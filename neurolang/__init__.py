@@ -1,3 +1,3 @@
 from __future__ import absolute_import, division, print_function
-from .version import __version__  # noqa
-from .neurolang import *  # noqa
+from .version import __version__
+from .neurolang import *
