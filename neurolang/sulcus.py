@@ -30,6 +30,14 @@ class Sulcus(object):
 
         return Sulcus(new_anterior, new_posterior, new_inferior, new_superior)
 
+    def difference(self, sulcus):
+        new_anterior = self.anterior.difference(sulcus.anterior)
+        new_posterior = self.posterior.difference(sulcus.posterior)
+        new_inferior = self.inferior.difference(sulcus.inferior)
+        new_superior = self.superior.difference(sulcus.superior)
+
+        return Sulcus(new_anterior, new_posterior, new_inferior, new_superior)
+
     def __repr__(self):
         strio = StringIO()
         for a in ('anterior', 'posterior', 'inferior', 'superior'):
@@ -63,4 +71,4 @@ class SulcusSolver(SetBasedSolver):
                 raise
             return argument.value
         else:
-            return super().predicate(self, ast)
+            return super().predicate(ast)

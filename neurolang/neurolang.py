@@ -8,6 +8,20 @@ import logging
 import tatsu
 from .ast import TatsuASTConverter, ASTWalker, ASTNode
 
+
+class NeuroLangException(Exception):
+    """Base class for NeuroLang Exceptions"""
+    pass
+
+
+class NeuroLangTypeException(NeuroLangException):
+    pass
+
+
+class NeuroLangPredicateException(NeuroLangException):
+    pass
+
+
 # import numpy as np
 # from .due import due, Doi
 
@@ -18,6 +32,8 @@ from .ast import TatsuASTConverter, ASTWalker, ASTNode
 #         description="Template project for small scientific Python projects",
 #         tags=["reference-implementation"],
 #         path='neurolang')
+
+
 grammar_EBNF = r'''
     @@whitespace :: /[\s\t\n\r\\ ]/
 
@@ -137,7 +153,7 @@ def type_validation_value(value, type_, value_mapping=None):
     elif issubclass(type_, typing.Mapping):
         return (
             issubclass(type(value), type_.__base__) and
-            all((
+            ((type_.args is None) or all((
                 type_validation_value(
                     k, type_.__args__[0], value_mapping=value_mapping
                 ) and
@@ -145,17 +161,17 @@ def type_validation_value(value, type_, value_mapping=None):
                     v, type_.__args__[1], value_mapping=value_mapping
                 )
                 for k, v in value.items()
-            ))
+            )))
         )
     elif issubclass(type_, typing.Iterable):
         return (
             issubclass(type(value), type_.__base__) and
-            all((
+            ((type_.__args__ is None) or all((
                 type_validation_value(
                     i, type_.__args__[0], value_mapping=value_mapping
                 )
                 for i in value
-            ))
+            )))
         )
     else:
         if value_mapping is None:
@@ -174,7 +190,7 @@ class Symbol(object):
         if not type_validation_value(
             value, type_, value_mapping=value_mapping
         ):
-            raise ValueError(
+            raise NeuroLangTypeException(
                 "The value %s does not correspond to the type %s" %
                 (value, type_)
             )
@@ -240,7 +256,9 @@ def type_validation(symbol, type_):
             return isinstance(symbol.value, type_)
         else:
             return isinstance(symbol, type_)
-    raise
+    raise NeuroLangTypeException(
+        "Can't validate type between symbol %s and type %s" (symbol, type_)
+    )
 
 
 class GenericSolver(ASTWalker):
@@ -261,7 +279,9 @@ class GenericSolver(ASTWalker):
             signature = inspect.signature(method)
             argument = ast['argument']
             if len(signature.parameters) != 1:
-                raise ValueError("Predicates take exactly one parameter")
+                raise NeuroLangPredicateException(
+                    "Predicates take exactly one parameter"
+                )
             else:
                 parameter = next(iter(signature.parameters.values()))
 
@@ -270,8 +290,8 @@ class GenericSolver(ASTWalker):
             else:
                 argument_value = argument
 
-            if not isinstance(argument, parameter.annotation):
-                raise ValueError
+            if not isinstance(argument_value, parameter.annotation):
+                raise NeuroLangTypeException("argument of wrong type")
 
             value = method(argument_value)
 
@@ -280,9 +300,11 @@ class GenericSolver(ASTWalker):
                 value
             )
         except AttributeError:
-            raise
+            raise NeuroLangException(
+                "Predicate %s not implemented" % identifier
+            )
 
-    def resolve(self, ast, plural=False):
+    def execute(self, ast, plural=False):
         return self.evaluate(ast)
 
 
@@ -325,13 +347,13 @@ class NeuroLangInterpreter(ASTWalker):
         else:
             value_mapping = None
 
-        value = category_solver.resolve(
+        value = category_solver.execute(
             ast['statement'], is_plural
         )
 
         if isinstance(value, Symbol):
             if not is_subtype(value.type, symbol_type):
-                raise ValueError()
+                raise NeuroLangTypeException()
         else:
             value = Symbol(
                 symbol_type, value,
@@ -364,7 +386,9 @@ class NeuroLangInterpreter(ASTWalker):
             elif ast.name == 'string':
                 return str(ast['value'])
             else:
-                raise ValueError(str(ast))
+                raise NeuroLangTypeException(
+                    "Value %s not recognised" % str(ast)
+                )
         elif isinstance(ast, str):
             return self.symbols[ast]
         else:
@@ -379,7 +403,7 @@ class NeuroLangInterpreter(ASTWalker):
                 if isinstance(argument, ASTNode):
                     return ast
                 else:
-                    raise ValueError
+                    raise ValueError("Argument is not boolean")
                 if argument:
                     return True
         return False
@@ -393,7 +417,7 @@ class NeuroLangInterpreter(ASTWalker):
                 if isinstance(argument, ASTNode):
                     return ast
                 else:
-                    raise ValueError
+                    raise ValueError("Argument is not boolean")
                 if not argument:
                     return False
         return True
@@ -409,7 +433,7 @@ class NeuroLangInterpreter(ASTWalker):
         function = function_symbol.value
 
         if not isinstance(function_symbol.type, typing.Callable):
-            raise
+            raise NeuroLangTypeException()
 
         function_type_arguments, function_type_return = \
             get_Callable_arguments_and_return(
@@ -426,11 +450,11 @@ class NeuroLangInterpreter(ASTWalker):
                 argument_type = type(a)
 
             if not isinstance(argument_type, function_type_arguments[i]):
-                raise
+                raise NeuroLangTypeException()
 
         result = function(*arguments)
         if not isinstance(result, function_type_return):
-            raise
+            raise NeuroLangTypeException()
 
         return Symbol(
             function_type_return,
@@ -444,13 +468,7 @@ class NeuroLangInterpreter(ASTWalker):
         return int(ast['value'])
 
 
-class SetBasedSolver(ASTWalker):
-    def __init__(self):
-        pass
-
-    def set_symbol_table(self, symbol_table):
-        self.symbol_table = symbol_table
-
+class SetBasedSolver(GenericSolver):
     def statement(self, ast):
         arguments = ast['argument']
         if len(arguments) == 1:
@@ -474,24 +492,27 @@ class SetBasedSolver(ASTWalker):
         return solution
 
     def negated_argument(self, ast):
-        raise
+        all_elements = set(
+            self.symbol_table.symbols_by_type(self.type).keys()
+        )
+        argument = ast['argument']
+        if isinstance(argument, Symbol):
+            argument = argument.value
 
-    def predicate(self, ast):
-        logging.debug(str(self.__class__.__name__) + " evaluating predicate")
-        if ast['identifier'] == "in":
-            argument = ast['argument']
-            if isinstance(argument.type, typing.Set):
-                argument = copy(argument)
-                value = argument.pop()
-                for next_value in argument:
-                    value = value.union(next_value)
-                return value
-            else:
-                raise
-        else:
-            return None
+        difference = all_elements.difference(argument)
+        return difference
 
-    def resolve(self, ast, plural=False):
+    def predicate_in(self, argument:typing.Set)->typing.Set:
+        print(argument)
+        return argument
+
+        argument = copy(argument)
+        value = argument.pop()
+        for next_value in argument:
+            value = value.union(next_value)
+        return value
+
+    def execute(self, ast, plural=False):
         value = self.evaluate(ast)
         if isinstance(value, typing.Set) and not plural:
             value_set = copy(value)
@@ -507,8 +528,12 @@ def get_Callable_arguments_and_return(callable):
 
 
 def parser(code, **kwargs):
+    kwargs['semantics'] = kwargs.get('semantics', TatsuASTConverter())
+    kwargs['parseinfo'] = True
+    kwargs['trace'] = kwargs.get('trace', False)
+    kwargs['colorize'] = True
+
     parser_tatsu = tatsu.compile(grammar_EBNF)
-    ast = parser_tatsu.parse(code, parseinfo=True, trace=False, colorize=True,
-                             semantics=TatsuASTConverter())
+    ast = parser_tatsu.parse(code, **kwargs)
 
     return ast
