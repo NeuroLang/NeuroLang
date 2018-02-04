@@ -2,7 +2,6 @@ from __future__ import absolute_import, division, print_function
 import typing
 import logging
 import inspect
-import operator
 
 import tatsu
 
@@ -53,11 +52,10 @@ grammar_EBNF = r'''
     predicate = identifier:dotted_identifier argument:sum;
 
     sum = term+:product { op+:('+' | '-') ~ term:product };
-    product = factor+:power { op+:( '*' | '/' ) ~ factor:power};
+    product = factor+:power { op+:('*' | '//' | '/') ~ factor:power};
     power = base:value ['**' exponent:value];
 
     value = value:function_application
-          | value:tuple
           | value:dotted_identifier
           | value:literal
           | "(" value:sum ")";
@@ -67,13 +65,12 @@ grammar_EBNF = r'''
         {"," ~ argument:function_argument}] ")";
     function_argument = value | statement;
 
-    literal = string | number;
+    literal = string | number | tuple;
 
     tuple = '(' element+:sum ({',' element:sum}+ | ',') ')';
 
     dotted_identifier = root:identifier { '.' ~ children:identifier };
     identifier = /[a-zA-Z_][a-zA-Z0-9_]*/;
-
 
     OR = "or";
     AND = "and";
@@ -290,8 +287,10 @@ class NeuroLangInterpreter(ASTWalker):
             for op, argument in zip(ast['op'], arguments[1:]):
                 if op == '*':
                     result = result * argument
-                else:
+                elif op == '/':
                     result = result / argument
+                else:
+                    result = result // argument
         return result
 
     def power(self, ast):
