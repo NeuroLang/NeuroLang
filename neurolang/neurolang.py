@@ -1,25 +1,16 @@
 from __future__ import absolute_import, division, print_function
-import collections
 import typing
-import inspect
-from copy import copy
 import logging
+import inspect
+import operator
 
 import tatsu
+
 from .ast import TatsuASTConverter, ASTWalker, ASTNode
-
-
-class NeuroLangException(Exception):
-    """Base class for NeuroLang Exceptions"""
-    pass
-
-
-class NeuroLangTypeException(NeuroLangException):
-    pass
-
-
-class NeuroLangPredicateException(NeuroLangException):
-    pass
+from .symbols_and_types import (
+    Symbol, SymbolTable, typing_callable_from_annotated_function,
+    NeuroLangTypeException, is_subtype
+)
 
 
 # import numpy as np
@@ -44,7 +35,7 @@ grammar_EBNF = r'''
                      | value;
 
     import_statement = "import" ~ module:dotted_identifier;
-    query = identifier:dotted_identifier "is" "a"
+    query = identifier:dotted_identifier ("is" "a" | "are")
         category:identifier statement:statement;
     assignment = identifier:dotted_identifier "=" argument:value;
 
@@ -55,23 +46,30 @@ grammar_EBNF = r'''
     negated_argument = NOT argument:argument;
 
     argument = '('~ @:statement ')'
-             | predicate;
+             | WHERE @:comparison
+             | @:predicate;
 
-    predicate = identifier:dotted_identifier argument:value
-              | WHERE comparison:comparison;
+    comparison = operand+:sum operator:comparison_operator ~ operand:sum;
+    predicate = identifier:dotted_identifier argument:sum;
 
-    comparison = operand+:value [operator:comparison_operator ~ operand:value];
+    sum = term+:product { op+:('+' | '-') ~ term:product };
+    product = factor+:power { op+:( '*' | '/' ) ~ factor:power};
+    power = base:value ['**' exponent:value];
+
+    value = value:function_application
+          | value:tuple
+          | value:dotted_identifier
+          | value:literal
+          | "(" value:sum ")";
 
     function_application = identifier:dotted_identifier
         "("~ [argument+:function_argument
         {"," ~ argument:function_argument}] ")";
     function_argument = value | statement;
 
-    value = value:function_application
-          | value:dotted_identifier
-          | value:literal;
-
     literal = string | number;
+
+    tuple = '(' element+:sum ({',' element:sum}+ | ',') ')';
 
     dotted_identifier = root:identifier { '.' ~ children:identifier };
     identifier = /[a-zA-Z_][a-zA-Z0-9_]*/;
@@ -89,159 +87,15 @@ grammar_EBNF = r'''
     number = point_float
            | integer;
 
-    integer = value:/[0-9]+/;
-    point_float = value:/[0-9]*/ '.' /[0-9]+/
-                | value:/[0-9]+/ '.';
+    integer = value:/-{0,1}[0-9]+/;
+    point_float = value:/-{0,1}[0-9]*/ '.' /[0-9]+/
+                | value:/-{0,1}[0-9]+/ '.';
 
     string = '"'value:/(\\(\w+|\S+)|[^\r\n\f"])*/'"'
            | "'"value:/(\\(\w+|\S+)|[^\r\n\f"])*/"'";
     newline = {['\u000C'] ['\r'] '\n'}+;
     SPACE = /[\s\t\n]+/;
 '''
-
-
-def typing_callable_from_annotated_function(function):
-    signature = inspect.signature(function)
-    parameter_types = [
-        v.annotation for v in signature.parameters.values()
-    ]
-    return typing.Callable[
-        parameter_types,
-        signature.return_annotation
-    ]
-
-
-def is_subtype(left, right):
-    if (
-        issubclass(right, typing.Callable) and
-        issubclass(left, typing.Callable)
-    ):
-        left_args = left.__args__
-        right_args = right.__args__
-
-        if len(left_args) != len(right_args):
-            False
-
-        return all((
-            is_subtype(left_arg, right_arg)
-            for left_arg, right_arg in zip(left_args, right_args)
-        ))
-    else:
-        if right == int:
-            right = typing.SupportsInt
-        elif right == float:
-            right = typing.SupportsFloat
-        elif right == complex:
-            right = typing.SupportsComplex
-        elif right == str:
-            right = typing.Text
-
-        return issubclass(left, right)
-
-
-def get_type(value):
-    if isinstance(value, typing.Callable):
-        return typing_callable_from_annotated_function(value)
-    else:
-        return type(value)
-
-
-def type_validation_value(value, type_, value_mapping=None):
-    if issubclass(type_, typing.Callable):
-        symbol_type = typing_callable_from_annotated_function(value)
-        return is_subtype(symbol_type, type_)
-    elif issubclass(type_, typing.Mapping):
-        return (
-            issubclass(type(value), type_.__base__) and
-            ((type_.args is None) or all((
-                type_validation_value(
-                    k, type_.__args__[0], value_mapping=value_mapping
-                ) and
-                type_validation_value(
-                    v, type_.__args__[1], value_mapping=value_mapping
-                )
-                for k, v in value.items()
-            )))
-        )
-    elif issubclass(type_, typing.Iterable):
-        return (
-            issubclass(type(value), type_.__base__) and
-            ((type_.__args__ is None) or all((
-                type_validation_value(
-                    i, type_.__args__[0], value_mapping=value_mapping
-                )
-                for i in value
-            )))
-        )
-    else:
-        if value_mapping is None:
-            if isinstance(value, Symbol):
-                value = value.value
-            return isinstance(value, type_)
-        else:
-            value = value_mapping[value]
-            if isinstance(value, Symbol):
-                value = value.value
-            return isinstance(value, type_)
-
-
-class Symbol(object):
-    def __init__(self, type_, value, value_mapping=None):
-        if not type_validation_value(
-            value, type_, value_mapping=value_mapping
-        ):
-            raise NeuroLangTypeException(
-                "The value %s does not correspond to the type %s" %
-                (value, type_)
-            )
-        self.type = type_
-        self.value = value
-
-    def __repr__(self):
-        return '%s: %s' % (self.value, self.type)
-
-
-class SymbolTable(collections.MutableMapping):
-    def __init__(self):
-        self._symbols = collections.OrderedDict()
-        self._symbols_by_type = dict()
-
-    def __len__(self):
-        return len(self._symbols)
-
-    def __getitem__(self, key):
-        return self._symbols[key]
-
-    def __setitem__(self, key, value):
-        if isinstance(value, Symbol) and isinstance(key, str):
-            self._symbols[key] = value
-            if value.type not in self._symbols_by_type:
-                self._symbols_by_type[value.type] = dict()
-            self._symbols_by_type[value.type][key] = value
-        else:
-            raise ValueError("Wrong assignement %s" % str(value))
-
-    def __delitem__(self, key):
-        value = self._symbols[key]
-        del self._symbols_by_type[value.type][key]
-        del self._symbols[key]
-
-    def __iter__(self):
-        return iter(self._labels)
-
-    def __repr__(self):
-        return '{%s}' % (
-            ', '.join([
-                '%s: (%s)' % (k, v)
-                for k, v in self._symbols.items()
-            ])
-        )
-
-    def types(self):
-        return self._symbols_by_type.keys()
-
-    def symbols_by_type(self, type_):
-        return dict(self._symbols_by_type[type_])
 
 
 def type_validation(symbol, type_):
@@ -261,62 +115,40 @@ def type_validation(symbol, type_):
     )
 
 
-class GenericSolver(ASTWalker):
-
-    @property
-    def plural_type_name(self):
-        return self.type_name + 's'
-
-    def set_symbol_table(self, symbol_table):
-        self.symbol_table = symbol_table
-
-    def predicate(self, ast):
-        logging.debug(str(self.__class__.__name__) + " evaluating predicate")
-
-        identifier = ast['identifier']
-        try:
-            method = getattr(self, 'predicate_' + identifier)
-            signature = inspect.signature(method)
-            argument = ast['argument']
-            if len(signature.parameters) != 1:
-                raise NeuroLangPredicateException(
-                    "Predicates take exactly one parameter"
-                )
-            else:
-                parameter = next(iter(signature.parameters.values()))
-
-            if isinstance(argument, Symbol):
-                argument_value = argument.value
-            else:
-                argument_value = argument
-
-            if not isinstance(argument_value, parameter.annotation):
-                raise NeuroLangTypeException("argument of wrong type")
-
-            value = method(argument_value)
-
-            return Symbol(
-                signature.return_annotation,
-                value
-            )
-        except AttributeError:
-            raise NeuroLangException(
-                "Predicate %s not implemented" % identifier
-            )
-
-    def execute(self, ast, plural=False):
-        return self.evaluate(ast)
-
-
 class NeuroLangInterpreter(ASTWalker):
     def __init__(self, category_solvers=None, functions=None, symbols=None):
+        self.symbols = SymbolTable()
+
         self.category_solvers = dict()
         for category_solver in category_solvers:
             self.category_solvers[category_solver.type_name] = category_solver
             self.category_solvers[
                 category_solver.plural_type_name
             ] = category_solver
-        self.symbols = SymbolTable()
+
+            for name, member in inspect.getmembers(category_solver.type):
+                if not inspect.isfunction(member) or name.startswith('_'):
+                    continue
+                signature = inspect.signature(member)
+                parameters_items = iter(signature.parameters.items())
+
+                next(parameters_items)
+                if (
+                    signature.return_annotation == inspect._empty or
+                    any(
+                        v == inspect._empty for k, v in parameters_items
+                    )
+                ):
+                    continue
+
+                argument_types = iter(signature.parameters.values())
+                next(argument_types)
+
+                member.__annotations__['self'] = category_solver.type
+                functions = functions + [
+                    (member, category_solver.type_name + '_' + name)
+                ]
+
         if symbols is not None:
             for k, v in symbols.items():
                 self.symbols[k] = v
@@ -353,7 +185,9 @@ class NeuroLangInterpreter(ASTWalker):
 
         if isinstance(value, Symbol):
             if not is_subtype(value.type, symbol_type):
-                raise NeuroLangTypeException()
+                raise NeuroLangTypeException(
+                    "%s doesn't have type %s" % (value, symbol_type)
+                )
         else:
             value = Symbol(
                 symbol_type, value,
@@ -367,6 +201,22 @@ class NeuroLangInterpreter(ASTWalker):
         self.symbols[ast['identifier']] = ast['argument']
         logging.debug(self.symbols[ast['identifier']])
         return ast['argument']
+
+    def tuple(self, ast):
+        types_ = []
+        values = []
+        for element in ast['element']:
+            if isinstance(element, Symbol):
+                types_.append(element.type)
+                values.append(element.value)
+            else:
+                types_.append(type(element))
+                values.append(element)
+
+        return Symbol(
+            typing.Tuple[tuple(types_)],
+            tuple(values)
+        )
 
     def category(self, ast):
         self.category = ast['category']
@@ -422,6 +272,36 @@ class NeuroLangInterpreter(ASTWalker):
                     return False
         return True
 
+    def sum(self, ast):
+        arguments = ast['term']
+        result = arguments[0]
+        if 'op' in ast:
+            for op, argument in zip(ast['op'], arguments[1:]):
+                if op == '+':
+                    result = result + argument
+                else:
+                    result = result - argument
+        return result
+
+    def product(self, ast):
+        arguments = ast['factor']
+        result = arguments[0]
+        if 'op' in ast:
+            for op, argument in zip(ast['op'], arguments[1:]):
+                if op == '*':
+                    result = result * argument
+                else:
+                    result = result / argument
+        return result
+
+    def power(self, ast):
+        result = ast['base']
+
+        if 'exponent' in ast:
+            result = result ** ast['exponent']
+
+        return result
+
     def dotted_identifier(self, ast):
         identifier = ast['root']
         if 'children' in ast and ast['children'] is not None:
@@ -449,11 +329,11 @@ class NeuroLangInterpreter(ASTWalker):
                 arguments.append(a)
                 argument_type = type(a)
 
-            if not isinstance(argument_type, function_type_arguments[i]):
+            if not is_subtype(argument_type, function_type_arguments[i]):
                 raise NeuroLangTypeException()
 
         result = function(*arguments)
-        if not isinstance(result, function_type_return):
+        if not is_subtype(type(result), function_type_return):
             raise NeuroLangTypeException()
 
         return Symbol(
@@ -466,61 +346,6 @@ class NeuroLangInterpreter(ASTWalker):
 
     def integer(self, ast):
         return int(ast['value'])
-
-
-class SetBasedSolver(GenericSolver):
-    def statement(self, ast):
-        arguments = ast['argument']
-        if len(arguments) == 1:
-            return arguments[0]
-
-        solution = arguments[0]
-        for argument in arguments[1:]:
-            solution = solution.union(argument)
-
-        return solution
-
-    def and_test(self, ast):
-        arguments = ast['argument']
-        if len(arguments) == 1:
-            return arguments[0]
-
-        solution = arguments[0]
-        for argument in arguments[1:]:
-            solution = solution.intersection(argument)
-
-        return solution
-
-    def negated_argument(self, ast):
-        all_elements = set(
-            self.symbol_table.symbols_by_type(self.type).keys()
-        )
-        argument = ast['argument']
-        if isinstance(argument, Symbol):
-            argument = argument.value
-
-        difference = all_elements.difference(argument)
-        return difference
-
-    def predicate_in(self, argument:typing.Set)->typing.Set:
-        print(argument)
-        return argument
-
-        argument = copy(argument)
-        value = argument.pop()
-        for next_value in argument:
-            value = value.union(next_value)
-        return value
-
-    def execute(self, ast, plural=False):
-        value = self.evaluate(ast)
-        if isinstance(value, typing.Set) and not plural:
-            value_set = copy(value)
-            value = self.symbol_table[value_set.pop()].value
-            for other_value in value_set:
-                other_value = self.symbol_table[other_value].value
-                value = value.union(other_value)
-        return value
 
 
 def get_Callable_arguments_and_return(callable):

@@ -1,4 +1,6 @@
-from .neurolang import SetBasedSolver, Symbol, is_subtype
+from .solver import SetBasedSolver
+from .symbols_and_types import Symbol, is_subtype
+from collections import abc
 from pprint import pprint
 from io import StringIO
 
@@ -37,6 +39,15 @@ class Sulcus(object):
         new_superior = self.superior.difference(sulcus.superior)
 
         return Sulcus(new_anterior, new_posterior, new_inferior, new_superior)
+
+    def __and__(self, sulcus):
+        return self.intersection(sulcus)
+
+    def __or__(self, sulcus):
+        return self.union(sulcus)
+
+    def __sub__(self, sulcus):
+        return self.difference(sulcus)
 
     def __repr__(self):
         strio = StringIO()
