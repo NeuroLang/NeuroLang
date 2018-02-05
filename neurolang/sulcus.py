@@ -1,11 +1,12 @@
 from .solver import SetBasedSolver
-from .symbols_and_types import Symbol, is_subtype
+from .symbols_and_types import Symbol, is_subtype, FiniteDomain
+from typing import Set
 from collections import abc
 from pprint import pprint
 from io import StringIO
 
 
-class Sulcus(object):
+class Sulcus(FiniteDomain):
     def __init__(self, anterior, posterior, inferior, superior):
         self.anterior = anterior
         self.posterior = posterior
@@ -16,7 +17,7 @@ class Sulcus(object):
         if k in ('anterior', 'posterior', 'inferior', 'superior'):
             return getattr(self, k)
 
-    def intersection(self, sulcus):
+    def intersection(self, sulcus: 'Sulcus')->Set['Sulcus']:
         new_anterior = self.anterior.intersection(sulcus.anterior)
         new_posterior = self.posterior.intersection(sulcus.posterior)
         new_inferior = self.inferior.intersection(sulcus.inferior)
@@ -24,7 +25,7 @@ class Sulcus(object):
 
         return Sulcus(new_anterior, new_posterior, new_inferior, new_superior)
 
-    def union(self, sulcus):
+    def union(self, sulcus: 'Sulcus')->Set['Sulcus']:
         new_anterior = self.anterior.union(sulcus.anterior)
         new_posterior = self.posterior.union(sulcus.posterior)
         new_inferior = self.inferior.union(sulcus.inferior)
@@ -32,7 +33,7 @@ class Sulcus(object):
 
         return Sulcus(new_anterior, new_posterior, new_inferior, new_superior)
 
-    def difference(self, sulcus):
+    def difference(self, sulcus: 'Sulcus')->Set['Sulcus']:
         new_anterior = self.anterior.difference(sulcus.anterior)
         new_posterior = self.posterior.difference(sulcus.posterior)
         new_inferior = self.inferior.difference(sulcus.inferior)
@@ -40,13 +41,13 @@ class Sulcus(object):
 
         return Sulcus(new_anterior, new_posterior, new_inferior, new_superior)
 
-    def __and__(self, sulcus):
+    def __and__(self, sulcus: 'Sulcus')->Set['Sulcus']:
         return self.intersection(sulcus)
 
-    def __or__(self, sulcus):
+    def __or__(self, sulcus: 'Sulcus')->Set['Sulcus']:
         return self.union(sulcus)
 
-    def __sub__(self, sulcus):
+    def __sub__(self, sulcus: 'Sulcus')->Set['Sulcus']:
         return self.difference(sulcus)
 
     def __repr__(self):

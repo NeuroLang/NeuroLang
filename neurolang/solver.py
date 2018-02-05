@@ -6,7 +6,8 @@ from copy import copy
 from .ast import ASTWalker
 from .exceptions import NeuroLangException
 from .symbols_and_types import (
-    Symbol, type_validation_value, NeuroLangTypeException
+    Symbol, type_validation_value, NeuroLangTypeException,
+    FiniteDomain, is_subtype, resolve_forward_references
 )
 
 
@@ -52,20 +53,38 @@ class GenericSolver(ASTWalker):
             parameter = next(iter(signature.parameters.values()))
 
         if isinstance(argument, Symbol):
-            argument_value = argument.value
+            value = argument.value
         else:
-            argument_value = argument
+            value = argument
 
         if not type_validation_value(
-            argument_value, parameter.annotation
+            value,
+            resolve_forward_references(
+                self.type,
+                parameter.annotation,
+                type_name='type'
+            ),
+            value_mapping=self.symbol_table
         ):
             raise NeuroLangTypeException("argument of wrong type")
 
-        value = method(argument_value)
+        result = method(value)
+
+        if isinstance(result, Symbol):
+            value = result.value
+        else:
+            value = result
+
+        return_type = resolve_forward_references(
+            self.type,
+            signature.return_annotation,
+            type_name='type'
+        )
 
         result = Symbol(
-            signature.return_annotation,
-            value
+            return_type,
+            value,
+            value_mapping=self.symbol_table
         )
 
         return result
@@ -108,12 +127,23 @@ class GenericSolver(ASTWalker):
             ):
                 raise NeuroLangTypeException("operand of wrong type")
 
-            value = method(*operand_values)
+            result = method(*operand_values)
+
+            if isinstance(result, Symbol):
+                value = result.value
+                type_ = result.type
+            else:
+                value = result
+                type_ = type(result)
+
+            if not is_subtype(type_, signature.return_annotation):
+                raise
 
             return Symbol(
                 signature.return_annotation,
                 value
             )
+
         except AttributeError:
             raise NeuroLangException(
                 "Condition %s not implemented" % ast['operator']
@@ -161,23 +191,35 @@ class GenericSolver(ASTWalker):
         return solution
 
     def negated_argument(self, ast):
-        all_elements = set(
-            self.symbol_table.symbols_by_type(self.type).keys()
-        )
         argument = ast['argument']
         if isinstance(argument, Symbol):
-            argument = argument.value
+            value = argument.value
+            type_ = argument.type
+        else:
+            value = argument
+            type_ = type(argument)
 
-        difference = all_elements - argument
+        if issubclass(type_, typing.Set):
+            type_ = type_.__args__[0]
 
-        return difference
+        if issubclass(type_, FiniteDomain):
+            all_elements = set(
+                self.symbol_table.symbols_by_type(self.type).keys()
+            )
+            difference = all_elements - value
+
+            return difference
+        else:
+            raise NeuroLangException("Type %s is not a finite type" % type_)
 
 
 class SetBasedSolver(GenericSolver):
     def __new__(cls):
         return super().__new__(cls)
 
-    def predicate_in(self, argument: typing.Set)->typing.Set:
+    def predicate_in(
+        self, argument: typing.Set['type']
+    )->typing.Set['type']:
         return argument
 
         argument = copy(argument)

@@ -43,6 +43,16 @@ def is_subtype(left, right):
             is_subtype(left_arg, right_arg)
             for left_arg, right_arg in zip(left_args, right_args)
         ))
+    elif (any(
+        issubclass(right, T) and
+        issubclass(left, T)
+        for T in (typing.Set, typing.List, typing.Tuple)
+    )):
+        return all(
+            is_subtype(l, r) for l, r in zip(
+                get_type_args(left), get_type_args(right)
+            )
+        )
     else:
         if right == int:
             right = typing.SupportsInt
@@ -54,6 +64,40 @@ def is_subtype(left, right):
             right = typing.Text
 
         return issubclass(left, right)
+
+
+def resolve_forward_references(type_, type_hint, type_name=None):
+    if type_name is None:
+        type_name = type_.__name__
+    if (
+        isinstance(type_hint, str) and
+        type_hint == type_name
+    ):
+        return type_
+    elif (
+        isinstance(type_hint, typing._ForwardRef) and
+        type_hint.__forward_arg__ == type_name
+    ):
+        return type_
+    elif hasattr(type_hint, '__args__'):
+        new_args = []
+        for arg in type_hint.__args__:
+            if isinstance(arg, list):
+                new_arg = []
+                for subarg in arg:
+                    new_arg.append(
+                        resolve_forward_references(
+                            type_, arg, type_name=type_name
+                        )
+                    )
+                new_args.append(new_arg)
+            else:
+                new_args.append(
+                    resolve_forward_references(type_, arg, type_name=type_name)
+                )
+        return type_hint.__base__[tuple(new_args)]
+    else:
+        return type_hint
 
 
 def get_type(value):
@@ -106,7 +150,10 @@ def type_validation_value(value, type_, value_mapping=None):
             )))
         )
     else:
-        if value_mapping is None:
+        if (
+            (value_mapping is None) or
+            not isinstance(value, Identifier)
+        ):
             if isinstance(value, Symbol):
                 value = value.value
             return is_subtype(type(value), type_)
@@ -131,6 +178,20 @@ class Symbol(object):
 
     def __repr__(self):
         return '%s: %s' % (self.value, self.type)
+
+
+class Identifier(object):
+    def __init__(self, value):
+        self.value = value
+
+    def __hash__(self):
+        return hash(self.value)
+
+    def __eq__(self, other):
+        return hash(self) == hash(other)
+
+    def __repr__(self):
+        return 'Id(%s)' % repr(self.value)
 
 
 class SymbolTable(collections.MutableMapping):
@@ -199,3 +260,7 @@ class SymbolTable(collections.MutableMapping):
     def create_scope(self):
         subscope = SymbolTable(enclosing_scope=self)
         return subscope
+
+
+class FiniteDomain(object):
+    pass

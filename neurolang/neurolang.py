@@ -7,8 +7,8 @@ import tatsu
 
 from .ast import TatsuASTConverter, ASTWalker, ASTNode
 from .symbols_and_types import (
-    Symbol, SymbolTable, typing_callable_from_annotated_function,
-    NeuroLangTypeException, is_subtype
+    Identifier, Symbol, SymbolTable, typing_callable_from_annotated_function,
+    NeuroLangTypeException, is_subtype, resolve_forward_references
 )
 
 
@@ -56,6 +56,7 @@ grammar_EBNF = r'''
     power = base:value ['**' exponent:value];
 
     value = value:function_application
+          | value:projection
           | value:dotted_identifier
           | value:literal
           | "(" value:sum ")";
@@ -64,6 +65,8 @@ grammar_EBNF = r'''
         "("~ [argument+:function_argument
         {"," ~ argument:function_argument}] ")";
     function_argument = value | statement;
+
+    projection = identifier:dotted_identifier"["item:integer"]";
 
     literal = string | number | tuple;
 
@@ -142,13 +145,18 @@ class NeuroLangInterpreter(ASTWalker):
                 next(argument_types)
 
                 member.__annotations__['self'] = category_solver.type
+                for k, v in member.__annotations__.items():
+                    member.__annotations__[k] = resolve_forward_references(
+                        category_solver.type,
+                        v
+                    )
                 functions = functions + [
                     (member, category_solver.type_name + '_' + name)
                 ]
 
         if symbols is not None:
             for k, v in symbols.items():
-                self.symbols[k] = v
+                self.symbols[Identifier(k)] = v
         self.functions = dict()
         for f in functions:
             if isinstance(f, tuple):
@@ -157,7 +165,7 @@ class NeuroLangInterpreter(ASTWalker):
             else:
                 func = f
                 name = f.__name__
-            self.symbols[name] = Symbol(
+            self.symbols[Identifier(name)] = Symbol(
                 typing_callable_from_annotated_function(func),
                 func
             )
@@ -191,12 +199,12 @@ class NeuroLangInterpreter(ASTWalker):
                 value_mapping=value_mapping
             )
 
-        self.symbols[ast['identifier']] = value
+        self.symbols[Identifier(ast['identifier'])] = value
         return ast
 
     def assignment(self, ast):
-        self.symbols[ast['identifier']] = ast['argument']
-        logging.debug(self.symbols[ast['identifier']])
+        self.symbols[Identifier(ast['identifier'])] = ast['argument']
+        logging.debug(self.symbols[Identifier(ast['identifier'])])
         return ast['argument']
 
     def tuple(self, ast):
@@ -229,7 +237,7 @@ class NeuroLangInterpreter(ASTWalker):
                 identifier = ast['root']
                 if ast['children'] is not None:
                     identifier += '.' + '.'.join(ast['children'])
-                return self.symbols[identifier]
+                return self.symbols[Identifier(identifier)]
             elif ast.name == 'string':
                 return str(ast['value'])
             else:
@@ -237,7 +245,7 @@ class NeuroLangInterpreter(ASTWalker):
                     "Value %s not recognised" % str(ast)
                 )
         elif isinstance(ast, str):
-            return self.symbols[ast]
+            return self.symbols[Identifier(ast)]
         else:
             return ast
 
@@ -268,6 +276,15 @@ class NeuroLangInterpreter(ASTWalker):
                 if not argument:
                     return False
         return True
+
+    def negated_argument(self, ast):
+        argument = ast['argument']
+        if not isinstance(argument, bool):
+            if isinstance(argument, ASTNode):
+                return ast
+            else:
+                raise ValueError("Argument is not boolean")
+        return not argument
 
     def sum(self, ast):
         arguments = ast['term']
@@ -308,7 +325,7 @@ class NeuroLangInterpreter(ASTWalker):
         return identifier
 
     def function_application(self, ast):
-        function_symbol = self.symbols[ast['identifier']]
+        function_symbol = self.symbols[Identifier(ast['identifier'])]
         function = function_symbol.value
 
         if not isinstance(function_symbol.type, typing.Callable):
@@ -339,6 +356,25 @@ class NeuroLangInterpreter(ASTWalker):
             function_type_return,
             result,
         )
+
+    def projection(self, ast):
+        identifier = self.symbols[Identifier(ast['identifier'])]
+        item = ast['item']
+        if (
+            isinstance(identifier, Symbol) and
+            issubclass(identifier.type, typing.Tuple)
+        ):
+            if len(identifier.value) > item:
+                return Symbol(
+                    identifier.type.__args__[item],
+                    identifier.value[item]
+                )
+            else:
+                raise NeuroLangTypeException(
+                    "Tuple doesn't have %d items" % item
+                )
+        else:
+            raise NeuroLangTypeException("%s is not a tuple" % identifier)
 
     def point_float(self, ast):
         return float(ast['value'])
