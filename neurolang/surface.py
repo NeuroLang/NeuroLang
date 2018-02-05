@@ -27,6 +27,12 @@ class Surface(Set):
     def __len__(self):
         return len(self.triangles)
 
+    def __hash__(self):
+        return hash(tuple(
+            self.vertices.tobytes(),
+            self.triangles.tobytes()
+        ))
+
 
 class Overlay(object):
     def __init__(self, overlay):
@@ -57,9 +63,9 @@ class Region(Surface):
         self.surface = surface
 
         if triangle_ids is None:
-            triangle_ids = set(i for i in range(len(surface.triangles)))
+            triangle_ids = frozenset(i for i in range(len(surface.triangles)))
         else:
-            triangle_ids = set(triangle_ids)
+            triangle_ids = frozenset(triangle_ids)
             if not triangle_ids.issubset(np.arange(len(self.triangles))):
                 raise ValueError(
                     "Triangles given are not a subset of the surface"
@@ -69,13 +75,13 @@ class Region(Surface):
 
         if isinstance(parameter, typing.Callable):
             mask = parameter(self)
-            self.triangle_ids = {
+            self.triangle_ids = frozenset((
                 k for k, v in mask.items()
                 if v
-            }
+            ))
 
         if len(self.triangle_ids) > 0:
-            triangle_ids = self.triangle_ids.copy()
+            triangle_ids = set(self.triangle_ids.copy())
 
             triangle_sides = {
                 k: {
@@ -129,6 +135,12 @@ class Region(Surface):
 
     def __len__(self):
         return len(self.triangle_ids)
+
+    def __hash__(self):
+        return hash(tuple(
+            self.surface,
+            self.triangle_ids
+        ))
 
     def area(self)->float:
         return self.triangle_area.sum()
@@ -189,7 +201,7 @@ class SurfaceOverlay(typing.Callable[
     def __ge__(self, parameter: typing.SupportsFloat)->'SurfaceOverlay':
         return self.__operand(operator.ge, parameter)
 
-    def contiguous_regions(self):
+    def contiguous_regions(self)->typing.Iterator[Region]:
         triangle_ids_map = self(self.surface)
         triangle_ids = set(
             k for k, v in triangle_ids_map.items()
@@ -255,17 +267,30 @@ class RegionSolver(SetBasedSolver):
     type_name = "region"
     type = Region
 
-    def predicate_on_surface(self, surface: Surface)->Region:
+    def predicate_on_surface(
+        self, surface: Surface
+    )->Region:
         return self.type(surface)
 
     def comparison_default(
         self, comparison: str, *operands: typing.Any
-    )->Region:
+    )->typing.Union[Region, typing.Set[Region]]:
         comparison_operator = getattr(operator, comparison)
         result = operands[0]
         for operand in operands[1:]:
             result = comparison_operator(result, operand)
-        return self.type(result)
+
+        if self.is_plural_evaluation:
+            if hasattr(result, 'contiguous_regions'):
+                return Symbol(
+                    typing.Set[self.type],
+                    set(result.contiguous_regions())
+                )
+        else:
+            return Symbol(
+                self.type,
+                self.type(result)
+            )
 
 
 class SurfaceOverlaySolver(GenericSolver):

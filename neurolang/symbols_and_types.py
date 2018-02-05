@@ -29,30 +29,43 @@ def get_type_args(type_):
 
 
 def is_subtype(left, right):
-    if (
-        issubclass(right, typing.Callable) and
-        issubclass(left, typing.Callable)
-    ):
-        left_args = get_type_args(left)
-        right_args = get_type_args(right)
-
-        if len(left_args) != len(right_args):
-            False
-
-        return all((
-            is_subtype(left_arg, right_arg)
-            for left_arg, right_arg in zip(left_args, right_args)
-        ))
-    elif (any(
-        issubclass(right, T) and
-        issubclass(left, T)
-        for T in (typing.Set, typing.List, typing.Tuple)
-    )):
-        return all(
-            is_subtype(l, r) for l, r in zip(
-                get_type_args(left), get_type_args(right)
+    if right == typing.Any:
+        return True
+    elif hasattr(right, '__origin__'):
+        if right.__origin__ == typing.Union:
+            return any(
+                is_subtype(left, r)
+                for r in right.__args__
             )
-        )
+        elif (
+            issubclass(right, typing.Callable) and
+            issubclass(left, typing.Callable)
+        ):
+            left_args = get_type_args(left)
+            right_args = get_type_args(right)
+
+            if len(left_args) != len(right_args):
+                False
+
+            return all((
+                is_subtype(left_arg, right_arg)
+                for left_arg, right_arg in zip(left_args, right_args)
+            ))
+        elif (any(
+            issubclass(right, T) and
+            issubclass(left, T)
+            for T in (
+                typing.Set, typing.List, typing.Tuple,
+                typing.Mapping, typing.Iterable
+            )
+        )):
+            return all(
+                is_subtype(l, r) for l, r in zip(
+                    get_type_args(left), get_type_args(right)
+                )
+            )
+        else:
+            raise ValueError("typing Generic not supported")
     else:
         if right == int:
             right = typing.SupportsInt
@@ -81,7 +94,7 @@ def resolve_forward_references(type_, type_hint, type_name=None):
         return type_
     elif hasattr(type_hint, '__args__') and type_hint.__args__ is not None:
         new_args = []
-        for arg in type_hint.__args__:
+        for arg in get_type_args(type_hint):
             if isinstance(arg, list):
                 new_arg = []
                 for subarg in arg:
@@ -95,89 +108,91 @@ def resolve_forward_references(type_, type_hint, type_name=None):
                 new_args.append(
                     resolve_forward_references(type_, arg, type_name=type_name)
                 )
-        return type_hint.__base__[tuple(new_args)]
+        return type_hint.__origin__[tuple(new_args)]
     else:
         return type_hint
 
 
-def get_type(value):
-    if isinstance(value, typing.Callable):
-        return typing_callable_from_annotated_function(value)
-    else:
-        return type(value)
-
-
-def get_type_and_value(value, value_mapping=None):
-    if value_mapping is not None and isinstance(value, Identifier):
-        value = value_mapping[value]
+def get_type_and_value(value, symbol_table=None):
+    if symbol_table is not None and isinstance(value, Identifier):
+        value = symbol_table[value]
 
     if isinstance(value, Symbol):
         return value.type, value.value
     else:
-        return type(value), value
+        if isinstance(value, types.FunctionType):
+            return typing_callable_from_annotated_function(value), value
+        else:
+            return type(value), value
 
 
-def type_validation_value(value, type_, value_mapping=None):
+def type_validation_value(value, type_, symbol_table=None):
     if type_ == typing.Any:
         return True
-    elif issubclass(type_, typing.Callable):
-        if isinstance(value, types.FunctionType):
-            symbol_type = typing_callable_from_annotated_function(value)
+    elif hasattr(type_, '__origin__'):
+        if type_.__origin__ == typing.Union:
+            return any(
+                type_validation_value(value, t, symbol_table=symbol_table)
+                for t in type_.__args__
+            )
+        elif issubclass(type_, typing.Callable):
+            if isinstance(value, types.FunctionType):
+                symbol_type = typing_callable_from_annotated_function(value)
+            else:
+                symbol_type = type(value)
+            return is_subtype(symbol_type, type_)
+        elif issubclass(type_, typing.Mapping):
+            return (
+                issubclass(type(value), type_.__origin__) and
+                ((type_.args is None) or all((
+                    type_validation_value(
+                        k, type_.__args__[0], symbol_table=symbol_table
+                    ) and
+                    type_validation_value(
+                        v, type_.__args__[1], symbol_table=symbol_table
+                    )
+                    for k, v in value.items()
+                )))
+            )
+        elif issubclass(type_, typing.Set):
+            return (
+                issubclass(type(value), type_.__origin__) and
+                ((type_.__args__ is None) or all((
+                    type_validation_value(
+                        i, type_.__args__[0], symbol_table=symbol_table
+                    )
+                    for i in value
+                )))
+            )
+        elif issubclass(type_, typing.Tuple):
+            return (
+                issubclass(type(value), type_.__origin__) and
+                ((type_.__args__ is None) or all((
+                    type_validation_value(
+                        v, t, symbol_table=symbol_table
+                    )
+                    for v, t in zip(value, type_.__args__)
+                )))
+            )
         else:
-            symbol_type = type(value)
-        return is_subtype(symbol_type, type_)
-    elif issubclass(type_, typing.Mapping):
-        return (
-            issubclass(type(value), type_.__base__) and
-            ((type_.args is None) or all((
-                type_validation_value(
-                    k, type_.__args__[0], value_mapping=value_mapping
-                ) and
-                type_validation_value(
-                    v, type_.__args__[1], value_mapping=value_mapping
-                )
-                for k, v in value.items()
-            )))
-        )
-    elif issubclass(type_, typing.Set):
-        return (
-            issubclass(type(value), type_.__base__) and
-            ((type_.__args__ is None) or all((
-                type_validation_value(
-                    i, type_.__args__[0], value_mapping=value_mapping
-                )
-                for i in value
-            )))
-        )
-    elif issubclass(type_, typing.Tuple):
-        return (
-            issubclass(type(value), type_.__base__) and
-            ((type_.__args__ is None) or all((
-                type_validation_value(
-                    v, t, value_mapping=value_mapping
-                )
-                for v, t in zip(value, type_.__args__)
-            )))
-        )
+            raise ValueError("Type %s not implemented in the checker" % type_)
     else:
         if (
-            (value_mapping is None) or
-            not isinstance(value, Identifier)
+            (symbol_table is not None) and
+            isinstance(value, Identifier)
         ):
-            if isinstance(value, Symbol):
-                value = value.value
-            return is_subtype(type(value), type_)
-        else:
-            value = value_mapping[value]
-            if isinstance(value, Symbol):
-                value = value.value
-            return is_subtype(type(value), type_)
+            value = symbol_table[value].value
+        elif isinstance(value, Symbol):
+            value = value.value
+        return isinstance(
+            value, type_
+        )
 
 
 class Symbol(object):
-    def __init__(self, type_, value, value_mapping=None):
+    def __init__(self, type_, value, symbol_table=None):
         if not type_validation_value(
-            value, type_, value_mapping=value_mapping
+            value, type_, symbol_table=symbol_table
         ):
             raise NeuroLangTypeException(
                 "The value %s does not correspond to the type %s" %

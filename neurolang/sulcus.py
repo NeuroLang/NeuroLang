@@ -1,5 +1,5 @@
 from .solver import SetBasedSolver, FiniteDomain
-from .symbols_and_types import is_subtype, get_type_and_value
+from .symbols_and_types import is_subtype, get_type_and_value, Symbol
 from typing import Set
 from pprint import pprint
 from io import StringIO
@@ -12,7 +12,7 @@ class Sulcus(FiniteDomain):
         self.inferior = inferior
         self.superior = superior
 
-    def __getitem__(self, k):
+    def __getitem__(self, k: str)->Set['Sulcus']:
         if k in ('anterior', 'posterior', 'inferior', 'superior'):
             return getattr(self, k)
 
@@ -65,7 +65,7 @@ class SulcusSolver(SetBasedSolver):
     def predicate(self, ast):
         argument_type, argument = get_type_and_value(
             ast['argument'],
-            value_mapping=self.symbol_table
+            symbol_table=self.symbol_table
         )
 
         if ast['identifier'].value in (
@@ -74,7 +74,11 @@ class SulcusSolver(SetBasedSolver):
             predicate = ast['identifier'].value[:-3]
             if not is_subtype(argument_type, self.type):
                 raise ValueError()
-            return argument[predicate]
+            return Symbol(
+                Set[self.type],
+                argument[predicate],
+                symbol_table=self.symbol_table
+            )
         if ast['identifier'].value == 'with_limb':
             if not is_subtype(argument_type, self.type):
                 raise

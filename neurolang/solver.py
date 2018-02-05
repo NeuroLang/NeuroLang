@@ -28,6 +28,7 @@ class GenericSolver(ASTWalker):
         '<': 'lt',
         '<=': 'le'
     }
+    is_plural_evaluation = False
 
     @property
     def plural_type_name(self):
@@ -57,7 +58,7 @@ class GenericSolver(ASTWalker):
             parameter = next(iter(signature.parameters.values()))
 
         type_, value = get_type_and_value(
-            argument, value_mapping=self.symbol_table
+            argument, symbol_table=self.symbol_table
         )
 
         if not type_validation_value(
@@ -67,14 +68,14 @@ class GenericSolver(ASTWalker):
                 parameter.annotation,
                 type_name='type'
             ),
-            value_mapping=self.symbol_table
+            symbol_table=self.symbol_table
         ):
             raise NeuroLangTypeException("argument of wrong type")
 
         result = method(value)
 
         type_, value = get_type_and_value(
-            result, value_mapping=self.symbol_table
+            result, symbol_table=self.symbol_table
         )
 
         return_type = resolve_forward_references(
@@ -83,10 +84,15 @@ class GenericSolver(ASTWalker):
             type_name='type'
         )
 
+        if not is_subtype(type_, return_type):
+            raise NeuroLangTypeException(
+                "Value returned doesn't have the right type"
+            )
+
         result = Symbol(
             return_type,
             value,
-            value_mapping=self.symbol_table
+            symbol_table=self.symbol_table
         )
 
         return result
@@ -97,58 +103,57 @@ class GenericSolver(ASTWalker):
             'comparison_%s' % self.comparison_names[ast['operator']]
         )
 
-        try:
-            if hasattr(self, comparison_name):
-                method = getattr(self, comparison_name)
-                operand_values = []
-            else:
-                method = self.comparison_default
-                operand_values = [self.comparison_names[ast['operator']]]
-
-            signature = inspect.signature(method)
-            operands = ast['operand']
-            if len(signature.parameters) != 2:
-                raise NeuroLangPredicateException(
-                    "Comparisons take two parameters"
-                )
-
-            parameters = signature.parameters.values()
-
-            operand_values += [
-                get_type_and_value(operand, mapping=self.symbol_table)[1]
-                for operand in operands
-            ]
-
-            if any(
-                not type_validation_value(
-                    operand_value, parameter.annotation
-                )
-                for operand_value, parameter
-                in zip(operand_values, parameters)
-            ):
-                raise NeuroLangTypeException("operand of wrong type")
-
-            result = method(*operand_values)
-
-            type_, value = get_type_and_value(
-                result, value_mapping=self.symbol_table
-            )
-
-            if not is_subtype(type_, signature.return_annotation):
-                raise
-
-            return Symbol(
-                signature.return_annotation,
-                value
-            )
-
-        except AttributeError:
+        if hasattr(self, comparison_name):
+            method = getattr(self, comparison_name)
+            operand_values = []
+        elif hasattr(self, 'comparison_default'):
+            method = self.comparison_default
+            operand_values = [self.comparison_names[ast['operator']]]
+        else:
             raise NeuroLangException(
-                "Condition %s not implemented" % ast['operator']
+                "Comparison %s not implemented" % ast['operator']
             )
+
+        signature = inspect.signature(method)
+        operands = ast['operand']
+        if len(signature.parameters) != 2:
+            raise NeuroLangPredicateException(
+                "Comparisons take two parameters"
+            )
+
+        parameters = signature.parameters.values()
+
+        operand_values += [
+            get_type_and_value(operand, symbol_table=self.symbol_table)[1]
+            for operand in operands
+        ]
+
+        if any(
+            not type_validation_value(
+                operand_value, parameter.annotation
+            )
+            for operand_value, parameter
+            in zip(operand_values, parameters)
+        ):
+            raise NeuroLangTypeException("operand of wrong type")
+
+        result = method(*operand_values)
+
+        type_, value = get_type_and_value(
+            result, symbol_table=self.symbol_table
+        )
+
+        if not is_subtype(type_, signature.return_annotation):
+            raise
+
+        return Symbol(
+            type_,
+            value
+        )
 
     def execute(self, ast, plural=False):
         self.set_symbol_table(self.symbol_table.create_scope())
+        self.is_plural_evaluation = plural
         result = self.evaluate(ast)
         self.set_symbol_table(self.symbol_table.enclosing_scope)
         return result
@@ -159,12 +164,12 @@ class GenericSolver(ASTWalker):
             return arguments[0]
 
         _, solution = get_type_and_value(
-            arguments[0], value_mapping=self.symbol_table
+            arguments[0], symbol_table=self.symbol_table
         )
 
         for argument in arguments[1:]:
             _, argument = get_type_and_value(
-                        argument, value_mapping=self.symbol_table
+                        argument, symbol_table=self.symbol_table
                     )
             solution = solution | argument
 
@@ -176,12 +181,12 @@ class GenericSolver(ASTWalker):
             return arguments[0]
 
         _, solution = get_type_and_value(
-            arguments[0], value_mapping=self.symbol_table
+            arguments[0], symbol_table=self.symbol_table
         )
 
         for argument in arguments[1:]:
             _, argument = get_type_and_value(
-                        argument, value_mapping=self.symbol_table
+                        argument, symbol_table=self.symbol_table
                     )
             solution = solution & argument
 
@@ -190,7 +195,7 @@ class GenericSolver(ASTWalker):
     def negated_argument(self, ast):
         argument = ast['argument']
         type_, value = get_type_and_value(
-                    argument, value_mapping=self.symbol_table
+                    argument, symbol_table=self.symbol_table
                 )
 
         if issubclass(type_, typing.Set):
@@ -223,6 +228,7 @@ class SetBasedSolver(GenericSolver):
         return value
 
     def execute(self, ast, plural=False):
+        self.is_plural_evaluation = plural
         value = self.evaluate(ast)
         if isinstance(value, typing.Set) and not plural:
             value_set = copy(value)
