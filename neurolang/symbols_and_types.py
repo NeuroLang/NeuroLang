@@ -79,7 +79,7 @@ def resolve_forward_references(type_, type_hint, type_name=None):
         type_hint.__forward_arg__ == type_name
     ):
         return type_
-    elif hasattr(type_hint, '__args__'):
+    elif hasattr(type_hint, '__args__') and type_hint.__args__ is not None:
         new_args = []
         for arg in type_hint.__args__:
             if isinstance(arg, list):
@@ -105,6 +105,16 @@ def get_type(value):
         return typing_callable_from_annotated_function(value)
     else:
         return type(value)
+
+
+def get_type_and_value(value, value_mapping=None):
+    if value_mapping is not None and isinstance(value, Identifier):
+        value = value_mapping[value]
+
+    if isinstance(value, Symbol):
+        return value.type, value.value
+    else:
+        return type(value), value
 
 
 def type_validation_value(value, type_, value_mapping=None):
@@ -260,7 +270,3 @@ class SymbolTable(collections.MutableMapping):
     def create_scope(self):
         subscope = SymbolTable(enclosing_scope=self)
         return subscope
-
-
-class FiniteDomain(object):
-    pass

@@ -7,11 +7,15 @@ from .ast import ASTWalker
 from .exceptions import NeuroLangException
 from .symbols_and_types import (
     Symbol, type_validation_value, NeuroLangTypeException,
-    FiniteDomain, is_subtype, resolve_forward_references
+    is_subtype, resolve_forward_references, get_type_and_value
 )
 
 
 class NeuroLangPredicateException(NeuroLangException):
+    pass
+
+
+class FiniteDomain(object):
     pass
 
 
@@ -36,10 +40,10 @@ class GenericSolver(ASTWalker):
         logging.debug(str(self.__class__.__name__) + " evaluating predicate")
         identifier = ast['identifier']
 
-        predicate_method = 'predicate_' + identifier
+        predicate_method = 'predicate_' + identifier.value
         if not hasattr(self, predicate_method):
             raise NeuroLangException(
-                "Predicate %s not implemented" % identifier
+                "Predicate %s not implemented" % identifier.value
             )
 
         method = getattr(self, predicate_method)
@@ -52,10 +56,9 @@ class GenericSolver(ASTWalker):
         else:
             parameter = next(iter(signature.parameters.values()))
 
-        if isinstance(argument, Symbol):
-            value = argument.value
-        else:
-            value = argument
+        type_, value = get_type_and_value(
+            argument, value_mapping=self.symbol_table
+        )
 
         if not type_validation_value(
             value,
@@ -70,10 +73,9 @@ class GenericSolver(ASTWalker):
 
         result = method(value)
 
-        if isinstance(result, Symbol):
-            value = result.value
-        else:
-            value = result
+        type_, value = get_type_and_value(
+            result, value_mapping=self.symbol_table
+        )
 
         return_type = resolve_forward_references(
             self.type,
@@ -113,8 +115,7 @@ class GenericSolver(ASTWalker):
             parameters = signature.parameters.values()
 
             operand_values += [
-                operand.value if isinstance(operand, Symbol)
-                else operand
+                get_type_and_value(operand, mapping=self.symbol_table)[1]
                 for operand in operands
             ]
 
@@ -129,12 +130,9 @@ class GenericSolver(ASTWalker):
 
             result = method(*operand_values)
 
-            if isinstance(result, Symbol):
-                value = result.value
-                type_ = result.type
-            else:
-                value = result
-                type_ = type(result)
+            type_, value = get_type_and_value(
+                result, value_mapping=self.symbol_table
+            )
 
             if not is_subtype(type_, signature.return_annotation):
                 raise
@@ -160,16 +158,15 @@ class GenericSolver(ASTWalker):
         if len(arguments) == 1:
             return arguments[0]
 
-        if isinstance(arguments[0], Symbol):
-            solution = arguments[0].value
-        else:
-            solution = arguments[0]
+        _, solution = get_type_and_value(
+            arguments[0], value_mapping=self.symbol_table
+        )
 
-        solution = arguments[0]
         for argument in arguments[1:]:
-            if isinstance(argument, Symbol):
-                argument = argument.value
-            solution = solution or argument
+            _, argument = get_type_and_value(
+                        argument, value_mapping=self.symbol_table
+                    )
+            solution = solution | argument
 
         return solution
 
@@ -178,26 +175,23 @@ class GenericSolver(ASTWalker):
         if len(arguments) == 1:
             return arguments[0]
 
-        if isinstance(arguments[0], Symbol):
-            solution = arguments[0].value
-        else:
-            solution = arguments[0]
+        _, solution = get_type_and_value(
+            arguments[0], value_mapping=self.symbol_table
+        )
 
         for argument in arguments[1:]:
-            if isinstance(argument, Symbol):
-                argument = argument.value
-            solution = solution and argument
+            _, argument = get_type_and_value(
+                        argument, value_mapping=self.symbol_table
+                    )
+            solution = solution & argument
 
         return solution
 
     def negated_argument(self, ast):
         argument = ast['argument']
-        if isinstance(argument, Symbol):
-            value = argument.value
-            type_ = argument.type
-        else:
-            value = argument
-            type_ = type(argument)
+        type_, value = get_type_and_value(
+                    argument, value_mapping=self.symbol_table
+                )
 
         if issubclass(type_, typing.Set):
             type_ = type_.__args__[0]

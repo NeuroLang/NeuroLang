@@ -1,7 +1,6 @@
-from .solver import SetBasedSolver
-from .symbols_and_types import Symbol, is_subtype, FiniteDomain
+from .solver import SetBasedSolver, FiniteDomain
+from .symbols_and_types import is_subtype, get_type_and_value
 from typing import Set
-from collections import abc
 from pprint import pprint
 from io import StringIO
 
@@ -64,23 +63,21 @@ class SulcusSolver(SetBasedSolver):
     plural_type_name = "sulci"
 
     def predicate(self, ast):
-        if isinstance(ast['argument'], Symbol):
-            argument = ast['argument']
-        elif isinstance(ast['argument'], str):
-            argument = self.symbol_table[ast['argument']]
-        else:
-            raise
+        argument_type, argument = get_type_and_value(
+            ast['argument'],
+            value_mapping=self.symbol_table
+        )
 
-        if ast['identifier'] in (
+        if ast['identifier'].value in (
             "anterior_to", "posterior_to", "superior_to", "inferior_to"
         ):
-            predicate = ast['identifier'][:-3]
-            if not is_subtype(argument.type, self.type):
+            predicate = ast['identifier'].value[:-3]
+            if not is_subtype(argument_type, self.type):
                 raise ValueError()
-            return argument.value[predicate]
-        if ast['identifier'] == 'with_limb':
-            if not is_subtype(argument.type, self.type):
+            return argument[predicate]
+        if ast['identifier'].value == 'with_limb':
+            if not is_subtype(argument_type, self.type):
                 raise
-            return argument.value
+            return argument
         else:
             return super().predicate(ast)

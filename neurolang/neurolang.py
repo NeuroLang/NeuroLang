@@ -8,7 +8,8 @@ import tatsu
 from .ast import TatsuASTConverter, ASTWalker, ASTNode
 from .symbols_and_types import (
     Identifier, Symbol, SymbolTable, typing_callable_from_annotated_function,
-    NeuroLangTypeException, is_subtype, resolve_forward_references
+    NeuroLangTypeException, is_subtype, resolve_forward_references,
+    get_type_and_value
 )
 
 
@@ -98,35 +99,28 @@ grammar_EBNF = r'''
 '''
 
 
-def type_validation(symbol, type_):
-    if isinstance(type_, typing.Callable):
-        if isinstance(symbol, Symbol):
-            return issubclass(symbol.type, type_)
-        else:
-            symbol_type = typing_callable_from_annotated_function(symbol)
-            return issubclass(symbol_type, type_)
-    else:
-        if isinstance(symbol, Symbol):
-            return isinstance(symbol.value, type_)
-        else:
-            return isinstance(symbol, type_)
-    raise NeuroLangTypeException(
-        "Can't validate type between symbol %s and type %s" (symbol, type_)
-    )
-
-
 class NeuroLangInterpreter(ASTWalker):
-    def __init__(self, category_solvers=None, functions=None, symbols=None):
+    def __init__(
+        self, category_solvers=None, functions=None,
+        types=None, symbols=None
+    ):
         self.symbols = SymbolTable()
 
         self.category_solvers = dict()
+
+        if types is None:
+            types = []
+
         for category_solver in category_solvers:
             self.category_solvers[category_solver.type_name] = category_solver
             self.category_solvers[
                 category_solver.plural_type_name
             ] = category_solver
 
-            for name, member in inspect.getmembers(category_solver.type):
+            types.append((category_solver.type, category_solver.type_name))
+
+        for type_, type_name in types:
+            for name, member in inspect.getmembers(type_):
                 if not inspect.isfunction(member) or name.startswith('_'):
                     continue
                 signature = inspect.signature(member)
@@ -144,20 +138,20 @@ class NeuroLangInterpreter(ASTWalker):
                 argument_types = iter(signature.parameters.values())
                 next(argument_types)
 
-                member.__annotations__['self'] = category_solver.type
+                member.__annotations__['self'] = type_
                 for k, v in member.__annotations__.items():
                     member.__annotations__[k] = resolve_forward_references(
-                        category_solver.type,
+                        type_,
                         v
                     )
                 functions = functions + [
-                    (member, category_solver.type_name + '_' + name)
+                    (member, type_name + '_' + name)
                 ]
 
         if symbols is not None:
             for k, v in symbols.items():
                 self.symbols[Identifier(k)] = v
-        self.functions = dict()
+
         for f in functions:
             if isinstance(f, tuple):
                 func = f[0]
@@ -180,43 +174,41 @@ class NeuroLangInterpreter(ASTWalker):
 
         if is_plural:
             symbol_type = typing.Set[category_solver.type]
-            value_mapping = self.symbols
-        else:
-            value_mapping = None
 
         value = category_solver.execute(
             ast['statement'], is_plural
         )
 
-        if isinstance(value, Symbol):
-            if not is_subtype(value.type, symbol_type):
-                raise NeuroLangTypeException(
-                    "%s doesn't have type %s" % (value, symbol_type)
-                )
-        else:
-            value = Symbol(
-                symbol_type, value,
-                value_mapping=value_mapping
+        value_type, value = get_type_and_value(
+            value, value_mapping=self.symbols
+        )
+        if not is_subtype(value_type, symbol_type):
+            raise NeuroLangTypeException(
+                "%s doesn't have type %s" % (value, symbol_type)
             )
 
-        self.symbols[Identifier(ast['identifier'])] = value
+        value = Symbol(
+            symbol_type, value,
+            value_mapping=self.symbols
+        )
+
+        self.symbols[ast['identifier']] = value
         return ast
 
     def assignment(self, ast):
-        self.symbols[Identifier(ast['identifier'])] = ast['argument']
-        logging.debug(self.symbols[Identifier(ast['identifier'])])
+        self.symbols[ast['identifier']] = ast['argument']
+        logging.debug(self.symbols[ast['identifier']])
         return ast['argument']
 
     def tuple(self, ast):
         types_ = []
         values = []
         for element in ast['element']:
-            if isinstance(element, Symbol):
-                types_.append(element.type)
-                values.append(element.value)
-            else:
-                types_.append(type(element))
-                values.append(element)
+            type_, value = get_type_and_value(
+                element, value_mapping=self.symbols
+            )
+            types_.append(type_)
+            values.append(value)
 
         return Symbol(
             typing.Tuple[tuple(types_)],
@@ -237,15 +229,16 @@ class NeuroLangInterpreter(ASTWalker):
                 identifier = ast['root']
                 if ast['children'] is not None:
                     identifier += '.' + '.'.join(ast['children'])
-                return self.symbols[Identifier(identifier)]
+                identifier = Identifier(identifier)
+                return self.symbols[identifier]
             elif ast.name == 'string':
                 return str(ast['value'])
             else:
                 raise NeuroLangTypeException(
                     "Value %s not recognised" % str(ast)
                 )
-        elif isinstance(ast, str):
-            return self.symbols[Identifier(ast)]
+        elif isinstance(ast, Identifier):
+            return self.symbols[ast]
         else:
             return ast
 
@@ -322,10 +315,10 @@ class NeuroLangInterpreter(ASTWalker):
         identifier = ast['root']
         if 'children' in ast and ast['children'] is not None:
             identifier += '.' + '.'.join(ast['children'])
-        return identifier
+        return Identifier(identifier)
 
     def function_application(self, ast):
-        function_symbol = self.symbols[Identifier(ast['identifier'])]
+        function_symbol = self.symbols[ast['identifier']]
         function = function_symbol.value
 
         if not isinstance(function_symbol.type, typing.Callable):
@@ -338,12 +331,10 @@ class NeuroLangInterpreter(ASTWalker):
 
         arguments = []
         for i, a in enumerate(ast['argument']):
-            if isinstance(a, Symbol):
-                arguments.append(a.value)
-                argument_type = a.type
-            else:
-                arguments.append(a)
-                argument_type = type(a)
+            argument_type, value = get_type_and_value(
+                a, value_mapping=self.symbols
+            )
+            arguments.append(value)
 
             if not is_subtype(argument_type, function_type_arguments[i]):
                 raise NeuroLangTypeException()
@@ -358,12 +349,20 @@ class NeuroLangInterpreter(ASTWalker):
         )
 
     def projection(self, ast):
-        identifier = self.symbols[Identifier(ast['identifier'])]
-        item = ast['item']
+        identifier = self.symbols[ast['identifier']]
+        item, item_type = get_type_and_value(
+            ast['item'],
+            value_mapping=self.symbols
+        )
         if (
             isinstance(identifier, Symbol) and
             issubclass(identifier.type, typing.Tuple)
         ):
+            if not is_subtype(item_type, typing.SupportsInt):
+                raise NeuroLangTypeException(
+                    "Tuple projection argument should be an int"
+                )
+            item = int(item)
             if len(identifier.value) > item:
                 return Symbol(
                     identifier.type.__args__[item],
@@ -373,6 +372,20 @@ class NeuroLangInterpreter(ASTWalker):
                 raise NeuroLangTypeException(
                     "Tuple doesn't have %d items" % item
                 )
+        elif (
+            isinstance(identifier, Symbol) and
+            issubclass(identifier.type, typing.Mapping)
+        ):
+            key_type = identifier.type.__args__[0]
+            if not is_subtype(item_type, key_type):
+                raise NeuroLangTypeException(
+                    "key type does not agree with Mapping key %s" % key_type
+                )
+
+            return Symbol(
+                identifier.type.__args__[1],
+                identifier.value[item]
+            )
         else:
             raise NeuroLangTypeException("%s is not a tuple" % identifier)
 
