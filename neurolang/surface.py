@@ -15,6 +15,8 @@ class Surface(Set):
     def __init__(self, vertices, triangles):
         self.vertices = vertices
         self.triangles = triangles
+        self.vertices.setflags(write=False)
+        self.triangles.setflags(write=False)
         self.triangle_ids = set(range(len(triangles)))
         self.surface = self
 
@@ -28,7 +30,7 @@ class Surface(Set):
         return len(self.triangles)
 
     def __hash__(self):
-        return hash(tuple(
+        return hash((
             self.vertices.tobytes(),
             self.triangles.tobytes()
         ))
@@ -137,7 +139,7 @@ class Region(Surface):
         return len(self.triangle_ids)
 
     def __hash__(self):
-        return hash(tuple(
+        return hash((
             self.surface,
             self.triangle_ids
         ))
@@ -284,7 +286,7 @@ class RegionSolver(SetBasedSolver):
             if hasattr(result, 'contiguous_regions'):
                 return Symbol(
                     typing.Set[self.type],
-                    set(result.contiguous_regions())
+                    frozenset(result.contiguous_regions())
                 )
         else:
             return Symbol(
