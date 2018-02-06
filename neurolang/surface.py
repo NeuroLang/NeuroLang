@@ -276,7 +276,7 @@ class RegionSolver(SetBasedSolver):
 
     def comparison_default(
         self, comparison: str, *operands: typing.Any
-    )->typing.Union[Region, typing.Set[Region]]:
+    )->typing.Union[Region, typing.AbstractSet[Region]]:
         comparison_operator = getattr(operator, comparison)
         result = operands[0]
         for operand in operands[1:]:
@@ -285,7 +285,7 @@ class RegionSolver(SetBasedSolver):
         if self.is_plural_evaluation:
             if hasattr(result, 'contiguous_regions'):
                 return Symbol(
-                    typing.Set[self.type],
+                    typing.AbstractSet[self.type],
                     frozenset(result.contiguous_regions())
                 )
         else:

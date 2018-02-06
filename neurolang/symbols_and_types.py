@@ -55,7 +55,7 @@ def is_subtype(left, right):
             issubclass(right, T) and
             issubclass(left, T)
             for T in (
-                typing.Set, typing.List, typing.Tuple,
+                typing.AbstractSet, typing.List, typing.Tuple,
                 typing.Mapping, typing.Iterable
             )
         )):
@@ -77,40 +77,6 @@ def is_subtype(left, right):
             right = typing.Text
 
         return issubclass(left, right)
-
-
-def resolve_forward_references(type_, type_hint, type_name=None):
-    if type_name is None:
-        type_name = type_.__name__
-    if (
-        isinstance(type_hint, str) and
-        type_hint == type_name
-    ):
-        return type_
-    elif (
-        isinstance(type_hint, typing._ForwardRef) and
-        type_hint.__forward_arg__ == type_name
-    ):
-        return type_
-    elif hasattr(type_hint, '__args__') and type_hint.__args__ is not None:
-        new_args = []
-        for arg in get_type_args(type_hint):
-            if isinstance(arg, list):
-                new_arg = []
-                for subarg in arg:
-                    new_arg.append(
-                        resolve_forward_references(
-                            type_, arg, type_name=type_name
-                        )
-                    )
-                new_args.append(new_arg)
-            else:
-                new_args.append(
-                    resolve_forward_references(type_, arg, type_name=type_name)
-                )
-        return type_hint.__origin__[tuple(new_args)]
-    else:
-        return type_hint
 
 
 def get_type_and_value(value, symbol_table=None):
@@ -154,7 +120,7 @@ def type_validation_value(value, type_, symbol_table=None):
                     for k, v in value.items()
                 )))
             )
-        elif issubclass(type_, typing.Set):
+        elif issubclass(type_, typing.AbstractSet):
             return (
                 issubclass(type(value), type_.__origin__) and
                 ((type_.__args__ is None) or all((

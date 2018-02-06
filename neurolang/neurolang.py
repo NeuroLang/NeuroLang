@@ -9,7 +9,7 @@ from .ast import TatsuASTConverter, ASTWalker, ASTNode
 from .exceptions import NeuroLangException
 from .symbols_and_types import (
     Identifier, Symbol, SymbolTable, typing_callable_from_annotated_function,
-    NeuroLangTypeException, is_subtype, resolve_forward_references,
+    NeuroLangTypeException, is_subtype,
     get_type_and_value
 )
 
@@ -140,11 +140,8 @@ class NeuroLangInterpreter(ASTWalker):
                 next(argument_types)
 
                 member.__annotations__['self'] = type_
-                for k, v in member.__annotations__.items():
-                    member.__annotations__[k] = resolve_forward_references(
-                        type_,
-                        v
-                    )
+                for k, v in typing.get_type_hints(member).items():
+                    member.__annotations__[k] = v
                 functions = functions + [
                     (member, type_name + '_' + name)
                 ]
@@ -181,7 +178,7 @@ class NeuroLangInterpreter(ASTWalker):
         symbol_type = category_solver.type
 
         if is_plural:
-            symbol_type = typing.Set[category_solver.type]
+            symbol_type = typing.AbstractSet[category_solver.type]
 
         query_result = category_solver.execute(
             ast['statement'], is_plural

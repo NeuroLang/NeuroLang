@@ -198,7 +198,7 @@ class GenericSolver(ASTWalker):
                     argument, symbol_table=self.symbol_table
                 )
 
-        if issubclass(type_, typing.Set):
+        if issubclass(type_, typing.AbstractSet):
             type_ = type_.__args__[0]
 
         if issubclass(type_, FiniteDomain):
@@ -217,8 +217,8 @@ class SetBasedSolver(GenericSolver):
         return super().__new__(cls)
 
     def predicate_in(
-        self, argument: typing.Set['type']
-    )->typing.Set['type']:
+        self, argument: typing.AbstractSet['type']
+    )->typing.AbstractSet['type']:
         return argument
 
         argument = copy(argument)
@@ -230,7 +230,7 @@ class SetBasedSolver(GenericSolver):
     def execute(self, ast, plural=False):
         self.is_plural_evaluation = plural
         value = self.evaluate(ast)
-        if isinstance(value, typing.Set) and not plural:
+        if isinstance(value, typing.AbstractSet) and not plural:
             value_set = copy(value)
             value = self.symbol_table[value_set.pop()].value
             for other_value in value_set:
