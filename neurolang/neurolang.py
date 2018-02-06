@@ -6,6 +6,7 @@ import inspect
 import tatsu
 
 from .ast import TatsuASTConverter, ASTWalker, ASTNode
+from .exceptions import NeuroLangException
 from .symbols_and_types import (
     Identifier, Symbol, SymbolTable, typing_callable_from_annotated_function,
     NeuroLangTypeException, is_subtype, resolve_forward_references,
@@ -35,7 +36,7 @@ grammar_EBNF = r'''
                      | value;
 
     import_statement = "import" ~ module:dotted_identifier;
-    query = identifier:dotted_identifier ("is" "a" | "are")
+    query = identifier:dotted_identifier link:("is" "a" | "are")
         category:identifier statement:statement;
     assignment = identifier:dotted_identifier "=" argument:value;
 
@@ -170,6 +171,13 @@ class NeuroLangInterpreter(ASTWalker):
     def query(self, ast):
         category_solver = self.category_solvers[ast['category']]
         is_plural = category_solver.plural_type_name == ast['category']
+
+        if not (is_plural or ast['link'] != 'are'):
+            raise NeuroLangException(
+                "Singular queries must be specified with 'is a' and "
+                "plural queries with 'are'"
+            )
+
         symbol_type = category_solver.type
 
         if is_plural:
