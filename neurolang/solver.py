@@ -7,7 +7,7 @@ from .ast import ASTWalker
 from .exceptions import NeuroLangException
 from .symbols_and_types import (
     Symbol, Identifier, type_validation_value, NeuroLangTypeException,
-    is_subtype, get_type_and_value, resolve_forward_references
+    is_subtype, get_type_and_value, replace_type_variable
 )
 
 
@@ -64,7 +64,22 @@ class GenericSolver(ASTWalker):
                 next(iter(signature.parameters.keys()))
             ]
 
-        if not (
+        type_, value = get_type_and_value(
+            argument, symbol_table=self.symbol_table
+        )
+
+        if not type_validation_value(
+            value,
+            replace_type_variable(
+                self.type,
+                parameter_type,
+                type_var=T
+             ),
+            symbol_table=self.symbol_table
+        ):
+            raise NeuroLangTypeException("argument of wrong type")
+
+        if (
             isinstance(argument, Identifier) and
             argument == self.identifier
         ):
@@ -96,10 +111,12 @@ class GenericSolver(ASTWalker):
                 type_var=T
              )
 
-            if not is_subtype(type_, return_type):
-                raise NeuroLangTypeException(
-                    "Value returned doesn't have the right type"
-                )
+        return_type = type_hints['return']
+        return_type = replace_type_variable(
+            self.type,
+            return_type,
+            type_var=T
+         )
 
             result = Symbol(
                 return_type,
