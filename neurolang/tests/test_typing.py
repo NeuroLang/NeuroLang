@@ -141,13 +141,15 @@ def test_type_validation_value():
     values = (
         3, {3, 8}, 'try', f, (3, 'a'),
         symbols_and_types.Symbol(typing.Tuple[str, float], ('a', 3.)),
-        symbols_and_types.Identifier('r')
+        symbols_and_types.Identifier('r'),
+        {'a': 3}
     )
     types_ = (
         int, typing.AbstractSet[int],
         typing.Text, typing.Callable[[int], int],
         typing.Tuple[int, str], typing.Tuple[str, float],
-        symbol_table[symbols_and_types.Identifier('r')].type
+        symbol_table[symbols_and_types.Identifier('r')].type,
+        typing.Mapping[str, int]
     )
 
     for i, v in enumerate(values):
@@ -179,3 +181,85 @@ def test_type_validation_value():
             None,
             typing.Generic[typing.T]
         )
+
+
+def test_Symbol():
+    v = 3
+    t = int
+    s = symbols_and_types.Symbol(t, v)
+    assert s.value == v
+    assert s.type == t
+    assert repr(s) == '%s: %s' % (v, t)
+
+    with pytest.raises(symbols_and_types.NeuroLangTypeException):
+        s = symbols_and_types.Symbol(t, 'a')
+
+
+def test_Identifier():
+    a = symbols_and_types.Identifier('a')
+    assert a == a
+    assert a == symbols_and_types.Identifier('a')
+    assert a == 'a'
+    assert hash(a) == hash('a')
+    assert repr(a) == "Id('a')"
+    assert a['b'] == symbols_and_types.Identifier('a.b')
+    assert a['b'].parent() == a
+
+
+def test_SymbolTable():
+    st = symbols_and_types.SymbolTable()
+    s1 = symbols_and_types.Symbol(int, 3)
+    s2 = symbols_and_types.Symbol(int, 4)
+    s3 = symbols_and_types.Symbol(float, 5.)
+    s4 = symbols_and_types.Symbol(int, 5)
+    s6 = symbols_and_types.Symbol(str, 'a')
+
+    assert len(st) == 0
+
+    st[symbols_and_types.Identifier('s1')] = s1
+    assert len(st) == 1
+    assert 's1' in st
+    assert st['s1'] == s1
+    assert st.symbols_by_type(s1.type) == {'s1': s1}
+    assert repr(st) == "{%s: (%s)}" % (symbols_and_types.Identifier('s1'), s1)
+
+    st[symbols_and_types.Identifier('s2')] = s2
+    assert len(st) == 2
+    assert 's2' in st
+    assert st['s2'] == s2
+    assert st.symbols_by_type(s1.type) == {'s1': s1, 's2': s2}
+
+    st[symbols_and_types.Identifier('s3')] = s3
+    assert len(st) == 3
+    assert 's3' in st
+    assert st['s3'] == s3
+    assert st.symbols_by_type(s1.type) == {'s1': s1, 's2': s2}
+    assert st.symbols_by_type(s3.type) == {'s3': s3}
+
+    del st['s1']
+    assert len(st) == 2
+    assert 's1' not in st
+    assert 's1' not in st.symbols_by_type(s1.type)
+
+    assert {int, float} == st.types()
+
+    stb = st.create_scope()
+    assert 's2' in stb
+    assert 's3' in stb
+    stb[symbols_and_types.Identifier('s4')] = s4
+    assert 's4' in stb
+    assert 's4' not in st
+
+    stb[symbols_and_types.Identifier('s5')] = None
+    assert 's5' in stb
+    assert stb[symbols_and_types.Identifier('s5')] is None
+
+    stc = stb.create_scope()
+    stc[symbols_and_types.Identifier('s6')] = s6
+    assert {int, float, str} == stc.types()
+    assert stc.symbols_by_type(int) == {'s2': s2, 's4': s4}
+
+    assert set(iter(stc)) == {'s2', 's3', 's4', 's5', 's6'}
+
+    with pytest.raises(ValueError):
+        stb[symbols_and_types.Identifier('s6')] = 5

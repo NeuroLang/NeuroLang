@@ -2,6 +2,7 @@ import typing
 import types
 import inspect
 import collections
+from itertools import chain
 
 from .exceptions import NeuroLangException
 
@@ -117,7 +118,6 @@ def type_validation_value(value, type_, symbol_table=None):
     ):
         value = symbol_table[value].value
     elif isinstance(value, Symbol):
-        print("Use symbol!")
         value = value.value
 
     if hasattr(type_, '__origin__'):
@@ -132,7 +132,7 @@ def type_validation_value(value, type_, symbol_table=None):
         elif issubclass(type_, typing.Mapping):
             return (
                 issubclass(type(value), type_.__origin__) and
-                ((type_.args is None) or all((
+                ((type_.__args__ is None) or all((
                     type_validation_value(
                         k, type_.__args__[0], symbol_table=symbol_table
                     ) and
@@ -246,12 +246,11 @@ class SymbolTable(collections.MutableMapping):
         del self._symbols[key]
 
     def __iter__(self):
-        keys = self._symbols.keys()
-        act = self.enclosing_scope
-        while act is not None:
-            keys = act.keys() or keys
-            act = act.enclosing_scope
-        return iter(keys)
+        keys = iter(self._symbols.keys())
+        if self.enclosing_scope is not None:
+            keys = chain(keys, iter(self.enclosing_scope))
+
+        return keys
 
     def __repr__(self):
         return '{%s}' % (
@@ -264,7 +263,7 @@ class SymbolTable(collections.MutableMapping):
     def types(self):
         ret = self._symbols_by_type.keys()
         if self.enclosing_scope is not None:
-            ret = ret or self._symbols_by_type.keys()
+            ret = ret | self.enclosing_scope.types()
         return ret
 
     def symbols_by_type(self, type_):
