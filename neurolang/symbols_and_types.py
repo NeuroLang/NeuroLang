@@ -110,18 +110,25 @@ def get_type_and_value(value, symbol_table=None):
 def type_validation_value(value, type_, symbol_table=None):
     if type_ == typing.Any:
         return True
-    elif hasattr(type_, '__origin__'):
+
+    if (
+        (symbol_table is not None) and
+        isinstance(value, Identifier)
+    ):
+        value = symbol_table[value].value
+    elif isinstance(value, Symbol):
+        print("Use symbol!")
+        value = value.value
+
+    if hasattr(type_, '__origin__'):
         if type_.__origin__ == typing.Union:
             return any(
                 type_validation_value(value, t, symbol_table=symbol_table)
                 for t in type_.__args__
             )
         elif issubclass(type_, typing.Callable):
-            if isinstance(value, types.FunctionType):
-                symbol_type = typing_callable_from_annotated_function(value)
-            else:
-                symbol_type = type(value)
-            return is_subtype(symbol_type, type_)
+            value_type, _ = get_type_and_value(value)
+            return is_subtype(value_type, type_)
         elif issubclass(type_, typing.Mapping):
             return (
                 issubclass(type(value), type_.__origin__) and
@@ -134,6 +141,16 @@ def type_validation_value(value, type_, symbol_table=None):
                     )
                     for k, v in value.items()
                 )))
+            )
+        elif issubclass(type_, typing.Tuple):
+            return (
+                issubclass(type(value), type_.__origin__) and
+                all((
+                    type_validation_value(
+                        v, t, symbol_table=symbol_table
+                    )
+                    for v, t in zip(value, type_.__args__)
+                ))
             )
         elif any(
             issubclass(type_, t)
@@ -148,26 +165,9 @@ def type_validation_value(value, type_, symbol_table=None):
                     for i in value
                 )))
             )
-        elif issubclass(type_, typing.Tuple):
-            return (
-                issubclass(type(value), type_.__origin__) and
-                ((type_.__args__ is None) or all((
-                    type_validation_value(
-                        v, t, symbol_table=symbol_table
-                    )
-                    for v, t in zip(value, type_.__args__)
-                )))
-            )
         else:
             raise ValueError("Type %s not implemented in the checker" % type_)
     else:
-        if (
-            (symbol_table is not None) and
-            isinstance(value, Identifier)
-        ):
-            value = symbol_table[value].value
-        elif isinstance(value, Symbol):
-            value = value.value
         return isinstance(
             value, type_
         )

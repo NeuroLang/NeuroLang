@@ -5,7 +5,7 @@ import typing
 from .. import symbols_and_types
 
 
-def test_typing_callable_from_anntoated_function():
+def test_typing_callable_from_annotated_function():
     def fun(a: int, b: str)->float:
         pass
 
@@ -98,3 +98,84 @@ def test_replace_subtype():
             float, typing.Set[typing.T], typing.T
         )
     )
+
+
+def test_get_type_and_value():
+    type_, value = symbols_and_types.get_type_and_value(3)
+    assert type_ == int
+    assert value == 3
+
+    type_, value = symbols_and_types.get_type_and_value(
+        symbols_and_types.Symbol(int, 3)
+    )
+    assert type_ == int
+    assert value == 3
+
+    type_, value = symbols_and_types.get_type_and_value(
+        symbols_and_types.Identifier('a'),
+        {symbols_and_types.Identifier('a'): symbols_and_types.Symbol(int, 3)}
+    )
+    assert type_ == int
+    assert value == 3
+
+    def f(a: int)->int:
+        return 0
+
+    type_, value = symbols_and_types.get_type_and_value(f)
+
+    assert type_ == typing.Callable[[int], int]
+    assert value == f
+
+
+def test_type_validation_value():
+    def f(a: int)->int:
+        return 0
+
+    symbol_table = {
+        symbols_and_types.Identifier('r'): symbols_and_types.Symbol(
+             typing.AbstractSet[str],
+             {'a'}
+        )
+    }
+
+    values = (
+        3, {3, 8}, 'try', f, (3, 'a'),
+        symbols_and_types.Symbol(typing.Tuple[str, float], ('a', 3.)),
+        symbols_and_types.Identifier('r')
+    )
+    types_ = (
+        int, typing.AbstractSet[int],
+        typing.Text, typing.Callable[[int], int],
+        typing.Tuple[int, str], typing.Tuple[str, float],
+        symbol_table[symbols_and_types.Identifier('r')].type
+    )
+
+    for i, v in enumerate(values):
+        assert symbols_and_types.type_validation_value(
+            v, typing.Any,
+            symbol_table=symbol_table
+        )
+
+        for j, t in enumerate(types_):
+            if i == j:
+                assert symbols_and_types.type_validation_value(
+                    v, t, symbol_table=symbol_table
+                )
+                assert symbols_and_types.type_validation_value(
+                    v, typing.Union[t, types_[(i + 1) % len(types_)]],
+                    symbol_table=symbol_table
+                )
+            else:
+                assert not symbols_and_types.type_validation_value(
+                    v, t, symbol_table=symbol_table
+                )
+                assert not symbols_and_types.type_validation_value(
+                    v, typing.Union[t, types_[(i + 1) % len(types_)]],
+                    symbol_table=symbol_table
+                )
+
+    with pytest.raises(ValueError, message="typing Generic not supported"):
+        assert symbols_and_types.type_validation_value(
+            None,
+            typing.Generic[typing.T]
+        )
