@@ -25,7 +25,7 @@ def get_type_args(type_):
     if hasattr(type_, '__args__') and type_.__args__ is not None:
         return type_.__args__
     else:
-        return []
+        return tuple()
 
 
 def is_subtype(left, right):
@@ -37,20 +37,20 @@ def is_subtype(left, right):
                 is_subtype(left, r)
                 for r in right.__args__
             )
-        elif (
-            issubclass(right, typing.Callable) and
-            issubclass(left, typing.Callable)
-        ):
-            left_args = get_type_args(left)
-            right_args = get_type_args(right)
+        elif issubclass(right, typing.Callable):
+            if issubclass(left, typing.Callable):
+                left_args = get_type_args(left)
+                right_args = get_type_args(right)
 
-            if len(left_args) != len(right_args):
-                False
+                if len(left_args) != len(right_args):
+                    False
 
-            return all((
-                is_subtype(left_arg, right_arg)
-                for left_arg, right_arg in zip(left_args, right_args)
-            ))
+                return all((
+                    is_subtype(left_arg, right_arg)
+                    for left_arg, right_arg in zip(left_args, right_args)
+                ))
+            else:
+                return False
         elif (any(
             issubclass(right, T) and
             issubclass(left, T)
@@ -71,8 +71,6 @@ def is_subtype(left, right):
             right = typing.SupportsInt
         elif right == float:
             right = typing.SupportsFloat
-        elif right == complex:
-            right = typing.SupportsComplex
         elif right == str:
             right = typing.Text
 
@@ -85,27 +83,12 @@ def replace_type_variable(type_, type_hint, type_var=None):
         type_hint == type_var
     ):
         return type_
-    elif (
-        isinstance(type_hint, typing._ForwardRef) and
-        type_hint.__forward_arg__ == type_var
-    ):
-        return type_
     elif hasattr(type_hint, '__args__') and type_hint.__args__ is not None:
         new_args = []
         for arg in get_type_args(type_hint):
-            if isinstance(arg, list):
-                new_arg = []
-                for subarg in arg:
-                    new_arg.append(
-                        replace_type_variable(
-                            type_, arg, type_var=type_var
-                        )
-                    )
-                new_args.append(new_arg)
-            else:
-                new_args.append(
-                    replace_type_variable(type_, arg, type_var=type_var)
-                )
+            new_args.append(
+                replace_type_variable(type_, arg, type_var=type_var)
+            )
         return type_hint.__origin__[tuple(new_args)]
     else:
         return type_hint
@@ -229,7 +212,9 @@ class Identifier(object):
 class SymbolTable(collections.MutableMapping):
     def __init__(self, enclosing_scope=None):
         self._symbols = collections.OrderedDict()
-        self._symbols_by_type = collections.defaultdict(lambda x: {})
+        self._symbols_by_type = collections.defaultdict(
+            lambda: set()
+        )
         self.enclosing_scope = enclosing_scope
 
     def __len__(self):
