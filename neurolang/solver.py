@@ -81,35 +81,20 @@ class GenericSolver(ASTWalker):
 
         if (
             isinstance(argument, Identifier) and
-            argument == self.identifier
+            argument == self.identifier and
+            issubclass(type_, FiniteDomain)
         ):
-            type_, value = get_type_and_value(
-                argument, symbol_table=self.symbol_table
+            all_ = self.symbol_table.symbols_by_type[type_]
+            result = set(
+                s for s in all_
+                if method(s)
             )
-
-            if not type_validation_value(
-                value,
-                resolve_forward_references(
-                    self.type,
-                    parameter_type,
-                    type_var=T
-                 ),
-                symbol_table=self.symbol_table
-            ):
-                raise NeuroLangTypeException("argument of wrong type")
-
+        else:
             result = method(value)
 
-            type_, value = get_type_and_value(
-                result, symbol_table=self.symbol_table
-            )
-
-            return_type = type_hints['return']
-            return_type = resolve_forward_references(
-                self.type,
-                return_type,
-                type_var=T
-             )
+        type_, value = get_type_and_value(
+            result, symbol_table=self.symbol_table
+        )
 
         return_type = type_hints['return']
         return_type = replace_type_variable(
@@ -118,11 +103,16 @@ class GenericSolver(ASTWalker):
             type_var=T
          )
 
-            result = Symbol(
-                return_type,
-                value,
-                symbol_table=self.symbol_table
+        if not is_subtype(type_, return_type):
+            raise NeuroLangTypeException(
+                "Value returned doesn't have the right type"
             )
+
+        result = Symbol(
+            return_type,
+            value,
+            symbol_table=self.symbol_table
+        )
 
         return result
 
@@ -184,9 +174,13 @@ class GenericSolver(ASTWalker):
         self.set_symbol_table(self.symbol_table.create_scope())
         self.is_plural_evaluation = plural
         self.query_identifier = identifier
-        result = self.evaluate(ast)
+        self.symbol_table[self.query_identifier] = None
+        result = self.specialized_execute(ast)
         self.set_symbol_table(self.symbol_table.enclosing_scope)
         return result
+
+    def specialized_execute(self, ast):
+        return self.evaluate(ast)
 
     def statement(self, ast):
         arguments = ast['argument']
@@ -257,10 +251,12 @@ class SetBasedSolver(GenericSolver):
             value = value.union(next_value)
         return value
 
-    def execute(self, ast, plural=False, identifier=None):
-        self.is_plural_evaluation = plural
+    def specialized_execute(self, ast):
         value = self.evaluate(ast)
-        if isinstance(value, typing.AbstractSet) and not plural:
+        if (
+            isinstance(value, typing.AbstractSet) and
+            not self.is_plural_evaluation
+        ):
             value_set = copy(value)
             value = self.symbol_table[value_set.pop()].value
             for other_value in value_set:

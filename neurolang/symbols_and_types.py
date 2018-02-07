@@ -152,7 +152,10 @@ def type_validation_value(value, type_, symbol_table=None):
                     for k, v in value.items()
                 )))
             )
-        elif issubclass(type_, typing.AbstractSet):
+        elif any(
+            issubclass(type_, t)
+            for t in (typing.AbstractSet, typing.Sequence, typing.Iterable)
+        ):
             return (
                 issubclass(type(value), type_.__origin__) and
                 ((type_.__args__ is None) or all((
@@ -247,8 +250,10 @@ class SymbolTable(collections.MutableMapping):
             if value.type not in self._symbols_by_type:
                 self._symbols_by_type[value.type] = dict()
             self._symbols_by_type[value.type][key] = value
+        elif value is None:
+            self._symbols[key] = None
         else:
-            raise ValueError("Wrong assignement %s" % str(value))
+            raise ValueError("Wrong assignment %s" % str(value))
 
     def __delitem__(self, key):
         value = self._symbols[key]

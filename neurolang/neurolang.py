@@ -243,7 +243,7 @@ class NeuroLangInterpreter(ASTWalker):
                 raise NeuroLangTypeException(
                     "Value %s not recognised" % str(ast)
                 )
-        elif isinstance(ast, Identifier):
+        elif isinstance(ast, Identifier) and ast in self.symbol_table:
             return self.symbol_table[ast]
         else:
             return ast
