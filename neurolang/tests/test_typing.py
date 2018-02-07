@@ -189,7 +189,6 @@ def test_Symbol():
     s = symbols_and_types.Symbol(t, v)
     assert s.value == v
     assert s.type == t
-    assert repr(s) == '%s: %s' % (v, t)
 
     with pytest.raises(symbols_and_types.NeuroLangTypeException):
         s = symbols_and_types.Symbol(t, 'a')
@@ -201,7 +200,6 @@ def test_Identifier():
     assert a == symbols_and_types.Identifier('a')
     assert a == 'a'
     assert hash(a) == hash('a')
-    assert repr(a) == "Id('a')"
     assert a['b'] == symbols_and_types.Identifier('a.b')
     assert a['b'].parent() == a
 
@@ -221,7 +219,6 @@ def test_SymbolTable():
     assert 's1' in st
     assert st['s1'] == s1
     assert st.symbols_by_type(s1.type) == {'s1': s1}
-    assert repr(st) == "{%s: (%s)}" % (symbols_and_types.Identifier('s1'), s1)
 
     st[symbols_and_types.Identifier('s2')] = s2
     assert len(st) == 2
