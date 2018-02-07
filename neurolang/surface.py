@@ -302,25 +302,26 @@ class SurfaceOverlaySolver(GenericSolver):
     def predicate_from_file(self, filename: str)->bool:
         f = nib.load(filename)
 
-        self.symbol_table[None] = Symbol(
+        self.symbol_table[self.identifier] = Symbol(
             SurfaceOverlay,
             SurfaceOverlay(
-                self.symbol_table[(None, 'surface')].value,
+                self.symbol_table[self.identifier['surface']].value,
                 f.darrays[0].data
             )
         )
         return True
 
     def predicate_on_surface(self, surface: Surface)->bool:
-        self.symbol_table[(None, 'surface')] = Symbol(
+        self.symbol_table[self.identifier['surface']] = Symbol(
             Surface,
             surface
         )
         return True
 
-    def execute(self, ast, plural=False):
+    def execute(self, ast, plural=False, identifier=None):
         self.set_symbol_table(self.symbol_table.create_scope())
+        self.identifier = identifier
         self.evaluate(ast)
-        result = self.symbol_table[None]
+        result = self.symbol_table[self.identifier]
         self.set_symbol_table(self.symbol_table.enclosing_scope)
         return result

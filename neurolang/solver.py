@@ -6,9 +6,12 @@ from copy import copy
 from .ast import ASTWalker
 from .exceptions import NeuroLangException
 from .symbols_and_types import (
-    Symbol, type_validation_value, NeuroLangTypeException,
-    is_subtype, resolve_forward_references, get_type_and_value
+    Symbol, Identifier, type_validation_value, NeuroLangTypeException,
+    is_subtype, get_type_and_value, resolve_forward_references
 )
+
+
+T = typing.TypeVar('T')
 
 
 class NeuroLangPredicateException(NeuroLangException):
@@ -49,51 +52,60 @@ class GenericSolver(ASTWalker):
 
         method = getattr(self, predicate_method)
         signature = inspect.signature(method)
+        type_hints = typing.get_type_hints(method)
+
         argument = ast['argument']
         if len(signature.parameters) != 1:
             raise NeuroLangPredicateException(
                 "Predicates take exactly one parameter"
             )
         else:
-            parameter = next(iter(signature.parameters.values()))
+            parameter_type = type_hints[
+                next(iter(signature.parameters.keys()))
+            ]
 
-        type_, value = get_type_and_value(
-            argument, symbol_table=self.symbol_table
-        )
-
-        if not type_validation_value(
-            value,
-            resolve_forward_references(
-                self.type,
-                parameter.annotation,
-                type_name='type'
-            ),
-            symbol_table=self.symbol_table
+        if not (
+            isinstance(argument, Identifier) and
+            argument == self.identifier
         ):
-            raise NeuroLangTypeException("argument of wrong type")
-
-        result = method(value)
-
-        type_, value = get_type_and_value(
-            result, symbol_table=self.symbol_table
-        )
-
-        return_type = resolve_forward_references(
-            self.type,
-            signature.return_annotation,
-            type_name='type'
-        )
-
-        if not is_subtype(type_, return_type):
-            raise NeuroLangTypeException(
-                "Value returned doesn't have the right type"
+            type_, value = get_type_and_value(
+                argument, symbol_table=self.symbol_table
             )
 
-        result = Symbol(
-            return_type,
-            value,
-            symbol_table=self.symbol_table
-        )
+            if not type_validation_value(
+                value,
+                resolve_forward_references(
+                    self.type,
+                    parameter_type,
+                    type_var=T
+                 ),
+                symbol_table=self.symbol_table
+            ):
+                raise NeuroLangTypeException("argument of wrong type")
+
+            result = method(value)
+
+            type_, value = get_type_and_value(
+                result, symbol_table=self.symbol_table
+            )
+
+            return_type = type_hints['return']
+            return_type = resolve_forward_references(
+                self.type,
+                return_type,
+                type_var=T
+             )
+
+            if not is_subtype(type_, return_type):
+                raise NeuroLangTypeException(
+                    "Value returned doesn't have the right type"
+                )
+
+            result = Symbol(
+                return_type,
+                value,
+                symbol_table=self.symbol_table
+            )
 
         return result
 
@@ -151,9 +163,10 @@ class GenericSolver(ASTWalker):
             value
         )
 
-    def execute(self, ast, plural=False):
+    def execute(self, ast, plural=False, identifier=None):
         self.set_symbol_table(self.symbol_table.create_scope())
         self.is_plural_evaluation = plural
+        self.query_identifier = identifier
         result = self.evaluate(ast)
         self.set_symbol_table(self.symbol_table.enclosing_scope)
         return result
@@ -217,8 +230,8 @@ class SetBasedSolver(GenericSolver):
         return super().__new__(cls)
 
     def predicate_in(
-        self, argument: typing.AbstractSet['type']
-    )->typing.AbstractSet['type']:
+        self, argument: typing.AbstractSet[T]
+    )->typing.AbstractSet[T]:
         return argument
 
         argument = copy(argument)
@@ -227,7 +240,7 @@ class SetBasedSolver(GenericSolver):
             value = value.union(next_value)
         return value
 
-    def execute(self, ast, plural=False):
+    def execute(self, ast, plural=False, identifier=None):
         self.is_plural_evaluation = plural
         value = self.evaluate(ast)
         if isinstance(value, typing.AbstractSet) and not plural:

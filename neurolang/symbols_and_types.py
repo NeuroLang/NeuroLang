@@ -79,6 +79,38 @@ def is_subtype(left, right):
         return issubclass(left, right)
 
 
+def resolve_forward_references(type_, type_hint, type_var=None):
+    if (
+        isinstance(type_hint, typing.TypeVar) and
+        type_hint == type_var
+    ):
+        return type_
+    elif (
+        isinstance(type_hint, typing._ForwardRef) and
+        type_hint.__forward_arg__ == type_var
+    ):
+        return type_
+    elif hasattr(type_hint, '__args__') and type_hint.__args__ is not None:
+        new_args = []
+        for arg in get_type_args(type_hint):
+            if isinstance(arg, list):
+                new_arg = []
+                for subarg in arg:
+                    new_arg.append(
+                        resolve_forward_references(
+                            type_, arg, type_var=type_var
+                        )
+                    )
+                new_args.append(new_arg)
+            else:
+                new_args.append(
+                    resolve_forward_references(type_, arg, type_var=type_var)
+                )
+        return type_hint.__origin__[tuple(new_args)]
+    else:
+        return type_hint
+
+
 def get_type_and_value(value, symbol_table=None):
     if symbol_table is not None and isinstance(value, Identifier):
         value = symbol_table[value]
@@ -174,6 +206,9 @@ class Symbol(object):
 class Identifier(object):
     def __init__(self, value):
         self.value = value
+
+    def __getitem__(self, value):
+        return Identifier(self.value + '.' + value)
 
     def __hash__(self):
         return hash(self.value)

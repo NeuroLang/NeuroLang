@@ -166,6 +166,7 @@ class NeuroLangInterpreter(ASTWalker):
             solver.set_symbol_table(self.symbol_table)
 
     def query(self, ast):
+        identifier = ast['identifier']
         category_solver = self.category_solvers[ast['category']]
         is_plural = category_solver.plural_type_name == ast['category']
 
@@ -181,7 +182,7 @@ class NeuroLangInterpreter(ASTWalker):
             symbol_type = typing.AbstractSet[category_solver.type]
 
         query_result = category_solver.execute(
-            ast['statement'], is_plural
+            ast['statement'], plural=is_plural, identifier=identifier
         )
 
         value_type, value = get_type_and_value(
