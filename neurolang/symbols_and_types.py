@@ -210,6 +210,9 @@ class Identifier(object):
     def __getitem__(self, value):
         return Identifier(self.value + '.' + value)
 
+    def parent(self):
+        return Identifier(self.value[:self.value.rindex('.')])
+
     def __hash__(self):
         return hash(self.value)
 
@@ -223,7 +226,7 @@ class Identifier(object):
 class SymbolTable(collections.MutableMapping):
     def __init__(self, enclosing_scope=None):
         self._symbols = collections.OrderedDict()
-        self._symbols_by_type = dict()
+        self._symbols_by_type = collections.defaultdict({})
         self.enclosing_scope = enclosing_scope
 
     def __len__(self):
@@ -236,7 +239,7 @@ class SymbolTable(collections.MutableMapping):
             if self.enclosing_scope is not None:
                 return self.enclosing_scope[key]
             else:
-                raise NeuroLangException("Symbol %s not in the table" % key)
+                raise KeyError("Symbol %s not in the table" % key)
 
     def __setitem__(self, key, value):
         if isinstance(value, Symbol):
