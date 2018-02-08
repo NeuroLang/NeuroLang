@@ -9,9 +9,12 @@ from .ast import TatsuASTConverter, ASTWalker, ASTNode
 from .exceptions import NeuroLangException
 from .symbols_and_types import (
     Identifier, Symbol, SymbolTable, typing_callable_from_annotated_function,
-    NeuroLangTypeException, is_subtype,
+    NeuroLangTypeException, is_subtype, get_Callable_arguments_and_return,
     get_type_and_value
 )
+
+
+__all__ = ['NeuroLangInterpreter', 'grammar_EBNF', 'parser']
 
 
 # import numpy as np
@@ -402,10 +405,6 @@ class NeuroLangInterpreter(ASTWalker):
 
     def integer(self, ast):
         return int(ast['value'])
-
-
-def get_Callable_arguments_and_return(callable):
-    return callable.__args__[:-1], callable.__args__[-1]
 
 
 def parser(code, **kwargs):

@@ -12,6 +12,10 @@ class NeuroLangTypeException(NeuroLangException):
     pass
 
 
+def get_Callable_arguments_and_return(callable):
+    return callable.__args__[:-1], callable.__args__[-1]
+
+
 def typing_callable_from_annotated_function(function):
     signature = inspect.signature(function)
     parameter_types = [

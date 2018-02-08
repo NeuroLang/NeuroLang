@@ -260,3 +260,10 @@ def test_SymbolTable():
 
     with pytest.raises(ValueError):
         stb[symbols_and_types.Identifier('s6')] = 5
+
+
+def test_get_callable_arguments_and_return():
+    c = typing.Callable[[int, str], float]
+    args, ret = symbols_and_types.get_Callable_arguments_and_return(c)
+    assert args == (int, str)
+    assert ret == float
