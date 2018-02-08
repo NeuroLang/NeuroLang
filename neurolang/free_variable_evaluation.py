@@ -1,5 +1,6 @@
 from itertools import chain
 import operator as op
+from functools import wraps
 # from types import FunctionType, BuiltinFunctionType
 
 __all__ = ['FreeVariable', 'FreeVariableApplication', 'evaluate']
@@ -123,6 +124,7 @@ def evaluate(free_variable_symbol, **kwargs):
 
 
 def op_bind(op):
+    @wraps(op)
     def f(*args):
         return FreeVariableApplication(op, args=args)
 
@@ -130,6 +132,7 @@ def op_bind(op):
 
 
 def rop_bind(op):
+    @wraps(op)
     def f(self, value):
         return FreeVariableApplication(op, args=(value, self))
 
