@@ -5,6 +5,7 @@ import collections
 from itertools import chain
 
 from .exceptions import NeuroLangException
+from .free_variable_evaluation import FreeVariable
 
 
 class NeuroLangTypeException(NeuroLangException):
@@ -189,24 +190,18 @@ class Symbol(object):
         return '%s: %s' % (self.value, self.type)
 
 
-class Identifier(object):
-    def __init__(self, value):
-        self.value = value
+class Identifier(FreeVariable):
+    def __init__(self, name):
+        self.name = name
 
     def __getitem__(self, value):
-        return Identifier(self.value + '.' + value)
+        return Identifier(self.name + '.' + value)
 
     def parent(self):
-        return Identifier(self.value[:self.value.rindex('.')])
-
-    def __hash__(self):
-        return hash(self.value)
-
-    def __eq__(self, other):
-        return hash(self) == hash(other)
+        return Identifier(self.name[:self.name.rindex('.')])
 
     def __repr__(self):
-        return 'Id(%s)' % repr(self.value)
+        return 'Id(%s)' % repr(self.name)
 
 
 class SymbolTable(collections.MutableMapping):

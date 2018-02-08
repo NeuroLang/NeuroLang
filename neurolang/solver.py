@@ -44,10 +44,10 @@ class GenericSolver(ASTWalker):
         logging.debug(str(self.__class__.__name__) + " evaluating predicate")
         identifier = ast['identifier']
 
-        predicate_method = 'predicate_' + identifier.value
+        predicate_method = 'predicate_' + identifier.name
         if not hasattr(self, predicate_method):
             raise NeuroLangException(
-                "Predicate %s not implemented" % identifier.value
+                "Predicate %s not implemented" % identifier.name
             )
 
         method = getattr(self, predicate_method)

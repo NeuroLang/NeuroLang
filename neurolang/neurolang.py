@@ -371,10 +371,10 @@ class NeuroLangInterpreter(ASTWalker):
                     "Tuple projection argument should be an int"
                 )
             item = int(item)
-            if len(identifier.value) > item:
+            if len(identifier.name) > item:
                 return Symbol(
                     identifier.type.__args__[item],
-                    identifier.value[item]
+                    identifier.name[item]
                 )
             else:
                 raise NeuroLangTypeException(
@@ -392,7 +392,7 @@ class NeuroLangInterpreter(ASTWalker):
 
             return Symbol(
                 identifier.type.__args__[1],
-                identifier.value[item]
+                identifier.name[item]
             )
         else:
             raise NeuroLangTypeException("%s is not a tuple" % identifier)

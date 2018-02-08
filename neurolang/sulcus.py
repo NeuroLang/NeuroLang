@@ -68,10 +68,10 @@ class SulcusSolver(SetBasedSolver):
             symbol_table=self.symbol_table
         )
 
-        if ast['identifier'].value in (
+        if ast['identifier'].name in (
             "anterior_to", "posterior_to", "superior_to", "inferior_to"
         ):
-            predicate = ast['identifier'].value[:-3]
+            predicate = ast['identifier'].name[:-3]
             if not is_subtype(argument_type, self.type):
                 raise ValueError()
             return Symbol(
@@ -79,7 +79,7 @@ class SulcusSolver(SetBasedSolver):
                 argument[predicate],
                 symbol_table=self.symbol_table
             )
-        if ast['identifier'].value == 'with_limb':
+        if ast['identifier'].name == 'with_limb':
             if not is_subtype(argument_type, self.type):
                 raise
             return argument
