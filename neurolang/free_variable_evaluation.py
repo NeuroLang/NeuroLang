@@ -1,14 +1,16 @@
 from itertools import chain
 import operator as op
-from functools import wraps
+import typing
+from functools import wraps, WRAPPER_ASSIGNMENTS
 # from types import FunctionType, BuiltinFunctionType
 
 __all__ = ['FreeVariable', 'FreeVariableApplication', 'evaluate']
 
 
 class FreeVariable(object):
-    def __init__(self, name):
+    def __init__(self, name, variable_type=typing.Any):
         self.name = name
+        self.variable_type = variable_type
 
     def __eq__(self, other):
         return (
@@ -23,12 +25,29 @@ class FreeVariable(object):
         return 'FV{%s}' % self.name
 
     def __getattr__(self, name):
-        return FreeVariableApplication(getattr, args=(self, name))
+        if name in WRAPPER_ASSIGNMENTS:
+            return super().__getattr__(name)
+        else:
+            return FreeVariableApplication(getattr, args=(self, name))
 
 
 class FreeVariableApplication(object):
-    def __init__(self, object_, args=None, kwargs=None):
-        self.function = object_
+    def __init__(
+        self, object_, args=None, kwargs=None,
+        variable_type=typing.Any
+    ):
+        self.__wrapped__ = object_
+
+        if args is None and kwargs is None:
+            for attr in WRAPPER_ASSIGNMENTS:
+                if hasattr(self.__wrapped__, attr):
+                    setattr(self, attr, getattr(self.__wrapped__, attr))
+            self.variable_type = None
+            self.is_function_type = True
+        else:
+            self.is_function_type = False
+            self.variable_type = variable_type
+
         if isinstance(object_, FreeVariable):
             self._free_variables = {object_}
         elif isinstance(object_, FreeVariableApplication):
@@ -61,16 +80,24 @@ class FreeVariableApplication(object):
             elif isinstance(arg, FreeVariableApplication):
                 free_variables |= arg._free_variables
 
-        if len(free_variables) > 0:
-            return FreeVariableApplication(self, args, kwargs)
+        if hasattr(self, '__annotations__'):
+            variable_type = self.__annotations__.get('return', None)
         else:
-            return self.function(*args, **kwargs)
+            variable_type = None
+
+        if len(free_variables) > 0:
+            return FreeVariableApplication(
+                self, args, kwargs,
+                variable_type=variable_type
+            )
+        else:
+            return self.__wrapped__(*args, **kwargs)
 
     def __repr__(self):
-        if hasattr(self.function, '__name__'):
-            fname = self.function.__name__
+        if hasattr(self.__wrapped__, '__name__'):
+            fname = self.__wrapped__.__name__
         else:
-            fname = repr(self.function)
+            fname = repr(self.__wrapped__)
         r = 'FVA{%s}' % fname
         if self.args is not None:
             r += (
@@ -90,14 +117,14 @@ def evaluate(free_variable_symbol, **kwargs):
     Replace free variables and evaluate the function
     '''
     if (
-            isinstance(free_variable_symbol.function, FreeVariable) and
-            free_variable_symbol.function in kwargs
+            isinstance(free_variable_symbol.__wrapped__, FreeVariable) and
+            free_variable_symbol.__wrapped__ in kwargs
     ):
-        function = kwargs[free_variable_symbol.function]
-    elif isinstance(free_variable_symbol.function, FreeVariableApplication):
-        function = evaluate(free_variable_symbol.function, **kwargs)
+        function = kwargs[free_variable_symbol.__wrapped__]
+    elif isinstance(free_variable_symbol.__wrapped__, FreeVariableApplication):
+        function = evaluate(free_variable_symbol.__wrapped__, **kwargs)
     else:
-        function = free_variable_symbol.function
+        function = free_variable_symbol.__wrapped__
 
     if free_variable_symbol.args is None:
         return function
@@ -154,7 +181,15 @@ for operator_name in dir(op):
     if not hasattr(FreeVariableApplication, name):
         setattr(FreeVariableApplication, name, op_bind(operator))
 
-for operator in [op.add, op.sub]:
+for operator in [
+    op.add, op.sub, op.mul, op.matmul, op.truediv, op.floordiv,
+    op.mod,  # op.divmod,
+    op.pow, op.lshift, op.rshift, op.and_, op.xor,
+    op.or_
+]:
     name = '__r%s__' % operator.__name__
+    if name.endswith('___'):
+        name = name[:-1]
+
     setattr(FreeVariable, name, rop_bind(operator))
     setattr(FreeVariableApplication, name, rop_bind(operator))

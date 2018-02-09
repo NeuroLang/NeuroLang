@@ -3,6 +3,7 @@ import pytest
 import typing
 
 from .. import symbols_and_types
+from ..free_variable_evaluation import FreeVariable, FreeVariableApplication
 
 
 def test_typing_callable_from_annotated_function():
@@ -267,3 +268,20 @@ def test_get_callable_arguments_and_return():
     args, ret = symbols_and_types.get_Callable_arguments_and_return(c)
     assert args == (int, str)
     assert ret == float
+
+
+def test_free_variable_wrapping():
+    def f(a: int)->float:
+        '''
+        test help
+        '''
+        return 2. * int(a)
+
+    fva = FreeVariableApplication(f)
+    x = FreeVariable('x', variable_type=int)
+    fvb = fva(x)
+    assert symbols_and_types.get_type_and_value(fva) == (
+        typing.Callable[[int], float], fva
+    )
+    assert symbols_and_types.get_type_and_value(fvb) == (float, fvb)
+    assert symbols_and_types.get_type_and_value(x) == (int, x)

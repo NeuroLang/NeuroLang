@@ -5,7 +5,7 @@ import collections
 from itertools import chain
 
 from .exceptions import NeuroLangException
-from .free_variable_evaluation import FreeVariable
+from .free_variable_evaluation import FreeVariable, FreeVariableApplication
 
 
 class NeuroLangTypeException(NeuroLangException):
@@ -106,6 +106,13 @@ def get_type_and_value(value, symbol_table=None):
 
     if isinstance(value, Symbol):
         return value.type, value.value
+    elif isinstance(value, FreeVariable):
+        return value.variable_type, value
+    elif isinstance(value, FreeVariableApplication):
+        if value.is_function_type:
+            return typing_callable_from_annotated_function(value), value
+        else:
+            return value.variable_type, value
     else:
         if isinstance(value, types.FunctionType):
             return typing_callable_from_annotated_function(value), value

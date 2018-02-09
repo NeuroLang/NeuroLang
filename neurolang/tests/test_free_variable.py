@@ -2,7 +2,9 @@ from ..free_variable_evaluation import (
     FreeVariable, FreeVariableApplication,
     evaluate
 )
+
 import operator as op
+import inspect
 
 
 def test_free_variable_application():
@@ -51,3 +53,23 @@ def test_free_variable_method_and_operator():
     assert evaluate(fvc * 2, a=1) == 6
     assert evaluate(a | False, a=True)
     assert evaluate(fve, a=[0, 1, 2]) == 2
+
+
+def test_free_variable_wrapping():
+    def f(a: int)->float:
+        '''
+        test help
+        '''
+        return 2. * int(a)
+
+    fva = FreeVariableApplication(f)
+    x = FreeVariable('x', variable_type=int)
+    fvb = fva(x)
+    assert fva.__annotations__ == f.__annotations__
+    assert fva.__doc__ == f.__doc__
+    assert fva.__name__ == f.__name__
+    assert fva.__qualname__ == f.__qualname__
+    assert fva.__module__ == f.__module__
+    assert inspect.signature(fva) == inspect.signature(f)
+    assert fvb.variable_type == float
+    assert x.variable_type == int
