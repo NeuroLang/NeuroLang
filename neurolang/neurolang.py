@@ -5,7 +5,8 @@ import inspect
 
 import tatsu
 
-from .ast import TatsuASTConverter, ASTWalker, ASTNode
+from .ast import ASTWalker, ASTNode
+from .ast_tatsu import TatsuASTConverter
 from .exceptions import NeuroLangException
 from .symbols_and_types import (
     Identifier, Symbol, SymbolTable, typing_callable_from_annotated_function,

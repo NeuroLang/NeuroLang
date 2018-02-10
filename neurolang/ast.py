@@ -1,5 +1,4 @@
 import logging
-import tatsu
 
 
 class ASTNode(dict):
@@ -27,6 +26,7 @@ class ASTWalker(object):
                 logging.debug('\tdeferring to class method %s' % ast.name)
                 return getattr(self, new_node.name)(new_node)
             else:
+                logging.debug('\tdeferring to _default method %s' % ast.name)
                 return self._default(new_node)
         elif isinstance(ast, list):
             logging.debug("\tevaluating a list of nodes")
@@ -37,14 +37,3 @@ class ASTWalker(object):
 
     def _default(self, ast):
         return ast
-
-
-class TatsuASTConverter(object):
-    def _default(self, ast):
-        if isinstance(ast, tatsu.ast.AST):
-            return ASTNode(
-                ast['parseinfo'].rule,
-                ast
-            )
-        else:
-            return ast
