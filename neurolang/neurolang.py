@@ -9,7 +9,8 @@ from .ast import ASTWalker, ASTNode
 from .ast_tatsu import TatsuASTConverter
 from .exceptions import NeuroLangException
 from .symbols_and_types import (
-    Identifier, TypedSymbol, TypedSymbolTable, typing_callable_from_annotated_function,
+    Identifier, TypedSymbol, TypedSymbolTable,
+    typing_callable_from_annotated_function,
     NeuroLangTypeException, is_subtype, get_Callable_arguments_and_return,
     get_type_and_value
 )
@@ -40,7 +41,7 @@ grammar_EBNF = r'''
                      | value;
 
     import_statement = "import" ~ module:dotted_identifier;
-    query = identifier:dotted_identifier link:("is" "a" | "are")
+    query = identifier:dotted_identifier link:("is" ("a" | "an") | "are")
         category:identifier statement:statement;
     assignment = identifier:dotted_identifier "=" argument:sum;
 
