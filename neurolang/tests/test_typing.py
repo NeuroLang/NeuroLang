@@ -3,7 +3,7 @@ import pytest
 import typing
 
 from .. import symbols_and_types
-from ..free_variable_evaluation import FreeVariable, FreeVariableApplication
+from ..expressions import Symbol, SymbolApplication
 
 
 def test_typing_callable_from_annotated_function():
@@ -107,14 +107,17 @@ def test_get_type_and_value():
     assert value == 3
 
     type_, value = symbols_and_types.get_type_and_value(
-        symbols_and_types.Symbol(int, 3)
+        symbols_and_types.TypedSymbol(int, 3)
     )
     assert type_ == int
     assert value == 3
 
     type_, value = symbols_and_types.get_type_and_value(
         symbols_and_types.Identifier('a'),
-        {symbols_and_types.Identifier('a'): symbols_and_types.Symbol(int, 3)}
+        {
+            symbols_and_types.Identifier('a'):
+                symbols_and_types.TypedSymbol(int, 3)
+        }
     )
     assert type_ == int
     assert value == 3
@@ -133,7 +136,7 @@ def test_type_validation_value():
         return 0
 
     symbol_table = {
-        symbols_and_types.Identifier('r'): symbols_and_types.Symbol(
+        symbols_and_types.Identifier('r'): symbols_and_types.TypedSymbol(
              typing.AbstractSet[str],
              {'a'}
         )
@@ -141,7 +144,7 @@ def test_type_validation_value():
 
     values = (
         3, {3, 8}, 'try', f, (3, 'a'),
-        symbols_and_types.Symbol(typing.Tuple[str, float], ('a', 3.)),
+        symbols_and_types.TypedSymbol(typing.Tuple[str, float], ('a', 3.)),
         symbols_and_types.Identifier('r'),
         {'a': 3}
     )
@@ -184,15 +187,15 @@ def test_type_validation_value():
         )
 
 
-def test_Symbol():
+def test_TypedSymbol():
     v = 3
     t = int
-    s = symbols_and_types.Symbol(t, v)
+    s = symbols_and_types.TypedSymbol(t, v)
     assert s.value == v
     assert s.type == t
 
     with pytest.raises(symbols_and_types.NeuroLangTypeException):
-        s = symbols_and_types.Symbol(t, 'a')
+        s = symbols_and_types.TypedSymbol(t, 'a')
 
 
 def test_Identifier():
@@ -205,13 +208,13 @@ def test_Identifier():
     assert a['b'].parent() == a
 
 
-def test_SymbolTable():
-    st = symbols_and_types.SymbolTable()
-    s1 = symbols_and_types.Symbol(int, 3)
-    s2 = symbols_and_types.Symbol(int, 4)
-    s3 = symbols_and_types.Symbol(float, 5.)
-    s4 = symbols_and_types.Symbol(int, 5)
-    s6 = symbols_and_types.Symbol(str, 'a')
+def test_TypedSymbolTable():
+    st = symbols_and_types.TypedSymbolTable()
+    s1 = symbols_and_types.TypedSymbol(int, 3)
+    s2 = symbols_and_types.TypedSymbol(int, 4)
+    s3 = symbols_and_types.TypedSymbol(float, 5.)
+    s4 = symbols_and_types.TypedSymbol(int, 5)
+    s6 = symbols_and_types.TypedSymbol(str, 'a')
 
     assert len(st) == 0
 
@@ -277,8 +280,8 @@ def test_free_variable_wrapping():
         '''
         return 2. * int(a)
 
-    fva = FreeVariableApplication(f)
-    x = FreeVariable('x', variable_type=int)
+    fva = SymbolApplication(f)
+    x = Symbol('x', type_=int)
     fvb = fva(x)
     assert symbols_and_types.get_type_and_value(fva) == (
         typing.Callable[[int], float], fva

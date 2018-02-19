@@ -1,5 +1,5 @@
-from ..free_variable_evaluation import (
-    FreeVariable, FreeVariableApplication,
+from ..expressions import (
+    Symbol, SymbolApplication,
     evaluate
 )
 
@@ -8,22 +8,22 @@ import inspect
 
 
 def test_free_variable_application():
-    a = FreeVariable('a')
-    b = FreeVariable('b')
-    assert FreeVariableApplication(op.add)(2, 3) == 5
+    a = Symbol('a')
+    b = Symbol('b')
+    assert SymbolApplication(op.add)(2, 3) == 5
 
-    fva = FreeVariableApplication(op.add)(a, 3)
-    fvb = FreeVariableApplication(op.sub)(fva, 10)
-    fvc = FreeVariableApplication(op.mul)(fvb, b)
-    fvd = FreeVariableApplication(a, kwargs={'c': b})
-    fve = FreeVariableApplication(a, kwargs={'c': op.add(b, 2)})
+    fva = SymbolApplication(op.add)(a, 3)
+    fvb = SymbolApplication(op.sub)(fva, 10)
+    fvc = SymbolApplication(op.mul)(fvb, b)
+    fvd = SymbolApplication(a, kwargs={'c': b})
+    fve = SymbolApplication(a, kwargs={'c': op.add(b, 2)})
 
     assert a in fva._free_variables and (len(fva._free_variables) == 1)
     assert evaluate(fva, a=2) == 5
     assert a in fvb._free_variables and (len(fvb._free_variables) == 1)
     assert evaluate(fvb, a=2) == -5
     assert b in fvc._free_variables and (len(fvc._free_variables) == 2)
-    assert isinstance(evaluate(fvc, b=2), FreeVariableApplication)
+    assert isinstance(evaluate(fvc, b=2), SymbolApplication)
     assert evaluate(evaluate(fvc, b=3), a=2) == evaluate(fvc, a=2, b=3) == -15
     assert evaluate(
         evaluate(fvd, a=lambda *args, **kwargs: kwargs['c']),
@@ -37,11 +37,11 @@ def test_free_variable_application():
         evaluate(fve, b=2),
         a=lambda *args, **kwargs: kwargs['c']
     ) == 4
-    assert FreeVariableApplication(op.add)(2, 3) == 5
+    assert SymbolApplication(op.add)(2, 3) == 5
 
 
 def test_free_variable_method_and_operator():
-    a = FreeVariable('a')
+    a = Symbol('a')
     fva = a.__len__()
     fvb = a - 4
     fvc = 4 - a
@@ -62,8 +62,8 @@ def test_free_variable_wrapping():
         '''
         return 2. * int(a)
 
-    fva = FreeVariableApplication(f)
-    x = FreeVariable('x', variable_type=int)
+    fva = SymbolApplication(f)
+    x = Symbol('x', type_=int)
     fvb = fva(x)
     assert fva.__annotations__ == f.__annotations__
     assert fva.__doc__ == f.__doc__
@@ -71,5 +71,5 @@ def test_free_variable_wrapping():
     assert fva.__qualname__ == f.__qualname__
     assert fva.__module__ == f.__module__
     assert inspect.signature(fva) == inspect.signature(f)
-    assert fvb.variable_type == float
-    assert x.variable_type == int
+    assert fvb.type == float
+    assert x.type == int

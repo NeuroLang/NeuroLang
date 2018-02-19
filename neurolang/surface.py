@@ -8,7 +8,7 @@ import numpy as np
 from cortex import polyutils
 
 from .solver import GenericSolver, SetBasedSolver
-from .symbols_and_types import Symbol
+from .symbols_and_types import TypedSymbol
 
 
 class Surface(Set):
@@ -284,12 +284,12 @@ class RegionSolver(SetBasedSolver):
 
         if self.is_plural_evaluation:
             if hasattr(result, 'contiguous_regions'):
-                return Symbol(
+                return TypedSymbol(
                     typing.AbstractSet[self.type],
                     frozenset(result.contiguous_regions())
                 )
         else:
-            return Symbol(
+            return TypedSymbol(
                 self.type,
                 self.type(result)
             )
@@ -302,7 +302,7 @@ class SurfaceOverlaySolver(GenericSolver):
     def predicate_from_file(self, filename: str)->bool:
         f = nib.load(filename)
 
-        self.symbol_table[self.identifier] = Symbol(
+        self.symbol_table[self.identifier] = TypedSymbol(
             SurfaceOverlay,
             SurfaceOverlay(
                 self.symbol_table[self.identifier['surface']].value,
@@ -312,7 +312,7 @@ class SurfaceOverlaySolver(GenericSolver):
         return True
 
     def predicate_on_surface(self, surface: Surface)->bool:
-        self.symbol_table[self.identifier['surface']] = Symbol(
+        self.symbol_table[self.identifier['surface']] = TypedSymbol(
             Surface,
             surface
         )

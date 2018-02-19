@@ -5,7 +5,7 @@ import collections
 from itertools import chain
 
 from .exceptions import NeuroLangException
-from .free_variable_evaluation import FreeVariable, FreeVariableApplication
+from .expressions import Symbol, SymbolApplication
 
 
 class NeuroLangTypeException(NeuroLangException):
@@ -104,15 +104,15 @@ def get_type_and_value(value, symbol_table=None):
     if symbol_table is not None and isinstance(value, Identifier):
         value = symbol_table[value]
 
-    if isinstance(value, Symbol):
+    if isinstance(value, TypedSymbol):
         return value.type, value.value
-    elif isinstance(value, FreeVariable):
-        return value.variable_type, value
-    elif isinstance(value, FreeVariableApplication):
+    elif isinstance(value, Symbol):
+        return value.type, value
+    elif isinstance(value, SymbolApplication):
         if value.is_function_type:
             return typing_callable_from_annotated_function(value), value
         else:
-            return value.variable_type, value
+            return value.type, value
     else:
         if isinstance(value, types.FunctionType):
             return typing_callable_from_annotated_function(value), value
@@ -129,7 +129,7 @@ def type_validation_value(value, type_, symbol_table=None):
         isinstance(value, Identifier)
     ):
         value = symbol_table[value].value
-    elif isinstance(value, Symbol):
+    elif isinstance(value, TypedSymbol):
         value = value.value
 
     if hasattr(type_, '__origin__'):
@@ -185,7 +185,7 @@ def type_validation_value(value, type_, symbol_table=None):
         )
 
 
-class Symbol(object):
+class TypedSymbol(object):
     def __init__(self, type_, value, symbol_table=None):
         if not type_validation_value(
             value, type_, symbol_table=symbol_table
@@ -201,7 +201,7 @@ class Symbol(object):
         return '%s: %s' % (self.value, self.type)
 
 
-class Identifier(FreeVariable):
+class Identifier(Symbol):
     def __init__(self, name):
         self.name = name
 
@@ -215,7 +215,7 @@ class Identifier(FreeVariable):
         return 'Id(%s)' % repr(self.name)
 
 
-class SymbolTable(collections.MutableMapping):
+class TypedSymbolTable(collections.MutableMapping):
     def __init__(self, enclosing_scope=None):
         self._symbols = collections.OrderedDict()
         self._symbols_by_type = collections.defaultdict(
@@ -233,10 +233,10 @@ class SymbolTable(collections.MutableMapping):
             if self.enclosing_scope is not None:
                 return self.enclosing_scope[key]
             else:
-                raise KeyError("Symbol %s not in the table" % key)
+                raise KeyError("TypedSymbol %s not in the table" % key)
 
     def __setitem__(self, key, value):
-        if isinstance(value, Symbol):
+        if isinstance(value, TypedSymbol):
             self._symbols[key] = value
             if value.type not in self._symbols_by_type:
                 self._symbols_by_type[value.type] = dict()
@@ -282,5 +282,5 @@ class SymbolTable(collections.MutableMapping):
         return ret
 
     def create_scope(self):
-        subscope = SymbolTable(enclosing_scope=self)
+        subscope = TypedSymbolTable(enclosing_scope=self)
         return subscope
