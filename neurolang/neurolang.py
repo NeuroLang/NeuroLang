@@ -182,7 +182,10 @@ class NeuroLangInterpreter(ASTWalker):
         category_solver = self.category_solvers[ast['category']]
         is_plural = category_solver.plural_type_name == ast['category']
 
-        if not (is_plural or ast['link'] != 'are'):
+        if not (
+            (is_plural and ast['link'] == 'are') or
+            (not is_plural and (ast['link'] not in ('is a', 'is an')))
+        ):
             raise NeuroLangException(
                 "Singular queries must be specified with 'is a' and "
                 "plural queries with 'are'"

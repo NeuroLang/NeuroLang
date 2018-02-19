@@ -1,3 +1,5 @@
+from pytest import raises
+
 from .. import neurolang as nl
 from .. import solver
 from typing import Set
@@ -52,6 +54,7 @@ def test_queries():
     two is a four_int equal_to 2
     three is a four_int equal_to 3
     oneset are four_ints singleton_set 1
+    oneset_ are four_ints in oneset
     '''
 
     ast = nl.parser(script)
@@ -62,3 +65,14 @@ def test_queries():
     assert nli.symbol_table['three'].value == 3
     assert len(nli.symbol_table['oneset'].value) == 1
     assert next(iter(nli.symbol_table['oneset'].value)) == 1
+    assert len(nli.symbol_table['oneset_'].value) == 1
+    assert next(iter(nli.symbol_table['oneset_'].value)) == 1
+
+    with raises(nl.NeuroLangException):
+        nli.evaluate(nl.parser("fail is a four_int singleton_set 1"))
+
+    with raises(nl.NeuroLangException):
+        nli.evaluate(nl.parser("fail are four_int singleton_set 1"))
+
+    with raises(nl.NeuroLangException):
+        nli.evaluate(nl.parser("fail is a four_ints singleton_set 1"))
