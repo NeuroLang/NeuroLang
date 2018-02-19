@@ -21,7 +21,7 @@ __all__ = ['NeuroLangInterpreter', 'grammar_EBNF', 'parser']
 # import numpy as np
 # from .due import due, Doi
 
-# __all__ = ["Model", "Fit", "opt_err_func", "transform_data", "cumgauss"]
+# __all__ = []
 
 
 # due.cite(Doi("10.1167/13.9.30"),
@@ -42,7 +42,7 @@ grammar_EBNF = r'''
     import_statement = "import" ~ module:dotted_identifier;
     query = identifier:dotted_identifier link:("is" "a" | "are")
         category:identifier statement:statement;
-    assignment = identifier:dotted_identifier "=" argument:value;
+    assignment = identifier:dotted_identifier "=" argument:sum;
 
     statement = argument+:and_test { OR ~ argument:and_test };
     and_test = argument+:not_test { AND ~ argument:not_test };
@@ -94,8 +94,8 @@ grammar_EBNF = r'''
            | integer;
 
     integer = value:/-{0,1}[0-9]+/;
-    point_float = value:/-{0,1}[0-9]*/ '.' /[0-9]+/
-                | value:/-{0,1}[0-9]+/ '.';
+    point_float = value:(/-{0,1}[0-9]*/ '.' /[0-9]+/)
+                | value:(/-{0,1}[0-9]+/ '.');
 
     string = '"'value:/(\\(\w+|\S+)|[^\r\n\f"])*/'"'
            | "'"value:/(\\(\w+|\S+)|[^\r\n\f"])*/"'";
@@ -116,14 +116,20 @@ class NeuroLangInterpreter(ASTWalker):
         if types is None:
             types = []
 
-        for category_solver in category_solvers:
-            self.category_solvers[category_solver.type_name] = category_solver
-            self.category_solvers[
-                category_solver.plural_type_name
-            ] = category_solver
+        if category_solvers is not None:
+            for category_solver in category_solvers:
+                self.category_solvers[
+                    category_solver.type_name
+                ] = category_solver
+                self.category_solvers[
+                    category_solver.plural_type_name
+                ] = category_solver
 
-            types.append((category_solver.type, category_solver.type_name))
+                types.append((category_solver.type, category_solver.type_name))
 
+        if types is None:
+            types = []
+        types += [(int, 'int'), (str, 'str'), (float, 'float')]
         for type_, type_name in types:
             for name, member in inspect.getmembers(type_):
                 if not inspect.isfunction(member) or name.startswith('_'):
@@ -154,17 +160,18 @@ class NeuroLangInterpreter(ASTWalker):
             for k, v in symbols.items():
                 self.symbol_table[Identifier(k)] = v
 
-        for f in functions:
-            if isinstance(f, tuple):
-                func = f[0]
-                name = f[1]
-            else:
-                func = f
-                name = f.__name__
-            self.symbol_table[Identifier(name)] = Symbol(
-                typing_callable_from_annotated_function(func),
-                func
-            )
+        if functions is not None:
+            for f in functions:
+                if isinstance(f, tuple):
+                    func = f[0]
+                    name = f[1]
+                else:
+                    func = f
+                    name = f.__name__
+                self.symbol_table[Identifier(name)] = Symbol(
+                    typing_callable_from_annotated_function(func),
+                    func
+                )
 
         for solver in self.category_solvers.values():
             solver.set_symbol_table(self.symbol_table)
@@ -234,21 +241,10 @@ class NeuroLangInterpreter(ASTWalker):
 
     def value(self, ast):
         ast = ast['value']
-        if isinstance(ast, ASTNode):
-            if ast.name == 'identifier':
-                identifier = ast['root']
-                if ast['children'] is not None:
-                    identifier += '.' + '.'.join(ast['children'])
-                identifier = Identifier(identifier)
-                return self.symbol_table[identifier]
-            elif ast.name == 'string':
-                return str(ast['value'])
-            else:
-                raise NeuroLangTypeException(
-                    "Value %s not recognised" % str(ast)
-                )
-        elif isinstance(ast, Identifier) and ast in self.symbol_table:
-            return self.symbol_table[ast]
+        if isinstance(ast, Identifier):
+                return self.symbol_table[ast]
+            # raise NeuroLangException(
+            #    "Value %s not recognised" % str(ast)
         else:
             return ast
 
@@ -291,33 +287,56 @@ class NeuroLangInterpreter(ASTWalker):
 
     def sum(self, ast):
         arguments = ast['term']
-        result = arguments[0]
+        result_type, result = get_type_and_value(arguments[0])
         if 'op' in ast:
             for op, argument in zip(ast['op'], arguments[1:]):
+                argument_type, argument = get_type_and_value(argument)
+                if (
+                    (argument_type != result_type) and
+                    is_subtype(result_type, argument_type)
+                ):
+                    result_type = argument_type
                 if op == '+':
                     result = result + argument
                 else:
                     result = result - argument
-        return result
+            return Symbol(result_type, result)
+        else:
+            return arguments[0]
 
     def product(self, ast):
         arguments = ast['factor']
-        result = arguments[0]
+        result_type, result = get_type_and_value(arguments[0])
         if 'op' in ast:
             for op, argument in zip(ast['op'], arguments[1:]):
+                argument_type, argument = get_type_and_value(argument)
+                if (
+                    (argument_type != result_type) and
+                    is_subtype(result_type, argument_type)
+                ):
+                    result_type = argument_type
                 if op == '*':
                     result = result * argument
                 elif op == '/':
                     result = result / argument
-                else:
+                elif op == '//':
                     result = result // argument
-        return result
+                    result_type = int
+
+            return Symbol(result_type, result)
+        else:
+            return arguments[0]
 
     def power(self, ast):
         result = ast['base']
 
         if 'exponent' in ast:
-            result = result ** ast['exponent']
+            result_type, result_value = get_type_and_value(result)
+            result_value = (
+                result_value **
+                get_type_and_value(ast['exponent'])[1]
+            )
+            result = Symbol(result_type, result_value)
 
         return result
 
@@ -401,11 +420,14 @@ class NeuroLangInterpreter(ASTWalker):
         else:
             raise NeuroLangTypeException("%s is not a tuple" % identifier)
 
+    def string(self, ast):
+        return Symbol(str, str(ast['value']))
+
     def point_float(self, ast):
-        return float(ast['value'])
+        return Symbol(float, float(''.join(ast['value'])))
 
     def integer(self, ast):
-        return int(ast['value'])
+        return Symbol(int, int(ast['value']))
 
 
 def parser(code, **kwargs):
