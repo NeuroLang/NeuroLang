@@ -5,7 +5,7 @@ import collections
 from itertools import chain
 
 from .exceptions import NeuroLangException
-from .expressions import Symbol, SymbolApplication
+from . import expressions
 
 
 class NeuroLangTypeException(NeuroLangException):
@@ -106,9 +106,9 @@ def get_type_and_value(value, symbol_table=None):
 
     if isinstance(value, TypedSymbol):
         return value.type, value.value
-    elif isinstance(value, Symbol):
+    elif isinstance(value, expressions.Symbol):
         return value.type, value
-    elif isinstance(value, SymbolApplication):
+    elif isinstance(value, expressions.SymbolApplication):
         if value.is_function_type:
             return typing_callable_from_annotated_function(value), value
         else:
@@ -185,7 +185,7 @@ def type_validation_value(value, type_, symbol_table=None):
         )
 
 
-class TypedSymbol(object):
+class TypedSymbol(expressions.Constant):
     def __init__(self, type_, value, symbol_table=None):
         if not type_validation_value(
             value, type_, symbol_table=symbol_table
@@ -201,7 +201,7 @@ class TypedSymbol(object):
         return '%s: %s' % (self.value, self.type)
 
 
-class Identifier(Symbol):
+class Identifier(expressions.Symbol):
     def __init__(self, name):
         self.name = name
 

@@ -7,10 +7,21 @@ from functools import wraps, WRAPPER_ASSIGNMENTS
 __all__ = ['Symbol', 'SymbolApplication', 'evaluate']
 
 
-class Symbol(object):
+class Expression(object):
+    _symbols = {}
+
+    def __getattr__(self, name):
+        if name in WRAPPER_ASSIGNMENTS or name == '__signature__':
+            return super().__getattr__(name)
+        else:
+            return SymbolApplication(getattr, args=(self, name))
+
+
+class Symbol(Expression):
     def __init__(self, name, type_=typing.Any):
         self.name = name
         self.type = type_
+        self._symbols = {self}
 
     def __eq__(self, other):
         return (
@@ -24,14 +35,27 @@ class Symbol(object):
     def __repr__(self):
         return 'S{%s}' % self.name
 
-    def __getattr__(self, name):
-        if name in WRAPPER_ASSIGNMENTS:
-            return super().__getattr__(name)
-        else:
-            return SymbolApplication(getattr, args=(self, name))
+
+class Constant(Expression):
+    def __init__(self, value, type_=typing.Any):
+        self.value = value
+        self.type = type_
+        self._symbols = {}
+
+    def __eq__(self, other):
+        return (
+            (isinstance(other, Constant) or isinstance(other, self.type)) and
+            hash(self) == hash(other)
+        )
+
+    def __hash__(self):
+        return hash(self.value)
+
+    def __repr__(self):
+        return 'C{%s}' % self.value
 
 
-class SymbolApplication(object):
+class SymbolApplication(Expression):
     def __init__(
         self, object_, args=None, kwargs=None,
         type_=typing.Any
@@ -49,11 +73,11 @@ class SymbolApplication(object):
             self.type = type_
 
         if isinstance(object_, Symbol):
-            self._free_variables = {object_}
+            self._symbols = {object_}
         elif isinstance(object_, SymbolApplication):
-            self._free_variables = object_._free_variables.copy()
+            self._symbols = object_._symbols.copy()
         else:
-            self._free_variables = set()
+            self._symbols = set()
 
         self.args = args
         self.kwargs = kwargs
@@ -67,31 +91,25 @@ class SymbolApplication(object):
 
             for arg in chain(self.args, self.kwargs.values()):
                 if isinstance(arg, Symbol):
-                    self._free_variables.add(arg)
+                    self._symbols.add(arg)
                 elif isinstance(arg, SymbolApplication):
-                    self._free_variables |= arg._free_variables
+                    self._symbols |= arg._symbols
 
     def __call__(self, *args, **kwargs):
-        free_variables = self._free_variables.copy()
-
+        symbols = self._symbols.copy()
         for arg in chain(args, kwargs.values()):
-            if isinstance(arg, Symbol):
-                free_variables.add(arg)
-            elif isinstance(arg, SymbolApplication):
-                free_variables |= arg._free_variables
+            if isinstance(arg, Expression):
+                symbols |= arg._symbols
 
         if hasattr(self, '__annotations__'):
             variable_type = self.__annotations__.get('return', None)
         else:
             variable_type = None
 
-        if len(free_variables) > 0:
-            return SymbolApplication(
-                self, args, kwargs,
-                type_=variable_type
-            )
-        else:
-            return self.__wrapped__(*args, **kwargs)
+        return SymbolApplication(
+            self, args, kwargs,
+            type_=variable_type,
+         )
 
     def __repr__(self):
         if hasattr(self.__wrapped__, '__name__'):
@@ -106,9 +124,8 @@ class SymbolApplication(object):
                 ', '.join(
                     repr(k) + '=' + repr(v)
                     for k, v in self.kwargs.items()
-                ) +
-                ')'
-            )
+                ) + ')')
+
         return r
 
 
@@ -137,7 +154,7 @@ for operator_name in dir(op):
     if name.endswith('___'):
         name = name[:-1]
 
-    for c in (Symbol, SymbolApplication):
+    for c in (Constant, Symbol, SymbolApplication):
         if not hasattr(c, name):
             setattr(c, name, op_bind(operator))
 
@@ -152,7 +169,7 @@ for operator in [
     if name.endswith('___'):
         name = name[:-1]
 
-    for c in (Symbol, SymbolApplication):
+    for c in (Constant, Symbol, SymbolApplication):
         setattr(c, name, rop_bind(operator))
 
 
@@ -160,35 +177,47 @@ def evaluate(expression, **kwargs):
     '''
     Replace free variables and evaluate the function
     '''
-    if (
-            isinstance(expression.__wrapped__, Symbol) and
-            expression.__wrapped__ in kwargs
-    ):
-        function = kwargs[expression.__wrapped__]
-    elif isinstance(expression.__wrapped__, SymbolApplication):
-        function = evaluate(expression.__wrapped__, **kwargs)
-    else:
-        function = expression.__wrapped__
-
-    if expression.args is None:
-        return function
-
-    new_args = []
-    for arg in expression.args:
-        if isinstance(arg, Symbol) and arg in kwargs:
-            new_args.append(kwargs[arg])
-        elif isinstance(arg, SymbolApplication):
-            new_args.append(evaluate(arg, **kwargs))
+    if isinstance(expression, Constant):
+        return expression.value
+    if isinstance(expression, Symbol):
+        if expression in kwargs:
+            return kwargs[expression]
         else:
+            return expression
+    elif isinstance(expression, SymbolApplication):
+        if (
+                isinstance(expression.__wrapped__, Symbol) and
+                expression.__wrapped__ in kwargs
+        ):
+            function = kwargs[expression.__wrapped__]
+        elif isinstance(expression.__wrapped__, SymbolApplication):
+            function = evaluate(expression.__wrapped__, **kwargs)
+        else:
+            function = expression.__wrapped__
+
+        if expression.args is None:
+            return function
+
+        we_should_evaluate = True
+        new_args = []
+        for arg in expression.args:
+            arg = evaluate(arg, **kwargs)
             new_args.append(arg)
+            we_should_evaluate &= not isinstance(arg, Expression)
 
-    new_kwargs = dict()
-    for k, arg in expression.kwargs.items():
-        if isinstance(arg, Symbol) and arg in kwargs:
-            new_kwargs[k] = kwargs[arg]
-        elif isinstance(arg, SymbolApplication):
-            new_kwargs[k] = evaluate(arg, **kwargs)
-        else:
+        new_kwargs = dict()
+        for k, arg in expression.kwargs.items():
+            arg = evaluate(arg, **kwargs)
             new_kwargs[k] = arg
+            we_should_evaluate &= not isinstance(arg, Expression)
 
-    return SymbolApplication(function)(*new_args, **new_kwargs)
+        function = evaluate(function, **kwargs)
+        if isinstance(function, Expression):
+            we_should_evaluate = False
+
+        if we_should_evaluate:
+            return function(*new_args, **new_kwargs)
+        else:
+            return SymbolApplication(function)(*new_args, **new_kwargs)
+    else:
+        return expression
