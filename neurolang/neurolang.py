@@ -236,10 +236,6 @@ class NeuroLangInterpreter(ASTWalker):
             tuple(values)
         )
 
-    def category(self, ast):
-        self.category = ast['category']
-        return ast['category']
-
     def predicate(self, ast):
         return ast
 
@@ -354,7 +350,7 @@ class NeuroLangInterpreter(ASTWalker):
         function_symbol = self.symbol_table[ast['identifier']]
         function = function_symbol.value
 
-        if not isinstance(function_symbol.type, typing.Callable):
+        if not is_subtype(function_symbol.type, typing.Callable):
             raise NeuroLangTypeException()
 
         function_type_arguments, function_type_return = \

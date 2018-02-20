@@ -14,9 +14,16 @@ def test_assignment_values():
         e = 1 + 2 * 5.
         f = 2. ** 3.
         g = f
+        h = double(f)
     '''
 
-    nli = nl.NeuroLangInterpreter()
+    def double(v: float)->float:
+        return 2 * v
+
+    def bad_double(v: float)->float:
+        return {}
+
+    nli = nl.NeuroLangInterpreter(functions=[double, bad_double])
     ast = nl.parser(command)
     nli.evaluate(ast)
 
@@ -28,6 +35,16 @@ def test_assignment_values():
     assert nli.symbol_table['e'].value == 11
     assert nli.symbol_table['f'].value == 8.
     assert nli.symbol_table['g'].value == 8.
+    assert nli.symbol_table['h'].value == 16.
+
+    with raises(nl.NeuroLangTypeException):
+        nli.evaluate(nl.parser('t = double("a")'))
+
+    with raises(nl.NeuroLangTypeException):
+        nli.evaluate(nl.parser('t = bad_double(1.)'))
+
+    with raises(nl.NeuroLangTypeException):
+        nli.evaluate(nl.parser('t = a("a")'))
 
 
 def test_queries():
