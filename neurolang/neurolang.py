@@ -380,45 +380,47 @@ class NeuroLangInterpreter(ASTWalker):
         )
 
     def projection(self, ast):
-        identifier = self.symbol_table[ast['identifier']]
-        item, item_type = get_type_and_value(
+        symbol = self.symbol_table[ast['identifier']]
+        item_type, item = get_type_and_value(
             ast['item'],
             symbol_table=self.symbol_table
         )
         if (
-            isinstance(identifier, TypedSymbol) and
-            issubclass(identifier.type, typing.Tuple)
+            isinstance(symbol, TypedSymbol) and
+            issubclass(symbol.type, typing.Tuple)
         ):
             if not is_subtype(item_type, typing.SupportsInt):
                 raise NeuroLangTypeException(
                     "Tuple projection argument should be an int"
                 )
             item = int(item)
-            if len(identifier.name) > item:
+            if len(symbol.value) > item:
                 return TypedSymbol(
-                    identifier.type.__args__[item],
-                    identifier.name[item]
+                    symbol.type.__args__[item],
+                    symbol.value[item]
                 )
             else:
                 raise NeuroLangTypeException(
                     "Tuple doesn't have %d items" % item
                 )
         elif (
-            isinstance(identifier, TypedSymbol) and
-            issubclass(identifier.type, typing.Mapping)
+            isinstance(symbol, TypedSymbol) and
+            issubclass(symbol.type, typing.Mapping)
         ):
-            key_type = identifier.type.__args__[0]
+            key_type = symbol.type.__args__[0]
             if not is_subtype(item_type, key_type):
                 raise NeuroLangTypeException(
                     "key type does not agree with Mapping key %s" % key_type
                 )
 
             return TypedSymbol(
-                identifier.type.__args__[1],
-                identifier.name[item]
+                symbol.type.__args__[1],
+                symbol.name[item]
             )
         else:
-            raise NeuroLangTypeException("%s is not a tuple" % identifier)
+            raise NeuroLangTypeException(
+                "%s is not a tuple" % ast['identifier']
+            )
 
     def string(self, ast):
         return TypedSymbol(str, str(ast['value']))

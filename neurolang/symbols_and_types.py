@@ -37,7 +37,7 @@ def get_type_args(type_):
 def is_subtype(left, right):
     if right == typing.Any:
         return True
-    elif hasattr(right, '__origin__'):
+    elif hasattr(right, '__origin__') and right.__origin__ is not None:
         if right.__origin__ == typing.Union:
             return any(
                 is_subtype(left, r)
@@ -132,7 +132,7 @@ def type_validation_value(value, type_, symbol_table=None):
     elif isinstance(value, TypedSymbol):
         value = value.value
 
-    if hasattr(type_, '__origin__'):
+    if hasattr(type_, '__origin__') and type_.__origin__ is not None:
         if type_.__origin__ == typing.Union:
             return any(
                 type_validation_value(value, t, symbol_table=symbol_table)

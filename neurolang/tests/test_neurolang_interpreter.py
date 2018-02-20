@@ -2,7 +2,7 @@ from pytest import raises
 
 from .. import neurolang as nl
 from .. import solver
-from typing import Set
+from typing import Set, Tuple
 
 
 def test_assignment_values():
@@ -15,6 +15,9 @@ def test_assignment_values():
         f = 2. ** 3.
         g = f
         h = double(f)
+        i = 5 - 2
+        l = 5. / 2.
+        m = 5 // 2
     '''
 
     def double(v: float)->float:
@@ -36,6 +39,9 @@ def test_assignment_values():
     assert nli.symbol_table['f'].value == 8.
     assert nli.symbol_table['g'].value == 8.
     assert nli.symbol_table['h'].value == 16.
+    assert nli.symbol_table['i'].value == 3
+    assert nli.symbol_table['l'].value == 2.5
+    assert nli.symbol_table['m'].value == 2
 
     with raises(nl.NeuroLangTypeException):
         nli.evaluate(nl.parser('t = double("a")'))
@@ -45,6 +51,25 @@ def test_assignment_values():
 
     with raises(nl.NeuroLangTypeException):
         nli.evaluate(nl.parser('t = a("a")'))
+
+
+def test_tuples():
+    command = '''
+        a = (1, "a")
+        b = a[0]
+    '''
+    nli = nl.NeuroLangInterpreter()
+    ast = nl.parser(command)
+    nli.evaluate(ast)
+
+    assert nli.symbol_table['a'].type == Tuple[int, str]
+    assert nli.symbol_table['a'].value == (1, "a")
+
+    assert nli.symbol_table['b'].type == int
+    assert nli.symbol_table['b'].value == 1
+
+    with raises(nl.NeuroLangTypeException):
+        nli.evaluate(nl.parser('a[2]'))
 
 
 def test_queries():
