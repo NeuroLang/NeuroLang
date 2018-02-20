@@ -101,10 +101,10 @@ def replace_type_variable(type_, type_hint, type_var=None):
 
 
 def get_type_and_value(value, symbol_table=None):
-    if symbol_table is not None and isinstance(value, Identifier):
+    if symbol_table is not None and isinstance(value, Symbol):
         value = symbol_table[value]
 
-    if isinstance(value, TypedSymbol):
+    if isinstance(value, Expression):
         return value.type, value.value
     elif isinstance(value, expressions.Symbol):
         return value.type, value
@@ -126,10 +126,10 @@ def type_validation_value(value, type_, symbol_table=None):
 
     if (
         (symbol_table is not None) and
-        isinstance(value, Identifier)
+        isinstance(value, Symbol)
     ):
         value = symbol_table[value].value
-    elif isinstance(value, TypedSymbol):
+    elif isinstance(value, Expression):
         value = value.value
 
     if hasattr(type_, '__origin__') and type_.__origin__ is not None:
@@ -185,7 +185,7 @@ def type_validation_value(value, type_, symbol_table=None):
         )
 
 
-class TypedSymbol(expressions.Constant):
+class Expression(expressions.Constant):
     def __init__(self, type_, value, symbol_table=None):
         if not type_validation_value(
             value, type_, symbol_table=symbol_table
@@ -201,15 +201,15 @@ class TypedSymbol(expressions.Constant):
         return '%s: %s' % (self.value, self.type)
 
 
-class Identifier(expressions.Symbol):
+class Symbol(expressions.Symbol):
     def __init__(self, name):
         self.name = name
 
     def __getitem__(self, value):
-        return Identifier(self.name + '.' + value)
+        return Symbol(self.name + '.' + value)
 
     def parent(self):
-        return Identifier(self.name[:self.name.rindex('.')])
+        return Symbol(self.name[:self.name.rindex('.')])
 
     def __repr__(self):
         return 'Id(%s)' % repr(self.name)
@@ -233,10 +233,10 @@ class TypedSymbolTable(collections.MutableMapping):
             if self.enclosing_scope is not None:
                 return self.enclosing_scope[key]
             else:
-                raise KeyError("TypedSymbol %s not in the table" % key)
+                raise KeyError("Expression %s not in the table" % key)
 
     def __setitem__(self, key, value):
-        if isinstance(value, TypedSymbol):
+        if isinstance(value, Expression):
             self._symbols[key] = value
             if value.type not in self._symbols_by_type:
                 self._symbols_by_type[value.type] = dict()
