@@ -1,35 +1,44 @@
 from .. import neurolang as nl
 
 
-def test_abelian_group_under_addition():
-    nli = nl.NeuroLangInterpreter()
+def test_abelian_group_under_addition(
+    type_=int,
+    elements=(1, 2, 3), null_element=0,
+    operation='+', inverse_operation='-'
+):
+
+    symbols = {
+        'element{}'.format(i + 1): nl.TypedSymbol(type_, e)
+        for i, e in enumerate(elements)
+    }
+    symbols['null'] = nl.TypedSymbol(type_, null_element)
+    nli = nl.NeuroLangInterpreter(symbols=symbols, types=[(type_, 'dummy')])
 
     associative_command = '''
-        a = (1 + 2) + 3
-        b = 1 + (2 + 3)
-    '''
+        a = (element1 {0} element2) {0} element3
+        b = element1 {0} (element2 {0} element3)
+    '''.format(operation)
     nli.evaluate(nl.parser(associative_command))
     assert nli.symbol_table['a'].value == nli.symbol_table['b'].value
 
     commutative_command = '''
-        a = 1 + 2
-        b = 2 + 1
-    '''
+        a = element1 {0} element2
+        b = element2 {0} element1
+    '''.format(operation)
     nli.evaluate(nl.parser(commutative_command))
     assert nli.symbol_table['a'].value == nli.symbol_table['b'].value
 
     identity_command = '''
-        b = 42
-        a = b + 0
-    '''
+        a = element1 {0} null
+    '''.format(operation)
     nli.evaluate(nl.parser(identity_command))
-    assert nli.symbol_table['a'].value == nli.symbol_table['b'].value
+    assert nli.symbol_table['a'].value == nli.symbol_table['element1'].value
 
     inverse_command = '''
-        a = 42 - 42
-    '''
+        a = element1 {0} element1
+    '''.format(inverse_operation)
     nli.evaluate(nl.parser(inverse_command))
-    assert nli.symbol_table['a'].value == 0
+    assert nli.symbol_table['a'].value == nli.symbol_table['null'].value
 
 
 def test_monoid_under_multiplication():
