@@ -10,8 +10,8 @@ def test_assignment_values():
         a = 1
         b = "a"
         c = 1.2
-        d = 1.2 + 1.
-        e = 1 + 2 * 5
+        d = 1 + 1.2 + 1.
+        e = 1 + 2 * 5.
         f = 2. ** 3.
         g = f
     '''
@@ -24,7 +24,7 @@ def test_assignment_values():
     assert nli.symbol_table['a'].value == 1
     assert nli.symbol_table['b'].value == "a"
     assert nli.symbol_table['c'].value == 1.2
-    assert nli.symbol_table['d'].value == 2.2
+    assert nli.symbol_table['d'].value == 3.2
     assert nli.symbol_table['e'].value == 11
     assert nli.symbol_table['f'].value == 8.
     assert nli.symbol_table['g'].value == 8.
