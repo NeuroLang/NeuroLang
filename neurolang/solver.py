@@ -226,8 +226,10 @@ class GenericSolver(ASTWalker):
 
         if issubclass(type_, FiniteDomain):
             all_elements = set(
+                get_type_and_value(self.symbol_table[s])[1] for s in
                 self.symbol_table.symbols_by_type(self.type).keys()
             )
+
             difference = all_elements - value
 
             return difference

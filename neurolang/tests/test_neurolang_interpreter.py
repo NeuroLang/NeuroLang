@@ -56,6 +56,8 @@ def test_queries():
     oneset are four_ints singleton_set 1
     oneset_ are four_ints in oneset
     onetwo are four_ints singleton_set 1 or singleton_set 2
+    twoset are four_ints in onetwo and singleton_set 2
+    twothree are four_ints not in oneset
     '''
 
     ast = nl.parser(script)
@@ -65,12 +67,11 @@ def test_queries():
     assert nli.symbol_table['one'].type == FourInts
     assert nli.symbol_table['two'].value == 2
     assert nli.symbol_table['three'].value == 3
-    assert len(nli.symbol_table['oneset'].value) == 1
-    assert next(iter(nli.symbol_table['oneset'].value)) == 1
-    assert len(nli.symbol_table['oneset_'].value) == 1
-    assert next(iter(nli.symbol_table['oneset_'].value)) == 1
-    assert len(nli.symbol_table['onetwo'].value) == 2
-    assert nli.symbol_table['onetwo'].value.issubset({1, 2})
+    assert nli.symbol_table['oneset'].value == {1}
+    assert nli.symbol_table['oneset_'].value == {1}
+    assert nli.symbol_table['onetwo'].value == {1, 2}
+    assert nli.symbol_table['twoset'].value == {2}
+    assert nli.symbol_table['twothree'].value == {2, 3}
 
     with raises(nl.NeuroLangException):
         nli.evaluate(nl.parser("fail is a four_int singleton_set 1"))
