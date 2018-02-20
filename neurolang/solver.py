@@ -186,7 +186,6 @@ class GenericSolver(ASTWalker):
         arguments = ast['argument']
         if len(arguments) == 1:
             return arguments[0]
-
         _, solution = get_type_and_value(
             arguments[0], symbol_table=self.symbol_table
         )

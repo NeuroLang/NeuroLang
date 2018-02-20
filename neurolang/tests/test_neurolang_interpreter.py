@@ -42,8 +42,8 @@ def test_queries():
         def predicate_equal_to(self, value: int)->FourInts:
             return FourInts(value)
 
-        def predicate_singleton_set(self, value_it: int)->Set[FourInts]:
-            return {FourInts(1)}
+        def predicate_singleton_set(self, value: int)->Set[FourInts]:
+            return {FourInts(value)}
 
     nli = nl.NeuroLangInterpreter(
         category_solvers=[FourIntsSetSolver()],
@@ -55,18 +55,22 @@ def test_queries():
     three is a four_int equal_to 3
     oneset are four_ints singleton_set 1
     oneset_ are four_ints in oneset
+    onetwo are four_ints singleton_set 1 or singleton_set 2
     '''
 
     ast = nl.parser(script)
     nli.evaluate(ast)
 
     assert nli.symbol_table['one'].value == 1
+    assert nli.symbol_table['one'].type == FourInts
     assert nli.symbol_table['two'].value == 2
     assert nli.symbol_table['three'].value == 3
     assert len(nli.symbol_table['oneset'].value) == 1
     assert next(iter(nli.symbol_table['oneset'].value)) == 1
     assert len(nli.symbol_table['oneset_'].value) == 1
     assert next(iter(nli.symbol_table['oneset_'].value)) == 1
+    assert len(nli.symbol_table['onetwo'].value) == 2
+    assert nli.symbol_table['onetwo'].value.issubset({1, 2})
 
     with raises(nl.NeuroLangException):
         nli.evaluate(nl.parser("fail is a four_int singleton_set 1"))
