@@ -107,16 +107,16 @@ def test_get_type_and_value():
     assert value == 3
 
     type_, value = symbols_and_types.get_type_and_value(
-        symbols_and_types.TypedSymbol(int, 3)
+        symbols_and_types.Expression(int, 3)
     )
     assert type_ == int
     assert value == 3
 
     type_, value = symbols_and_types.get_type_and_value(
-        symbols_and_types.Identifier('a'),
+        symbols_and_types.Symbol('a'),
         {
-            symbols_and_types.Identifier('a'):
-                symbols_and_types.TypedSymbol(int, 3)
+            symbols_and_types.Symbol('a'):
+                symbols_and_types.Expression(int, 3)
         }
     )
     assert type_ == int
@@ -136,7 +136,7 @@ def test_type_validation_value():
         return 0
 
     symbol_table = {
-        symbols_and_types.Identifier('r'): symbols_and_types.TypedSymbol(
+        symbols_and_types.Symbol('r'): symbols_and_types.Expression(
              typing.AbstractSet[str],
              {'a'}
         )
@@ -144,15 +144,15 @@ def test_type_validation_value():
 
     values = (
         3, {3, 8}, 'try', f, (3, 'a'),
-        symbols_and_types.TypedSymbol(typing.Tuple[str, float], ('a', 3.)),
-        symbols_and_types.Identifier('r'),
+        symbols_and_types.Expression(typing.Tuple[str, float], ('a', 3.)),
+        symbols_and_types.Symbol('r'),
         {'a': 3}
     )
     types_ = (
         int, typing.AbstractSet[int],
         typing.Text, typing.Callable[[int], int],
         typing.Tuple[int, str], typing.Tuple[str, float],
-        symbol_table[symbols_and_types.Identifier('r')].type,
+        symbol_table[symbols_and_types.Symbol('r')].type,
         typing.Mapping[str, int]
     )
 
@@ -190,47 +190,47 @@ def test_type_validation_value():
 def test_TypedSymbol():
     v = 3
     t = int
-    s = symbols_and_types.TypedSymbol(t, v)
+    s = symbols_and_types.Expression(t, v)
     assert s.value == v
     assert s.type == t
 
     with pytest.raises(symbols_and_types.NeuroLangTypeException):
-        s = symbols_and_types.TypedSymbol(t, 'a')
+        s = symbols_and_types.Expression(t, 'a')
 
 
 def test_Identifier():
-    a = symbols_and_types.Identifier('a')
+    a = symbols_and_types.Symbol('a')
     assert a == a
-    assert a == symbols_and_types.Identifier('a')
+    assert a == symbols_and_types.Symbol('a')
     assert a == 'a'
     assert hash(a) == hash('a')
-    assert a['b'] == symbols_and_types.Identifier('a.b')
+    assert a['b'] == symbols_and_types.Symbol('a.b')
     assert a['b'].parent() == a
 
 
 def test_TypedSymbolTable():
     st = symbols_and_types.TypedSymbolTable()
-    s1 = symbols_and_types.TypedSymbol(int, 3)
-    s2 = symbols_and_types.TypedSymbol(int, 4)
-    s3 = symbols_and_types.TypedSymbol(float, 5.)
-    s4 = symbols_and_types.TypedSymbol(int, 5)
-    s6 = symbols_and_types.TypedSymbol(str, 'a')
+    s1 = symbols_and_types.Expression(int, 3)
+    s2 = symbols_and_types.Expression(int, 4)
+    s3 = symbols_and_types.Expression(float, 5.)
+    s4 = symbols_and_types.Expression(int, 5)
+    s6 = symbols_and_types.Expression(str, 'a')
 
     assert len(st) == 0
 
-    st[symbols_and_types.Identifier('s1')] = s1
+    st[symbols_and_types.Symbol('s1')] = s1
     assert len(st) == 1
     assert 's1' in st
     assert st['s1'] == s1
     assert st.symbols_by_type(s1.type) == {'s1': s1}
 
-    st[symbols_and_types.Identifier('s2')] = s2
+    st[symbols_and_types.Symbol('s2')] = s2
     assert len(st) == 2
     assert 's2' in st
     assert st['s2'] == s2
     assert st.symbols_by_type(s1.type) == {'s1': s1, 's2': s2}
 
-    st[symbols_and_types.Identifier('s3')] = s3
+    st[symbols_and_types.Symbol('s3')] = s3
     assert len(st) == 3
     assert 's3' in st
     assert st['s3'] == s3
@@ -247,23 +247,23 @@ def test_TypedSymbolTable():
     stb = st.create_scope()
     assert 's2' in stb
     assert 's3' in stb
-    stb[symbols_and_types.Identifier('s4')] = s4
+    stb[symbols_and_types.Symbol('s4')] = s4
     assert 's4' in stb
     assert 's4' not in st
 
-    stb[symbols_and_types.Identifier('s5')] = None
+    stb[symbols_and_types.Symbol('s5')] = None
     assert 's5' in stb
-    assert stb[symbols_and_types.Identifier('s5')] is None
+    assert stb[symbols_and_types.Symbol('s5')] is None
 
     stc = stb.create_scope()
-    stc[symbols_and_types.Identifier('s6')] = s6
+    stc[symbols_and_types.Symbol('s6')] = s6
     assert {int, float, str} == stc.types()
     assert stc.symbols_by_type(int) == {'s2': s2, 's4': s4}
 
     assert set(iter(stc)) == {'s2', 's3', 's4', 's5', 's6'}
 
     with pytest.raises(ValueError):
-        stb[symbols_and_types.Identifier('s6')] = 5
+        stb[symbols_and_types.Symbol('s6')] = 5
 
 
 def test_get_callable_arguments_and_return():
