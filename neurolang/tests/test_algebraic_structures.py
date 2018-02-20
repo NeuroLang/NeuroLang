@@ -31,66 +31,64 @@ right_distributy_command = '''
 '''
 
 
-def test_abelian_group_under_addition(
-    type_=int,
-    elements=(1, 2, 3), null_element=0,
-    operation='+', inverse_operation='-'
-):
-
-    symbols = {
-        'element{}'.format(i + 1): nl.TypedSymbol(type_, e)
-        for i, e in enumerate(elements)
-    }
-    symbols['null'] = nl.TypedSymbol(type_, null_element)
-    nli = nl.NeuroLangInterpreter(symbols=symbols, types=[(type_, 'dummy')])
-
-    nli.evaluate(nl.parser(associative_command.format(op=operation)))
-    assert nli.symbol_table['a'].value == nli.symbol_table['b'].value
-
-    nli.evaluate(nl.parser(commutative_command.format(op=operation)))
-    assert nli.symbol_table['a'].value == nli.symbol_table['b'].value
-
-    nli.evaluate(nl.parser(identity_command.format(op=operation)))
-    assert nli.symbol_table['a'].value == nli.symbol_table['b'].value
-
-    nli.evaluate(nl.parser(inverse_command.format(op=inverse_operation)))
-    assert nli.symbol_table['a'].value == nli.symbol_table['b'].value
-
-
-def test_monoid_under_multiplication(
-        type_=int,
-        elements=(1, 2, 3), null_element=1,
-        operation='*', inverse_operation='/'
-):
-    symbols = {
-        'element{}'.format(i + 1): nl.TypedSymbol(type_, e)
-        for i, e in enumerate(elements)
-    }
-    symbols['null'] = nl.TypedSymbol(type_, null_element)
-    nli = nl.NeuroLangInterpreter(symbols=symbols, types=[(type_, 'dummy')])
-
-    nli.evaluate(nl.parser(associative_command.format(op=operation)))
-    assert nli.symbol_table['a'].value == nli.symbol_table['b'].value
-
-    nli.evaluate(nl.parser(identity_command.format(op=operation)))
-    assert nli.symbol_table['a'].value == nli.symbol_table['b'].value
-
-
-def test_multiplication_is_distributive_with_respect_to_addition(
-        type_=int,
-        elements=(1, 2, 3), null_element=1,
-        add='+', mul='*'
-):
-    symbols = {
-        'element{}'.format(i + 1): nl.TypedSymbol(type_, e)
-        for i, e in enumerate(elements)
-    }
-    nli = nl.NeuroLangInterpreter(symbols=symbols, types=[(type_, 'dummy')])
-
-    command = left_distributy_command.format(op_add=add, op_mul=mul)
+def check_command(command, nli):
     nli.evaluate(nl.parser(command))
     assert nli.symbol_table['a'].value == nli.symbol_table['b'].value
 
-    command = right_distributy_command.format(op_add=add, op_mul=mul)
-    nli.evaluate(nl.parser(command))
-    assert nli.symbol_table['a'].value == nli.symbol_table['b'].value
+
+def check_is_abelian_group(op, inv_op, nli, null=None):
+    if null is not None:
+        old_null = nli.symbol_table['null'].value
+        nli.symbol_table['null'].value = null
+
+    check_is_monoid(operation=op, nli=nli)
+    check_command(commutative_command.format(op=op), nli)
+    check_command(inverse_command.format(op=inv_op), nli)
+
+    # Restore nli
+    if null is not None:
+        nli.symbol_table['null'].value = old_null
+
+
+def check_is_monoid(operation, nli, null=None):
+    if null is not None:
+        old_null = nli.symbol_table['null'].value
+        nli.symbol_table['null'].value = null
+
+    check_command(associative_command.format(op=operation), nli)
+    check_command(identity_command.format(op=operation), nli)
+
+    # Restore nli
+    if null is not None:
+        nli.symbol_table['null'].value = old_null
+
+
+def check_op1_is_distributive_with_respect_to_op2(op1, op2, nli):
+    command = left_distributy_command.format(op_add=op2, op_mul=op1)
+    check_command(command, nli)
+
+    command = right_distributy_command.format(op_add=op2, op_mul=op1)
+    check_command(command, nli)
+
+
+def check_algebraic_structure_is_a_ring(nli, op_add='+', op_inv_add='-',
+                                        op_mul='*', op_inv_mul='/'):
+    check_is_abelian_group(op=op_add, inv_op=op_inv_add, nli=nli, null=0)
+    check_is_monoid(operation=op_mul, nli=nli, null=1)
+    check_op1_is_distributive_with_respect_to_op2(op1=op_mul, op2=op_add,
+                                                  nli=nli)
+
+
+def test_algebraic_structure_of_naturals():
+    elements = (1, 2, 3)
+    null_element = 0
+    symbols = {
+        'element{}'.format(i + 1): nl.TypedSymbol(int, e)
+        for i, e in enumerate(elements)
+    }
+    symbols['null'] = nl.TypedSymbol(int, null_element)
+    nli = nl.NeuroLangInterpreter(symbols=symbols, types=[(int, 'dummy')])
+
+    check_algebraic_structure_is_a_ring(op_add='+', op_inv_add='-',
+                                        op_mul='*', op_inv_mul='/',
+                                        nli=nli)
