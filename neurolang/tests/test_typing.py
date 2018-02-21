@@ -198,16 +198,6 @@ def test_TypedSymbol():
         s = symbols_and_types.Expression(t, 'a')
 
 
-def test_Identifier():
-    a = symbols_and_types.Symbol('a')
-    assert a == a
-    assert a == symbols_and_types.Symbol('a')
-    assert a == 'a'
-    assert hash(a) == hash('a')
-    assert a['b'] == symbols_and_types.Symbol('a.b')
-    assert a['b'].parent() == a
-
-
 def test_TypedSymbolTable():
     st = symbols_and_types.TypedSymbolTable()
     s1 = symbols_and_types.Expression(int, 3)

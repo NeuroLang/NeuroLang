@@ -5,7 +5,19 @@ from itertools import chain
 
 from .exceptions import NeuroLangException
 from . import expressions
-from .expressions import typing_callable_from_annotated_function
+from .expressions import (
+    typing_callable_from_annotated_function,
+    Symbol,
+    SymbolApplication,
+    evaluate
+)
+
+
+__all__ = [
+    'NeuroLangTypeException', 'get_type_and_value', 'is_subtype',
+    'type_validation_value', 'Expression', 'Symbol', 'SymbolApplication',
+    'evaluate', 'TypedSymbolTable'
+]
 
 
 class NeuroLangTypeException(NeuroLangException):
@@ -190,24 +202,6 @@ class Expression(expressions.Constant):
 
     def __repr__(self):
         return '%s: %s' % (self.value, self.type)
-
-
-class Symbol(expressions.Symbol):
-    def __init__(self, name):
-        self.name = name
-
-    def __getitem__(self, value):
-        return Symbol(self.name + '.' + value)
-
-    def parent(self):
-        return Symbol(self.name[:self.name.rindex('.')])
-
-    def __repr__(self):
-        return 'Id(%s)' % repr(self.name)
-
-
-SymbolApplication = expressions.SymbolApplication
-evaluate = expressions.evaluate
 
 
 class TypedSymbolTable(collections.MutableMapping):
