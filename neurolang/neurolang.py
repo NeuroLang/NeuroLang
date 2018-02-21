@@ -427,7 +427,9 @@ class NeuroLangInterpreter(ASTWalker):
         return Expression(int, int(ast['value']))
         return ast
 
-    def compile(self):
+    def compile(self, ast=None):
+        if ast is not None:
+            self.evaluate(ast)
         for k, v in self.symbol_table.items():
             if isinstance(v, Expression):
                 self.symbol_table[k] = Expression(
