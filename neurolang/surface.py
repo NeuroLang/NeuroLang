@@ -5,8 +5,6 @@ import operator
 import nibabel as nib
 import numpy as np
 
-from cortex import polyutils
-
 from .solver import GenericSolver, SetBasedSolver
 from .symbols_and_types import TypedSymbol
 
@@ -123,11 +121,6 @@ class Region(Surface):
         self.triangle_area = np.sqrt((
             semiperimeter[:, None] - self.triangle_side_lengths
         ).prod(axis=1) * semiperimeter)
-
-        surf_ = polyutils.Surface(self.vertices, self.triangles)
-        self.distance = surf_.geodesic_distance(
-            np.unique(self.triangles[list(self.triangle_ids)])
-        )
 
     def __contains__(self, element):
         return element in self.triangle_ids
