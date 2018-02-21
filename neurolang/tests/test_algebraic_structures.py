@@ -21,13 +21,13 @@ inverse_command = '''
 '''
 
 left_distributy_command = '''
-    a = element1 {op_mul} (element2 {op_add} element3)
-    b = (element1 {op_mul} element2) {op_add} (element1 {op_mul} element3)
+    a = element1 {op_dot} (element2 {op_cross} element3)
+    b = (element1 {op_dot} element2) {op_cross} (element1 {op_dot} element3)
 '''
 
 right_distributy_command = '''
-    a = (element2 {op_add} element3) {op_mul} element1
-    b = (element2 {op_mul} element1) {op_add} (element3 {op_mul} element1)
+    a = (element2 {op_cross} element3) {op_dot} element1
+    b = (element2 {op_dot} element1) {op_cross} (element3 {op_dot} element1)
 '''
 
 
@@ -63,11 +63,11 @@ def check_is_monoid(operation, nli, null=None):
         nli.symbol_table['null'].value = old_null
 
 
-def check_op1_is_distributive_with_respect_to_op2(op1, op2, nli):
-    command = left_distributy_command.format(op_add=op2, op_mul=op1)
+def check_cross_op_is_distributive_with_respect_to_dot_op(cross, dot, nli):
+    command = left_distributy_command.format(op_cross=cross, op_dot=dot)
     check_command(command, nli)
 
-    command = right_distributy_command.format(op_add=op2, op_mul=op1)
+    command = right_distributy_command.format(op_cross=cross, op_dot=dot)
     check_command(command, nli)
 
 
@@ -75,8 +75,9 @@ def check_algebraic_structure_is_a_ring(nli, op_add='+', op_inv_add='-',
                                         op_mul='*', op_inv_mul='/'):
     check_is_abelian_group(op=op_add, inv_op=op_inv_add, nli=nli, null=0)
     check_is_monoid(operation=op_mul, nli=nli, null=1)
-    check_op1_is_distributive_with_respect_to_op2(op1=op_mul, op2=op_add,
-                                                  nli=nli)
+    check_cross_op_is_distributive_with_respect_to_dot_op(cross=op_add,
+                                                          dot=op_mul,
+                                                          nli=nli)
 
 
 def test_algebraic_structure_of_naturals():
