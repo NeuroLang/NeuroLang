@@ -1,6 +1,6 @@
 from ..expressions import (
     Symbol, Constant,
-    SymbolApplication,
+    Function,
     evaluate
 )
 
@@ -12,24 +12,24 @@ def test_symbol_application():
     a = Symbol('a')
     b = Symbol('b')
 
-    oadd = SymbolApplication(op.add)
+    oadd = Function(op.add)
     c = oadd(2, 3)
     assert c.__wrapped__ == oadd
     assert c.args == (2, 3)
     assert evaluate(c) == 5
 
-    fva = SymbolApplication(op.add)(a, 3)
-    fvb = SymbolApplication(op.sub)(fva, 10)
-    fvc = SymbolApplication(op.mul)(fvb, b)
-    fvd = SymbolApplication(a, kwargs={'c': b})
-    fve = SymbolApplication(a, kwargs={'c': op.add(b, 2)})
+    fva = Function(op.add)(a, 3)
+    fvb = Function(op.sub)(fva, 10)
+    fvc = Function(op.mul)(fvb, b)
+    fvd = Function(a, kwargs={'c': b})
+    fve = Function(a, kwargs={'c': op.add(b, 2)})
 
     assert a in fva._symbols and (len(fva._symbols) == 1)
     assert evaluate(fva, a=2) == 5
     assert a in fvb._symbols and (len(fvb._symbols) == 1)
     assert evaluate(fvb, a=2) == -5
     assert b in fvc._symbols and (len(fvc._symbols) == 2)
-    assert isinstance(evaluate(fvc, b=2), SymbolApplication)
+    assert isinstance(evaluate(fvc, b=2), Function)
     assert evaluate(evaluate(fvc, b=3), a=2) == evaluate(fvc, a=2, b=3) == -15
     assert evaluate(
         evaluate(fvd, a=lambda *args, **kwargs: kwargs['c']),
@@ -82,7 +82,7 @@ def test_symbol_wrapping():
         '''
         return 2. * int(a)
 
-    fva = SymbolApplication(f)
+    fva = Function(f)
     x = Symbol('x', type_=int)
     fvb = fva(x)
     assert fva.__annotations__ == f.__annotations__

@@ -9,8 +9,7 @@ from .ast import ASTWalker, ASTNode
 from .ast_tatsu import TatsuASTConverter
 from .exceptions import NeuroLangException
 from .symbols_and_types import (
-    Symbol, Expression, SymbolApplication, TypedSymbolTable,
-    typing_callable_from_annotated_function,
+    Symbol, Expression, Function, TypedSymbolTable,
     NeuroLangTypeException, is_subtype, get_Callable_arguments_and_return,
     get_type_and_value, evaluate
 )
@@ -169,10 +168,7 @@ class NeuroLangInterpreter(ASTWalker):
                 else:
                     func = f
                     name = f.__name__
-                self.symbol_table[Symbol(name)] = Expression(
-                    typing_callable_from_annotated_function(func),
-                    func
-                )
+                self.symbol_table[Symbol(name)] = Function(func)
 
         for solver in self.category_solvers.values():
             solver.set_symbol_table(self.symbol_table)
@@ -347,15 +343,14 @@ class NeuroLangInterpreter(ASTWalker):
         return Symbol(identifier)
 
     def function_application(self, ast):
-        function_symbol = self.symbol_table[ast['identifier']]
-        function = function_symbol.value
+        function = self.symbol_table[ast['identifier']]
 
-        if not is_subtype(function_symbol.type, typing.Callable):
+        if not is_subtype(function.type, typing.Callable):
             raise NeuroLangTypeException()
 
         function_type_arguments, function_type_return = \
             get_Callable_arguments_and_return(
-                function_symbol.type
+                function.type
             )
 
         arguments = []
@@ -368,7 +363,7 @@ class NeuroLangInterpreter(ASTWalker):
             if not is_subtype(argument_type, function_type_arguments[i]):
                 raise NeuroLangTypeException()
 
-        function = SymbolApplication(function, args=arguments)
+        function = Function(function, args=arguments)
         result_type, result = get_type_and_value(function)
 
         if not is_subtype(result_type, function_type_return):
