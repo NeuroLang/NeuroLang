@@ -7,14 +7,17 @@ from .exceptions import NeuroLangException
 from . import expressions
 from .expressions import (
     typing_callable_from_annotated_function,
+    ToBeInferred,
     Symbol,
     Function,
+    Definition,
     evaluate
 )
 
 
 __all__ = [
-    'Symbol', 'Expression', 'Function', 'TypedSymbolTable',
+    'ToBeInferred',
+    'Symbol', 'Expression', 'Function', 'Definition', 'TypedSymbolTable',
     'typing_callable_from_annotated_function',
     'NeuroLangTypeException', 'is_subtype',
     'get_Callable_arguments_and_return', 'get_type_and_value', 'evaluate'
@@ -38,6 +41,10 @@ def get_type_args(type_):
 
 def is_subtype(left, right):
     if right == typing.Any:
+        return True
+    elif left == typing.Any:
+        return right == typing.Any
+    elif left == ToBeInferred:
         return True
     elif hasattr(right, '__origin__') and right.__origin__ is not None:
         if right.__origin__ == typing.Union:
@@ -123,7 +130,7 @@ def get_type_and_value(value, symbol_table=None):
 
 
 def type_validation_value(value, type_, symbol_table=None):
-    if type_ == typing.Any:
+    if type_ == typing.Any or type_ == ToBeInferred:
         return True
 
     if (

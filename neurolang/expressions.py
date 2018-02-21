@@ -6,9 +6,13 @@ from functools import wraps, WRAPPER_ASSIGNMENTS
 
 
 __all__ = [
-    'Symbol', 'Function', 'evaluate',
+    'Symbol', 'Function', 'Definition', 'evaluate',
+    'ToBeInferred',
     'typing_callable_from_annotated_function'
 ]
+
+
+ToBeInferred = typing.TypeVar('ToBeInferred')
 
 
 def typing_callable_from_annotated_function(function):
@@ -26,7 +30,7 @@ class Expression(object):
     _symbols = {}
     super_attributes = WRAPPER_ASSIGNMENTS + ('__signature__', 'mro', 'type')
     local_attributes = tuple()
-    type = typing.Any
+    type = ToBeInferred
 
     def __getattr__(self, attr):
         if attr in self.super_attributes or attr in self.local_attributes:
@@ -36,7 +40,7 @@ class Expression(object):
 
 
 class Symbol(Expression):
-    def __init__(self, name, type_=typing.Any):
+    def __init__(self, name, type_=ToBeInferred):
         self.name = name
         self.type = type_
         self._symbols = {self}
@@ -55,7 +59,7 @@ class Symbol(Expression):
 
 
 class Constant(Expression):
-    def __init__(self, value, type_=typing.Any):
+    def __init__(self, value, type_=ToBeInferred):
         self.value = value
         self.type = type_
         self._symbols = {}
@@ -76,7 +80,7 @@ class Constant(Expression):
 class Function(Expression):
     def __init__(
         self, object_, args=None, kwargs=None,
-        type_=typing.Any
+        type_=ToBeInferred
     ):
         self.__wrapped__ = object_
 
@@ -88,6 +92,8 @@ class Function(Expression):
                 self.type = typing_callable_from_annotated_function(
                     self.__wrapped__
                 )
+            else:
+                self.type = type_
             self.has_been_applied = False
         else:
             self.has_been_applied = True
@@ -143,7 +149,7 @@ class Function(Expression):
             fname = self.__wrapped__.__name__
         else:
             fname = repr(self.__wrapped__)
-        r = 'F{{{}: {}}'.format(fname, self.type)
+        r = 'F{{{}: {}}}'.format(fname, self.type)
         if self.args is not None:
             r += (
                 '(' +
@@ -154,6 +160,20 @@ class Function(Expression):
                 ) + ')')
 
         return r
+
+
+class Definition(Expression):
+    local_attributes = ['identifier', 'expression']
+
+    def __init__(self, type_, symbol, expression, symbol_table=None):
+        self.symbol = symbol
+        self.value = expression
+        self.type = type_
+
+    def __repr__(self):
+        return 'Def{{{}: {} <- {}}}'.format(
+            self.symbol.name, self.type, self.value
+        )
 
 
 def op_bind(op):
@@ -181,7 +201,7 @@ for operator_name in dir(op):
     if name.endswith('___'):
         name = name[:-1]
 
-    for c in (Constant, Symbol, Function):
+    for c in (Constant, Symbol, Function, Definition):
         if not hasattr(c, name):
             setattr(c, name, op_bind(operator))
 
@@ -196,7 +216,7 @@ for operator in [
     if name.endswith('___'):
         name = name[:-1]
 
-    for c in (Constant, Symbol, Function):
+    for c in (Constant, Symbol, Function, Definition):
         setattr(c, name, rop_bind(operator))
 
 
