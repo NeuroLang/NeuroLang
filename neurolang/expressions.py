@@ -3,10 +3,10 @@ import operator as op
 import typing
 import inspect
 from functools import wraps, WRAPPER_ASSIGNMENTS
-# from types import FunctionType, BuiltinFunctionType
+
 
 __all__ = [
-    'Symbol', 'SymbolApplication', 'evaluate',
+    'Symbol', 'Function', 'evaluate',
     'typing_callable_from_annotated_function'
 ]
 
@@ -32,7 +32,7 @@ class Expression(object):
         if attr in self.super_attributes or attr in self.local_attributes:
             return getattr(super(), attr)
         else:
-            return SymbolApplication(getattr, args=(self, attr))
+            return Function(getattr, args=(self, attr))
 
 
 class Symbol(Expression):
@@ -51,7 +51,7 @@ class Symbol(Expression):
         return hash(self.name)
 
     def __repr__(self):
-        return 'S{%s}' % self.name
+        return 'S{{{}: {}}}'.format(self.name, self.type)
 
 
 class Constant(Expression):
@@ -70,10 +70,10 @@ class Constant(Expression):
         return hash(self.value)
 
     def __repr__(self):
-        return 'C{%s}' % self.value
+        return 'C{{{}: {}}}'.format(self.value, self.type)
 
 
-class SymbolApplication(Expression):
+class Function(Expression):
     def __init__(
         self, object_, args=None, kwargs=None,
         type_=typing.Any
@@ -85,16 +85,12 @@ class SymbolApplication(Expression):
                 if hasattr(self.__wrapped__, attr):
                     setattr(self, attr, getattr(self.__wrapped__, attr))
             if hasattr(self.__wrapped__, '__annotations__'):
-                setattr(
-                    self, '__annotations__',
-                    self.__wrapped__.__annotations__
-                )
                 self.type = typing_callable_from_annotated_function(
                     self.__wrapped__
                 )
-            self.is_function_type = True
+            self.has_been_applied = False
         else:
-            self.is_function_type = False
+            self.has_been_applied = True
             if (
                 hasattr(self.__wrapped__, '__signature__') or
                 hasattr(self.__wrapped__, '__annotations__')
@@ -105,7 +101,7 @@ class SymbolApplication(Expression):
 
         if isinstance(object_, Symbol):
             self._symbols = {object_}
-        elif isinstance(object_, SymbolApplication):
+        elif isinstance(object_, Function):
             self._symbols = object_._symbols.copy()
         else:
             self._symbols = set()
@@ -123,7 +119,7 @@ class SymbolApplication(Expression):
             for arg in chain(self.args, self.kwargs.values()):
                 if isinstance(arg, Symbol):
                     self._symbols.add(arg)
-                elif isinstance(arg, SymbolApplication):
+                elif isinstance(arg, Function):
                     self._symbols |= arg._symbols
 
     def __call__(self, *args, **kwargs):
@@ -137,7 +133,7 @@ class SymbolApplication(Expression):
         else:
             variable_type = None
 
-        return SymbolApplication(
+        return Function(
             self, args, kwargs,
             type_=variable_type,
          )
@@ -147,7 +143,7 @@ class SymbolApplication(Expression):
             fname = self.__wrapped__.__name__
         else:
             fname = repr(self.__wrapped__)
-        r = 'EA{%s}' % fname
+        r = 'F{{{}: {}}'.format(fname, self.type)
         if self.args is not None:
             r += (
                 '(' +
@@ -163,7 +159,7 @@ class SymbolApplication(Expression):
 def op_bind(op):
     @wraps(op)
     def f(*args):
-        return SymbolApplication(op, args=args)
+        return Function(op, args=args)
 
     return f
 
@@ -171,7 +167,7 @@ def op_bind(op):
 def rop_bind(op):
     @wraps(op)
     def f(self, value):
-        return SymbolApplication(op, args=(value, self))
+        return Function(op, args=(value, self))
 
     return f
 
@@ -181,11 +177,11 @@ for operator_name in dir(op):
     if operator_name.startswith('_'):
         continue
 
-    name = '__%s__' % operator_name
+    name = '__{}__'.format(operator_name)
     if name.endswith('___'):
         name = name[:-1]
 
-    for c in (Constant, Symbol, SymbolApplication):
+    for c in (Constant, Symbol, Function):
         if not hasattr(c, name):
             setattr(c, name, op_bind(operator))
 
@@ -196,11 +192,11 @@ for operator in [
     op.pow, op.lshift, op.rshift, op.and_, op.xor,
     op.or_
 ]:
-    name = '__r%s__' % operator.__name__
+    name = '__r{}__'.format(operator.__name__)
     if name.endswith('___'):
         name = name[:-1]
 
-    for c in (Constant, Symbol, SymbolApplication):
+    for c in (Constant, Symbol, Function):
         setattr(c, name, rop_bind(operator))
 
 
@@ -215,13 +211,13 @@ def evaluate(expression, **kwargs):
             return kwargs[expression]
         else:
             return expression
-    elif isinstance(expression, SymbolApplication):
+    elif isinstance(expression, Function):
         if (
                 isinstance(expression.__wrapped__, Symbol) and
                 expression.__wrapped__ in kwargs
         ):
             function = kwargs[expression.__wrapped__]
-        elif isinstance(expression.__wrapped__, SymbolApplication):
+        elif isinstance(expression.__wrapped__, Function):
             function = evaluate(expression.__wrapped__, **kwargs)
         else:
             function = expression.__wrapped__
@@ -249,6 +245,6 @@ def evaluate(expression, **kwargs):
         if we_should_evaluate:
             return function(*new_args, **new_kwargs)
         else:
-            return SymbolApplication(function)(*new_args, **new_kwargs)
+            return Function(function)(*new_args, **new_kwargs)
     else:
         return expression

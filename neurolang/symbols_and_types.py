@@ -8,15 +8,16 @@ from . import expressions
 from .expressions import (
     typing_callable_from_annotated_function,
     Symbol,
-    SymbolApplication,
+    Function,
     evaluate
 )
 
 
 __all__ = [
-    'NeuroLangTypeException', 'get_type_and_value', 'is_subtype',
-    'type_validation_value', 'Expression', 'Symbol', 'SymbolApplication',
-    'evaluate', 'TypedSymbolTable'
+    'Symbol', 'Expression', 'Function', 'TypedSymbolTable',
+    'typing_callable_from_annotated_function',
+    'NeuroLangTypeException', 'is_subtype',
+    'get_Callable_arguments_and_return', 'get_type_and_value', 'evaluate'
 ]
 
 
@@ -109,14 +110,14 @@ def get_type_and_value(value, symbol_table=None):
         return value.type, value.value
     elif isinstance(value, expressions.Symbol):
         return value.type, value
-    elif isinstance(value, expressions.SymbolApplication):
-        if value.is_function_type:
-            return typing_callable_from_annotated_function(value), value
-        else:
-            return value.type, value
+    elif isinstance(value, expressions.Function):
+        return value.type, value
     else:
         if isinstance(value, types.FunctionType):
-            return typing_callable_from_annotated_function(value), value
+            return (
+                expressions.typing_callable_from_annotated_function(value),
+                value
+            )
         else:
             return type(value), value
 
@@ -180,7 +181,7 @@ def type_validation_value(value, type_, symbol_table=None):
             )
         else:
             raise ValueError("Type %s not implemented in the checker" % type_)
-    elif isinstance(value, SymbolApplication):
+    elif isinstance(value, Function):
         return is_subtype(value.type, type_)
     else:
         return isinstance(
@@ -199,9 +200,6 @@ class Expression(expressions.Constant):
             )
         self.type = type_
         self.value = value
-
-    def __repr__(self):
-        return '%s: %s' % (self.value, self.type)
 
 
 class TypedSymbolTable(collections.MutableMapping):
@@ -225,7 +223,7 @@ class TypedSymbolTable(collections.MutableMapping):
                 raise KeyError("Expression %s not in the table" % key)
 
     def __setitem__(self, key, value):
-        if isinstance(value, Expression):
+        if isinstance(value, expressions.Expression):
             self._symbols[key] = value
             if value.type not in self._symbols_by_type:
                 self._symbols_by_type[value.type] = dict()
