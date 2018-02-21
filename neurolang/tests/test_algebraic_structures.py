@@ -32,7 +32,7 @@ right_distributy_command = '''
 
 
 def check_command(command, nli):
-    nli.evaluate(nl.parser(command))
+    nli.compile(nl.parser(command))
     assert nli.symbol_table['a'].value == nli.symbol_table['b'].value
 
 
