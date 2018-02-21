@@ -29,6 +29,7 @@ def test_assignment_values():
     nli = nl.NeuroLangInterpreter(functions=[double, bad_double])
     ast = nl.parser(command)
     nli.evaluate(ast)
+    nli.compile()
 
     assert type(nli.symbol_table['a'].value) == int
     assert nli.symbol_table['a'].value == 1
@@ -45,12 +46,15 @@ def test_assignment_values():
 
     with raises(nl.NeuroLangTypeException):
         nli.evaluate(nl.parser('t = double("a")'))
+        nli.compile()
 
     with raises(nl.NeuroLangTypeException):
         nli.evaluate(nl.parser('t = bad_double(1.)'))
+        nli.compile()
 
     with raises(nl.NeuroLangTypeException):
         nli.evaluate(nl.parser('t = a("a")'))
+        nli.compile()
 
 
 def test_tuples():

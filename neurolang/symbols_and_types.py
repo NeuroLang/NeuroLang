@@ -1,11 +1,11 @@
 import typing
 import types
-import inspect
 import collections
 from itertools import chain
 
 from .exceptions import NeuroLangException
 from . import expressions
+from .expressions import typing_callable_from_annotated_function
 
 
 class NeuroLangTypeException(NeuroLangException):
@@ -14,17 +14,6 @@ class NeuroLangTypeException(NeuroLangException):
 
 def get_Callable_arguments_and_return(callable):
     return callable.__args__[:-1], callable.__args__[-1]
-
-
-def typing_callable_from_annotated_function(function):
-    signature = inspect.signature(function)
-    parameter_types = [
-        v.annotation for v in signature.parameters.values()
-    ]
-    return typing.Callable[
-        parameter_types,
-        signature.return_annotation
-    ]
 
 
 def get_type_args(type_):
@@ -179,6 +168,8 @@ def type_validation_value(value, type_, symbol_table=None):
             )
         else:
             raise ValueError("Type %s not implemented in the checker" % type_)
+    elif isinstance(value, SymbolApplication):
+        return is_subtype(value.type, type_)
     else:
         return isinstance(
             value, type_
@@ -213,6 +204,10 @@ class Symbol(expressions.Symbol):
 
     def __repr__(self):
         return 'Id(%s)' % repr(self.name)
+
+
+SymbolApplication = expressions.SymbolApplication
+evaluate = expressions.evaluate
 
 
 class TypedSymbolTable(collections.MutableMapping):
