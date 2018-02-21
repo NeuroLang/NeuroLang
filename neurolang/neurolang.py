@@ -9,10 +9,10 @@ from .ast import ASTWalker, ASTNode
 from .ast_tatsu import TatsuASTConverter
 from .exceptions import NeuroLangException
 from .symbols_and_types import (
-    Symbol, Expression, TypedSymbolTable,
+    Symbol, Expression, SymbolApplication, TypedSymbolTable,
     typing_callable_from_annotated_function,
     NeuroLangTypeException, is_subtype, get_Callable_arguments_and_return,
-    get_type_and_value
+    get_type_and_value, evaluate
 )
 
 
@@ -368,9 +368,9 @@ class NeuroLangInterpreter(ASTWalker):
             if not is_subtype(argument_type, function_type_arguments[i]):
                 raise NeuroLangTypeException()
 
-        result_type, result = get_type_and_value(
-            function(*arguments)
-        )
+        function = SymbolApplication(function, args=arguments)
+        result_type, result = get_type_and_value(function)
+
         if not is_subtype(result_type, function_type_return):
             raise NeuroLangTypeException()
 
@@ -430,6 +430,15 @@ class NeuroLangInterpreter(ASTWalker):
 
     def integer(self, ast):
         return Expression(int, int(ast['value']))
+        return ast
+
+    def compile(self):
+        for k, v in self.symbol_table.items():
+            if isinstance(v, Expression):
+                self.symbol_table[k] = Expression(
+                    v.type,
+                    evaluate(v.value)
+                )
 
 
 def parser(code, **kwargs):

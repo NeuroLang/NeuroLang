@@ -1,20 +1,38 @@
 from itertools import chain
 import operator as op
 import typing
+import inspect
 from functools import wraps, WRAPPER_ASSIGNMENTS
 # from types import FunctionType, BuiltinFunctionType
 
-__all__ = ['Symbol', 'SymbolApplication', 'evaluate']
+__all__ = [
+    'Symbol', 'SymbolApplication', 'evaluate',
+    'typing_callable_from_annotated_function'
+]
+
+
+def typing_callable_from_annotated_function(function):
+    signature = inspect.signature(function)
+    parameter_types = [
+        v.annotation for v in signature.parameters.values()
+    ]
+    return typing.Callable[
+        parameter_types,
+        signature.return_annotation
+    ]
 
 
 class Expression(object):
     _symbols = {}
+    super_attributes = WRAPPER_ASSIGNMENTS + ('__signature__', 'mro', 'type')
+    local_attributes = tuple()
+    type = typing.Any
 
-    def __getattr__(self, name):
-        if name in WRAPPER_ASSIGNMENTS or name == '__signature__':
-            return super().__getattr__(name)
+    def __getattr__(self, attr):
+        if attr in self.super_attributes or attr in self.local_attributes:
+            return getattr(super(), attr)
         else:
-            return SymbolApplication(getattr, args=(self, name))
+            return SymbolApplication(getattr, args=(self, attr))
 
 
 class Symbol(Expression):
@@ -66,11 +84,24 @@ class SymbolApplication(Expression):
             for attr in WRAPPER_ASSIGNMENTS:
                 if hasattr(self.__wrapped__, attr):
                     setattr(self, attr, getattr(self.__wrapped__, attr))
-            self.type = None
+            if hasattr(self.__wrapped__, '__annotations__'):
+                setattr(
+                    self, '__annotations__',
+                    self.__wrapped__.__annotations__
+                )
+                self.type = typing_callable_from_annotated_function(
+                    self.__wrapped__
+                )
             self.is_function_type = True
         else:
             self.is_function_type = False
-            self.type = type_
+            if (
+                hasattr(self.__wrapped__, '__signature__') or
+                hasattr(self.__wrapped__, '__annotations__')
+            ):
+                self.type = inspect.signature(
+                    self.__wrapped__
+                ).return_annotation
 
         if isinstance(object_, Symbol):
             self._symbols = {object_}
