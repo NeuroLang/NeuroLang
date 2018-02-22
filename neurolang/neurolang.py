@@ -9,10 +9,9 @@ from .ast import ASTWalker, ASTNode
 from .ast_tatsu import TatsuASTConverter
 from .exceptions import NeuroLangException
 from .symbols_and_types import (
-    Identifier, TypedSymbol, TypedSymbolTable,
-    typing_callable_from_annotated_function,
+    Symbol, Expression, Function, TypedSymbolTable,
     NeuroLangTypeException, is_subtype, get_Callable_arguments_and_return,
-    get_type_and_value
+    get_type_and_value, evaluate
 )
 
 
@@ -159,7 +158,7 @@ class NeuroLangInterpreter(ASTWalker):
 
         if symbols is not None:
             for k, v in symbols.items():
-                self.symbol_table[Identifier(k)] = v
+                self.symbol_table[Symbol(k)] = v
 
         if functions is not None:
             for f in functions:
@@ -169,10 +168,7 @@ class NeuroLangInterpreter(ASTWalker):
                 else:
                     func = f
                     name = f.__name__
-                self.symbol_table[Identifier(name)] = TypedSymbol(
-                    typing_callable_from_annotated_function(func),
-                    func
-                )
+                self.symbol_table[Symbol(name)] = Function(func)
 
         for solver in self.category_solvers.values():
             solver.set_symbol_table(self.symbol_table)
@@ -208,7 +204,7 @@ class NeuroLangInterpreter(ASTWalker):
                 "%s doesn't have type %s" % (value, symbol_type)
             )
 
-        value = TypedSymbol(
+        value = Expression(
             value_type, value,
             symbol_table=self.symbol_table
         )
@@ -231,7 +227,7 @@ class NeuroLangInterpreter(ASTWalker):
             types_.append(type_)
             values.append(value)
 
-        return TypedSymbol(
+        return Expression(
             typing.Tuple[tuple(types_)],
             tuple(values)
         )
@@ -241,7 +237,7 @@ class NeuroLangInterpreter(ASTWalker):
 
     def value(self, ast):
         ast = ast['value']
-        if isinstance(ast, Identifier):
+        if isinstance(ast, Symbol):
                 return self.symbol_table[ast]
             # raise NeuroLangException(
             #    "Value %s not recognised" % str(ast)
@@ -300,7 +296,7 @@ class NeuroLangInterpreter(ASTWalker):
                     result = result + argument
                 else:
                     result = result - argument
-            return TypedSymbol(result_type, result)
+            return Expression(result_type, result)
         else:
             return arguments[0]
 
@@ -323,7 +319,7 @@ class NeuroLangInterpreter(ASTWalker):
                     result = result // argument
                     result_type = int
 
-            return TypedSymbol(result_type, result)
+            return Expression(result_type, result)
         else:
             return arguments[0]
 
@@ -336,7 +332,7 @@ class NeuroLangInterpreter(ASTWalker):
                 result_value **
                 get_type_and_value(ast['exponent'])[1]
             )
-            result = TypedSymbol(result_type, result_value)
+            result = Expression(result_type, result_value)
 
         return result
 
@@ -344,18 +340,17 @@ class NeuroLangInterpreter(ASTWalker):
         identifier = ast['root']
         if 'children' in ast and ast['children'] is not None:
             identifier += '.' + '.'.join(ast['children'])
-        return Identifier(identifier)
+        return Symbol(identifier)
 
     def function_application(self, ast):
-        function_symbol = self.symbol_table[ast['identifier']]
-        function = function_symbol.value
+        function = self.symbol_table[ast['identifier']]
 
-        if not is_subtype(function_symbol.type, typing.Callable):
+        if not is_subtype(function.type, typing.Callable):
             raise NeuroLangTypeException()
 
         function_type_arguments, function_type_return = \
             get_Callable_arguments_and_return(
-                function_symbol.type
+                function.type
             )
 
         arguments = []
@@ -368,13 +363,13 @@ class NeuroLangInterpreter(ASTWalker):
             if not is_subtype(argument_type, function_type_arguments[i]):
                 raise NeuroLangTypeException()
 
-        result_type, result = get_type_and_value(
-            function(*arguments)
-        )
+        function = Function(function, args=arguments)
+        result_type, result = get_type_and_value(function)
+
         if not is_subtype(result_type, function_type_return):
             raise NeuroLangTypeException()
 
-        return TypedSymbol(
+        return Expression(
             result_type,
             result,
         )
@@ -386,7 +381,7 @@ class NeuroLangInterpreter(ASTWalker):
             symbol_table=self.symbol_table
         )
         if (
-            isinstance(symbol, TypedSymbol) and
+            isinstance(symbol, Expression) and
             issubclass(symbol.type, typing.Tuple)
         ):
             if not is_subtype(item_type, typing.SupportsInt):
@@ -395,7 +390,7 @@ class NeuroLangInterpreter(ASTWalker):
                 )
             item = int(item)
             if len(symbol.value) > item:
-                return TypedSymbol(
+                return Expression(
                     symbol.type.__args__[item],
                     symbol.value[item]
                 )
@@ -404,7 +399,7 @@ class NeuroLangInterpreter(ASTWalker):
                     "Tuple doesn't have %d items" % item
                 )
         elif (
-            isinstance(symbol, TypedSymbol) and
+            isinstance(symbol, Expression) and
             issubclass(symbol.type, typing.Mapping)
         ):
             key_type = symbol.type.__args__[0]
@@ -413,7 +408,7 @@ class NeuroLangInterpreter(ASTWalker):
                     "key type does not agree with Mapping key %s" % key_type
                 )
 
-            return TypedSymbol(
+            return Expression(
                 symbol.type.__args__[1],
                 symbol.name[item]
             )
@@ -423,13 +418,24 @@ class NeuroLangInterpreter(ASTWalker):
             )
 
     def string(self, ast):
-        return TypedSymbol(str, str(ast['value']))
+        return Expression(str, str(ast['value']))
 
     def point_float(self, ast):
-        return TypedSymbol(float, float(''.join(ast['value'])))
+        return Expression(float, float(''.join(ast['value'])))
 
     def integer(self, ast):
-        return TypedSymbol(int, int(ast['value']))
+        return Expression(int, int(ast['value']))
+        return ast
+
+    def compile(self, ast=None):
+        if ast is not None:
+            self.evaluate(ast)
+        for k, v in self.symbol_table.items():
+            if isinstance(v, Expression):
+                self.symbol_table[k] = Expression(
+                    v.type,
+                    evaluate(v.value)
+                )
 
 
 def parser(code, **kwargs):

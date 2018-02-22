@@ -28,7 +28,7 @@ def test_assignment_values():
 
     nli = nl.NeuroLangInterpreter(functions=[double, bad_double])
     ast = nl.parser(command)
-    nli.evaluate(ast)
+    nli.compile(ast)
 
     assert type(nli.symbol_table['a'].value) == int
     assert nli.symbol_table['a'].value == 1
@@ -44,13 +44,13 @@ def test_assignment_values():
     assert nli.symbol_table['m'].value == 2
 
     with raises(nl.NeuroLangTypeException):
-        nli.evaluate(nl.parser('t = double("a")'))
+        nli.compile(nl.parser('t = double("a")'))
 
     with raises(nl.NeuroLangTypeException):
-        nli.evaluate(nl.parser('t = bad_double(1.)'))
+        nli.compile(nl.parser('t = bad_double(1.)'))
 
     with raises(nl.NeuroLangTypeException):
-        nli.evaluate(nl.parser('t = a("a")'))
+        nli.compile(nl.parser('t = a("a")'))
 
 
 def test_tuples():
@@ -60,7 +60,7 @@ def test_tuples():
     '''
     nli = nl.NeuroLangInterpreter()
     ast = nl.parser(command)
-    nli.evaluate(ast)
+    nli.compile(ast)
 
     assert nli.symbol_table['a'].type == Tuple[int, str]
     assert nli.symbol_table['a'].value == (1, "a")
@@ -69,7 +69,7 @@ def test_tuples():
     assert nli.symbol_table['b'].value == 1
 
     with raises(nl.NeuroLangTypeException):
-        nli.evaluate(nl.parser('a[2]'))
+        nli.compile(nl.parser('a[2]'))
 
 
 def test_queries():
@@ -103,7 +103,7 @@ def test_queries():
     '''
 
     ast = nl.parser(script)
-    nli.evaluate(ast)
+    nli.compile(ast)
 
     assert nli.symbol_table['one'].value == 1
     assert nli.symbol_table['one'].type == FourInts
@@ -116,10 +116,10 @@ def test_queries():
     assert nli.symbol_table['twothree'].value == {2, 3}
 
     with raises(nl.NeuroLangException):
-        nli.evaluate(nl.parser("fail is a four_int singleton_set 1"))
+        nli.compile(nl.parser("fail is a four_int singleton_set 1"))
 
     with raises(nl.NeuroLangException):
-        nli.evaluate(nl.parser("fail are four_int singleton_set 1"))
+        nli.compile(nl.parser("fail are four_int singleton_set 1"))
 
     with raises(nl.NeuroLangException):
-        nli.evaluate(nl.parser("fail is a four_ints singleton_set 1"))
+        nli.compile(nl.parser("fail is a four_ints singleton_set 1"))

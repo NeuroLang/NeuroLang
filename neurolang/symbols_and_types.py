@@ -1,11 +1,24 @@
 import typing
 import types
-import inspect
 import collections
 from itertools import chain
 
 from .exceptions import NeuroLangException
-from .expressions import Symbol, SymbolApplication
+from . import expressions
+from .expressions import (
+    typing_callable_from_annotated_function,
+    Symbol,
+    Function,
+    evaluate
+)
+
+
+__all__ = [
+    'Symbol', 'Expression', 'Function', 'TypedSymbolTable',
+    'typing_callable_from_annotated_function',
+    'NeuroLangTypeException', 'is_subtype',
+    'get_Callable_arguments_and_return', 'get_type_and_value', 'evaluate'
+]
 
 
 class NeuroLangTypeException(NeuroLangException):
@@ -14,17 +27,6 @@ class NeuroLangTypeException(NeuroLangException):
 
 def get_Callable_arguments_and_return(callable):
     return callable.__args__[:-1], callable.__args__[-1]
-
-
-def typing_callable_from_annotated_function(function):
-    signature = inspect.signature(function)
-    parameter_types = [
-        v.annotation for v in signature.parameters.values()
-    ]
-    return typing.Callable[
-        parameter_types,
-        signature.return_annotation
-    ]
 
 
 def get_type_args(type_):
@@ -101,21 +103,21 @@ def replace_type_variable(type_, type_hint, type_var=None):
 
 
 def get_type_and_value(value, symbol_table=None):
-    if symbol_table is not None and isinstance(value, Identifier):
+    if symbol_table is not None and isinstance(value, Symbol):
         value = symbol_table[value]
 
-    if isinstance(value, TypedSymbol):
+    if isinstance(value, Expression):
         return value.type, value.value
-    elif isinstance(value, Symbol):
+    elif isinstance(value, expressions.Symbol):
         return value.type, value
-    elif isinstance(value, SymbolApplication):
-        if value.is_function_type:
-            return typing_callable_from_annotated_function(value), value
-        else:
-            return value.type, value
+    elif isinstance(value, expressions.Function):
+        return value.type, value
     else:
         if isinstance(value, types.FunctionType):
-            return typing_callable_from_annotated_function(value), value
+            return (
+                expressions.typing_callable_from_annotated_function(value),
+                value
+            )
         else:
             return type(value), value
 
@@ -126,10 +128,10 @@ def type_validation_value(value, type_, symbol_table=None):
 
     if (
         (symbol_table is not None) and
-        isinstance(value, Identifier)
+        isinstance(value, Symbol)
     ):
         value = symbol_table[value].value
-    elif isinstance(value, TypedSymbol):
+    elif isinstance(value, Expression):
         value = value.value
 
     if hasattr(type_, '__origin__') and type_.__origin__ is not None:
@@ -179,13 +181,15 @@ def type_validation_value(value, type_, symbol_table=None):
             )
         else:
             raise ValueError("Type %s not implemented in the checker" % type_)
+    elif isinstance(value, Function):
+        return is_subtype(value.type, type_)
     else:
         return isinstance(
             value, type_
         )
 
 
-class TypedSymbol(object):
+class Expression(expressions.Constant):
     def __init__(self, type_, value, symbol_table=None):
         if not type_validation_value(
             value, type_, symbol_table=symbol_table
@@ -196,23 +200,6 @@ class TypedSymbol(object):
             )
         self.type = type_
         self.value = value
-
-    def __repr__(self):
-        return '%s: %s' % (self.value, self.type)
-
-
-class Identifier(Symbol):
-    def __init__(self, name):
-        self.name = name
-
-    def __getitem__(self, value):
-        return Identifier(self.name + '.' + value)
-
-    def parent(self):
-        return Identifier(self.name[:self.name.rindex('.')])
-
-    def __repr__(self):
-        return 'Id(%s)' % repr(self.name)
 
 
 class TypedSymbolTable(collections.MutableMapping):
@@ -233,10 +220,10 @@ class TypedSymbolTable(collections.MutableMapping):
             if self.enclosing_scope is not None:
                 return self.enclosing_scope[key]
             else:
-                raise KeyError("TypedSymbol %s not in the table" % key)
+                raise KeyError("Expression %s not in the table" % key)
 
     def __setitem__(self, key, value):
-        if isinstance(value, TypedSymbol):
+        if isinstance(value, expressions.Expression):
             self._symbols[key] = value
             if value.type not in self._symbols_by_type:
                 self._symbols_by_type[value.type] = dict()
