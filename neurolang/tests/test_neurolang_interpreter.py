@@ -123,3 +123,15 @@ def test_queries():
 
     with raises(nl.NeuroLangException):
         nli.compile(nl.parser("fail is a four_ints singleton_set 1"))
+
+
+def test_mix_queries_and_algebra():
+    command = '''
+        foo is a String foo
+        bar = foo
+    '''
+    nli = nl.NeuroLangInterpreter()
+    nli.compile(nl.parser(command))
+
+    assert nli.symbol_table['foo'].value == "foo"
+    assert nli.symbol_table['bar'].value == "foo"
