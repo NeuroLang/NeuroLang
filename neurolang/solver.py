@@ -109,8 +109,8 @@ class GenericSolver(ASTWalker):
             )
 
         result = Expression(
-            return_type,
             value,
+            type_=return_type,
             symbol_table=self.symbol_table
         )
 
@@ -166,8 +166,8 @@ class GenericSolver(ASTWalker):
             raise
 
         return Expression(
-            type_,
-            value
+            value,
+            type_=type_
         )
 
     def execute(self, ast, plural=False, identifier=None):

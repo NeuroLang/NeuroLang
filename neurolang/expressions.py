@@ -3,6 +3,8 @@ import operator as op
 import typing
 import inspect
 from functools import wraps, WRAPPER_ASSIGNMENTS
+import types
+from .exceptions import NeuroLangException
 
 
 __all__ = [
@@ -13,6 +15,10 @@ __all__ = [
 
 
 ToBeInferred = typing.TypeVar('ToBeInferred')
+
+
+class NeuroLangTypeException(NeuroLangException):
+    pass
 
 
 def typing_callable_from_annotated_function(function):
@@ -26,24 +32,209 @@ def typing_callable_from_annotated_function(function):
     ]
 
 
+def get_type_args(type_):
+    if hasattr(type_, '__args__') and type_.__args__ is not None:
+        return type_.__args__
+    else:
+        return tuple()
+
+
+def get_type_and_value(value, symbol_table=None):
+    if symbol_table is not None and isinstance(value, Symbol):
+        value = symbol_table.get(value, value)
+
+    if isinstance(value, Expression):
+        return value.type, value.value
+    else:
+        if isinstance(value, types.FunctionType):
+            return (
+                typing_callable_from_annotated_function(value),
+                value
+            )
+        else:
+            return type(value), value
+
+
+def is_subtype(left, right):
+    if left == right:
+        return True
+    if right == typing.Any:
+        return True
+    elif left == typing.Any:
+        return right == typing.Any
+    elif left == ToBeInferred:
+        return True
+    elif hasattr(right, '__origin__') and right.__origin__ is not None:
+        if right.__origin__ == typing.Union:
+            return any(
+                is_subtype(left, r)
+                for r in right.__args__
+            )
+        elif issubclass(right, typing.Callable):
+            if issubclass(left, typing.Callable):
+                left_args = get_type_args(left)
+                right_args = get_type_args(right)
+
+                if len(left_args) != len(right_args):
+                    False
+
+                return all((
+                    is_subtype(left_arg, right_arg)
+                    for left_arg, right_arg in zip(left_args, right_args)
+                ))
+            else:
+                return False
+        elif (any(
+            issubclass(right, T) and
+            issubclass(left, T)
+            for T in (
+                typing.AbstractSet, typing.List, typing.Tuple,
+                typing.Mapping, typing.Iterable
+            )
+        )):
+            return all(
+                is_subtype(l, r) for l, r in zip(
+                    get_type_args(left), get_type_args(right)
+                )
+            )
+        else:
+            raise ValueError("typing Generic not supported")
+    else:
+        if left == int:
+            return right in (float, complex, typing.SupportsInt)
+        elif left == float:
+            return right in (complex, typing.SupportsFloat)
+        elif right == int:
+            right = typing.SupportsInt
+        elif right == float:
+            right = typing.SupportsFloat
+        elif right == str:
+            right = typing.Text
+
+        return issubclass(left, right)
+
+
+def unify_types(t1, t2):
+    if is_subtype(t1, t2):
+        return t2
+    elif is_subtype(t2, t1):
+        return t1
+
+
+def type_validation_value(value, type_, symbol_table=None):
+    if type_ == typing.Any or type_ == ToBeInferred:
+        return True
+
+    if (
+        (symbol_table is not None) and
+        isinstance(value, Symbol)
+    ):
+        value = symbol_table[value].value
+    elif isinstance(value, Expression):
+        value = value.value
+
+    if hasattr(type_, '__origin__') and type_.__origin__ is not None:
+        if type_.__origin__ == typing.Union:
+            return any(
+                type_validation_value(value, t, symbol_table=symbol_table)
+                for t in type_.__args__
+            )
+        elif issubclass(type_, typing.Callable):
+            value_type, _ = get_type_and_value(value)
+            return is_subtype(value_type, type_)
+        elif issubclass(type_, typing.Mapping):
+            return (
+                issubclass(type(value), type_.__origin__) and
+                ((type_.__args__ is None) or all((
+                    type_validation_value(
+                        k, type_.__args__[0], symbol_table=symbol_table
+                    ) and
+                    type_validation_value(
+                        v, type_.__args__[1], symbol_table=symbol_table
+                    )
+                    for k, v in value.items()
+                )))
+            )
+        elif issubclass(type_, typing.Tuple):
+            return (
+                issubclass(type(value), type_.__origin__) and
+                all((
+                    type_validation_value(
+                        v, t, symbol_table=symbol_table
+                    )
+                    for v, t in zip(value, type_.__args__)
+                ))
+            )
+        elif any(
+            issubclass(type_, t)
+            for t in (typing.AbstractSet, typing.Sequence, typing.Iterable)
+        ):
+            return (
+                issubclass(type(value), type_.__origin__) and
+                ((type_.__args__ is None) or all((
+                    type_validation_value(
+                        i, type_.__args__[0], symbol_table=symbol_table
+                    )
+                    for i in value
+                )))
+            )
+        else:
+            raise ValueError("Type %s not implemented in the checker" % type_)
+    elif isinstance(value, Function):
+        return is_subtype(value.type, type_)
+    else:
+        return isinstance(
+            value, type_
+        )
+
+
 class Expression(object):
-    _symbols = {}
+    _symbols = set()
     super_attributes = WRAPPER_ASSIGNMENTS + ('__signature__', 'mro', 'type')
-    local_attributes = tuple()
     type = ToBeInferred
 
+    def __init__(self, value, type_=ToBeInferred, symbol_table=None):
+        if not type_validation_value(
+            value, type_, symbol_table=symbol_table
+        ):
+            raise NeuroLangTypeException(
+               "The value %s does not correspond to the type %s" %
+               (value, type_)
+            )
+        self.type = type_
+        self.value = value
+
+        if not type_validation_value(
+            value, self.type, symbol_table=symbol_table
+        ):
+            raise NeuroLangTypeException(
+                "The value %s does not correspond to the type %s" %
+                (value, type_)
+            )
+
+        if isinstance(value, Expression):
+            self._symbols |= value._symbols
+
+    def __repr__(self):
+        return 'E{{{}: {}}}'.format(self.value, self.type)
+
     def __getattr__(self, attr):
-        if attr in self.super_attributes or attr in self.local_attributes:
+        if (
+            attr in dir(self) or
+            attr in self.super_attributes
+        ):
             return getattr(super(), attr)
         else:
             return Function(getattr, args=(self, attr))
 
 
 class Symbol(Expression):
-    def __init__(self, name, type_=ToBeInferred):
+    def __init__(self, name, type_=ToBeInferred, symbol_table=None):
         self.name = name
         self.type = type_
         self._symbols = {self}
+        self._symbol_table = None
+        self.value = self
 
     def __eq__(self, other):
         return (
@@ -62,7 +253,14 @@ class Constant(Expression):
     def __init__(self, value, type_=ToBeInferred):
         self.value = value
         self.type = type_
-        self._symbols = {}
+
+        if not type_validation_value(
+            value, self.type
+        ):
+            raise NeuroLangTypeException(
+                "The value %s does not correspond to the type %s" %
+                (value, type_)
+            )
 
     def __eq__(self, other):
         return (
@@ -83,7 +281,7 @@ class Function(Expression):
         type_=ToBeInferred
     ):
         self.__wrapped__ = object_
-
+        self.value = self
         if args is None and kwargs is None:
             for attr in WRAPPER_ASSIGNMENTS:
                 if hasattr(self.__wrapped__, attr):
@@ -172,6 +370,14 @@ class Definition(Expression):
 
     def __repr__(self):
         return 'Def{{{}: {} <- {}}}'.format(
+            self.symbol.name, self.type, self.value
+        )
+
+
+class Query(Definition):
+
+    def __repr__(self):
+        return 'Query{{{}: {} <- {}}}'.format(
             self.symbol.name, self.type, self.value
         )
 

@@ -9,7 +9,8 @@ from .ast import ASTWalker, ASTNode
 from .ast_tatsu import TatsuASTConverter
 from .exceptions import NeuroLangException
 from .symbols_and_types import (
-    Symbol, Expression, Function, Definition, TypedSymbolTable,
+    Symbol, Constant, Expression, Function, Definition, Query,
+    TypedSymbolTable, unify_types,
     NeuroLangTypeException, is_subtype, get_Callable_arguments_and_return,
     get_type_and_value, evaluate
 )
@@ -147,7 +148,7 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
         if is_plural:
             symbol_type = typing.AbstractSet[category_solver.type]
 
-        value = Definition(
+        value = Query(
             symbol_type, identifier, ast['statement'],
             symbol_table=self.symbol_table
         )
@@ -159,12 +160,12 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
         identifier = ast['identifier']
         type_, value = get_type_and_value(ast['argument'])
         identifier = Symbol(identifier.name, type_)
-
-        self.symbol_table[identifier] = Definition(
+        result = Definition(
             type_, identifier, ast['argument']
         )
+        self.symbol_table[identifier] = result
         logging.debug(self.symbol_table[identifier])
-        return ast['argument']
+        return result
 
     def tuple(self, ast):
         types_ = []
@@ -177,8 +178,8 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
             values.append(value)
 
         return Expression(
-            typing.Tuple[tuple(types_)],
-            tuple(values)
+            tuple(values),
+            type_=typing.Tuple[tuple(types_)]
         )
 
     def predicate(self, ast):
@@ -214,34 +215,27 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
 
     def sum(self, ast):
         arguments = ast['term']
-        result_type, result = get_type_and_value(arguments[0])
+        result_type, _ = get_type_and_value(arguments[0])
+        result = arguments[0]
         if 'op' in ast:
             for op, argument in zip(ast['op'], arguments[1:]):
-                argument_type, argument = get_type_and_value(argument)
-                if (
-                    (argument_type != result_type) and
-                    is_subtype(result_type, argument_type)
-                ):
-                    result_type = argument_type
+                argument_type, _ = get_type_and_value(argument)
+                result_type = unify_types(result_type, argument_type)
                 if op == '+':
                     result = result + argument
                 else:
                     result = result - argument
-            return Expression(result_type, result)
-        else:
-            return arguments[0]
+                result.type = result_type
+        return result
 
     def product(self, ast):
         arguments = ast['factor']
-        result_type, result = get_type_and_value(arguments[0])
+        result_type, _ = get_type_and_value(arguments[0])
+        result = arguments[0]
         if 'op' in ast:
             for op, argument in zip(ast['op'], arguments[1:]):
-                argument_type, argument = get_type_and_value(argument)
-                if (
-                    (argument_type != result_type) and
-                    is_subtype(result_type, argument_type)
-                ):
-                    result_type = argument_type
+                argument_type, _ = get_type_and_value(argument)
+                result_type = unify_types(result_type, argument_type)
                 if op == '*':
                     result = result * argument
                 elif op == '/':
@@ -249,23 +243,27 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
                 elif op == '//':
                     result = result // argument
                     result_type = int
-
-            return Expression(result_type, result)
-        else:
-            return arguments[0]
+                result.type = result_type
+        return result
 
     def power(self, ast):
         result = ast['base']
 
         if 'exponent' in ast:
-            result_type, result_value = get_type_and_value(result)
-            result_value = (
-                result_value **
-                get_type_and_value(ast['exponent'])[1]
+            exponent = ast['exponent']
+            result_type, _ = get_type_and_value(result)
+            exponent_type, _ = get_type_and_value(exponent)
+            result = (
+                result ** exponent
             )
-            result = Expression(result_type, result_value)
-
+            result.type = unify_types(result_type, exponent_type)
         return result
+
+    def comparison(self, ast):
+        if len(ast['operand']) == 1:
+            return ast['operand']
+        else:
+            return Function(Symbol(ast['operator']))(ast['operand'])
 
     def dotted_identifier(self, ast):
         identifier = ast['root']
@@ -285,19 +283,16 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
             if isinstance(value, Definition):
                 value = value.symbol
 
-            arguments.append(value)
+            arguments.append(a)
             argument_types.append(argument_type)
 
         function = Function(
             function,
+            args=arguments,
             type_=typing.Callable[argument_types, typing.Any]
-        )(arguments)
-        result_type, result = get_type_and_value(function)
-
-        return Expression(
-            result_type,
-            result,
         )
+
+        return function
 
     def projection(self, ast):
         symbol = self.symbol_table[ast['identifier']]
@@ -316,8 +311,8 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
             item = int(item)
             if len(symbol.value) > item:
                 return Expression(
-                    symbol.type.__args__[item],
-                    symbol.value[item]
+                    symbol.value[item],
+                    type_=symbol.type.__args__[item]
                 )
             else:
                 raise NeuroLangTypeException(
@@ -334,8 +329,8 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
                 )
 
             return Expression(
-                symbol.type.__args__[1],
-                symbol.name[item]
+                symbol.name[item],
+                type_=symbol.type.__args__[1]
             )
         else:
             raise NeuroLangTypeException(
@@ -343,14 +338,13 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
             )
 
     def string(self, ast):
-        return Expression(str, str(ast['value']))
+        return Constant(str(ast['value']), type_=str)
 
     def point_float(self, ast):
-        return Expression(float, float(''.join(ast['value'])))
+        return Constant(float(''.join(ast['value'])), type_=float)
 
     def integer(self, ast):
-        return Expression(int, int(ast['value']))
-        return ast
+        return Constant(int(ast['value']), type_=int)
 
     def compile(self, ast=None):
         if ast is not None:
@@ -358,8 +352,8 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
         for k, v in self.symbol_table.items():
             if isinstance(v, Expression):
                 self.symbol_table[k] = Expression(
-                    v.type,
-                    evaluate(v.value)
+                    evaluate(v.value),
+                    type_=v.type
                 )
 
 
@@ -489,8 +483,8 @@ class NeuroLangInterpreter(ASTWalker):
             values.append(value)
 
         return Expression(
-            typing.Tuple[tuple(types_)],
-            tuple(values)
+            tuple(values),
+            type_=typing.Tuple[tuple(types_)]
         )
 
     def predicate(self, ast):
@@ -557,7 +551,7 @@ class NeuroLangInterpreter(ASTWalker):
                     result = result + argument
                 else:
                     result = result - argument
-            return Expression(result_type, result)
+            return Expression(result, type_=result_type)
         else:
             return arguments[0]
 
@@ -579,8 +573,7 @@ class NeuroLangInterpreter(ASTWalker):
                 elif op == '//':
                     result = result // argument
                     result_type = int
-
-            return Expression(result_type, result)
+            return Expression(result, type_=result_type)
         else:
             return arguments[0]
 
@@ -593,7 +586,7 @@ class NeuroLangInterpreter(ASTWalker):
                 result_value **
                 get_type_and_value(ast['exponent'])[1]
             )
-            result = Expression(result_type, result_value)
+            result = Expression(result_value, type_=result_type)
 
         return result
 
@@ -631,8 +624,8 @@ class NeuroLangInterpreter(ASTWalker):
             raise NeuroLangTypeException()
 
         return Expression(
-            result_type,
             result,
+            type_=result_type
         )
 
     def projection(self, ast):
@@ -652,8 +645,8 @@ class NeuroLangInterpreter(ASTWalker):
             item = int(item)
             if len(symbol.value) > item:
                 return Expression(
-                    symbol.type.__args__[item],
-                    symbol.value[item]
+                    symbol.value[item],
+                    type_=symbol.type.__args__[item]
                 )
             else:
                 raise NeuroLangTypeException(
@@ -670,8 +663,8 @@ class NeuroLangInterpreter(ASTWalker):
                 )
 
             return Expression(
-                symbol.type.__args__[1],
-                symbol.name[item]
+                symbol.name[item],
+                type_=symbol.type.__args__[1]
             )
         else:
             raise NeuroLangTypeException(
@@ -679,23 +672,26 @@ class NeuroLangInterpreter(ASTWalker):
             )
 
     def string(self, ast):
-        return Expression(str, str(ast['value']))
+        return Constant(str(ast['value']), type_=str)
 
     def point_float(self, ast):
-        return Expression(float, float(''.join(ast['value'])))
+        return Constant(float(''.join(ast['value'])), type_=float)
 
     def integer(self, ast):
-        return Expression(int, int(ast['value']))
+        return Constant(int(ast['value']), type_=int)
         return ast
 
     def compile(self, ast=None):
         if ast is not None:
             self.evaluate(ast)
         for k, v in self.symbol_table.items():
-            if isinstance(v, Expression):
+            if (
+                isinstance(v, Expression) and
+                not isinstance(v, Function)
+            ):
                 self.symbol_table[k] = Expression(
-                    v.type,
-                    evaluate(v.value)
+                    evaluate(v.value),
+                    type_=v.type
                 )
 
 

@@ -84,10 +84,10 @@ def test_algebraic_structure_of_naturals():
     elements = (1, 2, 3)
     null_element = 0
     symbols = {
-        'element{}'.format(i + 1): nl.Expression(int, e)
+        'element{}'.format(i + 1): nl.Constant(e, type_=int)
         for i, e in enumerate(elements)
     }
-    symbols['null'] = nl.Expression(int, null_element)
+    symbols['null'] = nl.Constant(null_element, type_=int)
     nli = nl.NeuroLangInterpreter(symbols=symbols, types=[(int, 'dummy')])
 
     check_algebraic_structure_is_a_ring(op_add='+', op_inv_add='-',

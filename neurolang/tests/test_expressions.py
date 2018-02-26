@@ -6,6 +6,7 @@ from ..expressions import (
 
 import operator as op
 import inspect
+from typing import Set
 
 
 def test_symbol_application():
@@ -62,9 +63,9 @@ def test_symbol_method_and_operator():
 
 
 def test_constant_method_and_operator():
-    a = Constant(1, int)
+    a = Constant(1, type_=int)
     fva = a + 1
-    b = Constant({1}, int)
+    b = Constant({1}, type_=Set[int])
     fvb = b.__len__()
     fbc = b.union({1, 2})
 
