@@ -421,6 +421,15 @@ class NeuroLangInterpreter(ASTWalker):
                 else:
                     func = f
                     name = f.__name__
+
+                signature = inspect.signature(func)
+                parameters_items = iter(signature.parameters.items())
+
+                argument_types = iter(signature.parameters.values())
+                next(argument_types)
+
+                for k, v in typing.get_type_hints(func).items():
+                    func.__annotations__[k] = v
                 self.symbol_table[Symbol(name)] = Function(func)
 
         for solver in self.category_solvers.values():

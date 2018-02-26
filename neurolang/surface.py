@@ -6,7 +6,7 @@ import nibabel as nib
 import numpy as np
 
 from .solver import GenericSolver, SetBasedSolver
-from .symbols_and_types import Expression
+from .symbols_and_types import Constant
 
 
 class Surface(Set):
@@ -277,14 +277,14 @@ class RegionSolver(SetBasedSolver):
 
         if self.is_plural_evaluation:
             if hasattr(result, 'contiguous_regions'):
-                return Expression(
-                    typing.AbstractSet[self.type],
-                    frozenset(result.contiguous_regions())
+                return Constant(
+                    frozenset(result.contiguous_regions()),
+                    type_=typing.AbstractSet[self.type],
                 )
         else:
-            return Expression(
-                self.type,
-                self.type(result)
+            return Constant(
+                self.type(result),
+                type_=self.type,
             )
 
 
@@ -295,19 +295,19 @@ class SurfaceOverlaySolver(GenericSolver):
     def predicate_from_file(self, filename: str)->bool:
         f = nib.load(filename)
 
-        self.symbol_table[self.identifier] = Expression(
-            SurfaceOverlay,
+        self.symbol_table[self.identifier] = Constant(
             SurfaceOverlay(
                 self.symbol_table[self.identifier['surface']].value,
                 f.darrays[0].data
-            )
+            ),
+            type_=SurfaceOverlay
         )
         return True
 
     def predicate_on_surface(self, surface: Surface)->bool:
-        self.symbol_table[self.identifier['surface']] = Expression(
-            Surface,
-            surface
+        self.symbol_table[self.identifier['surface']] = Constant(
+            surface,
+            type_=Surface
         )
         return True
 

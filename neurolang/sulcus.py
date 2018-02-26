@@ -75,8 +75,8 @@ class SulcusSolver(SetBasedSolver):
             if not is_subtype(argument_type, self.type):
                 raise ValueError()
             return Expression(
-                Set[self.type],
                 argument[predicate],
+                type_=Set[self.type],
                 symbol_table=self.symbol_table
             )
         if ast['identifier'].name == 'with_limb':
