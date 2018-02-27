@@ -15,7 +15,7 @@ def test_symbol_application():
 
     oadd = Function(op.add)
     c = oadd(2, 3)
-    assert c.__wrapped__ == oadd
+    assert c.function == oadd
     assert c.args == (2, 3)
     assert evaluate(c) == 5
 

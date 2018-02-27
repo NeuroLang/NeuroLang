@@ -326,6 +326,10 @@ class Function(Expression):
                 elif isinstance(arg, Function):
                     self._symbols |= arg._symbols
 
+    @property
+    def function(self):
+        return self.__wrapped__
+
     def __call__(self, *args, **kwargs):
         symbols = self._symbols.copy()
         for arg in chain(args, kwargs.values()):
@@ -438,15 +442,10 @@ def evaluate(expression, **kwargs):
         else:
             return expression
     elif isinstance(expression, Function):
-        if (
-                isinstance(expression.__wrapped__, Symbol) and
-                expression.__wrapped__ in kwargs
-        ):
-            function = kwargs[expression.__wrapped__]
-        elif isinstance(expression.__wrapped__, Function):
-            function = evaluate(expression.__wrapped__, **kwargs)
+        if isinstance(expression.function, Expression):
+            function = evaluate(expression.function, **kwargs)
         else:
-            function = expression.__wrapped__
+            function = expression.function
 
         if expression.args is None:
             return function
