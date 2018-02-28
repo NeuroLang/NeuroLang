@@ -4,17 +4,19 @@ import typing
 import inspect
 from functools import wraps, WRAPPER_ASSIGNMENTS
 import types
+from warnings import warn
 from .exceptions import NeuroLangException
 
 
 __all__ = [
     'Symbol', 'Function', 'Definition', 'evaluate',
+    'Projection',
     'ToBeInferred',
     'typing_callable_from_annotated_function'
 ]
 
 
-ToBeInferred = typing.TypeVar('ToBeInferred')
+ToBeInferred = typing.TypeVar('ToBeInferred', covariant=True)
 
 
 class NeuroLangTypeException(NeuroLangException):
@@ -215,6 +217,17 @@ class Expression(object):
         if isinstance(value, Expression):
             self._symbols |= value._symbols
 
+    def __call__(self, *args, **kwargs):
+        if hasattr(self, '__annotations__'):
+            variable_type = self.__annotations__.get('return', None)
+        else:
+            variable_type = ToBeInferred
+
+        return Function(
+            self, args, kwargs,
+            type_=variable_type,
+         )
+
     def __repr__(self):
         return 'E{{{}: {}}}'.format(self.value, self.type)
 
@@ -225,7 +238,10 @@ class Expression(object):
         ):
             return getattr(super(), attr)
         else:
-            return Function(getattr, args=(self, attr))
+            return Function(
+                Constant(getattr),
+                args=(self, Constant(attr, type_=str))
+            )
 
 
 class Symbol(Expression):
@@ -250,7 +266,23 @@ class Symbol(Expression):
 
 
 class Constant(Expression):
-    def __init__(self, value, type_=ToBeInferred):
+    def __init__(
+        self, value, type_=ToBeInferred,
+        auto_infer_annotated_functions_type=True
+    ):
+        if callable(value):
+            for attr in WRAPPER_ASSIGNMENTS:
+                if hasattr(value, attr):
+                    setattr(self, attr, getattr(value, attr))
+
+            if (
+                auto_infer_annotated_functions_type and
+                hasattr(value, '__annotations__') and type_ == ToBeInferred
+            ):
+                type_ = typing_callable_from_annotated_function(
+                    value
+                )
+
         self.value = value
         self.type = type_
 
@@ -263,8 +295,13 @@ class Constant(Expression):
             )
 
     def __eq__(self, other):
+        if self.type == ToBeInferred:
+            warn('Making a comparison with types needed to be inferred')
         return (
-            (isinstance(other, Constant) or isinstance(other, self.type)) and
+            (
+                isinstance(other, Constant) or
+                self.type == ToBeInferred or isinstance(other, self.type)
+            ) and
             hash(self) == hash(other)
         )
 
@@ -283,19 +320,30 @@ class Function(Expression):
         self.__wrapped__ = object_
         self.value = self
         if args is None and kwargs is None:
+            if isinstance(self.__wrapped__, Constant):
+                function = self.__wrapped__.value
+            else:
+                function = self.__wrapped__
             for attr in WRAPPER_ASSIGNMENTS:
-                if hasattr(self.__wrapped__, attr):
-                    setattr(self, attr, getattr(self.__wrapped__, attr))
-            if hasattr(self.__wrapped__, '__annotations__'):
+                if hasattr(function, attr):
+                    setattr(self, attr, getattr(function, attr))
+            if hasattr(function, '__annotations__'):
                 self.type = typing_callable_from_annotated_function(
-                    self.__wrapped__
+                    function
                 )
             else:
                 self.type = type_
             self.has_been_applied = False
         else:
             self.has_been_applied = True
-            if (
+            if isinstance(self.__wrapped__, Expression):
+                if self.__wrapped__.type == ToBeInferred:
+                    self.type = ToBeInferred
+                elif isinstance(self.__wrapped__.type, typing.Callable):
+                    self.type = self.__wrapped__.type.__args__[-1]
+                else:
+                    NeuroLangTypeException
+            elif (
                 hasattr(self.__wrapped__, '__signature__') or
                 hasattr(self.__wrapped__, '__annotations__')
             ):
@@ -364,10 +412,42 @@ class Function(Expression):
         return r
 
 
-class Definition(Expression):
-    local_attributes = ['identifier', 'expression']
+class Projection(Expression):
+    def __init__(
+        self, collection, item,
+        type_=ToBeInferred,
+        auto_infer_projection_type=True
+    ):
+        if type_ == ToBeInferred and auto_infer_projection_type:
+            if not collection.type == ToBeInferred:
+                if is_subtype(collection.type, typing.Tuple):
+                    if (
+                        isinstance(item, Constant) and
+                        is_subtype(item.type, typing.SupportsInt) and
+                        len(collection.type.__args__) > int(item.value)
+                    ):
+                        type_ = collection.type.__args__[int(item.value)]
+                    else:
+                        raise NeuroLangTypeException(
+                            "Not {} elements in tuple".format(int(item.value))
+                        )
+                if is_subtype(collection.type, typing.Mapping):
+                    type_ = collection.type.__args__[1]
 
-    def __init__(self, type_, symbol, expression, symbol_table=None):
+        self._symbol = collection._symbols | item._symbols
+        self.collection = collection
+        self.item = item
+        self.type = type_
+
+    def __repr__(self):
+        return 'P{{{}[{}]: {}}}'.format(self.collection, self.item, self.type)
+
+
+class Definition(Expression):
+    def __init__(
+        self, symbol, expression,
+        type_=ToBeInferred, symbol_table=None
+    ):
         self.symbol = symbol
         self.value = expression
         self.type = type_
@@ -389,7 +469,7 @@ class Query(Definition):
 def op_bind(op):
     @wraps(op)
     def f(*args):
-        return Function(op, args=args)
+        return Function(Constant(op), args=args)
 
     return f
 
@@ -397,7 +477,7 @@ def op_bind(op):
 def rop_bind(op):
     @wraps(op)
     def f(self, value):
-        return Function(op, args=(value, self))
+        return Function(Constant(op), args=(value, self))
 
     return f
 
@@ -434,18 +514,30 @@ def evaluate(expression, **kwargs):
     '''
     Replace free variables and evaluate the function
     '''
-    if isinstance(expression, Constant):
-        return expression.value
-    if isinstance(expression, Symbol):
+    if isinstance(expression, list) or isinstance(expression, tuple):
+        evaluated = []
+        for e in expression:
+            evaluated.append(evaluate(e, **kwargs))
+
+        return evaluated
+    elif isinstance(expression, Constant):
+        return expression
+    elif isinstance(expression, Symbol):
         if expression in kwargs:
             return kwargs[expression]
         else:
             return expression
+    elif isinstance(expression, Definition):
+        result = Definition(
+            expression.symbol,
+            evaluate(expression.value, **kwargs),
+            type_=expression.type,
+        )
     elif isinstance(expression, Function):
         if isinstance(expression.function, Expression):
             function = evaluate(expression.function, **kwargs)
         else:
-            function = expression.function
+            raise ValueError
 
         if expression.args is None:
             return function
@@ -455,20 +547,29 @@ def evaluate(expression, **kwargs):
         for arg in expression.args:
             arg = evaluate(arg, **kwargs)
             new_args.append(arg)
-            we_should_evaluate &= not isinstance(arg, Expression)
+            we_should_evaluate &= isinstance(arg, Constant)
 
         new_kwargs = dict()
         for k, arg in expression.kwargs.items():
             arg = evaluate(arg, **kwargs)
             new_kwargs[k] = arg
-            we_should_evaluate &= not isinstance(arg, Expression)
+            we_should_evaluate &= isinstance(arg, Constant)
 
-        function = evaluate(function, **kwargs)
-        if isinstance(function, Expression):
-            we_should_evaluate = False
-
+        we_should_evaluate &= isinstance(function, Constant)
         if we_should_evaluate:
-            return function(*new_args, **new_kwargs)
+            function = function.value
+            new_args = tuple(
+                a.value for a in new_args
+            )
+            new_kwargs = {
+                k: v.value
+                for k, v in new_kwargs.items()
+            }
+            result = Constant(
+                function(*new_args, **new_kwargs),
+                type_=expression.type
+            )
+            return result
         else:
             return Function(function)(*new_args, **new_kwargs)
     else:

@@ -88,7 +88,9 @@ def test_algebraic_structure_of_naturals():
         for i, e in enumerate(elements)
     }
     symbols['null'] = nl.Constant(null_element, type_=int)
-    nli = nl.NeuroLangInterpreter(symbols=symbols, types=[(int, 'dummy')])
+    nli = nl.NeuroLangIntermediateRepresentationCompiler(
+        symbols=symbols, types=[(int, 'dummy')]
+    )
 
     check_algebraic_structure_is_a_ring(op_add='+', op_inv_add='-',
                                         op_mul='*', op_inv_mul='/',

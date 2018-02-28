@@ -11,6 +11,7 @@ from .expressions import (
     Function,
     Definition,
     Query,
+    Projection,
     evaluate,
     is_subtype,
     get_type_args,
@@ -24,6 +25,7 @@ from .expressions import (
 __all__ = [
     'ToBeInferred',
     'Symbol', 'Constant', 'Expression', 'Function', 'Definition', 'Query',
+    'Projection',
     'TypedSymbolTable',
     'typing_callable_from_annotated_function',
     'NeuroLangTypeException', 'is_subtype', 'type_validation_value',

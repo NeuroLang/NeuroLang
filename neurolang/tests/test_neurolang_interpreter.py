@@ -26,7 +26,9 @@ def test_assignment_values():
     def bad_double(v: float)->float:
         return {}
 
-    nli = nl.NeuroLangInterpreter(functions=[double, bad_double])
+    nli = nl.NeuroLangIntermediateRepresentationCompiler(
+        functions=[double, bad_double]
+    )
     ast = nl.parser(command)
     nli.compile(ast)
 
@@ -58,7 +60,7 @@ def test_tuples():
         a = (1, "a")
         b = a[0]
     '''
-    nli = nl.NeuroLangInterpreter()
+    nli = nl.NeuroLangIntermediateRepresentationCompiler()
     ast = nl.parser(command)
     nli.compile(ast)
 
