@@ -87,7 +87,11 @@ def test_queries():
             return FourInts(value)
 
         def predicate_singleton_set(self, value: int)->Set[FourInts]:
-            return {FourInts(value)}
+            return solver.FiniteDomainSet(
+                [FourInts(value)],
+                type_=FourInts,
+                typed_symbol_table=self.symbol_table
+            )
 
     nli = nl.NeuroLangIntermediateRepresentationCompiler(
         category_solvers=[FourIntsSetSolver()],

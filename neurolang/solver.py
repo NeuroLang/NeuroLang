@@ -24,6 +24,25 @@ class FiniteDomain(object):
     pass
 
 
+class FiniteDomainSet(set):
+    def __init__(self, *args, type_=None, typed_symbol_table=None):
+        super().__init__(*args)
+        self.type = type_
+        self.symbol_table = typed_symbol_table
+
+    def __invert__(self):
+        result = FiniteDomainSet(
+            (
+                v.value.value for v in
+                self.symbol_table.symbols_by_type(self.type).values()
+                if v.value.value not in self
+            ),
+            type_=self.type,
+            typed_symbol_table=self.symbol_table
+        )
+        return result
+
+
 class GenericSolver_exp(ExpressionBasicEvaluator):
 
     @property
