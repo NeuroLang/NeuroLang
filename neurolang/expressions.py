@@ -10,7 +10,7 @@ from .exceptions import NeuroLangException
 
 __all__ = [
     'Symbol', 'Function', 'Definition', 'evaluate',
-    'Projection',
+    'Projection', 'Predicate',
     'ToBeInferred',
     'typing_callable_from_annotated_function'
 ]
@@ -399,7 +399,7 @@ class Function(Expression):
             fname = self.__wrapped__.__name__
         else:
             fname = repr(self.__wrapped__)
-        r = 'F{{{}: {}}}'.format(fname, self.type)
+        r = u'\u03C3{{{}: {}}}'.format(fname, self.type)
         if self.args is not None:
             r += (
                 '(' +
@@ -440,7 +440,27 @@ class Projection(Expression):
         self.type = type_
 
     def __repr__(self):
-        return 'P{{{}[{}]: {}}}'.format(self.collection, self.item, self.type)
+        return u"\u03C3{{{}[{}]: {}}}".format(
+            self.collection, self.item, self.type
+        )
+
+
+class Predicate(Function):
+    def __repr__(self):
+        if hasattr(self.__wrapped__, '__name__'):
+            fname = self.__wrapped__.__name__
+        else:
+            fname = repr(self.__wrapped__)
+        r = 'P{{{}: {}}}'.format(fname, self.type)
+        if self.args is not None:
+            r += (
+                '(' +
+                ', '.join(repr(arg) for arg in self.args) +
+                ', '.join(
+                    repr(k) + '=' + repr(v)
+                    for k, v in self.kwargs.items()
+                ) + ')')
+        return r
 
 
 class Definition(Expression):

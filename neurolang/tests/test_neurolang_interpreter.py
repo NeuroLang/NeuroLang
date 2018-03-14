@@ -79,7 +79,7 @@ def test_queries():
     class FourInts(int, solver.FiniteDomain):
         pass
 
-    class FourIntsSetSolver(solver.SetBasedSolver):
+    class FourIntsSetSolver(solver.SetBasedSolver_exp):
         type_name = 'four_int'
         type = FourInts
 
@@ -89,7 +89,7 @@ def test_queries():
         def predicate_singleton_set(self, value: int)->Set[FourInts]:
             return {FourInts(value)}
 
-    nli = nl.NeuroLangInterpreter(
+    nli = nl.NeuroLangIntermediateRepresentationCompiler(
         category_solvers=[FourIntsSetSolver()],
     )
 
@@ -107,15 +107,15 @@ def test_queries():
     ast = nl.parser(script)
     nli.compile(ast)
 
-    assert nli.symbol_table['one'].value == 1
-    assert nli.symbol_table['one'].type == FourInts
-    assert nli.symbol_table['two'].value == 2
-    assert nli.symbol_table['three'].value == 3
-    assert nli.symbol_table['oneset'].value == {1}
-    assert nli.symbol_table['oneset_'].value == {1}
-    assert nli.symbol_table['onetwo'].value == {1, 2}
-    assert nli.symbol_table['twoset'].value == {2}
-    assert nli.symbol_table['twothree'].value == {2, 3}
+    assert nli.symbol_table['one'].value.value == 1
+    assert nli.symbol_table['one'].value.type == FourInts
+    assert nli.symbol_table['two'].value.value == 2
+    assert nli.symbol_table['three'].value.value == 3
+    assert nli.symbol_table['oneset'].value.value == {1}
+    assert nli.symbol_table['oneset_'].value.value == {1}
+    assert nli.symbol_table['onetwo'].value.value == {1, 2}
+    assert nli.symbol_table['twoset'].value.value == {2}
+    assert nli.symbol_table['twothree'].value.value == {2, 3}
 
     with raises(nl.NeuroLangException):
         nli.compile(nl.parser("fail is a four_int singleton_set 1"))

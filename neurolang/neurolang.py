@@ -10,17 +10,20 @@ from .ast_tatsu import TatsuASTConverter
 from .exceptions import NeuroLangException
 from .symbols_and_types import (
     Symbol, Constant, Expression, Function, Definition, Query,
-    Projection,
+    Projection, Predicate,
     TypedSymbolTable, unify_types, ToBeInferred,
     NeuroLangTypeException, is_subtype, get_Callable_arguments_and_return,
     get_type_and_value, evaluate
 )
-from .expression_walker import ExpressionWalker
+
+from .expression_walker import (
+    ExpressionBasicEvaluator, ExpressionReplacement
+)
 
 
 __all__ = [
     'NeuroLangIntermediateRepresentation',
-    'NeuroLangBasicEvaluator', 'ExpressionReplacement',
+    'ExpressionReplacement',
     'NeuroLangIntermediateRepresentationCompiler',
     'grammar_EBNF', 'parser',
     'Constant', 'Symbol', 'Function', 'Definition', 'Query'
@@ -152,27 +155,28 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
         )
 
     def predicate(self, ast):
-        return Function(ast['identifier'], args=[ast['argument']])
+        return Predicate(ast['identifier'], args=[ast['argument']])
 
     def value(self, ast):
         return ast['value']
 
     def statement(self, ast):
         arguments = ast['argument']
-        if len(arguments) == 1:
-            return arguments[0]
-        return Function(Symbol('or'))(arguments)
+        result = arguments[0]
+        for argument in arguments[1:]:
+            result = result | argument
+        return result
 
     def and_test(self, ast):
         arguments = ast['argument']
-        if len(arguments) == 1:
-            return arguments[0]
-
-        return Function(Symbol('and'))(arguments)
+        result = arguments[0]
+        for argument in arguments[1:]:
+            result = result & argument
+        return result
 
     def negated_argument(self, ast):
         argument = ast['argument']
-        return Function(Symbol('not'))(argument)
+        return ~argument
 
     def sum(self, ast):
         arguments = ast['term']
@@ -299,98 +303,7 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
         return Constant(int(ast['value']), type_=int)
 
 
-class NeuroLangBasicEvaluator(ExpressionWalker):
-    def __init__(self, symbol_table=None):
-        if symbol_table is None:
-            symbol_table = dict()
-        self.symbol_table = symbol_table
-        self.simplify_mode = False
-
-    def constant(self, expression):
-        return expression
-
-    def symbol(self, expression):
-        try:
-            return self.symbol_table[expression]
-        except KeyError:
-            if self.simplify_mode:
-                return expression
-            else:
-                raise ValueError('{} not in symbol table'.format(expression))
-
-    def definition(self, expression):
-        value = self.walk(expression.value)
-        self.symbol_table[expression.symbol] = value
-        return Definition(expression.symbol, value, type_=expression.type)
-
-    def projection(self, expression):
-        collection = self.walk(expression.collection)
-        item = self.walk(expression.item)
-
-        result = Projection(collection, item)
-
-        if isinstance(collection, Constant) and isinstance(item, Constant):
-            result = Constant(
-                collection.value[int(item.value)],
-                type_=result.type
-            )
-
-        return result
-
-    def function(self, expression):
-        function = self.walk(expression.function)
-        function_type, function_value = get_type_and_value(function)
-        if function_type != ToBeInferred:
-            if not is_subtype(function_type, typing.Callable):
-                raise NeuroLangTypeException(
-                    'Function {} is not of callable type'.format(function)
-                )
-            result_type = function_type.__args__[-1]
-        else:
-            result_type = ToBeInferred
-
-        if expression.args is None and expression.kwargs is None:
-            return Function(function, type_=function_type)
-
-        we_should_evaluate = True
-        new_args = []
-        for arg in expression.args:
-            arg = self.walk(arg)
-            new_args.append(arg)
-            we_should_evaluate &= isinstance(arg, Constant)
-
-        new_kwargs = dict()
-        for k, arg in expression.kwargs.items():
-            arg = self.walk(arg)
-            new_kwargs[k] = arg
-            we_should_evaluate &= isinstance(arg, Constant)
-
-        we_should_evaluate &= isinstance(function, Constant)
-
-        if we_should_evaluate:
-            new_args = [a.value for a in new_args]
-            new_kwargs = {k: v.value for k, v in new_kwargs.items()}
-            result = Constant(
-                function_value(*new_args, **new_kwargs),
-                type_=result_type
-            )
-            return result
-        else:
-            return Function(function)(*new_args, **new_kwargs)
-
-
-class ExpressionReplacement(ExpressionWalker):
-    def __init__(self, replacements):
-        self.replacements = replacements
-
-    def walk(self, expression):
-        if isinstance(expression, list):
-            return super().walk(expression)
-        else:
-            return self.replacements.get(expression, super().walk(expression))
-
-
-class NeuroLangIntermediateRepresentationCompiler(NeuroLangBasicEvaluator):
+class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
     def __init__(
         self, category_solvers=None, functions=None,
         types=None, symbols=None
@@ -476,6 +389,31 @@ class NeuroLangIntermediateRepresentationCompiler(NeuroLangBasicEvaluator):
 
         for solver in self.category_solvers.values():
             solver.set_symbol_table(self.symbol_table)
+
+    def query(self, expression):
+        solver = self.category_solvers[expression.type]
+        is_plural = solver.plural_type_name == expression.type
+
+        if is_plural:
+            symbol_type = typing.AbstractSet[solver.type]
+        else:
+            symbol_type = solver.type
+
+        query_result = solver.walk(
+            expression.value,  # plural=is_plural,
+            # identifier=expression.symbol
+        )
+
+        value_type, value = get_type_and_value(query_result)
+
+        if not is_subtype(value_type, symbol_type):
+            raise NeuroLangTypeException(
+                "%s doesn't have type %s" % (value, symbol_type)
+            )
+
+        result = Query(expression.symbol, query_result, type_=symbol_type)
+        self.symbol_table[Symbol(expression.symbol.name, symbol_type)] = result
+        return result
 
     def compile(self, ast):
         nli = NeuroLangIntermediateRepresentation()
