@@ -206,8 +206,11 @@ class Expression(object):
         self.type = type_
         self.value = value
 
-        if not type_validation_value(
-            value, self.type, symbol_table=symbol_table
+        if (
+            value != ... or
+            not type_validation_value(
+                value, self.type, symbol_table=symbol_table
+            )
         ):
             raise NeuroLangTypeException(
                 "The value %s does not correspond to the type %s" %
@@ -286,7 +289,9 @@ class Constant(Expression):
         self.value = value
         self.type = type_
 
-        if not type_validation_value(
+        if self.value == ...:
+            pass
+        elif not type_validation_value(
             value, self.type
         ):
             raise NeuroLangTypeException(
@@ -314,10 +319,11 @@ class Constant(Expression):
 
 class Function(Expression):
     def __init__(
-        self, object_, args=None, kwargs=None,
+        self, functor, args=None, kwargs=None,
         type_=ToBeInferred
     ):
-        self.__wrapped__ = object_
+        self.__wrapped__ = functor
+        self.functor = functor
         self.value = self
         if args is None and kwargs is None:
             if isinstance(self.__wrapped__, Constant):
@@ -351,10 +357,10 @@ class Function(Expression):
                     self.__wrapped__
                 ).return_annotation
 
-        if isinstance(object_, Symbol):
-            self._symbols = {object_}
-        elif isinstance(object_, Function):
-            self._symbols = object_._symbols.copy()
+        if isinstance(functor, Symbol):
+            self._symbols = {functor}
+        elif isinstance(functor, Function):
+            self._symbols = functor._symbols.copy()
         else:
             self._symbols = set()
 
@@ -399,7 +405,7 @@ class Function(Expression):
             fname = self.__wrapped__.__name__
         else:
             fname = repr(self.__wrapped__)
-        r = u'\u03C3{{{}: {}}}'.format(fname, self.type)
+        r = u'\u03BB{{{}: {}}}'.format(fname, self.type)
         if self.args is not None:
             r += (
                 '(' +
@@ -465,11 +471,11 @@ class Predicate(Function):
 
 class Definition(Expression):
     def __init__(
-        self, symbol, expression,
+        self, symbol, value,
         type_=ToBeInferred, symbol_table=None
     ):
         self.symbol = symbol
-        self.value = expression
+        self.value = value
         self.type = type_
 
     def __repr__(self):
