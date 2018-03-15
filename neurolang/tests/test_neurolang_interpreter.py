@@ -79,7 +79,7 @@ def test_queries():
     class FourInts(int, solver.FiniteDomain):
         pass
 
-    class FourIntsSetSolver(solver.SetBasedSolver_exp):
+    class FourIntsSetSolver(solver.SetBasedSolver):
         type_name = 'four_int'
         type = FourInts
 

@@ -206,11 +206,10 @@ class Expression(object):
         self.type = type_
         self.value = value
 
-        if (
-            value != ... or
-            not type_validation_value(
-                value, self.type, symbol_table=symbol_table
-            )
+        if self.value == ...:
+            pass
+        elif not type_validation_value(
+            value, self.type, symbol_table=symbol_table
         ):
             raise NeuroLangTypeException(
                 "The value %s does not correspond to the type %s" %

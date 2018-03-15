@@ -17,6 +17,7 @@ from .symbols_and_types import (
 )
 
 from .expression_walker import (
+    add_match,
     ExpressionBasicEvaluator, ExpressionReplacement
 )
 
@@ -323,10 +324,22 @@ class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
                     category_solver.type_name
                 ] = category_solver
                 self.category_solvers[
+                    category_solver.type
+                ] = category_solver
+
+                self.category_solvers[
                     category_solver.plural_type_name
+                ] = category_solver
+                self.category_solvers[
+                    typing.AbstractSet[category_solver.type]
                 ] = category_solver
 
                 types.append((category_solver.type, category_solver.type_name))
+                types.append((
+                    typing.AbstractSet[category_solver.type],
+                    category_solver.plural_type_name
+                ))
+
         else:
             category_solvers = dict()
 
@@ -390,6 +403,7 @@ class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
         for solver in self.category_solvers.values():
             solver.set_symbol_table(self.symbol_table)
 
+    @add_match(Query)
     def query(self, expression):
         solver = self.category_solvers[expression.type]
         is_plural = solver.plural_type_name == expression.type
