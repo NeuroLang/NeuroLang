@@ -217,7 +217,10 @@ class Expression(object):
             return getattr(super(), attr)
         else:
             return FunctionApplication(
-                Constant(getattr),
+                Constant(
+                    getattr,
+                    type_=typing.Callable[[self.type, str], ToBeInferred]
+                ),
                 args=(self, Constant(attr, type_=str))
             )
 
@@ -431,7 +434,11 @@ class Query(Definition):
 def op_bind(op):
     @wraps(op)
     def f(*args):
-        return FunctionApplication(Constant(op), args=args)
+        arg_types = [get_type_and_value(a)[0] for a in args]
+        return FunctionApplication(
+            Constant(op, type_=typing.Callable[arg_types, ToBeInferred]),
+            args,
+        )
 
     return f
 
@@ -439,7 +446,11 @@ def op_bind(op):
 def rop_bind(op):
     @wraps(op)
     def f(self, value):
-        return FunctionApplication(Constant(op), args=(value, self))
+        arg_types = [get_type_and_value(a)[0] for a in (value, self)]
+        return FunctionApplication(
+            Constant(op, type_=typing.Callable[arg_types, ToBeInferred]),
+            args=(value, self),
+        )
 
     return f
 
