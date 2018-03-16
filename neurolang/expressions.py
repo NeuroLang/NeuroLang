@@ -221,11 +221,10 @@ class Expression(object):
 
 
 class Symbol(Expression):
-    def __init__(self, name, type_=ToBeInferred, symbol_table=None):
+    def __init__(self, name, type_=ToBeInferred):
         self.name = name
         self.type = type_
         self._symbols = {self}
-        self._symbol_table = None
         self.value = self
 
     def __eq__(self, other):
@@ -403,7 +402,7 @@ class Predicate(FunctionApplication):
 class Definition(Expression):
     def __init__(
         self, symbol, value,
-        type_=ToBeInferred, symbol_table=None
+        type_=ToBeInferred
     ):
         self.symbol = symbol
         self.value = value
