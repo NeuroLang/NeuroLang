@@ -46,15 +46,17 @@ def get_type_and_value(value, symbol_table=None):
         value = symbol_table.get(value, value)
 
     if isinstance(value, Expression):
-        return value.type, value.value
+        type_ = value.type
+        if isinstance(value, (Constant, Definition)):
+            value = value.value
+        return type_, value
+    elif isinstance(value, types.FunctionType):
+        return (
+            typing_callable_from_annotated_function(value),
+            value
+        )
     else:
-        if isinstance(value, types.FunctionType):
-            return (
-                typing_callable_from_annotated_function(value),
-                value
-            )
-        else:
-            return type(value), value
+        return type(value), value
 
 
 def is_subtype(left, right):
@@ -225,7 +227,6 @@ class Symbol(Expression):
         self.name = name
         self.type = type_
         self._symbols = {self}
-        self.value = self
 
     def __eq__(self, other):
         return (
@@ -295,7 +296,6 @@ class FunctionApplication(Expression):
         type_=ToBeInferred
     ):
         self.functor = functor
-        self.value = self
         self.args = args
         self.kwargs = kwargs
 
