@@ -191,33 +191,10 @@ def type_validation_value(value, type_, symbol_table=None):
 
 
 class Expression(object):
-    _symbols = set()
     super_attributes = WRAPPER_ASSIGNMENTS + ('__signature__', 'mro', 'type')
-    type = ToBeInferred
 
-    def __init__(self, value, type_=ToBeInferred, symbol_table=None):
-        if not type_validation_value(
-            value, type_, symbol_table=symbol_table
-        ):
-            raise NeuroLangTypeException(
-               "The value %s does not correspond to the type %s" %
-               (value, type_)
-            )
-        self.type = type_
-        self.value = value
-
-        if self.value == ...:
-            pass
-        elif not type_validation_value(
-            value, self.type, symbol_table=symbol_table
-        ):
-            raise NeuroLangTypeException(
-                "The value %s does not correspond to the type %s" %
-                (value, type_)
-            )
-
-        if isinstance(value, Expression):
-            self._symbols |= value._symbols
+    def __init__(self):
+        raise TypeError("Expression can not be instantiated")
 
     def __call__(self, *args, **kwargs):
         if hasattr(self, '__annotations__'):
@@ -229,9 +206,6 @@ class Expression(object):
             self, args, kwargs,
             type_=variable_type,
          )
-
-    def __repr__(self):
-        return 'E{{{}: {}}}'.format(self.value, self.type)
 
     def __getattr__(self, attr):
         if (

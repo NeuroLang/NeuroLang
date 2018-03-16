@@ -107,7 +107,7 @@ def test_get_type_and_value():
     assert value == 3
 
     type_, value = symbols_and_types.get_type_and_value(
-        symbols_and_types.Expression(3, type_=int)
+        symbols_and_types.Constant(3, type_=int)
     )
     assert type_ == int
     assert value == 3
@@ -116,7 +116,7 @@ def test_get_type_and_value():
         symbols_and_types.Symbol('a'),
         {
             symbols_and_types.Symbol('a'):
-                symbols_and_types.Expression(3, type_=int)
+                symbols_and_types.Constant(3, type_=int)
         }
     )
     assert type_ == int
@@ -136,7 +136,7 @@ def test_type_validation_value():
         return 0
 
     symbol_table = {
-        symbols_and_types.Symbol('r'): symbols_and_types.Expression(
+        symbols_and_types.Symbol('r'): symbols_and_types.Constant(
              {'a'},
              type_=typing.AbstractSet[str]
         )
@@ -144,7 +144,7 @@ def test_type_validation_value():
 
     values = (
         3, {3, 8}, 'try', f, (3, 'a'),
-        symbols_and_types.Expression(
+        symbols_and_types.Constant(
             ('a', 3.), type_=typing.Tuple[str, float]
         ),
         symbols_and_types.Symbol('r'),
@@ -192,21 +192,21 @@ def test_type_validation_value():
 def test_TypedSymbol():
     v = 3
     t = int
-    s = symbols_and_types.Expression(v, type_=t)
+    s = symbols_and_types.Constant(v, type_=t)
     assert s.value == v
     assert s.type == t
 
     with pytest.raises(symbols_and_types.NeuroLangTypeException):
-        s = symbols_and_types.Expression('a', type_=t)
+        s = symbols_and_types.Constant('a', type_=t)
 
 
 def test_TypedSymbolTable():
     st = symbols_and_types.TypedSymbolTable()
-    s1 = symbols_and_types.Expression(3, type_=int)
-    s2 = symbols_and_types.Expression(4, type_=int)
-    s3 = symbols_and_types.Expression(5., type_=float)
-    s4 = symbols_and_types.Expression(5, type_=int)
-    s6 = symbols_and_types.Expression('a', type_=str)
+    s1 = symbols_and_types.Constant(3, type_=int)
+    s2 = symbols_and_types.Constant(4, type_=int)
+    s3 = symbols_and_types.Constant(5., type_=float)
+    s4 = symbols_and_types.Constant(5, type_=int)
+    s6 = symbols_and_types.Constant('a', type_=str)
 
     assert len(st) == 0
 
