@@ -364,22 +364,6 @@ class FunctionApplication(Expression):
     def funcion(self):
         return self.functor
 
-    def __call__(self, *args, **kwargs):
-        symbols = self._symbols.copy()
-        for arg in chain(args, kwargs.values()):
-            if isinstance(arg, Expression):
-                symbols |= arg._symbols
-
-        if hasattr(self, '__annotations__'):
-            variable_type = self.__annotations__.get('return', None)
-        else:
-            variable_type = None
-
-        return FunctionApplication(
-            self, args, kwargs,
-            type_=variable_type,
-         )
-
     def __repr__(self):
         r = u'\u03BB{{{}: {}}}'.format(self.functor, self.type)
         if self.args is not None:
