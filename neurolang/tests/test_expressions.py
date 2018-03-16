@@ -1,3 +1,4 @@
+from .. import expressions
 from ..expressions import (
     Symbol, Constant,
     FunctionApplication
@@ -112,3 +113,24 @@ def test_symbol_wrapping():
     assert inspect.signature(fva) == inspect.signature(f)
     assert fvb.type == float
     assert x.type == int
+
+
+def test_compatibility_for_pattern_matching():
+    for symbol_name in dir(expressions):
+        symbol = getattr(expressions, symbol_name)
+        if not (
+            type(symbol) == type and
+            issubclass(symbol, expressions.Expression) and
+            symbol != expressions.Expression
+        ):
+            continue
+        signature = inspect.signature(symbol)
+        argnames = [
+            name for name, param in signature.parameters.items()
+            if param.default == signature.empty
+        ]
+        args = (...,) * len(argnames)
+        instance = symbol(*args)
+
+        for argname in argnames:
+            assert getattr(instance, argname) == ...

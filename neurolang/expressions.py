@@ -359,22 +359,29 @@ class Projection(Expression):
         auto_infer_projection_type=True
     ):
         if type_ == ToBeInferred and auto_infer_projection_type:
-            if not collection.type == ToBeInferred:
-                if is_subtype(collection.type, typing.Tuple):
-                    if (
-                        isinstance(item, Constant) and
-                        is_subtype(item.type, typing.SupportsInt) and
-                        len(collection.type.__args__) > int(item.value)
-                    ):
-                        type_ = collection.type.__args__[int(item.value)]
-                    else:
-                        raise NeuroLangTypeException(
-                            "Not {} elements in tuple".format(int(item.value))
-                        )
-                if is_subtype(collection.type, typing.Mapping):
-                    type_ = collection.type.__args__[1]
+            if collection != ...:
+                if not collection.type == ToBeInferred:
+                    if is_subtype(collection.type, typing.Tuple):
+                        if (
+                            isinstance(item, Constant) and
+                            is_subtype(item.type, typing.SupportsInt) and
+                            len(collection.type.__args__) > int(item.value)
+                        ):
+                            type_ = collection.type.__args__[int(item.value)]
+                        else:
+                            raise NeuroLangTypeException(
+                                "Not {} elements in tuple".format(
+                                    int(item.value)
+                                )
+                            )
+                    if is_subtype(collection.type, typing.Mapping):
+                        type_ = collection.type.__args__[1]
 
-        self._symbol = collection._symbols | item._symbols
+        if collection != ...:
+            self._symbol = collection._symbols
+        if item != ...:
+            self._symbol |= item._symbols
+
         self.collection = collection
         self.item = item
         self.type = type_
