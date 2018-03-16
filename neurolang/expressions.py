@@ -335,7 +335,7 @@ class FunctionApplication(Expression):
                     self._symbols |= arg._symbols
 
     @property
-    def funcion(self):
+    def function(self):
         return self.functor
 
     def __repr__(self):
