@@ -116,7 +116,7 @@ class ExpressionBasicEvaluator(ExpressionWalker):
             return self.walk(result)
 
     @add_match(
-        Function(Constant(...)),
+        Function(Constant(...), ...),
         lambda expression:
             expression.args is not None and
             all(

@@ -273,6 +273,7 @@ class Constant(Expression):
         auto_infer_annotated_functions_type=True
     ):
         if callable(value):
+            self.__wrapped__ = value
             for attr in WRAPPER_ASSIGNMENTS:
                 if hasattr(value, attr):
                     setattr(self, attr, getattr(value, attr))
@@ -318,7 +319,7 @@ class Constant(Expression):
 
 class Function(Expression):
     def __init__(
-        self, functor, args=None, kwargs=None,
+        self, functor, args, kwargs=None,
         type_=ToBeInferred
     ):
         self.__wrapped__ = functor
@@ -373,11 +374,12 @@ class Function(Expression):
             if self.kwargs is None:
                 self.kwargs = dict()
 
-            for arg in chain(self.args, self.kwargs.values()):
-                if isinstance(arg, Symbol):
-                    self._symbols.add(arg)
-                elif isinstance(arg, Function):
-                    self._symbols |= arg._symbols
+            if self.args is not ...:
+                for arg in chain(self.args, self.kwargs.values()):
+                    if isinstance(arg, Symbol):
+                        self._symbols.add(arg)
+                    elif isinstance(arg, Function):
+                        self._symbols |= arg._symbols
 
     @property
     def function(self):

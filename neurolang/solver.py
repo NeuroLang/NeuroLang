@@ -6,11 +6,12 @@ from copy import copy
 from .ast import ASTWalker
 from .exceptions import NeuroLangException
 from .symbols_and_types import (
-    Expression, Symbol, Constant, Predicate,
+    Expression, Symbol, Constant, Predicate, Function,
     type_validation_value,
     NeuroLangTypeException,
     is_subtype, get_type_and_value, replace_type_variable
 )
+from operator import invert
 from .expression_walker import (
     add_match, ExpressionWalker, ExpressionBasicEvaluator
 )
@@ -129,3 +130,12 @@ class SetBasedSolver(GenericSolver):
         self, argument: typing.AbstractSet[T]
     )->typing.AbstractSet[T]:
         return argument
+
+    @add_match(
+        Function(Constant(invert), ...),
+        lambda expression: isinstance(expression.args[0], FiniteDomainSet)
+    )
+    def rewrite_finite_domain_inversion(self, expression):
+        print("Invert set")
+        raise ValueError
+        return Function(Symbol('negate'), expression.args)

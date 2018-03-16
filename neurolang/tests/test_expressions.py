@@ -1,14 +1,22 @@
 from ..expressions import (
     Symbol, Constant,
-    Function,
-    evaluate
+    Function
 )
+
+from ..expression_walker import ExpressionBasicEvaluator
 
 import operator as op
 import inspect
 from typing import Set, Callable
 
 C = Constant
+
+
+def evaluate(expression, **kwargs):
+    ebe = ExpressionBasicEvaluator()
+    for k, v in kwargs.items():
+        ebe.symbol_table[k] = v
+    return ebe.walk(expression)
 
 
 def test_symbol_application():
@@ -26,8 +34,8 @@ def test_symbol_application():
     fva = oadd(a, C(3))
     fvb = osub(fva, C(10))
     fvc = omul(fvb, b)
-    fvd = Function(a, kwargs={'c': b})
-    fve = Function(a, kwargs={'c': op.add(b, C(2))})
+    fvd = Function(a, None, kwargs={'c': b})
+    fve = Function(a, None, kwargs={'c': op.add(b, C(2))})
 
     assert a in fva._symbols and (len(fva._symbols) == 1)
     assert evaluate(fva, a=C(2)) == 5
@@ -93,7 +101,7 @@ def test_symbol_wrapping():
         '''
         return 2. * int(a)
 
-    fva = Function(f)
+    fva = Constant(f)
     x = Symbol('x', type_=int)
     fvb = fva(x)
     assert fva.__annotations__ == f.__annotations__
