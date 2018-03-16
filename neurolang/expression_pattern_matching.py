@@ -58,7 +58,7 @@ class PatternMatcher(object, metaclass=PatternMatchingMetaClass):
             raise ValueError()
 
     def pattern_match(self, pattern, expression):
-        if isinstance(pattern, type(...)):
+        if pattern is ...:
             return True
         elif type(pattern) == type:
             return isinstance(expression, pattern)

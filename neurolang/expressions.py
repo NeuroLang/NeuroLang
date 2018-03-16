@@ -264,7 +264,7 @@ class Constant(Expression):
             self.__wrapped__ = None
 
         if not (
-            self.value == ... or
+            self.value is ... or
             type_validation_value(self.value, self.type)
         ):
             raise NeuroLangTypeException(
@@ -359,7 +359,7 @@ class Projection(Expression):
         auto_infer_projection_type=True
     ):
         if type_ == ToBeInferred and auto_infer_projection_type:
-            if collection != ...:
+            if collection is not ...:
                 if not collection.type == ToBeInferred:
                     if is_subtype(collection.type, typing.Tuple):
                         if (
@@ -377,9 +377,9 @@ class Projection(Expression):
                     if is_subtype(collection.type, typing.Mapping):
                         type_ = collection.type.__args__[1]
 
-        if collection != ...:
+        if collection is not ...:
             self._symbol = collection._symbols
-        if item != ...:
+        if item is not ...:
             self._symbol |= item._symbols
 
         self.collection = collection
