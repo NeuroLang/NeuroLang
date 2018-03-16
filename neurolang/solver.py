@@ -1,9 +1,7 @@
 import logging
 import inspect
 import typing
-from copy import copy
 
-from .ast import ASTWalker
 from .exceptions import NeuroLangException
 from .symbols_and_types import (
     Expression, Symbol, Constant, Predicate, FunctionApplication,
@@ -59,18 +57,20 @@ class GenericSolver(ExpressionBasicEvaluator):
     def predicate(self, expression):
         logging.debug(str(self.__class__.__name__) + " evaluating predicate")
 
-        if isinstance(expression.function, Symbol):
-            identifier = expression.function
+        if isinstance(expression.functor, Symbol):
+            identifier = expression.functor
+            predicate_method = 'predicate_' + identifier.name
+            if hasattr(self, predicate_method):
+                method = getattr(self, predicate_method)
+            elif self.symbol_table[expression.functor]:
+                method = self.symbol_table[expression.functor]
+            else:
+                raise NeuroLangException(
+                    "Predicate %s not implemented" % identifier
+                )
 
-        predicate_method = 'predicate_' + identifier.name
-        if hasattr(self, predicate_method):
-            method = getattr(self, predicate_method)
-            signature = inspect.signature(method)
-            type_hints = typing.get_type_hints(method)
-        else:
-            raise NeuroLangException(
-                "Predicate %s not implemented" % identifier
-            )
+        signature = inspect.signature(method)
+        type_hints = typing.get_type_hints(method)
 
         argument = self.walk(expression.args[0])
         if len(signature.parameters) != 1:

@@ -27,7 +27,7 @@ def test_symbol_application():
     osub = C(op.sub,  type_=Callable[[int, int], int])
     omul = C(op.mul,  type_=Callable[[int, int], int])
     c = oadd(C(2), C(3))
-    assert c.function == oadd
+    assert c.functor == oadd
     assert all((e1.value == e2 for e1, e2 in zip(c.args, (2, 3))))
     assert evaluate(c) == 5
 

@@ -272,7 +272,10 @@ class Constant(Expression):
         self, value, type_=ToBeInferred,
         auto_infer_annotated_functions_type=True
     ):
-        if callable(value):
+        self.value = value
+        self.type = type_
+
+        if callable(self.value):
             self.__wrapped__ = value
             for attr in WRAPPER_ASSIGNMENTS:
                 if hasattr(value, attr):
@@ -280,23 +283,19 @@ class Constant(Expression):
 
             if (
                 auto_infer_annotated_functions_type and
-                hasattr(value, '__annotations__') and type_ == ToBeInferred
+                hasattr(value, '__annotations__') and self.type == ToBeInferred
             ):
-                type_ = typing_callable_from_annotated_function(
-                    value
-                )
+                self.type = typing_callable_from_annotated_function(value)
+        else:
+            self.__wrapped__ = None
 
-        self.value = value
-        self.type = type_
-
-        if self.value == ...:
-            pass
-        elif not type_validation_value(
-            value, self.type
+        if not (
+            self.value == ... or
+            type_validation_value(self.value, self.type)
         ):
             raise NeuroLangTypeException(
                 "The value %s does not correspond to the type %s" %
-                (value, type_)
+                (self.value, self.type_)
             )
 
     def __eq__(self, other):
@@ -322,40 +321,25 @@ class FunctionApplication(Expression):
         self, functor, args, kwargs=None,
         type_=ToBeInferred
     ):
-        self.__wrapped__ = functor
         self.functor = functor
         self.value = self
-        if args is None and kwargs is None:
-            if isinstance(self.__wrapped__, Constant):
-                function = self.__wrapped__.value
+        self.args = args
+        self.kwargs = kwargs
+
+        if isinstance(self.functor, Expression):
+            if self.functor.type == ToBeInferred:
+                self.type = ToBeInferred
+            elif isinstance(self.functor.type, typing.Callable):
+                self.type = self.functor.type.__args__[-1]
             else:
-                function = self.__wrapped__
-            for attr in WRAPPER_ASSIGNMENTS:
-                if hasattr(function, attr):
-                    setattr(self, attr, getattr(function, attr))
-            if hasattr(function, '__annotations__'):
-                self.type = typing_callable_from_annotated_function(
-                    function
-                )
-            else:
-                self.type = type_
-            self.has_been_applied = False
-        else:
-            self.has_been_applied = True
-            if isinstance(self.__wrapped__, Expression):
-                if self.__wrapped__.type == ToBeInferred:
-                    self.type = ToBeInferred
-                elif isinstance(self.__wrapped__.type, typing.Callable):
-                    self.type = self.__wrapped__.type.__args__[-1]
-                else:
-                    NeuroLangTypeException
-            elif (
-                hasattr(self.__wrapped__, '__signature__') or
-                hasattr(self.__wrapped__, '__annotations__')
-            ):
-                self.type = inspect.signature(
-                    self.__wrapped__
-                ).return_annotation
+                NeuroLangTypeException
+        elif (
+            hasattr(self.functor, '__signature__') or
+            hasattr(self.functor, '__annotations__')
+        ):
+            self.type = inspect.signature(
+                self.functor
+            ).return_annotation
 
         if isinstance(functor, Symbol):
             self._symbols = {functor}
@@ -364,26 +348,21 @@ class FunctionApplication(Expression):
         else:
             self._symbols = set()
 
-        self.args = args
-        self.kwargs = kwargs
+        if self.kwargs is None:
+            self.kwargs = dict()
 
-        if self.args is not None or self.kwargs is not None:
-
+        if self.args is not ...:
             if self.args is None:
                 self.args = tuple()
-            if self.kwargs is None:
-                self.kwargs = dict()
-
-            if self.args is not ...:
-                for arg in chain(self.args, self.kwargs.values()):
-                    if isinstance(arg, Symbol):
-                        self._symbols.add(arg)
-                    elif isinstance(arg, FunctionApplication):
-                        self._symbols |= arg._symbols
+            for arg in chain(self.args, self.kwargs.values()):
+                if isinstance(arg, Symbol):
+                    self._symbols.add(arg)
+                elif isinstance(arg, FunctionApplication):
+                    self._symbols |= arg._symbols
 
     @property
-    def function(self):
-        return self.__wrapped__
+    def funcion(self):
+        return self.functor
 
     def __call__(self, *args, **kwargs):
         symbols = self._symbols.copy()
@@ -402,11 +381,7 @@ class FunctionApplication(Expression):
          )
 
     def __repr__(self):
-        if hasattr(self.__wrapped__, '__name__'):
-            fname = self.__wrapped__.__name__
-        else:
-            fname = repr(self.__wrapped__)
-        r = u'\u03BB{{{}: {}}}'.format(fname, self.type)
+        r = u'\u03BB{{{}: {}}}'.format(self.functor, self.type)
         if self.args is not None:
             r += (
                 '(' +
@@ -454,11 +429,7 @@ class Projection(Expression):
 
 class Predicate(FunctionApplication):
     def __repr__(self):
-        if hasattr(self.__wrapped__, '__name__'):
-            fname = self.__wrapped__.__name__
-        else:
-            fname = repr(self.__wrapped__)
-        r = 'P{{{}: {}}}'.format(fname, self.type)
+        r = 'P{{{}: {}}}'.format(self.functor, self.type)
         if self.args is not None:
             r += (
                 '(' +

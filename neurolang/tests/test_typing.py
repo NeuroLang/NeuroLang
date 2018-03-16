@@ -276,7 +276,7 @@ def test_free_variable_wrapping():
     x = Symbol('x', type_=int)
     fvb = fva(x)
     fva_type, fva_value = symbols_and_types.get_type_and_value(fva)
-    assert fva_type == typing.Callable[[int], float], fva
+    assert fva_type == typing.Callable[[int], float]
     assert fva_value == f
 
     assert symbols_and_types.get_type_and_value(fvb) == (float, fvb)

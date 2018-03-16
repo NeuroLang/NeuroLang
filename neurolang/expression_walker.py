@@ -21,7 +21,7 @@ class ExpressionWalker(PatternMatcher):
     @add_match(FunctionApplication)
     def function(self, expression):
         return FunctionApplication(
-            self.match(expression.function),
+            self.match(expression.functor),
             args=[self.walk(e) for e in expression.args],
             kwargs={k: self.walk(v) for k, v in expression.kwargs},
             type_=expression.type_
@@ -131,13 +131,13 @@ class ExpressionBasicEvaluator(ExpressionWalker):
         if functor_type != ToBeInferred:
             if not is_subtype(functor_type, typing.Callable):
                 raise NeuroLangTypeException(
-                    'FunctionApplication {} is not of callable type'.format(functor)
+                    'Function {} is not of callable type'.format(functor)
                 )
             result_type = functor_type.__args__[-1]
         else:
             if not callable(functor_value):
                 raise NeuroLangTypeException(
-                    'FunctionApplication {} is not of callable type'.format(functor)
+                    'Function {} is not of callable type'.format(functor)
                 )
             result_type = ToBeInferred
 
@@ -181,7 +181,7 @@ class ExpressionBasicEvaluator(ExpressionWalker):
             if functor_type != ToBeInferred:
                 if not is_subtype(functor_type, typing.Callable):
                     raise NeuroLangTypeException(
-                        'FunctionApplication {} is not of callable type'.format(functor)
+                        'Function {} is not of callable type'.format(functor)
                     )
             else:
                 if (
@@ -189,7 +189,7 @@ class ExpressionBasicEvaluator(ExpressionWalker):
                     not callable(functor_value)
                 ):
                     raise NeuroLangTypeException(
-                        'FunctionApplication {} is not of callable type'.format(functor)
+                        'Function {} is not of callable type'.format(functor)
                     )
 
             result = functor(*new_args, **new_kwargs)
@@ -237,7 +237,7 @@ class ExpressionWalkerGraph(object):
 
     def function(self, expression):
         return FunctionApplication(
-            self.walk(expression.function),
+            self.walk(expression.functor),
             args=[self.walk(e) for e in expression.args],
             kwargs={k: self.walk(v) for k, v in expression.kwargs},
             type_=expression.type_
