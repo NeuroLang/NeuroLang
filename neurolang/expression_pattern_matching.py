@@ -68,14 +68,6 @@ class PatternMatcher(object, metaclass=PatternMatchingMetaClass):
                 not expressions.is_subtype(pattern.type, expression.type)
             ):
                 return False
-            elif isinstance(pattern, expressions.FunctionApplication):
-                return (
-                    self.pattern_match(pattern.functor, expression.functor) and
-                    (
-                        pattern.args is None or
-                        self.pattern_match(pattern.args, expression.args)
-                    )
-                )
             else:
                 parameters = inspect.signature(pattern.__class__).parameters
                 return all(
@@ -85,5 +77,13 @@ class PatternMatcher(object, metaclass=PatternMatchingMetaClass):
                     for argname, arg in parameters.items()
                     if arg.default == inspect._empty
                 )
+        elif isinstance(pattern, tuple) and isinstance(expression, tuple):
+            if len(pattern) != len(expression):
+                return False
+            for p, e in zip(pattern, expression):
+                if not self.pattern_match(p, e):
+                    return False
+            else:
+                return True
         else:
             return pattern == expression
