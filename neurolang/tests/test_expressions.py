@@ -1,6 +1,6 @@
 from ..expressions import (
     Symbol, Constant,
-    Function
+    FunctionApplication
 )
 
 from ..expression_walker import ExpressionBasicEvaluator
@@ -34,15 +34,15 @@ def test_symbol_application():
     fva = oadd(a, C(3))
     fvb = osub(fva, C(10))
     fvc = omul(fvb, b)
-    fvd = Function(a, None, kwargs={'c': b})
-    fve = Function(a, None, kwargs={'c': op.add(b, C(2))})
+    fvd = FunctionApplication(a, None, kwargs={'c': b})
+    fve = FunctionApplication(a, None, kwargs={'c': op.add(b, C(2))})
 
     assert a in fva._symbols and (len(fva._symbols) == 1)
     assert evaluate(fva, a=C(2)) == 5
     assert a in fvb._symbols and (len(fvb._symbols) == 1)
     assert evaluate(fvb, a=C(2)) == -5
     assert b in fvc._symbols and (len(fvc._symbols) == 2)
-    assert isinstance(evaluate(fvc, b=C(2)), Function)
+    assert isinstance(evaluate(fvc, b=C(2)), FunctionApplication)
     assert evaluate(
         evaluate(fvc, b=C(3)), a=C(2)
     ) == evaluate(fvc, a=C(2), b=C(3)) == -15

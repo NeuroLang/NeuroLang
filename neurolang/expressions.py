@@ -9,7 +9,7 @@ from .exceptions import NeuroLangException
 
 
 __all__ = [
-    'Symbol', 'Function', 'Definition', 'evaluate',
+    'Symbol', 'FunctionApplication', 'Definition',
     'Projection', 'Predicate',
     'ToBeInferred',
     'typing_callable_from_annotated_function'
@@ -182,7 +182,7 @@ def type_validation_value(value, type_, symbol_table=None):
             )
         else:
             raise ValueError("Type %s not implemented in the checker" % type_)
-    elif isinstance(value, Function):
+    elif isinstance(value, FunctionApplication):
         return is_subtype(value.type, type_)
     else:
         return isinstance(
@@ -225,7 +225,7 @@ class Expression(object):
         else:
             variable_type = ToBeInferred
 
-        return Function(
+        return FunctionApplication(
             self, args, kwargs,
             type_=variable_type,
          )
@@ -240,7 +240,7 @@ class Expression(object):
         ):
             return getattr(super(), attr)
         else:
-            return Function(
+            return FunctionApplication(
                 Constant(getattr),
                 args=(self, Constant(attr, type_=str))
             )
@@ -317,7 +317,7 @@ class Constant(Expression):
         return 'C{{{}: {}}}'.format(self.value, self.type)
 
 
-class Function(Expression):
+class FunctionApplication(Expression):
     def __init__(
         self, functor, args, kwargs=None,
         type_=ToBeInferred
@@ -359,7 +359,7 @@ class Function(Expression):
 
         if isinstance(functor, Symbol):
             self._symbols = {functor}
-        elif isinstance(functor, Function):
+        elif isinstance(functor, FunctionApplication):
             self._symbols = functor._symbols.copy()
         else:
             self._symbols = set()
@@ -378,7 +378,7 @@ class Function(Expression):
                 for arg in chain(self.args, self.kwargs.values()):
                     if isinstance(arg, Symbol):
                         self._symbols.add(arg)
-                    elif isinstance(arg, Function):
+                    elif isinstance(arg, FunctionApplication):
                         self._symbols |= arg._symbols
 
     @property
@@ -396,7 +396,7 @@ class Function(Expression):
         else:
             variable_type = None
 
-        return Function(
+        return FunctionApplication(
             self, args, kwargs,
             type_=variable_type,
          )
@@ -452,7 +452,7 @@ class Projection(Expression):
         )
 
 
-class Predicate(Function):
+class Predicate(FunctionApplication):
     def __repr__(self):
         if hasattr(self.__wrapped__, '__name__'):
             fname = self.__wrapped__.__name__
@@ -496,7 +496,7 @@ class Query(Definition):
 def op_bind(op):
     @wraps(op)
     def f(*args):
-        return Function(Constant(op), args=args)
+        return FunctionApplication(Constant(op), args=args)
 
     return f
 
@@ -504,7 +504,7 @@ def op_bind(op):
 def rop_bind(op):
     @wraps(op)
     def f(self, value):
-        return Function(Constant(op), args=(value, self))
+        return FunctionApplication(Constant(op), args=(value, self))
 
     return f
 
@@ -518,7 +518,7 @@ for operator_name in dir(op):
     if name.endswith('___'):
         name = name[:-1]
 
-    for c in (Constant, Symbol, Function, Definition):
+    for c in (Constant, Symbol, FunctionApplication, Definition):
         if not hasattr(c, name):
             setattr(c, name, op_bind(operator))
 
@@ -533,71 +533,5 @@ for operator in [
     if name.endswith('___'):
         name = name[:-1]
 
-    for c in (Constant, Symbol, Function, Definition):
+    for c in (Constant, Symbol, FunctionApplication, Definition):
         setattr(c, name, rop_bind(operator))
-
-
-def evaluate(expression, **kwargs):
-    '''
-    Replace free variables and evaluate the function
-    '''
-    if isinstance(expression, list) or isinstance(expression, tuple):
-        evaluated = []
-        for e in expression:
-            evaluated.append(evaluate(e, **kwargs))
-
-        return evaluated
-    elif isinstance(expression, Constant):
-        return expression
-    elif isinstance(expression, Symbol):
-        if expression in kwargs:
-            return kwargs[expression]
-        else:
-            return expression
-    elif isinstance(expression, Definition):
-        result = Definition(
-            expression.symbol,
-            evaluate(expression.value, **kwargs),
-            type_=expression.type,
-        )
-    elif isinstance(expression, Function):
-        if isinstance(expression.function, Expression):
-            function = evaluate(expression.function, **kwargs)
-        else:
-            raise ValueError
-
-        if expression.args is None:
-            return function
-
-        we_should_evaluate = True
-        new_args = []
-        for arg in expression.args:
-            arg = evaluate(arg, **kwargs)
-            new_args.append(arg)
-            we_should_evaluate &= isinstance(arg, Constant)
-
-        new_kwargs = dict()
-        for k, arg in expression.kwargs.items():
-            arg = evaluate(arg, **kwargs)
-            new_kwargs[k] = arg
-            we_should_evaluate &= isinstance(arg, Constant)
-
-        we_should_evaluate &= isinstance(function, Constant)
-        if we_should_evaluate:
-            function = function.value
-            new_args = tuple(
-                a.value for a in new_args
-            )
-            new_kwargs = {
-                k: v.value
-                for k, v in new_kwargs.items()
-            }
-            result = Constant(
-                function(*new_args, **new_kwargs),
-                type_=expression.type
-            )
-            return result
-        else:
-            return Function(function)(*new_args, **new_kwargs)
-    else:
-        return expression

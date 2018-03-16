@@ -8,12 +8,11 @@ from .expressions import (
     ToBeInferred,
     Constant, Expression,
     Symbol,
-    Function,
+    FunctionApplication,
     Definition,
     Predicate,
     Query,
     Projection,
-    evaluate,
     is_subtype,
     get_type_args,
     get_type_and_value,
@@ -25,13 +24,13 @@ from .expressions import (
 
 __all__ = [
     'ToBeInferred',
-    'Symbol', 'Constant', 'Expression', 'Function', 'Definition', 'Query',
-    'Projection', 'Predicate',
+    'Symbol', 'Constant', 'Expression', 'FunctionApplication', 'Definition',
+    'Projection', 'Predicate', 'Query',
     'TypedSymbolTable',
     'typing_callable_from_annotated_function',
     'NeuroLangTypeException', 'is_subtype', 'type_validation_value',
     'unify_types',
-    'get_Callable_arguments_and_return', 'get_type_and_value', 'evaluate'
+    'get_Callable_arguments_and_return', 'get_type_and_value'
 ]
 
 

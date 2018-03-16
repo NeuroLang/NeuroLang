@@ -68,7 +68,7 @@ class PatternMatcher(object, metaclass=PatternMatchingMetaClass):
                 not expressions.is_subtype(pattern.type, expression.type)
             ):
                 return False
-            elif isinstance(pattern, expressions.Function):
+            elif isinstance(pattern, expressions.FunctionApplication):
                 return (
                     self.pattern_match(pattern.functor, expression.functor) and
                     (

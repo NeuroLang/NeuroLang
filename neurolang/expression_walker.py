@@ -2,7 +2,7 @@ import logging
 import typing
 
 from .expressions import (
-    Expression, Function, Definition, Query, Projection, Constant,
+    Expression, FunctionApplication, Definition, Query, Projection, Constant,
     Symbol,
     get_type_and_value, ToBeInferred, is_subtype, NeuroLangTypeException
 )
@@ -18,9 +18,9 @@ class ExpressionWalker(PatternMatcher):
             type_=expression.type
         )
 
-    @add_match(Function)
+    @add_match(FunctionApplication)
     def function(self, expression):
-        return Function(
+        return FunctionApplication(
             self.match(expression.function),
             args=[self.walk(e) for e in expression.args],
             kwargs={k: self.walk(v) for k, v in expression.kwargs},
@@ -116,7 +116,7 @@ class ExpressionBasicEvaluator(ExpressionWalker):
             return self.walk(result)
 
     @add_match(
-        Function(Constant(...), ...),
+        FunctionApplication(Constant(...), ...),
         lambda expression:
             expression.args is not None and
             all(
@@ -131,13 +131,13 @@ class ExpressionBasicEvaluator(ExpressionWalker):
         if functor_type != ToBeInferred:
             if not is_subtype(functor_type, typing.Callable):
                 raise NeuroLangTypeException(
-                    'Function {} is not of callable type'.format(functor)
+                    'FunctionApplication {} is not of callable type'.format(functor)
                 )
             result_type = functor_type.__args__[-1]
         else:
             if not callable(functor_value):
                 raise NeuroLangTypeException(
-                    'Function {} is not of callable type'.format(functor)
+                    'FunctionApplication {} is not of callable type'.format(functor)
                 )
             result_type = ToBeInferred
 
@@ -149,7 +149,7 @@ class ExpressionBasicEvaluator(ExpressionWalker):
         )
         return result
 
-    @add_match(Function)
+    @add_match(FunctionApplication)
     def function(self, expression):
         changed = False
         functor = self.walk(expression.functor)
@@ -158,7 +158,7 @@ class ExpressionBasicEvaluator(ExpressionWalker):
 
         if expression.args is None and expression.kwargs is None:
             if changed:
-                result = Function(functor, type_=functor_type)
+                result = FunctionApplication(functor, type_=functor_type)
                 return self.walk(result)
             else:
                 return expression
@@ -181,7 +181,7 @@ class ExpressionBasicEvaluator(ExpressionWalker):
             if functor_type != ToBeInferred:
                 if not is_subtype(functor_type, typing.Callable):
                     raise NeuroLangTypeException(
-                        'Function {} is not of callable type'.format(functor)
+                        'FunctionApplication {} is not of callable type'.format(functor)
                     )
             else:
                 if (
@@ -189,7 +189,7 @@ class ExpressionBasicEvaluator(ExpressionWalker):
                     not callable(functor_value)
                 ):
                     raise NeuroLangTypeException(
-                        'Function {} is not of callable type'.format(functor)
+                        'FunctionApplication {} is not of callable type'.format(functor)
                     )
 
             result = functor(*new_args, **new_kwargs)
@@ -236,7 +236,7 @@ class ExpressionWalkerGraph(object):
         )
 
     def function(self, expression):
-        return Function(
+        return FunctionApplication(
             self.walk(expression.function),
             args=[self.walk(e) for e in expression.args],
             kwargs={k: self.walk(v) for k, v in expression.kwargs},

@@ -3,7 +3,7 @@ import pytest
 import typing
 
 from .. import symbols_and_types
-from ..expressions import Symbol, Function
+from ..expressions import Symbol, Constant
 
 
 def test_typing_callable_from_annotated_function():
@@ -272,11 +272,12 @@ def test_free_variable_wrapping():
         '''
         return 2. * int(a)
 
-    fva = Function(f)
+    fva = Constant(f)
     x = Symbol('x', type_=int)
     fvb = fva(x)
-    assert symbols_and_types.get_type_and_value(fva) == (
-        typing.Callable[[int], float], fva
-    )
+    fva_type, fva_value = symbols_and_types.get_type_and_value(fva)
+    assert fva_type == typing.Callable[[int], float], fva
+    assert fva_value == f
+
     assert symbols_and_types.get_type_and_value(fvb) == (float, fvb)
     assert symbols_and_types.get_type_and_value(x) == (int, x)

@@ -6,7 +6,7 @@ from copy import copy
 from .ast import ASTWalker
 from .exceptions import NeuroLangException
 from .symbols_and_types import (
-    Expression, Symbol, Constant, Predicate, Function,
+    Expression, Symbol, Constant, Predicate, FunctionApplication,
     type_validation_value,
     NeuroLangTypeException,
     is_subtype, get_type_and_value, replace_type_variable
@@ -132,10 +132,10 @@ class SetBasedSolver(GenericSolver):
         return argument
 
     @add_match(
-        Function(Constant(invert), ...),
+        FunctionApplication(Constant(invert), ...),
         lambda expression: isinstance(expression.args[0], FiniteDomainSet)
     )
     def rewrite_finite_domain_inversion(self, expression):
         print("Invert set")
         raise ValueError
-        return Function(Symbol('negate'), expression.args)
+        return FunctionApplication(Symbol('negate'), expression.args)
