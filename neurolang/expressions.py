@@ -307,6 +307,14 @@ class FunctionApplication(Expression):
                 self.type = self.functor.type.__args__[-1]
             else:
                 NeuroLangTypeException
+
+            if isinstance(functor, Symbol):
+                self._symbols = {functor}
+            elif isinstance(functor, FunctionApplication):
+                self._symbols = functor._symbols.copy()
+            else:
+                self._symbols = set()
+
         elif (
             hasattr(self.functor, '__signature__') or
             hasattr(self.functor, '__annotations__')
@@ -314,13 +322,6 @@ class FunctionApplication(Expression):
             self.type = inspect.signature(
                 self.functor
             ).return_annotation
-
-        if isinstance(functor, Symbol):
-            self._symbols = {functor}
-        elif isinstance(functor, FunctionApplication):
-            self._symbols = functor._symbols.copy()
-        else:
-            self._symbols = set()
 
         if self.kwargs is None:
             self.kwargs = dict()
@@ -415,7 +416,6 @@ class Definition(Expression):
 
 
 class Query(Definition):
-
     def __repr__(self):
         return 'Query{{{}: {} <- {}}}'.format(
             self.symbol.name, self.type, self.value
