@@ -1,5 +1,5 @@
 from .solver import SetBasedSolver, FiniteDomain
-from .symbols_and_types import is_subtype, get_type_and_value, TypedSymbol
+from .symbols_and_types import is_subtype, get_type_and_value, Expression
 from typing import Set
 from pprint import pprint
 from io import StringIO
@@ -74,9 +74,9 @@ class SulcusSolver(SetBasedSolver):
             predicate = ast['identifier'].name[:-3]
             if not is_subtype(argument_type, self.type):
                 raise ValueError()
-            return TypedSymbol(
-                Set[self.type],
+            return Expression(
                 argument[predicate],
+                type_=Set[self.type],
                 symbol_table=self.symbol_table
             )
         if ast['identifier'].name == 'with_limb':

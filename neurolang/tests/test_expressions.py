@@ -1,68 +1,108 @@
+from .. import expressions
 from ..expressions import (
-    Symbol, SymbolApplication,
-    evaluate
+    Symbol, Constant,
+    FunctionApplication
 )
+
+from ..expression_walker import ExpressionBasicEvaluator
 
 import operator as op
 import inspect
+from typing import Set, Callable
+
+C = Constant
 
 
-def test_free_variable_application():
+def evaluate(expression, **kwargs):
+    ebe = ExpressionBasicEvaluator()
+    for k, v in kwargs.items():
+        ebe.symbol_table[k] = v
+    return ebe.walk(expression)
+
+
+def test_symbol_application():
     a = Symbol('a')
     b = Symbol('b')
-    assert SymbolApplication(op.add)(2, 3) == 5
 
-    fva = SymbolApplication(op.add)(a, 3)
-    fvb = SymbolApplication(op.sub)(fva, 10)
-    fvc = SymbolApplication(op.mul)(fvb, b)
-    fvd = SymbolApplication(a, kwargs={'c': b})
-    fve = SymbolApplication(a, kwargs={'c': op.add(b, 2)})
+    oadd = C(op.add, type_=Callable[[int, int], int])
+    osub = C(op.sub,  type_=Callable[[int, int], int])
+    omul = C(op.mul,  type_=Callable[[int, int], int])
+    c = oadd(C(2), C(3))
+    assert c.functor == oadd
+    assert all((e1.value == e2 for e1, e2 in zip(c.args, (2, 3))))
+    assert evaluate(c) == 5
 
-    assert a in fva._free_variables and (len(fva._free_variables) == 1)
-    assert evaluate(fva, a=2) == 5
-    assert a in fvb._free_variables and (len(fvb._free_variables) == 1)
-    assert evaluate(fvb, a=2) == -5
-    assert b in fvc._free_variables and (len(fvc._free_variables) == 2)
-    assert isinstance(evaluate(fvc, b=2), SymbolApplication)
-    assert evaluate(evaluate(fvc, b=3), a=2) == evaluate(fvc, a=2, b=3) == -15
+    fva = oadd(a, C(3))
+    fvb = osub(fva, C(10))
+    fvc = omul(fvb, b)
+    fvd = FunctionApplication(a, None, kwargs={'c': b})
+    fve = FunctionApplication(a, None, kwargs={'c': op.add(b, C(2))})
+
+    assert a in fva._symbols and (len(fva._symbols) == 1)
+    assert evaluate(fva, a=C(2)) == 5
+    assert a in fvb._symbols and (len(fvb._symbols) == 1)
+    assert evaluate(fvb, a=C(2)) == -5
+    assert b in fvc._symbols and (len(fvc._symbols) == 2)
+    assert isinstance(evaluate(fvc, b=C(2)), FunctionApplication)
     assert evaluate(
-        evaluate(fvd, a=lambda *args, **kwargs: kwargs['c']),
-        b=2
+        evaluate(fvc, b=C(3)), a=C(2)
+    ) == evaluate(fvc, a=C(2), b=C(3)) == -15
+    return
+    assert evaluate(
+        evaluate(fvd, a=C(lambda *args, **kwargs: kwargs['c'])),
+        b=C(2)
     ) == 2
     assert evaluate(
-        evaluate(fvd, b=2),
+        evaluate(fvd, b=C(2)),
         a=lambda *args, **kwargs: kwargs['c']
     ) == 2
     assert evaluate(
-        evaluate(fve, b=2),
+        evaluate(fve, b=C(2)),
         a=lambda *args, **kwargs: kwargs['c']
     ) == 4
-    assert SymbolApplication(op.add)(2, 3) == 5
 
 
-def test_free_variable_method_and_operator():
+def test_symbol_method_and_operator():
     a = Symbol('a')
     fva = a.__len__()
-    fvb = a - 4
-    fvc = 4 - a
-    fve = a[2]
+    fvb = a - C(4, type_=int)
+    fvc = C(4, type_=int) - a
+    fve = a[C(2)]
 
-    assert evaluate(fva, a={1}) == 1
-    assert evaluate(fvb, a=1) == -3
-    assert evaluate(fvc, a=1) == 3
-    assert evaluate(fvc * 2, a=1) == 6
-    assert evaluate(a | False, a=True)
-    assert evaluate(fve, a=[0, 1, 2]) == 2
+    assert evaluate(a, a=C(1)) == 1
+    assert evaluate(fva, a=C({1}, type_=Set[int])) == 1
+    assert evaluate(fvb, a=C(1)) == -3
+    assert evaluate(fvc, a=C(1)) == 3
+    assert evaluate(fvc * C(2), a=C(1)) == 6
+    assert evaluate(a | C(False), a=True)
+    assert evaluate(
+        fve,
+        a=C([C(x) for x in (0, 1, 2)])
+    ) == 2
 
 
-def test_free_variable_wrapping():
+def test_constant_method_and_operator():
+    a = C(1, type_=int)
+    fva = a + C(1)
+    b = C({1}, type_=Set[int])
+    fvb = b.__len__()
+    fbc = b.union(C({C(1), C(2)}))
+
+    assert a == 1
+    assert evaluate(a) == 1
+    assert evaluate(fva) == 2
+    assert evaluate(fvb) == 1
+    assert evaluate(fbc).value == {1, 2}
+
+
+def test_symbol_wrapping():
     def f(a: int)->float:
         '''
         test help
         '''
         return 2. * int(a)
 
-    fva = SymbolApplication(f)
+    fva = Constant(f)
     x = Symbol('x', type_=int)
     fvb = fva(x)
     assert fva.__annotations__ == f.__annotations__
@@ -73,3 +113,24 @@ def test_free_variable_wrapping():
     assert inspect.signature(fva) == inspect.signature(f)
     assert fvb.type == float
     assert x.type == int
+
+
+def test_compatibility_for_pattern_matching():
+    for symbol_name in dir(expressions):
+        symbol = getattr(expressions, symbol_name)
+        if not (
+            type(symbol) == type and
+            issubclass(symbol, expressions.Expression) and
+            symbol != expressions.Expression
+        ):
+            continue
+        signature = inspect.signature(symbol)
+        argnames = [
+            name for name, param in signature.parameters.items()
+            if param.default == signature.empty
+        ]
+        args = (...,) * len(argnames)
+        instance = symbol(*args)
+
+        for argname in argnames:
+            assert getattr(instance, argname) == ...
