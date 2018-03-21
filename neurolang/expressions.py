@@ -225,6 +225,13 @@ class Expression(object):
             )
 
 
+class Definition(Expression):
+    '''
+    Parent class for all composite operations
+    such as A + B or F(A)
+    '''
+
+
 class Symbol(Expression):
     def __init__(self, name, type_=ToBeInferred):
         self.name = name
@@ -293,7 +300,7 @@ class Constant(Expression):
         return 'C{{{}: {}}}'.format(self.value, self.type)
 
 
-class FunctionApplication(Expression):
+class FunctionApplication(Definition):
     def __init__(
         self, functor, args, kwargs=None,
         type_=ToBeInferred
@@ -355,7 +362,7 @@ class FunctionApplication(Expression):
         return r
 
 
-class Projection(Expression):
+class Projection(Definition):
     def __init__(
         self, collection, item,
         type_=ToBeInferred,
@@ -419,7 +426,7 @@ class Statement(Expression):
         self.type = type_
 
     def __repr__(self):
-        return 'Def{{{}: {} <- {}}}'.format(
+        return 'Statement{{{}: {} <- {}}}'.format(
             self.symbol.name, self.type, self.value
         )
 

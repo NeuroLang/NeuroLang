@@ -121,7 +121,8 @@ def test_compatibility_for_pattern_matching():
         if not (
             type(symbol) == type and
             issubclass(symbol, expressions.Expression) and
-            symbol != expressions.Expression
+            symbol != expressions.Expression and
+            symbol != expressions.Definition
         ):
             continue
         signature = inspect.signature(symbol)
