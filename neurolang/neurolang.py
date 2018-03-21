@@ -8,7 +8,7 @@ from .ast import ASTWalker
 from .ast_tatsu import TatsuASTConverter
 from .exceptions import NeuroLangException
 from .symbols_and_types import (
-    Symbol, Constant, Expression, FunctionApplication, Definition, Query,
+    Symbol, Constant, Expression, FunctionApplication, Statement, Query,
     Projection, Predicate,
     TypedSymbolTable, unify_types, ToBeInferred,
     NeuroLangTypeException, is_subtype,
@@ -26,7 +26,7 @@ __all__ = [
     'ExpressionReplacement', 'NeuroLangException',
     'NeuroLangIntermediateRepresentationCompiler',
     'grammar_EBNF', 'parser',
-    'Constant', 'Symbol', 'FunctionApplication', 'Definition', 'Query'
+    'Constant', 'Symbol', 'FunctionApplication', 'Statement', 'Query'
 ]
 
 
@@ -134,7 +134,7 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
         identifier = ast['identifier']
         type_, value = get_type_and_value(ast['argument'])
         identifier = Symbol(identifier.name, type_)
-        result = Definition(
+        result = Statement(
             identifier, ast['argument'], type_=type_
         )
         return result
@@ -243,7 +243,7 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
         argument_types = []
         for i, a in enumerate(ast['argument']):
             argument_type, value = get_type_and_value(a)
-            if isinstance(value, Definition):
+            if isinstance(value, Statement):
                 value = value.symbol
 
             arguments.append(a)
