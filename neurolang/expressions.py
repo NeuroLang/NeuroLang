@@ -9,7 +9,7 @@ from .exceptions import NeuroLangException
 
 
 __all__ = [
-    'Symbol', 'FunctionApplication', 'Definition',
+    'Symbol', 'FunctionApplication', 'Statement',
     'Projection', 'Predicate',
     'ToBeInferred',
     'typing_callable_from_annotated_function'
@@ -47,7 +47,7 @@ def get_type_and_value(value, symbol_table=None):
 
     if isinstance(value, Expression):
         type_ = value.type
-        if isinstance(value, (Constant, Definition)):
+        if isinstance(value, (Constant, Statement)):
             value = value.value
         return type_, value
     elif isinstance(value, types.FunctionType):
@@ -409,7 +409,7 @@ class Predicate(FunctionApplication):
         return r
 
 
-class Definition(Expression):
+class Statement(Expression):
     def __init__(
         self, symbol, value,
         type_=ToBeInferred
@@ -424,7 +424,7 @@ class Definition(Expression):
         )
 
 
-class Query(Definition):
+class Query(Statement):
     def __repr__(self):
         return 'Query{{{}: {} <- {}}}'.format(
             self.symbol.name, self.type, self.value
@@ -464,7 +464,7 @@ for operator_name in dir(op):
     if name.endswith('___'):
         name = name[:-1]
 
-    for c in (Constant, Symbol, FunctionApplication, Definition):
+    for c in (Constant, Symbol, FunctionApplication, Statement):
         if not hasattr(c, name):
             setattr(c, name, op_bind(operator))
 
@@ -479,5 +479,5 @@ for operator in [
     if name.endswith('___'):
         name = name[:-1]
 
-    for c in (Constant, Symbol, FunctionApplication, Definition):
+    for c in (Constant, Symbol, FunctionApplication, Statement):
         setattr(c, name, rop_bind(operator))

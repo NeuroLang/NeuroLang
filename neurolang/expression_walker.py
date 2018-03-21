@@ -2,7 +2,7 @@ import logging
 import typing
 
 from .expressions import (
-    Expression, FunctionApplication, Definition, Query, Projection, Constant,
+    Expression, FunctionApplication, Statement, Query, Projection, Constant,
     Symbol,
     get_type_and_value, ToBeInferred, is_subtype, NeuroLangTypeException
 )
@@ -11,9 +11,9 @@ from .expression_pattern_matching import add_match, PatternMatcher
 
 
 class ExpressionWalker(PatternMatcher):
-    @add_match(Definition)
+    @add_match(Statement)
     def definition(self, expression):
-        return Definition(
+        return Statement(
             expression.symbol, self.walk(expression.value),
             type_=expression.type
         )
@@ -73,7 +73,7 @@ class ExpressionBasicEvaluator(ExpressionWalker):
             else:
                 raise ValueError('{} not in symbol table'.format(expression))
 
-    @add_match(Definition)
+    @add_match(Statement)
     def definition(self, expression):
         value = self.walk(expression.value)
         self.symbol_table[expression.symbol] = value
@@ -81,7 +81,7 @@ class ExpressionBasicEvaluator(ExpressionWalker):
             return expression
         else:
             return self.walk(
-                Definition(expression.symbol, value, type_=expression.type)
+                Statement(expression.symbol, value, type_=expression.type)
             )
 
     @add_match(Query)
@@ -230,7 +230,7 @@ class ExpressionWalkerGraph(object):
         )
 
     def definition(self, expression):
-        return Definition(
+        return Statement(
             expression.symbol, self.walk(expression.value),
             type_=expression.type
         )

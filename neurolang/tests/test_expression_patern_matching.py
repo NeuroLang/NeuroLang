@@ -3,7 +3,7 @@ from pytest import raises
 from ..expression_pattern_matching import PatternMatcher, add_match
 from ..expressions import (
     Constant, Symbol, FunctionApplication, Projection,
-    Definition, Query
+    Statement, Query
 )
 
 
@@ -11,7 +11,7 @@ example_expressions = dict(
     c_int=Constant(1, type_=int),
     c_str=Constant('a', type_=str),
     s_a=Symbol('a', type_=str),
-    d_a=Definition(Symbol('a'), Constant(2, type_=int)),
+    d_a=Statement(Symbol('a'), Constant(2, type_=int)),
     f_d=FunctionApplication(
         Constant(lambda x: 2 * x),
         (Constant(2, type_=int),)
@@ -83,7 +83,7 @@ def test_match_expression_value():
         def _(self, expression):
             return expression
 
-        @add_match(Definition(..., Constant(..., type_=int)))
+        @add_match(Statement(..., Constant(..., type_=int)))
         def __(self, expression):
             return expression
 
