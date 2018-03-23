@@ -60,7 +60,7 @@ class PatternMatcher(object, metaclass=PatternMatchingMetaClass):
     def pattern_match(self, pattern, expression):
         if pattern is ...:
             return True
-        elif type(pattern) == type:
+        elif type(pattern) == expressions.ExpressionMeta:
             return isinstance(expression, pattern)
         elif isinstance(pattern, expressions.Expression):
             if (
