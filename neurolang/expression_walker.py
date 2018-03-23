@@ -12,27 +12,24 @@ from .expression_pattern_matching import add_match, PatternMatcher
 
 class ExpressionWalker(PatternMatcher):
     @add_match(Statement)
-    def definition(self, expression):
-        return Statement(
-            expression.symbol, self.walk(expression.value),
-            type_=expression.type
+    def statement(self, expression):
+        return Statement[expression.type](
+            expression.symbol, self.walk(expression.value)
         )
 
     @add_match(FunctionApplication)
     def function(self, expression):
-        return FunctionApplication(
+        return FunctionApplication[expression.type](
             self.match(expression.functor),
             args=[self.walk(e) for e in expression.args],
             kwargs={k: self.walk(v) for k, v in expression.kwargs},
-            type_=expression.type_
         )
 
     @add_match(Query)
     def query(self, expression):
-        return Query(
+        return Query[expression.type](
             expression.symbol,
-            self.walk(expression.value),
-            type_=expression.type
+            self.walk(expression.value)
         )
 
     @add_match(...)
@@ -74,14 +71,14 @@ class ExpressionBasicEvaluator(ExpressionWalker):
                 raise ValueError('{} not in symbol table'.format(expression))
 
     @add_match(Statement)
-    def definition(self, expression):
+    def statement(self, expression):
         value = self.walk(expression.value)
         self.symbol_table[expression.symbol] = value
         if value is expression.value:
             return expression
         else:
             return self.walk(
-                Statement(expression.symbol, value, type_=expression.type)
+                Statement[expression.type](expression.symbol, value)
             )
 
     @add_match(Query)
@@ -92,7 +89,7 @@ class ExpressionBasicEvaluator(ExpressionWalker):
             return expression
         else:
             return self.walk(
-                Query(expression.symbol, value, type_=expression.type)
+                Query[expression.type](expression.symbol, value)
             )
 
     @add_match(Projection(Constant(...), Constant(...)))
@@ -143,9 +140,8 @@ class ExpressionBasicEvaluator(ExpressionWalker):
 
         new_args = [a.value for a in expression.args]
         new_kwargs = {k: v.value for k, v in expression.kwargs.items()}
-        result = Constant(
-            functor_value(*new_args, **new_kwargs),
-            type_=result_type
+        result = Constant[result_type](
+            functor_value(*new_args, **new_kwargs)
         )
         return result
 
@@ -158,7 +154,7 @@ class ExpressionBasicEvaluator(ExpressionWalker):
 
         if expression.args is None and expression.kwargs is None:
             if changed:
-                result = FunctionApplication(functor, type_=functor_type)
+                result = FunctionApplication[functor_type](functor)
                 return self.walk(result)
             else:
                 return expression
@@ -224,30 +220,26 @@ class ExpressionWalkerGraph(object):
                 return self._default(expression)
 
     def expression(self, expression):
-        return Expression(
-            self.walk(expression.value),
-            type_=expression.type
+        return Expression[expression.type](
+            self.walk(expression.value)
         )
 
     def definition(self, expression):
-        return Statement(
-            expression.symbol, self.walk(expression.value),
-            type_=expression.type
+        return Statement[expression.type](
+            expression.symbol, self.walk(expression.value)
         )
 
     def function(self, expression):
-        return FunctionApplication(
+        return FunctionApplication[expression.type](
             self.walk(expression.functor),
             args=[self.walk(e) for e in expression.args],
-            kwargs={k: self.walk(v) for k, v in expression.kwargs},
-            type_=expression.type_
+            kwargs={k: self.walk(v) for k, v in expression.kwargs}
         )
 
     def query(self, expression):
-        return Query(
+        return Query[expression.type](
             expression.symbol,
-            self.walk(expression.value),
-            type_=expression.type
+            self.walk(expression.value)
         )
 
     def _default(self, expression):

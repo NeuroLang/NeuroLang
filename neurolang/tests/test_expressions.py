@@ -24,16 +24,16 @@ def test_symbol_application():
     a = Symbol('a')
     b = Symbol('b')
 
-    oadd = C(op.add, type_=Callable[[int, int], int])
-    osub = C(op.sub,  type_=Callable[[int, int], int])
-    omul = C(op.mul,  type_=Callable[[int, int], int])
-    c = oadd(C(2), C(3))
+    oadd = C[Callable[[int, int], int]](op.add)
+    osub = C[Callable[[int, int], int]](op.sub)
+    omul = C[Callable[[int, int], int]](op.mul)
+    c = oadd(C[int](2), C[int](3))
     assert c.functor == oadd
     assert all((e1.value == e2 for e1, e2 in zip(c.args, (2, 3))))
     assert evaluate(c) == 5
 
-    fva = oadd(a, C(3))
-    fvb = osub(fva, C(10))
+    fva = oadd(a, C[int](3))
+    fvb = osub(fva, C[int](10))
     fvc = omul(fvb, b)
     fvd = FunctionApplication(a, None, kwargs={'c': b})
     fve = FunctionApplication(a, None, kwargs={'c': op.add(b, C(2))})
@@ -65,12 +65,12 @@ def test_symbol_application():
 def test_symbol_method_and_operator():
     a = Symbol('a')
     fva = a.__len__()
-    fvb = a - C(4, type_=int)
-    fvc = C(4, type_=int) - a
+    fvb = a - C[int](4)
+    fvc = C[int](4) - a
     fve = a[C(2)]
 
     assert evaluate(a, a=C(1)) == 1
-    assert evaluate(fva, a=C({1}, type_=Set[int])) == 1
+    assert evaluate(fva, a=C[Set[int]]({1})) == 1
     assert evaluate(fvb, a=C(1)) == -3
     assert evaluate(fvc, a=C(1)) == 3
     assert evaluate(fvc * C(2), a=C(1)) == 6
@@ -82,9 +82,9 @@ def test_symbol_method_and_operator():
 
 
 def test_constant_method_and_operator():
-    a = C(1, type_=int)
+    a = C[int](1)
     fva = a + C(1)
-    b = C({1}, type_=Set[int])
+    b = C[Set[int]]({1})
     fvb = b.__len__()
     fbc = b.union(C({C(1), C(2)}))
 
@@ -103,7 +103,7 @@ def test_symbol_wrapping():
         return 2. * int(a)
 
     fva = Constant(f)
-    x = Symbol('x', type_=int)
+    x = Symbol[int]('x')
     fvb = fva(x)
     assert fva.__annotations__ == f.__annotations__
     assert fva.__doc__ == f.__doc__

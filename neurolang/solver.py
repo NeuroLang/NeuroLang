@@ -7,11 +7,11 @@ from .symbols_and_types import (
     Expression, Symbol, Constant, Predicate, FunctionApplication,
     type_validation_value,
     NeuroLangTypeException,
-    is_subtype, get_type_and_value, replace_type_variable
+    get_type_and_value, replace_type_variable
 )
 from operator import invert
 from .expression_walker import (
-    add_match, ExpressionWalker, ExpressionBasicEvaluator
+    add_match, ExpressionBasicEvaluator
 )
 
 
@@ -109,7 +109,7 @@ class GenericSolver(ExpressionBasicEvaluator):
          )
         result = method(value)
         if not isinstance(result, Expression):
-            result = Constant(method(value), type_=return_type)
+            result = Constant[return_type](method(value))
 
         # if not is_subtype(type_, return_type):
         #    raise NeuroLangTypeException(

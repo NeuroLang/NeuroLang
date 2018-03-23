@@ -2,7 +2,7 @@ from itertools import chain
 import operator as op
 import typing
 import inspect
-from functools import wraps, WRAPPER_ASSIGNMENTS
+from functools import wraps, WRAPPER_ASSIGNMENTS, lru_cache
 import types
 from warnings import warn
 from .exceptions import NeuroLangException
@@ -65,7 +65,7 @@ def is_subtype(left, right):
     if right == typing.Any:
         return True
     elif left == typing.Any:
-        return right == typing.Any
+        return right == typing.Any or right == ToBeInferred
     elif left == ToBeInferred:
         return True
     elif hasattr(right, '__origin__') and right.__origin__ is not None:
@@ -134,8 +134,12 @@ def type_validation_value(value, type_, symbol_table=None):
         isinstance(value, Symbol)
     ):
         value = symbol_table[value].value
-    elif isinstance(value, Expression):
-        value = value.value
+
+    if isinstance(value, Expression):
+        value_type, value = get_type_and_value(value)
+
+        if value is ...:
+            return is_subtype(value_type, type_)
 
     if hasattr(type_, '__origin__') and type_.__origin__ is not None:
         if type_.__origin__ == typing.Union:
@@ -192,11 +196,79 @@ def type_validation_value(value, type_, symbol_table=None):
         )
 
 
-class Expression(object):
+class ExpressionMeta(type):
+
+    def __new__(cls, *args, **kwargs):
+        __no_explicit_type__ = 'type' not in args[2]
+        obj = super().__new__(cls, *args, **kwargs)
+        obj.__no_explicit_type__ = __no_explicit_type__
+        if obj.__no_explicit_type__:
+            obj.type = typing.Any
+        orig_init = obj.__init__
+
+        @wraps(orig_init)
+        def new_init(self, *args, **kwargs):
+            if self.__no_explicit_type__:
+                self.type = ToBeInferred
+            return orig_init(self, *args, **kwargs)
+
+        obj.__init__ = new_init
+        return obj
+
+    @lru_cache(maxsize=None)
+    def __getitem__(cls, type_):
+        d = dict(cls.__dict__)
+        d['type'] = type_
+        d['__generic_class__'] = cls
+        d['__no_explicit_type__'] = False
+        return cls.__class__(
+            cls.__name__, cls.__bases__,
+            d
+        )
+
+    def __repr__(cls):
+        r = cls.__name__
+        if hasattr(cls, 'type'):
+            if isinstance(cls.type, type):
+                c = cls.type.__name__
+            else:
+                c = repr(cls.type)
+            r += '[{}]'.format(c)
+        return r
+
+    def __subclasscheck__(cls, other):
+        return (
+            super().__subclasscheck__(other) or
+            (
+                hasattr(other, '__generic_class__') and
+                issubclass(other.__generic_class__, cls)
+            ) or
+            (
+                hasattr(other, '__generic_class__') and
+                hasattr(cls, '__generic_class__') and
+                issubclass(
+                    other.__generic_class__,
+                    cls.__generic_class__
+                ) and
+                is_subtype(other.type, cls.type)
+            )
+        )
+
+    def __instancecheck__(cls, other):
+        return (
+            super().__instancecheck__(other) or
+            issubclass(other.__class__, cls)
+        )
+
+
+class Expression(metaclass=ExpressionMeta):
     super_attributes = WRAPPER_ASSIGNMENTS + ('__signature__', 'mro', 'type')
 
     def __init__(self):
         raise TypeError("Expression can not be instantiated")
+
+    def __getitem__(self, index):
+        return Projection(self, index)
 
     def __call__(self, *args, **kwargs):
         if hasattr(self, '__annotations__'):
@@ -204,9 +276,8 @@ class Expression(object):
         else:
             variable_type = ToBeInferred
 
-        return FunctionApplication(
+        return FunctionApplication[variable_type](
             self, args, kwargs,
-            type_=variable_type,
          )
 
     def __getattr__(self, attr):
@@ -217,11 +288,10 @@ class Expression(object):
             return getattr(super(), attr)
         else:
             return FunctionApplication(
-                Constant(
+                Constant[typing.Callable[[self.type, str], ToBeInferred]](
                     getattr,
-                    type_=typing.Callable[[self.type, str], ToBeInferred]
                 ),
-                args=(self, Constant(attr, type_=str))
+                args=(self, Constant[str](attr))
             )
 
 
@@ -233,9 +303,8 @@ class Definition(Expression):
 
 
 class Symbol(Expression):
-    def __init__(self, name, type_=ToBeInferred):
+    def __init__(self, name):
         self.name = name
-        self.type = type_
         self._symbols = {self}
 
     def __eq__(self, other):
@@ -253,25 +322,31 @@ class Symbol(Expression):
 
 class Constant(Expression):
     def __init__(
-        self, value, type_=ToBeInferred,
-        auto_infer_annotated_functions_type=True
+        self, value,
+        auto_infer_type=True
     ):
         self.value = value
-        self.type = type_
+        self.__wrapped__ = None
 
-        if callable(self.value):
+        if self.value is ...:
+            pass
+        elif callable(self.value):
             self.__wrapped__ = value
             for attr in WRAPPER_ASSIGNMENTS:
                 if hasattr(value, attr):
                     setattr(self, attr, getattr(value, attr))
 
-            if (
-                auto_infer_annotated_functions_type and
-                hasattr(value, '__annotations__') and self.type == ToBeInferred
-            ):
-                self.type = typing_callable_from_annotated_function(value)
-        else:
-            self.__wrapped__ = None
+            if (auto_infer_type) and self.type == ToBeInferred:
+                if hasattr(value, '__annotations__'):
+                    self.type = typing_callable_from_annotated_function(value)
+        elif auto_infer_type and self.type == ToBeInferred:
+            if isinstance(self.value, tuple):
+                self.type = typing.Tuple[tuple(
+                    a.type if a is not ... else typing.Any
+                    for a in self.value
+                )]
+            else:
+                self.type = type(value)
 
         if not (
             self.value is ... or
@@ -279,39 +354,53 @@ class Constant(Expression):
         ):
             raise NeuroLangTypeException(
                 "The value %s does not correspond to the type %s" %
-                (self.value, self.type_)
+                (self.value, self.type)
             )
 
     def __eq__(self, other):
         if self.type == ToBeInferred:
             warn('Making a comparison with types needed to be inferred')
-        return (
-            (
-                isinstance(other, Constant) or
-                self.type == ToBeInferred or isinstance(other, self.type)
-            ) and
-            hash(self) == hash(other)
-        )
+
+        if isinstance(other, Expression):
+            types_equal = (
+                is_subtype(self.type, other.type) or
+                is_subtype(other.type, self.type)
+            )
+            if types_equal:
+                if isinstance(other, Constant):
+                    return other.value == self.value
+                else:
+                    return hash(other) == hash(self)
+            else:
+                return False
+        else:
+            return (
+                type_validation_value(other, self.type) and
+                hash(other) == hash(self)
+            )
 
     def __hash__(self):
         return hash(self.value)
 
     def __repr__(self):
-        return 'C{{{}: {}}}'.format(self.value, self.type)
+        if self.value is ...:
+            value_str = '...'
+        else:
+            value_str = repr(self.value)
+        return 'C{{{}: {}}}'.format(value_str, self.type)
 
 
 class FunctionApplication(Definition):
     def __init__(
         self, functor, args, kwargs=None,
-        type_=ToBeInferred
     ):
         self.functor = functor
         self.args = args
         self.kwargs = kwargs
 
         if isinstance(self.functor, Expression):
-            if self.functor.type == ToBeInferred:
-                self.type = ToBeInferred
+            if self.functor.type in (ToBeInferred, typing.Any):
+                self.type = self.functor.type
             elif isinstance(self.functor.type, typing.Callable):
                 self.type = self.functor.type.__args__[-1]
             else:
@@ -350,7 +439,9 @@ class FunctionApplication(Definition):
 
     def __repr__(self):
         r = u'\u03BB{{{}: {}}}'.format(self.functor, self.type)
-        if self.args is not None:
+        if self.args is ...:
+            r += '(...)'
+        elif self.args is not None:
             r += (
                 '(' +
                 ', '.join(repr(arg) for arg in self.args) +
@@ -365,10 +456,9 @@ class FunctionApplication(Definition):
 class Projection(Definition):
     def __init__(
         self, collection, item,
-        type_=ToBeInferred,
         auto_infer_projection_type=True
     ):
-        if type_ == ToBeInferred and auto_infer_projection_type:
+        if self.type == ToBeInferred and auto_infer_projection_type:
             if collection is not ...:
                 if not collection.type == ToBeInferred:
                     if is_subtype(collection.type, typing.Tuple):
@@ -377,7 +467,9 @@ class Projection(Definition):
                             is_subtype(item.type, typing.SupportsInt) and
                             len(collection.type.__args__) > int(item.value)
                         ):
-                            type_ = collection.type.__args__[int(item.value)]
+                            self.type = collection.type.__args__[
+                                int(item.value)
+                            ]
                         else:
                             raise NeuroLangTypeException(
                                 "Not {} elements in tuple".format(
@@ -385,7 +477,7 @@ class Projection(Definition):
                                 )
                             )
                     if is_subtype(collection.type, typing.Mapping):
-                        type_ = collection.type.__args__[1]
+                        self.type = collection.type.__args__[1]
 
         if collection is not ...:
             self._symbol = collection._symbols
@@ -394,7 +486,6 @@ class Projection(Definition):
 
         self.collection = collection
         self.item = item
-        self.type = type_
 
     def __repr__(self):
         return u"\u03C3{{{}[{}]: {}}}".format(
@@ -419,22 +510,29 @@ class Predicate(FunctionApplication):
 class Statement(Expression):
     def __init__(
         self, symbol, value,
-        type_=ToBeInferred
     ):
         self.symbol = symbol
         self.value = value
-        self.type = type_
 
     def __repr__(self):
+        if self.symbol is ...:
+            name = '...'
+        else:
+            name = self.symbol.name
         return 'Statement{{{}: {} <- {}}}'.format(
-            self.symbol.name, self.type, self.value
+            name, self.type, self.value
         )
 
 
 class Query(Statement):
     def __repr__(self):
+        if self.symbol is ...:
+            name = '...'
+        else:
+            name = self.symbol.name
+
         return 'Query{{{}: {} <- {}}}'.format(
-            self.symbol.name, self.type, self.value
+            name, self.type, self.value
         )
 
 
@@ -443,7 +541,7 @@ def op_bind(op):
     def f(*args):
         arg_types = [get_type_and_value(a)[0] for a in args]
         return FunctionApplication(
-            Constant(op, type_=typing.Callable[arg_types, ToBeInferred]),
+            Constant[typing.Callable[arg_types, ToBeInferred]](op),
             args,
         )
 
@@ -455,7 +553,7 @@ def rop_bind(op):
     def f(self, value):
         arg_types = [get_type_and_value(a)[0] for a in (value, self)]
         return FunctionApplication(
-            Constant(op, type_=typing.Callable[arg_types, ToBeInferred]),
+            Constant[typing.Callable[arg_types, ToBeInferred]](op, ),
             args=(value, self),
         )
 

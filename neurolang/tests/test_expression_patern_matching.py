@@ -8,25 +8,25 @@ from ..expressions import (
 
 
 example_expressions = dict(
-    c_int=Constant(1, type_=int),
-    c_str=Constant('a', type_=str),
-    s_a=Symbol('a', type_=str),
-    d_a=Statement(Symbol('a'), Constant(2, type_=int)),
+    c_int=Constant[int](1),
+    c_str=Constant[str]('a'),
+    s_a=Symbol[str]('a'),
+    d_a=Statement(Symbol('a'), Constant[int](2)),
     f_d=FunctionApplication(
         Constant(lambda x: 2 * x),
-        (Constant(2, type_=int),)
+        (Constant[int](2),)
     ),
     q_a=Query(
         Symbol('a'),
         FunctionApplication(
-            Constant(lambda x: x % 2 == 0), (Constant(2, type_=int),)
+            Constant(lambda x: x % 2 == 0), (Constant[int](2),)
         )
     ),
-    t_a=(Constant(1., type_=float), Symbol('a')),
-    t_b=(Constant('a', type_=str), Symbol('a')),
+    t_a=Constant((Constant[float](1.), Symbol('a'))),
+    t_b=Constant((Constant[str]('a'), Symbol('a'))),
     p_a=Projection(
-        Constant((Constant('a', type_=str), Symbol('a'))),
-        Constant(1, type_=int)
+        Constant((Constant[str]('a'), Symbol('a'))),
+        Constant[int](1)
     ),
 )
 
@@ -64,7 +64,7 @@ def test_match_expression_type():
 
 def test_match_expression():
     class PM(PatternMatcher):
-        @add_match(Constant(..., type_=int))
+        @add_match(Constant[int](...))
         def _(self, expression):
             return expression
     pm = PM()
@@ -79,11 +79,11 @@ def test_match_expression():
 
 def test_match_expression_value():
     class PM(PatternMatcher):
-        @add_match(Constant(..., type_=int))
+        @add_match(Constant[int](...))
         def _(self, expression):
             return expression
 
-        @add_match(Statement(..., Constant(..., type_=int)))
+        @add_match(Statement(..., Constant[int](...)))
         def __(self, expression):
             return expression
 
@@ -103,11 +103,11 @@ def test_match_expression_value():
 
 def test_match_expression_tuple():
     class PM(PatternMatcher):
-        @add_match((Constant(..., type_=int),))
+        @add_match(Constant((Constant[float](...),)))
         def __(self, expression):
             return False
 
-        @add_match((Constant(..., type_=int), ...))
+        @add_match(Constant((Constant[float](...), ...)))
         def _(self, expression):
             return expression
     pm = PM()
