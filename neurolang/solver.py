@@ -7,11 +7,11 @@ from .symbols_and_types import (
     Expression, Symbol, Constant, Predicate, FunctionApplication,
     type_validation_value,
     NeuroLangTypeException,
-    is_subtype, get_type_and_value, replace_type_variable
+    get_type_and_value, replace_type_variable
 )
 from operator import invert
 from .expression_walker import (
-    add_match, ExpressionWalker, ExpressionBasicEvaluator
+    add_match, ExpressionBasicEvaluator
 )
 
 
