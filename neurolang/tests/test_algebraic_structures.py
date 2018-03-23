@@ -84,10 +84,10 @@ def test_algebraic_structure_of_naturals():
     elements = (1, 2, 3)
     null_element = 0
     symbols = {
-        'element{}'.format(i + 1): nl.Constant(e, type_=int)
+        'element{}'.format(i + 1): nl.Constant[int](e)
         for i, e in enumerate(elements)
     }
-    symbols['null'] = nl.Constant(null_element, type_=int)
+    symbols['null'] = nl.Constant[int](null_element)
     nli = nl.NeuroLangIntermediateRepresentationCompiler(
         symbols=symbols, types=[(int, 'dummy')]
     )

@@ -124,18 +124,17 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
         identifier = ast['identifier']
         category = ast['category']
 
-        value = Query(
-            identifier, ast['statement'],
-            type_=category
+        value = Query[category](
+            identifier, ast['statement']
         )
         return value
 
     def assignment(self, ast):
         identifier = ast['identifier']
         type_, value = get_type_and_value(ast['argument'])
-        identifier = Symbol(identifier.name, type_)
-        result = Statement(
-            identifier, ast['argument'], type_=type_
+        identifier = Symbol[type_](identifier.name)
+        result = Statement[type_](
+            identifier, ast['argument']
         )
         return result
 
@@ -149,9 +148,8 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
             types_.append(type_)
             values.append(element)
 
-        return Constant(
-            tuple(values),
-            type_=typing.Tuple[tuple(types_)]
+        return Constant[typing.Tuple[tuple(types_)]](
+            tuple(values)
         )
 
     def predicate(self, ast):
@@ -249,10 +247,11 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
             arguments.append(a)
             argument_types.append(argument_type)
 
-        function = FunctionApplication(
+        function = FunctionApplication[
+                typing.Callable[argument_types, typing.Any]
+        ](
             function,
-            args=arguments,
-            type_=typing.Callable[argument_types, typing.Any]
+            args=arguments
         )
 
         return function
@@ -268,10 +267,10 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
                 raise NeuroLangTypeException(
                     "Tuple projection argument should be an int"
                 )
-            item = Constant(int(item), type_=int)
+            item = Constant[int](int(item))
             if len(symbol.type.__args__) > item:
-                return Projection(
-                    symbol, item, type_=symbol.type.__args__[item]
+                return Projection[symbol.type.__args__[item]](
+                    symbol, item
                 )
             else:
                 raise NeuroLangTypeException(
@@ -284,9 +283,8 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
                     "key type does not agree with Mapping key %s" % key_type
                 )
 
-            return Expression(
-                symbol.name[item],
-                type_=symbol.type.__args__[1]
+            return Expression[symbol.type.__args__[1]](
+                symbol.name[item]
             )
         else:
             raise NeuroLangTypeException(
@@ -294,13 +292,13 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
             )
 
     def string(self, ast):
-        return Constant(str(ast['value']), type_=str)
+        return Constant[str](str(ast['value']))
 
     def point_float(self, ast):
-        return Constant(float(''.join(ast['value'])), type_=float)
+        return Constant[float](float(''.join(ast['value'])))
 
     def integer(self, ast):
-        return Constant(int(ast['value']), type_=int)
+        return Constant[int](int(ast['value']))
 
 
 class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
@@ -373,8 +371,8 @@ class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
             for k, v in symbols.items():
                 if not isinstance(v, Constant):
                     t, v = get_type_and_value(v)
-                    v = Constant(v, type_=t)
-                self.symbol_table[Symbol(k, type_=v.type)] = v
+                    v = Constant[t](v)
+                self.symbol_table[Symbol[v.type](k)] = v
 
         if functions is not None:
             for f in functions:
@@ -395,8 +393,8 @@ class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
                     func.__annotations__[k] = v
 
                 t, func = get_type_and_value(func)
-                self.symbol_table[Symbol(name, type_=t)] = Constant(
-                    func, type_=t
+                self.symbol_table[Symbol[t](name)] = Constant[t](
+                    func
                 )
 
         for solver in self.category_solvers.values():
@@ -424,8 +422,8 @@ class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
                 "%s doesn't have type %s" % (value, symbol_type)
             )
 
-        result = Query(expression.symbol, query_result, type_=symbol_type)
-        self.symbol_table[Symbol(expression.symbol.name, symbol_type)] = result
+        result = Query[symbol_type](expression.symbol, query_result)
+        self.symbol_table[Symbol[symbol_type](expression.symbol.name)] = result
         return result
 
     def compile(self, ast):
