@@ -402,9 +402,10 @@ class FunctionApplication(Definition):
             if self.functor.type in (ToBeInferred, typing.Any):
                 self.type = self.functor.type
             elif isinstance(self.functor.type, typing.Callable):
-                self.type = self.functor.type.__args__[-1]
+                if self.type == ToBeInferred:
+                    self.type = self.functor.type.__args__[-1]
             else:
-                NeuroLangTypeException
+                raise NeuroLangTypeException("Functor is not an expression")
 
             if isinstance(functor, Symbol):
                 self._symbols = {functor}

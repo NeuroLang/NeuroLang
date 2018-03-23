@@ -76,14 +76,14 @@ class PatternMatcher(object, metaclass=PatternMatchingMetaClass):
         if pattern is ...:
             return True
         elif type(pattern) == expressions.ExpressionMeta:
+            logging.debug("Match type")
             return isinstance(expression, pattern)
         elif isinstance(pattern, expressions.Expression):
-            if (
-                not isinstance(expression, pattern.__class__) or
-                not expressions.is_subtype(pattern.type, expression.type)
-            ):
+            logging.debug("Match expression instance")
+            if not isinstance(expression, pattern.__class__):
                 return False
             elif isclass(pattern.type) and issubclass(pattern.type, Tuple):
+                logging.debug("Match tuple")
                 if isclass(expression.type) and issubclass(expression.type, Tuple):
                     if (
                         len(pattern.type.__args__) !=
@@ -99,11 +99,18 @@ class PatternMatcher(object, metaclass=PatternMatchingMetaClass):
                     return False
             else:
                 parameters = inspect.signature(pattern.__class__).parameters
-                return all(
-                    self.pattern_match(
-                        getattr(pattern, argname), getattr(expression, argname)
-                    )
-                    for argname, arg in parameters.items()
-                    if arg.default == inspect._empty
-                )
+                logging.debug("Match parameters {}".format(parameters))
+                for argname, arg in parameters.items():
+                    if arg.default != inspect._empty:
+                        continue
+                    p = getattr(pattern, argname)
+                    e = getattr(expression, argname)
+                    match = self.pattern_match(p, e)
+                    logging.debug("\t {} vs {}: {}".format(p, e, match))
+                    if not match:
+                        return False
+                else:
+                    return True
+        else:
+            logging.debug("Match other {} vs {}".format(pattern, expression))
             return pattern == expression
