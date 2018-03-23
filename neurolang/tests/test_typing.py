@@ -107,7 +107,7 @@ def test_get_type_and_value():
     assert value == 3
 
     type_, value = symbols_and_types.get_type_and_value(
-        symbols_and_types.Constant(3, type_=int)
+        symbols_and_types.Constant[int](3)
     )
     assert type_ == int
     assert value == 3
@@ -116,7 +116,7 @@ def test_get_type_and_value():
         symbols_and_types.Symbol('a'),
         {
             symbols_and_types.Symbol('a'):
-                symbols_and_types.Constant(3, type_=int)
+                symbols_and_types.Constant[int](3)
         }
     )
     assert type_ == int
@@ -136,16 +136,16 @@ def test_type_validation_value():
         return 0
 
     symbol_table = {
-        symbols_and_types.Symbol('r'): symbols_and_types.Constant(
-             {'a'},
-             type_=typing.AbstractSet[str]
+        symbols_and_types.Symbol('r'):
+        symbols_and_types.Constant[typing.AbstractSet[str]](
+         {'a'}
         )
     }
 
     values = (
         3, {3, 8}, 'try', f, (3, 'a'),
-        symbols_and_types.Constant(
-            ('a', 3.), type_=typing.Tuple[str, float]
+        symbols_and_types.Constant[typing.Tuple[str, float]](
+            ('a', 3.)
         ),
         symbols_and_types.Symbol('r'),
         {'a': 3}
@@ -192,21 +192,21 @@ def test_type_validation_value():
 def test_TypedSymbol():
     v = 3
     t = int
-    s = symbols_and_types.Constant(v, type_=t)
+    s = symbols_and_types.Constant[t](v)
     assert s.value == v
     assert s.type == t
 
     with pytest.raises(symbols_and_types.NeuroLangTypeException):
-        s = symbols_and_types.Constant('a', type_=t)
+        s = symbols_and_types.Constant[t]('a')
 
 
 def test_TypedSymbolTable():
     st = symbols_and_types.TypedSymbolTable()
-    s1 = symbols_and_types.Constant(3, type_=int)
-    s2 = symbols_and_types.Constant(4, type_=int)
-    s3 = symbols_and_types.Constant(5., type_=float)
-    s4 = symbols_and_types.Constant(5, type_=int)
-    s6 = symbols_and_types.Constant('a', type_=str)
+    s1 = symbols_and_types.Constant[int](3)
+    s2 = symbols_and_types.Constant[int](4)
+    s3 = symbols_and_types.Constant[float](5.)
+    s4 = symbols_and_types.Constant[int](5)
+    s6 = symbols_and_types.Constant[str]('a')
 
     assert len(st) == 0
 
@@ -273,7 +273,7 @@ def test_free_variable_wrapping():
         return 2. * int(a)
 
     fva = Constant(f)
-    x = Symbol('x', type_=int)
+    x = Symbol[int]('x')
     fvb = fva(x)
     fva_type, fva_value = symbols_and_types.get_type_and_value(fva)
     assert fva_type == typing.Callable[[int], float]

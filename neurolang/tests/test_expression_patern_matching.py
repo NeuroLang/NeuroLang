@@ -22,8 +22,8 @@ example_expressions = dict(
             Constant(lambda x: x % 2 == 0), (Constant[int](2),)
         )
     ),
-    t_a=(Constant[float](1.), Symbol('a')),
-    t_b=(Constant[str]('a'), Symbol('a')),
+    t_a=Constant((Constant[float](1.), Symbol('a'))),
+    t_b=Constant((Constant[str]('a'), Symbol('a'))),
     p_a=Projection(
         Constant((Constant[str]('a'), Symbol('a'))),
         Constant[int](1)
@@ -103,11 +103,11 @@ def test_match_expression_value():
 
 def test_match_expression_tuple():
     class PM(PatternMatcher):
-        @add_match((Constant[int](...),))
+        @add_match(Constant((Constant[float](...),)))
         def __(self, expression):
             return False
 
-        @add_match((Constant[int](...), ...))
+        @add_match(Constant((Constant[float](...), ...)))
         def _(self, expression):
             return expression
     pm = PM()

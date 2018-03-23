@@ -109,7 +109,7 @@ class GenericSolver(ExpressionBasicEvaluator):
          )
         result = method(value)
         if not isinstance(result, Expression):
-            result = Constant(method(value), type_=return_type)
+            result = Constant[return_type](method(value))
 
         # if not is_subtype(type_, return_type):
         #    raise NeuroLangTypeException(

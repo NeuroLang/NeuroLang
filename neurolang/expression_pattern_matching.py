@@ -1,8 +1,12 @@
 from collections import OrderedDict
 from itertools import chain
 import inspect
+from inspect import isclass
+import logging
+from typing import Tuple
 
 from . import expressions
+from .expressions import ToBeInferred
 
 
 __all__ = ['add_match', 'PatternMatcher']
@@ -49,10 +53,21 @@ class PatternMatcher(object, metaclass=PatternMatchingMetaClass):
 
     def match(self, expression):
         for pattern, guard, action in self.patterns:
+            if logging.getLogger().getEffectiveLevel() >= logging.DEBUG:
+                pattern_match = self.pattern_match(pattern, expression)
+                guard_match = pattern_match and (
+                    guard is None or guard(expression)
+                )
+                logging.debug("test {}:{} | {}:{}".format(
+                    pattern, pattern_match,
+                    guard, guard_match
+                ))
+
             if (
                 self.pattern_match(pattern, expression) and
                 (guard is None or guard(expression))
             ):
+                logging.debug("* match {} | {}".format(pattern, guard))
                 return action(self, expression)
         else:
             raise ValueError()
@@ -68,6 +83,20 @@ class PatternMatcher(object, metaclass=PatternMatchingMetaClass):
                 not expressions.is_subtype(pattern.type, expression.type)
             ):
                 return False
+            elif isclass(pattern.type) and issubclass(pattern.type, Tuple):
+                if isclass(expression.type) and issubclass(expression.type, Tuple):
+                    if (
+                        len(pattern.type.__args__) !=
+                        len(expression.type.__args__)
+                    ):
+                        return False
+                    for p, e in zip(pattern.value, expression.value):
+                        if not self.pattern_match(p, e):
+                            return False
+                    else:
+                        return True
+                else:
+                    return False
             else:
                 parameters = inspect.signature(pattern.__class__).parameters
                 return all(
@@ -77,13 +106,4 @@ class PatternMatcher(object, metaclass=PatternMatchingMetaClass):
                     for argname, arg in parameters.items()
                     if arg.default == inspect._empty
                 )
-        elif isinstance(pattern, tuple) and isinstance(expression, tuple):
-            if len(pattern) != len(expression):
-                return False
-            for p, e in zip(pattern, expression):
-                if not self.pattern_match(p, e):
-                    return False
-            else:
-                return True
-        else:
             return pattern == expression

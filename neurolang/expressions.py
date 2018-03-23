@@ -65,7 +65,7 @@ def is_subtype(left, right):
     if right == typing.Any:
         return True
     elif left == typing.Any:
-        return right == typing.Any
+        return right == typing.Any or right == ToBeInferred
     elif left == ToBeInferred:
         return True
     elif hasattr(right, '__origin__') and right.__origin__ is not None:
@@ -134,8 +134,12 @@ def type_validation_value(value, type_, symbol_table=None):
         isinstance(value, Symbol)
     ):
         value = symbol_table[value].value
-    elif isinstance(value, Expression):
-        value = value.value
+
+    if isinstance(value, Expression):
+        value_type, value = get_type_and_value(value)
+
+        if value is ...:
+            return is_subtype(value_type, type_)
 
     if hasattr(type_, '__origin__') and type_.__origin__ is not None:
         if type_.__origin__ == typing.Union:
@@ -193,6 +197,7 @@ def type_validation_value(value, type_, symbol_table=None):
 
 
 class ExpressionMeta(type):
+
     def __new__(cls, *args, **kwargs):
         __no_explicit_type__ = 'type' not in args[2]
         obj = super().__new__(cls, *args, **kwargs)
@@ -212,7 +217,6 @@ class ExpressionMeta(type):
 
     @lru_cache(maxsize=None)
     def __getitem__(cls, type_):
-        print(cls)
         d = dict(cls.__dict__)
         d['type'] = type_
         d['__generic_class__'] = cls
@@ -232,12 +236,39 @@ class ExpressionMeta(type):
             r += '[{}]'.format(c)
         return r
 
+    def __subclasscheck__(cls, other):
+        return (
+            super().__subclasscheck__(other) or
+            (
+                hasattr(other, '__generic_class__') and
+                issubclass(other.__generic_class__, cls)
+            ) or
+            (
+                hasattr(other, '__generic_class__') and
+                hasattr(cls, '__generic_class__') and
+                issubclass(
+                    other.__generic_class__,
+                    cls.__generic_class__
+                ) and
+                is_subtype(other.type, cls.type)
+            )
+        )
+
+    def __instancecheck__(cls, other):
+        return (
+            super().__instancecheck__(other) or
+            issubclass(other.__class__, cls)
+        )
+
 
 class Expression(metaclass=ExpressionMeta):
     super_attributes = WRAPPER_ASSIGNMENTS + ('__signature__', 'mro', 'type')
 
     def __init__(self):
         raise TypeError("Expression can not be instantiated")
+
+    def __getitem__(self, index):
+        return Projection(self, index)
 
     def __call__(self, *args, **kwargs):
         if hasattr(self, '__annotations__'):
@@ -292,23 +323,30 @@ class Symbol(Expression):
 class Constant(Expression):
     def __init__(
         self, value,
-        auto_infer_annotated_functions_type=True
+        auto_infer_type=True
     ):
         self.value = value
+        self.__wrapped__ = None
 
-        if callable(self.value):
+        if self.value is ...:
+            pass
+        elif callable(self.value):
             self.__wrapped__ = value
             for attr in WRAPPER_ASSIGNMENTS:
                 if hasattr(value, attr):
                     setattr(self, attr, getattr(value, attr))
 
-            if (
-                auto_infer_annotated_functions_type and
-                hasattr(value, '__annotations__') and self.type == ToBeInferred
-            ):
-                self.type = typing_callable_from_annotated_function(value)
-        else:
-            self.__wrapped__ = None
+            if (auto_infer_type) and self.type == ToBeInferred:
+                if hasattr(value, '__annotations__'):
+                    self.type = typing_callable_from_annotated_function(value)
+        elif auto_infer_type and self.type == ToBeInferred:
+            if isinstance(self.value, tuple):
+                self.type = typing.Tuple[tuple(
+                    a.type if a is not ... else typing.Any
+                    for a in self.value
+                )]
+            else:
+                self.type = type(value)
 
         if not (
             self.value is ... or
@@ -322,13 +360,24 @@ class Constant(Expression):
     def __eq__(self, other):
         if self.type == ToBeInferred:
             warn('Making a comparison with types needed to be inferred')
-        return (
-            (
-                isinstance(other, Constant) or
-                self.type == ToBeInferred or isinstance(other, self.type)
-            ) and
-            hash(self) == hash(other)
-        )
+
+        if isinstance(other, Expression):
+            types_equal = (
+                is_subtype(self.type, other.type) or
+                is_subtype(other.type, self.type)
+            )
+            if types_equal:
+                if isinstance(other, Constant):
+                    return other.value == self.value
+                else:
+                    return hash(other) == hash(self)
+            else:
+                return False
+        else:
+            return (
+                type_validation_value(other, self.type) and
+                hash(other) == hash(self)
+            )
 
     def __hash__(self):
         return hash(self.value)
@@ -466,15 +515,24 @@ class Statement(Expression):
         self.value = value
 
     def __repr__(self):
+        if self.symbol is ...:
+            name = '...'
+        else:
+            name = self.symbol.name
         return 'Statement{{{}: {} <- {}}}'.format(
-            self.symbol.name, self.type, self.value
+            name, self.type, self.value
         )
 
 
 class Query(Statement):
     def __repr__(self):
+        if self.symbol is ...:
+            name = '...'
+        else:
+            name = self.symbol.name
+
         return 'Query{{{}: {} <- {}}}'.format(
-            self.symbol.name, self.type, self.value
+            name, self.type, self.value
         )
 
 
