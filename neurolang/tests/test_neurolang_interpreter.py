@@ -137,11 +137,14 @@ def test_queries():
     assert nli.symbol_table['twothree'].value.value == {2, 3}
 
 
-@mark.skip(resason="Need to work on the parser-semantics integration")
-def test_error_messafges():
-    nli = nl.NeuroLangIntermediateRepresentationCompiler(
-        category_solvers=[FourIntsSetSolver()],
-    )
+def test_error_messages():
+    class NLC(
+        FourIntsSetSolver,
+        nl.NeuroLangIntermediateRepresentationCompiler
+    ):
+        pass
+
+    nli = NLC()
 
     with raises(nl.NeuroLangException):
         nli.compile(nl.parser("fail is a four_int singleton_set 1"))
