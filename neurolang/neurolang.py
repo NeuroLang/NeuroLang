@@ -138,9 +138,24 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
     def query(self, ast):
         identifier = ast['identifier']
         category = ast['category']
+        link = ast['link']
 
         if category in self.type_name_map:
             category = self.type_name_map[category]
+
+            if (
+                hasattr(category, '__origin__') and
+                category.__origin__ is typing.AbstractSet
+            ):
+                if 'are' not in link:
+                    raise NeuroLangException(
+                        'Plural type queries need to be linked with "are"'
+                    )
+            else:
+                if 'is' not in link:
+                    raise NeuroLangException(
+                        'Singular type queries need to be linked with "are"'
+                    )
 
         value = Query[category](
             identifier, ast['statement']
@@ -411,32 +426,14 @@ class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
 
     @add_match(Query)
     def query(self, expression):
-        self.symbol_table[expression.symbol] = Query[expression.type](
-            expression.symbol, self.walk(expression.value)
+        expression.symbol.change_type(expression.type)
+        value = self.walk(expression.value)
+        value.change_type(expression.type)
+        result = Query[expression.type](
+            expression.symbol, value
         )
-    #    solver = self.category_solvers[expression.type]
-    #    is_plural = solver.plural_type_name == expression.type
-    #
-    #    if is_plural:
-    #        symbol_type = typing.AbstractSet[solver.type]
-    #    else:
-    #        symbol_type = solver.type
-    #
-    #    query_result = solver.walk(
-    #        expression.value,  # plural=is_plural,
-    #        # identifier=expression.symbol
-    #    )
-    #
-    #    value_type, value = get_type_and_value(query_result)
-    #
-    #    if not is_subtype(value_type, symbol_type):
-    #        raise NeuroLangTypeException(
-    #            "%s doesn't have type %s" % (value, symbol_type)
-    #        )
-    #
-    #    result = Query[symbol_type](expression.symbol, query_result)
-    #    self.symbol_table[Symbol[symbol_type](expression.symbol.name)] = result
-    #    return result
+        self.symbol_table[expression.symbol] = result
+        return result
 
     def get_intermediate_representation(self, ast, **kwargs):
         if isinstance(ast, str):

@@ -448,6 +448,16 @@ class Constant(Expression):
             value_str = repr(self.value)
         return 'C{{{}: {}}}'.format(value_str, self.type)
 
+    def change_type(self, type_):
+        self.__class__ = self.__class__[type_]
+        if not (
+            type_validation_value(self.value, self.type)
+        ):
+            raise NeuroLangTypeException(
+                "The value %s does not correspond to the type %s" %
+                (self.value, self.type)
+            )
+
 
 class FunctionApplication(Definition):
     def __init__(
