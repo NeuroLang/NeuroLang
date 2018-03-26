@@ -6,7 +6,6 @@ import logging
 from typing import Tuple
 
 from . import expressions
-from .expressions import ToBeInferred
 
 
 __all__ = ['add_match', 'PatternMatcher']
@@ -75,16 +74,25 @@ class PatternMatcher(object, metaclass=PatternMatchingMetaClass):
     def pattern_match(self, pattern, expression):
         if pattern is ...:
             return True
-        elif type(pattern) == expressions.ExpressionMeta:
-            logging.debug("Match type")
-            return isinstance(expression, pattern)
+        elif isclass(pattern):
+            if issubclass(pattern, expressions.Expression):
+                logging.debug("Match type")
+                return isinstance(expression, pattern)
+            else:
+                raise ValueError(
+                    'Class pattern matching only implemented '
+                    'for Expression subclasses'
+                )
         elif isinstance(pattern, expressions.Expression):
             logging.debug("Match expression instance")
             if not isinstance(expression, pattern.__class__):
                 return False
             elif isclass(pattern.type) and issubclass(pattern.type, Tuple):
                 logging.debug("Match tuple")
-                if isclass(expression.type) and issubclass(expression.type, Tuple):
+                if (
+                    isclass(expression.type) and
+                    issubclass(expression.type, Tuple)
+                ):
                     if (
                         len(pattern.type.__args__) !=
                         len(expression.type.__args__)
