@@ -111,6 +111,16 @@ class PatternMatcher(object, metaclass=PatternMatchingMetaClass):
                         return False
                 else:
                     return True
+        elif isinstance(pattern, tuple) and isinstance(expression, tuple):
+            logging.debug("Match tuples {} vs {}".format(pattern, expression))
+
+            if len(pattern) != len(expression):
+                return False
+            for p, e in zip(pattern, expression):
+                if not self.pattern_match(p, e):
+                    return False
+            else:
+                return True
         else:
             logging.debug("Match other {} vs {}".format(pattern, expression))
             return pattern == expression
