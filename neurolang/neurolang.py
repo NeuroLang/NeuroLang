@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 import typing
 import inspect
+from collections import namedtuple, Iterable, Mapping
 
 import tatsu
 
@@ -116,13 +117,30 @@ grammar_EBNF = r'''
 '''
 
 
+Category = namedtuple('Category', 'type_name type_name_plural type')
+
+
 class NeuroLangIntermediateRepresentation(ASTWalker):
-    def __init__(self):
-        pass
+    def __init__(self, type_name_map=None):
+        if isinstance(type_name_map, Mapping):
+            self.type_name_map = type_name_map
+        elif isinstance(type_name_map, Iterable):
+            self.type_name_map = dict()
+            for c in type_name_map:
+                self.type_name_map[c.type_name] = c.type
+                self.type_name_map[c.type_name_plural] = \
+                    typing.AbstractSet(c.type)
+        elif type_name_map is not None:
+            raise ValueError(
+                'type_name_map should be a map or iterable'
+            )
 
     def query(self, ast):
         identifier = ast['identifier']
         category = ast['category']
+
+        if category in self.type_name_map:
+            category = self.type_name_map[category]
 
         value = Query[category](
             identifier, ast['statement']
@@ -303,45 +321,35 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
 
 class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
     def __init__(
-        self, category_solvers=None, functions=None,
+        self, functions=None, type_name_map=None,
         types=None, symbols=None
     ):
+
         self.symbol_table = TypedSymbolTable()
 
-        self.category_solvers = dict()
-
-        if types is None:
-            types = []
         if functions is None:
             functions = []
+        if type_name_map is None:
+            self.type_name_map = dict()
 
-        if category_solvers is not None:
-            for category_solver in category_solvers:
-                self.category_solvers[
-                    category_solver.type_name
-                ] = category_solver
-                self.category_solvers[
-                    category_solver.type
-                ] = category_solver
+        self.type_name_map.update({'int': int, 'str': str, 'float': float})
 
-                self.category_solvers[
-                    category_solver.plural_type_name
-                ] = category_solver
-                self.category_solvers[
-                    typing.AbstractSet[category_solver.type]
-                ] = category_solver
+        for mixin_class in self.__class__.mro():
+            if (
+                hasattr(mixin_class, 'type') and
+                hasattr(mixin_class, 'type_name')
+            ):
+                self.type_name_map[mixin_class.type_name] = mixin_class.type
 
-                types.append((category_solver.type, category_solver.type_name))
-                types.append((
-                    typing.AbstractSet[category_solver.type],
-                    category_solver.plural_type_name
-                ))
+                if hasattr(mixin_class, 'type_name_plural'):
+                    type_name_plural = mixin_class.type_name_plural
+                else:
+                    type_name_plural = mixin_class.type_name + 's'
 
-        else:
-            category_solvers = dict()
+                self.type_name_map[type_name_plural] = \
+                    typing.AbstractSet[mixin_class.type]
 
-        types += [(int, 'int'), (str, 'str'), (float, 'float')]
-        for type_, type_name in types:
+        for type_name, type_ in self.type_name_map.items():
             for name, member in inspect.getmembers(type_):
                 if not inspect.isfunction(member) or name.startswith('_'):
                     continue
@@ -397,38 +405,46 @@ class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
                     func
                 )
 
-        for solver in self.category_solvers.values():
-            solver.set_symbol_table(self.symbol_table)
+        self.nli = NeuroLangIntermediateRepresentation(
+            type_name_map=self.type_name_map
+        )
 
     @add_match(Query)
     def query(self, expression):
-        solver = self.category_solvers[expression.type]
-        is_plural = solver.plural_type_name == expression.type
-
-        if is_plural:
-            symbol_type = typing.AbstractSet[solver.type]
-        else:
-            symbol_type = solver.type
-
-        query_result = solver.walk(
-            expression.value,  # plural=is_plural,
-            # identifier=expression.symbol
+        self.symbol_table[expression.symbol] = Query[expression.type](
+            expression.symbol, self.walk(expression.value)
         )
+    #    solver = self.category_solvers[expression.type]
+    #    is_plural = solver.plural_type_name == expression.type
+    #
+    #    if is_plural:
+    #        symbol_type = typing.AbstractSet[solver.type]
+    #    else:
+    #        symbol_type = solver.type
+    #
+    #    query_result = solver.walk(
+    #        expression.value,  # plural=is_plural,
+    #        # identifier=expression.symbol
+    #    )
+    #
+    #    value_type, value = get_type_and_value(query_result)
+    #
+    #    if not is_subtype(value_type, symbol_type):
+    #        raise NeuroLangTypeException(
+    #            "%s doesn't have type %s" % (value, symbol_type)
+    #        )
+    #
+    #    result = Query[symbol_type](expression.symbol, query_result)
+    #    self.symbol_table[Symbol[symbol_type](expression.symbol.name)] = result
+    #    return result
 
-        value_type, value = get_type_and_value(query_result)
+    def get_intermediate_representation(self, ast, **kwargs):
+        if isinstance(ast, str):
+            ast = parser(ast, **kwargs)
+        return self.nli.evaluate(ast)
 
-        if not is_subtype(value_type, symbol_type):
-            raise NeuroLangTypeException(
-                "%s doesn't have type %s" % (value, symbol_type)
-            )
-
-        result = Query[symbol_type](expression.symbol, query_result)
-        self.symbol_table[Symbol[symbol_type](expression.symbol.name)] = result
-        return result
-
-    def compile(self, ast):
-        nli = NeuroLangIntermediateRepresentation()
-        return self.walk(nli.evaluate(ast))
+    def compile(self, ast, **kwargs):
+        return self.walk(self.get_intermediate_representation(ast, **kwargs))
 
 
 def parser(code, **kwargs):

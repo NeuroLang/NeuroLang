@@ -1,5 +1,5 @@
-from .solver import SetBasedSolver, FiniteDomain
-from .symbols_and_types import is_subtype, get_type_and_value, Expression
+from .solver import SetBasedSolver, FiniteDomain, add_match
+from .expressions import is_subtype, get_type_and_value, Expression, Predicate, Query
 from typing import Set
 from pprint import pprint
 from io import StringIO
@@ -62,9 +62,10 @@ class SulcusSolver(SetBasedSolver):
     type_name = "sulcus"
     plural_type_name = "sulci"
 
-    def predicate(self, ast):
+    @add_match(Query[Sulcus])
+    def predicate(self, expression):
         argument_type, argument = get_type_and_value(
-            ast['argument'],
+            expression,
             symbol_table=self.symbol_table
         )
 
