@@ -197,6 +197,25 @@ def type_validation_value(value, type_, symbol_table=None):
 
 
 class ExpressionMeta(type):
+    '''
+    Metaclass for expressions. It guarantees a set of properties for every
+    class and instance:
+    * Classes have an attribute `type` which is set through the syntax
+      ClassName[TypeName]. If type is not specified then the `type`
+      attribute defaults to `typing.Any` for the class and
+      `ToBeInferred` for the instance. In this case the `__no_explicit_type__`
+      attribute is set to `True`
+    * Instances have an attribute for every argument in the `__init__`
+      constructor method and it's set by default to the value passed
+      during construction.
+    * Instances have a `_symbols` attribute which defaults to the empty set.
+      In other cases it must contain the set of free variables in the
+      expression.
+    * Constructor arguments can be given a value of `...` this is a
+      wildcard pattern for pattern-matching expressing that any value can go in
+      this parameter. In this case, the class constructor is not executed
+      and the `__is_pattern__` attribute is set to `True`.
+    '''
 
     def __new__(cls, *args, **kwargs):
         __no_explicit_type__ = 'type' not in args[2]
@@ -212,21 +231,21 @@ class ExpressionMeta(type):
                 a is ... or (isinstance(a, tuple) and ... in a)
                 for a in args
             )
-            self.is_pattern = generic_pattern_match
+            self.__is_pattern__ = generic_pattern_match
             self._symbols = set()
 
             if self.__no_explicit_type__:
                 self.type = ToBeInferred
 
-            if not self.is_pattern:
+            parameters = inspect.signature(self.__class__).parameters
+            for parameter, value in zip(parameters.items(), args):
+                argname, arg = parameter
+                if arg.default != inspect._empty:
+                    continue
+                setattr(self, argname, value)
+
+            if not self.__is_pattern__:
                 return orig_init(self, *args, **kwargs)
-            else:
-                parameters = inspect.signature(self.__class__).parameters
-                for parameter, value in zip(parameters.items(), args):
-                    argname, arg = parameter
-                    if arg.default != inspect._empty:
-                        continue
-                    setattr(self, argname, value)
 
         obj.__init__ = new_init
         return obj
@@ -278,7 +297,9 @@ class ExpressionMeta(type):
 
 
 class Expression(metaclass=ExpressionMeta):
-    super_attributes = WRAPPER_ASSIGNMENTS + ('__signature__', 'mro', 'type')
+    __super_attributes__ = WRAPPER_ASSIGNMENTS + (
+        '__signature__', 'mro', 'type', '_symbols'
+    )
 
     def __init__(self):
         raise TypeError("Expression can not be instantiated")
@@ -299,10 +320,10 @@ class Expression(metaclass=ExpressionMeta):
     def __getattr__(self, attr):
         if (
             attr in dir(self) or
-            attr in self.super_attributes or
-            self.is_pattern
+            attr in self.__super_attributes__ or
+            self.__is_pattern__
         ):
-            return getattr(super(), attr)
+            return super().__getattr__(attr)
         else:
             return FunctionApplication(
                 Constant[typing.Callable[[self.type, str], ToBeInferred]](
