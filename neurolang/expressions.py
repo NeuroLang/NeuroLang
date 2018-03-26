@@ -5,6 +5,7 @@ import inspect
 from functools import wraps, WRAPPER_ASSIGNMENTS, lru_cache
 import types
 from warnings import warn
+import logging
 from .exceptions import NeuroLangException
 
 
@@ -101,8 +102,10 @@ def is_subtype(left, right):
                     get_type_args(left), get_type_args(right)
                 )
             )
-        else:
+        elif right.__origin__ == typing.Generic:
             raise ValueError("typing Generic not supported")
+        else:
+            return False
     else:
         if left == int:
             return right in (float, complex, typing.SupportsInt)
@@ -301,7 +304,7 @@ class Expression(metaclass=ExpressionMeta):
         '__signature__', 'mro', 'type', '_symbols'
     )
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         raise TypeError("Expression can not be instantiated")
 
     def __getitem__(self, index):
@@ -325,12 +328,18 @@ class Expression(metaclass=ExpressionMeta):
         ):
             return super().__getattr__(attr)
         else:
-            return FunctionApplication(
-                Constant[typing.Callable[[self.type, str], ToBeInferred]](
-                    getattr,
-                ),
-                args=(self, Constant[str](attr))
-            )
+            logging.debug("Getting wrapped attribute {}".format(
+                attr
+            ))
+            return self.get_wrapped_attribute(attr)
+
+    def get_wrapped_attribute(self, attr):
+        return FunctionApplication(
+            Constant[typing.Callable[[self.type, str], ToBeInferred]](
+                getattr,
+            ),
+            args=(self, Constant[str](attr))
+        )
 
     def change_type(self, type_):
         self.__class__ = self.__class__[type_]
@@ -554,6 +563,9 @@ class Statement(Expression):
     ):
         self.symbol = symbol
         self.value = value
+
+    def reflect(self):
+        return self.value
 
     def __repr__(self):
         if self.symbol is ...:

@@ -2,7 +2,7 @@ from pytest import raises, mark
 
 from .. import neurolang as nl
 from .. import solver
-from typing import Set, Tuple
+from typing import Set, Tuple, AbstractSet
 
 
 def test_assignment_values():
@@ -82,6 +82,16 @@ class FourIntsSetSolver(solver.SetBasedSolver):
     type_name = 'four_int'
     type = FourInts
 
+    @nl.add_match(nl.Query[AbstractSet[FourInts]])
+    @nl.add_match(nl.Query[FourInts])
+    def query(self, expression):
+        value = self.walk(expression.value)
+        expression.symbol.change_type(expression.type)
+        value.change_type(expression.type)
+        res = nl.Query[expression.type](expression.symbol, value)
+        self.symbol_table[res.symbol] = res
+        return res
+
     def predicate_equal_to(self, value: int)->FourInts:
         return FourInts(value)
 
@@ -94,9 +104,13 @@ class FourIntsSetSolver(solver.SetBasedSolver):
 
 
 def test_queries():
-    nli = nl.NeuroLangIntermediateRepresentationCompiler(
-        category_solvers=[FourIntsSetSolver()],
-    )
+    class NLC(
+        FourIntsSetSolver,
+        nl.NeuroLangIntermediateRepresentationCompiler
+    ):
+        pass
+
+    nli = NLC()
 
     script = '''
     one is a four_int equal_to 1
