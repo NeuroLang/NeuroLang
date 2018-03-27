@@ -32,7 +32,7 @@ right_distributy_command = '''
 
 
 def check_command(command, nli):
-    nli.evaluate(nl.parser(command))
+    nli.compile(nl.parser(command))
     assert nli.symbol_table['a'].value == nli.symbol_table['b'].value
 
 
@@ -84,11 +84,13 @@ def test_algebraic_structure_of_naturals():
     elements = (1, 2, 3)
     null_element = 0
     symbols = {
-        'element{}'.format(i + 1): nl.TypedSymbol(int, e)
+        'element{}'.format(i + 1): nl.Constant[int](e)
         for i, e in enumerate(elements)
     }
-    symbols['null'] = nl.TypedSymbol(int, null_element)
-    nli = nl.NeuroLangInterpreter(symbols=symbols, types=[(int, 'dummy')])
+    symbols['null'] = nl.Constant[int](null_element)
+    nli = nl.NeuroLangIntermediateRepresentationCompiler(
+        symbols=symbols, types=[(int, 'dummy')]
+    )
 
     check_algebraic_structure_is_a_ring(op_add='+', op_inv_add='-',
                                         op_mul='*', op_inv_mul='/',
