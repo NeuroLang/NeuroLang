@@ -62,23 +62,22 @@ def test_aabbs_intersect():
 def test_expand_aabb_point():
     period_bound = Boundary((0, 0), (10, 10))
     box1 = BoundedAABB((0, 0), (5, 5), period_bound)
-    assert box1.expand((7, 7), period_bound) == BoundedAABB((0, 0), (7, 7), period_bound)
-
+    assert box1.expand((7, 7)) == BoundedAABB((0, 0), (7, 7), period_bound)
 
 def test_expand_aabb_point_outbound():
     period_bound = Boundary((0, 0), (10, 10))
     box1 = BoundedAABB((9, 9), (10, 10), period_bound)
-    assert box1.expand((14, 9), period_bound) == BoundedAABB((9, 9), (4, 9), period_bound)
+    assert box1.expand((14, 9)) == BoundedAABB((9, 9), (4, 9), period_bound)
 
 def test_expand_aabbs_inbound():
     period_bound = Boundary((0, 0), (10, 10))
     box1 = BoundedAABB((0, 0), (5, 5), period_bound)
     box2 = BoundedAABB((2, 2), (7, 7), period_bound)
-    assert box1.expand(box2, period_bound) == BoundedAABB((0, 0), (7, 7), period_bound)
+    assert box1.expand(box2) == BoundedAABB((0, 0), (7, 7), period_bound)
 
 
 def test_expand_aabbs_outside_bound():
     period_bound = Boundary((0, 0), (10, 10))
     box1 = BoundedAABB((0, 0), (1, 1), period_bound)
     box2 = BoundedAABB((9, 0), (10, 1), period_bound)
-    assert box1.expand(box2, period_bound) == BoundedAABB((9, 0), (1, 1), period_bound)
+    assert box1.expand(box2) == BoundedAABB((9, 0), (1, 1), period_bound)

@@ -1,14 +1,24 @@
 from typing import Union, Tuple, List, Set, Optional
 from .brain_tree import AABB, Tree
-from multimethod import multimethod
 import numpy as np
+from multimethod import multimethod
+from functools import singledispatch, update_wrapper
 
+
+def methdispatch(func):
+    dispatcher = singledispatch(func)
+    def wrapper(*args, **kw):
+        return dispatcher.dispatch(args[1].__class__)(*args, **kw)
+    wrapper.register = dispatcher.register
+    update_wrapper(wrapper, func)
+    return wrapper
 
 
 class BoundedAABB(AABB):
 
     def __init__(self, lb: tuple, ub: tuple, bounded_area: 'Boundary') -> None:
         super().__init__(lb, ub)
+        self._bound_area = bounded_area
 
     def __getitem__(self, i):
             return self._lb if i == 0 else self._ub
@@ -24,35 +34,44 @@ class BoundedAABB(AABB):
     #     self._lb = np.asanyarray([center[i] - rng[i]/2 for i in range(len(self._lb))])
     #     self._ub = np.asanyarray([center[i] + rng[i]/2 for i in range(len(self._lb))])
 
-    @multimethod(object, object)
-    def expand(self, another_box: 'BoundedAABB', bound_area: 'Boundary'):
-        '''precondition: self and antoher_box
-            must have the same dim
-        '''
-        
+    # def methdispatch(func):
+    #     dispatcher = singledispatch(func)
+    #
+    #     def wrapper(*args, **kw):
+    #         return dispatcher.dispatch(args[2].__class__)(*args, **kw)
+    #
+    #     wrapper.register = dispatcher.register
+    #     update_wrapper(wrapper, func)
+    #     return wrapper
+
+    @methdispatch
+    def expand(self, arg):
+        print(arg)
+
+    @expand.register(tuple)
+    def _(self, point: tuple):
         center = np.array([self._lb[i] + self.range()[i] / 2 for i in range(len(self._lb))])
-        box2_center = np.array([another_box[0][i] + another_box.range()[i] / 2 for i in range(len(another_box[0]))])
-
-        dc = np.array(bound_area.adjust_direction(tuple(box2_center - center)))
-        l1, u1 = tuple(self._lb), tuple(self._ub)
-        l2, u2 = tuple((center + dc) - another_box.range()/2), tuple((center + dc) + another_box.range()/2)
-
-        l, u = bound_area.adjust_position(np.array(min(l1, l2))), bound_area.adjust_position(np.array(max(u1, u2)))
-
-        return BoundedAABB(l, u, bound_area)
-
-    @multimethod(object, tuple)
-    def expand(self, point: tuple, bound_area: 'Boundary'):
-        center = np.array([self._lb[i] + self.range()[i] / 2 for i in range(len(self._lb))])
-        dc = np.array(bound_area.adjust_direction(tuple(np.array(point) - center)))
+        dc = np.array(self._bound_area.adjust_direction(tuple(np.array(point) - center)))
         p = center + dc
-        l = bound_area.adjust_position(np.array(min(tuple(self._lb), tuple(p))))
-        u = bound_area.adjust_position(np.array(max(tuple(self._ub), tuple(p))))
+        l = self._bound_area.adjust_position(np.array(min(tuple(self._lb), tuple(p))))
+        u = self._bound_area.adjust_position(np.array(max(tuple(self._ub), tuple(p))))
 
-        return BoundedAABB(l, u, bound_area)
+        return BoundedAABB(l, u, self._bound_area)
 
     def adjust_to_bound(self, bound_area: 'Boundary') -> None:
         self._lb, self._ub = bound_area.adjust_position(np.array(self._lb)), bound_area.adjust_position(np.array(self._ub))
+
+    @expand.register(object)
+    def _(self, another_box: 'BoundedAABB'):
+        center = np.array([self._lb[i] + self.range()[i] / 2 for i in range(len(self._lb))])
+        box2_center = np.array([another_box[0][i] + another_box.range()[i] / 2 for i in range(len(another_box[0]))])
+
+        dc = np.array(self._bound_area.adjust_direction(tuple(box2_center - center)))
+        l1, u1 = tuple(self._lb), tuple(self._ub)
+        l2, u2 = tuple((center + dc) - another_box.range()/2), tuple((center + dc) + another_box.range()/2)
+
+        l, u = self._bound_area.adjust_position(np.array(min(l1, l2))), self._bound_area.adjust_position(np.array(max(u1, u2)))
+        return BoundedAABB(l, u, self._bound_area)
 
     @multimethod(object, object)
     def intersects(self, other: 'BoundedAABB', bound_area: 'Boundary') -> bool:
