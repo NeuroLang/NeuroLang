@@ -2,7 +2,7 @@ import logging
 import typing
 
 from .expressions import (
-    Expression, FunctionApplication, Statement, Query, Projection, Constant,
+    FunctionApplication, Statement, Query, Projection, Constant,
     Symbol,
     get_type_and_value, ToBeInferred, is_subtype, NeuroLangTypeException
 )
@@ -192,66 +192,3 @@ class ExpressionBasicEvaluator(ExpressionWalker):
             return self.walk(result)
         else:
             return expression
-
-
-class ExpressionWalkerGraph(object):
-    @staticmethod
-    def get_class_name(expr):
-        return expr.__class__.__name__.lower()
-
-    def walk(self, expression):
-        logging.debug("evaluating {}".format(expression))
-        if isinstance(expression, list) or isinstance(expression, tuple):
-            result = [
-                self.walk(e)
-                for e in expression
-            ]
-            if isinstance(expression, tuple):
-                result = tuple(result)
-            return result
-        else:
-            if not isinstance(expression, Expression):
-                raise ValueError('{} is not an expression'.format(expression))
-            class_name = self.get_class_name(expression)
-            if hasattr(self, class_name):
-                return getattr(self, class_name)(expression)
-            else:
-                logging.debug("\tevaluating with default method")
-                return self._default(expression)
-
-    def expression(self, expression):
-        return Expression[expression.type](
-            self.walk(expression.value)
-        )
-
-    def definition(self, expression):
-        return Statement[expression.type](
-            expression.symbol, self.walk(expression.value)
-        )
-
-    def function(self, expression):
-        return FunctionApplication[expression.type](
-            self.walk(expression.functor),
-            args=[self.walk(e) for e in expression.args],
-            kwargs={k: self.walk(v) for k, v in expression.kwargs}
-        )
-
-    def query(self, expression):
-        return Query[expression.type](
-            expression.symbol,
-            self.walk(expression.value)
-        )
-
-    def _default(self, expression):
-        return expression
-
-
-class ExpressionReplacement(ExpressionWalker):
-    def __init__(self, replacements):
-        self.replacements = replacements
-
-    def walk(self, expression):
-        if isinstance(expression, list):
-            return super().walk(expression)
-        else:
-            return self.replacements.get(expression, super().walk(expression))

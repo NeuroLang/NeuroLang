@@ -18,13 +18,13 @@ from .symbols_and_types import (
 
 from .expression_walker import (
     add_match,
-    ExpressionBasicEvaluator, ExpressionReplacement
+    ExpressionBasicEvaluator
 )
 
 
 __all__ = [
     'NeuroLangIntermediateRepresentation',
-    'ExpressionReplacement', 'NeuroLangException',
+    'NeuroLangException',
     'NeuroLangIntermediateRepresentationCompiler',
     'grammar_EBNF', 'parser',
     'Constant', 'Symbol', 'FunctionApplication', 'Statement', 'Query'
