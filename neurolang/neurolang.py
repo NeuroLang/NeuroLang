@@ -16,9 +16,11 @@ from .symbols_and_types import (
     get_type_and_value
 )
 
+
 from .expression_walker import (
     add_match,
-    ExpressionBasicEvaluator
+    ExpressionBasicEvaluator,
+    PatternMatcher
 )
 
 
@@ -26,6 +28,7 @@ __all__ = [
     'NeuroLangIntermediateRepresentation',
     'NeuroLangException',
     'NeuroLangIntermediateRepresentationCompiler',
+    'PatternMatcher',
     'grammar_EBNF', 'parser',
     'Constant', 'Symbol', 'FunctionApplication', 'Statement', 'Query'
 ]
@@ -186,7 +189,7 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
         )
 
     def predicate(self, ast):
-        return Predicate(ast['identifier'], args=[ast['argument']])
+        return Predicate(ast['identifier'], args=(ast['argument'],))
 
     def value(self, ast):
         return ast['value']
@@ -423,17 +426,6 @@ class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
         self.nli = NeuroLangIntermediateRepresentation(
             type_name_map=self.type_name_map
         )
-
-    @add_match(Query)
-    def query(self, expression):
-        expression.symbol.change_type(expression.type)
-        value = self.walk(expression.value)
-        value.change_type(expression.type)
-        result = Query[expression.type](
-            expression.symbol, value
-        )
-        self.symbol_table[expression.symbol] = result
-        return result
 
     def get_intermediate_representation(self, ast, **kwargs):
         if isinstance(ast, str):
