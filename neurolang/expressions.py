@@ -326,7 +326,7 @@ class Expression(metaclass=ExpressionMeta):
             attr in self.__super_attributes__ or
             self.__is_pattern__
         ):
-            return super().__getattr__(attr)
+            return object.__getattribute__(self, attr)
         else:
             logging.debug("Getting wrapped attribute {}".format(
                 attr
@@ -490,6 +490,9 @@ class FunctionApplication(Definition):
 
         if self.args is None:
             self.args = tuple()
+        elif not isinstance(self.args, (tuple, list)):
+            raise ValueError('args parameter must be a tuple or a list')
+
         for arg in chain(self.args, self.kwargs.values()):
             if isinstance(arg, Symbol):
                 self._symbols.add(arg)
@@ -556,14 +559,19 @@ class Projection(Definition):
 class Predicate(FunctionApplication):
     def __repr__(self):
         r = 'P{{{}: {}}}'.format(self.functor, self.type)
-        if self.args is not None:
+        if self.args is ...:
+            r += '(...)'
+        elif self.args is not None:
             r += (
                 '(' +
-                ', '.join(repr(arg) for arg in self.args) +
-                ', '.join(
-                    repr(k) + '=' + repr(v)
-                    for k, v in self.kwargs.items()
-                ) + ')')
+                ', '.join(repr(arg) for arg in self.args)
+            )
+        if hasattr(self, 'kwargs') and self.kwargs is not None:
+            r += ', '.join(
+                repr(k) + '=' + repr(v)
+                for k, v in self.kwargs.items()
+            )
+        r += ')'
         return r
 
 
@@ -597,6 +605,11 @@ class Query(Statement):
         return 'Query{{{}: {} <- {}}}'.format(
             name, self.type, self.value
         )
+
+
+binary_opeations = (
+    op.add, op.sub, op.mul
+)
 
 
 def op_bind(op):

@@ -3,7 +3,7 @@
 Welcome to neurolang's documentation!
 ====================================
 
-`Shablona` is a template for a small scientific Python project. 
+`NeuroLang`
 
 To see how to use it, please refer to the `README file 
 <https://github.com/uwescience/neurolang/blob/master/README.md>`_ in the Github repository.
