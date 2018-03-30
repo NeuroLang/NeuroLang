@@ -10,8 +10,11 @@ Classes
 .. autosummary::
    :template: class.rst
    :toctree: gen_api
-
-   Model
+  
+   PatternMatcher
+   Expression
+   Constant
+   Definition
 
 
 Functions
@@ -21,6 +24,5 @@ Functions
    :template: function.rst
    :toctree: gen_api
 
-   transform_data
-   cumgauss
-   opt_err_func
+   add_match
+

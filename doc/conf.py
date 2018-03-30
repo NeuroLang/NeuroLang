@@ -18,7 +18,7 @@ import os
 
 # General information about the project.
 project = 'neurolang'
-copyright = '2015, Ariel Rokem'
+copyright = '2015, Demian Wassermann'
 
 currentdir = os.path.abspath(os.path.dirname(__file__))
 ver_file = os.path.join(currentdir, '..', project, 'version.py')
@@ -55,7 +55,8 @@ extensions = ['sphinx.ext.autodoc',
               'math_dollar',  # has to go before numpydoc
               'numpydoc',
               'github',
-              'sphinx_gallery.gen_gallery']
+              'sphinx_gallery.gen_gallery'
+              ]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -237,7 +238,7 @@ latex_elements = {
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
   ('index', 'neurolang.tex', 'neurolang Documentation',
-   'Ariel Rokem', 'manual'),
+   'Demian Wassermann', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -267,7 +268,7 @@ latex_documents = [
 # (source start file, name, description, authors, manual section).
 man_pages = [
     ('index', 'neurolang', 'neurolang Documentation',
-     ['Ariel Rokem'], 1)
+     ['Demian Wassermann'], 1)
 ]
 
 # If true, show URL addresses after external links.
@@ -281,7 +282,7 @@ man_pages = [
 #  dir menu entry, description, category)
 texinfo_documents = [
   ('index', 'neurolang', 'neurolang Documentation',
-   'Ariel Rokem', 'neurolang', 'One line description of project.',
+   'Demian Wassermann', 'neurolang', 'One line description of project.',
    'Miscellaneous'),
 ]
 

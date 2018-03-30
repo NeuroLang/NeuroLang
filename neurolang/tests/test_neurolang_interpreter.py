@@ -3,6 +3,7 @@ from pytest import raises, mark
 from .. import neurolang as nl
 from .. import solver
 from typing import Set, Tuple, AbstractSet
+import operator as op
 
 
 def test_assignment_values():
@@ -91,6 +92,8 @@ class FourIntsSetSolver(solver.SetBasedSolver):
         res = nl.Query[expression.type](expression.symbol, value)
         self.symbol_table[res.symbol] = res
         return res
+
+    #@nl.add_match(nl.FunctionApplication(op
 
     def predicate_equal_to(self, value: int)->FourInts:
         return FourInts(value)
