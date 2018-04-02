@@ -2,7 +2,39 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
-from ..perior_tree import BoundedAABB, Boundary
+from ..perior_tree import BoundedAABB, Boundary, Tree
+
+def _generate_random_box(x_bounds, y_bounds, boundry, size_bounds):
+    lower_bound = np.array([np.random.uniform(*b) for b in (x_bounds, y_bounds)])
+    upper_bound = lower_bound + np.random.uniform(*size_bounds, size=2)
+    return BoundedAABB(lower_bound, upper_bound, boundry)
+
+
+def test_tiles_array():
+    period_bound = Boundary((0, 0), (10, 10))
+    box1 = BoundedAABB((3, 3), (6, 6), period_bound)
+    ct = box1.cardinal_tiles()
+    assert ct[0, 8] == BoundedAABB((6, 0), (9, 3), period_bound)
+
+def test_create_dir_matrix():
+    period_bound = Boundary((0, 0), (10, 10))
+    box1 = BoundedAABB((3, 3), (6, 6), period_bound)
+    box2 = BoundedAABB((8, 8), (9, 9), period_bound)
+    m = box1.direction_matrix(box2)
+    assert m[0, 2] == 1
+    box2 = BoundedAABB((1, 1), (2, 2), period_bound)
+    m = box1.direction_matrix(box2)
+    assert m[2, 0] == 1
+    box2 = BoundedAABB((5, 5), (9.5, 9.5), period_bound)
+    m = box1.direction_matrix(box2)
+    assert np.all([m[0,1], m[0,2], m[1,1], m[1,2]]) == 1
+    box2 = BoundedAABB((9.2, 9.2), (9.5, 9.5), period_bound)
+    m = box1.direction_matrix(box2)
+    assert np.all(m) == 0
+    m = box1.direction_matrix(box1)
+    assert m[1, 1] == 1
+    m[1, 1] = 0
+    assert np.all(m) == 0
 
 def test_point_adjust_position():
     period_bound = Boundary((0, 0), (10, 10))
@@ -26,10 +58,10 @@ def test_vector_adjust_direction():
     # plt.show()
 
 
-def test_aabb_out_of_bound():
+def test_adjust_aabb_out_of_bound():
     period_bound = Boundary((0, 0), (10, 10))
     box1 = BoundedAABB((-3, -3), (-1,-1), period_bound)
-    box1.adjust_to_bound(period_bound)
+    box1.adjust_to_bound()
     assert box1 == BoundedAABB((7, 7), (9, 9), period_bound)
 
     # fig, ax = plt.subplots()
@@ -41,7 +73,7 @@ def test_aabbs_union_in_bound():
     period_bound = Boundary((0, 0), (10, 10))
     box1 = BoundedAABB((1, 1), (3, 3), period_bound)
     box2 = BoundedAABB((5, 6), (6, 8), period_bound)
-    assert box1.union(box2) == BoundedAABB((1, 1), (6, 8), period_bound)
+    assert box1.expand(box2) == BoundedAABB((1, 1), (6, 8), period_bound)
 
 
     # #Todo: refa ploting
@@ -51,13 +83,41 @@ def test_aabbs_union_in_bound():
     # ax.axis([0, 10, 0, 10])
     # plt.show()
 
+def test_contains_aabbs():
+    period_bound = Boundary((0, 0), (10, 10))
+    box1 = BoundedAABB((1, 1), (3, 3), period_bound)
+    box2 = BoundedAABB((0, 0), (2,2), period_bound)
+    assert not box1.contains(box2)
+
+    box1 = BoundedAABB((1, 1), (3, 3), period_bound)
+    box2 = BoundedAABB((1.5, 1.5), (2,2), period_bound)
+    assert box1.contains(box2)
+
+    box1 = BoundedAABB((1, 1), (3, 3), period_bound)
+    box2 = BoundedAABB((1, 1), (3, 3), period_bound)
+    assert box1.contains(box2)
+
+    box1 = BoundedAABB((-10, -10), (0, 0), period_bound)
+    box2 = BoundedAABB((1, 1), (3, 3), period_bound)
+    assert box1.contains(box2)
+
+
 def test_aabbs_intersect():
     period_bound = Boundary((0, 0), (10, 10))
     box1 = BoundedAABB((1, 1), (3, 3), period_bound)
     box2 = BoundedAABB((2, 2), (4, 4), period_bound)
-    assert box1.intersects(box1, period_bound)
-    assert box1.intersects(box2, period_bound)
-    assert box2.intersects(box1, period_bound)
+    assert box1.intersects(box1)
+    assert box1.intersects(box2)
+    assert box2.intersects(box1)
+
+    box1 = BoundedAABB((1, 1), (2, 2), period_bound)
+    box2 = BoundedAABB((3, 3), (4, 4), period_bound)
+    assert not box1.intersects(box2)
+
+    box1 = BoundedAABB((-2, -2), (0, 0), period_bound)
+    box2 = BoundedAABB((9, 9), (10, 10), period_bound)
+    assert box1.intersects(box2)
+
 
 def test_expand_aabb_point():
     period_bound = Boundary((0, 0), (10, 10))
@@ -81,3 +141,43 @@ def test_expand_aabbs_outside_bound():
     box1 = BoundedAABB((0, 0), (1, 1), period_bound)
     box2 = BoundedAABB((9, 0), (10, 1), period_bound)
     assert box1.expand(box2) == BoundedAABB((9, 0), (1, 1), period_bound)
+
+
+def test_boundry_eq():
+    period_bound = Boundary((0, 0), (10, 10))
+    box1 = BoundedAABB((0, 0), (5, 5), period_bound)
+    box2 = BoundedAABB((0, 0), (5, 5), period_bound)
+    assert box1 == box2
+
+
+def test_tree_construction():
+    tree = Tree()
+    assert tree.root is None
+
+
+def test_tree_add():
+    period_bound = Boundary((0, 0), (10, 10))
+    tree = Tree()
+    box1 = BoundedAABB((0, 0), (1, 1), period_bound)
+    box2 = BoundedAABB((0.5, 0.5), (2, 2), period_bound)
+    tree.add(box1)
+    assert tree.root is not None
+    tree.add(box2)
+    assert tree.root.box == box1.expand(box2)
+    assert tree.root.left.box == box1
+    assert tree.root.right.box == box2
+
+    for _ in range(100):
+        tree.add(_generate_random_box((-2, -1), (0, 1), period_bound, (0.2, 0.7)))
+        tree.add(_generate_random_box((1, 2), (0, 1), period_bound, (0.2, 0.7)))
+
+    print(tree.region_boxes)
+
+def test_tree_query_regions_contained_in_box():
+    period_bound = Boundary((0, 0), (10, 10))
+    tree = Tree()
+    tree.add(BoundedAABB((2, 2), (3, 3), period_bound), region_ids={1})
+    box = BoundedAABB((1, 1), (4, 4), period_bound)
+    assert tree.query_regions_contained_in_box(box) == {1}
+    box = BoundedAABB((2.5, 2.5), (4, 4), period_bound)
+    assert tree.query_regions_contained_in_box(box) == set()

@@ -42,14 +42,6 @@ def test_aabb_union():
     box2 = AABB((2, 2, 2), (3, 3, 3))
     assert box1.union(box2) == AABB((0, 0, 0), (3, 3, 3))
 
-
-def test_aabb_intersection():
-    box1 = AABB((0, 0, 0), (1, 1, 1))
-    assert box1.intersection(box1) == box1
-    box2 = AABB((0.5, 0.5, 0.5), (2, 2, 2))
-    assert box1.intersection(box2) == AABB((0.5, 0.5, 0.5), (1, 1, 1))
-
-
 def test_tree_construction():
     tree = Tree()
     assert tree.root is None
