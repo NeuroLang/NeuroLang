@@ -18,10 +18,6 @@ class AABB:
     def volume(self) -> float:
         return (self._ub - self._lb).prod()
 
-    def intersection(self, other: 'AABB') -> 'AABB':
-        return AABB(np.maximum(self._lb, other._lb),
-                    np.minimum(self._ub, other._ub))
-
     def union(self, other: 'AABB') -> 'AABB':
         return AABB(np.minimum(self._lb, other._lb),
                     np.maximum(self._ub, other._ub))
@@ -32,10 +28,6 @@ class AABB:
     def overlaps(self, other: 'AABB') -> bool:
         return ((other._ub > self._lb).sum() +
                 (other._lb < self._ub).sum()) == 6
-
-    def fatten(self) -> None:
-        self._lb *= 0.95
-        self._ub *= 1.05
 
     def __eq__(self, other) -> bool:
         return np.all(self._lb == other._lb) and np.all(self._ub == other._ub)
