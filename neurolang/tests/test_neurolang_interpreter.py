@@ -1,9 +1,8 @@
-from pytest import raises, mark
+from pytest import raises
 
 from .. import neurolang as nl
 from .. import solver
-from typing import Set, Tuple, AbstractSet
-import operator as op
+from typing import Tuple, AbstractSet
 
 
 def test_assignment_values():
@@ -83,26 +82,12 @@ class FourIntsSetSolver(solver.SetBasedSolver):
     type_name = 'four_int'
     type = FourInts
 
-    @nl.add_match(nl.Query[AbstractSet[FourInts]])
-    @nl.add_match(nl.Query[FourInts])
-    def query(self, expression):
-        value = self.walk(expression.value)
-        expression.symbol.change_type(expression.type)
-        value.change_type(expression.type)
-        res = nl.Query[expression.type](expression.symbol, value)
-        self.symbol_table[res.symbol] = res
-        return res
-
-    #@nl.add_match(nl.FunctionApplication(op
-
     def predicate_equal_to(self, value: int)->FourInts:
-        return FourInts(value)
+        return nl.Constant(FourInts(value))
 
-    def predicate_singleton_set(self, value: int)->Set[FourInts]:
+    def predicate_singleton_set(self, value: int)->AbstractSet[FourInts]:
         return solver.FiniteDomainSet(
-            [FourInts(value)],
-            type_=FourInts,
-            typed_symbol_table=self.symbol_table
+            [nl.Constant(FourInts(value))],
         )
 
 
@@ -129,15 +114,19 @@ def test_queries():
     ast = nl.parser(script)
     nli.compile(ast)
 
-    assert nli.symbol_table['one'].value.value == 1
-    assert nli.symbol_table['one'].value.type == FourInts
-    assert nli.symbol_table['two'].value.value == 2
-    assert nli.symbol_table['three'].value.value == 3
-    assert nli.symbol_table['oneset'].value.value == {1}
-    assert nli.symbol_table['oneset_'].value.value == {1}
-    assert nli.symbol_table['onetwo'].value.value == {1, 2}
-    assert nli.symbol_table['twoset'].value.value == {2}
-    assert nli.symbol_table['twothree'].value.value == {2, 3}
+    assert nli.symbol_table['one'].value == 1
+    assert nli.symbol_table['one'].type == FourInts
+    assert nli.symbol_table['two'].value == 2
+    assert nli.symbol_table['three'].value == 3
+    assert nli.symbol_table['one'] in nli.symbol_table['oneset']
+    assert nli.symbol_table['oneset_'].value \
+        == frozenset((nli.symbol_table['one'],))
+    assert nli.symbol_table['onetwo'].value \
+        == frozenset((nli.symbol_table['one'], nli.symbol_table['two']))
+    assert nli.symbol_table['twoset'].value \
+        == frozenset((nli.symbol_table['two'],))
+    assert nli.symbol_table['twothree'].value \
+        == frozenset((nli.symbol_table['two'], nli.symbol_table['three']))
 
 
 def test_error_messages():
@@ -150,10 +139,10 @@ def test_error_messages():
     nli = NLC()
 
     with raises(nl.NeuroLangException):
-        nli.compile(nl.parser("fail is a four_int singleton_set 1"))
+        nli.compile("fail is a four_int singleton_set 1")
 
     with raises(nl.NeuroLangException):
-        nli.compile(nl.parser("fail are four_int singleton_set 1"))
+        nli.compile("fail are four_int singleton_set 1")
 
     with raises(nl.NeuroLangException):
-        nli.compile(nl.parser("fail is a four_ints singleton_set 1"))
+        nli.compile("fail is a four_ints singleton_set 1")

@@ -126,6 +126,12 @@ def unify_types(t1, t2):
         return t2
     elif is_subtype(t2, t1):
         return t1
+    else:
+        raise NeuroLangTypeException(
+            "The types {} and {} can't be unified".format(
+                t1, t2
+            )
+        )
 
 
 def type_validation_value(value, type_, symbol_table=None):
@@ -199,7 +205,62 @@ def type_validation_value(value, type_, symbol_table=None):
         )
 
 
-class ExpressionMeta(type):
+class ParametricTypeClassMeta(type):
+    def __new__(cls, *args, **kwargs):
+        __no_explicit_type__ = 'type' not in args[2]
+        obj = super().__new__(cls, *args, **kwargs)
+        obj.__no_explicit_type__ = __no_explicit_type__
+        if obj.__no_explicit_type__:
+            obj.type = typing.Any
+        return obj
+
+    @lru_cache(maxsize=None)
+    def __getitem__(cls, type_):
+        d = dict(cls.__dict__)
+        d['type'] = type_
+        d['__generic_class__'] = cls
+        d['__no_explicit_type__'] = False
+        return cls.__class__(
+            cls.__name__, cls.__bases__,
+            d
+        )
+
+    def __repr__(cls):
+        r = cls.__name__
+        if hasattr(cls, 'type'):
+            if isinstance(cls.type, type):
+                c = cls.type.__name__
+            else:
+                c = repr(cls.type)
+            r += '[{}]'.format(c)
+        return r
+
+    def __subclasscheck__(cls, other):
+        return (
+            super().__subclasscheck__(other) or
+            (
+                hasattr(other, '__generic_class__') and
+                issubclass(other.__generic_class__, cls)
+            ) or
+            (
+                hasattr(other, '__generic_class__') and
+                hasattr(cls, '__generic_class__') and
+                issubclass(
+                    other.__generic_class__,
+                    cls.__generic_class__
+                ) and
+                is_subtype(other.type, cls.type)
+            )
+        )
+
+    def __instancecheck__(cls, other):
+        return (
+            super().__instancecheck__(other) or
+            issubclass(other.__class__, cls)
+        )
+
+
+class ExpressionMeta(ParametricTypeClassMeta):
     '''
     Metaclass for expressions. It guarantees a set of properties for every
     class and instance:
@@ -253,51 +314,6 @@ class ExpressionMeta(type):
         obj.__init__ = new_init
         return obj
 
-    @lru_cache(maxsize=None)
-    def __getitem__(cls, type_):
-        d = dict(cls.__dict__)
-        d['type'] = type_
-        d['__generic_class__'] = cls
-        d['__no_explicit_type__'] = False
-        return cls.__class__(
-            cls.__name__, cls.__bases__,
-            d
-        )
-
-    def __repr__(cls):
-        r = cls.__name__
-        if hasattr(cls, 'type'):
-            if isinstance(cls.type, type):
-                c = cls.type.__name__
-            else:
-                c = repr(cls.type)
-            r += '[{}]'.format(c)
-        return r
-
-    def __subclasscheck__(cls, other):
-        return (
-            super().__subclasscheck__(other) or
-            (
-                hasattr(other, '__generic_class__') and
-                issubclass(other.__generic_class__, cls)
-            ) or
-            (
-                hasattr(other, '__generic_class__') and
-                hasattr(cls, '__generic_class__') and
-                issubclass(
-                    other.__generic_class__,
-                    cls.__generic_class__
-                ) and
-                is_subtype(other.type, cls.type)
-            )
-        )
-
-    def __instancecheck__(cls, other):
-        return (
-            super().__instancecheck__(other) or
-            issubclass(other.__class__, cls)
-        )
-
 
 class Expression(metaclass=ExpressionMeta):
     __super_attributes__ = WRAPPER_ASSIGNMENTS + (
@@ -345,6 +361,8 @@ class Expression(metaclass=ExpressionMeta):
         self.__class__ = self.__class__[type_]
 
     def cast(self, type_):
+        if type_ == self.type:
+            return self
         parameters = inspect.signature(self.__class__).parameters
         args = (
             getattr(self, argname)
