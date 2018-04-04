@@ -2,6 +2,7 @@ from __future__ import absolute_import, division, print_function
 import typing
 import inspect
 from collections import namedtuple, Iterable, Mapping
+import logging
 
 import tatsu
 
@@ -29,7 +30,7 @@ __all__ = [
     'NeuroLangException',
     'NeuroLangIntermediateRepresentationCompiler',
     'PatternMatcher',
-    'grammar_EBNF', 'parser',
+    'grammar_EBNF', 'parser', 'add_match',
     'Constant', 'Symbol', 'FunctionApplication', 'Statement', 'Query'
 ]
 
@@ -159,11 +160,17 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
                     raise NeuroLangException(
                         'Singular type queries need to be linked with "are"'
                     )
+        identifier = identifier.cast(category)
+        value = ast['statement'].cast(category)
 
-        value = Query[category](
-            identifier, ast['statement']
+        logging.debug('Evaluating query {} {} {}'.format(
+            identifier, link, value
+        ))
+
+        result = Query[category](
+            identifier, value
         )
-        return value
+        return result
 
     def assignment(self, ast):
         identifier = ast['identifier']

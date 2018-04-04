@@ -4,7 +4,8 @@ import typing
 from .expressions import (
     FunctionApplication, Statement, Query, Projection, Constant,
     Symbol,
-    get_type_and_value, ToBeInferred, is_subtype, NeuroLangTypeException
+    get_type_and_value, ToBeInferred, is_subtype, NeuroLangTypeException,
+    unify_types
 )
 
 from .expression_pattern_matching import add_match, PatternMatcher
@@ -70,26 +71,35 @@ class ExpressionBasicEvaluator(ExpressionWalker):
             else:
                 raise ValueError('{} not in symbol table'.format(expression))
 
-    @add_match(Statement)
-    def statement(self, expression):
-        value = self.walk(expression.value)
-        self.symbol_table[expression.symbol] = value
-        if value is expression.value:
-            return expression
-        else:
-            return self.walk(
-                Statement[expression.type](expression.symbol, value)
-            )
-
     @add_match(Query)
     def query(self, expression):
         value = self.walk(expression.value)
-        self.symbol_table[expression.symbol] = value
+        return_type = unify_types(expression.type, value.type)
+        value.change_type(return_type)
+        expression.symbol.change_type(return_type)
         if value is expression.value:
+            if isinstance(value, Constant):
+                self.symbol_table[expression.symbol] = value
+            else:
+                self.symbol_table[expression.symbol] = expression
             return expression
         else:
             return self.walk(
                 Query[expression.type](expression.symbol, value)
+            )
+
+    @add_match(Statement)
+    def statement(self, expression):
+        value = self.walk(expression.value)
+        return_type = unify_types(expression.type, value.type)
+        value.change_type(return_type)
+        expression.symbol.change_type(return_type)
+        if value is expression.value:
+            self.symbol_table[expression.symbol] = value
+            return expression
+        else:
+            return self.walk(
+                Statement[expression.type](expression.symbol, value)
             )
 
     @add_match(Projection(Constant(...), Constant(...)))
