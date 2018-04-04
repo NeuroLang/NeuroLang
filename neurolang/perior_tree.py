@@ -7,6 +7,7 @@ from functools import singledispatch, update_wrapper
 
 def methdispatch(func):
     dispatcher = singledispatch(func)
+
     def wrapper(*args, **kw):
         return dispatcher.dispatch(args[1].__class__)(*args, **kw)
     wrapper.register = dispatcher.register
@@ -38,6 +39,10 @@ class BoundedAABB(AABB):
     def volume(self) -> float:
         return (self._ub - self._lb).prod()
 
+    @property
+    def width(self) -> Tuple:
+        return self._ub - self._lb
+
     def adjust_to_bound(self) -> None:
         self._lb, self._ub = self._bound_area.adjust_position(np.array(self._lb)), self._bound_area.adjust_position(np.array(self._ub))
 
@@ -48,7 +53,7 @@ class BoundedAABB(AABB):
 
     @expand.register(tuple)
     def _(self, point: tuple):
-        center = np.array([self._lb[i] + self.width()[i] / 2 for i in range(len(self._lb))])
+        center = np.array([self._lb[i] + self.width[i] / 2 for i in range(len(self._lb))])
         dc = np.array(self._bound_area.adjust_direction(tuple(np.array(point) - center)))
         p = center + dc
         l = self._bound_area.adjust_position(np.array(min(tuple(self._lb), tuple(p))))
@@ -58,22 +63,22 @@ class BoundedAABB(AABB):
 
     @expand.register(object)
     def _(self, another_box: 'BoundedAABB'):
-        center = np.array([self._lb[i] + self.width()[i] / 2 for i in range(len(self._lb))])
-        box2_center = np.array([another_box[0][i] + another_box.width()[i] / 2 for i in range(len(another_box[0]))])
+        center = np.array([self._lb[i] + self.width[i] / 2 for i in range(len(self._lb))])
+        box2_center = np.array([another_box[0][i] + another_box.width[i] / 2 for i in range(len(another_box[0]))])
 
         dc = np.array(self._bound_area.adjust_direction(tuple(box2_center - center)))
         l1, u1 = tuple(self._lb), tuple(self._ub)
-        l2, u2 = tuple((center + dc) - another_box.width()/2), tuple((center + dc) + another_box.width()/2)
+        l2, u2 = tuple((center + dc) - another_box.width/2), tuple((center + dc) + another_box.width/2)
 
         l, u = self._bound_area.adjust_position(np.array(min(l1, l2))), self._bound_area.adjust_position(np.array(max(u1, u2)))
         return BoundedAABB(l, u, self._bound_area)
 
     def intersects(self, other: 'BoundedAABB') -> bool:
-        center = np.array([self._lb[i] + self.width()[i] / 2 for i in range(len(self._lb))])
-        box2_center = np.array([other[0][i] + other.width()[i] / 2 for i in range(len(other[0]))])
+        center = np.array([self._lb[i] + self.width[i] / 2 for i in range(len(self._lb))])
+        box2_center = np.array([other[0][i] + other.width[i] / 2 for i in range(len(other[0]))])
         dc = np.array(self._bound_area.adjust_direction(tuple(center - box2_center)))
-        radius = self.width()/2
-        other_radius = other.width()/2
+        radius = self.width/2
+        other_radius = other.width/2
         return np.all(abs(dc) <= other_radius + radius)
 
     @methdispatch
@@ -82,26 +87,23 @@ class BoundedAABB(AABB):
 
     @contains.register(object)
     def _(self, other: 'BoundedAABB') -> bool:
-        center = np.array([self._lb[i] + self.width()[i] / 2 for i in range(len(self._lb))])
-        box2_center = np.array([other._lb[i] + other.width()[i] / 2 for i in range(len(other._lb))])
+        center = np.array([self._lb[i] + self.width[i] / 2 for i in range(len(self._lb))])
+        box2_center = np.array([other._lb[i] + other.width[i] / 2 for i in range(len(other._lb))])
         dc = np.array(self._bound_area.adjust_direction(tuple(center - box2_center)))
-        radius = self.width()/2
-        other_radius = other.width()/2
+        radius = self.width/2
+        other_radius = other.width/2
         return np.all(abs(dc) <= radius - other_radius)
 
     @contains.register(tuple)
     def _(self, point: tuple) -> bool:
-        center = np.array([self._lb[i] + self.width()[i] / 2 for i in range(len(self._lb))])
+        center = np.array([self._lb[i] + self.width[i] / 2 for i in range(len(self._lb))])
 
         dc = np.array(self._bound_area.adjust_direction(tuple(point - center)))
-        radius = self.width() / 2
+        radius = self.width / 2
         for i in range(len(radius)):
             if abs(dc[i]) > radius[i]:
                 return False
         return True
-
-    def width(self) -> Tuple:
-        return self._ub - self._lb
 
     def direction_matrix(self, other: 'BoundedAABB') -> np.matrix:
         res = np.zeros(shape=(1, 9))
@@ -111,10 +113,9 @@ class BoundedAABB(AABB):
                 res[0, i] = 1
         return np.asmatrix(np.reshape(res, (3, 3)))
 
-
     def cardinal_tiles(self) -> np.array:
         res = np.empty((1, 9), dtype=object)
-        range = abs(self.width())
+        range = abs(self.width)
 
         index = 0
         for j in [1, 0, -1]:
@@ -138,25 +139,25 @@ class Boundary(BoundedAABB):
         res = np.copy(point)
         for i in range(len(point)):
             if point[i] < self._lb[i]:
-                res[i] = point[i] + self.width()[i]
+                res[i] = point[i] + self.width[i]
             elif point[i] > self._ub[i]:
-                res[i] = point[i] - self.width()[i]
+                res[i] = point[i] - self.width[i]
         return tuple(res)
 
     def adjust_direction(self, point):
         res = np.copy(point)
         for i in range(len(point)):
-            if point[i] < -(self.width()[i] / 2):
-                res[i] = point[i] + self.width()[i]
-            elif point[i] >= (self.width()[i] / 2):
-                res[i] = point[i] - self.width()[i]
+            if point[i] < -(self.width[i] / 2):
+                res[i] = point[i] + self.width[i]
+            elif point[i] >= (self.width[i] / 2):
+                res[i] = point[i] - self.width[i]
         return tuple(res)
 
     def __repr__(self):
         return 'Boundry(lowerBound={}, upperBound={})'.format(tuple(self._lb), tuple(self._ub))
 
     def __eq__(self, other) -> bool:
-        return  np.all(self._lb == other._lb) and np.all(self._ub == other._ub)
+        return np.all(self._lb == other._lb) and np.all(self._ub == other._ub)
 
 
 class Node:

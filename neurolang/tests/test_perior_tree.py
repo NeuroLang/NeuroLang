@@ -9,33 +9,6 @@ def _generate_random_box(x_bounds, y_bounds, boundry, size_bounds):
     upper_bound = lower_bound + np.random.uniform(*size_bounds, size=2)
     return BoundedAABB(lower_bound, upper_bound, boundry)
 
-
-def test_tiles_array():
-    period_bound = Boundary((0, 0), (10, 10))
-    box1 = BoundedAABB((3, 3), (6, 6), period_bound)
-    ct = box1.cardinal_tiles()
-    assert ct[0, 8] == BoundedAABB((6, 0), (9, 3), period_bound)
-
-def test_create_dir_matrix():
-    period_bound = Boundary((0, 0), (10, 10))
-    box1 = BoundedAABB((3, 3), (6, 6), period_bound)
-    box2 = BoundedAABB((8, 8), (9, 9), period_bound)
-    m = box1.direction_matrix(box2)
-    assert m[0, 2] == 1
-    box2 = BoundedAABB((1, 1), (2, 2), period_bound)
-    m = box1.direction_matrix(box2)
-    assert m[2, 0] == 1
-    box2 = BoundedAABB((5, 5), (9.5, 9.5), period_bound)
-    m = box1.direction_matrix(box2)
-    assert np.all([m[0,1], m[0,2], m[1,1], m[1,2]]) == 1
-    box2 = BoundedAABB((9.2, 9.2), (9.5, 9.5), period_bound)
-    m = box1.direction_matrix(box2)
-    assert np.all(m) == 0
-    m = box1.direction_matrix(box1)
-    assert m[1, 1] == 1
-    m[1, 1] = 0
-    assert np.all(m) == 0
-
 def test_point_adjust_position():
     period_bound = Boundary((0, 0), (10, 10))
     point = np.asanyarray((-3, -7))
@@ -170,8 +143,6 @@ def test_tree_add():
     for _ in range(100):
         tree.add(_generate_random_box((-2, -1), (0, 1), period_bound, (0.2, 0.7)))
         tree.add(_generate_random_box((1, 2), (0, 1), period_bound, (0.2, 0.7)))
-
-    print(tree.region_boxes)
 
 def test_tree_query_regions_contained_in_box():
     period_bound = Boundary((0, 0), (10, 10))
