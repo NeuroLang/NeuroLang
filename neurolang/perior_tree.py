@@ -134,7 +134,6 @@ class Boundary(BoundedAABB):
         self._lb = np.asanyarray(lb)
         self._ub = np.asanyarray(ub)
 
-
     def adjust_position(self, point) -> Tuple:
         res = np.copy(point)
         for i in range(len(point)):
