@@ -7,9 +7,10 @@ from .symbols_and_types import (
     Expression, Symbol, Constant, Predicate, FunctionApplication,
     type_validation_value,
     NeuroLangTypeException,
-    get_type_and_value, replace_type_variable
+    get_type_and_value, replace_type_variable,
+    ToBeInferred
 )
-from operator import invert
+from operator import invert, and_, or_
 from .expression_walker import (
     add_match, ExpressionBasicEvaluator
 )
@@ -26,23 +27,8 @@ class FiniteDomain(object):
     pass
 
 
-class FiniteDomainSet(set):
-    def __init__(self, *args, type_=None, typed_symbol_table=None):
-        super().__init__(*args)
-        self.type = type_
-        self.symbol_table = typed_symbol_table
-
-    def __invert__(self):
-        result = FiniteDomainSet(
-            (
-                v.value.value for v in
-                self.symbol_table.symbols_by_type(self.type).values()
-                if v.value.value not in self
-            ),
-            type_=self.type,
-            typed_symbol_table=self.symbol_table
-        )
-        return result
+class FiniteDomainSet(frozenset):
+    pass
 
 
 class GenericSolver(ExpressionBasicEvaluator):
@@ -93,7 +79,6 @@ class GenericSolver(ExpressionBasicEvaluator):
                 parameter_type,
                 type_var=T
              ),
-            symbol_table=self.symbol_table
         ):
             raise NeuroLangTypeException("argument of wrong type")
 
@@ -126,16 +111,54 @@ class GenericSolver(ExpressionBasicEvaluator):
 
 
 class SetBasedSolver(GenericSolver):
+    '''
+    A predicate `in <set>` which results in the `<set>` given as parameter
+    `and` and `or` operations between sets which are disjunction and
+    conjunction.
+    '''
     def predicate_in(
         self, argument: typing.AbstractSet[T]
     )->typing.AbstractSet[T]:
         return argument
 
     @add_match(
-        FunctionApplication(Constant(invert), ...),
-        lambda expression: isinstance(expression.args[0], FiniteDomainSet)
+        FunctionApplication(Constant(invert), (Constant[typing.AbstractSet],)),
+        lambda expression: isinstance(
+            get_type_and_value(expression.args[0])[1],
+            FiniteDomainSet
+        )
     )
     def rewrite_finite_domain_inversion(self, expression):
-        print("Invert set")
-        raise ValueError
-        return FunctionApplication(Symbol('negate'), expression.args)
+        set_constant = expression.args[0]
+        set_type, set_value = get_type_and_value(set_constant)
+        result = FiniteDomainSet(
+            (
+                v.value for v in
+                self.symbol_table.symbols_by_type(
+                    set_type.__args__[0]
+                ).values()
+            ),
+            type_=set_type,
+        )
+        return self.walk(Constant[set_type](result))
+
+    @add_match(
+        FunctionApplication(
+            Constant(and_),
+            (Constant[typing.AbstractSet], Constant[typing.AbstractSet])
+        )
+    )
+    @add_match(
+        FunctionApplication[ToBeInferred](
+            Constant(or_),
+            (Constant[typing.AbstractSet], Constant[typing.AbstractSet])
+        )
+    )
+    def rewrite_and_or(self, expression):
+        f = expression.functor.value
+        a_type, a = get_type_and_value(expression.args[0])
+        b_type, b = get_type_and_value(expression.args[1])
+        e = Constant[a_type](
+            f(a, b)
+        )
+        return e
