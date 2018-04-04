@@ -126,6 +126,12 @@ def unify_types(t1, t2):
         return t2
     elif is_subtype(t2, t1):
         return t1
+    else:
+        raise NeuroLangTypeException(
+            "The types {} and {} can't be unified".format(
+                t1, t2
+            )
+        )
 
 
 def type_validation_value(value, type_, symbol_table=None):
@@ -355,6 +361,8 @@ class Expression(metaclass=ExpressionMeta):
         self.__class__ = self.__class__[type_]
 
     def cast(self, type_):
+        if type_ == self.type:
+            return self
         parameters = inspect.signature(self.__class__).parameters
         args = (
             getattr(self, argname)

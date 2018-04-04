@@ -82,10 +82,6 @@ class GenericSolver(ExpressionBasicEvaluator):
         ):
             raise NeuroLangTypeException("argument of wrong type")
 
-        # type_, value = get_type_and_value(
-        #    result, symbol_table=self.symbol_table
-        # )
-
         return_type = type_hints['return']
         return_type = replace_type_variable(
             self.type,
@@ -95,17 +91,6 @@ class GenericSolver(ExpressionBasicEvaluator):
         result = method(value)
         if not isinstance(result, Expression):
             result = Constant[return_type](method(value))
-
-        # if not is_subtype(type_, return_type):
-        #    raise NeuroLangTypeException(
-        #        "Value returned doesn't have the right type"
-        #    )
-
-        # result = Expression(
-        #    value,
-        #    type_=return_type,
-        #    symbol_table=self.symbol_table
-        # )
 
         return result
 

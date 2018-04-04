@@ -82,16 +82,6 @@ class FourIntsSetSolver(solver.SetBasedSolver):
     type_name = 'four_int'
     type = FourInts
 
-    @nl.add_match(nl.Query[AbstractSet[FourInts]])
-    @nl.add_match(nl.Query[FourInts])
-    def query(self, expression):
-        value = self.walk(expression.value)
-        expression.symbol.change_type(expression.type)
-        value.change_type(expression.type)
-        res = nl.Query[expression.type](expression.symbol, value)
-        self.symbol_table[res.symbol] = res
-        return res
-
     def predicate_equal_to(self, value: int)->FourInts:
         return nl.Constant(FourInts(value))
 
@@ -128,7 +118,7 @@ def test_queries():
     assert nli.symbol_table['one'].type == FourInts
     assert nli.symbol_table['two'].value == 2
     assert nli.symbol_table['three'].value == 3
-    assert 1 in nli.symbol_table['oneset'].value
+    assert nli.symbol_table['one'] in nli.symbol_table['oneset']
     assert nli.symbol_table['oneset_'].value \
         == frozenset((nli.symbol_table['one'],))
     assert nli.symbol_table['onetwo'].value \
@@ -149,10 +139,10 @@ def test_error_messages():
     nli = NLC()
 
     with raises(nl.NeuroLangException):
-        nli.compile(nl.parser("fail is a four_int singleton_set 1"))
+        nli.compile("fail is a four_int singleton_set 1")
 
     with raises(nl.NeuroLangException):
-        nli.compile(nl.parser("fail are four_int singleton_set 1"))
+        nli.compile("fail are four_int singleton_set 1")
 
     with raises(nl.NeuroLangException):
-        nli.compile(nl.parser("fail is a four_ints singleton_set 1"))
+        nli.compile("fail is a four_ints singleton_set 1")
