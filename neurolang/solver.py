@@ -129,6 +129,7 @@ class SetBasedSolver(GenericSolver):
         )
     )
     def rewrite_finite_domain_inversion(self, expression):
+        import pdb; pdb.set_trace()
         set_constant = expression.args[0]
         set_type, set_value = get_type_and_value(set_constant)
         result = FiniteDomainSet(
@@ -137,6 +138,7 @@ class SetBasedSolver(GenericSolver):
                 self.symbol_table.symbols_by_type(
                     set_type.__args__[0]
                 ).values()
+                if v not in set_value
             ),
             type_=set_type,
         )
