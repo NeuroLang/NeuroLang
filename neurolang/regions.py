@@ -5,6 +5,10 @@ class Region:
 
     def __init__(self, lb, ub) -> None:
         self._bounding_box = np.c_[lb, ub]
+        self._bounding_box.setflags(write=False)
+
+    def __hash__(self):
+        return hash(self._bounding_box.tobytes())
 
     @property
     def bounding_box(self):

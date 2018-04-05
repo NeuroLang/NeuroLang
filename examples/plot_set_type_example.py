@@ -13,6 +13,8 @@ From the script, the resulting symbol table is
 import neurolang as nl
 from neurolang.solver import SetBasedSolver
 import typing
+import operator
+from neurolang.regions import *
 
 
 ###################################################################
@@ -40,14 +42,51 @@ class IntSetType(SetBasedSolver):
         )
         return res
 
+
 ##################################################################
-# Generate a compiler that adds the previously defined type to the
-# language. This works using the mixin pattern.
+class RegionsSetType(SetBasedSolver):
+    type = Region
+    type_name = 'Region'
+
+    # add a match for the predicate "singleton" with a region as parameter
+    # that will produce a set with just that region as a result
+    @nl.add_match(nl.Predicate(nl.Symbol('singleton'), (nl.Constant[typing.Tuple[int, int, int, int]],)))
+    def singleton(self, expression):
+        a = expression.args[0].value
+        r = Region(a[:2], a[2:])
+        res = nl.Constant[typing.AbstractSet[self.type]](
+            frozenset((r,))
+        )
+        return res
+
+    @nl.add_match(nl.FunctionApplication(nl.Constant(operator.invert), (nl.Constant[typing.AbstractSet],)))
+    def rewrite_finite_domain_inversion(self, expression):
+        set_constant = expression.args[0]
+        set_type, set_value = nl.get_type_and_value(set_constant)
+        all_regions = frozenset(
+            (
+                v.value for v in
+                self.symbol_table.symbols_by_type(
+                    set_type.__args__[0]
+                ).values()
+            )
+        )
+        for v in self.symbol_table.symbols_by_type(set_type).values():
+            all_regions = all_regions.union(v.value)
+
+        result = all_regions - set_value
+        return self.walk(nl.Constant[set_type](result))
+
+
+##################################################################
 class NeuroLangCompiler(
-    IntSetType,
+    RegionsSetType,
     nl.NeuroLangIntermediateRepresentationCompiler
 ):
     pass
+
+# Generate a compiler that adds the previously defined type to the
+# language. This works using the mixin pattern.
 
 
 nlc = NeuroLangCompiler()
@@ -55,12 +94,10 @@ nlc = NeuroLangCompiler()
 #####################
 # Run three queries
 nlc.compile('''
-    oneset are Integers singleton 1
-    twoset are Integers singleton 2
-    onetwoset are Integers in oneset or in twoset
-    evens_until_ten are Integers evens_until 10
-    empty are Integers in evens_until_ten and in oneset
-    two_again are Integers in evens_until_ten and in onetwoset
+    origin are Regions singleton (0, 0, 0, 0)
+    unit_region are Regions singleton (0, 0, 1, 1)
+    both are Regions in origin or in unit_region
+    test are Regions not in unit_region
 ''')
 
 
@@ -74,9 +111,7 @@ for k, v in nlc.symbol_table.items():
 # Print the intermediate representation
 # of a two statements
 ir = nlc.get_intermediate_representation('''
-    otherset are Integers in onetwoset
-    a = 5
+    one are Regions in both
 ''')
 print(ir[0])
-print('-' * 10)
-print(ir[1])
+
