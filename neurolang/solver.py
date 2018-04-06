@@ -58,6 +58,9 @@ class GenericSolver(ExpressionBasicEvaluator):
         signature = inspect.signature(method)
         type_hints = typing.get_type_hints(method)
 
+        if isinstance(method, Constant):
+            method_type, method = get_type_and_value(method)
+
         argument = self.walk(expression.args[0])
         if len(signature.parameters) != 1:
             raise NeuroLangPredicateException(
@@ -91,7 +94,8 @@ class GenericSolver(ExpressionBasicEvaluator):
         result = method(value)
         if not isinstance(result, Expression):
             result = Constant[return_type](method(value))
-
+        else:
+            result = self.walk(result)
         return result
 
 
