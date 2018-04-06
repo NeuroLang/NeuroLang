@@ -317,7 +317,8 @@ class ExpressionMeta(ParametricTypeClassMeta):
 
 class Expression(metaclass=ExpressionMeta):
     __super_attributes__ = WRAPPER_ASSIGNMENTS + (
-        '__signature__', 'mro', 'type', '_symbols'
+        '__signature__', 'mro', 'type', '_symbols',
+        '__code__', '__defaults__', '__kwdefaults__', '__no_type_check__'
     )
 
     def __init__(self, *args, **kwargs):
