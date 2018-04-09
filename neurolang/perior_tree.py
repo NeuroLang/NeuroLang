@@ -108,7 +108,7 @@ class BoundedAABB(AABB):
     def direction_matrix(self, other: 'BoundedAABB') -> np.matrix:
         res = np.zeros(shape=(1, 9))
         tiles = self.cardinal_tiles()
-        for i in range(0,9):
+        for i in range(0, 9):
             if other.intersects(tiles[0, i]):
                 res[0, i] = 1
         return np.asmatrix(np.reshape(res, (3, 3)))

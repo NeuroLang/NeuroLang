@@ -23,6 +23,16 @@ def get_interval_relation_to(bounding_box, another_bounding_box):
     return tuple([x_rel, y_rel])
 
 
+def is_in_direction(matrix, direction):
+    return matrix[directions_map(direction)] == 1
+
+
+def directions_map(d):
+    return {'NW': (0, 0), 'N': (0, 1), 'NE': (0, 2),
+            'W': (1, 0), 'O': (1, 1), 'E': (1, 2),
+            'SW': (2, 0), 'S': (2, 1), 'SE': (2, 2)}[d]
+
+
 def direction_matrix(bounding_box, another_bounding_box):
     ''' direction matrix of two bounding boxes '''
     intervals_relations = get_interval_relation_to(bounding_box, another_bounding_box)
