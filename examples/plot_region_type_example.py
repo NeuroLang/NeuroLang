@@ -32,25 +32,17 @@ class RegionsSetType(SetBasedSolver):
             typing.AbstractSet[self.type]
         ]
 
-        for direction_function in [self.north_of, self.south_of, self.east_of, self.west_of, self.overlapping]:
+        for key, value in {'north_of': 'N', 'south_of': 'S', 'east_of': 'E',
+                           'west_of': 'W', 'overlapping': 'O'}.items():
+            setattr(self, key, self.define_dir_based_fun(value))
             self.symbol_table[
-                nl.Symbol[pred_type](direction_function.__name__)
-            ] = nl.Constant[pred_type](direction_function)
+                nl.Symbol[pred_type](key)
+            ] = nl.Constant[pred_type](self.__getattribute__(key))
 
-    def north_of(self, reference_region: typing.AbstractSet[Region]) -> typing.AbstractSet[Region]:
-        return self.direction('N', reference_region)
-
-    def south_of(self, reference_region: typing.AbstractSet[Region]) -> typing.AbstractSet[Region]:
-        return self.direction('S', reference_region)
-
-    def west_of(self, reference_region: typing.AbstractSet[Region]) -> typing.AbstractSet[Region]:
-        return self.direction('W', reference_region)
-
-    def east_of(self, reference_region: typing.AbstractSet[Region]) -> typing.AbstractSet[Region]:
-        return self.direction('E', reference_region)
-
-    def overlapping(self, reference_region: typing.AbstractSet[Region]) -> typing.AbstractSet[Region]:
-        return self.direction('O', reference_region)
+    def define_dir_based_fun(self, direction: typing.AbstractSet[Region]) -> typing.AbstractSet[Region]:
+        def f(reference_region: typing.AbstractSet[Region]) -> typing.AbstractSet[Region]:
+            return self.direction(direction, reference_region)
+        return f
 
     # add a match for the predicate "singleton" with a region as parameter
     # that will produce a set with just that region as a result
