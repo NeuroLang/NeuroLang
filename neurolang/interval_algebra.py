@@ -28,3 +28,6 @@ def equals(i1, i2) -> bool:
 
 def converse(operation):
     return lambda x, y: operation(y, x)
+
+def negate(operation):
+    return lambda x, y : not operation(x, y)
