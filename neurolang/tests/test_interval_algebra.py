@@ -12,15 +12,20 @@ def foo(x, z, first, second, elems):
     return False
 
 
-def composition(comp, elems):
+def composition(comp, elems, conv=False):
+    if conv:
+        comp = [[converse(f),converse(g)] for [f, g] in comp]
     return [lambda x, z, f=functions[0], g=functions[1]: foo(x, z, f, g, deepcopy(elems))  for functions in comp]
 
 
-def apply_composition(foo, pars, negate=False, neg=None):
+def apply_composition(foo, pars, negate=False, neg=None, conversion=False):
     # for i in range(len(foo)):
     #     if not foo[i](pars[i][0], pars[i][1]):
     #         return False
     # return True
+    if conversion:
+        # foo = [converse(f) for f in reversed(foo)]
+        pars = list(reversed(pars))
     res = True
     for i in range(len(foo)):
         result = foo[i](pars[i][0], pars[i][1])
@@ -117,14 +122,14 @@ def test_IA_axioms():
     assert apply_composition(c1, [[tuple([-1, 0]), tuple([2, 5])]]) and apply_composition(c2, [[tuple([1, 2]), tuple([8, 10])]])  \
                                                         == apply_composition(c, [[tuple([-1, 0]), tuple([2, 5])], [tuple([1, 2]), tuple([8, 10])]])
 
-    # #composition
-    # r, s, t = random.choice([before, overlaps, during, meets, starts, finishes, equals], 3)
-    # c1 = composition([[r, t]], elems)
-    # c2 = composition([[s, t]], elems)
-    # c = composition([[random.choice([s, r]), t]], elems)
-    # i, j = random.choice(range(len(elems)), 2)
-    #
-    # assert (apply_composition(c1, [[elems[i], elems[j]]]) or apply_composition(c2, [[elems[i], elems[j]]]) ) == apply_composition(c, [[elems[i], elems[j]]])
+    #composition
+    r, s, t = random.choice([before, overlaps, during, meets, starts, finishes, equals], 3)
+    c1 = composition([[r, t]], elems)
+    c2 = composition([[s, t]], elems)
+    c = composition([[random.choice([s, r]), t]], elems)
+    i, j = random.choice(range(len(elems)), 2, replace=False)
+
+    assert (apply_composition(c1, [[elems[i], elems[j]]]) or apply_composition(c2, [[elems[i], elems[j]]]) ) == apply_composition(c, [[elems[i], elems[j]]])
 
 
     # inv-distrib
@@ -134,17 +139,16 @@ def test_IA_axioms():
     assert any([r(i, j), s(k, l)]) == converse(r)(i,j) or converse(s)(k, l)
 
 
-    # # inv-involutive-distr
-    # s, t = random.choice([before, overlaps, during, meets, starts, finishes, equals], 2)
-    # c = composition([[s, t]], elems)
-    # inv_c = composition([[converse(s), converse(t)]], elems)
-    # i, j = random.choice(range(len(elems)), 2)
-    # assert apply_composition(c, [[elems[j], elems[i]]]) == apply_composition(inv_c, [[elems[i], elems[j]]])
-
-
+    # inv-involutive-distr
+    s, t = random.choice([before, overlaps, during, meets, starts, finishes, equals], 2)
+    c = composition([[s, t]], elems)
+    inv_c = composition([[converse(t), converse(s)]], elems)
+    i, j = random.choice(range(len(elems)), 2, replace=False)
+    assert apply_composition(c, [[elems[i], elems[j]]], conversion=True) == apply_composition(inv_c, [[elems[j], elems[i]]])
 
     # Tarski/ de Morgan
-    i, j = random.choice(range(len(elems)), 2)
+    r, s = random.choice([before, overlaps, during, meets, starts, finishes, equals], 2)
+    i, j = random.choice(range(len(elems)), 2, replace=False)
     c = composition([[converse(r), negate(r)]], elems)
     c2 = composition([[r, s]], elems)
     assert (apply_composition(c, [[elems[i], elems[j]]], negate=False, neg=[False, True]) and apply_composition(c2, [[elems[i], elems[j]]], negate=True) and (not s)) == (not s)
