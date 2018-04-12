@@ -3,7 +3,7 @@ from ..interval_algebra import *
 from copy import deepcopy
 
 
-def foo(x, z, first, second, elems):
+def app(x, z, first, second, elems):
     elems.remove(x)
     elems.remove(z)
     for y in elems:
@@ -12,23 +12,19 @@ def foo(x, z, first, second, elems):
     return False
 
 
-def composition(comp, elems, conv=False):
-    if conv:
-        comp = [[converse(f),converse(g)] for [f, g] in comp]
-    return [lambda x, z, f=functions[0], g=functions[1]: foo(x, z, f, g, deepcopy(elems))  for functions in comp]
+def composition(comp, elems, convert=False):
+    if convert:
+        comp = [[converse(f), converse(g)] for [f, g] in comp]
+    return [lambda x, z, f=functions[0], g=functions[1]: app(x, z, f, g, deepcopy(elems))  for functions in comp]
 
 
-def apply_composition(foo, pars, negate=False, neg=None, conversion=False):
-    # for i in range(len(foo)):
-    #     if not foo[i](pars[i][0], pars[i][1]):
-    #         return False
-    # return True
+def apply_composition(foos, pars, negation=False, neg=None, conversion=False):
+
     if conversion:
-        # foo = [converse(f) for f in reversed(foo)]
         pars = list(reversed(pars))
     res = True
-    for i in range(len(foo)):
-        result = foo[i](pars[i][0], pars[i][1])
+    for i in range(len(foos)):
+        result = foos[i](pars[i][0], pars[i][1])
         if not neg:
             if not result:
                 res = False
@@ -38,9 +34,7 @@ def apply_composition(foo, pars, negate=False, neg=None, conversion=False):
                 res = False
                 break
 
-    #valid = all([neg[i] != foo[i](pars[i][0], pars[i][1]) for i in range(len(foo))])
-
-    return negate != res
+    return negation != res
 
 
 def test_ia_relations_functions():
@@ -60,7 +54,7 @@ def test_ia_relations_functions():
     assert not starts(intervals[3], intervals[4])
 
 
-def test_IA_axioms():
+def test_composition():
     elems = [tuple([1, 2]), tuple([4, 6]), tuple([8, 10])]
 
     rel = composition([[before, before]], elems)
@@ -92,52 +86,55 @@ def test_IA_axioms():
     rel = composition([[before, overlaps], [overlaps, overlaps]], elems)
     assert apply_composition(rel, [[tuple([0, 1]), tuple([4, 6])], [tuple([2, 5]), tuple([5, 8])]])
 
+def test_calculus_axioms():
+    elems = [tuple([0, 1]), tuple([1, 2]), tuple([1, 2]), tuple([1, 5]),  tuple([2, 5]), tuple([4, 6]), tuple([5, 8]), tuple([8, 10])]
 
     #Huntington's axiom
     r, s = random.choice([before, overlaps, during, meets, starts, finishes, equals], 2)
-    i, j = random.choice(range(len(elems)), 2)
+    i, j = random.choice(range(len(elems)), 2, replace=False)
     assert not (not r(elems[i], elems[j]) or not s(elems[i], elems[j])) or (not (
     (not r(elems[i], elems[j])) or s(elems[i], elems[j]))) == r(elems[i], elems[j])
 
 
     #identity
+    i, j = random.choice(range(len(elems)), 2)
+    elems.append(elems[j])
     rel = composition([[meets, equals]], elems)
-    all([apply_composition(rel, [[tuple([1, 2]), x]]) == meets(tuple([1, 2]), x) for x in elems])
+    assert apply_composition(rel, [[elems[i], elems[j]]]) == meets(elems[i], elems[j])
 
+    i, j = random.choice(range(len(elems)), 2)
+    elems.append(elems[i])
     rel = composition([[equals, meets]], elems)
-    all([apply_composition(rel, [[x, tuple([1, 2])]]) == meets(x, tuple([1, 2])) for x in elems])
-
+    assert apply_composition(rel, [[elems[i], elems[j]]]) == meets(elems[i], elems[j])
 
     #involution
     for op in [before, overlaps, during, meets, starts, finishes, equals]:
-        i, j = random.choice(range(len(elems)), 2)
+        i, j = random.choice(range(len(elems)), 2, replace=False)
         converse(converse(op))(elems[i], elems[j]) == op(elems[i], elems[j])
 
-
     #associativity
-    elems.append(tuple([-1, 0]))
-    c1 = composition([[before, meets]], elems)
-    c2 = composition([[meets, before]], elems)
-    c = composition([[before, meets], [meets, before]], elems)
-    assert apply_composition(c1, [[tuple([-1, 0]), tuple([2, 5])]]) and apply_composition(c2, [[tuple([1, 2]), tuple([8, 10])]])  \
-                                                        == apply_composition(c, [[tuple([-1, 0]), tuple([2, 5])], [tuple([1, 2]), tuple([8, 10])]])
+    r, s, t = random.choice([before, overlaps, during, meets, starts, finishes, equals], 3)
+    c1 = composition([[r, s]], elems)
+    c2 = composition([[s, t]], elems)
+    c = composition([[r, s], [s, t]], elems)
+    i, j, k, l = random.choice(range(len(elems)), 4, replace=False)
+    t1, t2, t3, t4 = elems[i], elems[j], elems[k], elems[l]
+    assert (apply_composition(c1, [[t1, t2]]) and apply_composition(c2, [[t3, t4]])) == apply_composition(c, [[t1, t2], [t3, t4]])
 
-    #composition
+    #distributivity
     r, s, t = random.choice([before, overlaps, during, meets, starts, finishes, equals], 3)
     c1 = composition([[r, t]], elems)
     c2 = composition([[s, t]], elems)
     c = composition([[random.choice([s, r]), t]], elems)
     i, j = random.choice(range(len(elems)), 2, replace=False)
-
-    assert (apply_composition(c1, [[elems[i], elems[j]]]) or apply_composition(c2, [[elems[i], elems[j]]]) ) == apply_composition(c, [[elems[i], elems[j]]])
-
+    app = apply_composition(c, [[elems[i], elems[j]]])
+    assert (apply_composition(c1, [[elems[i], elems[j]]]) == app) or (apply_composition(c2, [[elems[i], elems[j]]]) == app)
 
     # inv-distrib
     r, s = random.choice([before, overlaps, during, meets, starts, finishes, equals], 2)
-    i, j, k, l = random.choice(range(len(elems)), 4)
+    i, j, k, l = random.choice(range(len(elems)), 4, replace=False)
     [i, j, k, l] = [(q, p) for (p, q) in [elems[i], elems[j], elems[k], elems[l]]]
-    assert any([r(i, j), s(k, l)]) == converse(r)(i,j) or converse(s)(k, l)
-
+    assert any([r(i, j), s(k, l)]) == converse(r)(i, j) or converse(s)(k, l)
 
     # inv-involutive-distr
     s, t = random.choice([before, overlaps, during, meets, starts, finishes, equals], 2)
@@ -151,4 +148,4 @@ def test_IA_axioms():
     i, j = random.choice(range(len(elems)), 2, replace=False)
     c = composition([[converse(r), negate(r)]], elems)
     c2 = composition([[r, s]], elems)
-    assert (apply_composition(c, [[elems[i], elems[j]]], negate=False, neg=[False, True]) and apply_composition(c2, [[elems[i], elems[j]]], negate=True) and (not s)) == (not s)
+    assert (apply_composition(c, [[elems[i], elems[j]]], negation=False, neg=[False, True]) and apply_composition(c2, [[elems[i], elems[j]]], negation=True) and (not s)) == (not s)
