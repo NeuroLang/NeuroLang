@@ -1,14 +1,11 @@
 import logging
-import inspect
 import typing
+import inspect
 
 from .exceptions import NeuroLangException
 from .symbols_and_types import (
-    Expression, Symbol, Constant, Predicate, FunctionApplication,
-    type_validation_value,
-    NeuroLangTypeException,
-    get_type_and_value, replace_type_variable,
-    ToBeInferred
+    Symbol, Constant, Predicate, FunctionApplication,
+    get_type_and_value, replace_type_variable
 )
 from operator import invert, and_, or_
 from .expression_walker import (
@@ -43,60 +40,35 @@ class GenericSolver(ExpressionBasicEvaluator):
     def predicate(self, expression):
         logging.debug(str(self.__class__.__name__) + " evaluating predicate")
 
-        if isinstance(expression.functor, Symbol):
+        functor = expression.functor
+        if isinstance(functor, Symbol):
             identifier = expression.functor
             predicate_method = 'predicate_' + identifier.name
             if hasattr(self, predicate_method):
                 method = getattr(self, predicate_method)
-            elif self.symbol_table[expression.functor]:
-                method = self.symbol_table[expression.functor]
-            else:
-                raise NeuroLangException(
-                    "Predicate %s not implemented" % identifier
+                signature = inspect.signature(method)
+                type_hints = typing.get_type_hints(method)
+
+                parameter_type = type_hints[
+                    next(iter(signature.parameters.keys()))
+                ]
+
+                parameter_type = replace_type_variable(
+                    self.type,
+                    parameter_type,
+                    type_var=T
                 )
 
-        signature = inspect.signature(method)
-        type_hints = typing.get_type_hints(method)
+                return_type = type_hints['return']
+                return_type = replace_type_variable(
+                    self.type,
+                    return_type,
+                    type_var=T
+                 )
+                functor_type = typing.Callable[[parameter_type], return_type]
+                functor = Constant[functor_type](method)
 
-        if isinstance(method, Constant):
-            method_type, method = get_type_and_value(method)
-
-        argument = self.walk(expression.args[0])
-        if len(signature.parameters) != 1:
-            raise NeuroLangPredicateException(
-                "Predicates take exactly one parameter"
-            )
-        else:
-            parameter_type = type_hints[
-                next(iter(signature.parameters.keys()))
-            ]
-
-        type_, value = get_type_and_value(
-            argument, symbol_table=self.symbol_table
-        )
-
-        if not type_validation_value(
-            value,
-            replace_type_variable(
-                self.type,
-                parameter_type,
-                type_var=T
-             ),
-        ):
-            raise NeuroLangTypeException("argument of wrong type")
-
-        return_type = type_hints['return']
-        return_type = replace_type_variable(
-            self.type,
-            return_type,
-            type_var=T
-         )
-        result = method(value)
-        if not isinstance(result, Expression):
-            result = Constant[return_type](method(value))
-        else:
-            result = self.walk(result)
-        return result
+        return self.walk(functor(expression.args[0]))
 
 
 class SetBasedSolver(GenericSolver):
@@ -134,15 +106,10 @@ class SetBasedSolver(GenericSolver):
 
     @add_match(
         FunctionApplication(
-            Constant(and_),
+            Constant(...),
             (Constant[typing.AbstractSet], Constant[typing.AbstractSet])
-        )
-    )
-    @add_match(
-        FunctionApplication[ToBeInferred](
-            Constant(or_),
-            (Constant[typing.AbstractSet], Constant[typing.AbstractSet])
-        )
+        ),
+        lambda expression: expression.functor.value in (or_, and_)
     )
     def rewrite_and_or(self, expression):
         f = expression.functor.value

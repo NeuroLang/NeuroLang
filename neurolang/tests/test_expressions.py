@@ -135,3 +135,10 @@ def test_compatibility_for_pattern_matching():
 
         for argname in argnames:
             assert getattr(instance, argname) == ...
+
+
+def test_instance_check():
+    c = Constant[int](2)
+    assert isinstance(c, Constant)
+    assert isinstance(c, Constant[int])
+    assert issubclass(c.__class__, Constant)

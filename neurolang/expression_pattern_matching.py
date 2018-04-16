@@ -11,12 +11,14 @@ from . import expressions
 __all__ = ['add_match', 'PatternMatcher']
 
 
-class PatternMatchingMetaClass(type):
+class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
     @classmethod
     def __prepare__(self, name, bases):
         return OrderedDict()
 
-    def __new__(self, name, bases, classdict):
+    def __new__(cls, name, bases, classdict):
+        if hasattr(cls, 'type'):
+            print(cls.type)
         classdict['__ordered__'] = [
             key for key in classdict.keys()
             if key not in ('__module__', '__qualname__')
@@ -28,7 +30,7 @@ class PatternMatchingMetaClass(type):
                     (getattr(v, 'pattern'), getattr(v, 'guard'), v)
                 )
         classdict['__patterns__'] = patterns
-        return type.__new__(self, name, bases, classdict)
+        return type.__new__(cls, name, bases, classdict)
 
 
 def add_match(pattern, guard=None):

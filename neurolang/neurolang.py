@@ -356,6 +356,8 @@ class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
             functions = []
         if type_name_map is None:
             self.type_name_map = dict()
+        else:
+            self.type_name_map = type_name_map
 
         self.type_name_map.update({'int': int, 'str': str, 'float': float})
 
