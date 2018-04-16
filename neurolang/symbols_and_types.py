@@ -10,6 +10,7 @@ from .expressions import (
     Symbol,
     FunctionApplication,
     Statement,
+    ExistencialPredicate,
     Predicate,
     Query,
     Projection,
@@ -25,7 +26,7 @@ from .expressions import (
 __all__ = [
     'ToBeInferred',
     'Symbol', 'Constant', 'Expression', 'FunctionApplication', 'Statement',
-    'Projection', 'Predicate', 'Query',
+    'Projection', 'ExistencialPredicate' ,'Predicate', 'Query',
     'TypedSymbolTable',
     'typing_callable_from_annotated_function',
     'NeuroLangTypeException', 'is_subtype', 'type_validation_value',

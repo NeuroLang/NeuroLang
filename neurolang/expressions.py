@@ -586,6 +586,23 @@ class Predicate(FunctionApplication):
         return r
 
 
+class ExistencialPredicate(Predicate):
+    def __init__(self, symbol, predicate):
+
+        if not isinstance(symbol, Symbol):
+            raise
+        if not isinstance(predicate, Predicate):
+            raise
+
+        self.symbol = symbol
+        self.predicate = predicate
+        self._symbol = predicate._symbols - {symbol}
+
+    def __repr__(self):
+
+        r = u'\u2203{{{}: {} st {}}}'.format(self.symbol, self.type, self.predicate)
+        return r
+
 class Statement(Expression):
     def __init__(
         self, symbol, value,

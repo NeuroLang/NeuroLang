@@ -65,3 +65,12 @@ nlc.compile('''
 # Print the resulting symbol table
 for k, v in nlc.symbol_table.items():
     print(k, ':', v)
+
+#######################################
+# Print the intermediate representation
+# of a two statements
+ir = nlc.get_intermediate_representation('''
+    tenset are Integers singleton 10
+''')
+print(ir[0])
+print('-' * 10)

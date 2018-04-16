@@ -1,5 +1,15 @@
 from .RCD_relations import *
+from functools import singledispatch, update_wrapper
+import numpy as np
 
+def methdispatch(func):
+    dispatcher = singledispatch(func)
+
+    def wrapper(*args, **kw):
+        return dispatcher.dispatch(args[1].__class__)(*args, **kw)
+    wrapper.register = dispatcher.register
+    update_wrapper(wrapper, func)
+    return wrapper
 
 class Region:
 
@@ -41,3 +51,38 @@ class Region:
 
     def __repr__(self):
         return 'Region(lb={}, up={})'.format(tuple(self._lb), tuple(self._ub))
+
+    def __or__(self, other):
+        return tuple([[self,other], set.__or__])
+
+    def __and__(self, other):
+        return tuple([[self,other], set.__and__])
+
+    ####test
+    def __add__(self, other):
+        return is_in_direction(direction_matrix(self, other), 'N')
+
+    @methdispatch
+    def __north_of__(self, arg):
+        print(arg)
+
+    @__north_of__.register(tuple)
+    def _(self, others):
+        boxes = others[0]
+        typeof = others[1]
+        if typeof == set.__and__:
+            for box in boxes:
+                if not is_in_direction(direction_matrix(self, box), 'N'):
+                    return False
+            return True
+        elif typeof == set.__or__:
+            for box in boxes:
+                if is_in_direction(direction_matrix(self, box), 'N'):
+                    return True
+            return False
+        return False
+
+
+    @__north_of__.register(object)
+    def _(self, box):
+        return is_in_direction(direction_matrix(self, box), 'N')

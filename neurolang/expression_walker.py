@@ -50,7 +50,21 @@ class ExpressionWalker(PatternMatcher):
         return self.match(expression)
 
 
-class ExpressionBasicEvaluator(ExpressionWalker):
+class ReplaceSymbolWalker(ExpressionWalker):
+    def __init__(self, symbol, value):
+        self.symbol = symbol
+        self.value = value
+
+    @add_match(Symbol)
+    def replace_free_variable(self, expression):
+        if expression.name == self.symbol.name:
+            value_type = unify_types(self.symbol.type, self.value.type)
+            return self.value.cast(value_type)
+        else:
+            return expression
+
+
+class ExpressionBasicEvaluator(ReplaceSymbolWalker):
     def __init__(self, symbol_table=None):
         if symbol_table is None:
             symbol_table = dict()

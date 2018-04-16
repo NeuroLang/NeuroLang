@@ -86,6 +86,7 @@ def test_composition():
     rel = composition([[before, overlaps], [overlaps, overlaps]], elems)
     assert apply_composition(rel, [[tuple([0, 1]), tuple([4, 6])], [tuple([2, 5]), tuple([5, 8])]])
 
+
 def test_calculus_axioms():
     elems = [tuple([0, 1]), tuple([1, 2]), tuple([1, 2]), tuple([1, 5]),  tuple([2, 5]), tuple([4, 6]), tuple([5, 8]), tuple([8, 10])]
 

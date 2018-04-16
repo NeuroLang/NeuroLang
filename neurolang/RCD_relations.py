@@ -33,6 +33,11 @@ def directions_map(d):
             'SW': (2, 0), 'S': (2, 1), 'SE': (2, 2)}[d]
 
 
+def inverse_direction(d):
+    return {'NW': 'SE', 'N': 'S', 'NE': 'SW',
+            'W': 'E', 'O': 'O', 'E': 'W',
+            'SW': 'NE', 'S': 'N', 'SE': 'NW'}[d]
+
 def direction_matrix(bounding_box, another_bounding_box):
     ''' direction matrix of two bounding boxes '''
     intervals_relations = get_interval_relation_to(bounding_box, another_bounding_box)

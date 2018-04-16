@@ -95,3 +95,4 @@ def test_algebraic_structure_of_naturals():
     check_algebraic_structure_is_a_ring(op_add='+', op_inv_add='-',
                                         op_mul='*', op_inv_mul='/',
                                         nli=nli)
+

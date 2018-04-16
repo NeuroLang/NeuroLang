@@ -1,4 +1,4 @@
-from .RCD_relations import direction_matrix, is_in_direction
+from .RCD_relations import direction_matrix, is_in_direction, inverse_direction
 from .regions import Region
 from .solver import SetBasedSolver
 import typing
@@ -7,7 +7,6 @@ from . import neurolang as nl
 
 
 __all__ = ['RegionsSetSolver']
-
 
 class RegionsSetSolver(SetBasedSolver):
     type = Region
@@ -27,10 +26,44 @@ class RegionsSetSolver(SetBasedSolver):
                 nl.Symbol[pred_type](key)
             ] = nl.Constant[pred_type](self.__getattribute__(key))
 
-    def define_dir_based_fun(self, direction: typing.AbstractSet[Region]) -> typing.AbstractSet[Region]:
+        for key, value in {'north_of': 'N', 'south_of': 'S', 'east_of': 'E',
+                           'west_of': 'W', 'overlapping': 'O'}.items():
+            setattr(self, key, self.define_inv_dir_based_fun(value))
+            self.symbol_table[
+                nl.Symbol[pred_type]('inverse ' + key)
+            ] = nl.Constant[pred_type](self.__getattribute__(key))
+
+        self.symbol_table[nl.Symbol[pred_type]('universal')] = nl.Constant[pred_type](self.symbols_of_type())
+
+    def symbols_of_type(self) -> typing.AbstractSet[Region]:
+        def f(elem: typing.AbstractSet[Region]) -> typing.AbstractSet[Region]:
+            res = frozenset()
+            for elem in self.symbol_table.symbols_by_type(typing.AbstractSet[Region]).values():
+                res = res.union(elem.value)
+            return res
+        return f
+
+    def define_dir_based_fun(self, direction) -> typing.AbstractSet[Region]:
         def f(reference_region: typing.AbstractSet[Region]) -> typing.AbstractSet[Region]:
             return self.direction(direction, reference_region)
         return f
+
+    def define_inv_dir_based_fun(self, direction) -> typing.AbstractSet[Region]:
+        def f(reference_region: typing.AbstractSet[Region]) -> typing.AbstractSet[Region]:
+            return self.direction(inverse_direction(direction), reference_region)
+
+        return f
+
+    # def define_dir_based_fun2(self, direction) -> typing.AbstractSet[Region]:
+    #     def f(reference_region: typing.AbstractSet[Region]) -> typing.AbstractSet[Region]:
+    #         return self.direction(direction, reference_region, converse=True)
+    #     return f
+
+    # @nl.add_match(nl.Predicate(nl.Symbol('invert'), (nl.Constant[typing.AnyStr],)))
+    # def invert(self, expression):
+    #     functor = expression.args[0].value
+    #     res = self.symbol_table[functor].value
+    #     return frozenset()
 
     # add a match for the predicate "singleton" with a region as parameter
     # that will produce a set with just that region as a result
@@ -43,23 +76,28 @@ class RegionsSetSolver(SetBasedSolver):
         )
         return res
 
+    # @nl.add_match(nl.Predicate(nl.Symbol('invert'), (nl.Constant[str],nl.Constant[typing.AbstractSet[Region]])))
+    # def invert(self, expression):
+    #     return self.walk(nl.Constant[typing.AbstractSet[Region]](frozenset()))
+
     def direction(self, direction, reference_region: typing.AbstractSet[Region]) -> typing.AbstractSet[Region]:
         result, visited = frozenset(), frozenset()
         for symbol in self.symbol_table.symbols_by_type(typing.AbstractSet[Region]).values():
             regions_set = symbol.value
             if not regions_set <= visited:
                 for region in regions_set:
-                    is_north = True
+                    is_in_dir = True
                     for elem in reference_region:
-                        mat = direction_matrix(region, elem)
+                        mat = direction_matrix(region, elem) # if converse else direction_matrix(elem, region)        #invol -> alterna los parametros de esta aplicacion
                         if not is_in_direction(mat, direction) or (region in reference_region):
-                            is_north = False
+                            is_in_dir = False
                             break
-                    if is_north:
+                    if is_in_dir:
                         result = result.union(frozenset((region,)))
                 visited = visited.union(regions_set)
 
         return self.walk(nl.Constant[typing.AbstractSet[Region]](result))
+
 
     @nl.add_match(nl.FunctionApplication(nl.Constant(operator.invert), (nl.Constant[typing.AbstractSet],)))
     def rewrite_finite_domain_inversion(self, expression):
@@ -69,7 +107,7 @@ class RegionsSetSolver(SetBasedSolver):
             (
                 v.value for v in
                 self.symbol_table.symbols_by_type(
-                    set_type.__args__[0]
+                    set_type.__args__[0]    #nl.Constant[typing.AbstractSet[Region]]
                 ).values()
             )
         )
@@ -78,3 +116,9 @@ class RegionsSetSolver(SetBasedSolver):
 
         result = all_regions - set_value
         return self.walk(nl.Constant[set_type](result))
+
+    # @nl.add_match(nl.FunctionApplication(nl.Constant(conv), (nl.Constant[typing.AbstractSet],)))
+    # def rewrite_finite_domain_inversion(self, expression):
+    #     f = expression.functor.value
+    #     a_type, a = get_type_and_value(expression.args[0])
+    #     b_type, b = get_type_and_value(expression.args[1])

@@ -4,12 +4,15 @@ import inspect
 
 from .exceptions import NeuroLangException
 from .symbols_and_types import (
-    Symbol, Constant, Predicate, FunctionApplication,
-    get_type_and_value, replace_type_variable
+    Expression, Symbol, Constant, Predicate, ExistencialPredicate, FunctionApplication,
+    type_validation_value,
+    NeuroLangTypeException,
+    get_type_and_value, replace_type_variable,
+    ToBeInferred
 )
 from operator import invert, and_, or_
 from .expression_walker import (
-    add_match, ExpressionBasicEvaluator
+    add_match, ExpressionBasicEvaluator, ReplaceSymbolWalker
 )
 
 
@@ -70,7 +73,6 @@ class GenericSolver(ExpressionBasicEvaluator):
 
         return self.walk(functor(expression.args[0]))
 
-
 class SetBasedSolver(GenericSolver):
     '''
     A predicate `in <set>` which results in the `<set>` given as parameter
@@ -119,3 +121,16 @@ class SetBasedSolver(GenericSolver):
             f(a, b)
         )
         return e
+
+    @add_match(ExistencialPredicate)
+    def existencial_predicate(self, expression):
+
+        free_variable_symbol = expression.symbol
+        predicate = expression.predicate
+        partially_evaluated_predicate = self.walk(predicate)
+        results = frozenset()
+        for elem in self.symbol_table.symbols_by_type(free_variable_symbol.type):
+            rsw = ReplaceSymbolWalker(free_variable_symbol, elem.value)
+            pred = rsw.walk(partially_evaluated_predicate)
+            results = results.union(pred)
+        return results
