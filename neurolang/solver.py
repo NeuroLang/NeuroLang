@@ -4,7 +4,7 @@ import inspect
 
 from .exceptions import NeuroLangException
 from .symbols_and_types import (
-    Expression, Symbol, Constant, Predicate, ExistencialPredicate, FunctionApplication,
+    Expression, Symbol, Constant, Predicate, ExistentialPredicate, FunctionApplication,
     type_validation_value,
     NeuroLangTypeException,
     get_type_and_value, replace_type_variable,
@@ -122,15 +122,16 @@ class SetBasedSolver(GenericSolver):
         )
         return e
 
-    @add_match(ExistencialPredicate)
-    def existencial_predicate(self, expression):
+    @add_match(ExistentialPredicate)
+    def existential_predicate(self, expression):
 
         free_variable_symbol = expression.symbol
         predicate = expression.predicate
         partially_evaluated_predicate = self.walk(predicate)
         results = frozenset()
-        for elem in self.symbol_table.symbols_by_type(free_variable_symbol.type):
-            rsw = ReplaceSymbolWalker(free_variable_symbol, elem.value)
-            pred = rsw.walk(partially_evaluated_predicate)
-            results = results.union(pred)
-        return results
+        for elem in self.symbol_table.symbols_by_type(free_variable_symbol.type).values():
+            rsw = ReplaceSymbolWalker(free_variable_symbol, elem)
+            pred = self.walk(rsw.walk(partially_evaluated_predicate))
+
+            results = results.union(pred.value)
+        return Constant[free_variable_symbol.type](results)
