@@ -141,15 +141,10 @@ class SetBasedSolver(GenericSolver):
 
     @add_match(
         FunctionApplication(
-            Constant(and_),
+            Constant(...),
             (Constant[typing.AbstractSet], Constant[typing.AbstractSet])
-        )
-    )
-    @add_match(
-        FunctionApplication[ToBeInferred](
-            Constant(or_),
-            (Constant[typing.AbstractSet], Constant[typing.AbstractSet])
-        )
+        ),
+        lambda expression: expression.functor.value in (or_, and_)
     )
     def rewrite_and_or(self, expression):
         f = expression.functor.value
