@@ -206,14 +206,6 @@ def type_validation_value(value, type_, symbol_table=None):
 
 
 class ParametricTypeClassMeta(type):
-    def __new__(cls, *args, **kwargs):
-        __no_explicit_type__ = 'type' not in args[2]
-        obj = super().__new__(cls, *args, **kwargs)
-        obj.__no_explicit_type__ = __no_explicit_type__
-        if obj.__no_explicit_type__:
-            obj.type = typing.Any
-        return obj
-
     @lru_cache(maxsize=None)
     def __getitem__(cls, type_):
         d = dict(cls.__dict__)

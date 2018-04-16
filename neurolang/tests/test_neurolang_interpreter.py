@@ -83,7 +83,7 @@ class FourIntsSetSolver(solver.SetBasedSolver):
     type = FourInts
 
     def predicate_equal_to(self, value: int)->FourInts:
-        return nl.Constant(FourInts(value))
+        return FourInts(value)
 
     def predicate_singleton_set(self, value: int)->AbstractSet[FourInts]:
         return solver.FiniteDomainSet(
