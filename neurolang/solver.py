@@ -1,14 +1,11 @@
 import logging
-import inspect
 import typing
+import inspect
 
 from .exceptions import NeuroLangException
 from .symbols_and_types import (
-    Expression, Symbol, Constant, Predicate, FunctionApplication,
-    NeuroLangTypeException,
-    get_type_and_value, replace_type_variable,
-    is_subtype,
-    ToBeInferred
+    Symbol, Constant, Predicate, FunctionApplication,
+    get_type_and_value, replace_type_variable
 )
 from operator import invert, and_, or_
 from .expression_walker import (
@@ -49,61 +46,29 @@ class GenericSolver(ExpressionBasicEvaluator):
             predicate_method = 'predicate_' + identifier.name
             if hasattr(self, predicate_method):
                 method = getattr(self, predicate_method)
-                functor = Constant(method)
+                signature = inspect.signature(method)
+                type_hints = typing.get_type_hints(method)
+
+                parameter_type = type_hints[
+                    next(iter(signature.parameters.keys()))
+                ]
+
+                parameter_type = replace_type_variable(
+                    self.type,
+                    parameter_type,
+                    type_var=T
+                )
+
+                return_type = type_hints['return']
+                return_type = replace_type_variable(
+                    self.type,
+                    return_type,
+                    type_var=T
+                 )
+                functor_type = typing.Callable[[parameter_type], return_type]
+                functor = Constant[functor_type](method)
 
         return self.walk(functor(expression.args[0]))
-
-#            elif self.symbol_table[expression.functor]:
-#                method = self.symbol_table[expression.functor]
-#                if isinstance(method, Constant):
-#                    method_type, method = get_type_and_value(method)
-#            else:
-#                raise NeuroLangException(
-#                    "Predicate %s not implemented" % identifier
-#                )
-#
-#        signature = inspect.signature(method)
-#        type_hints = typing.get_type_hints(method)
-#
-#        argument = self.walk(expression.args[0])
-#        if len(signature.parameters) != 1:
-#            raise NeuroLangPredicateException(
-#                "Predicates take exactly one parameter"
-#            )
-#        else:
-#            parameter_type = type_hints[
-#                next(iter(signature.parameters.keys()))
-#            ]
-#
-#        argument_type, argument_value = get_type_and_value(
-#            argument, symbol_table=self.symbol_table
-#        )
-#
-#        parameter_type = replace_type_variable(
-#            self.type,
-#            parameter_type,
-#            type_var=T
-#        )
-#
-#        if not is_subtype(argument_type, parameter_type):
-#            raise NeuroLangTypeException("argument of wrong type")
-#
-#        return_type = type_hints['return']
-#        return_type = replace_type_variable(
-#            self.type,
-#            return_type,
-#            type_var=T
-#         )
-#
-#        if isinstance(argument, Constant):
-#            result = method_value(argument_value)
-#            if not isinstance(result, Expression):
-#                result = Constant[return_type](result)
-#            else:
-#                result = self.walk(result)
-#            return result
-#        else:
-#            return Predicate[return_type](method, (argument,))
 
 
 class SetBasedSolver(GenericSolver):
