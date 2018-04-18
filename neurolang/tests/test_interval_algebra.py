@@ -3,38 +3,38 @@ from ..interval_algebra import *
 from copy import deepcopy
 
 
-def app(x, z, first, second, elems):
-    elems.remove(x)
-    elems.remove(z)
-    for y in elems:
+def app(x, z, first, second, elements):
+    elements.remove(x)
+    elements.remove(z)
+    for y in elements:
         if first(x, y) and second(y, z):
             return True
     return False
 
 
-def composition(comp, elems, convert=False):
+def composition(relations, domain, convert=False):
     if convert:
-        comp = [[converse(f), converse(g)] for [f, g] in comp]
-    return [lambda x, z, f=functions[0], g=functions[1]: app(x, z, f, g, deepcopy(elems))  for functions in comp]
+        relations = [[converse(f), converse(g)] for [f, g] in relations]
+    return [lambda x, z, f=pair_of_fs[0], g=pair_of_fs[1]: app(x, z, f, g, deepcopy(domain)) for pair_of_fs in relations]
 
 
-def apply_composition(foos, pars, negation=False, neg=None, conversion=False):
+def apply_composition(relations, parameters, negate_whole_expression=False, negations=None, conversion=False):
 
     if conversion:
-        pars = list(reversed(pars))
+        parameters = list(reversed(parameters))
     res = True
-    for i in range(len(foos)):
-        result = foos[i](pars[i][0], pars[i][1])
-        if not neg:
-            if not result:
+    for i in range(len(relations)):
+        result = relations[i](parameters[i][0], parameters[i][1])
+        if negations:
+            if negations[i] != (not result):
                 res = False
                 break
         else:
-            if neg[i] != (not result):
+            if not result:
                 res = False
                 break
 
-    return negation != res
+    return negate_whole_expression != res
 
 
 def test_ia_relations_functions():
@@ -54,7 +54,7 @@ def test_ia_relations_functions():
     assert not starts(intervals[3], intervals[4])
 
 
-def test_composition():
+def test_compositions():
     elems = [tuple([1, 2]), tuple([4, 6]), tuple([8, 10])]
 
     rel = composition([[before, before]], elems)
@@ -88,14 +88,13 @@ def test_composition():
 
 
 def test_calculus_axioms():
-    elems = [tuple([0, 1]), tuple([1, 2]), tuple([1, 2]), tuple([1, 5]),  tuple([2, 5]), tuple([4, 6]), tuple([5, 8]), tuple([8, 10])]
+    elems = [tuple(random.randint(1, 100, size=2)) for _ in range(10)]
 
     #Huntington's axiom
     r, s = random.choice([before, overlaps, during, meets, starts, finishes, equals], 2)
     i, j = random.choice(range(len(elems)), 2, replace=False)
     assert not (not r(elems[i], elems[j]) or not s(elems[i], elems[j])) or (not (
     (not r(elems[i], elems[j])) or s(elems[i], elems[j]))) == r(elems[i], elems[j])
-
 
     #identity
     i, j = random.choice(range(len(elems)), 2)
@@ -149,4 +148,4 @@ def test_calculus_axioms():
     i, j = random.choice(range(len(elems)), 2, replace=False)
     c = composition([[converse(r), negate(r)]], elems)
     c2 = composition([[r, s]], elems)
-    assert (apply_composition(c, [[elems[i], elems[j]]], negation=False, neg=[False, True]) and apply_composition(c2, [[elems[i], elems[j]]], negation=True) and (not s)) == (not s)
+    assert (apply_composition(c, [[elems[i], elems[j]]], negate_whole_expression=False, negations=[False, True]) and apply_composition(c2, [[elems[i], elems[j]]], negate_whole_expression=True) and (not s)) == (not s)
