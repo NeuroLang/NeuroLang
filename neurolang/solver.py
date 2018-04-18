@@ -3,13 +3,14 @@ import typing
 import inspect
 
 from .exceptions import NeuroLangException
-from .symbols_and_types import (
-    Expression, Symbol, Constant, Predicate, ExistentialPredicate, FunctionApplication,
+from .expressions import (
+    Expression, Symbol, Constant, Predicate, FunctionApplication,
     type_validation_value,
     NeuroLangTypeException,
-    get_type_and_value, replace_type_variable,
+    get_type_and_value,
     ToBeInferred
 )
+from .symbols_and_types import (ExistentialPredicate, replace_type_variable)
 from operator import invert, and_, or_
 from .expression_walker import (
     add_match, ExpressionBasicEvaluator, ReplaceSymbolWalker
@@ -126,12 +127,18 @@ class SetBasedSolver(GenericSolver):
     def existential_predicate(self, expression):
 
         free_variable_symbol = expression.symbol
+        if free_variable_symbol in self.symbol_table._symbols:
+            return self.symbol_table._symbols[free_variable_symbol]
+
         predicate = expression.predicate
         partially_evaluated_predicate = self.walk(predicate)
         results = frozenset()
-        for elem in self.symbol_table.symbols_by_type(free_variable_symbol.type).values():
-            rsw = ReplaceSymbolWalker(free_variable_symbol, elem)
-            pred = self.walk(rsw.walk(partially_evaluated_predicate))
 
-            results = results.union(pred.value)
+        for elem_set in self.symbol_table.symbols_by_type(free_variable_symbol.type).values():
+            for elem in elem_set.value:
+                elem = Constant[free_variable_symbol.type](frozenset([elem]))
+                rsw = ReplaceSymbolWalker(free_variable_symbol, elem)
+                rsw_walk = rsw.walk(partially_evaluated_predicate)
+                pred = self.walk(rsw_walk)
+                results = results.union(pred.value)
         return Constant[free_variable_symbol.type](results)

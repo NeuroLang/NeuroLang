@@ -590,10 +590,12 @@ class ExistentialPredicate(Predicate):
     def __init__(self, symbol, predicate):
 
         if not isinstance(symbol, Symbol):
-            raise
-        if not isinstance(predicate, Predicate):
-            raise
+            raise NeuroLangException('A symbol should be provided for the existential quantifier expression')
+        if not isinstance(predicate, (Predicate, FunctionApplication)):
+            raise NeuroLangException('A predicate or a function application over predicates should be associated to the quantifier')
 
+        if symbol not in predicate._symbols:
+            raise NeuroLangException('Symbol should be a free variable on the predicate')
         self.symbol = symbol
         self.predicate = predicate
         self._symbol = predicate._symbols - {symbol}
