@@ -53,9 +53,9 @@ def translate_ia_relation(x, y):
     elif x in ['d', 's', 'f', 'e'] and y in ['mi', 'bi']:
         return np.array([[0, 1, 0], [0, 0, 0], [0, 0, 0]])
     elif x in ['mi', 'bi'] and y in ['d', 's', 'f', 'e']:
-        return np.array([[0, 0, 0], [1, 0, 0], [0, 0, 0]])
-    elif x in ['m', 'b'] and y in ['d', 's', 'f', 'e']:
         return np.array([[0, 0, 0], [0, 0, 1], [0, 0, 0]])
+    elif x in ['m', 'b'] and y in ['d', 's', 'f', 'e']:
+        return np.array([[0, 0, 0], [1, 0, 0], [0, 0, 0]])
     elif x in ['mi', 'bi'] and y in ['mi', 'bi']:
         return np.array([[0, 0, 1], [0, 0, 0], [0, 0, 0]])
     elif x in ['m', 'b'] and y in ['mi', 'bi']:

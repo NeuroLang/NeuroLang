@@ -30,7 +30,7 @@ class RegionsSetSolver(SetBasedSolver):
                            'west_of': 'W', 'overlapping': 'O'}.items():
             setattr(self, key, self.define_inv_dir_based_fun(value))
             self.symbol_table[
-                nl.Symbol[pred_type]('inverse ' + key)
+                nl.Symbol[pred_type]('converse ' + key)
             ] = nl.Constant[pred_type](self.__getattribute__(key))
 
         self.symbol_table[nl.Symbol[pred_type]('universal')] = nl.Constant[pred_type](self.symbols_of_type())
@@ -51,19 +51,7 @@ class RegionsSetSolver(SetBasedSolver):
     def define_inv_dir_based_fun(self, direction) -> typing.AbstractSet[Region]:
         def f(reference_region: typing.AbstractSet[Region]) -> typing.AbstractSet[Region]:
             return self.direction(inverse_direction(direction), reference_region)
-
         return f
-
-    # def define_dir_based_fun2(self, direction) -> typing.AbstractSet[Region]:
-    #     def f(reference_region: typing.AbstractSet[Region]) -> typing.AbstractSet[Region]:
-    #         return self.direction(direction, reference_region, converse=True)
-    #     return f
-
-    # @nl.add_match(nl.Predicate(nl.Symbol('invert'), (nl.Constant[typing.AnyStr],)))
-    # def invert(self, expression):
-    #     functor = expression.args[0].value
-    #     res = self.symbol_table[functor].value
-    #     return frozenset()
 
     # add a match for the predicate "singleton" with a region as parameter
     # that will produce a set with just that region as a result
@@ -76,10 +64,6 @@ class RegionsSetSolver(SetBasedSolver):
         )
         return res
 
-    # @nl.add_match(nl.Predicate(nl.Symbol('invert'), (nl.Constant[str],nl.Constant[typing.AbstractSet[Region]])))
-    # def invert(self, expression):
-    #     return self.walk(nl.Constant[typing.AbstractSet[Region]](frozenset()))
-
     def direction(self, direction, reference_region: typing.AbstractSet[Region]) -> typing.AbstractSet[Region]:
         result, visited = frozenset(), frozenset()
         for symbol in self.symbol_table.symbols_by_type(typing.AbstractSet[Region]).values():
@@ -88,7 +72,7 @@ class RegionsSetSolver(SetBasedSolver):
                 for region in regions_set:
                     is_in_dir = True
                     for elem in reference_region:
-                        mat = direction_matrix(region, elem) # if converse else direction_matrix(elem, region)        #invol -> alterna los parametros de esta aplicacion
+                        mat = direction_matrix(region, elem)
                         if not is_in_direction(mat, direction) or (region in reference_region):
                             is_in_dir = False
                             break
@@ -96,8 +80,7 @@ class RegionsSetSolver(SetBasedSolver):
                         result = result.union(frozenset((region,)))
                 visited = visited.union(regions_set)
 
-        return self.walk(nl.Constant[typing.AbstractSet[Region]](result))
-
+        return self.walk(result)
 
     @nl.add_match(nl.FunctionApplication(nl.Constant(operator.invert), (nl.Constant[typing.AbstractSet],)))
     def rewrite_finite_domain_inversion(self, expression):
@@ -107,7 +90,7 @@ class RegionsSetSolver(SetBasedSolver):
             (
                 v.value for v in
                 self.symbol_table.symbols_by_type(
-                    set_type.__args__[0]    #nl.Constant[typing.AbstractSet[Region]]
+                    set_type.__args__[0]
                 ).values()
             )
         )
@@ -116,9 +99,3 @@ class RegionsSetSolver(SetBasedSolver):
 
         result = all_regions - set_value
         return self.walk(nl.Constant[set_type](result))
-
-    # @nl.add_match(nl.FunctionApplication(nl.Constant(conv), (nl.Constant[typing.AbstractSet],)))
-    # def rewrite_finite_domain_inversion(self, expression):
-    #     f = expression.functor.value
-    #     a_type, a = get_type_and_value(expression.args[0])
-    #     b_type, b = get_type_and_value(expression.args[1])

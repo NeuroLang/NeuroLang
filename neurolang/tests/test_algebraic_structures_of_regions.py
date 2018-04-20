@@ -6,110 +6,72 @@ from typing import AbstractSet, Callable
 from ..regions import Region
 
 
-def inverse_direction(arg):
-    dirs = ['north_of', 'east_of', 'overlapping', 'west_of', 'south_of']
-    for i in range(len(arg)):
-        arg[i] = dirs[len(dirs) - dirs.index(arg[i]) - 1]
-    return arg
-
-
-# def define_universal_rel_in_solver(solver, type):
-#     def symbols_of_type():
-#         res = frozenset()
-#         for elem in solver.symbol_table.symbols_by_type(type).values():
-#             res = res.union(elem.value)
-#         return res
-#     solver.symbol_table[nl.Symbol[type]('universal')] = nl.Constant[type](symbols_of_type)
-
-def test_simple_relation_north_of():
-
+def test_relation_north_of():
+    region_set_type = typing.AbstractSet[Region]
     solver = RegionsSetSolver(TypedSymbolTable())
 
     inferior = Region((0, 0), (1, 1))
     central = Region((0, 2), (1, 3))
     superior = Region((0, 4), (1, 5))
 
-    north_relation = 'north_of'
-
     all_elements = frozenset([inferior, central, superior])
     elem = frozenset([central])
 
-    solver.symbol_table[nl.Symbol[AbstractSet[Region]]('db')] = nl.Constant[typing.AbstractSet[Region]](all_elements)
+    solver.symbol_table[nl.Symbol[region_set_type]('db')] = nl.Constant[region_set_type](all_elements)
+    solver.symbol_table[nl.Symbol[region_set_type]('elem')] = nl.Constant[region_set_type](elem)
 
-    region_set_type = typing.AbstractSet[Region]
-
-    def set_region_predicate(name='query_element', type=region_set_type, element=elem):
-        solver.symbol_table[nl.Symbol[type](name)] = nl.Constant[type](element)
-
-    def define_predicate(type=region_set_type, operation=north_relation, element='predicate_name'):
-        return nl.Predicate[type](
-            nl.Symbol[Callable[[type], type]](operation),
-            (nl.Symbol[type](element),)
+    north_relation = 'north_of'
+    predicate = nl.Predicate[region_set_type](
+            nl.Symbol[Callable[[region_set_type], region_set_type]](north_relation),
+            (nl.Symbol[region_set_type]('elem'),)
         )
 
-    set_region_predicate(name='predicate_name', type=region_set_type, element=elem)
-    pred = define_predicate(type=region_set_type, operation=north_relation, element='predicate_name')
+    query = nl.Query[region_set_type](nl.Symbol[region_set_type]('p1'), predicate)
+    solver.walk(query)
 
-    def solve_query(type=region_set_type, solver=solver, predicate=pred, target_name='query_result'):
-        query = nl.Query[type](nl.Symbol[type](target_name), predicate)
-        solver.walk(query)
-        return solver.symbol_table[target_name].value
+    assert solver.symbol_table['p1'].value == frozenset([superior])
 
-    expected = frozenset([superior])
-    actual = solve_query(region_set_type, solver, pred)
-    assert expected == actual
 
-def test_north_U_south():
-    # solver = RegionsSetSolver()
-    # solver.set_symbol_table(TypedSymbolTable())
-
+def test_north_u_south():
     solver = RegionsSetSolver(TypedSymbolTable())
 
-    db_elems = frozenset([
-        Region((0, 5), (1, 6)), Region((0, -10), (1, -8))
-    ])
+    db_elems = frozenset([Region((0, 5), (1, 6)), Region((0, -10), (1, -8))])
+    elem = frozenset([Region((0, 0), (1, 1))])
+
     solver.symbol_table[nl.Symbol[AbstractSet[Region]]('db')] = nl.Constant[typing.AbstractSet[Region]](db_elems)
-
-
-    elem = frozenset([
-        Region((0, 0), (1, 1))
-    ])
     solver.symbol_table[nl.Symbol[AbstractSet[Region]]('e1')] = nl.Constant[typing.AbstractSet[Region]](elem)
 
     check_union_commutativity(AbstractSet[Region], solver, 'north_of', 'south_of', 'e1')
 
-def check_union_commutativity(type, solver, relation1, relation2, element):
-    p1 = nl.Predicate[type](
-        nl.Symbol[Callable[[type], type]](relation1),
-        (nl.Symbol[type](element),)
+
+def check_union_commutativity(set_type, solver, relation1, relation2, element):
+    p1 = nl.Predicate[set_type](
+        nl.Symbol[Callable[[set_type], set_type]](relation1),
+        (nl.Symbol[set_type](element),)
     )
 
-    p2 = nl.Predicate[type](
-        nl.Symbol[Callable[[type], type]](relation2),
-        (nl.Symbol[type](element),)
+    p2 = nl.Predicate[set_type](
+        nl.Symbol[Callable[[set_type], set_type]](relation2),
+        (nl.Symbol[set_type](element),)
     )
 
-    query_a = nl.Query[type](nl.Symbol[type]('a'), p1 | p2)
-    query_b = nl.Query[type](nl.Symbol[type]('b'), p2 | p1)
-
+    query_a = nl.Query[set_type](nl.Symbol[set_type]('a'), (p1 | p2))
+    query_b = nl.Query[set_type](nl.Symbol[set_type]('b'), (p2 | p1))
     solver.walk(query_a)
     solver.walk(query_b)
-
     assert solver.symbol_table['a'] == solver.symbol_table['b']
 
 
-def test_union_asociativity():
+def test_union_associativity():
     solver = RegionsSetSolver(TypedSymbolTable())
 
-    db_elems = frozenset([
-        Region((0, 5), (1, 6)), Region((0, -10), (1, -8))
-    ])
-    solver.symbol_table[nl.Symbol[AbstractSet[Region]]('db')] = nl.Constant[AbstractSet[Region]](db_elems)
-
+    db_elems = frozenset([Region((0, 5), (1, 6)), Region((0, -10), (1, -8))])
     elem = frozenset([Region((0, 0), (1, 1))])
 
-    solver.symbol_table[nl.Symbol[AbstractSet[Region]]('e')] = nl.Constant[AbstractSet[Region]](elem)
-    check_union_associativity(AbstractSet[Region], solver, 'north_of', 'south_of', 'west_of', 'e')
+    solver.symbol_table[nl.Symbol[AbstractSet[Region]]('db')] = nl.Constant[typing.AbstractSet[Region]](db_elems)
+    solver.symbol_table[nl.Symbol[AbstractSet[Region]]('elem')] = nl.Constant[typing.AbstractSet[Region]](elem)
+
+    check_union_associativity(AbstractSet[Region], solver, 'north_of', 'south_of', 'west_of', 'elem')
 
 
 def check_union_associativity(type, solver, relation1, relation2, relation3, element):
@@ -135,6 +97,7 @@ def check_union_associativity(type, solver, relation1, relation2, relation3, ele
     solver.walk(query_b)
 
     assert solver.symbol_table['a'] == solver.symbol_table['b']
+
 
 def test_huntington_axiom():
     solver = RegionsSetSolver(TypedSymbolTable())
@@ -164,141 +127,241 @@ def check_huntington(type, solver, relation1, relation2, element):
     query_a = nl.Query[type](nl.Symbol[type]('a'), p1)
     solver.walk(query_a)
 
-    query_b = nl.Query[type](nl.Symbol[type]('b'), ~(
-        (~p1 | ~p2).cast(type)
-    ).cast(type) | ~(~p1 | p2).cast(type))
+    query_b = nl.Query[type](nl.Symbol[type]('b'), ~(~p1 | ~p2) | ~(~p1 | p2))
     solver.walk(query_b)
-
-
     assert solver.symbol_table['a'] == solver.symbol_table['b']
 
 
-def test_simple_converse():
+def test_composition():
     solver = RegionsSetSolver(TypedSymbolTable())
 
-    db_elems = frozenset([
-        Region((0, 5), (1, 6)), Region((0, -10), (1, -8))
-    ])
-    solver.symbol_table[nl.Symbol[AbstractSet[Region]]('db')] = nl.Constant[AbstractSet[Region]](db_elems)
+    superior = Region((0, 5), (1, 6))
+    central = Region((0, 0), (1, 1))
+    lat1 = Region((2, 0), (3, 1))
+    lat2 = Region((6, 0), (7, 1))
+    lat3 = Region((10, 0), (11, 1))
 
-    elem = frozenset([Region((0, 0), (1, 1))])
-    solver.symbol_table[nl.Symbol[AbstractSet[Region]]('e')] = nl.Constant[AbstractSet[Region]](elem)
+    db_elements = frozenset([central, superior, lat1, lat2, lat3])
+    set_type = AbstractSet[Region]
 
-    type = AbstractSet[Region]
+    solver.symbol_table[nl.Symbol[set_type]('db')] = nl.Constant[set_type](db_elements)
+    solver.symbol_table[nl.Symbol[set_type]('c')] = nl.Constant[set_type](frozenset([superior]))
 
-    p1 = nl.Predicate[type](
-        nl.Symbol[Callable[[type], type]]('north_of'),
-        (nl.Symbol[type]('e'),)
-    )
+    res = do_composition_of_relations_from_region(set_type, solver, 'c', 'east_of', 'south_of')
 
-    p2 = nl.Predicate[type](
-        nl.Symbol[Callable[[type], type]]('inverse north_of'),
-        (nl.Symbol[type]('e'),)
-    )
-
-    query_a = nl.Query[AbstractSet[Region]](nl.Symbol[AbstractSet[Region]]('a'), p1)
-    solver.walk(query_a)
-    assert solver.symbol_table['a'].value == frozenset({Region((0, 5), (1, 6))})
-
-    query_b = nl.Query[AbstractSet[Region]](nl.Symbol[AbstractSet[Region]]('b'), p2)
-    solver.walk(query_b)
-    assert solver.symbol_table['b'].value == frozenset({Region((0, -10), (1, -8))})
+    assert res == frozenset([lat1, lat2, lat3])
 
 
-def test_converse_involution():
-    solver = RegionsSetSolver(TypedSymbolTable())
+def do_composition_of_relations_from_region(set_type, solver, elem, relation1, relation2):
 
-    db_elems = frozenset([
-        Region((0, 5), (1, 6)), Region((0, -10), (1, -8))
-    ])
-    solver.symbol_table[nl.Symbol[AbstractSet[Region]]('db')] = nl.Constant[AbstractSet[Region]](db_elems)
+    bs = do_query_of_relation(set_type, solver, elem, relation2)
+    if bs.value == frozenset():
+        return bs.value
 
-    elem = frozenset([Region((0, 0), (1, 1))])
-    solver.symbol_table[nl.Symbol[AbstractSet[Region]]('e')] = nl.Constant[AbstractSet[Region]](elem)
-
-    involution = double_converse(AbstractSet[Region], solver, 'north_of', 'e')
-
-    p1 = nl.Predicate[type](
-        nl.Symbol[Callable[[type], type]]('north_of'),
-        (nl.Symbol[type]('e'),)
-    )
-
-    query_a = nl.Query[AbstractSet[Region]](nl.Symbol[AbstractSet[Region]]('query_result'), p1)
-    solver.walk(query_a)
-    assert involution == solver.symbol_table['query_result'].value
-
-
-def double_converse(type, solver, function, elem):
-
-    p1 = nl.Predicate[type](
-        nl.Symbol[Callable[[type], type]](function),
-        (nl.Symbol[type](elem),)
-    )
-
-    query_a = nl.Query[type](nl.Symbol[type]('a'), p1)
-    solver.walk(query_a)
-    result = solver.symbol_table['a'].value
-    solver.symbol_table[nl.Symbol[AbstractSet[Region]]('f')] = nl.Constant[AbstractSet[Region]](result)
-    p2 = nl.Predicate[type](
-        nl.Symbol[Callable[[type], type]]('inverse ' + function),
-        (nl.Symbol[type]('f'),)
-    )
-
-    query_b = nl.Query[type](nl.Symbol[type]('b'), p2)
-    solver.walk(query_b)
-
+    result = frozenset()
+    for b_element in bs.value:
+        solver.symbol_table[nl.Symbol[set_type]('b_element')] = nl.Constant[AbstractSet[Region]](frozenset([b_element]))
+        res = do_query_of_relation(set_type, solver, 'b_element', relation1)
+        result = result.union(res.value)
     return result
 
 
-# def test_converse_distributivity():
-#
-#     solver = RegionsSetSolver(TypedSymbolTable())
-#
-#     db_elems = frozenset([
-#         Region((0, 5), (1, 6)), Region((0, -10), (1, -8))
-#     ])
-#     solver.symbol_table[nl.Symbol[AbstractSet[Region]]('db')] = nl.Constant[AbstractSet[Region]](db_elems)
-#
-#     elem = frozenset([Region((0, 0), (1, 1))])
-#     solver.symbol_table[nl.Symbol[AbstractSet[Region]]('e')] = nl.Constant[AbstractSet[Region]](elem)
-#
-#     elem = frozenset([
-#         Region((0, 0), (1, 1))
-#     ])
-#     solver.symbol_table[nl.Symbol[AbstractSet[Region]]('e1')] = nl.Constant[typing.AbstractSet[Region]](elem)
-#
-#     north_u_south = get_converse_of_union_elements(AbstractSet[Region], solver, 'north_of', 'south_of', 'e1')
-#
-#
-#
-# def get_converse_of_union_elements(type, solver, relation1, relation2, elem):
-#
-#     [relation1, relation2] = inverse_direction([relation1, relation2])
-#     p1 = nl.Predicate[type](
-#         nl.Symbol[Callable[[type], type]](relation1),
-#         (nl.Symbol[type](elem),)
-#     )
-#
-#     p2 = nl.Predicate[type](
-#         nl.Symbol[Callable[[type], type]](relation2),
-#         (nl.Symbol[type](elem),)
-#     )
-#
-#     query_a = nl.Query[type](nl.Symbol[type]('a'), p1 | p2)
-#     solver.walk(query_a)
-#
-#     return solver.symbol_table['a']
-#
+def do_query_of_relation(set_type, solver, elem, relation):
 
-def test_universal_relation():
+    predicate = nl.Predicate[set_type](
+            nl.Symbol[Callable[[set_type], set_type]](relation),
+            (nl.Symbol[set_type](elem),)
+        )
+
+    query = nl.Query[set_type](nl.Symbol[set_type]('p'), predicate)
+    solver.walk(query)
+
+    return solver.symbol_table['p']
+
+
+def test_composition_distributivity():
+    solver = RegionsSetSolver(TypedSymbolTable())
+
+    superior = Region((0, 5), (1, 6))
+    central = Region((0, 0), (1, 1))
+    lat0 = Region((-3, 0), (-2, 1))
+    lat1 = Region((2, 0), (3, 1))
+    lat2 = Region((6, 0), (7, 1))
+    lat3 = Region((10, 0), (11, 1))
+
+    db_elements = frozenset([central, superior, lat0, lat1, lat2, lat3])
+    set_type = AbstractSet[Region]
+
+    solver.symbol_table[nl.Symbol[set_type]('db')] = nl.Constant[set_type](db_elements)
+    solver.symbol_table[nl.Symbol[set_type]('d')] = nl.Constant[set_type](frozenset([superior]))
+
+    res = check_distributivity(set_type, solver, 'd', 'west_of', 'east_of', 'south_of')
+
+    c1 = do_composition_of_relations_from_region(set_type, solver, 'd', 'west_of', 'south_of')
+    c2 = do_composition_of_relations_from_region(set_type, solver, 'd', 'east_of', 'south_of')
+    assert res == c1.union(c2)
+
+
+def check_distributivity(set_type, solver, elem, rel1, rel2, rel3):
+
+    res = do_query_of_relation(set_type, solver, elem, rel3)
+    obtained = frozenset()
+
+    #iterate over the result of a query b in B and apply R&S b to obtain the left side element (a)
+    for elements in res.value:
+
+        solver.symbol_table[nl.Symbol[set_type]('pred_base_element')] = nl.Constant[set_type](frozenset([elements]))
+        p1 = nl.Predicate[set_type](
+            nl.Symbol[Callable[[set_type], set_type]](rel1),
+            (nl.Symbol[set_type]('pred_base_element'),)
+        )
+
+        p2 = nl.Predicate[set_type](
+            nl.Symbol[Callable[[set_type], set_type]](rel2),
+            (nl.Symbol[set_type]('pred_base_element'),)
+        )
+
+        query_union = nl.Query[set_type](nl.Symbol[set_type]('union'), (p1 | p2))
+        solver.walk(query_union)
+        obtained = obtained.union(solver.symbol_table['union'].value)
+
+    return obtained
+
+
+def check_distributivity_composition_of_relations_from_region(set_type, solver, elem, rel1, rel2, rel3):
+
+    cs = do_query_of_relation(set_type, solver, elem, rel3)
+    if cs.value == frozenset():
+        return cs.value
+
+    bs = frozenset()
+    for c_elements in cs.value:
+        solver.symbol_table[nl.Symbol[set_type]('c')] = [c_elements]
+        b = do_query_of_relation(set_type, solver, 'c', rel2)
+        bs.union(b)
+
+    if bs.value == frozenset():
+        return bs.value
+
+    result = frozenset()
+    for b_elements in bs:
+        solver.symbol_table[nl.Symbol[set_type]('b')] = [b_elements]
+        res = do_query_of_relation(set_type, solver, 'b', rel1)
+        result.union(res)
+    return result
+
+
+def test_involution():
+    class SBS(RegionsSetSolver):
+        type = Region
+
+    solver = SBS(TypedSymbolTable())
+
+    inferior = Region((0, -10), (1, -8))
+    central = Region((0, 0), (1, 1))
+    superior = Region((0, 5), (1, 6))
+
+    db_elems = frozenset([central, superior, inferior])
+    elem = frozenset([central])
+
+    set_type = AbstractSet[Region]
+
+    solver.symbol_table[nl.Symbol[set_type]('db')] = nl.Constant[set_type](db_elems)
+    solver.symbol_table[nl.Symbol[set_type]('element')] = nl.Constant[set_type](elem)
+
+    north_relation = 'north_of'
+    p1 = nl.Predicate[set_type](
+        nl.Symbol[Callable[[set_type], set_type]](north_relation),
+        (nl.Symbol[set_type]('x'),)
+    )
+
+    exists = nl.ExistentialPredicate[set_type](
+        nl.Symbol[set_type]('x'), p1
+    )
+
+    query = nl.Query[set_type](nl.Symbol[set_type]('existential_query'), exists)
+    solver.walk(query)
+    res = solver.symbol_table['existential_query'].value - elem
+
+    p_conv = nl.Predicate[set_type](
+        nl.Symbol[Callable[[set_type], set_type]]('converse ' + north_relation),
+        (nl.Symbol[set_type]('element'),)
+    )
+    query_conv = nl.Query[set_type](nl.Symbol[set_type]('converse_query'), p_conv)
+    solver.walk(query_conv)
+
+    assert res == solver.symbol_table['converse_query'].value
+
+
+def test_converse_distributivity():
+
+    class SBS(RegionsSetSolver):
+        type = Region
+
+    solver = SBS(TypedSymbolTable())
+
+    db_elems = frozenset([Region((0, 5), (1, 6)), Region((0, -10), (1, -8))])
+    elem = frozenset([Region((0, 0), (1, 1))])
+
+    solver.symbol_table[nl.Symbol[AbstractSet[Region]]('db')] = nl.Constant[typing.AbstractSet[Region]](db_elems)
+    solver.symbol_table[nl.Symbol[AbstractSet[Region]]('e1')] = nl.Constant[typing.AbstractSet[Region]](elem)
+
+    set_type = AbstractSet[Region]
+
+    p1 = nl.Predicate[set_type](
+        nl.Symbol[Callable[[set_type], set_type]]('north_of'),
+        (nl.Symbol[set_type]('x'),)
+    )
+
+    p2 = nl.Predicate[set_type](
+        nl.Symbol[Callable[[set_type], set_type]]('south_of'),
+        (nl.Symbol[set_type]('x'),)
+    )
+
+    exists = nl.ExistentialPredicate[set_type](
+        nl.Symbol[set_type]('x'), p1 | p2
+    )
+    query_a = nl.Query[set_type](nl.Symbol[set_type]('a'), exists)
+    solver.walk(query_a)
+    res = solver.symbol_table['a'].value - elem
+
+    p1 = nl.Predicate[set_type](
+        nl.Symbol[Callable[[set_type], set_type]]('north_of'),
+        (nl.Symbol[set_type]('x'),)
+    )
+
+    p2 = nl.Predicate[set_type](
+        nl.Symbol[Callable[[set_type], set_type]]('south_of'),
+        (nl.Symbol[set_type]('x'),)
+    )
+
+    exists_p1 = nl.ExistentialPredicate[set_type](
+        nl.Symbol[set_type]('x'), p1
+    )
+    exists_p2 = nl.ExistentialPredicate[set_type](
+        nl.Symbol[set_type]('x'), p2
+    )
+
+    query_p1 = nl.Query[set_type](nl.Symbol[set_type]('p1'), exists_p1)
+    query_p2 = nl.Query[set_type](nl.Symbol[set_type]('p2'), exists_p2)
+    solver.walk(query_p1)
+    solver.walk(query_p2)
+    union_result = (solver.symbol_table['p1'].value | solver.symbol_table['p2'].value) - elem
+    assert union_result == res
+
+
+def test_universal_relation_return_all_elements():
 
     solver = RegionsSetSolver(TypedSymbolTable())
+    superior = Region((0, 5), (1, 6))
+    inferior = Region((0, -10), (1, -8))
+    central = Region((0, 0), (1, 1))
     db_elems = frozenset([
-        Region((0, 5), (1, 6)), Region((0, -10), (1, -8))
+        superior, inferior
     ])
     solver.symbol_table[nl.Symbol[AbstractSet[Region]]('db')] = nl.Constant[AbstractSet[Region]](db_elems)
 
-    elem = frozenset([Region((0, 0), (1, 1))])
+    elem = frozenset([central])
     solver.symbol_table[nl.Symbol[AbstractSet[Region]]('e')] = nl.Constant[AbstractSet[Region]](elem)
 
     type = AbstractSet[Region]
@@ -309,164 +372,57 @@ def test_universal_relation():
 
     query_a = nl.Query[AbstractSet[Region]](nl.Symbol[AbstractSet[Region]]('a'), p1)
     solver.walk(query_a)
-    print(solver.symbol_table['a'].value)
+    assert solver.symbol_table['a'].value == frozenset([superior, inferior, central])
+'''todo: review'''
 
 
+def test_composition_identity():
+    class SBS(RegionsSetSolver):
+        type = Region
 
-def test_basic_composition_relation():
+        def predicate_universal(self, reference_elem_in_set: AbstractSet[Region]) -> AbstractSet[Region]:
+            res = frozenset()
+            for elem in self.symbol_table.symbols_by_type(typing.AbstractSet[Region]).values():
+                res = res.union(elem.value)
+            return res
 
-    solver = RegionsSetSolver(TypedSymbolTable())
+    solver = SBS(TypedSymbolTable())
 
-    db_elems = frozenset([
-        Region((0, 5), (1, 6)), Region((0, -10), (1, -8))
-    ])
-    solver.symbol_table[nl.Symbol[AbstractSet[Region]]('db')] = nl.Constant[typing.AbstractSet[Region]](db_elems)
-
-    elem = frozenset([
-        Region((0, 0), (1, 1))
-    ])
-
-    print(compose_relations(AbstractSet[Region], solver, 'north_of', 'south_of', elem))
-    #assert compose_relations(AbstractSet[Region], solver, 'north_of', 'south_of', elem) == frozenset([Region((0, 0), (1, 1)), Region((0, -10), (1, -8)])
-
-
-def compose_relations(type, solver, relation1, relation2, element):
-
-    intermediate_results = frozenset()
-    for elem in element:
-        solver.symbol_table[nl.Symbol[type]('intermediate')] = nl.Constant[type](frozenset([elem]))
-        p1 = nl.Predicate[type](
-            nl.Symbol[Callable[[type], type]](relation1),
-            (nl.Symbol[type]('intermediate'),)
-        )
-
-        query_a = nl.Query[type](nl.Symbol[type]('first_query'), p1)
-        solver.walk(query_a)
-        intermediate_results = intermediate_results.union(solver.symbol_table['first_query'].value)
-    res = frozenset()
-    for elem in intermediate_results:
-        solver.symbol_table[nl.Symbol[AbstractSet[Region]]('intermediate')] = nl.Constant[typing.AbstractSet[Region]](frozenset([elem]))
-        p2 = nl.Predicate[type](
-            nl.Symbol[Callable[[type], type]](relation2),
-            (nl.Symbol[type]('intermediate'),)
-        )
-
-        query_b = nl.Query[type](nl.Symbol[type]('second_query'), p2)
-
-        solver.walk(query_b)
-        res = res.union(solver.symbol_table['second_query'].value)
-    return res
-
-def test_compose_associativity():
-
-    solver = RegionsSetSolver(TypedSymbolTable())
-
-    inferior = Region((0, 0), (1, 1))
-    central = Region((0, 2), (1, 3))
-    superior = Region((0, 4), (1, 5))
-
-    db_elems = frozenset([inferior, central, superior])
-
-    north_relation, south_relation = 'north_of', 'south_of'
-    type = AbstractSet[Region]
-
-    solver.symbol_table[nl.Symbol[AbstractSet[Region]]('db')] = nl.Constant[AbstractSet[Region]](db_elems)
-
+    db_elems = frozenset([Region((0, 5), (1, 6)), Region((0, -10), (1, -8))])
     elem = frozenset([Region((0, 0), (1, 1))])
-    solver.symbol_table[nl.Symbol[AbstractSet[Region]]('e')] = nl.Constant[AbstractSet[Region]](elem)
+    set_type = AbstractSet[Region]
 
-    #first part
-    intermediate_results = compose_relations(AbstractSet[Region], solver, north_relation, south_relation, elem)
+    solver.symbol_table[nl.Symbol[set_type]('db')] = nl.Constant[set_type](db_elems)
+    solver.symbol_table[nl.Symbol[set_type]('e')] = nl.Constant[set_type](elem)
 
-    solver.symbol_table[nl.Symbol[type]('foo1')] = nl.Constant[type](intermediate_results)
-    p2222 = nl.Predicate[type](
-        nl.Symbol[Callable[[type], type]](north_relation),
-        (nl.Symbol[type]('foo1'),)
+    pred_type = Callable[
+        [set_type],
+        set_type
+    ]
+    solver.symbol_table[nl.Symbol[pred_type]('universal')] = nl.Constant[pred_type](solver.predicate_universal)
+    solver.symbol_table[nl.Symbol[pred_type]('converse universal')] = nl.Constant[pred_type](
+        solver.predicate_universal)
+
+    id1 = relations_composition(AbstractSet[Region], solver, 'universal', 'north_of')
+    id2 = relations_composition(AbstractSet[Region], solver, 'converse north_of', 'universal')
+    assert id1 == id2
+
+
+def relations_composition(set_type, solver, relation_1, relation_2):
+    p1 = nl.Predicate[set_type](
+        nl.Symbol(relation_1),
+        (nl.Symbol[set_type]('x'),)
     )
 
-    query_b = nl.Query[type](nl.Symbol[type]('nuevo'), p2222)
-    solver.walk(query_b)
-
-    #TODO revisar este caso donde hay que iterar sobre todos los elementos para replicar el ciclo que se hace en la composicion
-    first_result = frozenset()
-    for elem in intermediate_results:
-        solver.symbol_table[nl.Symbol[AbstractSet[Region]]('intermediate')] = nl.Constant[typing.AbstractSet[Region]](
-            frozenset([elem]))
-        p2 = nl.Predicate[type](
-            nl.Symbol[Callable[[type], type]](north_relation),
-            (nl.Symbol[type]('intermediate'),)
-        )
-
-        query_b = nl.Query[type](nl.Symbol[type]('b'), p2)
-
-        solver.walk(query_b)
-        first_result = first_result.union(solver.symbol_table['b'].value)
-
-
-    #second part
-    p1 = nl.Predicate[type](
-        nl.Symbol[Callable[[type], type]](north_relation),
-        (nl.Symbol[type]('e'),)
+    p2 = nl.Predicate[set_type](
+        nl.Symbol('converse ' + relation_2),
+        (nl.Symbol[set_type]('x'),)
     )
-    query_a = nl.Query[type](nl.Symbol[type]('a'), p1)
+
+    exists = nl.ExistentialPredicate[set_type](
+        nl.Symbol[set_type]('x'), p1 & p2
+    )
+
+    query_a = nl.Query[set_type](nl.Symbol[set_type]('result'), exists)
     solver.walk(query_a)
-    intermediate = solver.symbol_table['a'].value
-    second_result = compose_relations(AbstractSet[Region], solver, south_relation, north_relation, intermediate)
-
-    assert first_result == second_result
-
-
-def test_compose_distributibity():
-
-    solver = RegionsSetSolver(TypedSymbolTable())
-
-    db_elems = frozenset([
-        Region((0, 5), (1, 6)), Region((0, 8), (1, 10)), Region((0, 20), (1, 21))
-    ])
-    solver.symbol_table[nl.Symbol[AbstractSet[Region]]('db')] = nl.Constant[typing.AbstractSet[Region]](db_elems)
-
-    elem = frozenset([
-        Region((0, 0), (1, 1))
-    ])
-    solver.symbol_table[nl.Symbol[AbstractSet[Region]]('element')] = nl.Constant[typing.AbstractSet[Region]](elem)
-
-    rel1, rel2, rel3 = 'north_of', 'south_of', 'north_of'
-
-    type = AbstractSet[Region]
-    p1 = nl.Predicate[type](
-        nl.Symbol[Callable[[type], type]](rel1),
-        (nl.Symbol[type]('element'),)
-    )
-
-    p2 = nl.Predicate[type](
-        nl.Symbol[Callable[[type], type]](rel2),
-        (nl.Symbol[type]('element'),)
-    )
-
-    query_a = nl.Query[type](nl.Symbol[type]('a'), p1 | p2)
-    solver.walk(query_a)
-
-    intermediate_results = solver.symbol_table['a'].value
-    first_result = frozenset()
-    for elements in intermediate_results:
-        solver.symbol_table[nl.Symbol[AbstractSet[Region]]('intermediate')] = nl.Constant[typing.AbstractSet[Region]](
-            frozenset([elements]))
-        p2 = nl.Predicate[type](
-            nl.Symbol[Callable[[type], type]](rel3),
-            (nl.Symbol[type]('intermediate'),)
-        )
-
-        query_b = nl.Query[type](nl.Symbol[type]('b'), p2)
-
-        solver.walk(query_b)
-        first_result = first_result.union(solver.symbol_table['b'].value)
-
-    #print(first_result)
-
-
-    #second part:
-    u_one = compose_relations(AbstractSet[Region], solver, rel1, rel2, elem)
-    u_two = compose_relations(AbstractSet[Region], solver, rel1, rel3, elem)
-
-    second_results = u_one.union(u_two)
-    print(second_results)
+    return solver.symbol_table['result']

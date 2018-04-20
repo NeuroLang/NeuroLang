@@ -140,5 +140,6 @@ class SetBasedSolver(GenericSolver):
                 rsw = ReplaceSymbolWalker(free_variable_symbol, elem)
                 rsw_walk = rsw.walk(partially_evaluated_predicate)
                 pred = self.walk(rsw_walk)
-                results = results.union(pred.value)
+                if pred.value != frozenset():
+                    results = results.union(elem.value)
         return Constant[free_variable_symbol.type](results)
