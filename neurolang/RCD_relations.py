@@ -9,8 +9,7 @@ def get_interval_relation_to(bounding_box, another_bounding_box):
     intervals = bounding_box.axis_intervals()
     other_box_intervals = another_bounding_box.axis_intervals()
 
-    N = len(intervals)
-    obtained_relation_per_axis = ['' for _ in range(N)]
+    obtained_relation_per_axis = ['' for _ in range(len(intervals))]
 
     for f in relations:
         for i in range(len(obtained_relation_per_axis)):
@@ -22,13 +21,15 @@ def get_interval_relation_to(bounding_box, another_bounding_box):
             break
     return tuple(obtained_relation_per_axis)
 
+
 def is_in_direction(matrix, direction):
     if direction in ['L', 'C', 'R']:
         index = int(np.where(np.array(['L', 'C', 'R']) == direction)[0])
         return np.any(matrix[index] == 1)
 
-    (x, y) = directions_map(direction)
-    return np.any(matrix[:, x, y] == 1)
+    (a, s) = directions_map(direction)
+    return np.any(matrix[:, a, s] == 1)
+
 
 def directions_map(d):
     return {'SP': (0, 0), 'S': (0, 1), 'SA': (0, 2),
@@ -41,34 +42,40 @@ def inverse_direction(d):
             'P': 'A', 'O': 'O', 'A': 'P',
             'IP': 'SA', 'I': 'S', 'IA': 'SP'}[d]
 
+
 def direction_matrix(bounding_box, another_bounding_box):
     ''' direction matrix of two bounding boxes '''
     intervals_relations = get_interval_relation_to(bounding_box, another_bounding_box)
     res = tensor_direction_matrix_wrapper(intervals_relations)
     return res
 
+
 def tensor_direction_matrix_wrapper(ia_relations):
-    x = ia_relations[0]
-    y = ia_relations[1]
-    xy_matrix = translate_ia_relation(x, y)
     res = np.zeros(shape=(3, 3, 3))
     if len(ia_relations) != 3:
-        res[1] = xy_matrix
+        a = ia_relations[0]
+        s = ia_relations[1]
+        as_matrix = translate_ia_relation(s, a)
+        res[1] = as_matrix
     else:
-        z = ia_relations[2]
-        if z in ['d', 's', 'f', 'e']:
-            res[1] = xy_matrix
-        elif z in ['m', 'b']:
-            res[0] = xy_matrix
-        elif z in ['mi', 'bi']:
-            res[2] = xy_matrix
-        elif z in ['o', 'fi']:
-            res[0] = res[1] = xy_matrix
-        elif z in ['oi', 'si']:
-            res[0] = res[2] = xy_matrix
-        elif z in ['di']:
-            res[0] = res[1] = res[2] = xy_matrix
+        a = ia_relations[1]
+        s = ia_relations[2]
+        as_matrix = translate_ia_relation(s, a)
+        r = ia_relations[0]
+        if r in ['d', 's', 'f', 'e']:
+            res[1] = as_matrix
+        elif r in ['m', 'b']:
+            res[0] = as_matrix
+        elif r in ['mi', 'bi']:
+            res[2] = as_matrix
+        elif r in ['o', 'fi']:
+            res[0] = res[1] = as_matrix
+        elif r in ['oi', 'si']:
+            res[0] = res[2] = as_matrix
+        elif r in ['di']:
+            res[0] = res[1] = res[2] = as_matrix
     return res
+
 
 def translate_ia_relation(x, y):
     '''' IA to RCD mapping '''

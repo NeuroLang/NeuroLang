@@ -21,7 +21,7 @@ class RegionsSetSolver(SetBasedSolver):
 
         for key, value in {'north_of': 'S', 'south_of': 'I', 'east_of': 'A',
                            'west_of': 'P', 'overlapping': 'O',
-                           'left': 'L', 'center': 'C', 'right': 'R'}.items():
+                           'left_of': 'L', 'center_of': 'C', 'right_of': 'R'}.items():
             setattr(self, key, self.define_dir_based_fun(value))
             self.symbol_table[
                 nl.Symbol[pred_type](key)
