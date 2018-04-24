@@ -5,44 +5,70 @@ import numpy as np
 
 def get_interval_relation_to(bounding_box, another_bounding_box):
     ''' retrieve interval relations of the axes between two objects '''
-    [x_rel, y_rel] = ['', '']
     relations = [before, overlaps, during, meets, starts, finishes, equals]
-    [x, y] = bounding_box.axis_intervals()
-    [other_x, other_y] = another_bounding_box.axis_intervals()
-    for f in relations:
-        if f(x, other_x):
-            x_rel = str(f.__name__[0])
-        elif f(other_x, x):
-            x_rel = str(f.__name__[0] + 'i')
-        if f(y, other_y):
-            y_rel = str(f.__name__[0])
-        elif f(other_y, y):
-            y_rel = str(f.__name__[0] + 'i')
-        if x_rel != '' and y_rel != '':
-            break
-    return tuple([x_rel, y_rel])
+    intervals = bounding_box.axis_intervals()
+    other_box_intervals = another_bounding_box.axis_intervals()
 
+    N = len(intervals)
+    obtained_relation_per_axis = ['' for _ in range(N)]
+
+    for f in relations:
+        for i in range(len(obtained_relation_per_axis)):
+            if f(intervals[i], other_box_intervals[i]):
+                obtained_relation_per_axis[i] = str(f.__name__[0])
+            elif f(other_box_intervals[i], intervals[i]):
+                obtained_relation_per_axis[i] = str(f.__name__[0] + 'i')
+        if np.all(np.array(obtained_relation_per_axis) != ''):
+            break
+    return tuple(obtained_relation_per_axis)
 
 def is_in_direction(matrix, direction):
-    return matrix[directions_map(direction)] == 1
+    if direction in ['L', 'C', 'R']:
+        index = int(np.where(np.array(['L', 'C', 'R']) == direction)[0])
+        return np.any(matrix[index] == 1)
 
+    (x, y) = directions_map(direction)
+    return np.any(matrix[:, x, y] == 1)
 
 def directions_map(d):
-    return {'NW': (0, 0), 'N': (0, 1), 'NE': (0, 2),
-            'W': (1, 0), 'O': (1, 1), 'E': (1, 2),
-            'SW': (2, 0), 'S': (2, 1), 'SE': (2, 2)}[d]
+    return {'SP': (0, 0), 'S': (0, 1), 'SA': (0, 2),
+            'P': (1, 0), 'O': (1, 1), 'A': (1, 2),
+            'IP': (2, 0), 'I': (2, 1), 'IA': (2, 2)}[d]
 
 
 def inverse_direction(d):
-    return {'NW': 'SE', 'N': 'S', 'NE': 'SW',
-            'W': 'E', 'O': 'O', 'E': 'W',
-            'SW': 'NE', 'S': 'N', 'SE': 'NW'}[d]
+    return {'SP': 'IA', 'S': 'I', 'SA': 'IP',
+            'P': 'A', 'O': 'O', 'A': 'P',
+            'IP': 'SA', 'I': 'S', 'IA': 'SP'}[d]
 
 def direction_matrix(bounding_box, another_bounding_box):
     ''' direction matrix of two bounding boxes '''
     intervals_relations = get_interval_relation_to(bounding_box, another_bounding_box)
-    return translate_ia_relation(intervals_relations[0], intervals_relations[1])
+    res = tensor_direction_matrix_wrapper(intervals_relations)
+    return res
 
+def tensor_direction_matrix_wrapper(ia_relations):
+    x = ia_relations[0]
+    y = ia_relations[1]
+    xy_matrix = translate_ia_relation(x, y)
+    res = np.zeros(shape=(3, 3, 3))
+    if len(ia_relations) != 3:
+        res[1] = xy_matrix
+    else:
+        z = ia_relations[2]
+        if z in ['d', 's', 'f', 'e']:
+            res[1] = xy_matrix
+        elif z in ['m', 'b']:
+            res[0] = xy_matrix
+        elif z in ['mi', 'bi']:
+            res[2] = xy_matrix
+        elif z in ['o', 'fi']:
+            res[0] = res[1] = xy_matrix
+        elif z in ['oi', 'si']:
+            res[0] = res[2] = xy_matrix
+        elif z in ['di']:
+            res[0] = res[1] = res[2] = xy_matrix
+    return res
 
 def translate_ia_relation(x, y):
     '''' IA to RCD mapping '''
@@ -72,7 +98,7 @@ def translate_ia_relation(x, y):
     elif x in ['fi', 'o'] and y in ['mi', 'bi']:
         return np.array([[1, 1, 0], [0, 0, 0], [0, 0, 0]])
     elif x in ['si', 'oi'] and y in ['mi', 'bi']:
-        return np.array([[0, 1, 1], [0, 0, 0], [0, 1, 1]])
+        return np.array([[0, 1, 1], [0, 0, 0], [0, 0, 0]])
     elif x in ['fi', 'o'] and y in ['d', 's', 'f', 'e']:
         return np.array([[0, 0, 0], [1, 1, 0], [0, 0, 0]])
     elif x in ['si', 'oi'] and y in ['d', 's', 'f', 'e']:

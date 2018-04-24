@@ -19,15 +19,14 @@ class RegionsSetSolver(SetBasedSolver):
             typing.AbstractSet[self.type]
         ]
 
-        for key, value in {'north_of': 'N', 'south_of': 'S', 'east_of': 'E',
-                           'west_of': 'W', 'overlapping': 'O'}.items():
+        for key, value in {'north_of': 'S', 'south_of': 'I', 'east_of': 'A',
+                           'west_of': 'P', 'overlapping': 'O',
+                           'left': 'L', 'center': 'C', 'right': 'R'}.items():
             setattr(self, key, self.define_dir_based_fun(value))
             self.symbol_table[
                 nl.Symbol[pred_type](key)
             ] = nl.Constant[pred_type](self.__getattribute__(key))
 
-        for key, value in {'north_of': 'N', 'south_of': 'S', 'east_of': 'E',
-                           'west_of': 'W', 'overlapping': 'O'}.items():
             setattr(self, key, self.define_inv_dir_based_fun(value))
             self.symbol_table[
                 nl.Symbol[pred_type]('converse ' + key)

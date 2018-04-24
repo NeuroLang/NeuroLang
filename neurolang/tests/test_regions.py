@@ -3,89 +3,112 @@ from ..regions import *
 from ..RCD_relations import *
 
 
-def _generate_random_box(x_bounds, y_bounds, size_bounds):
-    lower_bound = np.asanyarray([np.random.uniform(*b) for b in (x_bounds, y_bounds)])
-    upper_bound = lower_bound + np.random.uniform(size_bounds, size=2)
+def _generate_random_box(size_bounds, *args):
+    N = len(args)
+    lower_bound = np.array([np.random.uniform(*b) for b in tuple(args)])
+    upper_bound = lower_bound + np.random.uniform(*size_bounds, size=N)
     return Region(lower_bound, upper_bound)
 
 
 def test_region_eq():
-    r1 = Region((0, 0), (1, 1))
-    r2 = Region((0, 0), (1, 1))
+    r1 = Region((0, 0, 0), (1, 1, 1))
+    r2 = Region((0, 0, 0), (1, 1, 1))
     assert r1 == r2
-    r3 = _generate_random_box((0, 0), (0, 0), (0, 10))
-    r4 = _generate_random_box((50, 50), (100, 100), (50, 100))
+    r3 = _generate_random_box((0, 10), (0, 0), (0, 0), (0, 0))
+    r4 = _generate_random_box((50, 100), (50, 50), (100, 100), (200, 200))
     assert not r3 == r4
 
 
 def test_axis_intervals():
-    r1 = Region((0, 0), (1, 1))
-    assert np.array_equal(r1.axis_intervals(), np.array([tuple([0, 1]), tuple([0, 1])]))
-    r2 = Region((7, 0), (8, 6))
-    assert np.array_equal(r2.axis_intervals(), np.array([tuple([7, 8]), tuple([0, 6])]))
+    r1 = Region((0, 0, 0), (1, 1, 1))
+    assert np.array_equal(r1.axis_intervals(), np.array([tuple([0, 1]), tuple([0, 1]), tuple([0, 1])]))
+    r2 = Region((7, 0, 2), (8, 6, 4))
+    assert np.array_equal(r2.axis_intervals(), np.array([tuple([7, 8]), tuple([0, 6]), tuple([2, 4])]))
 
 
 def test_get_interval_relations_of_regions():
-    r1 = Region((1, 1), (2, 2))
-    r2 = Region((5, 5), (8, 8))
-    assert get_interval_relation_to(r1, r2) == tuple(['b', 'b'])
-    r1 = Region((1, 1), (10, 10))
-    assert get_interval_relation_to(r1, r2) == tuple(['di', 'di'])
-    r1 = Region((1, 1), (6, 6))
-    assert get_interval_relation_to(r1, r2) == tuple(['o', 'o'])
-    r2 = Region((1, 1), (2, 2))
-    assert get_interval_relation_to(r1, r2) == tuple(['si', 'si'])
-    assert get_interval_relation_to(r1, Region((1, 1), (6, 6))) == tuple(['e', 'e'])
+    r1 = Region((1, 1, 1), (2, 2, 2))
+    r2 = Region((5, 5, 5), (8, 8, 8))
+    assert get_interval_relation_to(r1, r2) == tuple(['b', 'b', 'b'])
+    r1 = Region((1, 1, 1), (10, 10, 10))
+    assert get_interval_relation_to(r1, r2) == tuple(['di', 'di', 'di'])
+    r1 = Region((1, 1, 1), (6, 6, 6))
+    assert get_interval_relation_to(r1, r2) == tuple(['o', 'o', 'o'])
+    r2 = Region((1, 1, 1), (2, 2, 2))
+    assert get_interval_relation_to(r1, r2) == tuple(['si', 'si', 'si'])
+    assert get_interval_relation_to(r1, Region((1, 1, 1), (6, 6, 6))) == tuple(['e', 'e', 'e'])
 
-    # r1 W r2
-    r1 = Region((5, 5), (8, 8))
-    r2 = Region((10, 6), (12, 7))
-    assert get_interval_relation_to(r1, r2) == tuple(['b', 'di'])
-    assert get_interval_relation_to(r2, r1) == tuple(['bi', 'd'])
+    r1 = Region((5, 5, 5), (8, 8, 8))
+    r2 = Region((12, 7, 8), (14, 8, 10))
+    assert get_interval_relation_to(r1, r2) == tuple(['b', 'fi', 'm'])
+    assert get_interval_relation_to(r2, r1) == tuple(['bi', 'f', 'mi'])
 
-    # r1 B:W:NW:W r2
-    r1 = Region((5, 5), (8, 8))
-    r2 = Region((7, 3), (9, 6))
-    assert get_interval_relation_to(r1, r2) == tuple(['o', 'oi'])
-    assert get_interval_relation_to(r2, r1) == tuple(['oi', 'o'])
+    r1 = Region((5, 5, 5), (8, 8, 8))
+    r2 = Region((7, 3, 3), (9, 6, 6))
+    assert get_interval_relation_to(r1, r2) == tuple(['o', 'oi', 'oi'])
+    assert get_interval_relation_to(r2, r1) == tuple(['oi', 'o', 'o'])
 
 
 def test_regions_dir_matrix():
-    r1 = Region((0, 8), (1, 9))
-    r2 = Region((0, 0), (1, 1))
-    # r1 N r2 - r2 S r1
-    result = np.array(np.zeros(shape=(3, 3)))
-    result[0, 1] = 1
-    assert np.array_equal(direction_matrix(r1, r2), result)
-    result = np.array([[0, 0, 0], [0, 0, 0], [0, 1, 0]])
-    assert np.array_equal(direction_matrix(r2, r1), result)
 
-    # r1 B:S:N:NE:E:SE r2
+    dir_tensor = np.zeros(shape=(3, 3, 3))
+    # r1 B:I:S:SA:A:IA r2
     r1 = Region((3, 3), (8, 8))
     r2 = Region((2, 4), (5, 6))
-    result = np.array([[0, 1, 1], [0, 1, 1], [0, 1, 1]])
-    assert np.array_equal(direction_matrix(r1, r2), result)
+    dir_tensor[1] = np.array([[0, 1, 1], [0, 1, 1], [0, 1, 1]])
+    assert np.array_equal(direction_matrix(r1, r2), dir_tensor)
 
-    # r1 B:S:SW:W r2
+    # r1 B:I:IP:P r2
     r1 = Region((1, 1), (5, 5))
     r2 = Region((3, 3), (7, 5))
-    result = np.array([[0, 0, 0], [1, 1, 0], [1, 1, 0]])
-    assert np.array_equal(direction_matrix(r1, r2), result)
+    dir_tensor[1] = np.array([[0, 0, 0], [1, 1, 0], [1, 1, 0]])
 
-    # r1 NW r2
+    assert np.array_equal(direction_matrix(r1, r2), dir_tensor)
+
+    # r1 SP r2
     r1 = Region((6, 6), (8, 8))
     r2 = Region((8, 4), (10, 6))
-    result = np.array([[1, 0, 0], [0, 0, 0], [0, 0, 0]])
-    assert np.array_equal(direction_matrix(r1, r2), result)
+    dir_tensor[1] = np.array([[1, 0, 0], [0, 0, 0], [0, 0, 0]])
+    assert np.array_equal(direction_matrix(r1, r2), dir_tensor)
 
     # r1 B r2
     r1 = Region((6, 5), (8, 8))
     r2 = Region((5, 5), (10, 10))
-    result = np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]])
-    assert np.array_equal(direction_matrix(r1, r2), result)
+    dir_tensor[1] = np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]])
+    assert np.array_equal(direction_matrix(r1, r2), dir_tensor)
 
-    # r1 B:S:SW:W:NW:N:NE:E:SE r2
+    # r1 B:I:IP:P:SP:S:SA:A:IA r2
     r1 = Region((0, 0), (10, 10))
     r2 = Region((5, 5), (6, 6))
-    result = np.array([[1, 1, 1], [1, 1, 1], [1, 1, 1]])
-    assert np.array_equal(direction_matrix(r1, r2), result)
+    dir_tensor[1] = np.array([[1, 1, 1], [1, 1, 1], [1, 1, 1]])
+    assert np.array_equal(direction_matrix(r1, r2), dir_tensor)
+
+    #Hyper-Rectangle Regions
+    r1 = Region((0, 8, 0), (1, 9, 10))
+    r2 = Region((0, 0, 0), (1, 1, 10))
+    # r1 SC r2 - r2 IC r1
+    dir_tensor = np.array(np.zeros(shape=(3, 3, 3)))
+    dir_tensor[1, 0, 1] = 1
+    obtained = direction_matrix(r1, r2)
+    assert np.array_equal(obtained, dir_tensor)
+    dir_tensor = np.array(np.zeros(shape=(3, 3, 3)))
+    dir_tensor[1, 2, 1] = 1
+    obtained = direction_matrix(r2, r1)
+    assert np.array_equal(obtained, dir_tensor)
+
+    r1 = Region((0, 8, 0), (1, 9, 10))
+    r2 = Region((0, 0, 15), (1, 1, 17))
+    # r1 SL r2
+    dir_tensor = np.array(np.zeros(shape=(3, 3, 3)))
+    dir_tensor[0, 0, 1] = 1
+    obtained = direction_matrix(r1, r2)
+    assert np.array_equal(obtained, dir_tensor)
+
+    r1 = Region((0, 0, 25), (1, 1, 30))
+    r2 = Region((5, 0, 15), (6, 1, 20))
+    # r1 PR r2
+    dir_tensor = np.array(np.zeros(shape=(3, 3, 3)))
+    dir_tensor[2, 1, 0] = 1
+    obtained = direction_matrix(r1, r2)
+    assert np.array_equal(obtained, dir_tensor)
+
