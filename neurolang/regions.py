@@ -5,6 +5,8 @@ import numpy as np
 class Region:
 
     def __init__(self, lb, ub) -> None:
+        if not np.all([lb[i] < ub[i] for i in range(len(lb))]):
+            raise Exception('Lower bounds must lower (and not equal) than upper bounds when creating rectangular regions')
         self._bounding_box = np.c_[lb, ub]
         self._bounding_box.setflags(write=False)
 

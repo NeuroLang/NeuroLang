@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 from ..regions import *
 from ..RCD_relations import *
 
@@ -111,3 +112,14 @@ def test_regions_dir_matrix():
     dir_tensor[2, 1, 0] = 1
     obtained = direction_matrix(r1, r2)
     assert np.array_equal(obtained, dir_tensor)
+
+
+def test_invalid_regions_raise_exception():
+    exception_msg = 'Lower bounds must lower (and not equal) than upper bounds when creating rectangular regions'
+    with pytest.raises(Exception) as excinfo:
+        Region((0, 0, 0), (1, -1, 1))
+    assert str(excinfo.value) == exception_msg
+
+    with pytest.raises(Exception) as excinfo:
+        Region((0, 0, 0), (0, 10, 20))
+    assert str(excinfo.value) == exception_msg
