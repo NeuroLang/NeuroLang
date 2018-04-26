@@ -1,12 +1,12 @@
 from .RCD_relations import *
 import numpy as np
-
+from .exceptions import RegionException
 
 class Region:
 
     def __init__(self, lb, ub) -> None:
         if not np.all([lb[i] < ub[i] for i in range(len(lb))]):
-            raise Exception('Lower bounds must lower (and not equal) than upper bounds when creating rectangular regions')
+            raise RegionException('Lower bounds must lower (and not equal) than upper bounds when creating rectangular regions')
         self._bounding_box = np.c_[lb, ub]
         self._bounding_box.setflags(write=False)
 

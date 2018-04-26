@@ -1,6 +1,7 @@
 from .RCD_relations import direction_matrix, is_in_direction, inverse_direction
 from .regions import Region
 from .solver import SetBasedSolver
+from .utils.data_manipulation import *
 import typing
 import operator
 from . import neurolang as nl
@@ -98,3 +99,13 @@ class RegionsSetSolver(SetBasedSolver):
 
         result = all_regions - set_value
         return self.walk(nl.Constant[set_type](result))
+
+    #todo: this should be moved to a diferent module
+    def load_regions_symbols_from_subject_data(self, strname):
+        data, labels = load_image_and_labels(strname)
+        label_regions_map = parse_region_label_map(labels)
+        for key, value in label_regions_map.items():
+            region_data = transform_to_ras_coordinate_system(labels, value)
+            (lb, ub) = region_data_limits(region_data)
+            region = Region(lb, ub)
+            self.symbol_table[nl.Symbol[self.type](key)] = nl.Constant[typing.AbstractSet[self.type]](frozenset([region]))

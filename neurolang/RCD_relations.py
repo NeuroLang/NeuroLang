@@ -55,12 +55,12 @@ def tensor_direction_matrix_wrapper(ia_relations):
     if len(ia_relations) != 3:
         a = ia_relations[0]
         s = ia_relations[1]
-        as_matrix = translate_ia_relation(s, a)
+        as_matrix = translate_ia_relation(a, s)
         res[1] = as_matrix
     else:
         a = ia_relations[1]
         s = ia_relations[2]
-        as_matrix = translate_ia_relation(s, a)
+        as_matrix = translate_ia_relation(a, s)
         r = ia_relations[0]
         if r in ['d', 's', 'f', 'e']:
             res[1] = as_matrix
@@ -71,7 +71,7 @@ def tensor_direction_matrix_wrapper(ia_relations):
         elif r in ['o', 'fi']:
             res[0] = res[1] = as_matrix
         elif r in ['oi', 'si']:
-            res[0] = res[2] = as_matrix
+            res[1] = res[2] = as_matrix
         elif r in ['di']:
             res[0] = res[1] = res[2] = as_matrix
     return res

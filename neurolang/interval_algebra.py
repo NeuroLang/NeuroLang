@@ -31,4 +31,4 @@ def converse(operation):
 
 
 def negate(operation):
-    return lambda x, y : not operation(x, y)
+    return lambda x, y: not operation(x, y)

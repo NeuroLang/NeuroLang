@@ -1,7 +1,9 @@
 import numpy as np
-import pytest
+from pytest import raises
 from ..regions import *
 from ..RCD_relations import *
+from ..utils.data_manipulation import *
+from ..exceptions import RegionException
 
 
 def _generate_random_box(size_bounds, *args):
@@ -55,7 +57,7 @@ def test_regions_dir_matrix():
     dir_tensor = np.zeros(shape=(3, 3, 3))
     # r1 B:I:S:SA:A:IA r2
     r1 = Region((3, 3), (8, 8))
-    r2 = Region((4, 2), (6, 5))
+    r2 = Region((2, 4), (5, 6))
     dir_tensor[1] = np.array([[0, 1, 1], [0, 1, 1], [0, 1, 1]])
     assert np.array_equal(direction_matrix(r1, r2), dir_tensor)
 
@@ -68,7 +70,7 @@ def test_regions_dir_matrix():
 
     # r1 SP r2
     r1 = Region((6, 6), (8, 8))
-    r2 = Region((4, 8), (6, 10))
+    r2 = Region((8, 4), (10, 6))
     dir_tensor[1] = np.array([[1, 0, 0], [0, 0, 0], [0, 0, 0]])
     assert np.array_equal(direction_matrix(r1, r2), dir_tensor)
 
@@ -85,7 +87,7 @@ def test_regions_dir_matrix():
     assert np.array_equal(direction_matrix(r1, r2), dir_tensor)
 
     #Hyper-Rectangle Regions
-    r1 = Region((0, 8, 0), (10, 9, 1))
+    r1 = Region((0, 0, 2), (10, 1, 9))
     r2 = Region((0, 0, 0), (10, 1, 1))
     # r1 SC r2 - r2 IC r1
     dir_tensor = np.array(np.zeros(shape=(3, 3, 3)))
@@ -97,7 +99,7 @@ def test_regions_dir_matrix():
     obtained = direction_matrix(r2, r1)
     assert np.array_equal(obtained, dir_tensor)
 
-    r1 = Region((0, 8, 0), (10, 9, 1))
+    r1 = Region((0, 0, 8), (10, 1, 9))
     r2 = Region((15, 0, 0), (17, 1, 1))
     # r1 SL r2
     dir_tensor = np.array(np.zeros(shape=(3, 3, 3)))
@@ -106,7 +108,7 @@ def test_regions_dir_matrix():
     assert np.array_equal(obtained, dir_tensor)
 
     r1 = Region((25, 0, 0), (30, 1, 1))
-    r2 = Region((15, 0, 5), (20, 1, 6))
+    r2 = Region((15, 5, 0), (20, 6, 1))
     # r1 PR r2
     dir_tensor = np.array(np.zeros(shape=(3, 3, 3)))
     dir_tensor[2, 1, 0] = 1
@@ -115,11 +117,41 @@ def test_regions_dir_matrix():
 
 
 def test_invalid_regions_raise_exception():
-    exception_msg = 'Lower bounds must lower (and not equal) than upper bounds when creating rectangular regions'
-    with pytest.raises(Exception) as excinfo:
-        Region((0, 0, 0), (1, -1, 1))
-    assert str(excinfo.value) == exception_msg
 
-    with pytest.raises(Exception) as excinfo:
+    with raises(RegionException):
+        Region((0, 0, 0), (1, -1, 1))
+
+    with raises(RegionException):
         Region((0, 0, 0), (0, 10, 20))
-    assert str(excinfo.value) == exception_msg
+
+
+def test_region_from_data():
+    subject = '100206'
+    region = 'CC_POSTERIOR'
+    r1 = create_region_from_subject_data(subject, region)
+    region = 'CC_ANTERIOR'
+    r2 = create_region_from_subject_data(subject, region)
+    region = 'CC_CENTRAL'
+    r3 = create_region_from_subject_data(subject, region)
+    region = 'CC_MID_ANTERIOR'
+    r4 = create_region_from_subject_data(subject, region)
+    region = 'CC_MID_POSTERIOR'
+    r5 = create_region_from_subject_data(subject, region)
+
+    for region in [r2, r3, r4, r5]:
+        (x, y) = directions_map('P')
+        directions = direction_matrix(r1, region)
+        assert np.any(directions[:, x, y] == 1)
+
+    for region in [r1, r3, r4, r5]:
+        (x, y) = directions_map('A')
+        directions = direction_matrix(r2, region)
+        assert np.any(directions[:, x, y] == 1)
+
+
+def create_region_from_subject_data(subject, region):
+    parc_data = load_image_and_labels(subject)
+    label_region_key = parse_region_label_map(parc_data)
+    region_data = transform_to_ras_coordinate_system(parc_data, label_region_key[region])
+    (lb, ub) = region_data_limits(region_data)
+    return Region(lb, ub)
