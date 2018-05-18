@@ -38,14 +38,14 @@ nlc.compile('''
     negative_unit are Regions singleton (-1, -1, 0, 0)
     test are Regions not in unit_region
 
-    foo are Regions north_of another_rectangle
-    bar are Regions north_of rect_q4
+    foo are Regions superior_of another_rectangle
+    bar are Regions superior_of rect_q4
     two_rectangles are Regions in another_rectangle or in rect_q4
-    func are Regions north_of two_rectangles
+    func are Regions superior_of two_rectangles
     both_limits are Regions in rect_q4 or in box5
-    empty are Regions north_of both_limits or in rect_q4
+    empty are Regions superior_of both_limits or in rect_q4
 
-    southern are Regions south_of unit_region
+    southern are Regions inferior_of unit_region
 
     within are Regions overlapping box5
 ''')
@@ -56,8 +56,8 @@ for k, v in nlc.symbol_table.items():
    print(k, ':', v)
 
 print('*' * 20)
-p1 = nl.Predicate(nl.Symbol('north_of'), (nl.Symbol('two_rectangles'),))
-p2 = nl.Predicate(nl.Symbol('north_of'), (nl.Symbol('rect_q4'),))
+p1 = nl.Predicate(nl.Symbol('superior_of'), (nl.Symbol('two_rectangles'),))
+p2 = nl.Predicate(nl.Symbol('superior_of'), (nl.Symbol('rect_q4'),))
 
 print(p1, p2)
 print('res1', nlc.walk(p1))
@@ -69,7 +69,7 @@ print(nlc.walk(p1 | p2))
 
 
 ir = nlc.get_intermediate_representation('''
-    foobar are Regions north_of unit_region
+    foobar are Regions superior_of unit_region
 ''')
 print(ir[0])
 print('-' * 10)

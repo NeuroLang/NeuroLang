@@ -5,7 +5,7 @@ from typing import AbstractSet, Callable
 from ..regions import Region
 
 
-def test_relation_north_of():
+def test_relation_superior_of():
     region_set_type = AbstractSet[Region]
     solver = RegionsSetSolver(TypedSymbolTable())
 
@@ -19,7 +19,7 @@ def test_relation_north_of():
     solver.symbol_table[nl.Symbol[region_set_type]('db')] = nl.Constant[region_set_type](all_elements)
     solver.symbol_table[nl.Symbol[region_set_type]('elem')] = nl.Constant[region_set_type](elem)
 
-    north_relation = 'north_of'
+    north_relation = 'superior_of'
     predicate = nl.Predicate[region_set_type](
             nl.Symbol[Callable[[region_set_type], region_set_type]](north_relation),
             (nl.Symbol[region_set_type]('elem'),)
@@ -40,7 +40,7 @@ def test_north_u_south():
     solver.symbol_table[nl.Symbol[AbstractSet[Region]]('db')] = nl.Constant[AbstractSet[Region]](db_elems)
     solver.symbol_table[nl.Symbol[AbstractSet[Region]]('e1')] = nl.Constant[AbstractSet[Region]](elem)
 
-    check_union_commutativity(AbstractSet[Region], solver, 'north_of', 'south_of', 'e1')
+    check_union_commutativity(AbstractSet[Region], solver, 'superior_of', 'inferior_of', 'e1')
 
 
 def check_union_commutativity(set_type, solver, relation1, relation2, element):
@@ -70,7 +70,7 @@ def test_union_associativity():
     solver.symbol_table[nl.Symbol[AbstractSet[Region]]('db')] = nl.Constant[AbstractSet[Region]](db_elems)
     solver.symbol_table[nl.Symbol[AbstractSet[Region]]('elem')] = nl.Constant[AbstractSet[Region]](elem)
 
-    check_union_associativity(AbstractSet[Region], solver, 'north_of', 'south_of', 'west_of', 'elem')
+    check_union_associativity(AbstractSet[Region], solver, 'superior_of', 'inferior_of', 'posterior_of', 'elem')
 
 
 def check_union_associativity(type, solver, relation1, relation2, relation3, element):
@@ -109,7 +109,7 @@ def test_huntington_axiom():
     elem = frozenset([Region((0, 0), (1, 1))])
 
     solver.symbol_table[nl.Symbol[AbstractSet[Region]]('e')] = nl.Constant[AbstractSet[Region]](elem)
-    check_huntington(AbstractSet[Region], solver, 'north_of', 'south_of', 'e')
+    check_huntington(AbstractSet[Region], solver, 'superior_of', 'inferior_of', 'e')
 
 
 def check_huntington(type, solver, relation1, relation2, element):
@@ -146,7 +146,7 @@ def test_composition():
     solver.symbol_table[nl.Symbol[set_type]('db')] = nl.Constant[set_type](db_elements)
     solver.symbol_table[nl.Symbol[set_type]('c')] = nl.Constant[set_type](frozenset([superior]))
 
-    res = do_composition_of_relations_from_region(set_type, solver, 'c', 'east_of', 'south_of')
+    res = do_composition_of_relations_from_region(set_type, solver, 'c', 'anterior_of', 'inferior_of')
 
     assert res == frozenset([lat1, lat2, lat3])
 
@@ -194,10 +194,10 @@ def test_composition_distributivity():
     solver.symbol_table[nl.Symbol[set_type]('db')] = nl.Constant[set_type](db_elements)
     solver.symbol_table[nl.Symbol[set_type]('d')] = nl.Constant[set_type](frozenset([superior]))
 
-    res = check_distributivity(set_type, solver, 'd', 'west_of', 'east_of', 'south_of')
+    res = check_distributivity(set_type, solver, 'd', 'posterior_of', 'anterior_of', 'inferior_of')
 
-    c1 = do_composition_of_relations_from_region(set_type, solver, 'd', 'west_of', 'south_of')
-    c2 = do_composition_of_relations_from_region(set_type, solver, 'd', 'east_of', 'south_of')
+    c1 = do_composition_of_relations_from_region(set_type, solver, 'd', 'posterior_of', 'inferior_of')
+    c2 = do_composition_of_relations_from_region(set_type, solver, 'd', 'anterior_of', 'inferior_of')
     assert res == c1.union(c2)
 
 
@@ -268,7 +268,7 @@ def test_involution():
     solver.symbol_table[nl.Symbol[set_type]('db')] = nl.Constant[set_type](db_elems)
     solver.symbol_table[nl.Symbol[set_type]('element')] = nl.Constant[set_type](elem)
 
-    north_relation = 'north_of'
+    north_relation = 'superior_of'
     p1 = nl.Predicate[set_type](
         nl.Symbol[Callable[[set_type], set_type]](north_relation),
         (nl.Symbol[set_type]('x'),)
@@ -308,12 +308,12 @@ def test_converse_distributivity():
     set_type = AbstractSet[Region]
 
     p1 = nl.Predicate[set_type](
-        nl.Symbol[Callable[[set_type], set_type]]('north_of'),
+        nl.Symbol[Callable[[set_type], set_type]]('superior_of'),
         (nl.Symbol[set_type]('x'),)
     )
 
     p2 = nl.Predicate[set_type](
-        nl.Symbol[Callable[[set_type], set_type]]('south_of'),
+        nl.Symbol[Callable[[set_type], set_type]]('inferior_of'),
         (nl.Symbol[set_type]('x'),)
     )
 
@@ -325,12 +325,12 @@ def test_converse_distributivity():
     res = solver.symbol_table['a'].value - elem
 
     p1 = nl.Predicate[set_type](
-        nl.Symbol[Callable[[set_type], set_type]]('north_of'),
+        nl.Symbol[Callable[[set_type], set_type]]('superior_of'),
         (nl.Symbol[set_type]('x'),)
     )
 
     p2 = nl.Predicate[set_type](
-        nl.Symbol[Callable[[set_type], set_type]]('south_of'),
+        nl.Symbol[Callable[[set_type], set_type]]('inferior_of'),
         (nl.Symbol[set_type]('x'),)
     )
 
@@ -402,8 +402,8 @@ def test_composition_identity():
     solver.symbol_table[nl.Symbol[pred_type]('converse universal')] = nl.Constant[pred_type](
         solver.predicate_universal)
 
-    id1 = relations_composition(AbstractSet[Region], solver, 'universal', 'north_of')
-    id2 = relations_composition(AbstractSet[Region], solver, 'converse north_of', 'universal')
+    id1 = relations_composition(AbstractSet[Region], solver, 'universal', 'superior_of')
+    id2 = relations_composition(AbstractSet[Region], solver, 'converse superior_of', 'universal')
     assert id1 == id2
 
 
@@ -453,6 +453,7 @@ def test_relation_left_of_aligned_from_unit_box():
 
     assert solver.symbol_table['p1'].value == frozenset([l1, l2])
 
+
 def test_relation_left_of_unaligned():
     region_set_type = AbstractSet[Region]
     solver = RegionsSetSolver(TypedSymbolTable())
@@ -480,6 +481,7 @@ def test_relation_left_of_unaligned():
     solver.walk(query)
 
     assert solver.symbol_table['p1'].value == frozenset([l1, l2, l3])
+
 
 def test_overlapping_hyperrectangles():
     region_set_type = AbstractSet[Region]
@@ -527,7 +529,7 @@ def test_paper_composition_ex():
 
     solver.symbol_table[nl.Symbol[set_type]('db')] = nl.Constant[set_type](db_elements)
     solver.symbol_table[nl.Symbol[set_type]('a')] = nl.Constant[set_type](frozenset([a]))
-    res = do_composition_of_relations_from_region(set_type, solver, 'a', 'north_of', 'north_of')
+    res = do_composition_of_relations_from_region(set_type, solver, 'a', 'superior_of', 'superior_of')
     assert res == frozenset([])
 
     solver = RegionsSetSolver(TypedSymbolTable())
@@ -539,5 +541,28 @@ def test_paper_composition_ex():
 
     solver.symbol_table[nl.Symbol[set_type]('db')] = nl.Constant[set_type](db_elements)
     solver.symbol_table[nl.Symbol[set_type]('a')] = nl.Constant[set_type](frozenset([a]))
-    res = do_composition_of_relations_from_region(set_type, solver, 'a', 'north_of', 'north_of')
+    res = do_composition_of_relations_from_region(set_type, solver, 'a', 'superior_of', 'superior_of')
     assert res == frozenset([c])
+
+
+def test_get_labels_from_region_results():
+    region_set_type = AbstractSet[Region]
+    solver = RegionsSetSolver(TypedSymbolTable())
+
+    center = Region((0, 0, 0), (1, 1, 1))
+    l1 = Region((-5, -2, -2), (-2, 0, 0))
+    l2 = Region((-10, 5, 5), (-8, 8, 7))
+    l3 = Region((-12, 9, 8), (-11, 10, 10))
+
+    l1_elem = frozenset([l1])
+    l2_elem = frozenset([l2])
+    l3_elem = frozenset([l3])
+    center_elem = frozenset([center])
+
+    solver.symbol_table[nl.Symbol[region_set_type]('l1')] = nl.Constant[region_set_type](l1_elem)
+    solver.symbol_table[nl.Symbol[region_set_type]('l2')] = nl.Constant[region_set_type](l2_elem)
+    solver.symbol_table[nl.Symbol[region_set_type]('l3')] = nl.Constant[region_set_type](l3_elem)
+    solver.symbol_table[nl.Symbol[region_set_type]('central')] = nl.Constant[region_set_type](center_elem)
+    search_for = frozenset([l1, center])
+    res = solver.get_label_of_regions_by_limits(search_for)
+    print(res)

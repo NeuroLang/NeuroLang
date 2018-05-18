@@ -134,7 +134,7 @@ def test_calculus_axioms():
     r, s = random.choice([before, overlaps, during, meets, starts, finishes, equals], 2)
     i, j, k, l = random.choice(range(len(elems)), 4, replace=False)
     [i, j, k, l] = [(q, p) for (p, q) in [elems[i], elems[j], elems[k], elems[l]]]
-    assert any([r(i, j), s(k, l)]) == converse(r)(i, j) or converse(s)(k, l)
+    assert any([r(i, j), s(k, l)]) == any([converse(r)(j, i), converse(s)(l, k)])
 
     # inv-involutive-distr
     s, t = random.choice([before, overlaps, during, meets, starts, finishes, equals], 2)

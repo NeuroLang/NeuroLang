@@ -1,5 +1,5 @@
 from .RCD_relations import direction_matrix, is_in_direction, inverse_direction
-from .regions import Region
+from .regions import *
 from .solver import SetBasedSolver
 from .utils.data_manipulation import *
 import typing
@@ -20,9 +20,9 @@ class RegionsSetSolver(SetBasedSolver):
             typing.AbstractSet[self.type]
         ]
 
-        for key, value in {'north_of': 'S', 'south_of': 'I', 'east_of': 'A',
-                           'west_of': 'P', 'overlapping': 'O',
-                           'left_of': 'L', 'center_of': 'C', 'right_of': 'R'}.items():
+        for key, value in {'superior_of': 'S', 'inferior_of': 'I', 'anterior_of': 'A',
+                           'posterior_of': 'P', 'overlapping': 'O',
+                           'left_of': 'L', 'aligned': 'C', 'right_of': 'R'}.items():
             setattr(self, key, self.define_dir_based_fun(value))
             self.symbol_table[
                 nl.Symbol[pred_type](key)
@@ -100,12 +100,18 @@ class RegionsSetSolver(SetBasedSolver):
         result = all_regions - set_value
         return self.walk(nl.Constant[set_type](result))
 
-    #todo: this should be moved to a diferent module
-    def load_regions_symbols_from_subject_data(self, strname):
-        data, labels = load_image_and_labels(strname)
-        label_regions_map = parse_region_label_map(labels)
-        for key, value in label_regions_map.items():
-            region_data = transform_to_ras_coordinate_system(labels, value)
-            (lb, ub) = region_data_limits(region_data)
-            region = Region(lb, ub)
-            self.symbol_table[nl.Symbol[self.type](key)] = nl.Constant[typing.AbstractSet[self.type]](frozenset([region]))
+    def load_regions_to_solver(self, parc_im):
+        labels = parc_im.get_data()
+        label_regions_map = parse_region_label_map(parc_im)
+        for region_name, region_key in label_regions_map.items():
+            voxel_coordinates = np.transpose((labels == region_key).nonzero())
+            region = ExplicitVBR(voxel_coordinates, parc_im.affine)
+            self.symbol_table[nl.Symbol[self.type](region_name)] = nl.Constant[typing.AbstractSet[self.type]](frozenset([region]))
+
+    def get_label_of_regions_by_limits(self, regions: typing.AbstractSet[Region]):
+        res = set()
+        for k, v in self.symbol_table.symbols_by_type(typing.AbstractSet[Region]).items():
+            for region in v.value:
+                if region in regions:
+                    res.add(k.name)
+        return res

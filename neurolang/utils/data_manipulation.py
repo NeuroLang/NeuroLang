@@ -3,12 +3,6 @@ import numpy as np
 from xml.etree import ElementTree
 
 
-def load_image_and_labels(subject):
-    labels_path = '/home/mschmit/Documents/data/%s/T1w/aparc.a2009s+aseg.nii.gz' % subject
-    labeled_im = nib.load(labels_path)
-    return labeled_im
-
-
 def parse_region_label_map(labeled_im):
     extension_header = ElementTree.fromstring(labeled_im.header.extensions[0].get_content())
     labeltable = {

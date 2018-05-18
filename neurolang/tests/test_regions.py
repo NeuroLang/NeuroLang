@@ -1,4 +1,5 @@
 import numpy as np
+import os
 from pytest import raises
 from ..regions import *
 from ..RCD_relations import *
@@ -22,7 +23,7 @@ def test_region_eq():
     assert not r3 == r4
 
 
-def test_axis_intervals():
+def test_coordinates():
     r1 = Region((0, 0, 0), (1, 1, 1))
     assert np.array_equal(r1.axis_intervals(), np.array([tuple([0, 1]), tuple([0, 1]), tuple([0, 1])]))
     r2 = Region((2, 0, 7), (4, 6, 8))
@@ -150,8 +151,42 @@ def test_region_from_data():
 
 
 def create_region_from_subject_data(subject, region):
-    parc_data = load_image_and_labels(subject)
-    label_region_key = parse_region_label_map(parc_data)
-    region_data = transform_to_ras_coordinate_system(parc_data, label_region_key[region])
-    (lb, ub) = region_data_limits(region_data)
-    return Region(lb, ub)
+    #todo: generate the data to remove file dependency in tests
+    path = 'data/%s/T1w/aparc.a2009s+aseg.nii.gz' % subject
+    if os.path.isfile(path):
+        parc_data = nib.load(path)
+        label_region_key = parse_region_label_map(parc_data)
+        region_data = transform_to_ras_coordinate_system(parc_data, label_region_key[region])
+        (lb, ub) = region_data_limits(region_data)
+        return Region(lb, ub)
+
+
+def test_sphere_volumetric_region():
+    subject = '100206'
+    path = 'data/%s/T1w/aparc.a2009s+aseg.nii.gz' % subject
+    if os.path.isfile(path):
+        parc_data = nib.load(path)
+        center = (1.10000151, -28.00000167, -43.30000049)
+        radius = 15
+        sr = SphericVolume(center, radius)
+        vbr_voxels = sr.to_ijk(parc_data.affine)
+        rand_voxel = vbr_voxels[np.random.choice(len(vbr_voxels), 1)]
+        coordinate = nib.affines.apply_affine(parc_data.affine, np.array(rand_voxel))
+        assert np.linalg.norm(np.array(coordinate) - np.array(center)) <= radius
+
+        esr = sr.to_explicit_region(parc_data.affine)
+        assert np.all(np.array([np.linalg.norm(np.array(tuple([x, y, z])) - np.array(center)) for [x, y, z] in esr.to_xyz()]) <= 15)
+
+
+def test_explicit_region():
+    subject = '100206'
+    path = 'data/%s/T1w/aparc.a2009s+aseg.nii.gz' % subject
+    if os.path.isfile(path):
+        parc_data = nib.load(path)
+        region = np.array(list(zip(*parc_data.get_data()[:100, :100, :100].nonzero())))
+
+        vbr = ExplicitVBR(region, parc_data.affine)
+        assert np.array_equal(vbr.to_ijk(parc_data.affine), vbr._voxels)
+
+        [i, j, k] = vbr._voxels[np.random.choice(len(vbr._voxels))]
+        assert not parc_data.get_data()[i, j, k] == 0
