@@ -5,6 +5,23 @@ import numpy as np
 import nibabel as nib
 from numpy.linalg import inv
 
+#code repetition, could be abstracted to one method (region, aff, set_op)
+
+def region_union(regions_set, affine):
+    voxels_per_regions = [set(map(tuple, elem.to_ijk(affine))) for elem in regions_set] # first convert to array of tuples
+    result_voxels = set.union(*voxels_per_regions)
+    return ExplicitVBR(list(map(lambda x: np.array(x), result_voxels)), affine)  # then convert back to 2d array, FIX!
+
+def region_intersection(regions_set, affine):
+    voxels_per_regions = [set(map(tuple, elem.to_ijk(affine))) for elem in regions_set]
+    result_voxels = set.intersection(*voxels_per_regions)
+    return ExplicitVBR(list(map(lambda x: np.array(x), result_voxels)), affine)
+
+def region_difference(regions_set, affine):
+    voxels_per_regions = [set(map(tuple, elem.to_ijk(affine))) for elem in regions_set]
+    result_voxels = set.difference(*voxels_per_regions)
+    return ExplicitVBR(list(map(lambda x: np.array(x), result_voxels)), affine)
+
 class Region:
 
     def __init__(self, lb, ub) -> None:
@@ -14,7 +31,7 @@ class Region:
         self._bounding_box.setflags(write=False)
 
     def __hash__(self):
-        return hash(self._bounding_box.tobytes())
+        return hash(self.bounding_box.tobytes())
 
     @property
     def bounding_box(self):
@@ -55,15 +72,18 @@ class VolumetricBrainRegion(Region):
         '''return ijk voxels coordinates corresponding to the affine matrix transform'''
         raise NotImplementedError()
 
+    def to_xyz_set(self, affine):
+        raise NotImplementedError()
+
+    def to_ijk_set(self, affine):
+        raise NotImplementedError()
+
 class ExplicitVBR(VolumetricBrainRegion):
 
     def __init__(self, voxels, affine_matrix):
         self._voxels = voxels
         self._affine_matrix = affine_matrix
         self._bounding_box = None
-
-    def __hash__(self):
-        return hash(self.bounding_box.tobytes())
 
     @property
     def bounding_box(self):
@@ -98,7 +118,7 @@ class ImplicitVBR(VolumetricBrainRegion):
         return ExplicitVBR(voxels_coordinates, affine)
 
 
-class SphericVolume(ImplicitVBR):
+class SphericalVolume(ImplicitVBR):
 
     def __init__(self, center, radius):
         self._center = center
@@ -131,8 +151,23 @@ class SphericVolume(ImplicitVBR):
     def center(self):
         return self._center
 
+    def __hash__(self):
+        return hash(self.bounding_box.tobytes())
+
     def __eq__(self, other) -> bool:
         return np.all(self._center == other._center) and self._radius == other._radius
 
     def __repr__(self):
-        return 'SphericVolume(Center={}, Radius={})'.format(tuple(self._center), self._radius)
+        return 'SphericalVolume(Center={}, Radius={})'.format(tuple(self._center), self._radius)
+
+
+class PlanarVolume(ImplicitVBR):
+
+    def __init__(self, origin, vector):
+        self._origin = np.array(origin)
+        self._vector = np.array(vector) / np.linalg.norm(vector)
+        self._bounding_box = None
+        self._limit = 10000
+
+    def point_in_plane(self, point):
+        return np.dot(self._vector, self._origin - point) == 0

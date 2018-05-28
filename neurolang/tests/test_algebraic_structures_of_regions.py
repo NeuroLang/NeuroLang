@@ -1,8 +1,22 @@
-from ..region_solver import RegionsSetSolver
+from ..region_solver import RegionsSetSolver, get_singleton_element_from_frozenset
 from ..symbols_and_types import TypedSymbolTable
 from .. import neurolang as nl
 from typing import AbstractSet, Callable
-from ..regions import Region
+from ..regions import *
+import os
+import numpy as np
+import nibabel as nib
+
+# todo: refa this awful tests
+
+subject = '100206'
+path = 'data/%s/T1w/aparc.a2009s+aseg.nii.gz' % subject
+data_from_file = os.path.isfile(path)
+
+if data_from_file:
+    region_solver = RegionsSetSolver(TypedSymbolTable())
+    parc_data = nib.load(path)
+    region_solver.load_regions_to_solver(parc_data)
 
 
 def test_relation_superior_of():
@@ -545,7 +559,7 @@ def test_paper_composition_ex():
     assert res == frozenset([c])
 
 
-def test_get_labels_from_region_results():
+def test_regions_names_from_table():
     region_set_type = AbstractSet[Region]
     solver = RegionsSetSolver(TypedSymbolTable())
 
@@ -559,10 +573,70 @@ def test_get_labels_from_region_results():
     l3_elem = frozenset([l3])
     center_elem = frozenset([center])
 
-    solver.symbol_table[nl.Symbol[region_set_type]('l1')] = nl.Constant[region_set_type](l1_elem)
-    solver.symbol_table[nl.Symbol[region_set_type]('l2')] = nl.Constant[region_set_type](l2_elem)
-    solver.symbol_table[nl.Symbol[region_set_type]('l3')] = nl.Constant[region_set_type](l3_elem)
-    solver.symbol_table[nl.Symbol[region_set_type]('central')] = nl.Constant[region_set_type](center_elem)
+    solver.symbol_table[nl.Symbol[region_set_type]('L1')] = nl.Constant[region_set_type](l1_elem)
+    solver.symbol_table[nl.Symbol[region_set_type]('L2')] = nl.Constant[region_set_type](l2_elem)
+    solver.symbol_table[nl.Symbol[region_set_type]('L3')] = nl.Constant[region_set_type](l3_elem)
+    solver.symbol_table[nl.Symbol[region_set_type]('CENTRAL')] = nl.Constant[region_set_type](center_elem)
     search_for = frozenset([l1, center])
-    res = solver.get_label_of_regions_by_limits(search_for)
-    print(res)
+    res = solver.name_of_regions(search_for)
+    assert res == ['L1', 'CENTRAL']
+
+
+def test_do_query():
+
+    region_set_type = AbstractSet[Region]
+    solver = RegionsSetSolver(TypedSymbolTable())
+
+    inferior = Region((0, 0), (1, 1))
+    central = Region((0, 2), (1, 3))
+    superior = Region((0, 4), (1, 5))
+
+    all_elements = frozenset([inferior, central, superior])
+    #todo function to load all symbols into solver
+    solver.symbol_table[nl.Symbol[region_set_type]('db')] = nl.Constant[region_set_type](all_elements)
+    solver.symbol_table[nl.Symbol[region_set_type]('CENTRAL')] = nl.Constant[region_set_type](frozenset([central]))
+    obtained = solver.run_query('superior_of', 'CENTRAL')
+    assert len(obtained) == 0
+
+    solver.symbol_table[nl.Symbol[region_set_type]('BOTTOM')] = nl.Constant[region_set_type](frozenset([inferior]))
+    solver.symbol_table[nl.Symbol[region_set_type]('TOP')] = nl.Constant[region_set_type](frozenset([superior]))
+    obtained = solver.run_query('superior_of', 'CENTRAL')
+    assert obtained == ['TOP']
+
+    solver.run_query('superior_of', 'BOTTOM', store_into='not_bottom')
+    assert solver.symbol_table['not_bottom'].value == frozenset([central, superior])
+
+
+def test_regions_union():
+
+    if data_from_file:
+        r1 = get_singleton_element_from_frozenset(region_solver.symbol_table['CTX_RH_G_FRONT_MIDDLE'].value)
+        r2 = get_singleton_element_from_frozenset(region_solver.symbol_table['CTX_RH_S_FRONT_INF'].value)
+        r3 = get_singleton_element_from_frozenset(region_solver.symbol_table['CTX_LH_S_PRECENTRAL-INF-PART'].value)
+        fs = set().union([r1, r2, r3])
+        union = region_union(fs, parc_data.affine)
+        assert (len(union.to_ijk(parc_data.affine))) == sum([len(reg.to_ijk(parc_data.affine)) for reg in fs])
+
+
+def test_regions_intersection():
+
+    if data_from_file:
+        brain_stem = get_singleton_element_from_frozenset(region_solver.symbol_table['BRAIN-STEM'].value)
+        brain_stem_coords = brain_stem.to_xyz()
+        center = brain_stem_coords[int(brain_stem_coords.shape[0] / 2)]
+        radius = 10
+        sr = SphericalVolume(center, radius)
+        region_solver.symbol_table[nl.Symbol[region_solver.type]('SPHERE')] = nl.Constant[
+            AbstractSet[region_solver.type]](frozenset([sr]))
+
+        sphere = get_singleton_element_from_frozenset(region_solver.symbol_table['SPHERE'].value)
+        fs = set().union([brain_stem, sphere])
+        intersect = region_intersection(fs, parc_data.affine)
+        assert not (len(intersect.to_ijk(parc_data.affine))) == 0
+
+        d1 = region_difference([brain_stem, sphere], parc_data.affine)
+        d2 = region_difference([sphere, brain_stem], parc_data.affine)
+        union = region_union([brain_stem, sphere], parc_data.affine)
+        intersect = region_difference([union, d1, d2], parc_data.affine)
+        intersect2 = region_intersection([sphere, brain_stem], parc_data.affine)
+        assert intersect == intersect2

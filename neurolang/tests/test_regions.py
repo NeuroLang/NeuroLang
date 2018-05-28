@@ -168,7 +168,7 @@ def test_sphere_volumetric_region():
         parc_data = nib.load(path)
         center = (1.10000151, -28.00000167, -43.30000049)
         radius = 15
-        sr = SphericVolume(center, radius)
+        sr = SphericalVolume(center, radius)
         vbr_voxels = sr.to_ijk(parc_data.affine)
         rand_voxel = vbr_voxels[np.random.choice(len(vbr_voxels), 1)]
         coordinate = nib.affines.apply_affine(parc_data.affine, np.array(rand_voxel))
@@ -190,3 +190,11 @@ def test_explicit_region():
 
         [i, j, k] = vbr._voxels[np.random.choice(len(vbr._voxels))]
         assert not parc_data.get_data()[i, j, k] == 0
+
+
+def test_planar_region():
+    center = (1, 5, 6)
+    vector = (1, 0, 0)
+    pr = PlanarVolume(center, vector)
+    assert pr.point_in_plane(center)
+    assert not pr.point_in_plane((2, 8, 7))
