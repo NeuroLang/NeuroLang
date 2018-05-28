@@ -1,5 +1,6 @@
 import numpy as np
 import os
+from numpy import random
 from pytest import raises
 from ..regions import *
 from ..RCD_relations import *
@@ -195,6 +196,11 @@ def test_explicit_region():
 def test_planar_region():
     center = (1, 5, 6)
     vector = (1, 0, 0)
-    pr = PlanarVolume(center, vector)
+    pr = PlanarVolume(center, vector, limit=10)
     assert pr.point_in_plane(center)
     assert not pr.point_in_plane((2, 8, 7))
+    p = tuple(random.randint(1, 250, size=3))
+    p_proj = pr.project_point_to_plane(p)
+    assert not pr.point_in_plane(p_proj)
+    assert np.all([0, -10, -10] == pr._lb)
+    assert np.all([10, 10, 10] == pr._ub)

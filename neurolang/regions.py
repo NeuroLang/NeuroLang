@@ -163,11 +163,55 @@ class SphericalVolume(ImplicitVBR):
 
 class PlanarVolume(ImplicitVBR):
 
-    def __init__(self, origin, vector):
+    def __init__(self, origin, vector, direction=1, limit=1000):
         self._origin = np.array(origin)
+        if not np.any([vector[i] > 0 for i in range(len(vector))]):
+            raise RegionException('Vector normal to the plane must be non-zero')
         self._vector = np.array(vector) / np.linalg.norm(vector)
         self._bounding_box = None
-        self._limit = 10000
+        if direction not in [1, -1]:
+            raise RegionException('Direction must either be 1 (superior to) or -1 (inferior to)')
+        self._dir = direction
+        if limit <= 0:
+            raise RegionException('Limit must be a positive value')
+        self._limit = limit
 
     def point_in_plane(self, point):
         return np.dot(self._vector, self._origin - point) == 0
+
+    def project_point_to_plane(self, point):
+        point = np.array(point)
+        d = np.dot(self._vector, point)
+        return point - d * self._vector
+
+    @property
+    def bounding_box(self):
+        if self._bounding_box is not None:
+            return self._bounding_box
+
+        outside = (self._dir * self._limit,) * 3
+        inside = self.project_point_to_plane(outside) * -1
+        [lb, ub] = sorted([inside, outside], key=lambda x: x[0])
+        self._bounding_box = np.c_[lb, ub]
+        return self._bounding_box
+
+    def to_ijk(self, affine):
+        bounds_voxels = nib.affines.apply_affine(np.linalg.inv(affine), np.array([self._lb, self._ub]))
+        [xs, ys, zs] = [range(int(min(bounds_voxels[:, i])), int(max(bounds_voxels[:, i]))) for i in range(3)]
+
+        #todo improve
+        voxel_coordinates = []
+        for x in xs:
+            for y in ys:
+                for z in zs:
+                    voxel_coordinates.append([x, y, z])
+        return np.array(voxel_coordinates)
+
+    def __hash__(self):
+        return hash(self.bounding_box.tobytes())
+
+    def __eq__(self, other) -> bool:
+        return np.all(self._origin == other._origin) and self._vector == other._vector
+
+    def __repr__(self):
+        return 'PlanarVolume(Origin={}, Normal Vector={})'.format(tuple(self._origin), self._vector)

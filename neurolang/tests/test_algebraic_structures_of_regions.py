@@ -1,7 +1,7 @@
 from ..region_solver import RegionsSetSolver, get_singleton_element_from_frozenset
 from ..symbols_and_types import TypedSymbolTable
 from .. import neurolang as nl
-from typing import AbstractSet, Callable
+from typing import AbstractSet, Callable, Tuple
 from ..regions import *
 import os
 import numpy as np
@@ -386,7 +386,7 @@ def test_universal_relation_return_all_elements():
     query_a = nl.Query[AbstractSet[Region]](nl.Symbol[AbstractSet[Region]]('a'), p1)
     solver.walk(query_a)
     assert solver.symbol_table['a'].value == frozenset([superior, inferior, central])
-'''todo: review'''
+    #todo: review
 
 
 def test_composition_identity():
@@ -640,3 +640,32 @@ def test_regions_intersection():
         intersect = region_difference([union, d1, d2], parc_data.affine)
         intersect2 = region_intersection([sphere, brain_stem], parc_data.affine)
         assert intersect == intersect2
+
+
+def test_planar_regions_from_query():
+    solver = RegionsSetSolver(TypedSymbolTable())
+    center = (1, 5, 6)
+    vector = (1, 0, 0)
+    solver.symbol_table[nl.Symbol[dict]('e')] = nl.Constant[dict]({'origin': center, 'vector': vector})
+
+    p1 = nl.Predicate[dict](
+        nl.Symbol[Callable[[dict], AbstractSet[Region]]]('superior_from_plane'),
+        (nl.Symbol[dict]('e'),)
+    )
+
+    query_a = nl.Query[AbstractSet[Region]](nl.Symbol[dict]('a'), p1)
+    solver.walk(query_a)
+
+    region = get_singleton_element_from_frozenset(solver.symbol_table['a'].value)
+    assert(np.all(region == PlanarVolume(center, vector)))
+
+    p1 = nl.Predicate[dict](
+        nl.Symbol[Callable[[dict], AbstractSet[Region]]]('inferior_from_plane'),
+        (nl.Symbol[dict]('e'),)
+    )
+
+    query_a = nl.Query[AbstractSet[Region]](nl.Symbol[dict]('a'), p1)
+    solver.walk(query_a)
+
+    region = get_singleton_element_from_frozenset(solver.symbol_table['a'].value)
+    assert (np.all(region == PlanarVolume(center, vector, direction=-1)))

@@ -9,6 +9,7 @@ from . import neurolang as nl
 
 __all__ = ['RegionsSetSolver', 'define_query', 'get_singleton_element_from_frozenset']
 
+
 #todo: this goto utils
 def define_query(set_type, functor, symbol_name, query_name):
     predicate = nl.Predicate[set_type](
@@ -18,8 +19,10 @@ def define_query(set_type, functor, symbol_name, query_name):
     query = nl.Query[set_type](nl.Symbol[set_type](query_name), predicate)
     return query
 
+
 def get_singleton_element_from_frozenset(fs):
     return next(iter(fs))
+
 
 class RegionsSetSolver(SetBasedSolver):
     type = Region
@@ -47,7 +50,18 @@ class RegionsSetSolver(SetBasedSolver):
 
         self.symbol_table[nl.Symbol[pred_type]('universal')] = nl.Constant[pred_type](self.symbols_of_type())
 
-    #todo replace 'Region' type for self.type
+        dict_to_region = typing.Callable[[typing.DefaultDict, ], typing.AbstractSet[Region]]
+        for key, value in {'superior_from_plane': 1, 'inferior_from_plane': -1}.items():
+            setattr(self, key, self.region_from_plane(value))
+            self.symbol_table[
+                nl.Symbol[dict_to_region](key)
+            ] = nl.Constant[dict_to_region](self.__getattribute__(key))
+
+    def region_from_plane(self, bb_direction) -> typing.AbstractSet[Region]:
+        def f(elem: typing.DefaultDict) -> typing.AbstractSet[Region]:
+            elem['direction'] = bb_direction
+            return frozenset([PlanarVolume(**elem)])
+        return f
 
     def symbols_of_type(self) -> typing.AbstractSet[Region]:
         def f(elem: typing.AbstractSet[Region]) -> typing.AbstractSet[Region]:
@@ -80,7 +94,7 @@ class RegionsSetSolver(SetBasedSolver):
 
     def direction(self, direction, reference_region: typing.AbstractSet[Region]) -> typing.AbstractSet[Region]:
         result, visited = set(), set()
-        for symbol in self.symbol_table.symbols_by_type(typing.AbstractSet[Region]).values():
+        for symbol in self.symbol_table.symbols_by_type(typing.AbstractSet[self.type]).values():
             regions_set = symbol.value - reference_region
             if not regions_set.issubset(visited):
                 visited.update(regions_set)
