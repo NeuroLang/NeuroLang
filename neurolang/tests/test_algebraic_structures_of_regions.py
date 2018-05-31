@@ -1,7 +1,7 @@
 from ..region_solver import RegionsSetSolver, get_singleton_element_from_frozenset
 from ..symbols_and_types import TypedSymbolTable
 from .. import neurolang as nl
-from typing import AbstractSet, Callable, Tuple
+from typing import AbstractSet, Callable
 from ..regions import *
 import os
 import numpy as np
@@ -497,38 +497,72 @@ def test_relation_left_of_unaligned():
     assert solver.symbol_table['p1'].value == frozenset([l1, l2, l3])
 
 
-def test_overlapping_hyperrectangles():
+def test_overlapped_hyperrect():
     region_set_type = AbstractSet[Region]
     solver = RegionsSetSolver(TypedSymbolTable())
 
-    a = Region((-10, -10), (5, 5))
-    b = Region((0, 0), (15, 15))
+    a0 = Region((1, -1, 1), (2, 0, 2))
+    b0 = Region((0, -1, 0), (1, 0, 1))
+    c0 = Region((0, -1, -1), (1, 0, 0))
 
-    all_elements = frozenset([a, b])
-    a = frozenset([a])
-    b = frozenset([b])
+    a1 = Region((0, 0, 1), (1, 1, 2))
+    c1 = Region((0, 0, -1), (1, 1, 0))
+
+    a2 = Region((0, 1, 1), (1, 2, 2))
+    b2 = Region((0, 1, 0), (1, 2, 1))
+    c2 = Region((0, 1, -1), (1, 2, 0))
+
+    all_elements = frozenset([a0, b0, c0, a1, c1, a2, b2, c2])
+    reference_set = frozenset([Region((0, 0, -0.5), (1, 1, 1.5))])
 
     solver.symbol_table[nl.Symbol[region_set_type]('db')] = nl.Constant[region_set_type](all_elements)
-    solver.symbol_table[nl.Symbol[region_set_type]('a')] = nl.Constant[region_set_type](a)
-    solver.symbol_table[nl.Symbol[region_set_type]('b')] = nl.Constant[region_set_type](b)
+    solver.symbol_table[nl.Symbol[region_set_type]('a')] = nl.Constant[region_set_type](reference_set)
 
     north_relation = 'overlapping'
     predicate = nl.Predicate[region_set_type](
         nl.Symbol[Callable[[region_set_type], region_set_type]](north_relation),
         (nl.Symbol[region_set_type]('a'),)
     )
-    predicate_r = nl.Predicate[region_set_type](
+
+    query = nl.Query[region_set_type](nl.Symbol[region_set_type]('p'), predicate)
+    solver.walk(query)
+
+    assert solver.symbol_table['p'].value == frozenset([a1, c1])
+
+    reference_set = frozenset([Region((10, 0, -0.5), (12, 1, 1.5))])
+
+    solver.symbol_table[nl.Symbol[region_set_type]('db')] = nl.Constant[region_set_type](all_elements)
+    solver.symbol_table[nl.Symbol[region_set_type]('a')] = nl.Constant[region_set_type](reference_set)
+
+    north_relation = 'overlapping'
+    predicate = nl.Predicate[region_set_type](
         nl.Symbol[Callable[[region_set_type], region_set_type]](north_relation),
-        (nl.Symbol[region_set_type]('b'),)
+        (nl.Symbol[region_set_type]('a'),)
     )
 
     query = nl.Query[region_set_type](nl.Symbol[region_set_type]('p'), predicate)
     solver.walk(query)
-    query = nl.Query[region_set_type](nl.Symbol[region_set_type]('pr'), predicate_r)
+
+    assert solver.symbol_table['p'].value == frozenset()
+
+    a0 = Region((5, -1, 0.5), (6, 1.5, 3))
+    all_elements = frozenset([a0, b0, c0, a1, c1, a2, b2, c2])
+    reference_set = frozenset([Region((5.5, 0, -0.5), (7, 1, 1.5))])
+
+    solver.symbol_table[nl.Symbol[region_set_type]('db')] = nl.Constant[region_set_type](all_elements)
+    solver.symbol_table[nl.Symbol[region_set_type]('a')] = nl.Constant[region_set_type](reference_set)
+
+    north_relation = 'overlapping'
+    predicate = nl.Predicate[region_set_type](
+        nl.Symbol[Callable[[region_set_type], region_set_type]](north_relation),
+        (nl.Symbol[region_set_type]('a'),)
+    )
+
+    query = nl.Query[region_set_type](nl.Symbol[region_set_type]('p'), predicate)
     solver.walk(query)
 
-    assert solver.symbol_table['p'].value == b
-    assert solver.symbol_table['pr'].value == a
+    assert solver.symbol_table['p'] == frozenset([a0])
+
 
 
 def test_paper_composition_ex():
@@ -595,15 +629,15 @@ def test_do_query():
     #todo function to load all symbols into solver
     solver.symbol_table[nl.Symbol[region_set_type]('db')] = nl.Constant[region_set_type](all_elements)
     solver.symbol_table[nl.Symbol[region_set_type]('CENTRAL')] = nl.Constant[region_set_type](frozenset([central]))
-    obtained = solver.run_query('superior_of', 'CENTRAL')
+    obtained = solver.run_query_on_region('superior_of', 'CENTRAL')
     assert len(obtained) == 0
 
     solver.symbol_table[nl.Symbol[region_set_type]('BOTTOM')] = nl.Constant[region_set_type](frozenset([inferior]))
     solver.symbol_table[nl.Symbol[region_set_type]('TOP')] = nl.Constant[region_set_type](frozenset([superior]))
-    obtained = solver.run_query('superior_of', 'CENTRAL')
+    obtained = solver.run_query_on_region('superior_of', 'CENTRAL')
     assert obtained == ['TOP']
 
-    solver.run_query('superior_of', 'BOTTOM', store_into='not_bottom')
+    solver.run_query_on_region('superior_of', 'BOTTOM', store_into='not_bottom')
     assert solver.symbol_table['not_bottom'].value == frozenset([central, superior])
 
 

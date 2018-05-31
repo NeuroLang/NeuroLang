@@ -34,24 +34,24 @@ def test_coordinates():
 def test_get_interval_relations_of_regions():
     r1 = Region((1, 1, 1), (2, 2, 2))
     r2 = Region((5, 5, 5), (8, 8, 8))
-    assert get_interval_relation_to(r1, r2) == tuple(['b', 'b', 'b'])
+    assert intervals_relations_from_boxes(r1, r2) == tuple(['b', 'b', 'b'])
     r1 = Region((1, 1, 1), (10, 10, 10))
-    assert get_interval_relation_to(r1, r2) == tuple(['di', 'di', 'di'])
+    assert intervals_relations_from_boxes(r1, r2) == tuple(['di', 'di', 'di'])
     r1 = Region((1, 1, 1), (6, 6, 6))
-    assert get_interval_relation_to(r1, r2) == tuple(['o', 'o', 'o'])
+    assert intervals_relations_from_boxes(r1, r2) == tuple(['o', 'o', 'o'])
     r2 = Region((1, 1, 1), (2, 2, 2))
-    assert get_interval_relation_to(r1, r2) == tuple(['si', 'si', 'si'])
-    assert get_interval_relation_to(r1, Region((1, 1, 1), (6, 6, 6))) == tuple(['e', 'e', 'e'])
+    assert intervals_relations_from_boxes(r1, r2) == tuple(['si', 'si', 'si'])
+    assert intervals_relations_from_boxes(r1, Region((1, 1, 1), (6, 6, 6))) == tuple(['e', 'e', 'e'])
 
     r1 = Region((5, 5, 5), (8, 8, 8))
     r2 = Region((8, 7, 12), (10, 8, 14))
-    assert get_interval_relation_to(r1, r2) == tuple(['m', 'fi', 'b'])
-    assert get_interval_relation_to(r2, r1) == tuple(['mi', 'f', 'bi'])
+    assert intervals_relations_from_boxes(r1, r2) == tuple(['m', 'fi', 'b'])
+    assert intervals_relations_from_boxes(r2, r1) == tuple(['mi', 'f', 'bi'])
 
     r1 = Region((5, 5, 5), (8, 8, 8))
     r2 = Region((3, 3, 7), (6, 6, 9))
-    assert get_interval_relation_to(r1, r2) == tuple(['oi', 'oi', 'o'])
-    assert get_interval_relation_to(r2, r1) == tuple(['o', 'o', 'oi'])
+    assert intervals_relations_from_boxes(r1, r2) == tuple(['oi', 'oi', 'o'])
+    assert intervals_relations_from_boxes(r2, r1) == tuple(['o', 'o', 'oi'])
 
 
 def test_regions_dir_matrix():

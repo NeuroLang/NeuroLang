@@ -159,10 +159,24 @@ class RegionsSetSolver(SetBasedSolver):
         obtained = self.name_of_regions(result)
         return obtained
 
-    def run_query(self, relation, region, store_into=None):
+    def run_query_on_region(self, relation, region, store_into=None):
         set_type = typing.AbstractSet[self.type]
         query = define_query(set_type, relation, region, 'query')
         obtained = self.solve_query(query)
         if store_into:
             obtained, symbol = self.query_and_store_result(query, store_into)
         return obtained
+
+    def query_from_plane(self, relation, plane_dict, store_into=None):
+
+        self.symbol_table[nl.Symbol[dict]('elem')] = nl.Constant[dict](plane_dict)
+        p1 = nl.Predicate[dict](
+            nl.Symbol[typing.Callable[[dict], typing.AbstractSet[Region]]](relation),
+            (nl.Symbol[dict]('elem'),)
+        )
+
+        query = nl.Query[typing.AbstractSet[Region]](nl.Symbol[dict]('a'), p1)
+        self.walk(query)
+        result = self.symbol_table[query.symbol.name].value
+        self.symbol_table[nl.Symbol[self.type](store_into)] = nl.Constant[typing.AbstractSet[Region]](result)
+        return result

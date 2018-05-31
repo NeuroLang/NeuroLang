@@ -1,9 +1,9 @@
-from .RCD_relations import *
 from .exceptions import RegionException
 from .utils import data_manipulation
 import numpy as np
 import nibabel as nib
 from numpy.linalg import inv
+
 
 #code repetition, could be abstracted to one method (region, aff, set_op)
 
@@ -12,15 +12,18 @@ def region_union(regions_set, affine):
     result_voxels = set.union(*voxels_per_regions)
     return ExplicitVBR(list(map(lambda x: np.array(x), result_voxels)), affine)  # then convert back to 2d array, FIX!
 
+
 def region_intersection(regions_set, affine):
     voxels_per_regions = [set(map(tuple, elem.to_ijk(affine))) for elem in regions_set]
     result_voxels = set.intersection(*voxels_per_regions)
     return ExplicitVBR(list(map(lambda x: np.array(x), result_voxels)), affine)
 
+
 def region_difference(regions_set, affine):
     voxels_per_regions = [set(map(tuple, elem.to_ijk(affine))) for elem in regions_set]
     result_voxels = set.difference(*voxels_per_regions)
     return ExplicitVBR(list(map(lambda x: np.array(x), result_voxels)), affine)
+
 
 class Region:
 

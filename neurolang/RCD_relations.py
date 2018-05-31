@@ -3,14 +3,15 @@ from .regions import *
 import numpy as np
 
 
-def get_interval_relation_to(bounding_box, another_bounding_box):
+def intervals_relations_from_boxes(bounding_box, another_bounding_box):
     ''' retrieve interval relations of the axes between two objects '''
-    relations = [before, overlaps, during, meets, starts, finishes, equals]
     intervals = bounding_box.axis_intervals()
     other_box_intervals = another_bounding_box.axis_intervals()
+    return get_intervals_relations(intervals, other_box_intervals)
 
+def get_intervals_relations(intervals, other_box_intervals):
     obtained_relation_per_axis = ['' for _ in range(len(intervals))]
-
+    relations = [before, overlaps, during, meets, starts, finishes, equals]
     for f in relations:
         for i in range(len(obtained_relation_per_axis)):
             if f(intervals[i], other_box_intervals[i]):
@@ -28,8 +29,7 @@ def is_in_direction(matrix, direction):
         return np.any(matrix[index] == 1)
 
     (a, s) = directions_map(direction)
-    return np.any(matrix[:, a, s] == 1)
-
+    return matrix[1][a, s] == 1
 
 def directions_map(d):
     return {'SP': (0, 0), 'S': (0, 1), 'SA': (0, 2),
@@ -45,35 +45,38 @@ def inverse_direction(d):
 
 def direction_matrix(bounding_box, another_bounding_box):
     ''' direction matrix of two bounding boxes '''
-    intervals_relations = get_interval_relation_to(bounding_box, another_bounding_box)
-    res = tensor_direction_matrix_wrapper(intervals_relations)
-    return res
 
-
-def tensor_direction_matrix_wrapper(ia_relations):
     res = np.zeros(shape=(3, 3, 3))
-    if len(ia_relations) != 3:
-        a = ia_relations[0]
-        s = ia_relations[1]
-        as_matrix = translate_ia_relation(a, s)
+    bb_lb, bb_ub = tuple(bounding_box._lb), tuple(bounding_box._ub)
+    if len(bb_lb) < 3:
+        res[1] = translate_ia_relation(*intervals_relations_from_boxes(bounding_box, another_bounding_box))
+        return res
+
+    another_bb_lb, another_bb_ub = tuple(another_bounding_box._lb), tuple(another_bounding_box._ub)
+    projected_bb_lb, projected_bb_ub = (another_bb_lb[:1] + bb_lb[1:], another_bb_ub[:1] + bb_ub[1:])
+    bb_lr_limits = bounding_box.axis_intervals()[:1]
+    another_bb_lr_limits = another_bounding_box.axis_intervals()[:1]
+    lr_relation = get_intervals_relations(bb_lr_limits, another_bb_lr_limits)[0]
+
+    projected_intervals = np.array([tuple([projected_bb_lb[i], projected_bb_ub[i]]) for i in range(len(projected_bb_lb))])# get intervals
+    another_bounding_box.axis_intervals()
+    postant_supinf_relations = get_intervals_relations(projected_intervals, another_bounding_box.axis_intervals())[1:]
+
+    as_matrix = translate_ia_relation(*postant_supinf_relations)
+
+    if lr_relation in ['d', 's', 'f', 'e']:
         res[1] = as_matrix
-    else:
-        a = ia_relations[1]
-        s = ia_relations[2]
-        as_matrix = translate_ia_relation(a, s)
-        r = ia_relations[0]
-        if r in ['d', 's', 'f', 'e']:
-            res[1] = as_matrix
-        elif r in ['m', 'b']:
-            res[0] = as_matrix
-        elif r in ['mi', 'bi']:
-            res[2] = as_matrix
-        elif r in ['o', 'fi']:
-            res[0] = res[1] = as_matrix
-        elif r in ['oi', 'si']:
-            res[1] = res[2] = as_matrix
-        elif r in ['di']:
-            res[0] = res[1] = res[2] = as_matrix
+    elif lr_relation in ['m', 'b']:
+        res[0] = as_matrix
+    elif lr_relation in ['mi', 'bi']:
+        res[2] = as_matrix
+    elif lr_relation in ['o', 'fi']:
+        res[0] = res[1] = as_matrix
+    elif lr_relation in ['oi', 'si']:
+        res[1] = res[2] = as_matrix
+    elif lr_relation in ['di']:
+        res[0] = res[1] = res[2] = as_matrix
+
     return res
 
 
