@@ -52,29 +52,20 @@ def direction_matrix(bounding_box, another_bounding_box):
         res[1] = translate_ia_relation(*intervals_relations_from_boxes(bounding_box, another_bounding_box))
         return res
 
-    another_bb_lb, another_bb_ub = tuple(another_bounding_box._lb), tuple(another_bounding_box._ub)
-    projected_bb_lb, projected_bb_ub = (another_bb_lb[:1] + bb_lb[1:], another_bb_ub[:1] + bb_ub[1:])
-    bb_lr_limits = bounding_box.axis_intervals()[:1]
-    another_bb_lr_limits = another_bounding_box.axis_intervals()[:1]
-    lr_relation = get_intervals_relations(bb_lr_limits, another_bb_lr_limits)[0]
+    (left_right, ant_post, inf_sup) = intervals_relations_from_boxes(bounding_box, another_bounding_box)
+    as_matrix = translate_ia_relation(ant_post, inf_sup)
 
-    projected_intervals = np.array([tuple([projected_bb_lb[i], projected_bb_ub[i]]) for i in range(len(projected_bb_lb))])# get intervals
-    another_bounding_box.axis_intervals()
-    postant_supinf_relations = get_intervals_relations(projected_intervals, another_bounding_box.axis_intervals())[1:]
-
-    as_matrix = translate_ia_relation(*postant_supinf_relations)
-
-    if lr_relation in ['d', 's', 'f', 'e']:
+    if left_right in ['d', 's', 'f', 'e']:
         res[1] = as_matrix
-    elif lr_relation in ['m', 'b']:
+    elif left_right in ['m', 'b']:
         res[0] = as_matrix
-    elif lr_relation in ['mi', 'bi']:
+    elif left_right in ['mi', 'bi']:
         res[2] = as_matrix
-    elif lr_relation in ['o', 'fi']:
+    elif left_right in ['o', 'fi']:
         res[0] = res[1] = as_matrix
-    elif lr_relation in ['oi', 'si']:
+    elif left_right in ['oi', 'si']:
         res[1] = res[2] = as_matrix
-    elif lr_relation in ['di']:
+    elif left_right in ['di']:
         res[0] = res[1] = res[2] = as_matrix
 
     return res
