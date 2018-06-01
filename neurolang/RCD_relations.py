@@ -29,7 +29,10 @@ def is_in_direction(matrix, direction):
         return np.any(matrix[index] == 1)
 
     (a, s) = directions_map(direction)
-    return matrix[1][a, s] == 1
+    #todo remove if
+    if matrix.shape == (3, 3, 3):
+        return matrix[1][a, s] == 1
+    return matrix[a, s] == 1
 
 def directions_map(d):
     return {'SP': (0, 0), 'S': (0, 1), 'SA': (0, 2),
@@ -42,109 +45,49 @@ def inverse_direction(d):
             'P': 'A', 'O': 'O', 'A': 'P',
             'IP': 'SA', 'I': 'S', 'IA': 'SP'}[d]
 
-
 def direction_matrix(bounding_box, another_bounding_box):
-    ''' direction matrix of two bounding boxes '''
+    relations = intervals_relations_from_boxes(bounding_box, another_bounding_box)
+    return translate_ia_relations(*relations[::-1])     # todo: relations reordering can be avoided
 
-    res = np.zeros(shape=(3, 3, 3))
-    bb_lb, bb_ub = tuple(bounding_box._lb), tuple(bounding_box._ub)
-    if len(bb_lb) < 3:
-        res[1] = translate_ia_relation(*intervals_relations_from_boxes(bounding_box, another_bounding_box))
-        return res
+def translate_ia_relations(*args):
+    n = len(args)
+    result = np.zeros(shape=(3,) * n)
 
-    (left_right, ant_post, inf_sup) = intervals_relations_from_boxes(bounding_box, another_bounding_box)
-    as_matrix = translate_ia_relation(ant_post, inf_sup)
+    # todo remove if
+    if n == 3:
+        args = [args[2], args[0], args[1]]
 
-    if left_right in ['d', 's', 'f', 'e']:
-        res[1] = as_matrix
-    elif left_right in ['m', 'b']:
-        res[0] = as_matrix
-    elif left_right in ['mi', 'bi']:
-        res[2] = as_matrix
-    elif left_right in ['o', 'fi']:
-        res[0] = res[1] = as_matrix
-    elif left_right in ['oi', 'si']:
-        res[1] = res[2] = as_matrix
-    elif left_right in ['di']:
-        res[0] = res[1] = res[2] = as_matrix
+    ixs_per_ax = np.empty((n, n), dtype=list)
+    ixs_prod_match = np.empty(n, dtype=list)
+    for i in range(n):
+        ixs_per_ax[i, :] = relations_to_matrix_idxs(n, i, args[i])
 
+    for i in range(n):
+        ixs_per_coordinate = [set(elem) for elem in ixs_per_ax[:, i]]
+        ixs_prod_match[i] = list(set.intersection(*ixs_per_coordinate))
+
+    result[np.ix_(*ixs_prod_match)] = 1
+
+    #todo remove ifs
+    if n == 3:
+        for k in range(3):
+            result[:, [0, 2], :] = result[:, [2, 0], :]
+    if n == 2:
+        result[[0, 2]] = result[[2, 0]]
+    return result
+
+
+def relations_to_matrix_idxs(n, dim, relation):
+
+    res = [[0, 1, 2]] * n
+    if relation in ['d', 's', 'f', 'e']:
+        res[dim] = [1]
+    elif relation in ['m', 'b']:
+        res[dim] = [0]
+    elif relation in ['mi', 'bi']:
+        res[dim] = [2]
+    elif relation in ['o', 'fi']:
+        res[dim] = [0, 1]
+    elif relation in ['oi', 'si']:
+        res[dim] = [1, 2]
     return res
-
-
-def translate_ia_relation(x, y):
-    '''' IA to RCD mapping '''
-    if x in ['d', 's', 'f', 'e'] and y in ['d', 's', 'f', 'e']:
-        return np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]])
-    elif x in ['d', 's', 'f', 'e'] and y in ['m', 'b']:
-        return np.array([[0, 0, 0], [0, 0, 0], [0, 1, 0]])
-    elif x in ['d', 's', 'f', 'e'] and y in ['mi', 'bi']:
-        return np.array([[0, 1, 0], [0, 0, 0], [0, 0, 0]])
-    elif x in ['mi', 'bi'] and y in ['d', 's', 'f', 'e']:
-        return np.array([[0, 0, 0], [0, 0, 1], [0, 0, 0]])
-    elif x in ['m', 'b'] and y in ['d', 's', 'f', 'e']:
-        return np.array([[0, 0, 0], [1, 0, 0], [0, 0, 0]])
-    elif x in ['mi', 'bi'] and y in ['mi', 'bi']:
-        return np.array([[0, 0, 1], [0, 0, 0], [0, 0, 0]])
-    elif x in ['m', 'b'] and y in ['mi', 'bi']:
-        return np.array([[1, 0, 0], [0, 0, 0], [0, 0, 0]])
-    elif x in ['mi', 'bi'] and y in ['m', 'b']:
-        return np.array([[0, 0, 0], [0, 0, 0], [0, 0, 1]])
-    elif x in ['m', 'b'] and y in ['m', 'b']:
-        return np.array([[0, 0, 0], [0, 0, 0], [1, 0, 0]])
-
-    elif x in ['fi', 'o'] and y in ['m', 'b']:
-        return np.array([[0, 0, 0], [0, 0, 0], [1, 1, 0]])
-    elif x in ['si', 'oi'] and y in ['m', 'b']:
-        return np.array([[0, 0, 0], [0, 0, 0], [0, 1, 1]])
-    elif x in ['fi', 'o'] and y in ['mi', 'bi']:
-        return np.array([[1, 1, 0], [0, 0, 0], [0, 0, 0]])
-    elif x in ['si', 'oi'] and y in ['mi', 'bi']:
-        return np.array([[0, 1, 1], [0, 0, 0], [0, 0, 0]])
-    elif x in ['fi', 'o'] and y in ['d', 's', 'f', 'e']:
-        return np.array([[0, 0, 0], [1, 1, 0], [0, 0, 0]])
-    elif x in ['si', 'oi'] and y in ['d', 's', 'f', 'e']:
-        return np.array([[0, 0, 0], [0, 1, 1], [0, 0, 0]])
-    elif x in ['d', 's', 'f', 'e'] and y in ['fi', 'o']:
-        return np.array([[0, 0, 0], [0, 1, 0], [0, 1, 0]])
-    elif x in ['d', 's', 'f', 'e'] and y in ['si', 'oi']:
-        return np.array([[0, 1, 0], [0, 1, 0], [0, 0, 0]])
-    elif x in ['m', 'b'] and y in ['fi', 'o']:
-        return np.array([[0, 0, 0], [1, 0, 0], [1, 0, 0]])
-
-    elif x in ['m', 'b'] and y in ['si', 'oi']:
-        return np.array([[1, 0, 0], [1, 0, 0], [0, 0, 0]])
-    elif x in ['mi', 'bi'] and y in ['fi', 'o']:
-        return np.array([[0, 0, 0], [0, 0, 1], [0, 0, 1]])
-    elif x in ['mi', 'bi'] and y in ['si', 'oi']:
-        return np.array([[0, 0, 1], [0, 0, 1], [0, 0, 0]])
-    elif x in ['di'] and y in ['m', 'b']:
-        return np.array([[0, 0, 0], [0, 0, 0], [1, 1, 1]])
-    elif x in ['di'] and y in ['mi', 'bi']:
-        return np.array([[1, 1, 1], [0, 0, 0], [0, 0, 0]])
-    elif x in ['di'] and y in ['d', 's', 'f', 'e']:
-        return np.array([[0, 0, 0], [1, 1, 1], [0, 0, 0]])
-    elif x in ['d', 's', 'f', 'e'] and y in ['di']:
-        return np.array([[0, 1, 0], [0, 1, 0], [0, 1, 0]])
-    elif x in ['m', 'b'] and y in ['di']:
-        return np.array([[1, 0, 0], [1, 0, 0], [1, 0, 0]])
-    elif x in ['mi', 'bi'] and y in ['di']:
-        return np.array([[0, 0, 1], [0, 0, 1], [0, 0, 1]])
-
-    elif x in ['o', 'fi'] and y in ['o', 'fi']:
-        return np.array([[0, 0, 0], [1, 1, 0], [1, 1, 0]])
-    elif x in ['o', 'fi'] and y in ['si', 'oi']:
-        return np.array([[1, 1, 0], [1, 1, 0], [0, 0, 0]])
-    elif x in ['si', 'oi'] and y in ['o', 'fi']:
-        return np.array([[0, 0, 0], [0, 1, 1], [0, 1, 1]])
-    elif x in ['si', 'oi'] and y in ['si', 'oi']:
-        return np.array([[0, 1, 1], [0, 1, 1], [0, 0, 0]])
-    elif x in ['o', 'fi'] and y in ['di']:
-        return np.array([[1, 1, 0], [1, 1, 0], [1, 1, 0]])
-    elif x in ['si', 'oi'] and y in ['di']:
-        return np.array([[0, 1, 1], [0, 1, 1], [0, 1, 1]])
-    elif x in ['di'] and y in ['fi', 'o']:
-        return np.array([[0, 0, 0], [1, 1, 1], [1, 1, 1]])
-    elif x in ['di'] and y in ['si', 'oi']:
-        return np.array([[1, 1, 1], [1, 1, 1], [0, 0, 0]])
-    elif x in ['di'] and y in ['di']:
-        return np.array(np.ones(shape=(3, 3)))

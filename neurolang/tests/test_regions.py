@@ -56,37 +56,37 @@ def test_get_interval_relations_of_regions():
 
 def test_regions_dir_matrix():
 
-    dir_tensor = np.zeros(shape=(3, 3, 3))
     # r1 B:I:S:SA:A:IA r2
     r1 = Region((3, 3), (8, 8))
     r2 = Region((2, 4), (5, 6))
-    dir_tensor[1] = np.array([[0, 1, 1], [0, 1, 1], [0, 1, 1]])
-    assert np.array_equal(direction_matrix(r1, r2), dir_tensor)
+    dir_matrix = np.array([[0, 1, 1], [0, 1, 1], [0, 1, 1]])
+    assert np.array_equal(direction_matrix(r1, r2), dir_matrix)
 
     # r1 B:I:IP:P r2
     r1 = Region((1, 1), (5, 5))
     r2 = Region((3, 3), (5, 7))
-    dir_tensor[1] = np.array([[0, 0, 0], [1, 1, 0], [1, 1, 0]])
-
-    assert np.array_equal(direction_matrix(r1, r2), dir_tensor)
+    dir_matrix = np.array([[0, 0, 0], [1, 1, 0], [1, 1, 0]])
+    dm = direction_matrix(r1, r2)
+    assert np.array_equal(dm, dir_matrix)
 
     # r1 SP r2
     r1 = Region((6, 6), (8, 8))
     r2 = Region((8, 4), (10, 6))
-    dir_tensor[1] = np.array([[1, 0, 0], [0, 0, 0], [0, 0, 0]])
-    assert np.array_equal(direction_matrix(r1, r2), dir_tensor)
+    dir_matrix = np.array([[1, 0, 0], [0, 0, 0], [0, 0, 0]])
+    dm = direction_matrix(r1, r2)
+    assert np.array_equal(dm, dir_matrix)
 
     # r1 B r2
     r1 = Region((5, 6), (8, 8))
     r2 = Region((5, 5), (10, 10))
-    dir_tensor[1] = np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]])
-    assert np.array_equal(direction_matrix(r1, r2), dir_tensor)
+    dir_matrix = np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]])
+    assert np.array_equal(direction_matrix(r1, r2), dir_matrix)
 
     # r1 B:I:IP:P:SP:S:SA:A:IA r2
     r1 = Region((0, 0), (10, 10))
     r2 = Region((5, 5), (6, 6))
-    dir_tensor[1] = np.array([[1, 1, 1], [1, 1, 1], [1, 1, 1]])
-    assert np.array_equal(direction_matrix(r1, r2), dir_tensor)
+    dir_matrix = np.array([[1, 1, 1], [1, 1, 1], [1, 1, 1]])
+    assert np.array_equal(direction_matrix(r1, r2), dir_matrix)
 
     #Hyper-Rectangle Regions
     r1 = Region((0, 0, 2), (10, 1, 9))
