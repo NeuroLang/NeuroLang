@@ -141,14 +141,14 @@ def test_region_from_data():
     r5 = create_region_from_subject_data(subject, region)
 
     for region in [r2, r3, r4, r5]:
-        (x, y) = directions_map('P')
-        directions = direction_matrix(r1, region)
-        assert np.any(directions[:, x, y] == 1)
+        (x, y) = directions['P']
+        dir = direction_matrix(r1, region)
+        assert np.any(dir[:, x, y] == 1)
 
     for region in [r1, r3, r4, r5]:
-        (x, y) = directions_map('A')
-        directions = direction_matrix(r2, region)
-        assert np.any(directions[:, x, y] == 1)
+        (x, y) = directions['A']
+        dir = direction_matrix(r2, region)
+        assert np.any(dir[:, x, y] == 1)
 
 
 def create_region_from_subject_data(subject, region):
