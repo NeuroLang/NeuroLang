@@ -204,3 +204,14 @@ def test_planar_region():
     assert not pr.point_in_plane(p_proj)
     assert np.all([0, -10, -10] == pr._lb)
     assert np.all([10, 10, 10] == pr._ub)
+
+
+def test_direction_tensor_region_at_time_intervals():
+
+    r1 = Region((0, 0, 0, 1), (1, 1, 1, 2))
+    r2 = Region((0, 0, 0, 5), (1, 1, 1, 6))
+    assert np.all(direction_matrix(r1, r2)[0, 1, :, :] == np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]]))
+    assert np.all(direction_matrix(r1, r2)[1:] == np.zeros(shape=(2, 3, 3, 3)))
+
+    assert np.all(direction_matrix(r2, r1)[-1, 1, :, :] == np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]]))
+    assert np.all(direction_matrix(r2, r1)[:-1] == np.zeros(shape=(2, 3, 3, 3)))

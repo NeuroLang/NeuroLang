@@ -50,7 +50,7 @@ def direction_matrix(bounding_box, another_bounding_box):
 
     #patch kronecker order such that: res = kron(r,kron(s,a))
     if n == 3:
-        relations = [relations[1], relations[2], relations[0]]
+        relations = [relations[1], relations[2]] + [relations[i] for i in range(0,n) if i not in [1,2]]
     rp_vector = [relative_position_vector(r) for r in relations]
     result = rp_vector[0]
     for i in range(1, n):
