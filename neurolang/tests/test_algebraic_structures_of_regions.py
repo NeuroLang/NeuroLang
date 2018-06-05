@@ -23,9 +23,9 @@ def test_relation_superior_of():
     region_set_type = AbstractSet[Region]
     solver = RegionsSetSolver(TypedSymbolTable())
 
-    inferior = Region((0, 0), (1, 1))
-    central = Region((0, 2), (1, 3))
-    superior = Region((0, 4), (1, 5))
+    inferior = Region((0, 0, 0), (1, 1, 1))
+    central = Region((0, 0, 2), (1, 1, 3))
+    superior = Region((0, 0, 4), (1, 1, 5))
 
     all_elements = frozenset([inferior, central, superior])
     elem = frozenset([central])
@@ -33,9 +33,9 @@ def test_relation_superior_of():
     solver.symbol_table[nl.Symbol[region_set_type]('db')] = nl.Constant[region_set_type](all_elements)
     solver.symbol_table[nl.Symbol[region_set_type]('elem')] = nl.Constant[region_set_type](elem)
 
-    north_relation = 'superior_of'
+    superior_relation = 'superior_of'
     predicate = nl.Predicate[region_set_type](
-            nl.Symbol[Callable[[region_set_type], region_set_type]](north_relation),
+            nl.Symbol[Callable[[region_set_type], region_set_type]](superior_relation),
             (nl.Symbol[region_set_type]('elem'),)
         )
 
@@ -45,11 +45,11 @@ def test_relation_superior_of():
     assert solver.symbol_table['p1'].value == frozenset([superior])
 
 
-def test_north_u_south():
+def test_superior_u_inferior():
     solver = RegionsSetSolver(TypedSymbolTable())
 
-    db_elems = frozenset([Region((0, 5), (1, 6)), Region((0, -10), (1, -8))])
-    elem = frozenset([Region((0, 0), (1, 1))])
+    db_elems = frozenset([Region((0, 0, 5), (1, 1, 6)), Region((0, 0, -10), (1, 1, -8))])
+    elem = frozenset([Region((0, 0, 0), (1, 1, 1))])
 
     solver.symbol_table[nl.Symbol[AbstractSet[Region]]('db')] = nl.Constant[AbstractSet[Region]](db_elems)
     solver.symbol_table[nl.Symbol[AbstractSet[Region]]('e1')] = nl.Constant[AbstractSet[Region]](elem)
@@ -78,8 +78,8 @@ def check_union_commutativity(set_type, solver, relation1, relation2, element):
 def test_union_associativity():
     solver = RegionsSetSolver(TypedSymbolTable())
 
-    db_elems = frozenset([Region((0, 5), (1, 6)), Region((0, -10), (1, -8))])
-    elem = frozenset([Region((0, 0), (1, 1))])
+    db_elems = frozenset([Region((0, 0, 5), (1, 1, 6)), Region((0, 0, -10), (1, 1, -8))])
+    elem = frozenset([Region((0, 0, 0), (1, 1, 1))])
 
     solver.symbol_table[nl.Symbol[AbstractSet[Region]]('db')] = nl.Constant[AbstractSet[Region]](db_elems)
     solver.symbol_table[nl.Symbol[AbstractSet[Region]]('elem')] = nl.Constant[AbstractSet[Region]](elem)
@@ -116,11 +116,11 @@ def test_huntington_axiom():
     solver = RegionsSetSolver(TypedSymbolTable())
 
     db_elems = frozenset([
-        Region((0, 5), (1, 6)), Region((0, -10), (1, -8))
+        Region((0, 0, 5), (1, 1, 6)), Region((0, 0, -10), (1, 1, -8))
     ])
     solver.symbol_table[nl.Symbol[AbstractSet[Region]]('db')] = nl.Constant[AbstractSet[Region]](db_elems)
 
-    elem = frozenset([Region((0, 0), (1, 1))])
+    elem = frozenset([Region((0, 0, 0), (1, 1, 1))])
 
     solver.symbol_table[nl.Symbol[AbstractSet[Region]]('e')] = nl.Constant[AbstractSet[Region]](elem)
     check_huntington(AbstractSet[Region], solver, 'superior_of', 'inferior_of', 'e')
@@ -148,11 +148,11 @@ def check_huntington(type, solver, relation1, relation2, element):
 def test_composition():
     solver = RegionsSetSolver(TypedSymbolTable())
 
-    superior = Region((0, 5), (1, 6))
-    central = Region((0, 0), (1, 1))
-    lat1 = Region((2, 0), (3, 1))
-    lat2 = Region((6, 0), (7, 1))
-    lat3 = Region((10, 0), (11, 1))
+    superior = Region((0, 0, 5), (1, 1, 6))
+    central = Region((0, 0, 0), (1, 1, 1))
+    lat1 = Region((0, 2, 0), (1, 3, 1))
+    lat2 = Region((0, 6, 0), (1, 7, 1))
+    lat3 = Region((0, 10, 0), (1, 11, 1))
 
     db_elements = frozenset([central, superior, lat1, lat2, lat3])
     set_type = AbstractSet[Region]
@@ -195,12 +195,12 @@ def do_query_of_relation(set_type, solver, elem, relation):
 def test_composition_distributivity():
     solver = RegionsSetSolver(TypedSymbolTable())
 
-    superior = Region((0, 5), (1, 6))
-    central = Region((0, 0), (1, 1))
-    lat0 = Region((-3, 0), (-2, 1))
-    lat1 = Region((2, 0), (3, 1))
-    lat2 = Region((6, 0), (7, 1))
-    lat3 = Region((10, 0), (11, 1))
+    superior = Region((0, 0, 5), (1, 1, 6))
+    central = Region((0, 0, 0), (1, 1, 1))
+    lat0 = Region((0, -3, 0), (1, -2, 1))
+    lat1 = Region((0, 2, 0), (1, 3, 1))
+    lat2 = Region((0, 6, 0), (1, 7, 1))
+    lat3 = Region((0, 10, 0), (1, 11, 1))
 
     db_elements = frozenset([central, superior, lat0, lat1, lat2, lat3])
     set_type = AbstractSet[Region]
@@ -270,9 +270,9 @@ def test_involution():
 
     solver = SBS(TypedSymbolTable())
 
-    inferior = Region((0, -10), (1, -8))
-    central = Region((0, 0), (1, 1))
-    superior = Region((0, 5), (1, 6))
+    inferior = Region((0, 0, -10), (1, 1, -8))
+    central = Region((0, 0, 0), (1, 1, 1))
+    superior = Region((0, 0, 5), (1, 1, 6))
 
     db_elems = frozenset([central, superior, inferior])
     elem = frozenset([central])
@@ -313,8 +313,8 @@ def test_converse_distributivity():
 
     solver = SBS(TypedSymbolTable())
 
-    db_elems = frozenset([Region((0, 5), (1, 6)), Region((0, -10), (1, -8))])
-    elem = frozenset([Region((0, 0), (1, 1))])
+    db_elems = frozenset([Region((0, 0, 5), (1, 1, 6)), Region((0, 0, -10), (1, 1, -8))])
+    elem = frozenset([Region((0, 0, 0), (1, 1, 1))])
 
     solver.symbol_table[nl.Symbol[AbstractSet[Region]]('db')] = nl.Constant[AbstractSet[Region]](db_elems)
     solver.symbol_table[nl.Symbol[AbstractSet[Region]]('e1')] = nl.Constant[AbstractSet[Region]](elem)
@@ -366,9 +366,9 @@ def test_converse_distributivity():
 def test_universal_relation_return_all_elements():
 
     solver = RegionsSetSolver(TypedSymbolTable())
-    superior = Region((0, 5), (1, 6))
-    inferior = Region((0, -10), (1, -8))
-    central = Region((0, 0), (1, 1))
+    superior = Region((0, 0, 5), (1, 1, 6))
+    inferior = Region((0, 0, -10), (1, 1, -8))
+    central = Region((0, 0, 0), (1, 1, 1))
     db_elems = frozenset([
         superior, inferior
     ])
@@ -401,8 +401,8 @@ def test_composition_identity():
 
     solver = SBS(TypedSymbolTable())
 
-    db_elems = frozenset([Region((0, 5), (1, 6)), Region((0, -10), (1, -8))])
-    elem = frozenset([Region((0, 0), (1, 1))])
+    db_elems = frozenset([Region((0, 0, 5), (1, 1, 6)), Region((0, 0, -10), (1, 1, -8))])
+    elem = frozenset([Region((0, 0, 0), (1, 1, 1))])
     set_type = AbstractSet[Region]
 
     solver.symbol_table[nl.Symbol[set_type]('db')] = nl.Constant[set_type](db_elems)
@@ -569,9 +569,9 @@ def test_paper_composition_ex():
     set_type = AbstractSet[Region]
     solver = RegionsSetSolver(TypedSymbolTable())
 
-    a = Region((2, 2), (7, 4))
-    b = Region((3, 4), (5, 6))
-    c = Region((2, 4), (4, 6))
+    a = Region((0, 2, 2), (1, 7, 4))
+    b = Region((0, 3, 4), (1, 5, 6))
+    c = Region((0, 2, 4), (1, 4, 6))
 
     db_elements = frozenset([a, b, c])
 
@@ -581,9 +581,9 @@ def test_paper_composition_ex():
     assert res == frozenset([])
 
     solver = RegionsSetSolver(TypedSymbolTable())
-    a = Region((2, 2), (10, 4))
-    b = Region((3, 5), (8, 7))
-    c = Region((4, 8), (6, 10))
+    a = Region((0, 2, 2), (1, 10, 4))
+    b = Region((0, 3, 5), (1, 8, 7))
+    c = Region((0, 4, 8), (1, 6, 10))
 
     db_elements = frozenset([a, b, c])
 
@@ -621,9 +621,9 @@ def test_do_query():
     region_set_type = AbstractSet[Region]
     solver = RegionsSetSolver(TypedSymbolTable())
 
-    inferior = Region((0, 0), (1, 1))
-    central = Region((0, 2), (1, 3))
-    superior = Region((0, 4), (1, 5))
+    inferior = Region((0, 0, 0), (1, 1, 1))
+    central = Region((0, 0, 2), (1, 1, 3))
+    superior = Region((0, 0, 4), (1, 1, 5))
 
     all_elements = frozenset([inferior, central, superior])
     #todo function to load all symbols into solver

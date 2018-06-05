@@ -4,8 +4,8 @@ from numpy import random
 from pytest import raises
 from ..regions import *
 from ..RCD_relations import *
+from ..exceptions import NeuroLangException
 from ..utils.data_manipulation import *
-from ..exceptions import RegionException
 
 
 def _generate_random_box(size_bounds, *args):
@@ -56,74 +56,80 @@ def test_get_interval_relations_of_regions():
 
 def test_regions_dir_matrix():
 
-    # r1 B:I:S:SA:A:IA r2
-    r1 = Region((3, 3), (8, 8))
-    r2 = Region((2, 4), (5, 6))
+    # r1 A:B:P:RA:R:RP r2
+    r1 = Region((3, 3, 0), (8, 8, 1))
+    r2 = Region((2, 4, 0), (5, 6, 1))
     dir_matrix = np.array([[0, 1, 1], [0, 1, 1], [0, 1, 1]])
-    assert np.array_equal(direction_matrix(r1, r2), dir_matrix)
+    assert np.array_equal(direction_matrix(r1, r2)[1], dir_matrix)
 
-    # r1 B:I:IP:P r2
-    r1 = Region((1, 1), (5, 5))
-    r2 = Region((3, 3), (5, 7))
-    dir_matrix = np.array([[0, 0, 0], [1, 1, 0], [1, 1, 0]])
-    dm = direction_matrix(r1, r2)
+    # r1 L:LA:A:B r2
+    r1 = Region((1, 1, 0), (5, 5, 1))
+    r2 = Region((3, 3, 0), (5, 7, 1))
+    dir_matrix = np.array([[1, 1, 0], [1, 1, 0], [0, 0, 0]])
+    dm = direction_matrix(r1, r2)[1]
     assert np.array_equal(dm, dir_matrix)
 
-    # r1 SP r2
-    r1 = Region((6, 6), (8, 8))
-    r2 = Region((8, 4), (10, 6))
-    dir_matrix = np.array([[1, 0, 0], [0, 0, 0], [0, 0, 0]])
+    # r1 LP r2
+    r1 = Region((6, 6, 0), (8, 8, 1))
+    r2 = Region((8, 4, 0), (10, 6, 1))
+    dir_matrix = np.array([[0, 0, 0], [0, 0, 0], [1, 0, 0]])
     dm = direction_matrix(r1, r2)
-    assert np.array_equal(dm, dir_matrix)
+    assert np.array_equal(dm[1], dir_matrix)
 
     # r1 B r2
-    r1 = Region((5, 6), (8, 8))
-    r2 = Region((5, 5), (10, 10))
+    r1 = Region((5, 6, 0), (8, 8, 1))
+    r2 = Region((5, 5, 0), (10, 10, 1))
     dir_matrix = np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]])
-    assert np.array_equal(direction_matrix(r1, r2), dir_matrix)
+    assert np.array_equal(direction_matrix(r1, r2)[1], dir_matrix)
 
-    # r1 B:I:IP:P:SP:S:SA:A:IA r2
-    r1 = Region((0, 0), (10, 10))
-    r2 = Region((5, 5), (6, 6))
+    # r1 LA:A:RA:L:B:R:LP:P:RP r2
+    r1 = Region((0, 0, 0), (10, 10, 1))
+    r2 = Region((5, 5, 0), (6, 6, 1))
     dir_matrix = np.array([[1, 1, 1], [1, 1, 1], [1, 1, 1]])
-    assert np.array_equal(direction_matrix(r1, r2), dir_matrix)
+    assert np.array_equal(direction_matrix(r1, r2)[1], dir_matrix)
 
     #Hyper-Rectangle Regions
     r1 = Region((0, 0, 2), (10, 1, 9))
     r2 = Region((0, 0, 0), (10, 1, 1))
-    # r1 SC r2 - r2 IC r1
+    # r1 S r2 - r2 I r1
     dir_tensor = np.array(np.zeros(shape=(3, 3, 3)))
-    dir_tensor[1, 0, 1] = 1
-    obtained = direction_matrix(r1, r2)
-    assert np.array_equal(obtained, dir_tensor)
-    dir_tensor = np.array(np.zeros(shape=(3, 3, 3)))
-    dir_tensor[1, 2, 1] = 1
-    obtained = direction_matrix(r2, r1)
-    assert np.array_equal(obtained, dir_tensor)
+    dir_tensor[2, 1, 1] = 1
+    assert np.array_equal(direction_matrix(r1, r2), dir_tensor)
 
+    dir_tensor = np.array(np.zeros(shape=(3, 3, 3)))
+    dir_tensor[0, 1, 1] = 1
+    assert np.array_equal(direction_matrix(r2, r1), dir_tensor)
+
+    # r1 SL r2
     r1 = Region((0, 0, 8), (10, 1, 9))
     r2 = Region((15, 0, 0), (17, 1, 1))
-    # r1 SL r2
-    dir_tensor = np.array(np.zeros(shape=(3, 3, 3)))
-    dir_tensor[0, 0, 1] = 1
-    obtained = direction_matrix(r1, r2)
-    assert np.array_equal(obtained, dir_tensor)
-
-    r1 = Region((25, 0, 0), (30, 1, 1))
-    r2 = Region((15, 5, 0), (20, 6, 1))
-    # r1 PR r2
     dir_tensor = np.array(np.zeros(shape=(3, 3, 3)))
     dir_tensor[2, 1, 0] = 1
-    obtained = direction_matrix(r1, r2)
-    assert np.array_equal(obtained, dir_tensor)
+    assert np.array_equal(direction_matrix(r1, r2), dir_tensor)
+
+    # r1 RA r2
+    r1 = Region((25, 0, 0), (30, 1, 1))
+    r2 = Region((15, 5, 0), (20, 6, 1))
+    dir_tensor = np.array(np.zeros(shape=(3, 3, 3)))
+    dir_tensor[1, 0, 2] = 1
+    assert np.array_equal(direction_matrix(r1, r2), dir_tensor)
+
+    #time intervals: r1 Before r2 - r2 After r1
+    r1 = Region((0, 0, 0, 1), (1, 1, 1, 2))
+    r2 = Region((0, 0, 0, 5), (1, 1, 1, 6))
+    assert np.all(direction_matrix(r1, r2)[0, 1, :, :] == np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]]))
+    assert np.all(direction_matrix(r1, r2)[1:] == np.zeros(shape=(2, 3, 3, 3)))
+
+    assert np.all(direction_matrix(r2, r1)[-1, 1, :, :] == np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]]))
+    assert np.all(direction_matrix(r2, r1)[:-1] == np.zeros(shape=(2, 3, 3, 3)))
 
 
 def test_invalid_regions_raise_exception():
 
-    with raises(RegionException):
+    with raises(NeuroLangException):
         Region((0, 0, 0), (1, -1, 1))
 
-    with raises(RegionException):
+    with raises(NeuroLangException):
         Region((0, 0, 0), (0, 10, 20))
 
 
@@ -141,14 +147,10 @@ def test_region_from_data():
     r5 = create_region_from_subject_data(subject, region)
 
     for region in [r2, r3, r4, r5]:
-        (x, y) = directions['P']
-        dir = direction_matrix(r1, region)
-        assert np.any(dir[:, x, y] == 1)
+        is_in_direction(direction_matrix(r1, region), 'P')
 
     for region in [r1, r3, r4, r5]:
-        (x, y) = directions['A']
-        dir = direction_matrix(r2, region)
-        assert np.any(dir[:, x, y] == 1)
+        is_in_direction(direction_matrix(r2, region), 'A')
 
 
 def create_region_from_subject_data(subject, region):
@@ -204,14 +206,3 @@ def test_planar_region():
     assert not pr.point_in_plane(p_proj)
     assert np.all([0, -10, -10] == pr._lb)
     assert np.all([10, 10, 10] == pr._ub)
-
-
-def test_direction_tensor_region_at_time_intervals():
-
-    r1 = Region((0, 0, 0, 1), (1, 1, 1, 2))
-    r2 = Region((0, 0, 0, 5), (1, 1, 1, 6))
-    assert np.all(direction_matrix(r1, r2)[0, 1, :, :] == np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]]))
-    assert np.all(direction_matrix(r1, r2)[1:] == np.zeros(shape=(2, 3, 3, 3)))
-
-    assert np.all(direction_matrix(r2, r1)[-1, 1, :, :] == np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]]))
-    assert np.all(direction_matrix(r2, r1)[:-1] == np.zeros(shape=(2, 3, 3, 3)))

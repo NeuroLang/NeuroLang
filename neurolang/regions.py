@@ -1,4 +1,4 @@
-from .exceptions import RegionException
+from .exceptions import NeuroLangException
 from .utils import data_manipulation
 import numpy as np
 import nibabel as nib
@@ -29,7 +29,7 @@ class Region:
 
     def __init__(self, lb, ub) -> None:
         if not np.all([lb[i] < ub[i] for i in range(len(lb))]):
-            raise RegionException('Lower bounds must be lower than upper bounds when creating rectangular regions')
+            raise NeuroLangException('Lower bounds must be lower than upper bounds when creating rectangular regions')
         self._bounding_box = np.c_[lb, ub]
         self._bounding_box.setflags(write=False)
 
@@ -169,14 +169,14 @@ class PlanarVolume(ImplicitVBR):
     def __init__(self, origin, vector, direction=1, limit=1000):
         self._origin = np.array(origin)
         if not np.any([vector[i] > 0 for i in range(len(vector))]):
-            raise RegionException('Vector normal to the plane must be non-zero')
+            raise NeuroLangException('Vector normal to the plane must be non-zero')
         self._vector = np.array(vector) / np.linalg.norm(vector)
         self._bounding_box = None
         if direction not in [1, -1]:
-            raise RegionException('Direction must either be 1 (superior to) or -1 (inferior to)')
+            raise NeuroLangException('Direction must either be 1 (superior to) or -1 (inferior to)')
         self._dir = direction
         if limit <= 0:
-            raise RegionException('Limit must be a positive value')
+            raise NeuroLangException('Limit must be a positive value')
         self._limit = limit
 
     def point_in_plane(self, point):

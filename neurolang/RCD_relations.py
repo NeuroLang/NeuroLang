@@ -2,14 +2,14 @@ from .interval_algebra import *
 from .regions import *
 import numpy as np
 
+directions = {'B': [[1], [1]], 'L': [[0, 1, 2], [0]],
+              'R': [[0, 1, 2], [2]],
+              'P': [[0], [0, 1, 2]],
+              'A': [[2], [0, 1, 2]],
+              'O': [[1], [1]]}
 
-directions = {'SP': (0, 0), 'S': (0, 1), 'SA': (0, 2),
-          'P': (1, 0), 'O': (1, 1), 'A': (1, 2),
-          'IP': (2, 0), 'I': (2, 1), 'IA': (2, 2)}
-
-inverse_directions = {'SP': 'IA', 'S': 'I', 'SA': 'IP',
-            'P': 'A', 'O': 'O', 'A': 'P',
-            'IP': 'SA', 'I': 'S', 'IA': 'SP'}
+inverse_directions = {'R': 'L', 'A': 'P', 'S': 'I',
+              'O': 'O', 'L': 'R', 'P': 'A', 'I': 'S'}
 
 
 def intervals_relations_from_boxes(bounding_box, another_bounding_box):
@@ -17,6 +17,7 @@ def intervals_relations_from_boxes(bounding_box, another_bounding_box):
     intervals = bounding_box.axis_intervals()
     other_box_intervals = another_bounding_box.axis_intervals()
     return get_intervals_relations(intervals, other_box_intervals)
+
 
 def get_intervals_relations(intervals, other_box_intervals):
     obtained_relation_per_axis = ['' for _ in range(len(intervals))]
@@ -33,37 +34,26 @@ def get_intervals_relations(intervals, other_box_intervals):
 
 
 def is_in_direction(matrix, direction):
-    if direction in ['L', 'C', 'R']:
-        index = int(np.where(np.array(['L', 'C', 'R']) == direction)[0])
-        return np.any(matrix[index] == 1)
+    if direction in ['I', 'C', 'S']:
+        dir_index = int(np.where(np.array(['I', 'C', 'S']) == direction)[0])
+        return np.any(matrix[dir_index] == 1)
 
-    (a, s) = directions[direction]
-    #todo remove if
-    if matrix.shape == (3, 3, 3):
-        return matrix[1][a, s] == 1
-    return matrix[a, s] == 1
+    for m in matrix:
+        if np.any(m[directions[direction]] == 1):
+            return True
+    return False
 
 
 def direction_matrix(bounding_box, another_bounding_box):
+
     relations = intervals_relations_from_boxes(bounding_box, another_bounding_box)
-    n = len(relations)
-
-    #patch kronecker order such that: res = kron(r,kron(s,a))
-    if n == 3:
-        relations = [relations[1], relations[2]] + [relations[i] for i in range(0,n) if i not in [1,2]]
     rp_vector = [relative_position_vector(r) for r in relations]
-    result = rp_vector[0]
-    for i in range(1, n):
-        result = np.kron(rp_vector[i], result)
-    result = result.reshape((3,) * n)
+    result = rp_vector[0].reshape(1, 3)
 
-    #patch to return matrices with the original standard: superior in upper rows, inferior in lower ones.
-    if n == 3:
-        for k in range(3):
-            result[:, [0, 2], :] = result[:, [2, 0], :]
-    if n == 2:
-        result[[0, 2]] = result[[2, 0]]
+    for i in range(1, len(relations)):
+        result = np.kron(rp_vector[i].reshape((3,) + (1,) * i), result)
     return result
+
 
 def relative_position_vector(relation):
     if relation in ['d', 's', 'f', 'e']:
@@ -77,4 +67,3 @@ def relative_position_vector(relation):
     elif relation in ['oi', 'si']:
         return np.array((0, 1, 1))
     return np.array((1, 1, 1))
-
