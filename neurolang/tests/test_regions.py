@@ -3,7 +3,7 @@ import os
 from numpy import random
 from pytest import raises
 from ..regions import *
-from ..RCD_relations import *
+from ..CD_relations import *
 from ..exceptions import NeuroLangException
 from ..utils.data_manipulation import *
 
@@ -26,32 +26,32 @@ def test_region_eq():
 
 def test_coordinates():
     r1 = Region((0, 0, 0), (1, 1, 1))
-    assert np.array_equal(r1.axis_intervals(), np.array([tuple([0, 1]), tuple([0, 1]), tuple([0, 1])]))
+    assert np.array_equal(r1.bounding_box, np.array([[tuple([0, 1]), tuple([0, 1]), tuple([0, 1])]]))
     r2 = Region((2, 0, 7), (4, 6, 8))
-    assert np.array_equal(r2.axis_intervals(), np.array([tuple([2, 4]), tuple([0, 6]), tuple([7, 8])]))
+    assert np.array_equal(r2.bounding_box, np.array([[tuple([2, 4]), tuple([0, 6]), tuple([7, 8])]]))
 
 
 def test_get_interval_relations_of_regions():
     r1 = Region((1, 1, 1), (2, 2, 2))
     r2 = Region((5, 5, 5), (8, 8, 8))
-    assert intervals_relations_from_boxes(r1, r2) == tuple(['b', 'b', 'b'])
+    assert intervals_relations_from_regions(r1, r2) == tuple(['b', 'b', 'b'])
     r1 = Region((1, 1, 1), (10, 10, 10))
-    assert intervals_relations_from_boxes(r1, r2) == tuple(['di', 'di', 'di'])
+    assert intervals_relations_from_regions(r1, r2) == tuple(['di', 'di', 'di'])
     r1 = Region((1, 1, 1), (6, 6, 6))
-    assert intervals_relations_from_boxes(r1, r2) == tuple(['o', 'o', 'o'])
+    assert intervals_relations_from_regions(r1, r2) == tuple(['o', 'o', 'o'])
     r2 = Region((1, 1, 1), (2, 2, 2))
-    assert intervals_relations_from_boxes(r1, r2) == tuple(['si', 'si', 'si'])
-    assert intervals_relations_from_boxes(r1, Region((1, 1, 1), (6, 6, 6))) == tuple(['e', 'e', 'e'])
+    assert intervals_relations_from_regions(r1, r2) == tuple(['si', 'si', 'si'])
+    assert intervals_relations_from_regions(r1, Region((1, 1, 1), (6, 6, 6))) == tuple(['e', 'e', 'e'])
 
     r1 = Region((5, 5, 5), (8, 8, 8))
     r2 = Region((8, 7, 12), (10, 8, 14))
-    assert intervals_relations_from_boxes(r1, r2) == tuple(['m', 'fi', 'b'])
-    assert intervals_relations_from_boxes(r2, r1) == tuple(['mi', 'f', 'bi'])
+    assert intervals_relations_from_regions(r1, r2) == tuple(['m', 'fi', 'b'])
+    assert intervals_relations_from_regions(r2, r1) == tuple(['mi', 'f', 'bi'])
 
     r1 = Region((5, 5, 5), (8, 8, 8))
     r2 = Region((3, 3, 7), (6, 6, 9))
-    assert intervals_relations_from_boxes(r1, r2) == tuple(['oi', 'oi', 'o'])
-    assert intervals_relations_from_boxes(r2, r1) == tuple(['o', 'o', 'oi'])
+    assert intervals_relations_from_regions(r1, r2) == tuple(['oi', 'oi', 'o'])
+    assert intervals_relations_from_regions(r2, r1) == tuple(['o', 'o', 'oi'])
 
 
 def test_regions_dir_matrix():
@@ -88,7 +88,6 @@ def test_regions_dir_matrix():
     dir_matrix = np.array([[1, 1, 1], [1, 1, 1], [1, 1, 1]])
     assert np.array_equal(direction_matrix(r1, r2)[1], dir_matrix)
 
-    #Hyper-Rectangle Regions
     r1 = Region((0, 0, 2), (10, 1, 9))
     r2 = Region((0, 0, 0), (10, 1, 1))
     # r1 S r2 - r2 I r1
@@ -114,7 +113,7 @@ def test_regions_dir_matrix():
     dir_tensor[1, 0, 2] = 1
     assert np.array_equal(direction_matrix(r1, r2), dir_tensor)
 
-    #time intervals: r1 Before r2 - r2 After r1
+    # 4d regions overlapping at time intervals: r1 Before r2 - r2 After r1
     r1 = Region((0, 0, 0, 1), (1, 1, 1, 2))
     r2 = Region((0, 0, 0, 5), (1, 1, 1, 6))
     assert np.all(direction_matrix(r1, r2)[0, 1, :, :] == np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]]))
@@ -122,6 +121,29 @@ def test_regions_dir_matrix():
 
     assert np.all(direction_matrix(r2, r1)[-1, 1, :, :] == np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]]))
     assert np.all(direction_matrix(r2, r1)[:-1] == np.zeros(shape=(2, 3, 3, 3)))
+    assert is_in_direction(direction_matrix(r2, r1), 'F')
+
+    # 2d regions (R-L, P-A)
+    r1 = Region((0, 0), (1, 1))
+    r2 = Region((0, 5), (1, 6))
+    assert is_in_direction(direction_matrix(r1, r2), 'P')
+
+
+def test_basic_overlap():
+    r1 = Region((0, 0, 0), (1, 1, 1))
+    r2 = Region((0, -5, -5), (1, 5, 5))
+    assert is_in_direction(direction_matrix(r1, r2), 'O')
+    for rel in ['P', 'A', 'I', 'S', 'L', 'R']:
+        assert not is_in_direction(direction_matrix(r1, r2), rel)
+
+    r1 = Region((0, 0, 0), (1, 3, 5))
+    r2 = Region((0, 2, 1), (1, 7, 4))
+    assert is_in_direction(direction_matrix(r1, r2), 'O')
+
+    r1 = Region((0, 0), (1, 1))
+    r2 = Region((1, 0), (2, 1))
+    assert is_in_direction(direction_matrix(r1, r2), 'L')
+    assert not is_in_direction(direction_matrix(r1, r2), 'O')
 
 
 def test_invalid_regions_raise_exception():
@@ -206,3 +228,6 @@ def test_planar_region():
     assert not pr.point_in_plane(p_proj)
     assert np.all([0, -10, -10] == pr._lb)
     assert np.all([10, 10, 10] == pr._ub)
+
+    r2 = Region((0, -5, -5), (1, 5, 5))
+    print(r2._lb)

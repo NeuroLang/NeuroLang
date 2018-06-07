@@ -1,4 +1,4 @@
-from .RCD_relations import direction_matrix, is_in_direction, inverse_directions
+from .CD_relations import direction_matrix, is_in_direction, inverse_directions
 from .regions import *
 from .solver import SetBasedSolver
 from .utils.data_manipulation import *
@@ -37,7 +37,7 @@ class RegionsSetSolver(SetBasedSolver):
 
         for key, value in {'superior_of': 'S', 'inferior_of': 'I', 'anterior_of': 'A',
                            'posterior_of': 'P', 'overlapping': 'O',
-                           'left_of': 'L', 'aligned': 'C', 'right_of': 'R'}.items():
+                           'left_of': 'L', 'right_of': 'R'}.items():
             setattr(self, key, self.define_dir_based_fun(value))
             self.symbol_table[
                 nl.Symbol[pred_type](key)
@@ -78,7 +78,7 @@ class RegionsSetSolver(SetBasedSolver):
 
     def define_inv_dir_based_fun(self, direction) -> typing.AbstractSet[Region]:
         def f(reference_region: typing.AbstractSet[Region]) -> typing.AbstractSet[Region]:
-            return self.direction(inverse_directions[direction], reference_region)
+            return self.direction([inverse_directions[d] for d in direction], reference_region)
         return f
 
     # add a match for the predicate "singleton" with a region as parameter

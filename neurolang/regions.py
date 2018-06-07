@@ -30,7 +30,7 @@ class Region:
     def __init__(self, lb, ub) -> None:
         if not np.all([lb[i] < ub[i] for i in range(len(lb))]):
             raise NeuroLangException('Lower bounds must be lower than upper bounds when creating rectangular regions')
-        self._bounding_box = np.c_[lb, ub]
+        self._bounding_box = np.array([np.c_[lb, ub]])
         self._bounding_box.setflags(write=False)
 
     def __hash__(self):
@@ -42,11 +42,11 @@ class Region:
 
     @property
     def _lb(self):
-        return self.bounding_box[:, 0]
+        return min(self.bounding_box[:, :, 0], key=tuple)
 
     @property
     def _ub(self):
-        return self.bounding_box[:, 1]
+        return max(self.bounding_box[:, :, 1], key=tuple)
 
     @property
     def center(self) -> np.array:
@@ -55,9 +55,6 @@ class Region:
     @property
     def width(self) -> np.array:
         return self._ub - self._lb
-
-    def axis_intervals(self) -> np.array:
-        return np.array([tuple([self._lb[i], self._ub[i]]) for i in range(len(self._lb))])
 
     def __eq__(self, other) -> bool:
         return np.all(self._lb == other._lb) and np.all(self._ub == other._ub)
@@ -93,7 +90,7 @@ class ExplicitVBR(VolumetricBrainRegion):
         if self._bounding_box is not None:
             return self._bounding_box
         (lb, ub) = data_manipulation.region_data_limits(self.to_xyz())
-        self._bounding_box = np.c_[lb, ub]
+        self._bounding_box = np.array([np.c_[lb, ub]])
         return self._bounding_box
 
     def to_xyz(self):
@@ -134,7 +131,7 @@ class SphericalVolume(ImplicitVBR):
             return self._bounding_box
         lb = tuple(np.array(self._center) - self._radius)
         ub = tuple(np.array(self._center) + self._radius)
-        self._bounding_box = np.c_[lb, ub]
+        self._bounding_box = np.array([np.c_[lb, ub]])
         return self._bounding_box
 
     def to_ijk(self, affine):
@@ -172,6 +169,7 @@ class PlanarVolume(ImplicitVBR):
             raise NeuroLangException('Vector normal to the plane must be non-zero')
         self._vector = np.array(vector) / np.linalg.norm(vector)
         self._bounding_box = None
+
         if direction not in [1, -1]:
             raise NeuroLangException('Direction must either be 1 (superior to) or -1 (inferior to)')
         self._dir = direction
@@ -195,7 +193,7 @@ class PlanarVolume(ImplicitVBR):
         outside = (self._dir * self._limit,) * 3
         inside = self.project_point_to_plane(outside) * -1
         [lb, ub] = sorted([inside, outside], key=lambda x: x[0])
-        self._bounding_box = np.c_[lb, ub]
+        self._bounding_box = np.array([np.c_[lb, ub]])
         return self._bounding_box
 
     def to_ijk(self, affine):
