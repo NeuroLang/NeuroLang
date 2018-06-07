@@ -30,28 +30,27 @@ def test_coordinates():
     r2 = Region((2, 0, 7), (4, 6, 8))
     assert np.array_equal(r2.bounding_box, np.array([[tuple([2, 4]), tuple([0, 6]), tuple([7, 8])]]))
 
-
 def test_get_interval_relations_of_regions():
     r1 = Region((1, 1, 1), (2, 2, 2))
     r2 = Region((5, 5, 5), (8, 8, 8))
-    assert intervals_relations_from_regions(r1, r2) == tuple(['b', 'b', 'b'])
+    assert get_intervals_relations(r1.bounding_box[0], r2.bounding_box[0]) == tuple(['b', 'b', 'b'])
     r1 = Region((1, 1, 1), (10, 10, 10))
-    assert intervals_relations_from_regions(r1, r2) == tuple(['di', 'di', 'di'])
+    assert get_intervals_relations(r1.bounding_box[0], r2.bounding_box[0]) == tuple(['di', 'di', 'di'])
     r1 = Region((1, 1, 1), (6, 6, 6))
-    assert intervals_relations_from_regions(r1, r2) == tuple(['o', 'o', 'o'])
+    assert get_intervals_relations(r1.bounding_box[0], r2.bounding_box[0]) == tuple(['o', 'o', 'o'])
     r2 = Region((1, 1, 1), (2, 2, 2))
-    assert intervals_relations_from_regions(r1, r2) == tuple(['si', 'si', 'si'])
-    assert intervals_relations_from_regions(r1, Region((1, 1, 1), (6, 6, 6))) == tuple(['e', 'e', 'e'])
+    assert get_intervals_relations(r1.bounding_box[0], r2.bounding_box[0]) == tuple(['si', 'si', 'si'])
+    assert get_intervals_relations(r1.bounding_box[0], Region((1, 1, 1), (6, 6, 6)).bounding_box[0]) == tuple(['e', 'e', 'e'])
 
     r1 = Region((5, 5, 5), (8, 8, 8))
     r2 = Region((8, 7, 12), (10, 8, 14))
-    assert intervals_relations_from_regions(r1, r2) == tuple(['m', 'fi', 'b'])
-    assert intervals_relations_from_regions(r2, r1) == tuple(['mi', 'f', 'bi'])
+    assert get_intervals_relations(r1.bounding_box[0], r2.bounding_box[0]) == tuple(['m', 'fi', 'b'])
+    assert get_intervals_relations(r2.bounding_box[0], r1.bounding_box[0]) == tuple(['mi', 'f', 'bi'])
 
     r1 = Region((5, 5, 5), (8, 8, 8))
     r2 = Region((3, 3, 7), (6, 6, 9))
-    assert intervals_relations_from_regions(r1, r2) == tuple(['oi', 'oi', 'o'])
-    assert intervals_relations_from_regions(r2, r1) == tuple(['o', 'o', 'oi'])
+    assert get_intervals_relations(r1.bounding_box[0], r2.bounding_box[0]) == tuple(['oi', 'oi', 'o'])
+    assert get_intervals_relations(r2.bounding_box[0], r1.bounding_box[0]) == tuple(['o', 'o', 'oi'])
 
 
 def test_regions_dir_matrix():
@@ -229,5 +228,27 @@ def test_planar_region():
     assert np.all([0, -10, -10] == pr._lb)
     assert np.all([10, 10, 10] == pr._ub)
 
-    r2 = Region((0, -5, -5), (1, 5, 5))
-    print(r2._lb)
+
+def test_regions_with_multiple_bb():
+    r1 = Region((0, 0, 0), (6, 6, 1))
+    r2 = Region((6, 0, 0), (12, 6, 1))
+    assert is_in_direction(direction_matrix(r1, r2), 'L')
+    r1._bounding_box = np.array([np.c_[(0, 0, 0), (6, 3, 1)], np.c_[(0, 3, 0), (6, 6, 1)]])
+    assert is_in_direction(direction_matrix(r1, r2), 'L')
+    r2 = Region((2, -3, 0), (5, 3, 1))
+    assert is_in_direction(direction_matrix(r1, r2), 'LAR')
+
+    vox_region = ExplicitVBR([[0, 0, 0], [2, 3, 1], [5, 5, 0]], np.eye(4))
+    other_vox_region = ExplicitVBR([[4, 0, 0], [5, 1, 1]], np.eye(4))
+    assert is_in_direction(direction_matrix(other_vox_region, vox_region), 'O')
+    for r in ['L', 'R', 'P', 'A', 'I', 'S']:
+        assert not is_in_direction(direction_matrix(other_vox_region, vox_region), r)
+
+    vox_region._bounding_box = np.array([np.c_[(0, 0, 0), (2.5, 2.5, 1)],
+                                         np.c_[(0, 2.5, 0), (2.5, 5, 1)],
+                                         np.c_[(2.5, 2.5, 0), (5, 5, 1)]])
+
+    assert not is_in_direction(direction_matrix(other_vox_region, vox_region), 'O')
+    assert is_in_direction(direction_matrix(other_vox_region, vox_region), 'PR')
+    for r in ['L', 'A', 'I', 'S']:
+        assert not is_in_direction(direction_matrix(other_vox_region, vox_region), r)

@@ -32,6 +32,7 @@ class Region:
             raise NeuroLangException('Lower bounds must be lower than upper bounds when creating rectangular regions')
         self._bounding_box = np.array([np.c_[lb, ub]])
         self._bounding_box.setflags(write=False)
+        self._dim = len(lb)
 
     def __hash__(self):
         return hash(self.bounding_box.tobytes())
@@ -39,6 +40,10 @@ class Region:
     @property
     def bounding_box(self):
         return self._bounding_box
+
+    @property
+    def dim(self):
+        return self._dim
 
     @property
     def _lb(self):
@@ -84,6 +89,7 @@ class ExplicitVBR(VolumetricBrainRegion):
         self._voxels = voxels
         self._affine_matrix = affine_matrix
         self._bounding_box = None
+        self._dim = len(voxels[0])
 
     @property
     def bounding_box(self):
@@ -131,6 +137,7 @@ class SphericalVolume(ImplicitVBR):
             return self._bounding_box
         lb = tuple(np.array(self._center) - self._radius)
         ub = tuple(np.array(self._center) + self._radius)
+        self._dim = len(lb)
         self._bounding_box = np.array([np.c_[lb, ub]])
         return self._bounding_box
 
@@ -194,6 +201,7 @@ class PlanarVolume(ImplicitVBR):
         inside = self.project_point_to_plane(outside) * -1
         [lb, ub] = sorted([inside, outside], key=lambda x: x[0])
         self._bounding_box = np.array([np.c_[lb, ub]])
+        self._dim = len(lb)
         return self._bounding_box
 
     def to_ijk(self, affine):

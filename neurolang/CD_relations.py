@@ -12,17 +12,38 @@ matrix_positions_per_directions = {'L': [0], 'O': [1], 'R': [2], 'P': [0],
 inverse_directions = {'R': 'L', 'A': 'P', 'S': 'I',
                     'O': 'O', 'L': 'R', 'P': 'A', 'I': 'S'}
 
+#
+# def direction_matrix(region, another_region):
+#
+#     relations = intervals_relations_from_regions(region, another_region)
+#     rp_vector = [relative_position_vector(r) for r in relations]
+#     result = rp_vector[0].reshape(1, 3)
+#
+#     for i in range(1, len(relations)):
+#         result = np.kron(rp_vector[i].reshape((3,) + (1,) * i), result)
+#     return result
+
 
 def direction_matrix(region, another_region):
 
-    relations = intervals_relations_from_regions(region, another_region)
-    rp_vector = [relative_position_vector(r) for r in relations]
-    result = rp_vector[0].reshape(1, 3)
+    res = np.zeros((3,) * region.dim)
+    for bb in region.bounding_box:
+        for another_region_bb in another_region.bounding_box:
+            relations = get_intervals_relations(bb, another_region_bb)
+            rp_vector = [relative_position_vector(r) for r in relations]
+            tensor = rp_vector[0].reshape(1, 3)
+            for i in range(1, len(relations)):
+                tensor = np.kron(rp_vector[i].reshape((3,) + (1,) * i), tensor)
+            res = np.logical_or(res, tensor).astype(int)
+    return res
 
-    for i in range(1, len(relations)):
-        result = np.kron(rp_vector[i].reshape((3,) + (1,) * i), result)
-    return result
-
+#
+# def intervals_relations_from_bounding_box(bb, another_bb):
+#     intervals = bb.bounding_box
+#     other_region_intervals = another_bb.bounding_box
+#     return get_intervals_relations(intervals, other_region_intervals)
+#
+#
 
 def is_in_direction(matrix, direction):
 
@@ -34,10 +55,10 @@ def is_in_direction(matrix, direction):
     return np.any(matrix[idxs] == 1)
 
 
-def intervals_relations_from_regions(region, another_region):
-    intervals = region.bounding_box[0]
-    other_region_intervals = another_region.bounding_box[0]
-    return get_intervals_relations(intervals, other_region_intervals)
+# def intervals_relations_from_regions(region, another_region):
+#     intervals = region.bounding_box
+#     other_region_intervals = another_region.bounding_box
+#     return get_intervals_relations(intervals, other_region_intervals)
 
 
 def get_intervals_relations(intervals, other_region_intervals):
