@@ -13,6 +13,21 @@ inverse_directions = {'R': 'L', 'A': 'P', 'S': 'I',
                     'O': 'O', 'L': 'R', 'P': 'A', 'I': 'S'}
 
 
+def cardinal_relation(region, reference_region, directions, refine_overlapping=False, granularity_levels=5):
+
+    mat = direction_matrix(region, reference_region)
+    obtained = is_in_direction(mat, directions)
+    if 'O' in directions and refine_overlapping and isinstance(region, ExplicitVBR):
+        min_granularity = 0
+        while obtained and min_granularity < granularity_levels:
+            region.downward_granularity()
+            reference_region.downward_granularity()
+            min_granularity += 1
+            mat = direction_matrix(region, reference_region)
+            obtained = is_in_direction(mat, directions)
+    return obtained
+
+
 def direction_matrix(region, another_region):
 
     res = np.zeros((3,) * region.dim)

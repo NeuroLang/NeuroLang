@@ -1,4 +1,4 @@
-from .CD_relations import direction_matrix, is_in_direction, inverse_directions
+from .CD_relations import cardinal_relation, inverse_directions
 from .regions import *
 from .solver import SetBasedSolver
 from .utils.data_manipulation import *
@@ -35,9 +35,9 @@ class RegionsSetSolver(SetBasedSolver):
             typing.AbstractSet[self.type]
         ]
 
-        for key, value in {'superior_of': 'S', 'inferior_of': 'I', 'anterior_of': 'A',
-                           'posterior_of': 'P', 'overlapping': 'O',
-                           'left_of': 'L', 'right_of': 'R'}.items():
+        for key, value in {'inferior_of': 'I', 'superior_of': 'S',
+                           'posterior_of': 'P', 'anterior_of': 'A',
+                           'overlapping': 'O', 'left_of': 'L', 'right_of': 'R'}.items():
             setattr(self, key, self.define_dir_based_fun(value))
             self.symbol_table[
                 nl.Symbol[pred_type](key)
@@ -92,16 +92,15 @@ class RegionsSetSolver(SetBasedSolver):
         )
         return res
 
-    def direction(self, direction, reference_region: typing.AbstractSet[Region]) -> typing.AbstractSet[Region]:
+    def direction(self, direction, reference_regions: typing.AbstractSet[Region]) -> typing.AbstractSet[Region]:
         result, visited = set(), set()
-        for symbol in self.symbol_table.symbols_by_type(typing.AbstractSet[self.type]).values():
-            regions_set = symbol.value - reference_region
+        for symbol_in_table in self.symbol_table.symbols_by_type(typing.AbstractSet[self.type]).values():
+            regions_set = symbol_in_table.value - reference_regions
             if not regions_set.issubset(visited):
                 visited.update(regions_set)
                 for region in regions_set:
-                    for elem in reference_region:
-                        mat = direction_matrix(region, elem)
-                        if not is_in_direction(mat, direction):
+                    for ref in reference_regions:
+                        if not cardinal_relation(region, ref, direction, refine_overlapping=True):
                             break
                     else:
                         result.update((region,))

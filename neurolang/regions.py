@@ -2,6 +2,7 @@ from .exceptions import NeuroLangException
 from .utils import data_manipulation
 import numpy as np
 import nibabel as nib
+import copy
 from numpy.linalg import inv
 
 
@@ -61,6 +62,17 @@ class Region:
     def width(self) -> np.array:
         return self._ub - self._lb
 
+    def split_bounding_box(self):
+        result = []
+        for bb in self.bounding_box:
+            bb1, bb2 = copy.copy(bb), copy.copy(bb)
+            ax = np.argmax([rng[1] - rng[0] for rng in bb])
+            middle = (bb[ax, 0] + bb[ax, 1])/2
+            bb1[ax] = [bb[ax, 0],  middle]
+            bb2[ax] = [middle, bb[ax, 1]]
+            result.extend([bb1, bb2])
+        self._bounding_box = np.array(result)
+
     def __eq__(self, other) -> bool:
         return np.all(self._lb == other._lb) and np.all(self._ub == other._ub)
 
@@ -82,6 +94,10 @@ class VolumetricBrainRegion(Region):
 
     def to_ijk_set(self, affine):
         raise NotImplementedError()
+
+    def remove_empty_bounding_boxes(self):
+        raise NotImplementedError()
+
 
 class ExplicitVBR(VolumetricBrainRegion):
 
@@ -107,6 +123,20 @@ class ExplicitVBR(VolumetricBrainRegion):
             np.linalg.solve(affine, self._affine_matrix),
             self._voxels)
 
+    def remove_empty_bounding_boxes(self):
+        bbs = self.bounding_box
+        bb_elems = np.zeros(len(bbs))
+        for value in self.to_xyz():
+            for i in range(len(bb_elems)):
+                if data_manipulation.coordinate_in_limits(value, bbs[i]):
+                    bb_elems[i] += 1
+                    break
+        self._bounding_box = bbs[(bb_elems != 0)]
+
+    def downward_granularity(self):
+        self.split_bounding_box()
+        self.remove_empty_bounding_boxes()
+
 
 class ImplicitVBR(VolumetricBrainRegion):
 
@@ -119,7 +149,7 @@ class ImplicitVBR(VolumetricBrainRegion):
     def to_xyz(self, affine):
         raise NotImplementedError()
 
-    def to_explicit_region(self, affine):
+    def to_explicit_vbr(self, affine):
         voxels_coordinates = self.to_ijk(affine)
         return ExplicitVBR(voxels_coordinates, affine)
 

@@ -198,7 +198,7 @@ def test_sphere_volumetric_region():
         coordinate = nib.affines.apply_affine(parc_data.affine, np.array(rand_voxel))
         assert np.linalg.norm(np.array(coordinate) - np.array(center)) <= radius
 
-        esr = sr.to_explicit_region(parc_data.affine)
+        esr = sr.to_explicit_vbr(parc_data.affine)
         assert np.all(np.array([np.linalg.norm(np.array(tuple([x, y, z])) - np.array(center)) for [x, y, z] in esr.to_xyz()]) <= 15)
 
 
@@ -249,6 +249,45 @@ def test_regions_with_multiple_bb():
                                          np.c_[(2.5, 2.5, 0), (5, 5, 1)]])
 
     assert not is_in_direction(direction_matrix(other_vox_region, vox_region), 'O')
-    assert is_in_direction(direction_matrix(other_vox_region, vox_region), 'PR')
+    assert is_in_direction(direction_matrix(other_vox_region, vox_region), 'P')
+    assert is_in_direction(direction_matrix(other_vox_region, vox_region), 'R')
     for r in ['L', 'A', 'I', 'S']:
         assert not is_in_direction(direction_matrix(other_vox_region, vox_region), r)
+
+
+def test_split_bb():
+    r1 = Region((0, 0, 0), (3, 6, 1))
+    r1.split_bounding_box()
+    _, n, _ = r1.bounding_box.shape
+    for i in range(n):
+        intervals_per_ax = r1.bounding_box[:, i, :]
+        assert sum(map(lambda ls: ls[1] - ls[0], np.unique(intervals_per_ax, axis=0))) == r1.width[i]
+
+
+def test_split_and_delete_empty_bb():
+    vox_region = ExplicitVBR([[0, 0, 0], [2, 2.5, 1], [5, 5, 0]], np.eye(4))
+    other_vox_region = ExplicitVBR([[4, 0, 0], [5, 1, 1]], np.eye(4))
+    assert is_in_direction(direction_matrix(other_vox_region, vox_region), 'O')
+    for r in ['L', 'R', 'P', 'A', 'I', 'S']:
+        assert not is_in_direction(direction_matrix(other_vox_region, vox_region), r)
+
+    vox_region.split_bounding_box()
+    vox_region.split_bounding_box()
+    vox_region.remove_empty_bounding_boxes()
+    assert not is_in_direction(direction_matrix(other_vox_region, vox_region), 'O')
+    assert is_in_direction(direction_matrix(other_vox_region, vox_region), 'P')
+    assert is_in_direction(direction_matrix(other_vox_region, vox_region), 'R')
+    for r in ['L', 'A', 'I', 'S']:
+        assert not is_in_direction(direction_matrix(other_vox_region, vox_region), r)
+
+
+def test_refinement_of_concave_not_overlapping():
+    vox_region = ExplicitVBR([[0, 0, 0], [2, 2.5, 1], [5, 5, 0]], np.eye(4))
+    other_vox_region = ExplicitVBR([[4, 0, 0], [5, 1, 1]], np.eye(4))
+    assert cardinal_relation(vox_region, other_vox_region, 'O', refine_overlapping=False)
+    assert not cardinal_relation(vox_region, other_vox_region, 'O', refine_overlapping=True)
+
+    vox_region = ExplicitVBR([[0, 0, 0], [0, 3, 1], [3, 3, 0], [6, 3, 0], [0, 9, 0]], np.eye(4))
+    other_vox_region = ExplicitVBR([[5, 0, 0], [10, 3, 0], [10, 8, 1], [5, 10, 0]], np.eye(4))
+    assert cardinal_relation(vox_region, other_vox_region, 'O', refine_overlapping=False)
+    assert not cardinal_relation(vox_region, other_vox_region, 'O', refine_overlapping=True, granularity_levels=5)
