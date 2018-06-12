@@ -6,7 +6,7 @@ from ..regions import *
 from ..CD_relations import *
 from ..exceptions import NeuroLangException
 from ..utils.data_manipulation import *
-
+from ..brain_tree import AABB, Tree
 
 def _generate_random_box(size_bounds, *args):
     N = len(args)
@@ -26,34 +26,41 @@ def test_region_eq():
 
 def test_coordinates():
     r1 = Region((0, 0, 0), (1, 1, 1))
-    assert np.array_equal(r1.bounding_box, np.array([[tuple([0, 1]), tuple([0, 1]), tuple([0, 1])]]))
+    assert np.array_equal(r1.bounding_box.limits, np.array([tuple([0, 1]), tuple([0, 1]), tuple([0, 1])]))
     r2 = Region((2, 0, 7), (4, 6, 8))
-    assert np.array_equal(r2.bounding_box, np.array([[tuple([2, 4]), tuple([0, 6]), tuple([7, 8])]]))
+    assert np.array_equal(r2.bounding_box.limits, np.array([tuple([2, 4]), tuple([0, 6]), tuple([7, 8])]))
+
 
 def test_get_interval_relations_of_regions():
     r1 = Region((1, 1, 1), (2, 2, 2))
     r2 = Region((5, 5, 5), (8, 8, 8))
-    assert get_intervals_relations(r1.bounding_box[0], r2.bounding_box[0]) == tuple(['b', 'b', 'b'])
+    assert get_intervals_relations(r1.bounding_box.limits, r2.bounding_box.limits) == tuple(['b', 'b', 'b'])
     r1 = Region((1, 1, 1), (10, 10, 10))
-    assert get_intervals_relations(r1.bounding_box[0], r2.bounding_box[0]) == tuple(['di', 'di', 'di'])
+    assert get_intervals_relations(r1.bounding_box.limits, r2.bounding_box.limits) == tuple(['di', 'di', 'di'])
     r1 = Region((1, 1, 1), (6, 6, 6))
-    assert get_intervals_relations(r1.bounding_box[0], r2.bounding_box[0]) == tuple(['o', 'o', 'o'])
+    assert get_intervals_relations(r1.bounding_box.limits, r2.bounding_box.limits) == tuple(['o', 'o', 'o'])
     r2 = Region((1, 1, 1), (2, 2, 2))
-    assert get_intervals_relations(r1.bounding_box[0], r2.bounding_box[0]) == tuple(['si', 'si', 'si'])
-    assert get_intervals_relations(r1.bounding_box[0], Region((1, 1, 1), (6, 6, 6)).bounding_box[0]) == tuple(['e', 'e', 'e'])
+    assert get_intervals_relations(r1.bounding_box.limits, r2.bounding_box.limits) == tuple(['si', 'si', 'si'])
+    r2 = Region((1, 1, 1), (6, 6, 6))
+    assert get_intervals_relations(r1.bounding_box.limits, r2.bounding_box.limits) == tuple(['e', 'e', 'e'])
 
     r1 = Region((5, 5, 5), (8, 8, 8))
     r2 = Region((8, 7, 12), (10, 8, 14))
-    assert get_intervals_relations(r1.bounding_box[0], r2.bounding_box[0]) == tuple(['m', 'fi', 'b'])
-    assert get_intervals_relations(r2.bounding_box[0], r1.bounding_box[0]) == tuple(['mi', 'f', 'bi'])
+    assert get_intervals_relations(r1.bounding_box.limits, r2.bounding_box.limits) == tuple(['m', 'fi', 'b'])
+    assert get_intervals_relations(r2.bounding_box.limits, r1.bounding_box.limits) == tuple(['mi', 'f', 'bi'])
 
     r1 = Region((5, 5, 5), (8, 8, 8))
     r2 = Region((3, 3, 7), (6, 6, 9))
-    assert get_intervals_relations(r1.bounding_box[0], r2.bounding_box[0]) == tuple(['oi', 'oi', 'o'])
-    assert get_intervals_relations(r2.bounding_box[0], r1.bounding_box[0]) == tuple(['o', 'o', 'oi'])
+    assert get_intervals_relations(r1.bounding_box.limits, r2.bounding_box.limits) == tuple(['oi', 'oi', 'o'])
+    assert get_intervals_relations(r2.bounding_box.limits, r1.bounding_box.limits) == tuple(['o', 'o', 'oi'])
 
 
 def test_regions_dir_matrix():
+
+    # 2d regions (R-L, P-A)
+    r1 = Region((0, 0), (1, 1))
+    r2 = Region((0, 5), (1, 6))
+    assert is_in_direction(direction_matrix(r1, r2), 'P')
 
     # r1 A:B:P:RA:R:RP r2
     r1 = Region((3, 3, 0), (8, 8, 1))
@@ -122,11 +129,6 @@ def test_regions_dir_matrix():
     assert np.all(direction_matrix(r2, r1)[:-1] == np.zeros(shape=(2, 3, 3, 3)))
     assert is_in_direction(direction_matrix(r2, r1), 'F')
 
-    # 2d regions (R-L, P-A)
-    r1 = Region((0, 0), (1, 1))
-    r2 = Region((0, 5), (1, 6))
-    assert is_in_direction(direction_matrix(r1, r2), 'P')
-
 
 def test_basic_overlap():
     r1 = Region((0, 0, 0), (1, 1, 1))
@@ -155,34 +157,36 @@ def test_invalid_regions_raise_exception():
 
 
 def test_region_from_data():
+    # todo: generate the data to remove file dependency in tests
     subject = '100206'
+    path = 'data/%s/T1w/aparc.a2009s+aseg.nii.gz' % subject
+
+    if not os.path.isfile(path):
+        return
+
+    def create_region_from_subject_data(region, path):
+        parc_data = nib.load(path)
+        label_region_key = parse_region_label_map(parc_data)
+        region_data = transform_to_ras_coordinate_system(parc_data, label_region_key[region])
+        (lb, ub) = region_data_limits(region_data)
+        return Region(lb, ub)
+
     region = 'CC_POSTERIOR'
-    r1 = create_region_from_subject_data(subject, region)
+    r1 = create_region_from_subject_data(region, path)
     region = 'CC_ANTERIOR'
-    r2 = create_region_from_subject_data(subject, region)
+    r2 = create_region_from_subject_data(region, path)
     region = 'CC_CENTRAL'
-    r3 = create_region_from_subject_data(subject, region)
+    r3 = create_region_from_subject_data(region, path)
     region = 'CC_MID_ANTERIOR'
-    r4 = create_region_from_subject_data(subject, region)
+    r4 = create_region_from_subject_data(region, path)
     region = 'CC_MID_POSTERIOR'
-    r5 = create_region_from_subject_data(subject, region)
+    r5 = create_region_from_subject_data(region, path)
 
     for region in [r2, r3, r4, r5]:
         is_in_direction(direction_matrix(r1, region), 'P')
 
     for region in [r1, r3, r4, r5]:
         is_in_direction(direction_matrix(r2, region), 'A')
-
-
-def create_region_from_subject_data(subject, region):
-    #todo: generate the data to remove file dependency in tests
-    path = 'data/%s/T1w/aparc.a2009s+aseg.nii.gz' % subject
-    if os.path.isfile(path):
-        parc_data = nib.load(path)
-        label_region_key = parse_region_label_map(parc_data)
-        region_data = transform_to_ras_coordinate_system(parc_data, label_region_key[region])
-        (lb, ub) = region_data_limits(region_data)
-        return Region(lb, ub)
 
 
 def test_sphere_volumetric_region():
@@ -198,8 +202,8 @@ def test_sphere_volumetric_region():
         coordinate = nib.affines.apply_affine(parc_data.affine, np.array(rand_voxel))
         assert np.linalg.norm(np.array(coordinate) - np.array(center)) <= radius
 
-        esr = sr.to_explicit_vbr(parc_data.affine)
-        assert np.all(np.array([np.linalg.norm(np.array(tuple([x, y, z])) - np.array(center)) for [x, y, z] in esr.to_xyz()]) <= 15)
+        explicit_sr = sr.to_explicit_vbr(parc_data.affine)
+        assert np.all(np.array([np.linalg.norm(np.array(tuple([x, y, z])) - np.array(center)) for [x, y, z] in explicit_sr.to_xyz()]) <= 15)
 
 
 def test_explicit_region():
@@ -225,15 +229,20 @@ def test_planar_region():
     p = tuple(random.randint(1, 250, size=3))
     p_proj = pr.project_point_to_plane(p)
     assert not pr.point_in_plane(p_proj)
-    assert np.all([0, -10, -10] == pr._lb)
-    assert np.all([10, 10, 10] == pr._ub)
+    assert np.all([0, -10, -10] == pr.bounding_box.lb)
+    assert np.all([10, 10, 10] == pr.bounding_box.ub)
+
+
+def test_split_region_bb():
+    r1 = Region((0, 0, 0), (5, 9, 1))
+    [bb1, bb2] = data_manipulation.split_bounding_box(r1.bounding_box.limits)
+    assert bb1 == AABB((0, 0, 0), (5, 4.5, 1))
+    assert bb2 == AABB((0, 4.5, 0), (5, 9, 1))
 
 
 def test_regions_with_multiple_bb():
     r1 = Region((0, 0, 0), (6, 6, 1))
     r2 = Region((6, 0, 0), (12, 6, 1))
-    assert is_in_direction(direction_matrix(r1, r2), 'L')
-    r1._bounding_box = np.array([np.c_[(0, 0, 0), (6, 3, 1)], np.c_[(0, 3, 0), (6, 6, 1)]])
     assert is_in_direction(direction_matrix(r1, r2), 'L')
     r2 = Region((2, -3, 0), (5, 3, 1))
     assert is_in_direction(direction_matrix(r1, r2), 'LAR')
@@ -244,50 +253,36 @@ def test_regions_with_multiple_bb():
     for r in ['L', 'R', 'P', 'A', 'I', 'S']:
         assert not is_in_direction(direction_matrix(other_vox_region, vox_region), r)
 
-    vox_region._bounding_box = np.array([np.c_[(0, 0, 0), (2.5, 2.5, 1)],
-                                         np.c_[(0, 2.5, 0), (2.5, 5, 1)],
-                                         np.c_[(2.5, 2.5, 0), (5, 5, 1)]])
+    tree = vox_region.aabb_tree
+    tree.add(AABB((0, 0, 0), (2.5, 5, 1)))
+    tree.add(AABB((2.5, 0, 0), (5, 5, 1)))
+    tree.add(AABB((0, 0, 0), (2.5, 2.5, 1)))
+    tree.add(AABB((0, 2.5, 0), (2.5, 5, 1)))
+    tree.add(AABB((2.5, 2.5, 0), (5, 5, 1)))
 
-    assert not is_in_direction(direction_matrix(other_vox_region, vox_region), 'O')
-    assert is_in_direction(direction_matrix(other_vox_region, vox_region), 'P')
-    assert is_in_direction(direction_matrix(other_vox_region, vox_region), 'R')
+    vox_region_bbs = [tree.root.left.left.box, tree.root.left.right.box, tree.root.right.left.box]
+    assert not is_in_direction(direction_matrix([other_vox_region.bounding_box], vox_region_bbs), 'O')
+    assert is_in_direction(direction_matrix([other_vox_region.bounding_box], vox_region_bbs), 'P')
+    assert is_in_direction(direction_matrix([other_vox_region.bounding_box], vox_region_bbs), 'R')
     for r in ['L', 'A', 'I', 'S']:
-        assert not is_in_direction(direction_matrix(other_vox_region, vox_region), r)
+        assert not is_in_direction(direction_matrix([other_vox_region.bounding_box], vox_region_bbs), r)
 
 
-def test_split_bb():
-    r1 = Region((0, 0, 0), (3, 6, 1))
-    r1.split_bounding_box()
-    _, n, _ = r1.bounding_box.shape
-    for i in range(n):
-        intervals_per_ax = r1.bounding_box[:, i, :]
-        assert sum(map(lambda ls: ls[1] - ls[0], np.unique(intervals_per_ax, axis=0))) == r1.width[i]
-
-
-def test_split_and_delete_empty_bb():
-    vox_region = ExplicitVBR([[0, 0, 0], [2, 2.5, 1], [5, 5, 0]], np.eye(4))
-    other_vox_region = ExplicitVBR([[4, 0, 0], [5, 1, 1]], np.eye(4))
-    assert is_in_direction(direction_matrix(other_vox_region, vox_region), 'O')
-    for r in ['L', 'R', 'P', 'A', 'I', 'S']:
-        assert not is_in_direction(direction_matrix(other_vox_region, vox_region), r)
-
-    vox_region.split_bounding_box()
-    vox_region.split_bounding_box()
-    vox_region.remove_empty_bounding_boxes()
-    assert not is_in_direction(direction_matrix(other_vox_region, vox_region), 'O')
-    assert is_in_direction(direction_matrix(other_vox_region, vox_region), 'P')
-    assert is_in_direction(direction_matrix(other_vox_region, vox_region), 'R')
-    for r in ['L', 'A', 'I', 'S']:
-        assert not is_in_direction(direction_matrix(other_vox_region, vox_region), r)
-
-
-def test_refinement_of_concave_not_overlapping():
+def test_refinement_of_concave_region_not_overlapping():
     vox_region = ExplicitVBR([[0, 0, 0], [2, 2.5, 1], [5, 5, 0]], np.eye(4))
     other_vox_region = ExplicitVBR([[4, 0, 0], [5, 1, 1]], np.eye(4))
     assert cardinal_relation(vox_region, other_vox_region, 'O', refine_overlapping=False)
     assert not cardinal_relation(vox_region, other_vox_region, 'O', refine_overlapping=True)
 
+    assert cardinal_relation(vox_region, other_vox_region, 'L', refine_overlapping=True)
+    assert cardinal_relation(vox_region, other_vox_region, 'A', refine_overlapping=True)
+    for r in ['R', 'P', 'I', 'S']:
+        assert not cardinal_relation(vox_region, other_vox_region, r, refine_overlapping=True)
+
     vox_region = ExplicitVBR([[0, 0, 0], [0, 3, 1], [3, 3, 0], [6, 3, 0], [0, 9, 0]], np.eye(4))
     other_vox_region = ExplicitVBR([[5, 0, 0], [10, 3, 0], [10, 8, 1], [5, 10, 0]], np.eye(4))
     assert cardinal_relation(vox_region, other_vox_region, 'O', refine_overlapping=False)
-    assert not cardinal_relation(vox_region, other_vox_region, 'O', refine_overlapping=True, granularity_levels=5)
+    assert not cardinal_relation(vox_region, other_vox_region, 'O', refine_overlapping=True)
+    assert cardinal_relation(vox_region, other_vox_region, 'L', refine_overlapping=True)
+    for r in ['R', 'P', 'A', 'I', 'S']:
+        assert not cardinal_relation(vox_region, other_vox_region, r, refine_overlapping=True)

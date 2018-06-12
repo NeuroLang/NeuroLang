@@ -1,6 +1,8 @@
 import nibabel as nib
 import numpy as np
+import copy
 from xml.etree import ElementTree
+from ..brain_tree import AABB
 
 
 def parse_region_label_map(labeled_im):
@@ -29,8 +31,30 @@ def region_data_limits(data):
     return tuple([tuple(limits[:, 0]), tuple(limits[:, 1])])
 
 
-def coordinate_in_limits(coordinate, region_limits):
-    for i in range(len(region_limits)):
-        if not region_limits[i, 0] <= coordinate[i] <= region_limits[i, 1]:
+def split_bounding_box(box_limits):
+    bb1, bb2 = copy.copy(box_limits), copy.copy(box_limits)
+    ax = np.argmax([rng[1] - rng[0] for rng in box_limits])
+    middle = (box_limits[ax, 0] + box_limits[ax, 1]) / 2
+    bb1[ax] = [box_limits[ax, 0], middle]
+    bb2[ax] = [middle, box_limits[ax, 1]]
+    return AABB(tuple(bb1[:, 0]), tuple(bb1[:, 1])), AABB(tuple(bb2[:, 0]), tuple(bb2[:, 1]))
+
+
+def add_non_empty_bb_to_tree(boxes, tree, elements):
+    bb_elements = np.zeros(len(boxes))
+    for i in range(len(boxes)):
+        for value in elements:
+            if element_in_bb_limits(value, boxes[i].limits):
+                bb_elements[i] += 1
+                break
+    boxes = boxes[(bb_elements != 0)]
+    for box in boxes:
+        tree.add(box)
+    return boxes
+
+
+def element_in_bb_limits(coordinate, box_limits):
+    for i in range(len(box_limits)):
+        if not box_limits[i, 0] <= coordinate[i] <= box_limits[i, 1]:
             return False
     return True

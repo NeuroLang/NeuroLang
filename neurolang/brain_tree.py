@@ -7,8 +7,18 @@ import numpy as np
 class AABB:
 
     def __init__(self, lb, ub) -> None:
-        self._lb = np.asanyarray(lb)
-        self._ub = np.asanyarray(ub)
+        self._lb = np.asanyarray(lb, dtype=float)
+        self._ub = np.asanyarray(ub, dtype=float)
+        self._lb.setflags(write=False)
+        self._ub.setflags(write=False)
+
+    @property
+    def lb(self) -> np.array:
+        return self._lb
+
+    @property
+    def ub(self) -> np.array:
+        return self._ub
 
     @property
     def center(self) -> np.array:
@@ -17,6 +27,18 @@ class AABB:
     @property
     def volume(self) -> float:
         return (self._ub - self._lb).prod()
+
+    @property
+    def width(self) -> np.array:
+        return self._ub - self._lb
+
+    @property
+    def limits(self):
+        return np.c_[self._lb, self._ub]
+
+    @property
+    def dim(self):
+        return len(self._lb)
 
     def union(self, other: 'AABB') -> 'AABB':
         return AABB(np.minimum(self._lb, other._lb),
@@ -35,6 +57,8 @@ class AABB:
     def __repr__(self):
         return 'AABB(lb={}, up={})'.format(tuple(self._lb), tuple(self._ub))
 
+    def __hash__(self):
+        return hash(np.c_[self._lb, self._ub].tobytes())
 
 def _aabb_from_vertices(vertices) -> AABB:
     stacked = np.vstack(vertices)
@@ -91,6 +115,14 @@ class Tree:
         n = self.root  # type: Node
         # go down until the tree until we reach a leaf
         while not n.is_leaf:
+            if n.left.box.contains(box):
+                n = n.left
+                continue
+            elif n.right is not None and n.right.box.contains(box):
+                n = n.right
+                continue
+            elif n.box.contains(box):
+                break
             # to decide whether to go to the left or right branch
             # we use a heuristic that takes into account the volume increase
             # of the left and right boxes after adding the new box
@@ -111,31 +143,45 @@ class Tree:
                 break
             n = n.left if cost_left < cost_right else n.right
 
-        old_parent = n.parent
-        new_parent = Node(box=box.union(n.box),
-                          left=n,
-                          parent=old_parent,
-                          height=n.height + 1,
-                          region_ids=region_ids)
-        n.parent = new_parent
-        new_node = Node(box=box, parent=new_parent, region_ids=region_ids)
-        new_parent.right = new_node
-        if old_parent is None:
-            self.root = new_parent
-        else:
-            if n is old_parent.left:
-                old_parent.left = new_parent
+        if n.box.contains(box):
+            new_node = Node(box=box, parent=n, region_ids=region_ids)
+            if n.left is None:
+                n.left = new_node
             else:
-                old_parent.right = new_parent
-
-        # recalculate heights and aabbs to take into account new node
-        n = new_node.parent
-        while n is not None:
-            # update sets of regions partially contained by parent nodes
+                n.right = new_node
             n.region_ids = n.region_ids.union(region_ids)
-            n.height = 1 + max(n.left.height, n.right.height)
-            n.box = n.left.box.union(n.right.box)
-            n = n.parent
+            while n is not None:
+                # update sets of regions partially contained by parent nodes
+                n.region_ids = n.region_ids.union(region_ids)
+                hrec = [n.left, n.right]
+                n.height = 1 + max(h.height for h in hrec if h is not None) if hrec != [None, None] else 0
+                n = n.parent
+        else:
+            old_parent = n.parent
+            new_parent = Node(box=box.union(n.box),
+                              left=n,
+                              parent=old_parent,
+                              height=n.height + 1,
+                              region_ids=region_ids)
+            n.parent = new_parent
+            new_node = Node(box=box, parent=new_parent, region_ids=region_ids)
+            new_parent.right = new_node
+            if old_parent is None:
+                self.root = new_parent
+            else:
+                if n is old_parent.left:
+                    old_parent.left = new_parent
+                else:
+                    old_parent.right = new_parent
+
+            # recalculate heights and aabbs to take into account new node
+            n = new_node.parent
+            while n is not None:
+                # update sets of regions partially contained by parent nodes
+                n.region_ids = n.region_ids.union(region_ids)
+                n.height = 1 + max(n.left.height, n.right.height)
+                n.box = n.left.box.union(n.right.box)
+                n = n.parent
 
     def query_regions_contained_in_box(self, box: AABB) -> Set[int]:
         if self.root is None:

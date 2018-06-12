@@ -100,7 +100,7 @@ class RegionsSetSolver(SetBasedSolver):
                 visited.update(regions_set)
                 for region in regions_set:
                     for ref in reference_regions:
-                        if not cardinal_relation(region, ref, direction, refine_overlapping=True):
+                        if not cardinal_relation(region, ref, direction, refine_overlapping=True, max_granularity=3):
                             break
                     else:
                         result.update((region,))
