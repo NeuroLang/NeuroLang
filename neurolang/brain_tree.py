@@ -11,6 +11,8 @@ class AABB:
         self._ub = np.asanyarray(ub, dtype=float)
         self._lb.setflags(write=False)
         self._ub.setflags(write=False)
+        self._limits = np.c_[self._lb, self._ub]
+
 
     @property
     def lb(self) -> np.array:
@@ -34,7 +36,7 @@ class AABB:
 
     @property
     def limits(self):
-        return np.c_[self._lb, self._ub]
+        return self._limits
 
     @property
     def dim(self):
