@@ -7,12 +7,14 @@ import numpy as np
 class AABB:
 
     def __init__(self, lb, ub) -> None:
-        self._lb = np.asanyarray(lb, dtype=float)
-        self._ub = np.asanyarray(ub, dtype=float)
-        self._lb.setflags(write=False)
-        self._ub.setflags(write=False)
-        self._limits = np.c_[self._lb, self._ub]
-
+        _lb = np.asanyarray(lb, dtype=float)
+        _ub = np.asanyarray(ub, dtype=float)
+        _lb.setflags(write=False)
+        _ub.setflags(write=False)
+        self._limits = np.c_[_lb, _ub]
+        self._limits.setflags(write=False)
+        self._lb = self._limits[:, 0]
+        self._ub = self._limits[:, 1]
 
     @property
     def lb(self) -> np.array:
@@ -24,15 +26,15 @@ class AABB:
 
     @property
     def center(self) -> np.array:
-        return 0.5 * (self._lb + self._ub)
+        return 0.5 * (self.lb + self.ub)
 
     @property
     def volume(self) -> float:
-        return (self._ub - self._lb).prod()
+        return (self.ub - self.lb).prod()
 
     @property
     def width(self) -> np.array:
-        return self._ub - self._lb
+        return self.ub - self.lb
 
     @property
     def limits(self):
@@ -40,27 +42,27 @@ class AABB:
 
     @property
     def dim(self):
-        return len(self._lb)
+        return len(self.lb)
 
     def union(self, other: 'AABB') -> 'AABB':
-        return AABB(np.minimum(self._lb, other._lb),
-                    np.maximum(self._ub, other._ub))
+        return AABB(np.minimum(self.lb, other.lb),
+                    np.maximum(self.ub, other.ub))
 
     def contains(self, other: 'AABB') -> bool:
-        return ((other._lb >= self._lb).sum() + (other._ub <= self._ub).sum()) == 6
+        return ((other.lb >= self.lb).sum() + (other.ub <= self.ub).sum()) == 6
 
     def overlaps(self, other: 'AABB') -> bool:
-        return ((other._ub > self._lb).sum() +
-                (other._lb < self._ub).sum()) == 6
+        return ((other.ub > self.lb).sum() +
+                (other.lb < self.ub).sum()) == 6
 
     def __eq__(self, other) -> bool:
-        return np.all(self._lb == other._lb) and np.all(self._ub == other._ub)
+        return np.all(self.lb == other.lb) and np.all(self.ub == other.ub)
 
     def __repr__(self):
-        return 'AABB(lb={}, up={})'.format(tuple(self._lb), tuple(self._ub))
+        return 'AABB(lb={}, up={})'.format(tuple(self.lb), tuple(self.ub))
 
     def __hash__(self):
-        return hash(np.c_[self._lb, self._ub].tobytes())
+        return hash(self.limits.tobytes())
 
 def _aabb_from_vertices(vertices) -> AABB:
     stacked = np.vstack(vertices)
