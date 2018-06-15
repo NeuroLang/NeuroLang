@@ -641,26 +641,17 @@ def test_do_query():
     assert solver.symbol_table['not_bottom'].value == frozenset([central, superior])
 
 
-
 def test_query_overlapping():
     subject = '100206'
     path = '../../data/%s/T1w/aparc.a2009s+aseg.nii.gz' % subject
     data_from_file = os.path.isfile(path)
 
-    import time
-
-    def measure_time(func):
-        t0 = time.time()
-        res = func()
-        duration = time.time() - t0
-        print('Done in %fs' % duration)
-        return res
-
     if data_from_file:
-        region_solver = RegionsSetSolver(TypedSymbolTable())
+        region_solver = RegionsSetSolver(TypedSymbolTable(), overlap_iter=20)
         parc_data = nib.load(path)
         region_solver.load_regions_to_solver(parc_data)
-        measure_time(lambda: region_solver.run_query_on_region('overlapping', 'CTX_LH_S_CIRCULAR_INSULA_ANT'))
+        region_solver.run_query_on_region('overlapping', 'CTX_LH_POLE_OCCIPITAL')
+
 
 def test_regions_union():
 

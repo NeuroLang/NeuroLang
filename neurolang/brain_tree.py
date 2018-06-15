@@ -94,7 +94,7 @@ class Node:
 
 class Tree:
 
-    def __init__(self) -> None:
+    def __init__(self) -> Node:
         self.root = None  # type: Union[Node, None]
         self.region_boxes = dict()  # type: Dict[int, AABB]
         self.height = 0
@@ -119,7 +119,8 @@ class Tree:
         n = self.root  # type: Node
         # go down until the tree until we reach a leaf
         while not n.is_leaf:
-            if n.left.box.contains(box):
+
+            if n.left is not None and n.left.box.contains(box):
                 n = n.left
                 continue
             elif n.right is not None and n.right.box.contains(box):
@@ -133,16 +134,24 @@ class Tree:
             combined_volume = box.union(n.box).volume
             cost = 2 * combined_volume
             inherit_cost = 2 * (combined_volume - n.box.volume)
-            if n.left.is_leaf:
+            if n.left is not None and n.left.is_leaf:
                 cost_left = box.union(n.left.box).volume + inherit_cost
             else:
-                cost_left = (box.union(n.left.box).volume -
-                             n.left.box.volume + inherit_cost)
-            if n.right.is_leaf:
+                if n.left is not None:
+                    cost_left = (box.union(n.left.box).volume -
+                                 n.left.box.volume + inherit_cost)
+                else:
+                    n = n.right
+                    break
+            if n.right is not None and n.right.is_leaf:
                 cost_right = box.union(n.right.box).volume + inherit_cost
             else:
-                cost_right = (box.union(n.right.box).volume -
-                              n.right.box.volume + inherit_cost)
+                if n.right is not None:
+                    cost_right = (box.union(n.right.box).volume -
+                                  n.right.box.volume + inherit_cost)
+                else:
+                    n = n.left
+                    break
             if (cost < cost_left) and (cost < cost_right):
                 break
             n = n.left if cost_left < cost_right else n.right
@@ -160,6 +169,7 @@ class Tree:
                 hrec = [n.left, n.right]
                 n.height = 1 + max(h.height for h in hrec if h is not None) if hrec != [None, None] else 0
                 n = n.parent
+            return new_node
         else:
             old_parent = n.parent
             new_parent = Node(box=box.union(n.box),
@@ -183,9 +193,12 @@ class Tree:
             while n is not None:
                 # update sets of regions partially contained by parent nodes
                 n.region_ids = n.region_ids.union(region_ids)
-                n.height = 1 + max(n.left.height, n.right.height)
-                n.box = n.left.box.union(n.right.box)
+                hrec = [n.left, n.right]
+                n.height = 1 + max(h.height for h in hrec if h is not None) if hrec != [None, None] else 0
+                if n.right is not None:
+                    n.box = n.left.box.union(n.right.box)
                 n = n.parent
+            return new_node
 
     def query_regions_contained_in_box(self, box: AABB) -> Set[int]:
         if self.root is None:

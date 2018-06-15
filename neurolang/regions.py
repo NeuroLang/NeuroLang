@@ -1,6 +1,6 @@
 from .exceptions import NeuroLangException
 from .utils import data_manipulation
-from .brain_tree import AABB, Tree
+from .brain_tree import AABB, Tree, _aabb_from_vertices
 import numpy as np
 import nibabel as nib
 import copy
@@ -96,9 +96,10 @@ class ExplicitVBR(VolumetricBrainRegion):
     def aabb_tree(self):
         if self._aabb_tree is not None:
             return self._aabb_tree
-        (lb, ub) = data_manipulation.region_data_limits(self.to_xyz())
+
+        # (lb, ub) = data_manipulation.region_data_limits()
         self._aabb_tree = Tree()
-        self._aabb_tree.add(AABB(lb, ub))
+        self._aabb_tree.add(_aabb_from_vertices(self.to_xyz()))
         return self._aabb_tree
 
     def to_xyz(self):

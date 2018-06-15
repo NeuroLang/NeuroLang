@@ -6,7 +6,7 @@ from ..regions import *
 from ..CD_relations import *
 from ..exceptions import NeuroLangException
 from ..utils.data_manipulation import *
-from ..brain_tree import AABB, Tree
+from ..brain_tree import AABB, Tree, _aabb_from_vertices
 
 def _generate_random_box(size_bounds, *args):
     N = len(args)
@@ -35,12 +35,16 @@ def test_get_interval_relations_of_regions():
     r1 = Region((1, 1, 1), (2, 2, 2))
     r2 = Region((5, 5, 5), (8, 8, 8))
     assert get_intervals_relations(r1.bounding_box.limits, r2.bounding_box.limits) == tuple(['b', 'b', 'b'])
+
     r1 = Region((1, 1, 1), (10, 10, 10))
     assert get_intervals_relations(r1.bounding_box.limits, r2.bounding_box.limits) == tuple(['di', 'di', 'di'])
+
     r1 = Region((1, 1, 1), (6, 6, 6))
     assert get_intervals_relations(r1.bounding_box.limits, r2.bounding_box.limits) == tuple(['o', 'o', 'o'])
+
     r2 = Region((1, 1, 1), (2, 2, 2))
     assert get_intervals_relations(r1.bounding_box.limits, r2.bounding_box.limits) == tuple(['si', 'si', 'si'])
+
     r2 = Region((1, 1, 1), (6, 6, 6))
     assert get_intervals_relations(r1.bounding_box.limits, r2.bounding_box.limits) == tuple(['e', 'e', 'e'])
 
@@ -159,7 +163,7 @@ def test_invalid_regions_raise_exception():
 def test_region_from_data():
     # todo: generate the data to remove file dependency in tests
     subject = '100206'
-    path = 'data/%s/T1w/aparc.a2009s+aseg.nii.gz' % subject
+    path = '../../data/%s/T1w/aparc.a2009s+aseg.nii.gz' % subject
 
     if not os.path.isfile(path):
         return
@@ -168,7 +172,7 @@ def test_region_from_data():
         parc_data = nib.load(path)
         label_region_key = parse_region_label_map(parc_data)
         region_data = transform_to_ras_coordinate_system(parc_data, label_region_key[region])
-        (lb, ub) = region_data_limits(region_data)
+        (lb, ub) = _aabb_from_vertices(region_data)
         return Region(lb, ub)
 
     region = 'CC_POSTERIOR'
@@ -269,14 +273,15 @@ def test_regions_with_multiple_bb():
 
 
 def test_refinement_of_concave_region_not_overlapping():
-    vox_region = ExplicitVBR([[0, 0, 0], [2, 2.5, 1], [5, 5, 0]], np.eye(4))
-    other_vox_region = ExplicitVBR([[4, 0, 0], [5, 1, 1]], np.eye(4))
+    vox_region = ExplicitVBR([[0, 0, 0], [2, 2, 1], [5, 5, 0]], np.eye(4))
+    other_vox_region = ExplicitVBR([[3, 0, 0], [3.1, 1, 1]], np.eye(4))
     assert cardinal_relation(vox_region, other_vox_region, 'O', refine_overlapping=False)
     assert not cardinal_relation(vox_region, other_vox_region, 'O', refine_overlapping=True)
 
     assert cardinal_relation(vox_region, other_vox_region, 'L', refine_overlapping=True)
+    assert cardinal_relation(vox_region, other_vox_region, 'R', refine_overlapping=True)
     assert cardinal_relation(vox_region, other_vox_region, 'A', refine_overlapping=True)
-    for r in ['R', 'P', 'I', 'S']:
+    for r in ['P', 'I', 'S']:
         assert not cardinal_relation(vox_region, other_vox_region, r, refine_overlapping=True)
 
     vox_region = ExplicitVBR([[0, 0, 0], [0, 3, 1], [3, 3, 0], [6, 3, 0], [0, 9, 0]], np.eye(4))

@@ -28,12 +28,14 @@ class RegionsSetSolver(SetBasedSolver):
     type = Region
     type_name = 'Region'
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, overlap_iter=None,  **kwargs):
         super().__init__(*args, **kwargs)
         pred_type = typing.Callable[
             [typing.AbstractSet[self.type], ],
             typing.AbstractSet[self.type]
         ]
+
+        self.overlaping_resolution_iterations = overlap_iter if overlap_iter is not None else 5
 
         for key, value in {'inferior_of': 'I', 'superior_of': 'S',
                            'posterior_of': 'P', 'anterior_of': 'A',
@@ -73,12 +75,12 @@ class RegionsSetSolver(SetBasedSolver):
 
     def define_dir_based_fun(self, direction) -> typing.AbstractSet[Region]:
         def f(reference_region: typing.AbstractSet[Region]) -> typing.AbstractSet[Region]:
-            return self.direction(direction, reference_region)
+            return self.direction(direction, reference_region, max_granularity=self.overlaping_resolution_iterations)
         return f
 
     def define_inv_dir_based_fun(self, direction) -> typing.AbstractSet[Region]:
         def f(reference_region: typing.AbstractSet[Region]) -> typing.AbstractSet[Region]:
-            return self.direction([inverse_directions[d] for d in direction], reference_region)
+            return self.direction([inverse_directions[d] for d in direction], reference_region, max_granularity=self.overlaping_resolution_iterations)
         return f
 
     # add a match for the predicate "singleton" with a region as parameter
@@ -92,7 +94,7 @@ class RegionsSetSolver(SetBasedSolver):
         )
         return res
 
-    def direction(self, direction, reference_regions: typing.AbstractSet[Region]) -> typing.AbstractSet[Region]:
+    def direction(self, direction, reference_regions: typing.AbstractSet[Region], max_granularity=5) -> typing.AbstractSet[Region]:
         result, visited = set(), set()
         for symbol_in_table in self.symbol_table.symbols_by_type(typing.AbstractSet[self.type]).values():
             regions_set = symbol_in_table.value - reference_regions
@@ -100,7 +102,7 @@ class RegionsSetSolver(SetBasedSolver):
                 visited.update(regions_set)
                 for region in regions_set:
                     for ref in reference_regions:
-                        if not cardinal_relation(region, ref, direction, refine_overlapping=True, max_granularity=3):
+                        if not cardinal_relation(region, ref, direction, refine_overlapping=True, max_granularity=max_granularity):
                             break
                     else:
                         result.update((region,))

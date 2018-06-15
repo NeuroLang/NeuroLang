@@ -47,7 +47,7 @@ def test_tree_construction():
     assert tree.root is None
 
 
-def test_tree_add():
+def test_tree_add_bt():
     tree = Tree()
     box1 = AABB((0, 0, 0), (1, 1, 1))
     box2 = AABB((0.5, 0.5, 0.5), (2, 2, 2))

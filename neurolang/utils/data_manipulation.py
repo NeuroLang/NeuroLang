@@ -25,36 +25,27 @@ def transform_to_ras_coordinate_system(labels_im, region_key):
     return ras_space_data
 
 
-def region_data_limits(data):
-    _, m = data.shape
-    limits = np.array([(min(data[:, i]), max(data[:, i])) for i in range(m)])
-    return tuple([tuple(limits[:, 0]), tuple(limits[:, 1])])
-
-
 def split_bounding_box(box_limits):
     bb1, bb2 = copy.copy(box_limits), copy.copy(box_limits)
-    ax = np.argmax([rng[1] - rng[0] for rng in box_limits])
+    ax = np.argmax(box_limits[:, 1] - box_limits[:, 0])
     middle = (box_limits[ax, 0] + box_limits[ax, 1]) / 2
     bb1[ax] = [box_limits[ax, 0], middle]
     bb2[ax] = [middle, box_limits[ax, 1]]
     return AABB(tuple(bb1[:, 0]), tuple(bb1[:, 1])), AABB(tuple(bb2[:, 0]), tuple(bb2[:, 1]))
 
 
-def add_non_empty_bb_to_tree(boxes, tree, elements):
-    bb_elements = np.zeros(len(boxes))
-    for i in range(len(boxes)):
-        for value in elements:
-            if element_in_bb_limits(value, boxes[i].limits):
-                bb_elements[i] += 1
+def add_non_empty_bbs_to_tree(nodes, boxes, tree, elements):
+    nodes[:] = []
+    bb_has_elements = np.zeros(len(boxes))
+    dim = boxes[0].dim
+    for value in elements:
+        for i in range(len(boxes)):
+            if bb_has_elements[i] == 0 and ((boxes[i].lb <= value).sum() + (value <= boxes[i].ub).sum()) == (2 * 3):
+                bb_has_elements[i] = 1
+                node = tree.add(boxes[i])
+                nodes.append(node)
                 break
-    boxes = boxes[(bb_elements != 0)]
-    for box in boxes:
-        tree.add(box)
+        if sum(bb_has_elements) == len(boxes):
+            break
+    boxes = boxes[(bb_has_elements != 0)]
     return boxes
-
-
-def element_in_bb_limits(coordinate, box_limits):
-    for i in range(len(box_limits)):
-        if not box_limits[i, 0] <= coordinate[i] <= box_limits[i, 1]:
-            return False
-    return True
