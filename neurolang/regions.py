@@ -1,6 +1,6 @@
 from .exceptions import NeuroLangException
 from .utils import data_manipulation
-from .brain_tree import AABB, Tree, _aabb_from_vertices
+from .brain_tree import AABB, Tree, aabb_from_vertices
 import numpy as np
 import nibabel as nib
 import copy
@@ -97,9 +97,11 @@ class ExplicitVBR(VolumetricBrainRegion):
         if self._aabb_tree is not None:
             return self._aabb_tree
 
-        # (lb, ub) = data_manipulation.region_data_limits()
         self._aabb_tree = Tree()
-        self._aabb_tree.add(_aabb_from_vertices(self.to_xyz()))
+        self._aabb_tree.add(aabb_from_vertices(self.to_xyz()))
+        voxels_width = abs(np.linalg.eigvals(self._affine_matrix)[:-1])
+        # bb = aabb_from_vertices(self.to_xyz())
+        # self._aabb_tree = construct_tree(bb, voxels_width)
         return self._aabb_tree
 
     def to_xyz(self):
@@ -109,6 +111,62 @@ class ExplicitVBR(VolumetricBrainRegion):
         return nib.affines.apply_affine(
             np.linalg.solve(affine, self._affine_matrix),
             self._voxels)
+
+def split_bbox(box):
+    ax = np.argmax(box.width)
+    middle = (box.lb[ax] + box.ub[ax]) / 2
+    b1_ub, b2_lb = box.ub.copy(), box.lb.copy()
+    b1_ub[ax] = middle
+    b2_lb[ax] = middle
+    return AABB(box.lb, b1_ub), AABB(b2_lb, box.ub)
+
+
+def b_tree(tree, bounding_box, max_resolution):
+    x, y = split_bbox(bounding_box)
+    if np.all(x.width > max_resolution) and np.all(y.width > max_resolution):
+        tree.add(x), tree.add(y)
+        b_tree(tree, x, max_resolution)
+        b_tree(tree, y, max_resolution)
+
+
+def b_tree_iter(box, max_resolution):
+    nodes = {}
+    nodes[0] = [box.lb, box.ub]
+    tree = Tree()
+    i = 1
+    make_tree = True
+    while make_tree:
+
+        parent = ((i + 1) // 2) - 1
+        parent_node = nodes[parent]
+        if parent_node is None:
+            continue
+        [lb, ub] = parent_node
+        ax = np.argmax(ub-lb)
+        middle = (lb[ax] + ub[ax]) / 2
+        b1_ub, b2_lb = ub.copy(), lb.copy()
+        b1_ub[ax] = middle
+        b2_lb[ax] = middle
+        b1, b2 = AABB(lb, b1_ub), AABB(b2_lb, ub)
+        if np.any(b1_ub - lb < max_resolution*5):
+            make_tree = False
+        else:
+            #check points are in subinterval
+            tree.add(b1)
+            tree.add(b2)
+            nodes[i] = [lb, b1_ub]
+            nodes[i + 1] = [b2_lb, ub]
+            i += 2
+    return tree
+
+
+def construct_tree(box, max_resolution):
+
+    # tree = Tree()
+    # tree.add(box)
+    # b_tree(tree, tree.root.box, max_resolution*5)
+    tree = b_tree_iter(box, max_resolution)
+    return tree
 
 
 class ImplicitVBR(VolumetricBrainRegion):

@@ -64,7 +64,7 @@ class AABB:
     def __hash__(self):
         return hash(self.limits.tobytes())
 
-def _aabb_from_vertices(vertices) -> AABB:
+def aabb_from_vertices(vertices) -> AABB:
     stacked = np.vstack(vertices)
     # take min and max in each dimension to get the triangle's bounding box
     return AABB(np.min(stacked, axis=0), np.max(stacked, axis=0))
@@ -162,12 +162,11 @@ class Tree:
                 n.left = new_node
             else:
                 n.right = new_node
-            n.region_ids = n.region_ids.union(region_ids)
             while n is not None:
-                # update sets of regions partially contained by parent nodes
                 n.region_ids = n.region_ids.union(region_ids)
                 hrec = [n.left, n.right]
-                n.height = 1 + max(h.height for h in hrec if h is not None) if hrec != [None, None] else 0
+                n.height = 1 + max(h.height for h in hrec if h is not None)
+                self.height = max(self.height, n.height)
                 n = n.parent
             return new_node
         else:
@@ -187,7 +186,6 @@ class Tree:
                     old_parent.left = new_parent
                 else:
                     old_parent.right = new_parent
-
             # recalculate heights and aabbs to take into account new node
             n = new_node.parent
             while n is not None:
