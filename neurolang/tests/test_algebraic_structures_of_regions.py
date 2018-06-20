@@ -640,19 +640,6 @@ def test_do_query():
     solver.run_query_on_region('superior_of', 'BOTTOM', store_into='not_bottom')
     assert solver.symbol_table['not_bottom'].value == frozenset([central, superior])
 
-
-def test_query_overlapping():
-    subject = '100206'
-    path = '../../data/%s/T1w/aparc.a2009s+aseg.nii.gz' % subject
-    data_from_file = os.path.isfile(path)
-
-    if data_from_file:
-        region_solver = RegionsSetSolver(TypedSymbolTable(), overlap_iter=20)
-        parc_data = nib.load(path)
-        region_solver.load_regions_to_solver(parc_data)
-        region_solver.run_query_on_region('overlapping', 'CTX_LH_POLE_OCCIPITAL')
-
-
 def test_regions_union():
 
     if data_from_file:
@@ -664,28 +651,28 @@ def test_regions_union():
         assert (len(union.to_ijk(parc_data.affine))) == sum([len(reg.to_ijk(parc_data.affine)) for reg in fs])
 
 
-def test_regions_intersection():
-
-    if data_from_file:
-        brain_stem = get_singleton_element_from_frozenset(region_solver.symbol_table['BRAIN-STEM'].value)
-        brain_stem_coords = brain_stem.to_xyz()
-        center = brain_stem_coords[int(brain_stem_coords.shape[0] / 2)]
-        radius = 10
-        sr = SphericalVolume(center, radius)
-        region_solver.symbol_table[nl.Symbol[region_solver.type]('SPHERE')] = nl.Constant[
-            AbstractSet[region_solver.type]](frozenset([sr]))
-
-        sphere = get_singleton_element_from_frozenset(region_solver.symbol_table['SPHERE'].value)
-        fs = set().union([brain_stem, sphere])
-        intersect = region_intersection(fs, parc_data.affine)
-        assert not (len(intersect.to_ijk(parc_data.affine))) == 0
-
-        d1 = region_difference([brain_stem, sphere], parc_data.affine)
-        d2 = region_difference([sphere, brain_stem], parc_data.affine)
-        union = region_union([brain_stem, sphere], parc_data.affine)
-        intersect = region_difference([union, d1, d2], parc_data.affine)
-        intersect2 = region_intersection([sphere, brain_stem], parc_data.affine)
-        assert intersect == intersect2
+# def test_regions_intersection():
+#
+#     if data_from_file:
+#         brain_stem = get_singleton_element_from_frozenset(region_solver.symbol_table['BRAIN-STEM'].value)
+#         brain_stem_coords = brain_stem.to_xyz()
+#         center = brain_stem_coords[int(brain_stem_coords.shape[0] / 2)]
+#         radius = 10
+#         sr = SphericalVolume(center, radius).to_xyz(brain_stem._affine_matrix)
+#         region_solver.symbol_table[nl.Symbol[region_solver.type]('SPHERE')] = nl.Constant[
+#             AbstractSet[region_solver.type]](frozenset([sr]))
+#
+#         sphere = get_singleton_element_from_frozenset(region_solver.symbol_table['SPHERE'].value)
+#         fs = set().union([brain_stem, sphere])
+#         intersect = region_intersection(fs, parc_data.affine)
+#         assert not (len(intersect.to_ijk(parc_data.affine))) == 0
+#
+#         d1 = region_difference([brain_stem, sphere], parc_data.affine)
+#         d2 = region_difference([sphere, brain_stem], parc_data.affine)
+#         union = region_union([brain_stem, sphere], parc_data.affine)
+#         intersect = region_difference([union, d1, d2], parc_data.affine)
+#         intersect2 = region_intersection([sphere, brain_stem], parc_data.affine)
+#         assert intersect == intersect2
 
 
 def test_planar_regions_from_query():

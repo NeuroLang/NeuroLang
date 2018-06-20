@@ -1,8 +1,6 @@
 import nibabel as nib
 import numpy as np
-import copy
 from xml.etree import ElementTree
-from ..brain_tree import AABB
 
 
 def parse_region_label_map(labeled_im):

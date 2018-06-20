@@ -67,7 +67,10 @@ class AABB:
 def aabb_from_vertices(vertices) -> AABB:
     stacked = np.vstack(vertices)
     # take min and max in each dimension to get the triangle's bounding box
-    return AABB(np.min(stacked, axis=0), np.max(stacked, axis=0))
+    lb, ub = np.min(stacked, axis=0), np.max(stacked, axis=0)
+    if not np.all([lb[i] < ub[i] for i in range(len(lb))]):
+        ub += 0.00000000001
+    return AABB(lb, ub)
 
 
 class Node:

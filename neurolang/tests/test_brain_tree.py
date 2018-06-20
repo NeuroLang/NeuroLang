@@ -63,8 +63,6 @@ def test_tree_add_bt():
         tree.add(_generate_random_box((-2, -1), (0, 1), (0, 1), (0.2, 0.7)))
         tree.add(_generate_random_box((1, 2), (0, 1), (0, 1), (0.2, 0.7)))
 
-    print(tree.region_boxes)
-    print(tree.height)
 
 def test_tree_add_with_region_id():
     tree = Tree()

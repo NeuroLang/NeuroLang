@@ -6,7 +6,8 @@ from ..regions import *
 from ..CD_relations import *
 from ..exceptions import NeuroLangException
 from ..utils.data_manipulation import *
-from ..brain_tree import AABB, Tree, aabb_from_vertices
+from ..brain_tree import AABB, Tree
+
 
 def _generate_random_box(size_bounds, *args):
     N = len(args)
@@ -159,40 +160,6 @@ def test_invalid_regions_raise_exception():
     with raises(NeuroLangException):
         Region((0, 0, 0), (0, 10, 20))
 
-
-def test_region_from_data():
-    # todo: generate the data to remove file dependency in tests
-    subject = '100206'
-    path = '../../data/%s/T1w/aparc.a2009s+aseg.nii.gz' % subject
-
-    if not os.path.isfile(path):
-        return
-
-    def create_region_from_subject_data(region, path):
-        parc_data = nib.load(path)
-        label_region_key = parse_region_label_map(parc_data)
-        region_data = transform_to_ras_coordinate_system(parc_data, label_region_key[region])
-        (lb, ub) = aabb_from_vertices(region_data)
-        return Region(lb, ub)
-
-    region = 'CC_POSTERIOR'
-    r1 = create_region_from_subject_data(region, path)
-    region = 'CC_ANTERIOR'
-    r2 = create_region_from_subject_data(region, path)
-    region = 'CC_CENTRAL'
-    r3 = create_region_from_subject_data(region, path)
-    region = 'CC_MID_ANTERIOR'
-    r4 = create_region_from_subject_data(region, path)
-    region = 'CC_MID_POSTERIOR'
-    r5 = create_region_from_subject_data(region, path)
-
-    for region in [r2, r3, r4, r5]:
-        is_in_direction(direction_matrix(r1, region), 'P')
-
-    for region in [r1, r3, r4, r5]:
-        is_in_direction(direction_matrix(r2, region), 'A')
-
-
 def test_sphere_volumetric_region():
     subject = '100206'
     path = 'data/%s/T1w/aparc.a2009s+aseg.nii.gz' % subject
@@ -237,13 +204,6 @@ def test_planar_region():
     assert np.all([10, 10, 10] == pr.bounding_box.ub)
 
 
-# def test_split_region_bb():
-#     r1 = Region((0, 0, 0), (5, 9, 1))
-#     [bb1, bb2] = data_manipulation.split_bounding_box(r1.bounding_box.limits)
-#     assert bb1 == AABB((0, 0, 0), (5, 4.5, 1))
-#     assert bb2 == AABB((0, 4.5, 0), (5, 9, 1))
-
-
 def test_regions_with_multiple_bb():
     r1 = Region((0, 0, 0), (6, 6, 1))
     r2 = Region((6, 0, 0), (12, 6, 1))
@@ -251,13 +211,14 @@ def test_regions_with_multiple_bb():
     r2 = Region((2, -3, 0), (5, 3, 1))
     assert is_in_direction(direction_matrix(r1, r2), 'LAR')
 
-    vox_region = ExplicitVBR([[0, 0, 0], [2, 3, 1], [5, 5, 0]], np.eye(4))
-    other_vox_region = ExplicitVBR([[4, 0, 0], [5, 1, 1]], np.eye(4))
+    vox_region = ExplicitVBR(np.array([[0, 0, 0], [2, 3, 1], [5, 5, 0]]), np.eye(4))
+    other_vox_region = ExplicitVBR(np.array([[4, 0, 0], [5, 1, 1]]), np.eye(4))
     assert is_in_direction(direction_matrix(other_vox_region, vox_region), 'O')
     for r in ['L', 'R', 'P', 'A', 'I', 'S']:
         assert not is_in_direction(direction_matrix(other_vox_region, vox_region), r)
 
-    tree = vox_region.aabb_tree
+    tree = Tree()
+    tree.add(vox_region.bounding_box)
     tree.add(AABB((0, 0, 0), (2.5, 5, 1)))
     tree.add(AABB((2.5, 0, 0), (5, 5, 1)))
     tree.add(AABB((0, 0, 0), (2.5, 2.5, 1)))
@@ -270,24 +231,3 @@ def test_regions_with_multiple_bb():
     assert is_in_direction(direction_matrix([other_vox_region.bounding_box], vox_region_bbs), 'R')
     for r in ['L', 'A', 'I', 'S']:
         assert not is_in_direction(direction_matrix([other_vox_region.bounding_box], vox_region_bbs), r)
-
-#
-# def test_refinement_of_concave_region_not_overlapping():
-#     vox_region = ExplicitVBR([[0, 0, 0], [2, 2, 1], [5, 5, 0]], np.eye(4))
-#     other_vox_region = ExplicitVBR([[3, 0, 0], [3.1, 1, 1]], np.eye(4))
-#     assert cardinal_relation(vox_region, other_vox_region, 'O', refine_overlapping=False)
-#     assert not cardinal_relation(vox_region, other_vox_region, 'O', refine_overlapping=True)
-#
-#     assert cardinal_relation(vox_region, other_vox_region, 'L', refine_overlapping=True)
-#     assert cardinal_relation(vox_region, other_vox_region, 'R', refine_overlapping=True)
-#     assert cardinal_relation(vox_region, other_vox_region, 'A', refine_overlapping=True)
-#     for r in ['P', 'I', 'S']:
-#         assert not cardinal_relation(vox_region, other_vox_region, r, refine_overlapping=True)
-#
-#     vox_region = ExplicitVBR([[0, 0, 0], [0, 3, 1], [3, 3, 0], [6, 3, 0], [0, 9, 0]], np.eye(4))
-#     other_vox_region = ExplicitVBR([[5, 0, 0], [10, 3, 0], [10, 8, 1], [5, 10, 0]], np.eye(4))
-#     assert cardinal_relation(vox_region, other_vox_region, 'O', refine_overlapping=False)
-#     assert not cardinal_relation(vox_region, other_vox_region, 'O', refine_overlapping=True)
-#     assert cardinal_relation(vox_region, other_vox_region, 'L', refine_overlapping=True)
-#     for r in ['R', 'P', 'A', 'I', 'S']:
-#         assert not cardinal_relation(vox_region, other_vox_region, r, refine_overlapping=True)

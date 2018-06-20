@@ -2,7 +2,6 @@ from .interval_algebra import *
 from .regions import *
 from functools import singledispatch
 import numpy as np
-import itertools
 
 directions_dim_space = {'L': [0], 'R': [0], 'P': [1], 'A': [1], 'O': [0, 1, 2],
                           'I': [2], 'S': [2], 'F': [3]}
@@ -14,13 +13,38 @@ inverse_directions = {'R': 'L', 'A': 'P', 'S': 'I',
                     'O': 'O', 'L': 'R', 'P': 'A', 'I': 'S'}
 
 
-def cardinal_relation(region, reference_region, directions, refine_overlapping=False, max_granularity=20):
+def cardinal_relation(region, reference_region, directions, refine_overlapping=False, stop_at=10000000):
 
-    region_tree = region.aabb_tree
-    reference_tree = reference_region.aabb_tree
-    mat = direction_matrix([region_tree.root.box], [reference_tree.root.box])
+    mat = direction_matrix([region.bounding_box], [reference_region.bounding_box])
     obtained = is_in_direction(mat, directions)
+
+    if 'O' in directions and obtained and refine_overlapping and isinstance(region, ExplicitVBR):
+
+        current_region = [region.aabb_tree.root]
+        current_reference_region = [reference_region.aabb_tree.root]
+        continue_refinement = True
+        max_depth_reached_ref = max_depth_reached_reg = False
+        level = 0
+        while obtained and continue_refinement and (level < stop_at):
+            if not max_depth_reached_reg:
+                current_region, max_depth_reached_reg = children_of_tree_node(current_region)
+            if not max_depth_reached_ref:
+                current_reference_region, max_depth_reached_ref = children_of_tree_node(current_reference_region)
+            continue_refinement = not (max_depth_reached_reg and max_depth_reached_ref)
+
+            mat = direction_matrix([reg.box for reg in current_region], [reg.box for reg in current_reference_region])
+            obtained = is_in_direction(mat, directions)
+            level += 1
     return obtained
+
+
+def children_of_tree_node(nodes):
+    result = []
+    for node in nodes:
+        result += [node for node in [node.left, node.right] if node is not None]
+        if len(result) == 0:
+            return nodes, True
+    return result, False
 
 
 def is_in_direction(matrix, direction):
