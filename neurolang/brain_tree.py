@@ -69,7 +69,7 @@ def aabb_from_vertices(vertices) -> AABB:
     # take min and max in each dimension to get the triangle's bounding box
     lb, ub = np.min(stacked, axis=0), np.max(stacked, axis=0)
     if not np.all([lb[i] < ub[i] for i in range(len(lb))]):
-        ub += 0.00000000001
+        ub += 0.00000000001  #todo solve case when a the box limits match in one of the axis
     return AABB(lb, ub)
 
 
