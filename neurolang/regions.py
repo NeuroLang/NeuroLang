@@ -8,7 +8,6 @@ from numpy.linalg import inv
 
 
 #code repetition, could be abstracted to one method (region, aff, set_op)
-
 def region_union(regions_set, affine):
     voxels_per_regions = [set(map(tuple, elem.to_ijk(affine))) for elem in regions_set] # first convert to array of tuples
     result_voxels = set.union(*voxels_per_regions)
@@ -93,10 +92,8 @@ class ExplicitVBR(VolumetricBrainRegion):
 
     @property
     def aabb_tree(self):
-        if self._aabb_tree is not None:
-            return self._aabb_tree
-
-        self._aabb_tree = self.build_tree()
+        if self._aabb_tree is None:
+            self._aabb_tree = self.build_tree()
         return self._aabb_tree
 
     def build_tree(self):
@@ -124,20 +121,21 @@ class ExplicitVBR(VolumetricBrainRegion):
             b1_voxs = parent_voxels[parent_voxels.T[ax] <= middle_voxel]
             b2_voxs = parent_voxels[parent_voxels.T[ax] > middle_voxel]
 
-            box1, box2 = aabb_from_vertices(
-                nib.affines.apply_affine(self._affine_matrix, b1_voxs)), aabb_from_vertices(
-                nib.affines.apply_affine(self._affine_matrix, b2_voxs))
+            if not (len(b1_voxs) == 0 and len(b2_voxs) == 0):
+                box1, box2 = aabb_from_vertices(
+                    nib.affines.apply_affine(self._affine_matrix, b1_voxs)), aabb_from_vertices(
+                    nib.affines.apply_affine(self._affine_matrix, b2_voxs))
 
-            if np.any(box1.ub - box1.lb < voxels_width * 2):
-                make_tree = False
-            else:
-                if len(b1_voxs) != 0:
-                    tree.add(box1)
-                    nodes[i] = [box1.lb, box1.ub, b1_voxs]
-                if len(b2_voxs) != 0:
-                    tree.add(box2)
-                    nodes[i + 1] = [box2.lb, box2.ub, b2_voxs]
-                i += 2
+                if np.any(box1.ub - box1.lb < voxels_width * 2):
+                    make_tree = False
+                else:
+                    if len(b1_voxs) != 0:
+                        tree.add(box1)
+                        nodes[i] = [box1.lb, box1.ub, b1_voxs]
+                    if len(b2_voxs) != 0:
+                        tree.add(box2)
+                        nodes[i + 1] = [box2.lb, box2.ub, b2_voxs]
+            i += 2
         return tree
 
     def to_xyz(self):
@@ -189,7 +187,7 @@ class SphericalVolume(ImplicitVBR):
     def to_ijk(self, affine):
         bb = self.bounding_box
         bounds_voxels = nib.affines.apply_affine(np.linalg.inv(affine), np.array([bb.lb, bb.ub]))
-        [xs, ys, zs] = [range(int(min(bounds_voxels[:, i])), int(max(bounds_voxels[:, i]))) for i in range(3)]
+        [xs, ys, zs] = [range(int(min(bounds_voxels[:, i])), int(max(bounds_voxels[:, i]))) for i in range(bb.dim)]
 
         #todo improve
         voxel_coordinates = []
