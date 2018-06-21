@@ -9,14 +9,14 @@ import nibabel as nib
 
 # todo: refa this awful tests
 
-subject = '100206'
-path = '../../data/%s/T1w/aparc.a2009s+aseg.nii.gz' % subject
-data_from_file = os.path.isfile(path)
-
-if data_from_file:
-    region_solver = RegionsSetSolver(TypedSymbolTable())
-    parc_data = nib.load(path)
-    region_solver.load_regions_to_solver(parc_data)
+# subject = '100206'
+# path = '../../data/%s/T1w/aparc.a2009s+aseg.nii.gz' % subject
+# data_from_file = os.path.isfile(path)
+#
+# if data_from_file:
+#     region_solver = RegionsSetSolver(TypedSymbolTable())
+#     parc_data = nib.load(path)
+#     region_solver.load_regions_to_solver(parc_data)
 
 
 def test_relation_superior_of():
@@ -643,7 +643,7 @@ def test_do_query():
 
 def test_regions_algebraic_op():
 
-    bs_vox = np.load('brain-stem-voxels.npy')
+    bs_vox = np.load('brain-stem-voxels.npy').astype(float)
     affine = np.eye(4)
     brain_stem = ExplicitVBR(bs_vox, affine)
     assert np.array_equal(brain_stem._voxels, brain_stem.to_ijk(affine))
@@ -658,9 +658,25 @@ def test_regions_algebraic_op():
     brain_stem = ExplicitVBR(bs_vox, affine)
     assert np.array_equal(brain_stem._voxels, brain_stem.to_ijk(affine))
 
-    affine = np.array([[-0.69999999, 0., 0., 90.], [0., 0.69999999, 0., -126.], [0., 0., 0.69999999, -72.], [0., 0., 0., 1.]])
+    affine = np.array([[-0.69999999, 0., 0., 90.], [0., 0.69999999, 0., -126.], [0., 0., 0.69999999, -72.], [0., 0., 0., 1.]]).round(2)
     brain_stem = ExplicitVBR(bs_vox, affine)
     assert np.array_equal(brain_stem._voxels, brain_stem.to_ijk(affine))
+    union = region_union([brain_stem], affine)
+    assert union.bounding_box == brain_stem.bounding_box
+
+    center = brain_stem.bounding_box.ub - 5
+    radius = 10
+    sphere = SphericalVolume(center, radius)
+    assert sphere.bounding_box.overlaps(brain_stem.bounding_box)
+    intersect = region_intersection([brain_stem, sphere], affine)
+    assert intersect is not None
+
+    d1 = region_difference([brain_stem, sphere], affine)
+    d2 = region_difference([sphere, brain_stem], affine)
+    union = region_union([brain_stem, sphere], affine)
+    intersect2 = region_difference([union, d1, d2], affine)
+    assert intersect2 is not None
+    assert intersect.bounding_box == intersect2.bounding_box
 
 
 def test_planar_regions_from_query():
