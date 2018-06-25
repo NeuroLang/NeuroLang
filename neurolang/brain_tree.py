@@ -64,13 +64,10 @@ class AABB:
     def __hash__(self):
         return hash(self.limits.tobytes())
 
+
 def aabb_from_vertices(vertices) -> AABB:
-    stacked = np.vstack(vertices)
-    # take min and max in each dimension to get the triangle's bounding box
-    lb, ub = np.min(stacked, axis=0), np.max(stacked, axis=0)
-    ub += 1
-    # if not np.all([lb[i] < ub[i] for i in range(len(lb))]):
-    #     ub += 1  #todo solve case when a the box limits match in one of the axis
+    vertices = np.atleast_2d(vertices)
+    lb, ub = np.min(vertices, axis=0), np.max(vertices, axis=0)
     return AABB(lb, ub)
 
 

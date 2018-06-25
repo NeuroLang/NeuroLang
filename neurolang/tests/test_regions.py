@@ -226,8 +226,8 @@ def test_build_tree_one_voxel_regions():
     assert region.bounding_box == AABB((2, 2, 2), (3, 3, 3))
     assert region.aabb_tree.height == 0
 
-    other_region = ExplicitVBR(np.array([[2, 2, 2]]), np.eye(4) * 10)
-    assert other_region.bounding_box == AABB((20, 20, 20), (21, 21, 21))
+    other_region = ExplicitVBR(np.array([[2, 2, 2]]), np.diag((10, 10, 10, 1)))
+    assert other_region.bounding_box == AABB((20, 20, 20), (30, 30, 30))
     assert other_region.aabb_tree.height == 0
     assert is_in_direction(direction_matrix(other_region, region), 'SA')
 

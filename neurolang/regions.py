@@ -99,8 +99,14 @@ class ExplicitVBR(VolumetricBrainRegion):
     def aabb_tree(self):
         return self._aabb_tree
 
+    def generate_bounding_box(self, voxels_ijk):
+        voxels_xyz = nib.affines.apply_affine(self._affine_matrix, voxels_ijk)
+        voxels_xyz_u = nib.affines.apply_affine(self._affine_matrix, voxels_ijk + 1)
+        voxels_xyz = np.concatenate((voxels_xyz, voxels_xyz_u), axis=0)
+        return aabb_from_vertices(voxels_xyz)
+
     def build_tree(self):
-        box = aabb_from_vertices(self.to_xyz())
+        box = self.generate_bounding_box(self._voxels)
 
         nodes = {}
         nodes[0] = [box.lb, box.ub, self._voxels]
@@ -110,35 +116,37 @@ class ExplicitVBR(VolumetricBrainRegion):
         i = 1
 
         make_tree = True
+        affine_matrix_inv = np.linalg.inv(self._affine_matrix)
+        middle = np.zeros(box.dim)
+
         while make_tree:
-
             parent = ((i + 1) // 2) - 1
-            if parent not in nodes.keys():
-                i += 2
-                continue
-            [lb, ub, parent_voxels] = nodes[parent]
-            ax = np.argmax(ub - lb)
-            middle = np.zeros(box.dim)
-            middle[ax] = (lb[ax] + ub[ax]) / 2
-            middle_voxel = nib.affines.apply_affine(np.linalg.inv(self._affine_matrix), middle)[
-                ax]  # this only works if the affine matrix is diagonal
-            b1_voxs = parent_voxels[parent_voxels.T[ax] <= middle_voxel]
-            b2_voxs = parent_voxels[parent_voxels.T[ax] > middle_voxel]
 
-            if len(b1_voxs) != 0 and len(b1_voxs) != len(parent_voxels):
-                box1 = aabb_from_vertices(
-                    nib.affines.apply_affine(self._affine_matrix, b1_voxs))
-                tree.add(box1)
-                nodes[i] = [box1.lb, box1.ub, b1_voxs]
-                last_added = i
-            if len(b2_voxs) != 0 and len(b2_voxs) != len(parent_voxels):
-                box2 = aabb_from_vertices(
-                    nib.affines.apply_affine(self._affine_matrix, b2_voxs))
-                tree.add(box2)
-                nodes[i + 1] = [box2.lb, box2.ub, b2_voxs]
-                last_added = i+1
-            if last_added == parent:
-                make_tree = False
+            if parent in nodes:
+                lb, ub, parent_voxels = nodes[parent]
+                ax = np.argmax(ub - lb)
+                middle[:] = 0
+                middle[ax] = (lb[ax] + ub[ax]) / 2
+                middle_voxel = nib.affines.apply_affine(affine_matrix_inv, middle)[
+                    ax]  # this only works if the affine matrix is diagonal
+
+                b1_voxs = parent_voxels[parent_voxels.T[ax] <= middle_voxel]
+                if len(b1_voxs) != 0 and len(b1_voxs) != len(parent_voxels):
+                    box1 = self.generate_bounding_box(b1_voxs)
+                    tree.add(box1)
+                    nodes[i] = [box1.lb, box1.ub, b1_voxs]
+                    last_added = i
+
+                b2_voxs = parent_voxels[parent_voxels.T[ax] > middle_voxel]
+                if len(b2_voxs) != 0 and len(b2_voxs) != len(parent_voxels):
+                    box2 = self.generate_bounding_box(b2_voxs)
+                    tree.add(box2)
+                    nodes[i + 1] = [box2.lb, box2.ub, b2_voxs]
+                    last_added = i + 1
+
+                if last_added == parent:
+                    make_tree = False
+
             i += 2
         return tree
 

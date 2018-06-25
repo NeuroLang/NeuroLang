@@ -36,9 +36,11 @@ def overlap_resolution(region, reference_region, stop_at=10000000):
     current_region = [region.aabb_tree.root]
     current_reference_region = [reference_region.aabb_tree.root]
     level = 0
-    continue_refinement = overlap = True
+    continue_refinement = True
+    overlap = True
     mat = None
-    max_depth_reached_reg = max_depth_reached_ref = False
+    max_depth_reached_reg = False
+    max_depth_reached_ref = False
     while continue_refinement:
         if not max_depth_reached_reg:
             current_region, max_depth_reached_reg = children_of_tree_node(current_region)
