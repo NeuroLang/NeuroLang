@@ -63,6 +63,7 @@ class Region:
     def __repr__(self):
         return 'Region(AABB={})'.format(self.bounding_box)
 
+
 class VolumetricBrainRegion(Region):
 
     def to_xyz(self, affine):
@@ -86,9 +87,9 @@ class VolumetricBrainRegion(Region):
 class ExplicitVBR(VolumetricBrainRegion):
 
     def __init__(self, voxels, affine_matrix):
-        self._voxels = voxels
+        self._voxels = np.asanyarray(voxels)
         self._affine_matrix = affine_matrix
-        self._aabb_tree = None
+        self._aabb_tree = self.build_tree()
 
     @property
     def bounding_box(self):
@@ -96,19 +97,18 @@ class ExplicitVBR(VolumetricBrainRegion):
 
     @property
     def aabb_tree(self):
-        if self._aabb_tree is None:
-            self._aabb_tree = self.build_tree()
         return self._aabb_tree
 
     def build_tree(self):
         box = aabb_from_vertices(self.to_xyz())
-        voxels_width = abs(np.linalg.eigvals(self._affine_matrix)[:-1])
 
         nodes = {}
         nodes[0] = [box.lb, box.ub, self._voxels]
         tree = Tree()
         tree.add(box)
+        last_added = 0
         i = 1
+
         make_tree = True
         while make_tree:
 
@@ -125,20 +125,20 @@ class ExplicitVBR(VolumetricBrainRegion):
             b1_voxs = parent_voxels[parent_voxels.T[ax] <= middle_voxel]
             b2_voxs = parent_voxels[parent_voxels.T[ax] > middle_voxel]
 
-            if not (len(b1_voxs) == 0 and len(b2_voxs) == 0):
-                box1, box2 = aabb_from_vertices(
-                    nib.affines.apply_affine(self._affine_matrix, b1_voxs)), aabb_from_vertices(
+            if len(b1_voxs) != 0 and len(b1_voxs) != len(parent_voxels):
+                box1 = aabb_from_vertices(
+                    nib.affines.apply_affine(self._affine_matrix, b1_voxs))
+                tree.add(box1)
+                nodes[i] = [box1.lb, box1.ub, b1_voxs]
+                last_added = i
+            if len(b2_voxs) != 0 and len(b2_voxs) != len(parent_voxels):
+                box2 = aabb_from_vertices(
                     nib.affines.apply_affine(self._affine_matrix, b2_voxs))
-
-                if np.any(box1.ub - box1.lb < voxels_width * 2):
-                    make_tree = False
-                else:
-                    if len(b1_voxs) != 0:
-                        tree.add(box1)
-                        nodes[i] = [box1.lb, box1.ub, b1_voxs]
-                    if len(b2_voxs) != 0:
-                        tree.add(box2)
-                        nodes[i + 1] = [box2.lb, box2.ub, b2_voxs]
+                tree.add(box2)
+                nodes[i + 1] = [box2.lb, box2.ub, b2_voxs]
+                last_added = i+1
+            if last_added == parent:
+                make_tree = False
             i += 2
         return tree
 

@@ -5,18 +5,10 @@ from typing import AbstractSet, Callable
 from ..regions import *
 import os
 import numpy as np
+from numpy import random
 import nibabel as nib
 
 # todo: refa this awful tests
-
-# subject = '100206'
-# path = '../../data/%s/T1w/aparc.a2009s+aseg.nii.gz' % subject
-# data_from_file = os.path.isfile(path)
-#
-# if data_from_file:
-#     region_solver = RegionsSetSolver(TypedSymbolTable())
-#     parc_data = nib.load(path)
-#     region_solver.load_regions_to_solver(parc_data)
 
 
 def test_relation_superior_of():
@@ -564,7 +556,6 @@ def test_overlapped_hyperrect():
     assert solver.symbol_table['p'] == frozenset([a0])
 
 
-
 def test_paper_composition_ex():
     set_type = AbstractSet[Region]
     solver = RegionsSetSolver(TypedSymbolTable())
@@ -616,7 +607,7 @@ def test_regions_names_from_table():
     assert res == ['L1', 'CENTRAL']
 
 
-def test_do_query():
+def test_query_symbols_from_table():
 
     region_set_type = AbstractSet[Region]
     solver = RegionsSetSolver(TypedSymbolTable())
@@ -641,41 +632,41 @@ def test_do_query():
     assert solver.symbol_table['not_bottom'].value == frozenset([central, superior])
 
 
-def test_regions_algebraic_op():
+def test_regions_union_intersection():
 
-    bs_vox = np.load('brain-stem-voxels.npy').astype(float)
-    affine = np.eye(4)
-    brain_stem = ExplicitVBR(bs_vox, affine)
-    assert np.array_equal(brain_stem._voxels, brain_stem.to_ijk(affine))
+    # bs_vox = np.load('brain-stem-voxels.npy').astype(float)
+    def randint(): return random.randint(70, 100)
 
-    affine = np.eye(4) * 2
-    affine[-1] = 1
-    brain_stem = ExplicitVBR(bs_vox, affine)
-    assert np.array_equal(brain_stem._voxels, brain_stem.to_ijk(affine))
-
-    affine = np.eye(4)
-    affine[:, -1] = np.array([1, 1, 1, 1])
-    brain_stem = ExplicitVBR(bs_vox, affine)
-    assert np.array_equal(brain_stem._voxels, brain_stem.to_ijk(affine))
-
+    voxels = [(randint(), randint(), randint()) for _ in range(50)]
     affine = np.array([[-0.69999999, 0., 0., 90.], [0., 0.69999999, 0., -126.], [0., 0., 0.69999999, -72.], [0., 0., 0., 1.]]).round(2)
-    brain_stem = ExplicitVBR(bs_vox, affine)
-    assert np.array_equal(brain_stem._voxels, brain_stem.to_ijk(affine))
-    union = region_union([brain_stem], affine)
-    assert union.bounding_box == brain_stem.bounding_box
-
-    center = brain_stem.bounding_box.ub - 5
-    radius = 10
+    region = ExplicitVBR(voxels, affine)
+    union = region_union([region], affine)
+    assert union.bounding_box == region.bounding_box
+    #
+    center = region.bounding_box.ub
+    radius = 30
     sphere = SphericalVolume(center, radius)
-    assert sphere.bounding_box.overlaps(brain_stem.bounding_box)
-    intersect = region_intersection([brain_stem, sphere], affine)
+    assert sphere.bounding_box.overlaps(region.bounding_box)
+    intersect = region_intersection([region, sphere], affine)
     assert intersect is not None
 
-    d1 = region_difference([brain_stem, sphere], affine)
-    d2 = region_difference([sphere, brain_stem], affine)
-    union = region_union([brain_stem, sphere], affine)
+
+def test_intersection_difference():
+
+    def randint(): return random.randint(1, 5)
+    affine = np.array([[-0.69999999, 0., 0., 90.], [0., 0.69999999, 0., -126.], [0., 0., 0.69999999, -72.], [0., 0., 0., 1.]]).round(2)
+
+    center = (randint(), randint(), randint())
+    center2 = (randint(), randint(), randint())
+    radius = 5
+    sphere = SphericalVolume(center, radius)
+    other_sphere = SphericalVolume(center2, radius)
+
+    intersect = region_intersection([sphere, other_sphere], affine)
+    d1 = region_difference([sphere, other_sphere], affine)
+    d2 = region_difference([other_sphere, sphere], affine)
+    union = region_union([sphere, other_sphere], affine)
     intersect2 = region_difference([union, d1, d2], affine)
-    assert intersect2 is not None
     assert intersect.bounding_box == intersect2.bounding_box
 
 

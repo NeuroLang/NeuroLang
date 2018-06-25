@@ -16,26 +16,41 @@ inverse_directions = {'R': 'L', 'A': 'P', 'S': 'I',
 def cardinal_relation(region, reference_region, directions, refine_overlapping=False, stop_at=10000000):
 
     mat = direction_matrix([region.bounding_box], [reference_region.bounding_box])
-    obtained = is_in_direction(mat, directions)
+    if 'O' in directions:
+        overlap = is_in_direction(mat, directions)
+        if refine_overlapping and isinstance(region, ExplicitVBR):
+            _, overlap = overlap_resolution(region, reference_region, stop_at)
+        return overlap
+    else:
+        obtained = is_in_direction(mat, directions)
+        if not obtained and refine_overlapping:
+            overlap = is_in_direction(mat, 'O')
+            if overlap and isinstance(region, ExplicitVBR):
+                mat, _ = overlap_resolution(region, reference_region, stop_at)
+                obtained = is_in_direction(mat, directions)
+        return obtained
 
-    if 'O' in directions and obtained and refine_overlapping and isinstance(region, ExplicitVBR):
 
-        current_region = [region.aabb_tree.root]
-        current_reference_region = [reference_region.aabb_tree.root]
-        continue_refinement = True
-        max_depth_reached_ref = max_depth_reached_reg = False
-        level = 0
-        while obtained and continue_refinement and (level < stop_at):
-            if not max_depth_reached_reg:
-                current_region, max_depth_reached_reg = children_of_tree_node(current_region)
-            if not max_depth_reached_ref:
-                current_reference_region, max_depth_reached_ref = children_of_tree_node(current_reference_region)
-            continue_refinement = not (max_depth_reached_reg and max_depth_reached_ref)
+def overlap_resolution(region, reference_region, stop_at=10000000):
 
-            mat = direction_matrix([reg.box for reg in current_region], [reg.box for reg in current_reference_region])
-            obtained = is_in_direction(mat, directions)
-            level += 1
-    return obtained
+    current_region = [region.aabb_tree.root]
+    current_reference_region = [reference_region.aabb_tree.root]
+    level = 0
+    continue_refinement = overlap = True
+    mat = None
+    max_depth_reached_reg = max_depth_reached_ref = False
+    while continue_refinement:
+        if not max_depth_reached_reg:
+            current_region, max_depth_reached_reg = children_of_tree_node(current_region)
+        if not max_depth_reached_ref:
+            current_reference_region, max_depth_reached_ref = children_of_tree_node(current_reference_region)
+
+        mat = direction_matrix([reg.box for reg in current_region], [reg.box for reg in current_reference_region])
+        overlap = is_in_direction(mat, 'O')
+        continue_refinement = (level < stop_at) and (not (max_depth_reached_reg and max_depth_reached_ref)) \
+                              and overlap
+        level += 1
+    return mat, overlap
 
 
 def children_of_tree_node(nodes):
@@ -53,7 +68,7 @@ def is_in_direction(matrix, direction):
     for i in direction:
         for dim in directions_dim_space[i]:
             idxs[n-1-dim] = matrix_positions_per_directions[i]
-    return np.any(matrix[idxs] == 1)
+    return np.any(matrix[np.ix_(*idxs)] == 1)
 
 
 def relation_vectors(intervals, other_region_intervals):

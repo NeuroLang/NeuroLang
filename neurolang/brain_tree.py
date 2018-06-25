@@ -68,8 +68,9 @@ def aabb_from_vertices(vertices) -> AABB:
     stacked = np.vstack(vertices)
     # take min and max in each dimension to get the triangle's bounding box
     lb, ub = np.min(stacked, axis=0), np.max(stacked, axis=0)
-    if not np.all([lb[i] < ub[i] for i in range(len(lb))]):
-        ub += 0.00000000001  #todo solve case when a the box limits match in one of the axis
+    ub += 1
+    # if not np.all([lb[i] < ub[i] for i in range(len(lb))]):
+    #     ub += 1  #todo solve case when a the box limits match in one of the axis
     return AABB(lb, ub)
 
 
@@ -122,6 +123,8 @@ class Tree:
         n = self.root  # type: Node
         # go down until the tree until we reach a leaf
         while not n.is_leaf:
+            if n.box == box:
+                return
 
             if n.left is not None and n.left.box.contains(box):
                 n = n.left
