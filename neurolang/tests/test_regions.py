@@ -69,123 +69,127 @@ def test_get_interval_relations_of_regions():
     assert get_intervals_relations(r2.bounding_box.limits, r1.bounding_box.limits) == tuple(['o', 'o', 'oi'])
 
 
+def _dir_matrix(region, other_region):
+    return direction_matrix([region.bounding_box], [other_region.bounding_box])
+
+
 def test_regions_dir_matrix():
 
     # 2d regions (R-L, P-A)
     r1 = Region((0, 0), (1, 1))
     r2 = Region((0, 5), (1, 6))
-    assert is_in_direction(direction_matrix(r1, r2), 'P')
+    assert is_in_direction(_dir_matrix(r1, r2), 'P')
 
     # r1 A:B:P:RA:R:RP r2
     r1 = Region((3, 3, 0), (8, 8, 1))
     r2 = Region((2, 4, 0), (5, 6, 1))
     dir_matrix = np.array([[0, 1, 1], [0, 1, 1], [0, 1, 1]])
-    assert np.array_equal(direction_matrix(r1, r2)[1], dir_matrix)
+    assert np.array_equal(_dir_matrix(r1, r2)[1], dir_matrix)
 
     # r1 L:LA:A:B r2
     r1 = Region((1, 1, 0), (5, 5, 1))
     r2 = Region((3, 3, 0), (5, 7, 1))
     dir_matrix = np.array([[1, 1, 0], [1, 1, 0], [0, 0, 0]])
-    dm = direction_matrix(r1, r2)[1]
+    dm = _dir_matrix(r1, r2)[1]
     assert np.array_equal(dm, dir_matrix)
 
     # r1 LP r2
     r1 = Region((6, 6, 0), (8, 8, 1))
     r2 = Region((8, 4, 0), (10, 6, 1))
     dir_matrix = np.array([[0, 0, 0], [0, 0, 0], [1, 0, 0]])
-    dm = direction_matrix(r1, r2)
+    dm = _dir_matrix(r1, r2)
     assert np.array_equal(dm[1], dir_matrix)
 
     # r1 B r2
     r1 = Region((5, 6, 0), (8, 8, 1))
     r2 = Region((5, 5, 0), (10, 10, 1))
     dir_matrix = np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]])
-    assert np.array_equal(direction_matrix(r1, r2)[1], dir_matrix)
+    assert np.array_equal(_dir_matrix(r1, r2)[1], dir_matrix)
 
     # r1 LA:A:RA:L:B:R:LP:P:RP r2
     r1 = Region((0, 0, 0), (10, 10, 1))
     r2 = Region((5, 5, 0), (6, 6, 1))
     dir_matrix = np.array([[1, 1, 1], [1, 1, 1], [1, 1, 1]])
-    assert np.array_equal(direction_matrix(r1, r2)[1], dir_matrix)
+    assert np.array_equal(_dir_matrix(r1, r2)[1], dir_matrix)
 
     r1 = Region((0, 0, 2), (10, 1, 9))
     r2 = Region((0, 0, 0), (10, 1, 1))
     # r1 S r2 - r2 I r1
     dir_tensor = np.array(np.zeros(shape=(3, 3, 3)))
     dir_tensor[2, 1, 1] = 1
-    assert np.array_equal(direction_matrix(r1, r2), dir_tensor)
+    assert np.array_equal(_dir_matrix(r1, r2), dir_tensor)
 
     dir_tensor = np.array(np.zeros(shape=(3, 3, 3)))
     dir_tensor[0, 1, 1] = 1
-    assert np.array_equal(direction_matrix(r2, r1), dir_tensor)
+    assert np.array_equal(_dir_matrix(r2, r1), dir_tensor)
 
     # r1 SL r2
     r1 = Region((0, 0, 8), (10, 1, 9))
     r2 = Region((15, 0, 0), (17, 1, 1))
     dir_tensor = np.array(np.zeros(shape=(3, 3, 3)))
     dir_tensor[2, 1, 0] = 1
-    assert np.array_equal(direction_matrix(r1, r2), dir_tensor)
+    assert np.array_equal(_dir_matrix(r1, r2), dir_tensor)
 
     # r1 RA r2
     r1 = Region((25, 0, 0), (30, 1, 1))
     r2 = Region((15, 5, 0), (20, 6, 1))
     dir_tensor = np.array(np.zeros(shape=(3, 3, 3)))
     dir_tensor[1, 0, 2] = 1
-    assert np.array_equal(direction_matrix(r1, r2), dir_tensor)
+    assert np.array_equal(_dir_matrix(r1, r2), dir_tensor)
 
     # 4d regions overlapping at time intervals: r1 Before r2 - r2 After r1
     r1 = Region((0, 0, 0, 1), (1, 1, 1, 2))
     r2 = Region((0, 0, 0, 5), (1, 1, 1, 6))
-    assert np.all(direction_matrix(r1, r2)[0, 1, :, :] == np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]]))
-    assert np.all(direction_matrix(r1, r2)[1:] == np.zeros(shape=(2, 3, 3, 3)))
+    assert np.all(_dir_matrix(r1, r2)[0, 1, :, :] == np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]]))
+    assert np.all(_dir_matrix(r1, r2)[1:] == np.zeros(shape=(2, 3, 3, 3)))
 
-    assert np.all(direction_matrix(r2, r1)[-1, 1, :, :] == np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]]))
-    assert np.all(direction_matrix(r2, r1)[:-1] == np.zeros(shape=(2, 3, 3, 3)))
-    assert is_in_direction(direction_matrix(r2, r1), 'F')
+    assert np.all(_dir_matrix(r2, r1)[-1, 1, :, :] == np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]]))
+    assert np.all(_dir_matrix(r2, r1)[:-1] == np.zeros(shape=(2, 3, 3, 3)))
+    assert is_in_direction(_dir_matrix(r2, r1), 'F')
 
 
 def test_basic_directionality():
     r1 = Region((0, 0), (1, 1))
     r2 = Region((0, -5), (1, -2))
-    assert is_in_direction(direction_matrix(r1, r2), 'A')
-    assert is_in_direction(direction_matrix(r2, r1), 'P')
+    assert is_in_direction(_dir_matrix(r1, r2), 'A')
+    assert is_in_direction(_dir_matrix(r2, r1), 'P')
 
     r1 = Region((0, 0), (1, 1))
     r2 = Region((4, 0), (6, 2))
-    assert is_in_direction(direction_matrix(r1, r2), 'L')
-    assert is_in_direction(direction_matrix(r2, r1), 'R')
-    assert is_in_direction(direction_matrix(r2, r1), 'A')
-    assert is_in_direction(direction_matrix(r2, r1), 'RA')
+    assert is_in_direction(_dir_matrix(r1, r2), 'L')
+    assert is_in_direction(_dir_matrix(r2, r1), 'R')
+    assert is_in_direction(_dir_matrix(r2, r1), 'A')
+    assert is_in_direction(_dir_matrix(r2, r1), 'RA')
 
     r1 = Region((0, 0, 0), (1, 1, 1))
     r2 = Region((0, 0, 3), (1, 1, 4))
-    assert is_in_direction(direction_matrix(r1, r2), 'I')
-    assert is_in_direction(direction_matrix(r2, r1), 'S')
+    assert is_in_direction(_dir_matrix(r1, r2), 'I')
+    assert is_in_direction(_dir_matrix(r2, r1), 'S')
 
     r1 = Region((0, 0), (2, 2))
     r2 = Region((1, 0), (3, 2))
-    assert is_in_direction(direction_matrix(r1, r2), 'AO')
-    assert is_in_direction(direction_matrix(r2, r1), 'PO')
+    assert is_in_direction(_dir_matrix(r1, r2), 'AO')
+    assert is_in_direction(_dir_matrix(r2, r1), 'PO')
 
     r1 = Region((0, 0), (6, 6))
     r2 = Region((2, 3), (7, 4))
-    assert is_in_direction(direction_matrix(r1, r2), 'LAPO')
-    assert is_in_direction(direction_matrix(r2, r1), 'OR')
+    assert is_in_direction(_dir_matrix(r1, r2), 'LAPO')
+    assert is_in_direction(_dir_matrix(r2, r1), 'OR')
 
     r1 = Region((0, 0, 0), (1, 1, 1))
     r2 = Region((0, -5, -5), (1, 5, 5))
-    assert is_in_direction(direction_matrix(r1, r2), 'O')
+    assert is_in_direction(_dir_matrix(r1, r2), 'O')
     for rel in ['P', 'A', 'I', 'S', 'L', 'R']:
-        assert not is_in_direction(direction_matrix(r1, r2), rel)
+        assert not is_in_direction(_dir_matrix(r1, r2), rel)
 
     r1 = Region((0, 0, 0), (1, 3, 5))
     r2 = Region((0, 2, 1), (1, 7, 4))
-    assert is_in_direction(direction_matrix(r1, r2), 'O')
+    assert is_in_direction(_dir_matrix(r1, r2), 'O')
 
     r1 = Region((0, 0), (1, 1))
     r2 = Region((1, 0), (2, 1))
-    assert is_in_direction(direction_matrix(r1, r2), 'L')
-    assert not is_in_direction(direction_matrix(r1, r2), 'O')
+    assert is_in_direction(_dir_matrix(r1, r2), 'L')
+    assert not is_in_direction(_dir_matrix(r1, r2), 'O')
 
 
 def test_explicit_region():
@@ -229,7 +233,7 @@ def test_build_tree_one_voxel_regions():
     other_region = ExplicitVBR(np.array([[2, 2, 2]]), np.diag((10, 10, 10, 1)))
     assert other_region.bounding_box == AABB((20, 20, 20), (30, 30, 30))
     assert other_region.aabb_tree.height == 0
-    assert is_in_direction(direction_matrix(other_region, region), 'SA')
+    assert is_in_direction(_dir_matrix(other_region, region), 'SA')
 
 
 def test_tree_of_convex_regions():
@@ -281,15 +285,15 @@ def test_planar_region():
 def test_regions_with_multiple_bb_directionality():
     r1 = Region((0, 0, 0), (6, 6, 1))
     r2 = Region((6, 0, 0), (12, 6, 1))
-    assert is_in_direction(direction_matrix(r1, r2), 'L')
+    assert is_in_direction(_dir_matrix(r1, r2), 'L')
     r2 = Region((2, -3, 0), (5, 3, 1))
-    assert is_in_direction(direction_matrix(r1, r2), 'LR')
+    assert is_in_direction(_dir_matrix(r1, r2), 'LR')
 
     region = ExplicitVBR(np.array([[0, 0, 0], [5, 5, 0]]), np.eye(4))
     other_region = ExplicitVBR(np.array([[3, 0, 0]]), np.eye(4))
-    assert is_in_direction(direction_matrix(other_region, region), 'O')
+    assert is_in_direction(_dir_matrix(other_region, region), 'O')
     for r in ['L', 'R', 'P', 'A', 'I', 'S']:
-        assert not is_in_direction(direction_matrix(other_region, region), r)
+        assert not is_in_direction(_dir_matrix(other_region, region), r)
 
     tree = Tree()
     tree.add(region.bounding_box)

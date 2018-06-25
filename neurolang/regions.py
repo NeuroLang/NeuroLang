@@ -1,13 +1,17 @@
 from .exceptions import NeuroLangException
-from .utils import data_manipulation
 from .brain_tree import AABB, Tree, aabb_from_vertices
 import numpy as np
 import nibabel as nib
-import copy
-from numpy.linalg import inv
 
 
-#code repetition, could be abstracted to one method (region, aff, set_op)
+__all__ = [
+    'region_union', 'region_intersection', 'region_difference',
+    'Region', 'VolumetricBrainRegion',
+    'ImplicitVBR', 'ExplicitVBR',
+    'SphericalVolume', 'PlanarVolume'
+]
+
+
 def region_union(regions_set, affine):
     voxels_per_regions = [set(map(tuple, elem.to_ijk(affine))) for elem in regions_set] # first convert to array of tuples
     result_voxels = set.union(*voxels_per_regions)
@@ -28,6 +32,7 @@ def region_difference(regions_set, affine):
     if len(result_voxels) == 0:
         return None
     return ExplicitVBR(np.array(list(map(list, result_voxels))), affine)
+#code repetition, could be abstracted to one method (region, aff, set_op)
 
 
 class Region:
@@ -89,7 +94,7 @@ class ExplicitVBR(VolumetricBrainRegion):
     def __init__(self, voxels, affine_matrix):
         self._voxels = np.asanyarray(voxels)
         self._affine_matrix = affine_matrix
-        self._aabb_tree = self.build_tree()
+        self._aabb_tree = None
 
     @property
     def bounding_box(self):
@@ -97,6 +102,8 @@ class ExplicitVBR(VolumetricBrainRegion):
 
     @property
     def aabb_tree(self):
+        if self._aabb_tree is None:
+            self._aabb_tree = self.build_tree()
         return self._aabb_tree
 
     def generate_bounding_box(self, voxels_ijk):
