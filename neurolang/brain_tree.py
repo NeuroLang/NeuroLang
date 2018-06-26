@@ -107,6 +107,38 @@ class Tree:
             self.region_boxes[region_id] = \
                 self.region_boxes[region_id].union(added_box)
 
+    def add_left(self, box: AABB, region_ids: Set[int] = set()) -> None:
+        return self.add_in_direction('left', box, region_ids)
+
+    def add_right(self, box: AABB, region_ids: Set[int] = set()) -> None:
+        return self.add_in_direction('right', box, region_ids)
+
+    def add_in_direction(self, direction: str, box: AABB, region_ids: Set[int] = set()) -> None:
+
+        for region_id in region_ids:
+            self.expand_region_box(region_id, box)
+        n = self.root
+        while not n.is_leaf:
+            if n.left is not None and n.left.box.contains(box):
+                n = n.left
+                continue
+            elif n.right is not None and n.right.box.contains(box):
+                n = n.right
+                continue
+            elif n.box.contains(box):
+                break
+        new_node = Node(box=box, parent=n, region_ids=region_ids)
+        if direction == 'left':
+            n.left = new_node
+        elif direction == 'right':
+            n.right = new_node
+        while n is not None:
+            n.region_ids = n.region_ids.union(region_ids)
+            hrec = [n.left, n.right]
+            n.height = 1 + max(h.height for h in hrec if h is not None)
+            self.height = max(self.height, n.height)
+            n = n.parent
+
     def add(self, box: AABB, region_ids: Set[int] = set()) -> None:
 
         for region_id in region_ids:
@@ -171,7 +203,6 @@ class Tree:
                 n.height = 1 + max(h.height for h in hrec if h is not None)
                 self.height = max(self.height, n.height)
                 n = n.parent
-            return new_node
         else:
             old_parent = n.parent
             new_parent = Node(box=box.union(n.box),
@@ -199,7 +230,6 @@ class Tree:
                 if n.right is not None:
                     n.box = n.left.box.union(n.right.box)
                 n = n.parent
-            return new_node
 
     def query_regions_contained_in_box(self, box: AABB) -> Set[int]:
         if self.root is None:

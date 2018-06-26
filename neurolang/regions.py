@@ -140,14 +140,14 @@ class ExplicitVBR(VolumetricBrainRegion):
                 b1_voxs = parent_voxels[parent_voxels.T[ax] <= middle_voxel]
                 if len(b1_voxs) != 0 and len(b1_voxs) != len(parent_voxels):
                     box1 = self.generate_bounding_box(b1_voxs)
-                    tree.add(box1)
+                    tree.add_left(box1)
                     nodes[i] = [box1.lb, box1.ub, b1_voxs]
                     last_added = i
 
                 b2_voxs = parent_voxels[parent_voxels.T[ax] > middle_voxel]
                 if len(b2_voxs) != 0 and len(b2_voxs) != len(parent_voxels):
                     box2 = self.generate_bounding_box(b2_voxs)
-                    tree.add(box2)
+                    tree.add_right(box2)
                     nodes[i + 1] = [box2.lb, box2.ub, b2_voxs]
                     last_added = i + 1
 
@@ -165,6 +165,14 @@ class ExplicitVBR(VolumetricBrainRegion):
             np.linalg.solve(affine, self._affine_matrix),
             self._voxels)
 
+    def __eq__(self, other) -> bool:
+        return self._affine_matrix == other._affine_matrix and np.all(self._voxels == other._voxels)
+
+    def __repr__(self):
+        return 'Region(VBR= affine:{}, voxels:{})'.format(self._affine_matrix, self._voxels)
+
+    def __hash__(self):
+        return hash(self._voxels.tobytes() + self._affine_matrix.tobytes())
 
 class ImplicitVBR(VolumetricBrainRegion):
 

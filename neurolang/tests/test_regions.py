@@ -41,34 +41,6 @@ def test_coordinates():
     assert np.array_equal(r2.bounding_box.limits, np.array([tuple([2, 4]), tuple([0, 6]), tuple([7, 8])]))
 
 
-def test_get_interval_relations_of_regions():
-    r1 = Region((1, 1, 1), (2, 2, 2))
-    r2 = Region((5, 5, 5), (8, 8, 8))
-    assert get_intervals_relations(r1.bounding_box.limits, r2.bounding_box.limits) == tuple(['b', 'b', 'b'])
-
-    r1 = Region((1, 1, 1), (10, 10, 10))
-    assert get_intervals_relations(r1.bounding_box.limits, r2.bounding_box.limits) == tuple(['di', 'di', 'di'])
-
-    r1 = Region((1, 1, 1), (6, 6, 6))
-    assert get_intervals_relations(r1.bounding_box.limits, r2.bounding_box.limits) == tuple(['o', 'o', 'o'])
-
-    r2 = Region((1, 1, 1), (2, 2, 2))
-    assert get_intervals_relations(r1.bounding_box.limits, r2.bounding_box.limits) == tuple(['si', 'si', 'si'])
-
-    r2 = Region((1, 1, 1), (6, 6, 6))
-    assert get_intervals_relations(r1.bounding_box.limits, r2.bounding_box.limits) == tuple(['e', 'e', 'e'])
-
-    r1 = Region((5, 5, 5), (8, 8, 8))
-    r2 = Region((8, 7, 12), (10, 8, 14))
-    assert get_intervals_relations(r1.bounding_box.limits, r2.bounding_box.limits) == tuple(['m', 'fi', 'b'])
-    assert get_intervals_relations(r2.bounding_box.limits, r1.bounding_box.limits) == tuple(['mi', 'f', 'bi'])
-
-    r1 = Region((5, 5, 5), (8, 8, 8))
-    r2 = Region((3, 3, 7), (6, 6, 9))
-    assert get_intervals_relations(r1.bounding_box.limits, r2.bounding_box.limits) == tuple(['oi', 'oi', 'o'])
-    assert get_intervals_relations(r2.bounding_box.limits, r1.bounding_box.limits) == tuple(['o', 'o', 'oi'])
-
-
 def _dir_matrix(region, other_region):
     return direction_matrix([region.bounding_box], [other_region.bounding_box])
 
@@ -201,8 +173,8 @@ def test_explicit_region():
     vbr = ExplicitVBR(voxels, affine)
     assert np.array_equal(vbr.to_ijk(affine), vbr._voxels)
     assert vbr.aabb_tree is not None
-    assert np.all(vbr.bounding_box.lb > 0)
-    assert np.all(vbr.bounding_box.lb < 1000)
+    assert np.all(vbr.bounding_box.lb >= 0)
+    assert np.all(vbr.bounding_box.lb <= 1000)
 
     affine = np.eye(4)
     brain_stem = ExplicitVBR(voxels, affine)
@@ -221,7 +193,6 @@ def test_explicit_region():
     affine = np.array([[-0.69999999, 0., 0., 90.], [0., 0.69999999, 0., -126.], [0., 0., 0.69999999, -72.], [0., 0., 0., 1.]]).round(2)
     brain_stem = ExplicitVBR(voxels, affine)
     assert np.array_equal(brain_stem._voxels, brain_stem.to_ijk(affine))
-
 
 
 def test_build_tree_one_voxel_regions():
@@ -314,9 +285,12 @@ def test_regions_with_multiple_bb_directionality():
 
 
 def test_refinement_of_not_overlapping():
+
     triangle = ExplicitVBR(np.array([[0, 0, 0], [6, 0, 0], [6, 6, 1]]), np.eye(4))
     other_region = ExplicitVBR(np.array([[0, 6, 0]]), np.eye(4))
     assert cardinal_relation(other_region, triangle, 'O', refine_overlapping=False)
+    with raises(ValueError):
+        cardinal_relation(other_region, triangle, 'O', refine_overlapping=True, stop_at=0)
     assert not cardinal_relation(other_region, triangle, 'O', refine_overlapping=True)
     for r in ['L', 'A']:
         assert cardinal_relation(other_region, triangle, r, refine_overlapping=True)
@@ -335,3 +309,8 @@ def test_refinement_of_not_overlapping():
         assert cardinal_relation(inner, outer, r, refine_overlapping=True)
     for r in ['A', 'I', 'S', 'O']:
         assert not cardinal_relation(inner, outer, r, refine_overlapping=True)
+
+    region = ExplicitVBR(np.array([[0, 0, 0], [0, 1, 0], [0, 2, 0]]), np.eye(4))
+    other_region = ExplicitVBR(np.array([[0, 0, 0], [1, 0, 0], [2, 0, 0]]), np.eye(4))
+    assert cardinal_relation(region, other_region, 'O', refine_overlapping=False)
+    assert cardinal_relation(region, other_region, 'O', refine_overlapping=True)

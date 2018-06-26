@@ -3,14 +3,11 @@ from ..symbols_and_types import TypedSymbolTable
 from .. import neurolang as nl
 from typing import AbstractSet, Callable
 from ..regions import *
-import os
 import numpy as np
 from numpy import random
-import nibabel as nib
+
 
 # todo: refa this awful tests
-
-
 def test_relation_superior_of():
     region_set_type = AbstractSet[Region]
     solver = RegionsSetSolver(TypedSymbolTable())
@@ -634,7 +631,6 @@ def test_query_symbols_from_table():
 
 def test_regions_union_intersection():
 
-    # bs_vox = np.load('brain-stem-voxels.npy').astype(float)
     def randint(): return random.randint(70, 100)
 
     voxels = [(randint(), randint(), randint()) for _ in range(50)]

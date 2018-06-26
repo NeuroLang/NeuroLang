@@ -4,6 +4,7 @@ from .solver import SetBasedSolver
 from .utils.data_manipulation import *
 import typing
 import operator
+import numpy as np
 from . import neurolang as nl
 
 
@@ -127,13 +128,15 @@ class RegionsSetSolver(SetBasedSolver):
         result = all_regions - set_value
         return self.walk(nl.Constant[set_type](result))
 
-    def load_regions_to_solver(self, parc_im):
+    def load_regions_to_solver(self, parc_im, n=None):
         labels = parc_im.get_data()
-        label_regions_map = parse_region_label_map(parc_im)
+        label_regions_map = parse_region_label_map(parc_im, n)
         for region_name, region_key in label_regions_map.items():
             voxel_coordinates = np.transpose((labels == region_key).nonzero())
             region = ExplicitVBR(voxel_coordinates, parc_im.affine)
-            self.symbol_table[nl.Symbol[self.type](region_name)] = nl.Constant[typing.AbstractSet[self.type]](frozenset([region]))
+            frozenset([region])
+            self.symbol_table[nl.Symbol[self.type](region_name)] = \
+                nl.Constant[typing.AbstractSet[self.type]](frozenset([region]))
 
     def name_of_regions(self, regions: typing.AbstractSet[Region]):
         '''by convention regions names are define in uppercase while result and functions in lowercase'''

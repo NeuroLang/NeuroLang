@@ -1,5 +1,6 @@
 from numpy import random
 from ..interval_algebra import *
+from ..regions import Region
 from copy import deepcopy
 
 
@@ -139,9 +140,9 @@ def test_calculus_axioms():
     # inv-involutive-distr
     s, t = random.choice([before, overlaps, during, meets, starts, finishes, equals], 2)
     c = composition([[s, t]], elems)
-    inv_c = composition([[converse(t), converse(s)]], elems)
+    inc = composition([[converse(t), converse(s)]], elems)
     i, j = random.choice(range(len(elems)), 2, replace=False)
-    assert apply_composition(c, [[elems[i], elems[j]]], conversion=True) == apply_composition(inv_c, [[elems[j], elems[i]]])
+    assert apply_composition(c, [[elems[i], elems[j]]], conversion=True) == apply_composition(inc, [[elems[j], elems[i]]])
 
     # Tarski/ de Morgan
     r, s = random.choice([before, overlaps, during, meets, starts, finishes, equals], 2)
@@ -149,3 +150,31 @@ def test_calculus_axioms():
     c = composition([[converse(r), negate(r)]], elems)
     c2 = composition([[r, s]], elems)
     assert (apply_composition(c, [[elems[i], elems[j]]], negate_whole_expression=False, negations=[False, True]) and apply_composition(c2, [[elems[i], elems[j]]], negate_whole_expression=True) and (not s)) == (not s)
+
+
+def test_get_interval_relations_of_regions():
+    r1 = Region((1, 1, 1), (2, 2, 2))
+    r2 = Region((5, 5, 5), (8, 8, 8))
+    assert get_intervals_relations(r1.bounding_box.limits, r2.bounding_box.limits) == tuple(['b', 'b', 'b'])
+
+    r1 = Region((1, 1, 1), (10, 10, 10))
+    assert get_intervals_relations(r1.bounding_box.limits, r2.bounding_box.limits) == tuple(['di', 'di', 'di'])
+
+    r1 = Region((1, 1, 1), (6, 6, 6))
+    assert get_intervals_relations(r1.bounding_box.limits, r2.bounding_box.limits) == tuple(['o', 'o', 'o'])
+
+    r2 = Region((1, 1, 1), (2, 2, 2))
+    assert get_intervals_relations(r1.bounding_box.limits, r2.bounding_box.limits) == tuple(['si', 'si', 'si'])
+
+    r2 = Region((1, 1, 1), (6, 6, 6))
+    assert get_intervals_relations(r1.bounding_box.limits, r2.bounding_box.limits) == tuple(['e', 'e', 'e'])
+
+    r1 = Region((5, 5, 5), (8, 8, 8))
+    r2 = Region((8, 7, 12), (10, 8, 14))
+    assert get_intervals_relations(r1.bounding_box.limits, r2.bounding_box.limits) == tuple(['m', 'fi', 'b'])
+    assert get_intervals_relations(r2.bounding_box.limits, r1.bounding_box.limits) == tuple(['mi', 'f', 'bi'])
+
+    r1 = Region((5, 5, 5), (8, 8, 8))
+    r2 = Region((3, 3, 7), (6, 6, 9))
+    assert get_intervals_relations(r1.bounding_box.limits, r2.bounding_box.limits) == tuple(['oi', 'oi', 'o'])
+    assert get_intervals_relations(r2.bounding_box.limits, r1.bounding_box.limits) == tuple(['o', 'o', 'oi'])
