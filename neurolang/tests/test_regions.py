@@ -4,7 +4,6 @@ from numpy import random
 from pytest import raises
 from ..regions import Region, SphericalVolume, PlanarVolume, ExplicitVBR
 from ..CD_relations import direction_matrix, cardinal_relation, is_in_direction
-from ..interval_algebra import get_intervals_relations
 from ..exceptions import NeuroLangException
 from ..brain_tree import AABB, Tree
 

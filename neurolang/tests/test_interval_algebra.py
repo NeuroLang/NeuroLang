@@ -140,9 +140,9 @@ def test_calculus_axioms():
     # inv-involutive-distr
     s, t = random.choice([before, overlaps, during, meets, starts, finishes, equals], 2)
     c = composition([[s, t]], elems)
-    inc = composition([[converse(t), converse(s)]], elems)
+    inv_c = composition([[converse(t), converse(s)]], elems)
     i, j = random.choice(range(len(elems)), 2, replace=False)
-    assert apply_composition(c, [[elems[i], elems[j]]], conversion=True) == apply_composition(inc, [[elems[j], elems[i]]])
+    assert apply_composition(c, [[elems[i], elems[j]]], conversion=True) == apply_composition(inv_c, [[elems[j], elems[i]]])
 
     # Tarski/ de Morgan
     r, s = random.choice([before, overlaps, during, meets, starts, finishes, equals], 2)

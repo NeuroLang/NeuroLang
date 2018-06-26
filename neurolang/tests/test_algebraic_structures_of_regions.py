@@ -600,7 +600,7 @@ def test_regions_names_from_table():
     solver.symbol_table[nl.Symbol[region_set_type]('L3')] = nl.Constant[region_set_type](l3_elem)
     solver.symbol_table[nl.Symbol[region_set_type]('CENTRAL')] = nl.Constant[region_set_type](center_elem)
     search_for = frozenset([l1, center])
-    res = solver.name_of_regions(search_for)
+    res = solver.regions_symbol_names_from_set(search_for)
     assert res == ['L1', 'CENTRAL']
 
 
@@ -617,15 +617,15 @@ def test_query_symbols_from_table():
     #todo function to load all symbols into solver
     solver.symbol_table[nl.Symbol[region_set_type]('db')] = nl.Constant[region_set_type](all_elements)
     solver.symbol_table[nl.Symbol[region_set_type]('CENTRAL')] = nl.Constant[region_set_type](frozenset([central]))
-    obtained = solver.run_query_on_region('superior_of', 'CENTRAL')
+    obtained = solver.query_relation_region('superior_of', 'CENTRAL')
     assert len(obtained) == 0
 
     solver.symbol_table[nl.Symbol[region_set_type]('BOTTOM')] = nl.Constant[region_set_type](frozenset([inferior]))
     solver.symbol_table[nl.Symbol[region_set_type]('TOP')] = nl.Constant[region_set_type](frozenset([superior]))
-    obtained = solver.run_query_on_region('superior_of', 'CENTRAL')
+    obtained = solver.query_relation_region('superior_of', 'CENTRAL')
     assert obtained == ['TOP']
 
-    solver.run_query_on_region('superior_of', 'BOTTOM', store_into='not_bottom')
+    solver.query_relation_region('superior_of', 'BOTTOM', store_into='not_bottom')
     assert solver.symbol_table['not_bottom'].value == frozenset([central, superior])
 
 
@@ -693,3 +693,30 @@ def test_planar_regions_from_query():
 
     region = get_singleton_element_from_frozenset(solver.symbol_table['a'].value)
     assert (np.all(region == PlanarVolume(center, vector, direction=-1)))
+
+
+def test_term_defined_regions():
+
+    solver = RegionsSetSolver(TypedSymbolTable())
+    emotion_regions = solver.load_term_defined_regions('emotion', k=2)
+    assert solver.symbol_table['EMOTION'].value == emotion_regions
+    assert len(emotion_regions) == 2
+
+
+def test_term_defined_relative_position():
+    region_set_type = AbstractSet[Region]
+    solver = RegionsSetSolver(TypedSymbolTable())
+    solver.load_term_defined_regions('temporal lobe', k=1)
+    anterior_limit_region_set = frozenset([ExplicitVBR(np.array([[50, 90, 50]]), np.eye(4))])
+    solver.symbol_table[nl.Symbol[region_set_type]('anterior_region')] = nl.Constant[region_set_type](anterior_limit_region_set)
+
+    superior_relation = 'anterior_of'
+    predicate = nl.Predicate[region_set_type](
+            nl.Symbol[Callable[[region_set_type], region_set_type]](superior_relation),
+            (nl.Symbol[region_set_type]('TEMPORAL LOBE'),)
+        )
+
+    query = nl.Query[region_set_type](nl.Symbol[region_set_type]('p1'), predicate)
+    solver.walk(query)
+
+    assert solver.symbol_table['p1'].value == anterior_limit_region_set

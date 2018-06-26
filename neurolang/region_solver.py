@@ -4,7 +4,9 @@ from .solver import SetBasedSolver
 from .utils.data_manipulation import *
 import typing
 import operator
+import os
 import numpy as np
+from neurosynth import Dataset, meta
 from . import neurolang as nl
 
 
@@ -36,7 +38,7 @@ class RegionsSetSolver(SetBasedSolver):
             typing.AbstractSet[self.type]
         ]
 
-        self.stop_refinement_at = overlap_iter if overlap_iter is not None else 10000000
+        self.stop_refinement_at = overlap_iter if overlap_iter is not None else None
 
         for key, value in {'inferior_of': 'I', 'superior_of': 'S',
                            'posterior_of': 'P', 'anterior_of': 'A',
@@ -95,7 +97,7 @@ class RegionsSetSolver(SetBasedSolver):
         )
         return res
 
-    def direction(self, direction, reference_regions: typing.AbstractSet[Region], refinement_resolution=1000000) -> typing.AbstractSet[Region]:
+    def direction(self, direction, reference_regions: typing.AbstractSet[Region], refinement_resolution=None) -> typing.AbstractSet[Region]:
         result, visited = set(), set()
         for symbol_in_table in self.symbol_table.symbols_by_type(typing.AbstractSet[self.type]).values():
             regions_set = symbol_in_table.value - reference_regions
@@ -128,9 +130,28 @@ class RegionsSetSolver(SetBasedSolver):
         result = all_regions - set_value
         return self.walk(nl.Constant[set_type](result))
 
-    def load_regions_to_solver(self, parc_im, n=None):
+    def load_term_defined_regions(self, term, k=None):
+
+        file_dir = os.path.abspath(os.path.dirname(__file__))
+        path = os.path.join(file_dir, 'utils/neurosynth')
+        file = path + '/dataset.pkl'
+        if not os.path.isfile(file):
+            dataset = generate_neurosynth_dataset(path)
+        else:
+            dataset = Dataset.load(file)
+        studies_ids = dataset.get_studies(features=term, frequency_threshold=0.05)
+        ma = meta.MetaAnalysis(dataset, studies_ids, q=0.01, prior=0.5)
+        data = ma.images['pAgF_z_FDR_0.01']
+        affine = dataset.masker.get_header().get_sform()
+        voxels = dataset.masker.unmask(data)
+        regions_set = generate_connected_regions_set(voxels, affine, k)
+        self.symbol_table[nl.Symbol[self.type](term.upper())] = \
+            nl.Constant[typing.AbstractSet[self.type]](frozenset(regions_set))
+        return regions_set
+
+    def load_parcellation_regions_to_solver(self, parc_im, k=None):
         labels = parc_im.get_data()
-        label_regions_map = parse_region_label_map(parc_im, n)
+        label_regions_map = parse_region_label_map(parc_im, k)
         for region_name, region_key in label_regions_map.items():
             voxel_coordinates = np.transpose((labels == region_key).nonzero())
             region = ExplicitVBR(voxel_coordinates, parc_im.affine)
@@ -138,7 +159,7 @@ class RegionsSetSolver(SetBasedSolver):
             self.symbol_table[nl.Symbol[self.type](region_name)] = \
                 nl.Constant[typing.AbstractSet[self.type]](frozenset([region]))
 
-    def name_of_regions(self, regions: typing.AbstractSet[Region]):
+    def regions_symbol_names_from_set(self, regions: typing.AbstractSet[Region]):
         '''by convention regions names are define in uppercase while result and functions in lowercase'''
         res = []
         for k, v in self.symbol_table.symbols_by_type(typing.AbstractSet[self.type]).items():
@@ -150,25 +171,25 @@ class RegionsSetSolver(SetBasedSolver):
                     if len(res) == len(regions): return res
         return res
 
-    def query_and_store_result(self, query, result_symbol_name):
+    def query_and_store_symbol(self, query, symbol_name):
         self.walk(query)
         result = self.symbol_table[query.symbol.name].value
-        self.symbol_table[nl.Symbol[self.type](result_symbol_name)] = nl.Constant[typing.AbstractSet[self.type]](result)
-        obtained = self.name_of_regions(result)
-        return obtained, result_symbol_name
+        self.symbol_table[nl.Symbol[self.type](symbol_name)] = nl.Constant[typing.AbstractSet[self.type]](result)
+        obtained = self.regions_symbol_names_from_set(result)
+        return obtained, symbol_name
 
     def solve_query(self, query):
         self.walk(query)
         result = self.symbol_table[query.symbol.name].value
-        obtained = self.name_of_regions(result)
+        obtained = self.regions_symbol_names_from_set(result)
         return obtained
 
-    def run_query_on_region(self, relation, region, store_into=None):
+    def query_relation_region(self, relation, region, store_into=None):
         set_type = typing.AbstractSet[self.type]
         query = define_query(set_type, relation, region, 'query')
         obtained = self.solve_query(query)
         if store_into:
-            obtained, symbol = self.query_and_store_result(query, store_into)
+            obtained, symbol = self.query_and_store_symbol(query, store_into)
         return obtained
 
     def query_from_plane(self, relation, plane_dict, store_into=None):
