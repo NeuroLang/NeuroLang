@@ -2,10 +2,12 @@ from .exceptions import NeuroLangException
 from .brain_tree import AABB, Tree, aabb_from_vertices
 import numpy as np
 import nibabel as nib
+from scipy.ndimage import label, generate_binary_structure
 
 
 __all__ = [
     'region_union', 'region_intersection', 'region_difference',
+    'region_set_from_masked_data', 'take_principal_regions',
     'Region', 'VolumetricBrainRegion',
     'ImplicitVBR', 'ExplicitVBR',
     'SphericalVolume', 'PlanarVolume'
@@ -173,6 +175,23 @@ class ExplicitVBR(VolumetricBrainRegion):
 
     def __hash__(self):
         return hash(self._voxels.tobytes() + self._affine_matrix.tobytes())
+
+
+def region_set_from_masked_data(data, affine):
+    s = generate_binary_structure(3, 2)
+    labeled_array, num_features = label(data, structure=s)
+    regions = set()
+    for i in range(1, num_features):
+        region_voxels = list(zip(*np.where(labeled_array == i)))
+        regions.add(ExplicitVBR(region_voxels, affine))
+
+    return set(regions)
+
+
+def take_principal_regions(region_set, k):
+    sorted_by_size = sorted(list(region_set), key=lambda x: len(x._voxels), reverse=True)
+    return set(sorted_by_size[:k])
+
 
 class ImplicitVBR(VolumetricBrainRegion):
 

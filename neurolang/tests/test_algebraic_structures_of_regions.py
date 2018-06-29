@@ -3,6 +3,8 @@ from ..symbols_and_types import TypedSymbolTable
 from .. import neurolang as nl
 from typing import AbstractSet, Callable
 from ..regions import *
+from ..CD_relations import *
+import nibabel as nib
 import numpy as np
 from numpy import random
 
@@ -600,7 +602,7 @@ def test_regions_names_from_table():
     solver.symbol_table[nl.Symbol[region_set_type]('L3')] = nl.Constant[region_set_type](l3_elem)
     solver.symbol_table[nl.Symbol[region_set_type]('CENTRAL')] = nl.Constant[region_set_type](center_elem)
     search_for = frozenset([l1, center])
-    res = solver.regions_symbol_names_from_set(search_for)
+    res = solver.symbol_names_of_region_set(search_for)
     assert res == ['L1', 'CENTRAL']
 
 
@@ -625,7 +627,7 @@ def test_query_symbols_from_table():
     obtained = solver.query_relation_region('superior_of', 'CENTRAL')
     assert obtained == ['TOP']
 
-    solver.query_relation_region('superior_of', 'BOTTOM', store_into='not_bottom')
+    solver.query_relation_region('superior_of', 'BOTTOM', store_symbol_name='not_bottom')
     assert solver.symbol_table['not_bottom'].value == frozenset([central, superior])
 
 
@@ -695,20 +697,17 @@ def test_planar_regions_from_query():
     assert (np.all(region == PlanarVolume(center, vector, direction=-1)))
 
 
-def test_term_defined_regions():
+def test_term_defined_regions_creation():
 
     solver = RegionsSetSolver(TypedSymbolTable())
-    emotion_regions = solver.load_term_defined_regions('emotion', k=2)
+    emotion_regions = solver.load_term_defined_regions('emotion')
     assert solver.symbol_table['EMOTION'].value == emotion_regions
-    assert len(emotion_regions) == 2
 
 
 def test_term_defined_relative_position():
     region_set_type = AbstractSet[Region]
     solver = RegionsSetSolver(TypedSymbolTable())
-    solver.load_term_defined_regions('temporal lobe', k=1)
-    anterior_limit_region_set = frozenset([ExplicitVBR(np.array([[50, 90, 50]]), np.eye(4))])
-    solver.symbol_table[nl.Symbol[region_set_type]('anterior_region')] = nl.Constant[region_set_type](anterior_limit_region_set)
+    solver.load_term_defined_regions('temporal lobe')
 
     superior_relation = 'anterior_of'
     predicate = nl.Predicate[region_set_type](
@@ -716,7 +715,72 @@ def test_term_defined_relative_position():
             (nl.Symbol[region_set_type]('TEMPORAL LOBE'),)
         )
 
+    anterior_limit_region_set = frozenset([ExplicitVBR(np.array([[50, 90, 50]]), np.eye(4))])
+    solver.symbol_table[nl.Symbol[region_set_type]('ANTERIOR_REGION')] = nl.Constant[region_set_type](
+        anterior_limit_region_set)
+
     query = nl.Query[region_set_type](nl.Symbol[region_set_type]('p1'), predicate)
     solver.walk(query)
 
     assert solver.symbol_table['p1'].value == anterior_limit_region_set
+
+
+def test_term_defined_solve_overlapping():
+    region_set_type = AbstractSet[Region]
+    solver = RegionsSetSolver(TypedSymbolTable())
+    solver.load_term_defined_regions('gambling')
+
+    superior_relation = 'overlapping'
+    predicate = nl.Predicate[region_set_type](
+        nl.Symbol[Callable[[region_set_type], region_set_type]](superior_relation),
+        (nl.Symbol[region_set_type]('GAMBLING'),)
+    )
+
+    region_set = set(solver.symbol_table['GAMBLING'].value)
+    a_region = get_singleton_element_from_frozenset(take_principal_regions(region_set, 1))
+
+    center = a_region.bounding_box.ub
+    a_voxels = nib.affines.apply_affine(np.linalg.inv(a_region._affine_matrix), np.array([center - 1, center + 1]))
+
+    solver.symbol_table[nl.Symbol[region_set_type]('OVERLAPPING_RECTANGLE')] = nl.Constant[region_set_type](
+        frozenset([ExplicitVBR(a_voxels, a_region._affine_matrix)]))
+
+    query = nl.Query[region_set_type](nl.Symbol[region_set_type]('p1'), predicate)
+    solver.walk(query)
+    assert solver.symbol_table['p1'].value == set()
+
+    assert cardinal_relation(a_region, ExplicitVBR(a_voxels, a_region._affine_matrix), 'O', refine_overlapping=False)
+    assert not cardinal_relation(a_region, ExplicitVBR(a_voxels, a_region._affine_matrix), 'O', refine_overlapping=True)
+
+
+def test_regexp_region_union():
+
+    region_set_type = AbstractSet[Region]
+    solver = RegionsSetSolver(TypedSymbolTable())
+    vbr0 = ExplicitVBR(np.array([[0, 0, 0]]), np.eye(4))
+    vbr1 = ExplicitVBR(np.array([[1, 1, 1]]), np.eye(4))
+    vbr2 = ExplicitVBR(np.array([[2, 2, 2]]), np.eye(4))
+    vbr_rand = ExplicitVBR(np.array([[random.randint(0, 1000), random.randint(0, 1000), random.randint(0, 1000)]]), np.eye(4))
+
+    solver.symbol_table[nl.Symbol[region_set_type]('REGION_ZEROS')] = nl.Constant[region_set_type](frozenset([vbr0]))
+    solver.symbol_table[nl.Symbol[region_set_type]('REGION_ONES')] = nl.Constant[region_set_type](frozenset([vbr1]))
+    solver.symbol_table[nl.Symbol[region_set_type]('REGION_TWOS')] = nl.Constant[region_set_type](frozenset([vbr2]))
+    solver.symbol_table[nl.Symbol[region_set_type]('RAND_REGIONS')] = nl.Constant[region_set_type](frozenset([vbr_rand]))
+
+    solver.region_union_from_regexp('^REG\w', store_symbol_name='UNION')
+    region = get_singleton_element_from_frozenset(solver.symbol_table['UNION'].value)
+    assert np.array_equal(region._affine_matrix, vbr0._affine_matrix)
+    assert vbr1._voxels in region._voxels
+    assert vbr2._voxels in region._voxels
+    assert not vbr_rand._voxels in region._voxels
+
+    solver.region_union_from_regexp('REG\w', store_symbol_name='UNION')
+    region = get_singleton_element_from_frozenset(solver.symbol_table['UNION'].value)
+    assert vbr1._voxels in region._voxels
+    assert vbr_rand._voxels in region._voxels
+
+    solver.region_union_from_regexp('[N|O]S$', store_symbol_name='UNION')
+    region = get_singleton_element_from_frozenset(solver.symbol_table['UNION'].value)
+    assert vbr0._voxels in region._voxels
+    assert vbr_rand._voxels in region._voxels
+    assert not vbr1._voxels in region._voxels

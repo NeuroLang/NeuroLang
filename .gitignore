@@ -105,3 +105,6 @@ ENV/
 
 # jetbrains IDE
 .idea/*
+
+# neurosynth resources
+neurolang/utils/neurosynth/
