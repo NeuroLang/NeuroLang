@@ -11,10 +11,9 @@ from neurosynth import Dataset, meta
 from . import neurolang as nl
 
 
-__all__ = ['RegionsSetSolver', 'define_query', 'get_singleton_element_from_frozenset', 'region_union_from_regexp']
+__all__ = ['RegionsSetSolver', 'define_query', 'get_singleton_element_from_frozenset']
 
 
-#todo: this goto utils
 def define_query(set_type, functor, symbol_name, query_name):
     predicate = nl.Predicate[set_type](
         nl.Symbol[typing.Callable[[set_type], set_type]](functor),
@@ -157,10 +156,18 @@ class RegionsSetSolver(SetBasedSolver):
         label_regions_map = parse_region_label_map(parc_im, k)
         for region_name, region_key in label_regions_map.items():
             voxel_coordinates = np.transpose((labels == region_key).nonzero())
-            region = ExplicitVBR(voxel_coordinates, parc_im.affine)
+            region = ExplicitVBR(voxel_coordinates, parc_im.affine, parc_im.shape)
             frozenset([region])
             self.symbol_table[nl.Symbol[self.type](region_name)] = \
                 nl.Constant[typing.AbstractSet[self.type]](frozenset([region]))
+
+    def region_from_symbol_name(self, label):
+        set = self.symbol_table[label].value
+        first = get_singleton_element_from_frozenset(set)
+        if len(set) == 1:
+            return first
+        else:
+            return region_union(set, first._affine_matrix)
 
     def symbol_names_of_region_set(self, regions: typing.AbstractSet[Region]):
         '''by convention regions names are define in uppercase while result and functions in lowercase'''

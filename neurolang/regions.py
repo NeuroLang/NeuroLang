@@ -14,26 +14,32 @@ __all__ = [
 ]
 
 
-def region_union(regions_set, affine):
-    voxels_per_regions = [set(map(tuple, elem.to_ijk(affine))) for elem in regions_set] # first convert to array of tuples
+def region_union(region_set, affine):
+    voxels_per_regions = [set(map(tuple, region.to_ijk(affine))) for region in region_set] # first convert to array of tuples
     result_voxels = set.union(*voxels_per_regions)
-    return ExplicitVBR(np.array(list(map(list, result_voxels))), affine)  # then convert back to 2d array, FIX!
+    dim = max([region._image_dim for region in region_set]) if all(
+        isinstance(x, ExplicitVBR) and x._image_dim is not None for x in region_set) else None #to improve
+    return ExplicitVBR(np.array(list(result_voxels), dtype=list), affine, dim)  # then convert back to 2d array, FIX!
 
 
-def region_intersection(regions_set, affine):
-    voxels_per_regions = [set(map(tuple, elem.to_ijk(affine))) for elem in regions_set]
+def region_intersection(region_set, affine):
+    voxels_per_regions = [set(map(tuple, region.to_ijk(affine))) for region in region_set]  # first convert to array of tuples
     result_voxels = set.intersection(*voxels_per_regions)
     if len(result_voxels) == 0:
         return None
-    return ExplicitVBR(np.array(list(map(list, result_voxels))), affine)
+    dim = max([region._image_dim for region in region_set]) if all(
+            isinstance(x, ExplicitVBR) and x._image_dim is not None for x in region_set) else None
+    return ExplicitVBR(np.array(list(map(list, result_voxels))), affine, dim)
 
 
-def region_difference(regions_set, affine):
-    voxels_per_regions = [set(map(tuple, elem.to_ijk(affine))) for elem in regions_set]
+def region_difference(region_set, affine):
+    voxels_per_regions = [set(map(tuple, region.to_ijk(affine))) for region in region_set]
     result_voxels = set.difference(*voxels_per_regions)
     if len(result_voxels) == 0:
         return None
-    return ExplicitVBR(np.array(list(map(list, result_voxels))), affine)
+    dim = max([region._image_dim for region in region_set]) if all(
+        isinstance(x, ExplicitVBR) and x._image_dim is not None for x in region_set) else None
+    return ExplicitVBR(np.array(list(map(list, result_voxels))), affine, dim)
 #code repetition, could be abstracted to one method (region, aff, set_op)
 
 
@@ -93,9 +99,10 @@ class VolumetricBrainRegion(Region):
 
 class ExplicitVBR(VolumetricBrainRegion):
 
-    def __init__(self, voxels, affine_matrix):
-        self._voxels = np.asanyarray(voxels)
+    def __init__(self, voxels, affine_matrix, img_dim=None):
+        self._voxels = np.asanyarray(voxels, dtype=int)
         self._affine_matrix = affine_matrix
+        self._image_dim = img_dim
         self._aabb_tree = None
 
     @property
@@ -166,6 +173,11 @@ class ExplicitVBR(VolumetricBrainRegion):
         return nib.affines.apply_affine(
             np.linalg.solve(affine, self._affine_matrix),
             self._voxels)
+
+    def spatial_image(self):
+        mask = np.zeros(self._image_dim)
+        mask[np.transpose(self._voxels).tolist()] = 1
+        return nib.spatialimages.SpatialImage(mask, self._affine_matrix)
 
     def __eq__(self, other) -> bool:
         return self._affine_matrix == other._affine_matrix and np.all(self._voxels == other._voxels)
