@@ -29,7 +29,7 @@ def region_intersection(region_set, affine):
         return None
     dim = max([region._image_dim for region in region_set]) if all(
             isinstance(x, ExplicitVBR) and x._image_dim is not None for x in region_set) else None
-    return ExplicitVBR(np.array(list(map(list, result_voxels))), affine, dim)
+    return ExplicitVBR(np.array(list(result_voxels), dtype=list), affine, dim)
 
 
 def region_difference(region_set, affine):
@@ -39,7 +39,7 @@ def region_difference(region_set, affine):
         return None
     dim = max([region._image_dim for region in region_set]) if all(
         isinstance(x, ExplicitVBR) and x._image_dim is not None for x in region_set) else None
-    return ExplicitVBR(np.array(list(map(list, result_voxels))), affine, dim)
+    return ExplicitVBR(np.array(list(result_voxels), dtype=list), affine, dim)
 #code repetition, could be abstracted to one method (region, aff, set_op)
 
 
@@ -174,10 +174,17 @@ class ExplicitVBR(VolumetricBrainRegion):
             np.linalg.solve(affine, self._affine_matrix),
             self._voxels)
 
-    def spatial_image(self):
-        mask = np.zeros(self._image_dim)
-        mask[np.transpose(self._voxels).tolist()] = 1
-        return nib.spatialimages.SpatialImage(mask, self._affine_matrix)
+    def spatial_image(self, out=None, value=1):
+        if out is None:
+            mask = np.zeros(self._image_dim, dtype=np.int16)
+            out = nib.spatialimages.SpatialImage(mask, self._affine_matrix)
+        elif out.shape != self._image_dim and not np.allclose(out.affine, self._affine_matrix):
+            raise ValueError("...")
+        else:
+            mask = out.get_data()
+
+        mask[tuple(self._voxels.T)] = value
+        return out
 
     def __eq__(self, other) -> bool:
         return self._affine_matrix == other._affine_matrix and np.all(self._voxels == other._voxels)
@@ -326,7 +333,7 @@ class PlanarVolume(ImplicitVBR):
         return hash(self.bounding_box.limits.tobytes())
 
     def __eq__(self, other) -> bool:
-        return np.all(self._origin == other._origin) and self._vector == other._vector
+        return np.all(self._origin == other._origin) and np.all(self._vector == other._vector)
 
     def __repr__(self):
         return 'PlanarVolume(Origin={}, Normal Vector={})'.format(tuple(self._origin), self._vector)

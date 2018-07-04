@@ -2,7 +2,7 @@ import numpy as np
 import nibabel as nib
 from numpy import random
 from pytest import raises
-from ..regions import Region, SphericalVolume, PlanarVolume, ExplicitVBR
+from ..regions import *
 from ..CD_relations import direction_matrix, cardinal_relation, is_in_direction
 from ..exceptions import NeuroLangException
 from ..brain_tree import AABB, Tree
@@ -313,3 +313,41 @@ def test_refinement_of_not_overlapping():
     other_region = ExplicitVBR(np.array([[0, 0, 0], [1, 0, 0], [2, 0, 0]]), np.eye(4))
     assert cardinal_relation(region, other_region, 'O', refine_overlapping=False)
     assert cardinal_relation(region, other_region, 'O', refine_overlapping=True)
+
+
+def test_regions_union_intersection():
+
+    def randint(): return random.randint(70, 100)
+
+    voxels = [(randint(), randint(), randint()) for _ in range(50)]
+    affine = np.array([[-0.69999999, 0., 0., 90.], [0., 0.69999999, 0., -126.], [0., 0., 0.69999999, -72.], [0., 0., 0., 1.]]).round(2)
+    region = ExplicitVBR(voxels, affine)
+    union = region_union([region], affine)
+    assert union.bounding_box == region.bounding_box
+    #
+    center = region.bounding_box.ub
+    radius = 30
+    sphere = SphericalVolume(center, radius)
+    assert sphere.bounding_box.overlaps(region.bounding_box)
+    intersect = region_intersection([region, sphere], affine)
+    assert intersect is not None
+
+
+def test_intersection_difference():
+
+    def randint(): return random.randint(1, 5)
+    affine = np.array([[-0.69999999, 0., 0., 90.], [0., 0.69999999, 0., -126.], [0., 0., 0.69999999, -72.], [0., 0., 0., 1.]]).round(2)
+
+    center = (randint(), randint(), randint())
+    center2 = (randint(), randint(), randint())
+    radius = 10
+    sphere = SphericalVolume(center, radius)
+    other_sphere = SphericalVolume(center2, radius)
+
+    intersect = region_intersection([sphere, other_sphere], affine)
+    d1 = region_difference([sphere, other_sphere], affine)
+    d2 = region_difference([other_sphere, sphere], affine)
+    union = region_union([sphere, other_sphere], affine)
+    intersect2 = region_difference([union, d1, d2], affine)
+    assert intersect.bounding_box == intersect2.bounding_box
+

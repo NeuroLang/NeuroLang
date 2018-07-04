@@ -1,4 +1,4 @@
-from ..region_solver import RegionsSetSolver, get_singleton_element_from_frozenset
+from ..region_solver import RegionsSetSolver#, get_singleton_element_from_frozenset
 from ..symbols_and_types import TypedSymbolTable
 from .. import neurolang as nl
 from typing import AbstractSet, Callable
@@ -7,6 +7,23 @@ from ..CD_relations import *
 import nibabel as nib
 import numpy as np
 from numpy import random
+
+
+def do_query_of_relation(set_type, solver, elem, relation):
+
+    predicate = nl.Predicate[set_type](
+            nl.Symbol[Callable[[set_type], set_type]](relation),
+            (nl.Symbol[set_type](elem),)
+        )
+
+    query = nl.Query[set_type](nl.Symbol[set_type]('p'), predicate)
+    solver.walk(query)
+
+    return solver.symbol_table['p']
+
+
+def get_singleton_element_from_frozenset(fs):
+    return next(iter(fs))
 
 
 # todo: refa this awful tests
@@ -24,19 +41,10 @@ def test_relation_superior_of():
     solver.symbol_table[nl.Symbol[region_set_type]('db')] = nl.Constant[region_set_type](all_elements)
     solver.symbol_table[nl.Symbol[region_set_type]('elem')] = nl.Constant[region_set_type](elem)
 
-    superior_relation = 'superior_of'
-    predicate = nl.Predicate[region_set_type](
-            nl.Symbol[Callable[[region_set_type], region_set_type]](superior_relation),
-            (nl.Symbol[region_set_type]('elem'),)
-        )
-
-    query = nl.Query[region_set_type](nl.Symbol[region_set_type]('p1'), predicate)
-    solver.walk(query)
-
-    assert solver.symbol_table['p1'].value == frozenset([superior])
+    assert do_query_of_relation(region_set_type, solver, 'elem', 'superior_of').value == frozenset([superior])
 
 
-def test_superior_u_inferior():
+def test_superior_u_inferior_relation():
     solver = RegionsSetSolver(TypedSymbolTable())
 
     db_elems = frozenset([Region((0, 0, 5), (1, 1, 6)), Region((0, 0, -10), (1, 1, -8))])
@@ -66,7 +74,7 @@ def check_union_commutativity(set_type, solver, relation1, relation2, element):
     assert solver.symbol_table['a'] == solver.symbol_table['b']
 
 
-def test_union_associativity():
+def test_relations_union_associativity():
     solver = RegionsSetSolver(TypedSymbolTable())
 
     db_elems = frozenset([Region((0, 0, 5), (1, 1, 6)), Region((0, 0, -10), (1, 1, -8))])
@@ -103,7 +111,7 @@ def check_union_associativity(type, solver, relation1, relation2, relation3, ele
     assert solver.symbol_table['a'] == solver.symbol_table['b']
 
 
-def test_huntington_axiom():
+def test_huntington_axiom_satisfiability():
     solver = RegionsSetSolver(TypedSymbolTable())
 
     db_elems = frozenset([
@@ -136,7 +144,7 @@ def check_huntington(type, solver, relation1, relation2, element):
     assert solver.symbol_table['a'] == solver.symbol_table['b']
 
 
-def test_composition():
+def test_composition_of_relations():
     solver = RegionsSetSolver(TypedSymbolTable())
 
     superior = Region((0, 0, 5), (1, 1, 6))
@@ -151,12 +159,12 @@ def test_composition():
     solver.symbol_table[nl.Symbol[set_type]('db')] = nl.Constant[set_type](db_elements)
     solver.symbol_table[nl.Symbol[set_type]('c')] = nl.Constant[set_type](frozenset([superior]))
 
-    res = do_composition_of_relations_from_region(set_type, solver, 'c', 'anterior_of', 'inferior_of')
+    res = do_composition_of_relations(set_type, solver, 'c', 'anterior_of', 'inferior_of')
 
     assert res == frozenset([lat1, lat2, lat3])
 
 
-def do_composition_of_relations_from_region(set_type, solver, elem, relation1, relation2):
+def do_composition_of_relations(set_type, solver, elem, relation1, relation2):
 
     bs = do_query_of_relation(set_type, solver, elem, relation2)
     if bs.value == frozenset():
@@ -170,17 +178,24 @@ def do_composition_of_relations_from_region(set_type, solver, elem, relation1, r
     return result
 
 
-def do_query_of_relation(set_type, solver, elem, relation):
+def relations_composition(set_type, solver, relation_1, relation_2):
+    p1 = nl.Predicate[set_type](
+        nl.Symbol(relation_1),
+        (nl.Symbol[set_type]('x'),)
+    )
 
-    predicate = nl.Predicate[set_type](
-            nl.Symbol[Callable[[set_type], set_type]](relation),
-            (nl.Symbol[set_type](elem),)
-        )
+    p2 = nl.Predicate[set_type](
+        nl.Symbol('converse ' + relation_2),
+        (nl.Symbol[set_type]('x'),)
+    )
 
-    query = nl.Query[set_type](nl.Symbol[set_type]('p'), predicate)
-    solver.walk(query)
+    exists = nl.ExistentialPredicate[set_type](
+        nl.Symbol[set_type]('x'), p1 & p2
+    )
 
-    return solver.symbol_table['p']
+    query_a = nl.Query[set_type](nl.Symbol[set_type]('result'), exists)
+    solver.walk(query_a)
+    return solver.symbol_table['result']
 
 
 def test_composition_distributivity():
@@ -200,7 +215,6 @@ def test_composition_distributivity():
     solver.symbol_table[nl.Symbol[set_type]('d')] = nl.Constant[set_type](frozenset([superior]))
 
     res = check_distributivity(set_type, solver, 'd', 'posterior_of', 'anterior_of', 'inferior_of')
-
     c1 = do_composition_of_relations_from_region(set_type, solver, 'd', 'posterior_of', 'inferior_of')
     c2 = do_composition_of_relations_from_region(set_type, solver, 'd', 'anterior_of', 'inferior_of')
     assert res == c1.union(c2)
@@ -232,30 +246,7 @@ def check_distributivity(set_type, solver, elem, rel1, rel2, rel3):
     return obtained
 
 
-def check_distributivity_composition_of_relations_from_region(set_type, solver, elem, rel1, rel2, rel3):
-
-    cs = do_query_of_relation(set_type, solver, elem, rel3)
-    if cs.value == frozenset():
-        return cs.value
-
-    bs = frozenset()
-    for c_elements in cs.value:
-        solver.symbol_table[nl.Symbol[set_type]('c')] = [c_elements]
-        b = do_query_of_relation(set_type, solver, 'c', rel2)
-        bs.union(b)
-
-    if bs.value == frozenset():
-        return bs.value
-
-    result = frozenset()
-    for b_elements in bs:
-        solver.symbol_table[nl.Symbol[set_type]('b')] = [b_elements]
-        res = do_query_of_relation(set_type, solver, 'b', rel1)
-        result.union(res)
-    return result
-
-
-def test_involution():
+def test_relation_involution():
     class SBS(RegionsSetSolver):
         type = Region
 
@@ -297,7 +288,7 @@ def test_involution():
     assert res == solver.symbol_table['converse_query'].value
 
 
-def test_converse_distributivity():
+def test_relation_converse_distributivity():
 
     class SBS(RegionsSetSolver):
         type = Region
@@ -411,55 +402,21 @@ def test_composition_identity():
     id2 = relations_composition(AbstractSet[Region], solver, 'converse superior_of', 'universal')
     assert id1 == id2
 
+def do_composition_of_relations_from_region(set_type, solver, elem, relation1, relation2):
 
-def relations_composition(set_type, solver, relation_1, relation_2):
-    p1 = nl.Predicate[set_type](
-        nl.Symbol(relation_1),
-        (nl.Symbol[set_type]('x'),)
-    )
+    bs = do_query_of_relation(set_type, solver, elem, relation2)
+    if bs.value == frozenset():
+        return bs.value
 
-    p2 = nl.Predicate[set_type](
-        nl.Symbol('converse ' + relation_2),
-        (nl.Symbol[set_type]('x'),)
-    )
-
-    exists = nl.ExistentialPredicate[set_type](
-        nl.Symbol[set_type]('x'), p1 & p2
-    )
-
-    query_a = nl.Query[set_type](nl.Symbol[set_type]('result'), exists)
-    solver.walk(query_a)
-    return solver.symbol_table['result']
+    result = frozenset()
+    for b_element in bs.value:
+        solver.symbol_table[nl.Symbol[set_type]('b_element')] = nl.Constant[AbstractSet[Region]](frozenset([b_element]))
+        res = do_query_of_relation(set_type, solver, 'b_element', relation1)
+        result = result.union(res.value)
+    return result
 
 
-def test_relation_left_of_aligned_from_unit_box():
-    region_set_type = AbstractSet[Region]
-    solver = RegionsSetSolver(TypedSymbolTable())
-
-    center = Region((0, 0, 0), (1, 1, 1))
-    l1 = Region((-5, 0, 0), (-2, 1, 1))
-    l2 = Region((-10, 0, 0), (-8, 1, 1))
-    r1 = Region((3, 0, 0), (5, 1, 1))
-
-    all_elements = frozenset([center, l1, l2, r1])
-    elem = frozenset([center])
-
-    solver.symbol_table[nl.Symbol[region_set_type]('db')] = nl.Constant[region_set_type](all_elements)
-    solver.symbol_table[nl.Symbol[region_set_type]('elem')] = nl.Constant[region_set_type](elem)
-
-    north_relation = 'left_of'
-    predicate = nl.Predicate[region_set_type](
-            nl.Symbol[Callable[[region_set_type], region_set_type]](north_relation),
-            (nl.Symbol[region_set_type]('elem'),)
-        )
-
-    query = nl.Query[region_set_type](nl.Symbol[region_set_type]('p1'), predicate)
-    solver.walk(query)
-
-    assert solver.symbol_table['p1'].value == frozenset([l1, l2])
-
-
-def test_relation_left_of_unaligned():
+def test_left_of():
     region_set_type = AbstractSet[Region]
     solver = RegionsSetSolver(TypedSymbolTable())
 
@@ -476,25 +433,17 @@ def test_relation_left_of_unaligned():
     solver.symbol_table[nl.Symbol[region_set_type]('db')] = nl.Constant[region_set_type](all_elements)
     solver.symbol_table[nl.Symbol[region_set_type]('elem')] = nl.Constant[region_set_type](elem)
 
-    north_relation = 'left_of'
-    predicate = nl.Predicate[region_set_type](
-            nl.Symbol[Callable[[region_set_type], region_set_type]](north_relation),
-            (nl.Symbol[region_set_type]('elem'),)
-        )
-
-    query = nl.Query[region_set_type](nl.Symbol[region_set_type]('p1'), predicate)
-    solver.walk(query)
-
-    assert solver.symbol_table['p1'].value == frozenset([l1, l2, l3])
+    obtained_value = do_query_of_relation(region_set_type, solver, 'elem', 'left_of').value
+    assert obtained_value == frozenset([l1, l2, l3])
 
 
-def test_overlapped_hyperrect():
+def test_overlapping_bounding_boxes():
     region_set_type = AbstractSet[Region]
     solver = RegionsSetSolver(TypedSymbolTable())
 
-    a0 = Region((1, -1, 1), (2, 0, 2))
-    b0 = Region((0, -1, 0), (1, 0, 1))
-    c0 = Region((0, -1, -1), (1, 0, 0))
+    a0 = Region((-1, 0, 1), (0, 1, 2))
+    b0 = Region((-1, 0, 0), (0, 1, 1))
+    c0 = Region((-1, 0, -1), (0, 1, 0))
 
     a1 = Region((0, 0, 1), (1, 1, 2))
     c1 = Region((0, 0, -1), (1, 1, 0))
@@ -509,50 +458,16 @@ def test_overlapped_hyperrect():
     solver.symbol_table[nl.Symbol[region_set_type]('db')] = nl.Constant[region_set_type](all_elements)
     solver.symbol_table[nl.Symbol[region_set_type]('a')] = nl.Constant[region_set_type](reference_set)
 
-    north_relation = 'overlapping'
-    predicate = nl.Predicate[region_set_type](
-        nl.Symbol[Callable[[region_set_type], region_set_type]](north_relation),
-        (nl.Symbol[region_set_type]('a'),)
-    )
-
-    query = nl.Query[region_set_type](nl.Symbol[region_set_type]('p'), predicate)
-    solver.walk(query)
-
-    assert solver.symbol_table['p'].value == frozenset([a1, c1])
+    obtained_value = do_query_of_relation(region_set_type, solver, 'a', 'overlapping').value
+    assert obtained_value == frozenset([a1, c1])
 
     reference_set = frozenset([Region((10, 0, -0.5), (12, 1, 1.5))])
 
     solver.symbol_table[nl.Symbol[region_set_type]('db')] = nl.Constant[region_set_type](all_elements)
     solver.symbol_table[nl.Symbol[region_set_type]('a')] = nl.Constant[region_set_type](reference_set)
 
-    north_relation = 'overlapping'
-    predicate = nl.Predicate[region_set_type](
-        nl.Symbol[Callable[[region_set_type], region_set_type]](north_relation),
-        (nl.Symbol[region_set_type]('a'),)
-    )
-
-    query = nl.Query[region_set_type](nl.Symbol[region_set_type]('p'), predicate)
-    solver.walk(query)
-
-    assert solver.symbol_table['p'].value == frozenset()
-
-    a0 = Region((5, -1, 0.5), (6, 1.5, 3))
-    all_elements = frozenset([a0, b0, c0, a1, c1, a2, b2, c2])
-    reference_set = frozenset([Region((5.5, 0, -0.5), (7, 1, 1.5))])
-
-    solver.symbol_table[nl.Symbol[region_set_type]('db')] = nl.Constant[region_set_type](all_elements)
-    solver.symbol_table[nl.Symbol[region_set_type]('a')] = nl.Constant[region_set_type](reference_set)
-
-    north_relation = 'overlapping'
-    predicate = nl.Predicate[region_set_type](
-        nl.Symbol[Callable[[region_set_type], region_set_type]](north_relation),
-        (nl.Symbol[region_set_type]('a'),)
-    )
-
-    query = nl.Query[region_set_type](nl.Symbol[region_set_type]('p'), predicate)
-    solver.walk(query)
-
-    assert solver.symbol_table['p'] == frozenset([a0])
+    obtained_value = do_query_of_relation(region_set_type, solver, 'a', 'overlapping').value
+    assert obtained_value == frozenset()
 
 
 def test_paper_composition_ex():
@@ -583,152 +498,65 @@ def test_paper_composition_ex():
     assert res == frozenset([c])
 
 
-def test_regions_names_from_table():
-    region_set_type = AbstractSet[Region]
-    solver = RegionsSetSolver(TypedSymbolTable())
-
-    center = Region((0, 0, 0), (1, 1, 1))
-    l1 = Region((-5, -2, -2), (-2, 0, 0))
-    l2 = Region((-10, 5, 5), (-8, 8, 7))
-    l3 = Region((-12, 9, 8), (-11, 10, 10))
-
-    l1_elem = frozenset([l1])
-    l2_elem = frozenset([l2])
-    l3_elem = frozenset([l3])
-    center_elem = frozenset([center])
-
-    solver.symbol_table[nl.Symbol[region_set_type]('L1')] = nl.Constant[region_set_type](l1_elem)
-    solver.symbol_table[nl.Symbol[region_set_type]('L2')] = nl.Constant[region_set_type](l2_elem)
-    solver.symbol_table[nl.Symbol[region_set_type]('L3')] = nl.Constant[region_set_type](l3_elem)
-    solver.symbol_table[nl.Symbol[region_set_type]('CENTRAL')] = nl.Constant[region_set_type](center_elem)
-    search_for = frozenset([l1, center])
-    res = solver.symbol_names_of_region_set(search_for)
-    assert res == ['L1', 'CENTRAL']
-
-
-def test_query_symbols_from_table():
-
-    region_set_type = AbstractSet[Region]
-    solver = RegionsSetSolver(TypedSymbolTable())
-
-    inferior = Region((0, 0, 0), (1, 1, 1))
-    central = Region((0, 0, 2), (1, 1, 3))
-    superior = Region((0, 0, 4), (1, 1, 5))
-
-    all_elements = frozenset([inferior, central, superior])
-    #todo function to load all symbols into solver
-    solver.symbol_table[nl.Symbol[region_set_type]('db')] = nl.Constant[region_set_type](all_elements)
-    solver.symbol_table[nl.Symbol[region_set_type]('CENTRAL')] = nl.Constant[region_set_type](frozenset([central]))
-    obtained = solver.query_relation_region('superior_of', 'CENTRAL')
-    assert len(obtained) == 0
-
-    solver.symbol_table[nl.Symbol[region_set_type]('BOTTOM')] = nl.Constant[region_set_type](frozenset([inferior]))
-    solver.symbol_table[nl.Symbol[region_set_type]('TOP')] = nl.Constant[region_set_type](frozenset([superior]))
-    obtained = solver.query_relation_region('superior_of', 'CENTRAL')
-    assert obtained == ['TOP']
-
-    solver.query_relation_region('superior_of', 'BOTTOM', store_symbol_name='not_bottom')
-    assert solver.symbol_table['not_bottom'].value == frozenset([central, superior])
-
-
-def test_regions_union_intersection():
-
-    def randint(): return random.randint(70, 100)
-
-    voxels = [(randint(), randint(), randint()) for _ in range(50)]
-    affine = np.array([[-0.69999999, 0., 0., 90.], [0., 0.69999999, 0., -126.], [0., 0., 0.69999999, -72.], [0., 0., 0., 1.]]).round(2)
-    region = ExplicitVBR(voxels, affine)
-    union = region_union([region], affine)
-    assert union.bounding_box == region.bounding_box
-    #
-    center = region.bounding_box.ub
-    radius = 30
-    sphere = SphericalVolume(center, radius)
-    assert sphere.bounding_box.overlaps(region.bounding_box)
-    intersect = region_intersection([region, sphere], affine)
-    assert intersect is not None
-
-
-def test_intersection_difference():
-
-    def randint(): return random.randint(1, 5)
-    affine = np.array([[-0.69999999, 0., 0., 90.], [0., 0.69999999, 0., -126.], [0., 0., 0.69999999, -72.], [0., 0., 0., 1.]]).round(2)
-
-    center = (randint(), randint(), randint())
-    center2 = (randint(), randint(), randint())
-    radius = 5
-    sphere = SphericalVolume(center, radius)
-    other_sphere = SphericalVolume(center2, radius)
-
-    intersect = region_intersection([sphere, other_sphere], affine)
-    d1 = region_difference([sphere, other_sphere], affine)
-    d2 = region_difference([other_sphere, sphere], affine)
-    union = region_union([sphere, other_sphere], affine)
-    intersect2 = region_difference([union, d1, d2], affine)
-    assert intersect.bounding_box == intersect2.bounding_box
-
-
 def test_planar_regions_from_query():
     solver = RegionsSetSolver(TypedSymbolTable())
     center = (1, 5, 6)
     vector = (1, 0, 0)
-    solver.symbol_table[nl.Symbol[dict]('e')] = nl.Constant[dict]({'origin': center, 'vector': vector})
+    solver.symbol_table[nl.Symbol[dict]('plane')] = nl.Constant[dict]({'origin': center, 'vector': vector})
 
     p1 = nl.Predicate[dict](
         nl.Symbol[Callable[[dict], AbstractSet[Region]]]('superior_from_plane'),
-        (nl.Symbol[dict]('e'),)
+        (nl.Symbol[dict]('plane'),)
     )
 
     query_a = nl.Query[AbstractSet[Region]](nl.Symbol[dict]('a'), p1)
     solver.walk(query_a)
 
-    region = get_singleton_element_from_frozenset(solver.symbol_table['a'].value)
-    assert(np.all(region == PlanarVolume(center, vector)))
+    obtained = do_query_of_relation(dict, solver, 'plane', 'superior_from_plane').value
+    assert obtained == frozenset([PlanarVolume(center, vector)])
 
-    p1 = nl.Predicate[dict](
-        nl.Symbol[Callable[[dict], AbstractSet[Region]]]('inferior_from_plane'),
-        (nl.Symbol[dict]('e'),)
-    )
-
-    query_a = nl.Query[AbstractSet[Region]](nl.Symbol[dict]('a'), p1)
-    solver.walk(query_a)
-
-    region = get_singleton_element_from_frozenset(solver.symbol_table['a'].value)
-    assert (np.all(region == PlanarVolume(center, vector, direction=-1)))
+    obtained = do_query_of_relation(dict, solver, 'plane', 'inferior_from_plane').value
+    assert obtained == frozenset([PlanarVolume(center, vector, direction=-1)])
 
 
 def test_term_defined_regions_creation():
 
     solver = RegionsSetSolver(TypedSymbolTable())
-    emotion_regions = solver.load_term_defined_regions('emotion')
-    assert solver.symbol_table['EMOTION'].value == emotion_regions
+    solver.symbol_table[nl.Symbol[str]('term')] = nl.Constant[str]('emotion')
+    obtained = do_query_of_relation(str, solver, 'term', 'neurosynth_term').value
+    assert not obtained == frozenset([])
 
 
 def test_term_defined_relative_position():
+
     region_set_type = AbstractSet[Region]
     solver = RegionsSetSolver(TypedSymbolTable())
-    solver.load_term_defined_regions('temporal lobe')
+    solver.symbol_table[nl.Symbol[str]('term')] = nl.Constant[str]('temporal lobe')
+    do_query_of_relation(str, solver, 'term', 'neurosynth_term')
 
     superior_relation = 'anterior_of'
     predicate = nl.Predicate[region_set_type](
-            nl.Symbol[Callable[[region_set_type], region_set_type]](superior_relation),
-            (nl.Symbol[region_set_type]('TEMPORAL LOBE'),)
-        )
+        nl.Symbol[Callable[[region_set_type], region_set_type]](superior_relation),
+        (nl.Symbol[region_set_type]('TEMPORAL LOBE'),)
+    )
 
     anterior_limit_region_set = frozenset([ExplicitVBR(np.array([[50, 90, 50]]), np.eye(4))])
     solver.symbol_table[nl.Symbol[region_set_type]('ANTERIOR_REGION')] = nl.Constant[region_set_type](
         anterior_limit_region_set)
 
-    query = nl.Query[region_set_type](nl.Symbol[region_set_type]('p1'), predicate)
+    query = nl.Query[region_set_type](nl.Symbol[region_set_type]('p2'), predicate)
     solver.walk(query)
 
-    assert solver.symbol_table['p1'].value == anterior_limit_region_set
+    assert solver.symbol_table['p2'].value == anterior_limit_region_set
 
 
 def test_term_defined_solve_overlapping():
+
     region_set_type = AbstractSet[Region]
     solver = RegionsSetSolver(TypedSymbolTable())
-    solver.load_term_defined_regions('gambling')
+
+    solver.symbol_table[nl.Symbol[str]('term')] = nl.Constant[str]('gambling')
+    do_query_of_relation(str, solver, 'term', 'neurosynth_term')
 
     superior_relation = 'overlapping'
     predicate = nl.Predicate[region_set_type](
@@ -767,20 +595,25 @@ def test_regexp_region_union():
     solver.symbol_table[nl.Symbol[region_set_type]('REGION_TWOS')] = nl.Constant[region_set_type](frozenset([vbr2]))
     solver.symbol_table[nl.Symbol[region_set_type]('RAND_REGIONS')] = nl.Constant[region_set_type](frozenset([vbr_rand]))
 
-    solver.region_union_from_regexp('^REG\w', store_symbol_name='UNION')
-    region = get_singleton_element_from_frozenset(solver.symbol_table['UNION'].value)
-    assert np.array_equal(region._affine_matrix, vbr0._affine_matrix)
-    assert vbr1._voxels in region._voxels
-    assert vbr2._voxels in region._voxels
-    assert not vbr_rand._voxels in region._voxels
+    solver.symbol_table[nl.Symbol[str]('term')] = nl.Constant[str]('^REG\w')
+    obtained = do_query_of_relation(str, solver, 'term', 'regexp').value
+    affine = get_singleton_element_from_frozenset(obtained)._affine_matrix
+    voxels = get_singleton_element_from_frozenset(obtained)._voxels
+    assert np.array_equal(affine, vbr0._affine_matrix)
+    assert vbr1._voxels in voxels
+    assert vbr2._voxels in voxels
+    assert not vbr_rand._voxels in voxels
 
-    solver.region_union_from_regexp('REG\w', store_symbol_name='UNION')
-    region = get_singleton_element_from_frozenset(solver.symbol_table['UNION'].value)
-    assert vbr1._voxels in region._voxels
-    assert vbr_rand._voxels in region._voxels
+    solver.symbol_table[nl.Symbol[str]('term')] = nl.Constant[str]('REG\w')
+    obtained = do_query_of_relation(str, solver, 'term', 'regexp').value
 
-    solver.region_union_from_regexp('[N|O]S$', store_symbol_name='UNION')
-    region = get_singleton_element_from_frozenset(solver.symbol_table['UNION'].value)
-    assert vbr0._voxels in region._voxels
-    assert vbr_rand._voxels in region._voxels
-    assert not vbr1._voxels in region._voxels
+    voxels = get_singleton_element_from_frozenset(obtained)._voxels
+    assert vbr1._voxels in voxels
+    assert vbr_rand._voxels in voxels
+
+    solver.symbol_table[nl.Symbol[str]('term')] = nl.Constant[str]('[N|O]S$')
+    obtained = do_query_of_relation(str, solver, 'term', 'regexp').value
+    voxels = get_singleton_element_from_frozenset(obtained)._voxels
+    assert vbr0._voxels in voxels
+    assert vbr_rand._voxels in voxels
+    assert not vbr1._voxels in voxels

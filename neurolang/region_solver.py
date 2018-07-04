@@ -11,20 +11,7 @@ from neurosynth import Dataset, meta
 from . import neurolang as nl
 
 
-__all__ = ['RegionsSetSolver', 'define_query', 'get_singleton_element_from_frozenset']
-
-
-def define_query(set_type, functor, symbol_name, query_name):
-    predicate = nl.Predicate[set_type](
-        nl.Symbol[typing.Callable[[set_type], set_type]](functor),
-        (nl.Symbol[set_type](symbol_name),)
-    )
-    query = nl.Query[set_type](nl.Symbol[set_type](query_name), predicate)
-    return query
-
-
-def get_singleton_element_from_frozenset(fs):
-    return next(iter(fs))
+__all__ = ['RegionsSetSolver']
 
 
 class RegionsSetSolver(SetBasedSolver):
@@ -43,29 +30,50 @@ class RegionsSetSolver(SetBasedSolver):
         for key, value in {'inferior_of': 'I', 'superior_of': 'S',
                            'posterior_of': 'P', 'anterior_of': 'A',
                            'overlapping': 'O', 'left_of': 'L', 'right_of': 'R'}.items():
-            setattr(self, key, self.define_dir_based_fun(value))
+            setattr(self, key, self._define_dir_based_fun(value))
             self.symbol_table[
                 nl.Symbol[pred_type](key)
             ] = nl.Constant[pred_type](self.__getattribute__(key))
 
-            setattr(self, key, self.define_inv_dir_based_fun(value))
+            setattr(self, key, self._define_inv_dir_based_fun(value))
             self.symbol_table[
                 nl.Symbol[pred_type]('converse ' + key)
             ] = nl.Constant[pred_type](self.__getattribute__(key))
 
         self.symbol_table[nl.Symbol[pred_type]('universal')] = nl.Constant[pred_type](self.symbols_of_type())
 
-        dict_to_region = typing.Callable[[typing.DefaultDict, ], typing.AbstractSet[Region]]
+        dict_to_region_set = typing.Callable[[typing.DefaultDict, ], typing.AbstractSet[Region]]
         for key, value in {'superior_from_plane': 1, 'inferior_from_plane': -1}.items():
-            setattr(self, key, self.region_from_plane(value))
+            setattr(self, key, self._region_from_plane(value))
             self.symbol_table[
-                nl.Symbol[dict_to_region](key)
-            ] = nl.Constant[dict_to_region](self.__getattribute__(key))
+                nl.Symbol[dict_to_region_set](key)
+            ] = nl.Constant[dict_to_region_set](self.__getattribute__(key))
 
-    def region_from_plane(self, bb_direction) -> typing.AbstractSet[Region]:
-        def f(elem: typing.DefaultDict) -> typing.AbstractSet[Region]:
-            elem['direction'] = bb_direction
-            return frozenset([PlanarVolume(**elem)])
+        str_to_region_set = typing.Callable[[typing.Text, ], typing.AbstractSet[Region]]
+
+        self.symbol_table[nl.Symbol[str_to_region_set]('neurosynth_term')] = nl.Constant[str_to_region_set](
+            self._neurosynth_term_rois())
+
+        self.symbol_table[nl.Symbol[str_to_region_set]('regexp')] = nl.Constant[str_to_region_set](
+            self._region_set_from_regexp())
+
+    def _define_dir_based_fun(self, direction) -> typing.AbstractSet[Region]:
+        def f(reference_region: typing.AbstractSet[Region]) -> typing.AbstractSet[Region]:
+            return self.direction(direction, reference_region, refinement_resolution=self.stop_refinement_at)
+
+        return f
+
+    def _define_inv_dir_based_fun(self, direction) -> typing.AbstractSet[Region]:
+        def f(reference_region: typing.AbstractSet[Region]) -> typing.AbstractSet[Region]:
+            return self.direction([inverse_directions[d] for d in direction], reference_region,
+                                  refinement_resolution=self.stop_refinement_at)
+
+        return f
+
+    def _region_from_plane(self, bb_direction) -> typing.AbstractSet[Region]:
+        def f(plane_attributes: typing.DefaultDict) -> typing.AbstractSet[Region]:
+            plane_attributes['direction'] = bb_direction
+            return frozenset([PlanarVolume(**plane_attributes)])
         return f
 
     def symbols_of_type(self) -> typing.AbstractSet[Region]:
@@ -76,26 +84,46 @@ class RegionsSetSolver(SetBasedSolver):
             return res
         return f
 
-    def define_dir_based_fun(self, direction) -> typing.AbstractSet[Region]:
-        def f(reference_region: typing.AbstractSet[Region]) -> typing.AbstractSet[Region]:
-            return self.direction(direction, reference_region, refinement_resolution=self.stop_refinement_at)
+    def _neurosynth_term_rois(self) -> typing.AbstractSet[Region]:
+        def f(elem: typing.Text) -> typing.AbstractSet[Region]:
+
+            file_dir = os.path.abspath(os.path.dirname(__file__))
+            path = os.path.join(file_dir, 'utils/neurosynth')
+            file = os.path.join(path, 'dataset.pkl')
+            if not os.path.isfile(file):
+                dataset = fetch_neurosynth_dataset(path)
+            else:
+                dataset = Dataset.load(file)
+
+            studies_ids = dataset.get_studies(features=elem, frequency_threshold=0.05)
+            ma = meta.MetaAnalysis(dataset, studies_ids, q=0.01, prior=0.5)
+            data = ma.images['pAgF_z_FDR_0.01']
+            affine = dataset.masker.get_header().get_sform()
+            masked_data = dataset.masker.unmask(data)
+            regions_set = frozenset(region_set_from_masked_data(masked_data, affine))
+
+            self.symbol_table[nl.Symbol[self.type](elem.upper())] = \
+                nl.Constant[typing.AbstractSet[self.type]](regions_set)
+            return self.walk(regions_set)
         return f
 
-    def define_inv_dir_based_fun(self, direction) -> typing.AbstractSet[Region]:
-        def f(reference_region: typing.AbstractSet[Region]) -> typing.AbstractSet[Region]:
-            return self.direction([inverse_directions[d] for d in direction], reference_region, refinement_resolution=self.stop_refinement_at)
-        return f
+    def _region_set_from_regexp(self) -> typing.AbstractSet[Region]:
+        def f(regexp: typing.Text) -> typing.AbstractSet[Region]:
+            regions = set()
+            match = False
+            for k, v in self.symbol_table.symbols_by_type(typing.AbstractSet[self.type]).items():
+                if re.search(regexp, k.name):
+                    match = True
+                    iterator = iter(v.value)
+                    first = next(iterator)
+                    affine = first._affine_matrix
+                    regions.add(first)
+                    for region in iterator:
+                        regions.add(region)
 
-    # add a match for the predicate "singleton" with a region as parameter
-    # that will produce a set with just that region as a result
-    @nl.add_match(nl.Predicate(nl.Symbol('singleton'), (nl.Constant[typing.Tuple[int, int, int, int]],)))
-    def singleton(self, expression):
-        a = expression.args[0].value
-        r = Region((a[0].value, a[1].value), (a[2].value, a[3].value))
-        res = nl.Constant[typing.AbstractSet[self.type]](
-            frozenset((r,))
-        )
-        return res
+            result = frozenset([region_union(regions, affine)]) if match else frozenset([])
+            return self.walk(result)
+        return f
 
     def direction(self, direction, reference_regions: typing.AbstractSet[Region], refinement_resolution=None) -> typing.AbstractSet[Region]:
         result, visited = set(), set()
@@ -111,6 +139,17 @@ class RegionsSetSolver(SetBasedSolver):
                         result.update((region,))
 
         return self.walk(frozenset(result))
+
+    # add a match for the predicate "singleton" with a region as parameter
+    # that will produce a set with just that region as a result
+    @nl.add_match(nl.Predicate(nl.Symbol('singleton'), (nl.Constant[typing.Tuple[int, int, int, int]],)))
+    def singleton(self, expression):
+        a = expression.args[0].value
+        r = Region((a[0].value, a[1].value), (a[2].value, a[3].value))
+        res = nl.Constant[typing.AbstractSet[self.type]](
+            frozenset((r,))
+        )
+        return res
 
     @nl.add_match(nl.FunctionApplication(nl.Constant(operator.invert), (nl.Constant[typing.AbstractSet],)))
     def rewrite_finite_domain_inversion(self, expression):
@@ -129,107 +168,3 @@ class RegionsSetSolver(SetBasedSolver):
 
         result = all_regions - set_value
         return self.walk(nl.Constant[set_type](result))
-
-    def load_term_defined_regions(self, term):
-
-        file_dir = os.path.abspath(os.path.dirname(__file__))
-        path = os.path.join(file_dir, 'utils/neurosynth')
-        file = os.path.join(path, 'dataset.pkl')
-        if not os.path.isfile(file):
-            dataset = fetch_neurosynth_dataset(path)
-        else:
-            dataset = Dataset.load(file)
-
-        studies_ids = dataset.get_studies(features=term, frequency_threshold=0.05)
-        ma = meta.MetaAnalysis(dataset, studies_ids, q=0.01, prior=0.5)
-        data = ma.images['pAgF_z_FDR_0.01']
-        affine = dataset.masker.get_header().get_sform()
-        masked_data = dataset.masker.unmask(data)
-        regions_set = frozenset(region_set_from_masked_data(masked_data, affine))
-
-        self.symbol_table[nl.Symbol[self.type](term.upper())] = \
-            nl.Constant[typing.AbstractSet[self.type]](regions_set)
-        return regions_set
-
-    def load_parcellation_regions_to_solver(self, parc_im, k=None):
-        labels = parc_im.get_data()
-        label_regions_map = parse_region_label_map(parc_im, k)
-        for region_name, region_key in label_regions_map.items():
-            voxel_coordinates = np.transpose((labels == region_key).nonzero())
-            region = ExplicitVBR(voxel_coordinates, parc_im.affine, parc_im.shape)
-            frozenset([region])
-            self.symbol_table[nl.Symbol[self.type](region_name)] = \
-                nl.Constant[typing.AbstractSet[self.type]](frozenset([region]))
-
-    def region_from_symbol_name(self, label):
-        set = self.symbol_table[label].value
-        first = get_singleton_element_from_frozenset(set)
-        if len(set) == 1:
-            return first
-        else:
-            return region_union(set, first._affine_matrix)
-
-    def symbol_names_of_region_set(self, regions: typing.AbstractSet[Region]):
-        '''by convention regions names are define in uppercase while result and functions in lowercase'''
-        res = []
-        for k, v in self.symbol_table.symbols_by_type(typing.AbstractSet[self.type]).items():
-            if not k.name.isupper():
-                continue
-            for region in v.value:
-                if region in regions:
-                    res.append(k.name)
-                    if len(res) == len(regions): return res
-        return res
-
-    def query_and_store_symbol(self, query, symbol_name):
-        self.walk(query)
-        result = self.symbol_table[query.symbol.name].value
-        self.symbol_table[nl.Symbol[self.type](symbol_name)] = nl.Constant[typing.AbstractSet[self.type]](result)
-        obtained = self.symbol_names_of_region_set(result)
-        return obtained, symbol_name
-
-    def solve_query(self, query):
-        self.walk(query)
-        result = self.symbol_table[query.symbol.name].value
-        obtained = self.symbol_names_of_region_set(result)
-        return obtained
-
-    def query_relation_region(self, relation, region, store_symbol_name=None):
-        set_type = typing.AbstractSet[self.type]
-        query = define_query(set_type, relation, region, 'query')
-        obtained = self.solve_query(query)
-        if store_symbol_name:
-            obtained, symbol = self.query_and_store_symbol(query, store_symbol_name)
-        return obtained
-
-    def query_from_plane(self, relation, plane_dict, store_into=None):
-
-        self.symbol_table[nl.Symbol[dict]('elem')] = nl.Constant[dict](plane_dict)
-        p1 = nl.Predicate[dict](
-            nl.Symbol[typing.Callable[[dict], typing.AbstractSet[Region]]](relation),
-            (nl.Symbol[dict]('elem'),)
-        )
-
-        query = nl.Query[typing.AbstractSet[Region]](nl.Symbol[dict]('a'), p1)
-        self.walk(query)
-        result = self.symbol_table[query.symbol.name].value
-        self.symbol_table[nl.Symbol[self.type](store_into)] = nl.Constant[typing.AbstractSet[Region]](result)
-        return result
-
-    def region_union_from_regexp(self, regexp, affine=None, store_symbol_name=None):
-
-        regions = set()
-        for k, v in self.symbol_table.symbols_by_type(typing.AbstractSet[self.type]).items():
-            if re.search(regexp, k.name):
-                iterator = iter(v.value)
-                if affine is None:
-                    first = next(iterator)
-                    affine = first._affine_matrix
-                    regions.add(first)
-                for region in iterator:
-                        regions.add(region)
-
-        result = frozenset([region_union(regions, affine)])
-        if store_symbol_name is not None:
-            self.symbol_table[nl.Symbol[self.type](store_symbol_name)] = nl.Constant[typing.AbstractSet[Region]](result)
-        return result
