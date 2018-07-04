@@ -6,7 +6,6 @@ import typing
 import operator
 import os
 import re
-import numpy as np
 from neurosynth import Dataset, meta
 from . import neurolang as nl
 

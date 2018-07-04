@@ -1,6 +1,5 @@
 from ..regions import region_union
-from .. import neurolang as nl
-from typing import AbstractSet, Callable
+from typing import AbstractSet
 
 __all__ = ['symbol_names_of_region_set', 'region_from_symbol_name']
 

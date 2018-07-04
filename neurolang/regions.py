@@ -223,9 +223,9 @@ class ImplicitVBR(VolumetricBrainRegion):
     def to_xyz(self, affine):
         raise NotImplementedError()
 
-    def to_explicit_vbr(self, affine):
+    def to_explicit_vbr(self, affine, image_shape):
         voxels_coordinates = self.to_ijk(affine)
-        return ExplicitVBR(voxels_coordinates, affine)
+        return ExplicitVBR(voxels_coordinates, affine, image_shape)
 
 
 class SphericalVolume(ImplicitVBR):
