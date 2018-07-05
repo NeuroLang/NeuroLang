@@ -402,8 +402,8 @@ def test_composition_identity():
     id2 = relations_composition(AbstractSet[Region], solver, 'converse superior_of', 'universal')
     assert id1 == id2
 
-def do_composition_of_relations_from_region(set_type, solver, elem, relation1, relation2):
 
+def do_composition_of_relations_from_region(set_type, solver, elem, relation1, relation2):
     bs = do_query_of_relation(set_type, solver, elem, relation2)
     if bs.value == frozenset():
         return bs.value
@@ -496,27 +496,6 @@ def test_paper_composition_ex():
     solver.symbol_table[nl.Symbol[set_type]('a')] = nl.Constant[set_type](frozenset([a]))
     res = do_composition_of_relations_from_region(set_type, solver, 'a', 'superior_of', 'superior_of')
     assert res == frozenset([c])
-
-
-def test_planar_regions_from_query():
-    solver = RegionsSetSolver(TypedSymbolTable())
-    center = (1, 5, 6)
-    vector = (1, 0, 0)
-    solver.symbol_table[nl.Symbol[dict]('plane')] = nl.Constant[dict]({'origin': center, 'vector': vector})
-
-    p1 = nl.Predicate[dict](
-        nl.Symbol[Callable[[dict], AbstractSet[Region]]]('superior_from_plane'),
-        (nl.Symbol[dict]('plane'),)
-    )
-
-    query_a = nl.Query[AbstractSet[Region]](nl.Symbol[dict]('a'), p1)
-    solver.walk(query_a)
-
-    obtained = do_query_of_relation(dict, solver, 'plane', 'superior_from_plane').value
-    assert obtained == frozenset([PlanarVolume(center, vector)])
-
-    obtained = do_query_of_relation(dict, solver, 'plane', 'inferior_from_plane').value
-    assert obtained == frozenset([PlanarVolume(center, vector, direction=-1)])
 
 
 def test_term_defined_regions_creation():

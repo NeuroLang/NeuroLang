@@ -235,7 +235,7 @@ def test_spherical_volumetric_region():
     coordinate = nib.affines.apply_affine(affine, np.array(rand_voxel))
     assert np.linalg.norm(np.array(coordinate) - np.array(center)) <= radius
 
-    explicit_sr = sr.to_explicit_vbr(affine)
+    explicit_sr = sr.to_explicit_vbr(affine, None)
     assert np.all(np.array([np.linalg.norm(np.array(tuple([x, y, z])) - np.array(center)) for [x, y, z] in explicit_sr.to_xyz()]) <= 15)
 
 
@@ -350,4 +350,3 @@ def test_intersection_difference():
     union = region_union([sphere, other_sphere], affine)
     intersect2 = region_difference([union, d1, d2], affine)
     assert intersect.bounding_box == intersect2.bounding_box
-
