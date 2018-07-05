@@ -14,7 +14,10 @@ __all__ = [
 ]
 
 
-def region_union(region_set, affine):
+def region_union(region_set, affine=None):
+    if len(region_set) > 0 and affine is None:
+        affine = next(iter(region_set))._affine_matrix
+
     voxels_per_regions = [set(map(tuple, region.to_ijk(affine))) for region in region_set] # first convert to array of tuples
     result_voxels = set.union(*voxels_per_regions)
     dim = max([region._image_dim for region in region_set]) if all(
@@ -22,7 +25,10 @@ def region_union(region_set, affine):
     return ExplicitVBR(np.array(list(result_voxels), dtype=list), affine, dim)  # then convert back to 2d array, FIX!
 
 
-def region_intersection(region_set, affine):
+def region_intersection(region_set, affine=None):
+    if len(region_set) > 0 and affine is None:
+        affine = next(iter(region_set))._affine_matrix
+
     voxels_per_regions = [set(map(tuple, region.to_ijk(affine))) for region in region_set]  # first convert to array of tuples
     result_voxels = set.intersection(*voxels_per_regions)
     if len(result_voxels) == 0:
@@ -32,7 +38,10 @@ def region_intersection(region_set, affine):
     return ExplicitVBR(np.array(list(result_voxels), dtype=list), affine, dim)
 
 
-def region_difference(region_set, affine):
+def region_difference(region_set, affine=None):
+    if len(region_set) > 0 and affine is None:
+        affine = next(iter(region_set))._affine_matrix
+
     voxels_per_regions = [set(map(tuple, region.to_ijk(affine))) for region in region_set]
     result_voxels = set.difference(*voxels_per_regions)
     if len(result_voxels) == 0:

@@ -41,19 +41,12 @@ class RegionsSetSolver(SetBasedSolver):
 
         self.symbol_table[nl.Symbol[pred_type]('universal')] = nl.Constant[pred_type](self.symbols_of_type())
 
-        dict_to_region_set = typing.Callable[[typing.DefaultDict, ], typing.AbstractSet[Region]]
-        for key, value in {'superior_from_plane': 1, 'inferior_from_plane': -1}.items():
-            setattr(self, key, self._region_from_plane(value))
-            self.symbol_table[
-                nl.Symbol[dict_to_region_set](key)
-            ] = nl.Constant[dict_to_region_set](self.__getattribute__(key))
+        str_to_region_set_type = typing.Callable[[typing.Text, ], typing.AbstractSet[Region]]
 
-        str_to_region_set = typing.Callable[[typing.Text, ], typing.AbstractSet[Region]]
-
-        self.symbol_table[nl.Symbol[str_to_region_set]('neurosynth_term')] = nl.Constant[str_to_region_set](
+        self.symbol_table[nl.Symbol[str_to_region_set_type]('neurosynth_term')] = nl.Constant[str_to_region_set_type](
             self._neurosynth_term_rois())
 
-        self.symbol_table[nl.Symbol[str_to_region_set]('regexp')] = nl.Constant[str_to_region_set](
+        self.symbol_table[nl.Symbol[str_to_region_set_type]('regexp')] = nl.Constant[str_to_region_set_type](
             self._region_set_from_regexp())
 
     def _define_dir_based_fun(self, direction) -> typing.AbstractSet[Region]:
@@ -101,9 +94,7 @@ class RegionsSetSolver(SetBasedSolver):
             masked_data = dataset.masker.unmask(data)
             regions_set = frozenset(region_set_from_masked_data(masked_data, affine))
 
-            self.symbol_table[nl.Symbol[self.type](elem.upper())] = \
-                nl.Constant[typing.AbstractSet[self.type]](regions_set)
-            return self.walk(regions_set)
+            return regions_set
         return f
 
     def _region_set_from_regexp(self) -> typing.AbstractSet[Region]:
@@ -121,23 +112,25 @@ class RegionsSetSolver(SetBasedSolver):
                         regions.add(region)
 
             result = frozenset([region_union(regions, affine)]) if match else frozenset([])
-            return self.walk(result)
+            return result
         return f
 
     def direction(self, direction, reference_regions: typing.AbstractSet[Region], refinement_resolution=None) -> typing.AbstractSet[Region]:
         result, visited = set(), set()
         for symbol_in_table in self.symbol_table.symbols_by_type(typing.AbstractSet[self.type]).values():
-            regions_set = symbol_in_table.value - reference_regions
-            if not regions_set.issubset(visited):
-                visited.update(regions_set)
-                for region in regions_set:
-                    for ref in reference_regions:
-                        if not cardinal_relation(region, ref, direction, refine_overlapping=True, stop_at=refinement_resolution):
-                            break
-                    else:
-                        result.update((region,))
+            resolved_symbol = self.walk(symbol_in_table)
+            if isinstance(resolved_symbol, nl.Constant):
+                regions_set = resolved_symbol.value - reference_regions
+                if not regions_set.issubset(visited):
+                    visited.update(regions_set)
+                    for region in regions_set:
+                        for ref in reference_regions:
+                            if not cardinal_relation(region, ref, direction, refine_overlapping=True, stop_at=refinement_resolution):
+                                break
+                        else:
+                            result.update((region,))
 
-        return self.walk(frozenset(result))
+        return frozenset(result)
 
     # add a match for the predicate "singleton" with a region as parameter
     # that will produce a set with just that region as a result

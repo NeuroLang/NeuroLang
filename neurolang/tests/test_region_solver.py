@@ -9,17 +9,17 @@ import numpy as np
 from numpy import random
 
 
-def do_query_of_relation(set_type, solver, elem, relation):
+def do_query_of_relation(set_type, solver, elem, relation, output_symbol_name='p'):
 
     predicate = nl.Predicate[set_type](
             nl.Symbol[Callable[[set_type], set_type]](relation),
             (nl.Symbol[set_type](elem),)
         )
 
-    query = nl.Query[set_type](nl.Symbol[set_type]('p'), predicate)
+    query = nl.Query[set_type](nl.Symbol[set_type](output_symbol_name), predicate)
     solver.walk(query)
 
-    return solver.symbol_table['p']
+    return solver.symbol_table[output_symbol_name]
 
 
 def get_singleton_element_from_frozenset(fs):
@@ -532,7 +532,7 @@ def test_term_defined_relative_position():
     region_set_type = AbstractSet[Region]
     solver = RegionsSetSolver(TypedSymbolTable())
     solver.symbol_table[nl.Symbol[str]('term')] = nl.Constant[str]('temporal lobe')
-    do_query_of_relation(str, solver, 'term', 'neurosynth_term')
+    do_query_of_relation(str, solver, 'term', 'neurosynth_term', output_symbol_name='TEMPORAL LOBE')
 
     superior_relation = 'anterior_of'
     predicate = nl.Predicate[region_set_type](
@@ -556,7 +556,7 @@ def test_term_defined_solve_overlapping():
     solver = RegionsSetSolver(TypedSymbolTable())
 
     solver.symbol_table[nl.Symbol[str]('term')] = nl.Constant[str]('gambling')
-    do_query_of_relation(str, solver, 'term', 'neurosynth_term')
+    do_query_of_relation(str, solver, 'term', 'neurosynth_term', output_symbol_name='GAMBLING')
 
     superior_relation = 'overlapping'
     predicate = nl.Predicate[region_set_type](
