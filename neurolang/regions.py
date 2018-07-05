@@ -196,7 +196,7 @@ class ExplicitVBR(VolumetricBrainRegion):
         return out
 
     def __eq__(self, other) -> bool:
-        return self._affine_matrix == other._affine_matrix and np.all(self._voxels == other._voxels)
+        return np.all(self._affine_matrix == other._affine_matrix) and np.all(self._voxels == other._voxels)
 
     def __repr__(self):
         return 'Region(VBR= affine:{}, voxels:{})'.format(self._affine_matrix, self._voxels)
@@ -205,13 +205,13 @@ class ExplicitVBR(VolumetricBrainRegion):
         return hash(self._voxels.tobytes() + self._affine_matrix.tobytes())
 
 
-def region_set_from_masked_data(data, affine):
+def region_set_from_masked_data(data, affine, dim):
     s = generate_binary_structure(3, 2)
     labeled_array, num_features = label(data, structure=s)
     regions = set()
     for i in range(1, num_features):
         region_voxels = list(zip(*np.where(labeled_array == i)))
-        regions.add(ExplicitVBR(region_voxels, affine))
+        regions.add(ExplicitVBR(region_voxels, affine, dim))
 
     return set(regions)
 

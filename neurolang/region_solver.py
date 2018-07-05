@@ -91,8 +91,9 @@ class RegionsSetSolver(SetBasedSolver):
             ma = meta.MetaAnalysis(dataset, studies_ids, q=0.01, prior=0.5)
             data = ma.images['pAgF_z_FDR_0.01']
             affine = dataset.masker.get_header().get_sform()
+            dim = dataset.masker.dims
             masked_data = dataset.masker.unmask(data)
-            regions_set = frozenset(region_set_from_masked_data(masked_data, affine))
+            regions_set = frozenset(region_set_from_masked_data(masked_data, affine, dim))
 
             return regions_set
         return f
