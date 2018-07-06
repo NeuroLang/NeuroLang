@@ -52,6 +52,11 @@ def replace_type_variable(type_, type_hint, type_var=None):
                 replace_type_variable(type_, arg, type_var=type_var)
             )
         return type_hint.__origin__[tuple(new_args)]
+    elif isinstance(type_hint, typing.Iterable):
+        return [
+            replace_type_variable(type_, arg, type_var=type_var)
+            for arg in type_hint
+        ]
     else:
         return type_hint
 

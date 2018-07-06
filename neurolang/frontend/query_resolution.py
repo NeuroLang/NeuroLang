@@ -1,5 +1,6 @@
 from .. import neurolang as nl
-from ..symbols_and_types import is_subtype, Symbol, Constant
+from ..solver import T
+from ..symbols_and_types import is_subtype, Symbol, Constant, replace_type_variable
 from typing import AbstractSet, Callable, Container
 from uuid import uuid1
 import operator as op
@@ -158,16 +159,14 @@ class QueryBuilderSymbol(QueryBuilderExpression):
             if is_subtype(symbol.type, AbstractSet):
                 contained = []
                 all_symbols = self.query_builder.solver.symbol_table.symbols_by_type(
-                    symbol.type
+                    symbol.type.__args__[0]
                 )
                 for s in symbol.value:
                     for k, v in all_symbols.items():
-                        if len(v.value) == 1 and s in v.value:
+                        if isinstance(v, Constant) and s is v.value:
                             contained.append(k.name)
-                if len(contained) == 1 and contained[0] == self.symbol_name:
-                    return (f'{self.symbol_name}: {symbol.type} = {symbol.value}')
-                else:
-                    return (f'{self.symbol_name}: {symbol.type} = {contained}')
+                            break
+                return (f'{self.symbol_name}: {symbol.type} = {contained}')
             else:
                 return (f'{self.symbol_name}: {symbol.type} = {symbol.value}')
         else:
@@ -211,9 +210,19 @@ class QueryBuilder:
         return [
             s.name for s in
             self.solver.symbol_table.symbols_by_type(
+                self.type
+            )
+        ]
+
+    @property
+    def region_set_names(self):
+        return [
+            s.name for s in
+            self.solver.symbol_table.symbols_by_type(
                 self.set_type
             )
         ]
+
 
     @property
     def functions(self):
@@ -337,9 +346,14 @@ class QueryBuilder:
 class QuerySymbolsProxy:
     def __init__(self, query_builder):
         self._query_builder = query_builder
+        for k, v in self._query_builder.solver.included_predicates.items():
+            self._query_builder.solver.symbol_table[Symbol[v.type](k)] = v
 
     def __getattr__(self, attr):
-        return self._query_builder.get_symbol(attr)
+        try:
+            return self._query_builder.get_symbol(attr)
+        except ValueError as e:
+            raise AttributeError()
 
     def __getitem__(self, attr):
         return self._query_builder.get_symbol(attr)
@@ -360,3 +374,12 @@ class QuerySymbolsProxy:
             for symbol in self._query_builder.solver.symbol_table
         ]
         return init
+
+    def __repr__(self):
+        init = [
+            symbol.name
+            for symbol in self._query_builder.solver.symbol_table
+        ]
+
+        return f'QuerySymbolsProxy with symbols {init}'
+

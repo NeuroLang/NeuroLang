@@ -74,6 +74,22 @@ class GenericSolver(ExpressionBasicEvaluator):
 
         return self.walk(functor(expression.args[0]))
 
+    @property
+    def included_predicates(self):
+        predicate_constants = dict()
+        for predicate in dir(self):
+            if predicate.startswith('predicate_'):
+                c = Constant(getattr(self, predicate))
+                new_type = replace_type_variable(
+                    self.type,
+                    c.type,
+                    type_var=T
+                )
+                c = c.cast(new_type)
+                predicate_constants[predicate[len('predicate_'):]] = c
+        return predicate_constants
+
+
 class SetBasedSolver(GenericSolver):
     '''
     A predicate `in <set>` which results in the `<set>` given as parameter
