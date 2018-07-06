@@ -10,8 +10,8 @@ def test_add_regions_and_query():
     superior = Region((0, 0, 4), (1, 1, 5))
 
     neurolang.add_region_set([inferior, superior])
-    central = neurolang.add_region(central, result_symbol_name='CENTRAL')
-    central_predicate = neurolang.define_predicate('superior_of', central)
+    neurolang.add_region(central, result_symbol_name='CENTRAL')
+    central_predicate = neurolang.define_predicate('superior_of', 'CENTRAL')
     result = neurolang.solve_query(central_predicate)
     assert result.value == frozenset([superior])
 

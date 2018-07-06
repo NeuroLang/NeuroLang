@@ -312,19 +312,20 @@ class QueryBuilder:
             result_symbol_name = str(uuid1())
 
         symbol = nl.Symbol[self.set_type](result_symbol_name)
-        self.solver.symbol_table[symbol] = nl.Constant[self.set_type](frozenset((region,)))
+        self.solver.symbol_table[symbol] = nl.Constant[self.type](region)
 
         return QueryBuilderSymbol(self, result_symbol_name)
 
-    def add_region_set(self, region, result_symbol_name=None):
-        if not isinstance(region, Container):
+    def add_region_set(self, region_set, result_symbol_name=None):
+        if not isinstance(region_set, Container):
             raise ValueError(f"region must be instance of {self.set_type}")
 
-        if result_symbol_name is None:
-            result_symbol_name = str(uuid1())
+        for region in region_set:
+            if result_symbol_name is None:
+                result_symbol_name = str(uuid1())
 
-        symbol = nl.Symbol[self.set_type](result_symbol_name)
-        self.solver.symbol_table[symbol] = nl.Constant[self.set_type](frozenset(region))
+            symbol = nl.Symbol[self.set_type](result_symbol_name)
+            self.solver.symbol_table[symbol] = nl.Constant[self.type](region)
 
         return QueryBuilderSymbol(self, result_symbol_name)
 

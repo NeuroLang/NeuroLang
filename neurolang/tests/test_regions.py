@@ -170,28 +170,28 @@ def test_explicit_region():
     voxels = [(randint(), randint(), randint()) for _ in range(50)]
     affine = np.eye(4)
     vbr = ExplicitVBR(voxels, affine)
-    assert np.array_equal(vbr.to_ijk(affine), vbr._voxels)
+    assert np.array_equal(vbr.to_ijk(affine), vbr.voxels)
     assert vbr.aabb_tree is not None
     assert np.all(vbr.bounding_box.lb >= 0)
     assert np.all(vbr.bounding_box.lb <= 1000)
 
     affine = np.eye(4)
     brain_stem = ExplicitVBR(voxels, affine)
-    assert np.array_equal(brain_stem._voxels, brain_stem.to_ijk(affine))
+    assert np.array_equal(brain_stem.voxels, brain_stem.to_ijk(affine))
 
     affine = np.eye(4) * 2
     affine[-1] = 1
     brain_stem = ExplicitVBR(voxels, affine)
-    assert np.array_equal(brain_stem._voxels, brain_stem.to_ijk(affine))
+    assert np.array_equal(brain_stem.voxels, brain_stem.to_ijk(affine))
 
     affine = np.eye(4)
     affine[:, -1] = np.array([1, 1, 1, 1])
     brain_stem = ExplicitVBR(voxels, affine)
-    assert np.array_equal(brain_stem._voxels, brain_stem.to_ijk(affine))
+    assert np.array_equal(brain_stem.voxels, brain_stem.to_ijk(affine))
 
     affine = np.array([[-0.69999999, 0., 0., 90.], [0., 0.69999999, 0., -126.], [0., 0., 0.69999999, -72.], [0., 0., 0., 1.]]).round(2)
     brain_stem = ExplicitVBR(voxels, affine)
-    assert np.array_equal(brain_stem._voxels, brain_stem.to_ijk(affine))
+    assert np.array_equal(brain_stem.voxels, brain_stem.to_ijk(affine))
 
 
 def test_build_tree_one_voxel_regions():

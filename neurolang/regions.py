@@ -16,38 +16,38 @@ __all__ = [
 
 def region_union(region_set, affine=None):
     if len(region_set) > 0 and affine is None:
-        affine = next(iter(region_set))._affine_matrix
+        affine = next(iter(region_set)).affine
 
     voxels_per_regions = [set(map(tuple, region.to_ijk(affine))) for region in region_set] # first convert to array of tuples
     result_voxels = set.union(*voxels_per_regions)
-    dim = max([region._image_dim for region in region_set]) if all(
-        isinstance(x, ExplicitVBR) and x._image_dim is not None for x in region_set) else None #to improve
+    dim = max([region.image_dim for region in region_set]) if all(
+        isinstance(x, ExplicitVBR) and x.image_dim is not None for x in region_set) else None #to improve
     return ExplicitVBR(np.array(list(result_voxels), dtype=list), affine, dim)  # then convert back to 2d array, FIX!
 
 
 def region_intersection(region_set, affine=None):
     if len(region_set) > 0 and affine is None:
-        affine = next(iter(region_set))._affine_matrix
+        affine = next(iter(region_set)).affine
 
     voxels_per_regions = [set(map(tuple, region.to_ijk(affine))) for region in region_set]  # first convert to array of tuples
     result_voxels = set.intersection(*voxels_per_regions)
     if len(result_voxels) == 0:
         return None
-    dim = max([region._image_dim for region in region_set]) if all(
-            isinstance(x, ExplicitVBR) and x._image_dim is not None for x in region_set) else None
+    dim = max([region.image_dim for region in region_set]) if all(
+            isinstance(x, ExplicitVBR) and x.image_dim is not None for x in region_set) else None
     return ExplicitVBR(np.array(list(result_voxels), dtype=list), affine, dim)
 
 
 def region_difference(region_set, affine=None):
     if len(region_set) > 0 and affine is None:
-        affine = next(iter(region_set))._affine_matrix
+        affine = next(iter(region_set)).affine
 
     voxels_per_regions = [set(map(tuple, region.to_ijk(affine))) for region in region_set]
     result_voxels = set.difference(*voxels_per_regions)
     if len(result_voxels) == 0:
         return None
-    dim = max([region._image_dim for region in region_set]) if all(
-        isinstance(x, ExplicitVBR) and x._image_dim is not None for x in region_set) else None
+    dim = max([region.image_dim for region in region_set]) if all(
+        isinstance(x, ExplicitVBR) and x.image_dim is not None for x in region_set) else None
     return ExplicitVBR(np.array(list(result_voxels), dtype=list), affine, dim)
 #code repetition, could be abstracted to one method (region, aff, set_op)
 
@@ -109,9 +109,9 @@ class VolumetricBrainRegion(Region):
 class ExplicitVBR(VolumetricBrainRegion):
 
     def __init__(self, voxels, affine_matrix, img_dim=None):
-        self._voxels = np.asanyarray(voxels, dtype=int)
-        self._affine_matrix = affine_matrix
-        self._image_dim = img_dim
+        self.voxels = np.asanyarray(voxels, dtype=int)
+        self.affine = affine_matrix
+        self.image_dim = img_dim
         self._aabb_tree = None
 
     @property
@@ -125,23 +125,23 @@ class ExplicitVBR(VolumetricBrainRegion):
         return self._aabb_tree
 
     def generate_bounding_box(self, voxels_ijk):
-        voxels_xyz = nib.affines.apply_affine(self._affine_matrix, voxels_ijk)
-        voxels_xyz_u = nib.affines.apply_affine(self._affine_matrix, voxels_ijk + 1)
+        voxels_xyz = nib.affines.apply_affine(self.affine, voxels_ijk)
+        voxels_xyz_u = nib.affines.apply_affine(self.affine, voxels_ijk + 1)
         voxels_xyz = np.concatenate((voxels_xyz, voxels_xyz_u), axis=0)
         return aabb_from_vertices(voxels_xyz)
 
     def build_tree(self):
-        box = self.generate_bounding_box(self._voxels)
+        box = self.generate_bounding_box(self.voxels)
 
         nodes = {}
-        nodes[0] = [box.lb, box.ub, self._voxels]
+        nodes[0] = [box.lb, box.ub, self.voxels]
         tree = Tree()
         tree.add(box)
         last_added = 0
         i = 1
 
         make_tree = True
-        affine_matrix_inv = np.linalg.inv(self._affine_matrix)
+        affine_matrix_inv = np.linalg.inv(self.affine)
         middle = np.zeros(box.dim)
 
         while make_tree:
@@ -176,33 +176,33 @@ class ExplicitVBR(VolumetricBrainRegion):
         return tree
 
     def to_xyz(self):
-        return nib.affines.apply_affine(self._affine_matrix, self._voxels)
+        return nib.affines.apply_affine(self.affine, self.voxels)
 
     def to_ijk(self, affine):
         return nib.affines.apply_affine(
-            np.linalg.solve(affine, self._affine_matrix),
-            self._voxels)
+            np.linalg.solve(affine, self.affine),
+            self.voxels)
 
     def spatial_image(self, out=None, value=1):
         if out is None:
-            mask = np.zeros(self._image_dim, dtype=np.int16)
-            out = nib.spatialimages.SpatialImage(mask, self._affine_matrix)
-        elif out.shape != self._image_dim and not np.allclose(out.affine, self._affine_matrix):
+            mask = np.zeros(self.image_dim, dtype=np.int16)
+            out = nib.spatialimages.SpatialImage(mask, self.affine)
+        elif out.shape != self.image_dim and not np.allclose(out.affine, self.affine):
             raise ValueError("...")
         else:
             mask = out.get_data()
 
-        mask[tuple(self._voxels.T)] = value
+        mask[tuple(self.voxels.T)] = value
         return out
 
     def __eq__(self, other) -> bool:
-        return np.all(self._affine_matrix == other._affine_matrix) and np.all(self._voxels == other._voxels)
+        return np.all(self.affine == other.affine) and np.all(self.voxels == other.voxels)
 
     def __repr__(self):
-        return 'Region(VBR= affine:{}, voxels:{})'.format(self._affine_matrix, self._voxels)
+        return 'Region(VBR= affine:{}, voxels:{})'.format(self.affine, self.voxels)
 
     def __hash__(self):
-        return hash(self._voxels.tobytes() + self._affine_matrix.tobytes())
+        return hash(self.voxels.tobytes() + self.affine.tobytes())
 
 
 def region_set_from_masked_data(data, affine, dim):
@@ -217,7 +217,7 @@ def region_set_from_masked_data(data, affine, dim):
 
 
 def take_principal_regions(region_set, k):
-    sorted_by_size = sorted(list(region_set), key=lambda x: len(x._voxels), reverse=True)
+    sorted_by_size = sorted(list(region_set), key=lambda x: len(x.voxels), reverse=True)
     return set(sorted_by_size[:k])
 
 
