@@ -27,17 +27,27 @@ class NeuroLangTypeException(NeuroLangException):
 def typing_callable_from_annotated_function(function):
     signature = inspect.signature(function)
     parameter_types = [
-        v.annotation for v in signature.parameters.values()
+        v.annotation if v.annotation != inspect._empty
+        else ToBeInferred
+        for v in signature.parameters.values()
     ]
+
+    if signature.return_annotation == inspect._empty:
+        return_annotation = ToBeInferred
+    else:
+        return_annotation = signature.return_annotation
     return typing.Callable[
         parameter_types,
-        signature.return_annotation
+        return_annotation
     ]
 
 
 def get_type_args(type_):
     if hasattr(type_, '__args__') and type_.__args__ is not None:
-        return type_.__args__
+        if is_subtype(type_, typing.Callable):
+            return list((list(type_.__args__[:-1]), type_.__args__[-1]))
+        else:
+            return type_.__args__
     else:
         return tuple()
 
