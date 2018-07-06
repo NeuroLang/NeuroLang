@@ -413,6 +413,18 @@ class Constant(Expression):
                     a.type
                     for a in self.value
                 )]
+            if isinstance(self.value, frozenset):
+                current_type = None
+                for a in self.value:
+                    if isinstance(a, Expression):
+                        new_type = a.type
+                    else:
+                        new_type = type(a)
+                    if current_type is None:
+                        current_type = new_type
+                    else:
+                        current_type = unify_types(current_type, new_type)
+                self.type = typing.AbstractSet[current_type]
             else:
                 self.type = type(value)
 
