@@ -413,7 +413,7 @@ class Constant(Expression):
                     a.type
                     for a in self.value
                 )]
-            if isinstance(self.value, frozenset):
+            elif isinstance(self.value, frozenset):
                 current_type = None
                 for a in self.value:
                     if isinstance(a, Expression):
