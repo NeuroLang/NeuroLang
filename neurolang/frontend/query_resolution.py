@@ -2,11 +2,150 @@ from .. import neurolang as nl
 from ..symbols_and_types import is_subtype, Symbol, Constant
 from typing import AbstractSet, Callable, Container
 from uuid import uuid1
+import operator as op
+from functools import wraps
 
 __all__ = ['QueryBuilder']
 
 
-class QueryBuilderSymbol:
+class QueryBuilderExpression:
+    def __init__(self, query_builder, expression):
+        self.query_builder = query_builder
+        self.expression = expression
+
+    def do(self, result_symbol_name=None):
+        return self.query_builder.execute_expression(
+            self.expression,
+            result_symbol_name=result_symbol_name
+        )
+
+    def __call__(self, *args, **kwargs):
+        new_args = [
+            a.expression if isinstance(a, QueryBuilderExpression)
+            else Constant(a)
+            for a in args
+        ]
+
+        new_kwargs = {
+            k: (
+                v.expression if isinstance(v, QueryBuilderExpression)
+                else Constant(v)
+            )
+            for k, v in kwargs.items()
+        }
+        new_expression = self.expression(*new_args, **new_kwargs)
+        return QueryBuilderOperation(
+                self.query_builder, new_expression, self, args)
+
+    def __repr__(self):
+        if isinstance(self.expression, Constant):
+            return repr(self.expression.value)
+        else:
+            return object.__repr__(self)
+
+
+
+binary_opeations = (
+    op.add, op.sub, op.mul
+)
+
+def op_bind(op):
+    @wraps(op)
+    def f(self, *args):
+        new_args = [
+            arg.expression if isinstance(arg, QueryBuilderExpression)
+            else Constant(arg)
+            for arg in args
+        ]
+        new_expression = op(self.expression, *new_args)
+        return QueryBuilderOperation(
+            self.query_builder, new_expression, op,
+            (self,) + args, infix=len(args) > 0
+        )
+
+    return f
+
+
+def rop_bind(op):
+    @wraps(op)
+    def f(self, value):
+        original_value = value
+        if isinstance(value, QueryBuilderExpression):
+            value = value.expression
+        else:
+            value = Constant(value)
+
+        return QueryBuilderOperation(
+            self.query_builder, op(self.expression, value), 
+            op, (self, original_value), infix=True
+        )
+
+    return f
+
+
+for operator_name in dir(op):
+    operator = getattr(op, operator_name)
+    if operator_name.startswith('_'):
+        continue
+
+    name = f'__{operator_name}__'
+    if name.endswith('___'):
+        name = name[:-1]
+
+    if not hasattr(QueryBuilderExpression, name):
+        setattr(QueryBuilderExpression, name, op_bind(operator))
+
+
+for operator in [
+    op.add, op.sub, op.mul, op.matmul, op.truediv, op.floordiv,
+    op.mod,  # op.divmod,
+    op.pow, op.lshift, op.rshift, op.and_, op.xor,
+    op.or_
+]:
+    name = f'__r{operator.__name__}__'
+    if name.endswith('___'):
+        name = name[:-1]
+
+    setattr(QueryBuilderExpression, name, rop_bind(operator))
+
+
+class QueryBuilderOperation(QueryBuilderExpression):
+    def __init__(self, query_builder, expression, operator, arguments, infix=False):
+        self.query_builder = query_builder
+        self.expression = expression
+        self.operator = operator
+        self.arguments = arguments
+        self.infix = infix
+
+    def __repr__(self):
+        if isinstance(self.operator, QueryBuilderSymbol):
+            op_repr = self.operator.symbol_name
+        elif isinstance(self.operator, QueryBuilderOperation):
+            op_repr = '({})'.format(repr(self.operator))
+        else:
+            op_repr = repr(self.operator)
+
+        arguments_repr = []
+        for a in self.arguments:
+            if isinstance(a, QueryBuilderOperation):
+                arguments_repr.append(
+                    '( {} )'.format(repr(a))
+                )
+            elif isinstance(a, QueryBuilderSymbol):
+                arguments_repr.append(a.symbol_name)
+            else:
+                arguments_repr.append(repr(a))
+
+        if self.infix:
+            return ' {} '.format(op_repr).join(arguments_repr)
+        else:
+            return '{}({})'.format(
+                op_repr,
+                ', '.join(arguments_repr)
+            )
+
+
+class QueryBuilderSymbol(QueryBuilderExpression):
     def __init__(self, query_builder, symbol_name):
         self.symbol_name = symbol_name
         self.query_builder = query_builder
@@ -39,6 +178,10 @@ class QueryBuilderSymbol:
         return self.query_builder.solver.symbol_table[self.symbol_name]
 
     @property
+    def expression(self):
+        return self.symbol
+
+    @property
     def value(self):
         if isinstance(self.symbol, Constant):
             return self.symbol.value
@@ -56,6 +199,12 @@ class QueryBuilder:
         if symbol_name not in self.solver.symbol_table:
             raise ValueError('')
         return QueryBuilderSymbol(self, symbol_name)
+
+    def __getitem__(self, symbol_name):
+        return self.get_symbol(symbol_name)
+
+    def __contains__(self, symbol):
+        return symbol in self.solver.symbol_table
 
     @property
     def region_names(self):
@@ -108,8 +257,8 @@ class QueryBuilder:
 
     def solve_query(self, query, result_symbol_name=None):
 
-        if isinstance(query, QueryBuilderSymbol):
-            query = query.symbol
+        if isinstance(query, QueryBuilderExpression):
+            query = query.expression
 
         if not isinstance(query, nl.Query):
             if result_symbol_name is None:
@@ -141,6 +290,20 @@ class QueryBuilder:
 
         return QueryBuilderSymbol(self, result_symbol_name)
 
+    def add_symbol(self, value, result_symbol_name=None):
+        if result_symbol_name is None:
+            result_symbol_name = str(uuid1())
+
+        if isinstance(value, QueryBuilderExpression):
+            value = value.expression
+        else:
+            value = nl.Constant(value)
+
+        symbol = nl.Symbol[self.set_type](result_symbol_name)
+        self.solver.symbol_table[symbol] = value
+
+        return QueryBuilderSymbol(self, result_symbol_name)
+
     def add_region(self, region, result_symbol_name=None):
         if not isinstance(region, self.type):
             raise ValueError(f"region must be instance of {self.type}")
@@ -164,3 +327,35 @@ class QueryBuilder:
         self.solver.symbol_table[symbol] = nl.Constant[self.set_type](frozenset(region))
 
         return QueryBuilderSymbol(self, result_symbol_name)
+
+    @property
+    def symbols(self):
+        return QuerySymbolsProxy(self)
+
+
+class QuerySymbolsProxy:
+    def __init__(self, query_builder):
+        self._query_builder = query_builder
+
+    def __getattr__(self, attr):
+        return self._query_builder.get_symbol(attr)
+
+    def __getitem__(self, attr):
+        return self._query_builder.get_symbol(attr)
+
+    def __setitem__(self, key, value):
+        return self._query_builder.add_symbol(value, result_symbol_name=key)
+
+    def __contains__(self, symbol):
+        return symbol in self._query_builder.solver.symbol_table
+
+    def __len__(self):
+        return len(self._query_builder.solver.symbol_table)
+
+    def __dir__(self):
+        init = object.__dir__(self)
+        init += [
+            symbol.name
+            for symbol in self._query_builder.solver.symbol_table
+        ]
+        return init
