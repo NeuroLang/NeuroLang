@@ -153,6 +153,8 @@ def type_validation_value(value, type_, symbol_table=None):
         isinstance(value, Symbol)
     ):
         value = symbol_table[value].value
+    else:
+        return is_subtype(value.type, type_)
 
     if isinstance(value, Expression):
         value_type, value = get_type_and_value(value)
