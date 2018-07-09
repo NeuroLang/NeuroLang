@@ -217,6 +217,9 @@ class QueryBuilder:
         self.set_type = AbstractSet[self.solver.type]
         self.type = self.solver.type
 
+        for k, v in self.solver.included_predicates.items():
+            self.solver.symbol_table[Symbol[v.type](k)] = v
+
     def get_symbol(self, symbol_name):
         if symbol_name not in self.solver.symbol_table:
             raise ValueError('')
@@ -397,8 +400,6 @@ class QueryBuilder:
 class QuerySymbolsProxy:
     def __init__(self, query_builder):
         self._query_builder = query_builder
-        for k, v in self._query_builder.solver.included_predicates.items():
-            self._query_builder.solver.symbol_table[Symbol[v.type](k)] = v
 
     def __getattr__(self, attr):
         try:
