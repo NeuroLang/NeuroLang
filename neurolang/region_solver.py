@@ -1,13 +1,15 @@
-from .CD_relations import cardinal_relation, inverse_directions
-from .regions import *
-from .solver import SetBasedSolver
-from .utils.data_manipulation import *
 import typing
 import operator
 import os
 import re
+
 from neurosynth import Dataset, meta
+
 from . import neurolang as nl
+from .CD_relations import cardinal_relation, inverse_directions
+from .regions import *
+from .solver import SetBasedSolver
+from .utils.data_manipulation import *
 
 
 __all__ = ['RegionsSetSolver']
@@ -22,7 +24,7 @@ class RegionsSetSolver(SetBasedSolver):
         super().__init__(*args, **kwargs)
         pred_type = typing.Callable[[self.type, ], self.set_type]
 
-        self.stop_refinement_at = overlap_iter if overlap_iter is not None else None
+        self.stop_refinement_at = overlap_iter
 
         for key, value in {'inferior_of': 'I', 'superior_of': 'S',
                            'posterior_of': 'P', 'anterior_of': 'A',
