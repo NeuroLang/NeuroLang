@@ -175,29 +175,11 @@ class DatalogSolver(GenericSolver):
         lambda expression: expression.functor.value in (or_, and_, xor)
     )
     def rewrite_and_or(self, expression):
-        f = expression.functor.value
-        a_type, a = get_type_and_value(expression.args[0])
-        b_type, b = get_type_and_value(expression.args[1])
-        e = Constant[a_type](
-            f(a, b)
-        )
-        return e
+        return expression.cast(bool)
 
     @add_match(FunctionApplication(Constant(invert), (Expression[bool],)))
     def rewrite_finite_domain_inversion(self, expression):
-        set_constant = expression.args[0]
-        set_type, set_value = get_type_and_value(set_constant)
-        result = FiniteDomainSet(
-            (
-                v.value for v in
-                self.symbol_table.symbols_by_type(
-                    set_type.__args__[0]
-                ).values()
-                if v not in set_value
-            ),
-            type_=set_type,
-        )
-        return self.walk(Constant[set_type](result))
+        return expression.cast(bool)
 
     @add_match(Query)
     def query_resolution(self, expression):
