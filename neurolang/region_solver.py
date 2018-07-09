@@ -24,7 +24,7 @@ class RegionsSetSolver(SetBasedSolver):
         super().__init__(*args, **kwargs)
         pred_type = typing.Callable[[self.type, ], self.set_type]
 
-        self.stop_refinement_at = overlap_iter if overlap_iter is not None else None
+        self.stop_refinement_at = overlap_iter
 
         for key, value in {'inferior_of': 'I', 'superior_of': 'S',
                            'posterior_of': 'P', 'anterior_of': 'A',
