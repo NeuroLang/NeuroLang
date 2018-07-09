@@ -1,6 +1,5 @@
 from .. import neurolang as nl
-from ..solver import T
-from ..symbols_and_types import is_subtype, Symbol, Constant, replace_type_variable
+from ..symbols_and_types import is_subtype, Symbol, Constant
 from typing import AbstractSet, Callable, Container
 from uuid import uuid1
 import operator as op
@@ -41,14 +40,16 @@ class QueryBuilderExpression:
     def __repr__(self):
         if isinstance(self.expression, Constant):
             return repr(self.expression.value)
+        elif isinstance(self.expression, Symbol):
+            return f'{self.expression.name}'
         else:
             return object.__repr__(self)
-
 
 
 binary_opeations = (
     op.add, op.sub, op.mul
 )
+
 
 def op_bind(op):
     @wraps(op)
@@ -77,7 +78,7 @@ def rop_bind(op):
             value = Constant(value)
 
         return QueryBuilderOperation(
-            self.query_builder, op(self.expression, value), 
+            self.query_builder, op(self.expression, value),
             op, (self, original_value), infix=True
         )
 
@@ -111,7 +112,10 @@ for operator in [
 
 
 class QueryBuilderOperation(QueryBuilderExpression):
-    def __init__(self, query_builder, expression, operator, arguments, infix=False):
+    def __init__(
+        self, query_builder, expression,
+        operator, arguments, infix=False
+    ):
         self.query_builder = query_builder
         self.expression = expression
         self.operator = operator
@@ -158,14 +162,19 @@ class QueryBuilderSymbol(QueryBuilderExpression):
         elif isinstance(symbol, Constant):
             if is_subtype(symbol.type, AbstractSet):
                 contained = []
-                all_symbols = self.query_builder.solver.symbol_table.symbols_by_type(
-                    symbol.type.__args__[0]
+                all_symbols = (
+                    self.query_builder.solver.symbol_table.symbols_by_type(
+                        symbol.type.__args__[0]
+                    )
                 )
                 for s in symbol.value:
-                    for k, v in all_symbols.items():
-                        if isinstance(v, Constant) and s is v.value:
-                            contained.append(k.name)
-                            break
+                    if isinstance(s, Constant):
+                        for k, v in all_symbols.items():
+                            if isinstance(v, Constant) and s is v.value:
+                                contained.append(k.name)
+                                break
+                    if isinstance(s, Symbol):
+                        contained.append(s.name)
                 return (f'{self.symbol_name}: {symbol.type} = {contained}')
             else:
                 return (f'{self.symbol_name}: {symbol.type} = {symbol.value}')
@@ -186,6 +195,20 @@ class QueryBuilderSymbol(QueryBuilderExpression):
             return self.symbol.value
         else:
             raise ValueError("This result type has no value")
+
+
+class QueryBuilderQuery(QueryBuilderExpression):
+    def __init__(self, query_builder, expression, symbol, predicate):
+        self.query_builder = query_builder
+        self.expression = expression
+        self.symbol = symbol
+        self.predicate = predicate
+
+    def __repr__(self):
+        return u'{{{s} | \u2203{s}: {p}}}'.format(
+            s=repr(self.symbol),
+            p=repr(self.predicate)
+        )
 
 
 class QueryBuilder:
@@ -222,7 +245,6 @@ class QueryBuilder:
                 self.set_type
             )
         ]
-
 
     @property
     def functions(self):
@@ -261,7 +283,9 @@ class QueryBuilder:
             result_symbol_name = str(uuid1())
 
         result = self.solver.walk(expression)
-        self.solver.symbol_table[nl.Symbol[result.type](result_symbol_name)] = result
+        self.solver.symbol_table[nl.Symbol[result.type](
+            result_symbol_name
+        )] = result
         return QueryBuilderSymbol(self, result_symbol_name)
 
     def solve_query(self, query, result_symbol_name=None):
@@ -273,10 +297,16 @@ class QueryBuilder:
             if result_symbol_name is None:
                 result_symbol_name = str(uuid1())
 
-            query = nl.Query[self.set_type](nl.Symbol[self.set_type](result_symbol_name), query)
+            query = nl.Query[self.set_type](
+                nl.Symbol[self.set_type](result_symbol_name),
+                query
+            )
         else:
             if result_symbol_name is not None:
-                raise ValueError("Query result symbol name already defined in query expression")
+                raise ValueError(
+                    "Query result symbol name "
+                    "already defined in query expression"
+                )
             result_symbol_name = query.symbol.name
 
         self.solver.walk(query)
@@ -292,12 +322,33 @@ class QueryBuilder:
             (nl.Constant[str](term),)
         )
 
-        query = nl.Query[self.set_type](nl.Symbol[self.set_type](result_symbol_name), predicate)
+        query = nl.Query[self.set_type](
+            nl.Symbol[self.set_type](result_symbol_name),
+            predicate
+        )
         query_res = self.solver.walk(query)
         for r in query_res.value.value:
             self.add_region(r)
 
         return QueryBuilderSymbol(self, result_symbol_name)
+
+    def new_region_symbol(self, symbol_name=None):
+        if symbol_name is None:
+            symbol_name = str(uuid1())
+        return QueryBuilderExpression(
+            self,
+            nl.Symbol[self.type](symbol_name)
+        )
+
+    def query(self, symbol, predicate):
+        return QueryBuilderQuery(
+            self,
+            nl.Query[symbol.expression.type](
+                symbol.expression,
+                predicate.expression
+            ),
+            symbol, predicate
+        )
 
     def add_symbol(self, value, result_symbol_name=None):
         if result_symbol_name is None:
@@ -382,4 +433,3 @@ class QuerySymbolsProxy:
         ]
 
         return f'QuerySymbolsProxy with symbols {init}'
-

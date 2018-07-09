@@ -4,11 +4,9 @@ import inspect
 
 from .exceptions import NeuroLangException
 from .expressions import (
-    Expression, Symbol, Constant, Predicate, FunctionApplication,
-    type_validation_value,
-    NeuroLangTypeException,
+    Symbol, Constant, Predicate, FunctionApplication,
+    Query,
     get_type_and_value,
-    ToBeInferred
 )
 from .symbols_and_types import (ExistentialPredicate, replace_type_variable)
 from operator import invert, and_, or_
@@ -150,7 +148,9 @@ class SetBasedSolver(GenericSolver):
         partially_evaluated_predicate = self.walk(predicate)
         results = frozenset()
 
-        for elem_set in self.symbol_table.symbols_by_type(free_variable_symbol.type).values():
+        for elem_set in self.symbol_table.symbols_by_type(
+            free_variable_symbol.type
+        ).values():
             for elem in elem_set.value:
                 elem = Constant[free_variable_symbol.type](frozenset([elem]))
                 rsw = ReplaceSymbolWalker(free_variable_symbol, elem)
@@ -159,3 +159,32 @@ class SetBasedSolver(GenericSolver):
                 if pred.value != frozenset():
                     results = results.union(elem.value)
         return Constant[free_variable_symbol.type](results)
+
+
+class DatalogSolver(GenericSolver):
+    '''
+    WIP Solver with queries having the semantics of Datalog.
+    For now predicates work only on constants on the symbols table
+    '''
+    @add_match(Query)
+    def query_resolution(self, expression):
+        out_query_type = expression.head.type
+
+        result = []
+        for symbol, value in self.symbol_table.symbols_by_type(
+            out_query_type
+        ).items():
+            if not isinstance(value, Constant):
+                continue
+            if symbol in expression.free_variable_symbol:
+                rsw = ReplaceSymbolWalker(expression.head, value)
+                body = rsw.walk(expression.body)
+            else:
+                body = expression.body
+            res = self.walk(body)
+            if res.value:
+                result.append(symbol)
+
+        return Constant[typing.AbstractSet[out_query_type]](
+            frozenset(result)
+        )

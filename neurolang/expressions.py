@@ -148,13 +148,11 @@ def type_validation_value(value, type_, symbol_table=None):
     if type_ == typing.Any or type_ == ToBeInferred:
         return True
 
-    if (
-        (symbol_table is not None) and
-        isinstance(value, Symbol)
-    ):
-        value = symbol_table[value].value
-    else:
-        return is_subtype(value.type, type_)
+    if isinstance(value, Symbol):
+        if (symbol_table is not None):
+            value = symbol_table[value].value
+        else:
+            return is_subtype(value.type, type_)
 
     if isinstance(value, Expression):
         value_type, value = get_type_and_value(value)
@@ -649,15 +647,38 @@ class Statement(Expression):
         )
 
 
-class Query(Statement):
+class Query(Expression):
+    def __init__(
+        self, head, body,
+    ):
+        self.head = head
+        self.body = body
+
+    @property
+    def symbol(self):
+        '''
+        backward compat
+        '''
+        return self.head
+
+    @property
+    def value(self):
+        '''
+        backward compat
+        '''
+        return self.body
+
+    def reflect(self):
+        return self.body
+
     def __repr__(self):
-        if self.symbol is ...:
+        if self.head is ...:
             name = '...'
         else:
-            name = self.symbol.name
+            name = self.head.name
 
         return 'Query{{{}: {} <- {}}}'.format(
-            name, self.type, self.value
+            name, self.type, self.body
         )
 
 
@@ -699,7 +720,7 @@ for operator_name in dir(op):
     if name.endswith('___'):
         name = name[:-1]
 
-    for c in (Constant, Symbol, FunctionApplication, Statement):
+    for c in (Constant, Symbol, FunctionApplication, Statement, Query):
         if not hasattr(c, name):
             setattr(c, name, op_bind(operator))
 
@@ -714,5 +735,5 @@ for operator in [
     if name.endswith('___'):
         name = name[:-1]
 
-    for c in (Constant, Symbol, FunctionApplication, Statement):
+    for c in (Constant, Symbol, FunctionApplication, Statement, Query):
         setattr(c, name, rop_bind(operator))
