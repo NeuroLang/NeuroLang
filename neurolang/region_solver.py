@@ -1,13 +1,15 @@
-from .CD_relations import cardinal_relation, inverse_directions
-from .regions import *
-from .solver import SetBasedSolver
-from .utils.data_manipulation import *
 import typing
 import operator
 import os
 import re
+
 from neurosynth import Dataset, meta
+
 from . import neurolang as nl
+from .CD_relations import cardinal_relation, inverse_directions
+from .regions import *
+from .solver import SetBasedSolver
+from .utils.data_manipulation import *
 
 
 __all__ = ['RegionsSetSolver']
