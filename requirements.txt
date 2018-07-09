@@ -3,4 +3,3 @@ scipy
 nibabel
 pandas
 tatsu
-neurosynth

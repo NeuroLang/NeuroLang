@@ -3,7 +3,12 @@ import operator
 import os
 import re
 
-from neurosynth import Dataset, meta
+try:
+    from neurosynth import Dataset, meta
+    __has_neurosynth__ = True
+except ModuleNotFoundError:
+    __has_neurosynth__ = False
+
 
 from . import neurolang as nl
 from .CD_relations import cardinal_relation, inverse_directions
@@ -71,6 +76,8 @@ class RegionsSetSolver(SetBasedSolver):
 
     def _neurosynth_term_regions(self) -> typing.Callable[[typing.Text], typing.AbstractSet[Region]]:
         def f(elem: typing.Text) -> typing.AbstractSet[Region]:
+            if not __has_neurosynth__:
+                raise NotImplemented("Neurosynth not installed")
 
             file_dir = os.path.abspath(os.path.dirname(__file__))
             path = os.path.join(file_dir, 'utils/neurosynth')
