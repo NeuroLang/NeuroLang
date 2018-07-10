@@ -349,8 +349,8 @@ def test_term_defined_regions_creation():
 def do_query_of_regions_from_term(solver, elem, relation, output_symbol_name='q'):
 
     predicate = nl.Predicate[solver.set_type](
-            nl.Symbol[Callable[[solver.type], str, ]](relation),
-            (nl.Symbol[str, ](elem),)
+            nl.Symbol[Callable[[solver.type], str]](relation),
+            (nl.Symbol[str](elem),)
     )
 
     query = nl.Query[solver.set_type](nl.Symbol[solver.set_type](output_symbol_name), predicate)
