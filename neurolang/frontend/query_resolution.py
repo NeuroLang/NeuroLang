@@ -20,6 +20,9 @@ class QueryBuilder:
         for k, v in self.solver.included_predicates.items():
             self.solver.symbol_table[nl.Symbol[v.type](k)] = v
 
+        for k, v in self.solver.included_functions.items():
+            self.solver.symbol_table[nl.Symbol[v.type](k)] = v
+
     def get_symbol(self, symbol_name):
         if symbol_name not in self.solver.symbol_table:
             raise ValueError('')

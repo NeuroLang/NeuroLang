@@ -71,7 +71,45 @@ class GenericSolver(ExpressionBasicEvaluator):
                 functor_type = typing.Callable[[parameter_type], return_type]
                 functor = Constant[functor_type](method)
 
-        return self.walk(functor(expression.args[0]))
+        return self.walk(functor(*expression.args))
+
+    @add_match(Symbol[typing.Callable])
+    def callable_symbol(self, expression):
+        logging.debug(
+            str(self.__class__.__name__) + " evaluating callable symbol"
+        )
+
+        functor = self.symbol_table.get(expression, expression)
+        if functor is not expression:
+            return functor
+
+        identifier = expression.functor
+        function_method = 'function_' + identifier.name
+        if hasattr(self, function_method):
+            method = getattr(self, function_method)
+            signature = inspect.signature(method)
+            type_hints = typing.get_type_hints(method)
+
+            parameter_type = type_hints[
+                next(iter(signature.parameters.keys()))
+            ]
+
+            parameter_type = replace_type_variable(
+                self.type,
+                parameter_type,
+                type_var=T
+            )
+
+            return_type = type_hints['return']
+            return_type = replace_type_variable(
+                self.type,
+                return_type,
+                type_var=T
+             )
+            functor_type = typing.Callable[[parameter_type], return_type]
+            functor = Constant[functor_type](method)
+
+        return functor
 
     @property
     def included_predicates(self):
@@ -87,6 +125,21 @@ class GenericSolver(ExpressionBasicEvaluator):
                 c = c.cast(new_type)
                 predicate_constants[predicate[len('predicate_'):]] = c
         return predicate_constants
+
+    @property
+    def included_functions(self):
+        function_constants = dict()
+        for function in dir(self):
+            if function.startswith('function_'):
+                c = Constant(getattr(self, function))
+                new_type = replace_type_variable(
+                    self.type,
+                    c.type,
+                    type_var=T
+                )
+                c = c.cast(new_type)
+                function_constants[function[len('function_'):]] = c
+        return function_constants
 
 
 class SetBasedSolver(GenericSolver):

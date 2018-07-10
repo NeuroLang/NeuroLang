@@ -170,7 +170,7 @@ class Symbol(Expression):
                             if isinstance(v, nl.Constant) and s is v.value:
                                 contained.append(k.name)
                                 break
-                    if isinstance(s, Symbol):
+                    if isinstance(s, nl.Symbol):
                         contained.append(s.name)
                 return (f'{self.symbol_name}: {symbol.type} = {contained}')
             else:

@@ -1,3 +1,6 @@
+import typing
+import re
+
 from .CD_relations import cardinal_relation
 from .regions import Region
 from .solver import DatalogSolver
@@ -16,7 +19,7 @@ class RegionSolver(DatalogSolver):
         }
 
         def build_function(relation):
-            def f(self, x: Region, y: Region)->bool:
+            def f(self, x: Region, y: Region) -> bool:
                 return bool(cardinal_relation(
                     x, y, relation,
                     refine_overlapping=False,
@@ -28,3 +31,13 @@ class RegionSolver(DatalogSolver):
             setattr(cls, f'predicate_{key}', build_function(value))
 
         return DatalogSolver.__new__(cls)
+
+    def function_regexp(
+        self, regexp: typing.Text
+    ) -> typing.AbstractSet[Region]:
+        regions = []
+        for k, v in self.symbol_table.symbols_by_type(Region).items():
+            if re.search(regexp, k.name):
+                regions.append(k)
+
+        return frozenset(regions)
