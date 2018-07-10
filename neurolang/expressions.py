@@ -13,8 +13,7 @@ from .exceptions import NeuroLangException
 __all__ = [
     'Symbol', 'FunctionApplication', 'Statement',
     'Projection', 'Predicate', 'ExistentialPredicate',
-    'ToBeInferred',
-    'typing_callable_from_annotated_function'
+    'ToBeInferred', 'typing_callable_from_annotated_function'
 ]
 
 
