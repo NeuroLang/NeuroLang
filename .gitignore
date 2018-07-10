@@ -109,3 +109,4 @@ ENV/
 # neurosynth resources
 neurolang/utils/neurosynth/
 .pytest_cache
+.lvimrc
