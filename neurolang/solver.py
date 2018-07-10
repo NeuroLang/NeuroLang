@@ -39,39 +39,44 @@ class GenericSolver(ExpressionBasicEvaluator):
     def set_symbol_table(self, symbol_table):
         self.symbol_table = symbol_table
 
-    @add_match(Predicate)
+    @add_match(Predicate(Symbol, ...))
     def predicate(self, expression):
         logging.debug(str(self.__class__.__name__) + " evaluating predicate")
 
         functor = expression.functor
-        if isinstance(functor, Symbol):
-            identifier = expression.functor
-            predicate_method = 'predicate_' + identifier.name
-            if hasattr(self, predicate_method):
-                method = getattr(self, predicate_method)
-                signature = inspect.signature(method)
-                type_hints = typing.get_type_hints(method)
 
-                parameter_type = type_hints[
-                    next(iter(signature.parameters.keys()))
-                ]
+        new_functor = self.walk(functor)
+        if new_functor is not functor:
+            res = Predicate[expression.type](new_functor, expression.args)
+            return self.walk(res)
+        elif hasattr(self, f'predicate_{functor.name}'):
+            method = getattr(self, f'predicate_{functor.name}')
+            signature = inspect.signature(method)
+            type_hints = typing.get_type_hints(method)
 
-                parameter_type = replace_type_variable(
-                    self.type,
-                    parameter_type,
-                    type_var=T
-                )
+            parameter_type = type_hints[
+                next(iter(signature.parameters.keys()))
+            ]
 
-                return_type = type_hints['return']
-                return_type = replace_type_variable(
-                    self.type,
-                    return_type,
-                    type_var=T
-                 )
-                functor_type = typing.Callable[[parameter_type], return_type]
-                functor = Constant[functor_type](method)
+            parameter_type = replace_type_variable(
+                self.type,
+                parameter_type,
+                type_var=T
+            )
 
-        return self.walk(functor(*expression.args))
+            return_type = type_hints['return']
+            return_type = replace_type_variable(
+                self.type,
+                return_type,
+                type_var=T
+             )
+            functor_type = typing.Callable[[parameter_type], return_type]
+            functor = Constant[functor_type](method)
+            res = Predicate[expression.type](functor, expression.args)
+            return self.walk(res)
+        else:
+            res = Predicate[expression.type](functor, self.walk(expression.args))
+            return res
 
     @add_match(Symbol[typing.Callable])
     def callable_symbol(self, expression):
@@ -80,13 +85,11 @@ class GenericSolver(ExpressionBasicEvaluator):
         )
 
         functor = self.symbol_table.get(expression, expression)
-        if functor is not expression:
-            return functor
-
-        identifier = expression.functor
-        function_method = 'function_' + identifier.name
-        if hasattr(self, function_method):
-            method = getattr(self, function_method)
+        if (
+            functor is expression and 
+            hasattr(self, f'function_{expression.name}')
+        ):
+            method = getattr(self, f'function_{expression.name}')
             signature = inspect.signature(method)
             type_hints = typing.get_type_hints(method)
 
