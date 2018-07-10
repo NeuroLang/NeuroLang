@@ -129,5 +129,16 @@ def test_pattern_matching_parametric_type():
         def _(self, expression):
             return expression
 
+        @add_match(FunctionApplication(..., (Constant[T],)))
+        def __(self, expression):
+            return expression
+
+        @add_match(Constant)
+        def ___(self, expression):
+            return expression
+
     PM_int = PM[int]
     assert PM_int.__patterns__[0][0] == Constant[int]
+    assert isinstance(PM_int.__patterns__[1][0], FunctionApplication)
+    assert PM_int.__patterns__[1][0].args[0] == Constant[int]
+    assert PM_int.__patterns__[2][0] == Constant

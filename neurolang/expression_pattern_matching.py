@@ -37,16 +37,59 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
             if callable(v) and hasattr(v, 'pattern') and hasattr(v, 'guard'):
                 pattern = getattr(v, 'pattern')
                 if needs_replacement:
-                    pattern = pattern.__generic_class__[
-                        replace_type_variable(
-                            dst_type, pattern.type, type_var=src_type
-                        )
-                    ]
+                    pattern = __pattern_replace_type__(
+                        pattern, src_type, dst_type
+                    )
                 patterns.append(
                     (pattern, getattr(v, 'guard'), v)
                 )
         classdict['__patterns__'] = patterns
         return type.__new__(cls, name, bases, classdict)
+
+
+def __pattern_replace_type__(pattern, src_type, dst_type):
+    if (
+        isclass(pattern) and
+        issubclass(pattern, expressions.Expression) and
+        hasattr(pattern, '__generic_class__')
+    ):
+        pattern = pattern.__generic_class__[
+            replace_type_variable(
+                dst_type, pattern.type, type_var=src_type
+            )
+        ]
+    elif isinstance(pattern, expressions.Expression):
+        print(f"Replace {pattern}")
+        parameters = inspect.signature(
+            pattern.__class__
+        ).parameters
+        args = []
+
+        for argname, arg in parameters.items():
+            if arg.default != inspect._empty:
+                continue
+            args.append(
+                __pattern_replace_type__(
+                    getattr(pattern, argname),
+                    src_type,
+                    dst_type
+                )
+            )
+
+        pattern_class = type(pattern)
+        if hasattr(pattern_class, '__generic_class__'):
+            pattern_class = pattern_class[
+                replace_type_variable(
+                    dst_type, pattern.type, type_var=src_type
+                )
+            ]
+        pattern = pattern_class(*args)
+    elif isinstance(pattern, tuple):
+        pattern = tuple(
+            __pattern_replace_type__(p, src_type, dst_type)
+            for p in pattern
+        )
+    return pattern
 
 
 def add_match(pattern, guard=None):

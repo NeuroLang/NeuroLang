@@ -543,11 +543,9 @@ class FunctionApplication(Definition):
         elif self.args is not None:
             r += (
                 '(' +
-                ', '.join(repr(arg) for arg in self.args) +
-                ', '.join(
-                    repr(k) + '=' + repr(v)
-                    for k, v in self.kwargs.items()
-                ) + ')')
+                ', '.join(repr(arg) for arg in self.args)
+                + ')'
+                )
 
         return r
 
