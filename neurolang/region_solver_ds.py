@@ -2,8 +2,9 @@ import typing
 import re
 
 from .CD_relations import cardinal_relation
-from .regions import Region
+from .regions import Region, region_union
 from .solver import DatalogSolver
+from .expressions import Constant
 
 
 class RegionSolver(DatalogSolver):
@@ -41,3 +42,19 @@ class RegionSolver(DatalogSolver):
                 regions.append(k)
 
         return frozenset(regions)
+
+    def function_region_union(
+        self, region_set: typing.AbstractSet[Region]
+    ) -> Region:
+
+        new_region_set = []
+        for region in region_set:
+            region = self.walk(region)
+            if not isinstance(region, Constant):
+                raise ValueError(
+                    "Region union can only be evaluated on resolved regions"
+                )
+
+            new_region_set.append(region.value)
+
+        return region_union(new_region_set)

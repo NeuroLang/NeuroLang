@@ -4,13 +4,12 @@ import inspect
 
 from .exceptions import NeuroLangException
 from .expressions import (
-    Expression,
     Symbol, Constant, Predicate, FunctionApplication,
     Query,
     get_type_and_value,
 )
 from .symbols_and_types import (ExistentialPredicate, replace_type_variable)
-from operator import invert, and_, or_, xor
+from operator import invert, and_, or_
 from .expression_walker import (
     add_match, ExpressionBasicEvaluator, ReplaceSymbolWalker
 )
@@ -75,7 +74,10 @@ class GenericSolver(ExpressionBasicEvaluator):
             res = Predicate[expression.type](functor, expression.args)
             return self.walk(res)
         else:
-            res = Predicate[expression.type](functor, self.walk(expression.args))
+            res = Predicate[expression.type](
+                functor,
+                self.walk(expression.args)
+            )
             return res
 
     @add_match(Symbol[typing.Callable])
@@ -86,7 +88,7 @@ class GenericSolver(ExpressionBasicEvaluator):
 
         functor = self.symbol_table.get(expression, expression)
         if (
-            functor is expression and 
+            functor is expression and
             hasattr(self, f'function_{expression.name}')
         ):
             method = getattr(self, f'function_{expression.name}')
@@ -223,19 +225,22 @@ class DatalogSolver(GenericSolver):
     WIP Solver with queries having the semantics of Datalog.
     For now predicates work only on constants on the symbols table
     '''
-    @add_match(
-        FunctionApplication(
-            Constant(...),
-            (Expression[bool], Expression[bool])
-        ),
-        lambda expression: expression.functor.value in (or_, and_, xor)
-    )
-    def rewrite_and_or(self, expression):
-        return expression.cast(bool)
 
-    @add_match(FunctionApplication(Constant(invert), (Expression[bool],)))
-    def rewrite_finite_domain_inversion(self, expression):
-        return expression.cast(bool)
+    @add_match(FunctionApplication(Constant(invert), (Constant[bool],)))
+    def rewrite_boolean_inversion(self, expression):
+        return Constant(not expression.args[0].value)
+
+    @add_match(
+        FunctionApplication(Constant(and_), (Constant[bool], Constant[bool]))
+    )
+    def rewrite_boolean_and(self, expression):
+        return Constant(expression.args[0].value and expression.args[1].value)
+
+    @add_match(
+        FunctionApplication(Constant(or_), (Constant[bool], Constant[bool]))
+    )
+    def rewrite_boolean_or(self, expression):
+        return Constant(expression.args[0].value or expression.args[1].value)
 
     @add_match(Query)
     def query_resolution(self, expression):
