@@ -1,11 +1,12 @@
-from itertools import chain
-import operator as op
 import typing
 import inspect
-from functools import wraps, WRAPPER_ASSIGNMENTS, lru_cache
 import types
+import operator as op
+from itertools import chain
+from functools import wraps, WRAPPER_ASSIGNMENTS, lru_cache
 from warnings import warn
 import logging
+
 from .exceptions import NeuroLangException
 
 
@@ -27,12 +28,11 @@ class NeuroLangTypeException(NeuroLangException):
 def typing_callable_from_annotated_function(function):
     signature = inspect.signature(function)
     parameter_types = [
-        v.annotation if v.annotation != inspect._empty
-        else ToBeInferred
+        v.annotation if v.annotation != inspect._empty else ToBeInferred
         for v in signature.parameters.values()
     ]
 
-    if signature.return_annotation == inspect._empty:
+    if signature.return_annotation is inspect._empty:
         return_annotation = ToBeInferred
     else:
         return_annotation = signature.return_annotation
