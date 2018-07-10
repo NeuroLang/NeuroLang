@@ -1,4 +1,5 @@
 from pytest import raises
+import typing
 
 from ..expression_pattern_matching import PatternMatcher, add_match
 from ..expressions import (
@@ -118,3 +119,15 @@ def test_match_expression_tuple():
         else:
             with raises(ValueError):
                 pm.match(e)
+
+
+def test_pattern_matching_parametric_type():
+    T = typing.TypeVar('T')
+
+    class PM(PatternMatcher[T]):
+        @add_match(Constant[T])
+        def _(self, expression):
+            return expression
+
+    PM_int = PM[int]
+    assert PM_int.__patterns__[0][0] == Constant[int]

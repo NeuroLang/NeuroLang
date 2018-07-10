@@ -3,10 +3,10 @@ from itertools import chain
 import inspect
 from inspect import isclass
 import logging
-from typing import Tuple
+from typing import Tuple, TypeVar
 
 from . import expressions
-
+from .symbols_and_types import replace_type_variable
 
 __all__ = ['add_match', 'PatternMatcher']
 
@@ -17,17 +17,33 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
         return OrderedDict()
 
     def __new__(cls, name, bases, classdict):
-        if hasattr(cls, 'type'):
-            print(cls.type)
         classdict['__ordered__'] = [
             key for key in classdict.keys()
             if key not in ('__module__', '__qualname__')
         ]
         patterns = []
+        if (
+            '__generic_class__' in classdict and
+            hasattr(classdict['__generic_class__'], 'type') and
+            isinstance(classdict['__generic_class__'].type, TypeVar)
+        ):
+            needs_replacement = True
+            src_type = classdict['__generic_class__'].type
+            dst_type = classdict['type']
+        else:
+            needs_replacement = False
+
         for k, v in classdict.items():
             if callable(v) and hasattr(v, 'pattern') and hasattr(v, 'guard'):
+                pattern = getattr(v, 'pattern')
+                if needs_replacement:
+                    pattern = pattern.__generic_class__[
+                        replace_type_variable(
+                            dst_type, pattern.type, type_var=src_type
+                        )
+                    ]
                 patterns.append(
-                    (getattr(v, 'pattern'), getattr(v, 'guard'), v)
+                    (pattern, getattr(v, 'guard'), v)
                 )
         classdict['__patterns__'] = patterns
         return type.__new__(cls, name, bases, classdict)
