@@ -23,7 +23,7 @@ __all__ = ['RegionsSetSolver']
 class RegionsSetSolver(SetBasedSolver[Region]):
     type = Region
     set_type = typing.AbstractSet[type]
-    set_map_type = typing.Callable[[typing.Text], set_type]
+    get_set_type = typing.Callable[[typing.Text], set_type]
     type_name = type.__name__
 
     def __init__(self, *args, overlap_iter=None, **kwargs):
@@ -50,11 +50,11 @@ class RegionsSetSolver(SetBasedSolver[Region]):
             nl.Symbol[typing.Callable[[], self.set_type]]('universal')
         ] = nl.Constant[typing.Callable[[], self.set_type]](self.all_regions)
 
-        self.symbol_table[nl.Symbol[self.set_map_type]('neurosynth_term')] = \
-            nl.Constant[self.set_map_type](self._neurosynth_term_regions())
+        self.symbol_table[nl.Symbol[self.get_set_type]('neurosynth_term')] = \
+            nl.Constant[self.get_set_type](self._neurosynth_term_regions())
 
-        self.symbol_table[nl.Symbol[self.set_map_type]('regexp')] = \
-            nl.Constant[self.set_map_type](self._region_set_from_regexp())
+        self.symbol_table[nl.Symbol[self.get_set_type]('regexp')] = \
+            nl.Constant[self.get_set_type](self._region_set_from_regexp())
 
     def _define_dir_based_fun(self, direction) -> set_type:
         def f(reference_region: self.type) -> self.set_type:
@@ -81,7 +81,7 @@ class RegionsSetSolver(SetBasedSolver[Region]):
             res = res.union(elem.value)
         return res
 
-    def _neurosynth_term_regions(self) -> set_map_type:
+    def _neurosynth_term_regions(self) -> get_set_type:
         def f(elem: typing.Text) -> self.set_type:
             if not __has_neurosynth__:
                 raise NotImplemented("Neurosynth not installed")
@@ -108,7 +108,7 @@ class RegionsSetSolver(SetBasedSolver[Region]):
             return region_set
         return f
 
-    def _region_set_from_regexp(self) -> set_map_type:
+    def _region_set_from_regexp(self) -> get_set_type:
         def f(regexp: typing.Text) -> self.set_type:
             regions = set()
             match = False
