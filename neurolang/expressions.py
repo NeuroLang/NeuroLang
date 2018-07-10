@@ -11,7 +11,7 @@ from .exceptions import NeuroLangException
 
 __all__ = [
     'Symbol', 'FunctionApplication', 'Statement',
-    'Projection', 'Predicate', 'ExistentialPredicate'
+    'Projection', 'Predicate', 'ExistentialPredicate',
     'ToBeInferred',
     'typing_callable_from_annotated_function'
 ]
@@ -626,6 +626,7 @@ class ExistentialPredicate(Predicate):
 
         r = u'\u2203{{{}: {} st {}}}'.format(self.symbol, self.type, self.predicate)
         return r
+
 
 class Statement(Expression):
     def __init__(
