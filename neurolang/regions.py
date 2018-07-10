@@ -1,8 +1,9 @@
-from .exceptions import NeuroLangException
-from .brain_tree import AABB, Tree, aabb_from_vertices
 import numpy as np
 import nibabel as nib
-from scipy.ndimage import label, generate_binary_structure
+import scipy.ndimage
+
+from .exceptions import NeuroLangException
+from .brain_tree import AABB, Tree, aabb_from_vertices
 
 
 __all__ = [
@@ -18,7 +19,9 @@ def region_union(region_set, affine=None):
     if len(region_set) > 0 and affine is None:
         affine = next(iter(region_set)).affine
 
-    voxels_per_regions = [set(map(tuple, region.to_ijk(affine))) for region in region_set] # first convert to array of tuples
+    # first convert to array of tuples
+    voxels_per_regions = [set(map(tuple, region.to_ijk(affine)))
+                          for region in region_set]
     result_voxels = set.union(*voxels_per_regions)
     dim = max([region.image_dim for region in region_set]) if all(
         isinstance(x, ExplicitVBR) and x.image_dim is not None for x in region_set) else None #to improve
@@ -206,8 +209,8 @@ class ExplicitVBR(VolumetricBrainRegion):
 
 
 def region_set_from_masked_data(data, affine, dim):
-    s = generate_binary_structure(3, 2)
-    labeled_array, num_features = label(data, structure=s)
+    s = scipy.ndimage.generate_binary_structure(3, 2)
+    labeled_array, num_features = scipy.ndimage.label(data, structure=s)
     regions = set()
     for i in range(1, num_features):
         region_voxels = list(zip(*np.where(labeled_array == i)))

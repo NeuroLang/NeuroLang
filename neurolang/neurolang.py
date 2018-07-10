@@ -286,6 +286,8 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
             argument_type, value = get_type_and_value(a)
             if isinstance(value, Statement):
                 value = value.symbol
+            elif isinstance(value, Query):
+                value = value.head
 
             arguments.append(a)
             argument_types.append(argument_type)

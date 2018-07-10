@@ -1,9 +1,13 @@
 from xml.etree import ElementTree
-import neurosynth as ns
 from collections import Iterable
 from fnmatch import fnmatch
 import os
 
+try:
+    import neurosynth as ns
+    __has_neurosynth__ = True
+except ModuleNotFoundError:
+    __has_neurosynth__ = False
 
 def parse_region_label_map(labeled_im, selected_labels=None):
     extension_header = ElementTree.fromstring(labeled_im.header.extensions[0].get_content())
@@ -33,10 +37,13 @@ def parse_region_label_map(labeled_im, selected_labels=None):
 
 
 def fetch_neurosynth_dataset(path):
-    if not os.path.exists(path):
-        os.makedirs(path)
-    ns.dataset.download(path=path, unpack=True)
-    dataset = ns.Dataset(os.path.join(path, 'database.txt'))
-    dataset.add_features(os.path.join(path, 'features.txt'))
-    dataset.save(os.path.join(path, 'dataset.pkl'))
-    return dataset
+    if __has_neurosynth__:
+        if not os.path.exists(path):
+            os.makedirs(path)
+        ns.dataset.download(path=path, unpack=True)
+        dataset = ns.Dataset(os.path.join(path, 'database.txt'))
+        dataset.add_features(os.path.join(path, 'features.txt'))
+        dataset.save(os.path.join(path, 'dataset.pkl'))
+        return dataset
+    else:
+        raise NotImplemented("Neurosynth not installed in the system")

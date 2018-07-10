@@ -1,13 +1,20 @@
-from .CD_relations import cardinal_relation, inverse_directions
-from .regions import *
-from .solver import SetBasedSolver
-from .utils.data_manipulation import *
 import typing
 import operator
 import os
 import re
-from neurosynth import Dataset, meta
+
+try:
+    from neurosynth import Dataset, meta
+    __has_neurosynth__ = True
+except ModuleNotFoundError:
+    __has_neurosynth__ = False
+
+
 from . import neurolang as nl
+from .CD_relations import cardinal_relation, inverse_directions
+from .regions import *
+from .solver import SetBasedSolver
+from .utils.data_manipulation import *
 
 
 __all__ = ['RegionsSetSolver']
@@ -22,7 +29,7 @@ class RegionsSetSolver(SetBasedSolver):
         super().__init__(*args, **kwargs)
         pred_type = typing.Callable[[self.type, ], self.set_type]
 
-        self.stop_refinement_at = overlap_iter if overlap_iter is not None else None
+        self.stop_refinement_at = overlap_iter
 
         for key, value in {'inferior_of': 'I', 'superior_of': 'S',
                            'posterior_of': 'P', 'anterior_of': 'A',
@@ -69,6 +76,8 @@ class RegionsSetSolver(SetBasedSolver):
 
     def _neurosynth_term_regions(self) -> typing.Callable[[typing.Text], typing.AbstractSet[Region]]:
         def f(elem: typing.Text) -> typing.AbstractSet[Region]:
+            if not __has_neurosynth__:
+                raise NotImplemented("Neurosynth not installed")
 
             file_dir = os.path.abspath(os.path.dirname(__file__))
             path = os.path.join(file_dir, 'utils/neurosynth')
