@@ -125,8 +125,9 @@ class SetBasedSolver(GenericSolver[T]):
     conjunction.
     '''
     def predicate_in(
-        self, argument: typing.AbstractSet[T]
-    )->typing.AbstractSet[T]:
+        self,
+        argument: typing.AbstractSet[T]
+    ) -> typing.AbstractSet[T]:
         return argument
 
     @add_match(

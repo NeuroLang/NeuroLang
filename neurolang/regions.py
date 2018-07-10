@@ -25,7 +25,8 @@ def region_union(region_set, affine=None):
     result_voxels = set.union(*voxels_per_regions)
     dim = max([region.image_dim for region in region_set]) if all(
         isinstance(x, ExplicitVBR) and x.image_dim is not None for x in region_set) else None #to improve
-    return ExplicitVBR(np.array(list(result_voxels), dtype=list), affine, dim)  # then convert back to 2d array, FIX!
+    # convert back to 2d array, TODO: fix
+    return ExplicitVBR(np.array(list(result_voxels), dtype=list), affine, dim)
 
 
 def region_intersection(region_set, affine=None):
