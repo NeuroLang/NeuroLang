@@ -156,8 +156,9 @@ class ExplicitVBR(VolumetricBrainRegion):
                 ax = np.argmax(ub - lb)
                 middle[:] = 0
                 middle[ax] = (lb[ax] + ub[ax]) / 2
-                middle_voxel = nib.affines.apply_affine(affine_matrix_inv, middle)[
-                    ax]  # this only works if the affine matrix is diagonal
+                # this only works if the affine matrix is diagonal
+                middle_voxel = \
+                    nib.affines.apply_affine(affine_matrix_inv, middle)[ax]
 
                 b1_voxs = parent_voxels[parent_voxels.T[ax] <= middle_voxel]
                 if len(b1_voxs) != 0 and len(b1_voxs) != len(parent_voxels):

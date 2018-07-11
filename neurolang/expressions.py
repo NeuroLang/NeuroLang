@@ -35,10 +35,7 @@ def typing_callable_from_annotated_function(function):
         return_annotation = ToBeInferred
     else:
         return_annotation = signature.return_annotation
-    return typing.Callable[
-        parameter_types,
-        return_annotation
-    ]
+    return typing.Callable[parameter_types, return_annotation]
 
 
 def get_type_args(type_):
@@ -70,7 +67,13 @@ def get_type_and_value(value, symbol_table=None):
 
 
 def is_subtype(left, right):
-    if left == right:
+    if (
+        type(left) is list and
+        type(right) is list and
+        len(left) == len(right)
+    ):
+        return all(is_subtype(left[i], right[i]) for i in range(len(left)))
+    if left is right:
         return True
     if right is typing.Any:
         return True
@@ -79,11 +82,8 @@ def is_subtype(left, right):
     elif left is ToBeInferred:
         return True
     elif hasattr(right, '__origin__') and right.__origin__ is not None:
-        if right.__origin__ == typing.Union:
-            return any(
-                is_subtype(left, r)
-                for r in right.__args__
-            )
+        if right.__origin__ is typing.Union:
+            return any(is_subtype(left, r) for r in right.__args__)
         elif issubclass(right, typing.Callable):
             if issubclass(left, typing.Callable):
                 left_args, left_return = get_type_args(left)
@@ -109,12 +109,11 @@ def is_subtype(left, right):
             )
         )):
             return all(
-                is_subtype(l, r) for l, r in zip(
-                    get_type_args(left), get_type_args(right)
-                )
+                is_subtype(l, r) for l, r in
+                zip(get_type_args(left), get_type_args(right))
             )
-        elif right.__origin__ == typing.Generic:
-            raise ValueError("typing Generic not supported")
+        elif right.__origin__ is typing.Generic:
+            raise ValueError('typing Generic not supported')
         else:
             return False
     else:
@@ -139,14 +138,12 @@ def unify_types(t1, t2):
         return t1
     else:
         raise NeuroLangTypeException(
-            "The types {} and {} can't be unified".format(
-                t1, t2
-            )
+            'The types {} and {} can\'t be unified'.format(t1, t2)
         )
 
 
 def type_validation_value(value, type_, symbol_table=None):
-    if type_ == typing.Any or type_ == ToBeInferred:
+    if type_ is typing.Any or type_ is ToBeInferred:
         return True
 
     if isinstance(value, Symbol):
@@ -162,7 +159,7 @@ def type_validation_value(value, type_, symbol_table=None):
             return is_subtype(value_type, type_)
 
     if hasattr(type_, '__origin__') and type_.__origin__ is not None:
-        if type_.__origin__ == typing.Union:
+        if type_.__origin__ is typing.Union:
             return any(
                 type_validation_value(value, t, symbol_table=symbol_table)
                 for t in type_.__args__
@@ -207,13 +204,11 @@ def type_validation_value(value, type_, symbol_table=None):
                 )))
             )
         else:
-            raise ValueError("Type %s not implemented in the checker" % type_)
+            raise ValueError('Type %s not implemented in the checker' % type_)
     elif isinstance(value, FunctionApplication):
         return is_subtype(value.type, type_.type)
     else:
-        return isinstance(
-            value, type_
-        )
+        return isinstance(value, type_)
 
 
 class ParametricTypeClassMeta(type):
@@ -223,10 +218,7 @@ class ParametricTypeClassMeta(type):
         d['type'] = type_
         d['__generic_class__'] = cls
         d['__no_explicit_type__'] = False
-        return cls.__class__(
-            cls.__name__, cls.__bases__,
-            d
-        )
+        return cls.__class__(cls.__name__, cls.__bases__, d)
 
     def __repr__(cls):
         r = cls.__name__
@@ -257,10 +249,8 @@ class ParametricTypeClassMeta(type):
         )
 
     def __instancecheck__(cls, other):
-        return (
-            super().__instancecheck__(other) or
-            issubclass(other.__class__, cls)
-        )
+        return (super().__instancecheck__(other) or
+                issubclass(other.__class__, cls))
 
 
 class ExpressionMeta(ParametricTypeClassMeta):
@@ -326,7 +316,7 @@ class Expression(metaclass=ExpressionMeta):
     )
 
     def __init__(self, *args, **kwargs):
-        raise TypeError("Expression can not be instantiated")
+        raise TypeError('Expression can not be instantiated')
 
     def __getitem__(self, index):
         return Projection(self, index)
@@ -337,9 +327,7 @@ class Expression(metaclass=ExpressionMeta):
         else:
             variable_type = ToBeInferred
 
-        return FunctionApplication[variable_type](
-            self, args, kwargs,
-         )
+        return FunctionApplication[variable_type](self, args, kwargs)
 
     def __getattr__(self, attr):
         if (
@@ -349,7 +337,7 @@ class Expression(metaclass=ExpressionMeta):
         ):
             return object.__getattribute__(self, attr)
         else:
-            logging.debug("Getting wrapped attribute {}".format(
+            logging.debug('Getting wrapped attribute {}'.format(
                 attr
             ))
             return self.get_wrapped_attribute(attr)
@@ -366,13 +354,13 @@ class Expression(metaclass=ExpressionMeta):
         self.__class__ = self.__class__[type_]
 
     def cast(self, type_):
-        if type_ == self.type:
+        if type_ is self.type:
             return self
         parameters = inspect.signature(self.__class__).parameters
         args = (
             getattr(self, argname)
             for argname, arg in parameters.items()
-            if arg.default == inspect._empty
+            if arg.default is inspect._empty
         )
         if hasattr(self.__class__, '__generic_class__'):
             ret = self.__class__.__generic_class__[type_](*args)
@@ -402,10 +390,8 @@ class Symbol(NonConstant):
         self._symbols = {self}
 
     def __eq__(self, other):
-        return (
-            (isinstance(other, Symbol) or isinstance(other, str)) and
-            hash(self) == hash(other)
-        )
+        return ((isinstance(other, Symbol) or isinstance(other, str)) and
+                hash(self) == hash(other))
 
     def __hash__(self):
         return hash(self.name)
@@ -434,7 +420,7 @@ class Constant(Expression):
             if auto_infer_type and self.type == ToBeInferred:
                 if hasattr(value, '__annotations__'):
                     self.type = typing_callable_from_annotated_function(value)
-        elif auto_infer_type and self.type == ToBeInferred:
+        elif auto_infer_type and self.type is ToBeInferred:
             if isinstance(self.value, tuple):
                 self.type = typing.Tuple[tuple(
                     a.type
@@ -468,7 +454,7 @@ class Constant(Expression):
 
         if not self.__verify_type__(self.value, self.type):
             raise NeuroLangTypeException(
-                "The value %s does not correspond to the type %s" %
+                'The value %s does not correspond to the type %s' %
                 (self.value, self.type)
             )
 
@@ -487,7 +473,7 @@ class Constant(Expression):
         )
 
     def __eq__(self, other):
-        if self.type == ToBeInferred:
+        if self.type is ToBeInferred:
             warn('Making a comparison with types needed to be inferred')
 
         if isinstance(other, Expression):
@@ -503,10 +489,8 @@ class Constant(Expression):
             else:
                 return False
         else:
-            return (
-                type_validation_value(other, self.type) and
-                hash(other) == hash(self)
-            )
+            return (type_validation_value(other, self.type) and
+                    hash(other) == hash(self))
 
     def __hash__(self):
         return hash(self.value)
@@ -522,7 +506,7 @@ class Constant(Expression):
         self.__class__ = self.__class__[type_]
         if not self.__verify_type__(self.value, self.type):
             raise NeuroLangTypeException(
-                "The value %s does not correspond to the type %s" %
+                'The value %s does not correspond to the type %s' %
                 (self.value, self.type)
             )
 
@@ -541,14 +525,14 @@ class FunctionApplication(Definition):
             elif isinstance(self.functor.type, typing.Callable):
                 self.type = self.functor.type.__args__[-1]
             else:
-                raise NeuroLangTypeException("Functor is not an expression")
+                raise NeuroLangTypeException('Functor is not an expression')
         else:
             if not (
                 self.functor.type in (ToBeInferred, typing.Any)
                 or is_subtype(self.functor.type.__args__[-1], self.type)
             ):
                 raise NeuroLangTypeException(
-                    "Functor return type not unifiable with application type"
+                    'Functor return type not unifiable with application type'
                 )
 
         if isinstance(functor, Symbol):
@@ -595,8 +579,8 @@ class Projection(Definition):
         self, collection, item,
         auto_infer_projection_type=True
     ):
-        if self.type == ToBeInferred and auto_infer_projection_type:
-            if not collection.type == ToBeInferred:
+        if self.type is ToBeInferred and auto_infer_projection_type:
+            if collection.type is not ToBeInferred:
                 if is_subtype(collection.type, typing.Tuple):
                     if (
                         isinstance(item, Constant) and
@@ -608,7 +592,7 @@ class Projection(Definition):
                         ]
                     else:
                         raise NeuroLangTypeException(
-                            "Not {} elements in tuple".format(
+                            'Not {} elements in tuple'.format(
                                 int(item.value)
                             )
                         )
@@ -622,8 +606,9 @@ class Projection(Definition):
         self.item = item
 
     def __repr__(self):
-        return u"\u03C3{{{}[{}]: {}}}".format(
-            self.collection, self.item, self.type
+        return (
+            u'\u03C3{{{}[{}]: {}}}'
+            .format(self.collection, self.item, self.type)
         )
 
 
@@ -681,9 +666,7 @@ class Statement(Expression):
             name = '...'
         else:
             name = self.symbol.name
-        return 'Statement{{{}: {} <- {}}}'.format(
-            name, self.type, self.value
-        )
+        return 'Statement{{{}: {} <- {}}}'.format(name, self.type, self.value)
 
 
 class Query(Expression):
@@ -716,9 +699,7 @@ class Query(Expression):
         else:
             name = self.head.name
 
-        return 'Query{{{}: {} <- {}}}'.format(
-            name, self.type, self.body
-        )
+        return 'Query{{{}: {} <- {}}}'.format(name, self.type, self.body)
 
 
 binary_opeations = (
@@ -731,7 +712,9 @@ def op_bind(op):
     def f(*args):
         arg_types = [get_type_and_value(a)[0] for a in args]
         return FunctionApplication(
-            Constant[typing.Callable[arg_types, ToBeInferred]](op, auto_infer_type=False),
+            Constant[typing.Callable[arg_types, ToBeInferred]](
+              op, auto_infer_type=False
+            ),
             args,
         )
 

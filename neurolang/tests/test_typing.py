@@ -43,6 +43,14 @@ def test_is_subtype_base_types():
         typing.Callable[[int], int],
         typing.Callable[[int], float]
     )
+    assert symbols_and_types.is_subtype(
+        typing.Callable[[int, typing.Tuple[int, int]], int],
+        typing.Callable[[int, typing.Tuple[int, int]], int],
+    )
+    assert not symbols_and_types.is_subtype(
+        typing.Callable[[int, int], int],
+        typing.Callable[[int, typing.Tuple[int, int]], int]
+    )
     assert not symbols_and_types.is_subtype(
         typing.Set,
         typing.Callable
@@ -55,7 +63,7 @@ def test_is_subtype_base_types():
         typing.AbstractSet[int], typing.AbstractSet[float]
     )
 
-    with pytest.raises(ValueError, message="typing Generic not supported"):
+    with pytest.raises(ValueError, message='typing Generic not supported'):
         assert symbols_and_types.is_subtype(
             typing.Set[int],
             typing.Generic[typing.T]
@@ -182,7 +190,7 @@ def test_type_validation_value():
                     symbol_table=symbol_table
                 )
 
-    with pytest.raises(ValueError, message="typing Generic not supported"):
+    with pytest.raises(ValueError, message='typing Generic not supported'):
         assert symbols_and_types.type_validation_value(
             None,
             typing.Generic[typing.T]
