@@ -25,9 +25,9 @@ def test_symbol_application():
     a = Symbol('a')
     b = Symbol('b')
 
-    oadd = C[Callable[[int, int], int]](op.add)
-    osub = C[Callable[[int, int], int]](op.sub)
-    omul = C[Callable[[int, int], int]](op.mul)
+    oadd = C[Callable[[int, int], int]](op.add, auto_infer_type=False)
+    osub = C[Callable[[int, int], int]](op.sub, auto_infer_type=False)
+    omul = C[Callable[[int, int], int]](op.mul, auto_infer_type=False)
     c = oadd(C[int](2), C[int](3))
     assert c.functor == oadd
     assert all((e1.value == e2 for e1, e2 in zip(c.args, (2, 3))))

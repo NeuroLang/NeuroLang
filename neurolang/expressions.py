@@ -58,10 +58,7 @@ def get_type_and_value(value, symbol_table=None):
             value = value.value
         return type_, value
     elif isinstance(value, (types.FunctionType, types.MethodType)):
-        return (
-            typing_callable_from_annotated_function(value),
-            value
-        )
+        return (typing_callable_from_annotated_function(value), value)
     else:
         return type(value), value
 
@@ -720,7 +717,9 @@ def rop_bind(op):
     def f(self, value):
         arg_types = [get_type_and_value(a)[0] for a in (value, self)]
         return FunctionApplication(
-            Constant[typing.Callable[arg_types, ToBeInferred]](op, auto_infer_type=False),
+            Constant[typing.Callable[arg_types, ToBeInferred]](
+              op, auto_infer_type=False
+            ),
             args=(value, self),
         )
 
