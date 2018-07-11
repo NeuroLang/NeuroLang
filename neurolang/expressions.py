@@ -67,12 +67,6 @@ def get_type_and_value(value, symbol_table=None):
 
 
 def is_subtype(left, right):
-    if (
-        type(left) is list and
-        type(right) is list and
-        len(left) == len(right)
-    ):
-        return all(is_subtype(left[i], right[i]) for i in range(len(left)))
     if left is right:
         return True
     if right is typing.Any:
@@ -85,19 +79,23 @@ def is_subtype(left, right):
         if right.__origin__ is typing.Union:
             return any(is_subtype(left, r) for r in right.__args__)
         elif issubclass(right, typing.Callable):
+            print('entering callable')
             if issubclass(left, typing.Callable):
-                left_args, left_return = get_type_args(left)
-                right_args, right_return = get_type_args(right)
+                print('entering callable 2')
+                left_args, left_return_type = get_type_args(left)
+                right_args, right_return_type = get_type_args(right)
+
+                print(left_args, right_args)
 
                 if len(left_args) != len(right_args):
                     return False
 
-                return len(left_args) == 0 or (
-                    is_subtype(left_return, right_return) and all((
-                        is_subtype(left_arg, right_arg)
-                        for left_arg, right_arg in zip(left_args, right_args)
-                    ))
-                )
+                return (
+                    is_subtype(left_return_type, right_return_type) and
+                    all(is_subtype(left_arg, right_arg)
+                        for left_arg, right_arg in
+                        zip(left_args, right_args))
+               )
             else:
                 return False
         elif (any(
@@ -127,6 +125,8 @@ def is_subtype(left, right):
             right = typing.SupportsFloat
         elif right is str:
             right = typing.Text
+
+        print(left, right)
 
         return issubclass(left, right)
 
