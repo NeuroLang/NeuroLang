@@ -79,13 +79,9 @@ def is_subtype(left, right):
         if right.__origin__ is typing.Union:
             return any(is_subtype(left, r) for r in right.__args__)
         elif issubclass(right, typing.Callable):
-            print('entering callable')
             if issubclass(left, typing.Callable):
-                print('entering callable 2')
                 left_args, left_return_type = get_type_args(left)
                 right_args, right_return_type = get_type_args(right)
-
-                print(left_args, right_args)
 
                 if len(left_args) != len(right_args):
                     return False
@@ -125,8 +121,6 @@ def is_subtype(left, right):
             right = typing.SupportsFloat
         elif right is str:
             right = typing.Text
-
-        print(left, right)
 
         return issubclass(left, right)
 
