@@ -79,3 +79,82 @@ def test_numeric_operations_solver():
 
     assert e.type == expressions.ToBeInferred
     assert s.walk(e).type == int
+
+def test_boolean_operations_solver():
+    s = solver.BooleanOperationsSolver()
+
+    or_ = (
+        expressions.Symbol[bool]('a') |
+        expressions.Symbol[bool]('b')
+    )
+
+    assert or_.type == expressions.ToBeInferred
+    assert s.walk(or_).type == bool
+
+    or_ = (
+        expressions.Constant(True) |
+        expressions.Symbol[bool]('b')
+    )
+
+    assert s.walk(or_).value
+
+    or_ = (
+        expressions.Symbol[bool]('b') |
+        expressions.Constant(True)
+    )
+
+    assert s.walk(or_).value
+
+    or_ = (
+        expressions.Constant(False) |
+        expressions.Symbol[bool]('b')
+    )
+
+    assert not isinstance(s.walk(or_), expressions.Constant)
+
+    or_ = (
+        expressions.Symbol[bool]('b') |
+        expressions.Constant(False)
+    )
+
+    assert not isinstance(s.walk(or_), expressions.Constant)
+
+    and_ = (
+        expressions.Symbol[bool]('a') &
+        expressions.Symbol[bool]('b')
+    )
+
+    assert and_.type == expressions.ToBeInferred
+    assert s.walk(and_).type == bool
+
+    and_ = (
+        expressions.Constant(False) &
+        expressions.Symbol[bool]('b')
+    )
+
+    assert not s.walk(and_).value
+
+    and_ = (
+        expressions.Symbol[bool]('b') &
+        expressions.Constant(False)
+    )
+
+    assert not s.walk(and_).value
+
+    and_ = (
+        expressions.Constant(True) &
+        expressions.Symbol[bool]('b')
+    )
+
+    assert not isinstance(s.walk(and_), expressions.Constant)
+
+    and_ = (
+        expressions.Symbol[bool]('b') &
+        expressions.Constant(True)
+    )
+
+    assert not isinstance(s.walk(and_), expressions.Constant)
+
+
+
+
