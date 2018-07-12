@@ -378,14 +378,20 @@ class Expression(metaclass=ExpressionMeta):
         return self.__class__[type_](*args)
 
 
-class Definition(Expression):
+class NonConstant(Expression):
+    '''
+    Any expression which is not a constant
+    '''
+
+
+class Definition(NonConstant):
     '''
     Parent class for all composite operations
     such as A + B or F(A)
     '''
 
 
-class Symbol(Expression):
+class Symbol(NonConstant):
     def __init__(self, name):
         self.name = name
         self._symbols = {self}

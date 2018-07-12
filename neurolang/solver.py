@@ -4,7 +4,7 @@ import inspect
 
 from .exceptions import NeuroLangException
 from .expressions import (
-    Expression,
+    Expression, NonConstant,
     Symbol, Constant, Predicate, FunctionApplication,
     Query,
     get_type_and_value,
@@ -190,6 +190,61 @@ class SetBasedSolver(GenericSolver[T]):
         return Constant[free_variable_symbol.type](results)
 
 
+class BooleanRewriteSolver(GenericSolver):
+    @add_match(
+        FunctionApplication(Constant, (Expression[bool],) * 2),
+        lambda expression:
+            expression.functor.value in (or_, and_) and
+            expression.type is not bool
+    )
+    def cast_binary(self, expression):
+        return self.walk(expression.cast(bool))
+
+    @add_match(
+        FunctionApplication(
+            Constant(...),
+            (NonConstant[bool], Constant[bool])
+        ),
+        lambda expression: (
+            expression.functor.value in (or_, and_)
+        )
+    )
+    def dual_operator(self, expression):
+        return self.walk(
+            FunctionApplication[bool](
+                expression.functor,
+                expression.args[::-1]
+            )
+        )
+
+    @add_match(
+        FunctionApplication(Constant(...), (
+            NonConstant[bool],
+            FunctionApplication(Constant(...), (Constant[bool], ...))
+        )),
+        lambda expression: (
+            expression.functor.value in (or_, and_)
+            and expression.args[1].functor.value is expression.functor.value
+        )
+    )
+    def bring_constants_up_left(self, expression):
+        return self.walk(
+            FunctionApplication[bool](
+                expression.functor,
+                (
+                    expression.args[1].args[0],
+                    FunctionApplication[bool](
+                        expression.functor,
+                        (
+                            expression.args[0],
+                            expression.args[1].args[1]
+                        )
+                    )
+                )
+            )
+        )
+
+
 class BooleanOperationsSolver(GenericSolver):
     @add_match(FunctionApplication(Constant(invert), (Constant[bool],)))
     def rewrite_boolean_inversion(self, expression):
@@ -231,13 +286,6 @@ class BooleanOperationsSolver(GenericSolver):
     def rewrite_boolean_and_r(self, expression):
         return Constant(False)
 
-    @add_match(
-        FunctionApplication(Constant, (Expression[bool],) * 2),
-        lambda expression: expression.functor.value in (or_, and_)
-    )
-    def cast_binary(self, expression):
-        return expression.cast(bool)
-
 
 class NumericOperationsSolver(GenericSolver[T]):
     @add_match(
@@ -255,7 +303,11 @@ class NumericOperationsSolver(GenericSolver[T]):
         return expression.cast(expression.args[0].type)
 
 
-class DatalogSolver(BooleanOperationsSolver):
+class DatalogSolver(
+        BooleanOperationsSolver,
+        NumericOperationsSolver[int],
+        NumericOperationsSolver[float]
+):
     '''
     WIP Solver with queries having the semantics of Datalog.
     For now predicates work only on constants on the symbols table

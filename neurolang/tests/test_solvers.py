@@ -80,6 +80,7 @@ def test_numeric_operations_solver():
     assert e.type == expressions.ToBeInferred
     assert s.walk(e).type == int
 
+
 def test_boolean_operations_solver():
     s = solver.BooleanOperationsSolver()
 
@@ -156,5 +157,31 @@ def test_boolean_operations_solver():
     assert not isinstance(s.walk(and_), expressions.Constant)
 
 
+def test_boolean_operations_rewrite():
+    s = solver.BooleanRewriteSolver()
+    a = expressions.Symbol[bool]('a')
+    b = expressions.Symbol[bool]('b')
 
+    original = b | expressions.Constant(True)
+    rewritten = s.walk(original)
+    assert rewritten.functor.value is original.functor.value
+    assert rewritten.args[0] is original.args[1]
+    assert rewritten.args[1] is original.args[0]
 
+    or_ = (
+        a |
+        (expressions.Constant(True) | b)
+    )
+
+    rewritten_or = s.walk(or_)
+    assert rewritten_or.args[0] is or_.args[1].args[0]
+    assert rewritten_or.args[1].args[0] is a
+    assert rewritten_or.args[1].args[1] is b
+    assert rewritten_or.functor.value is or_.functor.value
+    assert rewritten_or.args[1].functor.value is or_.args[1].functor.value
+
+    t_ = s.walk(a | b | a | expressions.Constant(True))
+    assert isinstance(t_.args[0], expressions.Constant) and t_.args[0]
+    assert t_.args[1].args[0].args[0] is a
+    assert t_.args[1].args[0].args[1] is b
+    assert t_.args[1].args[1] is a
