@@ -296,7 +296,8 @@ class ExpressionMeta(ParametricTypeClassMeta):
         @wraps(orig_init)
         def new_init(self, *args, **kwargs):
             generic_pattern_match = any(
-                a is ... or (isinstance(a, tuple) and ... in a)
+                a is ... or (isinstance(a, tuple) and ... in a) or
+                (inspect.isclass(a) and issubclass(a, Expression))
                 for a in args
             )
             self.__is_pattern__ = generic_pattern_match
@@ -511,9 +512,6 @@ class FunctionApplication(Definition):
         self.functor = functor
         self.args = args
         self.kwargs = kwargs
-
-        if not isinstance(self.functor, Expression):
-            self.functor = Constant(self.functor)
 
         if self.functor.type in (ToBeInferred, typing.Any):
             self.type = self.functor.type

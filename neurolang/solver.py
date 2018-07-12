@@ -7,7 +7,7 @@ from .expressions import (
     Expression,
     Symbol, Constant, Predicate, FunctionApplication,
     Query,
-    get_type_and_value, ToBeInferred
+    get_type_and_value,
 )
 from .symbols_and_types import ExistentialPredicate
 from operator import (
@@ -210,15 +210,14 @@ class BooleanOperationsSolver(GenericSolver):
 
 class NumericOperationsSolver(GenericSolver[T]):
     @add_match(
-        FunctionApplication[ToBeInferred](Constant, (Expression[T],) * 2),
+        FunctionApplication(Constant, (Expression[T],) * 2),
         lambda expression: expression.functor.value in (add, sub, mul, truediv)
     )
     def cast_binary(self, expression):
-        print("Match!")
         return expression.cast(expression.args[0].type)
 
     @add_match(
-        FunctionApplication[ToBeInferred](Constant(...), (Expression[T],)),
+        FunctionApplication(Constant, (Expression[T],)),
         lambda expression: expression.functor.value in (pos, neg)
     )
     def cast_unary(self, expression):

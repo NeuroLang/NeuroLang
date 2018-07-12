@@ -56,7 +56,10 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
                     not hasattr(attribute, '__annotations__')
                 ):
                     continue
-                if isinstance(attribute, (types.FunctionType, types.MethodType)):
+                if isinstance(
+                    attribute,
+                    (types.FunctionType, types.MethodType)
+                ):
                     new_attribute = types.FunctionType(
                         attribute.__code__, attribute.__globals__,
                         name=attribute.__name__,
@@ -229,8 +232,8 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
                     'for Expression subclasses'
                 )
         elif isinstance(pattern, expressions.Expression):
-            if not expressions.is_subtype(
-                type(expression), type(pattern)
+            if not isinstance(
+                expression, type(pattern)
             ):
                 logging.debug(
                     f"\texpression is not instance of pattern "
