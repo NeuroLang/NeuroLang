@@ -73,11 +73,11 @@ def get_type_and_value(value, symbol_table=None):
 def is_subtype(left, right):
     if left == right:
         return True
-    if right == typing.Any:
+    if right is typing.Any:
         return True
-    elif left == typing.Any:
-        return right == typing.Any or right == ToBeInferred
-    elif left == ToBeInferred:
+    elif left is typing.Any:
+        return right is typing.Any or right is ToBeInferred
+    elif left is ToBeInferred:
         return True
     elif hasattr(right, '__origin__') and right.__origin__ is not None:
         if right.__origin__ == typing.Union:
@@ -119,15 +119,15 @@ def is_subtype(left, right):
         else:
             return False
     else:
-        if left == int:
+        if left is int:
             return right in (float, complex, typing.SupportsInt)
-        elif left == float:
+        elif left is float:
             return right in (complex, typing.SupportsFloat)
-        elif right == int:
+        elif right is int:
             right = typing.SupportsInt
-        elif right == float:
+        elif right is float:
             right = typing.SupportsFloat
-        elif right == str:
+        elif right is str:
             right = typing.Text
 
         return issubclass(left, right)
