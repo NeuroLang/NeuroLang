@@ -94,7 +94,6 @@ def __pattern_replace_type__(pattern, src_type, dst_type):
             )
         ]
     elif isinstance(pattern, expressions.Expression):
-        print(f"Replace {pattern}")
         parameters = inspect.signature(
             pattern.__class__
         ).parameters
