@@ -85,14 +85,6 @@ def test_boolean_operations_solver():
     s = solver.BooleanOperationsSolver()
 
     or_ = (
-        expressions.Symbol[bool]('a') |
-        expressions.Symbol[bool]('b')
-    )
-
-    assert or_.type == expressions.ToBeInferred
-    assert s.walk(or_).type == bool
-
-    or_ = (
         expressions.Constant(True) |
         expressions.Symbol[bool]('b')
     )
@@ -119,14 +111,6 @@ def test_boolean_operations_solver():
     )
 
     assert not isinstance(s.walk(or_), expressions.Constant)
-
-    and_ = (
-        expressions.Symbol[bool]('a') &
-        expressions.Symbol[bool]('b')
-    )
-
-    assert and_.type == expressions.ToBeInferred
-    assert s.walk(and_).type == bool
 
     and_ = (
         expressions.Constant(False) &
@@ -161,6 +145,16 @@ def test_boolean_operations_rewrite():
     s = solver.BooleanRewriteSolver()
     a = expressions.Symbol[bool]('a')
     b = expressions.Symbol[bool]('b')
+
+    or_ = a | b
+
+    assert or_.type == expressions.ToBeInferred
+    assert s.walk(or_).type == bool
+
+    and_ = a & b
+
+    assert and_.type == expressions.ToBeInferred
+    assert s.walk(and_).type == bool
 
     original = b | expressions.Constant(True)
     rewritten = s.walk(original)
