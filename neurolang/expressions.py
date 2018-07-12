@@ -61,7 +61,7 @@ def get_type_and_value(value, symbol_table=None):
         if isinstance(value, (Constant, Statement)):
             value = value.value
         return type_, value
-    elif isinstance(value, types.FunctionType):
+    elif isinstance(value, (types.FunctionType, types.MethodType)):
         return (
             typing_callable_from_annotated_function(value),
             value
@@ -91,12 +91,14 @@ def is_subtype(left, right):
                 right_args = get_type_args(right)
 
                 if len(left_args) != len(right_args):
-                    False
+                    return False
 
-                return all((
-                    is_subtype(left_arg, right_arg)
-                    for left_arg, right_arg in zip(left_args, right_args)
-                ))
+                return len(left_args) == 0 or (
+                    is_subtype(left_args[1], right_args[1]) and all((
+                        is_subtype(left_arg, right_arg)
+                        for left_arg, right_arg in zip(left_args[0], right_args[0])
+                    ))
+                )
             else:
                 return False
         elif (any(
@@ -208,7 +210,7 @@ def type_validation_value(value, type_, symbol_table=None):
         else:
             raise ValueError("Type %s not implemented in the checker" % type_)
     elif isinstance(value, FunctionApplication):
-        return is_subtype(value.type, type_)
+        return is_subtype(value.type, type_.type)
     else:
         return isinstance(
             value, type_
@@ -403,10 +405,13 @@ class Symbol(Expression):
 class Constant(Expression):
     def __init__(
         self, value,
-        auto_infer_type=True
+        auto_infer_type=True,
+        verify_type=True
     ):
         self.value = value
         self.__wrapped__ = None
+        self.auto_infer_type = auto_infer_type
+        self.verify_type = verify_type
 
         if callable(self.value):
             self.__wrapped__ = value
@@ -414,7 +419,7 @@ class Constant(Expression):
                 if hasattr(value, attr):
                     setattr(self, attr, getattr(value, attr))
 
-            if (auto_infer_type) and self.type == ToBeInferred:
+            if auto_infer_type and self.type == ToBeInferred:
                 if hasattr(value, '__annotations__'):
                     self.type = typing_callable_from_annotated_function(value)
         elif auto_infer_type and self.type == ToBeInferred:
@@ -438,9 +443,7 @@ class Constant(Expression):
             else:
                 self.type = type(value)
 
-        if not (
-            type_validation_value(self.value, self.type)
-        ):
+        if not self.__verify_type__(self.value, self.type):
             raise NeuroLangTypeException(
                 "The value %s does not correspond to the type %s" %
                 (self.value, self.type)
@@ -448,6 +451,17 @@ class Constant(Expression):
 
         if auto_infer_type and self.type != ToBeInferred:
             self.change_type(self.type)
+
+    def __verify_type__(self, value, type_):
+        return (
+            isinstance(
+                value,
+                (types.BuiltinFunctionType, types.BuiltinMethodType)
+            ) or (
+                self.verify_type and
+                type_validation_value(value, type_)
+            )
+        )
 
     def __eq__(self, other):
         if self.type == ToBeInferred:
@@ -483,9 +497,7 @@ class Constant(Expression):
 
     def change_type(self, type_):
         self.__class__ = self.__class__[type_]
-        if not (
-            type_validation_value(self.value, self.type)
-        ):
+        if not self.__verify_type__(self.value, self.type):
             raise NeuroLangTypeException(
                 "The value %s does not correspond to the type %s" %
                 (self.value, self.type)
@@ -691,7 +703,7 @@ def op_bind(op):
     def f(*args):
         arg_types = [get_type_and_value(a)[0] for a in args]
         return FunctionApplication(
-            Constant[typing.Callable[arg_types, ToBeInferred]](op),
+            Constant[typing.Callable[arg_types, ToBeInferred]](op, auto_infer_type=False),
             args,
         )
 
@@ -703,7 +715,7 @@ def rop_bind(op):
     def f(self, value):
         arg_types = [get_type_and_value(a)[0] for a in (value, self)]
         return FunctionApplication(
-            Constant[typing.Callable[arg_types, ToBeInferred]](op, ),
+            Constant[typing.Callable[arg_types, ToBeInferred]](op, auto_infer_type=False),
             args=(value, self),
         )
 

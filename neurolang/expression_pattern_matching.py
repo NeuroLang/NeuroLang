@@ -1,9 +1,11 @@
 from collections import OrderedDict
+import copy
 from itertools import chain
 import inspect
 from inspect import isclass
 import logging
 from typing import Tuple, TypeVar
+import types
 
 from . import expressions
 from .symbols_and_types import replace_type_variable
@@ -44,7 +46,37 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
                     (pattern, getattr(v, 'guard'), v)
                 )
         classdict['__patterns__'] = patterns
-        return type.__new__(cls, name, bases, classdict)
+
+        new_cls = type.__new__(cls, name, bases, classdict)
+        if needs_replacement:
+            for attribute_name in dir(new_cls):
+                attribute = getattr(new_cls, attribute_name, None)
+                if (
+                    attribute is None or
+                    not hasattr(attribute, '__annotations__')
+                ):
+                    continue
+                if isinstance(attribute, (types.FunctionType, types.MethodType)):
+                    new_attribute = types.FunctionType(
+                        attribute.__code__, attribute.__globals__,
+                        name=attribute.__name__,
+                        argdefs=attribute.__defaults__,
+                        closure=attribute.__closure__
+                    )
+                else:
+                    new_attribute = copy.copy(attribute)
+                annotations = getattr(attribute, '__annotations__')
+                if annotations:
+                    new_annotations = {
+                        k: replace_type_variable(
+                            dst_type, v, type_var=src_type
+                        )
+                        for k, v in annotations.items()
+                    }
+                    setattr(new_attribute, '__annotations__', new_annotations)
+                    setattr(new_cls, attribute_name, new_attribute)
+
+        return new_cls
 
 
 def __pattern_replace_type__(pattern, src_type, dst_type):
@@ -151,7 +183,9 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
                 self.pattern_match(pattern, expression) and
                 (guard is None or guard(expression))
             ):
-                logging.debug("**** match {} | {}".format(pattern, guard))
+                logging.debug(
+                    f"**** match {pattern} | {guard} with {expression}"
+                )
                 return action(self, expression)
         else:
             raise ValueError()
@@ -180,23 +214,32 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
           :class:`Expression` matches when
           ``instance == expression``
         '''
+        logging.debug(f"Match try {expression} with pattern {pattern}")
         if pattern is ...:
             return True
         elif isclass(pattern):
             if issubclass(pattern, expressions.Expression):
-                logging.debug("Match type")
-                return isinstance(expression, pattern)
+                res = isinstance(expression, pattern)
+                if res:
+                    logging.debug(f"Match type {expression} {pattern}")
+                return res
             else:
                 raise ValueError(
                     'Class pattern matching only implemented '
                     'for Expression subclasses'
                 )
         elif isinstance(pattern, expressions.Expression):
-            logging.debug("Match expression instance")
-            if not isinstance(expression, pattern.__class__):
+            if not expressions.is_subtype(
+                type(expression), type(pattern)
+            ):
+                logging.debug(
+                    f"\texpression is not instance of pattern "
+                    f"class {pattern.__class__}"
+                )
                 return False
-            elif isclass(pattern.type) and issubclass(pattern.type, Tuple):
-                logging.debug("Match tuple")
+
+            if isclass(pattern.type) and issubclass(pattern.type, Tuple):
+                logging.debug("\tMatch tuple")
                 if (
                     isclass(expression.type) and
                     issubclass(expression.type, Tuple)
@@ -210,32 +253,39 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
                         if not self.pattern_match(p, e):
                             return False
                     else:
+                        logging.debug(
+                            f"\t\tMatched tuple's expression instance "
+                            f"{expression} with {pattern}"
+                        )
                         return True
                 else:
                     return False
             else:
                 parameters = inspect.signature(pattern.__class__).parameters
-                logging.debug("Match parameters {}".format(parameters))
+                logging.debug(
+                    f"\t\tTrying to match parameters "
+                    f"{expression} with {pattern}"
+                )
                 for argname, arg in parameters.items():
                     if arg.default != inspect._empty:
                         continue
                     p = getattr(pattern, argname)
                     e = getattr(expression, argname)
                     match = self.pattern_match(p, e)
-                    logging.debug("\t {} vs {}: {}".format(p, e, match))
                     if not match:
                         return False
+                    else:
+                        logging.debug(f"\t\t\tmatch {p} vs {e}")
                 else:
                     return True
         elif isinstance(pattern, tuple) and isinstance(expression, tuple):
-            logging.debug("Match tuples {} vs {}".format(pattern, expression))
-
             if len(pattern) != len(expression):
                 return False
             for p, e in zip(pattern, expression):
                 if not self.pattern_match(p, e):
                     return False
             else:
+                logging.debug(f"Match tuples {expression} with {pattern}")
                 return True
         else:
             logging.debug("Match other {} vs {}".format(pattern, expression))

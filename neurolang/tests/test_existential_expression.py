@@ -9,7 +9,7 @@ from typing import Callable, AbstractSet
 def test_existential_elem_in_set():
     set_type = AbstractSet[int]
 
-    class SBS(SetBasedSolver):
+    class SBS(SetBasedSolver[int]):
         type = int
 
     solver = SBS(TypedSymbolTable())
@@ -30,8 +30,7 @@ def test_existential_elem_in_set():
 def test_existential_greater_than():
     set_type = AbstractSet[int]
 
-    class SBS(SetBasedSolver):
-        type = int
+    class SBS(SetBasedSolver[int]):
 
         def predicate_is_greater_than(self, reference_elem_in_set: AbstractSet[int]) -> AbstractSet[int]:
             res = frozenset()

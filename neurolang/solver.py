@@ -4,12 +4,16 @@ import inspect
 
 from .exceptions import NeuroLangException
 from .expressions import (
+    Expression,
     Symbol, Constant, Predicate, FunctionApplication,
     Query,
-    get_type_and_value,
+    get_type_and_value, ToBeInferred
 )
-from .symbols_and_types import (ExistentialPredicate, replace_type_variable)
-from operator import invert, and_, or_
+from .symbols_and_types import ExistentialPredicate
+from operator import (
+    invert, and_, or_,
+    add, sub, mul, truediv, pos, neg
+)
 from .expression_walker import (
     add_match, ExpressionBasicEvaluator, ReplaceSymbolWalker
 )
@@ -57,18 +61,7 @@ class GenericSolver(ExpressionBasicEvaluator):
                 next(iter(signature.parameters.keys()))
             ]
 
-            parameter_type = replace_type_variable(
-                self.type,
-                parameter_type,
-                type_var=T
-            )
-
             return_type = type_hints['return']
-            return_type = replace_type_variable(
-                self.type,
-                return_type,
-                type_var=T
-             )
             functor_type = typing.Callable[[parameter_type], return_type]
             functor = Constant[functor_type](method)
             res = Predicate[expression.type](functor, expression.args)
@@ -99,18 +92,7 @@ class GenericSolver(ExpressionBasicEvaluator):
                 next(iter(signature.parameters.keys()))
             ]
 
-            parameter_type = replace_type_variable(
-                self.type,
-                parameter_type,
-                type_var=T
-            )
-
             return_type = type_hints['return']
-            return_type = replace_type_variable(
-                self.type,
-                return_type,
-                type_var=T
-             )
             functor_type = typing.Callable[[parameter_type], return_type]
             functor = Constant[functor_type](method)
 
@@ -122,12 +104,6 @@ class GenericSolver(ExpressionBasicEvaluator):
         for predicate in dir(self):
             if predicate.startswith('predicate_'):
                 c = Constant(getattr(self, predicate))
-                new_type = replace_type_variable(
-                    self.type,
-                    c.type,
-                    type_var=T
-                )
-                c = c.cast(new_type)
                 predicate_constants[predicate[len('predicate_'):]] = c
         return predicate_constants
 
@@ -137,17 +113,11 @@ class GenericSolver(ExpressionBasicEvaluator):
         for function in dir(self):
             if function.startswith('function_'):
                 c = Constant(getattr(self, function))
-                new_type = replace_type_variable(
-                    self.type,
-                    c.type,
-                    type_var=T
-                )
-                c = c.cast(new_type)
                 function_constants[function[len('function_'):]] = c
         return function_constants
 
 
-class SetBasedSolver(GenericSolver):
+class SetBasedSolver(GenericSolver[T]):
     '''
     A predicate `in <set>` which results in the `<set>` given as parameter
     `and` and `or` operations between sets which are disjunction and
@@ -220,12 +190,7 @@ class SetBasedSolver(GenericSolver):
         return Constant[free_variable_symbol.type](results)
 
 
-class DatalogSolver(GenericSolver):
-    '''
-    WIP Solver with queries having the semantics of Datalog.
-    For now predicates work only on constants on the symbols table
-    '''
-
+class BooleanOperationsSolver(GenericSolver):
     @add_match(FunctionApplication(Constant(invert), (Constant[bool],)))
     def rewrite_boolean_inversion(self, expression):
         return Constant(not expression.args[0].value)
@@ -241,6 +206,30 @@ class DatalogSolver(GenericSolver):
     )
     def rewrite_boolean_or(self, expression):
         return Constant(expression.args[0].value or expression.args[1].value)
+
+
+class NumericOperationsSolver(GenericSolver[T]):
+    @add_match(
+        FunctionApplication[ToBeInferred](Constant, (Expression[T],) * 2),
+        lambda expression: expression.functor.value in (add, sub, mul, truediv)
+    )
+    def cast_binary(self, expression):
+        print("Match!")
+        return expression.cast(expression.args[0].type)
+
+    @add_match(
+        FunctionApplication[ToBeInferred](Constant(...), (Expression[T],)),
+        lambda expression: expression.functor.value in (pos, neg)
+    )
+    def cast_unary(self, expression):
+        return expression.cast(expression.args[0].type)
+
+
+class DatalogSolver(BooleanOperationsSolver):
+    '''
+    WIP Solver with queries having the semantics of Datalog.
+    For now predicates work only on constants on the symbols table
+    '''
 
     @add_match(Query)
     def query_resolution(self, expression):

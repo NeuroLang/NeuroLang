@@ -28,9 +28,7 @@ def test_symbol_table():
 
 
 def test_predicate_match():
-    class NewSolver(solver.GenericSolver):
-        type = float
-
+    class NewSolver(solver.GenericSolver[solver.T]):
         def predicate_test(self, a: solver.T) -> bool:
             return True
 
@@ -39,20 +37,19 @@ def test_predicate_match():
             (expressions.Constant[float](0.),)
         )
 
-    ns = NewSolver()
+    ns = NewSolver[float]()
     assert ns.walk(ir).type == bool
 
 
 def test_predicate_symbol_table():
-    class NewSolver(solver.GenericSolver):
+    class NewSolver(solver.GenericSolver[solver.T]):
         type = float
 
         def predicate_test(self, a: float) -> bool:
             return expressions.Symbol[bool]('b')
 
-    ns = NewSolver()
+    ns = NewSolver[float]()
 
-    
     def ff(x: float) -> bool:
         return x % 2 == 0
     ft = typing.Callable[[float], bool]
@@ -70,3 +67,15 @@ def test_predicate_symbol_table():
     assert ns.walk(pt).value
     assert not ns.walk(pf).value
     assert ns.walk(ps).value
+
+
+def test_numeric_operations_solver():
+    s = solver.NumericOperationsSolver[int]()
+
+    e = (
+        expressions.Symbol[int]('a') -
+        expressions.Symbol[int]('b')
+    )
+
+    assert e.type == expressions.ToBeInferred
+    assert s.walk(e).type == int
