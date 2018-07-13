@@ -1,13 +1,14 @@
 import logging
 import typing
 import inspect
+import itertools
 
 from .exceptions import NeuroLangException
 from .expressions import (
     Expression, NonConstant,
     Symbol, Constant, Predicate, FunctionApplication,
     Query,
-    get_type_and_value,
+    get_type_and_value, is_subtype
 )
 from .symbols_and_types import ExistentialPredicate
 from operator import (
@@ -191,18 +192,17 @@ class SetBasedSolver(GenericSolver[T]):
 
 
 class BooleanRewriteSolver(GenericSolver):
-    @add_match(
-        FunctionApplication(Constant, (Expression[bool],) * 2),
-        lambda expression:
-            expression.functor.value in (or_, and_) and
-            expression.type is not bool
-    )
-    def cast_binary(self, expression):
-        if expression.type is not bool:
-            expression.change_type(bool)
-            return self.walk(expression)
-        else:
-            return expression
+    # @add_match(
+    #    FunctionApplication(Constant, (Expression[bool],) * 2),
+    #    lambda expression:
+    #        expression.functor.value in (or_, and_) and
+    #        expression.type is not bool
+    # )
+    # def cast_binary(self, expression):
+    #    if expression.type is not bool:
+    #        return self.walk(expression.cast(bool))
+    #    else:
+    #        return expression
 
     @add_match(
         FunctionApplication(
@@ -343,23 +343,42 @@ class DatalogSolver(
 
         result = []
 
-        constants = {
-            k: v
-            for k, v in self.symbol_table.symbols_by_type(
-                out_query_type
-            ).items()
-            if isinstance(v, Constant)
-        }
+        if not is_subtype(out_query_type, typing.Tuple):
+            symbols_in_head = (expression.head,)
+        else:
+            symbols_in_head = expression.head.value
 
-        for symbol, value in constants.items():
-            if expression.head in expression.free_variable_symbol:
-                rsw = ReplaceSymbolWalker(expression.head, value)
-                body = rsw.walk(expression.body)
-            else:
-                body = expression.body
+        if any(s not in symbols_in_head for s in expression.body._symbols):
+            raise NotImplementedError(
+                "All free symbols in the body must be in the head"
+            )
+
+        constants = tuple((
+            (
+                (k, v)
+                for k, v in self.symbol_table.symbols_by_type(
+                    sym.type
+                ).items()
+                if isinstance(v, Constant)
+            )
+            for sym in symbols_in_head
+        ))
+
+        constant_cross_prod = itertools.product(*constants)
+
+        for symbol_values in constant_cross_prod:
+            body = expression.body
+            for i, s in enumerate(symbols_in_head):
+                if s in body._symbols:
+                    rsw = ReplaceSymbolWalker(s, symbol_values[i][1])
+                    body = rsw.walk(body)
+
             res = self.walk(body)
             if res.value:
-                result.append(symbol)
+                if not is_subtype(out_query_type, typing.Tuple):
+                    result.append(symbol_values[0][0])
+                else:
+                    result.append(tuple(zip(*symbol_values))[0])
 
         return Constant[typing.AbstractSet[out_query_type]](
             frozenset(result)
