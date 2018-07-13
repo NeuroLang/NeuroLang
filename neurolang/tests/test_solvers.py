@@ -1,4 +1,5 @@
 import typing
+import operator as op
 
 from .. import solver
 from .. import expressions
@@ -179,3 +180,11 @@ def test_boolean_operations_rewrite():
     assert t_.args[1].args[0].args[0] is a
     assert t_.args[1].args[0].args[1] is b
     assert t_.args[1].args[1] is a
+
+    t_ = ~(a | b)
+    t_r = s.walk(t_)
+    assert t_r.functor.value is op.and_
+    assert t_r.args[0].functor.value is op.invert
+    assert t_r.args[1].functor.value is op.invert
+    assert t_r.args[0].args[0] is a
+    assert t_r.args[1].args[0] is b
