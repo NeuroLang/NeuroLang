@@ -198,7 +198,11 @@ class BooleanRewriteSolver(GenericSolver):
             expression.type is not bool
     )
     def cast_binary(self, expression):
-        return self.walk(expression.cast(bool))
+        if expression.type is not bool:
+            expression.change_type(bool)
+            return self.walk(expression)
+        else:
+            return expression
 
     @add_match(
         FunctionApplication(
@@ -240,6 +244,25 @@ class BooleanRewriteSolver(GenericSolver):
                             expression.args[1].args[1]
                         )
                     )
+                )
+            )
+        )
+
+    @add_match(
+        FunctionApplication[bool](
+            Constant(invert),
+            (FunctionApplication[bool](
+                Constant(or_),
+                (Expression[bool], Expression[bool])
+            ),)
+        )
+    )
+    def neg_disj_to_conj(self, expression):
+        return self.walk(
+            FunctionApplication[bool](
+                Constant(and_), (
+                    (~expression.args[0].args[0]).cast(bool),
+                    (~expression.args[0].args[1]).cast(bool)
                 )
             )
         )
@@ -304,6 +327,7 @@ class NumericOperationsSolver(GenericSolver[T]):
 
 
 class DatalogSolver(
+        BooleanRewriteSolver,
         BooleanOperationsSolver,
         NumericOperationsSolver[int],
         NumericOperationsSolver[float]
@@ -318,12 +342,17 @@ class DatalogSolver(
         out_query_type = expression.head.type
 
         result = []
-        for symbol, value in self.symbol_table.symbols_by_type(
-            out_query_type
-        ).items():
-            if not isinstance(value, Constant):
-                continue
-            if symbol in expression.free_variable_symbol:
+
+        constants = {
+            k: v
+            for k, v in self.symbol_table.symbols_by_type(
+                out_query_type
+            ).items()
+            if isinstance(v, Constant)
+        }
+
+        for symbol, value in constants.items():
+            if expression.head in expression.free_variable_symbol:
                 rsw = ReplaceSymbolWalker(expression.head, value)
                 body = rsw.walk(expression.body)
             else:
