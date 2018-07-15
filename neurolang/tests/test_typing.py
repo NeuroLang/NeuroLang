@@ -63,6 +63,9 @@ def test_is_subtype_base_types():
         typing.AbstractSet[int], typing.AbstractSet[float]
     )
 
+    with pytest.raises(TypeError, message='list of types not supported'):
+        assert symbols_and_types.is_subtype([int, int], [float, float])
+
     with pytest.raises(ValueError, message='typing Generic not supported'):
         assert symbols_and_types.is_subtype(
             typing.Set[int],
