@@ -231,8 +231,13 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
                     'for Expression subclasses'
                 )
         elif isinstance(pattern, expressions.Expression):
-            if not isinstance(
-                expression, type(pattern)
+            if not (
+                (
+                    hasattr(type(pattern), '__generic_class__') and
+                    isinstance(expression, type(pattern).__generic_class__) and
+                    pattern.type is expressions.ToBeInferred
+                ) or
+                isinstance(expression, type(pattern))
             ):
                 logging.debug(
                     f"\texpression is not instance of pattern "

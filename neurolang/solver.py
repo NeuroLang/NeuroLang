@@ -5,6 +5,7 @@ import itertools
 
 from .exceptions import NeuroLangException
 from .expressions import (
+    ToBeInferred,
     Expression, NonConstant,
     Symbol, Constant, Predicate, FunctionApplication,
     Query,
@@ -193,7 +194,7 @@ class SetBasedSolver(GenericSolver[T]):
 
 class BooleanRewriteSolver(GenericSolver):
     @add_match(
-       FunctionApplication(Constant, (Expression[bool],) * 2),
+       FunctionApplication[ToBeInferred](Constant, (Expression[bool],) * 2),
        lambda expression: (
            expression.functor.value in (or_, and_) and
            expression.type is not bool
