@@ -192,17 +192,18 @@ class SetBasedSolver(GenericSolver[T]):
 
 
 class BooleanRewriteSolver(GenericSolver):
-    # @add_match(
-    #    FunctionApplication(Constant, (Expression[bool],) * 2),
-    #    lambda expression:
-    #        expression.functor.value in (or_, and_) and
-    #        expression.type is not bool
-    # )
-    # def cast_binary(self, expression):
-    #    if expression.type is not bool:
-    #        return self.walk(expression.cast(bool))
-    #    else:
-    #        return expression
+    @add_match(
+       FunctionApplication(Constant, (Expression[bool],) * 2),
+       lambda expression: (
+           expression.functor.value in (or_, and_) and
+           expression.type is not bool
+       )
+    )
+    def cast_binary(self, expression):
+        if expression.type is not bool:
+            return self.walk(expression.cast(bool))
+        else:
+            return expression
 
     @add_match(
         FunctionApplication(
@@ -348,7 +349,9 @@ class DatalogSolver(
         else:
             symbols_in_head = expression.head.value
 
-        if any(s not in expression.head._symbols for s in expression.body._symbols):
+        if any(
+            s not in expression.head._symbols for s in expression.body._symbols
+        ):
             raise NotImplementedError(
                 "All free symbols in the body must be in the head"
             )
