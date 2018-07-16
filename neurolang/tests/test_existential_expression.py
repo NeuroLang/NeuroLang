@@ -50,7 +50,7 @@ def test_existential_greater_than():
     ]
     solver.symbol_table[nl.Symbol[pred_type]('is_greater_than')] = nl.Constant[pred_type](solver.predicate_is_greater_than)
 
-    p1 = Predicate[type](
+    p1 = Predicate[set_type](
         Symbol('is_greater_than'),
         (Symbol[set_type]('x'),)
     )
@@ -129,12 +129,12 @@ def test_existential_negate_predicate():
     solver.symbol_table[nl.Symbol[pred_type]('are_consecutives')] = nl.Constant[pred_type](
         solver.predicate_are_consecutives)
 
-    p1 = Predicate[type](
+    p1 = Predicate[set_type](
         Symbol('are_consecutives'),
         (Symbol[set_type]('x'),)
     )
 
-    exists = ExistentialPredicate[type](
+    exists = ExistentialPredicate[set_type](
         Symbol[set_type]('x'), p1
     )
 

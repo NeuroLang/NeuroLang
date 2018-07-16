@@ -348,7 +348,7 @@ class DatalogSolver(
         else:
             symbols_in_head = expression.head.value
 
-        if any(s not in symbols_in_head for s in expression.body._symbols):
+        if any(s not in expression.head._symbols for s in expression.body._symbols):
             raise NotImplementedError(
                 "All free symbols in the body must be in the head"
             )

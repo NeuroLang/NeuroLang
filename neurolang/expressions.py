@@ -375,7 +375,13 @@ class Expression(metaclass=ExpressionMeta):
             for argname, arg in parameters.items()
             if arg.default == inspect._empty
         )
-        return self.__class__[type_](*args)
+        if hasattr(self.__class__, '__generic_class__'):
+            ret = self.__class__.__generic_class__[type_](*args)
+        else:
+            ret = self.__class__[type_](*args)
+
+        assert ret.type is type_
+        return ret
 
 
 class NonConstant(Expression):
@@ -435,9 +441,20 @@ class Constant(Expression):
                     a.type
                     for a in self.value
                 )]
+                self._symbols = set()
+                for a in self.value:
+                    try:
+                        self._symbols |= a._symbols
+                    except AttributeError:
+                        pass
             elif isinstance(self.value, frozenset):
                 current_type = None
+                self._symbols = set()
                 for a in self.value:
+                    try:
+                        self._symbols |= a._symbols
+                    except AttributeError:
+                        pass
                     if isinstance(a, Expression):
                         new_type = a.type
                     else:
@@ -519,13 +536,21 @@ class FunctionApplication(Definition):
         self.args = args
         self.kwargs = kwargs
 
-        if self.functor.type in (ToBeInferred, typing.Any):
-            self.type = self.functor.type
-        elif isinstance(self.functor.type, typing.Callable):
-            if self.type == ToBeInferred:
+        if self.type in (ToBeInferred, typing.Any):
+            if self.functor.type in (ToBeInferred, typing.Any):
+                pass
+            elif isinstance(self.functor.type, typing.Callable):
                 self.type = self.functor.type.__args__[-1]
+            else:
+                raise NeuroLangTypeException("Functor is not an expression")
         else:
-            raise NeuroLangTypeException("Functor is not an expression")
+            if not (
+                self.functor.type in (ToBeInferred, typing.Any)
+                or is_subtype(self.functor.type.__args__[-1], self.type)
+            ):
+                raise NeuroLangTypeException(
+                    "Functor return type not unifiable with application type"
+                )
 
         if isinstance(functor, Symbol):
             self._symbols = {functor}
