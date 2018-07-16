@@ -77,14 +77,14 @@ def is_subtype(left, right):
             return any(is_subtype(left, r) for r in right.__args__)
         elif issubclass(right, typing.Callable):
             if issubclass(left, typing.Callable):
-                left_args, left_return_type = get_type_args(left)
-                right_args, right_return_type = get_type_args(right)
+                left_args, left_return = get_type_args(left)
+                right_args, right_return = get_type_args(right)
 
                 if len(left_args) != len(right_args):
                     return False
 
                 return (
-                    is_subtype(left_return_type, right_return_type) and
+                    is_subtype(left_return, right_return) and
                     all(is_subtype(left_arg, right_arg)
                         for left_arg, right_arg in
                         zip(left_args, right_args))
