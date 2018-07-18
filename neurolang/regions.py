@@ -5,6 +5,7 @@ import scipy.ndimage
 from .exceptions import NeuroLangException
 from .brain_tree import AABB, Tree, aabb_from_vertices
 
+
 __all__ = [
     'region_union', 'region_intersection', 'region_difference',
     'region_set_from_masked_data', 'take_principal_regions',
@@ -22,8 +23,8 @@ def region_union(region_set, affine=None):
                           for region in region_set]
     result_voxels = set.union(*voxels_per_regions)
     dim = max([region.image_dim for region in region_set]) if all(
-        isinstance(x, ExplicitVBR) and x.image_dim is not None for x in region_set) else None
-    return ExplicitVBR(np.array(list(result_voxels), dtype=list), affine, dim)
+        isinstance(x, ExplicitVBR) and x.image_dim is not None for x in region_set) else None #to improve
+    return ExplicitVBR(np.array(list(result_voxels), dtype=list), affine, dim)  # then convert back to 2d array, FIX!
 
 
 def region_intersection(region_set, affine=None):
@@ -35,7 +36,8 @@ def region_intersection(region_set, affine=None):
     if len(result_voxels) == 0:
         return None
     dim = max([region.image_dim for region in region_set]) if all(
-        isinstance(x, ExplicitVBR) and x.image_dim is not None for x in region_set) else None
+        isinstance(x, ExplicitVBR) and x.image_dim is not None for x in region_set
+    ) else None
     return ExplicitVBR(np.array(list(result_voxels), dtype=list), affine, dim)
 
 
@@ -194,6 +196,7 @@ class ExplicitVBR(VolumetricBrainRegion):
     def __repr__(self):
         return f'Region(VBR= voxels:{self.voxels}, affine:{self.affine})'
 
+    
     def __hash__(self):
         return hash(self.voxels.tobytes() + self.affine.tobytes())
 

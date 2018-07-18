@@ -186,9 +186,12 @@ def test_explicit_region():
     brain_stem = ExplicitVBR(voxels, affine)
     assert np.array_equal(brain_stem.voxels, brain_stem.to_ijk(affine))
 
-    affine = np.array(
-        [[-0.69999999, 0., 0., 90.], [0., 0.69999999, 0., -126.], [0., 0., 0.69999999, -72.], [0., 0., 0., 1.]]).round(
-        2)
+    affine = np.array([
+      [-0.69999999, 0., 0., 90.],
+      [0., 0.69999999, 0., -126.],
+      [0., 0., 0.69999999, -72.],
+      [0., 0., 0., 1.]]
+    ).round(2)
     brain_stem = ExplicitVBR(voxels, affine)
     assert np.array_equal(brain_stem.voxels, brain_stem.to_ijk(affine))
 
@@ -312,15 +315,20 @@ def test_refinement_of_not_overlapping():
 
 
 def test_regions_union_intersection():
-    def randint(): return random.randint(70, 100)
-
-    voxels = [(randint(), randint(), randint()) for _ in range(50)]
-    affine = np.array(
-        [[-0.69999999, 0., 0., 90.], [0., 0.69999999, 0., -126.], [0., 0., 0.69999999, -72.], [0., 0., 0., 1.]]).round(
-        2)
+    voxels = [
+      (random.randint(70, 100), random.randint(70, 100), random.randint(70, 100))
+      for _ in range(50)
+    ]
+    affine = np.array([
+        [-0.69999999, 0., 0., 90.],
+        [0., 0.69999999, 0., -126.],
+        [0., 0., 0.69999999, -72.],
+        [0., 0., 0., 1.]]
+    ).round(2)
     region = ExplicitVBR(voxels, affine)
     union = region_union([region], affine)
     assert union.bounding_box == region.bounding_box
+    #
 
     center = region.bounding_box.ub
     radius = 30
