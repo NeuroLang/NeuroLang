@@ -25,7 +25,6 @@ def test_region_eq():
 
 
 def test_invalid_regions_raise_exception():
-
     with raises(NeuroLangException):
         Region((0, 0, 0), (1, -1, 1))
 
@@ -45,7 +44,6 @@ def _dir_matrix(region, other_region):
 
 
 def test_regions_dir_matrix():
-
     # 2d regions (R-L, P-A)
     r1 = Region((0, 0), (1, 1))
     r2 = Region((0, 5), (1, 6))
@@ -164,7 +162,6 @@ def test_basic_directionality():
 
 
 def test_explicit_region():
-
     def randint(): return random.randint(0, 1000)
 
     voxels = [(randint(), randint(), randint()) for _ in range(50)]
@@ -189,13 +186,17 @@ def test_explicit_region():
     brain_stem = ExplicitVBR(voxels, affine)
     assert np.array_equal(brain_stem.voxels, brain_stem.to_ijk(affine))
 
-    affine = np.array([[-0.69999999, 0., 0., 90.], [0., 0.69999999, 0., -126.], [0., 0., 0.69999999, -72.], [0., 0., 0., 1.]]).round(2)
+    affine = np.array([
+      [-0.69999999, 0., 0., 90.],
+      [0., 0.69999999, 0., -126.],
+      [0., 0., 0.69999999, -72.],
+      [0., 0., 0., 1.]]
+    ).round(2)
     brain_stem = ExplicitVBR(voxels, affine)
     assert np.array_equal(brain_stem.voxels, brain_stem.to_ijk(affine))
 
 
 def test_build_tree_one_voxel_regions():
-
     region = ExplicitVBR(np.array([[2, 2, 2]]), np.eye(4))
     assert region.bounding_box == AABB((2, 2, 2), (3, 3, 3))
     assert region.aabb_tree.height == 0
@@ -217,17 +218,15 @@ def test_tree_of_convex_regions():
 
     region = ExplicitVBR(np.array([[0, 0, 0], [2, 2, 1], [5, 5, 0], [10, 10, 0]]), np.eye(4))
     assert region.aabb_tree.height == 3
-    #rand length n of voxels takes you to log2(n) tree height only if equidist
 
 
 def test_spherical_volumetric_region():
-
     def randint(): return random.randint(0, 1000)
 
     N = 500
     voxels = sorted([(randint(), randint(), randint()) for _ in range(N)])
     affine = np.eye(4)
-    center = voxels[N//2]
+    center = voxels[N // 2]
     radius = 15
     sr = SphericalVolume(center, radius)
     vbr_voxels = sr.to_ijk(affine)
@@ -236,7 +235,8 @@ def test_spherical_volumetric_region():
     assert np.linalg.norm(np.array(coordinate) - np.array(center)) <= radius
 
     explicit_sr = sr.to_explicit_vbr(affine, None)
-    assert np.all(np.array([np.linalg.norm(np.array(tuple([x, y, z])) - np.array(center)) for [x, y, z] in explicit_sr.to_xyz()]) <= 15)
+    assert np.all(np.array(
+        [np.linalg.norm(np.array(tuple([x, y, z])) - np.array(center)) for [x, y, z] in explicit_sr.to_xyz()]) <= 15)
 
 
 def test_planar_region():
@@ -284,7 +284,6 @@ def test_regions_with_multiple_bb_directionality():
 
 
 def test_refinement_of_not_overlapping():
-
     triangle = ExplicitVBR(np.array([[0, 0, 0], [6, 0, 0], [6, 6, 1]]), np.eye(4))
     other_region = ExplicitVBR(np.array([[0, 6, 0]]), np.eye(4))
     assert cardinal_relation(other_region, triangle, 'O', refine_overlapping=False)
@@ -316,15 +315,21 @@ def test_refinement_of_not_overlapping():
 
 
 def test_regions_union_intersection():
-
-    def randint(): return random.randint(70, 100)
-
-    voxels = [(randint(), randint(), randint()) for _ in range(50)]
-    affine = np.array([[-0.69999999, 0., 0., 90.], [0., 0.69999999, 0., -126.], [0., 0., 0.69999999, -72.], [0., 0., 0., 1.]]).round(2)
+    voxels = [
+      (random.randint(70, 100), random.randint(70, 100), random.randint(70, 100))
+      for _ in range(50)
+    ]
+    affine = np.array([
+        [-0.69999999, 0., 0., 90.],
+        [0., 0.69999999, 0., -126.],
+        [0., 0., 0.69999999, -72.],
+        [0., 0., 0., 1.]]
+    ).round(2)
     region = ExplicitVBR(voxels, affine)
     union = region_union([region], affine)
     assert union.bounding_box == region.bounding_box
     #
+
     center = region.bounding_box.ub
     radius = 30
     sphere = SphericalVolume(center, radius)
@@ -334,9 +339,11 @@ def test_regions_union_intersection():
 
 
 def test_intersection_difference():
-
     def randint(): return random.randint(1, 5)
-    affine = np.array([[-0.69999999, 0., 0., 90.], [0., 0.69999999, 0., -126.], [0., 0., 0.69999999, -72.], [0., 0., 0., 1.]]).round(2)
+
+    affine = np.array(
+        [[-0.69999999, 0., 0., 90.], [0., 0.69999999, 0., -126.], [0., 0., 0.69999999, -72.], [0., 0., 0., 1.]]).round(
+        2)
 
     center = (randint(), randint(), randint())
     center2 = (randint(), randint(), randint())
