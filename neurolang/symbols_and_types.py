@@ -10,6 +10,7 @@ from .expressions import (
     Symbol,
     FunctionApplication,
     Statement,
+    ExistentialPredicate,
     Predicate,
     Query,
     Projection,
@@ -25,7 +26,7 @@ from .expressions import (
 __all__ = [
     'ToBeInferred',
     'Symbol', 'Constant', 'Expression', 'FunctionApplication', 'Statement',
-    'Projection', 'Predicate', 'Query',
+    'Projection', 'ExistentialPredicate', 'Predicate', 'Query',
     'TypedSymbolTable',
     'typing_callable_from_annotated_function',
     'NeuroLangTypeException', 'is_subtype', 'type_validation_value',
@@ -51,6 +52,11 @@ def replace_type_variable(type_, type_hint, type_var=None):
                 replace_type_variable(type_, arg, type_var=type_var)
             )
         return type_hint.__origin__[tuple(new_args)]
+    elif isinstance(type_hint, typing.Iterable):
+        return [
+            replace_type_variable(type_, arg, type_var=type_var)
+            for arg in type_hint
+        ]
     else:
         return type_hint
 
@@ -58,9 +64,7 @@ def replace_type_variable(type_, type_hint, type_var=None):
 class TypedSymbolTable(collections.MutableMapping):
     def __init__(self, enclosing_scope=None):
         self._symbols = collections.OrderedDict()
-        self._symbols_by_type = collections.defaultdict(
-            lambda: set()
-        )
+        self._symbols_by_type = collections.defaultdict(dict)
         self.enclosing_scope = enclosing_scope
 
     def __len__(self):

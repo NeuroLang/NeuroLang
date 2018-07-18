@@ -102,3 +102,9 @@ ENV/
 
 #
 /scratch_notebooks
+
+# jetbrains IDE
+.idea/*
+
+# neurosynth resources
+neurolang/utils/neurosynth/

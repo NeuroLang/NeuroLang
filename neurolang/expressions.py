@@ -11,7 +11,7 @@ from .exceptions import NeuroLangException
 
 __all__ = [
     'Symbol', 'FunctionApplication', 'Statement',
-    'Projection', 'Predicate',
+    'Projection', 'Predicate', 'ExistentialPredicate',
     'ToBeInferred',
     'typing_callable_from_annotated_function'
 ]
@@ -27,17 +27,27 @@ class NeuroLangTypeException(NeuroLangException):
 def typing_callable_from_annotated_function(function):
     signature = inspect.signature(function)
     parameter_types = [
-        v.annotation for v in signature.parameters.values()
+        v.annotation if v.annotation != inspect._empty
+        else ToBeInferred
+        for v in signature.parameters.values()
     ]
+
+    if signature.return_annotation == inspect._empty:
+        return_annotation = ToBeInferred
+    else:
+        return_annotation = signature.return_annotation
     return typing.Callable[
         parameter_types,
-        signature.return_annotation
+        return_annotation
     ]
 
 
 def get_type_args(type_):
     if hasattr(type_, '__args__') and type_.__args__ is not None:
-        return type_.__args__
+        if is_subtype(type_, typing.Callable):
+            return list((list(type_.__args__[:-1]), type_.__args__[-1]))
+        else:
+            return type_.__args__
     else:
         return tuple()
 
@@ -138,11 +148,11 @@ def type_validation_value(value, type_, symbol_table=None):
     if type_ == typing.Any or type_ == ToBeInferred:
         return True
 
-    if (
-        (symbol_table is not None) and
-        isinstance(value, Symbol)
-    ):
-        value = symbol_table[value].value
+    if isinstance(value, Symbol):
+        if (symbol_table is not None):
+            value = symbol_table[value].value
+        else:
+            return is_subtype(value.type, type_)
 
     if isinstance(value, Expression):
         value_type, value = get_type_and_value(value)
@@ -413,6 +423,18 @@ class Constant(Expression):
                     a.type
                     for a in self.value
                 )]
+            elif isinstance(self.value, frozenset):
+                current_type = None
+                for a in self.value:
+                    if isinstance(a, Expression):
+                        new_type = a.type
+                    else:
+                        new_type = type(a)
+                    if current_type is None:
+                        current_type = new_type
+                    else:
+                        current_type = unify_types(current_type, new_type)
+                self.type = typing.AbstractSet[current_type]
             else:
                 self.type = type(value)
 
@@ -586,6 +608,26 @@ class Predicate(FunctionApplication):
         return r
 
 
+class ExistentialPredicate(Predicate):
+    def __init__(self, symbol, predicate):
+
+        if not isinstance(symbol, Symbol):
+            raise NeuroLangException('A symbol should be provided for the existential quantifier expression')
+        if not isinstance(predicate, (Predicate, FunctionApplication)):
+            raise NeuroLangException('A predicate or a function application over predicates should be associated to the quantifier')
+
+        if symbol not in predicate._symbols:
+            raise NeuroLangException('Symbol should be a free variable on the predicate')
+        self.symbol = symbol
+        self.predicate = predicate
+        self._symbol = predicate._symbols - {symbol}
+
+    def __repr__(self):
+
+        r = u'\u2203{{{}: {} st {}}}'.format(self.symbol, self.type, self.predicate)
+        return r
+
+
 class Statement(Expression):
     def __init__(
         self, symbol, value,
@@ -606,15 +648,38 @@ class Statement(Expression):
         )
 
 
-class Query(Statement):
+class Query(Expression):
+    def __init__(
+        self, head, body,
+    ):
+        self.head = head
+        self.body = body
+
+    @property
+    def symbol(self):
+        '''
+        backward compat
+        '''
+        return self.head
+
+    @property
+    def value(self):
+        '''
+        backward compat
+        '''
+        return self.body
+
+    def reflect(self):
+        return self.body
+
     def __repr__(self):
-        if self.symbol is ...:
+        if self.head is ...:
             name = '...'
         else:
-            name = self.symbol.name
+            name = self.head.name
 
         return 'Query{{{}: {} <- {}}}'.format(
-            name, self.type, self.value
+            name, self.type, self.body
         )
 
 
@@ -656,7 +721,7 @@ for operator_name in dir(op):
     if name.endswith('___'):
         name = name[:-1]
 
-    for c in (Constant, Symbol, FunctionApplication, Statement):
+    for c in (Constant, Symbol, FunctionApplication, Statement, Query):
         if not hasattr(c, name):
             setattr(c, name, op_bind(operator))
 
@@ -671,5 +736,5 @@ for operator in [
     if name.endswith('___'):
         name = name[:-1]
 
-    for c in (Constant, Symbol, FunctionApplication, Statement):
+    for c in (Constant, Symbol, FunctionApplication, Statement, Query):
         setattr(c, name, rop_bind(operator))

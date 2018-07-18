@@ -15,7 +15,6 @@ from neurolang.solver import SetBasedSolver
 import typing
 
 
-###################################################################
 # Make a class to handle sets of integers. The typename is Integer
 # automatically, the integer set name is Integers ('Integer' + 's')
 class IntSetType(SetBasedSolver):
@@ -40,7 +39,7 @@ class IntSetType(SetBasedSolver):
         )
         return res
 
-##################################################################
+
 # Generate a compiler that adds the previously defined type to the
 # language. This works using the mixin pattern.
 class NeuroLangCompiler(
@@ -52,7 +51,6 @@ class NeuroLangCompiler(
 
 nlc = NeuroLangCompiler()
 
-#####################
 # Run three queries
 nlc.compile('''
     oneset are Integers singleton 1
@@ -64,19 +62,15 @@ nlc.compile('''
 ''')
 
 
-#####################################
 # Print the resulting symbol table
 for k, v in nlc.symbol_table.items():
     print(k, ':', v)
-
 
 #######################################
 # Print the intermediate representation
 # of a two statements
 ir = nlc.get_intermediate_representation('''
-    otherset are Integers in onetwoset
-    a = 5
+    tenset are Integers singleton 10
 ''')
 print(ir[0])
 print('-' * 10)
-print(ir[1])
