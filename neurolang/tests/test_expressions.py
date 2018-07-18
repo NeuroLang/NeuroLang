@@ -5,7 +5,7 @@ from ..expressions import (
     ToBeInferred
 )
 
-from ..expression_walker import ExpressionBasicEvaluator
+from ..expression_walker import ExpressionBasicEvaluator, ReplaceSymbolWalker
 
 import operator as op
 import inspect
