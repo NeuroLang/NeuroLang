@@ -1,13 +1,16 @@
-from ..region_solver import RegionsSetSolver
-from ..symbols_and_types import TypedSymbolTable
-from .. import neurolang as nl
 from typing import AbstractSet, Callable
-from ..regions import *
-from ..CD_relations import *
+
 import nibabel as nib
 import numpy as np
 from numpy import random
 import pytest
+
+from ..region_solver import RegionsSetSolver
+from ..region_solver_ds import IndexRegionSolver, RegionSolver
+from ..symbols_and_types import TypedSymbolTable
+from .. import neurolang as nl
+from ..regions import *
+from ..CD_relations import *
 
 
 def do_query_of_regions_in_relation_to_region(solver, elem, relation, output_symbol_name='q'):
@@ -449,3 +452,28 @@ def test_regexp_region_union():
     assert vbr0.voxels in voxels
     assert vbr_rand.voxels in voxels
     assert vbr1.voxels not in voxels
+
+
+def test_index_region_solver():
+
+    class TestSolver(IndexRegionSolver, RegionSolver):
+        pass
+
+    solver = TestSolver(TypedSymbolTable())
+
+    solver.initialize_region_index()
+
+    inferior = Region((0, 0, 0), (1, 1, 1))
+    central = Region((0, 0, 2), (1, 1, 3))
+    superior = Region((0, 0, 4), (1, 1, 5))
+
+    for region in (inferior, central, superior):
+        solver.add_region_to_index(region)
+
+    expression = nl.Predicate(
+        nl.Symbol('inferior_of'),
+        (nl.Constant(inferior), nl.Constant(central))
+    )
+    result = solver.walk(expression)
+    assert isinstance(result, nl.Constant)
+    assert result.value

@@ -25,6 +25,15 @@ class NeuroLangTypeException(NeuroLangException):
 
 
 def typing_callable_from_annotated_function(function):
+    '''Get a Callable type from a function's annotations
+
+    If an annotation is missing, the ToBeInferred is substituted.
+
+    Parameters
+    ----------
+    function : <class 'function'>
+        Function on which
+    '''
     signature = inspect.signature(function)
     parameter_types = [
         v.annotation if v.annotation is not inspect.Parameter.empty
@@ -529,6 +538,17 @@ class Constant(Expression):
 
 
 class FunctionApplication(Definition):
+    '''FIXME
+
+    Examples
+    --------
+    The FunctionApplication is invoked like this
+
+    >>> FunctionApplication[return_type](functor, args)
+
+    The ``return_type`` is optional. When not given, ToBeInferred is
+    used instead.
+    '''
     def __init__(
         self, functor, args, kwargs=None,
     ):

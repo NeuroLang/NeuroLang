@@ -98,12 +98,12 @@ class Tree:
         self.region_boxes = dict()
         self.height = 0
 
-    def expand_region_box(self, region_id, added_box):
-        if region_id not in self.region_boxes:
-            self.region_boxes[region_id] = added_box
+    def expand_region_box(self, region, added_box):
+        if region not in self.region_boxes:
+            self.region_boxes[region] = added_box
         else:
-            self.region_boxes[region_id] = \
-                self.region_boxes[region_id].union(added_box)
+            self.region_boxes[region] = \
+                self.region_boxes[region].union(added_box)
 
     def add_left(self, box, regions=set()):
         return self.add_in_direction('left', box, regions)
@@ -113,8 +113,8 @@ class Tree:
 
     def add_in_direction(self, direction, box, regions=set()):
 
-        for region_id in regions:
-            self.expand_region_box(region_id, box)
+        for region in regions:
+            self.expand_region_box(region, box)
         n = self.root
         while not n.is_leaf:
             if n.left is not None and n.left.box.contains(box):
@@ -139,8 +139,8 @@ class Tree:
 
     def add(self, box, regions=set()):
 
-        for region_id in regions:
-            self.expand_region_box(region_id, box)
+        for region in regions:
+            self.expand_region_box(region, box)
 
         # if the tree is empty, just set root to the given node
         if self.root is None:
@@ -241,21 +241,21 @@ class Tree:
         matching_regions = set()
         for n in (self.root.left, self.root.right):
             if n.box.overlaps(box):
-                for region_id in n.regions:
-                    if box.contains(self.region_boxes[region_id]):
-                        matching_regions.add(region_id)
+                for region in n.regions:
+                    if box.contains(self.region_boxes[region]):
+                        matching_regions.add(region)
         return matching_regions
 
-    def query_regions_axdir(self, region_id, axis, direction):
+    def query_regions_axdir(self, region, axis, direction):
         if direction not in (-1, 1):
             raise Exception('bad direction value: {}, expected to be in {}'
                             .format(direction, (-1, 1)))
         if axis not in (0, 1, 2):
             raise Exception('bad axis value: {}, expected to be in {}'
                             .format(axis, (0, 1, 2)))
-        if region_id not in self.region_boxes or self.root is None:
+        if region not in self.region_boxes or self.root is None:
             return set()
-        region_box = self.region_boxes[region_id]
+        region_box = self.region_boxes[region]
         box = deepcopy(self.root.box)
         if direction == 1:
             box._lb[axis] = region_box._ub[axis]

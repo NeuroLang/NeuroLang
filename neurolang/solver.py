@@ -65,8 +65,7 @@ class GenericSolver(ExpressionBasicEvaluator):
             ]
 
             return_type = type_hints['return']
-            functor_type = typing.Callable[[parameter_type], return_type]
-            functor = Constant[functor_type](method)
+            functor = Constant(method)
             res = Predicate[expression.type](functor, expression.args)
             return self.walk(res)
         else:

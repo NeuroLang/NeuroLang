@@ -64,7 +64,7 @@ def test_tree_add_bt():
         tree.add(_generate_random_box((1, 2), (0, 1), (0, 1), (0.2, 0.7)))
 
 
-def test_tree_add_with_region_id():
+def test_tree_add_with_region():
     tree = Tree()
     box1 = AABB((1000, 1000, 1000), (2000, 500, 2000))
     tree.add(box1, regions={4})
@@ -86,20 +86,30 @@ def test_tree_query_regions_axdir():
     tree = Tree()
     tree.add(AABB((0, 0, 0), (1, 1, 1)), regions={1})
     tree.add(AABB((2, 0, 0), (3, 1, 1)), regions={2})
-    assert tree.query_regions_axdir(region_id=1, axis=0, direction=1) == {2}
-    assert tree.query_regions_axdir(region_id=1, axis=1, direction=1) == set()
-    assert tree.query_regions_axdir(region_id=2, axis=0, direction=-1) == {1}
+    assert tree.query_regions_axdir(region=1, axis=0, direction=1) == {2}
+    assert tree.query_regions_axdir(region=1, axis=1, direction=1) == set()
+    assert tree.query_regions_axdir(region=2, axis=0, direction=-1) == {1}
 
     tree = Tree()
     tree.add(AABB((-0.5, -0.5, -20.5), (0.6, 0.6, -20)), regions={1})
     tree.add(AABB((0.5, 0.5, 20), (1.5, 1.5, 20.5)), regions={2})
-    assert tree.query_regions_axdir(region_id=1, axis=2, direction=1) == {2}
-    assert tree.query_regions_axdir(region_id=1, axis=0, direction=1) == set()
-    assert tree.query_regions_axdir(region_id=1, axis=1, direction=1) == set()
-    assert tree.query_regions_axdir(region_id=2, axis=2, direction=-1) == {1}
+    assert tree.query_regions_axdir(region=1, axis=2, direction=1) == {2}
+    assert tree.query_regions_axdir(region=1, axis=0, direction=1) == set()
+    assert tree.query_regions_axdir(region=1, axis=1, direction=1) == set()
+    assert tree.query_regions_axdir(region=2, axis=2, direction=-1) == {1}
+
+    tree = Tree()
+    inferior = AABB((0, 0, 0), (1, 1, 1))
+    central = AABB((0, 0, 2), (1, 1, 3))
+    superior = AABB((0, 0, 4), (1, 1, 5))
+    for box in (inferior, central, superior):
+        tree.add(box, regions={box})
+    assert tree.query_regions_axdir(
+        region=central, axis=2, direction=-1
+    ) == {inferior}
 
 
-def test_tree_root_region_id_set_maintaned():
+def test_tree_root_region_set_maintaned():
     tree = Tree()
     inferior = AABB((0, 0, 0), (1, 1, 1))
     central = AABB((0, 0, 2), (1, 1, 3))
