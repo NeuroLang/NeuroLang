@@ -97,3 +97,38 @@ def test_tree_query_regions_axdir():
     assert tree.query_regions_axdir(region_id=1, axis=0, direction=1) == set()
     assert tree.query_regions_axdir(region_id=1, axis=1, direction=1) == set()
     assert tree.query_regions_axdir(region_id=2, axis=2, direction=-1) == {1}
+
+
+def test_tree_root_region_id_set_maintaned():
+    tree = Tree()
+    inferior = AABB((0, 0, 0), (1, 1, 1))
+    central = AABB((0, 0, 2), (1, 1, 3))
+    superior = AABB((0, 0, 4), (1, 1, 5))
+    for box in [inferior, central, superior]:
+        tree.add(box, region_ids={hash(box)})
+    expected_root_box = AABB((0, 0, 0), (1, 1, 5))
+    expected_root_region_ids = {hash(r) for r in [inferior, central, superior]}
+    assert tree.root.box == expected_root_box
+    assert tree.root.region_ids == expected_root_region_ids
+
+def test_tree_root_box_correctly_expanding():
+    tree = Tree()
+    assert tree.root is None
+    box1 = AABB((0, 0, 0), (2.5, 2.5, 1))
+    box2 = AABB((0, 2.5, 0), (2.5, 5, 1))
+    tree.add(box1, region_ids={hash(box1)})
+    assert tree.root is not None
+    assert tree.root.height == 0
+    assert tree.root.is_leaf
+    tree.add(box2, region_ids={hash(box2)})
+    assert tree.root.box == AABB((0, 0, 0), (2.5, 5, 1))
+    assert tree.root.region_ids == {hash(box1), hash(box2)}
+    assert tree.root.left is not None
+    assert tree.root.right is not None
+    assert tree.root.left.is_leaf
+    assert tree.root.left.is_leaf
+    assert tree.root.height == 1
+    box3 = AABB((2.5, 2.5, 0), (5, 5, 1))
+    tree.add(box3, region_ids={hash(box3)})
+    assert tree.root.box == AABB((0, 0, 0), (5, 5, 1))
+    assert tree.root
