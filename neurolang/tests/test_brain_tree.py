@@ -67,15 +67,15 @@ def test_tree_add_bt():
 def test_tree_add_with_region_id():
     tree = Tree()
     box1 = AABB((1000, 1000, 1000), (2000, 500, 2000))
-    tree.add(box1, region_ids={4})
+    tree.add(box1, regions={4})
     assert tree.root is not None
     assert tree.root.box == box1
-    assert 4 in tree.root.region_ids
+    assert 4 in tree.root.regions
 
 
 def test_tree_query_regions_contained_in_box():
     tree = Tree()
-    tree.add(AABB((0, 0, 0), (1, 1, 1)), region_ids={1})
+    tree.add(AABB((0, 0, 0), (1, 1, 1)), regions={1})
     box = AABB((-1, -1, -1), (2, 2, 2))
     assert tree.query_regions_contained_in_box(box) == {1}
     box = AABB((0.5, 0.5, 0.5), (2, 2, 2))
@@ -84,15 +84,15 @@ def test_tree_query_regions_contained_in_box():
 
 def test_tree_query_regions_axdir():
     tree = Tree()
-    tree.add(AABB((0, 0, 0), (1, 1, 1)), region_ids={1})
-    tree.add(AABB((2, 0, 0), (3, 1, 1)), region_ids={2})
+    tree.add(AABB((0, 0, 0), (1, 1, 1)), regions={1})
+    tree.add(AABB((2, 0, 0), (3, 1, 1)), regions={2})
     assert tree.query_regions_axdir(region_id=1, axis=0, direction=1) == {2}
     assert tree.query_regions_axdir(region_id=1, axis=1, direction=1) == set()
     assert tree.query_regions_axdir(region_id=2, axis=0, direction=-1) == {1}
 
     tree = Tree()
-    tree.add(AABB((-0.5, -0.5, -20.5), (0.6, 0.6, -20)), region_ids={1})
-    tree.add(AABB((0.5, 0.5, 20), (1.5, 1.5, 20.5)), region_ids={2})
+    tree.add(AABB((-0.5, -0.5, -20.5), (0.6, 0.6, -20)), regions={1})
+    tree.add(AABB((0.5, 0.5, 20), (1.5, 1.5, 20.5)), regions={2})
     assert tree.query_regions_axdir(region_id=1, axis=2, direction=1) == {2}
     assert tree.query_regions_axdir(region_id=1, axis=0, direction=1) == set()
     assert tree.query_regions_axdir(region_id=1, axis=1, direction=1) == set()
@@ -104,31 +104,31 @@ def test_tree_root_region_id_set_maintaned():
     inferior = AABB((0, 0, 0), (1, 1, 1))
     central = AABB((0, 0, 2), (1, 1, 3))
     superior = AABB((0, 0, 4), (1, 1, 5))
-    for box in [inferior, central, superior]:
-        tree.add(box, region_ids={hash(box)})
+    for box in (inferior, central, superior):
+        tree.add(box, regions={box})
     expected_root_box = AABB((0, 0, 0), (1, 1, 5))
-    expected_root_region_ids = {hash(r) for r in [inferior, central, superior]}
+    expected_root_regions = {r for r in (inferior, central, superior)}
     assert tree.root.box == expected_root_box
-    assert tree.root.region_ids == expected_root_region_ids
+    assert tree.root.regions == expected_root_regions
 
 def test_tree_root_box_correctly_expanding():
     tree = Tree()
     assert tree.root is None
     box1 = AABB((0, 0, 0), (2.5, 2.5, 1))
     box2 = AABB((0, 2.5, 0), (2.5, 5, 1))
-    tree.add(box1, region_ids={hash(box1)})
+    tree.add(box1, regions={box1})
     assert tree.root is not None
     assert tree.root.height == 0
     assert tree.root.is_leaf
-    tree.add(box2, region_ids={hash(box2)})
+    tree.add(box2, regions={box2})
     assert tree.root.box == AABB((0, 0, 0), (2.5, 5, 1))
-    assert tree.root.region_ids == {hash(box1), hash(box2)}
+    assert tree.root.regions == {box1, box2}
     assert tree.root.left is not None
     assert tree.root.right is not None
     assert tree.root.left.is_leaf
     assert tree.root.left.is_leaf
     assert tree.root.height == 1
     box3 = AABB((2.5, 2.5, 0), (5, 5, 1))
-    tree.add(box3, region_ids={hash(box3)})
+    tree.add(box3, regions={box3})
     assert tree.root.box == AABB((0, 0, 0), (5, 5, 1))
     assert tree.root
