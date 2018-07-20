@@ -90,14 +90,18 @@ def test_boolean_operations_solver():
         expressions.Symbol[bool]('b')
     )
 
-    assert s.walk(or_).value
+    r = s.walk(or_)
+    assert isinstance(r, expressions.Constant)
+    assert r.value
 
     or_ = (
         expressions.Symbol[bool]('b') |
         expressions.Constant(True)
     )
 
-    assert s.walk(or_).value
+    r = s.walk(or_)
+    assert isinstance(r, expressions.Constant)
+    assert r.value
 
     or_ = (
         expressions.Constant(False) |
@@ -118,14 +122,18 @@ def test_boolean_operations_solver():
         expressions.Symbol[bool]('b')
     )
 
-    assert not s.walk(and_).value
+    r = s.walk(and_)
+    assert isinstance(r, expressions.Constant)
+    assert not r.value
 
     and_ = (
         expressions.Symbol[bool]('b') &
         expressions.Constant(False)
     )
 
-    assert not s.walk(and_).value
+    r = s.walk(and_)
+    assert isinstance(r, expressions.Constant)
+    assert not r.value
 
     and_ = (
         expressions.Constant(True) &
