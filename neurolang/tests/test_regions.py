@@ -25,6 +25,7 @@ def test_region_eq():
 
 
 def test_invalid_regions_raise_exception():
+
     with raises(NeuroLangException):
         Region((0, 0, 0), (1, -1, 1))
 
@@ -34,9 +35,15 @@ def test_invalid_regions_raise_exception():
 
 def test_coordinates():
     r1 = Region((0, 0, 0), (1, 1, 1))
-    assert np.array_equal(r1.bounding_box.limits, np.array([tuple([0, 1]), tuple([0, 1]), tuple([0, 1])]))
+    assert np.array_equal(
+        r1.bounding_box.limits,
+        np.array([tuple([0, 1]), tuple([0, 1]), tuple([0, 1])])
+    )
     r2 = Region((2, 0, 7), (4, 6, 8))
-    assert np.array_equal(r2.bounding_box.limits, np.array([tuple([2, 4]), tuple([0, 6]), tuple([7, 8])]))
+    assert np.array_equal(
+        r2.bounding_box.limits,
+        np.array([tuple([2, 4]), tuple([0, 6]), tuple([7, 8])])
+    )
 
 
 def _dir_matrix(region, other_region):
@@ -44,6 +51,7 @@ def _dir_matrix(region, other_region):
 
 
 def test_regions_dir_matrix():
+
     # 2d regions (R-L, P-A)
     r1 = Region((0, 0), (1, 1))
     r2 = Region((0, 5), (1, 6))
@@ -109,11 +117,23 @@ def test_regions_dir_matrix():
     # 4d regions overlapping at time intervals: r1 Before r2 - r2 After r1
     r1 = Region((0, 0, 0, 1), (1, 1, 1, 2))
     r2 = Region((0, 0, 0, 5), (1, 1, 1, 6))
-    assert np.all(_dir_matrix(r1, r2)[0, 1, :, :] == np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]]))
-    assert np.all(_dir_matrix(r1, r2)[1:] == np.zeros(shape=(2, 3, 3, 3)))
+    assert np.array_equal(
+        _dir_matrix(r1, r2)[0, 1, :, :],
+        np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]])
+    )
+    assert np.array_equal(
+        _dir_matrix(r1, r2)[1:],
+        np.zeros(shape=(2, 3, 3, 3))
+    )
 
-    assert np.all(_dir_matrix(r2, r1)[-1, 1, :, :] == np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]]))
-    assert np.all(_dir_matrix(r2, r1)[:-1] == np.zeros(shape=(2, 3, 3, 3)))
+    assert np.array_equal(
+        _dir_matrix(r2, r1)[-1, 1, :, :],
+        np.array([[0, 0, 0], [0, 1, 0], [0, 0, 0]])
+    )
+    assert np.array_equal(
+        _dir_matrix(r2, r1)[:-1],
+        np.zeros(shape=(2, 3, 3, 3))
+    )
     assert is_in_direction(_dir_matrix(r2, r1), 'F')
 
 
@@ -162,6 +182,7 @@ def test_basic_directionality():
 
 
 def test_explicit_region():
+
     def randint(): return random.randint(0, 1000)
 
     voxels = [(randint(), randint(), randint()) for _ in range(50)]
@@ -187,16 +208,17 @@ def test_explicit_region():
     assert np.array_equal(brain_stem.voxels, brain_stem.to_ijk(affine))
 
     affine = np.array([
-      [-0.69999999, 0., 0., 90.],
-      [0., 0.69999999, 0., -126.],
-      [0., 0., 0.69999999, -72.],
-      [0., 0., 0., 1.]]
-    ).round(2)
+        [-0.69999999, 0., 0., 90.],
+        [0., 0.69999999, 0., -126.],
+        [0., 0., 0.69999999, -72.],
+        [0., 0., 0., 1.]
+    ]).round(2)
     brain_stem = ExplicitVBR(voxels, affine)
     assert np.array_equal(brain_stem.voxels, brain_stem.to_ijk(affine))
 
 
 def test_build_tree_one_voxel_regions():
+
     region = ExplicitVBR(np.array([[2, 2, 2]]), np.eye(4))
     assert region.bounding_box == AABB((2, 2, 2), (3, 3, 3))
     assert region.aabb_tree.height == 0
@@ -210,17 +232,25 @@ def test_build_tree_one_voxel_regions():
 def test_tree_of_convex_regions():
     cube = ExplicitVBR(np.array([[0, 0, 0], [5, 5, 5]]), np.eye(4))
     assert cube.aabb_tree.height == 1
-    triangle = ExplicitVBR(np.array([[0, 0, 0], [2, 0, 1], [5, 5, 5]]), np.eye(4))
+    triangle = ExplicitVBR(
+        np.array([[0, 0, 0], [2, 0, 1], [5, 5, 5]]), np.eye(4)
+    )
     assert triangle.aabb_tree.height == 2
 
-    region = ExplicitVBR(np.array([[0, 0, 0], [2, 2, 1], [5, 5, 0], [8, 8, 0]]), np.eye(4))
+    region = ExplicitVBR(
+        np.array([[0, 0, 0], [2, 2, 1], [5, 5, 0], [8, 8, 0]]), np.eye(4)
+    )
     assert region.aabb_tree.height == 2
 
-    region = ExplicitVBR(np.array([[0, 0, 0], [2, 2, 1], [5, 5, 0], [10, 10, 0]]), np.eye(4))
+    region = ExplicitVBR(
+        np.array([[0, 0, 0], [2, 2, 1], [5, 5, 0], [10, 10, 0]]), np.eye(4)
+    )
     assert region.aabb_tree.height == 3
+    #rand length n of voxels takes you to log2(n) tree height only if equidist
 
 
 def test_spherical_volumetric_region():
+
     def randint(): return random.randint(0, 1000)
 
     N = 500
@@ -235,8 +265,12 @@ def test_spherical_volumetric_region():
     assert np.linalg.norm(np.array(coordinate) - np.array(center)) <= radius
 
     explicit_sr = sr.to_explicit_vbr(affine, None)
-    assert np.all(np.array(
-        [np.linalg.norm(np.array(tuple([x, y, z])) - np.array(center)) for [x, y, z] in explicit_sr.to_xyz()]) <= 15)
+    assert np.all(
+        np.array([
+            np.linalg.norm(np.array(tuple([x, y, z])) - np.array(center))
+            for [x, y, z] in explicit_sr.to_xyz()
+        ]) <= 15
+    )
 
 
 def test_planar_region():
@@ -248,8 +282,8 @@ def test_planar_region():
     p = tuple(random.randint(1, 250, size=3))
     p_proj = pr.project_point_to_plane(p)
     assert not pr.point_in_plane(p_proj)
-    assert np.all([0, -10, -10] == pr.bounding_box.lb)
-    assert np.all([10, 10, 10] == pr.bounding_box.ub)
+    assert np.array_equal([0, -10, -10], pr.bounding_box.lb)
+    assert np.array_equal([10, 10, 10], pr.bounding_box.ub)
 
 
 def test_regions_with_multiple_bb_directionality():
@@ -270,30 +304,56 @@ def test_regions_with_multiple_bb_directionality():
     tree.add(AABB((0, 0, 0), (2.5, 5, 1)))
     tree.add(AABB((2.5, 0, 0), (5, 5, 1)))
     region_bbs = [tree.root.left.box, tree.root.right.box]
-    assert is_in_direction(direction_matrix([other_region.bounding_box], region_bbs), 'O')
+    assert is_in_direction(
+        direction_matrix([other_region.bounding_box], region_bbs), 'O'
+    )
 
-    tree.add(AABB((0, 0, 0), (2.5, 2.5, 1)))
-    tree.add(AABB((0, 2.5, 0), (2.5, 5, 1)))
-    tree.add(AABB((2.5, 2.5, 0), (5, 5, 1)))
+    region_bbs = [
+      AABB((0, 0, 0), (2.5, 2.5, 1)),
+      AABB((0, 2.5, 0), (2.5, 5, 1)),
+      AABB((2.5, 2.5, 0), (5, 5, 1)),
+    ]
 
-    region_bbs = [tree.root.left.left.box, tree.root.left.right.box, tree.root.right.left.box]
-    assert is_in_direction(direction_matrix([other_region.bounding_box], region_bbs), 'P')
-    assert is_in_direction(direction_matrix([other_region.bounding_box], region_bbs), 'R')
+    for region in region_bbs:
+      tree.add(region)
+
+    assert is_in_direction(
+        direction_matrix([other_region.bounding_box], region_bbs), 'P'
+    )
+    assert is_in_direction(
+        direction_matrix([other_region.bounding_box], region_bbs), 'R'
+    )
+
     for r in ['L', 'A', 'I', 'S', 'O']:
-        assert not is_in_direction(direction_matrix([other_region.bounding_box], region_bbs), r)
+        assert not is_in_direction(
+            direction_matrix([other_region.bounding_box], region_bbs), r
+        )
 
 
 def test_refinement_of_not_overlapping():
-    triangle = ExplicitVBR(np.array([[0, 0, 0], [6, 0, 0], [6, 6, 1]]), np.eye(4))
+
+    triangle = ExplicitVBR(
+        np.array([[0, 0, 0], [6, 0, 0], [6, 6, 1]]), np.eye(4)
+    )
     other_region = ExplicitVBR(np.array([[0, 6, 0]]), np.eye(4))
-    assert cardinal_relation(other_region, triangle, 'O', refine_overlapping=False)
+    assert cardinal_relation(
+        other_region, triangle, 'O', refine_overlapping=False
+    )
     with raises(ValueError):
-        cardinal_relation(other_region, triangle, 'O', refine_overlapping=True, stop_at=0)
-    assert not cardinal_relation(other_region, triangle, 'O', refine_overlapping=True)
+        cardinal_relation(
+            other_region, triangle, 'O', refine_overlapping=True, stop_at=0
+        )
+    assert not cardinal_relation(
+        other_region, triangle, 'O', refine_overlapping=True
+    )
     for r in ['L', 'A']:
-        assert cardinal_relation(other_region, triangle, r, refine_overlapping=True)
+        assert cardinal_relation(
+            other_region, triangle, r, refine_overlapping=True
+        )
     for r in ['R', 'P', 'I', 'S', 'O']:
-        assert not cardinal_relation(other_region, triangle, r, refine_overlapping=True)
+        assert not cardinal_relation(
+            other_region, triangle, r, refine_overlapping=True
+        )
 
     outer = ExplicitVBR(np.array([[0, 0, 0], [10, 10, 0]]), np.eye(4))
     inner = ExplicitVBR(np.array([[8, 0, 0]]), np.eye(4))
@@ -308,28 +368,35 @@ def test_refinement_of_not_overlapping():
     for r in ['A', 'I', 'S', 'O']:
         assert not cardinal_relation(inner, outer, r, refine_overlapping=True)
 
-    region = ExplicitVBR(np.array([[0, 0, 0], [0, 1, 0], [0, 2, 0]]), np.eye(4))
-    other_region = ExplicitVBR(np.array([[0, 0, 0], [1, 0, 0], [2, 0, 0]]), np.eye(4))
-    assert cardinal_relation(region, other_region, 'O', refine_overlapping=False)
-    assert cardinal_relation(region, other_region, 'O', refine_overlapping=True)
+    region = ExplicitVBR(
+        np.array([[0, 0, 0], [0, 1, 0], [0, 2, 0]]), np.eye(4)
+    )
+    other_region = ExplicitVBR(
+        np.array([[0, 0, 0], [1, 0, 0], [2, 0, 0]]), np.eye(4)
+    )
+    assert cardinal_relation(
+        region, other_region, 'O', refine_overlapping=False
+    )
+    assert cardinal_relation(
+        region, other_region, 'O', refine_overlapping=True
+    )
 
 
 def test_regions_union_intersection():
-    voxels = [
-      (random.randint(70, 100), random.randint(70, 100), random.randint(70, 100))
-      for _ in range(50)
-    ]
+
+    def randint(): return random.randint(70, 100)
+
+    voxels = [(randint(), randint(), randint()) for _ in range(50)]
     affine = np.array([
         [-0.69999999, 0., 0., 90.],
         [0., 0.69999999, 0., -126.],
         [0., 0., 0.69999999, -72.],
-        [0., 0., 0., 1.]]
-    ).round(2)
+        [0., 0., 0., 1.]
+    ]).round(2)
     region = ExplicitVBR(voxels, affine)
     union = region_union([region], affine)
     assert union.bounding_box == region.bounding_box
     #
-
     center = region.bounding_box.ub
     radius = 30
     sphere = SphericalVolume(center, radius)
@@ -339,11 +406,14 @@ def test_regions_union_intersection():
 
 
 def test_intersection_difference():
-    def randint(): return random.randint(1, 5)
 
-    affine = np.array(
-        [[-0.69999999, 0., 0., 90.], [0., 0.69999999, 0., -126.], [0., 0., 0.69999999, -72.], [0., 0., 0., 1.]]).round(
-        2)
+    def randint(): return random.randint(1, 5)
+    affine = np.array([
+        [-0.69999999, 0., 0., 90.],
+        [0., 0.69999999, 0., -126.],
+        [0., 0., 0.69999999, -72.],
+        [0., 0., 0., 1.]
+    ]).round(2)
 
     center = (randint(), randint(), randint())
     center2 = (randint(), randint(), randint())
