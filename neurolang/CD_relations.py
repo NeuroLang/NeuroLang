@@ -14,7 +14,7 @@ inverse_directions = {'R': 'L', 'A': 'P', 'S': 'I',
                       'O': 'O', 'L': 'R', 'P': 'A', 'I': 'S'}
 
 direction_from_relation = {'I': -1, 'S': 1,
-                           'A': -1, 'P': 1,
+                           'P': -1, 'A': 1,
                            'L': -1, 'R': 1}
 
 

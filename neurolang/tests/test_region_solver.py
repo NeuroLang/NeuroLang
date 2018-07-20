@@ -463,17 +463,47 @@ def test_index_region_solver():
 
     solver.initialize_region_index()
 
+    central = Region((2, 2, 2), (3, 3, 3))
+
     inferior = Region((0, 0, 0), (1, 1, 1))
-    central = Region((0, 0, 2), (1, 1, 3))
     superior = Region((0, 0, 4), (1, 1, 5))
 
-    for region in (inferior, central, superior):
+    posterior = Region((0, 0, 0), (1, 1, 1))
+    anterior = Region((0, 4, 0), (1, 5, 1))
+
+    left = Region((0, 0, 0), (1, 1, 1))
+    right = Region((4, 0, 0), (5, 1, 1))
+
+    for region in (central, inferior, superior,
+                   anterior, posterior, left, right):
         solver.add_region_to_index(region)
 
-    expression = nl.Predicate(
-        nl.Symbol('inferior_of'),
-        (nl.Constant(inferior), nl.Constant(central))
-    )
-    result = solver.walk(expression)
-    assert isinstance(result, nl.Constant)
-    assert result.value
+    def test_relation(relation, region_a, region_b):
+        expression = nl.Predicate(
+            nl.Symbol(relation),
+            (nl.Constant(region_a), nl.Constant(region_b))
+        )
+        result = solver.walk(expression)
+        assert isinstance(result, nl.Constant)
+        assert result.value is True
+
+    test_relation('inferior_of', inferior, central)
+    test_relation('inferior_of', inferior, superior)
+    test_relation('inferior_of', central, superior)
+    test_relation('superior_of', central, inferior)
+    test_relation('superior_of', superior, central)
+    test_relation('superior_of', superior, inferior)
+
+    test_relation('posterior_of', posterior, central)
+    test_relation('posterior_of', posterior, anterior)
+    test_relation('posterior_of', central, anterior)
+    test_relation('anterior_of', central, posterior)
+    test_relation('anterior_of', anterior, central)
+    test_relation('anterior_of', anterior, posterior)
+
+    test_relation('left_of', left, central)
+    test_relation('left_of', left, right)
+    test_relation('left_of', central, right)
+    test_relation('right_of', central, left)
+    test_relation('right_of', right, central)
+    test_relation('right_of', right, left)
