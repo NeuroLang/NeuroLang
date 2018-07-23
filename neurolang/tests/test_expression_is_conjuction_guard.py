@@ -52,3 +52,4 @@ def test_non_constant_arg_is_not_a_conjunction():
     expression = FunctionApplication[bool](
         Constant(operator.and_), (Constant[bool](True), non_constant_arg)
     )
+    assert not expression_is_conjunction_guard(expression)
