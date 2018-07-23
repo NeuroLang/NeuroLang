@@ -328,6 +328,10 @@ class NumericOperationsSolver(GenericSolver[T]):
         return expression.cast(expression.args[0].type)
 
 
+def expression_is_conjuction_guard(expression):
+    pass
+
+
 class DatalogSolver(
         BooleanRewriteSolver,
         BooleanOperationsSolver,
