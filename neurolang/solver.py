@@ -328,8 +328,32 @@ class NumericOperationsSolver(GenericSolver[T]):
         return expression.cast(expression.args[0].type)
 
 
-def expression_is_conjuction_guard(expression):
-    pass
+def expression_is_conjunction_guard(expression):
+    '''Check if the given expression is a conjuction.
+
+    Parameters
+    ----------
+    expression : nl.Expression
+        Expression for which we need to check if it's a conjunction.
+
+    Returns
+    -------
+    bool
+        True if the expression is a conjuction or a Constant[bool],
+        False otherwise.
+
+    '''
+    if isinstance(expression, Constant):
+        return (expression.type is bool)
+    if (
+        is_subtype(type(expression), typing.Callable) and
+        expression.functor.value is and_
+    ):
+        return (
+            expression_is_conjunction_guard(expression.args[0]) and
+            expression_is_conjunction_guard(expression.args[1])
+        )
+    return False
 
 
 class DatalogSolver(
