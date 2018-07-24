@@ -648,22 +648,30 @@ class Predicate(FunctionApplication):
 
 
 class ExistentialPredicate(Predicate):
-    def __init__(self, symbol, predicate):
+    def __init__(self, head, body):
 
-        if not isinstance(symbol, Symbol):
-            raise NeuroLangException('A symbol should be provided for the existential quantifier expression')
-        if not isinstance(predicate, (Predicate, FunctionApplication)):
-            raise NeuroLangException('A predicate or a function application over predicates should be associated to the quantifier')
+        if not isinstance(head, Symbol):
+            raise NeuroLangException(
+                'A symbol should be provided for the '
+                'existential quantifier expression'
+            )
+        if not isinstance(body, (Predicate, FunctionApplication)):
+            raise NeuroLangException(
+                'A predicate or a function application over '
+                'predicates should be associated to the quantifier'
+            )
 
-        if symbol not in predicate._symbols:
-            raise NeuroLangException('Symbol should be a free variable on the predicate')
-        self.symbol = symbol
-        self.predicate = predicate
-        self._symbol = predicate._symbols - {symbol}
+        if head not in body._symbols:
+            raise NeuroLangException(
+                'Symbol should be a free '
+                'variable on the predicate'
+            )
+        self.head = head
+        self.body = body
+        self._symbol = body._symbols - {head}
 
     def __repr__(self):
-
-        r = u'\u2203{{{}: {} st {}}}'.format(self.symbol, self.type, self.predicate)
+        r = u'\u2203{{{}: {} st {}}}'.format(self.head, self.type, self.body)
         return r
 
 

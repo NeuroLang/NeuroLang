@@ -171,25 +171,25 @@ class SetBasedSolver(GenericSolver[T]):
     @add_match(ExistentialPredicate)
     def existential_predicate(self, expression):
 
-        free_variable_symbol = expression.symbol
-        if free_variable_symbol in self.symbol_table._symbols:
-            return self.symbol_table._symbols[free_variable_symbol]
+        head = expression.head
+        if head in self.symbol_table._symbols:
+            return self.symbol_table._symbols[head]
 
-        predicate = expression.predicate
-        partially_evaluated_predicate = self.walk(predicate)
+        body = expression.body
+        partially_evaluated_body = self.walk(body)
         results = frozenset()
 
         for elem_set in self.symbol_table.symbols_by_type(
-            free_variable_symbol.type
+            head.type
         ).values():
             for elem in elem_set.value:
-                elem = Constant[free_variable_symbol.type](frozenset([elem]))
-                rsw = ReplaceSymbolWalker(free_variable_symbol, elem)
-                rsw_walk = rsw.walk(partially_evaluated_predicate)
+                elem = Constant[head.type](frozenset([elem]))
+                rsw = ReplaceSymbolWalker(head, elem)
+                rsw_walk = rsw.walk(partially_evaluated_body)
                 pred = self.walk(rsw_walk)
                 if pred.value != frozenset():
                     results = results.union(elem.value)
-        return Constant[free_variable_symbol.type](results)
+        return Constant[head.type](results)
 
 
 class BooleanRewriteSolver(GenericSolver):
@@ -387,3 +387,37 @@ class DatalogSolver(
         return Constant[typing.AbstractSet[out_query_type]](
             frozenset(result)
         )
+
+    @add_match(ExistentialPredicate)
+    def existential_predicate(self, expression):
+
+        head = expression.head
+        if head in self.symbol_table._symbols:
+            return self.symbol_table._symbols[head]
+
+        body = expression.body
+        partially_evaluated_body = self.walk(body)
+
+        if isinstance(partially_evaluated_body, Constant):
+            if not is_subtype(partially_evaluated_body.type, bool):
+                res = Constant[bool](bool(Constant.value))
+            else:
+                res = partially_evaluated_body.cast(bool)
+            return res
+        elif (
+            len(partially_evaluated_body._symbols) == 1 and
+            head in partially_evaluated_body._symbols
+        ):
+            for element_value in self.symbol_table.symbols_by_type(
+                head.type
+            ).values():
+                rsw = ReplaceSymbolWalker(head, element_value)
+                res = rsw.walk(partially_evaluated_body)
+                res = self.walk(res)
+                if isinstance(res, Constant) and bool(res.value):
+                    return Constant(True)
+            return Constant(False)
+        else:
+            return ExistentialPredicate[expression.type](
+                head, partially_evaluated_body
+            )
