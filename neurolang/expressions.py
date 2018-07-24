@@ -309,7 +309,7 @@ class ExpressionMeta(ParametricTypeClassMeta):
             parameters = inspect.signature(self.__class__).parameters
             for parameter, value in zip(parameters.items(), args):
                 argname, arg = parameter
-                if arg.default != inspect._empty:
+                if arg.default is not inspect.Parameter.empty:
                     continue
                 setattr(self, argname, value)
 
@@ -675,7 +675,7 @@ class ExistentialPredicate(Predicate):
         return r
 
 
-class Statement(Expression):
+class Statement(Definition):
     def __init__(
         self, symbol, value,
     ):
@@ -695,7 +695,7 @@ class Statement(Expression):
         )
 
 
-class Query(Expression):
+class Query(Definition):
     def __init__(
         self, head, body,
     ):
@@ -740,7 +740,9 @@ def op_bind(op):
     def f(*args):
         arg_types = [get_type_and_value(a)[0] for a in args]
         return FunctionApplication(
-            Constant[typing.Callable[arg_types, ToBeInferred]](op, auto_infer_type=False),
+            Constant[typing.Callable[arg_types, ToBeInferred]](
+                op, auto_infer_type=False
+            ),
             args,
         )
 
@@ -752,7 +754,9 @@ def rop_bind(op):
     def f(self, value):
         arg_types = [get_type_and_value(a)[0] for a in (value, self)]
         return FunctionApplication(
-            Constant[typing.Callable[arg_types, ToBeInferred]](op, auto_infer_type=False),
+            Constant[typing.Callable[arg_types, ToBeInferred]](
+                op, auto_infer_type=False
+            ),
             args=(value, self),
         )
 
