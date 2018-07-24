@@ -147,7 +147,7 @@ def unify_types(t1, t2):
 
 
 def type_validation_value(value, type_, symbol_table=None):
-    if type_ == typing.Any or type_ == ToBeInferred:
+    if type_ is typing.Any or type_ is ToBeInferred:
         return True
 
     if isinstance(value, Symbol):
@@ -432,10 +432,10 @@ class Constant(Expression):
                 if hasattr(value, attr):
                     setattr(self, attr, getattr(value, attr))
 
-            if auto_infer_type and self.type == ToBeInferred:
+            if auto_infer_type and self.type is ToBeInferred:
                 if hasattr(value, '__annotations__'):
                     self.type = typing_callable_from_annotated_function(value)
-        elif auto_infer_type and self.type == ToBeInferred:
+        elif auto_infer_type and self.type is ToBeInferred:
             if isinstance(self.value, tuple):
                 self.type = typing.Tuple[tuple(
                     a.type
@@ -473,7 +473,7 @@ class Constant(Expression):
                 (self.value, self.type)
             )
 
-        if auto_infer_type and self.type != ToBeInferred:
+        if auto_infer_type and self.type is not ToBeInferred:
             self.change_type(self.type)
 
     def __verify_type__(self, value, type_):
@@ -488,7 +488,7 @@ class Constant(Expression):
         )
 
     def __eq__(self, other):
-        if self.type == ToBeInferred:
+        if self.type is ToBeInferred:
             warn('Making a comparison with types needed to be inferred')
 
         if isinstance(other, Expression):
@@ -596,8 +596,8 @@ class Projection(Definition):
         self, collection, item,
         auto_infer_projection_type=True
     ):
-        if self.type == ToBeInferred and auto_infer_projection_type:
-            if not collection.type == ToBeInferred:
+        if self.type is ToBeInferred and auto_infer_projection_type:
+            if collection.type is not ToBeInferred:
                 if is_subtype(collection.type, typing.Tuple):
                     if (
                         isinstance(item, Constant) and
