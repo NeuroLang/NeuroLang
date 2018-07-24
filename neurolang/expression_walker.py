@@ -29,8 +29,8 @@ class ExpressionWalker(PatternMatcher):
     @add_match(Query)
     def query(self, expression):
         return Query[expression.type](
-            expression.symbol,
-            self.walk(expression.value)
+            expression.head,
+            self.walk(expression.body)
         )
 
     @add_match(...)
@@ -64,7 +64,20 @@ class ReplaceSymbolWalker(ExpressionWalker):
             return expression
 
 
-class ExpressionBasicEvaluator(ReplaceSymbolWalker):
+class ReplaceSymbolsByConstants(ExpressionWalker):
+    def __init__(self, symbol_table):
+        self.symbol_table = symbol_table
+
+    @add_match(Symbol)
+    def symbol(self, expression):
+        new_expression = self.symbol_table.get(expression, expression)
+        if isinstance(new_expression, Constant):
+            return new_expression
+        else:
+            return expression
+
+
+class ExpressionBasicEvaluator(ExpressionWalker):
     def __init__(self, symbol_table=None):
         if symbol_table is None:
             symbol_table = dict()
@@ -87,19 +100,19 @@ class ExpressionBasicEvaluator(ReplaceSymbolWalker):
 
     @add_match(Query)
     def query(self, expression):
-        value = self.walk(expression.value)
-        return_type = unify_types(expression.type, value.type)
-        value.change_type(return_type)
-        expression.symbol.change_type(return_type)
-        if value is expression.value:
-            if isinstance(value, Constant):
-                self.symbol_table[expression.symbol] = value
+        body = self.walk(expression.body)
+        return_type = unify_types(expression.type, body.type)
+        body.change_type(return_type)
+        expression.head.change_type(return_type)
+        if body is expression.body:
+            if isinstance(body, Constant):
+                self.symbol_table[expression.head] = body
             else:
-                self.symbol_table[expression.symbol] = expression
+                self.symbol_table[expression.head] = expression
             return expression
         else:
             return self.walk(
-                Query[expression.type](expression.symbol, value)
+                Query[expression.type](expression.head, body)
             )
 
     @add_match(Statement)

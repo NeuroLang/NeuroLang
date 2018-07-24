@@ -293,7 +293,7 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
             argument_types.append(argument_type)
 
         function = FunctionApplication[
-                typing.Callable[argument_types, typing.Any]
+            typing.Any
         ](
             function,
             args=arguments

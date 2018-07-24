@@ -61,7 +61,7 @@ def get_type_and_value(value, symbol_table=None):
         if isinstance(value, (Constant, Statement)):
             value = value.value
         return type_, value
-    elif isinstance(value, types.FunctionType):
+    elif isinstance(value, (types.FunctionType, types.MethodType)):
         return (
             typing_callable_from_annotated_function(value),
             value
@@ -73,11 +73,11 @@ def get_type_and_value(value, symbol_table=None):
 def is_subtype(left, right):
     if left == right:
         return True
-    if right == typing.Any:
+    if right is typing.Any:
         return True
-    elif left == typing.Any:
-        return right == typing.Any or right == ToBeInferred
-    elif left == ToBeInferred:
+    elif left is typing.Any:
+        return right is typing.Any or right is ToBeInferred
+    elif left is ToBeInferred:
         return True
     elif hasattr(right, '__origin__') and right.__origin__ is not None:
         if right.__origin__ == typing.Union:
@@ -87,16 +87,18 @@ def is_subtype(left, right):
             )
         elif issubclass(right, typing.Callable):
             if issubclass(left, typing.Callable):
-                left_args = get_type_args(left)
-                right_args = get_type_args(right)
+                left_args, left_return = get_type_args(left)
+                right_args, right_return = get_type_args(right)
 
                 if len(left_args) != len(right_args):
-                    False
+                    return False
 
-                return all((
-                    is_subtype(left_arg, right_arg)
-                    for left_arg, right_arg in zip(left_args, right_args)
-                ))
+                return len(left_args) == 0 or (
+                    is_subtype(left_return, right_return) and all((
+                        is_subtype(left_arg, right_arg)
+                        for left_arg, right_arg in zip(left_args, right_args)
+                    ))
+                )
             else:
                 return False
         elif (any(
@@ -117,15 +119,15 @@ def is_subtype(left, right):
         else:
             return False
     else:
-        if left == int:
+        if left is int:
             return right in (float, complex, typing.SupportsInt)
-        elif left == float:
+        elif left is float:
             return right in (complex, typing.SupportsFloat)
-        elif right == int:
+        elif right is int:
             right = typing.SupportsInt
-        elif right == float:
+        elif right is float:
             right = typing.SupportsFloat
-        elif right == str:
+        elif right is str:
             right = typing.Text
 
         return issubclass(left, right)
@@ -208,7 +210,7 @@ def type_validation_value(value, type_, symbol_table=None):
         else:
             raise ValueError("Type %s not implemented in the checker" % type_)
     elif isinstance(value, FunctionApplication):
-        return is_subtype(value.type, type_)
+        return is_subtype(value.type, type_.type)
     else:
         return isinstance(
             value, type_
@@ -294,7 +296,8 @@ class ExpressionMeta(ParametricTypeClassMeta):
         @wraps(orig_init)
         def new_init(self, *args, **kwargs):
             generic_pattern_match = any(
-                a is ... or (isinstance(a, tuple) and ... in a)
+                a is ... or (isinstance(a, tuple) and ... in a) or
+                (inspect.isclass(a) and issubclass(a, Expression))
                 for a in args
             )
             self.__is_pattern__ = generic_pattern_match
@@ -372,17 +375,29 @@ class Expression(metaclass=ExpressionMeta):
             for argname, arg in parameters.items()
             if arg.default == inspect._empty
         )
-        return self.__class__[type_](*args)
+        if hasattr(self.__class__, '__generic_class__'):
+            ret = self.__class__.__generic_class__[type_](*args)
+        else:
+            ret = self.__class__[type_](*args)
+
+        assert ret.type is type_
+        return ret
 
 
-class Definition(Expression):
+class NonConstant(Expression):
+    '''
+    Any expression which is not a constant
+    '''
+
+
+class Definition(NonConstant):
     '''
     Parent class for all composite operations
     such as A + B or F(A)
     '''
 
 
-class Symbol(Expression):
+class Symbol(NonConstant):
     def __init__(self, name):
         self.name = name
         self._symbols = {self}
@@ -403,10 +418,13 @@ class Symbol(Expression):
 class Constant(Expression):
     def __init__(
         self, value,
-        auto_infer_type=True
+        auto_infer_type=True,
+        verify_type=True
     ):
         self.value = value
         self.__wrapped__ = None
+        self.auto_infer_type = auto_infer_type
+        self.verify_type = verify_type
 
         if callable(self.value):
             self.__wrapped__ = value
@@ -414,7 +432,7 @@ class Constant(Expression):
                 if hasattr(value, attr):
                     setattr(self, attr, getattr(value, attr))
 
-            if (auto_infer_type) and self.type == ToBeInferred:
+            if auto_infer_type and self.type == ToBeInferred:
                 if hasattr(value, '__annotations__'):
                     self.type = typing_callable_from_annotated_function(value)
         elif auto_infer_type and self.type == ToBeInferred:
@@ -423,9 +441,20 @@ class Constant(Expression):
                     a.type
                     for a in self.value
                 )]
+                self._symbols = set()
+                for a in self.value:
+                    try:
+                        self._symbols |= a._symbols
+                    except AttributeError:
+                        pass
             elif isinstance(self.value, frozenset):
                 current_type = None
+                self._symbols = set()
                 for a in self.value:
+                    try:
+                        self._symbols |= a._symbols
+                    except AttributeError:
+                        pass
                     if isinstance(a, Expression):
                         new_type = a.type
                     else:
@@ -438,9 +467,7 @@ class Constant(Expression):
             else:
                 self.type = type(value)
 
-        if not (
-            type_validation_value(self.value, self.type)
-        ):
+        if not self.__verify_type__(self.value, self.type):
             raise NeuroLangTypeException(
                 "The value %s does not correspond to the type %s" %
                 (self.value, self.type)
@@ -448,6 +475,17 @@ class Constant(Expression):
 
         if auto_infer_type and self.type != ToBeInferred:
             self.change_type(self.type)
+
+    def __verify_type__(self, value, type_):
+        return (
+            isinstance(
+                value,
+                (types.BuiltinFunctionType, types.BuiltinMethodType)
+            ) or (
+                self.verify_type and
+                type_validation_value(value, type_)
+            )
+        )
 
     def __eq__(self, other):
         if self.type == ToBeInferred:
@@ -483,9 +521,7 @@ class Constant(Expression):
 
     def change_type(self, type_):
         self.__class__ = self.__class__[type_]
-        if not (
-            type_validation_value(self.value, self.type)
-        ):
+        if not self.__verify_type__(self.value, self.type):
             raise NeuroLangTypeException(
                 "The value %s does not correspond to the type %s" %
                 (self.value, self.type)
@@ -500,16 +536,21 @@ class FunctionApplication(Definition):
         self.args = args
         self.kwargs = kwargs
 
-        if not isinstance(self.functor, Expression):
-            self.functor = Constant(self.functor)
-
-        if self.functor.type in (ToBeInferred, typing.Any):
-            self.type = self.functor.type
-        elif isinstance(self.functor.type, typing.Callable):
-            if self.type == ToBeInferred:
+        if self.type in (ToBeInferred, typing.Any):
+            if self.functor.type in (ToBeInferred, typing.Any):
+                pass
+            elif isinstance(self.functor.type, typing.Callable):
                 self.type = self.functor.type.__args__[-1]
+            else:
+                raise NeuroLangTypeException("Functor is not an expression")
         else:
-            raise NeuroLangTypeException("Functor is not an expression")
+            if not (
+                self.functor.type in (ToBeInferred, typing.Any)
+                or is_subtype(self.functor.type.__args__[-1], self.type)
+            ):
+                raise NeuroLangTypeException(
+                    "Functor return type not unifiable with application type"
+                )
 
         if isinstance(functor, Symbol):
             self._symbols = {functor}
@@ -543,11 +584,9 @@ class FunctionApplication(Definition):
         elif self.args is not None:
             r += (
                 '(' +
-                ', '.join(repr(arg) for arg in self.args) +
-                ', '.join(
-                    repr(k) + '=' + repr(v)
-                    for k, v in self.kwargs.items()
-                ) + ')')
+                ', '.join(repr(arg) for arg in self.args)
+                + ')'
+                )
 
         return r
 
@@ -693,7 +732,7 @@ def op_bind(op):
     def f(*args):
         arg_types = [get_type_and_value(a)[0] for a in args]
         return FunctionApplication(
-            Constant[typing.Callable[arg_types, ToBeInferred]](op),
+            Constant[typing.Callable[arg_types, ToBeInferred]](op, auto_infer_type=False),
             args,
         )
 
@@ -705,7 +744,7 @@ def rop_bind(op):
     def f(self, value):
         arg_types = [get_type_and_value(a)[0] for a in (value, self)]
         return FunctionApplication(
-            Constant[typing.Callable[arg_types, ToBeInferred]](op, ),
+            Constant[typing.Callable[arg_types, ToBeInferred]](op, auto_infer_type=False),
             args=(value, self),
         )
 
