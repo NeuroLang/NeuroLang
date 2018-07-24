@@ -702,20 +702,6 @@ class Query(Definition):
         self.head = head
         self.body = body
 
-    @property
-    def symbol(self):
-        '''
-        backward compat
-        '''
-        return self.head
-
-    @property
-    def value(self):
-        '''
-        backward compat
-        '''
-        return self.body
-
     def reflect(self):
         return self.body
 
