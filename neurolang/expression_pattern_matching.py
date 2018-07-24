@@ -6,6 +6,7 @@ from inspect import isclass
 import logging
 from typing import Tuple, TypeVar
 import types
+from warnings import warn
 
 from . import expressions
 from .symbols_and_types import replace_type_variable
@@ -19,6 +20,25 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
         return OrderedDict()
 
     def __new__(cls, name, bases, classdict):
+        overwriteable_properties = (
+            '__module__', '__patterns__', '__doc__',
+            'type', 'plural_type_name', '__no_explicit_type__',
+            '__generic_class__',
+        )
+
+        for base in bases:
+            repeated_methods = set(dir(base)).intersection(classdict)
+            repeated_methods.difference_update(overwriteable_properties)
+            if '__init__' in repeated_methods:
+                if getattr(base, '__init__') is object.__init__:
+                    repeated_methods.remove('__init__')
+            if len(repeated_methods) > 1:
+                warn_message = (
+                    f"Warning in class {name} "
+                    f"overwrites {repeated_methods} from base {base}"
+                )
+                warn(warn_message)
+
         patterns = []
         if (
             '__generic_class__' in classdict and
@@ -42,7 +62,6 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
                     (pattern, getattr(v, 'guard'), v)
                 )
         classdict['__patterns__'] = patterns
-
 
         new_cls = super().__new__(cls, name, bases, classdict)
         if needs_replacement:
@@ -141,9 +160,6 @@ def add_match(pattern, guard=None):
 class PatternMatcher(metaclass=PatternMatchingMetaClass):
     '''Class for expression pattern matching.
     '''
-    def __init__(self):
-        pass
-
     @property
     def patterns(self):
         '''Property holding an iterator of triplets ``(pattern, guard, action)``
