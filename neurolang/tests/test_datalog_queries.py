@@ -91,3 +91,95 @@ def test_too_many_symbols_in_query_body():
 
     with raises(NotImplementedError):
         ds.walk(query)
+
+
+def test_existential_predicate():
+    ds = solver.DatalogSolver(TypedSymbolTable())
+
+    for s in range(5):
+        sym = expressions.Symbol[int](str(s))
+        ds.symbol_table[sym] = expressions.Constant[int](s)
+
+    def gt(a: int, b: int) -> bool:
+        return a > b
+
+    ds.symbol_table[expressions.Symbol('gt')] = expressions.Constant(gt)
+
+    x = expressions.Symbol[int]('x')
+
+    expression = expressions.ExistentialPredicate(
+        x, ds.symbol_table['gt'](x, expressions.Constant(2))
+    )
+    res = ds.walk(expression)
+    assert isinstance(res, expressions.Constant)
+    assert res.type is bool
+    assert res.value
+
+    expression = expressions.ExistentialPredicate(
+        x, ds.symbol_table['gt'](x, expressions.Constant(10))
+    )
+    res = ds.walk(expression)
+    assert isinstance(res, expressions.Constant)
+    assert res.type is bool
+    assert not res.value
+
+
+def test_existential_predicate_trivial():
+    ds = solver.DatalogSolver(TypedSymbolTable())
+
+    for s in range(5):
+        sym = expressions.Symbol[int](str(s))
+        ds.symbol_table[sym] = expressions.Constant[int](s)
+
+    def gt(a: int, b: int) -> bool:
+        return a > b
+
+    ds.symbol_table[expressions.Symbol('gt')] = expressions.Constant(gt)
+
+    x = expressions.Symbol[int]('x')
+
+    expression = expressions.ExistentialPredicate(
+        x,
+        expressions.Constant(True) |
+        ds.symbol_table['gt'](x, expressions.Constant(2))
+    )
+    res = ds.walk(expression)
+    assert isinstance(res, expressions.Constant)
+    assert res.type is bool
+    assert res.value
+
+    expression = expressions.ExistentialPredicate(
+        x,
+        expressions.Constant(False) &
+        ds.symbol_table['gt'](x, expressions.Constant(2))
+    )
+    res = ds.walk(expression)
+    assert isinstance(res, expressions.Constant)
+    assert res.type is bool
+    assert not res.value
+
+
+def test_existential_predicate_not_solved():
+    ds = solver.DatalogSolver(TypedSymbolTable())
+
+    for s in range(5):
+        sym = expressions.Symbol[int](str(s))
+        ds.symbol_table[sym] = expressions.Constant[int](s)
+
+    def gt(a: int, b: int) -> bool:
+        return a > b
+
+    ds.symbol_table[expressions.Symbol('gt')] = expressions.Constant(gt)
+
+    x = expressions.Symbol[int]('x')
+    y = expressions.Symbol[int]('y')
+
+    expression = expressions.ExistentialPredicate(
+        x,
+        ds.symbol_table['gt'](x, expressions.Constant(2)) &
+        ds.symbol_table['gt'](y, expressions.Constant(2))
+    )
+    res = ds.walk(expression)
+    assert isinstance(res, expressions.ExistentialPredicate)
+    assert res.head == expression.head
+    assert res.body == res.body
