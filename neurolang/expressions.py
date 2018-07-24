@@ -27,12 +27,12 @@ class NeuroLangTypeException(NeuroLangException):
 def typing_callable_from_annotated_function(function):
     signature = inspect.signature(function)
     parameter_types = [
-        v.annotation if v.annotation != inspect._empty
+        v.annotation if v.annotation is not inspect.Parameter.empty
         else ToBeInferred
         for v in signature.parameters.values()
     ]
 
-    if signature.return_annotation == inspect._empty:
+    if signature.return_annotation is inspect.Parameter.empty:
         return_annotation = ToBeInferred
     else:
         return_annotation = signature.return_annotation
@@ -373,7 +373,7 @@ class Expression(metaclass=ExpressionMeta):
         args = (
             getattr(self, argname)
             for argname, arg in parameters.items()
-            if arg.default == inspect._empty
+            if arg.default is inspect.Parameter.empty
         )
         if hasattr(self.__class__, '__generic_class__'):
             ret = self.__class__.__generic_class__[type_](*args)
