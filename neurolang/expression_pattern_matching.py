@@ -19,10 +19,6 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
         return OrderedDict()
 
     def __new__(cls, name, bases, classdict):
-        classdict['__ordered__'] = [
-            key for key in classdict.keys()
-            if key not in ('__module__', '__qualname__')
-        ]
         patterns = []
         if (
             '__generic_class__' in classdict and
@@ -47,7 +43,8 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
                 )
         classdict['__patterns__'] = patterns
 
-        new_cls = type.__new__(cls, name, bases, classdict)
+
+        new_cls = super().__new__(cls, name, bases, classdict)
         if needs_replacement:
             for attribute_name in dir(new_cls):
                 attribute = getattr(new_cls, attribute_name, None)
