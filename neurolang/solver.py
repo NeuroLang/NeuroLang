@@ -328,7 +328,7 @@ class NumericOperationsSolver(GenericSolver[T]):
         return expression.cast(expression.args[0].type)
 
 
-def expression_is_conjunction_guard(expression):
+def is_conjunctive_expression(expression):
     '''Check if the given expression is a conjuction.
 
     Parameters
@@ -343,17 +343,34 @@ def expression_is_conjunction_guard(expression):
         False otherwise.
 
     '''
+    # expression is a constant bool, which is considered conjunctive
     if isinstance(expression, Constant):
-        return (expression.type is bool)
-    if (
-        is_subtype(type(expression), typing.Callable) and
-        expression.functor.value is and_
+        return is_subtype(expression.type, bool)
+    # expression is a boolean symbol
+    elif isinstance(expression, Symbol):
+        return not isinstance(expression, FunctionApplication)
+    # expression is a function application returning boolean
+    elif (
+        isinstance(expression, FunctionApplication) and
+        (is_subtype(expression.type, bool) or
+         is_subtype(expression.type, ToBeInferred))
     ):
-        return (
-            expression_is_conjunction_guard(expression.args[0]) and
-            expression_is_conjunction_guard(expression.args[1])
-        )
-    return False
+        # expression is the AND logical operator
+        if expression.functor.value is and_:
+            return (
+                is_conjunctive_expression(expression.args[0]) and
+                is_conjunctive_expression(expression.args[1])
+            )
+        # expression is a function application of symbols
+        # which are not function applications
+        else:
+            return all(
+                isinstance(x, Symbol) and
+                not isinstance(x, FunctionApplication)
+                for x in expression.args
+            )
+    else:
+        return False
 
 
 class DatalogSolver(
