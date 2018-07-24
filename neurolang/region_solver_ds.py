@@ -7,8 +7,7 @@ from .solver import DatalogSolver
 from .expressions import Constant
 
 
-class RegionSolver(DatalogSolver):
-    type = Region
+class RegionSolver(DatalogSolver[Region]):
     type_name = 'Region'
 
     def __new__(cls, *args, **kwargs):
