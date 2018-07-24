@@ -1,4 +1,3 @@
-import time
 from typing import AbstractSet, Callable
 
 import nibabel as nib
@@ -510,23 +509,9 @@ def test_index_region_solver():
     test_relation('right_of', right, left)
 
 
-def test_profiling_index_region_solver():
-
-    class IndexSolver(IndexRegionSolver, RegionSolver):
-        pass
-
-    class NoIndexSolver(RegionSolver):
-        pass
-
-    print('hello')
-
-    index_solver = IndexSolver(TypedSymbolTable())
-    index_solver.initialize_region_index()
-    no_index_solver = NoIndexSolver(TypedSymbolTable())
-
+def profile_solver(solver):
     inferior_regions = []
     superior_regions = []
-
     for _ in range(30):
         lb = np.array([np.random.randint(0, 100),
                        np.random.randint(0, 100),
@@ -535,9 +520,9 @@ def test_profiling_index_region_solver():
                        np.random.randint(lb[1] + 1, lb[1] + 100),
                        np.random.randint(lb[2] + 1, lb[2] + 100)])
         region = Region(lb, ub)
-        index_solver.add_region_to_index(region)
+        if hasattr(solver, 'index'):
+            solver.add_region_to_index(region)
         inferior_regions.append(region)
-
     for _ in range(30):
         lb = np.array([np.random.randint(201, 300),
                        np.random.randint(201, 300),
@@ -546,10 +531,11 @@ def test_profiling_index_region_solver():
                        np.random.randint(lb[1] + 1, lb[1] + 100),
                        np.random.randint(lb[2] + 1, lb[2] + 100)])
         region = Region(lb, ub)
-        index_solver.add_region_to_index(region)
+        if hasattr(solver, 'index'):
+            solver.add_region_to_index(region)
         superior_regions.append(region)
 
-    def test_relation(solver, relation, region_a, region_b):
+    def test_relation(relation, region_a, region_b):
         expression = nl.Predicate(
             nl.Symbol(relation),
             (nl.Constant(region_a), nl.Constant(region_b))
@@ -558,14 +544,25 @@ def test_profiling_index_region_solver():
         assert isinstance(result, nl.Constant)
         assert result.value is True
 
-    for solver in (no_index_solver, index_solver):
-        start_time = time.time()
-        for inferior_region in inferior_regions:
-            for superior_region in superior_regions:
-                test_relation(solver, 'inferior_of',
-                              inferior_region, superior_region)
-                test_relation(solver, 'superior_of',
-                              superior_region, inferior_region)
-        end_time = time.time()
-        elapsed_time = end_time - start_time
-        print('{}: {}'.format(solver, elapsed_time))
+    for inferior_region in inferior_regions:
+        for superior_region in superior_regions:
+            test_relation(solver, 'inferior_of',
+                          inferior_region, superior_region)
+            test_relation(solver, 'superior_of',
+                          superior_region, inferior_region)
+
+
+def test_profiling_index_region_solver():
+
+    class IndexSolver(IndexRegionSolver, RegionSolver):
+        pass
+
+    index_solver = IndexSolver(TypedSymbolTable())
+    index_solver.initialize_region_index()
+    profile_solver(index_solver)
+
+
+def test_profiling_region_solver():
+    class NoIndexSolver(RegionSolver):
+        pass
+    profile_solver(NoIndexSolver())

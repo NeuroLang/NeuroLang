@@ -348,7 +348,7 @@ def is_conjunctive_expression(expression):
         return is_subtype(expression.type, bool)
     # expression is a boolean symbol
     elif isinstance(expression, Symbol):
-        return not isinstance(expression, FunctionApplication)
+        return not is_subtype(expression.type, typing.Callable)
     # expression is a function application returning boolean
     elif (
         isinstance(expression, FunctionApplication) and
@@ -366,7 +366,7 @@ def is_conjunctive_expression(expression):
         else:
             return all(
                 isinstance(x, Symbol) and
-                not isinstance(x, FunctionApplication)
+                not is_subtype(x.type, typing.Callable)
                 for x in expression.args
             )
     else:
