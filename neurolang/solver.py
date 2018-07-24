@@ -365,9 +365,11 @@ def is_conjunctive_expression(expression):
         # which are not function applications
         else:
             return all(
-                isinstance(x, Symbol) and
-                not is_subtype(x.type, typing.Callable)
-                for x in expression.args
+                isinstance(arg, Constant) or (
+                    isinstance(arg, Symbol) and
+                    not is_subtype(arg.type, typing.Callable)
+                    for arg in expression.args
+                )
             )
     else:
         return False
