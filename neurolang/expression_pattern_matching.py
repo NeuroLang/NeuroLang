@@ -116,7 +116,7 @@ def __pattern_replace_type__(pattern, src_type, dst_type):
         args = []
 
         for argname, arg in parameters.items():
-            if arg.default != inspect._empty:
+            if arg.default is not inspect.Parameter.empty:
                 continue
             args.append(
                 __pattern_replace_type__(
@@ -287,7 +287,7 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
                     f"{expression} with {pattern}"
                 )
                 for argname, arg in parameters.items():
-                    if arg.default != inspect._empty:
+                    if arg.default is not inspect.Parameter.empty:
                         continue
                     p = getattr(pattern, argname)
                     e = getattr(expression, argname)

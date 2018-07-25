@@ -27,12 +27,12 @@ class NeuroLangTypeException(NeuroLangException):
 def typing_callable_from_annotated_function(function):
     signature = inspect.signature(function)
     parameter_types = [
-        v.annotation if v.annotation != inspect._empty
+        v.annotation if v.annotation is not inspect.Parameter.empty
         else ToBeInferred
         for v in signature.parameters.values()
     ]
 
-    if signature.return_annotation == inspect._empty:
+    if signature.return_annotation is inspect.Parameter.empty:
         return_annotation = ToBeInferred
     else:
         return_annotation = signature.return_annotation
@@ -147,7 +147,7 @@ def unify_types(t1, t2):
 
 
 def type_validation_value(value, type_, symbol_table=None):
-    if type_ == typing.Any or type_ == ToBeInferred:
+    if type_ is typing.Any or type_ is ToBeInferred:
         return True
 
     if isinstance(value, Symbol):
@@ -309,7 +309,7 @@ class ExpressionMeta(ParametricTypeClassMeta):
             parameters = inspect.signature(self.__class__).parameters
             for parameter, value in zip(parameters.items(), args):
                 argname, arg = parameter
-                if arg.default != inspect._empty:
+                if arg.default is not inspect.Parameter.empty:
                     continue
                 setattr(self, argname, value)
 
@@ -373,7 +373,7 @@ class Expression(metaclass=ExpressionMeta):
         args = (
             getattr(self, argname)
             for argname, arg in parameters.items()
-            if arg.default == inspect._empty
+            if arg.default is inspect.Parameter.empty
         )
         if hasattr(self.__class__, '__generic_class__'):
             ret = self.__class__.__generic_class__[type_](*args)
@@ -432,10 +432,10 @@ class Constant(Expression):
                 if hasattr(value, attr):
                     setattr(self, attr, getattr(value, attr))
 
-            if auto_infer_type and self.type == ToBeInferred:
+            if auto_infer_type and self.type is ToBeInferred:
                 if hasattr(value, '__annotations__'):
                     self.type = typing_callable_from_annotated_function(value)
-        elif auto_infer_type and self.type == ToBeInferred:
+        elif auto_infer_type and self.type is ToBeInferred:
             if isinstance(self.value, tuple):
                 self.type = typing.Tuple[tuple(
                     a.type
@@ -473,7 +473,7 @@ class Constant(Expression):
                 (self.value, self.type)
             )
 
-        if auto_infer_type and self.type != ToBeInferred:
+        if auto_infer_type and self.type is not ToBeInferred:
             self.change_type(self.type)
 
     def __verify_type__(self, value, type_):
@@ -488,7 +488,7 @@ class Constant(Expression):
         )
 
     def __eq__(self, other):
-        if self.type == ToBeInferred:
+        if self.type is ToBeInferred:
             warn('Making a comparison with types needed to be inferred')
 
         if isinstance(other, Expression):
@@ -596,8 +596,8 @@ class Projection(Definition):
         self, collection, item,
         auto_infer_projection_type=True
     ):
-        if self.type == ToBeInferred and auto_infer_projection_type:
-            if not collection.type == ToBeInferred:
+        if self.type is ToBeInferred and auto_infer_projection_type:
+            if collection.type is not ToBeInferred:
                 if is_subtype(collection.type, typing.Tuple):
                     if (
                         isinstance(item, Constant) and
@@ -675,7 +675,7 @@ class ExistentialPredicate(Predicate):
         return r
 
 
-class Statement(Expression):
+class Statement(Definition):
     def __init__(
         self, symbol, value,
     ):
@@ -695,26 +695,12 @@ class Statement(Expression):
         )
 
 
-class Query(Expression):
+class Query(Definition):
     def __init__(
         self, head, body,
     ):
         self.head = head
         self.body = body
-
-    @property
-    def symbol(self):
-        '''
-        backward compat
-        '''
-        return self.head
-
-    @property
-    def value(self):
-        '''
-        backward compat
-        '''
-        return self.body
 
     def reflect(self):
         return self.body
@@ -740,7 +726,9 @@ def op_bind(op):
     def f(*args):
         arg_types = [get_type_and_value(a)[0] for a in args]
         return FunctionApplication(
-            Constant[typing.Callable[arg_types, ToBeInferred]](op, auto_infer_type=False),
+            Constant[typing.Callable[arg_types, ToBeInferred]](
+                op, auto_infer_type=False
+            ),
             args,
         )
 
@@ -752,7 +740,9 @@ def rop_bind(op):
     def f(self, value):
         arg_types = [get_type_and_value(a)[0] for a in (value, self)]
         return FunctionApplication(
-            Constant[typing.Callable[arg_types, ToBeInferred]](op, auto_infer_type=False),
+            Constant[typing.Callable[arg_types, ToBeInferred]](
+                op, auto_infer_type=False
+            ),
             args=(value, self),
         )
 

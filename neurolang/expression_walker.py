@@ -3,7 +3,7 @@ import typing
 
 from .expressions import (
     FunctionApplication, Statement, Query, Projection, Constant,
-    Symbol,
+    Symbol, ExistentialPredicate,
     get_type_and_value, ToBeInferred, is_subtype, NeuroLangTypeException,
     unify_types
 )
@@ -29,6 +29,13 @@ class ExpressionWalker(PatternMatcher):
     @add_match(Query)
     def query(self, expression):
         return Query[expression.type](
+            expression.head,
+            self.walk(expression.body)
+        )
+
+    @add_match(ExistentialPredicate)
+    def existential_predicate(self, expression):
+        return ExistentialPredicate[expression.type](
             expression.head,
             self.walk(expression.body)
         )
@@ -162,7 +169,7 @@ class ExpressionBasicEvaluator(ExpressionWalker):
         functor = expression.functor
         functor_type, functor_value = get_type_and_value(functor)
 
-        if functor_type != ToBeInferred:
+        if functor_type is not ToBeInferred:
             if not is_subtype(functor_type, typing.Callable):
                 raise NeuroLangTypeException(
                     'Function {} is not of callable type'.format(functor)
@@ -211,7 +218,7 @@ class ExpressionBasicEvaluator(ExpressionWalker):
         if changed:
             functor_type, functor_value = get_type_and_value(functor)
 
-            if functor_type != ToBeInferred:
+            if functor_type is not ToBeInferred:
                 if not is_subtype(functor_type, typing.Callable):
                     raise NeuroLangTypeException(
                         'Function {} is not of callable type'.format(functor)
