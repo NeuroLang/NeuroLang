@@ -118,26 +118,6 @@ class QueryBuilder:
         self.solver.walk(query)
         return Symbol(self, result_symbol_name)
 
-    def neurosynth_term_to_region_set(self, term, result_symbol_name=None):
-
-        if result_symbol_name is None:
-            result_symbol_name = str(uuid1())
-
-        predicate = nl.Predicate[str](
-            nl.Symbol[Callable[[str], self.set_type]]('neurosynth_term'),
-            (nl.Constant[str](term),)
-        )
-
-        query = nl.Query[self.set_type](
-            nl.Symbol[self.set_type](result_symbol_name),
-            predicate
-        )
-        query_res = self.solver.walk(query)
-        for r in query_res.value.value:
-            self.add_region(r)
-
-        return Symbol(self, result_symbol_name)
-
     def new_region_symbol(self, symbol_name=None):
         if symbol_name is None:
             symbol_name = str(uuid1())
@@ -169,6 +149,9 @@ class QueryBuilder:
         self.solver.symbol_table[symbol] = value
 
         return Symbol(self, result_symbol_name)
+
+    def delete_symbol(self, symbol):
+        del self.solver.symbol_table[symbol]
 
     def add_region(self, region, result_symbol_name=None):
         if not isinstance(region, self.type):

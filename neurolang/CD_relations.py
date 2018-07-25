@@ -16,6 +16,9 @@ inverse_directions = {'R': 'L', 'A': 'P', 'S': 'I',
 
 def cardinal_relation(region, reference_region, directions, refine_overlapping=False, stop_at=None):
 
+    if region == reference_region:
+        return False
+
     mat = direction_matrix([region.bounding_box], [reference_region.bounding_box])
     overlap = is_in_direction(mat, 'O')
     if overlap and refine_overlapping and isinstance(region, ExplicitVBR):
