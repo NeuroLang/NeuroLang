@@ -11,7 +11,9 @@ from .solver import GenericSolver, DatalogSolver, is_conjunctive_expression
 from .expressions import (
     Query, Expression, Constant, Symbol, FunctionApplication, is_subtype
 )
-from .expression_walker import add_match, ExpressionWalker, ReplaceSymbolWalker
+from .expression_walker import (
+    add_match, ExpressionWalker, ReplaceSymbolWalker, ReplaceSymbolsByConstants
+)
 from .brain_tree import Tree
 
 
@@ -87,7 +89,10 @@ class SpatialIndexRegionSolver(RegionSolver):
 
     @add_match(
         Query(Symbol[Region], ...),
-        guard=lambda expression: is_conjunctive_expression(expression.body)
+        guard=lambda expression: (
+            expression.head._symbols == expression.body._symbols and
+            is_conjunctive_expression(expression.body)
+        )
     )
     def spatial_query_resolution(self, expression):
 
@@ -107,11 +112,14 @@ class SpatialIndexRegionSolver(RegionSolver):
 
         out_query_type = Region
 
+        # rsw = ReplaceSymbolsByConstants(self.symbol_table)
+        body = expression.body
+
         result = []
 
         if (
-            expression.head not in expression.body._symbols or
-            len(expression.body._symbols) > 1
+            expression.head not in body._symbols or
+            len(body._symbols) > 1
         ):
             raise NotImplementedError(
                 "All free symbols in the body must be in the head"
@@ -119,7 +127,7 @@ class SpatialIndexRegionSolver(RegionSolver):
 
         # retrieve all function application in the expression
         get_af_walker = GetFunctionApplicationsWalker()
-        get_af_walker.walk(expression.body)
+        get_af_walker.walk(body)
         function_applications = get_af_walker.function_applications
 
         # retrieve all constant regions in the symbol table
@@ -154,11 +162,10 @@ class SpatialIndexRegionSolver(RegionSolver):
 
         for region in reduced_regions:
             constant, symbol = region_to_constant_and_symbol[region]
-            body = expression.body
             rsw = ReplaceSymbolWalker(expression.head, constant)
-            body = rsw.walk(body)
+            rsw_body = rsw.walk(body)
 
-            res = self.walk(body)
+            res = self.walk(rsw_body)
             if isinstance(res, Constant) and res.value:
                 result.append(symbol)
 

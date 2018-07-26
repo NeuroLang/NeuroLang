@@ -460,40 +460,51 @@ def test_regexp_region_union():
 
 def test_spatial_index_region_solver():
 
-    s = SpatialIndexRegionSolver(TypedSymbolTable())
-    s.initialize_region_index()
+    st = TypedSymbolTable()
 
-    # free symbol used for the query definition
-    x = Symbol[Region]('x')
     # region symbols
     posterior_inferior = Symbol[Region]('posterior_inferior')
     anterior = Symbol[Region]('anterior')
     superior = Symbol[Region]('superior')
 
-    s.symbol_table[posterior_inferior] = Constant(Region((0, 0, 0), (1, 1, 1)))
-    s.symbol_table[anterior] = Constant(Region((0, 2, 0), (1, 3, 1)))
-    s.symbol_table[superior] = Constant(Region((0, 0, 2), (1, 1, 3)))
+    st[posterior_inferior] = Constant(Region((0, 0, 0), (1, 1, 1)))
+    st[anterior] = Constant(Region((0, 2, 0), (1, 3, 1)))
+    st[superior] = Constant(Region((0, 0, 2), (1, 1, 3)))
+
+
+    s = SpatialIndexRegionSolver(st)
+    s.initialize_region_index()
+
+    for k, v in s.included_predicates.items():
+        s.symbol_table[k] = v
 
     for symbol in [posterior_inferior, anterior, superior]:
         s.add_region_to_index(s.symbol_table[symbol].value)
 
+    # free symbol used for the query definition
+    x = Symbol[Region]('x')
     # get all regions x such that
     #   posterior_of(x, anterior) and inferior_of(x, superior)
     # we expect this to return the symbol of posterior_of
     query = Query[AbstractSet[Region]](
-        x, FunctionApplication[bool](
-            Constant[Callable[[bool, bool], bool]](operator.and_), (
-                s.included_predicates['posterior_of'](
-                    x, s.symbol_table[anterior]
-                ),
-                s.included_predicates['inferior_of'](
-                    x, s.symbol_table[superior]
-                )
+        x, FunctionApplication(
+            Constant(operator.and_), (
+                Symbol('posterior_of')(x, anterior),
+                Symbol('inferior_of')(x, superior)
             )
         )
     )
 
     result = s.walk(query)
 
+    assert isinstance(result, nl.Constant)
+    assert result.value == {posterior_inferior}
+
+    rs = RegionSolver(st)
+
+    for k, v in s.included_predicates.items():
+        s.symbol_table[k] = v
+
+    result = rs.walk(query)
     assert isinstance(result, nl.Constant)
     assert result.value == {posterior_inferior}
