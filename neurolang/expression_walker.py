@@ -11,7 +11,21 @@ from .expressions import (
 from .expression_pattern_matching import add_match, PatternMatcher
 
 
-class ExpressionWalker(PatternMatcher):
+class PatternWalker(PatternMatcher):
+    def walk(self, expression):
+        logging.debug("walking {}".format(expression))
+        if isinstance(expression, list) or isinstance(expression, tuple):
+            result = [
+                self.walk(e)
+                for e in expression
+            ]
+            if isinstance(expression, tuple):
+                result = tuple(result)
+            return result
+        return self.match(expression)
+
+
+class ExpressionWalker(PatternWalker):
     @add_match(Statement)
     def statement(self, expression):
         return Statement[expression.type](
@@ -43,18 +57,6 @@ class ExpressionWalker(PatternMatcher):
     @add_match(...)
     def default(self, expression):
         return expression
-
-    def walk(self, expression):
-        logging.debug("walking {}".format(expression))
-        if isinstance(expression, list) or isinstance(expression, tuple):
-            result = [
-                self.walk(e)
-                for e in expression
-            ]
-            if isinstance(expression, tuple):
-                result = tuple(result)
-            return result
-        return self.match(expression)
 
 
 class ReplaceSymbolWalker(ExpressionWalker):
@@ -112,14 +114,28 @@ class ExpressionBasicEvaluator(ExpressionWalker):
         body.change_type(return_type)
         expression.head.change_type(return_type)
         if body is expression.body:
-            if isinstance(body, Constant):
-                self.symbol_table[expression.head] = body
-            else:
-                self.symbol_table[expression.head] = expression
             return expression
         else:
             return self.walk(
                 Query[expression.type](expression.head, body)
+            )
+
+    @add_match(ExistentialPredicate)
+    def existential_predicate(self, expression):
+        body = self.walk(expression.body)
+        if body.type is not ToBeInferred:
+            return_type = unify_types(expression.type, body.type)
+        else:
+            return_type = expression.type
+
+        if (
+            body is expression.body and
+            return_type is expression.type
+        ):
+            return expression
+        else:
+            return self.walk(
+                ExistentialPredicate[return_type](expression.head, body)
             )
 
     @add_match(Statement)

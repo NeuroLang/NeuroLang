@@ -87,7 +87,7 @@ def test_existential_bound_variable():
     p1 = Predicate[set_type](Symbol('is_greater_than'),
                              (Symbol[set_type]('x'), ))
 
-    exists = ExistentialPredicate[type](Symbol[type]('x'), p1)
+    exists = ExistentialPredicate[set_type](Symbol[type]('x'), p1)
 
     assert solver.walk(exists) == solver.symbol_table['x']
 

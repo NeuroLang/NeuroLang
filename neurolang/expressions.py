@@ -647,7 +647,7 @@ class Predicate(FunctionApplication):
         return r
 
 
-class ExistentialPredicate(Predicate):
+class ExistentialPredicate(Definition):
     def __init__(self, head, body):
 
         if not isinstance(head, Symbol):

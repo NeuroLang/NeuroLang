@@ -198,7 +198,7 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
                 self.pattern_match(pattern, expression) and
                 (guard is None or guard(expression))
             ):
-                logging.debug(
+                logging.info(
                     f"**** match {pattern} | {guard} with {expression}"
                 )
                 return action(self, expression)
