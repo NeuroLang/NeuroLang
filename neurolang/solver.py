@@ -17,7 +17,8 @@ from operator import (
     add, sub, mul, truediv, pos, neg
 )
 from .expression_walker import (
-    add_match, ExpressionBasicEvaluator, ReplaceSymbolWalker
+    add_match, ExpressionBasicEvaluator, ReplaceSymbolWalker,
+    ReplaceSymbolsByConstants
 )
 
 
@@ -339,7 +340,13 @@ class DatalogSolver(
     For now predicates work only on constants on the symbols table
     '''
 
-    @add_match(Query)
+    # @add_match(Query)
+    @add_match(
+        Query,
+        guard=lambda expression: (
+            expression.head._symbols == expression.body._symbols
+        )
+    )
     def query_resolution(self, expression):
         out_query_type = expression.head.type
 
@@ -350,8 +357,11 @@ class DatalogSolver(
         else:
             symbols_in_head = expression.head.value
 
+        rsw = ReplaceSymbolsByConstants(self.symbol_table)
+        body_no_symbols = rsw.walk(expression.body)
+
         if any(
-            s not in expression.head._symbols for s in expression.body._symbols
+            s not in expression.head._symbols for s in body_no_symbols._symbols
         ):
             raise NotImplementedError(
                 "All free symbols in the body must be in the head"
@@ -371,7 +381,7 @@ class DatalogSolver(
         constant_cross_prod = itertools.product(*constants)
 
         for symbol_values in constant_cross_prod:
-            body = expression.body
+            body = body_no_symbols
             for i, s in enumerate(symbols_in_head):
                 if s in body._symbols:
                     rsw = ReplaceSymbolWalker(s, symbol_values[i][1])

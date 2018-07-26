@@ -107,10 +107,9 @@ class ExpressionBasicEvaluator(ExpressionWalker):
 
     @add_match(Query)
     def query(self, expression):
+        head = expression.head
         body = self.walk(expression.body)
-        return_type = unify_types(expression.type, body.type)
-        body.change_type(return_type)
-        expression.head.change_type(return_type)
+        return_type = typing.AbstractSet[head.type]
         if body is expression.body:
             if isinstance(body, Constant):
                 self.symbol_table[expression.head] = body
@@ -119,7 +118,7 @@ class ExpressionBasicEvaluator(ExpressionWalker):
             return expression
         else:
             return self.walk(
-                Query[expression.type](expression.head, body)
+                Query[return_type](expression.head, body)
             )
 
     @add_match(Statement)
