@@ -347,13 +347,12 @@ def is_conjunctive_expression(expression):
     if isinstance(expression, Constant):
         return is_subtype(expression.type, bool)
     # expression is a boolean symbol
-    elif isinstance(expression, Symbol):
-        return not is_subtype(expression.type, typing.Callable)
+    elif isinstance(expression, Symbol) and is_subtype(expression.type, bool):
+        return True
     # expression is a function application returning boolean
     elif (
         isinstance(expression, FunctionApplication) and
-        (is_subtype(expression.type, bool) or
-         is_subtype(expression.type, ToBeInferred))
+        is_subtype(expression.type, bool)
     ):
         # expression is the AND logical operator
         if expression.functor.value is and_:
@@ -361,6 +360,8 @@ def is_conjunctive_expression(expression):
                 is_conjunctive_expression(expression.args[0]) and
                 is_conjunctive_expression(expression.args[1])
             )
+        elif expression.functor.value is or_:
+            return False
         # expression is a function application of symbols
         # which are not function applications
         else:
