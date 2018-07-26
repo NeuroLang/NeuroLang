@@ -1,4 +1,5 @@
 import typing
+import itertools
 import re
 
 from . import neurolang as nl
@@ -6,9 +7,11 @@ from .CD_relations import (cardinal_relation,
                            direction_from_relation,
                            directions_dim_space)
 from .regions import Region, region_union
-from .solver import GenericSolver, DatalogSolver
-from .expressions import Constant, Symbol, FunctionApplication
-from .expression_walker import add_match
+from .solver import GenericSolver, DatalogSolver, is_conjunctive_expression
+from .expressions import (
+    Query, Expression, Constant, Symbol, FunctionApplication, is_subtype
+)
+from .expression_walker import add_match, ExpressionWalker, ReplaceSymbolWalker
 from .brain_tree import Tree
 
 
@@ -64,7 +67,17 @@ class RegionSolver(DatalogSolver[Region]):
         return region_union(new_region_set)
 
 
-class IndexRegionSolver(GenericSolver[Region]):
+class GetFunctionApplicationsWalker(ExpressionWalker):
+    def __init__(self):
+        self.function_applications = []
+
+    @add_match(FunctionApplication)
+    def function_application(self, expression):
+        self.function_applications.append(expression)
+        return super().function(expression)
+
+
+class SpatialIndexRegionSolver(RegionSolver):
 
     def initialize_region_index(self):
         self.index = Tree()
@@ -72,24 +85,81 @@ class IndexRegionSolver(GenericSolver[Region]):
     def add_region_to_index(self, region):
         self.index.add(region.bounding_box, regions={region})
 
-    def __new__(cls, *args, **kwargs):
+    @add_match(
+        Query(Symbol, ...),
+        guard=lambda expression: is_conjunctive_expression(expression.body)
+    )
+    def spatial_query_resolution(self, expression):
+
+        out_query_type = expression.head.type
+
+        result = []
+
+        if (
+            expression.head not in expression.body._symbols or
+            len(expression.body._symbols) > 1
+        ):
+            raise NotImplementedError(
+                "All free symbols in the body must be in the head"
+            )
+
+        # retrieve all function application in the expression
+        get_af_walker = GetFunctionApplicationsWalker()
+        get_af_walker.walk(expression.body)
+        function_applications = get_af_walker.function_applications
+
+        # retrieve all constant regions in the symbol table
+        region_to_constant_and_symbol = {
+            region.value: (region, symbol)
+            for symbol, region
+            in self.symbol_table.symbols_by_type(Region).items()
+            if isinstance(region, Constant)
+        }
+
+        all_regions = set(region_to_constant_and_symbol.keys())
+
+        cardinal_predicates = {
+            self.included_predicates[relation]: relation for relation in (
+                'inferior_of', 'superior_of',
+                'posterior_of', 'anterior_of',
+                'left_of', 'right_of',
+            )
+        }
+
         cardinal_operations = {
             'inferior_of': 'I', 'superior_of': 'S',
             'posterior_of': 'P', 'anterior_of': 'A',
             'left_of': 'L', 'right_of': 'R',
         }
 
-        def build_function(relation):
-            direction = direction_from_relation.get(relation)
-            axis = directions_dim_space.get(relation)[0]
-            def f(self, x: Region, y: Region) -> bool:
-                matching = self.index.query_regions_axdir(
-                    y, axis=axis, direction=direction
+        # we start with all regions in the symbol table
+        reduced_regions = all_regions
+
+        # and reduce this set accordingly if we encounter any spatial relation
+        for function_application in function_applications:
+            if function_application.functor in cardinal_predicates:
+                relation = cardinal_predicates[function_application.functor]
+                anatomical_direction = cardinal_operations[relation]
+                direction = direction_from_relation[anatomical_direction]
+                axis = directions_dim_space[anatomical_direction][0]
+                relative_region = (
+                    function_application.args[0]
+                    if isinstance(function_application.args[0], Constant)
+                    else function_application.args[1]
+                ).value
+                matching_regions = self.index.query_regions_axdir(
+                    relative_region, axis=axis, direction=direction
                 )
-                return (x in matching)
-            return f
+                reduced_regions.intersection_update(matching_regions)
 
-        for key, value in cardinal_operations.items():
-            setattr(cls, f'predicate_{key}', build_function(value))
+        for region in reduced_regions:
+            constant, symbol = region_to_constant_and_symbol[region]
+            body = expression.body
+            rsw = ReplaceSymbolWalker(expression.head, constant)
+            body = rsw.walk(body)
 
-        return GenericSolver[Region].__new__(cls)
+            res = self.walk(body)
+            if isinstance(res, Constant) and res.value:
+                result.append(symbol)
+
+        return Constant[typing.AbstractSet[out_query_type]](frozenset(result))

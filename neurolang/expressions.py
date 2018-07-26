@@ -728,8 +728,10 @@ class Query(Definition):
     def __repr__(self):
         if self.head is ...:
             name = '...'
-        else:
+        elif isinstance(self.head, Symbol):
             name = self.head.name
+        else:
+            name = repr(self.head)
 
         return 'Query{{{}: {} <- {}}}'.format(
             name, self.type, self.body

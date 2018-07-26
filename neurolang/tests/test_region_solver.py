@@ -1,4 +1,5 @@
 from typing import AbstractSet, Callable
+import operator
 
 import nibabel as nib
 import numpy as np
@@ -6,8 +7,11 @@ from numpy import random
 import pytest
 
 from ..region_solver import RegionsSetSolver
-from ..region_solver_ds import IndexRegionSolver, RegionSolver
+from ..region_solver_ds import SpatialIndexRegionSolver, RegionSolver
 from ..symbols_and_types import TypedSymbolTable
+from ..expressions import (
+    Symbol, Predicate, FunctionApplication, Constant, Query
+)
 from .. import neurolang as nl
 from ..regions import *
 from ..CD_relations import *
@@ -454,115 +458,42 @@ def test_regexp_region_union():
     assert vbr1.voxels not in voxels
 
 
-def test_index_region_solver():
+def test_spatial_index_region_solver():
 
-    class TestSolver(IndexRegionSolver, RegionSolver):
-        pass
+    s = SpatialIndexRegionSolver(TypedSymbolTable())
+    s.initialize_region_index()
 
-    solver = TestSolver(TypedSymbolTable())
+    # free symbol used for the query definition
+    x = Symbol[Region]('x')
+    # region symbols
+    posterior_inferior = Symbol[Region]('posterior_inferior')
+    anterior = Symbol[Region]('anterior')
+    superior = Symbol[Region]('superior')
 
-    solver.initialize_region_index()
+    s.symbol_table[posterior_inferior] = Constant(Region((0, 0, 0), (1, 1, 1)))
+    s.symbol_table[anterior] = Constant(Region((0, 2, 0), (1, 3, 1)))
+    s.symbol_table[superior] = Constant(Region((0, 0, 2), (1, 1, 3)))
 
-    central = Region((2, 2, 2), (3, 3, 3))
+    for symbol in [posterior_inferior, anterior, superior]:
+        s.add_region_to_index(s.symbol_table[symbol].value)
 
-    inferior = Region((0, 0, 0), (1, 1, 1))
-    superior = Region((0, 0, 4), (1, 1, 5))
-
-    posterior = Region((0, 0, 0), (1, 1, 1))
-    anterior = Region((0, 4, 0), (1, 5, 1))
-
-    left = Region((0, 0, 0), (1, 1, 1))
-    right = Region((4, 0, 0), (5, 1, 1))
-
-    for region in (central, inferior, superior,
-                   anterior, posterior, left, right):
-        solver.add_region_to_index(region)
-
-    def test_relation(relation, region_a, region_b):
-        expression = nl.Predicate(
-            nl.Symbol(relation),
-            (nl.Constant(region_a), nl.Constant(region_b))
+    # get all regions x such that
+    #   posterior_of(x, anterior) and inferior_of(x, superior)
+    # we expect this to return the symbol of posterior_of
+    query = Query[AbstractSet[Region]](
+        x, FunctionApplication[bool](
+            Constant[Callable[[bool, bool], bool]](operator.and_), (
+                s.included_predicates['posterior_of'](
+                    x, s.symbol_table[anterior]
+                ),
+                s.included_predicates['inferior_of'](
+                    x, s.symbol_table[superior]
+                )
+            )
         )
-        result = solver.walk(expression)
-        assert isinstance(result, nl.Constant)
-        assert result.value is True
+    )
 
-    test_relation('inferior_of', inferior, central)
-    test_relation('inferior_of', inferior, superior)
-    test_relation('inferior_of', central, superior)
-    test_relation('superior_of', central, inferior)
-    test_relation('superior_of', superior, central)
-    test_relation('superior_of', superior, inferior)
+    result = s.walk(query)
 
-    test_relation('posterior_of', posterior, central)
-    test_relation('posterior_of', posterior, anterior)
-    test_relation('posterior_of', central, anterior)
-    test_relation('anterior_of', central, posterior)
-    test_relation('anterior_of', anterior, central)
-    test_relation('anterior_of', anterior, posterior)
-
-    test_relation('left_of', left, central)
-    test_relation('left_of', left, right)
-    test_relation('left_of', central, right)
-    test_relation('right_of', central, left)
-    test_relation('right_of', right, central)
-    test_relation('right_of', right, left)
-
-
-def profile_solver(solver):
-    inferior_regions = []
-    superior_regions = []
-    for _ in range(30):
-        lb = np.array([np.random.randint(0, 100),
-                       np.random.randint(0, 100),
-                       np.random.randint(0, 100)])
-        ub = np.array([np.random.randint(lb[0] + 1, lb[0] + 100),
-                       np.random.randint(lb[1] + 1, lb[1] + 100),
-                       np.random.randint(lb[2] + 1, lb[2] + 100)])
-        region = Region(lb, ub)
-        if hasattr(solver, 'index'):
-            solver.add_region_to_index(region)
-        inferior_regions.append(region)
-    for _ in range(30):
-        lb = np.array([np.random.randint(201, 300),
-                       np.random.randint(201, 300),
-                       np.random.randint(201, 300)])
-        ub = np.array([np.random.randint(lb[0] + 1, lb[0] + 100),
-                       np.random.randint(lb[1] + 1, lb[1] + 100),
-                       np.random.randint(lb[2] + 1, lb[2] + 100)])
-        region = Region(lb, ub)
-        if hasattr(solver, 'index'):
-            solver.add_region_to_index(region)
-        superior_regions.append(region)
-
-    def test_relation(relation, region_a, region_b):
-        expression = nl.Predicate(
-            nl.Symbol(relation),
-            (nl.Constant(region_a), nl.Constant(region_b))
-        )
-        result = solver.walk(expression)
-        assert isinstance(result, nl.Constant)
-        assert result.value is True
-
-    for inferior_region in inferior_regions:
-        for superior_region in superior_regions:
-            test_relation(solver, 'inferior_of',
-                          inferior_region, superior_region)
-            test_relation(solver, 'superior_of',
-                          superior_region, inferior_region)
-
-
-def test_profiling_index_region_solver():
-
-    class IndexSolver(IndexRegionSolver, RegionSolver):
-        pass
-
-    index_solver = IndexSolver(TypedSymbolTable())
-    index_solver.initialize_region_index()
-    profile_solver(index_solver)
-
-
-def test_profiling_region_solver():
-    class NoIndexSolver(RegionSolver):
-        pass
-    profile_solver(NoIndexSolver())
+    assert isinstance(result, nl.Constant)
+    assert result.value == {posterior_inferior}
