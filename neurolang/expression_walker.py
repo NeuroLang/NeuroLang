@@ -3,7 +3,7 @@ import typing
 
 from .expressions import (
     FunctionApplication, Statement, Query, Projection, Constant,
-    Symbol,
+    Symbol, ExistentialPredicate,
     get_type_and_value, ToBeInferred, is_subtype, NeuroLangTypeException,
     unify_types
 )
@@ -29,6 +29,13 @@ class ExpressionWalker(PatternMatcher):
     @add_match(Query)
     def query(self, expression):
         return Query[expression.type](
+            expression.head,
+            self.walk(expression.body)
+        )
+
+    @add_match(ExistentialPredicate)
+    def existential_predicate(self, expression):
+        return ExistentialPredicate[expression.type](
             expression.head,
             self.walk(expression.body)
         )
@@ -100,10 +107,9 @@ class ExpressionBasicEvaluator(ExpressionWalker):
 
     @add_match(Query)
     def query(self, expression):
+        head = expression.head
         body = self.walk(expression.body)
-        return_type = unify_types(expression.type, body.type)
-        body.change_type(return_type)
-        expression.head.change_type(return_type)
+        return_type = typing.AbstractSet[head.type]
         if body is expression.body:
             if isinstance(body, Constant):
                 self.symbol_table[expression.head] = body
@@ -112,7 +118,7 @@ class ExpressionBasicEvaluator(ExpressionWalker):
             return expression
         else:
             return self.walk(
-                Query[expression.type](expression.head, body)
+                Query[return_type](expression.head, body)
             )
 
     @add_match(Statement)
@@ -162,7 +168,7 @@ class ExpressionBasicEvaluator(ExpressionWalker):
         functor = expression.functor
         functor_type, functor_value = get_type_and_value(functor)
 
-        if functor_type != ToBeInferred:
+        if functor_type is not ToBeInferred:
             if not is_subtype(functor_type, typing.Callable):
                 raise NeuroLangTypeException(
                     'Function {} is not of callable type'.format(functor)
@@ -211,7 +217,7 @@ class ExpressionBasicEvaluator(ExpressionWalker):
         if changed:
             functor_type, functor_value = get_type_and_value(functor)
 
-            if functor_type != ToBeInferred:
+            if functor_type is not ToBeInferred:
                 if not is_subtype(functor_type, typing.Callable):
                     raise NeuroLangTypeException(
                         'Function {} is not of callable type'.format(functor)

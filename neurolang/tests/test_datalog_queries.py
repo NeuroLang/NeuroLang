@@ -1,3 +1,4 @@
+import pytest
 from pytest import raises
 
 import typing
@@ -67,6 +68,7 @@ def test_multiple_symbol_query():
     ) == res.value
 
 
+@pytest.mark.skip
 def test_too_many_symbols_in_query_body():
     ds = solver.DatalogSolver(TypedSymbolTable())
 

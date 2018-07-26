@@ -304,7 +304,7 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
     def projection(self, ast):
         symbol = ast['identifier']
         item = ast['item']
-        if symbol.type == ToBeInferred:
+        if symbol.type is ToBeInferred:
             return Projection(symbol, item)
         elif is_subtype(symbol.type, typing.Tuple):
             item_type, item = get_type_and_value(item)
