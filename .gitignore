@@ -106,5 +106,11 @@ ENV/
 # jetbrains IDE
 .idea/*
 
-# neurosynth resources
-neurolang/utils/neurosynth/
+# local vimrc plugin
+.lvimrc
+
+# pytest cache directory
+.pytest_cache/
+
+# pytest profiling results directory
+prof/

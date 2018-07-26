@@ -241,17 +241,17 @@ class SetBasedSolver(GenericSolver[T]):
 
 
 class BooleanRewriteSolver(PatternWalker):
-    # @add_match(
-    #    FunctionApplication(Constant, (Expression[bool],) * 2),
-    #    lambda expression:
-    #        expression.functor.value in (or_, and_) and
-    #        expression.type is not bool
-    # )
-    # def cast_binary(self, expression):
-    #    if expression.type is not bool:
-    #        return self.walk(expression.cast(bool))
-    #    else:
-    #        return expression
+    @add_match(
+        FunctionApplication(Constant, (Expression[bool],) * 2),
+        lambda expression:
+            expression.functor.value in (or_, and_) and
+            expression.type is not bool
+    )
+    def cast_binary(self, expression):
+        if expression.type is not bool:
+            return self.walk(expression.cast(bool))
+        else:
+            return expression
 
     @add_match(
         FunctionApplication(
@@ -387,7 +387,13 @@ class DatalogSolver(
     For now predicates work only on constants on the symbols table
     '''
 
-    @add_match(Query)
+    # @add_match(Query)
+    @add_match(
+        Query,
+        guard=lambda expression: (
+            expression.head._symbols == expression.body._symbols
+        )
+    )
     def query_resolution(self, expression):
         out_query_type = expression.head.type
 
@@ -397,11 +403,6 @@ class DatalogSolver(
             symbols_in_head = (expression.head,)
         else:
             symbols_in_head = expression.head.value
-
-        if any(s not in symbols_in_head for s in expression.body._symbols):
-            raise NotImplementedError(
-                "All free symbols in the body must be in the head"
-            )
 
         constants = tuple((
             (
