@@ -86,12 +86,26 @@ class SpatialIndexRegionSolver(RegionSolver):
         self.index.add(region.bounding_box, regions={region})
 
     @add_match(
-        Query(Symbol, ...),
+        Query(Symbol[Region], ...),
         guard=lambda expression: is_conjunctive_expression(expression.body)
     )
     def spatial_query_resolution(self, expression):
 
-        out_query_type = expression.head.type
+        cardinal_predicates = {
+            self.included_predicates[relation]: relation for relation in (
+                'inferior_of', 'superior_of',
+                'posterior_of', 'anterior_of',
+                'left_of', 'right_of',
+            )
+        }
+
+        cardinal_operations = {
+            'inferior_of': 'I', 'superior_of': 'S',
+            'posterior_of': 'P', 'anterior_of': 'A',
+            'left_of': 'L', 'right_of': 'R',
+        }
+
+        out_query_type = Region
 
         result = []
 
@@ -118,35 +132,21 @@ class SpatialIndexRegionSolver(RegionSolver):
 
         all_regions = set(region_to_constant_and_symbol.keys())
 
-        cardinal_predicates = {
-            self.included_predicates[relation]: relation for relation in (
-                'inferior_of', 'superior_of',
-                'posterior_of', 'anterior_of',
-                'left_of', 'right_of',
-            )
-        }
-
-        cardinal_operations = {
-            'inferior_of': 'I', 'superior_of': 'S',
-            'posterior_of': 'P', 'anterior_of': 'A',
-            'left_of': 'L', 'right_of': 'R',
-        }
-
         # we start with all regions in the symbol table
         reduced_regions = all_regions
 
         # and reduce this set accordingly if we encounter any spatial relation
         for function_application in function_applications:
-            if function_application.functor in cardinal_predicates:
+            if (
+                function_application.functor in cardinal_predicates and
+                function_application.args[0] is expression.head and
+                isinstance(function_application.args[1], Constant)
+            ):
                 relation = cardinal_predicates[function_application.functor]
                 anatomical_direction = cardinal_operations[relation]
                 direction = direction_from_relation[anatomical_direction]
                 axis = directions_dim_space[anatomical_direction][0]
-                relative_region = (
-                    function_application.args[0]
-                    if isinstance(function_application.args[0], Constant)
-                    else function_application.args[1]
-                ).value
+                relative_region = function_application.args[1].value
                 matching_regions = self.index.query_regions_axdir(
                     relative_region, axis=axis, direction=direction
                 )
