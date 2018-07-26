@@ -256,7 +256,7 @@ def test_spherical_volumetric_region():
     N = 500
     voxels = sorted([(randint(), randint(), randint()) for _ in range(N)])
     affine = np.eye(4)
-    center = voxels[N // 2]
+    center = voxels[N//2]
     radius = 15
     sr = SphericalVolume(center, radius)
     vbr_voxels = sr.to_ijk(affine)
