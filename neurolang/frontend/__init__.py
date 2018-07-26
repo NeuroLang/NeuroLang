@@ -1,5 +1,5 @@
 from .query_resolution import QueryBuilder
-from ..region_solver import RegionsSetSolver
+from ..region_solver_ds import RegionSolver
 from ..symbols_and_types import TypedSymbolTable
 from ..regions import ExplicitVBR, SphericalVolume, region_set_from_masked_data, region_union, take_principal_regions
 from ..utils.data_manipulation import parse_region_label_map, fetch_neurosynth_dataset
@@ -22,7 +22,7 @@ class RegionFrontend(QueryBuilder):
 
     def __init__(self, solver=None):
         if solver is None:
-            solver = RegionsSetSolver(TypedSymbolTable())
+            solver = RegionSolver(TypedSymbolTable())
         super().__init__(solver)
 
     def load_parcellation(self, parc_im, selected_labels=None):
