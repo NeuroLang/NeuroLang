@@ -508,3 +508,48 @@ def test_spatial_index_region_solver():
     result = rs.walk(query)
     assert isinstance(result, nl.Constant)
     assert result.value == {posterior_inferior}
+
+
+def _profile_solver(solver_cls):
+    st = TypedSymbolTable()
+
+    solver = solver_cls(st)
+
+    for k, v in solver.included_predicates.items():
+        solver.symbol_table[k] = v
+
+    inferior_of = Symbol('inferior_of')
+
+    reference = Symbol[Region]('reference')
+    st[reference] = Constant(Region((0, 0, 2), (1, 1, 3)))
+
+    inferior = Symbol[Region]('inferior')
+    st[inferior] = Constant(Region((0, 0, 0), (1, 1, 1)))
+
+    for i in range(300):
+        symbol = Symbol[Region](f'superior_{i}')
+        lb = np.random.randint(low=0, high=5, size=3) + [0, 0, 5]
+        ub = lb + np.random.randint(low=1, high=10, size=3)
+        st[symbol] = Constant(Region(lb, ub))
+
+    if solver_cls is SpatialIndexRegionSolver:
+        solver.initialize_region_index()
+        for region in solver.symbol_table.symbols_by_type(Region).values():
+            solver.add_region_to_index(region.value)
+
+    x = Symbol[Region]('x')
+
+    query = Query(x, inferior_of(x, reference))
+
+    result = solver.walk(query)
+
+    assert isinstance(result, nl.Constant)
+    assert result.value == {inferior}
+
+
+def test_profile_region_solver():
+    _profile_solver(RegionSolver)
+
+
+def test_profile_spatial_index_region_solver():
+    _profile_solver(SpatialIndexRegionSolver)
