@@ -64,6 +64,7 @@ def replace_type_variable(type_, type_hint, type_var=None):
 class TypedSymbolTable(collections.MutableMapping):
     def __init__(self, enclosing_scope=None):
         self._symbols = collections.OrderedDict()
+
         self._symbols_by_type = collections.defaultdict(dict)
         self.enclosing_scope = enclosing_scope
 

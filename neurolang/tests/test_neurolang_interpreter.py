@@ -78,7 +78,7 @@ class FourInts(int, solver.FiniteDomain):
     pass
 
 
-class FourIntsSetSolver(solver.SetBasedSolver):
+class FourIntsSetSolver(solver.SetBasedSolver[FourInts]):
     type_name = 'four_int'
     type = FourInts
 
@@ -94,6 +94,7 @@ class FourIntsSetSolver(solver.SetBasedSolver):
 def test_queries():
     class NLC(
         FourIntsSetSolver,
+        solver.SetBasedSolver[int],
         nl.NeuroLangIntermediateRepresentationCompiler
     ):
         pass

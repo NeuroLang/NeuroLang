@@ -12,15 +12,15 @@ except ModuleNotFoundError:
 
 from . import neurolang as nl
 from .CD_relations import cardinal_relation, inverse_directions
-from .regions import *
+from .regions import Region, region_union, region_set_from_masked_data
 from .solver import SetBasedSolver
-from .utils.data_manipulation import *
+from .utils.data_manipulation import fetch_neurosynth_dataset
 
 
 __all__ = ['RegionsSetSolver']
 
 
-class RegionsSetSolver(SetBasedSolver):
+class RegionsSetSolver(SetBasedSolver[Region]):
     type = Region
     set_type = typing.AbstractSet[Region]
     type_name = 'Region'

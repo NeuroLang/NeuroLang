@@ -1,17 +1,24 @@
 import logging
 import typing
 import inspect
+import itertools
 
 from .exceptions import NeuroLangException
 from .expressions import (
+    ToBeInferred,
+    Expression, NonConstant,
     Symbol, Constant, Predicate, FunctionApplication,
     Query,
-    get_type_and_value,
+    get_type_and_value, is_subtype
 )
-from .symbols_and_types import (ExistentialPredicate, replace_type_variable)
-from operator import invert, and_, or_
+from .symbols_and_types import ExistentialPredicate
+from operator import (
+    invert, and_, or_,
+    add, sub, mul, truediv, pos, neg
+)
 from .expression_walker import (
-    add_match, ExpressionBasicEvaluator, ReplaceSymbolWalker
+    add_match, ExpressionBasicEvaluator, ReplaceSymbolWalker,
+    ReplaceSymbolsByConstants
 )
 
 
@@ -57,18 +64,7 @@ class GenericSolver(ExpressionBasicEvaluator):
                 next(iter(signature.parameters.keys()))
             ]
 
-            parameter_type = replace_type_variable(
-                self.type,
-                parameter_type,
-                type_var=T
-            )
-
             return_type = type_hints['return']
-            return_type = replace_type_variable(
-                self.type,
-                return_type,
-                type_var=T
-             )
             functor_type = typing.Callable[[parameter_type], return_type]
             functor = Constant[functor_type](method)
             res = Predicate[expression.type](functor, expression.args)
@@ -99,18 +95,7 @@ class GenericSolver(ExpressionBasicEvaluator):
                 next(iter(signature.parameters.keys()))
             ]
 
-            parameter_type = replace_type_variable(
-                self.type,
-                parameter_type,
-                type_var=T
-            )
-
             return_type = type_hints['return']
-            return_type = replace_type_variable(
-                self.type,
-                return_type,
-                type_var=T
-             )
             functor_type = typing.Callable[[parameter_type], return_type]
             functor = Constant[functor_type](method)
 
@@ -122,12 +107,6 @@ class GenericSolver(ExpressionBasicEvaluator):
         for predicate in dir(self):
             if predicate.startswith('predicate_'):
                 c = Constant(getattr(self, predicate))
-                new_type = replace_type_variable(
-                    self.type,
-                    c.type,
-                    type_var=T
-                )
-                c = c.cast(new_type)
                 predicate_constants[predicate[len('predicate_'):]] = c
         return predicate_constants
 
@@ -137,17 +116,11 @@ class GenericSolver(ExpressionBasicEvaluator):
         for function in dir(self):
             if function.startswith('function_'):
                 c = Constant(getattr(self, function))
-                new_type = replace_type_variable(
-                    self.type,
-                    c.type,
-                    type_var=T
-                )
-                c = c.cast(new_type)
                 function_constants[function[len('function_'):]] = c
         return function_constants
 
 
-class SetBasedSolver(GenericSolver):
+class SetBasedSolver(GenericSolver[T]):
     '''
     A predicate `in <set>` which results in the `<set>` given as parameter
     `and` and `or` operations between sets which are disjunction and
@@ -199,33 +172,106 @@ class SetBasedSolver(GenericSolver):
     @add_match(ExistentialPredicate)
     def existential_predicate(self, expression):
 
-        free_variable_symbol = expression.symbol
-        if free_variable_symbol in self.symbol_table._symbols:
-            return self.symbol_table._symbols[free_variable_symbol]
+        head = expression.head
+        if head in self.symbol_table._symbols:
+            return self.symbol_table._symbols[head]
 
-        predicate = expression.predicate
-        partially_evaluated_predicate = self.walk(predicate)
+        body = expression.body
+        partially_evaluated_body = self.walk(body)
         results = frozenset()
 
         for elem_set in self.symbol_table.symbols_by_type(
-            free_variable_symbol.type
+            head.type
         ).values():
             for elem in elem_set.value:
-                elem = Constant[free_variable_symbol.type](frozenset([elem]))
-                rsw = ReplaceSymbolWalker(free_variable_symbol, elem)
-                rsw_walk = rsw.walk(partially_evaluated_predicate)
+                elem = Constant[head.type](frozenset([elem]))
+                rsw = ReplaceSymbolWalker(head, elem)
+                rsw_walk = rsw.walk(partially_evaluated_body)
                 pred = self.walk(rsw_walk)
                 if pred.value != frozenset():
                     results = results.union(elem.value)
-        return Constant[free_variable_symbol.type](results)
+        return Constant[head.type](results)
 
 
-class DatalogSolver(GenericSolver):
-    '''
-    WIP Solver with queries having the semantics of Datalog.
-    For now predicates work only on constants on the symbols table
-    '''
+class BooleanRewriteSolver(GenericSolver):
+    @add_match(
+       FunctionApplication[ToBeInferred](Constant, (Expression[bool],) * 2),
+       lambda expression: (
+           expression.functor.value in (or_, and_) and
+           expression.type is not bool
+       )
+    )
+    def cast_binary(self, expression):
+        if expression.type is not bool:
+            return self.walk(expression.cast(bool))
+        else:
+            return expression
 
+    @add_match(
+        FunctionApplication(
+            Constant(...),
+            (NonConstant[bool], Constant[bool])
+        ),
+        lambda expression: (
+            expression.functor.value in (or_, and_)
+        )
+    )
+    def dual_operator(self, expression):
+        return self.walk(
+            FunctionApplication[bool](
+                expression.functor,
+                expression.args[::-1]
+            )
+        )
+
+    @add_match(
+        FunctionApplication(Constant(...), (
+            NonConstant[bool],
+            FunctionApplication(Constant(...), (Constant[bool], ...))
+        )),
+        lambda expression: (
+            expression.functor.value in (or_, and_)
+            and expression.args[1].functor.value is expression.functor.value
+        )
+    )
+    def bring_constants_up_left(self, expression):
+        return self.walk(
+            FunctionApplication[bool](
+                expression.functor,
+                (
+                    expression.args[1].args[0],
+                    FunctionApplication[bool](
+                        expression.functor,
+                        (
+                            expression.args[0],
+                            expression.args[1].args[1]
+                        )
+                    )
+                )
+            )
+        )
+
+    @add_match(
+        FunctionApplication[bool](
+            Constant(invert),
+            (FunctionApplication[bool](
+                Constant(or_),
+                (Expression[bool], Expression[bool])
+            ),)
+        )
+    )
+    def neg_disj_to_conj(self, expression):
+        return self.walk(
+            FunctionApplication[bool](
+                Constant(and_), (
+                    (~expression.args[0].args[0]).cast(bool),
+                    (~expression.args[0].args[1]).cast(bool)
+                )
+            )
+        )
+
+
+class BooleanOperationsSolver(GenericSolver):
     @add_match(FunctionApplication(Constant(invert), (Constant[bool],)))
     def rewrite_boolean_inversion(self, expression):
         return Constant(not expression.args[0].value)
@@ -242,25 +288,146 @@ class DatalogSolver(GenericSolver):
     def rewrite_boolean_or(self, expression):
         return Constant(expression.args[0].value or expression.args[1].value)
 
-    @add_match(Query)
+    @add_match(
+        FunctionApplication(Constant(or_), (True, Expression[bool]))
+    )
+    def rewrite_boolean_or_l(self, expression):
+        return Constant(True)
+
+    @add_match(
+        FunctionApplication(Constant(or_), (Expression[bool], True))
+    )
+    def rewrite_boolean_or_r(self, expression):
+        return Constant(True)
+
+    @add_match(
+        FunctionApplication(Constant(and_), (False, Expression[bool]))
+    )
+    def rewrite_boolean_and_l(self, expression):
+        return Constant(False)
+
+    @add_match(
+        FunctionApplication(Constant(and_), (Expression[bool], False))
+    )
+    def rewrite_boolean_and_r(self, expression):
+        return Constant(False)
+
+
+class NumericOperationsSolver(GenericSolver[T]):
+    @add_match(
+        FunctionApplication(Constant, (Expression[T],) * 2),
+        lambda expression: expression.functor.value in (add, sub, mul, truediv)
+    )
+    def cast_binary(self, expression):
+        return expression.cast(expression.args[0].type)
+
+    @add_match(
+        FunctionApplication(Constant, (Expression[T],)),
+        lambda expression: expression.functor.value in (pos, neg)
+    )
+    def cast_unary(self, expression):
+        return expression.cast(expression.args[0].type)
+
+
+class DatalogSolver(
+        BooleanRewriteSolver,
+        BooleanOperationsSolver,
+        NumericOperationsSolver[int],
+        NumericOperationsSolver[float]
+):
+    '''
+    WIP Solver with queries having the semantics of Datalog.
+    For now predicates work only on constants on the symbols table
+    '''
+
+    # @add_match(Query)
+    @add_match(
+        Query,
+        guard=lambda expression: (
+            expression.head._symbols == expression.body._symbols
+        )
+    )
     def query_resolution(self, expression):
         out_query_type = expression.head.type
 
         result = []
-        for symbol, value in self.symbol_table.symbols_by_type(
-            out_query_type
-        ).items():
-            if not isinstance(value, Constant):
-                continue
-            if symbol in expression.free_variable_symbol:
-                rsw = ReplaceSymbolWalker(expression.head, value)
-                body = rsw.walk(expression.body)
-            else:
-                body = expression.body
+
+        if not is_subtype(out_query_type, typing.Tuple):
+            symbols_in_head = (expression.head,)
+        else:
+            symbols_in_head = expression.head.value
+
+        rsw = ReplaceSymbolsByConstants(self.symbol_table)
+        body_no_symbols = rsw.walk(expression.body)
+
+        if any(
+            s not in expression.head._symbols for s in body_no_symbols._symbols
+        ):
+            raise NotImplementedError(
+                "All free symbols in the body must be in the head"
+            )
+
+        constants = tuple((
+            (
+                (k, v)
+                for k, v in self.symbol_table.symbols_by_type(
+                    sym.type
+                ).items()
+                if isinstance(v, Constant)
+            )
+            for sym in symbols_in_head
+        ))
+
+        constant_cross_prod = itertools.product(*constants)
+
+        for symbol_values in constant_cross_prod:
+            body = body_no_symbols
+            for i, s in enumerate(symbols_in_head):
+                if s in body._symbols:
+                    rsw = ReplaceSymbolWalker(s, symbol_values[i][1])
+                    body = rsw.walk(body)
+
             res = self.walk(body)
             if res.value:
-                result.append(symbol)
+                if not is_subtype(out_query_type, typing.Tuple):
+                    result.append(symbol_values[0][0])
+                else:
+                    result.append(tuple(zip(*symbol_values))[0])
 
         return Constant[typing.AbstractSet[out_query_type]](
             frozenset(result)
         )
+
+    @add_match(ExistentialPredicate)
+    def existential_predicate(self, expression):
+
+        head = expression.head
+        if head in self.symbol_table._symbols:
+            return self.symbol_table._symbols[head]
+
+        body = expression.body
+        partially_evaluated_body = self.walk(body)
+
+        if isinstance(partially_evaluated_body, Constant):
+            if not is_subtype(partially_evaluated_body.type, bool):
+                res = Constant[bool](bool(Constant.value))
+            else:
+                res = partially_evaluated_body.cast(bool)
+            return res
+        elif (
+            len(partially_evaluated_body._symbols) == 1 and
+            head in partially_evaluated_body._symbols
+        ):
+            for element_value in self.symbol_table.symbols_by_type(
+                head.type
+            ).values():
+                rsw = ReplaceSymbolWalker(head, element_value)
+                res = rsw.walk(partially_evaluated_body)
+                res = self.walk(res)
+                if isinstance(res, Constant) and bool(res.value):
+                    return Constant(True)
+            return Constant(False)
+        else:
+            return ExistentialPredicate[expression.type](
+                head, partially_evaluated_body
+            )

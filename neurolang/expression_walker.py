@@ -3,7 +3,7 @@ import typing
 
 from .expressions import (
     FunctionApplication, Statement, Query, Projection, Constant,
-    Symbol,
+    Symbol, ExistentialPredicate,
     get_type_and_value, ToBeInferred, is_subtype, NeuroLangTypeException,
     unify_types
 )
@@ -29,8 +29,15 @@ class ExpressionWalker(PatternMatcher):
     @add_match(Query)
     def query(self, expression):
         return Query[expression.type](
-            expression.symbol,
-            self.walk(expression.value)
+            expression.head,
+            self.walk(expression.body)
+        )
+
+    @add_match(ExistentialPredicate)
+    def existential_predicate(self, expression):
+        return ExistentialPredicate[expression.type](
+            expression.head,
+            self.walk(expression.body)
         )
 
     @add_match(...)
@@ -64,7 +71,20 @@ class ReplaceSymbolWalker(ExpressionWalker):
             return expression
 
 
-class ExpressionBasicEvaluator(ReplaceSymbolWalker):
+class ReplaceSymbolsByConstants(ExpressionWalker):
+    def __init__(self, symbol_table):
+        self.symbol_table = symbol_table
+
+    @add_match(Symbol)
+    def symbol(self, expression):
+        new_expression = self.symbol_table.get(expression, expression)
+        if isinstance(new_expression, Constant):
+            return new_expression
+        else:
+            return expression
+
+
+class ExpressionBasicEvaluator(ExpressionWalker):
     def __init__(self, symbol_table=None):
         if symbol_table is None:
             symbol_table = dict()
@@ -87,19 +107,18 @@ class ExpressionBasicEvaluator(ReplaceSymbolWalker):
 
     @add_match(Query)
     def query(self, expression):
-        value = self.walk(expression.value)
-        return_type = unify_types(expression.type, value.type)
-        value.change_type(return_type)
-        expression.symbol.change_type(return_type)
-        if value is expression.value:
-            if isinstance(value, Constant):
-                self.symbol_table[expression.symbol] = value
+        head = expression.head
+        body = self.walk(expression.body)
+        return_type = typing.AbstractSet[head.type]
+        if body is expression.body:
+            if isinstance(body, Constant):
+                self.symbol_table[expression.head] = body
             else:
-                self.symbol_table[expression.symbol] = expression
+                self.symbol_table[expression.head] = expression
             return expression
         else:
             return self.walk(
-                Query[expression.type](expression.symbol, value)
+                Query[return_type](expression.head, body)
             )
 
     @add_match(Statement)
@@ -149,7 +168,7 @@ class ExpressionBasicEvaluator(ReplaceSymbolWalker):
         functor = expression.functor
         functor_type, functor_value = get_type_and_value(functor)
 
-        if functor_type != ToBeInferred:
+        if functor_type is not ToBeInferred:
             if not is_subtype(functor_type, typing.Callable):
                 raise NeuroLangTypeException(
                     'Function {} is not of callable type'.format(functor)
@@ -198,7 +217,7 @@ class ExpressionBasicEvaluator(ReplaceSymbolWalker):
         if changed:
             functor_type, functor_value = get_type_and_value(functor)
 
-            if functor_type != ToBeInferred:
+            if functor_type is not ToBeInferred:
                 if not is_subtype(functor_type, typing.Callable):
                     raise NeuroLangTypeException(
                         'Function {} is not of callable type'.format(functor)

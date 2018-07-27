@@ -1,7 +1,8 @@
 from .. import expressions
 from ..expressions import (
     Symbol, Constant,
-    FunctionApplication
+    FunctionApplication,
+    ToBeInferred
 )
 
 from ..expression_walker import ExpressionBasicEvaluator, ReplaceSymbolWalker
@@ -142,3 +143,17 @@ def test_instance_check():
     assert isinstance(c, Constant)
     assert isinstance(c, Constant[int])
     assert issubclass(c.__class__, Constant)
+    assert c.type is int
+
+
+def test_typecast_check():
+    s = Symbol('a')
+    s_float = s.cast(float)
+
+    assert isinstance(s, Symbol)
+    assert s.type is ToBeInferred
+    assert isinstance(s_float, Symbol)
+    assert isinstance(s_float, Symbol[float])
+    assert issubclass(s.__class__, Symbol)
+    assert s_float.type is float
+    assert s_float.name == 'a'
