@@ -14,6 +14,11 @@ from .symbols_and_types import replace_type_variable
 __all__ = ['add_match', 'PatternMatcher']
 
 
+
+class NeuroLangPatternMatchingNoMatch(expressions.NeuroLangException):
+    pass
+
+
 class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
     @classmethod
     def __prepare__(self, name, bases):
@@ -203,7 +208,7 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
                 )
                 return action(self, expression)
         else:
-            raise ValueError()
+            raise NeuroLangPatternMatchingNoMatch(f'No match for {expression}')
 
     def pattern_match(self, pattern, expression):
         '''Returns ``True`` if ``pattern`` matches ``expression``.
