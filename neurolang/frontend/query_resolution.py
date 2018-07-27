@@ -94,30 +94,6 @@ class QueryBuilder:
         )] = result
         return Symbol(self, result_symbol_name)
 
-    def solve_query(self, query, result_symbol_name=None):
-
-        if isinstance(query, Expression):
-            query = query.expression
-
-        if not isinstance(query, nl.Query):
-            if result_symbol_name is None:
-                result_symbol_name = str(uuid1())
-
-            query = nl.Query[self.set_type](
-                nl.Symbol[self.set_type](result_symbol_name),
-                query
-            )
-        else:
-            if result_symbol_name is not None:
-                raise ValueError(
-                    "Query result symbol name "
-                    "already defined in query expression"
-                )
-            result_symbol_name = query.symbol.name
-
-        self.solver.walk(query)
-        return Symbol(self, result_symbol_name)
-
     def new_region_symbol(self, symbol_name=None):
         if symbol_name is None:
             symbol_name = str(uuid1())
@@ -150,9 +126,6 @@ class QueryBuilder:
 
         return Symbol(self, result_symbol_name)
 
-    def delete_symbol(self, symbol):
-        del self.solver.symbol_table[symbol]
-
     def add_region(self, region, result_symbol_name=None):
         if not isinstance(region, self.type):
             raise ValueError(f"region must be instance of {self.type}")
@@ -160,7 +133,7 @@ class QueryBuilder:
         if result_symbol_name is None:
             result_symbol_name = str(uuid1())
 
-        symbol = nl.Symbol[self.set_type](result_symbol_name)
+        symbol = nl.Symbol[self.type](result_symbol_name)
         self.solver.symbol_table[symbol] = nl.Constant[self.type](region)
 
         return Symbol(self, result_symbol_name)
@@ -169,11 +142,11 @@ class QueryBuilder:
         if not isinstance(region_set, Container):
             raise ValueError(f"region must be instance of {self.set_type}")
 
+        symbol = nl.Symbol[self.set_type](result_symbol_name)
+        self.solver.symbol_table[symbol] = nl.Constant[self.set_type](region_set)
         for region in region_set:
-            if result_symbol_name is None:
-                result_symbol_name = str(uuid1())
-
-            symbol = nl.Symbol[self.set_type](result_symbol_name)
+            region_symbol_name = str(uuid1())
+            symbol = nl.Symbol[self.type](region_symbol_name)
             self.solver.symbol_table[symbol] = nl.Constant[self.type](region)
 
         return Symbol(self, result_symbol_name)
