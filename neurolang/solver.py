@@ -242,35 +242,6 @@ class SetBasedSolver(GenericSolver[T]):
 
 class BooleanRewriteSolver(PatternWalker):
     @add_match(
-        FunctionApplication(Constant, (Expression[bool],) * 2),
-        lambda expression:
-            expression.functor.value in (or_, and_) and
-            expression.type is not bool
-    )
-    def cast_binary(self, expression):
-        if expression.type is not bool:
-            return self.walk(expression.cast(bool))
-        else:
-            return expression
-
-    @add_match(
-        FunctionApplication(
-            Constant(...),
-            (NonConstant[bool], Constant[bool])
-        ),
-        lambda expression: (
-            expression.functor.value in (or_, and_)
-        )
-    )
-    def dual_operator(self, expression):
-        return self.walk(
-            FunctionApplication[bool](
-                expression.functor,
-                expression.args[::-1]
-            )
-        )
-
-    @add_match(
         FunctionApplication(Constant(...), (
             NonConstant[bool],
             FunctionApplication(Constant(...), (Constant[bool], ...))
@@ -318,6 +289,56 @@ class BooleanRewriteSolver(PatternWalker):
 
 
 class BooleanOperationsSolver(PatternWalker):
+    @add_match(
+       FunctionApplication(Constant, (Expression[bool],) * 2),
+       lambda expression: (
+           expression.functor.value in (or_, and_) and
+           expression.type is not bool
+        )
+    )
+    def cast_binary(self, expression):
+        return self.walk(expression.cast(bool))
+
+    @add_match(
+       FunctionApplication(Constant(invert), (Expression[bool],)),
+       lambda expression: (
+           expression.type is not bool
+        )
+    )
+    def cast_unary(self, expression):
+        return self.walk(expression.cast(bool))
+
+    @add_match(
+        FunctionApplication(
+            Constant(invert), (
+                FunctionApplication(
+                    Constant(invert), (
+                        Expression[bool],
+                    )
+            ),)
+        )
+    )
+    def simplify_double_inversion(self, expression):
+        return self.walk(expression.args[0].args[0])
+
+    @add_match(
+        FunctionApplication(
+            Constant(...),
+            (NonConstant[bool], Constant[bool])
+        ),
+        lambda expression: (
+            expression.functor.value in (or_, and_)
+        )
+    )
+    def dual_operator(self, expression):
+        return self.walk(
+            FunctionApplication[bool](
+                expression.functor,
+                expression.args[::-1]
+            )
+        )
+
+
     @add_match(FunctionApplication(Constant(invert), (Constant[bool],)))
     def rewrite_boolean_inversion(self, expression):
         return Constant(not expression.args[0].value)
