@@ -238,25 +238,21 @@ class SphericalVolume(ImplicitVBR):
     def __init__(self, center, radius):
         self._center = center
         self._radius = radius
-        self._aabb_tree = None
+        lb = tuple(np.array(self._center) - self._radius)
+        ub = tuple(np.array(self._center) + self._radius)
+        self._bounding_box = AABB(lb, ub)
+
+    @property
+    def center(self):
+        return self._center
+
+    @property
+    def radius(self):
+        return self._radius
 
     @property
     def bounding_box(self):
-        return self.aabb_tree.root.box
-
-    @property
-    def aabb_tree(self):
-        if self._aabb_tree is not None:
-            return self._aabb_tree
-        self._aabb_tree = Tree()
-        lb = tuple(np.array(self._center) - self._radius)
-        ub = tuple(np.array(self._center) + self._radius)
-        self._aabb_tree.add(AABB(lb, ub))
-        return self._aabb_tree
-
-    def __contains__(self, point):
-        point = np.asanyarray(point)
-        return np.linalg.norm(point - self._center) <= self._radius
+        return self._bounding_box
 
     def to_ijk(self, affine):
         bb = self.bounding_box
@@ -270,11 +266,11 @@ class SphericalVolume(ImplicitVBR):
                                       np.array(list(product(*ranges))) if
                                       nib.affines.apply_affine(affine, point)
                                       in self])
-
         return voxel_coordinates
 
-    def center(self):
-        return self._center
+    def __contains__(self, point):
+        point = np.asanyarray(point)
+        return np.linalg.norm(point - self._center) <= self._radius
 
     def __hash__(self):
         return hash(self.bounding_box.limits.tobytes())
@@ -291,21 +287,24 @@ class SphericalVolume(ImplicitVBR):
 class PlanarVolume(ImplicitVBR):
     def __init__(self, origin, vector, direction=1, limit=1000):
         self._origin = np.array(origin)
+
         if not np.any([vector[i] > 0 for i in range(len(vector))]):
             raise ValueError('Vector normal to the plane must be non-zero')
         self._vector = np.array(vector) / np.linalg.norm(vector)
-        self._aabb_tree = None
 
         if direction not in [1, -1]:
             raise ValueError('Direction must either be'
                              ' 1 (superior to) or -1 (inferior to)')
         self._dir = direction
+
         if limit <= 0:
             raise ValueError('Limit must be a positive value')
         self._limit = limit
 
-    def __contains__(self, point):
-        return np.dot(self._vector, self._origin - point) == 0
+        box_limit = (self._dir * self._limit,) * 3
+        box_limit_in_plane = self.project_point_to_plane(box_limit) * -1
+        [lb, ub] = sorted([box_limit, box_limit_in_plane], key=lambda x: x[0])
+        self._bounding_box = AABB(lb, ub)
 
     def project_point_to_plane(self, point):
         point = np.array(point)
@@ -314,18 +313,7 @@ class PlanarVolume(ImplicitVBR):
 
     @property
     def bounding_box(self):
-        return self.aabb_tree.root.box
-
-    @property
-    def aabb_tree(self):
-        if self._aabb_tree is not None:
-            return self._aabb_tree
-        self._aabb_tree = Tree()
-        outside = (self._dir * self._limit,) * 3
-        inside = self.project_point_to_plane(outside) * -1
-        [lb, ub] = sorted([inside, outside], key=lambda x: x[0])
-        self._aabb_tree.add(AABB(lb, ub))
-        return self._aabb_tree
+        return self._bounding_box
 
     def to_ijk(self, affine):
         bb = self.bounding_box
@@ -336,6 +324,9 @@ class PlanarVolume(ImplicitVBR):
                   for i in range(bb.dim)]
 
         return np.array(list(product(*ranges)))
+
+    def __contains__(self, point):
+        return np.dot(self._vector, self._origin - point) == 0
 
     def __hash__(self):
         return hash(self.bounding_box.limits.tobytes())
