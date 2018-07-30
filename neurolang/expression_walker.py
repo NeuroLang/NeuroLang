@@ -16,7 +16,7 @@ from .expression_pattern_matching import add_match, PatternMatcher
 class PatternWalker(PatternMatcher):
     def walk(self, expression):
         logging.debug("walking {}".format(expression))
-        if isinstance(expression, list) or isinstance(expression, tuple):
+        if isinstance(expression, (list, tuple)):
             result = [
                 self.walk(e)
                 for e in expression
