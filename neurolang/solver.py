@@ -1,6 +1,4 @@
-import logging
 import typing
-import inspect
 import itertools
 
 from .exceptions import NeuroLangException
@@ -43,87 +41,6 @@ class GenericSolver(ExpressionBasicEvaluator):
 
     def set_symbol_table(self, symbol_table):
         self.symbol_table = symbol_table
-
-    @add_match(Predicate(Symbol, ...))
-    def predicate(self, expression):
-        logging.debug(str(self.__class__.__name__) + " evaluating predicate")
-
-        functor = expression.functor
-
-        new_functor = self.walk(functor)
-        if new_functor is not functor:
-            res = Predicate[expression.type](new_functor, expression.args)
-            return self.walk(res)
-        elif hasattr(self, f'predicate_{functor.name}'):
-            method = getattr(self, f'predicate_{functor.name}')
-            signature = inspect.signature(method)
-            type_hints = typing.get_type_hints(method)
-
-            parameter_type = type_hints[
-                next(iter(signature.parameters.keys()))
-            ]
-
-            return_type = type_hints['return']
-            functor_type = typing.Callable[[parameter_type], return_type]
-            functor = Constant[functor_type](method)
-            res = Predicate[expression.type](functor, expression.args)
-            return self.walk(res)
-        else:
-            res = Predicate[expression.type](
-                functor,
-                self.walk(expression.args)
-            )
-            return res
-
-    @add_match(Symbol[typing.Callable])
-    def callable_symbol(self, expression):
-        logging.debug(
-            str(self.__class__.__name__) + " evaluating callable symbol"
-        )
-
-        functor = self.symbol_table.get(expression, expression)
-        if (
-            functor is expression and
-            hasattr(self, f'function_{expression.name}')
-        ):
-            method = getattr(self, f'function_{expression.name}')
-            signature = inspect.signature(method)
-            type_hints = typing.get_type_hints(method)
-
-            parameter_type = type_hints[
-                next(iter(signature.parameters.keys()))
-            ]
-
-            return_type = type_hints['return']
-            functor_type = typing.Callable[[parameter_type], return_type]
-            functor = Constant[functor_type](method)
-
-        return functor
-
-    @property
-    def included_predicates(self):
-        predicate_constants = dict()
-        for predicate in dir(self):
-            if predicate.startswith('predicate_'):
-                c = Constant(getattr(self, predicate))
-                predicate_constants[predicate[len('predicate_'):]] = c
-        return predicate_constants
-
-    @property
-    def included_functions(self):
-        function_constants = dict()
-        for function in dir(self):
-            if function.startswith('function_'):
-                c = Constant(getattr(self, function))
-                function_constants[function[len('function_'):]] = c
-        return function_constants
-
-    def add_functions_and_predicates_to_symbol_table(self):
-        for k, v in self.included_predicates:
-            self.symbol_table[k] = v
-        for k, v in self.included_functions:
-            self.symbol_table[k] = v
-        self.symbol_table = self.symbol_table.create_scope()
 
 
 class SetBasedSolver(GenericSolver[T]):
@@ -404,7 +321,6 @@ class DatalogSolver(
     For now predicates work only on constants on the symbols table
     '''
 
-    # @add_match(Query)
     @add_match(
         Query,
         guard=lambda expression: (

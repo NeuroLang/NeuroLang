@@ -31,7 +31,8 @@ __all__ = [
     'NeuroLangIntermediateRepresentationCompiler',
     'PatternMatcher',
     'grammar_EBNF', 'parser', 'add_match',
-    'Constant', 'Symbol', 'FunctionApplication', 'Statement', 'Query', 'ExistentialPredicate'
+    'Constant', 'Symbol', 'FunctionApplication',
+    'Statement', 'Query', 'ExistentialPredicate'
 ]
 
 
@@ -351,8 +352,7 @@ class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
         self, functions=None, type_name_map=None,
         types=None, symbols=None
     ):
-
-        self.symbol_table = TypedSymbolTable()
+        super().__init__()
 
         if functions is None:
             functions = []

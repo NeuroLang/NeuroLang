@@ -1,6 +1,8 @@
+from itertools import chain
 import logging
 import typing
 
+from .symbols_and_types import TypedSymbolTable
 from .expressions import (
     FunctionApplication, Statement, Query, Projection, Constant,
     Symbol, ExistentialPredicate,
@@ -86,16 +88,13 @@ class ReplaceSymbolsByConstants(ExpressionWalker):
             return expression
 
 
-class ExpressionBasicEvaluator(ExpressionWalker):
+class SymbolTableEvaluator(ExpressionWalker):
     def __init__(self, symbol_table=None):
         if symbol_table is None:
-            symbol_table = dict()
+            symbol_table = TypedSymbolTable()
         self.symbol_table = symbol_table
         self.simplify_mode = False
-
-    @add_match(Constant)
-    def constant(self, expression):
-        return expression
+        self.add_functions_and_predicates_to_symbol_table()
 
     @add_match(Symbol)
     def symbol(self, expression):
@@ -106,6 +105,37 @@ class ExpressionBasicEvaluator(ExpressionWalker):
                 return expression
             else:
                 raise ValueError('{} not in symbol table'.format(expression))
+
+    @property
+    def included_predicates(self):
+        predicate_constants = dict()
+        for attribute in dir(self):
+            if attribute.startswith('predicate_'):
+                c = Constant(getattr(self, attribute))
+                predicate_constants[attribute[len('predicate_'):]] = c
+        return predicate_constants
+
+    @property
+    def included_functions(self):
+        function_constants = dict()
+        for attribute in dir(self):
+            if attribute.startswith('function_'):
+                c = Constant(getattr(self, attribute))
+                function_constants[attribute[len('function_'):]] = c
+        return function_constants
+
+    def add_functions_and_predicates_to_symbol_table(self):
+        for k, v in chain(
+            self.included_predicates.items(), self.included_functions.items()
+        ):
+            self.symbol_table[k] = v
+        self.symbol_table = self.symbol_table.create_scope()
+
+
+class ExpressionBasicEvaluator(SymbolTableEvaluator):
+    @add_match(Constant)
+    def constant(self, expression):
+        return expression
 
     @add_match(Query)
     def query(self, expression):

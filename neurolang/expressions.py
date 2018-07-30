@@ -134,7 +134,11 @@ def is_subtype(left, right):
 
 
 def unify_types(t1, t2):
-    if is_subtype(t1, t2):
+    if t1 is ToBeInferred:
+        return t2
+    elif t2 is ToBeInferred:
+        return t1
+    elif is_subtype(t1, t2):
         return t2
     elif is_subtype(t2, t1):
         return t1

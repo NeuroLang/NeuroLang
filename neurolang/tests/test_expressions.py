@@ -1,11 +1,12 @@
 from .. import expressions
 from ..expressions import (
+    Expression,
     Symbol, Constant,
     FunctionApplication,
     ToBeInferred
 )
 
-from ..expression_walker import ExpressionBasicEvaluator, ReplaceSymbolWalker
+from ..expression_walker import ExpressionBasicEvaluator
 
 import operator as op
 import inspect
@@ -17,6 +18,8 @@ C = Constant
 def evaluate(expression, **kwargs):
     ebe = ExpressionBasicEvaluator()
     for k, v in kwargs.items():
+        if not isinstance(v, Expression):
+            v = C(v)
         ebe.symbol_table[k] = v
     return ebe.walk(expression)
 
