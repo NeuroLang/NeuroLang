@@ -15,7 +15,7 @@ from .expression_pattern_matching import add_match, PatternMatcher
 
 class PatternWalker(PatternMatcher):
     def walk(self, expression):
-        logging.debug("walking {}".format(expression))
+        logging.debug(f"walking {expression}")
         if isinstance(expression, (list, tuple)):
             result = [
                 self.walk(e)
@@ -55,7 +55,7 @@ class ExpressionWalker(PatternWalker):
             if functor_type is not ToBeInferred:
                 if not is_subtype(functor_type, typing.Callable):
                     raise NeuroLangTypeException(
-                        'Function {} is not of callable type'.format(functor)
+                        f'Function {functor} is not of callable type'
                     )
             else:
                 if (
@@ -63,7 +63,7 @@ class ExpressionWalker(PatternWalker):
                     not callable(functor_value)
                 ):
                     raise NeuroLangTypeException(
-                        'Function {} is not of callable type'.format(functor)
+                        f'Function {functor} is not of callable type'
                     )
 
             result = functor(*args, **kwargs)
@@ -159,7 +159,7 @@ class SymbolTableEvaluator(ExpressionWalker):
             if self.simplify_mode:
                 return expression
             else:
-                raise ValueError('{} not in symbol table'.format(expression))
+                raise ValueError(f'{expression} not in symbol table')
 
     @property
     def included_predicates(self):
