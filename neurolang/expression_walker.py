@@ -36,28 +36,83 @@ class ExpressionWalker(PatternWalker):
 
     @add_match(FunctionApplication)
     def function(self, expression):
-        return FunctionApplication[expression.type](
-            self.match(expression.functor),
-            args=[self.walk(e) for e in expression.args],
-            kwargs={k: self.walk(v) for k, v in expression.kwargs},
-        )
+        functor = self.walk(expression.functor)
+        args = [self.walk(e) for e in expression.args]
+        kwargs = {k: self.walk(v) for k, v in expression.kwargs}
+
+        if (
+            functor is not expression.functor or
+            any(
+                arg is not new_arg
+                for arg, new_arg in zip(expression.args, args)
+            ) or any(
+                kwargs[k] is not expression.kwargs[k]
+                for k in expression.kwargs
+            )
+        ):
+            functor_type, functor_value = get_type_and_value(functor)
+
+            if functor_type is not ToBeInferred:
+                if not is_subtype(functor_type, typing.Callable):
+                    raise NeuroLangTypeException(
+                        'Function {} is not of callable type'.format(functor)
+                    )
+            else:
+                if (
+                    isinstance(functor, Constant) and
+                    not callable(functor_value)
+                ):
+                    raise NeuroLangTypeException(
+                        'Function {} is not of callable type'.format(functor)
+                    )
+
+            result = functor(*args, **kwargs)
+            return self.walk(result)
+        else:
+            return expression
 
     @add_match(Query)
     def query(self, expression):
-        return Query[expression.type](
-            expression.head,
-            self.walk(expression.body)
-        )
+        body = self.walk(expression.body)
+
+        if body is not expression.body:
+            return self.walk(Query[expression.type](
+                expression.head, body
+            ))
+        else:
+            return expression
 
     @add_match(ExistentialPredicate)
     def existential_predicate(self, expression):
-        return ExistentialPredicate[expression.type](
-            expression.head,
-            self.walk(expression.body)
-        )
+        body = self.walk(expression.body)
 
-    @add_match(...)
-    def default(self, expression):
+        if body is not expression.body:
+            return self.walk(ExistentialPredicate[expression.type](
+                expression.head, body
+            ))
+        else:
+            return expression
+
+    @add_match(Projection)
+    def projection(self, expression):
+        collection = self.walk(expression.collection)
+        item = self.walk(expression.item)
+
+        if (
+            collection is expression.collection and
+            item is expression.item
+        ):
+            return expression
+        else:
+            result = Projection(collection, item)
+            return self.walk(result)
+
+    @add_match(Constant)
+    def constant(self, expression):
+        return expression
+
+    @add_match(Symbol)
+    def symbol(self, expression):
         return expression
 
 
@@ -97,7 +152,7 @@ class SymbolTableEvaluator(ExpressionWalker):
         self.add_functions_and_predicates_to_symbol_table()
 
     @add_match(Symbol)
-    def symbol(self, expression):
+    def symbol_from_table(self, expression):
         try:
             return self.symbol_table.get(expression, expression)
         except KeyError:
@@ -132,42 +187,6 @@ class SymbolTableEvaluator(ExpressionWalker):
         self.symbol_table.set_readonly(True)
         self.symbol_table = self.symbol_table.create_scope()
 
-
-class ExpressionBasicEvaluator(SymbolTableEvaluator):
-    @add_match(Constant)
-    def constant(self, expression):
-        return expression
-
-    @add_match(Query)
-    def query(self, expression):
-        head = expression.head
-        body = self.walk(expression.body)
-        return_type = typing.AbstractSet[head.type]
-        if body is expression.body:
-            return expression
-        else:
-            return self.walk(
-                Query[return_type](expression.head, body)
-            )
-
-    @add_match(ExistentialPredicate)
-    def existential_predicate(self, expression):
-        body = self.walk(expression.body)
-        if body.type is not ToBeInferred:
-            return_type = unify_types(expression.type, body.type)
-        else:
-            return_type = expression.type
-
-        if (
-            body is expression.body and
-            return_type is expression.type
-        ):
-            return expression
-        else:
-            return self.walk(
-                ExistentialPredicate[return_type](expression.head, body)
-            )
-
     @add_match(Statement)
     def statement(self, expression):
         value = self.walk(expression.value)
@@ -182,25 +201,13 @@ class ExpressionBasicEvaluator(SymbolTableEvaluator):
                 Statement[expression.type](expression.symbol, value)
             )
 
+
+class ExpressionBasicEvaluator(SymbolTableEvaluator):
     @add_match(Projection(Constant(...), Constant(...)))
     def evaluate_projection(self, expression):
         return (
             expression.collection.value[int(expression.item.value)]
         )
-
-    @add_match(Projection)
-    def projection(self, expression):
-        collection = self.walk(expression.collection)
-        item = self.walk(expression.item)
-
-        if (
-            collection is expression.collection and
-            item is expression.item
-        ):
-            return expression
-        else:
-            result = Projection(collection, item)
-            return self.walk(result)
 
     @add_match(
         FunctionApplication(Constant(...), ...),
@@ -234,51 +241,3 @@ class ExpressionBasicEvaluator(SymbolTableEvaluator):
             functor_value(*new_args, **new_kwargs)
         )
         return result
-
-    @add_match(FunctionApplication)
-    def function(self, expression):
-        changed = False
-        functor = self.walk(expression.functor)
-        changed |= functor is not expression.functor
-        functor_type, functor_value = get_type_and_value(functor)
-
-        if expression.args is None and expression.kwargs is None:
-            if changed:
-                result = FunctionApplication[functor_type](functor)
-                return self.walk(result)
-            else:
-                return expression
-
-        new_args = []
-        for arg in expression.args:
-            new_arg = self.walk(arg)
-            new_args.append(new_arg)
-            changed |= new_arg is not arg
-
-        new_kwargs = dict()
-        for k, arg in expression.kwargs.items():
-            new_arg = self.walk(arg)
-            new_kwargs[k] = new_arg
-            changed |= new_arg is not arg
-
-        if changed:
-            functor_type, functor_value = get_type_and_value(functor)
-
-            if functor_type is not ToBeInferred:
-                if not is_subtype(functor_type, typing.Callable):
-                    raise NeuroLangTypeException(
-                        'Function {} is not of callable type'.format(functor)
-                    )
-            else:
-                if (
-                    isinstance(functor, Constant) and
-                    not callable(functor_value)
-                ):
-                    raise NeuroLangTypeException(
-                        'Function {} is not of callable type'.format(functor)
-                    )
-
-            result = functor(*new_args, **new_kwargs)
-            return self.walk(result)
-        else:
-            return expression
