@@ -73,7 +73,6 @@ class QueryBuilder:
 
     def define_function_application(self, function_name, symbol_name):
         if isinstance(symbol_name, str):
-
             symbol = nl.Symbol[self.set_type](symbol_name)
         elif isinstance(symbol_name, Symbol):
             symbol = symbol_name.symbol
@@ -138,14 +137,21 @@ class QueryBuilder:
 
         return Symbol(self, result_symbol_name)
 
-    def add_region_set(self, region_set, result_symbol_name=None):
+    def add_region_set(self, region_set, result_symbol_name=None,
+                       regions_symbols_names=None):
         if not isinstance(region_set, Container):
             raise ValueError(f"region must be instance of {self.set_type}")
 
+        if result_symbol_name is None:
+            result_symbol_name = str(uuid1())
+
         symbol = nl.Symbol[self.set_type](result_symbol_name)
-        self.solver.symbol_table[symbol] = nl.Constant[self.set_type](region_set)
-        for region in region_set:
-            region_symbol_name = str(uuid1())
+        self.solver.symbol_table[symbol] = nl.Constant[self.set_type](
+            region_set)
+
+        for i, region in enumerate(region_set):
+            region_symbol_name = str(uuid1()) if\
+                regions_symbols_names is None else regions_symbols_names[i]
             symbol = nl.Symbol[self.type](region_symbol_name)
             self.solver.symbol_table[symbol] = nl.Constant[self.type](region)
 

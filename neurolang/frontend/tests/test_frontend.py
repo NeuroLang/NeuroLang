@@ -1,14 +1,12 @@
 from neurolang import frontend
 from ... import region_solver_ds
 from ..query_resolution_expressions import Symbol
-from ...regions import Region, ExplicitVBR
+from ...regions import Region, ExplicitVBR, SphericalVolume
 from ... import neurolang as nl
 import numpy as np
-import pytest
 
 
 def test_add_regions_and_query_included_predicate():
-
     neurolang = frontend.RegionFrontend(
         region_solver_ds.RegionSolver(nl.TypedSymbolTable())
     )
@@ -21,9 +19,12 @@ def test_add_regions_and_query_included_predicate():
     assert neurolang.symbols.inferior_region.value == inferior
     assert neurolang.symbols.superior_region.value == superior
 
-    result_symbol = neurolang.symbols.superior_of(superior, inferior).do(result_symbol_name='is_superior_test')
+    result_symbol = neurolang.symbols.superior_of(
+        superior, inferior).do(result_symbol_name='is_superior_test')
     result = result_symbol.expression.value
-    result_symbol_from_table = neurolang.get_symbol('is_superior_test').expression.value
+    result_symbol_from_table = neurolang.get_symbol('is_superior_test'). \
+        expression.value
+
     assert result
     assert result_symbol_from_table
 
@@ -39,7 +40,6 @@ def test_add_regions_and_query_included_predicate():
 
 
 def test_query_regions_from_region_set():
-
     neurolang = frontend.RegionFrontend(
         region_solver_ds.RegionSolver(nl.TypedSymbolTable())
     )
@@ -63,24 +63,28 @@ def test_query_regions_from_region_set():
 
 
 def test_query_new_predicate():
-
     neurolang = frontend.RegionFrontend(
         region_solver_ds.RegionSolver(nl.TypedSymbolTable())
     )
 
     central = ExplicitVBR(np.array([[0, 0, 5], [1, 1, 8]]), np.eye(4))
-    reference_symbol = neurolang.add_region(central, result_symbol_name='reference_region')
+    reference_symbol = neurolang.add_region(
+        central, result_symbol_name='reference_region')
 
-    inferior_posterior = ExplicitVBR(np.array([[0, -10, -10], [1, -5, -5]]), np.eye(4))
-    inferior_central = ExplicitVBR(np.array([[0, 0, -1], [1, 1, 2]]), np.eye(4))
-    inferior_anterior = ExplicitVBR(np.array([[0,  2, 2], [1, 5, 3]]), np.eye(4))
+    inferior_posterior = ExplicitVBR(
+        np.array([[0, -10, -10], [1, -5, -5]]), np.eye(4))
+    inferior_central = ExplicitVBR(
+        np.array([[0, 0, -1], [1, 1, 2]]), np.eye(4))
+    inferior_anterior = ExplicitVBR(
+        np.array([[0, 2, 2], [1, 5, 3]]), np.eye(4))
 
     neurolang.add_region_set({
         inferior_posterior, inferior_central, inferior_anterior},
         result_symbol_name='inferiors')
 
     def posterior_and_inferior_of(y, z):
-        return neurolang.symbols.posterior_of(y, z) & neurolang.symbols.inferior_of(y, z)
+        return neurolang.symbols.posterior_of(y, z) & \
+               neurolang.symbols.inferior_of(y, z)
 
     x = neurolang.new_region_symbol(symbol_name='x')
     query = neurolang.query(
@@ -89,3 +93,17 @@ def test_query_new_predicate():
     query_result = query.do(result_symbol_name='result_of_test_query')
     for symbol in query_result.value:
         assert neurolang.symbols[symbol].value == inferior_posterior
+
+
+def test_load_spherical_volume():
+    neurolang = frontend.RegionFrontend(
+        region_solver_ds.RegionSolver(nl.TypedSymbolTable())
+    )
+
+    neurolang.sphere((0, 0, 0), 1, result_symbol_name='unit_region')
+
+    assert neurolang.symbols['unit_region'].value == SphericalVolume(
+               (0, 0, 0), 1)
+
+    neurolang.make_implicit_regions_explicit(np.eye(4), (5,) * 3)
+    assert isinstance(neurolang.symbols['unit_region'].value, ExplicitVBR)

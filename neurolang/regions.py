@@ -1,6 +1,7 @@
 import numpy as np
 import nibabel as nib
 import scipy.ndimage
+from itertools import product
 
 from .exceptions import NeuroLangException
 from .brain_tree import AABB, Tree, aabb_from_vertices
@@ -15,48 +16,46 @@ __all__ = [
 
 
 def region_union(region_set, affine=None):
-    if len(region_set) > 0 and affine is None:
-        affine = next(iter(region_set)).affine
-
-    voxels_per_regions = [set(map(tuple, region.to_ijk(affine)))
-                          for region in region_set]
-    result_voxels = set.union(*voxels_per_regions)
-    dim = max([region.image_dim for region in region_set]) if all(
-        isinstance(x, ExplicitVBR) and x.image_dim is not None for x in region_set) else None
-    return ExplicitVBR(np.array(list(result_voxels), dtype=list), affine, dim)
+    return region_set_algebraic_op(region_set, affine, set.union)
 
 
 def region_intersection(region_set, affine=None):
-    if len(region_set) > 0 and affine is None:
-        affine = next(iter(region_set)).affine
-
-    voxels_per_regions = [set(map(tuple, region.to_ijk(affine))) for region in region_set]
-    result_voxels = set.intersection(*voxels_per_regions)
-    if len(result_voxels) == 0:
-        return None
-    dim = max([region.image_dim for region in region_set]) if all(
-        isinstance(x, ExplicitVBR) and x.image_dim is not None for x in region_set) else None
-    return ExplicitVBR(np.array(list(result_voxels), dtype=list), affine, dim)
+    return region_set_algebraic_op(region_set, affine, set.intersection)
 
 
 def region_difference(region_set, affine=None):
-    if len(region_set) > 0 and affine is None:
+    return region_set_algebraic_op(region_set, affine, set.difference)
+
+
+def region_set_algebraic_op(region_set, affine=None, op=set.union):
+    if affine is None:
         affine = next(iter(region_set)).affine
 
-    voxels_per_regions = [set(map(tuple, region.to_ijk(affine))) for region in region_set]
-    result_voxels = set.difference(*voxels_per_regions)
-    if len(result_voxels) == 0:
-        return None
-    dim = max([region.image_dim for region in region_set]) if all(
-        isinstance(x, ExplicitVBR) and x.image_dim is not None for x in region_set) else None
-    return ExplicitVBR(np.array(list(result_voxels), dtype=list), affine, dim)
-# code repetition, could be abstracted to one method (region, aff, set_op)
+    max_dim = (0,) * 3
+    for region in region_set:
+        if isinstance(region, ImplicitVBR):
+            region = region.to_explicit_vbr(affine, max_dim)
+
+        if not isinstance(region, ExplicitVBR):
+            raise ValueError(f'Invalid type of region in set: {region}')
+
+        max_dim = max_dim if \
+            region.image_dim is None or \
+            all(map(lambda x, y: x > y, max_dim, region.image_dim)) else \
+            region.image_dim
+
+    voxels_set_of_regions = [set(map(tuple, region.to_ijk(affine))) for
+                             region in region_set]
+    result_voxels = np.array(list(op(*voxels_set_of_regions)), dtype=list)
+    return ExplicitVBR(result_voxels, affine, max_dim)
 
 
 class Region:
     def __init__(self, lb, ub) -> None:
         if not np.all([lb[i] < ub[i] for i in range(len(lb))]):
-            raise NeuroLangException('Lower bounds must be lower than upper bounds when creating rectangular regions')
+            raise NeuroLangException(
+                'Lower bounds must be lower'
+                ' than upper bounds when creating rectangular regions')
         self._bounding_box = AABB(lb, ub)
 
     def __hash__(self):
@@ -83,11 +82,13 @@ class Region:
 
 class VolumetricBrainRegion(Region):
     def to_xyz(self, affine):
-        '''return world coordinates of the region corresponding to the affine matrix transform'''
+        """return world coordinates of the region
+         corresponding to the affine matrix transform"""
         raise NotImplementedError()
 
     def to_ijk(self, affine):
-        '''return ijk voxels coordinates corresponding to the affine matrix transform'''
+        """return ijk voxels coordinates
+         corresponding to the affine matrix transform"""
         raise NotImplementedError()
 
     def to_xyz_set(self, affine):
@@ -145,8 +146,9 @@ class ExplicitVBR(VolumetricBrainRegion):
                 ax = np.argmax(ub - lb)
                 middle[:] = 0
                 middle[ax] = (lb[ax] + ub[ax]) / 2
-                middle_voxel = nib.affines.apply_affine(affine_matrix_inv, middle)[
-                    ax]  # this only works if the affine matrix is diagonal
+                middle_voxel = nib.affines.apply_affine(
+                    affine_matrix_inv, middle)[ax]
+                # this only works if the affine matrix is diagonal
 
                 b1_voxs = parent_voxels[parent_voxels.T[ax] <= middle_voxel]
                 if len(b1_voxs) != 0 and len(b1_voxs) != len(parent_voxels):
@@ -180,8 +182,9 @@ class ExplicitVBR(VolumetricBrainRegion):
         if out is None:
             mask = np.zeros(self.image_dim, dtype=np.int16)
             out = nib.spatialimages.SpatialImage(mask, self.affine)
-        elif out.shape != self.image_dim and not np.allclose(out.affine, self.affine):
-            raise ValueError("...")
+        elif out.shape != self.image_dim and \
+                not np.allclose(out.affine, self.affine):
+            raise ValueError("Image data has incompatible dimensionality")
         else:
             mask = out.get_data()
 
@@ -189,10 +192,11 @@ class ExplicitVBR(VolumetricBrainRegion):
         return out
 
     def __eq__(self, other) -> bool:
-        return np.all(self.affine == other.affine) and np.all(self.voxels == other.voxels)
+        return np.all(self.affine == other.affine) and \
+               np.all(self.voxels == other.voxels)
 
     def __repr__(self):
-        return f'Region(VBR= voxels:{self.voxels}, affine:{self.affine})'
+        return f'Region(VBR= affine:{self.affine}, voxels:{self.voxels})'
 
     def __hash__(self):
         return hash(self.voxels.tobytes() + self.affine.tobytes())
@@ -210,13 +214,14 @@ def region_set_from_masked_data(data, affine, dim):
 
 
 def take_principal_regions(region_set, k):
-    sorted_by_size = sorted(list(region_set), key=lambda x: len(x.voxels), reverse=True)
+    sorted_by_size = sorted(list(region_set),
+                            key=lambda x: len(x.voxels), reverse=True)
     return set(sorted_by_size[:k])
 
 
 class ImplicitVBR(VolumetricBrainRegion):
-    def voxel_in_region(self, voxel):
-        raise NotImplementedError()  # todo override set __in__
+    def __contains__(self, voxel):
+        raise NotImplementedError()
 
     def to_ijk(self, affine):
         raise NotImplementedError()
@@ -233,62 +238,73 @@ class SphericalVolume(ImplicitVBR):
     def __init__(self, center, radius):
         self._center = center
         self._radius = radius
-        self._bounding_box = None
-
-    @property
-    def bounding_box(self):
-        if self._bounding_box is not None:
-            return self._bounding_box
         lb = tuple(np.array(self._center) - self._radius)
         ub = tuple(np.array(self._center) + self._radius)
         self._bounding_box = AABB(lb, ub)
+
+    @property
+    def center(self):
+        return self._center
+
+    @property
+    def radius(self):
+        return self._radius
+
+    @property
+    def bounding_box(self):
         return self._bounding_box
 
     def to_ijk(self, affine):
         bb = self.bounding_box
-        bounds_voxels = nib.affines.apply_affine(np.linalg.inv(affine), np.array([bb.lb, bb.ub]))
-        [xs, ys, zs] = [range(int(min(bounds_voxels[:, i])), int(max(bounds_voxels[:, i]))) for i in range(bb.dim)]
+        bounds_voxels = nib.affines.apply_affine(
+            np.linalg.inv(affine), np.array([bb.lb, bb.ub]))
+        ranges = [range(int(min(bounds_voxels[:, i])),
+                        int(max(bounds_voxels[:, i])))
+                  for i in range(bb.dim)]
 
-        # todo improve
-        voxel_coordinates = []
-        for x in xs:
-            for y in ys:
-                for z in zs:
-                    xyz_coords = nib.affines.apply_affine(affine, np.array([x, y, z]))
-                    if np.linalg.norm(np.array(xyz_coords) - np.array(self._center)) <= self._radius:
-                        voxel_coordinates.append([x, y, z])
-        return np.array(voxel_coordinates)
+        voxel_coordinates = np.array([point for point in
+                                      np.array(list(product(*ranges))) if
+                                      nib.affines.apply_affine(affine, point)
+                                      in self])
+        return voxel_coordinates
 
-    def center(self):
-        return self._center
+    def __contains__(self, point):
+        point = np.asanyarray(point)
+        return np.linalg.norm(point - self._center) <= self._radius
 
     def __hash__(self):
         return hash(self.bounding_box.limits.tobytes())
 
     def __eq__(self, other) -> bool:
-        return np.all(self._center == other._center) and self._radius == other._radius
+        return np.all(self._center == other._center) and\
+               self._radius == other._radius
 
     def __repr__(self):
-        return f'SphericalVolume(Center={tuple(self._center)}, Radius={self._radius})'
+        return f'SphericalVolume(Center={tuple(self._center)},' \
+               f' Radius={self._radius})'
 
 
 class PlanarVolume(ImplicitVBR):
     def __init__(self, origin, vector, direction=1, limit=1000):
         self._origin = np.array(origin)
+
         if not np.any([vector[i] > 0 for i in range(len(vector))]):
-            raise NeuroLangException('Vector normal to the plane must be non-zero')
+            raise ValueError('Vector normal to the plane must be non-zero')
         self._vector = np.array(vector) / np.linalg.norm(vector)
-        self._bounding_box = None
 
         if direction not in [1, -1]:
-            raise NeuroLangException('Direction must either be 1 (superior to) or -1 (inferior to)')
+            raise ValueError('Direction must either be'
+                             ' 1 (superior to) or -1 (inferior to)')
         self._dir = direction
+
         if limit <= 0:
-            raise NeuroLangException('Limit must be a positive value')
+            raise ValueError('Limit must be a positive value')
         self._limit = limit
 
-    def point_in_plane(self, point):
-        return np.dot(self._vector, self._origin - point) == 0
+        box_limit = (self._dir * self._limit,) * 3
+        box_limit_in_plane = self.project_point_to_plane(box_limit) * -1
+        [lb, ub] = sorted([box_limit, box_limit_in_plane], key=lambda x: x[0])
+        self._bounding_box = AABB(lb, ub)
 
     def project_point_to_plane(self, point):
         point = np.array(point)
@@ -297,32 +313,28 @@ class PlanarVolume(ImplicitVBR):
 
     @property
     def bounding_box(self):
-        if self._bounding_box is not None:
-            return self._bounding_box
-        outside = (self._dir * self._limit,) * 3
-        inside = self.project_point_to_plane(outside) * -1
-        [lb, ub] = sorted([inside, outside], key=lambda x: x[0])
-        self._bounding_box = AABB(lb, ub)
         return self._bounding_box
 
     def to_ijk(self, affine):
         bb = self.bounding_box
-        bounds_voxels = nib.affines.apply_affine(np.linalg.inv(affine), np.array([bb.lb, bb.ub]))
-        [xs, ys, zs] = [range(int(min(bounds_voxels[:, i])), int(max(bounds_voxels[:, i]))) for i in range(3)]
+        bounds_voxels = nib.affines.apply_affine(np.linalg.inv(affine),
+                                                 np.array([bb.lb, bb.ub]))
+        ranges = [range(int(min(bounds_voxels[:, i])),
+                        int(max(bounds_voxels[:, i])))
+                  for i in range(bb.dim)]
 
-        # todo improve
-        voxel_coordinates = []
-        for x in xs:
-            for y in ys:
-                for z in zs:
-                    voxel_coordinates.append([x, y, z])
-        return np.array(voxel_coordinates)
+        return np.array(list(product(*ranges)))
+
+    def __contains__(self, point):
+        return np.dot(self._vector, self._origin - point) == 0
 
     def __hash__(self):
         return hash(self.bounding_box.limits.tobytes())
 
     def __eq__(self, other) -> bool:
-        return np.all(self._origin == other._origin) and np.all(self._vector == other._vector)
+        return np.all(self._origin == other._origin) and \
+               np.all(self._vector == other._vector)
 
     def __repr__(self):
-        return f'PlanarVolume(Origin={tuple(self._origin)}, Normal Vector={self._vector})'
+        return f'PlanarVolume(Origin={tuple(self._origin)},' \
+               f' Normal Vector={self._vector})'

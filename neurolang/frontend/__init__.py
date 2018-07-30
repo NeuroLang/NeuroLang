@@ -1,7 +1,7 @@
 from .query_resolution import QueryBuilder
-from ..region_solver import RegionsSetSolver
+from ..region_solver_ds import RegionSolver
 from ..symbols_and_types import TypedSymbolTable
-from ..regions import ExplicitVBR
+from ..regions import ExplicitVBR, ImplicitVBR, SphericalVolume
 from ..utils.data_manipulation import parse_region_label_map
 from .. import neurolang as nl
 import numpy as np
@@ -12,7 +12,7 @@ __all__ = ['RegionFrontend', 'QueryBuilder']
 class RegionFrontend(QueryBuilder):
     def __init__(self, solver=None):
         if solver is None:
-            solver = RegionsSetSolver(TypedSymbolTable())
+            solver = RegionSolver(TypedSymbolTable())
         super().__init__(solver)
 
     def load_parcellation(self, parc_im, selected_labels=None):
@@ -32,3 +32,18 @@ class RegionFrontend(QueryBuilder):
             res.append(s)
 
         return res
+
+    def sphere(self, center, radius, result_symbol_name=None):
+
+        sr = SphericalVolume(center, radius)
+        symbol = self.add_region(sr, result_symbol_name)
+        return symbol
+
+    def make_implicit_regions_explicit(self, affine, dim):
+
+        for region_symbol_name in self.region_names:
+            region_symbol = self.get_symbol(region_symbol_name)
+            region = region_symbol.value
+            if isinstance(region, ImplicitVBR):
+                self.add_region(region.to_explicit_vbr(
+                    affine, dim), region_symbol_name)
