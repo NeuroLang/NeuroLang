@@ -2,7 +2,10 @@ import numpy as np
 import nibabel as nib
 from numpy import random
 from pytest import raises
-from ..regions import *
+from ..regions import (
+    Region,
+    ExplicitVBR, SphericalVolume, PlanarVolume,
+    region_union, region_intersection, region_difference)
 from ..CD_relations import direction_matrix, cardinal_relation, is_in_direction
 from ..exceptions import NeuroLangException
 from ..brain_tree import AABB, Tree
@@ -246,17 +249,22 @@ def test_tree_of_convex_regions():
         np.array([[0, 0, 0], [2, 2, 1], [5, 5, 0], [10, 10, 0]]), np.eye(4)
     )
     assert region.aabb_tree.height == 3
-    #rand length n of voxels takes you to log2(n) tree height only if equidist
 
 
 def test_spherical_volumetric_region():
 
+    unit_sphere = SphericalVolume((0, 0, 0), 1)
+    assert (0, 0, 0) in unit_sphere
+    assert (1, 0, 0) in unit_sphere
+    assert not (1, 1, 1) in unit_sphere
+    unit_sphere.to_ijk(np.eye(4))
+
     def randint(): return random.randint(0, 1000)
 
-    N = 500
-    voxels = sorted([(randint(), randint(), randint()) for _ in range(N)])
+    samples = 500
+    voxels = sorted([(randint(), randint(), randint()) for _ in range(samples)])
     affine = np.eye(4)
-    center = voxels[N//2]
+    center = voxels[samples//2]
     radius = 15
     sr = SphericalVolume(center, radius)
     vbr_voxels = sr.to_ijk(affine)
@@ -277,11 +285,11 @@ def test_planar_region():
     center = (1, 5, 6)
     vector = (1, 0, 0)
     pr = PlanarVolume(center, vector, limit=10)
-    assert pr.point_in_plane(center)
-    assert not pr.point_in_plane((2, 8, 7))
+    assert center in pr
+    assert not (2, 8, 7) in pr
     p = tuple(random.randint(1, 250, size=3))
     p_proj = pr.project_point_to_plane(p)
-    assert not pr.point_in_plane(p_proj)
+    assert p_proj not in pr
     assert np.array_equal([0, -10, -10], pr.bounding_box.lb)
     assert np.array_equal([10, 10, 10], pr.bounding_box.ub)
 
@@ -315,7 +323,7 @@ def test_regions_with_multiple_bb_directionality():
     ]
 
     for region in region_bbs:
-      tree.add(region)
+        tree.add(region)
 
     assert is_in_direction(
         direction_matrix([other_region.bounding_box], region_bbs), 'P'
@@ -382,6 +390,25 @@ def test_refinement_of_not_overlapping():
     )
 
 
+def test_union_implicit_regions():
+
+    def all_points_in_spheres(points, spheres):
+        for p in points:
+            if not any([p in s for s in spheres]):
+                return False
+        return True
+
+    def randint(): return random.randint(0, 100)
+
+    radius = 5
+    sphere = SphericalVolume((randint(), randint(), randint()), radius)
+    other_sphere = SphericalVolume((randint(), randint(), randint()), radius)
+    affine = np.eye(4)
+    union = region_union([sphere, other_sphere], affine)
+    assert union.image_dim == (0,) * 3
+    assert all_points_in_spheres(union.voxels, {sphere, other_sphere})
+
+
 def test_regions_union_intersection():
 
     def randint(): return random.randint(70, 100)
@@ -393,7 +420,7 @@ def test_regions_union_intersection():
         [0., 0., 0.69999999, -72.],
         [0., 0., 0., 1.]
     ]).round(2)
-    region = ExplicitVBR(voxels, affine)
+    region = ExplicitVBR(voxels, affine, tuple([2, 2, 2]))
     union = region_union([region], affine)
     assert union.bounding_box == region.bounding_box
     #
@@ -415,11 +442,9 @@ def test_intersection_difference():
         [0., 0., 0., 1.]
     ]).round(2)
 
-    center = (randint(), randint(), randint())
-    center2 = (randint(), randint(), randint())
     radius = 10
-    sphere = SphericalVolume(center, radius)
-    other_sphere = SphericalVolume(center2, radius)
+    sphere = SphericalVolume((randint(), randint(), randint()), radius)
+    other_sphere = SphericalVolume((randint(), randint(), randint()), radius)
 
     intersect = region_intersection([sphere, other_sphere], affine)
     d1 = region_difference([sphere, other_sphere], affine)
