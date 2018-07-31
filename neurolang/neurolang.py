@@ -270,7 +270,9 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
         if len(ast['operand']) == 1:
             return ast['operand']
         else:
-            return FunctionApplication(Symbol(ast['operator']))(ast['operand'])
+            return FunctionApplication(
+                Symbol(ast['operator']), tuple(ast['operand'],)
+            )
 
     def dotted_identifier(self, ast):
         identifier = ast['root']
@@ -297,7 +299,7 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
             typing.Any
         ](
             function,
-            args=arguments
+            args=tuple(arguments)
         )
 
         return function
