@@ -19,7 +19,8 @@ from .expressions import (
     get_type_and_value,
     type_validation_value,
     unify_types,
-    NeuroLangTypeException
+    NeuroLangTypeException,
+    NeuroLangException
 )
 
 
@@ -62,11 +63,12 @@ def replace_type_variable(type_, type_hint, type_var=None):
 
 
 class TypedSymbolTable(collections.MutableMapping):
-    def __init__(self, enclosing_scope=None):
+    def __init__(self, enclosing_scope=None, readonly=False):
         self._symbols = collections.OrderedDict()
 
         self._symbols_by_type = collections.defaultdict(dict)
         self.enclosing_scope = enclosing_scope
+        self.readonly = readonly
 
     def __len__(self):
         return len(self._symbols)
@@ -81,6 +83,8 @@ class TypedSymbolTable(collections.MutableMapping):
                 raise KeyError("Expression %s not in the table" % key)
 
     def __setitem__(self, key, value):
+        if self.readonly:
+            raise NeuroLangException("This symbol table is readonly")
         if isinstance(value, expressions.Expression):
             self._symbols[key] = value
             if value.type not in self._symbols_by_type:
@@ -129,3 +133,6 @@ class TypedSymbolTable(collections.MutableMapping):
     def create_scope(self):
         subscope = TypedSymbolTable(enclosing_scope=self)
         return subscope
+
+    def set_readonly(self, readonly):
+        self.readonly = readonly
