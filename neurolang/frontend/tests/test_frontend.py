@@ -22,8 +22,8 @@ def test_add_regions_and_query_included_predicate():
     result_symbol = neurolang.symbols.superior_of(
         superior, inferior).do(result_symbol_name='is_superior_test')
     result = result_symbol.expression.value
-    result_symbol_from_table = neurolang.get_symbol('is_superior_test'). \
-        expression.value
+    result_symbol_from_table = neurolang.get_symbol(
+        'is_superior_test').expression.value
 
     assert result
     assert result_symbol_from_table
@@ -51,7 +51,10 @@ def test_query_regions_from_region_set():
     i2 = ExplicitVBR(np.array([[0, 0, -1], [1, 1, 2]]), np.eye(4))
     i3 = ExplicitVBR(np.array([[0, 0, -10], [1, 1, -5]]), np.eye(4))
 
-    neurolang.add_region_set({i1, i2, i3}, result_symbol_name='inferiors')
+    neurolang.add_region_set(
+        {i1, i2, i3}, result_symbol_name='inferiors',
+        regions_symbols_names={'i1', 'i2', 'i3'}
+    )
     x = neurolang.new_region_symbol(symbol_name='x')
     query = neurolang.query(
         x, neurolang.symbols.inferior_of(x, neurolang.symbols.reference_region)
@@ -100,10 +103,28 @@ def test_load_spherical_volume():
         region_solver_ds.RegionSolver(nl.TypedSymbolTable())
     )
 
-    neurolang.sphere((0, 0, 0), 1, result_symbol_name='unit_region')
+    inferior = ExplicitVBR(
+        np.array([[0, 0, 0], [1, 1, 1]]), np.eye(4))
+    superior = ExplicitVBR(
+        np.array([[0, 0, 4], [1, 1, 5]]), np.eye(4))
 
-    assert neurolang.symbols['unit_region'].value == SphericalVolume(
-               (0, 0, 0), 1)
+    neurolang.add_region(inferior, result_symbol_name='inferior_region')
+    neurolang.add_region(superior, result_symbol_name='superior_region')
+
+    neurolang.sphere((0, 0, 0), 1, result_symbol_name='unit_sphere')
+
+    assert neurolang.symbols['unit_sphere'].value \
+        == SphericalVolume((0, 0, 0), 1)
 
     neurolang.make_implicit_regions_explicit(np.eye(4), (5,) * 3)
-    assert isinstance(neurolang.symbols['unit_region'].value, ExplicitVBR)
+    for symbol_name in neurolang.region_names:
+        assert isinstance(neurolang.symbols[symbol_name].value, ExplicitVBR)
+
+    x = neurolang.new_region_symbol(symbol_name='x')
+    query = neurolang.query(
+        x, neurolang.symbols.overlapping(x, neurolang.symbols.unit_sphere)
+    )
+    query_result = query.do(result_symbol_name='result_of_test_query')
+    assert len(query_result.value) == 1
+    symbol = next(iter(query_result.value))
+    assert neurolang.symbols[symbol].value == inferior

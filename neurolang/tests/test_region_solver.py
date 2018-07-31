@@ -367,10 +367,9 @@ def test_term_defined_relative_position():
     temporal_lobe = do_query_of_regions_from_term(solver, 'term', 'neurosynth_term', output_symbol_name='TEMPORAL LOBE')
 
     solver.symbol_table[nl.Symbol[solver.type]('temporal_region')] = nl.Constant[solver.type]\
-        (get_singleton_element_from_frozenset(temporal_lobe.value))
-    superior_relation = 'anterior_of'
+        (get_singleton_element_from_frozenset(take_principal_regions(temporal_lobe.value, 1)))
     predicate = nl.Predicate[solver.set_type](
-        nl.Symbol[Callable[[solver.set_type], solver.type]](superior_relation),
+        nl.Symbol[Callable[[solver.type], solver.set_type]]('anterior_of'),
         (nl.Symbol[solver.type]('temporal_region'),)
     )
 
@@ -401,7 +400,7 @@ def test_term_defined_solve_overlapping():
         ExplicitVBR(a_voxels, a_gambling_region.affine))
 
     predicate = nl.Predicate[solver.set_type](
-        nl.Symbol[Callable[[solver.set_type], solver.type]]('overlapping'),
+        nl.Symbol[Callable[[solver.type], solver.set_type]]('overlapping'),
         (nl.Symbol[solver.type]('gambling'),)
     )
 
