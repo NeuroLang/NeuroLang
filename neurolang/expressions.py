@@ -568,8 +568,8 @@ class FunctionApplication(Definition):
 
         if self.args is None:
             self.args = tuple()
-        elif not isinstance(self.args, (tuple, list)):
-            raise ValueError('args parameter must be a tuple or a list')
+        elif not isinstance(self.args, tuple):
+            raise ValueError('args parameter must be a tuple')
 
         for arg in chain(self.args, self.kwargs.values()):
             if isinstance(arg, Symbol):

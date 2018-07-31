@@ -37,7 +37,7 @@ class ExpressionWalker(PatternWalker):
     @add_match(FunctionApplication)
     def function(self, expression):
         functor = self.walk(expression.functor)
-        args = [self.walk(e) for e in expression.args]
+        args = tuple(self.walk(e) for e in expression.args)
         kwargs = {k: self.walk(v) for k, v in expression.kwargs}
 
         if (
@@ -212,7 +212,6 @@ class ExpressionBasicEvaluator(SymbolTableEvaluator):
     @add_match(
         FunctionApplication(Constant(...), ...),
         lambda expression:
-            expression.args is not None and
             all(
                 isinstance(arg, Constant)
                 for arg in expression.args
@@ -235,9 +234,9 @@ class ExpressionBasicEvaluator(SymbolTableEvaluator):
                 )
             result_type = ToBeInferred
 
-        new_args = [a.value for a in expression.args]
-        new_kwargs = {k: v.value for k, v in expression.kwargs.items()}
+        args = tuple(a.value for a in expression.args)
+        kwargs = {k: v.value for k, v in expression.kwargs.items()}
         result = Constant[result_type](
-            functor_value(*new_args, **new_kwargs)
+            functor_value(*args, **kwargs)
         )
         return result
