@@ -4,7 +4,9 @@ from ..brain_tree import AABB, Tree
 
 
 def _generate_random_box(x_bounds, y_bounds, z_bounds, size_bounds):
-    lower_bound = np.array([np.random.uniform(*b) for b in (x_bounds, y_bounds, z_bounds)])
+    lower_bound = np.array([
+        np.random.uniform(*b) for b in (x_bounds, y_bounds, z_bounds)
+    ])
     upper_bound = lower_bound + np.random.uniform(*size_bounds, size=3)
     return AABB(lower_bound, upper_bound)
 
@@ -41,6 +43,7 @@ def test_aabb_union():
     box1 = AABB((0, 0, 0), (1, 1, 1))
     box2 = AABB((2, 2, 2), (3, 3, 3))
     assert box1.union(box2) == AABB((0, 0, 0), (3, 3, 3))
+
 
 def test_tree_construction():
     tree = Tree()
@@ -111,6 +114,7 @@ def test_tree_root_region_id_set_maintaned():
     assert tree.root.box == expected_root_box
     assert tree.root.regions == expected_root_regions
 
+
 def test_tree_root_box_correctly_expanding():
     tree = Tree()
     assert tree.root is None
@@ -132,3 +136,29 @@ def test_tree_root_box_correctly_expanding():
     tree.add(box3, regions={box3})
     assert tree.root.box == AABB((0, 0, 0), (5, 5, 1))
     assert tree.root
+
+
+def test_overlapping_regions():
+    tree = Tree()
+
+    box1 = AABB((0, 0, 0), (1, 1, 1))
+    box2 = AABB((0, 0, 0), (1, 1, 1))
+    tree.add(box1, regions={'box1'})
+    tree.add(box2, regions={'box2'})
+    matches = tree.query_overlapping_regions('box1')
+    assert matches == {'box2'}
+
+    box3 = AABB((0.9, 0.9, 0.9), (2, 2, 2))
+    tree.add(box3, regions={'box3'})
+    assert tree.query_overlapping_regions('box1') == {'box2', 'box3'}
+
+    tree = Tree()
+    target = AABB((0, 0, 0), (1, 1, 1))
+    tree.add(target, regions={'target'})
+    expected_overlapping = set()
+    for i in range(100):
+        box = _generate_random_box((0, 0.5), (0, 0.5), (0, 0.5), (1, 30))
+        label = f'box{i}'
+        tree.add(box, regions={label})
+        expected_overlapping.add(label)
+    assert tree.query_overlapping_regions('target') == expected_overlapping
