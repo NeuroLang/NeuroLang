@@ -591,7 +591,7 @@ class FunctionApplication(Definition):
         for arg in chain(self.args, self.kwargs.values()):
             if isinstance(arg, Symbol):
                 self._symbols.add(arg)
-            elif isinstance(arg, FunctionApplication):
+            elif isinstance(arg, Expression):
                 self._symbols |= arg._symbols
 
     @property
@@ -689,7 +689,7 @@ class ExistentialPredicate(Definition):
             )
         self.head = head
         self.body = body
-        self._symbol = body._symbols - {head}
+        self._symbols = body._symbols - {head}
 
     def __repr__(self):
         r = (
@@ -782,7 +782,8 @@ for operator_name in dir(op):
     if name.endswith('___'):
         name = name[:-1]
 
-    for c in (Constant, Symbol, FunctionApplication, Statement, Query):
+    for c in (Constant, Symbol, ExistentialPredicate, FunctionApplication,
+              Statement, Query):
         if not hasattr(c, name):
             setattr(c, name, op_bind(operator))
 
