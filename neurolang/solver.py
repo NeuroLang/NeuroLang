@@ -191,29 +191,6 @@ class BooleanRewriteSolver(PatternWalker):
         return self.walk(expression.args[0].args[0])
 
     @add_match(
-        FunctionApplication(Constant(...), (NonConstant, NonConstant)),
-        lambda expression: expression.functor.value in (or_, and_)
-    )
-    def partial_binary_evaluation(self, expression):
-        result = self.walk(expression.args[0])
-        new_args = None
-        if result is not expression.args[0]:
-            new_args = (result, expression.args[1])
-        else:
-            right_result = self.walk(expression.args[1])
-            if right_result is not expression.args[1]:
-                new_args = (expression.args[0], right_result)
-        if new_args is not None:
-            return self.walk(
-                FunctionApplication[bool](
-                    expression.functor,
-                    new_args
-                )
-            )
-        else:
-            return expression
-
-    @add_match(
         FunctionApplication[bool](
             Constant(...),
             (NonConstant[bool], Constant[bool])
@@ -272,6 +249,29 @@ class BooleanRewriteSolver(PatternWalker):
                 )
             )
         )
+
+    @add_match(
+        FunctionApplication(Constant(...), (NonConstant, NonConstant)),
+        lambda expression: expression.functor.value in (or_, and_)
+    )
+    def partial_binary_evaluation(self, expression):
+        result = self.walk(expression.args[0])
+        new_args = None
+        if result is not expression.args[0]:
+            new_args = (result, expression.args[1])
+        else:
+            right_result = self.walk(expression.args[1])
+            if right_result is not expression.args[1]:
+                new_args = (expression.args[0], right_result)
+        if new_args is not None:
+            return self.walk(
+                FunctionApplication[bool](
+                    expression.functor,
+                    new_args
+                )
+            )
+        else:
+            return expression
 
 
 class BooleanOperationsSolver(PatternWalker):
