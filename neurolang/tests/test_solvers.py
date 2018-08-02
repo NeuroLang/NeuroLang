@@ -5,6 +5,9 @@ from .. import solver
 from .. import expressions
 
 
+S = expressions.Symbol
+
+
 class ReturnSymbolConstantApplication(solver.PatternWalker):
     @solver.add_match(solver.Constant)
     def constant(self, expression):
@@ -29,6 +32,10 @@ class ReturnSymbolConstantApplication(solver.PatternWalker):
             return expression
         else:
             return self.walk(expressions.FunctionApplication(new_f, new_args))
+
+class DummySolver(solver.BooleanRewriteSolver,
+                  ReturnSymbolConstantApplication):
+    pass
 
 
 def test_type_properties():
@@ -153,13 +160,7 @@ def test_boolean_operations_solver_and():
 
 
 def test_boolean_operations_rewrite_cast():
-    class Dummy(
-        solver.BooleanRewriteSolver,
-        ReturnSymbolConstantApplication
-    ):
-        pass
-
-    s = Dummy()
+    s = DummySolver()
     a = expressions.Symbol[bool]('a')
     b = expressions.Symbol[bool]('b')
 
@@ -175,12 +176,7 @@ def test_boolean_operations_rewrite_cast():
 
 
 def test_boolean_operations_rewrite_constant_left():
-    class Dummy(
-        solver.BooleanRewriteSolver, ReturnSymbolConstantApplication
-    ):
-        pass
-
-    s = Dummy()
+    s = DummySolver()
     a = expressions.Symbol[bool]('a')
 
     original = a | expressions.Constant(True)
@@ -191,12 +187,7 @@ def test_boolean_operations_rewrite_constant_left():
 
 
 def test_boolean_operations_rewrite_nested_constant():
-    class Dummy(
-        solver.BooleanRewriteSolver, ReturnSymbolConstantApplication
-    ):
-        pass
-
-    s = Dummy()
+    s = DummySolver()
     a = expressions.Symbol[bool]('a')
     b = expressions.Symbol[bool]('b')
 
@@ -222,12 +213,7 @@ def test_boolean_operations_rewrite_nested_constant():
 
 
 def test_boolean_operations_rewrite_inversion():
-    class Dummy(
-        solver.BooleanRewriteSolver, ReturnSymbolConstantApplication
-    ):
-        pass
-
-    s = Dummy()
+    s = DummySolver()
     a = expressions.Symbol[bool]('a')
     b = expressions.Symbol[bool]('b')
 
@@ -238,3 +224,50 @@ def test_boolean_operations_rewrite_inversion():
     assert t_r.args[1].functor.value is op.invert
     assert t_r.args[0].args[0] is a
     assert t_r.args[1].args[0] is b
+
+
+def test_partial_binary_evaluation():
+
+
+    class ExpressionWalkHistorySolver(DummySolver):
+
+        def __init__(self, *args, **kwargs):
+            self.walked = []
+            super().__init__(*args, **kwargs)
+
+        def walk(self, expression):
+            self.walked.append(expression)
+            return super().walk(expression)
+
+        def assert_walked_before(self, e1, e2):
+            # make sure e1 was walked
+            assert any(e is e1 for e in self.walked)
+            # make sure e2 was walked
+            assert any(e is e2 for e in self.walked)
+            # get postion of e1 in walk history
+            e1_idx = next(i for i, e in enumerate(self.walked) if e is e1)
+            # get position of e2 in walk history
+            e2_idx = next(i for i, e in enumerate(self.walked) if e is e2)
+            # make sure e1 was walked before e2
+            assert e1_idx < e2_idx
+
+    s = ExpressionWalkHistorySolver()
+
+    a = S[bool]('a')
+    b = S[bool]('b')
+    c = S[bool]('c')
+    d = S[bool]('d')
+
+    exp = (~(a | b)) & (~(c | d))
+    wexp = s.walk(exp)
+    s.assert_walked_before(exp.args[0], exp.args[1])
+
+    s = ExpressionWalkHistorySolver()
+    exp = a & (a | b)
+    wexp = s.walk(exp)
+    s.assert_walked_before(exp.args[0], exp.args[1])
+
+    s = ExpressionWalkHistorySolver()
+    exp = a & (~(b | c))
+    wexp = s.walk(exp)
+    s.assert_walked_before(exp.args[0], exp.args[1])
