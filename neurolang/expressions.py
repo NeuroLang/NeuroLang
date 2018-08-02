@@ -1,3 +1,4 @@
+"""Expressions for the intermediate representation and auxiliary functions."""
 from itertools import chain
 import operator as op
 import typing
@@ -25,6 +26,7 @@ class NeuroLangTypeException(NeuroLangException):
 
 
 def typing_callable_from_annotated_function(function):
+    """Get typing.Callable type representing the annotated function type."""
     signature = inspect.signature(function)
     parameter_types = [
         v.annotation if v.annotation is not inspect.Parameter.empty
@@ -269,8 +271,9 @@ class ParametricTypeClassMeta(type):
 
 
 class ExpressionMeta(ParametricTypeClassMeta):
-    '''
-    Metaclass for expressions. It guarantees a set of properties for every
+    """
+    Metaclass for expressions. It guarantees a set of properties for every.
+
     class and instance:
     * Classes have an attribute `type` which is set through the syntax
       ClassName[TypeName]. If type is not specified then the `type`
@@ -287,7 +290,7 @@ class ExpressionMeta(ParametricTypeClassMeta):
       wildcard pattern for pattern-matching expressing that any value can go in
       this parameter. In this case, the class constructor is not executed
       and the `__is_pattern__` attribute is set to `True`.
-    '''
+    """
 
     def __new__(cls, *args, **kwargs):
         __no_explicit_type__ = 'type' not in args[2]
@@ -387,22 +390,34 @@ class Expression(metaclass=ExpressionMeta):
         assert ret.type is type_
         return ret
 
+    @property
+    def __type_repr__(self):
+        if (
+            hasattr(self.type, '__qualname__') and
+            not hasattr(self.type, '__args__')
+        ):
+            return self.type.__qualname__
+        else:
+            return repr(self.type)
+
 
 class NonConstant(Expression):
-    '''
-    Any expression which is not a constant
-    '''
+    """Any expression which is not a constant."""
 
 
 class Definition(NonConstant):
-    '''
-    Parent class for all composite operations
+    """
+    Parent class for all composite operations.
+
     such as A + B or F(A)
-    '''
+    """
 
 
 class Symbol(NonConstant):
+    """Symbol of a certain type."""
+
     def __init__(self, name):
+        """Initialize symbol with it's name."""
         self.name = name
         self._symbols = {self}
 
@@ -416,7 +431,7 @@ class Symbol(NonConstant):
         return hash(self.name)
 
     def __repr__(self):
-        return 'S{{{}: {}}}'.format(self.name, self.type)
+        return 'S{{{}: {}}}'.format(self.name, self.__type_repr__)
 
 
 class Constant(Expression):
@@ -519,9 +534,11 @@ class Constant(Expression):
     def __repr__(self):
         if self.value is ...:
             value_str = '...'
+        elif callable(self.value):
+            value_str = self.value.__qualname__
         else:
             value_str = repr(self.value)
-        return 'C{{{}: {}}}'.format(value_str, self.type)
+        return 'C{{{}: {}}}'.format(value_str, self.__type_repr__)
 
     def change_type(self, type_):
         self.__class__ = self.__class__[type_]
@@ -582,7 +599,7 @@ class FunctionApplication(Definition):
         return self.functor
 
     def __repr__(self):
-        r = u'\u03BB{{{}: {}}}'.format(self.functor, self.type)
+        r = u'\u03BB{{{}: {}}}'.format(self.functor, self.__type_repr__)
         if self.args is ...:
             r += '(...)'
         elif self.args is not None:
@@ -628,13 +645,13 @@ class Projection(Definition):
 
     def __repr__(self):
         return u"\u03C3{{{}[{}]: {}}}".format(
-            self.collection, self.item, self.type
+            self.collection, self.item, self.__type_repr__
         )
 
 
 class Predicate(FunctionApplication):
     def __repr__(self):
-        r = 'P{{{}: {}}}'.format(self.functor, self.type)
+        r = 'P{{{}: {}}}'.format(self.functor, self.__type_repr__)
         if self.args is ...:
             r += '(...)'
         elif self.args is not None:
@@ -675,7 +692,10 @@ class ExistentialPredicate(Definition):
         self._symbol = body._symbols - {head}
 
     def __repr__(self):
-        r = u'\u2203{{{}: {} st {}}}'.format(self.head, self.type, self.body)
+        r = (
+            u'\u2203{{{}: {} st {}}}'
+            .format(self.head, self.__type_repr__, self.body)
+        )
         return r
 
 
@@ -695,7 +715,7 @@ class Statement(Definition):
         else:
             name = self.symbol.name
         return 'Statement{{{}: {} <- {}}}'.format(
-            name, self.type, self.value
+            name, self.__type_repr__, self.value
         )
 
 
@@ -716,7 +736,7 @@ class Query(Definition):
             name = self.head.name
 
         return 'Query{{{}: {} <- {}}}'.format(
-            name, self.type, self.body
+            name, self.__type_repr__, self.body
         )
 
 
