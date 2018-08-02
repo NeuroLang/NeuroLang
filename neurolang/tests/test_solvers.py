@@ -230,7 +230,10 @@ def test_partial_binary_evaluation():
 
 
     class ExpressionWalkHistorySolver(DummySolver):
-        walked = []
+
+        def __init__(self, *args, **kwargs):
+            self.walked = []
+            super().__init__(*args, **kwargs)
 
         def walk(self, expression):
             self.walked.append(expression)
@@ -257,5 +260,14 @@ def test_partial_binary_evaluation():
 
     exp = (~(a | b)) & (~(c | d))
     wexp = s.walk(exp)
+    s.assert_walked_before(exp.args[0], exp.args[1])
 
+    s = ExpressionWalkHistorySolver()
+    exp = a & (a | b)
+    wexp = s.walk(exp)
+    s.assert_walked_before(exp.args[0], exp.args[1])
+
+    s = ExpressionWalkHistorySolver()
+    exp = a & (~(b | c))
+    wexp = s.walk(exp)
     s.assert_walked_before(exp.args[0], exp.args[1])

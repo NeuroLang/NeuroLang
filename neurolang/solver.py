@@ -279,7 +279,7 @@ class BooleanRewriteSolver(PatternWalker):
         new_args = (walk_first_result, expression.args[1])
         # if the walk on the first argument did not change anything
         # we walk on the second argument and replace it with the result
-        if walk_first_result is not first_arg:
+        if walk_first_result is first_arg:
             new_args = (walk_first_result, self.walk(expression.args[1]))
 
         # if the expression arguments did not change, we stop walking here
