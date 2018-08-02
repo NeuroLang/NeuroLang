@@ -299,6 +299,11 @@ class ExpressionMeta(ParametricTypeClassMeta):
         if obj.__no_explicit_type__:
             obj.type = typing.Any
         orig_init = obj.__init__
+        obj.__children__ = [
+            name for name, parameter
+            in inspect.signature(orig_init).parameters.items()
+            if parameter.default is inspect.Parameter.empty
+        ][1:]
 
         @wraps(orig_init)
         def new_init(self, *args, **kwargs):

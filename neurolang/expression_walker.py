@@ -1,16 +1,65 @@
-from itertools import chain
+from itertools import chain, product
 import logging
 import typing
 
 from .symbols_and_types import TypedSymbolTable
 from .expressions import (
     FunctionApplication, Statement, Query, Projection, Constant,
-    Symbol, ExistentialPredicate,
+    Symbol, ExistentialPredicate, Expression,
     get_type_and_value, ToBeInferred, is_subtype, NeuroLangTypeException,
     unify_types
 )
 
 from .expression_pattern_matching import add_match, PatternMatcher
+
+
+def expression_dfs_iterator(expression, include_level=False):
+    """
+    Iterate the expression tree in deep first search order.
+
+    Iterates over elements `(parameter_name, parameter_object)` when
+    `include_level` is `False`.
+
+    If `include_level` is `True` then the iterated elements are
+    `(parameter_name, parameter_object, depth_level)`
+    """
+    if include_level:
+        current_level = 0
+        stack = [(None, expression, current_level)]
+    else:
+        stack = [(None, expression)]
+
+    while stack:
+        current_element = stack.pop()
+
+        if isinstance(current_element[1], Symbol):
+            children = []
+        elif isinstance(current_element[1], Constant):
+            if (
+                    is_subtype(Constant.type, typing.Tuple) or
+                    is_subtype(Constant.type, typing.AbstractSet)
+            ):
+                children = product((None,), current_element[1].value)
+            else:
+                children = []
+        elif isinstance(current_element[1], tuple):
+            children = product((None,), current_element[1])
+        elif isinstance(current_element[1], Expression):
+            children = (
+                (name, getattr(current_element[1], name))
+                for name in current_element[1].__children__
+            )
+
+        current_length = len(stack)
+        if include_level:
+            current_level = current_element[-1] + 1
+            for name, value in children:
+                stack.insert(current_length, (name, value, current_level))
+        else:
+            for c in children:
+                stack.insert(current_length, c)
+
+        yield current_element
 
 
 class PatternWalker(PatternMatcher):
