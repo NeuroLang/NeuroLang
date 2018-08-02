@@ -205,9 +205,11 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
                 self.pattern_match(pattern, expression) and
                 (guard is None or guard(expression))
             ):
-                logging.info(
-                    f"**** match {pattern} | {guard} with {expression}"
-                )
+                name = '\033[1m\033[91m' + action.__qualname__ + '\033[0m'
+                logging.info(f'MATCH {name}')
+                logging.info(f'\tpattern: {pattern}')
+                logging.info(f'\tguard: {guard}')
+                logging.info(f'\texpression: {expression}')
                 return action(self, expression)
         else:
             raise NeuroLangPatternMatchingNoMatch(f'No match for {expression}')
