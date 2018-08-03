@@ -11,6 +11,7 @@ from .expressions import (
     FunctionApplication,
     Statement,
     ExistentialPredicate,
+    UniversalPredicate,
     Predicate,
     Query,
     Projection,
@@ -27,7 +28,8 @@ from .expressions import (
 __all__ = [
     'ToBeInferred',
     'Symbol', 'Constant', 'Expression', 'FunctionApplication', 'Statement',
-    'Projection', 'ExistentialPredicate', 'Predicate', 'Query',
+    'Projection', 'ExistentialPredicate', 'UniversalPredicate',
+    'Predicate', 'Query',
     'TypedSymbolTable',
     'typing_callable_from_annotated_function',
     'NeuroLangTypeException', 'is_subtype', 'type_validation_value',

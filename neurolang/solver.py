@@ -7,7 +7,8 @@ from operator import (
 
 from .exceptions import NeuroLangException
 from .expressions import (
-    Expression, NonConstant, ExistentialPredicate,
+    Expression, NonConstant,
+    ExistentialPredicate, UniversalPredicate,
     Symbol, Constant, Predicate, FunctionApplication,
     Query,
     get_type_and_value, is_subtype, unify_types,
@@ -445,3 +446,41 @@ class DatalogSolver(
                 return Constant(True)
 
         return Constant(False)
+
+    @add_match(
+        UniversalPredicate,
+        lambda expression: expression.head._symbols == expression.body._symbols
+    )
+    def universal_predicate(self, expression):
+        out_query_type = expression.head.type
+        if not is_subtype(out_query_type, typing.Tuple):
+            symbols_in_head = (expression.head,)
+        else:
+            symbols_in_head = expression.head.value
+
+        constants = tuple((
+            (
+                (k, v)
+                for k, v in self.symbol_table.symbols_by_type(
+                    sym.type
+                ).items()
+                if isinstance(v, Constant)
+            )
+            for sym in symbols_in_head
+        ))
+
+        constant_cross_prod = itertools.product(*constants)
+
+        for symbol_values in constant_cross_prod:
+            body = expression.body
+            for i, s in enumerate(symbols_in_head):
+                if s in body._symbols:
+                    rsw = ReplaceSymbolWalker(s, symbol_values[i][1])
+                    body = rsw.walk(body)
+
+            res = self.walk(body)
+            if not res.value:
+                return Constant(False)
+
+        return Constant(True)
+

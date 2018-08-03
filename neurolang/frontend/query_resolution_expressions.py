@@ -220,3 +220,17 @@ class Exists(Expression):
             s=repr(self.symbol),
             p=repr(self.predicate)
         )
+
+
+class All(Expression):
+    def __init__(self, query_builder, expression, symbol, predicate):
+        self.query_builder = query_builder
+        self.expression = expression
+        self.symbol = symbol
+        self.predicate = predicate
+
+    def __repr__(self):
+        return u'\u2200{s}: {p}'.format(
+            s=repr(self.symbol),
+            p=repr(self.predicate)
+        )
