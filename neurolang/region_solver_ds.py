@@ -30,17 +30,30 @@ class RegionSolver(DatalogSolver[Region]):
         def anatomical_direction_function(relation):
 
             def func(self, x: Region, y: Region) -> bool:
-                def cardinal_directionality(rel):
-                    return cardinal_relation(
-                        x, y, rel,
-                        refine_overlapping=False,
-                        stop_at=None)
+
+                is_in_direction = cardinal_relation(
+                    x, y, relation,
+                    refine_overlapping=False,
+                    stop_at=None
+                )
+
+                is_in_inverse_direction = cardinal_relation(
+                    x, y, inverse_directions[relation],
+                    refine_overlapping=False,
+                    stop_at=None
+                )
+
+                is_overlapping = cardinal_relation(
+                    x, y, cardinal_operations['overlapping'],
+                    refine_overlapping=False,
+                    stop_at=None
+                )
 
                 return bool(
-                        cardinal_directionality(relation) and not
-                        cardinal_directionality(
-                            inverse_directions[relation]) and not
-                        cardinal_directionality('O'))
+                    is_in_direction and
+                    not is_in_inverse_direction and
+                    not is_overlapping)
+
             return func
 
         for key, value in cardinal_operations.items():
