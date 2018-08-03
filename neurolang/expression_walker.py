@@ -1,3 +1,4 @@
+from collections import deque
 from itertools import chain, product
 import logging
 import typing
@@ -13,51 +14,70 @@ from .expressions import (
 from .expression_pattern_matching import add_match, PatternMatcher
 
 
-def expression_dfs_iterator(expression, include_level=False):
+def expression_iterator(expression, include_level=False, dfs=True):
     """
-    Iterate the expression tree in deep first search order.
+    Iterate traversing expression tree.
 
     Iterates over elements `(parameter_name, parameter_object)` when
     `include_level` is `False`.
 
     If `include_level` is `True` then the iterated elements are
-    `(parameter_name, parameter_object, depth_level)`
+    `(parameter_name, parameter_object, depth_level)`.
+
+    If `dfs` is true the iteration is in DFS order else is in BFS.
     """
     if include_level:
         current_level = 0
-        stack = [(None, expression, current_level)]
+        stack = deque([(None, expression, current_level)])
     else:
-        stack = [(None, expression)]
+        stack = deque([(None, expression)])
+
+    if dfs:
+        pop = stack.pop
+        extend = stack.extend
+    else:
+        pop = stack.popleft
+        extend = stack.extend
 
     while stack:
-        current_element = stack.pop()
+        current_element = pop()
 
         if isinstance(current_element[1], Symbol):
             children = []
         elif isinstance(current_element[1], Constant):
-            if (
-                    is_subtype(Constant.type, typing.Tuple) or
-                    is_subtype(Constant.type, typing.AbstractSet)
-            ):
+            if is_subtype(Constant.type, typing.Tuple):
+                c = current_element[1].value
+                children = product((None,), c)
+            elif is_subtype(Constant.type, typing.AbstractSet):
                 children = product((None,), current_element[1].value)
             else:
                 children = []
         elif isinstance(current_element[1], tuple):
-            children = product((None,), current_element[1])
+            c = current_element[1]
+            children = product((None,), c)
         elif isinstance(current_element[1], Expression):
+            c = current_element[1].__children__
+
             children = (
                 (name, getattr(current_element[1], name))
-                for name in current_element[1].__children__
+                for name in c
             )
 
-        current_length = len(stack)
         if include_level:
             current_level = current_element[-1] + 1
-            for name, value in children:
-                stack.insert(current_length, (name, value, current_level))
-        else:
-            for c in children:
-                stack.insert(current_length, c)
+            children = [
+                (name, value, current_level)
+                for name, value in children
+            ]
+
+        if dfs:
+            try:
+                children = reversed(children)
+            except TypeError:
+                children = list(children)
+                children.reverse()
+
+        extend(children)
 
         yield current_element
 
