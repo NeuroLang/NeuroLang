@@ -254,6 +254,45 @@ class BooleanRewriteSolver(PatternWalker):
         )
 
     @add_match(
+        FunctionApplication[bool](
+            Constant(...), (FunctionApplication[bool], Expression[bool])
+        ),
+        lambda expression: expression.functor.value in (or_, and_) and
+        any(
+            isinstance(arg, Definition) for arg in expression.args[0].args
+        ) and (
+            not isinstance(expression.args[1], Definition) or (
+                all(
+                    not isinstance(arg, Definition)
+                    for arg in expression.args[1].args
+                )
+            )
+        )
+    )
+    def conjunction_composition_dual(self, expression):
+        return self.walk(
+            FunctionApplication[bool](
+                Constant(expression.functor.value),
+                (expression.args[1], expression.args[0])
+            )
+        )
+
+    @add_match(
+        FunctionApplication[bool](
+            Constant(...), (Definition, Expression[bool])
+        ),
+        lambda expression: expression.functor.value in (or_, and_) and
+        not isinstance(expression.args[1], Definition)
+    )
+    def conjunction_definition_dual(self, expression):
+        return self.walk(
+            FunctionApplication[bool](
+                Constant(expression.functor.value),
+                (expression.args[1], expression.args[0])
+            )
+        )
+
+    @add_match(
         FunctionApplication(Constant(...), (NonConstant, NonConstant)),
         lambda expression: expression.functor.value in (or_, and_)
     )
@@ -294,45 +333,6 @@ class BooleanRewriteSolver(PatternWalker):
             return self.walk(
                 FunctionApplication[bool](expression.functor, new_args)
             )
-
-    @add_match(
-        FunctionApplication[bool](
-            Constant(...), (FunctionApplication[bool], Expression[bool])
-        ),
-        lambda expression: expression.functor.value in (or_, and_) and
-        any(
-            isinstance(arg, Definition) for arg in expression.args[0].args
-        ) and (
-            not isinstance(expression.args[1], Definition) or (
-                all(
-                    not isinstance(arg, Definition)
-                    for arg in expression.args[1].args
-                )
-            )
-        )
-    )
-    def conjunction_composition_dual(self, expression):
-        return self.walk(
-            FunctionApplication[bool](
-                Constant(expression.functor.value),
-                (expression.args[1], expression.args[0])
-            )
-        )
-
-    @add_match(
-        FunctionApplication[bool](
-            Constant(...), (Definition, Expression[bool])
-        ),
-        lambda expression: expression.functor.value in (or_, and_) and
-        not isinstance(expression.args[1], Definition)
-    )
-    def conjunction_definition_dual(self, expression):
-        return self.walk(
-            FunctionApplication[bool](
-                Constant(expression.functor.value),
-                (expression.args[1], expression.args[0])
-            )
-        )
 
 
 class BooleanOperationsSolver(PatternWalker):
