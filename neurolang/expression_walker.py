@@ -70,7 +70,13 @@ def expression_iterator(expression, include_level=False, dfs=True):
                 for name, value in children
             ]
 
-        if dfs:
+        if (
+            dfs and
+            not (
+                isinstance(expression, Constant) and
+                is_subtype(expression, typing.AbstractSet)
+            )
+        ):
             try:
                 children = reversed(children)
             except TypeError:
