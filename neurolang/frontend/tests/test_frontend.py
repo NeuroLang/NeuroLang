@@ -1,6 +1,5 @@
 from neurolang import frontend
 from ...regions import Region
-import pytest
 
 
 def test_add_regions_and_query():
@@ -10,18 +9,17 @@ def test_add_regions_and_query():
     central = Region((0, 0, 2), (1, 1, 3))
     superior = Region((0, 0, 4), (1, 1, 5))
 
-    neurolang.add_region_set([inferior, superior])
-    neurolang.add_region(central, result_symbol_name='CENTRAL')
-    central_predicate = neurolang.define_predicate('superior_of', 'CENTRAL')
-    result = neurolang.solve_query(central_predicate)
-    assert result.value == frozenset([superior])
+    neurolang.add_region(inferior, result_symbol_name='inferior')
+    neurolang.add_region(central, result_symbol_name='central')
+    neurolang.add_region(superior, result_symbol_name='superior')
 
-
-@pytest.mark.skip(reason="Need to fix neurosynth-based test")
-def test_neurosynth_query():
-    neurolang = frontend.RegionFrontend()
-    result = neurolang.neurosynth_term_to_region_set('emotion')
-    assert len(result.value) != 0
+    x = neurolang.new_region_symbol(symbol_name='x')
+    query = neurolang.query(
+        x, neurolang.symbols.superior_of(x, neurolang.symbols.central)
+    )
+    query_result = query.do(result_symbol_name='result_of_test_query')
+    result_symbol = next(iter(query_result.value))
+    assert neurolang.symbols[result_symbol].value == superior
 
 
 def test_anatomical_superior_of_query():
