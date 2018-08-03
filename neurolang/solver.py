@@ -1,5 +1,9 @@
 import typing
 import itertools
+from operator import (
+    invert, and_, or_,
+    add, sub, mul, truediv, pos, neg
+)
 
 from .exceptions import NeuroLangException
 from .expressions import (
@@ -9,15 +13,10 @@ from .expressions import (
     get_type_and_value, is_subtype, unify_types,
     ToBeInferred
 )
-from operator import (
-    invert, and_, or_,
-    add, sub, mul, truediv, pos, neg
-)
 from .expression_walker import (
     add_match, ExpressionBasicEvaluator, ReplaceSymbolWalker,
     PatternWalker
 )
-
 
 T = typing.TypeVar('T')
 
@@ -192,7 +191,7 @@ class BooleanRewriteSolver(PatternWalker):
 
     @add_match(
         FunctionApplication[bool](
-            Constant,
+            Constant(...),
             (NonConstant[bool], Constant[bool])
         ),
         lambda expression: (
@@ -249,6 +248,48 @@ class BooleanRewriteSolver(PatternWalker):
                 )
             )
         )
+
+    @add_match(
+        FunctionApplication(Constant(...), (NonConstant, NonConstant)),
+        lambda expression: expression.functor.value in (or_, and_)
+    )
+    def partial_binary_evaluation(self, expression):
+        '''Partially evaluate a binary AND or OR operator with
+        non-constant arguments by giving priority to the evaluation of
+        the first argument.
+
+        Parameters
+        ----------
+        expression : FunctionApplication
+            A OR or AND binary operator application.
+
+        Returns
+        -------
+        FunctionApplication
+            Same expression passed as parameter where the first
+            argument was walked on and the second argument was
+            potentially walked on if the walk on the first argument
+            did not modify its expression.
+
+        '''
+        first_arg, second_arg = expression.args
+        # we walk on the first argument
+        walk_first_result = self.walk(first_arg)
+        # and replace that argument with the result of the walk
+        new_args = (walk_first_result, expression.args[1])
+        # if the walk on the first argument did not change anything
+        # we walk on the second argument and replace it with the result
+        if walk_first_result is first_arg:
+            new_args = (walk_first_result, self.walk(expression.args[1]))
+
+        # if the expression arguments did not change, we stop walking here
+        if new_args == expression.args:
+            return expression
+        # otherwise, we keep walking
+        else:
+            return self.walk(
+                FunctionApplication[bool](expression.functor, new_args)
+            )
 
 
 class BooleanOperationsSolver(PatternWalker):
