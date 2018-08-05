@@ -81,6 +81,8 @@ def is_subtype(left, right):
         return right is typing.Any or right is ToBeInferred
     elif left is ToBeInferred:
         return True
+#    elif right is ToBeInferred:
+#        return left is typing.Any or left is ToBeInferred
     elif hasattr(right, '__origin__') and right.__origin__ is not None:
         if right.__origin__ == typing.Union:
             return any(

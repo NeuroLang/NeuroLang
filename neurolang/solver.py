@@ -340,14 +340,21 @@ class NumericOperationsSolver(PatternWalker[T]):
         lambda expression: expression.functor.value in (add, sub, mul, truediv)
     )
     def cast_binary(self, expression):
-        return expression.cast(expression.args[0].type)
+        type = expression.args[0].type
+        functor = expression.functor.cast(typing.Callable[[type, type], type])
+        if functor is not expression.functor:
+            expression = FunctionApplication[type](
+                functor, expression.args
+            )
+        else:
+            return self.walk(expression.cast(type))
 
     @add_match(
         FunctionApplication(Constant, (Expression[T],)),
         lambda expression: expression.functor.value in (pos, neg)
     )
     def cast_unary(self, expression):
-        return expression.cast(expression.args[0].type)
+        return self.walk(expression.cast(expression.args[0].type))
 
 
 class DatalogSolver(

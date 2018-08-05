@@ -33,6 +33,7 @@ class ReturnSymbolConstantApplication(solver.PatternWalker):
         else:
             return self.walk(expressions.FunctionApplication(new_f, new_args))
 
+
 class DummySolver(solver.BooleanRewriteSolver,
                   ReturnSymbolConstantApplication):
     pass
@@ -104,7 +105,18 @@ def test_predicate_symbol_table():
 
 
 def test_numeric_operations_solver():
-    s = solver.NumericOperationsSolver[int]()
+    class MatchAll(solver.PatternWalker):
+        @solver.add_match(...)
+        def expression(self, expression):
+            return expression
+
+    class TheSolver(
+        solver.NumericOperationsSolver[int],
+        MatchAll
+    ):
+        pass
+
+    s = TheSolver()
 
     e = (
         expressions.Symbol[int]('a') -
