@@ -7,11 +7,9 @@ from operator import (
 
 from .exceptions import NeuroLangException
 from .expressions import (
-    Expression, NonConstant, ExistentialPredicate,
-    Symbol, Constant, Predicate, FunctionApplication,
-    Query,
-    get_type_and_value, is_subtype, unify_types,
-    ToBeInferred
+    Expression, NonConstant, ExistentialPredicate, Symbol, Constant, Predicate,
+    FunctionApplication, Query, Definition, get_type_and_value, is_subtype,
+    unify_types, ToBeInferred
 )
 from .expression_walker import (
     add_match, ExpressionBasicEvaluator, ReplaceSymbolWalker,
@@ -164,7 +162,10 @@ class BooleanRewriteSolver(PatternWalker):
         )
     )
     def cast_binary(self, expression):
-        return self.walk(expression.cast(bool))
+        functor, args = expression.functor, expression.args
+        new_functor = functor.cast(typing.Callable[[bool, bool], bool])
+        new_application = FunctionApplication[bool](new_functor, args)
+        return self.walk(new_application)
 
     @add_match(
        FunctionApplication(Constant(invert), (Expression[bool],)),
@@ -173,7 +174,10 @@ class BooleanRewriteSolver(PatternWalker):
         )
     )
     def cast_unary(self, expression):
-        return self.walk(expression.cast(bool))
+        functor, args = expression.functor, expression.args
+        new_functor = functor.cast(typing.Callable[[bool, bool], bool])
+        new_application = FunctionApplication[bool](new_functor, args)
+        return self.walk(new_application)
 
     @add_match(
         FunctionApplication[bool](
@@ -250,6 +254,66 @@ class BooleanRewriteSolver(PatternWalker):
         )
 
     @add_match(
+        FunctionApplication[bool](
+            Constant(...), (FunctionApplication[bool], Expression[bool])
+        ),
+        lambda expression: expression.functor.value in (or_, and_) and
+        any(
+            isinstance(arg, Definition) for arg in expression.args[0].args
+        ) and (
+            not isinstance(expression.args[1], Definition) or (
+                all(
+                    not isinstance(arg, Definition)
+                    for arg in expression.args[1].args
+                )
+            )
+        )
+    )
+    def conjunction_composition_dual(self, expression):
+        return self.walk(
+            FunctionApplication[bool](
+                Constant(expression.functor.value),
+                (expression.args[1], expression.args[0])
+            )
+        )
+
+    @add_match(
+        FunctionApplication[bool](
+            Constant(...), (Definition, Expression[bool])
+        ),
+        lambda expression: expression.functor.value in (or_, and_) and
+        not isinstance(expression.args[1], Definition)
+    )
+    def conjunction_definition_dual(self, expression):
+        return self.walk(
+            FunctionApplication[bool](
+                Constant(expression.functor.value),
+                (expression.args[1], expression.args[0])
+            )
+        )
+
+    @add_match(
+        FunctionApplication(
+            Constant(and_),
+            (
+                FunctionApplication(Constant(and_), ...),
+                ...
+            )
+        )
+    )
+    def conjunction_distribution(self, expression):
+        return self.walk(FunctionApplication[expression.type](
+            expression.functor,
+            (
+                expression.args[0].args[0],
+                FunctionApplication[expression.args[0].type](
+                    expression.args[0].functor,
+                    (expression.args[0].args[1], expression.args[1])
+                )
+            )
+        ))
+
+    @add_match(
         FunctionApplication(Constant(...), (NonConstant, NonConstant)),
         lambda expression: expression.functor.value in (or_, and_)
     )
@@ -280,7 +344,7 @@ class BooleanRewriteSolver(PatternWalker):
         # if the walk on the first argument did not change anything
         # we walk on the second argument and replace it with the result
         if walk_first_result is first_arg:
-            new_args = (walk_first_result, self.walk(expression.args[1]))
+            new_args = (first_arg, self.walk(expression.args[1]))
 
         # if the expression arguments did not change, we stop walking here
         if new_args == expression.args:
