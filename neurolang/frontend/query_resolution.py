@@ -149,7 +149,7 @@ class QueryBuilder:
     def query(self, symbol, predicate):
         return Query(
             self,
-            nl.Query[symbol.expression.type](
+            nl.Query[AbstractSet[symbol.expression.type]](
                 symbol.expression,
                 predicate.expression
             ),
@@ -159,7 +159,7 @@ class QueryBuilder:
     def exists(self, symbol, predicate):
         return Exists(
             self,
-            nl.ExistentialPredicate[symbol.expression.type](
+            nl.ExistentialPredicate[bool](
                 symbol.expression,
                 predicate.expression
             ),
@@ -169,7 +169,7 @@ class QueryBuilder:
     def all(self, symbol, predicate):
         return All(
             self,
-            nl.UniversalPredicate[symbol.expression.type](
+            nl.UniversalPredicate[bool](
                 symbol.expression,
                 predicate.expression
             ),
