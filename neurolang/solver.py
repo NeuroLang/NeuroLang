@@ -1,9 +1,10 @@
-import typing
+from collections import OrderedDict
 import itertools
 from operator import (
     invert, and_, or_,
     add, sub, mul, truediv, pos, neg
 )
+import typing
 
 from .exceptions import NeuroLangException
 from .expressions import (
@@ -370,43 +371,30 @@ class DatalogSolver(
         )
     )
     def query_resolution(self, expression):
-        out_query_type = expression.head.type
+        out_query_type = expression.type
+        if out_query_type is ToBeInferred:
+            out_query_type = typing.AbstractSet[expression.head.type]
 
         result = []
 
-        if not is_subtype(out_query_type, typing.Tuple):
-            symbols_in_head = (expression.head,)
-        else:
-            symbols_in_head = expression.head.value
+        symbols_domains = self.quantifier_head_symbols_and_adom(expression.head)
 
-        constants = tuple((
-            (
-                (k, v)
-                for k, v in self.symbol_table.symbols_by_type(
-                    sym.type
-                ).items()
-                if isinstance(v, Constant)
-            )
-            for sym in symbols_in_head
-        ))
-
-        constant_cross_prod = itertools.product(*constants)
-
-        for symbol_values in constant_cross_prod:
+        for symbol_values in itertools.product(*symbols_domains.values()):
             body = expression.body
-            for i, s in enumerate(symbols_in_head):
+            for i, s in enumerate(symbols_domains.keys()):
+
                 if s in body._symbols:
                     rsw = ReplaceSymbolWalker(s, symbol_values[i][1])
                     body = rsw.walk(body)
 
             res = self.walk(body)
             if res.value:
-                if not is_subtype(out_query_type, typing.Tuple):
+                if not is_subtype(out_query_type.__args__[0], typing.Tuple):
                     result.append(symbol_values[0][0])
                 else:
                     result.append(tuple(zip(*symbol_values))[0])
 
-        return Constant[typing.AbstractSet[out_query_type]](
+        return Constant[out_query_type](
             frozenset(result)
         )
 
@@ -415,28 +403,11 @@ class DatalogSolver(
         lambda expression: expression.head._symbols == expression.body._symbols
     )
     def existential_predicate(self, expression):
-        out_query_type = expression.head.type
-        if not is_subtype(out_query_type, typing.Tuple):
-            symbols_in_head = (expression.head,)
-        else:
-            symbols_in_head = expression.head.value
+        symbols_domains = self.quantifier_head_symbols_and_adom(expression.head)
 
-        constants = tuple((
-            (
-                (k, v)
-                for k, v in self.symbol_table.symbols_by_type(
-                    sym.type
-                ).items()
-                if isinstance(v, Constant)
-            )
-            for sym in symbols_in_head
-        ))
-
-        constant_cross_prod = itertools.product(*constants)
-
-        for symbol_values in constant_cross_prod:
+        for symbol_values in itertools.product(*symbols_domains.values()):
             body = expression.body
-            for i, s in enumerate(symbols_in_head):
+            for i, s in enumerate(symbols_domains.keys()):
                 if s in body._symbols:
                     rsw = ReplaceSymbolWalker(s, symbol_values[i][1])
                     body = rsw.walk(body)
@@ -452,11 +423,31 @@ class DatalogSolver(
         lambda expression: expression.head._symbols == expression.body._symbols
     )
     def universal_predicate(self, expression):
-        out_query_type = expression.head.type
+        symbols_domains = self.quantifier_head_symbols_and_adom(expression.head)
+
+        for symbol_values in itertools.product(*symbols_domains.values()):
+            body = expression.body
+            for i, s in enumerate(symbols_domains.keys()):
+                if s in body._symbols:
+                    rsw = ReplaceSymbolWalker(s, symbol_values[i][1])
+                    body = rsw.walk(body)
+
+            res = self.walk(body)
+            if not res.value:
+                return Constant(False)
+
+        return Constant(True)
+
+    def quantifier_head_symbols_and_adom(self, head):
+        '''
+        Returns an ordered dictionary with the symbols of the quantifier head 
+        as keys and the active domain for each symbol as value.
+        '''
+        out_query_type = head.type
         if not is_subtype(out_query_type, typing.Tuple):
-            symbols_in_head = (expression.head,)
+            symbols_in_head = (head,)
         else:
-            symbols_in_head = expression.head.value
+            symbols_in_head = head.value
 
         constants = tuple((
             (
@@ -469,18 +460,4 @@ class DatalogSolver(
             for sym in symbols_in_head
         ))
 
-        constant_cross_prod = itertools.product(*constants)
-
-        for symbol_values in constant_cross_prod:
-            body = expression.body
-            for i, s in enumerate(symbols_in_head):
-                if s in body._symbols:
-                    rsw = ReplaceSymbolWalker(s, symbol_values[i][1])
-                    body = rsw.walk(body)
-
-            res = self.walk(body)
-            if not res.value:
-                return Constant(False)
-
-        return Constant(True)
-
+        return OrderedDict(zip(symbols_in_head, constants))
