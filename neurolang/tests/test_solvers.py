@@ -4,7 +4,6 @@ import operator as op
 from .. import solver
 from .. import expressions
 
-
 S = expressions.Symbol
 
 
@@ -20,10 +19,7 @@ class ReturnSymbolConstantApplication(solver.PatternWalker):
     @solver.add_match(solver.FunctionApplication)
     def fa(self, expression):
         new_f = self.walk(expression.functor)
-        new_args = tuple(
-            self.walk(a)
-            for a in expression.args
-        )
+        new_args = tuple(self.walk(a) for a in expression.args)
 
         if (
             new_f is expression.functor and
@@ -34,8 +30,9 @@ class ReturnSymbolConstantApplication(solver.PatternWalker):
             return self.walk(expressions.FunctionApplication(new_f, new_args))
 
 
-class DummySolver(solver.BooleanRewriteSolver,
-                  ReturnSymbolConstantApplication):
+class DummySolver(
+    solver.BooleanRewriteSolver, ReturnSymbolConstantApplication
+):
     pass
 
 
@@ -68,9 +65,8 @@ def test_predicate_match():
             return True
 
     ir = expressions.Predicate(
-            expressions.Symbol('test'),
-            (expressions.Constant[float](0.),)
-        )
+        expressions.Symbol('test'), (expressions.Constant[float](0.), )
+    )
 
     ns = NewSolver[float]()
     assert ns.walk(ir).type == bool
@@ -85,6 +81,7 @@ def test_predicate_symbol_table():
 
     def ff(x: float) -> bool:
         return x % 2 == 0
+
     ft = typing.Callable[[float], bool]
 
     sym = expressions.Symbol[ft]('a')
@@ -93,9 +90,9 @@ def test_predicate_symbol_table():
 
     symc = expressions.Symbol[float]('c')
 
-    pt = expressions.Predicate(sym, (expressions.Constant(2.),))
-    pf = expressions.Predicate(sym, (expressions.Constant(1.),))
-    ps = expressions.Predicate(sym, (symc,))
+    pt = expressions.Predicate(sym, (expressions.Constant(2.), ))
+    pf = expressions.Predicate(sym, (expressions.Constant(1.), ))
+    ps = expressions.Predicate(sym, (symc, ))
 
     assert ns.walk(pt).value
     assert not ns.walk(pf).value
@@ -108,18 +105,12 @@ def test_numeric_operations_solver():
         def expression(self, expression):
             return expression
 
-    class TheSolver(
-        solver.NumericOperationsSolver[int],
-        MatchAll
-    ):
+    class TheSolver(solver.NumericOperationsSolver[int], MatchAll):
         pass
 
     s = TheSolver()
 
-    e = (
-        expressions.Symbol[int]('a') -
-        expressions.Symbol[int]('b')
-    )
+    e = expressions.Symbol[int]('a') - expressions.Symbol[int]('b')
 
     assert e.type == expressions.ToBeInferred
     assert s.walk(e).type == int
@@ -128,19 +119,13 @@ def test_numeric_operations_solver():
 def test_boolean_operations_solver_or():
     s = solver.BooleanOperationsSolver()
 
-    or_ = (
-        expressions.Constant(True) |
-        expressions.Symbol[bool]('b')
-    )
+    or_ = expressions.Constant(True) | expressions.Symbol[bool]('b')
 
     r = s.walk(or_)
     assert isinstance(r, expressions.Constant)
     assert r.value
 
-    or_ = (
-        expressions.Symbol[bool]('b') |
-        expressions.Constant(True)
-    )
+    or_ = expressions.Symbol[bool]('b') | expressions.Constant(True)
 
     r = s.walk(or_)
     assert isinstance(r, expressions.Constant)
@@ -150,19 +135,13 @@ def test_boolean_operations_solver_or():
 def test_boolean_operations_solver_and():
     s = solver.BooleanOperationsSolver()
 
-    and_ = (
-        expressions.Constant(False) &
-        expressions.Symbol[bool]('b')
-    )
+    and_ = expressions.Constant(False) & expressions.Symbol[bool]('b')
 
     r = s.walk(and_)
     assert isinstance(r, expressions.Constant)
     assert not r.value
 
-    and_ = (
-        expressions.Symbol[bool]('b') &
-        expressions.Constant(False)
-    )
+    and_ = expressions.Symbol[bool]('b') & expressions.Constant(False)
 
     r = s.walk(and_)
     assert isinstance(r, expressions.Constant)
@@ -201,10 +180,7 @@ def test_boolean_operations_rewrite_nested_constant():
     a = expressions.Symbol[bool]('a')
     b = expressions.Symbol[bool]('b')
 
-    or_ = (
-        a |
-        (expressions.Constant(True) | b)
-    )
+    or_ = (a | (expressions.Constant(True) | b))
 
     rewritten_or = s.walk(or_)
     assert rewritten_or.args[0] is or_.args[1].args[0]
@@ -238,7 +214,6 @@ def test_boolean_operations_rewrite_inversion():
 
 def test_partial_binary_evaluation():
     class ExpressionWalkHistorySolver(DummySolver):
-
         def __init__(self, *args, **kwargs):
             self.walked = []
             super().__init__(*args, **kwargs)
@@ -282,11 +257,7 @@ def test_partial_binary_evaluation():
 
 
 def test_boolean_operations_rewrite_inversion_in_conjunction():
-    class Dummy(
-        solver.BooleanRewriteSolver, ReturnSymbolConstantApplication
-    ):
-        pass
-    s = Dummy()
+    s = DummySolver()
     a = expressions.Symbol[bool]('a')
     b = expressions.Symbol[bool]('b')
     c = expressions.Symbol[bool]('c')
@@ -306,11 +277,7 @@ def test_boolean_operations_rewrite_inversion_in_conjunction():
 
 
 def test_boolean_operations_rewrite_conj_composition_order():
-    class Dummy(
-        solver.BooleanRewriteSolver, ReturnSymbolConstantApplication
-    ):
-        pass
-    s = Dummy()
+    s = DummySolver()
     a = expressions.Symbol[bool]('a')
     b = expressions.Symbol[bool]('b')
     d = expressions.Symbol[bool]('d')
