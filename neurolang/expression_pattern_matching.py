@@ -1,3 +1,5 @@
+"""Module implementing expression pattern matching."""
+
 from collections import OrderedDict
 import copy
 from itertools import chain
@@ -12,6 +14,10 @@ from . import expressions
 from .symbols_and_types import replace_type_variable
 
 __all__ = ['add_match', 'PatternMatcher']
+
+
+class NeuroLangPatternMatchingNoMatch(expressions.NeuroLangException):
+    pass
 
 
 class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
@@ -143,13 +149,13 @@ def __pattern_replace_type__(pattern, src_type, dst_type):
 
 
 def add_match(pattern, guard=None):
-    '''Decorator adding patterns to a :class:`PatternMatcher` class.
+    """Decorate by adding patterns to a :class:`PatternMatcher` class.
 
     Should be used as
     `@add_match(PATTERN, GUARD)` to turn the decorated method, receiving
     an instance of :class:`Expression` into a matching case. See
     :py:meth:`PatternMatcher.pattern_match` for more details on patterns.
-    '''
+    """
     def bind_match(f):
         f.pattern = pattern
         f.guard = guard
@@ -158,31 +164,32 @@ def add_match(pattern, guard=None):
 
 
 class PatternMatcher(metaclass=PatternMatchingMetaClass):
-    '''Class for expression pattern matching.
-    '''
+    """Class for expression pattern matching."""
+
     @property
     def patterns(self):
-        '''Property holding an iterator of triplets ``(pattern, guard, action)``
+        """Property holding an iterator of triplets ``(pattern, guard, action)``.
 
-            - ``pattern``: is an Expression class, or instance where
-              construction parameters and the type can be replaced
-              by an ellipsis `...` to signal a wildcard. See
-              :py:meth:`pattern_match` for more details.
-            - ``guard``: is a function mapping an `Expression` instance
-              to a boolean or ``None``.
-            - ``action``: is the method receiving the matching ``expression``
-              instance to be executed upon pattern and match being ``True``.
-        '''
+        - ``pattern``: is an Expression class, or instance where
+          construction parameters and the type can be replaced
+          by an ellipsis `...` to signal a wildcard. See
+          :py:meth:`pattern_match` for more details.
+        - ``guard``: is a function mapping an `Expression` instance
+          to a boolean or ``None``.
+        - ``action``: is the method receiving the matching ``expression``
+          instance to be executed upon pattern and match being ``True``.
+        """
         return chain(*(
                 pm.__patterns__ for pm in self.__class__.mro()
                 if hasattr(pm, '__patterns__')
         ))
 
     def match(self, expression):
-        '''Find the action for a given expression by going through the ``patterns``.
+        """Find the action for a given expression by going through the ``patterns``.
+
         Goes through the triplets in in ``patterns`` and calls the action
         specified by the first satisfied triplet.
-        '''
+        """
         for pattern, guard, action in self.patterns:
             if logging.getLogger().getEffectiveLevel() >= logging.DEBUG:
                 pattern_match = self.pattern_match(pattern, expression)
@@ -198,15 +205,17 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
                 self.pattern_match(pattern, expression) and
                 (guard is None or guard(expression))
             ):
-                logging.debug(
-                    f"**** match {pattern} | {guard} with {expression}"
-                )
+                name = '\033[1m\033[91m' + action.__qualname__ + '\033[0m'
+                logging.info(f'MATCH {name}')
+                logging.info(f'\tpattern: {pattern}')
+                logging.info(f'\tguard: {guard}')
+                logging.info(f'\texpression: {expression}')
                 return action(self, expression)
         else:
-            raise ValueError()
+            raise NeuroLangPatternMatchingNoMatch(f'No match for {expression}')
 
     def pattern_match(self, pattern, expression):
-        '''Returns ``True`` if ``pattern`` matches ``expression``.
+        """Return ``True`` if ``pattern`` matches ``expression``.
 
         Patterns are of the following form:
 
@@ -228,7 +237,7 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
         - ``instance`` an instance of a python class not subclassing
           :class:`Expression` matches when
           ``instance == expression``
-        '''
+        """
         logging.debug(f"Match try {expression} with pattern {pattern}")
         if pattern is ...:
             return True

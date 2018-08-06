@@ -11,7 +11,7 @@ from .ast_tatsu import TatsuASTConverter
 from .exceptions import NeuroLangException
 from .symbols_and_types import (
     Symbol, Constant, Expression, FunctionApplication, Statement, Query,
-    Projection, Predicate, ExistentialPredicate,
+    Projection, Predicate, ExistentialPredicate, UniversalPredicate,
     TypedSymbolTable, unify_types, ToBeInferred,
     NeuroLangTypeException, is_subtype,
     get_type_and_value
@@ -31,7 +31,8 @@ __all__ = [
     'NeuroLangIntermediateRepresentationCompiler',
     'PatternMatcher',
     'grammar_EBNF', 'parser', 'add_match',
-    'Constant', 'Symbol', 'FunctionApplication', 'Statement', 'Query', 'ExistentialPredicate'
+    'Constant', 'Symbol', 'FunctionApplication',
+    'Statement', 'Query', 'ExistentialPredicate', 'UniversalPredicate'
 ]
 
 
@@ -269,7 +270,9 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
         if len(ast['operand']) == 1:
             return ast['operand']
         else:
-            return FunctionApplication(Symbol(ast['operator']))(ast['operand'])
+            return FunctionApplication(
+                Symbol(ast['operator']), tuple(ast['operand'],)
+            )
 
     def dotted_identifier(self, ast):
         identifier = ast['root']
@@ -296,7 +299,7 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
             typing.Any
         ](
             function,
-            args=arguments
+            args=tuple(arguments)
         )
 
         return function
@@ -351,8 +354,7 @@ class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
         self, functions=None, type_name_map=None,
         types=None, symbols=None
     ):
-
-        self.symbol_table = TypedSymbolTable()
+        super().__init__()
 
         if functions is None:
             functions = []

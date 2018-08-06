@@ -1,7 +1,9 @@
 from pytest import raises
 import typing
 
-from ..expression_pattern_matching import PatternMatcher, add_match
+from ..expression_pattern_matching import (
+    PatternMatcher, add_match, NeuroLangPatternMatchingNoMatch
+)
 from ..expressions import (
     Constant, Symbol, FunctionApplication, Projection,
     Statement, Query
@@ -59,7 +61,7 @@ def test_match_expression_type():
         if isinstance(e, Constant):
             assert pm.match(e) is e
         else:
-            with raises(ValueError):
+            with raises(NeuroLangPatternMatchingNoMatch):
                 pm.match(e)
 
 
@@ -74,7 +76,7 @@ def test_match_expression():
         if isinstance(e, Constant) and e == 1:
             assert pm.match(e) is e
         else:
-            with raises(ValueError):
+            with raises(NeuroLangPatternMatchingNoMatch):
                 pm.match(e)
 
 
@@ -98,7 +100,7 @@ def test_match_expression_value():
         if k in ('c_int', 'd_a', 'q_a'):
             assert pm.match(e) is e
         else:
-            with raises(ValueError):
+            with raises(NeuroLangPatternMatchingNoMatch):
                 pm.match(e)
 
 
@@ -117,7 +119,7 @@ def test_match_expression_tuple():
         if k == 't_a':
             assert pm.match(e) is e
         else:
-            with raises(ValueError):
+            with raises(NeuroLangPatternMatchingNoMatch):
                 pm.match(e)
 
 

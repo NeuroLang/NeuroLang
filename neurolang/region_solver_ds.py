@@ -3,9 +3,10 @@ import itertools
 import re
 
 from . import neurolang as nl
-from .CD_relations import (cardinal_relation,
-                           direction_from_relation,
-                           directions_dim_space)
+from .CD_relations import (
+    cardinal_relation, direction_from_relation, directions_dim_space,
+    inverse_directions
+)
 from .regions import Region, region_union
 from .solver import GenericSolver, DatalogSolver, is_conjunctive_expression
 from .expressions import (
@@ -37,8 +38,47 @@ class RegionSolver(DatalogSolver[Region]):
                 ))
             return f
 
+        def anatomical_direction_function(relation):
+
+            def func(self, x: Region, y: Region) -> bool:
+
+                is_in_direction = cardinal_relation(
+                    x, y, relation,
+                    refine_overlapping=False,
+                    stop_at=None
+                )
+
+                is_in_inverse_direction = cardinal_relation(
+                    x, y, inverse_directions[relation],
+                    refine_overlapping=False,
+                    stop_at=None
+                )
+
+                is_overlapping = cardinal_relation(
+                    x, y, cardinal_operations['overlapping'],
+                    refine_overlapping=False,
+                    stop_at=None
+                )
+
+                return bool(
+                    is_in_direction and
+                    not is_in_inverse_direction and
+                    not is_overlapping)
+
+            return func
+
         for key, value in cardinal_operations.items():
             setattr(cls, f'predicate_{key}', build_function(value))
+
+        anatomical_correct_operations = {
+            k: cardinal_operations[k] for k in (
+                'inferior_of', 'superior_of',
+                'posterior_of', 'anterior_of'
+                )
+        }
+        for key, value in anatomical_correct_operations.items():
+            setattr(cls, f'predicate_anatomical_{key}',
+                    anatomical_direction_function(value))
 
         return DatalogSolver.__new__(cls)
 

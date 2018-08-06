@@ -460,7 +460,8 @@ def test_regexp_region_union():
 
 def test_spatial_index_region_solver():
 
-    st = TypedSymbolTable()
+    s = SpatialIndexRegionSolver()
+    st = s.symbol_table
 
     # region symbols
     posterior_inferior = Symbol[Region]('posterior_inferior')
@@ -472,11 +473,7 @@ def test_spatial_index_region_solver():
     st[superior] = Constant(Region((0, 0, 2), (1, 1, 3)))
 
 
-    s = SpatialIndexRegionSolver(st)
     s.initialize_region_index()
-
-    for k, v in s.included_predicates.items():
-        s.symbol_table[k] = v
 
     for symbol in [posterior_inferior, anterior, superior]:
         s.add_region_to_index(s.symbol_table[symbol].value)
@@ -502,23 +499,17 @@ def test_spatial_index_region_solver():
 
     rs = RegionSolver(st)
 
-    for k, v in s.included_predicates.items():
-        s.symbol_table[k] = v
-
     result = rs.walk(query)
     assert isinstance(result, nl.Constant)
     assert result.value == {posterior_inferior}
 
 
 def _profile_solver(solver_cls):
-    st = TypedSymbolTable()
 
-    solver = solver_cls(st)
+    solver = solver_cls()
+    st = solver.symbol_table
 
-    for k, v in solver.included_predicates.items():
-        solver.symbol_table[k] = v
-
-    inferior_of = Symbol('inferior_of')
+    inferior_of = st['inferior_of']
 
     reference = Symbol[Region]('reference')
     st[reference] = Constant(Region((0, 0, 2), (1, 1, 3)))

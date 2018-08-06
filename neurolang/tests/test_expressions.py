@@ -1,11 +1,12 @@
 from .. import expressions
 from ..expressions import (
+    Expression,
     Symbol, Constant,
     FunctionApplication,
     ToBeInferred
 )
 
-from ..expression_walker import ExpressionBasicEvaluator, ReplaceSymbolWalker
+from ..expression_walker import ExpressionBasicEvaluator
 
 import operator as op
 import inspect
@@ -17,6 +18,8 @@ C = Constant
 def evaluate(expression, **kwargs):
     ebe = ExpressionBasicEvaluator()
     for k, v in kwargs.items():
+        if not isinstance(v, Expression):
+            v = C(v)
         ebe.symbol_table[k] = v
     return ebe.walk(expression)
 
@@ -157,3 +160,19 @@ def test_typecast_check():
     assert issubclass(s.__class__, Symbol)
     assert s_float.type is float
     assert s_float.name == 'a'
+
+
+def test_fa_composition_symbols_correctly_propagated():
+    fa1 = Symbol('fa1')
+    fa2 = Symbol('fa2')
+    fa3 = Symbol('fa3')
+    a = Symbol('a')
+    b = Symbol('b')
+    c = Symbol('c')
+    d = Symbol('d')
+    e = Symbol('e')
+
+    expression = fa1(a, fa2(b, fa3(c, d), e))
+
+    for symbol in [a, b, c, d, e]:
+        assert symbol in expression._symbols
