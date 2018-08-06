@@ -3,6 +3,7 @@ import operator as op
 
 from .. import solver
 from .. import expressions
+from ..expressions import Symbol, FunctionApplication
 
 S = expressions.Symbol
 
