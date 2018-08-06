@@ -5,7 +5,7 @@ import typing
 from .symbols_and_types import TypedSymbolTable
 from .expressions import (
     FunctionApplication, Statement, Query, Projection, Constant,
-    Symbol, ExistentialPredicate,
+    Symbol, ExistentialPredicate, UniversalPredicate,
     get_type_and_value, ToBeInferred, is_subtype, NeuroLangTypeException,
     unify_types
 )
@@ -88,6 +88,17 @@ class ExpressionWalker(PatternWalker):
 
         if body is not expression.body:
             return self.walk(ExistentialPredicate[expression.type](
+                expression.head, body
+            ))
+        else:
+            return expression
+
+    @add_match(UniversalPredicate)
+    def universal_predicate(self, expression):
+        body = self.walk(expression.body)
+
+        if body is not expression.body:
+            return self.walk(UniversalPredicate[expression.type](
                 expression.head, body
             ))
         else:
