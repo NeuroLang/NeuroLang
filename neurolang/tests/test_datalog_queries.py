@@ -185,3 +185,94 @@ def test_existential_predicate_not_solved():
     assert isinstance(res, expressions.ExistentialPredicate)
     assert res.head == expression.head
     assert res.body == res.body
+
+
+def test_universal_predicate():
+    ds = solver.DatalogSolver(TypedSymbolTable())
+
+    for s in range(5):
+        sym = expressions.Symbol[int](str(s))
+        ds.symbol_table[sym] = expressions.Constant[int](s)
+
+    def le(a: int, b: int) -> bool:
+        return a <= b
+
+    ds.symbol_table[expressions.Symbol('le')] = expressions.Constant(le)
+
+    x = expressions.Symbol[int]('x')
+
+    expression = expressions.UniversalPredicate(
+        x, ds.symbol_table['le'](x, expressions.Constant(2))
+    )
+    res = ds.walk(expression)
+    assert isinstance(res, expressions.Constant)
+    assert res.type is bool
+    assert not res.value
+
+    expression = expressions.UniversalPredicate(
+        x, ds.symbol_table['le'](x, expressions.Constant(10))
+    )
+    res = ds.walk(expression)
+    assert isinstance(res, expressions.Constant)
+    assert res.type is bool
+    assert res.value
+
+
+def test_universal_predicate_trivial():
+    ds = solver.DatalogSolver(TypedSymbolTable())
+
+    for s in range(5):
+        sym = expressions.Symbol[int](str(s))
+        ds.symbol_table[sym] = expressions.Constant[int](s)
+
+    def le(a: int, b: int) -> bool:
+        return a <= b
+
+    ds.symbol_table[expressions.Symbol('le')] = expressions.Constant(le)
+
+    x = expressions.Symbol[int]('x')
+
+    expression = expressions.UniversalPredicate(
+        x,
+        expressions.Constant(False) &
+        ds.symbol_table['le'](x, expressions.Constant(2))
+    )
+    res = ds.walk(expression)
+    assert isinstance(res, expressions.Constant)
+    assert res.type is bool
+    assert not res.value
+
+    expression = expressions.UniversalPredicate(
+        x,
+        expressions.Constant(True) |
+        ds.symbol_table['le'](x, expressions.Constant(2))
+    )
+    res = ds.walk(expression)
+    assert isinstance(res, expressions.Constant)
+    assert res.type is bool
+    assert res.value
+
+def test_universal_predicate_not_solved():
+    ds = solver.DatalogSolver(TypedSymbolTable())
+
+    for s in range(5):
+        sym = expressions.Symbol[int](str(s))
+        ds.symbol_table[sym] = expressions.Constant[int](s)
+
+    def le(a: int, b: int) -> bool:
+        return a <= b
+
+    ds.symbol_table[expressions.Symbol('le')] = expressions.Constant(le)
+
+    x = expressions.Symbol[int]('x')
+    y = expressions.Symbol[int]('y')
+
+    expression = expressions.UniversalPredicate(
+        x,
+        ds.symbol_table['le'](x, expressions.Constant(2)) &
+        ds.symbol_table['le'](y, expressions.Constant(2))
+    )
+    res = ds.walk(expression)
+    assert isinstance(res, expressions.UniversalPredicate)
+    assert res.head == expression.head
+    assert res.body == res.body

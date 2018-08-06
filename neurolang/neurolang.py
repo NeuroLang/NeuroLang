@@ -11,7 +11,7 @@ from .ast_tatsu import TatsuASTConverter
 from .exceptions import NeuroLangException
 from .symbols_and_types import (
     Symbol, Constant, Expression, FunctionApplication, Statement, Query,
-    Projection, Predicate, ExistentialPredicate,
+    Projection, Predicate, ExistentialPredicate, UniversalPredicate,
     TypedSymbolTable, unify_types, ToBeInferred,
     NeuroLangTypeException, is_subtype,
     get_type_and_value
@@ -32,7 +32,7 @@ __all__ = [
     'PatternMatcher',
     'grammar_EBNF', 'parser', 'add_match',
     'Constant', 'Symbol', 'FunctionApplication',
-    'Statement', 'Query', 'ExistentialPredicate'
+    'Statement', 'Query', 'ExistentialPredicate', 'UniversalPredicate'
 ]
 
 
