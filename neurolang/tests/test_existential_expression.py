@@ -13,7 +13,7 @@ def test_existential_elem_in_set():
 
     solver = SBS(TypedSymbolTable())
     solver.symbol_table[nl.Symbol[set_type]('elements')] = nl.Constant[
-        set_type](frozenset([1, 2, 3]))
+        set_type](frozenset(nl.Constant[int](i) for i in (1, 2, 3)))
 
     p1 = Predicate[set_type](Symbol('in'), (Symbol[set_type]('x'), ))
 
@@ -41,7 +41,7 @@ def test_existential_greater_than():
     solver = SBS(TypedSymbolTable())
     values = range(0, 100)
     solver.symbol_table[nl.Symbol[set_type]('elements')] = nl.Constant[
-        set_type](frozenset(values))
+        set_type](frozenset(nl.Constant[int](v) for v in values))
 
     pred_type = Callable[[set_type], set_type]
     solver.symbol_table[nl.Symbol[pred_type]('is_greater_than')] = nl.Constant[

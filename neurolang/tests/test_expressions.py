@@ -74,7 +74,7 @@ def test_symbol_method_and_operator():
     fve = a[C(2)]
 
     assert evaluate(a, a=C(1)) == 1
-    assert evaluate(fva, a=C[Set[int]]({1})) == 1
+    assert evaluate(fva, a=C[Set[int]]({C(1)})) == 1
     assert evaluate(fvb, a=C(1)) == -3
     assert evaluate(fvc, a=C(1)) == 3
     assert evaluate(fvc * C(2), a=C(1)) == 6
@@ -88,7 +88,7 @@ def test_symbol_method_and_operator():
 def test_constant_method_and_operator():
     a = C[int](1)
     fva = a + C(1)
-    b = C[Set[int]]({1})
+    b = C[Set[int]]({C(1)})
     fvb = b.__len__()
     fbc = b.union(C({C(1), C(2)}))
 
@@ -96,7 +96,7 @@ def test_constant_method_and_operator():
     assert evaluate(a) == 1
     assert evaluate(fva) == 2
     assert evaluate(fvb) == 1
-    assert evaluate(fbc).value == {1, 2}
+    assert evaluate(fbc).value == {C(1), C(2)}
 
 
 def test_symbol_wrapping():
