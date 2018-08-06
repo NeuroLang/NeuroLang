@@ -6,7 +6,8 @@ import typing
 from .symbols_and_types import TypedSymbolTable
 from .expressions import (
     FunctionApplication, Statement, Query, Projection, Constant,
-    Symbol, ExistentialPredicate, UniversalPredicate, Expression,
+    Symbol, Expression,
+    ExistentialPredicate, UniversalPredicate,
     get_type_and_value, ToBeInferred, is_subtype, NeuroLangTypeException,
     unify_types
 )
@@ -229,6 +230,23 @@ class ReplaceSymbolsByConstants(ExpressionWalker):
             return expression
 
 
+class ConstantsToValues(ExpressionWalker):
+    @add_match(Constant)
+    def symbol(self, expression):
+        if is_subtype(expression.type, typing.AbstractSet):
+            return frozenset(
+                self.walk(e)
+                for e in expression.value
+            )
+        elif is_subtype(expression.type, typing.Tuple):
+            return tuple(
+                self.walk(e)
+                for e in expression.value
+            )
+        else:
+            return expression.value
+
+
 class SymbolTableEvaluator(ExpressionWalker):
     def __init__(self, symbol_table=None):
         if symbol_table is None:
@@ -288,6 +306,14 @@ class SymbolTableEvaluator(ExpressionWalker):
             )
 
 
+def all_args_constant(expression):
+    return all(
+        isinstance(arg[1], Constant)
+        for arg in expression_iterator(expression.args, include_level=True)
+        if arg[2] > 0
+    )
+
+
 class ExpressionBasicEvaluator(SymbolTableEvaluator):
     @add_match(Projection(Constant(...), Constant(...)))
     def evaluate_projection(self, expression):
@@ -297,11 +323,7 @@ class ExpressionBasicEvaluator(SymbolTableEvaluator):
 
     @add_match(
         FunctionApplication(Constant(...), ...),
-        lambda expression:
-            all(
-                isinstance(arg, Constant)
-                for arg in expression.args
-            )
+        all_args_constant
     )
     def evaluate_function(self, expression):
         functor = expression.functor
@@ -320,8 +342,10 @@ class ExpressionBasicEvaluator(SymbolTableEvaluator):
                 )
             result_type = ToBeInferred
 
-        args = tuple(a.value for a in expression.args)
-        kwargs = {k: v.value for k, v in expression.kwargs.items()}
+        ctv = ConstantsToValues()
+
+        args = ctv.walk(expression.args)
+        kwargs = {k: ctv.walk(v) for k, v in expression.kwargs.items()}
         result = Constant[result_type](
             functor_value(*args, **kwargs)
         )
