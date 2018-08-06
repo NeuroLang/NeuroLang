@@ -293,6 +293,27 @@ class BooleanRewriteSolver(PatternWalker):
         )
 
     @add_match(
+        FunctionApplication(
+            Constant(and_),
+            (
+                FunctionApplication(Constant(and_), ...),
+                ...
+            )
+        )
+    )
+    def conjunction_distribution(self, expression):
+        return self.walk(FunctionApplication[expression.type](
+            expression.functor,
+            (
+                expression.args[0].args[0],
+                FunctionApplication[expression.args[0].type](
+                    expression.args[0].functor,
+                    (expression.args[0].args[1], expression.args[1])
+                )
+            )
+        ))
+
+    @add_match(
         FunctionApplication(Constant(...), (NonConstant, NonConstant)),
         lambda expression: expression.functor.value in (or_, and_)
     )
@@ -323,7 +344,7 @@ class BooleanRewriteSolver(PatternWalker):
         # if the walk on the first argument did not change anything
         # we walk on the second argument and replace it with the result
         if walk_first_result is first_arg:
-            new_args = (walk_first_result, self.walk(expression.args[1]))
+            new_args = (first_arg, self.walk(expression.args[1]))
 
         # if the expression arguments did not change, we stop walking here
         if new_args == expression.args:

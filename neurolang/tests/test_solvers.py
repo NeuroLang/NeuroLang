@@ -288,9 +288,9 @@ def test_boolean_operations_rewrite_inversion_in_conjunction():
     e = a & ~(b | c) & d
     we = s.walk(e)
     assert we.functor.value is op.and_
-    assert we.args[0] is d
+    assert we.args[0] is a
     assert we.args[1].functor.value is op.and_
-    assert we.args[1].args[0] is a
+    assert we.args[1].args[0] is d
     assert we.args[1].args[1].functor.value is op.and_
     assert we.args[1].args[1].args[0].functor.value is op.invert
     assert we.args[1].args[1].args[1].functor.value is op.invert
@@ -322,3 +322,16 @@ def test_boolean_operations_rewrite_conj_composition_order():
     assert exp.args[1].args[0] is e
     we = s.walk(exp)
     assert we.args[0].args[0] is e
+
+
+def test_boolean_operations_conjunction_distribution():
+    s = solver.DatalogSolver()
+    a, b, c = S('a'), S('b'), S('c')
+    e = (a & b) & c
+    we = s.walk(e)
+
+    assert we.args[0] is a
+    assert we.args[1].args[0] is b
+    assert we.args[1].args[1] is c
+    assert we.functor is e.functor
+    assert we.args[1].functor is e.args[0].functor
