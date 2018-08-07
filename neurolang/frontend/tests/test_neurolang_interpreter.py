@@ -1,7 +1,7 @@
 from pytest import raises
 
 from .. import neurolang as nl
-from .. import solver
+from ... import solver
 from typing import Tuple, AbstractSet
 
 
