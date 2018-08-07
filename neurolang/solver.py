@@ -403,18 +403,26 @@ class BooleanOperationsSolver(PatternWalker):
 
 class NumericOperationsSolver(PatternWalker[T]):
     @add_match(
-        FunctionApplication(Constant, (Expression[T],) * 2),
+        FunctionApplication[ToBeInferred](Constant, (Expression[T],) * 2),
         lambda expression: expression.functor.value in (add, sub, mul, truediv)
     )
     def cast_binary(self, expression):
-        return expression.cast(expression.args[0].type)
+        type = expression.args[0].type
+        functor = expression.functor.cast(typing.Callable[[type, type], type])
+        if functor is not expression.functor:
+            new_expression = FunctionApplication[type](
+                functor, expression.args
+            )
+        else:
+            new_expression = expression.cast(type)
+        return self.walk(new_expression)
 
     @add_match(
         FunctionApplication(Constant, (Expression[T],)),
         lambda expression: expression.functor.value in (pos, neg)
     )
     def cast_unary(self, expression):
-        return expression.cast(expression.args[0].type)
+        return self.walk(expression.cast(expression.args[0].type))
 
 
 def is_conjunctive_expression(expression):
