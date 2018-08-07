@@ -5,8 +5,10 @@ import typing
 import inspect
 from functools import wraps, WRAPPER_ASSIGNMENTS, lru_cache
 import types
+import threading
 from warnings import warn
 import logging
+from contextlib import contextmanager
 from .exceptions import NeuroLangException
 
 
@@ -19,6 +21,24 @@ __all__ = [
 
 
 ToBeInferred = typing.TypeVar('ToBeInferred', covariant=True)
+
+
+_lock = threading.RLock()
+
+_expressions_behave_as_python_objects = dict()
+
+
+@contextmanager
+def expressions_behave_as_objects():
+    global _lock
+    global _expressions_behave_as_python_objects
+    thread_id = threading.get_ident()
+
+    with _lock:
+        _expressions_behave_as_python_objects[thread_id] = True
+    yield
+    with _lock:
+        del _expressions_behave_as_python_objects[thread_id]
 
 
 class NeuroLangTypeException(NeuroLangException):
@@ -357,7 +377,11 @@ class Expression(metaclass=ExpressionMeta):
          )
 
     def __getattr__(self, attr):
+        global _expressions_behave_as_python_objects
+        thread_id = threading.get_ident()
+
         if (
+            thread_id not in _expressions_behave_as_python_objects or
             attr in dir(self) or
             attr in self.__super_attributes__ or
             self.__is_pattern__
@@ -774,8 +798,10 @@ class Query(Definition):
     def __repr__(self):
         if self.head is ...:
             name = '...'
-        else:
+        elif isinstance(self.head, Symbol):
             name = self.head.name
+        else:
+            name = repr(self.head)
 
         return 'Query{{{}: {} <- {}}}'.format(
             name, self.__type_repr__, self.body
