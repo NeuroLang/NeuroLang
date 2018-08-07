@@ -73,7 +73,7 @@ def get_type_and_value(value, symbol_table=None):
 
 
 def is_subtype(left, right):
-    if left == right:
+    if (left is right) or (left == right):
         return True
     if right is typing.Any:
         return True
@@ -81,8 +81,8 @@ def is_subtype(left, right):
         return right is typing.Any or right is ToBeInferred
     elif left is ToBeInferred:
         return True
-#    elif right is ToBeInferred:
-#        return left is typing.Any or left is ToBeInferred
+    elif right is ToBeInferred:
+        return left is ToBeInferred or left is typing.Any
     elif hasattr(right, '__origin__') and right.__origin__ is not None:
         if right.__origin__ == typing.Union:
             return any(

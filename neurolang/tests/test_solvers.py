@@ -3,7 +3,6 @@ import operator as op
 
 from .. import solver
 from .. import expressions
-from neurolang.expressions import Symbol, FunctionApplication
 
 
 S = expressions.Symbol
@@ -240,8 +239,6 @@ def test_boolean_operations_rewrite_inversion():
 
 
 def test_partial_binary_evaluation():
-
-
     class ExpressionWalkHistorySolver(DummySolver):
 
         def __init__(self, *args, **kwargs):
@@ -272,17 +269,17 @@ def test_partial_binary_evaluation():
     d = S[bool]('d')
 
     exp = (~(a | b)) & (~(c | d))
-    wexp = s.walk(exp)
+    s.walk(exp)
     s.assert_walked_before(exp.args[0], exp.args[1])
 
     s = ExpressionWalkHistorySolver()
     exp = a & (a | b)
-    wexp = s.walk(exp)
+    s.walk(exp)
     s.assert_walked_before(exp.args[0], exp.args[1])
 
     s = ExpressionWalkHistorySolver()
     exp = a & (~(b | c))
-    wexp = s.walk(exp)
+    s.walk(exp)
     s.assert_walked_before(exp.args[0], exp.args[1])
 
 
@@ -297,7 +294,7 @@ def test_boolean_operations_rewrite_inversion_in_conjunction():
     c = expressions.Symbol[bool]('c')
     d = expressions.Symbol[bool]('d')
 
-    e = a & ~(b | c) & d
+    e = a & (~(b | c) & d)
     we = s.walk(e)
     assert we.functor.value is op.and_
     assert we.args[0] is a
@@ -318,7 +315,6 @@ def test_boolean_operations_rewrite_conj_composition_order():
     s = Dummy()
     a = expressions.Symbol[bool]('a')
     b = expressions.Symbol[bool]('b')
-    c = expressions.Symbol[bool]('c')
     d = expressions.Symbol[bool]('d')
     e = expressions.Symbol[bool]('e')
     f = expressions.Symbol('f')

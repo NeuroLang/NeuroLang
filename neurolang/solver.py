@@ -410,12 +410,12 @@ class NumericOperationsSolver(PatternWalker[T]):
         type = expression.args[0].type
         functor = expression.functor.cast(typing.Callable[[type, type], type])
         if functor is not expression.functor:
-            expression = FunctionApplication[type](
+            new_expression = FunctionApplication[type](
                 functor, expression.args
             )
-            return self.walk(expression)
         else:
-            return self.walk(expression.cast(type))
+            new_expression = expression.cast(type)
+        return self.walk(new_expression)
 
     @add_match(
         FunctionApplication(Constant, (Expression[T],)),

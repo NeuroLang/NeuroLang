@@ -134,7 +134,7 @@ def __pattern_replace_type__(pattern, src_type, dst_type):
 
         pattern_class = type(pattern)
         if hasattr(pattern_class, '__generic_class__'):
-            pattern_class = pattern_class[
+            pattern_class = pattern_class.__generic_class__[
                 replace_type_variable(
                     dst_type, pattern.type, type_var=src_type
                 )
@@ -254,19 +254,19 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
                 (
                     hasattr(type(pattern), '__generic_class__') and
                     isinstance(expression, type(pattern).__generic_class__) and
-                    pattern.type is expressions.ToBeInferred
+                    expressions.is_subtype(expression.type, pattern.type)
                 ) or
                 isinstance(expression, type(pattern))
             ):
                 logging.log(
                     logging.DEBUG - 1,
-                    f"\t\texpression is not instance of pattern "
+                    f"\t\t\t\t{expression} is not instance of pattern "
                     f"class {pattern.__class__}"
                 )
                 return False
 
             if isclass(pattern.type) and issubclass(pattern.type, Tuple):
-                logging.log(logging.DEBUG - 1, "\t\tMatch tuple")
+                logging.log(logging.DEBUG - 1, "\t\t\t\tMatch tuple")
                 if (
                     isclass(expression.type) and
                     issubclass(expression.type, Tuple)
@@ -282,7 +282,7 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
                     else:
                         logging.log(
                             logging.DEBUG - 1,
-                            f"\t\t\tMatched tuple's expression instance "
+                            f"\t\t\t\t\tMatched tuple's expression instance "
                             f"{expression} with {pattern}"
                         )
                         return True
@@ -292,7 +292,7 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
                 parameters = inspect.signature(pattern.__class__).parameters
                 logging.log(
                     logging.DEBUG - 1,
-                    f"\t\tTrying to match parameters "
+                    f"\t\t\t\tTrying to match parameters "
                     f"{expression} with {pattern}"
                 )
                 for argname, arg in parameters.items():
@@ -306,7 +306,7 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
                     else:
                         logging.log(
                             logging.DEBUG - 1,
-                            f"\t\t\tmatch {p} vs {e}"
+                            f"\t\t\t\t\tmatch {p} vs {e}"
                         )
                 else:
                     return True
@@ -319,12 +319,12 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
             else:
                 logging.log(
                     logging.DEBUG - 1,
-                    f"\t\tMatch tuples {expression} with {pattern}"
+                    f"\t\t\t\tMatch tuples {expression} with {pattern}"
                 )
                 return True
         else:
             logging.log(
                 logging.DEBUG - 1,
-                "\t\tMatch other {} vs {}".format(pattern, expression)
+                f"\t\t\t\tMatch other {pattern} vs {expression}"
             )
             return pattern == expression
