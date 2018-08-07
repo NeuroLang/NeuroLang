@@ -12,7 +12,7 @@ from .exceptions import NeuroLangException
 
 __all__ = [
     'Symbol', 'FunctionApplication', 'Statement',
-    'Projection', 'Predicate', 'ExistentialPredicate',
+    'Projection', 'Predicate', 'ExistentialPredicate', 'UniversalPredicate',
     'ToBeInferred',
     'typing_callable_from_annotated_function'
 ]
@@ -301,6 +301,11 @@ class ExpressionMeta(ParametricTypeClassMeta):
         if obj.__no_explicit_type__:
             obj.type = typing.Any
         orig_init = obj.__init__
+        obj.__children__ = [
+            name for name, parameter
+            in inspect.signature(orig_init).parameters.items()
+            if parameter.default is inspect.Parameter.empty
+        ][1:]
 
         @wraps(orig_init)
         def new_init(self, *args, **kwargs):
@@ -670,7 +675,11 @@ class Predicate(FunctionApplication):
         return r
 
 
-class ExistentialPredicate(Definition):
+class Quantifier(Definition):
+    pass
+
+
+class ExistentialPredicate(Quantifier):
     def __init__(self, head, body):
 
         if not isinstance(head, Symbol):
@@ -696,6 +705,37 @@ class ExistentialPredicate(Definition):
     def __repr__(self):
         r = (
             u'\u2203{{{}: {} st {}}}'
+            .format(self.head, self.__type_repr__, self.body)
+        )
+        return r
+
+
+class UniversalPredicate(Quantifier):
+    def __init__(self, head, body):
+
+        if not isinstance(head, Symbol):
+            raise NeuroLangException(
+                'A symbol should be provided for the '
+                'universal quantifier expression'
+            )
+        if not isinstance(body, (Predicate, FunctionApplication)):
+            raise NeuroLangException(
+                'A predicate or a function application over '
+                'predicates should be associated to the quantifier'
+            )
+
+        if head not in body._symbols:
+            raise NeuroLangException(
+                'Symbol should be a free '
+                'variable on the predicate'
+            )
+        self.head = head
+        self.body = body
+        self._symbols = body._symbols - {head}
+
+    def __repr__(self):
+        r = (
+            u'\u2200{{{}: {} st {}}}'
             .format(self.head, self.__type_repr__, self.body)
         )
         return r

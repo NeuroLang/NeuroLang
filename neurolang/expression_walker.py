@@ -1,16 +1,91 @@
-from itertools import chain
+from collections import deque
+from itertools import chain, product
 import logging
 import typing
 
 from .symbols_and_types import TypedSymbolTable
 from .expressions import (
     FunctionApplication, Statement, Query, Projection, Constant,
-    Symbol, ExistentialPredicate,
+    Symbol, ExistentialPredicate, UniversalPredicate, Expression,
     get_type_and_value, ToBeInferred, is_subtype, NeuroLangTypeException,
     unify_types
 )
 
 from .expression_pattern_matching import add_match, PatternMatcher
+
+
+def expression_iterator(expression, include_level=False, dfs=True):
+    """
+    Iterate traversing expression tree.
+
+    Iterates over elements `(parameter_name, parameter_object)` when
+    `include_level` is `False`.
+
+    If `include_level` is `True` then the iterated elements are
+    `(parameter_name, parameter_object, depth_level)`.
+
+    If `dfs` is true the iteration is in DFS order else is in BFS.
+    """
+    if include_level:
+        current_level = 0
+        stack = deque([(None, expression, current_level)])
+    else:
+        stack = deque([(None, expression)])
+
+    if dfs:
+        pop = stack.pop
+        extend = stack.extend
+    else:
+        pop = stack.popleft
+        extend = stack.extend
+
+    while stack:
+        current_element = pop()
+
+        if isinstance(current_element[1], Symbol):
+            children = []
+        elif isinstance(current_element[1], Constant):
+            if is_subtype(Constant.type, typing.Tuple):
+                c = current_element[1].value
+                children = product((None,), c)
+            elif is_subtype(Constant.type, typing.AbstractSet):
+                children = product((None,), current_element[1].value)
+            else:
+                children = []
+        elif isinstance(current_element[1], tuple):
+            c = current_element[1]
+            children = product((None,), c)
+        elif isinstance(current_element[1], Expression):
+            c = current_element[1].__children__
+
+            children = (
+                (name, getattr(current_element[1], name))
+                for name in c
+            )
+
+        if include_level:
+            current_level = current_element[-1] + 1
+            children = [
+                (name, value, current_level)
+                for name, value in children
+            ]
+
+        if (
+            dfs and
+            not (
+                isinstance(expression, Constant) and
+                is_subtype(expression, typing.AbstractSet)
+            )
+        ):
+            try:
+                children = reversed(children)
+            except TypeError:
+                children = list(children)
+                children.reverse()
+
+        extend(children)
+
+        yield current_element
 
 
 class PatternWalker(PatternMatcher):
@@ -88,6 +163,17 @@ class ExpressionWalker(PatternWalker):
 
         if body is not expression.body:
             return self.walk(ExistentialPredicate[expression.type](
+                expression.head, body
+            ))
+        else:
+            return expression
+
+    @add_match(UniversalPredicate)
+    def universal_predicate(self, expression):
+        body = self.walk(expression.body)
+
+        if body is not expression.body:
+            return self.walk(UniversalPredicate[expression.type](
                 expression.head, body
             ))
         else:

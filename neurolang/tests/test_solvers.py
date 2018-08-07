@@ -3,6 +3,7 @@ import operator as op
 
 from .. import solver
 from .. import expressions
+from neurolang.expressions import Symbol, FunctionApplication
 
 
 S = expressions.Symbol
@@ -218,10 +219,10 @@ def test_boolean_operations_rewrite_nested_constant():
     original = a | b | a | expressions.Constant(True)
     t_ = s.walk(original)
     assert isinstance(t_.args[0], expressions.Constant)
-    assert t_.args[0].value
-    assert t_.args[1].args[0].args[0] is a
-    assert t_.args[1].args[0].args[1] is b
-    assert t_.args[1].args[1] is a
+    assert t_.args[0].value is True
+    assert t_.args[1].args[0] is a
+    assert t_.args[1].args[1].args[0] is a
+    assert t_.args[1].args[1].args[1] is b
 
 
 def test_boolean_operations_rewrite_inversion():
@@ -283,3 +284,66 @@ def test_partial_binary_evaluation():
     exp = a & (~(b | c))
     wexp = s.walk(exp)
     s.assert_walked_before(exp.args[0], exp.args[1])
+
+
+def test_boolean_operations_rewrite_inversion_in_conjunction():
+    class Dummy(
+        solver.BooleanRewriteSolver, ReturnSymbolConstantApplication
+    ):
+        pass
+    s = Dummy()
+    a = expressions.Symbol[bool]('a')
+    b = expressions.Symbol[bool]('b')
+    c = expressions.Symbol[bool]('c')
+    d = expressions.Symbol[bool]('d')
+
+    e = a & ~(b | c) & d
+    we = s.walk(e)
+    assert we.functor.value is op.and_
+    assert we.args[0] is a
+    assert we.args[1].functor.value is op.and_
+    assert we.args[1].args[0] is d
+    assert we.args[1].args[1].functor.value is op.and_
+    assert we.args[1].args[1].args[0].functor.value is op.invert
+    assert we.args[1].args[1].args[1].functor.value is op.invert
+    assert we.args[1].args[1].args[0].args[0] is b
+    assert we.args[1].args[1].args[1].args[0] is c
+
+
+def test_boolean_operations_rewrite_conj_composition_order():
+    class Dummy(
+        solver.BooleanRewriteSolver, ReturnSymbolConstantApplication
+    ):
+        pass
+    s = Dummy()
+    a = expressions.Symbol[bool]('a')
+    b = expressions.Symbol[bool]('b')
+    c = expressions.Symbol[bool]('c')
+    d = expressions.Symbol[bool]('d')
+    e = expressions.Symbol[bool]('e')
+    f = expressions.Symbol('f')
+
+    exp = (b | (d & e)) & a
+    assert exp.functor.value is op.and_
+    assert exp.args[1] is a
+    we = s.walk(exp)
+    assert we.args[0] is a
+
+    exp = (b | (d & e)) & f(e)
+    assert exp.functor.value is op.and_
+    assert exp.args[1].args[0] is e
+    we = s.walk(exp)
+    assert we.args[0].args[0] is e
+
+
+def test_boolean_operations_conjunction_distribution():
+    s = solver.DatalogSolver()
+    a, b, c = S('a'), S('b'), S('c')
+    e = (a & b) & c
+    we = s.walk(e)
+
+    assert we.args[0] is a
+    assert we.args[1].args[0] is b
+    assert we.args[1].args[1] is c
+    assert we.functor is e.functor
+    assert we.args[1].functor is e.args[0].functor
