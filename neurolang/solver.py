@@ -403,7 +403,7 @@ class BooleanOperationsSolver(PatternWalker):
 
 class NumericOperationsSolver(PatternWalker[T]):
     @add_match(
-        FunctionApplication(Constant, (Expression[T],) * 2),
+        FunctionApplication[ToBeInferred](Constant, (Expression[T],) * 2),
         lambda expression: expression.functor.value in (add, sub, mul, truediv)
     )
     def cast_binary(self, expression):
@@ -413,6 +413,7 @@ class NumericOperationsSolver(PatternWalker[T]):
             expression = FunctionApplication[type](
                 functor, expression.args
             )
+            return self.walk(expression)
         else:
             return self.walk(expression.cast(type))
 

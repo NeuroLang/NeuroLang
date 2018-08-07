@@ -3,6 +3,7 @@ from .version import __version__
 from .expression_walker import *
 from .expression_pattern_matching import *
 from .expressions import *
+from .neurolang_compiler import NeuroLangIntermediateRepresentationCompiler
 from .solver import *
 from .exceptions import NeuroLangException
 from .symbols_and_types import (
@@ -23,7 +24,7 @@ __all__ = [
     'add_match',
     'NeuroLangException',
     'PatternMatcher',
-    'grammar_EBNF', 'parser', 'add_match',
+    'add_match', 'NeuroLangIntermediateRepresentationCompiler',
     'Constant', 'Symbol', 'FunctionApplication',
     'Statement', 'Query', 'ExistentialPredicate', 'UniversalPredicate'
 ]

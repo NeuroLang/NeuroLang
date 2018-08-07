@@ -2,7 +2,7 @@ from .. import neurolang as nl
 import operator
 
 
-def associative_command(): 
+def associative_command():
     element1 = nl.Symbol('element1')
     element2 = nl.Symbol('element2')
     element3 = nl.Symbol('element3')
@@ -48,7 +48,7 @@ def inverse_command():
     op = nl.Symbol('op')
     element1 = nl.Symbol('element1')
     null = nl.Symbol('null')
-    
+
     a = null
     b = nl.FunctionApplication(op, (element1, element1))
 
@@ -130,9 +130,7 @@ def check_is_abelian_group(op, inv_op, nli, null=None):
     nli.push_scope()
     if null is not None:
         nli.symbol_table['null'] = nl.Constant(null)
-
     check_is_monoid(operation=op, nli=nli, null=null)
-
     nli.symbol_table['op'] = nl.Constant(op)
     check_command(commutative_command, nli)
     nli.symbol_table['op'] = nl.Constant(inv_op)
@@ -144,9 +142,9 @@ def check_is_abelian_group(op, inv_op, nli, null=None):
 def check_is_monoid(operation, nli, null=None):
     nli.push_scope()
 
-    nli.symbol_table['null'] = nl.Constant(null)
+    if null is not None:
+        nli.symbol_table['null'] = nl.Constant(null)
     nli.symbol_table['op'] = nl.Constant(operation)
-
     check_command(associative_command, nli)
     check_command(identity_command, nli)
 
@@ -163,7 +161,8 @@ def check_cross_op_is_distributive_with_respect_to_dot_op(cross, dot, nli):
     nli.pop_scope()
 
 
-def check_algebraic_structure_is_a_ring(nli,
+def check_algebraic_structure_is_a_ring(
+    nli,
     op_add=operator.add, op_inv_add=operator.sub,
     op_mul=operator.mul, op_inv_mul=operator.truediv
 ):
@@ -181,6 +180,7 @@ def test_algebraic_structure_of_naturals():
         nl.Symbol[int]('element{}'.format(i + 1)): nl.Constant[int](e)
         for i, e in enumerate(elements)
     }
+    symbols[nl.Symbol[int]('null')] = nl.Constant[int](null_element)
 
     class TheSolver(
         nl.NumericOperationsSolver[int],
@@ -188,12 +188,10 @@ def test_algebraic_structure_of_naturals():
     ):
         pass
 
-    symbols[nl.Symbol[int]('null')] = nl.Constant[int](null_element)
     nli = nl.NeuroLangIntermediateRepresentationCompiler(
         solver=TheSolver(),
         symbols=symbols
     )
-
     check_algebraic_structure_is_a_ring(
         op_add=operator.add, op_inv_add=operator.sub,
         op_mul=operator.mul, op_inv_mul=operator.truediv,
