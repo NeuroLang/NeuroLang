@@ -156,8 +156,8 @@ def test_compatibility_for_pattern_matching():
 
 def test_instance_check():
     c = C_[int](2)
-    assert isinstance(c, C_)
-    assert isinstance(c, C_[int])
+    assert isinstance(c, expressions.Constant)
+    assert isinstance(c, expressions.Constant[int])
     assert issubclass(c.__class__, C_)
     assert c.type is int
 
@@ -166,10 +166,10 @@ def test_typecast_check():
     s = S_('a')
     s_float = s.cast(float)
 
-    assert isinstance(s, S_)
+    assert isinstance(s, expressions.Symbol)
     assert s.type is ToBeInferred
-    assert isinstance(s_float, S_)
-    assert isinstance(s_float, S_[float])
+    assert isinstance(s_float, expressions.Symbol)
+    assert isinstance(s_float, expressions.Symbol[float])
     assert issubclass(s.__class__, S_)
     assert s_float.type is float
     assert s_float.name == 'a'

@@ -50,7 +50,7 @@ def test_match_expression_type():
     pm = PM()
 
     for e in example_expressions.values():
-        if isinstance(e, C_):
+        if isinstance(e, expressions.Constant):
             assert pm.match(e) is e
         else:
             with raises(NeuroLangPatternMatchingNoMatch):
@@ -66,7 +66,7 @@ def test_match_expression():
     pm = PM()
 
     for e in example_expressions.values():
-        if isinstance(e, C_) and e == 1:
+        if isinstance(e, expressions.Constant) and e == 1:
             assert pm.match(e) is e
         else:
             with raises(NeuroLangPatternMatchingNoMatch):
@@ -134,7 +134,9 @@ def test_pattern_matching_parametric_type():
             return expression
 
     PM_int = PM[int]
-    assert PM_int.__patterns__[0][0] == C_[int]
-    assert isinstance(PM_int.__patterns__[1][0], F_)
-    assert PM_int.__patterns__[1][0].args[0] == C_[int]
-    assert PM_int.__patterns__[2][0] == C_
+    assert PM_int.__patterns__[0][0] == expressions.Constant[int]
+    assert isinstance(
+        PM_int.__patterns__[1][0], expressions.FunctionApplication
+    )
+    assert PM_int.__patterns__[1][0].args[0] is expressions.Constant[int]
+    assert PM_int.__patterns__[2][0] == expressions.Constant

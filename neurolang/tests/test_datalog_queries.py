@@ -29,7 +29,7 @@ def test_simple_symbol_query():
     )
 
     res = ds.walk(query)
-    assert isinstance(res, C_[query.type])
+    assert isinstance(res, expressions.Constant[query.type])
     assert expressions.type_validation_value(
         res.value, typing.AbstractSet[int]
     )
@@ -59,7 +59,7 @@ def test_multiple_symbol_query():
     )
 
     res = ds.walk(query)
-    assert isinstance(res, C_[query.type])
+    assert isinstance(res, expressions.Constant[query.type])
     assert expressions.type_validation_value(
         res.value, typing.AbstractSet[typing.Tuple[int, int]]
     )
@@ -115,7 +115,7 @@ def test_existential_predicate():
         x, ds.symbol_table['gt'](x, C_(2))
     )
     res = ds.walk(expression)
-    assert isinstance(res, C_)
+    assert isinstance(res, expressions.Constant)
     assert res.type is bool
     assert res.value
 
@@ -123,7 +123,7 @@ def test_existential_predicate():
         x, ds.symbol_table['gt'](x, C_(10))
     )
     res = ds.walk(expression)
-    assert isinstance(res, C_)
+    assert isinstance(res, expressions.Constant)
     assert res.type is bool
     assert not res.value
 
@@ -147,7 +147,7 @@ def test_existential_predicate_trivial():
         C_(True) | ds.symbol_table['gt'](x, C_(2))
     )
     res = ds.walk(expression)
-    assert isinstance(res, C_)
+    assert isinstance(res, expressions.Constant)
     assert res.type is bool
     assert res.value
 
@@ -156,7 +156,7 @@ def test_existential_predicate_trivial():
         C_(False) & ds.symbol_table['gt'](x, C_(2))
     )
     res = ds.walk(expression)
-    assert isinstance(res, C_)
+    assert isinstance(res, expressions.Constant)
     assert res.type is bool
     assert not res.value
 
@@ -203,7 +203,7 @@ def test_universal_predicate():
         x, ds.symbol_table['le'](x, C_(2))
     )
     res = ds.walk(expression)
-    assert isinstance(res, C_)
+    assert isinstance(res, expressions.Constant)
     assert res.type is bool
     assert not res.value
 
@@ -211,7 +211,7 @@ def test_universal_predicate():
         x, ds.symbol_table['le'](x, C_(10))
     )
     res = ds.walk(expression)
-    assert isinstance(res, C_)
+    assert isinstance(res, expressions.Constant)
     assert res.type is bool
     assert res.value
 
@@ -235,7 +235,7 @@ def test_universal_predicate_trivial():
         C_(False) & ds.symbol_table['le'](x, C_(2))
     )
     res = ds.walk(expression)
-    assert isinstance(res, C_)
+    assert isinstance(res, expressions.Constant)
     assert res.type is bool
     assert not res.value
 
@@ -244,7 +244,7 @@ def test_universal_predicate_trivial():
         C_(True) | ds.symbol_table['le'](x, C_(2))
     )
     res = ds.walk(expression)
-    assert isinstance(res, C_)
+    assert isinstance(res, expressions.Constant)
     assert res.type is bool
     assert res.value
 
