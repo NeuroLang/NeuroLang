@@ -109,8 +109,17 @@ ENV/
 # local vimrc plugin
 .lvimrc
 
+
+# tags
+tags
+
 # pytest cache directory
 .pytest_cache/
 
 # pytest profiling results directory
 prof/
+
+
+# other
+scratch
+*orig
