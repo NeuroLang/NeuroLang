@@ -1,36 +1,26 @@
 from pytest import raises
 import typing
 
+from .. import expressions
 from ..expression_pattern_matching import (
     PatternMatcher, add_match, NeuroLangPatternMatchingNoMatch
 )
-from ..expressions import (
-    Constant, Symbol, FunctionApplication, Projection,
-    Statement, Query
-)
+from ..expressions import Projection, Statement, Query
 
+C_ = expressions.Constant
+S_ = expressions.Symbol
+F_ = expressions.FunctionApplication
 
 example_expressions = dict(
-    c_int=Constant[int](1),
-    c_str=Constant[str]('a'),
-    s_a=Symbol[str]('a'),
-    d_a=Statement(Symbol('a'), Constant[int](2)),
-    f_d=FunctionApplication(
-        Constant(lambda x: 2 * x),
-        (Constant[int](2),)
-    ),
-    q_a=Query(
-        Symbol('a'),
-        FunctionApplication(
-            Constant(lambda x: x % 2 == 0), (Constant[int](2),)
-        )
-    ),
-    t_a=Constant((Constant[float](1.), Symbol('a'))),
-    t_b=Constant((Constant[str]('a'), Symbol('a'))),
-    p_a=Projection(
-        Constant((Constant[str]('a'), Symbol('a'))),
-        Constant[int](1)
-    ),
+    c_int=C_[int](1),
+    c_str=C_[str]('a'),
+    s_a=S_[str]('a'),
+    d_a=Statement(S_('a'), C_[int](2)),
+    f_d=F_(C_(lambda x: 2 * x), (C_[int](2), )),
+    q_a=Query(S_('a'), F_(C_(lambda x: x % 2 == 0), (C_[int](2), ))),
+    t_a=C_((C_[float](1.), S_('a'))),
+    t_b=C_((C_[str]('a'), S_('a'))),
+    p_a=Projection(C_((C_[str]('a'), S_('a'))), C_[int](1)),
 )
 
 
@@ -44,6 +34,7 @@ def test_default():
         @add_match(...)
         def _(self, expression):
             return expression
+
     pm = PM()
 
     for e in example_expressions.values():
@@ -52,13 +43,14 @@ def test_default():
 
 def test_match_expression_type():
     class PM(PatternMatcher):
-        @add_match(Constant)
+        @add_match(C_)
         def _(self, expression):
             return expression
+
     pm = PM()
 
     for e in example_expressions.values():
-        if isinstance(e, Constant):
+        if isinstance(e, C_):
             assert pm.match(e) is e
         else:
             with raises(NeuroLangPatternMatchingNoMatch):
@@ -67,13 +59,14 @@ def test_match_expression_type():
 
 def test_match_expression():
     class PM(PatternMatcher):
-        @add_match(Constant[int](...))
+        @add_match(C_[int](...))
         def _(self, expression):
             return expression
+
     pm = PM()
 
     for e in example_expressions.values():
-        if isinstance(e, Constant) and e == 1:
+        if isinstance(e, C_) and e == 1:
             assert pm.match(e) is e
         else:
             with raises(NeuroLangPatternMatchingNoMatch):
@@ -82,15 +75,15 @@ def test_match_expression():
 
 def test_match_expression_value():
     class PM(PatternMatcher):
-        @add_match(Constant[int](...))
+        @add_match(C_[int](...))
         def _(self, expression):
             return expression
 
-        @add_match(Statement(..., Constant[int](...)))
+        @add_match(Statement(..., C_[int](...)))
         def __(self, expression):
             return expression
 
-        @add_match(Query(..., FunctionApplication))
+        @add_match(Query(..., F_))
         def ___(self, expression):
             return expression
 
@@ -106,13 +99,14 @@ def test_match_expression_value():
 
 def test_match_expression_tuple():
     class PM(PatternMatcher):
-        @add_match(Constant((Constant[float](...),)))
+        @add_match(C_((C_[float](...), )))
         def __(self, expression):
             return False
 
-        @add_match(Constant((Constant[float](...), ...)))
+        @add_match(C_((C_[float](...), ...)))
         def _(self, expression):
             return expression
+
     pm = PM()
 
     for k, e in example_expressions.items():
@@ -127,20 +121,20 @@ def test_pattern_matching_parametric_type():
     T = typing.TypeVar('T')
 
     class PM(PatternMatcher[T]):
-        @add_match(Constant[T])
+        @add_match(C_[T])
         def _(self, expression):
             return expression
 
-        @add_match(FunctionApplication(..., (Constant[T],)))
+        @add_match(F_(..., (C_[T], )))
         def __(self, expression):
             return expression
 
-        @add_match(Constant)
+        @add_match(C_)
         def ___(self, expression):
             return expression
 
     PM_int = PM[int]
-    assert PM_int.__patterns__[0][0] == Constant[int]
-    assert isinstance(PM_int.__patterns__[1][0], FunctionApplication)
-    assert PM_int.__patterns__[1][0].args[0] == Constant[int]
-    assert PM_int.__patterns__[2][0] == Constant
+    assert PM_int.__patterns__[0][0] == C_[int]
+    assert isinstance(PM_int.__patterns__[1][0], F_)
+    assert PM_int.__patterns__[1][0].args[0] == C_[int]
+    assert PM_int.__patterns__[2][0] == C_

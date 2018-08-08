@@ -10,15 +10,15 @@ F_ = expressions.FunctionApplication
 
 
 class ReturnSymbolConstantApplication(solver.PatternWalker):
-    @solver.add_match(C_)
+    @solver.add_match(expressions.Constant)
     def constant(self, expression):
         return expression
 
-    @solver.add_match(S_)
+    @solver.add_match(expressions.Symbol)
     def symbol(self, expression):
         return expression
 
-    @solver.add_match(F_)
+    @solver.add_match(expressions.FunctionApplication)
     def fa(self, expression):
         new_f = self.walk(expression.functor)
         new_args = tuple(self.walk(a) for a in expression.args)

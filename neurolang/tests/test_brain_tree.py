@@ -4,7 +4,9 @@ from ..brain_tree import AABB, Tree
 
 
 def _generate_random_box(x_bounds, y_bounds, z_bounds, size_bounds):
-    lower_bound = np.array([np.random.uniform(*b) for b in (x_bounds, y_bounds, z_bounds)])
+    lower_bound = np.array([
+        np.random.uniform(*b) for b in (x_bounds, y_bounds, z_bounds)
+    ])
     upper_bound = lower_bound + np.random.uniform(*size_bounds, size=3)
     return AABB(lower_bound, upper_bound)
 
@@ -41,6 +43,7 @@ def test_aabb_union():
     box1 = AABB((0, 0, 0), (1, 1, 1))
     box2 = AABB((2, 2, 2), (3, 3, 3))
     assert box1.union(box2) == AABB((0, 0, 0), (3, 3, 3))
+
 
 def test_tree_construction():
     tree = Tree()
@@ -110,6 +113,7 @@ def test_tree_root_region_id_set_maintaned():
     expected_root_regions = {r for r in (inferior, central, superior)}
     assert tree.root.box == expected_root_box
     assert tree.root.regions == expected_root_regions
+
 
 def test_tree_root_box_correctly_expanding():
     tree = Tree()
