@@ -68,6 +68,43 @@ def test_multiple_symbol_query():
     ) == res.value
 
 
+def test_tuple_symbol_query():
+    ds = solver.DatalogSolver(TypedSymbolTable())
+
+    for s in range(5):
+        sym = expressions.Symbol[typing.Tuple[int, str]](str(s))
+        ds.symbol_table[sym] = expressions.Constant[typing.Tuple[int, str]]((
+            expressions.Constant[int](s),
+            expressions.Constant[str]('a' * s)
+        ))
+
+    def gt(a: int, b: int) -> bool:
+        return a > b
+
+    ds.symbol_table[expressions.Symbol('gt')] = expressions.Constant(gt)
+
+    x = expressions.Symbol[typing.Tuple[int, str]]('x')
+
+    query = expressions.Query[typing.AbstractSet[typing.Tuple[int, str]]](
+        x,
+        ds.symbol_table['gt'](
+            x[expressions.Constant(0)],
+            expressions.Constant(2)
+        )
+    )
+
+    res = ds.walk(query)
+    assert isinstance(res, expressions.Constant[query.type])
+    assert expressions.type_validation_value(
+        res.value, typing.AbstractSet[typing.Tuple[int, str]]
+    )
+    assert set(
+        str(x)
+        for x in range(5)
+        if x > 2
+    ) == res.value
+
+
 @pytest.mark.skip
 def test_too_many_symbols_in_query_body():
     ds = solver.DatalogSolver(TypedSymbolTable())
