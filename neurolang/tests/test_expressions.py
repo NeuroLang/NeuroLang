@@ -82,6 +82,7 @@ def test_symbol_application():
 
 def test_symbol_method_and_operator():
     with expressions_behave_as_objects():
+
         a = S_('a')
         fva = a.__len__()
         fvb = a - C_[int](4)
@@ -101,7 +102,7 @@ def test_constant_method_and_operator():
     with expressions_behave_as_objects():
         a = C_[int](1)
         fva = a + C_(1)
-        b = C_[Set[int]]({1})
+        b = C_[Set[int]]({C_(1)})
         fvb = b.__len__()
         fbc = b.union(C_({C_(1), C_(2)}))
 
