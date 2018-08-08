@@ -1,17 +1,17 @@
 from .. import expression_walker
 from .. import expressions
 
-C = expressions.Constant
-S = expressions.Symbol
-F = expressions.FunctionApplication
+C_ = expressions.Constant
+S_ = expressions.Symbol
+F_ = expressions.FunctionApplication
 
 
 def test_leaves():
-    for expression in (C(1), S('a')):
+    for expression in (C_(1), S_('a')):
         walk = list(expression_walker.expression_iterator(expression))
         assert walk == [(None, expression)]
 
-    for expression in (C(1), S('a')):
+    for expression in (C_(1), S_('a')):
         for dfs in (True, False):
             walk = list(
                 expression_walker.expression_iterator(
@@ -22,7 +22,7 @@ def test_leaves():
 
 
 def test_tuple():
-    expression = C((S('b'), S('c')))
+    expression = C_((S_('b'), S_('c')))
 
     for dfs in (True, False):
         walk = list(expression_walker.expression_iterator(expression))
@@ -42,7 +42,7 @@ def test_tuple():
 
 
 def test_function_application():
-    expression = F(S('a'), (S('b'), S('c')))
+    expression = F_(S_('a'), (S_('b'), S_('c')))
 
     for dfs in (True, False):
         walk = list(expression_walker.expression_iterator(expression))
@@ -64,7 +64,7 @@ def test_function_application():
 
 
 def test_function_application_nested_dfs():
-    expression = F(S('a'), (F(S('c'), tuple()), S('b')))
+    expression = F_(S_('a'), (F_(S_('c'), tuple()), S_('b')))
 
     walk = list(expression_walker.expression_iterator(expression))
     res = [
@@ -85,7 +85,7 @@ def test_function_application_nested_dfs():
 
 
 def test_function_application_nested_bfs():
-    expression = F(S('a'), (F(S('c'), tuple()), S('b')))
+    expression = F_(S_('a'), (F_(S_('c'), tuple()), S_('b')))
 
     walk = list(expression_walker.expression_iterator(expression, dfs=False))
     res = [
