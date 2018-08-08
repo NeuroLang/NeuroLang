@@ -489,7 +489,7 @@ class DatalogSolver(
                     body = rsw.walk(body)
 
             res = self.walk(body)
-            if res.value:
+            if isinstance(res, Constant) and res.value:
                 return Constant(True)
 
         return Constant(False)
