@@ -1,9 +1,12 @@
+import pytest
+
 from .. import expressions
 from ..expressions import (
     Expression,
     Symbol, Constant,
     FunctionApplication,
-    ToBeInferred
+    ToBeInferred,
+    expressions_behave_as_objects
 )
 
 from ..expression_walker import ExpressionBasicEvaluator
@@ -22,6 +25,20 @@ def evaluate(expression, **kwargs):
             v = C(v)
         ebe.symbol_table[k] = v
     return ebe.walk(expression)
+
+
+def test_expression_behaves_as_object():
+    a = Symbol('a')
+
+    with pytest.raises(AttributeError):
+        c = a.b
+
+    with expressions_behave_as_objects():
+        c = a.b
+
+    assert c.functor.value is getattr
+    assert c.args[0] is a
+    assert c.args[1] == C('b')
 
 
 def test_symbol_application():
@@ -67,11 +84,12 @@ def test_symbol_application():
 
 
 def test_symbol_method_and_operator():
-    a = Symbol('a')
-    fva = a.__len__()
-    fvb = a - C[int](4)
-    fvc = C[int](4) - a
-    fve = a[C(2)]
+    with expressions_behave_as_objects():
+        a = Symbol('a')
+        fva = a.__len__()
+        fvb = a - C[int](4)
+        fvc = C[int](4) - a
+        fve = a[C(2)]
 
     assert evaluate(a, a=C(1)) == 1
     assert evaluate(fva, a=C[Set[int]]({1})) == 1
@@ -86,11 +104,12 @@ def test_symbol_method_and_operator():
 
 
 def test_constant_method_and_operator():
-    a = C[int](1)
-    fva = a + C(1)
-    b = C[Set[int]]({1})
-    fvb = b.__len__()
-    fbc = b.union(C({C(1), C(2)}))
+    with expressions_behave_as_objects():
+        a = C[int](1)
+        fva = a + C(1)
+        b = C[Set[int]]({1})
+        fvb = b.__len__()
+        fbc = b.union(C({C(1), C(2)}))
 
     assert a == 1
     assert evaluate(a) == 1

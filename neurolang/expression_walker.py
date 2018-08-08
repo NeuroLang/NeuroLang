@@ -74,7 +74,7 @@ def expression_iterator(expression, include_level=False, dfs=True):
             dfs and
             not (
                 isinstance(expression, Constant) and
-                is_subtype(expression, typing.AbstractSet)
+                is_subtype(expression.type, typing.AbstractSet)
             )
         ):
             try:

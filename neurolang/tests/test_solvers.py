@@ -78,8 +78,6 @@ def test_predicate_match():
 
 def test_predicate_symbol_table():
     class NewSolver(solver.GenericSolver[solver.T]):
-        type = float
-
         def predicate_test(self, a: float) -> bool:
             return expressions.Symbol[bool]('b')
 
@@ -101,7 +99,7 @@ def test_predicate_symbol_table():
 
     assert ns.walk(pt).value
     assert not ns.walk(pf).value
-    assert ns.walk(ps).value
+    assert isinstance(ns.walk(ps), expressions.NonConstant)
 
 
 def test_numeric_operations_solver():
