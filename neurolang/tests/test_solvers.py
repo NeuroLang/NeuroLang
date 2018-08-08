@@ -10,7 +10,7 @@ F_ = expressions.FunctionApplication
 
 
 class ReturnSymbolConstantApplication(solver.PatternWalker):
-    @solver.add_match(solver.Constant)
+    @solver.add_match(C_)
     def constant(self, expression):
         return expression
 
