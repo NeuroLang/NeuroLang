@@ -83,7 +83,7 @@ def test_match_expression_value():
         def __(self, expression):
             return expression
 
-        @add_match(Query(..., F_))
+        @add_match(Query(..., expressions.FunctionApplication))
         def ___(self, expression):
             return expression
 
