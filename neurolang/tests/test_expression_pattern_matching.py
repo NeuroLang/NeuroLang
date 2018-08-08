@@ -43,7 +43,7 @@ def test_default():
 
 def test_match_expression_type():
     class PM(PatternMatcher):
-        @add_match(C_)
+        @add_match(expressions.Constant)
         def _(self, expression):
             return expression
 
@@ -59,7 +59,7 @@ def test_match_expression_type():
 
 def test_match_expression():
     class PM(PatternMatcher):
-        @add_match(C_[int](...))
+        @add_match(expressions.Constant[int](...))
         def _(self, expression):
             return expression
 
@@ -75,11 +75,11 @@ def test_match_expression():
 
 def test_match_expression_value():
     class PM(PatternMatcher):
-        @add_match(C_[int](...))
+        @add_match(expressions.Constant[int](...))
         def _(self, expression):
             return expression
 
-        @add_match(Statement(..., C_[int](...)))
+        @add_match(Statement(..., expressions.Constant[int](...)))
         def __(self, expression):
             return expression
 
@@ -99,11 +99,13 @@ def test_match_expression_value():
 
 def test_match_expression_tuple():
     class PM(PatternMatcher):
-        @add_match(C_((C_[float](...), )))
+        @add_match(expressions.Constant((expressions.Constant[float](...), )))
         def __(self, expression):
             return False
 
-        @add_match(C_((C_[float](...), ...)))
+        @add_match(
+            expressions.Constant((expressions.Constant[float](...), ...))
+        )
         def _(self, expression):
             return expression
 
@@ -121,15 +123,17 @@ def test_pattern_matching_parametric_type():
     T = typing.TypeVar('T')
 
     class PM(PatternMatcher[T]):
-        @add_match(C_[T])
+        @add_match(expressions.Constant[T])
         def _(self, expression):
             return expression
 
-        @add_match(F_(..., (C_[T], )))
+        @add_match(
+            expressions.FunctionApplication(..., (expressions.Constant[T], ))
+        )
         def __(self, expression):
             return expression
 
-        @add_match(C_)
+        @add_match(expressions.Constant)
         def ___(self, expression):
             return expression
 
