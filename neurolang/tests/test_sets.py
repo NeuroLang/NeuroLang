@@ -1,21 +1,23 @@
+from typing import AbstractSet
+
 from .. import solver
 from .. import neurolang as nl
+from .. import expressions
 
-from typing import AbstractSet
+C_ = expressions.Constant
 
 
 def test_union_monoid_ir():
     elements = [frozenset((a, )) for a in (1, 2)]
     null_element = frozenset()
     symbols = {
-        'element{}'.format(i + 1): nl.Constant[AbstractSet[int]](e)
+        'element{}'.format(i + 1): C_[AbstractSet[int]](e)
         for i, e in enumerate(elements)
     }
-    symbols['null'] = nl.Constant[AbstractSet[int]](null_element)
+    symbols['null'] = C_[AbstractSet[int]](null_element)
 
     nli = nl.NeuroLangIntermediateRepresentationCompiler(
-        solver.SetBasedSolver(),
-        symbols=symbols
+        solver.SetBasedSolver(), symbols=symbols
     )
 
     e1 = symbols['element1']
@@ -32,14 +34,13 @@ def test_intersection_monoid_ir():
     elements = [frozenset(a) for a in ({1}, {1, 2})]
     null_element = frozenset()
     symbols = {
-        'element{}'.format(i + 1): nl.Constant[AbstractSet[int]](e)
+        'element{}'.format(i + 1): C_[AbstractSet[int]](e)
         for i, e in enumerate(elements)
     }
-    symbols['null'] = nl.Constant[AbstractSet[int]](null_element)
+    symbols['null'] = C_[AbstractSet[int]](null_element)
 
     nli = nl.NeuroLangIntermediateRepresentationCompiler(
-        solver.SetBasedSolver(),
-        symbols=symbols
+        solver.SetBasedSolver(), symbols=symbols
     )
 
     e1 = symbols['element1']
