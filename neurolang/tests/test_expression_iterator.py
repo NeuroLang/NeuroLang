@@ -21,6 +21,23 @@ def test_leaves():
             assert walk == [(None, expression, 0)]
 
 
+def test_tuple():
+    expression = expressions.Constant((expressions.Symbol('b'),  expressions.Symbol('c')))
+
+    for dfs in (True, False):
+        walk = list(expression_walker.expression_iterator(expression))
+        res = [
+            (None, expression, 0),
+            (None, expression.value[0], 1), (None, expression.value[1], 1)
+        ]
+        assert walk == [r[:2] for r in res]
+
+        walk = list(expression_walker.expression_iterator(
+            expression, include_level=True, dfs=dfs
+        ))
+        assert walk == res
+
+
 def test_function_application():
     expression = expressions.FunctionApplication(
             expressions.Symbol('a'),

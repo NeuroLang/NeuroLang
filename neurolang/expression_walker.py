@@ -45,10 +45,10 @@ def expression_iterator(expression, include_level=False, dfs=True):
         if isinstance(current_element[1], Symbol):
             children = []
         elif isinstance(current_element[1], Constant):
-            if is_subtype(Constant.type, typing.Tuple):
+            if is_subtype(current_element[1].type, typing.Tuple):
                 c = current_element[1].value
                 children = product((None,), c)
-            elif is_subtype(Constant.type, typing.AbstractSet):
+            elif is_subtype(current_element[1].type, typing.AbstractSet):
                 children = product((None,), current_element[1].value)
             else:
                 children = []
