@@ -122,13 +122,13 @@ def test_boolean_operations_solver_or():
     or_ = C_(True) | S_[bool]('b')
 
     r = s.walk(or_)
-    assert isinstance(r, C_)
+    assert isinstance(r, expressions.Constant)
     assert r.value
 
     or_ = S_[bool]('b') | C_(True)
 
     r = s.walk(or_)
-    assert isinstance(r, C_)
+    assert isinstance(r, expressions.Constant)
     assert r.value
 
 
@@ -138,13 +138,13 @@ def test_boolean_operations_solver_and():
     and_ = C_(False) & S_[bool]('b')
 
     r = s.walk(and_)
-    assert isinstance(r, C_)
+    assert isinstance(r, expressions.Constant)
     assert not r.value
 
     and_ = S_[bool]('b') & C_(False)
 
     r = s.walk(and_)
-    assert isinstance(r, C_)
+    assert isinstance(r, expressions.Constant)
     assert not r.value
 
 
@@ -191,7 +191,7 @@ def test_boolean_operations_rewrite_nested_constant():
 
     original = a | b | a | C_(True)
     t_ = s.walk(original)
-    assert isinstance(t_.args[0], C_)
+    assert isinstance(t_.args[0], expressions.Constant)
     assert t_.args[0].value is True
     assert t_.args[1].args[0] is a
     assert t_.args[1].args[1].args[0] is a
