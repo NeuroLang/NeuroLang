@@ -453,7 +453,6 @@ class DatalogSolver(
         symbols_domains = self.quantifier_head_symbols_and_adom(
             expression.head
         )
-
         for symbol_values in itertools.product(*symbols_domains.values()):
             body = expression.body
             for i, s in enumerate(symbols_domains.keys()):
@@ -464,7 +463,7 @@ class DatalogSolver(
 
             res = self.walk(body)
             if res.value:
-                if not is_subtype(out_query_type.__args__[0], typing.Tuple):
+                if isinstance(expression.head, Symbol):
                     result.append(symbol_values[0][0])
                 else:
                     result.append(tuple(zip(*symbol_values))[0])
@@ -490,7 +489,7 @@ class DatalogSolver(
                     body = rsw.walk(body)
 
             res = self.walk(body)
-            if res.value:
+            if isinstance(res, Constant) and res.value:
                 return Constant(True)
 
         return Constant(False)
@@ -503,7 +502,6 @@ class DatalogSolver(
         symbols_domains = self.quantifier_head_symbols_and_adom(
             expression.head
         )
-
         for symbol_values in itertools.product(*symbols_domains.values()):
             body = expression.body
             for i, s in enumerate(symbols_domains.keys()):
@@ -522,11 +520,14 @@ class DatalogSolver(
         Returns an ordered dictionary with the symbols of the quantifier head
         as keys and the active domain for each symbol as value.
         '''
-        out_query_type = head.type
-        if not is_subtype(out_query_type, typing.Tuple):
-            symbols_in_head = (head,)
-        else:
+        if (
+            isinstance(head, Constant) and
+            is_subtype(head.type, typing.Tuple) and
+            all(isinstance(a, Symbol) for a in head.value)
+        ):
             symbols_in_head = head.value
+        else:
+            symbols_in_head = (head,)
 
         constants = tuple((
             (
@@ -538,5 +539,4 @@ class DatalogSolver(
             )
             for sym in symbols_in_head
         ))
-
         return OrderedDict(zip(symbols_in_head, constants))

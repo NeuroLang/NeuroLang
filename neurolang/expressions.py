@@ -668,8 +668,8 @@ class Projection(Definition):
                 if is_subtype(collection.type, typing.Mapping):
                     self.type = collection.type.__args__[1]
 
-        self._symbol = collection._symbols
-        self._symbol |= item._symbols
+        self._symbols = collection._symbols
+        self._symbols |= item._symbols
 
         self.collection = collection
         self.item = item
