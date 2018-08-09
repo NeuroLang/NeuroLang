@@ -31,3 +31,20 @@ def test_replace_variable_in_expression():
     ebe = ExpressionBasicEvaluator()
     add_result = ebe.walk(add_replacement)
     assert add_result == 5
+
+
+def test_replace_variables_in_expression():
+    symbols_to_replace = {
+        S_('a'): C_[int](2),
+        S_('b'): C_[int](3)
+    }
+
+    add_constant = C_[Callable[[int, int], int]](op.add)
+    add_op = add_constant(*symbols_to_replace)
+
+    rsw = ReplaceSymbolWalker(symbols_to_replace)
+    add_replacement = rsw.walk(add_op)
+
+    ebe = ExpressionBasicEvaluator()
+    add_result = ebe.walk(add_replacement)
+    assert add_result == 5
