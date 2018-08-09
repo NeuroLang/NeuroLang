@@ -28,8 +28,10 @@ def region_difference(region_set, affine=None):
 
 
 def region_set_algebraic_op(region_set, affine=None, op=set.union):
+
+    rs = set(filter(lambda x: x is not None, region_set))
     if affine is None:
-        affine = next(iter(region_set)).affine
+        affine = next(iter(rs)).affine
 
     max_dim = (0,) * 3
     for region in region_set:
@@ -39,19 +41,18 @@ def region_set_algebraic_op(region_set, affine=None, op=set.union):
         if not isinstance(region, ExplicitVBR):
             raise ValueError(f'Invalid type of region in set: {region}')
 
-        max_dim = max_dim if \
-            region.image_dim is None or \
-            all(map(lambda x, y: x > y, max_dim, region.image_dim)) else \
-            region.image_dim
+        if (region.image_dim is not None and
+                any(map(lambda x, y: x > y, region.image_dim, max_dim))):
+            max_dim = region.image_dim
 
     voxels_set_of_regions = [set(map(tuple, region.to_ijk(affine))) for
-                             region in region_set]
+                             region in rs]
     result_voxels = np.array(list(op(*voxels_set_of_regions)), dtype=list)
     return ExplicitVBR(result_voxels, affine, max_dim)
 
 
 class Region:
-    def __init__(self, lb, ub) -> None:
+    def __init__(self, lb, ub):
         if not np.all([lb[i] < ub[i] for i in range(len(lb))]):
             raise NeuroLangException(
                 'Lower bounds must be lower'
@@ -66,14 +67,14 @@ class Region:
         return self._bounding_box
 
     @property
-    def center(self) -> np.array:
+    def center(self):
         return self.bounding_box.center
 
     @property
-    def width(self) -> np.array:
+    def width(self):
         return self.bounding_box.width
 
-    def __eq__(self, other) -> bool:
+    def __eq__(self, other):
         return self.bounding_box == other.bounding_box
 
     def __repr__(self):
@@ -182,8 +183,8 @@ class ExplicitVBR(VolumetricBrainRegion):
         if out is None:
             mask = np.zeros(self.image_dim, dtype=np.int16)
             out = nib.spatialimages.SpatialImage(mask, self.affine)
-        elif out.shape != self.image_dim and \
-                not np.allclose(out.affine, self.affine):
+        elif (out.shape != self.image_dim and
+              not np.allclose(out.affine, self.affine)):
             raise ValueError("Image data has incompatible dimensionality")
         else:
             mask = out.get_data()
@@ -191,15 +192,15 @@ class ExplicitVBR(VolumetricBrainRegion):
         mask[tuple(self.voxels.T)] = value
         return out
 
-    def __eq__(self, other) -> bool:
-        return np.all(self.affine == other.affine) and \
-               np.all(self.voxels == other.voxels)
+    def __eq__(self, other):
+        return (np.all(self.affine == other.affine) and
+                np.all(self.voxels == other.voxels))
 
     def __repr__(self):
         return f'Region(VBR= affine:{self.affine}, voxels:{self.voxels})'
 
     def __hash__(self):
-        return hash(self.voxels.tobytes() + self.affine.tobytes())
+        return hash((self.voxels.tobytes(), self.affine.tobytes()))
 
 
 def region_set_from_masked_data(data, affine, dim):
@@ -269,19 +270,26 @@ class SphericalVolume(ImplicitVBR):
         return voxel_coordinates
 
     def __contains__(self, point):
+        if isinstance(point, (list, set)):
+            for value in point:
+                value = np.asanyarray(value)
+                if np.linalg.norm(value - self._center) >= self._radius:
+                    return False
+            return True
+
         point = np.asanyarray(point)
         return np.linalg.norm(point - self._center) <= self._radius
 
     def __hash__(self):
         return hash(self.bounding_box.limits.tobytes())
 
-    def __eq__(self, other) -> bool:
-        return np.all(self._center == other._center) and\
-               self._radius == other._radius
+    def __eq__(self, other):
+        return (np.all(self._center == other._center) and
+                self._radius == other._radius)
 
     def __repr__(self):
-        return f'SphericalVolume(Center={tuple(self._center)},' \
-               f' Radius={self._radius})'
+        return (f'SphericalVolume(Center={tuple(self._center)}, '
+                f'Radius={self._radius})')
 
 
 class PlanarVolume(ImplicitVBR):
@@ -301,15 +309,16 @@ class PlanarVolume(ImplicitVBR):
             raise ValueError('Limit must be a positive value')
         self._limit = limit
 
-        box_limit = (self._dir * self._limit,) * 3
-        box_limit_in_plane = self.project_point_to_plane(box_limit) * -1
+        box_limit = np.array((self._dir * self._limit,) * 3)
+        box_limit_in_plane = np.asanyarray(
+            self.project_point_to_plane(box_limit), dtype=int) * -1
         [lb, ub] = sorted([box_limit, box_limit_in_plane], key=lambda x: x[0])
         self._bounding_box = AABB(lb, ub)
 
     def project_point_to_plane(self, point):
         point = np.array(point)
-        d = np.dot(self._vector, point)
-        return point - d * self._vector
+        dist = np.dot(point - self._origin, self._vector)
+        return tuple(point - dist * self._vector)
 
     @property
     def bounding_box(self):
@@ -326,15 +335,21 @@ class PlanarVolume(ImplicitVBR):
         return np.array(list(product(*ranges)))
 
     def __contains__(self, point):
+        if isinstance(point, (list, set)):
+            for value in point:
+                if np.dot(self._vector, self._origin - value) != 0:
+                    return False
+            return True
+
         return np.dot(self._vector, self._origin - point) == 0
 
     def __hash__(self):
         return hash(self.bounding_box.limits.tobytes())
 
-    def __eq__(self, other) -> bool:
-        return np.all(self._origin == other._origin) and \
-               np.all(self._vector == other._vector)
+    def __eq__(self, other):
+        return (np.all(self._origin == other._origin) and
+                np.all(self._vector == other._vector))
 
     def __repr__(self):
-        return f'PlanarVolume(Origin={tuple(self._origin)},' \
-               f' Normal Vector={self._vector})'
+        return (f'PlanarVolume(Origin={tuple(self._origin)},'
+                f' Normal Vector={self._vector})')
