@@ -262,3 +262,29 @@ class Tree:
         else:
             box._ub[axis] = region_box._lb[axis]
         return self.query_regions_contained_in_box(box)
+
+    def _query_overlapping_regions_rec(self, node, region_box):
+        if node is None or not node.box.overlaps(region_box):
+            return set()
+        elif node.is_leaf:
+            return set(
+                region for region in node.regions
+                if self.region_boxes[region].overlaps(region_box)
+            )
+        else:
+            left_matches = self._query_overlapping_regions_rec(node.left,
+                                                               region_box)
+            right_matches = self._query_overlapping_regions_rec(node.right,
+                                                                region_box)
+            return left_matches.union(right_matches)
+
+    def query_overlapping_regions(self, region):
+        if region not in self.region_boxes or self.root is None:
+            return set()
+        region_box = self.region_boxes[region]
+        # normally, this should never happen
+        if not self.root.box.contains(region_box):
+            return set()
+        matching = self._query_overlapping_regions_rec(self.root, region_box)
+        matching = matching.difference({region})
+        return matching
