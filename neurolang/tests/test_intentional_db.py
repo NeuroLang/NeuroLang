@@ -13,12 +13,14 @@ S_ = expressions.Symbol
 F_ = expressions.FunctionApplication
 
 
-class IntensionalTestSolver(sdb.IntentionalDatabaseSolver, solver.GenericSolver):
+class IntensionalTestSolver(
+    sdb.IntensionalDatabaseSolver, solver.GenericSolver
+):
     pass
 
 
 def test_simple_set():
-    ts = IntentionalTestSolver()
+    ts = IntensionalTestSolver()
 
     s1 = C_[AbstractSet[int]](frozenset(C_(i) for i in range(5)))
 
@@ -35,7 +37,7 @@ def test_simple_set():
 
 
 def test_tuple_set():
-    ts = IntentionalTestSolver()
+    ts = IntensionalTestSolver()
 
     s1 = C_[AbstractSet[Tuple[int, str]]](
         frozenset(
@@ -56,7 +58,7 @@ def test_tuple_set():
 
 
 def test_simple_set_in_function():
-    ts = IntentionalTestSolver()
+    ts = IntensionalTestSolver()
 
     s1 = C_[AbstractSet[int]](frozenset(C_(i) for i in range(5)))
 
@@ -72,7 +74,7 @@ def test_simple_set_in_function():
 
 
 def test_join():
-    ts = IntentionalTestSolver()
+    ts = IntensionalTestSolver()
 
     set1 = C_(frozenset((i, i * 2) for i in range(2)))
 
@@ -92,7 +94,7 @@ def test_join():
 
 
 def test_join_notuple():
-    ts = IntentionalTestSolver()
+    ts = IntensionalTestSolver()
 
     set1 = C_(frozenset(i for i in range(2)))
 

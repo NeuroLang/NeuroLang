@@ -6,11 +6,11 @@ from .expressions import (
 )
 from .expression_walker import (add_match, PatternWalker)
 
-__all__ = ['IntentionalDatabaseSolver']
+__all__ = ['IntensionalDatabaseSolver']
 
 
-class IntentionalDatabaseSolver(PatternWalker):
-    '''Mixin to add sets as intentional databases on the DatalogSolver'''
+class IntensionalDatabaseSolver(PatternWalker):
+    '''Mixin to add sets as intensional databases on the DatalogSolver'''
     @add_match(
         FunctionApplication(Constant[AbstractSet], ...),
     )
