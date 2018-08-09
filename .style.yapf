@@ -5,3 +5,4 @@ coalesce_brackets = True
 spaces_around_power_operator = True
 split_before_logical_operator = False
 split_before_bitwise_operator = False
+split_complex_comprehension = True
