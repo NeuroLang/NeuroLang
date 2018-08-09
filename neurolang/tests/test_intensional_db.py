@@ -3,7 +3,7 @@ from itertools import product
 
 import pytest
 
-from .. import solver_datalog_intentional_db as sdb
+from .. import solver_datalog_intensional_db as sdb
 from .. import solver
 from .. import expressions
 from ..expressions import NeuroLangTypeException
