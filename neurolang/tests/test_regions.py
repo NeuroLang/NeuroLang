@@ -298,7 +298,7 @@ def test_planar_region():
                           pr.bounding_box.ub)
 
 
-def test_iterables_contained_in_implicits():
+def test_iterables_contained_in_implicit_regions():
 
     def randpoint(i, j): return tuple(random.randint(i, j, size=3))
 

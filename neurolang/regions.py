@@ -237,10 +237,10 @@ class ImplicitVBR(VolumetricBrainRegion):
 
 class SphericalVolume(ImplicitVBR):
     def __init__(self, center, radius):
-        self._center = center
-        self._radius = radius
-        lb = tuple(np.array(self._center) - self._radius)
-        ub = tuple(np.array(self._center) + self._radius)
+        self._center = np.asanyarray(center, dtype=int)
+        self._radius = np.asanyarray(radius, dtype=int)
+        lb = self._center - self._radius
+        ub = self._center + self._radius
         self._bounding_box = AABB(lb, ub)
 
     @property
@@ -273,12 +273,11 @@ class SphericalVolume(ImplicitVBR):
         if isinstance(point, (list, set)):
             for value in point:
                 value = np.asanyarray(value)
-                if np.linalg.norm(value - self._center) >= self._radius:
+                if np.linalg.norm(self._center - value) >= self._radius:
                     return False
             return True
 
-        point = np.asanyarray(point)
-        return np.linalg.norm(point - self._center) <= self._radius
+        return np.linalg.norm(self._center - point) <= self._radius
 
     def __hash__(self):
         return hash(self.bounding_box.limits.tobytes())
@@ -309,7 +308,7 @@ class PlanarVolume(ImplicitVBR):
             raise ValueError('Limit must be a positive value')
         self._limit = limit
 
-        box_limit = np.array((self._dir * self._limit,) * 3)
+        box_limit = np.asanyarray((self._dir * self._limit,) * 3, dtype=int)
         box_limit_in_plane = np.asanyarray(
             self.project_point_to_plane(box_limit), dtype=int) * -1
         [lb, ub] = sorted([box_limit, box_limit_in_plane], key=lambda x: x[0])
