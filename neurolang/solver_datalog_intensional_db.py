@@ -4,7 +4,9 @@ from itertools import product
 from .expressions import (
     FunctionApplication, Constant, NeuroLangTypeException, is_subtype
 )
-from .expression_walker import (add_match, PatternWalker)
+from .expression_walker import (
+    add_match, PatternWalker, ReplaceSymbolsByConstants
+)
 
 __all__ = ['IntensionalDatabaseSolver']
 
@@ -39,7 +41,9 @@ class IntensionalDatabaseSolver(PatternWalker):
                 'correspond with set type {functor.type}'
             )
 
-        ret = element in expression.functor.value
+        rsc = ReplaceSymbolsByConstants(self.symbol_table)
+        predset = rsc.walk(expression.functor).value
+        ret = element in predset
         return Constant[bool](ret)
 
     def function_isin(self, element: Any, set: AbstractSet) -> bool:

@@ -36,6 +36,25 @@ def test_simple_set():
     assert isinstance(res, expressions.Constant[bool]) and not res.value
 
 
+def test_simple_set_symbols():
+    ts = IntensionalTestSolver()
+
+    s1 = C_[AbstractSet[int]](frozenset(S_(str(i)) for i in range(5)))
+    for i in range(5):
+        ts.symbol_table[str(i)] = C_(i)
+
+    ts.symbol_table[S_[s1.type]('R')] = s1
+    fa = F_(s1, (C_(2), ))
+    res = ts.walk(fa)
+
+    assert isinstance(res, expressions.Constant[bool]) and res.value
+
+    fa = F_(s1, (C_(20), ))
+    res = ts.walk(fa)
+
+    assert isinstance(res, expressions.Constant[bool]) and not res.value
+
+
 def test_tuple_set():
     ts = IntensionalTestSolver()
 
