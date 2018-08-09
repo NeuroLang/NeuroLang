@@ -146,3 +146,29 @@ def test_tree_root_box_correctly_expanding():
     tree.add(box3, regions={box3})
     assert tree.root.box == AABB((0, 0, 0), (5, 5, 1))
     assert tree.root
+
+
+def test_overlapping_regions():
+    tree = Tree()
+
+    box1 = AABB((0, 0, 0), (1, 1, 1))
+    box2 = AABB((0, 0, 0), (1, 1, 1))
+    tree.add(box1, regions={'box1'})
+    tree.add(box2, regions={'box2'})
+    matches = tree.query_overlapping_regions('box1')
+    assert matches == {'box2'}
+
+    box3 = AABB((0.9, 0.9, 0.9), (2, 2, 2))
+    tree.add(box3, regions={'box3'})
+    assert tree.query_overlapping_regions('box1') == {'box2', 'box3'}
+
+    tree = Tree()
+    target = AABB((0, 0, 0), (1, 1, 1))
+    tree.add(target, regions={'target'})
+    expected_overlapping = set()
+    for i in range(100):
+        box = _generate_random_box((0, 0.5), (0, 0.5), (0, 0.5), (1, 30))
+        label = f'box{i}'
+        tree.add(box, regions={label})
+        expected_overlapping.add(label)
+    assert tree.query_overlapping_regions('target') == expected_overlapping

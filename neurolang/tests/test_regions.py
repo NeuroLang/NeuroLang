@@ -408,18 +408,11 @@ def test_regions_union_intersection():
 def test_intersection_difference():
 
     def randint(): return random.randint(1, 5)
-    affine = np.array([
-        [-0.69999999, 0., 0., 90.],
-        [0., 0.69999999, 0., -126.],
-        [0., 0., 0.69999999, -72.],
-        [0., 0., 0., 1.]
-    ]).round(2)
-
+    affine = np.eye(4)
     center = (randint(), randint(), randint())
-    center2 = (randint(), randint(), randint())
-    radius = 10
+    radius = randint()
     sphere = SphericalVolume(center, radius)
-    other_sphere = SphericalVolume(center2, radius)
+    other_sphere = SphericalVolume((center[0] + radius,) + center[1:], radius)
 
     intersect = region_intersection([sphere, other_sphere], affine)
     d1 = region_difference([sphere, other_sphere], affine)
