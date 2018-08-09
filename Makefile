@@ -1,3 +1,7 @@
+PYTEST ?= pytest
+CTAGS ?= ctags
+
+
 flake8:
 	@if command -v flake8 > /dev/null; then \
 		echo "Running flake8"; \
@@ -9,4 +13,10 @@ flake8:
 	@echo "flake8 passed"
 
 test:
-	py.test --cov=neurolang --cov-config .coveragerc --cov-report term-missing  neurolang neurolang  -vv
+	$(PYTEST) --cov=neurolang --cov-config .coveragerc --cov-report term-missing  neurolang neurolang  -vv
+
+
+ctags:
+	# make tags for symbol based navigation in emacs and vim
+	# Install with: sudo apt-get install exuberant-ctags
+	$(CTAGS) --python-kinds=-i -R neurolang

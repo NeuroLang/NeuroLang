@@ -1,3 +1,5 @@
+"""Module implementing expression pattern matching."""
+
 from collections import OrderedDict
 import copy
 from itertools import chain
@@ -12,6 +14,10 @@ from . import expressions
 from .symbols_and_types import replace_type_variable
 
 __all__ = ['add_match', 'PatternMatcher']
+
+
+class NeuroLangPatternMatchingNoMatch(expressions.NeuroLangException):
+    pass
 
 
 class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
@@ -128,7 +134,7 @@ def __pattern_replace_type__(pattern, src_type, dst_type):
 
         pattern_class = type(pattern)
         if hasattr(pattern_class, '__generic_class__'):
-            pattern_class = pattern_class[
+            pattern_class = pattern_class.__generic_class__[
                 replace_type_variable(
                     dst_type, pattern.type, type_var=src_type
                 )
@@ -143,13 +149,13 @@ def __pattern_replace_type__(pattern, src_type, dst_type):
 
 
 def add_match(pattern, guard=None):
-    '''Decorator adding patterns to a :class:`PatternMatcher` class.
+    """Decorate by adding patterns to a :class:`PatternMatcher` class.
 
     Should be used as
     `@add_match(PATTERN, GUARD)` to turn the decorated method, receiving
     an instance of :class:`Expression` into a matching case. See
     :py:meth:`PatternMatcher.pattern_match` for more details on patterns.
-    '''
+    """
     def bind_match(f):
         f.pattern = pattern
         f.guard = guard
@@ -158,55 +164,56 @@ def add_match(pattern, guard=None):
 
 
 class PatternMatcher(metaclass=PatternMatchingMetaClass):
-    '''Class for expression pattern matching.
-    '''
+    """Class for expression pattern matching."""
+
     @property
     def patterns(self):
-        '''Property holding an iterator of triplets ``(pattern, guard, action)``
+        """Property holding an iterator of triplets ``(pattern, guard, action)``.
 
-            - ``pattern``: is an Expression class, or instance where
-              construction parameters and the type can be replaced
-              by an ellipsis `...` to signal a wildcard. See
-              :py:meth:`pattern_match` for more details.
-            - ``guard``: is a function mapping an `Expression` instance
-              to a boolean or ``None``.
-            - ``action``: is the method receiving the matching ``expression``
-              instance to be executed upon pattern and match being ``True``.
-        '''
+        - ``pattern``: is an Expression class, or instance where
+          construction parameters and the type can be replaced
+          by an ellipsis `...` to signal a wildcard. See
+          :py:meth:`pattern_match` for more details.
+        - ``guard``: is a function mapping an `Expression` instance
+          to a boolean or ``None``.
+        - ``action``: is the method receiving the matching ``expression``
+          instance to be executed upon pattern and match being ``True``.
+        """
         return chain(*(
                 pm.__patterns__ for pm in self.__class__.mro()
                 if hasattr(pm, '__patterns__')
         ))
 
     def match(self, expression):
-        '''Find the action for a given expression by going through the ``patterns``.
+        """Find the action for a given expression by going through the ``patterns``.
+
         Goes through the triplets in in ``patterns`` and calls the action
         specified by the first satisfied triplet.
-        '''
-        for pattern, guard, action in self.patterns:
-            if logging.getLogger().getEffectiveLevel() >= logging.DEBUG:
-                pattern_match = self.pattern_match(pattern, expression)
-                guard_match = pattern_match and (
-                    guard is None or guard(expression)
-                )
-                logging.debug("test {} {}:{} | {}:{}".format(
-                    self.__class__.__name__, pattern, pattern_match,
-                    guard, guard_match
-                ))
+        """
 
-            if (
-                self.pattern_match(pattern, expression) and
-                (guard is None or guard(expression))
-            ):
-                logging.debug(
-                    f"**** match {pattern} | {guard} with {expression}"
-                )
-                return action(self, expression)
+        logging.info(f'\033[1m\033[91mExpression\033[0m: {expression}')
+        for pattern, guard, action in self.patterns:
+            name = '\033[1m\033[91m' + action.__qualname__ + '\033[0m'
+            pattern_match = self.pattern_match(pattern, expression)
+            guard_match = pattern_match and (
+                guard is None or guard(expression)
+            )
+            if (pattern_match and guard_match):
+                result_expression = action(self, expression)
+                logging.info(f'\tMATCH {name}')
+                logging.info(f'\t\tpattern: {pattern}')
+                logging.info(f'\t\tguard: {guard}')
+                logging.info(f'\t\tresult: {result_expression}')
+                return result_expression
+            else:
+                logging.debug(f'\tNOMATCH {name}')
+                logging.debug(f'\t\tpattern: {pattern} {pattern_match}')
+                logging.debug(f'\t\tguard: {guard} {guard_match}')
         else:
-            raise ValueError()
+            raise NeuroLangPatternMatchingNoMatch(f'No match for {expression}')
 
     def pattern_match(self, pattern, expression):
-        '''Returns ``True`` if ``pattern`` matches ``expression``.
+        """Return ``True`` if ``pattern`` matches ``expression``.
 
         Patterns are of the following form:
 
@@ -228,15 +235,14 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
         - ``instance`` an instance of a python class not subclassing
           :class:`Expression` matches when
           ``instance == expression``
-        '''
-        logging.debug(f"Match try {expression} with pattern {pattern}")
+        """
         if pattern is ...:
             return True
         elif isclass(pattern):
             if issubclass(pattern, expressions.Expression):
                 res = isinstance(expression, pattern)
                 if res:
-                    logging.debug(f"Match type {expression} {pattern}")
+                    logging.log(logging.DEBUG - 1, f"\t\tmatch type")
                 return res
             else:
                 raise ValueError(
@@ -248,18 +254,19 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
                 (
                     hasattr(type(pattern), '__generic_class__') and
                     isinstance(expression, type(pattern).__generic_class__) and
-                    pattern.type is expressions.ToBeInferred
+                    expressions.is_subtype(expression.type, pattern.type)
                 ) or
                 isinstance(expression, type(pattern))
             ):
-                logging.debug(
-                    f"\texpression is not instance of pattern "
+                logging.log(
+                    logging.DEBUG - 1,
+                    f"\t\t\t\t{expression} is not instance of pattern "
                     f"class {pattern.__class__}"
                 )
                 return False
 
             if isclass(pattern.type) and issubclass(pattern.type, Tuple):
-                logging.debug("\tMatch tuple")
+                logging.log(logging.DEBUG - 1, "\t\t\t\tMatch tuple")
                 if (
                     isclass(expression.type) and
                     issubclass(expression.type, Tuple)
@@ -273,8 +280,9 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
                         if not self.pattern_match(p, e):
                             return False
                     else:
-                        logging.debug(
-                            f"\t\tMatched tuple's expression instance "
+                        logging.log(
+                            logging.DEBUG - 1,
+                            f"\t\t\t\t\tMatched tuple's expression instance "
                             f"{expression} with {pattern}"
                         )
                         return True
@@ -282,8 +290,9 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
                     return False
             else:
                 parameters = inspect.signature(pattern.__class__).parameters
-                logging.debug(
-                    f"\t\tTrying to match parameters "
+                logging.log(
+                    logging.DEBUG - 1,
+                    f"\t\t\t\tTrying to match parameters "
                     f"{expression} with {pattern}"
                 )
                 for argname, arg in parameters.items():
@@ -295,7 +304,10 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
                     if not match:
                         return False
                     else:
-                        logging.debug(f"\t\t\tmatch {p} vs {e}")
+                        logging.log(
+                            logging.DEBUG - 1,
+                            f"\t\t\t\t\tmatch {p} vs {e}"
+                        )
                 else:
                     return True
         elif isinstance(pattern, tuple) and isinstance(expression, tuple):
@@ -305,8 +317,14 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
                 if not self.pattern_match(p, e):
                     return False
             else:
-                logging.debug(f"Match tuples {expression} with {pattern}")
+                logging.log(
+                    logging.DEBUG - 1,
+                    f"\t\t\t\tMatch tuples {expression} with {pattern}"
+                )
                 return True
         else:
-            logging.debug("Match other {} vs {}".format(pattern, expression))
+            logging.log(
+                logging.DEBUG - 1,
+                f"\t\t\t\tMatch other {pattern} vs {expression}"
+            )
             return pattern == expression

@@ -1,17 +1,20 @@
+"""Expressions for the intermediate representation and auxiliary functions."""
 from itertools import chain
 import operator as op
 import typing
 import inspect
 from functools import wraps, WRAPPER_ASSIGNMENTS, lru_cache
 import types
+import threading
 from warnings import warn
 import logging
+from contextlib import contextmanager
 from .exceptions import NeuroLangException
 
 
 __all__ = [
     'Symbol', 'FunctionApplication', 'Statement',
-    'Projection', 'Predicate', 'ExistentialPredicate',
+    'Projection', 'Predicate', 'ExistentialPredicate', 'UniversalPredicate',
     'ToBeInferred',
     'typing_callable_from_annotated_function'
 ]
@@ -20,11 +23,30 @@ __all__ = [
 ToBeInferred = typing.TypeVar('ToBeInferred', covariant=True)
 
 
+_lock = threading.RLock()
+
+_expressions_behave_as_python_objects = dict()
+
+
+@contextmanager
+def expressions_behave_as_objects():
+    global _lock
+    global _expressions_behave_as_python_objects
+    thread_id = threading.get_ident()
+
+    with _lock:
+        _expressions_behave_as_python_objects[thread_id] = True
+    yield
+    with _lock:
+        del _expressions_behave_as_python_objects[thread_id]
+
+
 class NeuroLangTypeException(NeuroLangException):
     pass
 
 
 def typing_callable_from_annotated_function(function):
+    """Get typing.Callable type representing the annotated function type."""
     signature = inspect.signature(function)
     parameter_types = [
         v.annotation if v.annotation is not inspect.Parameter.empty
@@ -71,7 +93,7 @@ def get_type_and_value(value, symbol_table=None):
 
 
 def is_subtype(left, right):
-    if left == right:
+    if (left is right) or (left == right):
         return True
     if right is typing.Any:
         return True
@@ -79,6 +101,8 @@ def is_subtype(left, right):
         return right is typing.Any or right is ToBeInferred
     elif left is ToBeInferred:
         return True
+    elif right is ToBeInferred:
+        return left is ToBeInferred or left is typing.Any
     elif hasattr(right, '__origin__') and right.__origin__ is not None:
         if right.__origin__ == typing.Union:
             return any(
@@ -134,7 +158,11 @@ def is_subtype(left, right):
 
 
 def unify_types(t1, t2):
-    if is_subtype(t1, t2):
+    if t1 is ToBeInferred:
+        return t2
+    elif t2 is ToBeInferred:
+        return t1
+    elif is_subtype(t1, t2):
         return t2
     elif is_subtype(t2, t1):
         return t1
@@ -265,8 +293,9 @@ class ParametricTypeClassMeta(type):
 
 
 class ExpressionMeta(ParametricTypeClassMeta):
-    '''
-    Metaclass for expressions. It guarantees a set of properties for every
+    """
+    Metaclass for expressions. It guarantees a set of properties for every.
+
     class and instance:
     * Classes have an attribute `type` which is set through the syntax
       ClassName[TypeName]. If type is not specified then the `type`
@@ -283,7 +312,7 @@ class ExpressionMeta(ParametricTypeClassMeta):
       wildcard pattern for pattern-matching expressing that any value can go in
       this parameter. In this case, the class constructor is not executed
       and the `__is_pattern__` attribute is set to `True`.
-    '''
+    """
 
     def __new__(cls, *args, **kwargs):
         __no_explicit_type__ = 'type' not in args[2]
@@ -292,6 +321,11 @@ class ExpressionMeta(ParametricTypeClassMeta):
         if obj.__no_explicit_type__:
             obj.type = typing.Any
         orig_init = obj.__init__
+        obj.__children__ = [
+            name for name, parameter
+            in inspect.signature(orig_init).parameters.items()
+            if parameter.default is inspect.Parameter.empty
+        ][1:]
 
         @wraps(orig_init)
         def new_init(self, *args, **kwargs):
@@ -343,7 +377,11 @@ class Expression(metaclass=ExpressionMeta):
          )
 
     def __getattr__(self, attr):
+        global _expressions_behave_as_python_objects
+        thread_id = threading.get_ident()
+
         if (
+            thread_id not in _expressions_behave_as_python_objects or
             attr in dir(self) or
             attr in self.__super_attributes__ or
             self.__is_pattern__
@@ -383,22 +421,34 @@ class Expression(metaclass=ExpressionMeta):
         assert ret.type is type_
         return ret
 
+    @property
+    def __type_repr__(self):
+        if (
+            hasattr(self.type, '__qualname__') and
+            not hasattr(self.type, '__args__')
+        ):
+            return self.type.__qualname__
+        else:
+            return repr(self.type)
+
 
 class NonConstant(Expression):
-    '''
-    Any expression which is not a constant
-    '''
+    """Any expression which is not a constant."""
 
 
 class Definition(NonConstant):
-    '''
-    Parent class for all composite operations
+    """
+    Parent class for all composite operations.
+
     such as A + B or F(A)
-    '''
+    """
 
 
 class Symbol(NonConstant):
+    """Symbol of a certain type."""
+
     def __init__(self, name):
+        """Initialize symbol with it's name."""
         self.name = name
         self._symbols = {self}
 
@@ -412,7 +462,7 @@ class Symbol(NonConstant):
         return hash(self.name)
 
     def __repr__(self):
-        return 'S{{{}: {}}}'.format(self.name, self.type)
+        return 'S{{{}: {}}}'.format(self.name, self.__type_repr__)
 
 
 class Constant(Expression):
@@ -515,9 +565,11 @@ class Constant(Expression):
     def __repr__(self):
         if self.value is ...:
             value_str = '...'
+        elif callable(self.value):
+            value_str = self.value.__qualname__
         else:
             value_str = repr(self.value)
-        return 'C{{{}: {}}}'.format(value_str, self.type)
+        return 'C{{{}: {}}}'.format(value_str, self.__type_repr__)
 
     def change_type(self, type_):
         self.__class__ = self.__class__[type_]
@@ -564,13 +616,13 @@ class FunctionApplication(Definition):
 
         if self.args is None:
             self.args = tuple()
-        elif not isinstance(self.args, (tuple, list)):
-            raise ValueError('args parameter must be a tuple or a list')
+        elif not isinstance(self.args, tuple):
+            raise ValueError('args parameter must be a tuple')
 
         for arg in chain(self.args, self.kwargs.values()):
             if isinstance(arg, Symbol):
                 self._symbols.add(arg)
-            elif isinstance(arg, FunctionApplication):
+            elif isinstance(arg, Expression):
                 self._symbols |= arg._symbols
 
     @property
@@ -578,7 +630,7 @@ class FunctionApplication(Definition):
         return self.functor
 
     def __repr__(self):
-        r = u'\u03BB{{{}: {}}}'.format(self.functor, self.type)
+        r = u'\u03BB{{{}: {}}}'.format(self.functor, self.__type_repr__)
         if self.args is ...:
             r += '(...)'
         elif self.args is not None:
@@ -616,21 +668,21 @@ class Projection(Definition):
                 if is_subtype(collection.type, typing.Mapping):
                     self.type = collection.type.__args__[1]
 
-        self._symbol = collection._symbols
-        self._symbol |= item._symbols
+        self._symbols = collection._symbols
+        self._symbols |= item._symbols
 
         self.collection = collection
         self.item = item
 
     def __repr__(self):
         return u"\u03C3{{{}[{}]: {}}}".format(
-            self.collection, self.item, self.type
+            self.collection, self.item, self.__type_repr__
         )
 
 
 class Predicate(FunctionApplication):
     def __repr__(self):
-        r = 'P{{{}: {}}}'.format(self.functor, self.type)
+        r = 'P{{{}: {}}}'.format(self.functor, self.__type_repr__)
         if self.args is ...:
             r += '(...)'
         elif self.args is not None:
@@ -647,7 +699,11 @@ class Predicate(FunctionApplication):
         return r
 
 
-class ExistentialPredicate(Predicate):
+class Quantifier(Definition):
+    pass
+
+
+class ExistentialPredicate(Quantifier):
     def __init__(self, head, body):
 
         if not isinstance(head, Symbol):
@@ -668,10 +724,44 @@ class ExistentialPredicate(Predicate):
             )
         self.head = head
         self.body = body
-        self._symbol = body._symbols - {head}
+        self._symbols = body._symbols - {head}
 
     def __repr__(self):
-        r = u'\u2203{{{}: {} st {}}}'.format(self.head, self.type, self.body)
+        r = (
+            u'\u2203{{{}: {} st {}}}'
+            .format(self.head, self.__type_repr__, self.body)
+        )
+        return r
+
+
+class UniversalPredicate(Quantifier):
+    def __init__(self, head, body):
+
+        if not isinstance(head, Symbol):
+            raise NeuroLangException(
+                'A symbol should be provided for the '
+                'universal quantifier expression'
+            )
+        if not isinstance(body, (Predicate, FunctionApplication)):
+            raise NeuroLangException(
+                'A predicate or a function application over '
+                'predicates should be associated to the quantifier'
+            )
+
+        if head not in body._symbols:
+            raise NeuroLangException(
+                'Symbol should be a free '
+                'variable on the predicate'
+            )
+        self.head = head
+        self.body = body
+        self._symbols = body._symbols - {head}
+
+    def __repr__(self):
+        r = (
+            u'\u2200{{{}: {} st {}}}'
+            .format(self.head, self.__type_repr__, self.body)
+        )
         return r
 
 
@@ -691,7 +781,7 @@ class Statement(Definition):
         else:
             name = self.symbol.name
         return 'Statement{{{}: {} <- {}}}'.format(
-            name, self.type, self.value
+            name, self.__type_repr__, self.value
         )
 
 
@@ -708,11 +798,13 @@ class Query(Definition):
     def __repr__(self):
         if self.head is ...:
             name = '...'
-        else:
+        elif isinstance(self.head, Symbol):
             name = self.head.name
+        else:
+            name = repr(self.head)
 
         return 'Query{{{}: {} <- {}}}'.format(
-            name, self.type, self.body
+            name, self.__type_repr__, self.body
         )
 
 
@@ -758,7 +850,8 @@ for operator_name in dir(op):
     if name.endswith('___'):
         name = name[:-1]
 
-    for c in (Constant, Symbol, FunctionApplication, Statement, Query):
+    for c in (Constant, Symbol, ExistentialPredicate, FunctionApplication,
+              Statement, Query):
         if not hasattr(c, name):
             setattr(c, name, op_bind(operator))
 
