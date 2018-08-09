@@ -63,7 +63,7 @@ def test_simple_set_in_function():
     fa = F_(S_('isin'), (C_(2), s1))
     res = ts.walk(fa)
 
-    assert isinstance(res, expressions.Constan[bool]) and res.value
+    assert isinstance(res, expressions.Constant[bool]) and res.value
 
     fa = F_(S_('isin'), (C_(20), s1))
     res = ts.walk(fa)
