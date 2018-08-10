@@ -1,7 +1,7 @@
 from pytest import raises
 
 from .. import neurolang as nl
-from .. import solver
+from ... import solver
 from typing import Tuple, AbstractSet
 
 
@@ -80,7 +80,6 @@ class FourInts(int, solver.FiniteDomain):
 
 class FourIntsSetSolver(solver.SetBasedSolver[FourInts]):
     type_name = 'four_int'
-    type = FourInts
 
     def predicate_equal_to(self, value: int)->FourInts:
         return FourInts(value)
@@ -113,6 +112,7 @@ def test_queries():
     '''
 
     ast = nl.parser(script)
+
     nli.compile(ast)
 
     assert nli.symbol_table['one'].value == 1

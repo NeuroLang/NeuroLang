@@ -1,98 +1,157 @@
+import operator
+
 from .. import neurolang as nl
+from .. import expressions
 
-associative_command = '''
-    a = (element1 {op} element2) {op} element3
-    b = element1 {op} (element2 {op} element3)
-'''
+C_ = expressions.Constant
+S_ = expressions.Symbol
+F_ = expressions.FunctionApplication
 
-commutative_command = '''
-    a = element1 {op} element2
-    b = element2 {op} element1
-'''
 
-identity_command = '''
+def associative_command():
+    element1 = S_('element1')
+    element2 = S_('element2')
+    element3 = S_('element3')
+    op = S_('op')
+
+    a = F_(op, (F_(op, (element1, element2)), element3))
+
+    b = F_(op, (element1, F_(op, (element2, element3))))
+    return a, b
+
+
+def commutative_command():
+    element1 = S_('element1')
+    element2 = S_('element2')
+    op = S_('op')
+    a = F_(op, (element1, element2))
+    b = F_(op, (element2, element1))
+    return a, b
+
+
+def identity_command():
+    op = S_('op')
+    element1 = S_('element1')
+    null = S_('null')
     a = element1
-    b = element1 {op} null
-'''
+    b = F_(op, (element1, null))
+    return a, b
 
-inverse_command = '''
+
+def inverse_command():
+    op = S_('op')
+    element1 = S_('element1')
+    null = S_('null')
+
     a = null
-    b = element1 {op} element1
-'''
+    b = F_(op, (element1, element1))
 
-left_distributy_command = '''
-    a = element1 {op_dot} (element2 {op_cross} element3)
-    b = (element1 {op_dot} element2) {op_cross} (element1 {op_dot} element3)
-'''
+    return a, b
 
-right_distributy_command = '''
-    a = (element2 {op_cross} element3) {op_dot} element1
-    b = (element2 {op_dot} element1) {op_cross} (element3 {op_dot} element1)
-'''
+
+def left_distributy_command():
+    op_dot = S_('op_dot')
+    op_cross = S_('op_cross')
+    element1 = S_('element1')
+    element2 = S_('element2')
+    element3 = S_('element3')
+    a = F_(op_dot, (element1, F_(op_cross, (element2, element3))))
+    b = F_(
+        op_cross,
+        (F_(op_dot, (element1, element2)), F_(op_dot, (element1, element3)))
+    )
+    return a, b
+
+
+def right_distributy_command():
+    op_dot = S_('op_dot')
+    op_cross = S_('op_cross')
+    element1 = S_('element1')
+    element2 = S_('element2')
+    element3 = S_('element3')
+    a = F_(op_dot, (F_(op_cross, (element2, element3)), element1))
+    b = F_(
+        op_cross,
+        (F_(op_dot, (element2, element1)), F_(op_dot, (element3, element1)))
+    )
+    return a, b
 
 
 def check_command(command, nli):
-    nli.compile(nl.parser(command))
-    assert nli.symbol_table['a'].value == nli.symbol_table['b'].value
+    a, b = command()
+    a_res = nli.compile(a)
+    b_res = nli.compile(b)
+    assert a_res == b_res
 
 
 def check_is_abelian_group(op, inv_op, nli, null=None):
+    nli.push_scope()
     if null is not None:
-        old_null = nli.symbol_table['null'].value
-        nli.symbol_table['null'].value = null
+        nli.symbol_table['null'] = C_(null)
+    check_is_monoid(operation=op, nli=nli, null=null)
+    nli.symbol_table['op'] = C_(op)
+    check_command(commutative_command, nli)
+    nli.symbol_table['op'] = C_(inv_op)
+    check_command(inverse_command, nli)
 
-    check_is_monoid(operation=op, nli=nli)
-    check_command(commutative_command.format(op=op), nli)
-    check_command(inverse_command.format(op=inv_op), nli)
-
-    # Restore nli
-    if null is not None:
-        nli.symbol_table['null'].value = old_null
+    nli.pop_scope()
 
 
 def check_is_monoid(operation, nli, null=None):
-    if null is not None:
-        old_null = nli.symbol_table['null'].value
-        nli.symbol_table['null'].value = null
+    nli.push_scope()
 
-    check_command(associative_command.format(op=operation), nli)
-    check_command(identity_command.format(op=operation), nli)
-
-    # Restore nli
     if null is not None:
-        nli.symbol_table['null'].value = old_null
+        nli.symbol_table['null'] = C_(null)
+    nli.symbol_table['op'] = C_(operation)
+    check_command(associative_command, nli)
+    check_command(identity_command, nli)
+
+    nli.pop_scope()
 
 
 def check_cross_op_is_distributive_with_respect_to_dot_op(cross, dot, nli):
-    command = left_distributy_command.format(op_cross=cross, op_dot=dot)
-    check_command(command, nli)
+    nli.push_scope()
+    nli.symbol_table['op_dot'] = C_(dot)
+    nli.symbol_table['op_cross'] = C_(cross)
 
-    command = right_distributy_command.format(op_cross=cross, op_dot=dot)
-    check_command(command, nli)
+    check_command(left_distributy_command, nli)
+    check_command(right_distributy_command, nli)
+    nli.pop_scope()
 
 
-def check_algebraic_structure_is_a_ring(nli, op_add='+', op_inv_add='-',
-                                        op_mul='*', op_inv_mul='/'):
+def check_algebraic_structure_is_a_ring(
+    nli,
+    op_add=operator.add,
+    op_inv_add=operator.sub,
+    op_mul=operator.mul,
+    op_inv_mul=operator.truediv
+):
     check_is_abelian_group(op=op_add, inv_op=op_inv_add, nli=nli, null=0)
     check_is_monoid(operation=op_mul, nli=nli, null=1)
-    check_cross_op_is_distributive_with_respect_to_dot_op(cross=op_add,
-                                                          dot=op_mul,
-                                                          nli=nli)
+    check_cross_op_is_distributive_with_respect_to_dot_op(
+        cross=op_add, dot=op_mul, nli=nli
+    )
 
 
 def test_algebraic_structure_of_naturals():
     elements = (1, 2, 3)
     null_element = 0
     symbols = {
-        'element{}'.format(i + 1): nl.Constant[int](e)
+        S_[int]('element{}'.format(i + 1)): C_[int](e)
         for i, e in enumerate(elements)
     }
-    symbols['null'] = nl.Constant[int](null_element)
+    symbols[S_[int]('null')] = C_[int](null_element)
+
+    class TheSolver(nl.NumericOperationsSolver[int], nl.GenericSolver):
+        pass
+
     nli = nl.NeuroLangIntermediateRepresentationCompiler(
-        symbols=symbols, types=[(int, 'dummy')]
+        solver=TheSolver(), symbols=symbols
     )
-
-    check_algebraic_structure_is_a_ring(op_add='+', op_inv_add='-',
-                                        op_mul='*', op_inv_mul='/',
-                                        nli=nli)
-
+    check_algebraic_structure_is_a_ring(
+        op_add=operator.add,
+        op_inv_add=operator.sub,
+        op_mul=operator.mul,
+        op_inv_mul=operator.truediv,
+        nli=nli
+    )

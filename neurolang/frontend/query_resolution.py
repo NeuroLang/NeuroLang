@@ -5,7 +5,7 @@ from ..symbols_and_types import is_subtype
 
 from .query_resolution_expressions import (
     Expression, Symbol,
-    Query
+    Query, Exists, All
 )
 
 __all__ = ['QueryBuilder']
@@ -59,15 +59,15 @@ class QueryBuilder:
             if is_subtype(s.type, Callable)
         ]
 
-    def query(self, symbol, predicate):
-        return Query(
-            self,
-            nl.Query[symbol.expression.type](
-                symbol.expression,
-                predicate.expression
-            ),
-            symbol, predicate
-        )
+    # def query(self, symbol, predicate):
+    #     return Query(
+    #         self,
+    #         nl.Query[symbol.expression.type](
+    #             symbol.expression,
+    #             predicate.expression
+    #         ),
+    #         symbol, predicate
+    #     )
 
     def execute_expression(self, expression, result_symbol_name=None):
         if result_symbol_name is None:
@@ -85,6 +85,36 @@ class QueryBuilder:
         return Expression(
             self,
             nl.Symbol[self.type](symbol_name)
+        )
+
+    def query(self, symbol, predicate):
+        return Query(
+            self,
+            nl.Query[AbstractSet[symbol.expression.type]](
+                symbol.expression,
+                predicate.expression
+            ),
+            symbol, predicate
+        )
+
+    def exists(self, symbol, predicate):
+        return Exists(
+            self,
+            nl.ExistentialPredicate[bool](
+                symbol.expression,
+                predicate.expression
+            ),
+            symbol, predicate
+        )
+
+    def all(self, symbol, predicate):
+        return All(
+            self,
+            nl.UniversalPredicate[bool](
+                symbol.expression,
+                predicate.expression
+            ),
+            symbol, predicate
         )
 
     def add_symbol(self, value, result_symbol_name=None):
