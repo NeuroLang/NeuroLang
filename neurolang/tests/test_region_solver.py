@@ -1,13 +1,20 @@
-from ..region_solver import RegionsSetSolver
-from ..symbols_and_types import TypedSymbolTable
-from .. import neurolang as nl
 from typing import AbstractSet, Callable
-from ..regions import Region, ExplicitVBR, take_principal_regions
-from ..CD_relations import cardinal_relation
+import operator
+
 import nibabel as nib
 import numpy as np
 from numpy import random
 import pytest
+
+from .. import neurolang as nl
+from ..region_solver import RegionsSetSolver
+from ..region_solver_ds import SpatialIndexRegionSolver, RegionSolver
+from ..symbols_and_types import TypedSymbolTable
+from ..expressions import (
+    Symbol, FunctionApplication, Constant, Query
+)
+from ..regions import Region, ExplicitVBR, take_principal_regions
+from ..CD_relations import cardinal_relation
 
 
 def do_query_of_regions_in_relation_to_region(
@@ -591,3 +598,91 @@ def test_regexp_region_union():
     assert vbr0.voxels in voxels
     assert vbr_rand.voxels in voxels
     assert vbr1.voxels not in voxels
+
+
+def test_spatial_index_region_solver():
+
+    s = SpatialIndexRegionSolver()
+    st = s.symbol_table
+
+    # region symbols
+    posterior_inferior = Symbol[Region]('posterior_inferior')
+    anterior = Symbol[Region]('anterior')
+    superior = Symbol[Region]('superior')
+
+    st[posterior_inferior] = Constant(Region((0, 0, 0), (1, 1, 1)))
+    st[anterior] = Constant(Region((0, 2, 0), (1, 3, 1)))
+    st[superior] = Constant(Region((0, 0, 2), (1, 1, 3)))
+
+
+    s.initialize_region_index()
+
+    for symbol in [posterior_inferior, anterior, superior]:
+        s.add_region_to_index(s.symbol_table[symbol].value)
+
+    # free symbol used for the query definition
+    x = Symbol[Region]('x')
+    # get all regions x such that
+    #   posterior_of(x, anterior) and inferior_of(x, superior)
+    # we expect this to return the symbol of posterior_of
+    query = Query[AbstractSet[Region]](
+        x, FunctionApplication(
+            Constant(operator.and_), (
+                Symbol('posterior_of')(x, anterior),
+                Symbol('inferior_of')(x, superior)
+            )
+        )
+    )
+
+    result = s.walk(query)
+
+    assert isinstance(result, nl.Constant)
+    assert result.value == {posterior_inferior}
+
+    rs = RegionSolver(st)
+
+    result = rs.walk(query)
+    assert isinstance(result, nl.Constant)
+    assert result.value == {posterior_inferior}
+
+
+def _profile_solver(solver_cls):
+
+    solver = solver_cls()
+    st = solver.symbol_table
+
+    inferior_of = st['inferior_of']
+
+    reference = Symbol[Region]('reference')
+    st[reference] = Constant(Region((0, 0, 2), (1, 1, 3)))
+
+    inferior = Symbol[Region]('inferior')
+    st[inferior] = Constant(Region((0, 0, 0), (1, 1, 1)))
+
+    for i in range(300):
+        symbol = Symbol[Region](f'superior_{i}')
+        lb = np.random.randint(low=0, high=5, size=3) + [0, 0, 5]
+        ub = lb + np.random.randint(low=1, high=10, size=3)
+        st[symbol] = Constant(Region(lb, ub))
+
+    if solver_cls is SpatialIndexRegionSolver:
+        solver.initialize_region_index()
+        for region in solver.symbol_table.symbols_by_type(Region).values():
+            solver.add_region_to_index(region.value)
+
+    x = Symbol[Region]('x')
+
+    query = Query(x, inferior_of(x, reference))
+
+    result = solver.walk(query)
+
+    assert isinstance(result, nl.Constant)
+    assert result.value == {inferior}
+
+
+def test_profile_region_solver():
+    _profile_solver(RegionSolver)
+
+
+def test_profile_spatial_index_region_solver():
+    _profile_solver(SpatialIndexRegionSolver)

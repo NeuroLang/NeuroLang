@@ -42,7 +42,10 @@ def test_anatomical_superior_of_query():
     assert len(query_result.value) == 2
 
     query = neurolang.query(
-        x, neurolang.symbols.anatomical_superior_of(x, neurolang.symbols.inferior_region)
+        x,
+        neurolang.symbols.anatomical_superior_of(
+            x, neurolang.symbols.inferior_region
+        )
     )
     query_result = query.do(result_symbol_name='result_of_test_query')
 

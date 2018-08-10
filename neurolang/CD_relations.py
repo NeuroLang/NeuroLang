@@ -13,6 +13,10 @@ matrix_positions_per_directions = {'L': [0], 'O': [1], 'R': [2], 'P': [0],
 inverse_directions = {'R': 'L', 'A': 'P', 'S': 'I',
                       'O': 'O', 'L': 'R', 'P': 'A', 'I': 'S'}
 
+direction_from_relation = {'I': -1, 'S': 1,
+                           'P': -1, 'A': 1,
+                           'L': -1, 'R': 1}
+
 
 def cardinal_relation(region, reference_region, directions, refine_overlapping=False, stop_at=None):
 
