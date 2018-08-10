@@ -1,7 +1,7 @@
 from pytest import raises
 
 from .. import neurolang as nl
-from .. import solver
+from ...deprecated import SetBasedSolver, FiniteDomain, FiniteDomainSet
 from typing import Tuple, AbstractSet
 
 
@@ -74,18 +74,18 @@ def test_tuples():
         nli.compile(nl.parser('a[2]'))
 
 
-class FourInts(int, solver.FiniteDomain):
+class FourInts(int, FiniteDomain):
     pass
 
 
-class FourIntsSetSolver(solver.SetBasedSolver[FourInts]):
+class FourIntsSetSolver(SetBasedSolver[FourInts]):
     type_name = 'four_int'
 
     def predicate_equal_to(self, value: int)->FourInts:
         return FourInts(value)
 
     def predicate_singleton_set(self, value: int)->AbstractSet[FourInts]:
-        return solver.FiniteDomainSet(
+        return FiniteDomainSet(
             [nl.Constant(FourInts(value))],
         )
 
@@ -93,7 +93,7 @@ class FourIntsSetSolver(solver.SetBasedSolver[FourInts]):
 def test_queries():
     class NLC(
         FourIntsSetSolver,
-        solver.SetBasedSolver[int],
+        SetBasedSolver[int],
         nl.NeuroLangIntermediateRepresentationCompiler
     ):
         pass

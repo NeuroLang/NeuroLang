@@ -5,20 +5,40 @@ import typing
 import inspect
 from functools import wraps, WRAPPER_ASSIGNMENTS, lru_cache
 import types
+import threading
 from warnings import warn
 import logging
+from contextlib import contextmanager
 from .exceptions import NeuroLangException
 
 
 __all__ = [
     'Symbol', 'FunctionApplication', 'Statement',
-    'Projection', 'Predicate', 'ExistentialPredicate', 'UniversalPredicate',
+    'Projection', 'ExistentialPredicate', 'UniversalPredicate',
     'ToBeInferred',
     'typing_callable_from_annotated_function'
 ]
 
 
 ToBeInferred = typing.TypeVar('ToBeInferred', covariant=True)
+
+
+_lock = threading.RLock()
+
+_expressions_behave_as_python_objects = dict()
+
+
+@contextmanager
+def expressions_behave_as_objects():
+    global _lock
+    global _expressions_behave_as_python_objects
+    thread_id = threading.get_ident()
+
+    with _lock:
+        _expressions_behave_as_python_objects[thread_id] = True
+    yield
+    with _lock:
+        del _expressions_behave_as_python_objects[thread_id]
 
 
 class NeuroLangTypeException(NeuroLangException):
@@ -73,7 +93,7 @@ def get_type_and_value(value, symbol_table=None):
 
 
 def is_subtype(left, right):
-    if left == right:
+    if (left is right) or (left == right):
         return True
     if right is typing.Any:
         return True
@@ -81,6 +101,8 @@ def is_subtype(left, right):
         return right is typing.Any or right is ToBeInferred
     elif left is ToBeInferred:
         return True
+    elif right is ToBeInferred:
+        return left is ToBeInferred or left is typing.Any
     elif hasattr(right, '__origin__') and right.__origin__ is not None:
         if right.__origin__ == typing.Union:
             return any(
@@ -355,7 +377,11 @@ class Expression(metaclass=ExpressionMeta):
          )
 
     def __getattr__(self, attr):
+        global _expressions_behave_as_python_objects
+        thread_id = threading.get_ident()
+
         if (
+            thread_id not in _expressions_behave_as_python_objects or
             attr in dir(self) or
             attr in self.__super_attributes__ or
             self.__is_pattern__
@@ -539,7 +565,7 @@ class Constant(Expression):
     def __repr__(self):
         if self.value is ...:
             value_str = '...'
-        elif callable(self.value):
+        elif callable(self.value) and not isinstance(self.value, Expression):
             value_str = self.value.__qualname__
         else:
             value_str = repr(self.value)
@@ -642,8 +668,8 @@ class Projection(Definition):
                 if is_subtype(collection.type, typing.Mapping):
                     self.type = collection.type.__args__[1]
 
-        self._symbol = collection._symbols
-        self._symbol |= item._symbols
+        self._symbols = collection._symbols
+        self._symbols |= item._symbols
 
         self.collection = collection
         self.item = item
@@ -652,25 +678,6 @@ class Projection(Definition):
         return u"\u03C3{{{}[{}]: {}}}".format(
             self.collection, self.item, self.__type_repr__
         )
-
-
-class Predicate(FunctionApplication):
-    def __repr__(self):
-        r = 'P{{{}: {}}}'.format(self.functor, self.__type_repr__)
-        if self.args is ...:
-            r += '(...)'
-        elif self.args is not None:
-            r += (
-                '(' +
-                ', '.join(repr(arg) for arg in self.args)
-            )
-        if hasattr(self, 'kwargs') and self.kwargs is not None:
-            r += ', '.join(
-                repr(k) + '=' + repr(v)
-                for k, v in self.kwargs.items()
-            )
-        r += ')'
-        return r
 
 
 class Quantifier(Definition):
@@ -685,9 +692,9 @@ class ExistentialPredicate(Quantifier):
                 'A symbol should be provided for the '
                 'existential quantifier expression'
             )
-        if not isinstance(body, (Predicate, FunctionApplication)):
+        if not isinstance(body, FunctionApplication):
             raise NeuroLangException(
-                'A predicate or a function application over '
+                'A function application over '
                 'predicates should be associated to the quantifier'
             )
 
@@ -716,9 +723,9 @@ class UniversalPredicate(Quantifier):
                 'A symbol should be provided for the '
                 'universal quantifier expression'
             )
-        if not isinstance(body, (Predicate, FunctionApplication)):
+        if not isinstance(body, FunctionApplication):
             raise NeuroLangException(
-                'A predicate or a function application over '
+                'A function application over '
                 'predicates should be associated to the quantifier'
             )
 
@@ -772,8 +779,10 @@ class Query(Definition):
     def __repr__(self):
         if self.head is ...:
             name = '...'
-        else:
+        elif isinstance(self.head, Symbol):
             name = self.head.name
+        else:
+            name = repr(self.head)
 
         return 'Query{{{}: {} <- {}}}'.format(
             name, self.__type_repr__, self.body

@@ -35,6 +35,7 @@ jobs:
             pip install -r requirements.txt
             pip install pytest
             pip install pytest-cov
+            pip install codacy-coverage
 
       - save_cache:
           paths:
@@ -45,7 +46,9 @@ jobs:
           name: run tests
           command: |
             . venv/bin/activate
+            export CODACY_PROJECT_TOKEN=09ad41d29d18441b9af7f0f9085bad77
             make test
+            python-codacy-coverage -r coverage.xml
 
       - store_artifacts:
           path: test-reports

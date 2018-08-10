@@ -46,10 +46,10 @@ def expression_iterator(expression, include_level=False, dfs=True):
         if isinstance(current_element[1], Symbol):
             children = []
         elif isinstance(current_element[1], Constant):
-            if is_subtype(Constant.type, typing.Tuple):
+            if is_subtype(current_element[1].type, typing.Tuple):
                 c = current_element[1].value
                 children = product((None,), c)
-            elif is_subtype(Constant.type, typing.AbstractSet):
+            elif is_subtype(current_element[1].type, typing.AbstractSet):
                 children = product((None,), current_element[1].value)
             else:
                 children = []
@@ -75,7 +75,7 @@ def expression_iterator(expression, include_level=False, dfs=True):
             dfs and
             not (
                 isinstance(expression, Constant) and
-                is_subtype(expression, typing.AbstractSet)
+                is_subtype(expression.type, typing.AbstractSet)
             )
         ):
             try:
@@ -204,15 +204,15 @@ class ExpressionWalker(PatternWalker):
 
 
 class ReplaceSymbolWalker(ExpressionWalker):
-    def __init__(self, symbol, value):
-        self.symbol = symbol
-        self.value = value
+    def __init__(self, symbol_replacements):
+        self.symbol_replacements = symbol_replacements
 
     @add_match(Symbol)
     def replace_free_variable(self, expression):
-        if expression.name == self.symbol.name:
-            value_type = unify_types(self.symbol.type, self.value.type)
-            return self.value.cast(value_type)
+        if expression.name in self.symbol_replacements:
+            replacement = self.symbol_replacements[expression.name]
+            replacement_type = unify_types(expression.type, replacement.type)
+            return replacement.cast(replacement_type)
         else:
             return expression
 
@@ -228,6 +228,18 @@ class ReplaceSymbolsByConstants(ExpressionWalker):
             return new_expression
         else:
             return expression
+
+    @add_match(Constant[typing.AbstractSet])
+    def constant_abstract_set(self, expression):
+        return expression.__class__(type(expression.value)(
+            self.walk(e) for e in expression.value
+        ))
+
+    @add_match(Constant[typing.Tuple])
+    def constant_tuple(self, expression):
+        return expression.__class__(tuple(
+            self.walk(e) for e in expression.value
+        ))
 
 
 class ConstantsToValues(ExpressionWalker):
@@ -287,7 +299,7 @@ class SymbolTableEvaluator(ExpressionWalker):
         for k, v in chain(
             self.included_predicates.items(), self.included_functions.items()
         ):
-            self.symbol_table[k] = v
+            self.symbol_table[Symbol[v.type](k)] = v
         self.symbol_table.set_readonly(True)
         self.symbol_table = self.symbol_table.create_scope()
 
