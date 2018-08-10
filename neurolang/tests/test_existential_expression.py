@@ -1,10 +1,9 @@
 from typing import Callable, AbstractSet
 
-from .. import neurolang as nl
 from ..symbols_and_types import TypedSymbolTable
-from ..solver import SetBasedSolver, FiniteDomainSet
+from ..deprecated import SetBasedSolver, FiniteDomainSet
 from .. import expressions
-from ..expressions import Predicate, ExistentialPredicate
+from ..expressions import FunctionApplication, ExistentialPredicate
 
 C_ = expressions.Constant
 S_ = expressions.Symbol
@@ -21,7 +20,7 @@ def test_existential_elem_in_set():
         frozenset([1, 2, 3])
     )
 
-    p1 = Predicate[set_type](S_('in'), (S_[set_type]('x'), ))
+    p1 = FunctionApplication[set_type](S_('in'), (S_[set_type]('x'), ))
 
     exists = ExistentialPredicate[set_type](S_[set_type]('x'), p1)
 
@@ -56,7 +55,9 @@ def test_existential_greater_than():
         solver.predicate_is_greater_than
     )
 
-    p1 = Predicate[set_type](S_('is_greater_than'), (S_[set_type]('x'), ))
+    p1 = FunctionApplication[set_type](
+        S_('is_greater_than'), (S_[set_type]('x'), )
+    )
 
     exists = ExistentialPredicate[set_type](S_[set_type]('x'), p1)
     res = solver.walk(exists)
@@ -93,7 +94,9 @@ def test_existential_bound_variable():
         solver.predicate_is_greater_than
     )
 
-    p1 = Predicate[set_type](S_('is_greater_than'), (S_[set_type]('x'), ))
+    p1 = FunctionApplication[set_type](
+        S_('is_greater_than'), (S_[set_type]('x'), )
+    )
 
     exists = ExistentialPredicate[set_type](S_[type]('x'), p1)
 
@@ -133,7 +136,9 @@ def test_existential_negate_predicate():
         solver.predicate_are_consecutives
     )
 
-    p1 = Predicate[set_type](S_('are_consecutives'), (S_[set_type]('x'), ))
+    p1 = FunctionApplication[set_type](
+        S_('are_consecutives'), (S_[set_type]('x'), )
+    )
 
     exists = ExistentialPredicate[set_type](S_[set_type]('x'), p1)
 
@@ -172,7 +177,9 @@ def test_existential_unsat_predicate_returns_empty():
         solver.predicate_is_additive_inverse
     )
 
-    p1 = Predicate[set_type](S_('is_additive_inverse'), (S_[set_type]('x'), ))
+    p1 = FunctionApplication[set_type](
+        S_('is_additive_inverse'), (S_[set_type]('x'), )
+    )
 
     exists = ExistentialPredicate[set_type](S_[set_type]('x'), p1)
 
@@ -223,9 +230,13 @@ def test_existential_predicates_conjuntion_and_disjunction():
         solver.predicate_sum_less_than_100
     )
 
-    p1 = Predicate[set_type](S_('greater_than'), (S_[set_type]('x'), ))
+    p1 = FunctionApplication[set_type](
+        S_('greater_than'), (S_[set_type]('x'), )
+    )
 
-    p2 = Predicate[set_type](S_('sum_less_than_100'), (S_[set_type]('x'), ))
+    p2 = FunctionApplication[set_type](
+        S_('sum_less_than_100'), (S_[set_type]('x'), )
+    )
 
     exists = ExistentialPredicate[set_type](S_[set_type]('x'), p1 & p2)
 

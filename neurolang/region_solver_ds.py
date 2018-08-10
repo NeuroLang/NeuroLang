@@ -202,7 +202,7 @@ class SpatialIndexRegionSolver(RegionSolver):
 
         for region in reduced_regions:
             constant, symbol = region_to_constant_and_symbol[region]
-            rsw = ReplaceSymbolWalker(expression.head, constant)
+            rsw = ReplaceSymbolWalker({expression.head: constant})
             rsw_body = rsw.walk(body)
 
             res = self.walk(rsw_body)

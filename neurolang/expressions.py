@@ -14,7 +14,7 @@ from .exceptions import NeuroLangException
 
 __all__ = [
     'Symbol', 'FunctionApplication', 'Statement',
-    'Projection', 'Predicate', 'ExistentialPredicate', 'UniversalPredicate',
+    'Projection', 'ExistentialPredicate', 'UniversalPredicate',
     'ToBeInferred',
     'typing_callable_from_annotated_function'
 ]
@@ -573,7 +573,7 @@ class Constant(Expression):
     def __repr__(self):
         if self.value is ...:
             value_str = '...'
-        elif callable(self.value):
+        elif callable(self.value) and not isinstance(self.value, Expression):
             value_str = self.value.__qualname__
         else:
             value_str = repr(self.value)
@@ -699,25 +699,6 @@ class Projection(Definition):
         )
 
 
-class Predicate(FunctionApplication):
-    def __repr__(self):
-        r = 'P{{{}: {}}}'.format(self.functor, self.__type_repr__)
-        if self.args is ...:
-            r += '(...)'
-        elif self.args is not None:
-            r += (
-                '(' +
-                ', '.join(repr(arg) for arg in self.args)
-            )
-        if hasattr(self, 'kwargs') and self.kwargs is not None:
-            r += ', '.join(
-                repr(k) + '=' + repr(v)
-                for k, v in self.kwargs.items()
-            )
-        r += ')'
-        return r
-
-
 class Quantifier(Definition):
     pass
 
@@ -730,9 +711,9 @@ class ExistentialPredicate(Quantifier):
                 'A symbol should be provided for the '
                 'existential quantifier expression'
             )
-        if not isinstance(body, (Predicate, FunctionApplication)):
+        if not isinstance(body, FunctionApplication):
             raise NeuroLangException(
-                'A predicate or a function application over '
+                'A function application over '
                 'predicates should be associated to the quantifier'
             )
 
@@ -761,9 +742,9 @@ class UniversalPredicate(Quantifier):
                 'A symbol should be provided for the '
                 'universal quantifier expression'
             )
-        if not isinstance(body, (Predicate, FunctionApplication)):
+        if not isinstance(body, FunctionApplication):
             raise NeuroLangException(
-                'A predicate or a function application over '
+                'A function application over '
                 'predicates should be associated to the quantifier'
             )
 
