@@ -8,7 +8,7 @@ from .solver import *
 from .exceptions import NeuroLangException
 from .symbols_and_types import (
     Symbol, Constant, Expression, FunctionApplication, Statement, Query,
-    Projection, Predicate, ExistentialPredicate,
+    Projection, ExistentialPredicate,
     TypedSymbolTable, unify_types, ToBeInferred,
     NeuroLangTypeException, is_subtype,
     get_type_and_value

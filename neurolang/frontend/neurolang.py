@@ -11,7 +11,7 @@ from .ast_tatsu import TatsuASTConverter
 from ..exceptions import NeuroLangException
 from ..symbols_and_types import (
     Symbol, Constant, Expression, FunctionApplication, Statement, Query,
-    Projection, Predicate, ExistentialPredicate,
+    Projection, ExistentialPredicate,
     TypedSymbolTable, unify_types, ToBeInferred,
     NeuroLangTypeException, is_subtype,
     get_type_and_value
@@ -197,7 +197,7 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
         )
 
     def predicate(self, ast):
-        return Predicate(ast['identifier'], args=(ast['argument'],))
+        return FunctionApplication(ast['identifier'], args=(ast['argument'],))
 
     def value(self, ast):
         return ast['value']
