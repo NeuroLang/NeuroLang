@@ -66,7 +66,7 @@ def test_predicate_match():
         def predicate_test(self, a: solver.T) -> bool:
             return True
 
-    ir = expressions.Predicate(S_('test'), (C_[float](0.), ))
+    ir = expressions.FunctionApplication(S_('test'), (C_[float](0.), ))
 
     ns = NewSolver[float]()
     assert ns.walk(ir).type == bool
@@ -90,9 +90,9 @@ def test_predicate_symbol_table():
 
     symc = S_[float]('c')
 
-    pt = expressions.Predicate(sym, (C_(2.), ))
-    pf = expressions.Predicate(sym, (C_(1.), ))
-    ps = expressions.Predicate(sym, (symc, ))
+    pt = expressions.FunctionApplication(sym, (C_(2.), ))
+    pf = expressions.FunctionApplication(sym, (C_(1.), ))
+    ps = expressions.FunctionApplication(sym, (symc, ))
 
     assert ns.walk(pt).value
     assert not ns.walk(pf).value
@@ -280,7 +280,6 @@ def test_boolean_operations_rewrite_conj_composition_order():
     s = DummySolver()
     a = S_[bool]('a')
     b = S_[bool]('b')
-    c = S_[bool]('c')
     d = S_[bool]('d')
     e = S_[bool]('e')
     f = S_('f')
