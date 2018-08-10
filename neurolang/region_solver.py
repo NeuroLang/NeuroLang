@@ -13,7 +13,7 @@ except ModuleNotFoundError:
 from . import neurolang as nl
 from .CD_relations import cardinal_relation, inverse_directions
 from .regions import Region, region_union, region_set_from_masked_data
-from .solver import SetBasedSolver
+from .deprecated import SetBasedSolver
 from .utils.data_manipulation import fetch_neurosynth_dataset
 
 

@@ -1,8 +1,7 @@
 from typing import Callable, AbstractSet
 
-from .. import neurolang as nl
 from ..symbols_and_types import TypedSymbolTable
-from ..solver import SetBasedSolver, FiniteDomainSet
+from ..deprecated import SetBasedSolver, FiniteDomainSet
 from .. import expressions
 from ..expressions import Predicate, ExistentialPredicate
 
