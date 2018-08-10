@@ -281,7 +281,7 @@ class SymbolTableEvaluator(ExpressionWalker):
         for k, v in chain(
             self.included_predicates.items(), self.included_functions.items()
         ):
-            self.symbol_table[k] = v
+            self.symbol_table[Symbol[v.type](k)] = v
         self.symbol_table.set_readonly(True)
         self.symbol_table = self.symbol_table.create_scope()
 
