@@ -13,7 +13,7 @@ except ModuleNotFoundError:
 from . import neurolang as nl
 from .CD_relations import cardinal_relation, inverse_directions
 from .regions import Region, region_union, region_set_from_masked_data
-from .solver import SetBasedSolver
+from .deprecated import SetBasedSolver
 from .utils.data_manipulation import fetch_neurosynth_data
 
 
@@ -85,6 +85,7 @@ class RegionsSetSolver(SetBasedSolver[Region]):
             return regions_set
         return f
 
+
     def _region_set_from_regexp(self) -> typing.Callable[[typing.Text], typing.AbstractSet[Region]]:
         def f(regexp: typing.Text) -> typing.AbstractSet[Region]:
             regions = set()
@@ -120,7 +121,7 @@ class RegionsSetSolver(SetBasedSolver[Region]):
 
     # add a match for the predicate "singleton" with a region as parameter
     # that will produce a set with just that region as a result
-    @nl.add_match(nl.Predicate(nl.Symbol('singleton'), (nl.Constant[Region],)))
+    @nl.add_match(nl.FunctionApplication(nl.Symbol('singleton'), (nl.Constant[Region],)))
     def singleton(self, expression):
         region = expression.args[0].value
         res = nl.Constant[self.set_type](
