@@ -19,6 +19,25 @@ from .solver import GenericSolver
 T = typing.TypeVar('T')
 
 
+class Predicate(FunctionApplication):
+    def __repr__(self):
+        r = 'P{{{}: {}}}'.format(self.functor, self.__type_repr__)
+        if self.args is ...:
+            r += '(...)'
+        elif self.args is not None:
+            r += (
+                '(' +
+                ', '.join(repr(arg) for arg in self.args)
+            )
+        if hasattr(self, 'kwargs') and self.kwargs is not None:
+            r += ', '.join(
+                repr(k) + '=' + repr(v)
+                for k, v in self.kwargs.items()
+            )
+        r += ')'
+        return r
+
+
 class FiniteDomain(object):
     pass
 

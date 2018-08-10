@@ -133,7 +133,7 @@ class RegionsSetSolver(SetBasedSolver[Region]):
 
     # add a match for the predicate "singleton" with a region as parameter
     # that will produce a set with just that region as a result
-    @nl.add_match(nl.Predicate(nl.Symbol('singleton'), (nl.Constant[Region],)))
+    @nl.add_match(nl.FunctionApplication(nl.Symbol('singleton'), (nl.Constant[Region],)))
     def singleton(self, expression):
         region = expression.args[0].value
         res = nl.Constant[self.set_type](

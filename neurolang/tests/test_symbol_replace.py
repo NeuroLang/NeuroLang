@@ -1,10 +1,7 @@
-from typing import Callable, AbstractSet
+from typing import Callable
 import operator as op
 
-from ..symbols_and_types import TypedSymbolTable
-from ..region_solver import SetBasedSolver
 from .. import expressions
-from ..expressions import Predicate, ExistentialPredicate
 from ..expression_walker import ReplaceSymbolWalker, ExpressionBasicEvaluator
 
 C_ = expressions.Constant
