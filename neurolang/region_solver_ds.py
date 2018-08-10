@@ -1,6 +1,7 @@
 import typing
 import itertools
 import re
+from collections import OrderedDict
 
 from . import neurolang as nl
 from .CD_relations import (
@@ -10,7 +11,8 @@ from .CD_relations import (
 from .regions import Region, region_union
 from .solver import GenericSolver, DatalogSolver, is_conjunctive_expression
 from .expressions import (
-    Query, Expression, Constant, Symbol, FunctionApplication, is_subtype
+    Query, Expression, Constant, Symbol, FunctionApplication, is_subtype,
+    ToBeInferred
 )
 from .expression_walker import (
     add_match, ExpressionWalker, ReplaceSymbolWalker, ReplaceSymbolsByConstants
@@ -119,6 +121,18 @@ class GetFunctionApplicationsWalker(ExpressionWalker):
         return super().function(expression)
 
 
+def is_region_symbol(expression):
+    return isinstance(expression, Symbol) and expression.type is Region
+
+
+def is_tuple_of_region_symbols(expression):
+    return (
+        isinstance(expression, Constant) and
+        is_subtype(expression.type, typing.Tuple) and
+        all(is_region_symbol(x) for x in expression.value)
+    )
+
+
 class SpatialIndexRegionSolver(RegionSolver):
 
     def initialize_region_index(self):
@@ -128,8 +142,12 @@ class SpatialIndexRegionSolver(RegionSolver):
         self.index.add(region.bounding_box, regions={region})
 
     @add_match(
-        Query(Symbol[Region], ...),
+        Query,
         guard=lambda expression: (
+            (
+                is_region_symbol(expression.head) or
+                is_tuple_of_region_symbols(expression.head)
+            ) and
             expression.head._symbols == expression.body._symbols and
             is_conjunctive_expression(expression.body)
         )
@@ -137,7 +155,7 @@ class SpatialIndexRegionSolver(RegionSolver):
     def spatial_query_resolution(self, expression):
 
         cardinal_predicates = {
-            self.included_predicates[relation]: relation for relation in (
+            self.symbol_table[relation]: relation for relation in (
                 'inferior_of', 'superior_of',
                 'posterior_of', 'anterior_of',
                 'left_of', 'right_of',
@@ -150,20 +168,14 @@ class SpatialIndexRegionSolver(RegionSolver):
             'left_of': 'L', 'right_of': 'R',
         }
 
-        out_query_type = Region
+        out_query_type = expression.type
+        if out_query_type is ToBeInferred:
+            out_query_type = typing.AbstractSet[expression.head.type]
 
         # rsw = ReplaceSymbolsByConstants(self.symbol_table)
         body = expression.body
 
         result = []
-
-        if (
-            expression.head not in body._symbols or
-            len(body._symbols) > 1
-        ):
-            raise NotImplementedError(
-                "All free symbols in the body must be in the head"
-            )
 
         # retrieve all function application in the expression
         get_af_walker = GetFunctionApplicationsWalker()
@@ -171,19 +183,20 @@ class SpatialIndexRegionSolver(RegionSolver):
         function_applications = get_af_walker.function_applications
 
         # retrieve all constant regions in the symbol table
-        region_to_constant_and_symbol = {
-            region.value: (region, symbol)
-            for symbol, region
+        region_to_symb_const = {
+            maybe_constant.value: (symbol, maybe_constant)
+            for symbol, maybe_constant
             in self.symbol_table.symbols_by_type(Region).items()
-            if isinstance(region, Constant)
+            if isinstance(maybe_constant, Constant)
         }
 
-        all_regions = set(region_to_constant_and_symbol.keys())
+        all_regions = set(region_to_symb_const.keys())
 
         # we start with all regions in the symbol table
         reduced_regions = all_regions
 
-        # and reduce this set accordingly if we encounter any spatial relation
+        # and reduce this set accordingly
+        # if we encounter any cardinal predicate
         for function_application in function_applications:
             if (
                 function_application.functor in cardinal_predicates and
@@ -200,13 +213,43 @@ class SpatialIndexRegionSolver(RegionSolver):
                 )
                 reduced_regions.intersection_update(matching_regions)
 
-        for region in reduced_regions:
-            constant, symbol = region_to_constant_and_symbol[region]
-            rsw = ReplaceSymbolWalker({expression.head: constant})
-            rsw_body = rsw.walk(body)
+        if (
+            isinstance(expression.head, Constant) and
+            is_subtype(expression.head.type, typing.Tuple) and
+            all(isinstance(a, Symbol) for a in expression.head.value)
+        ):
+            symbols_in_head = expression.head.value
+        else:
+            symbols_in_head = (expression.head,)
 
-            res = self.walk(rsw_body)
+
+        symbol_domains = OrderedDict(
+            zip(
+                symbols_in_head,
+                tuple((
+                    (
+                        region_to_symb_const[region]
+                        for region in reduced_regions
+                    )
+                    for _ in range(len(symbols_in_head))
+                ))
+            )
+        )
+
+        for symbol_values in itertools.product(*symbol_domains.values()):
+            rsw = ReplaceSymbolWalker(
+                dict(
+                    zip(
+                        symbol_domains.keys(),
+                        (s[1] for s in symbol_values)
+                    )
+                )
+            )
+            res = self.walk(rsw.walk(body))
             if isinstance(res, Constant) and res.value:
-                result.append(symbol)
+                if isinstance(expression.head, Symbol):
+                    result.append(symbol_values[0][0])
+                else:
+                    result.append(tuple(zip(*symbol_values))[0])
 
-        return Constant[typing.AbstractSet[out_query_type]](frozenset(result))
+        return Constant[out_query_type](frozenset(result))
