@@ -320,9 +320,10 @@ class SymbolTableEvaluator(ExpressionWalker):
 
 def all_args_constant(expression):
     return all(
-        isinstance(arg[1], Constant)
-        for arg in expression_iterator(expression.args, include_level=True)
-        if arg[2] > 0
+        isinstance(arg, Constant)
+        for _, arg, arg_level in expression_iterator(
+            expression.args, include_level=True
+        ) if arg_level > 0
     )
 
 
