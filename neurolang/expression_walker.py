@@ -203,15 +203,15 @@ class ExpressionWalker(PatternWalker):
 
 
 class ReplaceSymbolWalker(ExpressionWalker):
-    def __init__(self, symbol, value):
-        self.symbol = symbol
-        self.value = value
+    def __init__(self, symbol_replacements):
+        self.symbol_replacements = symbol_replacements
 
     @add_match(Symbol)
     def replace_free_variable(self, expression):
-        if expression.name == self.symbol.name:
-            value_type = unify_types(self.symbol.type, self.value.type)
-            return self.value.cast(value_type)
+        if expression.name in self.symbol_replacements:
+            replacement = self.symbol_replacements[expression.name]
+            replacement_type = unify_types(expression.type, replacement.type)
+            return replacement.cast(replacement_type)
         else:
             return expression
 
