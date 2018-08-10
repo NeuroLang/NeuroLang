@@ -228,6 +228,18 @@ class ReplaceSymbolsByConstants(ExpressionWalker):
         else:
             return expression
 
+    @add_match(Constant[typing.AbstractSet])
+    def constant_abstract_set(self, expression):
+        return expression.__class__(type(expression.value)(
+            self.walk(e) for e in expression.value
+        ))
+
+    @add_match(Constant[typing.Tuple])
+    def constant_tuple(self, expression):
+        return expression.__class__(tuple(
+            self.walk(e) for e in expression.value
+        ))
+
 
 class SymbolTableEvaluator(ExpressionWalker):
     def __init__(self, symbol_table=None):
