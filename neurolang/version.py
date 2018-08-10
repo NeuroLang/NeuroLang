@@ -26,50 +26,41 @@ CLASSIFIERS = ["Development Status :: 3 - Alpha",
                "Topic :: Scientific/Engineering"]
 
 # Description should be a one-liner:
-description = "neurolang: a template for small scientific Python projects"
+description = "neurolang: "
 # Long description will go up on the pypi page
 long_description = """
 
-Shablona
+NeuroLange
 ========
-Shablona is a template project for small scientific Python projects.
+NeuroLang is....
 
-It contains software implementations of an analysis of some simple data, but
-more importantly, it contains infrastructure for testing, documentation,
-continuous integration and deployment, which can be easily adapted
-to use in other projects.
+It does ..
 
-To get started using these components in your own software, please go to the
-repository README_.
-
-.. _README: https://github.com/uwescience/neurolang/blob/master/README.md
+.. _README: https://github.com/NeuroLang/neurolang/blob/master/README.md
 
 License
 =======
-``neurolang`` is licensed under the terms of the MIT license. See the file
-"LICENSE" for information on the history of this software, terms & conditions
-for usage, and a DISCLAIMER OF ALL WARRANTIES.
 
-All trademarks referenced herein are property of their respective holders.
-
-Copyright (c) 2015--, Ariel Rokem, The University of Washington
-eScience Institute.
 """
 
 NAME = "neurolang"
-MAINTAINER = "Ariel Rokem"
-MAINTAINER_EMAIL = "arokem@gmail.com"
+MAINTAINER = "Demian Wassermann"
+MAINTAINER_EMAIL = "demian.wassermann@inria.fr"
 DESCRIPTION = description
 LONG_DESCRIPTION = long_description
-URL = "http://github.com/uwescience/neurolang"
+URL = "http://github.com/Neurolang/neurolang"
 DOWNLOAD_URL = ""
-LICENSE = "MIT"
-AUTHOR = "Ariel Rokem"
-AUTHOR_EMAIL = "arokem@gmail.com"
+LICENSE = "BSD"
+AUTHOR = "Demian Wassermann"
+AUTHOR_EMAIL = "demian.wassermann@inria.fr"
 PLATFORMS = "OS Independent"
 MAJOR = _version_major
 MINOR = _version_minor
 MICRO = _version_micro
 VERSION = __version__
-PACKAGE_DATA = {'neurolang': [pjoin('data', '*')]}
-REQUIRES = ["numpy"]
+PACKAGE_DATA = {'neurolang': [
+    pjoin('data', '*'),
+    'neurolang/utils/neurosynth/database.txt',
+    'neurolang/utils/neurosynth/features.txt'
+]}
+REQUIRES = open('requirements.txt').readlines()
