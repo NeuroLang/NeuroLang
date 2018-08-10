@@ -303,6 +303,55 @@ class NumericOperationsSolver(PatternWalker[T]):
         return self.walk(expression.cast(expression.args[0].type))
 
 
+def is_conjunctive_expression(expression):
+    '''Check if the given expression is a conjuction.
+
+    Parameters
+    ----------
+    expression : nl.Expression
+        Expression for which we need to check if it's a conjunction.
+
+    Returns
+    -------
+    bool
+        True if the expression is a conjuction or a Constant[bool],
+        False otherwise.
+
+    '''
+    # expression is a constant bool, which is considered conjunctive
+    if isinstance(expression, Constant):
+        return is_subtype(expression.type, bool)
+    # expression is a boolean symbol
+    elif isinstance(expression, Symbol) and is_subtype(expression.type, bool):
+        return True
+    # expression is a function application returning boolean
+    elif (
+        isinstance(expression, FunctionApplication) and
+        is_subtype(expression.type, bool)
+    ):
+        # expression is the AND logical operator
+        if (
+            isinstance(expression.functor, Constant) and
+            expression.functor.value in (and_, or_)
+        ):
+            return (
+                expression.functor.value is and_ and
+                is_conjunctive_expression(expression.args[0]) and
+                is_conjunctive_expression(expression.args[1])
+            )
+        # expression is a function application of symbols
+        # which are not function applications
+        else:
+            return all(
+                isinstance(arg, Constant) or (
+                    isinstance(arg, Symbol) and
+                    not is_subtype(arg.type, typing.Callable)
+                ) for arg in expression.args
+            )
+    else:
+        return False
+
+
 class DatalogSolver(
         BooleanRewriteSolver,
         BooleanOperationsSolver,
