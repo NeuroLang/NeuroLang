@@ -68,7 +68,7 @@ def replace_type_variable(type_, type_hint, type_var=None):
 class TypedSymbolTable(collections.MutableMapping):
     def __init__(self, enclosing_scope=None, readonly=False):
         self._symbols = collections.OrderedDict()
-
+        self._values_to_symbol = collections.defaultdict(set)
         self._symbols_by_type = collections.defaultdict(dict)
         self.enclosing_scope = enclosing_scope
         self.readonly = readonly
@@ -89,7 +89,10 @@ class TypedSymbolTable(collections.MutableMapping):
         if self.readonly:
             raise NeuroLangException("This symbol table is readonly")
         if isinstance(value, expressions.Expression):
+            if not isinstance(key, expressions.Expression):
+                key = expressions.Symbol[value.type](key)
             self._symbols[key] = value
+            self._values_to_symbol[value].add(key)
             if value.type not in self._symbols_by_type:
                 self._symbols_by_type[value.type] = dict()
             self._symbols_by_type[value.type][key] = value
@@ -99,9 +102,12 @@ class TypedSymbolTable(collections.MutableMapping):
             raise ValueError("Wrong assignment %s" % str(value))
 
     def __delitem__(self, key):
+        if self.readonly:
+            raise NeuroLangException("This symbol table is readonly")
         value = self._symbols[key]
         del self._symbols_by_type[value.type][key]
         del self._symbols[key]
+        self._values_to_symbol[value].remove(key)
 
     def __iter__(self):
         keys = iter(self._symbols.keys())
@@ -132,6 +138,9 @@ class TypedSymbolTable(collections.MutableMapping):
 
         ret.update(self._symbols_by_type[type_])
         return ret
+
+    def symbols_for_value(self, value):
+        return self._values_to_symbol[value]
 
     def create_scope(self):
         subscope = TypedSymbolTable(enclosing_scope=self)

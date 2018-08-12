@@ -215,6 +215,18 @@ def test_TypedSymbolTable():
 
     assert {int, float} == st.types()
 
+    st[S_[s1.type]('s1_1')] = s1
+    st[S_[s1.type]('s1_2')] = s1
+    assert st.symbols_for_value(s1) == {
+        S_[s1.type]('s1_1'), S_[s1.type]('s1_2')
+    }
+    del st[S_[s1.type]('s1_1')]
+    assert st.symbols_for_value(s1) == {
+        S_[s1.type]('s1_2')
+    }
+    del st[S_[s1.type]('s1_2')]
+    assert len(st.symbols_for_value(s1)) == 0
+
     stb = st.create_scope()
     assert 's2' in stb
     assert 's3' in stb
