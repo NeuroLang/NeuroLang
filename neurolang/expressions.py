@@ -708,11 +708,6 @@ class ExistentialPredicate(Quantifier):
                 'predicates should be associated to the quantifier'
             )
 
-        if head not in body._symbols:
-            raise NeuroLangException(
-                'Symbol should be a free '
-                'variable on the predicate'
-            )
         self.head = head
         self.body = body
         self._symbols = body._symbols - {head}
@@ -739,11 +734,6 @@ class UniversalPredicate(Quantifier):
                 'predicates should be associated to the quantifier'
             )
 
-        if head not in body._symbols:
-            raise NeuroLangException(
-                'Symbol should be a free '
-                'variable on the predicate'
-            )
         self.head = head
         self.body = body
         self._symbols = body._symbols - {head}
