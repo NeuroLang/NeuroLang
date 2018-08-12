@@ -5,6 +5,7 @@ import typing
 
 from .symbols_and_types import TypedSymbolTable
 from .expressions import (
+    ExpressionBlock,
     FunctionApplication, Statement, Query, Projection, Constant,
     Symbol, ExistentialPredicate, UniversalPredicate, Expression,
     get_type_and_value, ToBeInferred, is_subtype, NeuroLangTypeException,
@@ -91,18 +92,23 @@ def expression_iterator(expression, include_level=False, dfs=True):
 class PatternWalker(PatternMatcher):
     def walk(self, expression):
         logging.debug(f"walking {expression}")
-        if isinstance(expression, (list, tuple)):
+        if isinstance(expression, tuple):
             result = [
                 self.walk(e)
                 for e in expression
             ]
-            if isinstance(expression, tuple):
-                result = tuple(result)
+            result = tuple(result)
             return result
         return self.match(expression)
 
 
 class ExpressionWalker(PatternWalker):
+    @add_match(ExpressionBlock)
+    def expression_block(self, expression):
+        return ExpressionBlock[expression.type](
+            [self.walk(e) for e in expression.expressions]
+        )
+
     @add_match(Statement)
     def statement(self, expression):
         return Statement[expression.type](
