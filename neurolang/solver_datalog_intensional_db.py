@@ -8,11 +8,11 @@ from .expression_walker import (
     add_match, PatternWalker, ReplaceSymbolsByConstants
 )
 
-__all__ = ['IntensionalDatabaseSolver']
+__all__ = ['ExtensionalDatabaseSolver']
 
 
-class IntensionalDatabaseSolver(PatternWalker):
-    '''Mixin to add sets as intensional databases on the DatalogSolver'''
+class ExtensionalDatabaseSolver(PatternWalker):
+    '''Mixin to add sets as extensional databases on the DatalogSolver'''
     @add_match(
         FunctionApplication(Constant[AbstractSet], ...),
     )
