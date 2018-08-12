@@ -287,8 +287,7 @@ class SymbolTableEvaluator(ExpressionWalker):
         top_scope = self.symbol_table
         while top_scope.enclosing_scope is not None:
             top_scope = top_scope.enclosing_scope
-
-        self.symbol_table.enclosing_scope = keyword_symbol_table
+        top_scope.enclosing_scope = keyword_symbol_table
 
     @add_match(Statement)
     def statement(self, expression):
