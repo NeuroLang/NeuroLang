@@ -3,7 +3,7 @@ import re
 
 from .CD_relations import cardinal_relation, inverse_directions
 from .regions import Region, region_union
-from .solver import PatternWalker
+from .expression_walker import PatternWalker
 from .expressions import Constant
 
 
