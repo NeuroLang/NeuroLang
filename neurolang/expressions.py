@@ -431,6 +431,29 @@ class Expression(metaclass=ExpressionMeta):
         else:
             return repr(self.type)
 
+    def __eq__(self, other):
+        if self.__is_pattern__ or not isinstance(other, Expression):
+            return super().__eq__(other)
+
+        if not isinstance(other, type(self)):
+            return False
+
+        for child in self.__children__:
+            val = getattr(self, child)
+            val_other = getattr(self, child)
+
+            if isinstance(val, (list, tuple)):
+                if not all(v == o for v, o in zip(val, val_other)):
+                    break
+            elif not(val == val_other):
+                break
+        else:
+            return True
+        return False
+
+    def __hash__(self):
+        return hash(tuple(getattr(self, c) for c in self.__children__))
+
 
 class NonConstant(Expression):
     """Any expression which is not a constant."""
