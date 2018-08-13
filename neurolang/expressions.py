@@ -465,6 +465,16 @@ class ExpressionBlock(Expression):
         )
 
 
+class ExpressionBlock(Expression):
+    def __init__(self, expressions):
+        self.expressions = expressions
+
+    def __repr__(self):
+        return '\\n'.join(
+            repr(e) for e in self.expressions
+        )
+
+
 class NonConstant(Expression):
     """Any expression which is not a constant."""
 
