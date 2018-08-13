@@ -1,6 +1,6 @@
 import pytest
 
-from operator import or_, and_, invert
+from operator import or_, and_, invert, eq
 import typing
 
 from .. import datalog_walkers as dw
@@ -38,20 +38,20 @@ def test_atom():
     srv = dw.SafeRangeVariablesWalker()
 
     a = C_(sum)
-    b = S_('b')
-    c = S_('c')
+    x = S_('x')
+    y = S_('y')
 
-    f = F_[bool](a, (b, C_(1)))
+    f = F_[bool](a, (x, C_(1)))
 
     restrictors = srv.walk(f)
-    assert restrictors == {b: {f}}
+    assert restrictors == {x: {f}}
 
-    f = F_[bool](a, (b, c, C_(1)))
+    f = F_[bool](a, (x, y, C_(1)))
 
     restrictors = srv.walk(f)
     assert restrictors == {
-        b: dw.Intersection({f}),
-        c: dw.Intersection({f})
+        x: dw.Intersection({f}),
+        y: dw.Intersection({f})
     }
 
 
@@ -59,25 +59,38 @@ def test_conjunction():
     srv = dw.SafeRangeVariablesWalker()
 
     a = C_(sum)
-    b = S_('b')
-    c = S_('c')
+    x = S_('x')
+    y = S_('y')
+    c = C_[int](1)
     d = C_(lambda x: x % 2 == 0)
 
-    f = F_[bool](a, (b, c, C_(1)))
-    g = F_[bool](d, (b,))
+    f = F_[bool](a, (x, y, C_(1)))
+    g = F_[bool](d, (x,))
     e = f & g
     restrictors = srv.walk(e)
     assert restrictors == {
-        b: dw.Intersection({f, g}),
-        c: dw.Intersection({f})
+        x: dw.Intersection({f, g}),
+        y: dw.Intersection({f})
     }
 
-    e = f & EP_[bool](S_('x'), g)
+    e = f & g & F_[bool](C_(eq), (x, c))
+    restrictors = srv.walk(e)
+    assert restrictors == {
+        x: dw.Intersection({f, g, c}),
+        y: dw.Intersection({f})
+    }
+
+    z = S_('z')
+    e = f & g & F_[bool](C_(eq), (x, z))
+    with pytest.raises(dw.NeuroLangException):
+        restrictors = srv.walk(e)
+
+    e = f & EP_[bool](S_('z'), g)
     restrictors = srv.walk(e)
 
     assert restrictors is dw.undefined
 
-    e = EP_[bool](S_('x'), g) & f
+    e = EP_[bool](S_('z'), g) & f
     restrictors = srv.walk(e)
 
     assert restrictors is dw.undefined
@@ -87,40 +100,40 @@ def test_disjunction():
     srv = dw.SafeRangeVariablesWalker()
 
     a = C_(sum)
-    b = S_('b')
-    c = S_('c')
+    x = S_('x')
+    y = S_('y')
     d = C_(any)
     e = C_(all)
 
-    f = F_[bool](a, (b, c, C_(1)))
-    g = F_[bool](d, (b,))
+    f = F_[bool](a, (x, y, C_(1)))
+    g = F_[bool](d, (x,))
 
     exp = f | g
     restrictors = srv.walk(exp)
-    res = {b: dw.Union((f, g))}
+    res = {x: dw.Union((f, g))}
 
     assert restrictors == res
 
-    h = F_[bool](e, (b,))
+    h = F_[bool](e, (x,))
     exp = (f & g) | h
     restrictors = srv.walk(exp)
-    res = {b: dw.Union((dw.Intersection((f, g)), h))}
+    res = {x: dw.Union((dw.Intersection((f, g)), h))}
 
     assert restrictors == res
 
-    h = F_[bool](e, (b,))
+    h = F_[bool](e, (x,))
     exp = f | (g & h)
     restrictors = srv.walk(exp)
-    res = {b: dw.Union((dw.Intersection((h, g)), f))}
+    res = {x: dw.Union((dw.Intersection((h, g)), f))}
 
     assert restrictors == res
 
-    e = f | EP_[bool](S_('x'), g)
+    e = f | EP_[bool](S_('z'), g)
     restrictors = srv.walk(e)
 
     assert restrictors is dw.undefined
 
-    e = EP_[bool](S_('x'), g) | f
+    e = EP_[bool](S_('z'), g) | f
     restrictors = srv.walk(e)
 
     assert restrictors is dw.undefined
@@ -130,10 +143,10 @@ def test_inversion():
     srv = dw.SafeRangeVariablesWalker()
 
     a = C_(sum)
-    b = S_('b')
-    c = S_('c')
+    x = S_('x')
+    y = S_('y')
 
-    f = F_[bool](a, (b, c, C_(1)))
+    f = F_[bool](a, (x, y, C_(1)))
     e = ~f
 
     restrictors = srv.walk(e)
@@ -145,16 +158,16 @@ def test_existential():
     srv = dw.SafeRangeVariablesWalker()
 
     a = C_(sum)
-    b = S_('b')
-    c = S_('c')
+    x = S_('x')
+    y = S_('y')
 
-    f = F_[bool](a, (b, c, C_(1)))
-    e = EP_[bool](b, f)
+    f = F_[bool](a, (x, y, C_(1)))
+    e = EP_[bool](x, f)
 
     restrictors = srv.walk(e)
-    assert restrictors == {c: dw.Intersection({f})}
+    assert restrictors == {y: dw.Intersection({f})}
 
-    e = EP_[bool](S_('x'), f)
+    e = EP_[bool](S_('z'), f)
 
     restrictors = srv.walk(e)
     assert restrictors is dw.undefined
@@ -164,16 +177,16 @@ def test_not_srnf():
     srv = dw.SafeRangeVariablesWalker()
 
     a = C_(sum)
-    b = S_('b')
-    c = S_('c')
+    x = S_('x')
+    y = S_('y')
 
-    f = F_[bool](a, (b, c, C_(1)))
-    e = UP_[bool](b, f)
+    f = F_[bool](a, (x, y, C_(1)))
+    e = UP_[bool](x, f)
 
     with pytest.raises(dw.NeuroLangException):
         srv.walk(e)
 
-    e2 = ~(f & EP_[bool](b, f))
+    e2 = ~(f & EP_[bool](x, f))
 
     with pytest.raises(dw.NeuroLangException):
         srv.walk(e2)
@@ -183,16 +196,16 @@ def test_replace_variables():
     vsw = dw.VariableSubstitutionWalker()
 
     a = C_(sum)
-    b = S_('b')
-    b_ = S_('b_')
-    c = S_('c')
+    x = S_('x')
+    x_ = S_('x_')
+    y = S_('y')
 
-    f = F_[bool](a, (b, c, C_(1)))
-    e = EP_[bool](b, f)
+    f = F_[bool](a, (x, y, C_(1)))
+    e = EP_[bool](x, f)
 
     exp = f & e
     exp_new = vsw.walk(exp)
-    expected_result = (f & EP_[bool](b_, F_(a, (b_, c, C_(1))))).cast(bool)
+    expected_result = (f & EP_[bool](x_, F_(a, (x_, y, C_(1))))).cast(bool)
 
     assert exp_new == expected_result
 

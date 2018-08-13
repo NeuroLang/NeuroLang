@@ -487,16 +487,6 @@ class Expression(metaclass=ExpressionMeta):
         return hash(tuple(getattr(self, c) for c in self.__children__))
 
 
-class ExpressionBlock(Expression):
-    def __init__(self, expressions):
-        self.expressions = expressions
-
-    def __repr__(self):
-        return 'BLOCK START\n' + '\n\t'.join(
-            repr(e) for e in self.expressions
-        ) + '\nBLOCK END'
-
-
 class NonConstant(Expression):
     """Any expression which is not a constant."""
 

@@ -5,7 +5,6 @@ from itertools import chain
 from . import expressions
 from .expressions import (
     typing_callable_from_annotated_function,
-    ExpressionBlock,
     ToBeInferred,
     Constant, Expression,
     Symbol,
@@ -31,7 +30,7 @@ __all__ = [
     'Symbol', 'Constant', 'Expression', 'FunctionApplication', 'Statement',
     'Projection', 'ExistentialPredicate', 'UniversalPredicate', 'Lambda',
     'Query',
-    'TypedSymbolTable', 'ExpressionBlock',
+    'TypedSymbolTable',
     'typing_callable_from_annotated_function',
     'NeuroLangTypeException', 'is_subtype', 'type_validation_value',
     'unify_types',

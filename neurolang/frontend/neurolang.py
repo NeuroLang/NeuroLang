@@ -11,8 +11,8 @@ from .ast_tatsu import TatsuASTConverter
 from ..exceptions import NeuroLangException
 from ..symbols_and_types import (
     Symbol, Constant, Expression, FunctionApplication, Statement, Query,
-    Projection, ExistentialPredicate, ExpressionBlock, Lambda,
-    unify_types, ToBeInferred,
+    Projection, ExistentialPredicate,
+    TypedSymbolTable, unify_types, ToBeInferred,
     NeuroLangTypeException, is_subtype,
     get_type_and_value
 )
@@ -446,11 +446,7 @@ class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
         return self.nli.evaluate(ast)
 
     def compile(self, ast, **kwargs):
-        return self.walk(
-            ExpressionBlock(
-                self.get_intermediate_representation(ast, **kwargs)
-            )
-        )
+        return self.walk(self.get_intermediate_representation(ast, **kwargs))
 
 
 def parser(code, **kwargs):

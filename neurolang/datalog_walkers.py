@@ -1,7 +1,6 @@
-from operator import and_, or_, invert
+from operator import and_, or_, invert, eq
 import typing
 import logging
-
 
 from . import expression_walker as ew
 from . import expressions as exp
@@ -176,8 +175,33 @@ class SafeRangeVariablesWalker(ew.PatternWalker):
         return dict()
 
     @ew.add_match(
+        F_[bool](C_(eq), ...),
+        lambda e: (
+            no_argument_is_application(e) and
+            any(
+                isinstance(a, C_)
+                for a in e.args
+            )
+        )
+    )
+    def equality(self, expression):
+        args = expression.args
+        restrictions = Intersection({
+            arg for arg in args
+            if isinstance(arg, C_)
+        })
+
+        return {
+            s: restrictions
+            for s in expression._symbols
+        }
+
+    @ew.add_match(
         F_[bool](C_, ...),
-        no_argument_is_application
+        lambda e: (
+            no_argument_is_application(e) and
+            e.functor != C_(eq)
+        )
     )
     def fa(self, expression):
         restrictors = {
