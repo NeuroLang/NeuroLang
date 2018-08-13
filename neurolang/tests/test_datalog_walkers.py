@@ -4,6 +4,7 @@ from operator import or_, and_, invert
 import typing
 
 from .. import datalog_walkers as dw
+from ..expression_walker import PatternWalker, add_match
 from ..neurolang import (
     Constant, Symbol, FunctionApplication,
     ExistentialPredicate, UniversalPredicate
@@ -270,3 +271,63 @@ def test_univ_to_ex():
     exp_res_in_f = exp_res.args[0].body.args[0]
     assert res_in_f.functor == exp_res_in_f.functor
     assert res_in_f.args[0] == exp_res_in_f.args[0]
+
+
+def test_flatten_and():
+    class Anything(PatternWalker):
+        @add_match(...)
+        def s(self, expression):
+            return expression
+
+    class Flat(dw.FlattenMultipleLogicalOperators, Anything):
+        pass
+
+    fw = Flat()
+
+    args = [S_[bool](f'a{i}') for i in range(5)]
+
+    exp = and_binary_functor(
+        and_binary_functor(
+            args[0],
+            and_binary_functor(
+                args[1],
+                and_binary_functor(args[2], args[3])
+            ),
+        ),
+        args[4]
+    )
+
+    res = fw.walk(exp)
+
+    assert res.functor == C_(and_)
+    assert set(res.args) == set(args)
+
+
+def test_flatten_or():
+    class Anything(PatternWalker):
+        @add_match(...)
+        def s(self, expression):
+            return expression
+
+    class Flat(dw.FlattenMultipleLogicalOperators, Anything):
+        pass
+
+    fw = Flat()
+
+    args = [S_[bool](f'a{i}') for i in range(5)]
+
+    exp = or_binary_functor(
+        or_binary_functor(
+            args[0],
+            or_binary_functor(
+                args[1],
+                or_binary_functor(args[2], args[3])
+            ),
+        ),
+        args[4]
+    )
+
+    res = fw.walk(exp)
+
+    assert res.functor == C_(or_)
+    assert set(res.args) == set(args)

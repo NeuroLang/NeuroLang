@@ -329,7 +329,9 @@ class FlattenMultipleLogicalOperators(ew.PatternWalker):
                 new_args.extend(a.args)
             else:
                 new_args.append(a)
-        return self.walk(F_[bool](expression.functor, new_args))
+
+        functor = C_[typing.Callable[[bool] * len(new_args), bool]](and_)
+        return self.walk(F_[bool](functor, tuple(new_args)))
 
     @ew.add_match(
         F_[bool](C_(or_), ...),
@@ -349,4 +351,5 @@ class FlattenMultipleLogicalOperators(ew.PatternWalker):
                 new_args.extend(a.args)
             else:
                 new_args.append(a)
-        return self.walk(F_[bool](expression.functor, new_args))
+        functor = C_[typing.Callable[[bool] * len(new_args), bool]](or_)
+        return self.walk(F_[bool](functor, tuple(new_args)))
