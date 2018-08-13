@@ -13,6 +13,16 @@ E_ = ExistentialPredicate
 A_ = UniversalPredicate
 
 
+def test_undefined():
+    a = set()
+
+    assert (a | dw.undefined) is dw.undefined
+    assert (dw.undefined | a) is dw.undefined
+    assert (a & dw.undefined) is dw.undefined
+    assert (dw.undefined & a) is dw.undefined
+    assert (~dw.undefined) is dw.undefined
+
+
 def test_atom():
     srv = dw.SafeRangeVariablesWalker()
 
@@ -120,3 +130,25 @@ def test_not_srnf():
 
     with pytest.raises(dw.NeuroLangException):
         srv.walk(e2)
+
+
+def test_replace_variables():
+    vsw = dw.VariableSubstitutionWalker()
+
+    a = C_(sum)
+    b = S_('b')
+    b_ = S_('b_')
+    c = S_('c')
+
+    f = F_[bool](a, (b, c, C_(1)))
+    e = E_[bool](b, f)
+
+    exp = f & e
+    exp_new = vsw.walk(exp)
+    expected_result = (f & E_[bool](b_, F_(a, (b_, c, C_(1))))).cast(bool)
+
+    assert exp_new.functor == expected_result.functor
+    assert exp_new.args[0] == expected_result.args[0]
+    assert exp_new.args[1].head == expected_result.args[1].head
+    assert exp_new.args[1].body.functor == expected_result.args[1].body.functor
+    assert exp_new.args[1].body.args == expected_result.args[1].body.args
