@@ -34,9 +34,6 @@ class RegionFrontend(QueryBuilder):
             region = ExplicitVBR(
                 voxel_coordinates, parc_im.affine, parc_im.shape
             )
-            # res.append(
-            #   self.add_region(region, result_symbol_name=region_name)
-            # )
             c = nl.Constant[self.solver.type](region)
             s = nl.Symbol[self.solver.type](region_name)
             self.solver.symbol_table[s] = c
