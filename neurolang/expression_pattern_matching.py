@@ -11,9 +11,7 @@ import types
 from warnings import warn
 
 from . import expressions
-from .symbols_and_types import (
-    replace_type_variable,
-)
+from .symbols_and_types import replace_type_variable
 
 __all__ = ['add_match', 'PatternMatcher']
 
