@@ -77,7 +77,14 @@ class Intersection(frozenset):
     Set of restrictions to be intersected
     to obtain the restricted domain.
     '''
-    pass
+    def __or__(self, other):
+        if isinstance(other, Intersection):
+            return Intersection(super().__or__(other))
+        else:
+            raise ValueError('parameter must be Intersection')
+
+    def __ror__(self, other):
+        return self.__or__(other)
 
 
 class Union(frozenset):
@@ -85,7 +92,14 @@ class Union(frozenset):
     Set of restrictions to be merged
     to obtain the restricted domain.
     '''
-    pass
+    def __or__(self, other):
+        if isinstance(other, Union):
+            return Union(super().__or__(other))
+        else:
+            raise ValueError('parameter must be Union')
+
+    def __ror__(self, other):
+        return self.__or__(other)
 
 
 class SafeRangeVariablesWalker(ew.PatternWalker):
@@ -103,10 +117,10 @@ class SafeRangeVariablesWalker(ew.PatternWalker):
         restrictors = dict()
         for arg in expression.args:
             arg_rest = self.walk(arg)
+            if arg_rest is undefined:
+                return undefined
             for k, v in arg_rest.items():
                 restrictor = v | restrictors.get(k, Intersection())
-                if restrictor is undefined:
-                    return undefined
                 restrictors[k] = restrictor
 
         return restrictors
@@ -119,22 +133,27 @@ class SafeRangeVariablesWalker(ew.PatternWalker):
             return undefined
         for arg in args:
             arg_rest = self.walk(arg)
+            if arg_rest is undefined:
+                return undefined
             for k in list(restrictors.keys()):
                 if k not in arg_rest:
                     del restrictors[k]
                 else:
-                    if (
-                        arg_rest[k] is not undefined and
-                        restrictors[k] is not undefined
-                    ):
-                        restrictors[k] = Intersection({
-                            Union((
-                                arg_rest[k],
-                                restrictors[k]
-                            ))
-                        })
-                    else:
-                        return undefined
+                    r1 = restrictors[k]
+                    r2 = arg_rest[k]
+
+                    if not isinstance(r1, Union):
+                        if len(r1) == 1:
+                            r1 = Union(r1)
+                        else:
+                            r1 = Union({r1})
+
+                    if not isinstance(r2, Union):
+                        if len(r2) == 1:
+                            r2 = Union(r2)
+                        else:
+                            r2 = Union({r2})
+                    restrictors[k] = r1 | r2
 
         return restrictors
 
@@ -280,13 +299,13 @@ class ConvertToSNRFWalker(ew.ExpressionWalker):
         return self.walk(
             F_[bool](
                 C_[typing.Callable[[bool], bool]](invert),
-                exp.ExistentialPredicate[bool](
+                (exp.ExistentialPredicate[bool](
                     expression.head,
                     F_[bool](
                         C_[typing.Callable[[bool], bool]](invert),
-                        expression.body
+                        (expression.body,)
                     )
-                )
+                ),)
             )
         )
 
