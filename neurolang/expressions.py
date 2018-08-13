@@ -437,9 +437,9 @@ class ExpressionBlock(Expression):
         self.expressions = expressions
 
     def __repr__(self):
-        return '\\n'.join(
+        return 'BLOCK START\n' + '\n\t'.join(
             repr(e) for e in self.expressions
-        )
+        ) + 'BLOCK END'
 
 
 class NonConstant(Expression):
