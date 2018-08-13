@@ -278,12 +278,16 @@ class SymbolTableEvaluator(ExpressionWalker):
         return function_constants
 
     def add_functions_and_predicates_to_symbol_table(self):
+        keyword_symbol_table = TypedSymbolTable()
         for k, v in chain(
             self.included_predicates.items(), self.included_functions.items()
         ):
-            self.symbol_table[Symbol[v.type](k)] = v
-        self.symbol_table.set_readonly(True)
-        self.symbol_table = self.symbol_table.create_scope()
+            keyword_symbol_table[Symbol[v.type](k)] = v
+        keyword_symbol_table.set_readonly(True)
+        top_scope = self.symbol_table
+        while top_scope.enclosing_scope is not None:
+            top_scope = top_scope.enclosing_scope
+        top_scope.enclosing_scope = keyword_symbol_table
 
     @add_match(Statement)
     def statement(self, expression):
