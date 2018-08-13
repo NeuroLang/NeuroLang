@@ -6,7 +6,7 @@ from itertools import chain
 import inspect
 from inspect import isclass
 import logging
-from typing import Tuple, TypeVar
+from typing import Any, Tuple, TypeVar
 import types
 from warnings import warn
 
@@ -14,6 +14,9 @@ from . import expressions
 from .symbols_and_types import replace_type_variable
 
 __all__ = ['add_match', 'PatternMatcher']
+
+
+UndeterminedType = TypeVar('UndeterminedType')
 
 
 class NeuroLangPatternMatchingNoMatch(expressions.NeuroLangException):
@@ -68,6 +71,23 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
                     (pattern, getattr(v, 'guard'), v)
                 )
         classdict['__patterns__'] = patterns
+
+        current_type = classdict.get('type', Any)
+        for base in bases:
+            if hasattr(base, 'type'):
+                if (
+                    current_type is Any or
+                    base.type is Any or
+                    isinstance(base.type, TypeVar) or
+                    current_type is base.type
+                ):
+                    if current_type is Any:
+                        current_type = base.type
+                else:
+                    current_type = UndeterminedType
+                    break
+
+        classdict['type'] = current_type
 
         new_cls = super().__new__(cls, name, bases, classdict)
         if needs_replacement:
