@@ -4,7 +4,6 @@ from operator import or_, and_, invert
 import typing
 
 from .. import datalog_walkers as dw
-from ..expression_walker import PatternWalker, add_match
 from ..neurolang import (
     Constant, Symbol, FunctionApplication,
     ExistentialPredicate, UniversalPredicate
@@ -195,11 +194,7 @@ def test_replace_variables():
     exp_new = vsw.walk(exp)
     expected_result = (f & E_[bool](b_, F_(a, (b_, c, C_(1))))).cast(bool)
 
-    assert exp_new.functor == expected_result.functor
-    assert exp_new.args[0] == expected_result.args[0]
-    assert exp_new.args[1].head == expected_result.args[1].head
-    assert exp_new.args[1].body.functor == expected_result.args[1].body.functor
-    assert exp_new.args[1].body.args == expected_result.args[1].body.args
+    assert exp_new == expected_result
 
     vsw = dw.VariableSubstitutionWalker()
 
@@ -227,12 +222,7 @@ def test_push_neg_and():
     e = (~(a & b).cast(bool)).cast(bool)
 
     res = csnrf.walk(e)
-    assert res.functor == C_(or_)
-    assert len(res.args) == 2
-    assert res.args[0].functor == C_(invert)
-    assert res.args[0].args[0] == a
-    assert res.args[1].functor == C_(invert)
-    assert res.args[1].args[0] == b
+    assert res == or_binary_functor(invert_functor(a), invert_functor(b))
 
 
 def test_push_neg_or():
@@ -243,12 +233,7 @@ def test_push_neg_or():
     e = (~(a | b).cast(bool)).cast(bool)
 
     res = csnrf.walk(e)
-    assert res.functor == C_(and_)
-    assert len(res.args) == 2
-    assert res.args[0].functor == C_(invert)
-    assert res.args[0].args[0] == a
-    assert res.args[1].functor == C_(invert)
-    assert res.args[1].args[0] == b
+    assert res == and_binary_functor(invert_functor(a), invert_functor(b))
 
 
 def test_univ_to_ex():
@@ -262,27 +247,11 @@ def test_univ_to_ex():
 
     res = csnrf.walk(e)
 
-    assert res.functor == exp_res.functor
-    assert len(res.args) == len(exp_res.args) == 1
-    assert res.args[0].head == exp_res.args[0].head
-    assert res.args[0].body.functor == exp_res.args[0].body.functor
-    assert len(res.args[0].body.args) == len(exp_res.args[0].body.args) == 1
-    res_in_f = res.args[0].body.args[0]
-    exp_res_in_f = exp_res.args[0].body.args[0]
-    assert res_in_f.functor == exp_res_in_f.functor
-    assert res_in_f.args[0] == exp_res_in_f.args[0]
+    assert res == exp_res
 
 
 def test_flatten_and():
-    class Anything(PatternWalker):
-        @add_match(...)
-        def s(self, expression):
-            return expression
-
-    class Flat(dw.FlattenMultipleLogicalOperators, Anything):
-        pass
-
-    fw = Flat()
+    fw = dw.FlattenMultipleLogicalOperators()
 
     args = [S_[bool](f'a{i}') for i in range(5)]
 
@@ -304,15 +273,7 @@ def test_flatten_and():
 
 
 def test_flatten_or():
-    class Anything(PatternWalker):
-        @add_match(...)
-        def s(self, expression):
-            return expression
-
-    class Flat(dw.FlattenMultipleLogicalOperators, Anything):
-        pass
-
-    fw = Flat()
+    fw = dw.FlattenMultipleLogicalOperators()
 
     args = [S_[bool](f'a{i}') for i in range(5)]
 
@@ -331,3 +292,23 @@ def test_flatten_or():
 
     assert res.functor == C_(or_)
     assert set(res.args) == set(args)
+
+
+def test_SNRF_and_range():
+    R = C_[typing.Callable[[bool], bool]](any)
+    Q = C_[typing.Callable[[bool], bool]](all)
+
+    x = S_[bool]('x')
+    y = S_[bool]('y')
+
+    exp = R(x)
+
+    res, r = dw.expression_to_SRNF_and_range(exp)
+    assert r == {x: dw.Intersection((exp,))}
+    assert res is exp
+
+    exp = A_[bool](x, invert_functor(Q(x, y)))
+    res, r = dw.expression_to_SRNF_and_range(exp)
+    exp_res = invert_functor(E_[bool](x, Q(x, y)))
+    assert r == {}
+    assert res == exp_res
