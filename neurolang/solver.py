@@ -243,39 +243,37 @@ class BooleanOperationsSolver(PatternWalker):
         return Constant(not expression.args[0].value)
 
     @add_match(
-        FunctionApplication(Constant(and_), (Constant[bool], Constant[bool]))
+        FunctionApplication(Constant(and_), ...),
+        lambda e: all(isinstance(a, Constant[bool]) for a in e.args)
     )
     def rewrite_boolean_and(self, expression):
-        return Constant(expression.args[0].value and expression.args[1].value)
+        return Constant[bool](all(a.value for a in expression.args))
 
     @add_match(
-        FunctionApplication(Constant(or_), (Constant[bool], Constant[bool]))
+        FunctionApplication(Constant(or_), ...),
+        lambda e: all(isinstance(a, Constant[bool]) for a in e.args)
     )
     def rewrite_boolean_or(self, expression):
-        return Constant(expression.args[0].value or expression.args[1].value)
+        return Constant[bool](any(a.value for a in expression.args))
 
     @add_match(
-        FunctionApplication(Constant(or_), (True, Expression[bool]))
+        FunctionApplication(Constant(or_), ...),
+        lambda e: any(
+            isinstance(a, Constant[bool]) and a.value
+            for a in e.args
+        )
     )
     def rewrite_boolean_or_l(self, expression):
         return Constant(True)
 
     @add_match(
-        FunctionApplication(Constant(or_), (Expression[bool], True))
-    )
-    def rewrite_boolean_or_r(self, expression):
-        return Constant(True)
-
-    @add_match(
-        FunctionApplication(Constant(and_), (False, Expression[bool]))
+        FunctionApplication(Constant(and_), ...),
+        lambda e: any(
+            isinstance(a, Constant[bool]) and not a.value
+            for a in e.args
+        )
     )
     def rewrite_boolean_and_l(self, expression):
-        return Constant(False)
-
-    @add_match(
-        FunctionApplication(Constant(and_), (Expression[bool], False))
-    )
-    def rewrite_boolean_and_r(self, expression):
         return Constant(False)
 
 
