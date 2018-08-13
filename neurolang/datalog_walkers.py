@@ -1,10 +1,14 @@
 from operator import and_, or_, invert
 import typing
+import logging
+
 
 from . import expression_walker as ew
 from . import expressions as exp
 from .neurolang import NeuroLangException
 
+
+logger = logging.getLogger()
 
 __all__ = [
     'undefined',
@@ -15,6 +19,7 @@ __all__ = [
 
 F_ = exp.FunctionApplication
 C_ = exp.Constant
+S_ = exp.Symbol
 
 
 class Undefined:
@@ -160,9 +165,12 @@ class SafeRangeVariablesWalker(ew.PatternWalker):
     @ew.add_match(
         F_[bool](
             C_(invert),
-            (F_[bool](C_, ...),)
+            (exp.Expression[bool],)
         ),
-        lambda expression: no_argument_is_application(expression.args[0])
+        lambda e: (
+            not isinstance(e.args[0], F_[bool]) or
+            no_argument_is_application(e.args[0])
+        )
     )
     def inversion(self, expression):
         return dict()
@@ -231,7 +239,7 @@ class VariableSubstitutionWalker(ew.PatternWalker):
         for s in expression.head._symbols:
             new_s = s
             while new_s in self.seen_variables:
-                new_s = exp.Symbol[new_s.type](new_s.name + '_')
+                new_s = S_[new_s.type](new_s.name + '_')
             if new_s is not s:
                 replacement_symbols[s] = new_s
 
@@ -310,7 +318,7 @@ class ConvertToSNRFWalker(ew.ExpressionWalker):
         )
 
 
-class FlattenMultipleLogicalOperators(ew.PatternWalker):
+class FlattenMultipleLogicalOperators(ew.ExpressionWalker):
     @ew.add_match(
         F_[bool](C_(and_), ...),
         lambda e: any(
@@ -353,3 +361,51 @@ class FlattenMultipleLogicalOperators(ew.PatternWalker):
                 new_args.append(a)
         functor = C_[typing.Callable[[bool] * len(new_args), bool]](or_)
         return self.walk(F_[bool](functor, tuple(new_args)))
+
+
+def expression_to_SRNF_and_range(expression):
+    '''
+    Converts a first-order logic expression to SRNF
+    and produces the range
+    '''
+
+    for _, e in ew.expression_iterator(expression):
+        if isinstance(e, F_[bool]):
+            if (
+                e.functor.value in (and_, or_, invert) and
+                all(e.type is bool for e in e.args)
+            ):
+                pass
+            elif all(not isinstance(a, exp.Definition) for a in e.args):
+                pass
+            else:
+                raise ValueError(
+                    f'{expression} is not a valid datalog expression'
+                )
+        elif isinstance(e, (
+            exp.ExistentialPredicate[bool], exp.UniversalPredicate[bool],
+            S_, C_
+        )):
+            pass
+        else:
+                raise ValueError(
+                    f'{expression} is not a valid datalog expression'
+                )
+
+        logger.info('Variable substitution')
+        vsw = VariableSubstitutionWalker()
+        expression = vsw.walk(expression)
+
+        logger.info('Flatten logical ops')
+        fw = FlattenMultipleLogicalOperators()
+        expression = fw.walk(expression)
+
+        logger.info('Convert to SNRF')
+        csnrf = ConvertToSNRFWalker()
+        expression = csnrf.walk(expression)
+
+        logger.info('Compute range')
+        srvw = SafeRangeVariablesWalker()
+        var_range = srvw.walk(expression)
+
+        return expression, var_range
