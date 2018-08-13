@@ -12,8 +12,8 @@ from ..neurolang import (
 C_ = Constant
 S_ = Symbol
 F_ = FunctionApplication
-E_ = ExistentialPredicate
-A_ = UniversalPredicate
+EP_ = ExistentialPredicate
+UP_ = UniversalPredicate
 
 and_binary_functor = C_[typing.Callable[[bool, bool], bool]](and_)
 or_binary_functor = C_[typing.Callable[[bool, bool], bool]](or_)
@@ -72,12 +72,12 @@ def test_conjunction():
         c: dw.Intersection({f})
     }
 
-    e = f & E_[bool](S_('x'), g)
+    e = f & EP_[bool](S_('x'), g)
     restrictors = srv.walk(e)
 
     assert restrictors is dw.undefined
 
-    e = E_[bool](S_('x'), g) & f
+    e = EP_[bool](S_('x'), g) & f
     restrictors = srv.walk(e)
 
     assert restrictors is dw.undefined
@@ -115,12 +115,12 @@ def test_disjunction():
 
     assert restrictors == res
 
-    e = f | E_[bool](S_('x'), g)
+    e = f | EP_[bool](S_('x'), g)
     restrictors = srv.walk(e)
 
     assert restrictors is dw.undefined
 
-    e = E_[bool](S_('x'), g) | f
+    e = EP_[bool](S_('x'), g) | f
     restrictors = srv.walk(e)
 
     assert restrictors is dw.undefined
@@ -149,12 +149,12 @@ def test_existential():
     c = S_('c')
 
     f = F_[bool](a, (b, c, C_(1)))
-    e = E_[bool](b, f)
+    e = EP_[bool](b, f)
 
     restrictors = srv.walk(e)
     assert restrictors == {c: dw.Intersection({f})}
 
-    e = E_[bool](S_('x'), f)
+    e = EP_[bool](S_('x'), f)
 
     restrictors = srv.walk(e)
     assert restrictors is dw.undefined
@@ -168,12 +168,12 @@ def test_not_srnf():
     c = S_('c')
 
     f = F_[bool](a, (b, c, C_(1)))
-    e = A_[bool](b, f)
+    e = UP_[bool](b, f)
 
     with pytest.raises(dw.NeuroLangException):
         srv.walk(e)
 
-    e2 = ~(f & E_[bool](b, f))
+    e2 = ~(f & EP_[bool](b, f))
 
     with pytest.raises(dw.NeuroLangException):
         srv.walk(e2)
@@ -188,11 +188,11 @@ def test_replace_variables():
     c = S_('c')
 
     f = F_[bool](a, (b, c, C_(1)))
-    e = E_[bool](b, f)
+    e = EP_[bool](b, f)
 
     exp = f & e
     exp_new = vsw.walk(exp)
-    expected_result = (f & E_[bool](b_, F_(a, (b_, c, C_(1))))).cast(bool)
+    expected_result = (f & EP_[bool](b_, F_(a, (b_, c, C_(1))))).cast(bool)
 
     assert exp_new == expected_result
 
@@ -241,9 +241,9 @@ def test_univ_to_ex():
 
     a = S_[typing.Callable[[bool], bool]]('a')
     b = S_[bool]('b')
-    e = A_[bool](b, a(b))
+    e = UP_[bool](b, a(b))
 
-    exp_res = invert_functor(E_[bool](b, invert_functor(a(b))))
+    exp_res = invert_functor(EP_[bool](b, invert_functor(a(b))))
 
     res = csnrf.walk(e)
 
@@ -307,8 +307,8 @@ def test_SNRF_and_range():
     assert r == {x: dw.Intersection((exp,))}
     assert res is exp
 
-    exp = A_[bool](x, invert_functor(Q(x, y)))
+    exp = UP_[bool](x, invert_functor(Q(x, y)))
     res, r = dw.expression_to_SRNF_and_range(exp)
-    exp_res = invert_functor(E_[bool](x, Q(x, y)))
+    exp_res = invert_functor(EP_[bool](x, Q(x, y)))
     assert r == {}
     assert res == exp_res
