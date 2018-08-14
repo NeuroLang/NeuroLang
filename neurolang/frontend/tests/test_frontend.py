@@ -1,6 +1,41 @@
 from neurolang import frontend
 from ...regions import Region
 
+from typing import Tuple, AbstractSet
+
+
+def test_new_symbol():
+    neurolang = frontend.RegionFrontend()
+
+    sym = neurolang.new_symbol(int)
+    assert sym.expression.type is int
+
+    sym_ = neurolang.new_symbol((float, int))
+    assert sym_.expression.type is Tuple[float, int]
+    assert sym.expression.name != sym_.expression.name
+
+    sym = neurolang.new_symbol(int, name='a')
+    assert sym.expression.name == 'a'
+
+
+def test_add_set():
+    neurolang = frontend.RegionFrontend()
+
+    s = neurolang.add_tuple_set(range(10), int)
+    res = neurolang[s]
+
+    assert s.type is AbstractSet[int]
+    assert res.type is AbstractSet[int]
+    assert res.value == frozenset(range(10))
+
+    v = frozenset(zip(('a', 'b', 'c'), range(3)))
+    s = neurolang.add_tuple_set(v, (str, int))
+    res = neurolang[s]
+
+    assert s.type is AbstractSet[Tuple[str, int]]
+    assert res.type is AbstractSet[Tuple[str, int]]
+    assert res.value == v
+
 
 def test_add_regions_and_query():
     neurolang = frontend.RegionFrontend()

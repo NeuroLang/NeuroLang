@@ -12,7 +12,9 @@ from .expressions import (
     unify_types, NeuroLangException
 )
 
-from .expression_pattern_matching import add_match, PatternMatcher
+from .expression_pattern_matching import (
+    add_match, PatternMatcher, NeuroLangPatternMatchingNoMatch
+)
 
 
 def expression_iterator(expression, include_level=False, dfs=True):
@@ -269,25 +271,26 @@ class ReplaceExpressionsByValues(ExpressionWalker):
     def symbol(self, expression):
         new_expression = self.symbol_table.get(expression, expression)
         if isinstance(new_expression, Constant):
-            return self.walk(new_expression)
+            return new_expression
         else:
-            raise NeuroLangException(
-                f'{expression} could not be evaluated '
-                'to a constant'
+            raise NeuroLangPatternMatchingNoMatch(
+                f'Symbol {expression} does not evaluate to a constant.'
             )
 
     @add_match(Constant[typing.AbstractSet])
     def constant_abstract_set(self, expression):
-        return frozenset(
+        return type(expression.value)(
             self.walk(e) for e in expression.value
         )
 
     @add_match(Constant[typing.Tuple])
     def constant_tuple(self, expression):
-        return tuple(self.walk(e) for e in expression.value)
+        return tuple(
+            self.walk(e) for e in expression.value
+        )
 
     @add_match(Constant)
-    def constant_value(self, expression):
+    def constant(self, expression):
         return expression.value
 
 
