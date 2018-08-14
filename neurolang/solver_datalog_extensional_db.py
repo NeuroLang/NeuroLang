@@ -2,7 +2,8 @@ from typing import AbstractSet, Any, Tuple
 from itertools import product
 
 from .expressions import (
-    FunctionApplication, Constant, NeuroLangTypeException, is_subtype
+    FunctionApplication, Constant, NeuroLangTypeException, Symbol,
+    is_subtype
 )
 from .expression_walker import (
     add_match, PatternWalker, ReplaceSymbolsByConstants
@@ -15,6 +16,7 @@ class ExtensionalDatabaseSolver(PatternWalker):
     '''Mixin to add sets as extensional databases on the DatalogSolver'''
     @add_match(
         FunctionApplication(Constant[AbstractSet], ...),
+        lambda e: all(len(a._symbols) == 0 for a in e.args)
     )
     def functionapplication_abstract_set(self, expression):
         '''
@@ -40,11 +42,37 @@ class ExtensionalDatabaseSolver(PatternWalker):
                 'Element type {element.type} does not '
                 'correspond with set type {functor.type}'
             )
-
+        import pdb; pdb.set_trace()
         rsc = ReplaceSymbolsByConstants(self.symbol_table)
         predset = rsc.walk(expression.functor).value
         ret = element in predset
         return Constant[bool](ret)
+
+    @add_match(
+        FunctionApplication(Symbol[AbstractSet], ...),
+    )
+    def functionapplication_abstract_set_symbol(self, expression):
+        '''
+        This pattern enables using intermediate representation objects
+        as relations in a datalog-compatible syntax. This means that
+        the set `R = {(1, 2), (3, 4)}` will behave such that
+        `R(1, 2)` (i.e. `FunctionApplication[bool](functor, args)`
+        with `functor = Constant[AbstractSet[Tuple[int, int]]](R)` and
+        `args = (Constant[int](1), Constant[int](2))`)
+        and `R(3, 4)` are `True` and any other tuple
+        given to `R` used as a function will be `False`.
+        '''
+        functor = self.walk(expression.functor)
+        args = self.walk(expression.args)
+        if (
+                functor is expression.functor and
+                args is expression.args
+        ):
+            return expression
+        else:
+            return self.walk(
+                FunctionApplication[expression.type](functor, args)
+            )
 
     def function_isin(self, element: Any, set: AbstractSet) -> bool:
         '''Function for checking that an element is in a set'''

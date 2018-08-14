@@ -274,11 +274,15 @@ class QueryBuilder:
                 continue
             symbol = nl.Symbol[Region](label_name)
             self.solver.symbol_table[symbol] = nl.Constant[Region](region)
-            atlas_set.add(
+            self.solver.symbol_table[self.new_symbol(str).expression] = \
+                nl.Constant[str](label_name)
+            tuple_symbol = self.new_symbol(Tuple[str, Region]).expression
+            self.solver.symbol_table[tuple_symbol] = (
                 nl.Constant[Tuple[str, Region]](
                     (nl.Constant[str](label_name), symbol)
                 )
             )
+            atlas_set.add(tuple_symbol)
         atlas_set = nl.Constant[AbstractSet[Tuple[str, Region]]](
             frozenset(atlas_set)
         )

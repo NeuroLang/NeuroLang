@@ -135,20 +135,20 @@ class ExpressionWalker(PatternWalker):
         ):
             functor_type, functor_value = get_type_and_value(functor)
 
-            if functor_type is not ToBeInferred:
-                if not is_subtype(functor_type, typing.Callable):
-                    raise NeuroLangTypeException(
-                        f'Function {functor} is not of callable type'
-                    )
-            else:
-                if (
-                    isinstance(functor, Constant) and
-                    not callable(functor_value)
-                ):
-                    raise NeuroLangTypeException(
-                        f'Function {functor} is not of callable type'
-                    )
-
+            # if functor_type is not ToBeInferred:
+            #    if not is_subtype(functor_type, typing.Callable):
+            #        raise NeuroLangTypeException(
+            #            f'Function {functor} is not of callable type'
+            #        )
+            # else:
+            #    if (
+            #        isinstance(functor, Constant) and
+            #        not callable(functor_value)
+            #    ):
+            #        raise NeuroLangTypeException(
+            #            f'Function {functor} is not of callable type'
+            #        )
+            #
             result = functor(*args, **kwargs)
             return self.walk(result)
         else:
@@ -355,10 +355,11 @@ class ExpressionBasicEvaluator(SymbolTableEvaluator):
 
     @add_match(
         FunctionApplication(Constant(...), ...),
-        lambda e: all(
-            not isinstance(arg, Expression) or isinstance(arg, Constant)
-            for _, arg in expression_iterator(e.args)
-        )
+        lambda expression:
+            all(
+                len(arg._symbols) == 0
+                for arg in expression.args
+            )
     )
     def evaluate_function(self, expression):
         functor = expression.functor

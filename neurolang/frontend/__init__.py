@@ -11,8 +11,8 @@ __all__ = ['RegionFrontend', 'QueryBuilder']
 
 
 class RegionFrontendSolver(
-        RegionSolver,
         IntensionalDatabaseSolver,
+        RegionSolver,
         DatalogSolver
 ):
     pass
