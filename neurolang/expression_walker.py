@@ -356,8 +356,9 @@ class ExpressionBasicEvaluator(SymbolTableEvaluator):
                 )
             result_type = ToBeInferred
 
-        args = tuple(a.value for a in expression.args)
-        kwargs = {k: v.value for k, v in expression.kwargs.items()}
+        rebv = ReplaceExpressionsByValues(self.symbol_table)
+        args = rebv.walk(expression.args)
+        kwargs = {k: rebv(v) for k, v in expression.kwargs.items()}
         result = Constant[result_type](
             functor_value(*args, **kwargs)
         )
