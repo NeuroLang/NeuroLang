@@ -14,6 +14,7 @@ from typing import Set, Callable
 C_ = expressions.Constant
 S_ = expressions.Symbol
 F_ = expressions.FunctionApplication
+L_ = expressions.Lambda
 
 
 def evaluate(expression, **kwargs):
@@ -111,6 +112,24 @@ def test_constant_method_and_operator():
     assert evaluate(fva) == 2
     assert evaluate(fvb) == 1
     assert evaluate(fbc).value == {1, 2}
+
+
+def test_lambda_expression():
+    l_ = L_[Callable[[], int]](tuple(), C_[int](2))
+    fa = F_[int](l_, tuple())
+    assert evaluate(fa) == 2
+
+    x = S_[int]('x')
+    l_ = L_[Callable[[int], int]]((x,), C_[int](2) + x)
+    fa = F_[int](l_, (C_[int](2),))
+
+    assert evaluate(fa) == 4
+
+    y = S_[int]('y')
+    l_ = L_[Callable[[int, int], int]]((x, y), x + y)
+    fa = F_[int](l_, (C_[int](2), C_[int](3),))
+
+    assert evaluate(fa) == 5
 
 
 def test_symbol_wrapping():
