@@ -365,11 +365,10 @@ class ExpressionBasicEvaluator(SymbolTableEvaluator):
 
     @add_match(
         FunctionApplication(Constant(...), ...),
-        lambda expression:
-            all(
-                isinstance(arg, Constant)
-                for arg in expression.args
-            )
+        lambda e: all(
+            not isinstance(arg, Expression) or isinstance(arg, Constant)
+            for _, arg in expression_iterator(e.args)
+        )
     )
     def evaluate_function(self, expression):
         functor = expression.functor
