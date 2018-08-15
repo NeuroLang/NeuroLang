@@ -261,6 +261,35 @@ class ReplaceSymbolsByConstants(ExpressionWalker):
         ))
 
 
+class ReplaceExpressionsByValues(ExpressionWalker):
+    def __init__(self, symbol_table):
+        self.symbol_table = symbol_table
+
+    @add_match(Symbol)
+    def symbol(self, expression):
+        new_expression = self.symbol_table.get(expression, expression)
+        if isinstance(new_expression, Constant):
+            return new_expression.value
+        else:
+            return expression
+
+    @add_match(Constant[typing.AbstractSet])
+    def constant_abstract_set(self, expression):
+        return frozenset(
+            self.walk(e) for e in expression.value
+        )
+
+    @add_match(Constant[typing.Tuple])
+    def constant_tuple(self, expression):
+        return tuple(
+            self.walk(e) for e in expression.value
+        )
+
+    @add_match(Constant)
+    def constant_value(self, expression):
+        return expression.value
+
+
 class SymbolTableEvaluator(ExpressionWalker):
     def __init__(self, symbol_table=None):
         if symbol_table is None:
