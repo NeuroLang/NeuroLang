@@ -8,10 +8,9 @@ from .solver import *
 from .exceptions import NeuroLangException
 from .symbols_and_types import (
     Symbol, Constant, Expression, FunctionApplication, Statement, Query,
-    Projection, ExistentialPredicate,
+    Projection, ExistentialPredicate, Lambda,
     TypedSymbolTable, unify_types, ToBeInferred,
     NeuroLangTypeException, is_subtype,
-    get_type_and_value
 )
 from .expression_walker import (
     add_match,
@@ -21,10 +20,13 @@ from .expression_walker import (
 
 
 __all__ = [
+    '__version__',
     'add_match',
     'NeuroLangException',
     'PatternMatcher',
-    'add_match', 'NeuroLangIntermediateRepresentationCompiler',
-    'Constant', 'Symbol', 'FunctionApplication',
-    'Statement', 'Query', 'ExistentialPredicate', 'UniversalPredicate'
+    'add_match', 'NeuroLangIntermediateRepresentationCompiler', 'Expression',
+    'Constant', 'Symbol', 'FunctionApplication', 'Lambda', 'Projection',
+    'Statement', 'Query', 'ExistentialPredicate', 'UniversalPredicate',
+    'TypedSymbolTable', 'ToBeInferred', 'is_subtype', 'unify_types',
+    'ExpressionBasicEvaluator', 'NeuroLangTypeException'
 ]
