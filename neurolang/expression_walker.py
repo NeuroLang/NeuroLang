@@ -9,7 +9,7 @@ from .expressions import (
     FunctionApplication, Statement, Query, Projection, Constant,
     Symbol, ExistentialPredicate, UniversalPredicate, Expression,
     get_type_and_value, ToBeInferred, is_subtype, NeuroLangTypeException,
-    unify_types
+    unify_types, NeuroLangException
 )
 
 from .expression_pattern_matching import add_match, PatternMatcher
@@ -257,7 +257,10 @@ class ReplaceExpressionsByValues(ExpressionWalker):
         if isinstance(new_expression, Constant):
             return new_expression.value
         else:
-            return expression
+            raise NeuroLangException(
+                f'{expression} could not be evaluated '
+                'to a constant'
+            )
 
     @add_match(Constant[typing.AbstractSet])
     def constant_abstract_set(self, expression):
