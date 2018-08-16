@@ -292,16 +292,16 @@ class ParametricTypeClassMeta(type):
         )
 
 
-def __check_expression_is_pattern__(arg):
+def __check_expression_is_pattern__(expression):
     '''
     Checks whether the Expression is a pattern for
     pattern matching instead of an instance representing
     an IR object
     '''
     return (
-        arg is ... or
-        (isinstance(arg, Expression) and arg.__is_pattern__) or
-        (inspect.isclass(arg) and issubclass(arg, Expression))
+        expression is ... or
+        (isinstance(expression, Expression) and expression.__is_pattern__) or
+        (inspect.isclass(expression) and issubclass(expression, Expression))
     )
 
 
