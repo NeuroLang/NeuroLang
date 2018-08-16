@@ -292,7 +292,12 @@ class ParametricTypeClassMeta(type):
         )
 
 
-def __check_expression__(arg):
+def __check_expression_is_pattern__(arg):
+    '''
+    Checks whether the Expression is a pattern for
+    pattern matching instead of an instance representing
+    an IR object
+    '''
     return (
         arg is ... or
         (isinstance(arg, Expression) and arg.__is_pattern__) or
@@ -339,12 +344,12 @@ class ExpressionMeta(ParametricTypeClassMeta):
         def new_init(self, *args, **kwargs):
             generic_pattern_match = True
             for arg in args:
-                if __check_expression__(arg):
+                if __check_expression_is_pattern__(arg):
                     break
                 if (
                     isinstance(arg, (tuple, list)) and
                     any(
-                        __check_expression__(a)
+                        __check_expression_is_pattern__(a)
                         for a in arg
                     )
                 ):
