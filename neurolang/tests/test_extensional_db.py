@@ -95,9 +95,9 @@ def test_simple_set_in_function():
 def test_join():
     ts = ExtensionalTestSolver()
 
-    set1 = C_(frozenset((i, i * 2) for i in range(2)))
+    set1 = C_(frozenset(C_((i, i * 2)) for i in range(2)))
 
-    set2 = C_(frozenset((i, i * 2) for i in range(4)))
+    set2 = C_(frozenset(C_((i, i * 2)) for i in range(4)))
 
     set3 = frozenset(
         e1 + e2
@@ -115,9 +115,9 @@ def test_join():
 def test_join_notuple():
     ts = ExtensionalTestSolver()
 
-    set1 = C_(frozenset(i for i in range(2)))
+    set1 = C_(frozenset(C_(i) for i in range(2)))
 
-    set2 = C_(frozenset((i, i * 2) for i in range(4)))
+    set2 = C_(frozenset((C_(i), C_(i * 2)) for i in range(4)))
 
     set3 = frozenset(
         (e1, ) + e2
