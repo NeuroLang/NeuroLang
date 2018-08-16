@@ -387,7 +387,16 @@ class Expression(metaclass=ExpressionMeta):
         raise TypeError("Expression can not be instantiated")
 
     def __getitem__(self, index):
-        return Projection(self, index)
+        global _expressions_behave_as_python_objects
+        thread_id = threading.get_ident()
+
+        if (
+            thread_id in _expressions_behave_as_python_objects or
+            self.__is_pattern__
+        ):
+            return Projection(self, index)
+        else:
+            super().__getitem__(index)
 
     def __call__(self, *args, **kwargs):
         if hasattr(self, '__annotations__'):
@@ -831,21 +840,17 @@ class UniversalPredicate(Quantifier):
 
 class Statement(Definition):
     def __init__(
-        self, symbol, value,
+        self, lhs, rhs,
     ):
-        self.symbol = symbol
-        self.value = value
+        self.lhs = lhs
+        self.rhs = rhs
 
     def reflect(self):
-        return self.value
+        return self.rhs
 
     def __repr__(self):
-        if self.symbol is ...:
-            name = '...'
-        else:
-            name = self.symbol.name
         return 'Statement{{{}: {} <- {}}}'.format(
-            name, self.__type_repr__, self.value
+            repr(self.lhs), self.__type_repr__, repr(self.rhs)
         )
 
 
