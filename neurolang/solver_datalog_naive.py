@@ -17,6 +17,8 @@ from .expression_walker import (
 
 
 class NaiveDatalog(PatternWalker):
+    constant_set_name = '__dl_constants__'
+
     def function_equals(self, a: Any, b: Any) -> bool:
         return a == b
 
@@ -27,16 +29,21 @@ class NaiveDatalog(PatternWalker):
     def statement_extensional(self, expression):
         lhs = expression.lhs
 
+        if lhs.functor.name == self.constant_set_name:
+            raise NeuroLangException(
+                f'symbol {self.constant_set_name} is protected'
+            )
+
         if lhs.functor.name in self.symbol_table:
             eb = self.symbol_table[lhs.functor.name].expressions
         else:
             eb = tuple()
 
         if all(isinstance(a, Constant) for a in lhs.args):
-            if '__dl_constants__' not in self.symbol_table:
-                self.symbol_table['__dl_constants__'] = \
+            if self.constant_set_name not in self.symbol_table:
+                self.symbol_table[self.constant_set_name] = \
                         Constant[AbstractSet[Any]](set())
-            self.symbol_table['__dl_constants__'].value.update(lhs.args)
+            self.symbol_table[self.constant_set_name].value.update(lhs.args)
 
             value = {Constant(lhs.args)}
 
@@ -85,6 +92,11 @@ class NaiveDatalog(PatternWalker):
     ))
     def statement_intensional(self, expression):
         lhs = expression.lhs
+        if lhs.functor.name == self.constant_set_name:
+            raise NeuroLangException(
+                f'symbol {self.constant_set_name} is protected'
+            )
+
         rhs = expression.rhs
 
         lhs_symbols = lhs._symbols - lhs.functor._symbols
@@ -134,7 +146,7 @@ class NaiveDatalog(PatternWalker):
             head = expression.head.value
 
         loop = product(
-            *((self.symbol_table['__dl_constants__'].value,) * len(head))
+            *((self.symbol_table[self.constant_set_name].value,) * len(head))
         )
 
         body = Lambda(head, expression.body)
@@ -158,7 +170,7 @@ class NaiveDatalog(PatternWalker):
             head = expression.head.value
 
         loop = product(
-            *((self.symbol_table['__dl_constants__'].value,) * len(head))
+            *((self.symbol_table[self.constant_set_name].value,) * len(head))
         )
 
         body = Lambda(head, expression.body)
@@ -188,7 +200,7 @@ class NaiveDatalog(PatternWalker):
             )
 
         loop = product(
-            *((self.symbol_table['__dl_constants__'].value,) * len(head))
+            *((self.symbol_table[self.constant_set_name].value,) * len(head))
         )
 
         body = Lambda(head, expression.body)
