@@ -104,7 +104,7 @@ def is_subtype(left, right):
     elif right is ToBeInferred:
         return left is ToBeInferred or left is typing.Any
     elif hasattr(right, '__origin__') and right.__origin__ is not None:
-        if right.__origin__ == typing.Union:
+        if right.__origin__ is typing.Union:
             return any(
                 is_subtype(left, r)
                 for r in right.__args__
@@ -125,19 +125,15 @@ def is_subtype(left, right):
                 )
             else:
                 return False
-        elif (any(
-            issubclass(right, T) and
-            issubclass(left, T)
-            for T in (
-                typing.AbstractSet, typing.List, typing.Tuple,
-                typing.Mapping, typing.Iterable
-            )
-        )):
-            return all(
-                is_subtype(l, r) for l, r in zip(
-                    get_type_args(left), get_type_args(right)
+        elif issubclass(left, right.__origin__):
+            if issubclass(right, typing.Iterable):
+                return all(
+                    is_subtype(l, r) for l, r in zip(
+                        get_type_args(left), get_type_args(right)
+                    )
                 )
-            )
+            else:
+                return True
         elif right.__origin__ == typing.Generic:
             raise ValueError("typing Generic not supported")
         else:
@@ -272,6 +268,7 @@ class ParametricTypeClassMeta(type):
             super().__subclasscheck__(other) or
             (
                 hasattr(other, '__generic_class__') and
+                not hasattr(cls, '__generic_class__') and
                 issubclass(other.__generic_class__, cls)
             ) or
             (
