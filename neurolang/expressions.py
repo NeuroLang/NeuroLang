@@ -292,6 +292,19 @@ class ParametricTypeClassMeta(type):
         )
 
 
+def __check_expression_is_pattern__(expression):
+    '''
+    Checks whether the Expression is a pattern for
+    pattern matching instead of an instance representing
+    an intermediate representation object
+    '''
+    return (
+        expression is ... or
+        (isinstance(expression, Expression) and expression.__is_pattern__) or
+        (inspect.isclass(expression) and issubclass(expression, Expression))
+    )
+
+
 class ExpressionMeta(ParametricTypeClassMeta):
     """
     Metaclass for expressions. It guarantees a set of properties for every.
@@ -329,11 +342,21 @@ class ExpressionMeta(ParametricTypeClassMeta):
 
         @wraps(orig_init)
         def new_init(self, *args, **kwargs):
-            generic_pattern_match = any(
-                a is ... or (isinstance(a, tuple) and ... in a) or
-                (inspect.isclass(a) and issubclass(a, Expression))
-                for a in args
-            )
+            generic_pattern_match = True
+            for arg in args:
+                if __check_expression_is_pattern__(arg):
+                    break
+                if (
+                    isinstance(arg, (tuple, list)) and
+                    any(
+                        __check_expression_is_pattern__(a)
+                        for a in arg
+                    )
+                ):
+                    break
+            else:
+                generic_pattern_match = False
+
             self.__is_pattern__ = generic_pattern_match
             self._symbols = set()
 
@@ -613,6 +636,38 @@ class Constant(Expression):
             )
 
 
+class Lambda(Definition):
+    def __init__(self, args, function_expression):
+        self.args = args
+        self.function_expression = function_expression
+
+        if self.args is None:
+            self.arg = tuple()
+
+        if (
+            isinstance(args, tuple) and
+            any(not isinstance(arg, Symbol) for arg in args)
+        ):
+            raise NeuroLangException(
+                "All arguments need to be a tuple of symbols"
+            )
+
+        src_type = [arg.type for arg in self.args]
+        dst_type = self.function_expression.type
+        self.type = unify_types(
+            typing.Callable[src_type, dst_type],
+            self.type
+        )
+
+        self._symbols = self.function_expression._symbols - set(self.args)
+
+    def __repr__(self):
+        r = u'\u03BB {} -> {}: {}'.format(
+            self.args, self.function_expression, self.__type_repr__
+        )
+        return r
+
+
 class FunctionApplication(Definition):
     def __init__(
         self, functor, args, kwargs=None,
@@ -637,26 +692,21 @@ class FunctionApplication(Definition):
                     "Functor return type not unifiable with application type"
                 )
 
-        if isinstance(functor, Symbol):
-            self._symbols = {functor}
-        elif isinstance(functor, FunctionApplication):
-            self._symbols = functor._symbols.copy()
-        else:
-            self._symbols = set()
+        self._symbols = functor._symbols.copy()
 
         if self.kwargs is None:
             self.kwargs = dict()
 
         if self.args is None:
             self.args = tuple()
-        elif not isinstance(self.args, tuple):
-            raise ValueError('args parameter must be a tuple')
+        elif not (
+            isinstance(self.args, tuple) and
+            all(isinstance(a, Expression) for a in self.args)
+        ):
+            raise ValueError('args parameter must be a tuple of expressions')
 
         for arg in chain(self.args, self.kwargs.values()):
-            if isinstance(arg, Symbol):
-                self._symbols.add(arg)
-            elif isinstance(arg, Expression):
-                self._symbols |= arg._symbols
+            self._symbols |= arg._symbols
 
     @property
     def function(self):

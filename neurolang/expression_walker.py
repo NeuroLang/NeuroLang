@@ -7,7 +7,7 @@ from .symbols_and_types import TypedSymbolTable
 from .expressions import (
     ExpressionBlock,
     FunctionApplication, Statement, Query, Projection, Constant,
-    Symbol, ExistentialPredicate, UniversalPredicate, Expression,
+    Symbol, ExistentialPredicate, UniversalPredicate, Expression, Lambda,
     get_type_and_value, ToBeInferred, is_subtype, NeuroLangTypeException,
     unify_types
 )
@@ -199,6 +199,20 @@ class ExpressionWalker(PatternWalker):
             result = Projection(collection, item)
             return self.walk(result)
 
+    @add_match(Lambda)
+    def lambda_(self, expression):
+        args = self.walk(expression.args)
+        function_expression = self.walk(expression.function_expression)
+
+        if (
+            all(a is a_ for a, a_ in zip(args, expression.args)) and
+            function_expression is expression.function_expression
+        ):
+            return expression
+        else:
+            res = Lambda[expression.type](args, function_expression)
+            return self.walk(res)
+
     @add_match(Constant)
     def constant(self, expression):
         return expression
@@ -348,3 +362,30 @@ class ExpressionBasicEvaluator(SymbolTableEvaluator):
             functor_value(*args, **kwargs)
         )
         return result
+
+    @add_match(
+        FunctionApplication(Lambda, ...)
+    )
+    def eval_lambda(self, expression):
+        lambda_ = expression.functor
+        args = expression.args
+        lambda_args = lambda_.args
+        if (
+            len(args) != len(lambda_args) or
+            not all(
+                is_subtype(l.type, a.type)
+                for l, a in zip(lambda_args, args)
+            )
+        ):
+            raise NeuroLangTypeException(
+                f'{args} is not the appropriate '
+                f'argument tuple for {lambda_args}'
+            )
+
+        if len(
+            lambda_.function_expression._symbols.intersection(lambda_args)
+        ) > 0:
+            rsw = ReplaceSymbolWalker(dict(zip(lambda_args, args)))
+            return self.walk(rsw.walk(lambda_.function_expression))
+        else:
+            return lambda_.function_expression
