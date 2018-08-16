@@ -296,7 +296,7 @@ def __check_expression_is_pattern__(expression):
     '''
     Checks whether the Expression is a pattern for
     pattern matching instead of an instance representing
-    an IR object
+    an intermediate representation object
     '''
     return (
         expression is ... or
