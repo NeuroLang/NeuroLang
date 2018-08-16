@@ -288,7 +288,7 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
         for i, a in enumerate(ast['argument']):
             argument_type, value = get_type_and_value(a)
             if isinstance(value, Statement):
-                value = value.symbol
+                value = value.lhs
             elif isinstance(value, Query):
                 value = value.head
 

@@ -82,9 +82,10 @@ def test_tuple_symbol_query():
 
     x = S_[typing.Tuple[int, str]]('x')
 
-    query = expressions.Query[typing.AbstractSet[typing.Tuple[int, str]]](
-        x, ds.symbol_table['gt'](x[C_(0)], C_(2))
-    )
+    with expressions.expressions_behave_as_objects():
+        query = expressions.Query[typing.AbstractSet[typing.Tuple[int, str]]](
+            x, ds.symbol_table['gt'](x[C_(0)], C_(2))
+        )
 
     res = ds.walk(query)
     assert isinstance(res, expressions.Constant[query.type])

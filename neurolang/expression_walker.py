@@ -112,7 +112,7 @@ class ExpressionWalker(PatternWalker):
     @add_match(Statement)
     def statement(self, expression):
         return Statement[expression.type](
-            expression.symbol, self.walk(expression.value)
+            expression.lhs, self.walk(expression.rhs)
         )
 
     @add_match(FunctionApplication)
@@ -311,16 +311,16 @@ class SymbolTableEvaluator(ExpressionWalker):
 
     @add_match(Statement)
     def statement(self, expression):
-        value = self.walk(expression.value)
-        return_type = unify_types(expression.type, value.type)
-        value.change_type(return_type)
-        expression.symbol.change_type(return_type)
-        if value is expression.value:
-            self.symbol_table[expression.symbol] = value
+        rhs = self.walk(expression.rhs)
+        return_type = unify_types(expression.type, rhs.type)
+        rhs.change_type(return_type)
+        expression.lhs.change_type(return_type)
+        if rhs is expression.rhs:
+            self.symbol_table[expression.lhs] = rhs
             return expression
         else:
             return self.walk(
-                Statement[expression.type](expression.symbol, value)
+                Statement[expression.type](expression.lhs, rhs)
             )
 
 
