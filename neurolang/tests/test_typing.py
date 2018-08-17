@@ -65,15 +65,6 @@ def test_subclass():
     )
 
 
-def test_isinstance():
-    a = expressions.Constant(3)
-    b = expressions.Constant[typing.AbstractSet]
-    print(a, b)
-    print(type(a).mro())
-    print(b.mro())
-    assert not isinstance(a, b)
-
-
 def test_replace_subtype():
     assert (
         typing.Set is symbols_and_types.replace_type_variable(
