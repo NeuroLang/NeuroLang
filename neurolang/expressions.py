@@ -453,6 +453,16 @@ class Expression(metaclass=ExpressionMeta):
         assert ret.type is type_
         return ret
 
+    def unapply(self):
+        return tuple(
+            getattr(self, child)
+            for child in self.__children__
+        )
+
+    @classmethod
+    def apply(cls, *args):
+        return cls(*args)
+
     @property
     def __type_repr__(self):
         if (

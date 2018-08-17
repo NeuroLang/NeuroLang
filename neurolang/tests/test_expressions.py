@@ -209,3 +209,12 @@ def test_fa_composition_symbols_correctly_propagated():
 
     for symbol in [a, b, c, d, e]:
         assert symbol in expression._symbols
+
+
+def test_apply_unapply():
+    a = C_(1)
+
+    assert C_.apply(*a.unapply()) == a
+
+    a = F_(S_('a'), (C_(1),))
+    assert F_.apply(*a.unapply()) == a
