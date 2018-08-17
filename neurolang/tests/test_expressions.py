@@ -206,9 +206,13 @@ def test_fa_composition_symbols_correctly_propagated():
     e = S_('e')
 
     expression = fa1(a, fa2(b, fa3(c, d), e))
+    expression_block = expressions.ExpressionBlock((
+        fa1(a), fa2(b, fa3(c, d), e)
+    ))
 
     for symbol in [a, b, c, d, e]:
         assert symbol in expression._symbols
+        assert symbol in expression_block._symbols
 
 
 def test_apply_unapply():
