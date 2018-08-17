@@ -15,7 +15,8 @@ from .expressions import (
     Query, ExistentialPredicate, UniversalPredicate
 )
 from .expression_walker import (
-    add_match, PatternWalker, expression_iterator
+    add_match, PatternWalker, expression_iterator,
+    ExpressionBasicEvaluator
 )
 
 
