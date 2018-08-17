@@ -213,8 +213,9 @@ def test_fa_composition_symbols_correctly_propagated():
 
 def test_apply_unapply():
     a = C_(1)
-
-    assert C_.apply(*a.unapply()) == a
+    b = a.apply(*a.unapply())
+    assert a is not b and a == b
 
     a = F_(S_('a'), (C_(1),))
-    assert F_.apply(*a.unapply()) == a
+    b = a.apply(*a.unapply())
+    assert a is not b and a == b
