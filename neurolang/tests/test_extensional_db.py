@@ -100,9 +100,9 @@ def test_join():
     set2 = C_(frozenset(C_((i, i * 2)) for i in range(4)))
 
     set3 = frozenset(
-        e1 + e2
+        e1.value + e2.value
         for e1, e2 in product(set1.value, set2.value)
-        if e1[1] == e2[0]
+        if e1.value[1] == e2.value[0]
     )  # yapf: disable
 
     fa = F_(S_('join'), (set1, C_(1), set2, C_(0)))
@@ -120,9 +120,9 @@ def test_join_notuple():
     set2 = C_(frozenset((C_(i), C_(i * 2)) for i in range(4)))
 
     set3 = frozenset(
-        (e1, ) + e2
+        (e1.value, ) + e2.value
         for e1, e2 in product(set1.value, set2.value)
-        if e1 == e2[1]
+        if e1 == e2.value[1]
     )  # yapf: disable
 
     fa = F_(S_('join'), (set1, C_(0), set2, C_(1)))
