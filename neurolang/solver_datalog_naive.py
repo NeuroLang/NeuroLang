@@ -16,7 +16,6 @@ from .expressions import (
 )
 from .expression_walker import (
     add_match, PatternWalker, expression_iterator,
-    ExpressionBasicEvaluator
 )
 
 
@@ -47,7 +46,7 @@ class NaiveDatalog(PatternWalker):
 
     @add_match(Statement(
         FunctionApplication[bool](Symbol, ...),
-        None
+        Constant(None)
     ))
     def statement_extensional(self, expression):
         lhs = expression.lhs
@@ -120,6 +119,8 @@ class NaiveDatalog(PatternWalker):
 
         self.symbol_table[lhs.functor.name] = ExpressionBlock(eb)
 
+        return expression
+
     @add_match(Statement(
         FunctionApplication[bool](Symbol, ...),
         Expression
@@ -154,7 +155,14 @@ class NaiveDatalog(PatternWalker):
 
         self.symbol_table[lhs.functor.name] = ExpressionBlock(eb)
 
-    @add_match(FunctionApplication(ExpressionBlock, ...))
+        return expression
+
+    @add_match(
+        FunctionApplication(ExpressionBlock, ...),
+        lambda e: all(
+            isinstance(a, Constant) for a in e.args
+        )
+    )
     def evaluate_datalog_expression(self, expression):
         for exp in expression.functor.expressions:
             if (
@@ -255,3 +263,42 @@ class NaiveDatalog(PatternWalker):
                     result.add(args[0])
 
         return Constant[AbstractSet[Any]](result)
+
+    def uextensional_database(self):
+        res = dict()
+        for key, value in self.symbol_table.items():
+            if not isinstance(value, ExpressionBlock):
+                eb = (value,)
+            else:
+                eb = value.expressions
+
+            for exp in eb:
+                if isinstance(exp, Constant[AbstractSet]):
+                    res[key] = exp
+        return res
+
+
+def extract_datalog_variables(expression):
+    '''extract variables from expression knowing that it's in Datalog format'''
+    res = set()
+    for _, exp in expression_iterator(expression):
+        if isinstance(exp, FunctionApplication):
+            for arg in exp.args:
+                if isinstance(arg, Symbol):
+                    res.add(arg)
+    return res
+
+
+def extract_datalog_predicates(expression):
+    """
+    extract predicates from expression
+    knowing that it's in Datalog format
+    """
+    res = set()
+    for _, exp in expression_iterator(expression):
+        if (
+            isinstance(exp, FunctionApplication) and
+            exp.functor.value is not and_
+        ):
+            res.add(exp)
+    return res

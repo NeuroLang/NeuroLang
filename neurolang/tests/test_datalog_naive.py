@@ -22,6 +22,7 @@ B_ = ExpressionBlock
 EP_ = ExistentialPredicate
 UP_ = UniversalPredicate
 Q_ = Query
+CNone = C_(None)
 
 
 class Datalog(
@@ -35,7 +36,7 @@ class Datalog(
 def test_facts_constants():
     dl = Datalog()
 
-    f1 = ST_(S_('Q')(C_(1), C_(2)), None)
+    f1 = ST_(S_('Q')(C_(1), C_(2)), CNone)
 
     dl.walk(f1)
 
@@ -46,7 +47,7 @@ def test_facts_constants():
     assert is_subtype(fact_set.type, AbstractSet)
     assert {C_((C_(1), C_(2)))} == fact_set.value
 
-    f2 = ST_(S_('Q')(C_(3), C_(4)), None)
+    f2 = ST_(S_('Q')(C_(3), C_(4)), CNone)
     dl.walk(f2)
     assert (
         {C_((C_(1), C_(2))), C_((C_(3), C_(4)))} ==
@@ -114,10 +115,10 @@ def test_facts_intensional():
     z = S_('z')
 
     extensional = ExpressionBlock((
-        ST_(Q(C_(1), C_(1)), None),
-        ST_(Q(C_(1), C_(2)), None),
-        ST_(Q(C_(1), C_(4)), None),
-        ST_(Q(C_(2), C_(4)), None),
+        ST_(Q(C_(1), C_(1)), CNone),
+        ST_(Q(C_(1), C_(2)), CNone),
+        ST_(Q(C_(1), C_(4)), CNone),
+        ST_(Q(C_(2), C_(4)), CNone),
     ))
 
     intensional = ExpressionBlock((
@@ -163,10 +164,10 @@ def test_query():
     z = S_('z')
 
     extensional = ExpressionBlock((
-        ST_(Q(C_(1), C_(1)), None),
-        ST_(Q(C_(1), C_(2)), None),
-        ST_(Q(C_(1), C_(4)), None),
-        ST_(Q(C_(2), C_(4)), None),
+        ST_(Q(C_(1), C_(1)), CNone),
+        ST_(Q(C_(1), C_(2)), CNone),
+        ST_(Q(C_(1), C_(4)), CNone),
+        ST_(Q(C_(2), C_(4)), CNone),
     ))
 
     intensional = ExpressionBlock((
