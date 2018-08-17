@@ -454,6 +454,7 @@ class Expression(metaclass=ExpressionMeta):
         return ret
 
     def unapply(self):
+        '''Returns a tuple of parameters used to build the expression.'''
         return tuple(
             getattr(self, child)
             for child in self.__children__
@@ -461,6 +462,7 @@ class Expression(metaclass=ExpressionMeta):
 
     @classmethod
     def apply(cls, *args):
+        '''Builds a new expression using a tuple of its parameters'''
         return cls(*args)
 
     @property
