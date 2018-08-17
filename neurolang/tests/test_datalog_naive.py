@@ -191,3 +191,25 @@ def test_query():
         C_((C_(1), C_(2))),
         C_((C_(1), C_(4))),
     }
+
+
+def test_not_conjunctive():
+
+    dl = Datalog()
+
+    Q = S_('Q')
+    R = S_('R')
+    x = S_('x')
+    y = S_('y')
+
+    with pytest.raises(NeuroLangException):
+        dl.walk(ST_(Q(x, y), R(x) | R(y)))
+
+    with pytest.raises(NeuroLangException):
+        dl.walk(ST_(Q(x, y), R(x) & R(y) | R(x)))
+
+    with pytest.raises(NeuroLangException):
+        dl.walk(ST_(Q(x, y), ~R(x)))
+
+    with pytest.raises(NeuroLangException):
+        dl.walk(ST_(Q(x, y), R(Q(x))))

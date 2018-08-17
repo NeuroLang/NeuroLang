@@ -6,6 +6,9 @@ from typing import AbstractSet, Any, Tuple
 from itertools import product
 
 
+from operator import and_
+
+
 from .expressions import (
     FunctionApplication, Constant, NeuroLangException, is_subtype,
     Statement, Symbol, Lambda, ExpressionBlock, Expression,
@@ -14,6 +17,25 @@ from .expressions import (
 from .expression_walker import (
     add_match, PatternWalker, expression_iterator
 )
+
+
+def is_conjunctive_expression(expression):
+    return all(
+        not isinstance(exp, FunctionApplication) or
+        (
+            isinstance(exp, FunctionApplication) and
+            (
+                (
+                    isinstance(exp.functor, Constant) and
+                    exp.functor.value is and_
+                ) or all(
+                    not isinstance(arg, FunctionApplication)
+                    for arg in exp.args
+                )
+            )
+        )
+        for _, exp in expression_iterator(expression)
+    )
 
 
 class NaiveDatalog(PatternWalker):
@@ -109,6 +131,10 @@ class NaiveDatalog(PatternWalker):
             )
 
         rhs = expression.rhs
+        if not is_conjunctive_expression(rhs):
+            raise NeuroLangException(
+                f'Expression {rhs} is not conjunctive'
+            )
 
         lhs_symbols = lhs._symbols - lhs.functor._symbols
 
