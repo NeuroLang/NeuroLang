@@ -111,7 +111,7 @@ def test_constant_method_and_operator():
     assert evaluate(a) == 1
     assert evaluate(fva) == 2
     assert evaluate(fvb) == 1
-    assert evaluate(fbc).value == {1, 2}
+    assert evaluate(fbc).value == {C(1), C(2)}
 
 
 def test_lambda_expression():
