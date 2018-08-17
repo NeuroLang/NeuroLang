@@ -9,6 +9,7 @@ from .expressions import (
     ToBeInferred,
     Constant, Expression,
     Symbol,
+    Lambda,
     FunctionApplication,
     Statement,
     ExistentialPredicate,
@@ -28,7 +29,7 @@ from .expressions import (
 __all__ = [
     'ToBeInferred',
     'Symbol', 'Constant', 'Expression', 'FunctionApplication', 'Statement',
-    'Projection', 'ExistentialPredicate', 'UniversalPredicate',
+    'Projection', 'ExistentialPredicate', 'UniversalPredicate', 'Lambda',
     'Query',
     'TypedSymbolTable', 'ExpressionBlock',
     'typing_callable_from_annotated_function',

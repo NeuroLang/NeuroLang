@@ -11,7 +11,7 @@ from .ast_tatsu import TatsuASTConverter
 from ..exceptions import NeuroLangException
 from ..symbols_and_types import (
     Symbol, Constant, Expression, FunctionApplication, Statement, Query,
-    Projection, ExistentialPredicate, ExpressionBlock,
+    Projection, ExistentialPredicate, ExpressionBlock, Lambda,
     unify_types, ToBeInferred,
     NeuroLangTypeException, is_subtype,
     get_type_and_value
@@ -31,7 +31,7 @@ __all__ = [
     'NeuroLangIntermediateRepresentationCompiler',
     'PatternMatcher',
     'grammar_EBNF', 'parser', 'add_match',
-    'Constant', 'Symbol', 'FunctionApplication',
+    'Constant', 'Symbol', 'FunctionApplication', 'Lambda',
     'Statement', 'Query', 'ExistentialPredicate'
 ]
 
@@ -288,7 +288,7 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
         for i, a in enumerate(ast['argument']):
             argument_type, value = get_type_and_value(a)
             if isinstance(value, Statement):
-                value = value.symbol
+                value = value.lhs
             elif isinstance(value, Query):
                 value = value.head
 
