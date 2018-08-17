@@ -269,7 +269,7 @@ class ReplaceExpressionsByValues(ExpressionWalker):
     def symbol(self, expression):
         new_expression = self.symbol_table.get(expression, expression)
         if isinstance(new_expression, Constant):
-            return new_expression.value
+            return self.walk(new_expression)
         else:
             raise NeuroLangException(
                 f'{expression} could not be evaluated '
