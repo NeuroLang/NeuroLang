@@ -57,7 +57,7 @@ class RegionSolver(PatternWalker[Region]):
             return func
 
         for key, value in cardinal_operations.items():
-            setattr(cls, f'predicate_{key}', build_function(value))
+            setattr(cls, f'function_{key}', build_function(value))
 
         anatomical_correct_operations = {
             k: cardinal_operations[k] for k in (
@@ -66,7 +66,7 @@ class RegionSolver(PatternWalker[Region]):
                 )
         }
         for key, value in anatomical_correct_operations.items():
-            setattr(cls, f'predicate_anatomical_{key}',
+            setattr(cls, f'function_anatomical_{key}',
                     anatomical_direction_function(value))
 
         return PatternWalker.__new__(cls)
