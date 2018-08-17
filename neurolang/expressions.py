@@ -453,6 +453,18 @@ class Expression(metaclass=ExpressionMeta):
         assert ret.type is type_
         return ret
 
+    def unapply(self):
+        '''Returns a tuple of parameters used to build the expression.'''
+        return tuple(
+            getattr(self, child)
+            for child in self.__children__
+        )
+
+    @classmethod
+    def apply(cls, *args):
+        '''Builds a new expression using a tuple of its parameters'''
+        return cls(*args)
+
     @property
     def __type_repr__(self):
         if (
