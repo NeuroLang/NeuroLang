@@ -3,11 +3,11 @@ import re
 
 from .CD_relations import cardinal_relation, inverse_directions
 from .regions import Region, region_union
-from .solver import DatalogSolver
+from .expression_walker import PatternWalker
 from .expressions import Constant
 
 
-class RegionSolver(DatalogSolver[Region]):
+class RegionSolver(PatternWalker[Region]):
     type_name = 'Region'
 
     def __new__(cls, *args, **kwargs):
@@ -69,7 +69,7 @@ class RegionSolver(DatalogSolver[Region]):
             setattr(cls, f'predicate_anatomical_{key}',
                     anatomical_direction_function(value))
 
-        return DatalogSolver.__new__(cls)
+        return PatternWalker.__new__(cls)
 
     def function_regexp(
         self, regexp: typing.Text

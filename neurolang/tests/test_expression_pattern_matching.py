@@ -3,7 +3,8 @@ import typing
 
 from .. import expressions
 from ..expression_pattern_matching import (
-    PatternMatcher, add_match, NeuroLangPatternMatchingNoMatch
+    PatternMatcher, add_match, NeuroLangPatternMatchingNoMatch,
+    UndeterminedType
 )
 from ..expressions import Projection, Statement, Query
 
@@ -27,6 +28,30 @@ example_expressions = dict(
 def test_construction():
     pm = PatternMatcher()
     assert isinstance(pm, PatternMatcher)
+
+
+def test_simple_type_inheritance():
+    class PM(PatternMatcher[int]):
+        pass
+
+    assert PM.type is int
+
+
+def test_multiple_type_inheritance():
+    class PM0(PatternMatcher):
+        pass
+
+    class PM(PatternMatcher[int], PM0[int]):
+        pass
+
+    assert PM.type is int
+
+
+def test_undetermined_type_inheritance():
+    class PM(PatternMatcher[int], PatternMatcher[float]):
+        pass
+
+    assert PM.type is UndeterminedType
 
 
 def test_default():
