@@ -446,7 +446,7 @@ def do_query_of_regions_from_term(
 ):
 
     predicate = nl.FunctionApplication[solver.set_type](
-        nl.Symbol[Callable[[solver.type], str]](relation),
+        nl.Symbol[Callable[[str], solver.set_type]](relation),
         (nl.Symbol[str](elem), )
     )
 

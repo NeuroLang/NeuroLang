@@ -125,6 +125,8 @@ def is_subtype(left, right):
                 )
             else:
                 return False
+        elif right.__origin__ is typing.Generic:
+            raise ValueError("typing Generic not supported")
         elif issubclass(left, right.__origin__):
             if issubclass(right, typing.Iterable):
                 return all(
@@ -134,8 +136,6 @@ def is_subtype(left, right):
                 )
             else:
                 return True
-        elif right.__origin__ == typing.Generic:
-            raise ValueError("typing Generic not supported")
         else:
             return False
     else:
@@ -564,33 +564,33 @@ class Constant(Expression):
                     self.type = typing_callable_from_annotated_function(value)
         elif auto_infer_type and self.type is ToBeInferred:
             if isinstance(self.value, tuple):
-                self.type = typing.Tuple[tuple(
-                    a.type
-                    for a in self.value
-                )]
+                new_tuple = []
+                types = []
                 self._symbols = set()
                 for a in self.value:
-                    try:
-                        self._symbols |= a._symbols
-                    except AttributeError:
-                        pass
+                    if not isinstance(a, Expression):
+                        a = Constant(a)
+                    new_tuple.append(a)
+                    types.append(a.type)
+                    self._symbols |= a._symbols
+                self.type = typing.Tuple[tuple(types)]
+                self.value = tuple(new_tuple)
             elif isinstance(self.value, frozenset):
+                new_value = []
                 current_type = None
                 self._symbols = set()
                 for a in self.value:
-                    try:
-                        self._symbols |= a._symbols
-                    except AttributeError:
-                        pass
-                    if isinstance(a, Expression):
-                        new_type = a.type
-                    else:
-                        new_type = type(a)
+                    if not isinstance(a, Expression):
+                        a = Constant(a)
+                    new_value.append(a)
+                    self._symbols |= a._symbols
+                    new_type = a.type
                     if current_type is None:
                         current_type = new_type
                     else:
                         current_type = unify_types(current_type, new_type)
                 self.type = typing.AbstractSet[current_type]
+                self.value = frozenset(new_value)
             else:
                 self.type = type(value)
 
