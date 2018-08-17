@@ -12,7 +12,7 @@ from .expressions import (
     Query, ExistentialPredicate, UniversalPredicate
 )
 from .expression_walker import (
-    add_match, PatternWalker
+    add_match, PatternWalker, expression_iterator
 )
 
 
@@ -28,6 +28,17 @@ class NaiveDatalog(PatternWalker):
     ))
     def statement_extensional(self, expression):
         lhs = expression.lhs
+
+        if any(
+            not isinstance(a, Constant)
+            for _, a, level in expression_iterator(
+                lhs.args, include_level=True
+            )
+            if level > 0
+        ):
+            raise NeuroLangException(
+                'Facts can only have constants as arguments'
+            )
 
         if lhs.functor.name == self.constant_set_name:
             raise NeuroLangException(
@@ -103,7 +114,7 @@ class NaiveDatalog(PatternWalker):
 
         if not lhs_symbols.issubset(rhs._symbols):
             raise NeuroLangException(
-                "All symbols on the left need to be on the right"
+                "All variables on the left need to be on the right"
             )
 
         if lhs.functor.name in self.symbol_table:

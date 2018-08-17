@@ -1,3 +1,5 @@
+import pytest
+
 from typing import AbstractSet
 
 from .. import solver_datalog_naive
@@ -8,7 +10,7 @@ from ..expressions import (
     FunctionApplication, Lambda, ExpressionBlock,
     ExistentialPredicate, UniversalPredicate,
     Query,
-    is_subtype
+    is_subtype, NeuroLangException
 )
 
 S_ = Symbol
@@ -38,7 +40,7 @@ def test_facts_constants():
     dl.walk(f1)
 
     assert 'Q' in dl.symbol_table
-    isinstance(dl.symbol_table['Q'], ExpressionBlock)
+    assert isinstance(dl.symbol_table['Q'], ExpressionBlock)
     fact_set = dl.symbol_table['Q'].expressions[0]
     assert isinstance(fact_set, Constant)
     assert is_subtype(fact_set.type, AbstractSet)
@@ -58,10 +60,15 @@ def test_facts_constants():
     assert dl.walk(g).value is False
 
 
-def test_facts_variables():
+def test_atoms_variables():
     dl = Datalog()
 
-    f1 = ST_(S_('Q')(S_('x'),), None)
+    eq = S_('equals')
+    x = S_('x')
+    y = S_('y')
+    Q = S_('Q')
+
+    f1 = ST_(Q(x,), eq(x, x))
 
     dl.walk(f1)
 
@@ -70,9 +77,9 @@ def test_facts_variables():
     fact = dl.symbol_table['Q'].expressions[-1]
     assert isinstance(fact, Lambda)
     assert len(fact.args) == 1
-    assert fact.function_expression.value is True
+    assert fact.function_expression == eq(x, x)
 
-    f2 = ST_(S_('Q')(S_('x'), S_('y')), None)
+    f2 = ST_(Q(x, y), eq(x, y))
 
     dl.walk(f2)
 
@@ -81,29 +88,18 @@ def test_facts_variables():
     fact = dl.symbol_table['Q'].expressions[-1]
     assert isinstance(fact, Lambda)
     assert len(fact.args) == 2
-    assert fact.function_expression.value is True
+    assert fact.function_expression == eq(x, y)
 
-    f3 = ST_(S_('Q')(S_('x'), S_('y'), S_('x')), None)
+    with pytest.raises(NeuroLangException):
+        dl.walk(ST_(Q(x), ...))
 
-    dl.walk(f3)
-
-    assert 'Q' in dl.symbol_table
-    isinstance(dl.symbol_table['Q'], ExpressionBlock)
-    fact = dl.symbol_table['Q'].expressions[-1]
-    assert isinstance(fact, Lambda)
-    assert len(fact.args) == 3
-    assert fact.function_expression.functor == S_('equals')
-    assert fact.function_expression.args == (S_('a0'), S_('a2'))
-
-    f = S_('Q')(C_(10))
-    g = S_('Q')(C_(1), C_(5))
-    h = S_('Q')(C_(18), C_(23), C_(18))
-    i = S_('Q')(C_(18), C_(23), C_(19))
+    f = Q(C_(10))
+    g = Q(C_(1), C_(5))
+    h = Q(C_(1), C_(1))
 
     assert dl.walk(f).value is True
-    assert dl.walk(g).value is True
+    assert dl.walk(g).value is False
     assert dl.walk(h).value is True
-    assert dl.walk(i).value is False
 
 
 def test_facts_intensional():
@@ -150,6 +146,9 @@ def test_facts_intensional():
 
     res = dl.walk(U(C_(2)))
     assert res.value is False
+
+    with pytest.raises(NeuroLangException):
+        res = dl.walk(ST_(Q(x, y), Q(x)))
 
 
 def test_query():
