@@ -2,7 +2,7 @@ import pytest
 
 from typing import AbstractSet
 
-from .. import solver_datalog_naive
+from .. import solver_datalog_naive as sdb
 from .. import solver_datalog_extensional_db
 from .. import expression_walker
 from ..expressions import (
@@ -27,7 +27,7 @@ CNone = C_(None)
 
 class Datalog(
     solver_datalog_extensional_db.ExtensionalDatabaseSolver,
-    solver_datalog_naive.NaiveDatalog,
+    sdb.NaiveDatalog,
     expression_walker.ExpressionBasicEvaluator
 ):
     pass
@@ -172,7 +172,7 @@ def test_query():
 
     intensional = ExpressionBlock((
         ST_(R(x, y, z), Q(x, y) & Q(y, z)),
-        ST_(T(x, z), EP_(y, Q(x, y) & Q(y, z))),
+        ST_(T(x, z), Q(x, y) & Q(y, z)),
         ST_(U(x), UP_(y, Q(x, y))),
     ))
 
@@ -192,6 +192,41 @@ def test_query():
         C_((C_(1), C_(2))),
         C_((C_(1), C_(4))),
     }
+
+
+def test_conjunctive_expression():
+    Q = S_('Q')
+    R = S_('R')
+    x = S_('x')
+    y = S_('y')
+
+    assert sdb.is_conjunctive_expression(
+        ST_(R(x), Q())
+    )
+
+    assert sdb.is_conjunctive_expression(
+        ST_(R(x), Q(x))
+    )
+
+    assert sdb.is_conjunctive_expression(
+        ST_(R(x), Q(x) & R(y, C_(1)))
+    )
+
+    assert not sdb.is_conjunctive_expression(
+        ST_(Q(x, y), R(x) | R(y))
+    )
+
+    assert not sdb.is_conjunctive_expression(
+        ST_(Q(x, y), R(x) & R(y) | R(x))
+    )
+
+    assert not sdb.is_conjunctive_expression(
+        ST_(Q(x, y), ~R(x))
+    )
+
+    assert not sdb.is_conjunctive_expression(
+        ST_(Q(x, y), R(Q(x)))
+    )
 
 
 def test_not_conjunctive():
@@ -214,3 +249,29 @@ def test_not_conjunctive():
 
     with pytest.raises(NeuroLangException):
         dl.walk(ST_(Q(x, y), R(Q(x))))
+
+
+def test_extract_free_variables():
+    Q = S_('Q')
+    R = S_('R')
+    x = S_('x')
+    y = S_('y')
+
+    emptyset = set()
+    assert sdb.extract_datalog_free_variables(Q) == emptyset
+    assert sdb.extract_datalog_free_variables(Q(x, y)) == {x, y}
+    assert sdb.extract_datalog_free_variables(Q(x, C_(1))) == {x}
+    assert sdb.extract_datalog_free_variables(Q(x) & R(y)) == {x, y}
+    assert sdb.extract_datalog_free_variables(EP_(x, Q(x, y))) == {y}
+    assert sdb.extract_datalog_free_variables(UP_(x, Q(x, y))) == {y}
+    assert sdb.extract_datalog_free_variables(ST_(R(x), Q(x, y))) == {y}
+    assert sdb.extract_datalog_free_variables(ST_(R(x), Q(y) & Q(x))) == {y}
+
+    with pytest.raises(NeuroLangException):
+        assert sdb.extract_datalog_free_variables(Q(x) | R(y))
+
+    with pytest.raises(NeuroLangException):
+        assert sdb.extract_datalog_free_variables(Q(R(y)))
+
+    with pytest.raises(NeuroLangException):
+        assert sdb.extract_datalog_free_variables(~(R(y)))

@@ -4,38 +4,16 @@ surely very slow
 '''
 from typing import AbstractSet, Any, Tuple
 from itertools import product
-
-
 from operator import and_
-
 
 from .expressions import (
     FunctionApplication, Constant, NeuroLangException, is_subtype,
     Statement, Symbol, Lambda, ExpressionBlock, Expression,
-    Query, ExistentialPredicate, UniversalPredicate
+    Query, ExistentialPredicate, UniversalPredicate, Quantifier
 )
 from .expression_walker import (
     add_match, PatternWalker, expression_iterator,
 )
-
-
-def is_conjunctive_expression(expression):
-    return all(
-        not isinstance(exp, FunctionApplication) or
-        (
-            isinstance(exp, FunctionApplication) and
-            (
-                (
-                    isinstance(exp.functor, Constant) and
-                    exp.functor.value is and_
-                ) or all(
-                    not isinstance(arg, FunctionApplication)
-                    for arg in exp.args
-                )
-            )
-        )
-        for _, exp in expression_iterator(expression)
-    )
 
 
 class NaiveDatalog(PatternWalker):
@@ -150,7 +128,14 @@ class NaiveDatalog(PatternWalker):
         else:
             eb = tuple()
 
-        lambda_ = Lambda(lhs.args, expression.rhs)
+        rhs = expression.rhs
+        fv = extract_datalog_free_variables(expression)
+
+        if len(fv) > 0:
+            for v in fv:
+                rhs = ExistentialPredicate[bool](v, rhs)
+
+        lambda_ = Lambda(lhs.args, rhs)
         eb = eb + (lambda_,)
 
         self.symbol_table[lhs.functor.name] = ExpressionBlock(eb)
@@ -279,15 +264,64 @@ class NaiveDatalog(PatternWalker):
         return res
 
 
-def extract_datalog_variables(expression):
+def is_conjunctive_expression(expression):
+    return all(
+        not isinstance(exp, FunctionApplication) or
+        (
+            isinstance(exp, FunctionApplication) and
+            (
+                (
+                    isinstance(exp.functor, Constant) and
+                    exp.functor.value is and_
+                ) or all(
+                    not isinstance(arg, FunctionApplication)
+                    for arg in exp.args
+                )
+            )
+        )
+        for _, exp in expression_iterator(expression)
+    )
+
+
+class ExtractDatalogFreeVariablesWalker(PatternWalker):
+    @add_match(FunctionApplication)
+    def extract_variables_fa(self, expression):
+        functor = expression.functor
+        args = expression.args
+        if isinstance(functor, Constant) and functor.value == and_:
+            return set().union(*(self.walk(a) for a in args))
+
+        variables = set()
+        for a in expression.args:
+            if isinstance(a, Symbol):
+                variables.add(a)
+            elif isinstance(a, Constant):
+                pass
+            else:
+                raise NeuroLangException('Not a Datalog function application')
+
+        return variables
+
+    @add_match(Quantifier)
+    def extract_variables_q(self, expression):
+        variables = self.walk(expression.body)
+        variables -= expression.head._symbols
+
+        return variables
+
+    @add_match(Statement)
+    def extract_variables_s(self, expression):
+        return self.walk(expression.rhs) - self.walk(expression.lhs)
+
+    @add_match(...)
+    def _(self, expression):
+        return set()
+
+
+def extract_datalog_free_variables(expression):
     '''extract variables from expression knowing that it's in Datalog format'''
-    res = set()
-    for _, exp in expression_iterator(expression):
-        if isinstance(exp, FunctionApplication):
-            for arg in exp.args:
-                if isinstance(arg, Symbol):
-                    res.add(arg)
-    return res
+    efvw = ExtractDatalogFreeVariablesWalker()
+    return efvw.walk(expression)
 
 
 def extract_datalog_predicates(expression):
