@@ -106,7 +106,7 @@ class ExpressionWalker(PatternWalker):
     @add_match(ExpressionBlock)
     def expression_block(self, expression):
         return ExpressionBlock[expression.type](
-            tuple([self.walk(e) for e in expression.expressions])
+            tuple(self.walk(e) for e in expression.expressions)
         )
 
     @add_match(Statement)
