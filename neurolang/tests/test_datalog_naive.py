@@ -194,6 +194,67 @@ def test_query():
     }
 
 
+def test_extensional_database():
+
+    dl = Datalog()
+
+    Q = S_('Q')
+    R = S_('R')
+    T = S_('T')
+    U = S_('U')
+    x = S_('x')
+    y = S_('y')
+    z = S_('z')
+
+    extensional = ExpressionBlock((
+        ST_(Q(C_(1), C_(1)), CNone),
+        ST_(Q(C_(1), C_(2)), CNone),
+        ST_(Q(C_(1), C_(4)), CNone),
+        ST_(Q(C_(2), C_(4)), CNone),
+        ST_(R(C_('a'), C_(1), C_(3)), CNone),
+    ))
+
+    intensional = ExpressionBlock((
+        ST_(R(x, y, z), Q(x, y) & Q(y, z)),
+        ST_(T(x, z), Q(x, y) & Q(y, z)),
+        ST_(U(x), UP_(y, Q(x, y))),
+    ))
+
+    dl.walk(extensional)
+
+    edb = dl.extensional_database()
+
+    assert edb.keys() == {'R', 'Q'}
+
+    assert edb['Q'] == C_(frozenset((
+        C_((C_(1), C_(1))),
+        C_((C_(1), C_(2))),
+        C_((C_(1), C_(4))),
+        C_((C_(2), C_(4))),
+    )))
+
+    assert edb['R'] == C_(frozenset((
+        C_((C_('a'), C_(1), C_(3))),
+    )))
+
+    dl.walk(intensional)
+    edb = dl.extensional_database()
+
+    assert edb.keys() == {'R', 'Q'}
+
+    assert edb['Q'] == C_(frozenset((
+        C_((C_(1), C_(1))),
+        C_((C_(1), C_(2))),
+        C_((C_(1), C_(4))),
+        C_((C_(2), C_(4))),
+    )))
+
+    assert edb['R'] == C_(frozenset((
+        C_((C_('a'), C_(1), C_(3))),
+    )))
+
+
+
 def test_conjunctive_expression():
     Q = S_('Q')
     R = S_('R')
