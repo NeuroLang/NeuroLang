@@ -254,7 +254,6 @@ def test_extensional_database():
     )))
 
 
-
 def test_conjunctive_expression():
     Q = S_('Q')
     R = S_('R')
