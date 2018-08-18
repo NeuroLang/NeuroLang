@@ -5,8 +5,9 @@ import typing
 
 from .symbols_and_types import TypedSymbolTable
 from .expressions import (
+    ExpressionBlock,
     FunctionApplication, Statement, Query, Projection, Constant,
-    Symbol, ExistentialPredicate, UniversalPredicate, Expression,
+    Symbol, ExistentialPredicate, UniversalPredicate, Expression, Lambda,
     get_type_and_value, ToBeInferred, is_subtype, NeuroLangTypeException,
     unify_types
 )
@@ -91,22 +92,27 @@ def expression_iterator(expression, include_level=False, dfs=True):
 class PatternWalker(PatternMatcher):
     def walk(self, expression):
         logging.debug(f"walking {expression}")
-        if isinstance(expression, (list, tuple)):
+        if isinstance(expression, tuple):
             result = [
                 self.walk(e)
                 for e in expression
             ]
-            if isinstance(expression, tuple):
-                result = tuple(result)
+            result = tuple(result)
             return result
         return self.match(expression)
 
 
 class ExpressionWalker(PatternWalker):
+    @add_match(ExpressionBlock)
+    def expression_block(self, expression):
+        return ExpressionBlock[expression.type](
+            [self.walk(e) for e in expression.expressions]
+        )
+
     @add_match(Statement)
     def statement(self, expression):
         return Statement[expression.type](
-            expression.symbol, self.walk(expression.value)
+            expression.lhs, self.walk(expression.rhs)
         )
 
     @add_match(FunctionApplication)
@@ -193,6 +199,20 @@ class ExpressionWalker(PatternWalker):
             result = Projection(collection, item)
             return self.walk(result)
 
+    @add_match(Lambda)
+    def lambda_(self, expression):
+        args = self.walk(expression.args)
+        function_expression = self.walk(expression.function_expression)
+
+        if (
+            all(a is a_ for a, a_ in zip(args, expression.args)) and
+            function_expression is expression.function_expression
+        ):
+            return expression
+        else:
+            res = Lambda[expression.type](args, function_expression)
+            return self.walk(res)
+
     @add_match(Constant)
     def constant(self, expression):
         return expression
@@ -278,25 +298,29 @@ class SymbolTableEvaluator(ExpressionWalker):
         return function_constants
 
     def add_functions_and_predicates_to_symbol_table(self):
+        keyword_symbol_table = TypedSymbolTable()
         for k, v in chain(
             self.included_predicates.items(), self.included_functions.items()
         ):
-            self.symbol_table[Symbol[v.type](k)] = v
-        self.symbol_table.set_readonly(True)
-        self.symbol_table = self.symbol_table.create_scope()
+            keyword_symbol_table[Symbol[v.type](k)] = v
+        keyword_symbol_table.set_readonly(True)
+        top_scope = self.symbol_table
+        while top_scope.enclosing_scope is not None:
+            top_scope = top_scope.enclosing_scope
+        top_scope.enclosing_scope = keyword_symbol_table
 
     @add_match(Statement)
     def statement(self, expression):
-        value = self.walk(expression.value)
-        return_type = unify_types(expression.type, value.type)
-        value.change_type(return_type)
-        expression.symbol.change_type(return_type)
-        if value is expression.value:
-            self.symbol_table[expression.symbol] = value
+        rhs = self.walk(expression.rhs)
+        return_type = unify_types(expression.type, rhs.type)
+        rhs.change_type(return_type)
+        expression.lhs.change_type(return_type)
+        if rhs is expression.rhs:
+            self.symbol_table[expression.lhs] = rhs
             return expression
         else:
             return self.walk(
-                Statement[expression.type](expression.symbol, value)
+                Statement[expression.type](expression.lhs, rhs)
             )
 
 
@@ -338,3 +362,30 @@ class ExpressionBasicEvaluator(SymbolTableEvaluator):
             functor_value(*args, **kwargs)
         )
         return result
+
+    @add_match(
+        FunctionApplication(Lambda, ...)
+    )
+    def eval_lambda(self, expression):
+        lambda_ = expression.functor
+        args = expression.args
+        lambda_args = lambda_.args
+        if (
+            len(args) != len(lambda_args) or
+            not all(
+                is_subtype(l.type, a.type)
+                for l, a in zip(lambda_args, args)
+            )
+        ):
+            raise NeuroLangTypeException(
+                f'{args} is not the appropriate '
+                f'argument tuple for {lambda_args}'
+            )
+
+        if len(
+            lambda_.function_expression._symbols.intersection(lambda_args)
+        ) > 0:
+            rsw = ReplaceSymbolWalker(dict(zip(lambda_args, args)))
+            return self.walk(rsw.walk(lambda_.function_expression))
+        else:
+            return lambda_.function_expression

@@ -2,6 +2,7 @@ from typing import AbstractSet, Callable, Container
 from uuid import uuid1
 from .. import neurolang as nl
 from ..symbols_and_types import is_subtype
+from ..region_solver_ds import Region
 
 from .query_resolution_expressions import (
     Expression, Symbol,
@@ -15,7 +16,6 @@ class QueryBuilder:
     def __init__(self, solver):
         self.solver = solver
         self.set_type = AbstractSet[self.solver.type]
-        self.type = self.solver.type
 
         for k, v in self.solver.included_predicates.items():
             self.solver.symbol_table[nl.Symbol[v.type](k)] = v
@@ -39,7 +39,7 @@ class QueryBuilder:
         return [
             s.name for s in
             self.solver.symbol_table.symbols_by_type(
-                self.type
+                Region
             )
         ]
 
@@ -143,7 +143,7 @@ class QueryBuilder:
             symbol_name = str(uuid1())
         return Expression(
             self,
-            nl.Symbol[self.type](symbol_name)
+            nl.Symbol[Region](symbol_name)
         )
 
     def query(self, symbol, predicate):
@@ -191,14 +191,14 @@ class QueryBuilder:
         return Symbol(self, result_symbol_name)
 
     def add_region(self, region, result_symbol_name=None):
-        if not isinstance(region, self.type):
-            raise ValueError(f"region must be instance of {self.type}")
+        if not isinstance(region, Region):
+            raise ValueError(f"region must be instance of {Region}")
 
         if result_symbol_name is None:
             result_symbol_name = str(uuid1())
 
-        symbol = nl.Symbol[self.type](result_symbol_name)
-        self.solver.symbol_table[symbol] = nl.Constant[self.type](region)
+        symbol = nl.Symbol[Region](result_symbol_name)
+        self.solver.symbol_table[symbol] = nl.Constant[Region](region)
 
         return Symbol(self, result_symbol_name)
 
@@ -211,7 +211,7 @@ class QueryBuilder:
                 result_symbol_name = str(uuid1())
 
             symbol = nl.Symbol[self.set_type](result_symbol_name)
-            self.solver.symbol_table[symbol] = nl.Constant[self.type](region)
+            self.solver.symbol_table[symbol] = nl.Constant[Region](region)
 
         return Symbol(self, result_symbol_name)
 

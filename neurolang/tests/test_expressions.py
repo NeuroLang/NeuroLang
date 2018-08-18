@@ -14,6 +14,7 @@ from typing import Set, Callable
 C_ = expressions.Constant
 S_ = expressions.Symbol
 F_ = expressions.FunctionApplication
+L_ = expressions.Lambda
 
 
 def evaluate(expression, **kwargs):
@@ -113,6 +114,24 @@ def test_constant_method_and_operator():
     assert evaluate(fbc).value == {1, 2}
 
 
+def test_lambda_expression():
+    l_ = L_[Callable[[], int]](tuple(), C_[int](2))
+    fa = F_[int](l_, tuple())
+    assert evaluate(fa) == 2
+
+    x = S_[int]('x')
+    l_ = L_[Callable[[int], int]]((x,), C_[int](2) + x)
+    fa = F_[int](l_, (C_[int](2),))
+
+    assert evaluate(fa) == 4
+
+    y = S_[int]('y')
+    l_ = L_[Callable[[int, int], int]]((x, y), x + y)
+    fa = F_[int](l_, (C_[int](2), C_[int](3),))
+
+    assert evaluate(fa) == 5
+
+
 def test_symbol_wrapping():
     def f(a: int) -> float:
         '''
@@ -187,6 +206,20 @@ def test_fa_composition_symbols_correctly_propagated():
     e = S_('e')
 
     expression = fa1(a, fa2(b, fa3(c, d), e))
+    expression_block = expressions.ExpressionBlock((
+        fa1(a), fa2(b, fa3(c, d), e)
+    ))
 
     for symbol in [a, b, c, d, e]:
         assert symbol in expression._symbols
+        assert symbol in expression_block._symbols
+
+
+def test_apply_unapply():
+    a = C_(1)
+    b = a.apply(*a.unapply())
+    assert a is not b and a == b
+
+    a = F_(S_('a'), (C_(1),))
+    b = a.apply(*a.unapply())
+    assert a is not b and a == b

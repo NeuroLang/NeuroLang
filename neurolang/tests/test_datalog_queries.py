@@ -1,6 +1,3 @@
-import pytest
-from pytest import raises
-
 import typing
 
 from .. import solver
@@ -85,9 +82,10 @@ def test_tuple_symbol_query():
 
     x = S_[typing.Tuple[int, str]]('x')
 
-    query = expressions.Query[typing.AbstractSet[typing.Tuple[int, str]]](
-        x, ds.symbol_table['gt'](x[C_(0)], C_(2))
-    )
+    with expressions.expressions_behave_as_objects():
+        query = expressions.Query[typing.AbstractSet[typing.Tuple[int, str]]](
+            x, ds.symbol_table['gt'](x[C_(0)], C_(2))
+        )
 
     res = ds.walk(query)
     assert isinstance(res, expressions.Constant[query.type])
@@ -95,32 +93,6 @@ def test_tuple_symbol_query():
         res.value, typing.AbstractSet[typing.Tuple[int, str]]
     )
     assert set(str(x) for x in range(5) if x > 2) == res.value
-
-
-@pytest.mark.skip
-def test_too_many_symbols_in_query_body():
-    ds = solver.DatalogSolver(TypedSymbolTable())
-
-    for s in range(5):
-        sym = S_[int](str(s))
-        ds.symbol_table[sym] = C_[int](s)
-
-    def gt(a: int, b: int) -> bool:
-        return a > b
-
-    ds.symbol_table[S_('gt')] = C_(gt)
-
-    x = S_[int]('x')
-    y = S_[int]('y')
-    z = S_[int]('z')
-
-    query = expressions.Query[typing.AbstractSet[typing.Tuple[int, int]]](
-        C_((x, y)), ds.symbol_table['gt'](ds.symbol_table['3'], x) &
-        ds.symbol_table['gt'](x, y) & ds.symbol_table['gt'](y, z)
-    )
-
-    with raises(NotImplementedError):
-        ds.walk(query)
 
 
 def test_existential_predicate():
