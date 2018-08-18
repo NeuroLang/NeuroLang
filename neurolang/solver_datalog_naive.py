@@ -264,17 +264,18 @@ class NaiveDatalog(PatternWalker):
 
         return Constant[AbstractSet[Any]](result)
 
-    def uextensional_database(self):
+    def extensional_database(self):
         res = dict()
         for key, value in self.symbol_table.items():
+            if key == self.constant_set_name:
+                continue
             if not isinstance(value, ExpressionBlock):
-                eb = (value,)
+                if isinstance(value, Constant[AbstractSet]):
+                    res[key] = value
             else:
-                eb = value.expressions
-
-            for exp in eb:
-                if isinstance(exp, Constant[AbstractSet]):
-                    res[key] = exp
+                for exp in value.expressions:
+                    if isinstance(exp, Constant[AbstractSet]):
+                        res[key] = exp
         return res
 
 
