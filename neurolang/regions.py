@@ -16,18 +16,18 @@ __all__ = [
 
 
 def region_union(region_set, affine=None):
-    return region_set_algebraic_op(region_set, affine, set.union)
+    return region_set_algebraic_op(set.union, region_set, affine)
 
 
 def region_intersection(region_set, affine=None):
-    return region_set_algebraic_op(region_set, affine, set.intersection)
+    return region_set_algebraic_op(set.intersection, region_set, affine)
 
 
 def region_difference(region_set, affine=None):
-    return region_set_algebraic_op(region_set, affine, set.difference)
+    return region_set_algebraic_op(set.difference, region_set, affine)
 
 
-def region_set_algebraic_op(region_set, affine=None, op=set.union):
+def region_set_algebraic_op(op, region_set, affine=None):
 
     rs = set(filter(lambda x: x is not None, region_set))
     if affine is None:
@@ -270,14 +270,8 @@ class SphericalVolume(ImplicitVBR):
         return voxel_coordinates
 
     def __contains__(self, point):
-        if isinstance(point, (list, set)):
-            for value in point:
-                value = np.asanyarray(value)
-                if np.linalg.norm(self._center - value) >= self._radius:
-                    return False
-            return True
-
-        return np.linalg.norm(self._center - point) <= self._radius
+        point = np.atleast_2d(point)
+        return np.all(np.linalg.norm(self._center - point, axis=1) <= self._radius)
 
     def __hash__(self):
         return hash(self.bounding_box.limits.tobytes())
@@ -334,13 +328,9 @@ class PlanarVolume(ImplicitVBR):
         return np.array(list(product(*ranges)))
 
     def __contains__(self, point):
-        if isinstance(point, (list, set)):
-            for value in point:
-                if np.dot(self._vector, self._origin - value) != 0:
-                    return False
-            return True
+        point = np.atleast_2d(point)
+        return np.all(np.sum(self._vector * (self._origin - point), axis=1) == 0)
 
-        return np.dot(self._vector, self._origin - point) == 0
 
     def __hash__(self):
         return hash(self.bounding_box.limits.tobytes())

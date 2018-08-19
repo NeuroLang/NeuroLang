@@ -298,21 +298,20 @@ def test_planar_region():
                           pr.bounding_box.ub)
 
 
-def test_iterables_contained_in_implicit_regions():
+def test_points_contained_in_implicit_regions():
 
     def randpoint(i, j): return tuple(random.randint(i, j, size=3))
 
     sphere = SphericalVolume((0, 0, 0), 10)
-    points = set([(i, i, i) for i in range(5)])
-    assert points in sphere
-    assert [(j, 0, 0) for j in range(5, 10)] in sphere
+    points = [[i, i, i] for i in range(5)] in sphere
+    assert [[j, 0, 0] for j in range(5, 10)] in sphere
 
     center = (0, 0, 0)
     vector = (1, 0, 0)
     pr = PlanarVolume(center, vector, limit=10)
     points = [pr.project_point_to_plane(randpoint(1, 250)) for _ in range(30)]
     assert points in pr
-    assert not {(1, 1, 1)} in pr
+    assert not (1, 1, 1) in pr
 
 
 def test_regions_with_multiple_bb_directionality():
