@@ -27,13 +27,13 @@ def region_difference(region_set, affine=None):
     return region_set_algebraic_op(set.difference, region_set, affine)
 
 
-def region_set_algebraic_op(op, region_set, affine=None):
+def region_set_algebraic_op(op, region_set, affine=None, n_dim=3):
 
     rs = list(filter(lambda x: x is not None, region_set))
     if affine is None:
         affine = next(iter(rs)).affine
 
-    max_dim = (0,) * 3
+    max_dim = (0,) * n_dim
     voxels_set_of_regions = []
     for region in rs:
         if isinstance(region, ImplicitVBR):
@@ -309,7 +309,7 @@ class PlanarVolume(ImplicitVBR):
         box_limit = np.asanyarray((self._dir * self._limit,) * 3, dtype=int)
         box_limit_in_plane = np.asanyarray(
             self.project_point_to_plane(box_limit), dtype=int) * -1
-        [lb, ub] = sorted([box_limit, box_limit_in_plane], key=lambda x: x[0])
+        lb, ub = sorted([box_limit, box_limit_in_plane], key=lambda x: x[0])
         self._bounding_box = AABB(lb, ub)
 
     def project_point_to_plane(self, point):
