@@ -16,23 +16,36 @@ from .expression_walker import (
 )
 
 
-class NaiveDatalog(PatternWalker):
+class Fact(Statement):
+    def __init__(self, lhs):
+        super().__init__(lhs, Constant(True))
+
+    @property
+    def fact(self):
+        return self.lhs
+
+    def __repr__(self):
+        return f'{self.fact}: {self.type} :- True'
+
+
+class DatalogBasic(PatternWalker):
+    '''
+    Implementation of Datalog grammar in terms of
+    Intermediate Representations. No query resolution implemented.
+    '''
     constant_set_name = '__dl_constants__'
 
     def function_equals(self, a: Any, b: Any) -> bool:
         return a == b
 
-    @add_match(Statement(
-        FunctionApplication[bool](Symbol, ...),
-        Constant(None)
-    ))
-    def statement_extensional(self, expression):
-        lhs = expression.lhs
+    @add_match(Fact(FunctionApplication[bool](Symbol, ...)))
+    def fact(self, expression):
+        fact = expression.fact
 
         if any(
             not isinstance(a, Constant)
             for _, a, level in expression_iterator(
-                lhs.args, include_level=True
+                fact.args, include_level=True
             )
             if level > 0
         ):
@@ -40,23 +53,23 @@ class NaiveDatalog(PatternWalker):
                 'Facts can only have constants as arguments'
             )
 
-        if lhs.functor.name == self.constant_set_name:
+        if fact.functor.name == self.constant_set_name:
             raise NeuroLangException(
                 f'symbol {self.constant_set_name} is protected'
             )
 
-        if lhs.functor.name in self.symbol_table:
-            eb = self.symbol_table[lhs.functor.name].expressions
+        if fact.functor.name in self.symbol_table:
+            eb = self.symbol_table[fact.functor.name].expressions
         else:
             eb = tuple()
 
-        if all(isinstance(a, Constant) for a in lhs.args):
+        if all(isinstance(a, Constant) for a in fact.args):
             if self.constant_set_name not in self.symbol_table:
                 self.symbol_table[self.constant_set_name] = \
                         Constant[AbstractSet[Any]](set())
-            self.symbol_table[self.constant_set_name].value.update(lhs.args)
+            self.symbol_table[self.constant_set_name].value.update(fact.args)
 
-            value = {Constant(lhs.args)}
+            value = {Constant(fact.args)}
 
             for i, block in enumerate(eb):
                 if isinstance(block, Constant):
@@ -69,14 +82,14 @@ class NaiveDatalog(PatternWalker):
 
             fact_set.value |= value
 
-        elif all(isinstance(a, Symbol) for a in lhs.args):
+        elif all(isinstance(a, Symbol) for a in fact.args):
             equalities = []
             parameters = [
-                Symbol[a.type](f'a{i}') for i, a in enumerate(lhs.args)
+                Symbol[a.type](f'a{i}') for i, a in enumerate(fact.args)
             ]
-            for i, a in enumerate(lhs.args[:-1]):
+            for i, a in enumerate(fact.args[:-1]):
                 sa = parameters[i]
-                for j, b in enumerate(lhs.args[i + 1:]):
+                for j, b in enumerate(fact.args[i + 1:]):
                     if a == b:
                         sb = parameters[j + i + 1]
                         equalities.append(Symbol('equals')(sa, sb))
@@ -95,9 +108,16 @@ class NaiveDatalog(PatternWalker):
                 "of a definition"
             )
 
-        self.symbol_table[lhs.functor.name] = ExpressionBlock(eb)
+        self.symbol_table[fact.functor.name] = ExpressionBlock(eb)
 
         return expression
+
+    @add_match(Statement(
+        FunctionApplication[bool](Symbol, ...),
+        Constant[bool](True)
+    ))
+    def statement_extensional(self, expression):
+        return self.fact(Fact[expression.type](expression.lhs))
 
     @add_match(Statement(
         FunctionApplication[bool](Symbol, ...),
@@ -128,19 +148,53 @@ class NaiveDatalog(PatternWalker):
         else:
             eb = tuple()
 
-        rhs = expression.rhs
-        fv = extract_datalog_free_variables(expression)
-
-        if len(fv) > 0:
-            for v in fv:
-                rhs = ExistentialPredicate[bool](v, rhs)
-
         lambda_ = Lambda(lhs.args, rhs)
         eb = eb + (lambda_,)
 
         self.symbol_table[lhs.functor.name] = ExpressionBlock(eb)
 
         return expression
+
+    def extensional_database(self):
+        res = dict()
+        for key, value in self.symbol_table.items():
+            if key == self.constant_set_name:
+                continue
+            if not isinstance(value, ExpressionBlock):
+                if isinstance(value, Constant[AbstractSet]):
+                    res[key] = value
+            else:
+                for exp in value.expressions:
+                    if isinstance(exp, Constant[AbstractSet]):
+                        res[key] = exp
+        return res
+
+
+class NaiveDatalog(DatalogBasic):
+    '''
+    Naive resolution system of Datalog.
+    '''
+    @add_match(Statement(
+        FunctionApplication[bool](Symbol, ...),
+        Expression
+     ),
+        lambda e: len(
+            extract_datalog_free_variables(e.rhs) -
+            extract_datalog_free_variables(e.lhs)
+        ) > 0
+    )
+    def statement_intensional_add_existential(self, expression):
+        lhs = expression.lhs
+        rhs = expression.rhs
+        fv = (
+            extract_datalog_free_variables(rhs) -
+            extract_datalog_free_variables(lhs)
+        )
+
+        if len(fv) > 0:
+            for v in fv:
+                rhs = ExistentialPredicate[bool](v, rhs)
+        return self.walk(Statement[expression.type](lhs, rhs))
 
     @add_match(
         FunctionApplication(ExpressionBlock, ...),

@@ -22,7 +22,7 @@ B_ = ExpressionBlock
 EP_ = ExistentialPredicate
 UP_ = UniversalPredicate
 Q_ = Query
-CNone = C_(None)
+T_ = sdb.Fact
 
 
 class Datalog(
@@ -36,7 +36,7 @@ class Datalog(
 def test_facts_constants():
     dl = Datalog()
 
-    f1 = ST_(S_('Q')(C_(1), C_(2)), CNone)
+    f1 = T_(S_('Q')(C_(1), C_(2)))
 
     dl.walk(f1)
 
@@ -47,7 +47,7 @@ def test_facts_constants():
     assert is_subtype(fact_set.type, AbstractSet)
     assert {C_((C_(1), C_(2)))} == fact_set.value
 
-    f2 = ST_(S_('Q')(C_(3), C_(4)), CNone)
+    f2 = T_(S_('Q')(C_(3), C_(4)))
     dl.walk(f2)
     assert (
         {C_((C_(1), C_(2))), C_((C_(3), C_(4)))} ==
@@ -115,10 +115,10 @@ def test_facts_intensional():
     z = S_('z')
 
     extensional = ExpressionBlock((
-        ST_(Q(C_(1), C_(1)), CNone),
-        ST_(Q(C_(1), C_(2)), CNone),
-        ST_(Q(C_(1), C_(4)), CNone),
-        ST_(Q(C_(2), C_(4)), CNone),
+        T_(Q(C_(1), C_(1))),
+        T_(Q(C_(1), C_(2))),
+        T_(Q(C_(1), C_(4))),
+        T_(Q(C_(2), C_(4))),
     ))
 
     intensional = ExpressionBlock((
@@ -158,31 +158,24 @@ def test_query():
     Q = S_('Q')
     R = S_('R')
     T = S_('T')
-    U = S_('U')
     x = S_('x')
     y = S_('y')
     z = S_('z')
 
     extensional = ExpressionBlock((
-        ST_(Q(C_(1), C_(1)), CNone),
-        ST_(Q(C_(1), C_(2)), CNone),
-        ST_(Q(C_(1), C_(4)), CNone),
-        ST_(Q(C_(2), C_(4)), CNone),
+        T_(Q(C_(1), C_(1))),
+        T_(Q(C_(1), C_(2))),
+        T_(Q(C_(1), C_(4))),
+        T_(Q(C_(2), C_(4))),
     ))
 
     intensional = ExpressionBlock((
         ST_(R(x, y, z), Q(x, y) & Q(y, z)),
         ST_(T(x, z), Q(x, y) & Q(y, z)),
-        ST_(U(x), UP_(y, Q(x, y))),
     ))
 
     dl.walk(extensional)
     dl.walk(intensional)
-
-    query = Q_(x, U(x))
-    res = dl.walk(query)
-
-    assert res.value == {C_(1)}
 
     query = Q_((x, y), T(x, y))
     res = dl.walk(query)
@@ -201,23 +194,21 @@ def test_extensional_database():
     Q = S_('Q')
     R = S_('R')
     T = S_('T')
-    U = S_('U')
     x = S_('x')
     y = S_('y')
     z = S_('z')
 
     extensional = ExpressionBlock((
-        ST_(Q(C_(1), C_(1)), CNone),
-        ST_(Q(C_(1), C_(2)), CNone),
-        ST_(Q(C_(1), C_(4)), CNone),
-        ST_(Q(C_(2), C_(4)), CNone),
-        ST_(R(C_('a'), C_(1), C_(3)), CNone),
+        T_(Q(C_(1), C_(1))),
+        T_(Q(C_(1), C_(2))),
+        T_(Q(C_(1), C_(4))),
+        T_(Q(C_(2), C_(4))),
+        T_(R(C_('a'), C_(1), C_(3))),
     ))
 
     intensional = ExpressionBlock((
         ST_(R(x, y, z), Q(x, y) & Q(y, z)),
         ST_(T(x, z), Q(x, y) & Q(y, z)),
-        ST_(U(x), UP_(y, Q(x, y))),
     ))
 
     dl.walk(extensional)
@@ -323,7 +314,6 @@ def test_extract_free_variables():
     assert sdb.extract_datalog_free_variables(Q(x, C_(1))) == {x}
     assert sdb.extract_datalog_free_variables(Q(x) & R(y)) == {x, y}
     assert sdb.extract_datalog_free_variables(EP_(x, Q(x, y))) == {y}
-    assert sdb.extract_datalog_free_variables(UP_(x, Q(x, y))) == {y}
     assert sdb.extract_datalog_free_variables(ST_(R(x), Q(x, y))) == {y}
     assert sdb.extract_datalog_free_variables(ST_(R(x), Q(y) & Q(x))) == {y}
 
