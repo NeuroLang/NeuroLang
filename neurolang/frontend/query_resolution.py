@@ -59,16 +59,6 @@ class QueryBuilder:
             if is_subtype(s.type, Callable)
         ]
 
-    # def query(self, symbol, predicate):
-    #     return Query(
-    #         self,
-    #         nl.Query[symbol.expression.type](
-    #             symbol.expression,
-    #             predicate.expression
-    #         ),
-    #         symbol, predicate
-    #     )
-
     def execute_expression(self, expression, result_symbol_name=None):
         if result_symbol_name is None:
             result_symbol_name = str(uuid1())
@@ -156,8 +146,8 @@ class QueryBuilder:
         self.solver.symbol_table[symbol] = nl.Constant[self.set_type](
             region_set)
 
-        if regions_symbols_names \
-                and len(regions_symbols_names) == len(region_set):
+        if (regions_symbols_names and
+                len(regions_symbols_names) == len(region_set)):
 
             regions_symbols_names = list(regions_symbols_names)
             for i, region in enumerate(region_set):

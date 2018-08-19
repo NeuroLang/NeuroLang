@@ -430,7 +430,7 @@ def test_paper_composition_ex():
     assert res == frozenset([c])
 
 
-@pytest.mark.skip(reason="need to fix neurosynth-based test")
+# @pytest.mark.skip(reason="need to fix neurosynth-based test")
 def test_term_defined_regions_creation():
 
     solver = RegionsSetSolver(TypedSymbolTable())

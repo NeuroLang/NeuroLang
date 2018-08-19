@@ -1,23 +1,29 @@
 from .query_resolution import QueryBuilder
+from ..solver import DatalogSolver
 from ..region_solver_ds import RegionSolver
-from ..symbols_and_types import TypedSymbolTable
 from ..regions import (
     ExplicitVBR, ImplicitVBR, SphericalVolume,
-    region_set_from_masked_data, take_principal_regions
-)
-from ..utils.data_manipulation import (
-    parse_region_label_map, fetch_neurosynth_data
-)
+    region_set_from_masked_data, take_principal_regions)
+from ..utils.data_manipulation import parse_region_label_map
+from neurolang.utils.neurosynth_utlis import fetch_neurosynth_data
 from .. import neurolang as nl
 import numpy as np
 
 __all__ = ['RegionFrontend', 'QueryBuilder']
 
 
+class RegionFrontendSolver(
+        RegionSolver,
+        DatalogSolver
+):
+    pass
+
+
 class RegionFrontend(QueryBuilder):
+
     def __init__(self, solver=None):
         if solver is None:
-            solver = RegionSolver(TypedSymbolTable())
+            solver = RegionFrontendSolver()
         super().__init__(solver)
 
     def load_parcellation(self, parc_im, selected_labels=None):
@@ -31,11 +37,12 @@ class RegionFrontend(QueryBuilder):
             region = ExplicitVBR(
                 voxel_coordinates, parc_im.affine, parc_im.shape
             )
+            #res.append(self.add_region(region, result_symbol_name=region_name))
             c = nl.Constant[self.solver.type](region)
             s = nl.Symbol[self.solver.type](region_name)
             self.solver.symbol_table[s] = c
             res.append(s)
-
+        
         return res
 
     def sphere(self, center, radius, result_symbol_name=None):

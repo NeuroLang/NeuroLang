@@ -26,7 +26,7 @@ def test_union_monoid_ir():
 
     res = nli.compile(e1_union_e2)
     assert res.type == e1.type
-    assert 1 in res and 2 in res
+    assert 1 in res.value and 2 in res.value
     assert len(res.value) == 2
 
 
@@ -49,4 +49,4 @@ def test_intersection_monoid_ir():
 
     res = nli.compile(e1_intersection_e2)
     assert res.type == e1.type
-    assert 1 in res and len(res.value) == 1
+    assert 1 in res.value and len(res.value) == 1

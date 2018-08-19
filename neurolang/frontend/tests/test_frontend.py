@@ -1,15 +1,11 @@
 from neurolang import frontend
-from ... import region_solver_ds
 from ..query_resolution_expressions import Symbol
 from ...regions import Region, ExplicitVBR, SphericalVolume
-from ... import neurolang as nl
 import numpy as np
 
 
 def test_add_regions_and_query_included_predicate():
-    neurolang = frontend.RegionFrontend(
-        region_solver_ds.RegionSolver(nl.TypedSymbolTable())
-    )
+    neurolang = frontend.RegionFrontend()
 
     inferior = Region((0, 0, 0), (1, 1, 1))
     superior = Region((0, 0, 4), (1, 1, 5))
@@ -40,9 +36,7 @@ def test_add_regions_and_query_included_predicate():
 
 
 def test_query_regions_from_region_set():
-    neurolang = frontend.RegionFrontend(
-        region_solver_ds.RegionSolver(nl.TypedSymbolTable())
-    )
+    neurolang = frontend.RegionFrontend()
 
     central = ExplicitVBR(np.array([[0, 0, 5], [1, 1, 8]]), np.eye(4))
     neurolang.add_region(central, result_symbol_name='reference_region')
@@ -66,9 +60,7 @@ def test_query_regions_from_region_set():
 
 
 def test_query_new_predicate():
-    neurolang = frontend.RegionFrontend(
-        region_solver_ds.RegionSolver(nl.TypedSymbolTable())
-    )
+    neurolang = frontend.RegionFrontend()
 
     central = ExplicitVBR(np.array([[0, 0, 5], [1, 1, 8]]), np.eye(4))
     reference_symbol = neurolang.add_region(
@@ -99,9 +91,7 @@ def test_query_new_predicate():
 
 
 def test_load_spherical_volume():
-    neurolang = frontend.RegionFrontend(
-        region_solver_ds.RegionSolver(nl.TypedSymbolTable())
-    )
+    neurolang = frontend.RegionFrontend()
 
     inferior = ExplicitVBR(
         np.array([[0, 0, 0], [1, 1, 1]]), np.eye(4))
@@ -113,8 +103,8 @@ def test_load_spherical_volume():
 
     neurolang.sphere((0, 0, 0), 1, result_symbol_name='unit_sphere')
 
-    assert neurolang.symbols['unit_sphere'].value \
-        == SphericalVolume((0, 0, 0), 1)
+    assert (neurolang.symbols['unit_sphere'].value
+            == SphericalVolume((0, 0, 0), 1))
 
     neurolang.make_implicit_regions_explicit(np.eye(4), (5,) * 3)
     for symbol_name in neurolang.region_names:

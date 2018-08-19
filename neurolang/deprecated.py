@@ -110,7 +110,7 @@ class SetBasedSolver(GenericSolver[T]):
         ).values():
             for elem in elem_set.value:
                 elem = Constant[free_variable_symbol.type](frozenset([elem]))
-                rsw = ReplaceSymbolWalker(free_variable_symbol, elem)
+                rsw = ReplaceSymbolWalker({free_variable_symbol: elem})
                 rsw_walk = rsw.walk(body)
                 pred = self.walk(rsw_walk)
                 if pred.value != frozenset():

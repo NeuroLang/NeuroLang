@@ -1,7 +1,7 @@
 import numpy as np
 import nibabel as nib
 from numpy import random
-from pytest import raises
+import pytest
 from ..regions import *
 from ..CD_relations import direction_matrix, cardinal_relation, is_in_direction
 from ..exceptions import NeuroLangException
@@ -26,10 +26,10 @@ def test_region_eq():
 
 def test_invalid_regions_raise_exception():
 
-    with raises(NeuroLangException):
+    with pytest.raises(NeuroLangException):
         Region((0, 0, 0), (1, -1, 1))
 
-    with raises(NeuroLangException):
+    with pytest.raises(NeuroLangException):
         Region((0, 0, 0), (0, 10, 20))
 
 
@@ -272,7 +272,7 @@ def test_spherical_volumetric_region():
         ]) <= 15
     )
 
-
+@pytest.mark.skip(reason="test to be modifiy")
 def test_planar_region():
     center = (1, 5, 6)
     vector = (1, 0, 0)
@@ -339,7 +339,7 @@ def test_refinement_of_not_overlapping():
     assert cardinal_relation(
         other_region, triangle, 'O', refine_overlapping=False
     )
-    with raises(ValueError):
+    with pytest.raises(ValueError):
         cardinal_relation(
             other_region, triangle, 'O', refine_overlapping=True, stop_at=0
         )

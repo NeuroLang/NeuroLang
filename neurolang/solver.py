@@ -332,12 +332,13 @@ class DatalogSolver(
             expression.head
         )
         for symbol_values in itertools.product(*symbols_domains.values()):
-            body = expression.body
-            for i, s in enumerate(symbols_domains.keys()):
-
-                if s in body._symbols:
-                    rsw = ReplaceSymbolWalker(s, symbol_values[i][1])
-                    body = rsw.walk(body)
+            rsw = ReplaceSymbolWalker(
+                dict(zip(
+                    symbols_domains.keys(),
+                    (s[1] for s in symbol_values)
+                ))
+            )
+            body = rsw.walk(expression.body)
 
             res = self.walk(body)
             if res.value:
@@ -360,12 +361,13 @@ class DatalogSolver(
         )
 
         for symbol_values in itertools.product(*symbols_domains.values()):
-            body = expression.body
-            for i, s in enumerate(symbols_domains.keys()):
-                if s in body._symbols:
-                    rsw = ReplaceSymbolWalker(s, symbol_values[i][1])
-                    body = rsw.walk(body)
-
+            rsw = ReplaceSymbolWalker(
+                dict(zip(
+                    symbols_domains.keys(),
+                    (s[1] for s in symbol_values)
+                ))
+            )
+            body = rsw.walk(expression.body)
             res = self.walk(body)
             if isinstance(res, Constant) and res.value:
                 return Constant(True)
@@ -381,12 +383,13 @@ class DatalogSolver(
             expression.head
         )
         for symbol_values in itertools.product(*symbols_domains.values()):
-            body = expression.body
-            for i, s in enumerate(symbols_domains.keys()):
-                if s in body._symbols:
-                    rsw = ReplaceSymbolWalker(s, symbol_values[i][1])
-                    body = rsw.walk(body)
-
+            rsw = ReplaceSymbolWalker(
+                dict(zip(
+                    symbols_domains.keys(),
+                    (s[1] for s in symbol_values)
+                ))
+            )
+            body = rsw.walk(expression.body)
             res = self.walk(body)
             if not res.value:
                 return Constant(False)

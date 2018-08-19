@@ -14,8 +14,7 @@ from . import neurolang as nl
 from .CD_relations import cardinal_relation, inverse_directions
 from .regions import Region, region_union, region_set_from_masked_data
 from .deprecated import SetBasedSolver
-from .utils.data_manipulation import fetch_neurosynth_data
-
+from neurolang.utils.neurosynth_utlis import fetch_neurosynth_data
 
 __all__ = ['RegionsSetSolver']
 
@@ -84,7 +83,6 @@ class RegionsSetSolver(SetBasedSolver[Region]):
 
             return regions_set
         return f
-
 
     def _region_set_from_regexp(self) -> typing.Callable[[typing.Text], typing.AbstractSet[Region]]:
         def f(regexp: typing.Text) -> typing.AbstractSet[Region]:

@@ -5,9 +5,11 @@ from itertools import chain
 from . import expressions
 from .expressions import (
     typing_callable_from_annotated_function,
+    ExpressionBlock,
     ToBeInferred,
     Constant, Expression,
     Symbol,
+    Lambda,
     FunctionApplication,
     Statement,
     ExistentialPredicate,
@@ -27,9 +29,9 @@ from .expressions import (
 __all__ = [
     'ToBeInferred',
     'Symbol', 'Constant', 'Expression', 'FunctionApplication', 'Statement',
-    'Projection', 'ExistentialPredicate', 'UniversalPredicate',
+    'Projection', 'ExistentialPredicate', 'UniversalPredicate', 'Lambda',
     'Query',
-    'TypedSymbolTable',
+    'TypedSymbolTable', 'ExpressionBlock',
     'typing_callable_from_annotated_function',
     'NeuroLangTypeException', 'is_subtype', 'type_validation_value',
     'unify_types',
