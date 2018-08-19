@@ -29,12 +29,13 @@ def region_difference(region_set, affine=None):
 
 def region_set_algebraic_op(op, region_set, affine=None):
 
-    rs = set(filter(lambda x: x is not None, region_set))
+    rs = list(filter(lambda x: x is not None, region_set))
     if affine is None:
         affine = next(iter(rs)).affine
 
     max_dim = (0,) * 3
-    for region in region_set:
+    voxels_set_of_regions = []
+    for region in rs:
         if isinstance(region, ImplicitVBR):
             region = region.to_explicit_vbr(affine, max_dim)
 
@@ -44,10 +45,11 @@ def region_set_algebraic_op(op, region_set, affine=None):
         if (region.image_dim is not None and
                 any(map(lambda x, y: x > y, region.image_dim, max_dim))):
             max_dim = region.image_dim
+        voxels_set_of_regions.append(set(map(tuple, region.voxels)))
 
-    voxels_set_of_regions = [set(map(tuple, region.to_ijk(affine))) for
-                             region in rs]
     result_voxels = np.array(list(op(*voxels_set_of_regions)), dtype=list)
+    if len(result_voxels) == 0:
+        return None
     return ExplicitVBR(result_voxels, affine, max_dim)
 
 
@@ -271,7 +273,9 @@ class SphericalVolume(ImplicitVBR):
 
     def __contains__(self, point):
         point = np.atleast_2d(point)
-        return np.all(np.linalg.norm(self._center - point, axis=1) <= self._radius)
+        return np.all(
+            np.linalg.norm(self._center - point, axis=1) <= self._radius
+        )
 
     def __hash__(self):
         return hash(self.bounding_box.limits.tobytes())
@@ -329,8 +333,9 @@ class PlanarVolume(ImplicitVBR):
 
     def __contains__(self, point):
         point = np.atleast_2d(point)
-        return np.all(np.sum(self._vector * (self._origin - point), axis=1) == 0)
-
+        return np.all(
+            np.sum(self._vector * (self._origin - point), axis=1) == 0
+        )
 
     def __hash__(self):
         return hash(self.bounding_box.limits.tobytes())

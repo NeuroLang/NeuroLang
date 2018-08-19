@@ -452,7 +452,6 @@ def test_regions_union_intersection():
     assert intersect is not None
 
 
-@pytest.mark.skip(reason="to fix")
 def test_intersection_difference():
 
     def randint(): return random.randint(1, 5)
