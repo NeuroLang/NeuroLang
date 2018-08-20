@@ -9,7 +9,7 @@ from .expressions import (
     FunctionApplication, Statement, Query, Projection, Constant,
     Symbol, ExistentialPredicate, UniversalPredicate, Expression, Lambda,
     get_type_and_value, ToBeInferred, is_subtype, NeuroLangTypeException,
-    unify_types
+    unify_types, NeuroLangException
 )
 
 from .expression_pattern_matching import add_match, PatternMatcher
@@ -261,6 +261,36 @@ class ReplaceSymbolsByConstants(ExpressionWalker):
         ))
 
 
+class ReplaceExpressionsByValues(ExpressionWalker):
+    def __init__(self, symbol_table):
+        self.symbol_table = symbol_table
+
+    @add_match(Symbol)
+    def symbol(self, expression):
+        new_expression = self.symbol_table.get(expression, expression)
+        if isinstance(new_expression, Constant):
+            return self.walk(new_expression)
+        else:
+            raise NeuroLangException(
+                f'{expression} could not be evaluated '
+                'to a constant'
+            )
+
+    @add_match(Constant[typing.AbstractSet])
+    def constant_abstract_set(self, expression):
+        return frozenset(
+            self.walk(e) for e in expression.value
+        )
+
+    @add_match(Constant[typing.Tuple])
+    def constant_tuple(self, expression):
+        return tuple(self.walk(e) for e in expression.value)
+
+    @add_match(Constant)
+    def constant_value(self, expression):
+        return expression.value
+
+
 class SymbolTableEvaluator(ExpressionWalker):
     def __init__(self, symbol_table=None):
         if symbol_table is None:
@@ -333,11 +363,10 @@ class ExpressionBasicEvaluator(SymbolTableEvaluator):
 
     @add_match(
         FunctionApplication(Constant(...), ...),
-        lambda expression:
-            all(
-                isinstance(arg, Constant)
-                for arg in expression.args
-            )
+        lambda e: all(
+            not isinstance(arg, Expression) or isinstance(arg, Constant)
+            for _, arg in expression_iterator(e.args)
+        )
     )
     def evaluate_function(self, expression):
         functor = expression.functor
@@ -356,8 +385,9 @@ class ExpressionBasicEvaluator(SymbolTableEvaluator):
                 )
             result_type = ToBeInferred
 
-        args = tuple(a.value for a in expression.args)
-        kwargs = {k: v.value for k, v in expression.kwargs.items()}
+        rebv = ReplaceExpressionsByValues(self.symbol_table)
+        args = rebv.walk(expression.args)
+        kwargs = {k: rebv(v) for k, v in expression.kwargs.items()}
         result = Constant[result_type](
             functor_value(*args, **kwargs)
         )
