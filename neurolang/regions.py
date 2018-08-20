@@ -47,7 +47,7 @@ def region_set_algebraic_op(op, region_set, affine=None, n_dim=3):
             max_dim = region.image_dim
         voxels_set_of_regions.append(set(map(tuple, region.voxels)))
 
-    result_voxels = np.array(list(op(*voxels_set_of_regions)), dtype=list)
+    result_voxels = np.array(tuple(op(*voxels_set_of_regions)))
     if len(result_voxels) == 0:
         return None
     return ExplicitVBR(result_voxels, affine, max_dim)
