@@ -59,7 +59,7 @@ class RegionFrontend(QueryBuilder):
             if isinstance(region, ImplicitVBR):
                 self.add_region(
                     region.to_explicit_vbr(affine, dim), region_symbol_name
-                )
+                ) # implicit regions then should be deleted
 
     def load_neurosynth_term_region(
         self, term: str, components=None, result_symbol_name=None

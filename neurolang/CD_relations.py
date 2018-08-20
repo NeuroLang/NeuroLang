@@ -1,5 +1,5 @@
 from .interval_algebra import v_before, v_overlaps, v_during, v_meets, v_starts, v_finishes, v_equals
-from .regions import ExplicitVBR
+from .regions import ExplicitVBR, ImplicitVBR
 import numpy as np
 
 __all__ = ['cardinal_relation']
@@ -16,6 +16,8 @@ inverse_directions = {'R': 'L', 'A': 'P', 'S': 'I',
 
 def cardinal_relation(region, reference_region, directions, refine_overlapping=False, stop_at=None):
 
+    if isinstance(region, ImplicitVBR):
+        return False
     if region == reference_region:
         return False
 

@@ -47,8 +47,13 @@ def test_query_regions_from_region_set():
 
     neurolang.add_region_set(
         {i1, i2, i3}, result_symbol_name='inferiors',
-        regions_symbols_names={'i1', 'i2', 'i3'}
+        regions_symbols_names=['i1', 'i2', 'i3']
     )
+
+    neurolang.add_region(i1, result_symbol_name='i1')
+    neurolang.add_region(i2, result_symbol_name='i2')
+    neurolang.add_region(i3, result_symbol_name='i3')
+
     x = neurolang.new_region_symbol(symbol_name='x')
     query = neurolang.query(
         x, neurolang.symbols.inferior_of(x, neurolang.symbols.reference_region)

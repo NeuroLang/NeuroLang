@@ -130,7 +130,9 @@ class TypedSymbolTable(collections.MutableMapping):
         else:
             ret = dict()
 
-        ret.update(self._symbols_by_type[type_])
+        for t in self._symbols_by_type:
+            if is_subtype(t, type_):
+                ret.update(self._symbols_by_type[t])
         return ret
 
     def create_scope(self):

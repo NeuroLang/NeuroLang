@@ -116,7 +116,7 @@ class QueryBuilder:
         else:
             value = nl.Constant(value)
 
-        symbol = nl.Symbol[self.set_type](result_symbol_name)
+        symbol = nl.Symbol[self.type](result_symbol_name)
         self.solver.symbol_table[symbol] = value
 
         return Symbol(self, result_symbol_name)
@@ -125,13 +125,7 @@ class QueryBuilder:
         if not isinstance(region, self.type):
             raise ValueError(f"region must be instance of {self.type}")
 
-        if result_symbol_name is None:
-            result_symbol_name = str(uuid1())
-
-        symbol = nl.Symbol[self.type](result_symbol_name)
-        self.solver.symbol_table[symbol] = nl.Constant[self.type](region)
-
-        return Symbol(self, result_symbol_name)
+        return self.add_symbol(region, result_symbol_name)
 
     def add_region_set(
         self, region_set, result_symbol_name=None, regions_symbols_names=None
@@ -139,22 +133,20 @@ class QueryBuilder:
         if not isinstance(region_set, Container):
             raise ValueError(f"region must be instance of {self.set_type}")
 
-        if result_symbol_name is None:
+        if (not regions_symbols_names or
+                len(regions_symbols_names) < len(region_set)):
+            regions_symbols_names = [str(uuid1()) for _ in range(len(region_set))]
+
+        for i, region in enumerate(region_set):
+
+            self.add_region(region, regions_symbols_names[i])
+
+        if not result_symbol_name:
             result_symbol_name = str(uuid1())
 
         symbol = nl.Symbol[self.set_type](result_symbol_name)
         self.solver.symbol_table[symbol] = nl.Constant[self.set_type](
-            region_set)
-
-        if (regions_symbols_names and
-                len(regions_symbols_names) == len(region_set)):
-
-            regions_symbols_names = list(regions_symbols_names)
-            for i, region in enumerate(region_set):
-                region_symbol_name = regions_symbols_names[i]
-                symbol = nl.Symbol[self.type](region_symbol_name)
-                self.solver.symbol_table[symbol] \
-                    = nl.Constant[self.type](region)
+            frozenset(region_set))
 
         return Symbol(self, result_symbol_name)
 
