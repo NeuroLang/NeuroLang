@@ -34,7 +34,7 @@ def test_existential_greater_than():
     set_type = AbstractSet[int]
 
     class SBS(SetBasedSolver[int]):
-        def predicate_is_greater_than(
+        def function_is_greater_than(
             self, reference_elem_in_set: AbstractSet[int]
         ) -> AbstractSet[int]:
             res = frozenset()
@@ -55,7 +55,7 @@ def test_existential_greater_than():
 
     pred_type = Callable[[set_type], set_type]
     solver.symbol_table[S_[pred_type]('is_greater_than')] = C_[pred_type](
-        solver.predicate_is_greater_than
+        solver.function_is_greater_than
     )
 
     p1 = FunctionApplication[set_type](
@@ -73,7 +73,7 @@ def test_existential_bound_variable():
     class SBS(SetBasedSolver):
         type = int
 
-        def predicate_is_greater_than(
+        def function_is_greater_than(
             self, reference_elem_in_set: AbstractSet[int]
         ) -> AbstractSet[int]:
             res = frozenset()
@@ -94,7 +94,7 @@ def test_existential_bound_variable():
 
     pred_type = Callable[[set_type], set_type]
     solver.symbol_table[S_[pred_type]('is_greater_is_than')] = C_[pred_type](
-        solver.predicate_is_greater_than
+        solver.function_is_greater_than
     )
 
     p1 = FunctionApplication[set_type](
@@ -113,7 +113,7 @@ def test_existential_negate_predicate():
     class SBS(SetBasedSolver):
         type = int
 
-        def predicate_are_consecutives(
+        def function_are_consecutives(
             self, reference_elem_in_set: AbstractSet[int]
         ) -> AbstractSet[int]:
             res = frozenset()
@@ -136,7 +136,7 @@ def test_existential_negate_predicate():
 
     pred_type = Callable[[set_type], set_type]
     solver.symbol_table[S_[pred_type]('are_consecutives')] = C_[pred_type](
-        solver.predicate_are_consecutives
+        solver.function_are_consecutives
     )
 
     p1 = FunctionApplication[set_type](
@@ -156,7 +156,7 @@ def test_existential_unsat_predicate_returns_empty():
     class SBS(SetBasedSolver):
         type = int
 
-        def predicate_is_additive_inverse(
+        def function_is_additive_inverse(
             self, reference_elem_in_set: AbstractSet[int]
         ) -> AbstractSet[int]:
             res = frozenset()
@@ -177,7 +177,7 @@ def test_existential_unsat_predicate_returns_empty():
 
     pred_type = Callable[[set_type], set_type]
     solver.symbol_table[S_[pred_type]('is_additive_inverse')] = C_[pred_type](
-        solver.predicate_is_additive_inverse
+        solver.function_is_additive_inverse
     )
 
     p1 = FunctionApplication[set_type](
@@ -193,7 +193,7 @@ def test_existential_predicates_conjuntion_and_disjunction():
     class SBS(SetBasedSolver):
         type = int
 
-        def predicate_greater_than(
+        def function_greater_than(
             self, reference_elem_in_set: AbstractSet[int]
         ) -> AbstractSet[int]:
             res = frozenset()
@@ -206,7 +206,7 @@ def test_existential_predicates_conjuntion_and_disjunction():
                             res = res.union(frozenset([elem]))
             return FiniteDomainSet(res)
 
-        def predicate_sum_less_than_100(
+        def function_sum_less_than_100(
             self, reference_elem_in_set: AbstractSet[int]
         ) -> AbstractSet[int]:
             res = frozenset()
@@ -227,10 +227,10 @@ def test_existential_predicates_conjuntion_and_disjunction():
     )
     pred_type = Callable[[set_type], set_type]
     solver.symbol_table[S_[pred_type]('greater_than')] = C_[pred_type](
-        solver.predicate_greater_than
+        solver.function_greater_than
     )
     solver.symbol_table[S_[pred_type]('sum_less_than_100')] = C_[pred_type](
-        solver.predicate_sum_less_than_100
+        solver.function_sum_less_than_100
     )
 
     p1 = FunctionApplication[set_type](

@@ -46,7 +46,7 @@ class SurfaceSolver(GenericSolver):
     type_name = "surface"
     type = Surface
 
-    def predicate_from_file(self, filename: str)->Surface:
+    def function_from_file(self, filename: str)->Surface:
         f = nib.load(filename)
         return Surface(f.darrays[0].data, f.darrays[1].data)
 
@@ -262,7 +262,7 @@ class RegionSolver(SetBasedSolver):
     type_name = "region"
     type = Region
 
-    def predicate_on_surface(
+    def function_on_surface(
         self, surface: Surface
     )->Region:
         return self.type(surface)
@@ -292,7 +292,7 @@ class SurfaceOverlaySolver(GenericSolver):
     type_name = "surface_overlay"
     type = SurfaceOverlay
 
-    def predicate_from_file(self, filename: str)->bool:
+    def function_from_file(self, filename: str)->bool:
         f = nib.load(filename)
 
         self.symbol_table[self.identifier] = Constant(
@@ -304,7 +304,7 @@ class SurfaceOverlaySolver(GenericSolver):
         )
         return True
 
-    def predicate_on_surface(self, surface: Surface)->bool:
+    def function_on_surface(self, surface: Surface)->bool:
         self.symbol_table[self.identifier['surface']] = Constant(
             surface,
             type_=Surface

@@ -64,7 +64,7 @@ def test_subclass():
         expressions.Constant[int], expressions.Constant[typing.AbstractSet]
     )
 
-
+    
 def test_replace_subtype():
     assert (
         typing.Set is symbols_and_types.replace_type_variable(

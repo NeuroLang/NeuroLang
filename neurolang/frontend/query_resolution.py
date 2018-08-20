@@ -17,7 +17,7 @@ class QueryBuilder:
         self.solver = solver
         self.set_type = AbstractSet[self.solver.type]
 
-        for k, v in self.solver.included_predicates.items():
+        for k, v in self.solver.included_functions.items():
             self.solver.symbol_table[nl.Symbol[v.type](k)] = v
 
         for k, v in self.solver.included_functions.items():
