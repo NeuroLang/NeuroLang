@@ -284,9 +284,7 @@ class ReplaceExpressionsByValues(ExpressionWalker):
 
     @add_match(Constant[typing.Tuple])
     def constant_tuple(self, expression):
-        return tuple(
-            self.walk(e) for e in expression.value
-        )
+        return tuple(self.walk(e) for e in expression.value)
 
     @add_match(Constant)
     def constant_value(self, expression):
