@@ -325,3 +325,10 @@ def test_extract_free_variables():
 
     with pytest.raises(NeuroLangException):
         assert sdb.extract_datalog_free_variables(~(R(y)))
+
+
+def test_equality_operation():
+    dl = Datalog()
+
+    assert dl.walk(S_('equals')(C_(1), C_(1))).value is True
+    assert dl.walk(S_('equals')(C_(1), C_(2))).value is False
