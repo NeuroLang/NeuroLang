@@ -11,7 +11,7 @@ From the script, the resulting symbol table is
 '''
 
 import neurolang as nl
-from neurolang.solver import SetBasedSolver
+from neurolang.deprecated import SetBasedSolver
 import typing
 
 
