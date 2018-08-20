@@ -14,7 +14,7 @@ from . import neurolang as nl
 from .CD_relations import cardinal_relation, inverse_directions
 from .regions import Region, region_union, region_set_from_masked_data
 from .deprecated import SetBasedSolver
-from neurolang.utils.neurosynth_utlis import fetch_neurosynth_data
+from neurolang.utils.neurosynth_utils import fetch_neurosynth_data
 
 __all__ = ['RegionsSetSolver']
 

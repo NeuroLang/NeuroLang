@@ -5,7 +5,7 @@ from ..regions import (
     ExplicitVBR, ImplicitVBR, SphericalVolume,
     region_set_from_masked_data, take_principal_regions)
 from ..utils.data_manipulation import parse_region_label_map
-from neurolang.utils.neurosynth_utlis import fetch_neurosynth_data
+from neurolang.utils.neurosynth_utils import fetch_neurosynth_data
 from .. import neurolang as nl
 import numpy as np
 
