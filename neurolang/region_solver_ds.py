@@ -56,8 +56,13 @@ class RegionSolver(PatternWalker[Region]):
 
             return func
 
+        refine_overlapping = kwargs.get('refine_overlapping', False)
+
         for key, value in cardinal_operations.items():
-            setattr(cls, f'function_{key}', build_function(value))
+            setattr(
+                cls, f'function_{key}',
+                build_function(value, refine_overlapping=refine_overlapping)
+            )
 
         anatomical_correct_operations = {
             k: cardinal_operations[k] for k in (
@@ -66,8 +71,12 @@ class RegionSolver(PatternWalker[Region]):
                 )
         }
         for key, value in anatomical_correct_operations.items():
-            setattr(cls, f'function_anatomical_{key}',
-                    anatomical_direction_function(value))
+            setattr(
+                cls, f'function_anatomical_{key}',
+                anatomical_direction_function(
+                    value, refine_overlapping=refine_overlapping
+                )
+            )
 
         return PatternWalker.__new__(cls)
 
