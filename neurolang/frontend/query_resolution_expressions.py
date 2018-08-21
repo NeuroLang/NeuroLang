@@ -256,7 +256,7 @@ class Query(Expression):
         self.predicate = predicate
 
     def __repr__(self):
-        return u'{{{s} | {s}: {p}}}'.format(
+        return u'{{{s} | {p}}}'.format(
             s=repr(self.symbol),
             p=repr(self.predicate)
         )
