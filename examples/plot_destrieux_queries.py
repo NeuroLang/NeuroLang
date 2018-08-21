@@ -50,7 +50,7 @@ plotting.plot_roi(nl.symbols.L_S_central.value.spatial_image())
 
 ###############################################################################
 # Create and run a simple query
-# ----------------------------------------------
+# -----------------------------
 
 x = nl.new_region_symbol('x')
 q = nl.query(x, nl.symbols.anatomical_anterior_of(x, nl.symbols.L_S_central))
@@ -66,7 +66,7 @@ for r in res:
 
 ###############################################################################
 # Create and run query which is a bit more complex
-# ----------------------------------------------
+# ------------------------------------------------
 x = nl.new_region_symbol('x')
 q = nl.query(
     x,
@@ -85,7 +85,7 @@ for r in res:
 
 ###############################################################################
 # Create and run query with existential quantifiers and negation
-# --------------------------------------------------------
+# --------------------------------------------------------------
 x = nl.new_region_symbol('x')
 y = nl.new_region_symbol('y')
 q = nl.query(
