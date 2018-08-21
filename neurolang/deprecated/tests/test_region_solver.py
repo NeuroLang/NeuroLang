@@ -1,9 +1,9 @@
 from ..region_solver import RegionsSetSolver
-from ..symbols_and_types import TypedSymbolTable
-from .. import neurolang as nl
+from ...symbols_and_types import TypedSymbolTable
+from ... import neurolang as nl
 from typing import AbstractSet, Callable
-from ..regions import Region, ExplicitVBR, take_principal_regions
-from ..CD_relations import cardinal_relation
+from ...regions import Region, ExplicitVBR, take_principal_regions
+from ...CD_relations import cardinal_relation
 import nibabel as nib
 import numpy as np
 from numpy import random
