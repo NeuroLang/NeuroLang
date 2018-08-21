@@ -290,10 +290,6 @@ class ReplaceExpressionsByValues(ExpressionWalker):
     def constant_value(self, expression):
         return expression.value
 
-    @add_match(...)
-    def _(self, expression):
-        import pdb; pdb.set_trace()
-
 
 class SymbolTableEvaluator(ExpressionWalker):
     def __init__(self, symbol_table=None):
