@@ -10,7 +10,6 @@ executing some simple queries.
 from nilearn import datasets
 from nilearn import plotting
 import nibabel as nib
-import numpy as np
 
 from neurolang import frontend as fe
 
@@ -26,16 +25,13 @@ destrieux_map = nib.load(destrieux_dataset['maps'])
 # -------------------------------------------------
 
 nl = fe.RegionFrontend()
-for number, name in destrieux_dataset['labels']:
+for label_number, name in destrieux_dataset['labels']:
     name = name.decode()
     if not name.startswith('L ') or 'S_' not in name:
         continue
 
     # Create a region object
-    voxels = np.transpose((destrieux_map.get_data() == number).nonzero())
-    region = fe.ExplicitVBR(
-        voxels, destrieux_map.affine, img_dim=destrieux_map.shape
-    )
+    region = nl.create_region(destrieux_map, label=label_number)
 
     # Fine tune the symbol name
     name = 'L_' + name[2:].replace('-', '_')
