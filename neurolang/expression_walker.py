@@ -12,9 +12,7 @@ from .expressions import (
     unify_types, NeuroLangException
 )
 
-from .expression_pattern_matching import (
-    add_match, PatternMatcher, NeuroLangPatternMatchingNoMatch
-)
+from .expression_pattern_matching import add_match, PatternMatcher
 
 
 def expression_iterator(expression, include_level=False, dfs=True):
@@ -135,20 +133,20 @@ class ExpressionWalker(PatternWalker):
         ):
             functor_type, functor_value = get_type_and_value(functor)
 
-            # if functor_type is not ToBeInferred:
-            #    if not is_subtype(functor_type, typing.Callable):
-            #        raise NeuroLangTypeException(
-            #            f'Function {functor} is not of callable type'
-            #        )
-            # else:
-            #    if (
-            #        isinstance(functor, Constant) and
-            #        not callable(functor_value)
-            #    ):
-            #        raise NeuroLangTypeException(
-            #            f'Function {functor} is not of callable type'
-            #        )
-            #
+            if functor_type is not ToBeInferred:
+                if not is_subtype(functor_type, typing.Callable):
+                    raise NeuroLangTypeException(
+                        f'Function {functor} is not of callable type'
+                    )
+            else:
+                if (
+                    isinstance(functor, Constant) and
+                    not callable(functor_value)
+                ):
+                    raise NeuroLangTypeException(
+                        f'Function {functor} is not of callable type'
+                    )
+
             result = functor(*args, **kwargs)
             return self.walk(result)
         else:
@@ -271,27 +269,30 @@ class ReplaceExpressionsByValues(ExpressionWalker):
     def symbol(self, expression):
         new_expression = self.symbol_table.get(expression, expression)
         if isinstance(new_expression, Constant):
-            return new_expression
+            return self.walk(new_expression)
         else:
-            raise NeuroLangPatternMatchingNoMatch(
-                f'Symbol {expression} does not evaluate to a constant.'
+            raise NeuroLangException(
+                f'{expression} could not be evaluated '
+                'to a constant'
             )
 
     @add_match(Constant[typing.AbstractSet])
     def constant_abstract_set(self, expression):
-        return type(expression.value)(
+        return frozenset(
             self.walk(e) for e in expression.value
         )
 
     @add_match(Constant[typing.Tuple])
     def constant_tuple(self, expression):
-        return tuple(
-            self.walk(e) for e in expression.value
-        )
+        return tuple(self.walk(e) for e in expression.value)
 
     @add_match(Constant)
-    def constant(self, expression):
+    def constant_value(self, expression):
         return expression.value
+
+    @add_match(...)
+    def _(self, expression):
+        import pdb; pdb.set_trace()
 
 
 class SymbolTableEvaluator(ExpressionWalker):
@@ -355,11 +356,10 @@ class ExpressionBasicEvaluator(SymbolTableEvaluator):
 
     @add_match(
         FunctionApplication(Constant(...), ...),
-        lambda expression:
-            all(
-                len(arg._symbols) == 0
-                for arg in expression.args
-            )
+        lambda e: all(
+            not isinstance(arg, Expression) or isinstance(arg, Constant)
+            for _, arg in expression_iterator(e.args)
+        )
     )
     def evaluate_function(self, expression):
         functor = expression.functor

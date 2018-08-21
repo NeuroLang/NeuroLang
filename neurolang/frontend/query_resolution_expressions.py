@@ -159,7 +159,7 @@ class Symbol(Expression):
     def __init__(self, query_builder, symbol_name):
         self.symbol_name = symbol_name
         self.query_builder = query_builder
-        self.__rsbv = ReplaceExpressionsByValues(
+        self._rsbv = ReplaceExpressionsByValues(
             self.query_builder.solver.symbol_table
         )
 
@@ -215,6 +215,22 @@ class Symbol(Expression):
                 f'Symbol of type {self.symbol.type} is not iterable'
             )
 
+    def __len__(self):
+        symbol = self.symbol
+        if (
+            isinstance(symbol, nl.Constant) and (
+                is_subtype(symbol.type, AbstractSet) or
+                is_subtype(symbol.type, Tuple)
+            )
+        ):
+            return len(symbol.value)
+
+    def __eq__(self, other):
+        if isinstance(other, Expression):
+            return self.expression == other.expression
+        else:
+            return self.expression == other
+
     @property
     def symbol(self):
         return self.query_builder.solver.symbol_table[self.symbol_name]
@@ -227,7 +243,7 @@ class Symbol(Expression):
     def value(self):
         constant = self.query_builder.solver.symbol_table[self.symbol_name]
         try:
-            return self.__rsbv.walk(constant)
+            return self._rsbv.walk(constant)
         except NeuroLangPatternMatchingNoMatch:
             raise ValueError("Expression doesn't have a python value")
 

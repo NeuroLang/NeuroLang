@@ -48,13 +48,14 @@ def test_add_regions_and_query():
     neurolang.add_region(central, result_symbol_name='central')
     neurolang.add_region(superior, result_symbol_name='superior')
 
-    x = neurolang.new_region_symbol(symbol_name='x')
+    x = neurolang.new_region_symbol(name='x')
     query = neurolang.query(
         x, neurolang.symbols.superior_of(x, neurolang.symbols.central)
     )
     query_result = query.do(result_symbol_name='result_of_test_query')
-    result_symbol = next(iter(query_result.value))
-    assert neurolang.symbols[result_symbol].value == superior
+    result_symbol = next(iter(query_result))
+    assert result_symbol.value == superior
+    assert neurolang.symbols[result_symbol.symbol_name].value == superior
 
 
 def test_anatomical_superior_of_query():
@@ -68,7 +69,7 @@ def test_anatomical_superior_of_query():
     neurolang.add_region(central, result_symbol_name='central_region')
     neurolang.add_region(superior, result_symbol_name='superior_region')
 
-    x = neurolang.new_region_symbol(symbol_name='x')
+    x = neurolang.new_region_symbol(name='x')
     query = neurolang.query(
         x, neurolang.symbols.superior_of(x, neurolang.symbols.inferior_region)
     )
@@ -77,9 +78,11 @@ def test_anatomical_superior_of_query():
     assert len(query_result.value) == 2
 
     query = neurolang.query(
-        x, neurolang.symbols.anatomical_superior_of(x, neurolang.symbols.inferior_region)
+        x, neurolang.symbols.anatomical_superior_of(
+            x, neurolang.symbols.inferior_region
+        )
     )
     query_result = query.do(result_symbol_name='result_of_test_query')
 
     assert len(query_result.value) == 1
-    assert next(iter(query_result.value)).name == 'superior_region'
+    assert next(iter(query_result)).symbol_name == 'superior_region'

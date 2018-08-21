@@ -35,6 +35,8 @@ class QueryBuilder:
         return Symbol(self, symbol_name)
 
     def __getitem__(self, symbol_name):
+        if isinstance(symbol_name, Symbol):
+            symbol_name = symbol_name.symbol_name
         return self.get_symbol(symbol_name)
 
     def __contains__(self, symbol):
@@ -178,7 +180,12 @@ class QueryBuilder:
         new_set = []
         for e in iterable:
             s = self.new_symbol(element_type).expression
-            c = nl.Constant[element_type](e)
+            if is_subtype(element_type, Tuple):
+                c = nl.Constant[element_type](
+                    tuple(nl.Constant(ee) for ee in e)
+                )
+            else:
+                c = nl.Constant[element_type](e)
             self.solver.symbol_table[s] = c
             new_set.append(s)
 
@@ -187,7 +194,7 @@ class QueryBuilder:
         symbol = self.new_symbol(set_type, name=name)
         self.solver.symbol_table[symbol.expression] = constant
 
-        return symbol
+        return self.symbols[symbol]
 
     def query(self, symbol, predicate):
         return Query(

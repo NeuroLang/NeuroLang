@@ -359,6 +359,7 @@ class DatalogSolver(
         symbols_domains = self.quantifier_head_symbols_and_adom(
             expression.head
         )
+
         for symbol_values in itertools.product(*symbols_domains.values()):
             rsw = ReplaceSymbolWalker(
                 dict(zip(
