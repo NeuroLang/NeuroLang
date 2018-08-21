@@ -1,0 +1,98 @@
+.. _sphx-glr-auto-examples-plot-region-type-example-py:
+
+
+Example in adding a new type with set semantics to the NeuroLang language
+*************************************************************************
+
+A type with ``set`` semantics has the following operations
+
+* A predicate ``in <set>`` which results in the ``<set>`` given as
+   parameter
+
+* ``and`` and ``or`` operations between sets which are disjunction
+   and conjunction
+
+From the script, the resulting symbol table is
+
+::
+
+   from neurolang.region_solver import RegionsSetSolver
+   import neurolang as nl
+
+
+
+   class NeuroLangCompiler(
+       RegionsSetSolver,
+       nl.NeuroLangIntermediateRepresentationCompiler
+   ):
+       pass
+
+   # Generate a compiler that adds the previously defined type to the
+   # language. This works using the mixin pattern.
+
+
+   nlc = NeuroLangCompiler()
+
+::
+
+   Traceback (most recent call last):
+     File "/Users/dwasserm/sources/NeuroLang/examples/plot_region_type_example.py", line 28, in <module>
+       nlc = NeuroLangCompiler()
+     File "/Users/dwasserm/sources/NeuroLang/neurolang/region_solver.py", line 29, in __init__
+       super().__init__(*args, **kwargs)
+     File "/Users/dwasserm/sources/NeuroLang/neurolang/expression_walker.py", line 302, in __init__
+       self.symbol_table = symbol_table
+   AttributeError: can't set attribute
+
+Run three queries
+
+::
+
+   nlc.compile('''
+       unit_region are Regions singleton (0, 0, 1, 1)
+       box5 are Regions singleton (0, 0, 5, 5)
+       a_rectangle are Regions singleton (2, 1, 3, 2)
+       another_rectangle are Regions singleton (-5, -5, 4, -4)
+       rect_q4 are Regions singleton (0, -8, 4, -7)
+       negative_unit are Regions singleton (-1, -1, 0, 0)
+       test are Regions not in unit_region
+
+       foo are Regions superior_of another_rectangle
+       bar are Regions superior_of rect_q4
+       two_rectangles are Regions in another_rectangle or in rect_q4
+       func are Regions superior_of two_rectangles
+       both_limits are Regions in rect_q4 or in box5
+       empty are Regions superior_of both_limits or in rect_q4
+
+       southern are Regions inferior_of unit_region
+
+       within are Regions overlapping box5
+   ''')
+
+Print the resulting symbol table
+
+::
+
+   for k, v in nlc.symbol_table.items():
+      print(k, ':', v)
+
+   print('*' * 20)
+   p1 = nl.Predicate(nl.Symbol('superior_of'), (nl.Symbol('two_rectangles'),))
+   p2 = nl.Predicate(nl.Symbol('superior_of'), (nl.Symbol('rect_q4'),))
+
+   print(p1, p2)
+   print('res1', nlc.walk(p1))
+   print('res2', nlc.walk(p2))
+   print('*' * 20)
+   print(~p2)
+   print(nlc.walk(p1 & p2))
+   print(nlc.walk(p1 | p2))
+
+
+   ir = nlc.get_intermediate_representation('''
+       foobar are Regions superior_of unit_region
+   ''')
+   print(ir[0])
+   print('-' * 10)
+
+**Total running time of the script:** ( 0 minutes  0.000 seconds)
