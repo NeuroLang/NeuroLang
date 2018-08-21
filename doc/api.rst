@@ -13,8 +13,6 @@ Classes
   
    PatternMatcher
    Expression
-   Constant
-   Definition
 
 
 Functions
