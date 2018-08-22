@@ -10,3 +10,4 @@ class ExistentialDatalog(NaiveDatalog):
             raise NeuroLangException(
                 '\u2203-quantified variable cannot occur in rhs'
             )
+        return expression
