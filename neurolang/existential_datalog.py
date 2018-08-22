@@ -22,4 +22,4 @@ class ExistentialRule(Expression):
         eq_var_str = '\u2203 {}'.format(
             ', '.join([v.name for v in self.eq_variables])
         )
-        return 'fExistentialRule({eq_var_repr}, {statement_repr})'
+        return f'ExistentialRule({eq_var_repr}, {statement_repr})'
