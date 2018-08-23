@@ -152,7 +152,34 @@ def test_facts_intensional():
         res = dl.walk(St_(Q(x, y), Q(x)))
 
 
-def test_query():
+def test_query_single_element():
+    solver = Datalog()
+    # free variables
+    x = S_('x')
+
+    # constants
+    a, b = C_('a'), C_('b')
+
+    # predicates
+    Q = S_('Q')
+
+    extensional = ExpressionBlock((
+        T_(Q(a)),
+        T_(Q(b)),
+    ))
+
+    solver.walk(extensional)
+
+    query = Query(x, Q(x))
+
+    result = solver.walk(query)
+
+    assert isinstance(result, Constant)
+    assert result.value is not None
+    assert result.value == {a, b}
+
+
+def test_query_tuple():
     dl = Datalog()
 
     Q = S_('Q')
