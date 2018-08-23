@@ -313,6 +313,8 @@ class NaiveDatalog(DatalogBasic):
 
         body = Lambda(head, expression.body)
 
+        import pdb; pdb.set_trace()
+
         result = set()
 
         for args in loop:
