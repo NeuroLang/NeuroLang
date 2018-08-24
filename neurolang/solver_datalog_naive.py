@@ -293,6 +293,7 @@ class NaiveDatalog(DatalogBasic):
 
     @add_match(Query)
     def query_resolution(self, expression):
+
         if isinstance(expression.head, Symbol):
             head = (expression.head,)
         elif isinstance(expression.head, tuple):
@@ -312,8 +313,6 @@ class NaiveDatalog(DatalogBasic):
         )
 
         body = Lambda(head, expression.body)
-
-        import pdb; pdb.set_trace()
 
         result = set()
 

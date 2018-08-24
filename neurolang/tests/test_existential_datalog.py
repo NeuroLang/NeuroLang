@@ -1,10 +1,12 @@
 import pytest
+from typing import Any
 
 from .. import solver_datalog_extensional_db
 from .. import expression_walker
 from .. import expressions
 from ..expressions import ExpressionBlock, Query
-from ..existential_datalog import ExistentialDatalog
+from ..existential_datalog import ExistentialDatalog, SolverExistentialDatalog
+from ..solver_datalog_naive import NaiveDatalog
 from ..solver_datalog_naive import Fact
 
 C_ = expressions.Constant
@@ -17,6 +19,13 @@ EP_ = expressions.ExistentialPredicate
 class Solver(
     solver_datalog_extensional_db.ExtensionalDatabaseSolver,
     ExistentialDatalog, expression_walker.ExpressionBasicEvaluator
+):
+    pass
+
+
+class SolverWithExistentialResolution(
+    solver_datalog_extensional_db.ExtensionalDatabaseSolver,
+    SolverExistentialDatalog, expression_walker.ExpressionBasicEvaluator
 ):
     pass
 
@@ -57,20 +66,26 @@ def test_existential_statement_added_to_symbol_table():
     )
 
 
-# def test_existential_statement_resolution():
-    # solver = Solver()
-    # x, y = S_('x'), S_('y')
-    # a, b, c = C_('a'), C_('b'), C_('c')
-    # P, Q = S_('P'), S_('Q')
-    # extensional = ExpressionBlock((
-        # Fact(Q(a)),
-        # Fact(Q(b)),
-    # ))
-    # intensional = ExpressionBlock((St_(EP_(y, P(x, y)), Q(x)), ))
-    # solver.walk(extensional)
-    # solver.walk(intensional)
-    # query = Query(x, P(x, y))
-    # result = solver.walk(query)
-    # assert isinstance(result, expressions.Constant)
-    # assert result.value is not None
-    # assert result.value == frozenset({'a', 'b'})
+def test_existential_statement_resolution():
+    solver = SolverWithExistentialResolution()
+    x, y = S_('x'), S_('y')
+    a, b, c = C_('a'), C_('b'), C_('c')
+    P, Q = S_('P'), S_('Q')
+    extensional = ExpressionBlock((
+        Fact(Q(a)),
+        Fact(Q(b)),
+    ))
+    solver.walk(extensional)
+    assert 'Q' in solver.symbol_table
+    query = Query(x, Q(x))
+    result = solver.walk(query)
+    assert isinstance(result, expressions.Constant)
+    assert result.value is not None
+    assert result.value == frozenset({'a', 'b'})
+    intensional = ExpressionBlock((St_(EP_(y, P(x, y)), Q(x)), ))
+    solver.walk(intensional)
+    query = Query(x, P(x, y))
+    result = solver.walk(query)
+    assert isinstance(result, expressions.Constant)
+    assert result.value is not None
+    assert result.value == frozenset({'a', 'b'})
