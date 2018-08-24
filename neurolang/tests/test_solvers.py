@@ -63,7 +63,7 @@ def test_symbol_table():
 
 def test_predicate_match():
     class NewSolver(solver.GenericSolver[solver.T]):
-        def predicate_test(self, a: solver.T) -> bool:
+        def function_test(self, a: solver.T) -> bool:
             return True
 
     ir = expressions.FunctionApplication(S_('test'), (C_[float](0.), ))
@@ -74,7 +74,7 @@ def test_predicate_match():
 
 def test_predicate_symbol_table():
     class NewSolver(solver.GenericSolver[solver.T]):
-        def predicate_test(self, a: float) -> bool:
+        def function_test(self, a: float) -> bool:
             return S_[bool]('b')
 
     ns = NewSolver[float]()

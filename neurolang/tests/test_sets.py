@@ -8,7 +8,7 @@ C_ = expressions.Constant
 
 
 def test_union_monoid_ir():
-    elements = [frozenset((a, )) for a in (1, 2)]
+    elements = [frozenset((C_(a), )) for a in (1, 2)]
     null_element = frozenset()
     symbols = {
         'element{}'.format(i + 1): C_[AbstractSet[int]](e)
@@ -31,7 +31,7 @@ def test_union_monoid_ir():
 
 
 def test_intersection_monoid_ir():
-    elements = [frozenset(a) for a in ({1}, {1, 2})]
+    elements = [frozenset(C_(a_) for a_ in a) for a in ({1}, {1, 2})]
     null_element = frozenset()
     symbols = {
         'element{}'.format(i + 1): C_[AbstractSet[int]](e)

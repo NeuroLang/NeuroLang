@@ -1,8 +1,11 @@
-from pytest import raises
+from pytest import raises, mark
 
 from .. import neurolang as nl
 from ...deprecated import SetBasedSolver, FiniteDomain, FiniteDomainSet
 from typing import Tuple, AbstractSet
+
+
+pytestmark = mark.skipif(..., reason='Deprecated semantics')
 
 
 def test_assignment_values():
@@ -81,12 +84,12 @@ class FourInts(int, FiniteDomain):
 class FourIntsSetSolver(SetBasedSolver[FourInts]):
     type_name = 'four_int'
 
-    def predicate_equal_to(self, value: int)->FourInts:
+    def function_equal_to(self, value: int)->FourInts:
         return FourInts(value)
 
-    def predicate_singleton_set(self, value: int)->AbstractSet[FourInts]:
+    def function_singleton_set(self, value: int)->AbstractSet[FourInts]:
         return FiniteDomainSet(
-            [nl.Constant(FourInts(value))],
+            [nl.Constant(FourInts(nl.Constant[int](value)))],
         )
 
 

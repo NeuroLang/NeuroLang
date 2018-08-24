@@ -1,14 +1,20 @@
 from functools import wraps
 import operator as op
-from typing import AbstractSet
+from typing import AbstractSet, Tuple
 from .. import neurolang as nl
 from ..symbols_and_types import is_subtype
+from ..expression_walker import ReplaceExpressionsByValues
+from ..expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 
 
 class Expression:
     def __init__(self, query_builder, expression):
         self.query_builder = query_builder
         self.expression = expression
+
+    @property
+    def type(self):
+        return self.expression.type
 
     def do(self, result_symbol_name=None):
         return self.query_builder.execute_expression(
@@ -124,6 +130,8 @@ class Operation(Expression):
             op_repr = self.operator.symbol_name
         elif isinstance(self.operator, Operation):
             op_repr = '({})'.format(repr(self.operator))
+        elif hasattr(self.operator, '__qualname__'):
+            op_repr = self.operator.__qualname__
         else:
             op_repr = repr(self.operator)
 
@@ -151,6 +159,9 @@ class Symbol(Expression):
     def __init__(self, query_builder, symbol_name):
         self.symbol_name = symbol_name
         self.query_builder = query_builder
+        self._rsbv = ReplaceExpressionsByValues(
+            self.query_builder.solver.symbol_table
+        )
 
     def __repr__(self):
         symbol = self.symbol
@@ -178,6 +189,48 @@ class Symbol(Expression):
         else:
             raise ValueError('...')
 
+    def __iter__(self):
+        symbol = self.symbol
+        if (
+            isinstance(symbol, nl.Constant) and (
+                is_subtype(symbol.type, AbstractSet) or
+                is_subtype(symbol.type, Tuple)
+            )
+        ):
+            all_symbols = (
+                self.query_builder.solver.symbol_table.symbols_by_type(
+                    symbol.type.__args__[0]
+                )
+            )
+            for s in symbol.value:
+                if isinstance(s, nl.Constant):
+                    for k, v in all_symbols.items():
+                        if isinstance(v, nl.Constant) and s is v.value:
+                            yield Symbol(self.query_builder, k.name)
+                            break
+                if isinstance(s, nl.Symbol):
+                    yield Symbol(self.query_builder, s.name)
+        else:
+            raise TypeError(
+                f'Symbol of type {self.symbol.type} is not iterable'
+            )
+
+    def __len__(self):
+        symbol = self.symbol
+        if (
+            isinstance(symbol, nl.Constant) and (
+                is_subtype(symbol.type, AbstractSet) or
+                is_subtype(symbol.type, Tuple)
+            )
+        ):
+            return len(symbol.value)
+
+    def __eq__(self, other):
+        if isinstance(other, Expression):
+            return self.expression == other.expression
+        else:
+            return self.expression == other
+
     @property
     def symbol(self):
         return self.query_builder.solver.symbol_table[self.symbol_name]
@@ -188,10 +241,11 @@ class Symbol(Expression):
 
     @property
     def value(self):
-        if isinstance(self.symbol, nl.Constant):
-            return self.symbol.value
-        else:
-            raise ValueError("This result type has no value")
+        constant = self.query_builder.solver.symbol_table[self.symbol_name]
+        try:
+            return self._rsbv.walk(constant)
+        except NeuroLangPatternMatchingNoMatch:
+            raise ValueError("Expression doesn't have a python value")
 
 
 class Query(Expression):
@@ -202,7 +256,7 @@ class Query(Expression):
         self.predicate = predicate
 
     def __repr__(self):
-        return u'{{{s} | {s}: {p}}}'.format(
+        return u'{{{s} | {p}}}'.format(
             s=repr(self.symbol),
             p=repr(self.predicate)
         )

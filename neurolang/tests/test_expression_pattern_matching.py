@@ -82,6 +82,27 @@ def test_match_expression_type():
                 pm.match(e)
 
 
+def test_match_expression_type_param():
+    class PM(PatternMatcher):
+        @add_match(expressions.Constant[typing.AbstractSet])
+        def __(self, expression):
+            return 1
+
+        @add_match(expressions.Constant[int])
+        def _(self, expression):
+            return 2
+
+        @add_match(expressions.Constant)
+        def ___(self, expression):
+            return 3
+
+    pm = PM()
+
+    assert pm.match(C_(set())) == 1
+    assert pm.match(C_(1)) == 2
+    assert pm.match(C_('a')) == 3
+
+
 def test_match_expression():
     class PM(PatternMatcher):
         @add_match(expressions.Constant[int](...))

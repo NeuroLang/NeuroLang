@@ -219,10 +219,10 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
                 guard is None or guard(expression)
             )
             if (pattern_match and guard_match):
-                result_expression = action(self, expression)
                 logging.info(f'\tMATCH {name}')
                 logging.info(f'\t\tpattern: {pattern}')
                 logging.info(f'\t\tguard: {guard}')
+                result_expression = action(self, expression)
                 logging.info(f'\t\tresult: {result_expression}')
                 return result_expression
             else:

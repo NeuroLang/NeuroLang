@@ -91,7 +91,7 @@ def test_symbol_method_and_operator():
         fve = a[C_(2)]
 
     assert evaluate(a, a=C_(1)) == 1
-    assert evaluate(fva, a=C_[Set[int]]({1})) == 1
+    assert evaluate(fva, a=C_[Set[int]](set((C_(1),)))) == 1
     assert evaluate(fvb, a=C_(1)) == -3
     assert evaluate(fvc, a=C_(1)) == 3
     assert evaluate(fvc * C_(2), a=C_(1)) == 6
