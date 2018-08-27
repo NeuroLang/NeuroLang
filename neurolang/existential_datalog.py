@@ -88,6 +88,7 @@ class SolverExistentialDatalog(ExistentialDatalog):
                     isinstance(e.lhs, ExistentialPredicate)
                 )
             )
+            found_matching_existential_statement = False
             result = set()
             for e in eq_expressions:
                 # index of e-quantified variable
@@ -103,6 +104,9 @@ class SolverExistentialDatalog(ExistentialDatalog):
                     else:
                         new_q_head = (map_q_arg[s] for s in q_head)
                     result |= self.walk(Query(new_q_head, e.rhs)).value
+                    found_matching_existential_statement = True
+            if not found_matching_existential_statement:
+                return query
             return Constant[AbstractSet[Any]](result)
         else:
             return super().walk(query)

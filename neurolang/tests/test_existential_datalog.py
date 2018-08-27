@@ -96,3 +96,7 @@ def test_existential_statement_resolution():
     assert isinstance(result, expressions.Constant)
     assert result.value is not None
     assert result.value == frozenset({'a', 'b'})
+
+    query = Query(u, P(v, u))
+    result = solver.walk(query)
+    assert not isinstance(result, expressions.Constant)
