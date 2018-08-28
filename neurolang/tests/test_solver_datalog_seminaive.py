@@ -74,7 +74,7 @@ def test_intensional_single_case():
 
     extensional = B_(tuple(
         T_(Q(C_(i), C_(2 * i)))
-        for i in range(500)
+        for i in range(5000)
     ))
 
     intensional_1 = B_((
@@ -86,8 +86,8 @@ def test_intensional_single_case():
 
     dse = sds.DatalogSeminaiveEvaluator(dl)
 
-    # res = dse.walk(R(x))
-    # assert res == {C_((C_(1),))}
+    res = dse.walk(R(x))
+    assert res == {C_((C_(1),))}
 
     intensional_2 = B_((
         St_(S(x), Q(x, C_(2))),
@@ -98,11 +98,11 @@ def test_intensional_single_case():
 
     dse = sds.DatalogSeminaiveEvaluator(dl)
 
-    # res = dse.walk(S(x))
-    # assert res == {
-    #     C_((C_(1),)),
-    #     C_((C_(0),)),
-    # }
+    res = dse.walk(S(x))
+    assert res == {
+        C_((C_(1),)),
+        C_((C_(0),)),
+    }
 
     res = dse.walk(T(x))
     assert res == {
