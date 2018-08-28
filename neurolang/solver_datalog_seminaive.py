@@ -100,16 +100,22 @@ class DatalogSeminaiveEvaluator(PatternWalker):
     @staticmethod
     def multijoin(sets, joins):
         res = []
+
+        sel_str = (
+            'lambda s, t: ' +
+            ' and '.join(
+                f's[{i}].value[{j}].value == t[{k}].value'
+                for i, arg_map in joins.items()
+                for j, k in arg_map.items()
+            )
+        )
+        sel = eval(sel_str)
+
         for s in product(*sets):
             t = s[0].value
             for t_ in s[1:]:
                 t += t_.value
-
-            if all(
-                s[i].value[j].value == t[k].value
-                for i, arg_map in joins.items()
-                for j, k in arg_map.items()
-             ):
+            if sel(s, t):
                 res.append(Constant(t))
 
         return set(res)
