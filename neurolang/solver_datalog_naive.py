@@ -293,13 +293,15 @@ class NaiveDatalog(DatalogBasic):
         result = set()
 
         for args in loop:
+            if len(head) == 1:
+                args = (Constant(args),)
             fa = FunctionApplication(body, args)
             res = self.walk(fa)
             if isinstance(res, Constant) and res.value is True:
                 if len(head) > 1:
                     result.add(Constant(args))
                 else:
-                    result.add(args[0])
+                    result.add(args[0].value[0])
 
         return Constant[AbstractSet[Any]](result)
 
