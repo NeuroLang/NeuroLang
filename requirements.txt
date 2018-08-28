@@ -3,4 +3,4 @@ scipy
 nibabel
 pandas
 tatsu
-neurosynth
+neurosynth>=0.3.5
