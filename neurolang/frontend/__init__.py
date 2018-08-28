@@ -3,10 +3,8 @@ from ..solver import DatalogSolver
 from ..solver_datalog_extensional_db import ExtensionalDatabaseSolver
 from ..region_solver_ds import RegionSolver
 from ..regions import (
-    ExplicitVBR, ImplicitVBR, SphericalVolume,
-    region_set_from_masked_data, take_principal_regions)
+    ExplicitVBR, ImplicitVBR, SphericalVolume)
 from ..utils.data_manipulation import parse_region_label_map
-from neurolang.utils.neurosynth_utils import fetch_neurosynth_data
 from .. import neurolang as nl
 import numpy as np
 
@@ -39,7 +37,7 @@ class RegionFrontend(QueryBuilder):
             region = ExplicitVBR(
                 voxel_coordinates, parc_im.affine, parc_im.shape
             )
-            #res.append(self.add_region(region, result_symbol_name=region_name))
+
             c = nl.Constant[self.solver.type](region)
             s = nl.Symbol[self.solver.type](region_name)
             self.solver.symbol_table[s] = c
@@ -63,21 +61,3 @@ class RegionFrontend(QueryBuilder):
                     region.to_explicit_vbr(affine, dim), region_symbol_name
                 ) # implicit regions then should be deleted
 
-    def load_neurosynth_term_region(
-        self, term: str, components=None, result_symbol_name=None
-    ):
-
-        if not result_symbol_name:
-            result_symbol_name = \
-                term.replace(" ", "_") + '_region'  # this or uuid
-
-        data, affine, dim = fetch_neurosynth_data(term)
-
-        region_set = region_set_from_masked_data(data, affine, dim)
-        if components:
-            region_set = take_principal_regions(region_set, components)
-
-        c = nl.Constant[self.solver.set_type](region_set)
-        s = nl.Symbol[self.solver.set_type](result_symbol_name)
-        self.solver.symbol_table[s] = c
-        return s

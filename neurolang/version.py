@@ -71,5 +71,5 @@ MAJOR = _version_major
 MINOR = _version_minor
 MICRO = _version_micro
 VERSION = __version__
-PACKAGE_DATA = {'neurolang': [pjoin('data', '*')]}
+PACKAGE_DATA = {'neurolang': [pjoin('data', '*')], 'frontend': [pjoin('neurosynth_data','*')]}
 REQUIRES = ["numpy"]

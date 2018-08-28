@@ -1,6 +1,6 @@
-import typing
 import operator
 import re
+import typing
 
 try:
     from neurosynth import Dataset, meta
@@ -13,7 +13,7 @@ from .. import neurolang as nl
 from ..CD_relations import cardinal_relation, inverse_directions
 from ..regions import Region, region_union, region_set_from_masked_data
 from ..deprecated import SetBasedSolver
-from ..utils.neurosynth_utils import fetch_neurosynth_data
+from neurolang.frontend.neurosynth_utils import NeuroSynthHandler
 
 
 __all__ = ['RegionsSetSolver']
@@ -78,7 +78,7 @@ class RegionsSetSolver(SetBasedSolver[Region]):
             if not __has_neurosynth__:
                 raise NotImplemented("Neurosynth not installed")
 
-            masked_data, affine, dim = fetch_neurosynth_data(term)
+            masked_data, affine, dim = NeuroSynthHandler.ns_data_from_term(term)
             regions_set = frozenset(region_set_from_masked_data(masked_data, affine, dim))
 
             return regions_set
