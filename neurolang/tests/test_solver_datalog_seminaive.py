@@ -26,6 +26,7 @@ T_ = sdb.Fact
 class Datalog(
     solver_datalog_extensional_db.ExtensionalDatabaseSolver,
     sdb.DatalogBasic,
+    sds.DatalogSeminaiveEvaluator,
     expression_walker.ExpressionBasicEvaluator
 ):
     pass
@@ -45,28 +46,26 @@ def test_extensional():
     dl = Datalog()
     dl.walk(extensional)
 
-    dse = sds.DatalogSeminaiveEvaluator(dl)
-
-    res = dse.walk(Q(x, y))
+    res = dl.walk(Q(x, y))
     assert res == dl.extensional_database()[Q].value
 
-    res = dse.walk(Q(C_(0), y))
+    res = dl.walk(Q(C_(0), y))
     assert res == {C_((C_(0), C_(0)))}
 
-    res = dse.walk(Q(y, C_(2)))
+    res = dl.walk(Q(y, C_(2)))
     assert res == {C_((C_(1), C_(2)))}
 
-    res = dse.walk(Q(C_(2), C_(4)))
+    res = dl.walk(Q(C_(2), C_(4)))
     assert res == {C_((C_(2), C_(4)))}
 
-    res = dse.walk(Q(y, C_(1)))
+    res = dl.walk(Q(y, C_(1)))
     assert res == set()
 
 
 def test_intensional_single_case():
 
     Q = S_('Q')
-    R = S_('r')
+    R = S_('R')
     S = S_('S')
     T = S_('T')
     x = S_('x')
@@ -74,7 +73,7 @@ def test_intensional_single_case():
 
     extensional = B_(tuple(
         T_(Q(C_(i), C_(2 * i)))
-        for i in range(5000)
+        for i in range(500)
     ))
 
     intensional_1 = B_((
@@ -84,9 +83,7 @@ def test_intensional_single_case():
     dl.walk(extensional)
     dl.walk(intensional_1)
 
-    dse = sds.DatalogSeminaiveEvaluator(dl)
-
-    res = dse.walk(R(x))
+    res = dl.walk(R(x))
     assert res == {C_((C_(1),))}
 
     intensional_2 = B_((
@@ -96,15 +93,46 @@ def test_intensional_single_case():
     ))
     dl.walk(intensional_2)
 
-    dse = sds.DatalogSeminaiveEvaluator(dl)
-
-    res = dse.walk(S(x))
+    res = dl.walk(Query(x, S(x)))
     assert res == {
         C_((C_(1),)),
         C_((C_(0),)),
     }
 
-    res = dse.walk(T(x))
+    res = dl.walk(Query(x, T(x)))
     assert res == {
        C_((C_(0),)),
+    }
+
+
+def test_intensional_recursive():
+    Q = S_('Q')
+    R = S_('R')
+
+    x = S_('x')
+    y = S_('y')
+    z = S_('z')
+
+    extensional = B_(tuple(
+        T_(Q(C_(i), C_(2 * i)))
+        for i in range(3)
+    ))
+
+    intensional = B_((
+        St_(R(x, y), Q(x, y)),
+        St_(R(x, y), Q(x, z) & R(z, y)),
+    ))
+
+    dl = Datalog()
+    dl.walk(extensional)
+    dl.walk(intensional)
+
+    q = Query((x, y), R(x, y))
+    res = dl.walk(q)
+
+    assert res == {
+        (0, 0),
+        (1, 2),
+        (2, 3),
+        (1, 3)
     }

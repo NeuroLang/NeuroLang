@@ -1,40 +1,34 @@
 from itertools import product
-from operator import and_
 
-# from . import solver_datalog_naive
 from .expression_walker import (
-    PatternWalker, add_match, expression_iterator,
+    PatternWalker, add_match,
     ReplaceSymbolWalker
 )
 from .expressions import (
-    Constant, Symbol,
+    Constant, Symbol, Query,
     Lambda, FunctionApplication
+)
+from .solver_datalog_naive import (
+    extract_datalog_free_variables,
+    extract_datalog_predicates
 )
 
 
 class DatalogSeminaiveEvaluator(PatternWalker):
-    def __init__(self, datalog_walker):
-        self.datalog = datalog_walker
-        self.instance = self.datalog.extensional_database()
+    @property
+    def instance(self):
+        return self.extensional_database()
 
     @add_match(FunctionApplication(Lambda, ...))
     def evaluate_lambda(self, expression):
         args = list(expression.args)
-        predicates = []
         join_arguments = []
 
-        rsv = ReplaceSymbolWalker(zip(expression.functor.args, args))
+        rsv = ReplaceSymbolWalker(dict(zip(expression.functor.args, args)))
         function = rsv.walk(expression.functor.function_expression)
-        for _, p in expression_iterator(function):
-            if (
-                isinstance(p, FunctionApplication) and
-                not (
-                    isinstance(p.functor, Constant) and
-                    p.functor.value is and_
-                )
-            ):
-                predicates.append(p)
-                join_arguments.extend(p.args)
+        predicates = extract_datalog_predicates(function)
+        for p in predicates:
+            join_arguments.extend(p.args)
 
         joins = dict()
         for i, p in enumerate(predicates):
@@ -53,7 +47,10 @@ class DatalogSeminaiveEvaluator(PatternWalker):
             res_set,
             joins
         )
-        final_project_args = [join_arguments.index(a) for a in args]
+        final_project_args = [
+            join_arguments.index(a) for a in args
+            if a in join_arguments
+        ]
         res = self.project(res, final_project_args)
         return res
 
@@ -71,8 +68,8 @@ class DatalogSeminaiveEvaluator(PatternWalker):
         if functor in self.instance:
             res = self.select(self.instance[functor].value, constants)
 
-        if functor in self.datalog.intensional_database():
-            rules = self.datalog.intensional_database()[functor]
+        if functor in self.intensional_database():
+            rules = self.intensional_database()[functor]
             res_intensional = self.walk(rules.expressions[0](*args))
             for rule in rules.expressions[1:]:
                 res_intensional |= self.walk(rule(*args))
@@ -80,20 +77,53 @@ class DatalogSeminaiveEvaluator(PatternWalker):
 
         return res
 
+    @add_match(Query)
+    def query(self, expression):
+        if isinstance(expression.head, Symbol):
+            head = (expression.head,)
+        else:
+            head = expression.head
+
+        res = self.walk(expression.body)
+        body_fv = extract_datalog_free_variables(expression.body)
+        indices_to_project = tuple(
+            body_fv.index(v)
+            for v in head
+        )
+
+        return self.project(res, indices_to_project)
+
     @staticmethod
     def select(set_, constants):
+        if len(constants) == 0:
+            return set_
+
+        select_str = (
+            'lambda t, constants=constants: ' +
+            ' and '.join(
+                f't.value[{i}] == constants[{i}].value '
+                for i in constants
+            )
+        )
+
+        sel = eval(select_str)
+
         return set(
             t for t in set_
-            if all(
-                t.value[i] == v
-                for i, v in constants.items()
-            )
+            if sel(t)
         )
 
     @staticmethod
     def project(set_, indices):
+        project_str = (
+            'lambda t: (' +
+            ' ,'.join(f't.value[{i}]' for i in indices) +
+            ',)'
+        )
+
+        proj = eval(project_str)
         return set(
-            Constant(tuple(t.value[i] for i in indices))
+            Constant(proj(t))
             for t in set_
         )
 
