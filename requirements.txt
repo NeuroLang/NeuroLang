@@ -4,4 +4,3 @@ nibabel
 pandas
 tatsu
 neurosynth==0.3.7
-matplotlib

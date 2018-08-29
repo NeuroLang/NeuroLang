@@ -42,7 +42,7 @@ class RegionFrontend(QueryBuilder):
             s = nl.Symbol[self.solver.type](region_name)
             self.solver.symbol_table[s] = c
             res.append(s)
-        
+
         return res
 
     def sphere(self, center, radius, result_symbol_name=None):
@@ -59,5 +59,4 @@ class RegionFrontend(QueryBuilder):
             if isinstance(region, ImplicitVBR):
                 self.add_region(
                     region.to_explicit_vbr(affine, dim), region_symbol_name
-                ) # implicit regions then should be deleted
-
+                )
