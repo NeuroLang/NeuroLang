@@ -1,4 +1,5 @@
 from itertools import product
+from uuid import uuid4
 
 from .expression_walker import (
     PatternWalker, add_match,
@@ -12,12 +13,23 @@ from .solver_datalog_naive import (
     extract_datalog_free_variables,
     extract_datalog_predicates
 )
+from .exceptions import NeuroLangException
+
+
+MAX_RECURSION = 10000
+
+
+class MaxRecursionNeurolangException(NeuroLangException):
+    pass
 
 
 class DatalogSeminaiveEvaluator(PatternWalker):
-    @property
-    def instance(self):
-        return self.extensional_database()
+    '''
+    Query evaluation based on relational algebra operations
+    implemented over Python sets.
+    Recursive evaluation based on fixpoint semantics.
+    Indirect recursion is not supported and will break.
+    '''
 
     @add_match(FunctionApplication(Lambda, ...))
     def evaluate_lambda(self, expression):
@@ -64,16 +76,48 @@ class DatalogSeminaiveEvaluator(PatternWalker):
             if isinstance(arg, Constant)
         }
 
-        res = set()
-        if functor in self.instance:
-            res = self.select(self.instance[functor].value, constants)
+        if functor in self.extensional_database():
+            res = self.select(
+                self.symbol_table[functor].value,
+                constants
+            )
 
-        if functor in self.intensional_database():
+        elif functor in self.intensional_database():
+            fresh_name = functor.name + str(uuid4())
+            while fresh_name in self.symbol_table:
+                fresh_name = functor.name + str(uuid4())
+
+            fresh_symbol = Symbol[functor.type](fresh_name)
+            self.symbol_table[fresh_symbol] = Constant[functor.type](set())
+
+            replace_symbol_variable = ReplaceSymbolWalker(
+                {functor: fresh_symbol}
+            )
+
             rules = self.intensional_database()[functor]
-            res_intensional = self.walk(rules.expressions[0](*args))
-            for rule in rules.expressions[1:]:
-                res_intensional |= self.walk(rule(*args))
-            res = res | res_intensional
+            rules = replace_symbol_variable.walk(rules)
+
+            old_res = self.symbol_table[fresh_symbol].value
+
+            res = set()
+            for i in range(MAX_RECURSION):
+                old_res |= res
+
+                res = self.walk(rules.expressions[0](*args))
+                for rule in rules.expressions[1:]:
+                    res |= self.walk(rule(*args))
+
+                if res == old_res:
+                    break
+            else:
+                raise MaxRecursionNeurolangException(
+                    'Maximum number of recursions reached ' +
+                    f'for symbol {functor}'
+                )
+
+            del self.symbol_table[fresh_symbol]
+        else:
+            raise NeuroLangException(f'Symbol {functor} not defined')
 
         return res
 
