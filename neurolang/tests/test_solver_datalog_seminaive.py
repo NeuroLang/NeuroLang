@@ -1,6 +1,5 @@
 from .. import solver_datalog_seminaive as sds
 
-
 from .. import solver_datalog_naive as sdb
 from .. import solver_datalog_extensional_db
 from .. import expression_walker
@@ -115,7 +114,7 @@ def test_intensional_recursive():
 
     extensional = B_(tuple(
         T_(Q(C_(i), C_(2 * i)))
-        for i in range(3)
+        for i in range(5)
     ))
 
     intensional = B_((
@@ -133,6 +132,32 @@ def test_intensional_recursive():
     assert res == {
         (0, 0),
         (1, 2),
-        (2, 3),
-        (1, 3)
+        (2, 4),
+        (3, 6),
+        (4, 8),
+        (1, 4),
+        (2, 8),
+        (1, 8)
+    }
+
+    S = S_('S')
+    program_2 = B_((
+        St_(S(x, y), R(x, y)),
+        St_(S(x, y), R(x, z) & S(z, y)),
+    ))
+
+    dl.walk(program_2)
+
+    q = Query((x, y), S(x, y))
+    res = dl.walk(q)
+
+    assert res == {
+        (0, 0),
+        (1, 2),
+        (2, 4),
+        (3, 6),
+        (4, 8),
+        (1, 4),
+        (2, 8),
+        (1, 8),
     }
