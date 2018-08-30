@@ -2,7 +2,7 @@ from typing import AbstractSet, Any, Tuple
 
 from .expressions import NeuroLangException as NLE
 from .expressions import (
-    Definition, Statement, ExistentialPredicate, Constant, Symbol,
+    Definition, ExistentialPredicate, Constant, Symbol,
     ExpressionBlock, Query, FunctionApplication
 )
 from .solver_datalog_naive import NaiveDatalog
@@ -22,28 +22,40 @@ def _get_query_head(query):
         raise NLE('Query head must be symbol or tuple of symbols')
 
 
+class Implication(Definition):
+    def __init__(self, consequent, antecedent):
+        self.consequent = consequent
+        self.antecedent = antecedent
+
+    def __repr__(self):
+        return f'Implication{{{self.consequent} \u2190 {self.antecedent}}}'
+
+
 class ExistentialDatalog(NaiveDatalog):
     @add_match(
-        Statement(ExistentialPredicate, ...),
+        Implication(ExistentialPredicate, ...),
         # ensure the predicate is a simple function application on symbols
         lambda expression: all(
             isinstance(arg, Symbol) and
             not isinstance(arg, FunctionApplication)
-            for arg in expression.lhs.body.args
+            for arg in expression.consequent.body.args
         )
     )
     def existential_predicate_in_head(self, expression):
         '''
-        Add statement with a lhs existential predicate to symbol table
+        Add implication with existential predicate consequent
+        to the symbol table
         '''
-        eq_variable = expression.lhs.head
+        eq_variable = expression.consequent.head
         if not isinstance(eq_variable, Symbol):
             raise NLE('\u2203-quantified variable must be a symbol')
-        if eq_variable in expression.rhs._symbols:
-            raise NLE('\u2203-quantified variable cannot occur in rhs')
-        if eq_variable not in expression.lhs.body._symbols:
-            raise NLE('\u2203-quantified variable must occur in lhs body')
-        predicate_name = expression.lhs.body.functor.name
+        if eq_variable in expression.antecedent._symbols:
+            raise NLE('\u2203-quantified variable cannot occur in antecedent')
+        if eq_variable not in expression.consequent.body._symbols:
+            raise NLE(
+                "\u2203-quantified variable must occur in consequent'sbody"
+            )
+        predicate_name = expression.consequent.body.functor.name
         if predicate_name in self.symbol_table:
             expressions = self.symbol_table[predicate_name].expressions
         else:
@@ -84,8 +96,8 @@ class SolverExistentialDatalog(ExistentialDatalog):
         ):
             eq_expressions = (
                 e for e in self.symbol_table[predicate_name].expressions if (
-                    isinstance(e, Statement) and
-                    isinstance(e.lhs, ExistentialPredicate)
+                    isinstance(e, Implication) and
+                    isinstance(e.consequent, ExistentialPredicate)
                 )
             )
             found_matching_existential_statement = False
@@ -93,17 +105,17 @@ class SolverExistentialDatalog(ExistentialDatalog):
             for e in eq_expressions:
                 # index of e-quantified variable
                 # in existential intensional rule
-                eq_idx = e.lhs.body.args.index(e.lhs.head)
+                eq_idx = e.consequent.body.args.index(e.consequent.head)
                 if q_eq_idx == eq_idx:
                     map_q_arg = {
-                        q_predicate.args[i]: e.lhs.body.args[i]
+                        q_predicate.args[i]: e.consequent.body.args[i]
                         for i in range(len(q_predicate.args))
                     }
                     if isinstance(q_head, Symbol):
                         new_q_head = map_q_arg[q_head]
                     else:
                         new_q_head = (map_q_arg[s] for s in q_head)
-                    result |= self.walk(Query(new_q_head, e.rhs)).value
+                    result |= self.walk(Query(new_q_head, e.antecedent)).value
                     found_matching_existential_statement = True
             if not found_matching_existential_statement:
                 return query
