@@ -36,18 +36,17 @@ class Implication(Definition):
 
 class ExistentialDatalog(NaiveDatalog):
     @add_match(
-        Implication(ExistentialPredicate, ...),
+        Implication(ExistentialPredicate(..., FunctionApplication), ...),
         # ensure the predicate is a simple function application on symbols
         lambda expression: all(
-            isinstance(arg, Symbol) and
-            not isinstance(arg, FunctionApplication)
+            isinstance(arg, Symbol)
             for arg in expression.consequent.body.args
         )
     )
     def existential_predicate_in_head(self, expression):
         '''
-        Add implication with existential predicate consequent
-        to the symbol table
+        Add implication with a \u2203-quantified function application
+        consequent
         '''
         eq_variable = expression.consequent.head
         if not isinstance(eq_variable, Symbol):
@@ -85,6 +84,10 @@ class SolverExistentialDatalog(ExistentialDatalog):
     )
     def query_introduce_existential(self, expression):
         eq_variables = set(expression.body.args) - {expression.head}
+        if len(eq_variables) > 1:
+            raise NotImplementedError(
+                'Multiple \u2203-quantified variable currently unsupported'
+            )
         new_body = expression.body
         for eq_variable in eq_variables:
             new_body = ExistentialPredicate(eq_variable, new_body)
