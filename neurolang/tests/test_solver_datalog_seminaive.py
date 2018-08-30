@@ -1,3 +1,5 @@
+from typing import Callable
+
 from .. import solver_datalog_seminaive as sds
 
 from .. import solver_datalog_naive as sdb
@@ -166,10 +168,12 @@ def test_intensional_recursive():
 def test_intensional_defined():
     Q = S_('Q')
     R = S_('R')
-    T = S_('T')
+    T = S_[Callable[[int], bool]]('T')
 
     x = S_('x')
     y = S_('y')
+
+    t = C_[Callable[[int], bool]](lambda x: x % 2 == 0)
 
     extensional = B_(tuple(
         T_(Q(C_(i), C_(2 * i)))
@@ -177,13 +181,13 @@ def test_intensional_defined():
     ))
 
     intensional = B_((
-        St_(R(x, y), Q(x, y) & T(x)),
+        St_(R(x, y), T(y) & Q(x, y) & T(x)),
     ))
 
     dl = Datalog()
     dl.walk(extensional)
     dl.walk(intensional)
-    dl.symbol_table[T] = C_(lambda x: x % 2 == 0)
+    dl.symbol_table[T] = t
 
     q = Query((x, y), R(x, y))
     res = dl.walk(q)
