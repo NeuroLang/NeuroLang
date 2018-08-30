@@ -1,8 +1,7 @@
 from typing import AbstractSet, Any, Tuple
 
-from .expressions import NeuroLangException as NLE
 from .expressions import (
-    Definition, ExistentialPredicate, Constant, Symbol,
+    NeuroLangException, Definition, ExistentialPredicate, Constant, Symbol,
     ExpressionBlock, Query, FunctionApplication
 )
 from .solver_datalog_naive import NaiveDatalog
@@ -19,7 +18,9 @@ def _get_query_head(query):
     ):
         return query.head.value
     else:
-        raise NLE('Query head must be symbol or tuple of symbols')
+        raise NeuroLangException(
+            'Query head must be symbol or tuple of symbols'
+        )
 
 
 class Implication(Definition):
@@ -48,12 +49,16 @@ class ExistentialDatalog(NaiveDatalog):
         '''
         eq_variable = expression.consequent.head
         if not isinstance(eq_variable, Symbol):
-            raise NLE('\u2203-quantified variable must be a symbol')
+            raise NeuroLangException(
+                '\u2203-quantified variable must be a symbol'
+            )
         if eq_variable in expression.antecedent._symbols:
-            raise NLE('\u2203-quantified variable cannot occur in antecedent')
+            raise NeuroLangException(
+                '\u2203-quantified variable cannot occur in antecedent'
+            )
         if eq_variable not in expression.consequent.body._symbols:
-            raise NLE(
-                "\u2203-quantified variable must occur in consequent'sbody"
+            raise NeuroLangException(
+                "\u2203-quantified variable must occur in consequent's body"
             )
         predicate_name = expression.consequent.body.functor.name
         if predicate_name in self.symbol_table:
