@@ -29,7 +29,9 @@ class Implication(Definition):
         self.antecedent = antecedent
 
     def __repr__(self):
-        return f'Implication{{{self.consequent} \u2190 {self.antecedent}}}'
+        return 'Implication{{{} \u2190 {}}}'.format(
+            repr(self.consequent), repr(self.antecedent)
+        )
 
 
 class ExistentialDatalog(NaiveDatalog):
