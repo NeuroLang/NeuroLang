@@ -3,7 +3,13 @@ import typing
 import logging
 
 from . import expression_walker as ew
-from . import expressions as exp
+from .expressions import (
+    Expression,
+    Constant, FunctionApplication, Symbol,
+    Definition, Quantifier,
+    ExistentialPredicate, UniversalPredicate
+)
+
 from .neurolang import NeuroLangException
 
 
@@ -14,11 +20,6 @@ __all__ = [
     'SafeRangeVariablesWalker',
     'NeuroLangException'
 ]
-
-
-F_ = exp.FunctionApplication
-C_ = exp.Constant
-S_ = exp.Symbol
 
 
 class Undefined:
@@ -58,14 +59,14 @@ undefined = Undefined()
 
 def atleast_one_argument_is_application(expression):
     return any(
-        isinstance(a, F_)
+        isinstance(a, FunctionApplication)
         for a in expression.args
     )
 
 
 def no_argument_is_application(expression):
     return all(
-        not isinstance(a, F_)
+        not isinstance(a, FunctionApplication)
         for a in expression.args
     )
 
@@ -116,7 +117,7 @@ class SafeRangeVariablesWalker(ew.PatternWalker):
     variable.
     '''
 
-    @ew.add_match(F_[bool](C_(and_), ...))
+    @ew.add_match(FunctionApplication[bool](Constant(and_), ...))
     def conjunction(self, expression):
         restrictors = dict()
         for arg in expression.args:
@@ -129,7 +130,7 @@ class SafeRangeVariablesWalker(ew.PatternWalker):
 
         return restrictors
 
-    @ew.add_match(F_[bool](C_(or_), ...))
+    @ew.add_match(FunctionApplication[bool](Constant(or_), ...))
     def disjunction(self, expression):
         args = expression.args
         restrictors = self.walk(args[0])
@@ -162,12 +163,12 @@ class SafeRangeVariablesWalker(ew.PatternWalker):
         return restrictors
 
     @ew.add_match(
-        F_[bool](
-            C_(invert),
-            (exp.Expression[bool],)
+        FunctionApplication[bool](
+            Constant(invert),
+            (Expression[bool],)
         ),
         lambda e: (
-            not isinstance(e.args[0], F_[bool]) or
+            not isinstance(e.args[0], FunctionApplication[bool]) or
             no_argument_is_application(e.args[0])
         )
     )
@@ -175,11 +176,11 @@ class SafeRangeVariablesWalker(ew.PatternWalker):
         return dict()
 
     @ew.add_match(
-        F_[bool](C_(eq), ...),
+        FunctionApplication[bool](Constant(eq), ...),
         lambda e: (
             no_argument_is_application(e) and
             any(
-                isinstance(a, C_)
+                isinstance(a, Constant)
                 for a in e.args
             )
         )
@@ -188,7 +189,7 @@ class SafeRangeVariablesWalker(ew.PatternWalker):
         args = expression.args
         restrictions = Intersection({
             arg for arg in args
-            if isinstance(arg, C_)
+            if isinstance(arg, Constant)
         })
 
         return {
@@ -197,10 +198,10 @@ class SafeRangeVariablesWalker(ew.PatternWalker):
         }
 
     @ew.add_match(
-        F_[bool](C_, ...),
+        FunctionApplication[bool](Constant, ...),
         lambda e: (
             no_argument_is_application(e) and
-            e.functor != C_(eq)
+            e.functor != Constant(eq)
         )
     )
     def fa(self, expression):
@@ -210,7 +211,7 @@ class SafeRangeVariablesWalker(ew.PatternWalker):
         }
         return restrictors
 
-    @ew.add_match(exp.ExistentialPredicate[bool])
+    @ew.add_match(ExistentialPredicate[bool])
     def ex(self, expression):
         restrictors = self.walk(expression.body)
         if expression.head._symbols.issubset(restrictors.keys()):
@@ -231,7 +232,7 @@ class VariableSubstitutionWalker(ew.PatternWalker):
         self.seen_variables = set()
 
     @ew.add_match(
-        F_[bool](C_, ...),
+        FunctionApplication[bool](Constant, ...),
         lambda e: e.functor.value in (and_, or_, invert)
     )
     def logical_application(self, expression):
@@ -243,27 +244,27 @@ class VariableSubstitutionWalker(ew.PatternWalker):
             changed |= new_arg is not arg
 
         if changed:
-            return F_[bool](
+            return FunctionApplication[bool](
                 expression.functor, tuple(new_args)
             )
         else:
             return expression
 
     @ew.add_match(
-        F_[bool](C_, ...),
+        FunctionApplication[bool](Constant, ...),
         no_argument_is_application
     )
     def fa(self, expression):
         self.seen_variables |= expression._symbols
         return expression
 
-    @ew.add_match(exp.Quantifier[bool])
+    @ew.add_match(Quantifier[bool])
     def quantifier(self, expression):
         replacement_symbols = dict()
         for s in expression.head._symbols:
             new_s = s
             while new_s in self.seen_variables:
-                new_s = S_[new_s.type](new_s.name + '_')
+                new_s = Symbol[new_s.type](new_s.name + '_')
             if new_s is not s:
                 replacement_symbols[s] = new_s
 
@@ -281,26 +282,26 @@ class VariableSubstitutionWalker(ew.PatternWalker):
 
 
 class ConvertToSNRFWalker(ew.ExpressionWalker):
-    @ew.add_match(F_[bool](
-        C_(invert),
-        (F_[bool](C_(invert), ...),)
+    @ew.add_match(FunctionApplication[bool](
+        Constant(invert),
+        (FunctionApplication[bool](Constant(invert), ...),)
     ))
     def push_neg_double_neg(self, expression):
         return self.walk(expression.args[0].args[0])
 
     @ew.add_match(
-        F_[bool](
-            C_(invert),
-            (F_[bool](C_(and_), ...),)
+        FunctionApplication[bool](
+            Constant(invert),
+            (FunctionApplication[bool](Constant(and_), ...),)
         )
     )
     def push_neg_and(self, expression):
         args = expression.args[0].args
-        return self.walk(F_[bool](
-            C_[typing.Callable[[bool] * len(args), bool]](or_),
+        return self.walk(FunctionApplication[bool](
+            Constant[typing.Callable[[bool] * len(args), bool]](or_),
             tuple(
-                F_[bool](
-                    C_[typing.Callable[[bool], bool]](invert),
+                FunctionApplication[bool](
+                    Constant[typing.Callable[[bool], bool]](invert),
                     (a,)
                 )
                 for a in args
@@ -308,33 +309,33 @@ class ConvertToSNRFWalker(ew.ExpressionWalker):
         ))
 
     @ew.add_match(
-        F_[bool](
-            C_(invert),
-            (F_[bool](C_(or_), ...),)
+        FunctionApplication[bool](
+            Constant(invert),
+            (FunctionApplication[bool](Constant(or_), ...),)
         )
     )
     def push_neg_or(self, expression):
         args = expression.args[0].args
-        return self.walk(F_[bool](
-            C_[typing.Callable[[bool] * len(args), bool]](and_),
+        return self.walk(FunctionApplication[bool](
+            Constant[typing.Callable[[bool] * len(args), bool]](and_),
             tuple(
-                F_[bool](
-                    C_[typing.Callable[[bool], bool]](invert),
+                FunctionApplication[bool](
+                    Constant[typing.Callable[[bool], bool]](invert),
                     (a,)
                 )
                 for a in args
             )
         ))
 
-    @ew.add_match(exp.UniversalPredicate[bool])
+    @ew.add_match(UniversalPredicate[bool])
     def universal_to_existential(self, expression):
         return self.walk(
-            F_[bool](
-                C_[typing.Callable[[bool], bool]](invert),
-                (exp.ExistentialPredicate[bool](
+            FunctionApplication[bool](
+                Constant[typing.Callable[[bool], bool]](invert),
+                (ExistentialPredicate[bool](
                     expression.head,
-                    F_[bool](
-                        C_[typing.Callable[[bool], bool]](invert),
+                    FunctionApplication[bool](
+                        Constant[typing.Callable[[bool], bool]](invert),
                         (expression.body,)
                     )
                 ),)
@@ -344,10 +345,10 @@ class ConvertToSNRFWalker(ew.ExpressionWalker):
 
 class FlattenMultipleLogicalOperators(ew.ExpressionWalker):
     @ew.add_match(
-        F_[bool](C_(and_), ...),
+        FunctionApplication[bool](Constant(and_), ...),
         lambda e: any(
-            isinstance(a, exp.FunctionApplication[bool]) and
-            a.functor == C_(and_)
+            isinstance(a, FunctionApplication[bool]) and
+            a.functor == Constant(and_)
             for a in e.args
         )
     )
@@ -355,21 +356,21 @@ class FlattenMultipleLogicalOperators(ew.ExpressionWalker):
         new_args = []
         for a in expression.args:
             if (
-                isinstance(a, exp.FunctionApplication[bool]) and
-                a.functor == C_(and_)
+                isinstance(a, FunctionApplication[bool]) and
+                a.functor == Constant(and_)
             ):
                 new_args.extend(a.args)
             else:
                 new_args.append(a)
 
-        functor = C_[typing.Callable[[bool] * len(new_args), bool]](and_)
-        return self.walk(F_[bool](functor, tuple(new_args)))
+        functor = Constant[typing.Callable[[bool] * len(new_args), bool]](and_)
+        return self.walk(FunctionApplication[bool](functor, tuple(new_args)))
 
     @ew.add_match(
-        F_[bool](C_(or_), ...),
+        FunctionApplication[bool](Constant(or_), ...),
         lambda e: any(
-            isinstance(a, exp.FunctionApplication[bool]) and
-            a.functor == C_(or_)
+            isinstance(a, FunctionApplication[bool]) and
+            a.functor == Constant(or_)
             for a in e.args
         )
     )
@@ -377,14 +378,14 @@ class FlattenMultipleLogicalOperators(ew.ExpressionWalker):
         new_args = []
         for a in expression.args:
             if (
-                isinstance(a, exp.FunctionApplication[bool]) and
-                a.functor == C_(or_)
+                isinstance(a, FunctionApplication[bool]) and
+                a.functor == Constant(or_)
             ):
                 new_args.extend(a.args)
             else:
                 new_args.append(a)
-        functor = C_[typing.Callable[[bool] * len(new_args), bool]](or_)
-        return self.walk(F_[bool](functor, tuple(new_args)))
+        functor = Constant[typing.Callable[[bool] * len(new_args), bool]](or_)
+        return self.walk(FunctionApplication[bool](functor, tuple(new_args)))
 
 
 def expression_to_SRNF_and_range(expression):
@@ -394,21 +395,21 @@ def expression_to_SRNF_and_range(expression):
     '''
 
     for _, e in ew.expression_iterator(expression):
-        if isinstance(e, F_[bool]):
+        if isinstance(e, FunctionApplication[bool]):
             if (
                 e.functor.value in (and_, or_, invert) and
                 all(e.type is bool for e in e.args)
             ):
                 pass
-            elif all(not isinstance(a, exp.Definition) for a in e.args):
+            elif all(not isinstance(a, Definition) for a in e.args):
                 pass
             else:
                 raise ValueError(
                     f'{expression} is not a valid datalog expression'
                 )
         elif isinstance(e, (
-            exp.ExistentialPredicate[bool], exp.UniversalPredicate[bool],
-            S_, C_
+            ExistentialPredicate[bool], UniversalPredicate[bool],
+            Symbol, Constant
         )):
             pass
         else:
