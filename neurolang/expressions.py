@@ -504,9 +504,9 @@ class ExpressionBlock(Expression):
             self._symbols |= exp._symbols
 
     def __repr__(self):
-        return 'BLOCK START\n' + '\n\t'.join(
+        return 'BLOCK START\n' + '\n    '.join(
             repr(e) for e in self.expressions
-        ) + 'BLOCK END'
+        ) + '\nBLOCK END'
 
 
 class NonConstant(Expression):
@@ -609,7 +609,7 @@ class Constant(Expression):
                 value,
                 (types.BuiltinFunctionType, types.BuiltinMethodType)
             ) or (
-                self.verify_type and
+                not self.verify_type or
                 type_validation_value(value, type_)
             )
         )
