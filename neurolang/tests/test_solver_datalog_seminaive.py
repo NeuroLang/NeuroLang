@@ -72,7 +72,7 @@ def test_intensional_single_case():
 
     extensional = B_(tuple(
         T_(Q(C_(i), C_(2 * i)))
-        for i in range(500)
+        for i in range(50)
     ))
 
     intensional_1 = B_((
@@ -160,4 +160,35 @@ def test_intensional_recursive():
         (1, 4),
         (2, 8),
         (1, 8),
+    }
+
+
+def test_intensional_defined():
+    Q = S_('Q')
+    R = S_('R')
+    T = S_('T')
+
+    x = S_('x')
+    y = S_('y')
+
+    extensional = B_(tuple(
+        T_(Q(C_(i), C_(2 * i)))
+        for i in range(500)
+    ))
+
+    intensional = B_((
+        St_(R(x, y), Q(x, y) & T(x)),
+    ))
+
+    dl = Datalog()
+    dl.walk(extensional)
+    dl.walk(intensional)
+    dl.symbol_table[T] = C_(lambda x: x % 2 == 0)
+
+    q = Query((x, y), R(x, y))
+    res = dl.walk(q)
+    res == {
+        (0, 0),
+        (2, 4),
+        (4, 8),
     }

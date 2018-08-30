@@ -1,5 +1,6 @@
 from itertools import product
 from uuid import uuid4
+import typing
 
 from .expression_walker import (
     PatternWalker, add_match,
@@ -7,7 +8,9 @@ from .expression_walker import (
 )
 from .expressions import (
     Constant, Symbol, Query,
-    Lambda, FunctionApplication
+    Lambda, FunctionApplication,
+    ToBeInferred, is_subtype,
+    NeuroLangTypeException
 )
 from .solver_datalog_naive import (
     extract_datalog_free_variables,
@@ -34,34 +37,66 @@ class DatalogSeminaiveEvaluator(PatternWalker):
     @add_match(FunctionApplication(Lambda, ...))
     def evaluate_lambda(self, expression):
         args = list(expression.args)
-        join_arguments = []
 
         rsv = ReplaceSymbolWalker(dict(zip(expression.functor.args, args)))
         function = rsv.walk(expression.functor.function_expression)
         predicates = extract_datalog_predicates(function)
+
+        # Merging predicate by predicate progressively reduces the
+        # length of the crossproduct.
+        # The better implementation would be to use an IR on relational
+        # algebra and then apply known optimizations there.
+        # Or better implement it over SQL or NoSQL.
+
+        ext_pred = []
+        int_pred = []
+        other_pred = []
+        edb = self.extensional_database()
+        idb = self.intensional_database()
         for p in predicates:
-            join_arguments.extend(p.args)
+            if p.functor in edb:
+                ext_pred.append(p)
+            elif p.functor in idb:
+                int_pred.append(p)
+            else:
+                other_pred.append(p)
 
-        joins = dict()
-        for i, p in enumerate(predicates):
-            args_map = dict()
-            for j, a in enumerate(p.args):
-                if isinstance(a, Symbol):
-                    args_map[j] = join_arguments.index(a)
-            joins[i] = args_map
+        predicates = ext_pred + int_pred
 
-        res_set = [
-            self.walk(p)
-            for p in predicates
-        ]
+        if len(predicates) == 0 and len(other_pred) > 0:
+            raise NotImplemented(
+                "Predicates not in EDB or IDB can't bre alone"
+            )
 
-        res = self.multijoin(
-            res_set,
-            joins
+        cur_args = predicates[0].args
+        res = self.multijoin_named(
+            [self.walk(predicates[0])],
+            [cur_args]
         )
+
+        for pred in predicates[1:]:
+            res = self.multijoin_named(
+                [res, self.walk(pred)],
+                [cur_args, pred.args]
+            )
+
+            cur_args = cur_args + pred.args
+
+        for pred in other_pred:
+            new_res = set()
+            for t in res:
+                replacement = dict(zip(cur_args, t.value))
+                rsv = ReplaceSymbolWalker(replacement)
+                r = self.walk(
+                    self.symbol_table[pred.functor](*rsv.walk(pred.args))
+                )
+                if isinstance(r, Constant) and r.value is True:
+                    new_res.add(t)
+            res = new_res
+
         final_project_args = [
-            join_arguments.index(a) for a in args
-            if a in join_arguments
+            cur_args.index(a) for a in args
+            if a in cur_args
         ]
         res = self.project(res, final_project_args)
         return res
@@ -121,6 +156,35 @@ class DatalogSeminaiveEvaluator(PatternWalker):
 
         return res
 
+    @add_match(
+        FunctionApplication(Constant(...), ...),
+        lambda e: all(
+            isinstance(arg, Constant)
+            for arg in e.args
+        )
+    )
+    def evaluate_function(self, expression):
+        functor = expression.functor
+        args = expression.args
+        if functor.type is not ToBeInferred:
+            if not is_subtype(functor.type, typing.Callable):
+                raise NeuroLangTypeException(
+                    'Function {} is not of callable type'.format(functor)
+                )
+            result_type = functor.type.__args__[-1]
+        else:
+            if not callable(functor.value):
+                raise NeuroLangTypeException(
+                    'Function {} is not of callable type'.format(functor)
+                )
+            result_type = ToBeInferred
+
+        args = (a.value for a in args)
+        result = Constant[result_type](
+            functor.value(*args)
+        )
+        return result
+
     @add_match(Query)
     def query(self, expression):
         if isinstance(expression.head, Symbol):
@@ -172,8 +236,16 @@ class DatalogSeminaiveEvaluator(PatternWalker):
         )
 
     @staticmethod
-    def multijoin(sets, joins):
-        res = []
+    def multijoin_named(sets, sets_args):
+        join_arguments = sum(sets_args, tuple())
+
+        joins = dict()
+        for i, args in enumerate(sets_args):
+            args_map = dict()
+            for j, a in enumerate(args):
+                if isinstance(a, Symbol):
+                    args_map[j] = join_arguments.index(a)
+            joins[i] = args_map
 
         sel_str = (
             'lambda s, t: ' +
@@ -185,6 +257,7 @@ class DatalogSeminaiveEvaluator(PatternWalker):
         )
         sel = eval(sel_str)
 
+        res = []
         for s in product(*sets):
             t = s[0].value
             for t_ in s[1:]:
