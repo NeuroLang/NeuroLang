@@ -1,10 +1,13 @@
+import pytest
+
 from typing import Callable, AbstractSet
 
-from ..symbols_and_types import TypedSymbolTable
-from ..deprecated import SetBasedSolver, FiniteDomainSet
-from .. import expressions
-from ..expressions import FunctionApplication, ExistentialPredicate
+from ...symbols_and_types import TypedSymbolTable
+from .. import SetBasedSolver, FiniteDomainSet
+from ... import expressions
+from ...expressions import FunctionApplication, ExistentialPredicate
 
+pytestmark = pytest.mark.skipif(..., reason='Deprecated semantics')
 C_ = expressions.Constant
 S_ = expressions.Symbol
 
@@ -16,9 +19,9 @@ def test_existential_elem_in_set():
         type = int
 
     solver = SBS(TypedSymbolTable())
-    solver.symbol_table[S_[set_type]('elements')] = C_[set_type](
+    solver.symbol_table[S_[set_type]('elements')] = C_(
         frozenset([1, 2, 3])
-    )
+    ).cast(set_type)
 
     p1 = FunctionApplication[set_type](S_('in'), (S_[set_type]('x'), ))
 
@@ -31,7 +34,7 @@ def test_existential_greater_than():
     set_type = AbstractSet[int]
 
     class SBS(SetBasedSolver[int]):
-        def predicate_is_greater_than(
+        def function_is_greater_than(
             self, reference_elem_in_set: AbstractSet[int]
         ) -> AbstractSet[int]:
             res = frozenset()
@@ -46,13 +49,13 @@ def test_existential_greater_than():
 
     solver = SBS(TypedSymbolTable())
     values = range(0, 100)
-    solver.symbol_table[S_[set_type]('elements')] = C_[set_type](
+    solver.symbol_table[S_[set_type]('elements')] = C_(
         frozenset(values)
-    )
+    ).cast(set_type)
 
     pred_type = Callable[[set_type], set_type]
     solver.symbol_table[S_[pred_type]('is_greater_than')] = C_[pred_type](
-        solver.predicate_is_greater_than
+        solver.function_is_greater_than
     )
 
     p1 = FunctionApplication[set_type](
@@ -61,7 +64,7 @@ def test_existential_greater_than():
 
     exists = ExistentialPredicate[set_type](S_[set_type]('x'), p1)
     res = solver.walk(exists)
-    assert res == C_[set_type](frozenset(values[:-1]))
+    assert res == C_(frozenset(values[:-1])).cast(set_type)
 
 
 def test_existential_bound_variable():
@@ -70,7 +73,7 @@ def test_existential_bound_variable():
     class SBS(SetBasedSolver):
         type = int
 
-        def predicate_is_greater_than(
+        def function_is_greater_than(
             self, reference_elem_in_set: AbstractSet[int]
         ) -> AbstractSet[int]:
             res = frozenset()
@@ -91,7 +94,7 @@ def test_existential_bound_variable():
 
     pred_type = Callable[[set_type], set_type]
     solver.symbol_table[S_[pred_type]('is_greater_is_than')] = C_[pred_type](
-        solver.predicate_is_greater_than
+        solver.function_is_greater_than
     )
 
     p1 = FunctionApplication[set_type](
@@ -110,7 +113,7 @@ def test_existential_negate_predicate():
     class SBS(SetBasedSolver):
         type = int
 
-        def predicate_are_consecutives(
+        def function_are_consecutives(
             self, reference_elem_in_set: AbstractSet[int]
         ) -> AbstractSet[int]:
             res = frozenset()
@@ -125,7 +128,7 @@ def test_existential_negate_predicate():
 
     solver = SBS(TypedSymbolTable())
     solver.symbol_table[S_[set_type]('elements')] = C_[set_type](
-        frozenset([1, 2, 10])
+        frozenset([C_(1), C_(2), C_(10)])
     )
     solver.symbol_table[S_[type]('e1')] = C_[type](1)
     solver.symbol_table[S_[type]('e2')] = C_[type](2)
@@ -133,7 +136,7 @@ def test_existential_negate_predicate():
 
     pred_type = Callable[[set_type], set_type]
     solver.symbol_table[S_[pred_type]('are_consecutives')] = C_[pred_type](
-        solver.predicate_are_consecutives
+        solver.function_are_consecutives
     )
 
     p1 = FunctionApplication[set_type](
@@ -142,18 +145,18 @@ def test_existential_negate_predicate():
 
     exists = ExistentialPredicate[set_type](S_[set_type]('x'), p1)
 
-    assert solver.walk(exists).value == frozenset([1, 2])
+    assert solver.walk(exists).value == frozenset([C_(1), C_(2)])
 
     exists = ExistentialPredicate[type](S_[set_type]('x'), ~p1)
 
-    assert solver.walk(exists).value == frozenset([1, 2, 10])
+    assert solver.walk(exists).value == frozenset([C_(1), C_(2), C_(10)])
 
 
 def test_existential_unsat_predicate_returns_empty():
     class SBS(SetBasedSolver):
         type = int
 
-        def predicate_is_additive_inverse(
+        def function_is_additive_inverse(
             self, reference_elem_in_set: AbstractSet[int]
         ) -> AbstractSet[int]:
             res = frozenset()
@@ -169,12 +172,12 @@ def test_existential_unsat_predicate_returns_empty():
     set_type = AbstractSet[int]
     solver = SBS(TypedSymbolTable())
     solver.symbol_table[S_[set_type]('elements')] = C_[set_type](
-        frozenset(range(1, 500))
+        frozenset(C_(i) for i in range(1, 500))
     )
 
     pred_type = Callable[[set_type], set_type]
     solver.symbol_table[S_[pred_type]('is_additive_inverse')] = C_[pred_type](
-        solver.predicate_is_additive_inverse
+        solver.function_is_additive_inverse
     )
 
     p1 = FunctionApplication[set_type](
@@ -190,7 +193,7 @@ def test_existential_predicates_conjuntion_and_disjunction():
     class SBS(SetBasedSolver):
         type = int
 
-        def predicate_greater_than(
+        def function_greater_than(
             self, reference_elem_in_set: AbstractSet[int]
         ) -> AbstractSet[int]:
             res = frozenset()
@@ -199,11 +202,11 @@ def test_existential_predicates_conjuntion_and_disjunction():
                     AbstractSet[int]
                 ).values():
                     for elem in elem_set.value:
-                        if elem > e:
+                        if elem.value > e:
                             res = res.union(frozenset([elem]))
             return FiniteDomainSet(res)
 
-        def predicate_sum_less_than_100(
+        def function_sum_less_than_100(
             self, reference_elem_in_set: AbstractSet[int]
         ) -> AbstractSet[int]:
             res = frozenset()
@@ -212,7 +215,7 @@ def test_existential_predicates_conjuntion_and_disjunction():
                     AbstractSet[int]
                 ).values():
                     for elem in elem_set.value:
-                        if elem + e < 100:
+                        if elem.value + e < 100:
                             res = res.union(frozenset([elem]))
             return FiniteDomainSet(res)
 
@@ -220,14 +223,14 @@ def test_existential_predicates_conjuntion_and_disjunction():
 
     solver = SBS(TypedSymbolTable())
     solver.symbol_table[S_[set_type]('elements')] = C_[set_type](
-        frozenset([1, 2, 100])
+        frozenset(C_(a) for a in [1, 2, 100])
     )
     pred_type = Callable[[set_type], set_type]
     solver.symbol_table[S_[pred_type]('greater_than')] = C_[pred_type](
-        solver.predicate_greater_than
+        solver.function_greater_than
     )
     solver.symbol_table[S_[pred_type]('sum_less_than_100')] = C_[pred_type](
-        solver.predicate_sum_less_than_100
+        solver.function_sum_less_than_100
     )
 
     p1 = FunctionApplication[set_type](
@@ -240,8 +243,8 @@ def test_existential_predicates_conjuntion_and_disjunction():
 
     exists = ExistentialPredicate[set_type](S_[set_type]('x'), p1 & p2)
 
-    assert solver.walk(exists).value == frozenset([1])
+    assert solver.walk(exists).value == frozenset([C_(1)])
 
     exists = ExistentialPredicate[set_type](S_[set_type]('x'), (p1 | p2))
 
-    assert solver.walk(exists).value == frozenset([1, 2])
+    assert solver.walk(exists).value == frozenset([C_(1), C_(2)])

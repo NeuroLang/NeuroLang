@@ -3,17 +3,17 @@ from operator import (
     invert, and_, or_,
 )
 
-from .expressions import (
+from ..expressions import (
     Constant,
     FunctionApplication, ExistentialPredicate, Query,
     get_type_and_value,
     unify_types, is_subtype, ToBeInferred
 )
-from .expression_walker import (
+from ..expression_walker import (
     add_match,
     ReplaceSymbolWalker,
 )
-from .solver import GenericSolver
+from ..solver import GenericSolver
 
 
 T = typing.TypeVar('T')
@@ -53,7 +53,7 @@ class SetBasedSolver(GenericSolver[T]):
     conjunction.
     """
 
-    def predicate_in(
+    def function_in(
         self, argument: typing.AbstractSet[T]
     )->typing.AbstractSet[T]:
         return argument

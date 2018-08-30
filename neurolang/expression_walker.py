@@ -1,5 +1,5 @@
 from collections import deque
-from itertools import chain, product
+from itertools import product
 import logging
 import typing
 
@@ -8,7 +8,7 @@ from .expressions import (
     FunctionApplication, Statement, Query, Projection, Constant,
     Symbol, ExistentialPredicate, UniversalPredicate, Expression, Lambda,
     get_type_and_value, ToBeInferred, is_subtype, NeuroLangTypeException,
-    unify_types
+    unify_types, NeuroLangException, ExpressionBlock
 )
 
 from .expression_pattern_matching import add_match, PatternMatcher
@@ -103,6 +103,12 @@ class PatternWalker(PatternMatcher):
 
 
 class ExpressionWalker(PatternWalker):
+    @add_match(ExpressionBlock)
+    def expression_block(self, expression):
+        return ExpressionBlock[expression.type](
+            tuple(self.walk(e) for e in expression.expressions)
+        )
+
     @add_match(Statement)
     def statement(self, expression):
         return Statement[expression.type](
@@ -255,13 +261,43 @@ class ReplaceSymbolsByConstants(ExpressionWalker):
         ))
 
 
+class ReplaceExpressionsByValues(ExpressionWalker):
+    def __init__(self, symbol_table):
+        self.symbol_table = symbol_table
+
+    @add_match(Symbol)
+    def symbol(self, expression):
+        new_expression = self.symbol_table.get(expression, expression)
+        if isinstance(new_expression, Constant):
+            return self.walk(new_expression)
+        else:
+            raise NeuroLangException(
+                f'{expression} could not be evaluated '
+                'to a constant'
+            )
+
+    @add_match(Constant[typing.AbstractSet])
+    def constant_abstract_set(self, expression):
+        return frozenset(
+            self.walk(e) for e in expression.value
+        )
+
+    @add_match(Constant[typing.Tuple])
+    def constant_tuple(self, expression):
+        return tuple(self.walk(e) for e in expression.value)
+
+    @add_match(Constant)
+    def constant_value(self, expression):
+        return expression.value
+
+
 class SymbolTableEvaluator(ExpressionWalker):
     def __init__(self, symbol_table=None):
         if symbol_table is None:
             symbol_table = TypedSymbolTable()
         self.symbol_table = symbol_table
         self.simplify_mode = False
-        self.add_functions_and_predicates_to_symbol_table()
+        self.add_functions_to_symbol_table()
 
     @add_match(Symbol)
     def symbol_from_table(self, expression):
@@ -274,15 +310,6 @@ class SymbolTableEvaluator(ExpressionWalker):
                 raise ValueError(f'{expression} not in symbol table')
 
     @property
-    def included_predicates(self):
-        predicate_constants = dict()
-        for attribute in dir(self):
-            if attribute.startswith('predicate_'):
-                c = Constant(getattr(self, attribute))
-                predicate_constants[attribute[len('predicate_'):]] = c
-        return predicate_constants
-
-    @property
     def included_functions(self):
         function_constants = dict()
         for attribute in dir(self):
@@ -291,11 +318,9 @@ class SymbolTableEvaluator(ExpressionWalker):
                 function_constants[attribute[len('function_'):]] = c
         return function_constants
 
-    def add_functions_and_predicates_to_symbol_table(self):
+    def add_functions_to_symbol_table(self):
         keyword_symbol_table = TypedSymbolTable()
-        for k, v in chain(
-            self.included_predicates.items(), self.included_functions.items()
-        ):
+        for k, v in self.included_functions.items():
             keyword_symbol_table[Symbol[v.type](k)] = v
         keyword_symbol_table.set_readonly(True)
         top_scope = self.symbol_table
@@ -327,11 +352,10 @@ class ExpressionBasicEvaluator(SymbolTableEvaluator):
 
     @add_match(
         FunctionApplication(Constant(...), ...),
-        lambda expression:
-            all(
-                isinstance(arg, Constant)
-                for arg in expression.args
-            )
+        lambda e: all(
+            not isinstance(arg, Expression) or isinstance(arg, Constant)
+            for _, arg in expression_iterator(e.args)
+        )
     )
     def evaluate_function(self, expression):
         functor = expression.functor
@@ -350,8 +374,9 @@ class ExpressionBasicEvaluator(SymbolTableEvaluator):
                 )
             result_type = ToBeInferred
 
-        args = tuple(a.value for a in expression.args)
-        kwargs = {k: v.value for k, v in expression.kwargs.items()}
+        rebv = ReplaceExpressionsByValues(self.symbol_table)
+        args = rebv.walk(expression.args)
+        kwargs = {k: rebv(v) for k, v in expression.kwargs.items()}
         result = Constant[result_type](
             functor_value(*args, **kwargs)
         )

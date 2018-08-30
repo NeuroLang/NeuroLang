@@ -104,7 +104,7 @@ def is_subtype(left, right):
     elif right is ToBeInferred:
         return left is ToBeInferred or left is typing.Any
     elif hasattr(right, '__origin__') and right.__origin__ is not None:
-        if right.__origin__ == typing.Union:
+        if right.__origin__ is typing.Union:
             return any(
                 is_subtype(left, r)
                 for r in right.__args__
@@ -125,21 +125,17 @@ def is_subtype(left, right):
                 )
             else:
                 return False
-        elif (any(
-            issubclass(right, T) and
-            issubclass(left, T)
-            for T in (
-                typing.AbstractSet, typing.List, typing.Tuple,
-                typing.Mapping, typing.Iterable
-            )
-        )):
-            return all(
-                is_subtype(l, r) for l, r in zip(
-                    get_type_args(left), get_type_args(right)
-                )
-            )
-        elif right.__origin__ == typing.Generic:
+        elif right.__origin__ is typing.Generic:
             raise ValueError("typing Generic not supported")
+        elif issubclass(left, right.__origin__):
+            if issubclass(right, typing.Iterable):
+                return all(
+                    is_subtype(l, r) for l, r in zip(
+                        get_type_args(left), get_type_args(right)
+                    )
+                )
+            else:
+                return True
         else:
             return False
     else:
@@ -272,6 +268,7 @@ class ParametricTypeClassMeta(type):
             super().__subclasscheck__(other) or
             (
                 hasattr(other, '__generic_class__') and
+                not hasattr(cls, '__generic_class__') and
                 issubclass(other.__generic_class__, cls)
             ) or
             (
@@ -453,6 +450,18 @@ class Expression(metaclass=ExpressionMeta):
         assert ret.type is type_
         return ret
 
+    def unapply(self):
+        '''Returns a tuple of parameters used to build the expression.'''
+        return tuple(
+            getattr(self, child)
+            for child in self.__children__
+        )
+
+    @classmethod
+    def apply(cls, *args):
+        '''Builds a new expression using a tuple of its parameters'''
+        return cls(*args)
+
     @property
     def __type_repr__(self):
         if (
@@ -485,6 +494,19 @@ class Expression(metaclass=ExpressionMeta):
 
     def __hash__(self):
         return hash(tuple(getattr(self, c) for c in self.__children__))
+
+
+class ExpressionBlock(Expression):
+    def __init__(self, expressions):
+        self.expressions = expressions
+        self._symbols = set()
+        for exp in expressions:
+            self._symbols |= exp._symbols
+
+    def __repr__(self):
+        return 'BLOCK START\n' + '\n    '.join(
+            repr(e) for e in self.expressions
+        ) + '\nBLOCK END'
 
 
 class NonConstant(Expression):
@@ -542,33 +564,33 @@ class Constant(Expression):
                     self.type = typing_callable_from_annotated_function(value)
         elif auto_infer_type and self.type is ToBeInferred:
             if isinstance(self.value, tuple):
-                self.type = typing.Tuple[tuple(
-                    a.type
-                    for a in self.value
-                )]
+                new_tuple = []
+                types = []
                 self._symbols = set()
                 for a in self.value:
-                    try:
-                        self._symbols |= a._symbols
-                    except AttributeError:
-                        pass
+                    if not isinstance(a, Expression):
+                        a = Constant(a)
+                    new_tuple.append(a)
+                    types.append(a.type)
+                    self._symbols |= a._symbols
+                self.type = typing.Tuple[tuple(types)]
+                self.value = tuple(new_tuple)
             elif isinstance(self.value, frozenset):
+                new_value = []
                 current_type = None
                 self._symbols = set()
                 for a in self.value:
-                    try:
-                        self._symbols |= a._symbols
-                    except AttributeError:
-                        pass
-                    if isinstance(a, Expression):
-                        new_type = a.type
-                    else:
-                        new_type = type(a)
+                    if not isinstance(a, Expression):
+                        a = Constant(a)
+                    new_value.append(a)
+                    self._symbols |= a._symbols
+                    new_type = a.type
                     if current_type is None:
                         current_type = new_type
                     else:
                         current_type = unify_types(current_type, new_type)
                 self.type = typing.AbstractSet[current_type]
+                self.value = frozenset(new_value)
             else:
                 self.type = type(value)
 
@@ -587,7 +609,7 @@ class Constant(Expression):
                 value,
                 (types.BuiltinFunctionType, types.BuiltinMethodType)
             ) or (
-                self.verify_type and
+                not self.verify_type or
                 type_validation_value(value, type_)
             )
         )
@@ -774,7 +796,7 @@ class ExistentialPredicate(Quantifier):
                 'A symbol should be provided for the '
                 'existential quantifier expression'
             )
-        if not isinstance(body, FunctionApplication):
+        if not isinstance(body, (FunctionApplication, Quantifier)):
             raise NeuroLangException(
                 'A function application over '
                 'predicates should be associated to the quantifier'
@@ -800,7 +822,7 @@ class UniversalPredicate(Quantifier):
                 'A symbol should be provided for the '
                 'universal quantifier expression'
             )
-        if not isinstance(body, FunctionApplication):
+        if not isinstance(body, (FunctionApplication, Quantifier)):
             raise NeuroLangException(
                 'A function application over '
                 'predicates should be associated to the quantifier'

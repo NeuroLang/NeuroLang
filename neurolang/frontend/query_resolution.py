@@ -1,8 +1,12 @@
-from typing import AbstractSet, Callable, Container
+from typing import AbstractSet, Callable, Container, Tuple
 from uuid import uuid1
+
+import numpy as np
+
 from .. import neurolang as nl
 from ..symbols_and_types import is_subtype
 from ..region_solver_ds import Region
+from ..regions import ExplicitVBR
 
 from .query_resolution_expressions import (
     Expression, Symbol,
@@ -17,18 +21,22 @@ class QueryBuilder:
         self.solver = solver
         self.set_type = AbstractSet[self.solver.type]
 
-        for k, v in self.solver.included_predicates.items():
+        for k, v in self.solver.included_functions.items():
             self.solver.symbol_table[nl.Symbol[v.type](k)] = v
 
         for k, v in self.solver.included_functions.items():
             self.solver.symbol_table[nl.Symbol[v.type](k)] = v
 
     def get_symbol(self, symbol_name):
+        if isinstance(symbol_name, Expression):
+            symbol_name = symbol_name.expression.name
         if symbol_name not in self.solver.symbol_table:
             raise ValueError('')
         return Symbol(self, symbol_name)
 
     def __getitem__(self, symbol_name):
+        if isinstance(symbol_name, Symbol):
+            symbol_name = symbol_name.symbol_name
         return self.get_symbol(symbol_name)
 
     def __contains__(self, symbol):
@@ -138,13 +146,55 @@ class QueryBuilder:
 
         return Symbol(self, result_symbol_name)
 
-    def new_region_symbol(self, symbol_name=None):
-        if symbol_name is None:
-            symbol_name = str(uuid1())
+    @property
+    def types(self):
+        return self.solver.symbol_table.types
+
+    def new_symbol(self, type, name=None):
+        if isinstance(type, (tuple, list)):
+            type = tuple(type)
+            type = Tuple[type]
+
+        if name is None:
+            name = str(uuid1())
         return Expression(
             self,
-            nl.Symbol[Region](symbol_name)
+            nl.Symbol[type](name)
         )
+
+    def new_region_symbol(self, name=None):
+        return self.new_symbol(Region, name=name)
+
+    def add_tuple_set(self, iterable, types, name=None):
+        if not isinstance(types, tuple) or len(types) == 1:
+            if isinstance(types, tuple) and len(types) == 1:
+                types = types[0]
+                iterable = (e[0] for e in iterable)
+
+            set_type = AbstractSet[types]
+        else:
+            types = tuple(types)
+            set_type = AbstractSet[Tuple[types]]
+
+        element_type = set_type.__args__[0]
+        new_set = []
+        for e in iterable:
+            s = self.new_symbol(element_type).expression
+            if is_subtype(element_type, Tuple):
+                c = nl.Constant[element_type](
+                    tuple(nl.Constant(ee) for ee in e)
+                )
+            else:
+                c = nl.Constant[element_type](e)
+            self.solver.symbol_table[s] = c
+            new_set.append(s)
+
+        constant = nl.Constant[set_type](frozenset(new_set))
+
+        symbol = self.new_symbol(set_type, name=name)
+        self.solver.symbol_table[symbol.expression] = constant
+
+        return self.symbols[symbol]
 
     def query(self, symbol, predicate):
         return Query(
@@ -214,6 +264,38 @@ class QueryBuilder:
             self.solver.symbol_table[symbol] = nl.Constant[Region](region)
 
         return Symbol(self, result_symbol_name)
+
+    def create_region(self, spatial_image, label=1):
+        region = ExplicitVBR(
+            np.transpose((spatial_image.get_data() == label).nonzero()),
+            spatial_image.affine, img_dim=spatial_image.shape
+        )
+
+        return region
+
+    def add_atlas_set(self, name, atlas_labels, spatial_image):
+        atlas_set = set()
+        for label_number, label_name in atlas_labels:
+            region = self.create_region(spatial_image, label=label_number)
+            if len(region.voxels) == 0:
+                continue
+            symbol = nl.Symbol[Region](label_name)
+            self.solver.symbol_table[symbol] = nl.Constant[Region](region)
+            self.solver.symbol_table[self.new_symbol(str).expression] = \
+                nl.Constant[str](label_name)
+            tuple_symbol = self.new_symbol(Tuple[str, Region]).expression
+            self.solver.symbol_table[tuple_symbol] = (
+                nl.Constant[Tuple[str, Region]](
+                    (nl.Constant[str](label_name), symbol)
+                )
+            )
+            atlas_set.add(tuple_symbol)
+        atlas_set = nl.Constant[AbstractSet[Tuple[str, Region]]](
+            frozenset(atlas_set)
+        )
+        atlas_symbol = nl.Symbol[atlas_set.type](name)
+        self.solver.symbol_table[atlas_symbol] = atlas_set
+        return self[atlas_symbol]
 
     @property
     def symbols(self):

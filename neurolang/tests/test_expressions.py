@@ -15,6 +15,8 @@ C_ = expressions.Constant
 S_ = expressions.Symbol
 F_ = expressions.FunctionApplication
 L_ = expressions.Lambda
+E_ = expressions.ExistentialPredicate
+U_ = expressions.UniversalPredicate
 
 
 def evaluate(expression, **kwargs):
@@ -91,7 +93,7 @@ def test_symbol_method_and_operator():
         fve = a[C_(2)]
 
     assert evaluate(a, a=C_(1)) == 1
-    assert evaluate(fva, a=C_[Set[int]]({1})) == 1
+    assert evaluate(fva, a=C_[Set[int]](set((C_(1),)))) == 1
     assert evaluate(fvb, a=C_(1)) == -3
     assert evaluate(fvc, a=C_(1)) == 3
     assert evaluate(fvc * C_(2), a=C_(1)) == 6
@@ -206,6 +208,42 @@ def test_fa_composition_symbols_correctly_propagated():
     e = S_('e')
 
     expression = fa1(a, fa2(b, fa3(c, d), e))
+    expression_block = expressions.ExpressionBlock((
+        fa1(a), fa2(b, fa3(c, d), e)
+    ))
 
     for symbol in [a, b, c, d, e]:
         assert symbol in expression._symbols
+        assert symbol in expression_block._symbols
+
+
+def test_apply_unapply():
+    a = C_(1)
+    b = a.apply(*a.unapply())
+    assert a is not b and a == b
+
+    a = F_(S_('a'), (C_(1),))
+    b = a.apply(*a.unapply())
+    assert a is not b and a == b
+
+
+def test_nested_existentials():
+    x = S_('x')
+    y = S_('y')
+    P = S_('P')
+    Q = S_('Q')
+
+    exp = E_(x, E_(y, P(x) & Q(y)))
+
+    assert exp._symbols == {Q, P}
+
+
+def test_nested_universals():
+    x = S_('x')
+    y = S_('y')
+    P = S_('P')
+    Q = S_('Q')
+
+    exp = U_(x, U_(y, P(x) & Q(y)))
+
+    assert exp._symbols == {Q, P}

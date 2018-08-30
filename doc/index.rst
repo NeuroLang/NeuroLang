@@ -6,7 +6,7 @@ Welcome to neurolang's documentation!
 `NeuroLang`
 
 To see how to use it, please refer to the `README file 
-<https://github.com/uwescience/neurolang/blob/master/README.md>`_ in the Github repository.
+<https://github.com/NeuroLang/neurolang/blob/master/README.md>`_ in the Github repository.
 
 This is an example of documentation of the software, using sphinx_. 
 
