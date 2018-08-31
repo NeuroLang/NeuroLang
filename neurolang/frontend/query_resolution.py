@@ -28,7 +28,7 @@ class QueryBuilder:
         for k, v in self.solver.included_functions.items():
             self.solver.symbol_table[nl.Symbol[v.type](k)] = v
 
-        self._neurosynth = NeuroSynthHandler()
+        self.neurosynth_db = NeuroSynthHandler()
 
     def get_symbol(self, symbol_name):
         if isinstance(symbol_name, Expression):
@@ -99,14 +99,22 @@ class QueryBuilder:
     def new_region_symbol(self, name=None):
         return self.new_symbol(Region, name=name)
 
-    def query(self, symbol, predicate):
+    def query(self, head, predicate):
+
+        if isinstance(head, tuple):
+            symbols = ()
+            for e in head:
+                symbols += (e.expression,)
+            head = nl.Constant(symbols)
+        else:
+            head = head.expression
         return Query(
             self,
-            nl.Query[AbstractSet[symbol.expression.type]](
-                symbol.expression,
+            nl.Query[AbstractSet[head.type]](
+                head,
                 predicate.expression
             ),
-            symbol, predicate
+            head, predicate
         )
 
     def exists(self, symbol, predicate):
@@ -222,7 +230,7 @@ class QueryBuilder:
     ):
         if not result_symbol_name:
             result_symbol_name = str(uuid1())
-        region_set = self._neurosynth.ns_region_set_from_term(term)
+        region_set = self.neurosynth_db.ns_region_set_from_term(term)
         if n_components:
             region_set = take_principal_regions(region_set, n_components)
 

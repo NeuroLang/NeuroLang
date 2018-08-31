@@ -150,6 +150,27 @@ def test_load_spherical_volume():
     assert next(iter(query_result.value)) == inferior
 
 
+def test_multiple_symbols_query():
+    neurolang = frontend.RegionFrontend()
+    r1 = ExplicitVBR(np.array([[0, 0, 5], [1, 1, 10]]), np.eye(4))
+    r2 = ExplicitVBR(np.array([[0, 0, -10], [1, 1, -5]]), np.eye(4))
+    neurolang.add_region(r1, result_symbol_name='r1')
+    neurolang.add_region(r2, result_symbol_name='r2')
+
+    central = ExplicitVBR(np.array([[0, 0, 1], [1, 1, 1]]), np.eye(4))
+    neurolang.add_region(central, result_symbol_name='reference_region')
+
+    x = neurolang.new_region_symbol(name='x')
+    y = neurolang.new_region_symbol(name='y')
+    pred = (
+        neurolang.symbols.superior_of(x, neurolang.symbols.reference_region) &
+        neurolang.symbols.inferior_of(y, neurolang.symbols.reference_region)
+    )
+
+    res = neurolang.query((x, y), pred).do()
+    assert res.value == frozenset({(r1, r2)})
+
+
 @patch('neurolang.frontend.neurosynth_utils.'
        'NeuroSynthHandler.ns_region_set_from_term')
 def test_neurosynth_region(mock_ns_regions):
