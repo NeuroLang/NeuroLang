@@ -62,7 +62,7 @@ class ConvertSNRFToDatalogWalker(PatternWalker):
         datalog += new_expressions
         return new_predicate, ExpressionBlock(datalog)
 
-    @add_match(FunctionApplication(Constant(invert), FunctionApplication))
+    @add_match(FunctionApplication(Constant(invert), (FunctionApplication,)))
     def negation(self, expression):
         raise NotImplemented()
 

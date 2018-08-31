@@ -69,7 +69,7 @@ def test_simple_existential():
     assert datalog.expressions[0].rhs == exp.body
 
 
-def test_simple_conjunction_disjunction():
+def test_conjunction_disjunction():
     P = S_('P')
     Q = S_('Q')
 
