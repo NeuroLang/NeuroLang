@@ -16,7 +16,8 @@ from .expressions import (
 )
 from .solver_datalog_naive import (
     extract_datalog_free_variables,
-    extract_datalog_predicates
+    extract_datalog_predicates,
+    RelationalAlgebraSetIR
 )
 from .exceptions import NeuroLangException
 
@@ -71,21 +72,23 @@ class DatalogSeminaiveEvaluator(PatternWalker):
             )
 
         cur_args = predicates[0].args
-        res = self.multijoin_named(
-            [self.walk(predicates[0])],
-            [cur_args]
-        )
+        res = self.walk(predicates[0])
 
         for pred in predicates[1:]:
-            res = self.multijoin_named(
-                [res, self.walk(pred)],
-                [cur_args, pred.args]
-            )
+            join_left = []
+            join_right = []
+            for i, arg in enumerate(pred.args):
+                try:
+                    join_left.append(cur_args.index(arg))
+                    join_right.append(i)
+                except ValueError:
+                    pass
 
+            res = res.join_by_columns(self.walk(pred), join_left, join_right)
             cur_args = cur_args + pred.args
 
         for pred in other_pred:
-            new_res = set()
+            new_res = RelationalAlgebraSetIR()
             for t in res:
                 replacement = dict(zip(cur_args, t.value))
                 rsv = ReplaceSymbolWalker(replacement)
@@ -100,24 +103,28 @@ class DatalogSeminaiveEvaluator(PatternWalker):
             cur_args.index(a) for a in args
             if a in cur_args
         ]
-        res = self.project(res, final_project_args)
+        res = res.project(final_project_args)
         return res
 
     @add_match(FunctionApplication(Symbol, ...))
     def fa(self, expression):
         functor = expression.functor
         args = expression.args
-        constants = {
-            i: arg
-            for i, arg in enumerate(args)
-            if isinstance(arg, Constant)
-        }
+
+        constants = dict()
+        parameter_equalities = dict()
+        arglist = list(args)
+        for i, arg in enumerate(args):
+            if isinstance(arg, Constant):
+                constants[i] = arg
+            elif isinstance(arg, Symbol):
+                ix = arglist.index(arg)
+                if ix < i:
+                    parameter_equalities[i] = ix
 
         if functor in self.extensional_database():
-            res = self.select(
-                self.symbol_table[functor].value,
-                constants
-            )
+            res = self.symbol_table[functor].value.select_equality(constants)
+            res = res.select_columns(parameter_equalities)
 
         elif functor in self.intensional_database():
             fresh_name = functor.name + str(uuid4())
@@ -125,7 +132,9 @@ class DatalogSeminaiveEvaluator(PatternWalker):
                 fresh_name = functor.name + str(uuid4())
 
             fresh_symbol = Symbol[functor.type](fresh_name)
-            self.symbol_table[fresh_symbol] = Constant[functor.type](set())
+            self.symbol_table[fresh_symbol] = Constant[functor.type](
+                RelationalAlgebraSetIR()
+            )
 
             replace_symbol_variable = ReplaceSymbolWalker(
                 {functor: fresh_symbol}
@@ -136,7 +145,7 @@ class DatalogSeminaiveEvaluator(PatternWalker):
 
             old_res = self.symbol_table[fresh_symbol].value
 
-            res = set()
+            res = RelationalAlgebraSetIR()
             for i in range(MAX_RECURSION):
                 old_res |= res
 
@@ -201,53 +210,18 @@ class DatalogSeminaiveEvaluator(PatternWalker):
             for v in head
         )
 
-        return self.project(res, indices_to_project)
-
-    @staticmethod
-    def select(set_, constants):
-        if len(constants) == 0:
-            return set_
-
-        select_str = (
-            'lambda t, constants=constants: ' +
-            ' and '.join(
-                f't.value[{i}] == constants[{i}].value '
-                for i in constants
-            )
-        )
-
-        sel = eval(select_str)
-
-        return set(
-            t for t in set_
-            if sel(t)
-        )
-
-    @staticmethod
-    def project(set_, indices):
-        project_str = (
-            'lambda t: (' +
-            ' ,'.join(f't.value[{i}]' for i in indices) +
-            ',)'
-        )
-
-        proj = eval(project_str)
-        return set(
-            Constant(proj(t))
-            for t in set_
-        )
+        return res.project(indices_to_project)
 
     @staticmethod
     def multijoin_named(sets, sets_args):
         if len(sets) > 2:
             raise NotImplemented()
 
-        import pdb; pdb.set_trace()
         sets = [
             pandas.DataFrame.from_records(iter(s))
             for s in sets
         ]
-    
+
         join_arguments = sum(sets_args, tuple())
 
         joins = dict()

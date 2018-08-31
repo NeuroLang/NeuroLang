@@ -116,3 +116,21 @@ def test_join_columns():
     }
 
     assert all(i == j for i, j in zip(d._set.columns, range(4)))
+
+
+def test_ior():
+    a = ras.RelationalAlgebraSet([(0,)])
+    b = ras.RelationalAlgebraSet([(1,)])
+
+    a |= b
+
+    assert a == {(0,), (1,)}
+
+
+def test_iand():
+    a = ras.RelationalAlgebraSet([(0,), (1,)])
+    b = ras.RelationalAlgebraSet([(1,)])
+
+    a &= b
+
+    assert a == {(1,)}

@@ -69,6 +69,7 @@ def test_intensional_single_case():
     R = S_('R')
     S = S_('S')
     T = S_('T')
+    U = S_('U')
     x = S_('x')
     y = S_('y')
 
@@ -79,6 +80,7 @@ def test_intensional_single_case():
 
     intensional_1 = B_((
         St_(R(x), Q(x, C_(2))),
+        St_(S(x), Q(x, x)),
     ))
     dl = Datalog()
     dl.walk(extensional)
@@ -87,20 +89,35 @@ def test_intensional_single_case():
     res = dl.walk(R(x))
     assert res == {C_((C_(1),))}
 
-    intensional_2 = B_((
-        St_(S(x), Q(x, C_(2))),
-        St_(S(x), Q(x, x)),
-        St_(T(x), Q(x, y) & Q(y, x)),
-    ))
-    dl.walk(intensional_2)
+    res = dl.walk(S(x))
+    assert res == {C_((C_(0),))}
+
+    res = dl.walk(Query(x, R(x)))
+    assert res == {C_((C_(1),))}
 
     res = dl.walk(Query(x, S(x)))
+    assert res == {C_((C_(0),))}
+
+    intensional_3 = B_((
+        St_(T(x), Q(x, C_(2))),
+        St_(T(x), Q(x, x)),
+        St_(U(x), Q(x, y) & Q(y, x)),
+    ))
+    dl.walk(intensional_3)
+
+    res = dl.walk(T(x))
     assert res == {
         C_((C_(1),)),
         C_((C_(0),)),
     }
 
     res = dl.walk(Query(x, T(x)))
+    assert res == {
+        C_((C_(1),)),
+        C_((C_(0),)),
+    }
+
+    res = dl.walk(Query(x, U(x)))
     assert res == {
        C_((C_(0),)),
     }
@@ -115,7 +132,7 @@ def test_intensional_single_case_bench():
 
     extensional = B_(tuple(
         T_(Q(C_(i), C_(2 * i)))
-        for i in range(5000)
+        for i in range(5)
     ))
 
     intensional = B_((
