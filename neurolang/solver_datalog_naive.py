@@ -6,7 +6,7 @@ from typing import AbstractSet, Any, Tuple, Callable
 from itertools import product
 from operator import and_
 
-from .utils import OrderedSet
+from .utils import OrderedSet, RelationalAlgebraSet
 
 from .expressions import (
     FunctionApplication, Constant, NeuroLangException, is_subtype,
@@ -17,6 +17,30 @@ from .expressions import (
 from .expression_walker import (
     add_match, PatternWalker, expression_iterator,
 )
+
+
+class RelationalAlgebraSetIR(RelationalAlgebraSet):
+    def __init__(self, iterable=None):
+        super().__init__(None)
+        if iterable is not None:
+            for e in iterable:
+                self.add(e)
+
+    def add(self, element):
+        if isinstance(element, Constant):
+            element = element.value
+        super().add(element)
+
+    def __contains__(self, element):
+        if isinstance(element, Constant):
+            element = element.value
+        return super().__contains__(element)
+
+    def __iter__(self):
+        return (
+            Constant(e)
+            for e in super().__iter__()
+        )
 
 
 class Fact(Statement):
@@ -79,8 +103,7 @@ class DatalogBasic(PatternWalker):
                 raise NeuroLangException('Fact functor type incorrect')
 
             self.symbol_table[fact.functor.name] = \
-                Constant[AbstractSet[set_type]](set())
-
+                Constant[AbstractSet[set_type]](RelationalAlgebraSetIR())
         fact_set = self.symbol_table[fact.functor.name]
 
         if isinstance(fact_set, ExpressionBlock):
