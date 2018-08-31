@@ -2,6 +2,8 @@ from itertools import product
 from uuid import uuid4
 import typing
 
+import pandas
+
 from .expression_walker import (
     PatternWalker, add_match,
     ReplaceSymbolWalker
@@ -237,6 +239,47 @@ class DatalogSeminaiveEvaluator(PatternWalker):
 
     @staticmethod
     def multijoin_named(sets, sets_args):
+        if len(sets) > 2:
+            raise NotImplemented()
+
+        import pdb; pdb.set_trace()
+        sets = [
+            pandas.DataFrame.from_records(iter(s))
+            for s in sets
+        ]
+    
+        join_arguments = sum(sets_args, tuple())
+
+        joins = dict()
+        for i, args in enumerate(sets_args):
+            args_map = dict()
+            for j, a in enumerate(args):
+                if isinstance(a, Symbol):
+                    args_map[j] = join_arguments.index(a)
+            joins[i] = args_map
+
+        sel_str = (
+            'lambda s, t: ' +
+            ' and '.join(
+                f's[{i}].value[{j}].value == t[{k}].value'
+                for i, arg_map in joins.items()
+                for j, k in arg_map.items()
+            )
+        )
+        sel = eval(sel_str)
+
+        res = []
+        for s in product(*sets):
+            t = s[0].value
+            for t_ in s[1:]:
+                t += t_.value
+            if sel(s, t):
+                res.append(Constant(t))
+
+        return set(res)
+
+    @staticmethod
+    def multijoin_named_old(sets, sets_args):
         join_arguments = sum(sets_args, tuple())
 
         joins = dict()
