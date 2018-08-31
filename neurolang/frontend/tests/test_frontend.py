@@ -171,6 +171,57 @@ def test_multiple_symbols_query():
     assert res.value == frozenset({(r1, r2)})
 
 
+def test_tuple_symbol_multiple_types_query():
+    neurolang = frontend.RegionFrontend()
+    r1 = ExplicitVBR(np.array([[0, 0, 5], [1, 1, 10]]), np.eye(4))
+    r2 = ExplicitVBR(np.array([[0, 0, -10], [1, 1, -5]]), np.eye(4))
+    neurolang.add_region(r1, result_symbol_name='r1')
+    neurolang.add_region(r2, result_symbol_name='r2')
+
+    central = ExplicitVBR(np.array([[0, 0, 1], [1, 1, 1]]), np.eye(4))
+    neurolang.add_region(central, result_symbol_name='reference_region')
+
+    x = neurolang.new_region_symbol(name='x')
+    z = neurolang.new_symbol(int, name='max_value')
+
+    def norm_of_width(a: int, b: Region) -> bool:
+        return bool(np.linalg.norm(b.width) < a)
+
+    neurolang.add_tuple_set(range(10), int)
+
+    neurolang.add_symbol(norm_of_width, 'norm_of_width_gt')
+
+    pred = (
+        neurolang.symbols.superior_of(x, neurolang.symbols.reference_region) &
+        neurolang.symbols.norm_of_width_gt(z, neurolang.symbols.reference_region)
+    )
+
+    res = neurolang.query((x, z), pred).do()
+    assert res.value != frozenset()
+
+
+def test_quantifier_expressions():
+
+    neurolang = frontend.RegionFrontend()
+
+    i1 = ExplicitVBR(np.array([[0, 0, 2], [1, 1, 3]]), np.eye(4))
+    i2 = ExplicitVBR(np.array([[0, 0, 6], [1, 1, 8]]), np.eye(4))
+    i3 = ExplicitVBR(np.array([[0, 0, 10], [1, 1, 12]]), np.eye(4))
+    i4 = ExplicitVBR(np.array([[0, 0, 13], [1, 1, 17]]), np.eye(4))
+    regions = {i1, i2, i3, i4}
+    neurolang.add_tuple_set(regions, ExplicitVBR)
+
+    central = ExplicitVBR(np.array([[0, 0, 15], [1, 1, 20]]), np.eye(4))
+    neurolang.add_region(central, result_symbol_name='reference_region')
+
+    x = neurolang.new_region_symbol(name='x')
+    res = neurolang.all(x, ~neurolang.symbols.superior_of(x, neurolang.symbols.reference_region))
+    assert res.do().value
+
+    res = neurolang.exists(x, neurolang.symbols.overlapping(x, neurolang.symbols.reference_region))
+    assert res.do().value
+
+
 @patch('neurolang.frontend.neurosynth_utils.'
        'NeuroSynthHandler.ns_region_set_from_term')
 def test_neurosynth_region(mock_ns_regions):

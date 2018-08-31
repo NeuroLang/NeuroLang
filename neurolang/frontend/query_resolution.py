@@ -146,7 +146,7 @@ class QueryBuilder:
         else:
             value = nl.Constant(value)
 
-        symbol = nl.Symbol[self.solver.type](result_symbol_name)
+        symbol = nl.Symbol[value.type](result_symbol_name)
         self.solver.symbol_table[symbol] = value
 
         return Symbol(self, result_symbol_name)
