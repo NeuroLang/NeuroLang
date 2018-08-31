@@ -15,6 +15,8 @@ C_ = expressions.Constant
 S_ = expressions.Symbol
 F_ = expressions.FunctionApplication
 L_ = expressions.Lambda
+E_ = expressions.ExistentialPredicate
+U_ = expressions.UniversalPredicate
 
 
 def evaluate(expression, **kwargs):
@@ -223,3 +225,25 @@ def test_apply_unapply():
     a = F_(S_('a'), (C_(1),))
     b = a.apply(*a.unapply())
     assert a is not b and a == b
+
+
+def test_nested_existentials():
+    x = S_('x')
+    y = S_('y')
+    P = S_('P')
+    Q = S_('Q')
+
+    exp = E_(x, E_(y, P(x) & Q(y)))
+
+    assert exp._symbols == {Q, P}
+
+
+def test_nested_universals():
+    x = S_('x')
+    y = S_('y')
+    P = S_('P')
+    Q = S_('Q')
+
+    exp = U_(x, U_(y, P(x) & Q(y)))
+
+    assert exp._symbols == {Q, P}
