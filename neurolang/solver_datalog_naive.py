@@ -42,6 +42,36 @@ class RelationalAlgebraSetIR(RelationalAlgebraSet):
             for e in super().__iter__()
         )
 
+    def __or__(self, *args):
+        res = RelationalAlgebraSetIR()
+        res._set = super().__or__(*args)._set
+        return res
+
+    def __and__(self, *args):
+        res = RelationalAlgebraSetIR()
+        res._set = super().__and__(*args)._set
+        return res
+
+    def project(self, *args):
+        res = RelationalAlgebraSetIR()
+        res._set = super().project(*args)._set
+        return res
+
+    def select_equality(self, *args):
+        res = RelationalAlgebraSetIR()
+        res._set = super().select_equality(*args)._set
+        return res
+
+    def select_columns(self, *args):
+        res = RelationalAlgebraSetIR()
+        res._set = super().select_columns(*args)._set
+        return res
+
+    def join_by_columns(self, *args):
+        res = RelationalAlgebraSetIR()
+        res._set = super().join_by_columns(*args)._set
+        return res
+
 
 class Fact(Statement):
     def __init__(self, lhs):
