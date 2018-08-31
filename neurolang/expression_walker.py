@@ -131,22 +131,6 @@ class ExpressionWalker(PatternWalker):
                 for k in expression.kwargs
             )
         ):
-            functor_type, functor_value = get_type_and_value(functor)
-
-            if functor_type is not ToBeInferred:
-                if not is_subtype(functor_type, typing.Callable):
-                    raise NeuroLangTypeException(
-                        f'Function {functor} is not of callable type'
-                    )
-            else:
-                if (
-                    isinstance(functor, Constant) and
-                    not callable(functor_value)
-                ):
-                    raise NeuroLangTypeException(
-                        f'Function {functor} is not of callable type'
-                    )
-
             result = functor(*args, **kwargs)
             return self.walk(result)
         else:

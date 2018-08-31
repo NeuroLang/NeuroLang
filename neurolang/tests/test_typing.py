@@ -64,7 +64,7 @@ def test_subclass():
         expressions.Constant[int], expressions.Constant[typing.AbstractSet]
     )
 
-    
+
 def test_replace_subtype():
     assert (
         typing.Set is symbols_and_types.replace_type_variable(
@@ -206,7 +206,8 @@ def test_TypedSymbolTable():
     assert 's3' in st
     assert st['s3'] == s3
     assert st.symbols_by_type(s1.type) == {'s1': s1, 's2': s2}
-    assert st.symbols_by_type(s3.type) == {'s3': s3}
+    assert st.symbols_by_type(s3.type, False) == {'s3': s3}
+    assert st.symbols_by_type(s3.type, True) == {'s1': s1, 's2': s2, 's3': s3}
 
     del st['s1']
     assert len(st) == 2

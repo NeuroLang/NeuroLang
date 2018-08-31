@@ -124,13 +124,20 @@ class TypedSymbolTable(collections.MutableMapping):
             ret = ret | self.enclosing_scope.types()
         return ret
 
-    def symbols_by_type(self, type_):
+    def symbols_by_type(self, type_, include_subtypes=True):
+        ret = dict()
         if self.enclosing_scope is not None:
-            ret = self.enclosing_scope.symbols_by_type(type_)
-        else:
-            ret = dict()
+            ret.update(self.enclosing_scope.symbols_by_type(type_))
 
-        ret.update(self._symbols_by_type[type_])
+        for t in self.types():
+            if (
+                t is type_ or (
+                    include_subtypes and
+                    t is not ToBeInferred and is_subtype(t, type_)
+                )
+            ):
+                ret.update(self._symbols_by_type[t])
+
         return ret
 
     def create_scope(self):
