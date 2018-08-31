@@ -106,6 +106,32 @@ def test_intensional_single_case():
     }
 
 
+def test_intensional_single_case_bench():
+
+    Q = S_('Q')
+    T = S_('T')
+    x = S_('x')
+    y = S_('y')
+
+    extensional = B_(tuple(
+        T_(Q(C_(i), C_(2 * i)))
+        for i in range(5000)
+    ))
+
+    intensional = B_((
+        St_(T(x), Q(x, y) & Q(y, x)),
+    ))
+
+    dl = Datalog()
+    dl.walk(extensional)
+    dl.walk(intensional)
+
+    res = dl.walk(Query(x, T(x)))
+    assert res == {
+       C_((C_(0),)),
+    }
+
+
 def test_intensional_recursive():
     Q = S_('Q')
     R = S_('R')
