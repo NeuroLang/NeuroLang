@@ -1,4 +1,6 @@
-from typing import Callable
+import pytest
+
+from typing import Callable, AbstractSet, Tuple
 
 from .. import solver_datalog_seminaive as sds
 
@@ -33,19 +35,31 @@ class Datalog(
     pass
 
 
-def test_extensional():
-
+@pytest.fixture
+def extensional_single_double(N=5000):
     Q = S_('Q')
-    x = S_('x')
-    y = S_('y')
-
     extensional = B_(tuple(
-        T_(Q(C_(i), C_(2 * i)))
-        for i in range(5)
+       T_(Q(C_(i), C_(2 * i)))
+       for i in range(N)
     ))
 
     dl = Datalog()
     dl.walk(extensional)
+
+    # dl.symbol_table[Q] = C_[AbstractSet[Tuple[int, int]]](
+    #    sds.RelationalAlgebraSetIR(
+    #        (C_(i), C_(2 * i))
+    #        for i in range(N)
+    #    )
+    # )
+
+    return dl, Q
+
+
+def test_extensional(extensional_single_double):
+    dl, Q = extensional_single_double
+    x = S_('x')
+    y = S_('y')
 
     res = dl.walk(Q(x, y))
     assert res == dl.extensional_database()[Q].value
@@ -63,9 +77,10 @@ def test_extensional():
     assert res == set()
 
 
-def test_intensional_single_case():
+def test_intensional_single_case(extensional_single_double):
 
-    Q = S_('Q')
+    dl, Q = extensional_single_double
+
     R = S_('R')
     S = S_('S')
     T = S_('T')
@@ -73,17 +88,10 @@ def test_intensional_single_case():
     x = S_('x')
     y = S_('y')
 
-    extensional = B_(tuple(
-        T_(Q(C_(i), C_(2 * i)))
-        for i in range(50)
-    ))
-
     intensional_1 = B_((
         St_(R(x), Q(x, C_(2))),
         St_(S(x), Q(x, x)),
     ))
-    dl = Datalog()
-    dl.walk(extensional)
     dl.walk(intensional_1)
 
     res = dl.walk(R(x))
@@ -123,24 +131,18 @@ def test_intensional_single_case():
     }
 
 
-def test_intensional_single_case_bench():
+def test_intensional_single_case_bench(extensional_single_double):
 
-    Q = S_('Q')
+    dl, Q = extensional_single_double
+
     T = S_('T')
     x = S_('x')
     y = S_('y')
-
-    extensional = B_(tuple(
-        T_(Q(C_(i), C_(2 * i)))
-        for i in range(5)
-    ))
 
     intensional = B_((
         St_(T(x), Q(x, y) & Q(y, x)),
     ))
 
-    dl = Datalog()
-    dl.walk(extensional)
     dl.walk(intensional)
 
     res = dl.walk(Query(x, T(x)))
@@ -149,26 +151,20 @@ def test_intensional_single_case_bench():
     }
 
 
-def test_intensional_recursive():
-    Q = S_('Q')
+def test_intensional_recursive(extensional_single_double):
+    dl, Q = extensional_single_double
+
     R = S_('R')
 
     x = S_('x')
     y = S_('y')
     z = S_('z')
 
-    extensional = B_(tuple(
-        T_(Q(C_(i), C_(2 * i)))
-        for i in range(5)
-    ))
-
     intensional = B_((
         St_(R(x, y), Q(x, y)),
         St_(R(x, y), Q(x, z) & R(z, y)),
     ))
 
-    dl = Datalog()
-    dl.walk(extensional)
     dl.walk(intensional)
 
     q = Query((x, y), R(x, y))
@@ -208,8 +204,9 @@ def test_intensional_recursive():
     }
 
 
-def test_intensional_defined():
-    Q = S_('Q')
+def test_intensional_defined(extensional_single_double):
+    dl, Q = extensional_single_double
+
     R = S_('R')
     T = S_[Callable[[int], bool]]('T')
 
@@ -218,24 +215,16 @@ def test_intensional_defined():
 
     t = C_[Callable[[int], bool]](lambda x: x % 2 == 0)
 
-    extensional = B_(tuple(
-        T_(Q(C_(i), C_(2 * i)))
-        for i in range(500)
-    ))
-
     intensional = B_((
         St_(R(x, y), T(y) & Q(x, y) & T(x)),
     ))
 
-    dl = Datalog()
-    dl.walk(extensional)
     dl.walk(intensional)
     dl.symbol_table[T] = t
 
     q = Query((x, y), R(x, y))
     res = dl.walk(q)
-    res == {
-        (0, 0),
-        (2, 4),
-        (4, 8),
+    assert res == {
+        (i, 2 * i)
+        for i in range(0, 5000, 2)
     }

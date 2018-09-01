@@ -88,16 +88,19 @@ class DatalogSeminaiveEvaluator(PatternWalker):
             cur_args = cur_args + pred.args
 
         for pred in other_pred:
-            new_res = RelationalAlgebraSetIR()
+            new_res = set()
             for t in res:
                 replacement = dict(zip(cur_args, t.value))
                 rsv = ReplaceSymbolWalker(replacement)
                 r = self.walk(
-                    self.symbol_table[pred.functor](*rsv.walk(pred.args))
+                    FunctionApplication(
+                        self.symbol_table[pred.functor],
+                        rsv.walk(pred.args)
+                    )
                 )
                 if isinstance(r, Constant) and r.value is True:
                     new_res.add(t)
-            res = new_res
+            res = RelationalAlgebraSetIR(new_res)
 
         final_project_args = [
             cur_args.index(a) for a in args
@@ -111,18 +114,18 @@ class DatalogSeminaiveEvaluator(PatternWalker):
         functor = expression.functor
         args = expression.args
 
-        constants = dict()
-        parameter_equalities = dict()
-        arglist = list(args)
-        for i, arg in enumerate(args):
-            if isinstance(arg, Constant):
-                constants[i] = arg
-            elif isinstance(arg, Symbol):
-                ix = arglist.index(arg)
-                if ix < i:
-                    parameter_equalities[i] = ix
-
         if functor in self.extensional_database():
+            constants = dict()
+            parameter_equalities = dict()
+            arglist = list(args)
+            for i, arg in enumerate(args):
+                if isinstance(arg, Constant):
+                    constants[i] = arg
+                elif isinstance(arg, Symbol):
+                    ix = arglist.index(arg)
+                    if ix < i:
+                        parameter_equalities[i] = ix
+
             res = self.symbol_table[functor].value.select_equality(constants)
             res = res.select_columns(parameter_equalities)
 

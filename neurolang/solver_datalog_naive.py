@@ -21,14 +21,33 @@ from .expression_walker import (
 
 class RelationalAlgebraSetIR(RelationalAlgebraSet):
     def __init__(self, iterable=None):
-        super().__init__(None)
+        self.type = ToBeInferred
         if iterable is not None:
+            new_in = set()
             for e in iterable:
-                self.add(e)
+                if isinstance(e, Constant):
+                    new_in.add(e.value)
+                    if self.type is ToBeInferred:
+                        self.type = e.type
+                else:
+                    new_in.add(e)
+                    if self.type is ToBeInferred:
+                        c_ = Constant(e)
+                        self.type = c_.type
+
+            iterable = new_in
+
+        super().__init__(iterable)
 
     def add(self, element):
         if isinstance(element, Constant):
+            if self.type is ToBeInferred:
+                self.type = element.type
             element = element.value
+        else:
+            if self.type is ToBeInferred:
+                c_ = Constant(element)
+                self.type = c_.type
         super().add(element)
 
     def __contains__(self, element):
@@ -38,37 +57,43 @@ class RelationalAlgebraSetIR(RelationalAlgebraSet):
 
     def __iter__(self):
         return (
-            Constant(e)
+            Constant[self.type](e, auto_infer_type=False, verify_type=False)
             for e in super().__iter__()
         )
 
     def __or__(self, *args):
         res = RelationalAlgebraSetIR()
+        res.type = self.type
         res._set = super().__or__(*args)._set
         return res
 
     def __and__(self, *args):
         res = RelationalAlgebraSetIR()
+        res.type = self.type
         res._set = super().__and__(*args)._set
         return res
 
     def project(self, *args):
         res = RelationalAlgebraSetIR()
+        res.type = self.type
         res._set = super().project(*args)._set
         return res
 
     def select_equality(self, *args):
         res = RelationalAlgebraSetIR()
+        res.type = self.type
         res._set = super().select_equality(*args)._set
         return res
 
     def select_columns(self, *args):
         res = RelationalAlgebraSetIR()
+        res.type = self.type
         res._set = super().select_columns(*args)._set
         return res
 
     def join_by_columns(self, *args):
         res = RelationalAlgebraSetIR()
+        res.type = self.type
         res._set = super().join_by_columns(*args)._set
         return res
 
@@ -103,6 +128,11 @@ class DatalogBasic(PatternWalker):
     '''
 
     protected_keywords = set()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.symbol_table[self.constant_set_name] =\
+            Constant[AbstractSet[Any]](set())
 
     def function_equals(self, a: Any, b: Any) -> bool:
         return a == b
