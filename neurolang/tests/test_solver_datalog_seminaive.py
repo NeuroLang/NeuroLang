@@ -1,6 +1,6 @@
 import pytest
 
-from typing import Callable, AbstractSet, Tuple
+from typing import Callable
 
 from .. import solver_datalog_seminaive as sds
 
@@ -35,23 +35,19 @@ class Datalog(
     pass
 
 
+N = 5
+
+
 @pytest.fixture
-def extensional_single_double(N=5000):
+def extensional_single_double(N=N):
     Q = S_('Q')
     extensional = B_(tuple(
-       T_(Q(C_(i), C_(2 * i)))
-       for i in range(N)
+      T_(Q(C_(i), C_(2 * i)))
+      for i in range(N)
     ))
 
     dl = Datalog()
     dl.walk(extensional)
-
-    # dl.symbol_table[Q] = C_[AbstractSet[Tuple[int, int]]](
-    #    sds.RelationalAlgebraSetIR(
-    #        (C_(i), C_(2 * i))
-    #        for i in range(N)
-    #    )
-    # )
 
     return dl, Q
 
@@ -126,26 +122,6 @@ def test_intensional_single_case(extensional_single_double):
     }
 
     res = dl.walk(Query(x, U(x)))
-    assert res == {
-       C_((C_(0),)),
-    }
-
-
-def test_intensional_single_case_bench(extensional_single_double):
-
-    dl, Q = extensional_single_double
-
-    T = S_('T')
-    x = S_('x')
-    y = S_('y')
-
-    intensional = B_((
-        St_(T(x), Q(x, y) & Q(y, x)),
-    ))
-
-    dl.walk(intensional)
-
-    res = dl.walk(Query(x, T(x)))
     assert res == {
        C_((C_(0),)),
     }
@@ -226,5 +202,5 @@ def test_intensional_defined(extensional_single_double):
     res = dl.walk(q)
     assert res == {
         (i, 2 * i)
-        for i in range(0, 5000, 2)
+        for i in range(0, N, 2)
     }
