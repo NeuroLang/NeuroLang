@@ -91,7 +91,7 @@ def expression_iterator(expression, include_level=False, dfs=True):
 
 class PatternWalker(PatternMatcher):
     def walk(self, expression):
-        logging.debug(f"walking {expression}")
+        logging.debug("walking %(expression)s", {'expression': expression})
         if isinstance(expression, tuple):
             result = [
                 self.walk(e)
