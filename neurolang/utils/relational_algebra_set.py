@@ -119,9 +119,10 @@ class RelationalAlgebraSet(MutableSet):
 
         if not isinstance(columns, Iterable):
             columns = (columns,)
-        ret = RelationalAlgebraSet()
-        ret._set = self._set[list(columns)]
-        return ret
+        res = RelationalAlgebraSet()
+        res._set = self._set[list(columns)]
+        res._set.columns = range(len(res._set.columns))
+        return res
 
     def select_equality(self, criteria):
         """
