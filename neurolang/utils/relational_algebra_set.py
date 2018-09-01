@@ -69,6 +69,18 @@ class RelationalAlgebraSet(MutableSet):
         res._set = newset
         return res
 
+    def __eq__(self, other):
+        if isinstance(other, RelationalAlgebraSet):
+            return len(self & other) == len(self)
+        else:
+            return super().__eq__(other)
+
+    def __le__(self, other):
+        if isinstance(super, RelationalAlgebraSet):
+            return len(self & other) <= len(self)
+        else:
+            return super().__le__(other)
+
     def __ior__(self, other):
         res = self | other
         self._set = res._set

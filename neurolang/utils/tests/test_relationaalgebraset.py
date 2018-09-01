@@ -53,7 +53,7 @@ def test_project():
     data = set((i, 2 * i) for i in range(5))
     a = ras.RelationalAlgebraSet(data)
 
-    b = a.project(0)
+    b = a.project((0,))
     assert b == set((e[0],) for e in data)
     assert all(i == j for i, j in zip(b._set.columns, range(1)))
 
