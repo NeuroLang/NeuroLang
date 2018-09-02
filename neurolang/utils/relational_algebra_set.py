@@ -92,12 +92,11 @@ class RelationalAlgebraSet(MutableSet):
         return self
 
     def add(self, element):
+        element = pd.DataFrame.from_records([element])
         if len(self) == 0:
-            self._set = pd.DataFrame.from_records([element])
+            self._set = element
         else:
-            if element not in self:
-                element = {i: e for i, e in enumerate(element)}
-                self._set = self._set.append(element, ignore_index=True)
+            self._set = self._set.append(element, ignore_index=True)
 
     def discard(self, element):
         iterator = enumerate(element)
@@ -192,3 +191,6 @@ class RelationalAlgebraSet(MutableSet):
         res = RelationalAlgebraSet()
         res._set = self._set.copy()
         return res
+
+    def tidy_up(self):
+        self._res.drop_duplicates()
