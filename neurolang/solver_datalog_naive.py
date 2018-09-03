@@ -2,14 +2,17 @@
 Naive implementation of non-typed datalog. There's no optimizations and will be
 surely very slow
 '''
-from typing import AbstractSet, Any, Tuple
+from typing import AbstractSet, Any, Tuple, Callable
 from itertools import product
 from operator import and_
+
+from .utils import OrderedSet
 
 from .expressions import (
     FunctionApplication, Constant, NeuroLangException, is_subtype,
     Statement, Symbol, Lambda, ExpressionBlock, Expression,
-    Query, ExistentialPredicate, UniversalPredicate, Quantifier
+    Query, ExistentialPredicate, UniversalPredicate, Quantifier,
+    ToBeInferred
 )
 from .expression_walker import (
     add_match, PatternWalker, expression_iterator,
@@ -32,9 +35,18 @@ class DatalogBasic(PatternWalker):
     '''
     Implementation of Datalog grammar in terms of
     Intermediate Representations. No query resolution implemented.
-    '''
-    constant_set_name = '__dl_constants__'
+    In the symbol table the value for a symbol `S` is implemented as:
 
+    * If `S` is part of the extensional database, then the value of the symbol
+    is a set of tuples `a` representing `S(*a)` as facts
+
+    * If `S` is part of the intensional database then its value is an
+    `ExpressionBlock` such that each expression is a case of the symbol
+    each expression is a `Lambda` instance where the `function_expression` is
+    the query and the `args` are the needed projection. For instance
+    `Q(x) :- R(x, x)` and `Q(x) :- T(x)` is represented as a symbol `Q`
+     with value `ExpressionBlock((Lambda(R(x, x), (x,)), Lambda(T(x), (x,))))`
+    '''
     def function_equals(self, a: Any, b: Any) -> bool:
         return a == b
 
@@ -44,23 +56,24 @@ class DatalogBasic(PatternWalker):
 
         if any(
             not isinstance(a, Constant)
-            for _, a, level in expression_iterator(
-                fact.args, include_level=True
-            )
-            if level > 0
+            for a in fact.args
         ):
             raise NeuroLangException(
                 'Facts can only have constants as arguments'
             )
 
-        if fact.functor.name == self.constant_set_name:
-            raise NeuroLangException(
-                f'symbol {self.constant_set_name} is protected'
-            )
-
         if fact.functor.name not in self.symbol_table:
+            if fact.functor.type is ToBeInferred:
+                c = Constant(fact.args)
+                set_type = c.type
+            elif isinstance(fact.functor.type, Callable):
+                set_type = Tuple[fact.functor.type.__args__[:-1]]
+            else:
+                raise NeuroLangException('Fact functor type incorrect')
+
             self.symbol_table[fact.functor.name] = \
-                Constant[AbstractSet[Any]](set())
+                Constant[AbstractSet[set_type]](set())
+
         fact_set = self.symbol_table[fact.functor.name]
 
         if isinstance(fact_set, ExpressionBlock):
@@ -69,12 +82,7 @@ class DatalogBasic(PatternWalker):
                 'define as intensional predicate.'
             )
 
-        if all(isinstance(a, Constant) for a in fact.args):
-            if self.constant_set_name not in self.symbol_table:
-                self.symbol_table[self.constant_set_name] = \
-                        Constant[AbstractSet[Any]](set())
-            self.symbol_table[self.constant_set_name].value.update(fact.args)
-            fact_set.value.add(Constant(fact.args))
+        fact_set.value.add(Constant(fact.args))
 
         return expression
 
@@ -83,7 +91,7 @@ class DatalogBasic(PatternWalker):
         Constant[bool](True)
     ))
     def statement_extensional(self, expression):
-        return self.fact(Fact[expression.type](expression.lhs))
+        return self.walk(Fact[expression.type](expression.lhs))
 
     @add_match(Statement(
         FunctionApplication[bool](Symbol, ...),
@@ -91,12 +99,8 @@ class DatalogBasic(PatternWalker):
     ))
     def statement_intensional(self, expression):
         lhs = expression.lhs
-        if lhs.functor.name == self.constant_set_name:
-            raise NeuroLangException(
-                f'symbol {self.constant_set_name} is protected'
-            )
-
         rhs = expression.rhs
+
         if not is_conjunctive_expression(rhs):
             raise NeuroLangException(
                 f'Expression {rhs} is not conjunctive'
@@ -131,11 +135,13 @@ class DatalogBasic(PatternWalker):
         return expression
 
     def intensional_database(self):
-        return self.symbol_table.symbols_by_type(ExpressionBlock)
+        return {
+            k: v for k, v in self.symbol_table.items()
+            if isinstance(v, ExpressionBlock)
+        }
 
     def extensional_database(self):
         ret = self.symbol_table.symbols_by_type(AbstractSet)
-        del ret[self.constant_set_name]
         return ret
 
 
@@ -143,6 +149,29 @@ class NaiveDatalog(DatalogBasic):
     '''
     Naive resolution system of Datalog.
     '''
+    constant_set_name = '__dl_constants__'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.symbol_table[self.constant_set_name] =\
+            Constant[AbstractSet[Any]](set())
+
+    @add_match(Fact(FunctionApplication[bool](Symbol, ...)))
+    def fact(self, expression):
+        fact = expression.fact
+
+        expression = super().fact(expression)
+
+        if fact.functor.name == self.constant_set_name:
+            raise NeuroLangException(
+                f'symbol {self.constant_set_name} is protected'
+            )
+
+        if all(isinstance(a, Constant) for a in fact.args):
+            self.symbol_table[self.constant_set_name].value.update(fact.args)
+
+        return expression
+
     @add_match(Statement(
         FunctionApplication[bool](Symbol, ...),
         Expression
@@ -164,6 +193,18 @@ class NaiveDatalog(DatalogBasic):
             for v in fv:
                 rhs = ExistentialPredicate[bool](v, rhs)
         return self.walk(Statement[expression.type](lhs, rhs))
+
+    @add_match(Statement(
+        FunctionApplication[bool](Symbol, ...),
+        Expression
+    ))
+    def statement_intensional(self, expression):
+        lhs = expression.lhs
+        if lhs.functor.name == self.constant_set_name:
+            raise NeuroLangException(
+                f'symbol {self.constant_set_name} is protected'
+            )
+        return super().statement_intensional(expression)
 
     @add_match(
         FunctionApplication(ExpressionBlock, ...),
@@ -274,6 +315,11 @@ class NaiveDatalog(DatalogBasic):
 
         return Constant[AbstractSet[Any]](result)
 
+    def extensional_database(self):
+        ret = super().extensional_database()
+        del ret[self.constant_set_name]
+        return ret
+
 
 def is_conjunctive_expression(expression):
     return all(
@@ -295,30 +341,30 @@ def is_conjunctive_expression(expression):
 
 
 class ExtractDatalogFreeVariablesWalker(PatternWalker):
+    @add_match(FunctionApplication(Constant(and_), ...))
+    def conjunction(self, expression):
+        fvs = OrderedSet()
+        for arg in expression.args:
+            fvs |= self.walk(arg)
+        return fvs
+
     @add_match(FunctionApplication)
     def extract_variables_fa(self, expression):
-        functor = expression.functor
         args = expression.args
-        if isinstance(functor, Constant) and functor.value == and_:
-            return set().union(*(self.walk(a) for a in args))
 
-        variables = set()
-        for a in expression.args:
+        variables = OrderedSet()
+        for a in args:
             if isinstance(a, Symbol):
                 variables.add(a)
             elif isinstance(a, Constant):
                 pass
             else:
                 raise NeuroLangException('Not a Datalog function application')
-
         return variables
 
     @add_match(Quantifier)
     def extract_variables_q(self, expression):
-        variables = self.walk(expression.body)
-        variables -= expression.head._symbols
-
-        return variables
+        return self.walk(expression.body) - expression.head._symbols
 
     @add_match(Statement)
     def extract_variables_s(self, expression):
@@ -326,7 +372,7 @@ class ExtractDatalogFreeVariablesWalker(PatternWalker):
 
     @add_match(...)
     def _(self, expression):
-        return set()
+        return OrderedSet()
 
 
 def extract_datalog_free_variables(expression):
@@ -335,16 +381,35 @@ def extract_datalog_free_variables(expression):
     return efvw.walk(expression)
 
 
+class ExtractDatalogPredicates(PatternWalker):
+    @add_match(FunctionApplication(Constant(and_), ...))
+    def conjunction(self, expression):
+        res = OrderedSet()
+        for arg in expression.args:
+            res |= self.walk(arg)
+        return res
+
+    @add_match(FunctionApplication)
+    def extract_predicates_fa(self, expression):
+        return OrderedSet([expression])
+
+    @add_match(ExpressionBlock)
+    def expression_block(self, expression):
+        res = OrderedSet()
+        for exp in expression.expressions:
+            res |= self.walk(exp)
+        return res
+
+    @add_match(Lambda)
+    def lambda_(self, expression):
+        return self.walk(expression.function_expression)
+
+
 def extract_datalog_predicates(expression):
     """
     extract predicates from expression
     knowing that it's in Datalog format
     """
-    res = set()
-    for _, exp in expression_iterator(expression):
-        if (
-            isinstance(exp, FunctionApplication) and
-            exp.functor.value is not and_
-        ):
-            res.add(exp)
-    return res
+
+    edp = ExtractDatalogPredicates()
+    return edp.walk(expression)
