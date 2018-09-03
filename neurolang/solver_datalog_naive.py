@@ -24,19 +24,17 @@ class RelationalAlgebraSetIR(RelationalAlgebraSet):
         self.type = ToBeInferred
         if iterable is not None:
             new_in = set()
-            for e in iterable:
-                if isinstance(e, Constant):
+            try:
+                for e in iterable:
                     new_in.add(e.value)
                     if self.type is ToBeInferred:
                         self.type = e.type
-                else:
-                    new_in.add(e)
-                    if self.type is ToBeInferred:
-                        c_ = Constant(e)
-                        self.type = c_.type
-
+            except AttributeError:
+                raise NeuroLangException(
+                    "This set type only takes "
+                    "Constant expressions as input"
+                )
             iterable = new_in
-
         super().__init__(iterable)
 
     def add(self, element):
@@ -44,11 +42,12 @@ class RelationalAlgebraSetIR(RelationalAlgebraSet):
             if self.type is ToBeInferred:
                 self.type = element.type
             element = element.value
+            super().add(element)
         else:
-            if self.type is ToBeInferred:
-                c_ = Constant(element)
-                self.type = c_.type
-        super().add(element)
+            raise NeuroLangException(
+                "This set type only takes "
+                "Constant expressions as input"
+            )
 
     def __contains__(self, element):
         if isinstance(element, Constant):
@@ -170,8 +169,7 @@ class DatalogBasic(PatternWalker):
                 'define as intensional predicate.'
             )
 
-        if all(isinstance(a, Constant) for a in fact.args):
-            fact_set.value.add(Constant(fact.args))
+        fact_set.value.add(Constant(fact.args))
 
         return expression
 
