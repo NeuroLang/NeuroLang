@@ -172,7 +172,9 @@ class DatalogBasic(PatternWalker):
                 'define as intensional predicate.'
             )
 
-        fact_set.value.add(Constant(fact.args))
+        if all(isinstance(a, Constant) for a in fact.args):
+            self.symbol_table[self.constant_set_name].value.update(fact.args)
+            fact_set.value.add(Constant(fact.args))
 
         return expression
 
