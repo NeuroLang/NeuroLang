@@ -28,7 +28,6 @@ T_ = sdb.Fact
 
 class Datalog(
     sds.DatalogSeminaiveEvaluator,
-    sdb.DatalogBasic,
     solver_datalog_extensional_db.ExtensionalDatabaseSolver,
     expression_walker.ExpressionBasicEvaluator
 ):

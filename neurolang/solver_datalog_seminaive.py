@@ -5,7 +5,7 @@ import typing
 import pandas
 
 from .expression_walker import (
-    PatternWalker, add_match,
+    add_match,
     ReplaceSymbolWalker
 )
 from .expressions import (
@@ -17,7 +17,8 @@ from .expressions import (
 from .solver_datalog_naive import (
     extract_datalog_free_variables,
     extract_datalog_predicates,
-    RelationalAlgebraSetIR
+    RelationalAlgebraSetIR,
+    DatalogBasic
 )
 from .exceptions import NeuroLangException
 
@@ -29,7 +30,7 @@ class MaxRecursionNeurolangException(NeuroLangException):
     pass
 
 
-class DatalogSeminaiveEvaluator(PatternWalker):
+class DatalogSeminaiveEvaluator(DatalogBasic):
     '''
     Query evaluation based on relational algebra operations
     implemented over Python sets.
@@ -44,12 +45,6 @@ class DatalogSeminaiveEvaluator(PatternWalker):
         rsv = ReplaceSymbolWalker(dict(zip(expression.functor.args, args)))
         function = rsv.walk(expression.functor.function_expression)
         predicates = extract_datalog_predicates(function)
-
-        # Merging predicate by predicate progressively reduces the
-        # length of the crossproduct.
-        # The better implementation would be to use an IR on relational
-        # algebra and then apply known optimizations there.
-        # Or better implement it over SQL or NoSQL.
 
         ext_pred = []
         int_pred = []
