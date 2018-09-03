@@ -47,12 +47,19 @@ class DatalogBasic(PatternWalker):
     `Q(x) :- R(x, x)` and `Q(x) :- T(x)` is represented as a symbol `Q`
      with value `ExpressionBlock((Lambda(R(x, x), (x,)), Lambda(T(x), (x,))))`
     '''
+
+    protected_keywords = set()
+
     def function_equals(self, a: Any, b: Any) -> bool:
         return a == b
 
     @add_match(Fact(FunctionApplication[bool](Symbol, ...)))
     def fact(self, expression):
         fact = expression.fact
+        if fact.functor.name in self.protected_keywords:
+            raise NeuroLangException(
+                f'symbol {self.constant_set_name} is protected'
+            )
 
         if any(
             not isinstance(a, Constant)
@@ -100,6 +107,11 @@ class DatalogBasic(PatternWalker):
     def statement_intensional(self, expression):
         lhs = expression.lhs
         rhs = expression.rhs
+
+        if lhs.functor.name in self.protected_keywords:
+            raise NeuroLangException(
+                f'symbol {self.constant_set_name} is protected'
+            )
 
         if not is_conjunctive_expression(rhs):
             raise NeuroLangException(
@@ -153,21 +165,18 @@ class NaiveDatalog(DatalogBasic):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.protected_keywords.add(self.constant_set_name)
         self.symbol_table[self.constant_set_name] =\
             Constant[AbstractSet[Any]](set())
 
     @add_match(Fact(FunctionApplication[bool](Symbol, ...)))
     def fact(self, expression):
-        fact = expression.fact
-        if fact.functor.name == self.constant_set_name:
-            raise NeuroLangException(
-                f'symbol {self.constant_set_name} is protected'
-            )
         # Not sure of using inheritance here (i.e. super), it generates
         # confusing coding patterns between Pattern Matching + Mixins
         # and inheritance-based code.
         expression = super().fact(expression)
 
+        fact = expression.fact
         if all(isinstance(a, Constant) for a in fact.args):
             self.symbol_table[self.constant_set_name].value.update(fact.args)
 
@@ -194,18 +203,6 @@ class NaiveDatalog(DatalogBasic):
             for v in fv:
                 rhs = ExistentialPredicate[bool](v, rhs)
         return self.walk(Statement[expression.type](lhs, rhs))
-
-    @add_match(Statement(
-        FunctionApplication[bool](Symbol, ...),
-        Expression
-    ))
-    def statement_intensional(self, expression):
-        lhs = expression.lhs
-        if lhs.functor.name == self.constant_set_name:
-            raise NeuroLangException(
-                f'symbol {self.constant_set_name} is protected'
-            )
-        return super().statement_intensional(expression)
 
     @add_match(
         FunctionApplication(ExpressionBlock, ...),
