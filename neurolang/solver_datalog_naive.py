@@ -149,11 +149,16 @@ class DatalogBasic(PatternWalker):
     def intensional_database(self):
         return {
             k: v for k, v in self.symbol_table.items()
-            if isinstance(v, ExpressionBlock)
+            if (
+                k not in self.protected_keywords and
+                isinstance(v, ExpressionBlock)
+            )
         }
 
     def extensional_database(self):
         ret = self.symbol_table.symbols_by_type(AbstractSet)
+        for keyword in self.protected_keywords:
+            del ret[keyword]
         return ret
 
 
@@ -312,11 +317,6 @@ class NaiveDatalog(DatalogBasic):
                     result.add(args[0].value[0])
 
         return Constant[AbstractSet[Any]](result)
-
-    def extensional_database(self):
-        ret = super().extensional_database()
-        del ret[self.constant_set_name]
-        return ret
 
 
 def is_conjunctive_expression(expression):
