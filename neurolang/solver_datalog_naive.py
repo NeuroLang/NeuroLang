@@ -159,13 +159,14 @@ class NaiveDatalog(DatalogBasic):
     @add_match(Fact(FunctionApplication[bool](Symbol, ...)))
     def fact(self, expression):
         fact = expression.fact
-
-        expression = super().fact(expression)
-
         if fact.functor.name == self.constant_set_name:
             raise NeuroLangException(
                 f'symbol {self.constant_set_name} is protected'
             )
+        # Not sure of using inheritance here (i.e. super), it generates
+        # confusing coding patterns between Pattern Matching + Mixins
+        # and inheritance-based code.
+        expression = super().fact(expression)
 
         if all(isinstance(a, Constant) for a in fact.args):
             self.symbol_table[self.constant_set_name].value.update(fact.args)
