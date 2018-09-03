@@ -4,7 +4,7 @@ from .expressions import (
     NeuroLangException, Definition, ExistentialPredicate, Constant, Symbol,
     ExpressionBlock, Query, FunctionApplication
 )
-from .solver_datalog_naive import NaiveDatalog
+from .solver_datalog_naive import NaiveDatalog, DatalogBasic
 from .expression_pattern_matching import add_match
 
 
@@ -34,7 +34,7 @@ class Implication(Definition):
         )
 
 
-class ExistentialDatalog(NaiveDatalog):
+class ExistentialDatalog(DatalogBasic):
     @add_match(
         Implication(ExistentialPredicate(..., FunctionApplication), ...),
         # ensure the predicate is a simple function application on symbols
@@ -71,7 +71,7 @@ class ExistentialDatalog(NaiveDatalog):
         return expression
 
 
-class SolverExistentialDatalog(ExistentialDatalog):
+class SolverExistentialDatalog(NaiveDatalog, ExistentialDatalog):
 
     @add_match(
         Query(Symbol, FunctionApplication),
