@@ -365,11 +365,20 @@ class ExpressionMeta(ParametricTypeClassMeta):
 
             if self.__is_pattern__:
                 parameters = inspect.signature(self.__class__).parameters
-                for parameter, value in zip(parameters.items(), args):
-                    argname, arg = parameter
-                    if arg.default is not inspect.Parameter.empty:
-                        continue
+                cls_argnames = [
+                    argname for argname, arg in parameters.items()
+                    if arg.default is inspect.Parameter.empty
+                ]
+                if len(cls_argnames) != len(args):
+                    raise TypeError(
+                        f'Pattern {self.__class__} with '
+                        'wrong number of parameters. '
+                        f'Parameters are {cls_argnames}'
+                    )
+
+                for argname, value in zip(cls_argnames, args):
                     setattr(self, argname, value)
+
             else:
                 return orig_init(self, *args, **kwargs)
 
