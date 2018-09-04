@@ -101,3 +101,29 @@ def test_existential_statement_resolution():
     query = Query(u, P(v, u))
     result = solver.walk(query)
     assert not isinstance(result, expressions.Constant)
+
+
+def test_and_query_resolution():
+    solver = SolverWithExistentialResolution()
+    x, y = S_('x'), S_('y')
+    P, Q = S_('P'), S_('Q')
+
+    query = Query(x, P(x) & Q(y))
+    result = solver.walk(query)
+
+
+def test_multiple_eq_variables_in_consequent():
+    solver = SolverWithExistentialResolution()
+    x, y, z = S_('x'), S_('y')
+    P, Q = S_('P'), S_('Q')
+    extensional = ExpressionBlock((
+        Fact(Q(a)),
+        Fact(Q(b)),
+    ))
+    solver.walk(extensional)
+    solwer.walk(Implication(EP_(x, EP_(y, P(x, y, z))), Q(z)))
+    query = Query(z, P(x, y, z))
+    result = solver.walk(query)
+    assert isinstance(result, expressions.Constant)
+    assert result.value is not None
+    assert result.value == frozenset({'a', 'b'})

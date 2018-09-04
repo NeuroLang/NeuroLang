@@ -23,6 +23,13 @@ def _get_query_head(query):
         )
 
 
+def _get_eq_variables(expression):
+    if not isinstance(expression, ExistentialPredicate):
+        return set()
+    else:
+        return {expression.head} | _get_eq_variables(expression.body)
+
+
 class Implication(Definition):
     def __init__(self, consequent, antecedent):
         self.consequent = consequent
@@ -32,6 +39,28 @@ class Implication(Definition):
         return 'Implication{{{} \u2190 {}}}'.format(
             repr(self.consequent), repr(self.antecedent)
         )
+
+
+def _get_existential_implication_fa(expression):
+    if not isinstance(expression, Implication):
+        raise NeuroLangException('Must be called on an Implication')
+    elif not isinstance(expression.consequent, ExistentialPredicate):
+        raise NeuroLangException(
+            'Implication consequent must contain existential predicate'
+        )
+    else:
+        result = expression.consequent
+        while isinstance(result, ExistentialPredicate):
+            result = result.body
+        if (
+            not isinstance(result, FunctionApplication) or
+            not all(isinstance(arg, Symbol) for arg in result.args)
+        ):
+            raise Exception(
+                'Implication e-quantified consequent must be a '
+                'function application on symbols'
+            )
+        return result
 
 
 class ExistentialDatalog(DatalogBasic):
@@ -93,42 +122,23 @@ class SolverExistentialDatalog(NaiveDatalog, ExistentialDatalog):
             new_body = ExistentialPredicate(eq_variable, new_body)
         return self.walk(Query(expression.head, new_body))
 
-    @add_match(Query(..., ExistentialPredicate(..., FunctionApplication)))
-    def query_resolution(self, query):
-        q_head = _get_query_head(query)
-        q_predicate = query.body.body
-        # index of e-quantified variable in query
-        q_eq_idx = q_predicate.args.index(query.body.head)
-        predicate_name = q_predicate.functor.name
-        if (
-            predicate_name in self.symbol_table and
-            isinstance(self.symbol_table[predicate_name], ExpressionBlock)
-        ):
-            eq_expressions = (
-                e for e in self.symbol_table[predicate_name].expressions if (
-                    isinstance(e, Implication) and
-                    isinstance(e.consequent, ExistentialPredicate)
-                )
+    @add_match(FunctionApplication(Implication(ExistentialPredicate, ...)))
+    def existential_consequent_resolution(self, expression):
+        eq_variables = _get_eq_variables(expression.functor.consequent)
+        fa = _get_existential_implication_fa(expression.functor)
+        if not isinstance(fa.functor, Symbol):
+            raise NeuroLangException(
+                'E-quantified consequent must be a '
+                'function application of a symbol'
             )
-            found_matching_existential_statement = False
-            result = set()
-            for e in eq_expressions:
-                # index of e-quantified variable
-                # in existential intensional rule
-                eq_idx = e.consequent.body.args.index(e.consequent.head)
-                if q_eq_idx == eq_idx:
-                    map_q_arg = {
-                        q_predicate.args[i]: e.consequent.body.args[i]
-                        for i in range(len(q_predicate.args))
-                    }
-                    if isinstance(q_head, Symbol):
-                        new_q_head = map_q_arg[q_head]
-                    else:
-                        new_q_head = (map_q_arg[s] for s in q_head)
-                    result |= self.walk(Query(new_q_head, e.antecedent)).value
-                    found_matching_existential_statement = True
-            if not found_matching_existential_statement:
-                return query
-            return Constant[AbstractSet[Any]](result)
-        else:
-            return super().walk(query)
+        fa_name = fa.functor.name
+        eq_expressions = (
+            e for e in self.symbol_table[fa_name].expressions if (
+                isinstance(e, Implication) and
+                isinstance(e.consequent, ExistentialPredicate)
+            )
+        )
+        result = False
+        for eq_exp in eq_expressions:
+            result |= self.walk(FunctionApplication(eq_exp, expression.args))
+        return result
