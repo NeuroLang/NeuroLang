@@ -268,17 +268,20 @@ class ParametricTypeClassMeta(type):
             super().__subclasscheck__(other) or
             (
                 hasattr(other, '__generic_class__') and
-                not hasattr(cls, '__generic_class__') and
-                issubclass(other.__generic_class__, cls)
-            ) or
-            (
-                hasattr(other, '__generic_class__') and
-                hasattr(cls, '__generic_class__') and
-                issubclass(
-                    other.__generic_class__,
-                    cls.__generic_class__
-                ) and
-                is_subtype(other.type, cls.type)
+                (
+                    (
+                        not hasattr(cls, '__generic_class__') and
+                        issubclass(other.__generic_class__, cls)
+                    ) or
+                    (
+                        hasattr(cls, '__generic_class__') and
+                        issubclass(
+                            other.__generic_class__,
+                            cls.__generic_class__
+                        ) and
+                        is_subtype(other.type, cls.type)
+                    )
+                )
             )
         )
 
@@ -360,14 +363,14 @@ class ExpressionMeta(ParametricTypeClassMeta):
             if self.__no_explicit_type__:
                 self.type = ToBeInferred
 
-            parameters = inspect.signature(self.__class__).parameters
-            for parameter, value in zip(parameters.items(), args):
-                argname, arg = parameter
-                if arg.default is not inspect.Parameter.empty:
-                    continue
-                setattr(self, argname, value)
-
-            if not self.__is_pattern__:
+            if self.__is_pattern__:
+                parameters = inspect.signature(self.__class__).parameters
+                for parameter, value in zip(parameters.items(), args):
+                    argname, arg = parameter
+                    if arg.default is not inspect.Parameter.empty:
+                        continue
+                    setattr(self, argname, value)
+            else:
                 return orig_init(self, *args, **kwargs)
 
         obj.__init__ = new_init
@@ -396,7 +399,7 @@ class Expression(metaclass=ExpressionMeta):
             super().__getitem__(index)
 
     def __call__(self, *args, **kwargs):
-        if hasattr(self, '__annotations__'):
+        if hasattr(self, '__annotations__') and len(self.__annotations__) > 0:
             variable_type = self.__annotations__.get('return', None)
         else:
             variable_type = ToBeInferred
