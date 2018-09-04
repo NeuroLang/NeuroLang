@@ -171,6 +171,8 @@ class NaiveDatalog(DatalogBasic):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.protected_keywords.add(self.constant_set_name)
+        self.symbol_table[self.constant_set_name] =\
+            Constant[AbstractSet[Any]](set())
 
     @add_match(Fact(FunctionApplication[bool](Symbol, ...)))
     def fact(self, expression):
@@ -178,10 +180,6 @@ class NaiveDatalog(DatalogBasic):
         # confusing coding patterns between Pattern Matching + Mixins
         # and inheritance-based code.
         expression = super().fact(expression)
-
-        if self.constant_set_name not in self.symbol_table:
-            self.symbol_table[self.constant_set_name] =\
-                Constant[AbstractSet[Any]](set())
 
         fact = expression.fact
         if all(isinstance(a, Constant) for a in fact.args):
