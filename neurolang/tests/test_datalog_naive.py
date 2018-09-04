@@ -274,6 +274,42 @@ def test_extensional_database():
     )))
 
 
+@pytest.mark.xfail(
+    reason="The naive solver can't handle recursion",
+    raises=RecursionError
+)
+def test_intensional_recursive():
+    Q = S_('Q')
+    R = S_('R')
+    x = S_('x')
+    y = S_('y')
+    z = S_('z')
+
+    extensional = ExpressionBlock(tuple(
+        T_(Q(C_(i), C_(2 * i)))
+        for i in range(4)
+    ))
+
+    intensional = ExpressionBlock((
+        St_(R(x, y), Q(x, y)),
+        St_(R(x, y), R(x, z) & R(z, y))
+    ))
+
+    dl = Datalog()
+    dl.walk(extensional)
+    dl.walk(intensional)
+
+    res = dl.walk(Q_((x, y), R(x, y)))
+
+    assert res == {
+        (i, 2 * i)
+        for i in range(4)
+    } | {
+        (i, 4 * i)
+        for i in range(4)
+    }
+
+
 def test_conjunctive_expression():
     Q = S_('Q')
     R = S_('R')
