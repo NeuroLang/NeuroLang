@@ -371,7 +371,9 @@ class ExpressionMeta(ParametricTypeClassMeta):
                 ]
                 if len(cls_argnames) != len(args):
                     raise TypeError(
-                        f'Pattern {cls} with wrong number of parameters'
+                        f'Pattern {self.__class__} with '
+                        'wrong number of parameters. '
+                        f'Parameters are {cls_argnames}'
                     )
 
                 for argname, value in zip(cls_argnames, args):
