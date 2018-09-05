@@ -134,7 +134,7 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
             for c in type_name_map:
                 self.type_name_map[c.type_name] = c.type
                 self.type_name_map[c.type_name_plural] = \
-                    typing.AbstractSet(c.type)
+                    typing.AbstractSet[c.type]
         elif type_name_map is not None:
             raise ValueError(
                 'type_name_map should be a map or iterable'
