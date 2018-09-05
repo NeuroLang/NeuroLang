@@ -1,6 +1,7 @@
 from .interval_algebra import v_before, v_overlaps, v_during, v_meets, v_starts, v_finishes, v_equals
 from .regions import ExplicitVBR
 import numpy as np
+from scipy.linalg import kron
 
 __all__ = ['cardinal_relation']
 
@@ -104,6 +105,6 @@ def direction_matrix(region_bbs, another_region_bbs):
             rp_vector = relation_vectors(bb.limits, another_region_bb.limits)
             tensor = rp_vector[0].reshape(1, 3)
             for i in range(1, len(rp_vector)):
-                tensor = np.kron(rp_vector[i].reshape((3,) + (1,) * i), tensor)
+                tensor = kron(rp_vector[i].reshape((3,) + (1,) * i), tensor)
             res = np.logical_or(res, tensor).astype(int)
     return res
