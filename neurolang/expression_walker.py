@@ -90,14 +90,13 @@ def expression_iterator(expression, include_level=False, dfs=True):
 
 class PatternWalker(PatternMatcher):
     def walk(self, expression):
-        logging.debug(f"walking {expression}")
-        if isinstance(expression, (list, tuple)):
+        logging.debug("walking %(expression)s", {'expression': expression})
+        if isinstance(expression, tuple):
             result = [
                 self.walk(e)
                 for e in expression
             ]
-            if isinstance(expression, tuple):
-                result = tuple(result)
+            result = tuple(result)
             return result
         return self.match(expression)
 
@@ -131,22 +130,6 @@ class ExpressionWalker(PatternWalker):
                 for k in expression.kwargs
             )
         ):
-            functor_type, functor_value = get_type_and_value(functor)
-
-            if functor_type is not ToBeInferred:
-                if not is_subtype(functor_type, typing.Callable):
-                    raise NeuroLangTypeException(
-                        f'Function {functor} is not of callable type'
-                    )
-            else:
-                if (
-                    isinstance(functor, Constant) and
-                    not callable(functor_value)
-                ):
-                    raise NeuroLangTypeException(
-                        f'Function {functor} is not of callable type'
-                    )
-
             result = functor(*args, **kwargs)
             return self.walk(result)
         else:

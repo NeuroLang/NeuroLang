@@ -58,57 +58,23 @@ class DatalogBasic(PatternWalker):
                 f'symbol {self.constant_set_name} is protected'
             )
 
-        if fact.functor.name in self.symbol_table:
-            eb = self.symbol_table[fact.functor.name].expressions
-        else:
-            eb = tuple()
+        if fact.functor.name not in self.symbol_table:
+            self.symbol_table[fact.functor.name] = \
+                Constant[AbstractSet[Any]](set())
+        fact_set = self.symbol_table[fact.functor.name]
+
+        if isinstance(fact_set, ExpressionBlock):
+            raise NeuroLangException(
+                f'{fact.functor.name} has been previously '
+                'define as intensional predicate.'
+            )
 
         if all(isinstance(a, Constant) for a in fact.args):
             if self.constant_set_name not in self.symbol_table:
                 self.symbol_table[self.constant_set_name] = \
                         Constant[AbstractSet[Any]](set())
             self.symbol_table[self.constant_set_name].value.update(fact.args)
-
-            value = {Constant(fact.args)}
-
-            for i, block in enumerate(eb):
-                if isinstance(block, Constant):
-                    fact_set = block
-                    break
-            else:
-                fact_set = Constant[AbstractSet[Any]](set())
-                eb = eb + (fact_set,)
-                i = len(eb) - 1
-
-            fact_set.value |= value
-
-        elif all(isinstance(a, Symbol) for a in fact.args):
-            equalities = []
-            parameters = [
-                Symbol[a.type](f'a{i}') for i, a in enumerate(fact.args)
-            ]
-            for i, a in enumerate(fact.args[:-1]):
-                sa = parameters[i]
-                for j, b in enumerate(fact.args[i + 1:]):
-                    if a == b:
-                        sb = parameters[j + i + 1]
-                        equalities.append(Symbol('equals')(sa, sb))
-
-            if len(equalities) == 0:
-                functor = Constant(True)
-            else:
-                functor = equalities[0]
-                for eq in equalities[1:]:
-                    functor = functor & eq
-            lambda_ = Lambda(tuple(parameters), functor)
-            eb = eb + (lambda_,)
-        else:
-            raise NeuroLangException(
-                "Can't mix contants and symbols on the left hand side "
-                "of a definition"
-            )
-
-        self.symbol_table[fact.functor.name] = ExpressionBlock(eb)
+            fact_set.value.add(Constant(fact.args))
 
         return expression
 
@@ -144,6 +110,15 @@ class DatalogBasic(PatternWalker):
             )
 
         if lhs.functor.name in self.symbol_table:
+            value = self.symbol_table[lhs.functor.name]
+            if (
+                isinstance(value, Constant) and
+                is_subtype(value.type, AbstractSet)
+            ):
+                raise NeuroLangException(
+                    'f{lhs.functor.name} has been previously '
+                    'defined as Fact or extensional database.'
+                )
             eb = self.symbol_table[lhs.functor.name].expressions
         else:
             eb = tuple()
@@ -155,19 +130,13 @@ class DatalogBasic(PatternWalker):
 
         return expression
 
+    def intensional_database(self):
+        return self.symbol_table.symbols_by_type(ExpressionBlock)
+
     def extensional_database(self):
-        res = dict()
-        for key, value in self.symbol_table.items():
-            if key == self.constant_set_name:
-                continue
-            if not isinstance(value, ExpressionBlock):
-                if isinstance(value, Constant[AbstractSet]):
-                    res[key] = value
-            else:
-                for exp in value.expressions:
-                    if isinstance(exp, Constant[AbstractSet]):
-                        res[key] = exp
-        return res
+        ret = self.symbol_table.symbols_by_type(AbstractSet)
+        del ret[self.constant_set_name]
+        return ret
 
 
 class NaiveDatalog(DatalogBasic):
@@ -304,20 +273,6 @@ class NaiveDatalog(DatalogBasic):
                     result.add(args[0].value[0])
 
         return Constant[AbstractSet[Any]](result)
-
-    def extensional_database(self):
-        res = dict()
-        for key, value in self.symbol_table.items():
-            if key == self.constant_set_name:
-                continue
-            if not isinstance(value, ExpressionBlock):
-                if isinstance(value, Constant[AbstractSet]):
-                    res[key] = value
-            else:
-                for exp in value.expressions:
-                    if isinstance(exp, Constant[AbstractSet]):
-                        res[key] = exp
-        return res
 
 
 def is_conjunctive_expression(expression):
