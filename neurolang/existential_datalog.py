@@ -93,50 +93,16 @@ class ExistentialDatalog(DatalogBasic):
 
 
 class SolverExistentialDatalog(NaiveDatalog, ExistentialDatalog):
-
-    @add_match(
-        Query(Symbol, FunctionApplication),
-        lambda expression: all(
-            isinstance(arg, Symbol)
-            for arg in expression.body.args
-        ) and (
-            len(set(expression.body.args) - {expression.head}) > 0
-        )
-    )
-    def query_introduce_existential(self, expression):
-        eq_variables = set(expression.body.args) - {expression.head}
-        if len(eq_variables) > 1:
-            raise NotImplementedError(
-                'Multiple \u2203-quantified variable currently unsupported'
-            )
-        new_body = expression.body
-        for eq_variable in eq_variables:
-            new_body = ExistentialPredicate(eq_variable, new_body)
-        return self.walk(Query(expression.head, new_body))
-
     @add_match(
         FunctionApplication(Implication(ExistentialPredicate, ...), ...)
     )
-    def existential_query_resolution(self, expression):
+    def existential_consequent_implication_resolution(self, expression):
         consequent_body, eq_variables = (
             _parse_implication_with_existential_consequent(expression.functor)
         )
-        consequent_name = consequent_body.functor.name
-        eq_expressions = (
-            e for e in self.symbol_table[consequent_name].expressions if (
-                isinstance(e, Implication) and
-                isinstance(e.consequent, ExistentialPredicate)
+        return self.walk(
+            FunctionApplication(
+                Lambda(consequent_body.args, expression.functor.antecedent),
+                expression.args
             )
         )
-        result = Constant(False)
-        for eq_exp in eq_expressions:
-            eq_exp_consequent_body, eq_exp_eq_variables = (
-                _parse_implication_with_existential_consequent(eq_exp)
-            )
-            result.value |= self.walk(
-                FunctionApplication(
-                    Lambda(eq_exp_consequent_body.args, eq_exp.antecedent),
-                    expression.args
-                )
-            )
-        return result

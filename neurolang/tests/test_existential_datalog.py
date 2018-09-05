@@ -119,14 +119,15 @@ def test_and_query_resolution():
 
 def test_multiple_eq_variables_in_consequent():
     solver = SolverWithExistentialResolution()
-    x, y, z = S_('x'), S_('y')
+    a, b = C_('a'), C_('b')
+    x, y, z = S_('x'), S_('y'), S_('z')
     P, Q = S_('P'), S_('Q')
     extensional = ExpressionBlock((
         Fact(Q(a)),
         Fact(Q(b)),
     ))
     solver.walk(extensional)
-    solwer.walk(Implication(EP_(x, EP_(y, P(x, y, z))), Q(z)))
+    solver.walk(Implication(EP_(x, EP_(y, P(x, y, z))), Q(z)))
     query = Query(z, P(x, y, z))
     result = solver.walk(query)
     assert isinstance(result, expressions.Constant)

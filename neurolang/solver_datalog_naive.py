@@ -18,6 +18,23 @@ from .expression_walker import (
     add_match, PatternWalker, expression_iterator,
 )
 
+def _get_head_variables(expression_head):
+    if isinstance(expression_head, Symbol):
+        head_variables = (expression_head,)
+    elif isinstance(expression_head, tuple):
+        head_variables = expression_head
+    elif (
+        isinstance(expression_head, Constant) and
+        is_subtype(expression_head.type, Tuple)
+    ):
+        head_variables = expression_head.value
+    else:
+        raise NeuroLangException(
+            'Head needs to be a tuple of symbols or a symbol'
+        )
+    return head_variables
+
+
 
 class Fact(Statement):
     def __init__(self, lhs):
@@ -291,9 +308,24 @@ class NaiveDatalog(DatalogBasic):
             return Constant(False)
         return Constant(True)
 
+    @add_match(
+        Query,
+        lambda e: (
+            len(extract_datalog_free_variables(e.body)) >
+            len(set(_get_head_variables(e.head)))
+        )
+    )
+    def query_introduce_existential(self, expression):
+        head_variables = set(_get_head_variables(expression.head))
+        body_free_variables = extract_datalog_free_variables(expression.body)
+        eq_variables = body_free_variables - head_variables
+        new_body = expression.body
+        for eq_variable in eq_variables:
+            new_body = ExistentialPredicate(eq_variable, new_body)
+        return self.walk(Query(expression.head, new_body))
+
     @add_match(Query)
     def query_resolution(self, expression):
-
         if isinstance(expression.head, Symbol):
             head = (expression.head,)
         elif isinstance(expression.head, tuple):
@@ -328,6 +360,7 @@ class NaiveDatalog(DatalogBasic):
                     result.add(args[0].value[0])
 
         return Constant[AbstractSet[Any]](result)
+
 
 
 def is_conjunctive_expression(expression):
