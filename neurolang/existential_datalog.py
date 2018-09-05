@@ -2,9 +2,11 @@ from typing import AbstractSet, Any, Tuple
 
 from .expressions import (
     NeuroLangException, Definition, ExistentialPredicate, Constant, Symbol,
-    ExpressionBlock, Query, FunctionApplication
+    ExpressionBlock, Query, FunctionApplication, Lambda
 )
-from .solver_datalog_naive import NaiveDatalog, DatalogBasic
+from .solver_datalog_naive import (
+    NaiveDatalog, DatalogBasic, extract_datalog_free_variables
+)
 from .expression_pattern_matching import add_match
 
 
@@ -23,13 +25,6 @@ def _get_query_head(query):
         )
 
 
-def _get_eq_variables(expression):
-    if not isinstance(expression, ExistentialPredicate):
-        return set()
-    else:
-        return {expression.head} | _get_eq_variables(expression.body)
-
-
 class Implication(Definition):
     def __init__(self, consequent, antecedent):
         self.consequent = consequent
@@ -41,62 +36,59 @@ class Implication(Definition):
         )
 
 
-def _get_existential_implication_fa(expression):
+def _parse_implication_with_existential_consequent(expression):
     if not isinstance(expression, Implication):
-        raise NeuroLangException('Must be called on an Implication')
-    elif not isinstance(expression.consequent, ExistentialPredicate):
+        raise NeuroLangException('Not an implication')
+    if not isinstance(expression.consequent, ExistentialPredicate):
+        raise NeuroLangException('No existential consequent')
+    eq_variables = set()
+    e = expression.consequent
+    while isinstance(e, ExistentialPredicate):
+        eq_variables.add(e.head)
+        e = e.body
+    if not isinstance(e, FunctionApplication):
         raise NeuroLangException(
-            'Implication consequent must contain existential predicate'
+            'Expected core of consequent to be a function application'
         )
-    else:
-        result = expression.consequent
-        while isinstance(result, ExistentialPredicate):
-            result = result.body
-        if (
-            not isinstance(result, FunctionApplication) or
-            not all(isinstance(arg, Symbol) for arg in result.args)
-        ):
-            raise Exception(
-                'Implication e-quantified consequent must be a '
-                'function application on symbols'
-            )
-        return result
+    if not all(isinstance(arg, Symbol) for arg in e.args):
+        raise NeuroLangException(
+            'Expected core of consequent to be '
+            'a function application on symbols only'
+        )
+    if not isinstance(e.functor, Symbol):
+        raise NeuroLangException(
+            'Core of consequent functor expected to be a symbol'
+        )
+    return e, eq_variables
 
 
 class ExistentialDatalog(DatalogBasic):
-    @add_match(
-        Implication(ExistentialPredicate(..., FunctionApplication), ...),
-        # ensure the predicate is a simple function application on symbols
-        lambda expression: all(
-            isinstance(arg, Symbol)
-            for arg in expression.consequent.body.args
-        )
-    )
+    @add_match(Implication(ExistentialPredicate, ...))
     def existential_predicate_in_head(self, expression):
         '''
         Add implication with a \u2203-quantified function application
         consequent
         '''
-        eq_variable = expression.consequent.head
-        if not isinstance(eq_variable, Symbol):
-            raise NeuroLangException(
-                '\u2203-quantified variable must be a symbol'
-            )
-        if eq_variable in expression.antecedent._symbols:
-            raise NeuroLangException(
-                '\u2203-quantified variable cannot occur in antecedent'
-            )
-        if eq_variable not in expression.consequent.body._symbols:
-            raise NeuroLangException(
-                "\u2203-quantified variable must occur in consequent's body"
-            )
-        predicate_name = expression.consequent.body.functor.name
-        if predicate_name in self.symbol_table:
-            expressions = self.symbol_table[predicate_name].expressions
+        consequent_body, eq_variables = (
+            _parse_implication_with_existential_consequent(expression)
+        )
+        consequent_name = consequent_body.functor.name
+        for eq_variable in eq_variables:
+            if eq_variable in expression.antecedent._symbols:
+                raise NeuroLangException(
+                    '\u2203-quantified variable cannot occur in antecedent'
+                )
+            if eq_variable not in consequent_body._symbols:
+                raise NeuroLangException(
+                    "\u2203-quantified variable must occur "
+                    "in consequent's body"
+                )
+        if consequent_name in self.symbol_table:
+            expressions = self.symbol_table[consequent_name].expressions
         else:
             expressions = tuple()
         expressions += (expression, )
-        self.symbol_table[predicate_name] = ExpressionBlock(expressions)
+        self.symbol_table[consequent_name] = ExpressionBlock(expressions)
         return expression
 
 
@@ -122,23 +114,29 @@ class SolverExistentialDatalog(NaiveDatalog, ExistentialDatalog):
             new_body = ExistentialPredicate(eq_variable, new_body)
         return self.walk(Query(expression.head, new_body))
 
-    @add_match(FunctionApplication(Implication(ExistentialPredicate, ...)))
-    def existential_consequent_resolution(self, expression):
-        eq_variables = _get_eq_variables(expression.functor.consequent)
-        fa = _get_existential_implication_fa(expression.functor)
-        if not isinstance(fa.functor, Symbol):
-            raise NeuroLangException(
-                'E-quantified consequent must be a '
-                'function application of a symbol'
-            )
-        fa_name = fa.functor.name
+    @add_match(
+        FunctionApplication(Implication(ExistentialPredicate, ...), ...)
+    )
+    def existential_query_resolution(self, expression):
+        consequent_body, eq_variables = (
+            _parse_implication_with_existential_consequent(expression.functor)
+        )
+        consequent_name = consequent_body.functor.name
         eq_expressions = (
-            e for e in self.symbol_table[fa_name].expressions if (
+            e for e in self.symbol_table[consequent_name].expressions if (
                 isinstance(e, Implication) and
                 isinstance(e.consequent, ExistentialPredicate)
             )
         )
-        result = False
+        result = Constant(False)
         for eq_exp in eq_expressions:
-            result |= self.walk(FunctionApplication(eq_exp, expression.args))
+            eq_exp_consequent_body, eq_exp_eq_variables = (
+                _parse_implication_with_existential_consequent(eq_exp)
+            )
+            result.value |= self.walk(
+                FunctionApplication(
+                    Lambda(eq_exp_consequent_body.args, eq_exp.antecedent),
+                    expression.args
+                )
+            )
         return result

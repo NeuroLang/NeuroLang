@@ -56,15 +56,20 @@ def test_existential_statement_added_to_symbol_table():
     a, b, c = C_('a'), C_('b'), C_('c')
     P, Q = S_('P'), S_('Q')
     intensional = ExpressionBlock((Implication(EP_(y, P(x, y)), Q(x)), ))
-
     solver.walk(intensional)
-
     assert 'P' in solver.symbol_table
     assert len(solver.symbol_table['P'].expressions) == 1
     assert isinstance(
         solver.symbol_table['P'].expressions[0].consequent,
         expressions.ExistentialPredicate
     )
+    solver = Solver()
+    z = S_('z')
+    intensional = ExpressionBlock(
+        (Implication(EP_(x, EP_(y, P(x, y, z))), Q(z)), )
+    )
+    solver.walk(intensional)
+    assert 'P' in solver.symbol_table
 
 
 def test_existential_statement_resolution():
