@@ -7,6 +7,9 @@ from .expression_walker import PatternWalker
 from .expressions import Constant
 
 
+REFINE_OVERLAPPING = True
+
+
 class RegionSolver(PatternWalker[Region]):
     type_name = 'Region'
 
@@ -17,6 +20,11 @@ class RegionSolver(PatternWalker[Region]):
             'left_of': 'L', 'right_of': 'R',
             'overlapping': 'O'
         }
+
+        refine_overlapping = kwargs.get(
+            'refine_overlapping',
+            REFINE_OVERLAPPING
+        )
 
         def build_function(relation, refine_overlapping=False):
             def f(self, x: Region, y: Region) -> bool:
@@ -55,9 +63,6 @@ class RegionSolver(PatternWalker[Region]):
                     not is_overlapping)
 
             return func
-
-        refine_overlapping = kwargs.get('refine_overlapping', False)
-
         for key, value in cardinal_operations.items():
             setattr(
                 cls, f'function_{key}',
