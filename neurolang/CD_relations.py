@@ -1,7 +1,7 @@
 from .interval_algebra import v_before, v_overlaps, v_during, v_meets, v_starts, v_finishes, v_equals
 from .regions import ExplicitVBR
 import numpy as np
-from scipy.linalg import kron
+
 
 __all__ = ['cardinal_relation']
 
@@ -89,22 +89,22 @@ def is_in_direction(matrix, direction):
 def relation_vectors(intervals, other_region_intervals):
     obtained_vectors = []
     relations = [v_before, v_overlaps, v_during, v_meets, v_starts, v_finishes, v_equals]
-    for i in range(len(intervals)):
+    for interval, other_region_interval in zip(intervals, other_region_intervals):
         for f in relations:
-            vector = f(intervals[i], other_region_intervals[i])
+            vector = f(interval, other_region_interval)
             if vector is not None:
                 obtained_vectors.append(vector)
                 break
-    return obtained_vectors
+    return np.array(obtained_vectors)
 
 
 def direction_matrix(region_bbs, another_region_bbs):
-    res = np.zeros((3,) * region_bbs[0].dim)
+    res = np.zeros((3,) * region_bbs[0].dim, dtype=bool)
     for bb in region_bbs:
         for another_region_bb in another_region_bbs:
             rp_vector = relation_vectors(bb.limits, another_region_bb.limits)
             tensor = rp_vector[0].reshape(1, 3)
             for i in range(1, len(rp_vector)):
-                tensor = kron(rp_vector[i].reshape((3,) + (1,) * i), tensor)
-            res = np.logical_or(res, tensor).astype(int)
-    return res
+                tensor = np.kron(rp_vector[i].reshape((3,) + (1,) * i), tensor)
+            res += tensor.astype(bool, copy=False)  # np.logical_or(res, tensor)
+    return res.astype(int, copy=False)

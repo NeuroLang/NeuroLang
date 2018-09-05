@@ -106,7 +106,7 @@ class VolumetricBrainRegion(Region):
 
 class ExplicitVBR(VolumetricBrainRegion):
     def __init__(
-        self, voxels, affine_matrix, img_dim=None, prebuild_tree=True
+        self, voxels, affine_matrix, img_dim=None, prebuild_tree=False
     ):
         self.voxels = np.asanyarray(voxels, dtype=int)
         self.affine = affine_matrix
