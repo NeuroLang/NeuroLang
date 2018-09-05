@@ -6,6 +6,7 @@ from .interval_algebra import (
 from .regions import Region, ImplicitVBR
 import logging
 import numpy as np
+from scipy.linalg import kron
 
 
 __all__ = ['cardinal_relation']
@@ -92,7 +93,6 @@ def overlap_resolution(region, reference_region, stop_at=None):
                 current_reference_region_level = current_ref_region_next_level
             else:
                 max_depth_reached_ref = True
-
         mat = direction_matrix(
             [reg.box for reg in current_region_level],
             [reg.box for reg in current_reference_region_level]
@@ -142,6 +142,6 @@ def direction_matrix(region_bbs, another_region_bbs):
             rp_vector = relation_vectors(bb.limits, another_region_bb.limits)
             tensor = rp_vector[0].reshape(1, 3)
             for i in range(1, len(rp_vector)):
-                tensor = np.kron(rp_vector[i].reshape((3,) + (1,) * i), tensor)
+                tensor = kron(rp_vector[i].reshape((3,) + (1,) * i), tensor).squeeze()
             res += tensor.astype(bool, copy=False)  # np.logical_or(res, tensor)
     return res.astype(int, copy=False)

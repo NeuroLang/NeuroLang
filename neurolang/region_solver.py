@@ -26,12 +26,17 @@ class RegionSolver(PatternWalker[Region]):
             REFINE_OVERLAPPING
         )
 
+        max_tree_depth_level = kwargs.get(
+            'max_tree_depth_level',
+            None
+        )
+
         def build_function(relation, refine_overlapping=False):
             def f(self, x: Region, y: Region) -> bool:
                 return bool(cardinal_relation(
                     x, y, relation,
                     refine_overlapping=refine_overlapping,
-                    stop_at=None
+                    stop_at=max_tree_depth_level
                 ))
             return f
 
@@ -42,19 +47,19 @@ class RegionSolver(PatternWalker[Region]):
                 is_in_direction = cardinal_relation(
                     x, y, relation,
                     refine_overlapping=refine_overlapping,
-                    stop_at=None
+                    stop_at=max_tree_depth_level
                 )
 
                 is_in_inverse_direction = cardinal_relation(
                     x, y, inverse_directions[relation],
                     refine_overlapping=refine_overlapping,
-                    stop_at=None
+                    stop_at=max_tree_depth_level
                 )
 
                 is_overlapping = cardinal_relation(
                     x, y, cardinal_operations['overlapping'],
                     refine_overlapping=refine_overlapping,
-                    stop_at=None
+                    stop_at=max_tree_depth_level
                 )
 
                 return bool(
