@@ -105,11 +105,16 @@ class VolumetricBrainRegion(Region):
 
 
 class ExplicitVBR(VolumetricBrainRegion):
-    def __init__(self, voxels, affine_matrix, img_dim=None):
+    def __init__(
+        self, voxels, affine_matrix, img_dim=None, prebuild_tree=True
+    ):
         self.voxels = np.asanyarray(voxels, dtype=int)
         self.affine = affine_matrix
         self.image_dim = img_dim
-        self._aabb_tree = None
+        if prebuild_tree:
+            self._aabb_tree = self.build_tree()
+        else:
+            self._aabb_tree = None
 
     @property
     def bounding_box(self):
