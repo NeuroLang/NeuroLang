@@ -41,8 +41,8 @@ def test_facts_constants():
     dl.walk(f1)
 
     assert 'Q' in dl.symbol_table
-    assert isinstance(dl.symbol_table['Q'], ExpressionBlock)
-    fact_set = dl.symbol_table['Q'].expressions[0]
+    assert isinstance(dl.symbol_table['Q'], Constant[AbstractSet])
+    fact_set = dl.symbol_table['Q']
     assert isinstance(fact_set, Constant)
     assert is_subtype(fact_set.type, AbstractSet)
     assert {C_((C_(1), C_(2)))} == fact_set.value
@@ -219,6 +219,7 @@ def test_extensional_database():
     dl = Datalog()
 
     Q = S_('Q')
+    R0 = S_('R0')
     R = S_('R')
     T = S_('T')
     x = S_('x')
@@ -230,10 +231,11 @@ def test_extensional_database():
         T_(Q(C_(1), C_(2))),
         T_(Q(C_(1), C_(4))),
         T_(Q(C_(2), C_(4))),
-        T_(R(C_('a'), C_(1), C_(3))),
+        T_(R0(C_('a'), C_(1), C_(3))),
     ))
 
     intensional = ExpressionBlock((
+        St_(R(x, y, z), R0(x, y, z)),
         St_(R(x, y, z), Q(x, y) & Q(y, z)),
         St_(T(x, z), Q(x, y) & Q(y, z)),
     ))
@@ -242,7 +244,7 @@ def test_extensional_database():
 
     edb = dl.extensional_database()
 
-    assert edb.keys() == {'R', 'Q'}
+    assert edb.keys() == {'R0', 'Q'}
 
     assert edb['Q'] == C_(frozenset((
         C_((C_(1), C_(1))),
@@ -251,14 +253,14 @@ def test_extensional_database():
         C_((C_(2), C_(4))),
     )))
 
-    assert edb['R'] == C_(frozenset((
+    assert edb['R0'] == C_(frozenset((
         C_((C_('a'), C_(1), C_(3))),
     )))
 
     dl.walk(intensional)
     edb = dl.extensional_database()
 
-    assert edb.keys() == {'R', 'Q'}
+    assert edb.keys() == {'R0', 'Q'}
 
     assert edb['Q'] == C_(frozenset((
         C_((C_(1), C_(1))),
@@ -267,9 +269,45 @@ def test_extensional_database():
         C_((C_(2), C_(4))),
     )))
 
-    assert edb['R'] == C_(frozenset((
+    assert edb['R0'] == C_(frozenset((
         C_((C_('a'), C_(1), C_(3))),
     )))
+
+
+@pytest.mark.xfail(
+    reason="The naive solver can't handle recursion",
+    raises=RecursionError
+)
+def test_intensional_recursive():
+    Q = S_('Q')
+    R = S_('R')
+    x = S_('x')
+    y = S_('y')
+    z = S_('z')
+
+    extensional = ExpressionBlock(tuple(
+        T_(Q(C_(i), C_(2 * i)))
+        for i in range(4)
+    ))
+
+    intensional = ExpressionBlock((
+        St_(R(x, y), Q(x, y)),
+        St_(R(x, y), R(x, z) & R(z, y))
+    ))
+
+    dl = Datalog()
+    dl.walk(extensional)
+    dl.walk(intensional)
+
+    res = dl.walk(Q_((x, y), R(x, y)))
+
+    assert res == {
+        (i, 2 * i)
+        for i in range(4)
+    } | {
+        (i, 4 * i)
+        for i in range(4)
+    }
 
 
 def test_conjunctive_expression():
