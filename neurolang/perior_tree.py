@@ -100,8 +100,8 @@ class BoundedAABB(AABB):
 
         dc = np.array(self._bound_area.adjust_direction(tuple(point - center)))
         radius = self.width / 2
-        for i in range(len(radius)):
-            if abs(dc[i]) > radius[i]:
+        for i, r in enumerate(radius):
+            if abs(dc[i]) > r:
                 return False
         return True
 
@@ -136,20 +136,20 @@ class Boundary(BoundedAABB):
 
     def adjust_position(self, point) -> Tuple:
         res = np.copy(point)
-        for i in range(len(point)):
-            if point[i] < self._lb[i]:
-                res[i] = point[i] + self.width[i]
-            elif point[i] > self._ub[i]:
-                res[i] = point[i] - self.width[i]
+        for i, p in enumerate(point):
+            if p < self._lb[i]:
+                res[i] = p + self.width[i]
+            elif p > self._ub[i]:
+                res[i] = p - self.width[i]
         return tuple(res)
 
     def adjust_direction(self, point):
         res = np.copy(point)
-        for i in range(len(point)):
-            if point[i] < -(self.width[i] / 2):
-                res[i] = point[i] + self.width[i]
-            elif point[i] >= (self.width[i] / 2):
-                res[i] = point[i] - self.width[i]
+        for i, p in enumerate(point):
+            if p < -(self.width[i] / 2):
+                res[i] = p + self.width[i]
+            elif p >= (self.width[i] / 2):
+                res[i] = p - self.width[i]
         return tuple(res)
 
     def __repr__(self):
