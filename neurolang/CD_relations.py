@@ -6,6 +6,7 @@ from .interval_algebra import (
 from .regions import Region, ImplicitVBR
 import logging
 import numpy as np
+from scipy.linalg import kron
 
 __all__ = ['cardinal_relation']
 
@@ -142,6 +143,6 @@ def direction_matrix(region_bbs, another_region_bbs):
             rp_vector = relation_vectors(bb.limits, another_region_bb.limits)
             tensor = rp_vector[0].reshape(1, 3)
             for i in range(1, len(rp_vector)):
-                tensor = np.kron(rp_vector[i].reshape((3,) + (1,) * i), tensor)
+                tensor = kron(rp_vector[i].reshape((3,) + (1,) * i), tensor)
             res = np.logical_or(res, tensor).astype(int)
     return res
