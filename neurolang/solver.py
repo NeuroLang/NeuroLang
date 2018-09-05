@@ -217,7 +217,7 @@ class BooleanRewriteSolver(PatternWalker):
             did not modify its expression.
 
         '''
-        first_arg, second_arg = expression.args
+        first_arg = expression.args[0]
         # we walk on the first argument
         walk_first_result = self.walk(first_arg)
         # and replace that argument with the result of the walk

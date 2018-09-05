@@ -248,7 +248,7 @@ class QuerySymbolsProxy:
     def __getattr__(self, attr):
         try:
             return self._query_builder.get_symbol(attr)
-        except ValueError as e:
+        except ValueError:
             raise AttributeError()
 
     def __getitem__(self, attr):

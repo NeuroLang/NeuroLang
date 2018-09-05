@@ -175,7 +175,7 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
 
     def assignment(self, ast):
         identifier = ast['identifier']
-        type_, value = get_type_and_value(ast['argument'])
+        type_, _ = get_type_and_value(ast['argument'])
         identifier = Symbol[type_](identifier.name)
         result = Statement[type_](
             identifier, ast['argument']
@@ -186,7 +186,7 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
         types_ = []
         values = []
         for element in ast['element']:
-            type_, value = get_type_and_value(
+            type_, _ = get_type_and_value(
                 element
             )
             types_.append(type_)
@@ -285,7 +285,7 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
 
         arguments = []
         argument_types = []
-        for i, a in enumerate(ast['argument']):
+        for a in ast['argument']:
             argument_type, value = get_type_and_value(a)
             if isinstance(value, Statement):
                 value = value.lhs
