@@ -7,7 +7,7 @@ from .expression_walker import PatternWalker
 from .expressions import Constant
 
 
-REFINE_OVERLAPPING = True
+REFINE_OVERLAPPING = False
 
 
 class RegionSolver(PatternWalker[Region]):
