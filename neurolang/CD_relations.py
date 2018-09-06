@@ -1,5 +1,8 @@
 from .interval_algebra import v_before, v_overlaps, v_during, v_meets, v_starts, v_finishes, v_equals
 from .regions import ExplicitVBR
+
+from functools import lru_cache
+
 import numpy as np
 from scipy.linalg import kron
 
@@ -19,13 +22,16 @@ inverse_directions = {'R': 'L', 'A': 'P', 'S': 'I',
 def cardinal_relation(region, reference_region, directions, refine_overlapping=False, stop_at=None):
 
     mat = direction_matrix([region.bounding_box], [reference_region.bounding_box])
+    if not (refine_overlapping and 'O' in directions) and is_in_direction(mat, directions):
+        return True
+
     overlap = is_in_direction(mat, 'O')
     if overlap and refine_overlapping and isinstance(region, ExplicitVBR):
-        mat = overlap_resolution(region, reference_region, stop_at)
+        mat = overlap_resolution(region, reference_region, directions, stop_at)
     return is_in_direction(mat, directions)
 
 
-def overlap_resolution(region, reference_region, stop_at=None):
+def overlap_resolution(region, reference_region, directions=None, stop_at=None):
     if stop_at == 0:
         raise ValueError("stop_at must be larger than 0")
 
@@ -37,6 +43,10 @@ def overlap_resolution(region, reference_region, stop_at=None):
 
     max_depth_reached_reg = False
     max_depth_reached_ref = False
+
+    directions = directions.replace('O', '')
+    if len(directions) == 0:
+        directions = None
 
     while (
         ((stop_at is None) or (level < stop_at)) and
@@ -60,6 +70,13 @@ def overlap_resolution(region, reference_region, stop_at=None):
             [reg.box for reg in current_region_level],
             [reg.box for reg in current_reference_region_level]
         )
+
+        if (
+            directions is not None and
+            is_in_direction(mat, directions)
+        ):
+            break
+
         overlap = is_in_direction(mat, 'O')
         level += 1
 
@@ -77,12 +94,17 @@ def tree_next_level(nodes):
     return result
 
 
-def is_in_direction(matrix, direction):
-    n = matrix.ndim
+@lru_cache(maxsize=128)
+def is_in_direction_indices(n, direction):
     indices = [[0, 1, 2]] * n
     for i in direction:
         for dim in directions_dim_space[i]:
             indices[n - 1 - dim] = matrix_positions_per_directions[i]
+    return indices
+
+
+def is_in_direction(matrix, direction):
+    indices = is_in_direction_indices(matrix.ndim, direction)
     return np.any(matrix[np.ix_(*indices)] == 1)
 
 
