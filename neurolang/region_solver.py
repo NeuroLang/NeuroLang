@@ -63,12 +63,8 @@ class RegionSolver(PatternWalker[Region]):
                     )
                 )
 
-                # return bool(
-                #    is_in_direction and
-                #    not is_in_inverse_direction and
-                #    not is_overlapping)
-
             return func
+
         for key, value in cardinal_operations.items():
             setattr(
                 cls, f'function_{key}',
