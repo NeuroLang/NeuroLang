@@ -29,6 +29,7 @@ class Implication(Definition):
     def __init__(self, consequent, antecedent):
         self.consequent = consequent
         self.antecedent = antecedent
+        self._symbols = consequent._symbols | antecedent._symbols
 
     def __repr__(self):
         return 'Implication{{{} \u2190 {}}}'.format(

@@ -316,6 +316,7 @@ class NaiveDatalog(DatalogBasic):
         )
     )
     def query_introduce_existential(self, expression):
+        import pdb; pdb.set_trace()
         head_variables = set(_get_head_variables(expression.head))
         body_free_variables = extract_datalog_free_variables(expression.body)
         eq_variables = body_free_variables - head_variables
@@ -452,6 +453,5 @@ def extract_datalog_predicates(expression):
     extract predicates from expression
     knowing that it's in Datalog format
     """
-
     edp = ExtractDatalogPredicates()
     return edp.walk(expression)
