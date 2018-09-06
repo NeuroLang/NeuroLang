@@ -211,10 +211,10 @@ def test_quantifier_expressions():
 
     neurolang = frontend.RegionFrontend()
 
-    i1 = ExplicitVBR(np.array([[0, 0, 2], [1, 1, 3]]), np.eye(4))
-    i2 = ExplicitVBR(np.array([[0, 0, 6], [1, 1, 8]]), np.eye(4))
-    i3 = ExplicitVBR(np.array([[0, 0, 10], [1, 1, 12]]), np.eye(4))
-    i4 = ExplicitVBR(np.array([[0, 0, 13], [1, 1, 17]]), np.eye(4))
+    i1 = ExplicitVBR(np.array([[0, 0, 2]]), np.eye(4))
+    i2 = ExplicitVBR(np.array([[0, 0, 6]]), np.eye(4))
+    i3 = ExplicitVBR(np.array([[0, 0, 10]]), np.eye(4))
+    i4 = ExplicitVBR(np.array([[0, 0, 13], [0, 0, 15]]), np.eye(4))
     regions = {i1, i2, i3, i4}
     neurolang.add_tuple_set(regions, ExplicitVBR)
 

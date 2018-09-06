@@ -44,28 +44,29 @@ class RegionSolver(PatternWalker[Region]):
 
             def func(self, x: Region, y: Region) -> bool:
 
-                is_in_direction = cardinal_relation(
-                    x, y, relation,
-                    refine_overlapping=refine_overlapping,
-                    stop_at=max_tree_depth_level
-                )
-
-                is_in_inverse_direction = cardinal_relation(
-                    x, y, inverse_directions[relation],
-                    refine_overlapping=refine_overlapping,
-                    stop_at=max_tree_depth_level
-                )
-
-                is_overlapping = cardinal_relation(
-                    x, y, cardinal_operations['overlapping'],
-                    refine_overlapping=refine_overlapping,
-                    stop_at=max_tree_depth_level
-                )
-
                 return bool(
-                    is_in_direction and
-                    not is_in_inverse_direction and
-                    not is_overlapping)
+                    cardinal_relation(
+                        x, y, relation,
+                        refine_overlapping=refine_overlapping,
+                        stop_at=max_tree_depth_level
+                    ) and not (
+                        cardinal_relation(
+                            x, y, inverse_directions[relation],
+                            refine_overlapping=refine_overlapping,
+                            stop_at=max_tree_depth_level
+                        ) or
+                        cardinal_relation(
+                            x, y, cardinal_operations['overlapping'],
+                            refine_overlapping=refine_overlapping,
+                            stop_at=max_tree_depth_level
+                        )
+                    )
+                )
+
+                # return bool(
+                #    is_in_direction and
+                #    not is_in_inverse_direction and
+                #    not is_overlapping)
 
             return func
         for key, value in cardinal_operations.items():
