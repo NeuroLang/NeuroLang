@@ -126,6 +126,13 @@ def test_and_query_resolution():
     assert result.value is not None
     assert result.value == frozenset({'a'})
 
+    # query = Query(x, P(x) & Q(y))
+    # import pdb; pdb.set_trace()
+    # result = solver.walk(query)
+    # assert isinstance(result, expressions.Constant)
+    # assert result.value is not None
+    # assert result.value == frozenset({'a'})
+
 
 def test_multiple_eq_variables_in_consequent():
     solver = SolverWithExistentialResolution()

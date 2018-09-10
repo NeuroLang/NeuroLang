@@ -10,21 +10,6 @@ from .solver_datalog_naive import (
 from .expression_pattern_matching import add_match
 
 
-def _get_query_head(query):
-    if isinstance(query.head, Symbol):
-        return query.head
-    elif (
-        isinstance(query.head, Constant) and
-        is_subtype(query.head.type, Tuple) and
-        all(isinstance(s, Symbol) for s in query.head)
-    ):
-        return query.head.value
-    else:
-        raise NeuroLangException(
-            'Query head must be symbol or tuple of symbols'
-        )
-
-
 class Implication(Definition):
     def __init__(self, consequent, antecedent):
         self.consequent = consequent
@@ -98,6 +83,7 @@ class SolverExistentialDatalog(NaiveDatalog, ExistentialDatalog):
         FunctionApplication(Implication(ExistentialPredicate, ...), ...)
     )
     def existential_consequent_implication_resolution(self, expression):
+        import pdb; pdb.set_trace()
         consequent_body, eq_variables = (
             _parse_implication_with_existential_consequent(expression.functor)
         )

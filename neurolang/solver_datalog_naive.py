@@ -18,22 +18,47 @@ from .expression_walker import (
     add_match, PatternWalker, expression_iterator,
 )
 
-def _get_head_variables(expression_head):
+def _get_query_head_free_variables(expression_head):
     if isinstance(expression_head, Symbol):
-        head_variables = (expression_head,)
+        head_variables = {expression_head}
     elif isinstance(expression_head, tuple):
-        head_variables = expression_head
+        head_variables = set(e for e in expression_head)
     elif (
         isinstance(expression_head, Constant) and
         is_subtype(expression_head.type, Tuple)
     ):
-        head_variables = expression_head.value
+        head_variables = set(e for e in expression_head.value)
     else:
         raise NeuroLangException(
             'Head needs to be a tuple of symbols or a symbol'
         )
     return head_variables
 
+
+def _query_introduce_existential(expression, head_variables):
+    if isinstance(expression, FunctionApplication):
+        if (
+            isinstance(expression.functor, Constant) and
+            expression.functor.value is and_
+        ):
+            return FunctionApplication[bool](
+                Constant(and_),
+                tuple(
+                    _query_introduce_existential(arg, head_variables)
+                    for arg in expression.args
+                )
+            )
+        else:
+            fa_free_variables = extract_datalog_free_variables(expression)
+            eq_variables = fa_free_variables - head_variables
+            new_expression = expression
+            for eq_variable in eq_variables:
+                new_expression = ExistentialPredicate(
+                    eq_variable, new_expression
+                )
+            return new_expression
+    else:
+        return expression
 
 
 class Fact(Statement):
@@ -311,19 +336,14 @@ class NaiveDatalog(DatalogBasic):
     @add_match(
         Query,
         lambda e: (
-            len(extract_datalog_free_variables(e.body)) >
-            len(set(_get_head_variables(e.head)))
+            extract_datalog_free_variables(e.body) >
+            _get_query_head_free_variables(e.head)
         )
     )
     def query_introduce_existential(self, expression):
-        import pdb; pdb.set_trace()
-        head_variables = set(_get_head_variables(expression.head))
-        body_free_variables = extract_datalog_free_variables(expression.body)
-        eq_variables = body_free_variables - head_variables
-        new_body = expression.body
-        for eq_variable in eq_variables:
-            new_body = ExistentialPredicate(eq_variable, new_body)
-        return self.walk(Query(expression.head, new_body))
+        return _query_introduce_existential(
+            expression.body, _get_query_head_free_variables(expression.head)
+        )
 
     @add_match(Query)
     def query_resolution(self, expression):
