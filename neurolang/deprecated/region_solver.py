@@ -1,7 +1,6 @@
-import typing
 import operator
-import os
 import re
+import typing
 
 try:
     from neurosynth import Dataset, meta
@@ -13,8 +12,8 @@ except ModuleNotFoundError:
 from .. import neurolang as nl
 from ..CD_relations import cardinal_relation, inverse_directions
 from ..regions import Region, region_union, region_set_from_masked_data
-from . import SetBasedSolver
-from ..utils.data_manipulation import fetch_neurosynth_dataset
+from ..deprecated import SetBasedSolver
+from ..frontend.neurosynth_utils import NeuroSynthHandler
 
 
 __all__ = ['RegionsSetSolver']
@@ -75,24 +74,11 @@ class RegionsSetSolver(SetBasedSolver[Region]):
         return res
 
     def _neurosynth_term_regions(self) -> typing.Callable[[typing.Text], typing.AbstractSet[Region]]:
-        def f(elem: typing.Text) -> typing.AbstractSet[Region]:
+        def f(term: typing.Text) -> typing.AbstractSet[Region]:
             if not __has_neurosynth__:
                 raise NotImplemented("Neurosynth not installed")
 
-            file_dir = os.path.abspath(os.path.dirname(__file__))
-            path = os.path.join(file_dir, 'utils/neurosynth')
-            file = os.path.join(path, 'dataset.pkl')
-            if not os.path.isfile(file):
-                dataset = fetch_neurosynth_dataset(path)
-            else:
-                dataset = Dataset.load(file)
-
-            studies_ids = dataset.get_studies(features=elem, frequency_threshold=0.05)
-            ma = meta.MetaAnalysis(dataset, studies_ids, q=0.01, prior=0.5)
-            data = ma.images['pAgF_z_FDR_0.01']
-            affine = dataset.masker.get_header().get_sform()
-            dim = dataset.masker.dims
-            masked_data = dataset.masker.unmask(data)
+            masked_data, affine, dim = NeuroSynthHandler.ns_data_from_term(term)
             regions_set = frozenset(region_set_from_masked_data(masked_data, affine, dim))
 
             return regions_set

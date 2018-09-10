@@ -1,17 +1,18 @@
-from typing import AbstractSet, Callable, Container, Tuple
-from uuid import uuid1
-
 import numpy as np
-
-from .. import neurolang as nl
-from ..symbols_and_types import is_subtype
-from ..region_solver_ds import Region
-from ..regions import ExplicitVBR
-
+from uuid import uuid1
+from typing import AbstractSet, Callable, Tuple
+from neurolang.frontend.neurosynth_utils import NeuroSynthHandler
 from .query_resolution_expressions import (
     Expression, Symbol,
     Query, Exists, All
 )
+from .. import neurolang as nl
+from ..region_solver_ds import Region
+from ..regions import (
+    ExplicitVBR,
+    take_principal_regions
+)
+from ..symbols_and_types import is_subtype
 
 __all__ = ['QueryBuilder']
 
@@ -26,6 +27,8 @@ class QueryBuilder:
 
         for k, v in self.solver.included_functions.items():
             self.solver.symbol_table[nl.Symbol[v.type](k)] = v
+
+        self.neurosynth_db = NeuroSynthHandler()
 
     def get_symbol(self, symbol_name):
         if isinstance(symbol_name, Expression):
@@ -67,31 +70,6 @@ class QueryBuilder:
             if is_subtype(s.type, Callable)
         ]
 
-    def define_predicate(self, predicate_name, symbol):
-        if isinstance(symbol, str):
-            symbol = self.get_symbol(symbol)
-        if isinstance(symbol, Symbol):
-            symbol = symbol.symbol
-
-        functor = self.solver.symbol_table[predicate_name]
-
-        predicate = nl.Predicate[self.set_type](functor, (symbol,))
-
-        return predicate
-
-    def define_function_application(self, function_name, symbol_name):
-        if isinstance(symbol_name, str):
-
-            symbol = nl.Symbol[self.set_type](symbol_name)
-        elif isinstance(symbol_name, Symbol):
-            symbol = symbol_name.symbol
-
-        fa = nl.FunctionApplication[self.set_type](
-            nl.Symbol[Callable[[self.set_type], self.set_type]](function_name),
-            (symbol,)
-        )
-        return fa
-
     def execute_expression(self, expression, result_symbol_name=None):
         if result_symbol_name is None:
             result_symbol_name = str(uuid1())
@@ -100,50 +78,6 @@ class QueryBuilder:
         self.solver.symbol_table[nl.Symbol[result.type](
             result_symbol_name
         )] = result
-        return Symbol(self, result_symbol_name)
-
-    def solve_query(self, query, result_symbol_name=None):
-
-        if isinstance(query, Expression):
-            query = query.expression
-
-        if not isinstance(query, nl.Query):
-            if result_symbol_name is None:
-                result_symbol_name = str(uuid1())
-
-            query = nl.Query[self.set_type](
-                nl.Symbol[self.set_type](result_symbol_name),
-                query
-            )
-        else:
-            if result_symbol_name is not None:
-                raise ValueError(
-                    "Query result symbol name "
-                    "already defined in query expression"
-                )
-            result_symbol_name = query.symbol.name
-
-        self.solver.walk(query)
-        return Symbol(self, result_symbol_name)
-
-    def neurosynth_term_to_region_set(self, term, result_symbol_name=None):
-
-        if result_symbol_name is None:
-            result_symbol_name = str(uuid1())
-
-        predicate = nl.Predicate[str](
-            nl.Symbol[Callable[[str], self.set_type]]('neurosynth_term'),
-            (nl.Constant[str](term),)
-        )
-
-        query = nl.Query[self.set_type](
-            nl.Symbol[self.set_type](result_symbol_name),
-            predicate
-        )
-        query_res = self.solver.walk(query)
-        for r in query_res.value.value:
-            self.add_region(r)
-
         return Symbol(self, result_symbol_name)
 
     @property
@@ -164,6 +98,67 @@ class QueryBuilder:
 
     def new_region_symbol(self, name=None):
         return self.new_symbol(Region, name=name)
+
+    def query(self, head, predicate):
+
+        if isinstance(head, tuple):
+            symbols = ()
+            for e in head:
+                symbols += (e.expression,)
+            head = nl.Constant(symbols)
+        else:
+            head = head.expression
+        return Query(
+            self,
+            nl.Query[AbstractSet[head.type]](
+                head,
+                predicate.expression
+            ),
+            head, predicate
+        )
+
+    def exists(self, symbol, predicate):
+        return Exists(
+            self,
+            nl.ExistentialPredicate[bool](
+                symbol.expression,
+                predicate.expression
+            ),
+            symbol, predicate
+        )
+
+    def all(self, symbol, predicate):
+        return All(
+            self,
+            nl.UniversalPredicate[bool](
+                symbol.expression,
+                predicate.expression
+            ),
+            symbol, predicate
+        )
+
+    def add_symbol(self, value, result_symbol_name=None):
+        if result_symbol_name is None:
+            result_symbol_name = str(uuid1())
+
+        if isinstance(value, Expression):
+            value = value.expression
+        else:
+            value = nl.Constant(value)
+
+        symbol = nl.Symbol[value.type](result_symbol_name)
+        self.solver.symbol_table[symbol] = value
+
+        return Symbol(self, result_symbol_name)
+
+    def add_region(self, region, result_symbol_name=None):
+        if not isinstance(region, self.solver.type):
+            raise ValueError(
+                f"type mismatch between region and solver type:"
+                f" {self.solver.type}"
+            )
+
+        return self.add_symbol(region, result_symbol_name)
 
     def add_tuple_set(self, iterable, types, name=None):
         if not isinstance(types, tuple) or len(types) == 1:
@@ -196,75 +191,6 @@ class QueryBuilder:
 
         return self.symbols[symbol]
 
-    def query(self, symbol, predicate):
-        return Query(
-            self,
-            nl.Query[AbstractSet[symbol.expression.type]](
-                symbol.expression,
-                predicate.expression
-            ),
-            symbol, predicate
-        )
-
-    def exists(self, symbol, predicate):
-        return Exists(
-            self,
-            nl.ExistentialPredicate[bool](
-                symbol.expression,
-                predicate.expression
-            ),
-            symbol, predicate
-        )
-
-    def all(self, symbol, predicate):
-        return All(
-            self,
-            nl.UniversalPredicate[bool](
-                symbol.expression,
-                predicate.expression
-            ),
-            symbol, predicate
-        )
-
-    def add_symbol(self, value, result_symbol_name=None):
-        if result_symbol_name is None:
-            result_symbol_name = str(uuid1())
-
-        if isinstance(value, Expression):
-            value = value.expression
-        else:
-            value = nl.Constant(value)
-
-        symbol = nl.Symbol[self.set_type](result_symbol_name)
-        self.solver.symbol_table[symbol] = value
-
-        return Symbol(self, result_symbol_name)
-
-    def add_region(self, region, result_symbol_name=None):
-        if not isinstance(region, Region):
-            raise ValueError(f"region must be instance of {Region}")
-
-        if result_symbol_name is None:
-            result_symbol_name = str(uuid1())
-
-        symbol = nl.Symbol[Region](result_symbol_name)
-        self.solver.symbol_table[symbol] = nl.Constant[Region](region)
-
-        return Symbol(self, result_symbol_name)
-
-    def add_region_set(self, region_set, result_symbol_name=None):
-        if not isinstance(region_set, Container):
-            raise ValueError(f"region must be instance of {self.set_type}")
-
-        for region in region_set:
-            if result_symbol_name is None:
-                result_symbol_name = str(uuid1())
-
-            symbol = nl.Symbol[self.set_type](result_symbol_name)
-            self.solver.symbol_table[symbol] = nl.Constant[Region](region)
-
-        return Symbol(self, result_symbol_name)
-
     def create_region(self, spatial_image, label=1):
         region = ExplicitVBR(
             np.transpose((spatial_image.get_data() == label).nonzero()),
@@ -281,8 +207,10 @@ class QueryBuilder:
                 continue
             symbol = nl.Symbol[Region](label_name)
             self.solver.symbol_table[symbol] = nl.Constant[Region](region)
-            self.solver.symbol_table[self.new_symbol(str).expression] = \
+            self.solver.symbol_table[self.new_symbol(str).expression] = (
                 nl.Constant[str](label_name)
+            )
+
             tuple_symbol = self.new_symbol(Tuple[str, Region]).expression
             self.solver.symbol_table[tuple_symbol] = (
                 nl.Constant[Tuple[str, Region]](
@@ -296,6 +224,17 @@ class QueryBuilder:
         atlas_symbol = nl.Symbol[atlas_set.type](name)
         self.solver.symbol_table[atlas_symbol] = atlas_set
         return self[atlas_symbol]
+
+    def load_neurosynth_term_region(
+        self, term: str, n_components=None, result_symbol_name=None
+    ):
+        if not result_symbol_name:
+            result_symbol_name = str(uuid1())
+        region_set = self.neurosynth_db.ns_region_set_from_term(term)
+        if n_components:
+            region_set = take_principal_regions(region_set, n_components)
+
+        return self.add_tuple_set(region_set, ExplicitVBR, result_symbol_name)
 
     @property
     def symbols(self):
