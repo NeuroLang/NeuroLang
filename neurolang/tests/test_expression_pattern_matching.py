@@ -190,3 +190,13 @@ def test_pattern_matching_parametric_type():
     )
     assert PM_int.__patterns__[1][0].args[0] is expressions.Constant[int]
     assert PM_int.__patterns__[2][0] == expressions.Constant
+
+
+def test_pattern_matching_wrong_args():
+    with raises(TypeError):
+        class PM(PatternMatcher):
+            @add_match(
+                expressions.FunctionApplication(...)
+            )
+            def __(self, expression):
+                return expression

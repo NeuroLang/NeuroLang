@@ -1,3 +1,5 @@
+from pytest import raises
+
 from .. import expression_walker
 from .. import symbols_and_types
 from .. import neurolang as nl
@@ -50,3 +52,13 @@ def test_evaluating_embedded_functions():
 
     res = w.walk(F_[int](f, (a,)))
     assert res.value == 3
+
+
+def test_pattern_walker_wrong_args():
+    with raises(TypeError):
+        class PM(expression_walker.PatternWalker):
+            @expression_walker.add_match(
+                F_(...)
+            )
+            def __(self, expression):
+                return expression
