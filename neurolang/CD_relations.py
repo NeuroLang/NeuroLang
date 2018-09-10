@@ -22,6 +22,9 @@ inverse_directions = {'R': 'L', 'A': 'P', 'S': 'I',
 def cardinal_relation(region, reference_region, directions,
                       refine_overlapping=False, stop_at=None):
 
+    if region is reference_region:
+        return False
+
     if(
         type(region) is Region and
         type(reference_region) is Region
@@ -32,22 +35,21 @@ def cardinal_relation(region, reference_region, directions,
 
     if isinstance(region, ImplicitVBR):
         if isinstance(reference_region, ImplicitVBR):
-            logging.warning(
+            raise NotImplemented(
                 f'Comparison between two implicit regions '
                 f'can\'t be performed: {region}, {reference_region}'
             )
-            return False
         region = region.to_explicit_vbr(reference_region.affine,
                                         reference_region.image_dim)
     if isinstance(reference_region, ImplicitVBR):
         reference_region = reference_region.to_explicit_vbr(region.affine,
                                                             region.image_dim)
 
-    if region == reference_region:
-        return False
-
     if np.any(region.affine != reference_region.affine):
         region.voxels = region.to_ijk(reference_region.affine)
+
+    if region == reference_region:
+        return False
 
     mat = direction_matrix([region.bounding_box],
                            [reference_region.bounding_box])

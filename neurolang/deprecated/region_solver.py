@@ -13,7 +13,7 @@ from .. import neurolang as nl
 from ..CD_relations import cardinal_relation, inverse_directions
 from ..regions import Region, region_union, region_set_from_masked_data
 from ..deprecated import SetBasedSolver
-from neurolang.frontend.neurosynth_utils import NeuroSynthHandler
+from ..frontend.neurosynth_utils import NeuroSynthHandler
 
 
 __all__ = ['RegionsSetSolver']
