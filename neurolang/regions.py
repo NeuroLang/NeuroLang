@@ -4,7 +4,7 @@ import scipy.ndimage
 from itertools import product
 
 from .exceptions import NeuroLangException
-from .brain_tree import AABB, Tree, aabb_from_vertices
+from .aabb_tree import AABB, Tree, aabb_from_vertices
 
 __all__ = [
     'region_union', 'region_intersection', 'region_difference',

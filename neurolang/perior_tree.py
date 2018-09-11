@@ -1,5 +1,5 @@
 from typing import Union, Tuple, Set
-from .brain_tree import AABB
+from .aabb_tree import AABB
 import numpy as np
 from copy import deepcopy
 from functools import singledispatch, update_wrapper
