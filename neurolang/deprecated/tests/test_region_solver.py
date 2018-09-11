@@ -1,5 +1,5 @@
 from ..region_solver import RegionsSetSolver
-from ...symbols_and_types import TypedSymbolTable
+from ...expressions import TypedSymbolTable
 from ... import neurolang as nl
 from typing import AbstractSet, Callable
 from ...regions import Region, ExplicitVBR, take_principal_regions

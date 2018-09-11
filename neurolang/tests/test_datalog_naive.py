@@ -10,7 +10,7 @@ from ..expressions import (
     FunctionApplication, Lambda, ExpressionBlock,
     ExistentialPredicate, UniversalPredicate,
     Query,
-    is_subtype, NeuroLangException
+    is_leq_informative, NeuroLangException
 )
 
 S_ = Symbol
@@ -26,8 +26,8 @@ T_ = sdb.Fact
 
 
 class Datalog(
-    solver_datalog_extensional_db.ExtensionalDatabaseSolver,
     sdb.NaiveDatalog,
+    solver_datalog_extensional_db.ExtensionalDatabaseSolver,
     expression_walker.ExpressionBasicEvaluator
 ):
     pass
@@ -54,7 +54,7 @@ def test_facts_constants():
     assert isinstance(dl.symbol_table['Q'], Constant[AbstractSet])
     fact_set = dl.symbol_table['Q']
     assert isinstance(fact_set, Constant)
-    assert is_subtype(fact_set.type, AbstractSet)
+    assert is_leq_informative(fact_set.type, AbstractSet)
     assert {C_((C_(1), C_(2)))} == fact_set.value
 
     f2 = T_(S_('Q')(C_(3), C_(4)))
@@ -407,3 +407,38 @@ def test_equality_operation():
 
     assert dl.walk(S_('equals')(C_(1), C_(1))).value is True
     assert dl.walk(S_('equals')(C_(1), C_(2))).value is False
+
+
+def test_existential_predicate():
+    solver = Datalog()
+    a, b = C_('a'), C_('b')
+    x = S_('x')
+    Q = S_('Q')
+    extensional = ExpressionBlock((
+        sdb.Fact(Q(a)),
+        sdb.Fact(Q(b)),
+    ))
+    solver.walk(extensional)
+
+    exp = EP_(x, Q(x))
+    result = solver.walk(exp)
+
+    assert result.value is True
+
+
+def test_and_query_resolution():
+    solver = Datalog()
+    a, b = C_('a'), C_('b')
+    x, y = S_('x'), S_('y')
+    P, Q = S_('P'), S_('Q')
+    extensional = ExpressionBlock((
+        sdb.Fact(Q(a)),
+        sdb.Fact(Q(b)),
+        sdb.Fact(P(a)),
+    ))
+    solver.walk(extensional)
+
+    query = Query(x, EP_(y, P(x) & Q(y)))
+    result = solver.walk(query)
+
+    assert result.value == {a}

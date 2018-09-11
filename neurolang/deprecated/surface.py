@@ -6,7 +6,7 @@ import nibabel as nib
 import numpy as np
 
 from .solver import GenericSolver, SetBasedSolver
-from .symbols_and_types import Constant
+from .expressions import Constant
 
 
 class Surface(Set):

@@ -9,10 +9,10 @@ from operator import and_
 from .utils import OrderedSet, RelationalAlgebraSet
 
 from .expressions import (
-    FunctionApplication, Constant, NeuroLangException, is_subtype,
+    FunctionApplication, Constant, NeuroLangException, is_leq_informative,
     Statement, Symbol, Lambda, ExpressionBlock, Expression,
     Query, ExistentialPredicate, UniversalPredicate, Quantifier,
-    ToBeInferred
+    Unknown
 )
 from .expression_walker import (
     add_match, PatternWalker, expression_iterator,
@@ -150,7 +150,7 @@ class DatalogBasic(PatternWalker):
             )
 
         if fact.functor.name not in self.symbol_table:
-            if fact.functor.type is ToBeInferred:
+            if fact.functor.type is Unknown:
                 c = Constant(fact.args)
                 set_type = c.type
             elif isinstance(fact.functor.type, Callable):
@@ -204,7 +204,7 @@ class DatalogBasic(PatternWalker):
             value = self.symbol_table[lhs.functor.name]
             if (
                 isinstance(value, Constant) and
-                is_subtype(value.type, AbstractSet)
+                is_leq_informative(value.type, AbstractSet)
             ):
                 raise NeuroLangException(
                     'f{lhs.functor.name} has been previously '
@@ -263,6 +263,16 @@ class NaiveDatalog(DatalogBasic):
             self.symbol_table[self.constant_set_name].value.update(fact.args)
 
         return expression
+
+    @add_match(
+        FunctionApplication(Constant[AbstractSet], (Constant,)),
+        lambda exp: not is_leq_informative(exp.args[0].type, Tuple)
+    )
+    def function_application_edb_notuple(self, expression):
+        return self.walk(FunctionApplication(
+            expression.functor,
+            (Constant(expression.args),)
+        ))
 
     @add_match(Statement(
         FunctionApplication[bool](Symbol, ...),
@@ -328,7 +338,7 @@ class NaiveDatalog(DatalogBasic):
             head = (expression.head,)
         elif (
             isinstance(expression.head, Constant) and
-            is_subtype(expression.head.type, Tuple)
+            is_leq_informative(expression.head.type, Tuple)
         ):
             head = expression.head.value
 
@@ -352,7 +362,7 @@ class NaiveDatalog(DatalogBasic):
             head = (expression.head,)
         elif (
             isinstance(expression.head, Constant) and
-            is_subtype(expression.head.type, Tuple)
+            is_leq_informative(expression.head.type, Tuple)
         ):
             head = expression.head.value
 
@@ -378,7 +388,7 @@ class NaiveDatalog(DatalogBasic):
             head = expression.head
         elif (
             isinstance(expression.head, Constant) and
-            is_subtype(expression.head.type, Tuple)
+            is_leq_informative(expression.head.type, Tuple)
         ):
             head = expression.head.value
         else:
