@@ -1,7 +1,7 @@
 from .query_resolution import QueryBuilder
 from ..solver import DatalogSolver
 from ..solver_datalog_extensional_db import ExtensionalDatabaseSolver
-from ..region_solver_ds import RegionSolver
+from ..region_solver import RegionSolver
 from ..regions import (
     ExplicitVBR, ImplicitVBR, SphericalVolume)
 from ..utils.data_manipulation import parse_region_label_map

@@ -7,7 +7,7 @@ from .query_resolution_expressions import (
     Query, Exists, All
 )
 from .. import neurolang as nl
-from ..region_solver_ds import Region
+from ..region_solver import Region
 from ..regions import (
     ExplicitVBR,
     take_principal_regions
