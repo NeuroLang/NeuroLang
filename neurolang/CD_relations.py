@@ -1,5 +1,10 @@
-from .interval_algebra import v_before, v_overlaps, v_during, v_meets, v_starts, v_finishes, v_equals
-from .regions import ExplicitVBR
+from .interval_algebra import (
+    v_before, v_overlaps, v_during,
+    v_meets, v_starts, v_finishes,
+    v_equals
+)
+from .regions import Region, ImplicitVBR
+import logging
 import numpy as np
 
 __all__ = ['cardinal_relation']
@@ -14,11 +19,42 @@ inverse_directions = {'R': 'L', 'A': 'P', 'S': 'I',
                       'O': 'O', 'L': 'R', 'P': 'A', 'I': 'S'}
 
 
-def cardinal_relation(region, reference_region, directions, refine_overlapping=False, stop_at=None):
+def cardinal_relation(region, reference_region, directions,
+                      refine_overlapping=False, stop_at=None):
 
-    mat = direction_matrix([region.bounding_box], [reference_region.bounding_box])
+    if region is reference_region:
+        return False
+
+    if(
+        type(region) is Region and
+        type(reference_region) is Region
+    ):
+        mat = direction_matrix([region.bounding_box],
+                               [reference_region.bounding_box])
+        return is_in_direction(mat, directions)
+
+    if isinstance(region, ImplicitVBR):
+        if isinstance(reference_region, ImplicitVBR):
+            raise NotImplemented(
+                f'Comparison between two implicit regions '
+                f'can\'t be performed: {region}, {reference_region}'
+            )
+        region = region.to_explicit_vbr(reference_region.affine,
+                                        reference_region.image_dim)
+    if isinstance(reference_region, ImplicitVBR):
+        reference_region = reference_region.to_explicit_vbr(region.affine,
+                                                            region.image_dim)
+
+    if np.any(region.affine != reference_region.affine):
+        region.voxels = region.to_ijk(reference_region.affine)
+
+    if region == reference_region:
+        return False
+
+    mat = direction_matrix([region.bounding_box],
+                           [reference_region.bounding_box])
     overlap = is_in_direction(mat, 'O')
-    if overlap and refine_overlapping and isinstance(region, ExplicitVBR):
+    if overlap and refine_overlapping:
         mat = overlap_resolution(region, reference_region, stop_at)
     return is_in_direction(mat, directions)
 
@@ -49,9 +85,10 @@ def overlap_resolution(region, reference_region, stop_at=None):
                 max_depth_reached_reg = True
 
         if not max_depth_reached_ref:
-            current_reference_region_next_level = tree_next_level(current_reference_region_level)
-            if current_reference_region_next_level:
-                current_reference_region_level = current_reference_region_next_level
+            current_ref_region_next_level = tree_next_level(
+                current_reference_region_level)
+            if current_ref_region_next_level:
+                current_reference_region_level = current_ref_region_next_level
             else:
                 max_depth_reached_ref = True
 
@@ -87,7 +124,8 @@ def is_in_direction(matrix, direction):
 
 def relation_vectors(intervals, other_region_intervals):
     obtained_vectors = []
-    relations = [v_before, v_overlaps, v_during, v_meets, v_starts, v_finishes, v_equals]
+    relations = [v_before, v_overlaps, v_during,
+                 v_meets, v_starts, v_finishes, v_equals]
     for i in range(len(intervals)):
         for f in relations:
             vector = f(intervals[i], other_region_intervals[i])

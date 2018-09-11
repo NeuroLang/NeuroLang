@@ -183,6 +183,11 @@ class Symbol(Expression):
                                 break
                     if isinstance(s, nl.Symbol):
                         contained.append(s.name)
+                    if isinstance(s, tuple):
+                        t = '('
+                        for e in s:
+                            t += (e.name + ', ')
+                        contained.append(t[:-2] + ')')
                 return (f'{self.symbol_name}: {symbol.type} = {contained}')
             else:
                 return (f'{self.symbol_name}: {symbol.type} = {symbol.value}')
