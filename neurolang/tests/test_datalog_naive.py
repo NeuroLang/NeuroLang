@@ -33,6 +33,16 @@ class Datalog(
     pass
 
 
+def test_no_facts():
+    dl = Datalog()
+    x = S_('x')
+    Q = S_('Q')
+
+    res = dl.walk(Query(x, Q(x)))
+
+    assert len(res.value) == 0
+
+
 def test_facts_constants():
     dl = Datalog()
 
