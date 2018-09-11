@@ -1,5 +1,5 @@
 from .query_resolution import QueryBuilder
-from ..solver import DatalogSolver
+from ..solver import FirstOrderLogicSolver
 from ..solver_datalog_extensional_db import ExtensionalDatabaseSolver
 from ..region_solver import RegionSolver
 from ..regions import (
@@ -14,7 +14,7 @@ __all__ = ['RegionFrontend', 'QueryBuilder']
 class RegionFrontendSolver(
         ExtensionalDatabaseSolver,
         RegionSolver,
-        DatalogSolver
+        FirstOrderLogicSolver
 ):
     pass
 

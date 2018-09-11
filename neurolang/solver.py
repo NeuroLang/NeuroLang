@@ -303,7 +303,7 @@ class NumericOperationsSolver(PatternWalker[T]):
         return self.walk(expression.cast(expression.args[0].type))
 
 
-class DatalogSolver(
+class FirstOrderLogicSolver(
         BooleanRewriteSolver,
         BooleanOperationsSolver,
         NumericOperationsSolver[int],
@@ -311,7 +311,7 @@ class DatalogSolver(
         GenericSolver
 ):
     '''
-    WIP Solver with queries having the semantics of Datalog.
+    WIP non-recursive first order logic query solver.
     For now predicates work only on constants on the symbols table
     '''
 

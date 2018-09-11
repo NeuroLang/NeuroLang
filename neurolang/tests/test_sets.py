@@ -17,7 +17,7 @@ def test_union_monoid_ir():
     symbols['null'] = C_[AbstractSet[int]](null_element)
 
     nli = nl.NeuroLangIntermediateRepresentationCompiler(
-        solver.DatalogSolver(), symbols=symbols
+        solver.FirstOrderLogicSolver(), symbols=symbols
     )
 
     e1 = symbols['element1']
@@ -40,7 +40,7 @@ def test_intersection_monoid_ir():
     symbols['null'] = C_[AbstractSet[int]](null_element)
 
     nli = nl.NeuroLangIntermediateRepresentationCompiler(
-        solver.DatalogSolver(), symbols=symbols
+        solver.FirstOrderLogicSolver(), symbols=symbols
     )
 
     e1 = symbols['element1']
