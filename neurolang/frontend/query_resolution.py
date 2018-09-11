@@ -7,7 +7,7 @@ from .query_resolution_expressions import (
     Query, Exists, All
 )
 from .. import neurolang as nl
-from ..region_solver_ds import Region
+from ..region_solver import Region
 from ..regions import (
     ExplicitVBR,
     take_principal_regions
@@ -248,7 +248,7 @@ class QuerySymbolsProxy:
     def __getattr__(self, attr):
         try:
             return self._query_builder.get_symbol(attr)
-        except ValueError as e:
+        except ValueError:
             raise AttributeError()
 
     def __getitem__(self, attr):

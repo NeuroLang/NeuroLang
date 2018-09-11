@@ -66,7 +66,7 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
         else:
             needs_replacement = False
 
-        for k, v in classdict.items():
+        for v in classdict.values():
             if callable(v) and hasattr(v, 'pattern') and hasattr(v, 'guard'):
                 pattern = getattr(v, 'pattern')
                 if needs_replacement:

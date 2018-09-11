@@ -1,6 +1,6 @@
 import numpy as np
 
-from ..brain_tree import AABB, Tree
+from ..aabb_tree import AABB, Tree
 
 
 def _generate_random_box(x_bounds, y_bounds, z_bounds, size_bounds):

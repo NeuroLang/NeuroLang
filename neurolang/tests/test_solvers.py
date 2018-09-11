@@ -298,7 +298,7 @@ def test_boolean_operations_rewrite_conj_composition_order():
 
 
 def test_boolean_operations_conjunction_distribution():
-    s = solver.DatalogSolver()
+    s = solver.FirstOrderLogicSolver()
     a, b, c = S_('a'), S_('b'), S_('c')
     e = (a & b) & c
     we = s.walk(e)

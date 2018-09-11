@@ -360,7 +360,7 @@ class ExpressionBasicEvaluator(SymbolTableEvaluator):
 
         rebv = ReplaceExpressionsByValues(self.symbol_table)
         args = rebv.walk(expression.args)
-        kwargs = {k: rebv(v) for k, v in expression.kwargs.items()}
+        kwargs = {k: rebv.walk(v) for k, v in expression.kwargs.items()}
         result = Constant[result_type](
             functor_value(*args, **kwargs)
         )
