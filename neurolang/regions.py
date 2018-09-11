@@ -179,6 +179,15 @@ class ExplicitVBR(VolumetricBrainRegion):
 
             tree.height = tree_node.height + 1
 
+        stack = [tree.root]
+        while stack:
+            node = stack.pop()
+            node.height = tree.height - node.height
+            if node.left is not None:
+                stack.append(node.left)
+            if node.right is not None:
+                stack.append(node.right)
+
         return tree
 
     def to_xyz(self):
@@ -324,6 +333,15 @@ class BoundigBoxSequenceElement(ImplicitVBR):
                 (box_right.lb, box_right.ub, boxes_higher, tree_node.right)
             )
             tree.height = tree_node.height + 1
+
+        stack = [tree.root]
+        while stack:
+            node = stack.pop()
+            node.height = tree.height - node.height
+            if node.left is not None:
+                stack.append(node.left)
+            if node.right is not None:
+                stack.append(node.right)
 
         return tree
 
