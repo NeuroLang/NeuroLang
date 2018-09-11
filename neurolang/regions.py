@@ -160,9 +160,11 @@ class ExplicitVBR(VolumetricBrainRegion):
             else:
                 continue
 
+            height = tree_node.height - 1
+
             box_left = self.generate_bounding_box(voxels_left)
             tree_node.left = Node(
-                box=box_left, parent=tree_node, height=tree_node.height + 1
+                box=box_left, parent=tree_node, height=height
             )
             stack.append(
                 (box_left.lb, box_left.ub, voxels_left, tree_node.left)
@@ -171,18 +173,18 @@ class ExplicitVBR(VolumetricBrainRegion):
             voxels_right = parent_voxels[~left_mask]
             box_right = self.generate_bounding_box(voxels_right)
             tree_node.right = Node(
-                box=box_right, parent=tree_node, height=tree_node.height + 1
+                box=box_right, parent=tree_node, height=height
             )
             stack.append(
                 (box_right.lb, box_right.ub, voxels_right, tree_node.right)
             )
 
-            tree.height = tree_node.height + 1
+            tree.height = -height
 
         stack = [tree.root]
         while stack:
             node = stack.pop()
-            node.height = tree.height - node.height
+            node.height = tree.height + node.height
             if node.left is not None:
                 stack.append(node.left)
             if node.right is not None:
@@ -317,9 +319,10 @@ class BoundigBoxSequenceElement(ImplicitVBR):
             else:
                 continue
 
+            height = tree_node.height - 1
             box_left = self.generate_bounding_box(boxes_lower)
             tree_node.left = Node(
-                box=box_left, parent=tree_node, height=tree_node.height + 1
+                box=box_left, parent=tree_node, height=height
             )
             stack.append(
                 (box_left.lb, box_left.ub, boxes_lower, tree_node.left)
@@ -327,17 +330,17 @@ class BoundigBoxSequenceElement(ImplicitVBR):
 
             box_right = self.generate_bounding_box(boxes_higher)
             tree_node.right = Node(
-                box=box_right, parent=tree_node, height=tree_node.height + 1
+                box=box_right, parent=tree_node, height=height
             )
             stack.append(
                 (box_right.lb, box_right.ub, boxes_higher, tree_node.right)
             )
-            tree.height = tree_node.height + 1
+            tree.height = -height
 
         stack = [tree.root]
         while stack:
             node = stack.pop()
-            node.height = tree.height - node.height
+            node.height = tree.height + node.height
             if node.left is not None:
                 stack.append(node.left)
             if node.right is not None:
