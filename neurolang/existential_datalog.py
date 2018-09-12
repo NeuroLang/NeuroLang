@@ -2,25 +2,12 @@ from typing import AbstractSet, Any, Tuple
 
 from .expressions import (
     NeuroLangException, Definition, ExistentialPredicate, Constant, Symbol,
-    ExpressionBlock, Query, FunctionApplication, Lambda
+    ExpressionBlock, Query, FunctionApplication, Lambda, Implication
 )
 from .solver_datalog_naive import (
     NaiveDatalog, DatalogBasic, extract_datalog_free_variables
 )
 from .expression_pattern_matching import add_match
-
-
-class Implication(Definition):
-    """Expression of the form P(x, y) <- Q(x)"""
-    def __init__(self, consequent, antecedent):
-        self.consequent = consequent
-        self.antecedent = antecedent
-        self._symbols = consequent._symbols | antecedent._symbols
-
-    def __repr__(self):
-        return 'Implication{{{} \u2190 {}}}'.format(
-            repr(self.consequent), repr(self.antecedent)
-        )
 
 
 def _parse_implication_with_existential_consequent(expression):
@@ -50,6 +37,21 @@ def _parse_implication_with_existential_consequent(expression):
 
 
 class ExistentialDatalog(DatalogBasic):
+
+    def existential_intensional_database(self):
+        return {
+            k: v for k, v in self.symbol_table.items()
+            if (
+                k not in self.protected_keywords and
+                isinstance(v, ExpressionBlock) and
+                all(
+                    isinstance(expression, Implication) and
+                    isinstance(expression.consequent, ExistentialPredicate)
+                    for expression in v
+                )
+            )
+        }
+
     @add_match(Implication(ExistentialPredicate, ...))
     def existential_predicate_in_head(self, expression):
         """
@@ -71,6 +73,10 @@ class ExistentialDatalog(DatalogBasic):
                     "in consequent's body"
                 )
         if consequent_name in self.symbol_table:
+            if consequent_name in self.intensional_database():
+                raise NeuroLangException(
+                    'A rule cannot be both in IDB and E-IDB'
+                )
             expressions = self.symbol_table[consequent_name].expressions
         else:
             expressions = tuple()

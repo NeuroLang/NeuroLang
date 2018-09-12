@@ -12,7 +12,7 @@ from .expressions import (
     FunctionApplication, Constant, NeuroLangException, is_leq_informative,
     Statement, Symbol, Lambda, ExpressionBlock, Expression,
     Query, ExistentialPredicate, UniversalPredicate, Quantifier,
-    Unknown
+    ToBeInferred, Implication
 )
 from .expression_walker import (
     add_match, PatternWalker, expression_iterator,
@@ -42,8 +42,8 @@ def _query_introduce_existential(body, head_variables):
             isinstance(body.functor, Constant) and
             body.functor.value is and_
         ):
-            return FunctionApplication[bool](
-                Constant(and_),
+            new_body = FunctionApplication(
+                body.functor,
                 tuple(
                     _query_introduce_existential(arg, head_variables)
                     for arg in body.args
@@ -56,11 +56,7 @@ def _query_introduce_existential(body, head_variables):
                 new_body = ExistentialPredicate(
                     eq_variable, new_body
                 )
-    if len(head_variables) == 1:
-        new_head = next(iter(head_variables))
-    else:
-        new_head = Constant[Tuple](tuple(head_variables))
-    return Query(new_head, new_body)
+    return new_body
 
 
 class Fact(Statement):
@@ -195,7 +191,12 @@ class DatalogBasic(PatternWalker):
             k: v for k, v in self.symbol_table.items()
             if (
                 k not in self.protected_keywords and
-                isinstance(v, ExpressionBlock)
+                isinstance(v, ExpressionBlock) and
+                not any(
+                    isinstance(expression, Implication) and
+                    isinstance(expression.consequent, ExistentialPredicate)
+                    for expression in v
+                )
             )
         }
 
@@ -343,8 +344,11 @@ class NaiveDatalog(DatalogBasic):
         )
     )
     def query_introduce_existential(self, expression):
-        return self.walk(_query_introduce_existential(
-            expression.body, _get_head_free_variables(expression.head)
+        return self.walk(Query(
+            expression.head,
+            _query_introduce_existential(
+                expression.body, _get_head_free_variables(expression.head)
+            )
         ))
 
     @add_match(Query)

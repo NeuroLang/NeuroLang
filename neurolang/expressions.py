@@ -475,6 +475,19 @@ class Constant(Expression):
             )
 
 
+class Implication(Definition):
+    """Expression of the form `P(x) <- Q(x)`"""
+    def __init__(self, consequent, antecedent):
+        self.consequent = consequent
+        self.antecedent = antecedent
+        self._symbols = consequent._symbols | antecedent._symbols
+
+    def __repr__(self):
+        return 'Implication{{{} \u2190 {}}}'.format(
+            repr(self.consequent), repr(self.antecedent)
+        )
+
+
 class Lambda(Definition):
     def __init__(self, args, function_expression):
         self.args = args
