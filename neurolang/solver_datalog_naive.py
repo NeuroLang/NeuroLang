@@ -187,6 +187,16 @@ class NaiveDatalog(DatalogBasic):
 
         return expression
 
+    @add_match(
+        FunctionApplication(Constant[AbstractSet], (Constant,)),
+        lambda exp: not is_subtype(exp.args[0].type, Tuple)
+    )
+    def function_application_edb_notuple(self, expression):
+        return self.walk(FunctionApplication(
+            expression.functor,
+            (Constant(expression.args),)
+        ))
+
     @add_match(Statement(
         FunctionApplication[bool](Symbol, ...),
         Expression
