@@ -18,7 +18,7 @@ from .expression_walker import (
     add_match, PatternWalker, expression_iterator,
 )
 
-def _get_query_head_free_variables(expression_head):
+def _get_head_free_variables(expression_head):
     if isinstance(expression_head, Symbol):
         head_variables = {expression_head}
     elif isinstance(expression_head, tuple):
@@ -339,12 +339,12 @@ class NaiveDatalog(DatalogBasic):
         Query,
         lambda e: (
             extract_datalog_free_variables(e.body) >
-            _get_query_head_free_variables(e.head)
+            _get_head_free_variables(e.head)
         )
     )
     def query_introduce_existential(self, expression):
         return self.walk(_query_introduce_existential(
-            expression.body, _get_query_head_free_variables(expression.head)
+            expression.body, _get_head_free_variables(expression.head)
         ))
 
     @add_match(Query)
