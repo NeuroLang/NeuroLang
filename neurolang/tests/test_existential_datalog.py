@@ -18,15 +18,17 @@ EP_ = expressions.ExistentialPredicate
 
 
 class Solver(
+    ExistentialDatalog,
     solver_datalog_extensional_db.ExtensionalDatabaseSolver,
-    ExistentialDatalog, expression_walker.ExpressionBasicEvaluator
+    expression_walker.ExpressionBasicEvaluator,
 ):
     pass
 
 
 class SolverWithExistentialResolution(
+    SolverExistentialDatalog,
     solver_datalog_extensional_db.ExtensionalDatabaseSolver,
-    SolverExistentialDatalog, expression_walker.ExpressionBasicEvaluator
+    expression_walker.ExpressionBasicEvaluator,
 ):
     pass
 
@@ -150,3 +152,13 @@ def test_multiple_eq_variables_in_consequent():
     assert isinstance(result, expressions.Constant)
     assert result.value is not None
     assert result.value == frozenset({'a', 'b'})
+
+
+# def test_cannot_mix_existential_and_non_existential_rule_definitions():
+# solver = SolverWithExistentialResolution()
+# x, y = S_('x'), S_('y')
+# P, Q = S_('P'), S_('Q')
+
+# with pytest.raises(expressions.NeuroLangException):
+# exp = Implication(EP_(y, P(x, y)), Q(x, y))
+# solver.walk(exp)
