@@ -55,7 +55,7 @@ def test_existential_statement_added_to_symbol_table():
     x, y = S_('x'), S_('y')
     a, b, c = C_('a'), C_('b'), C_('c')
     P, Q = S_('P'), S_('Q')
-    intensional = ExpressionBlock((Implication(EP_(y, P(x, y)), Q(x)), ))
+    intensional = Implication(EP_(y, P(x, y)), Q(x))
     solver.walk(intensional)
     assert 'P' in solver.symbol_table
     assert len(solver.symbol_table['P'].expressions) == 1

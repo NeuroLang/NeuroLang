@@ -35,30 +35,32 @@ def _get_query_head_free_variables(expression_head):
     return head_variables
 
 
-def _query_introduce_existential(expression, head_variables):
-    if isinstance(expression, FunctionApplication):
+def _query_introduce_existential(body, head_variables):
+    new_body = body
+    if isinstance(body, FunctionApplication):
         if (
-            isinstance(expression.functor, Constant) and
-            expression.functor.value is and_
+            isinstance(body.functor, Constant) and
+            body.functor.value is and_
         ):
             return FunctionApplication[bool](
                 Constant(and_),
                 tuple(
                     _query_introduce_existential(arg, head_variables)
-                    for arg in expression.args
+                    for arg in body.args
                 )
             )
         else:
-            fa_free_variables = extract_datalog_free_variables(expression)
+            fa_free_variables = extract_datalog_free_variables(body)
             eq_variables = fa_free_variables - head_variables
-            new_expression = expression
             for eq_variable in eq_variables:
-                new_expression = ExistentialPredicate(
-                    eq_variable, new_expression
+                new_body = ExistentialPredicate(
+                    eq_variable, new_body
                 )
-            return new_expression
+    if len(head_variables) == 1:
+        new_head = next(iter(head_variables))
     else:
-        return expression
+        new_head = Constant[Tuple](tuple(head_variables))
+    return Query(new_head, new_body)
 
 
 class Fact(Statement):
@@ -341,9 +343,9 @@ class NaiveDatalog(DatalogBasic):
         )
     )
     def query_introduce_existential(self, expression):
-        return _query_introduce_existential(
+        return self.walk(_query_introduce_existential(
             expression.body, _get_query_head_free_variables(expression.head)
-        )
+        ))
 
     @add_match(Query)
     def query_resolution(self, expression):

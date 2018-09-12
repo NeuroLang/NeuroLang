@@ -11,6 +11,7 @@ from .expression_pattern_matching import add_match
 
 
 class Implication(Definition):
+    """Expression of the form P(x, y) <- Q(x)"""
     def __init__(self, consequent, antecedent):
         self.consequent = consequent
         self.antecedent = antecedent
@@ -51,10 +52,10 @@ def _parse_implication_with_existential_consequent(expression):
 class ExistentialDatalog(DatalogBasic):
     @add_match(Implication(ExistentialPredicate, ...))
     def existential_predicate_in_head(self, expression):
-        '''
+        """
         Add implication with a \u2203-quantified function application
         consequent
-        '''
+        """
         consequent_body, eq_variables = (
             _parse_implication_with_existential_consequent(expression)
         )
@@ -83,7 +84,6 @@ class SolverExistentialDatalog(NaiveDatalog, ExistentialDatalog):
         FunctionApplication(Implication(ExistentialPredicate, ...), ...)
     )
     def existential_consequent_implication_resolution(self, expression):
-        import pdb; pdb.set_trace()
         consequent_body, eq_variables = (
             _parse_implication_with_existential_consequent(expression.functor)
         )
