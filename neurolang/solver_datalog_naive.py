@@ -12,7 +12,7 @@ from .expressions import (
     FunctionApplication, Constant, NeuroLangException, is_leq_informative,
     Statement, Symbol, Lambda, ExpressionBlock, Expression,
     Query, ExistentialPredicate, UniversalPredicate, Quantifier,
-    ToBeInferred, Implication
+    ToBeInferred
 )
 from .expression_walker import (
     add_match, PatternWalker, expression_iterator,
@@ -191,12 +191,7 @@ class DatalogBasic(PatternWalker):
             k: v for k, v in self.symbol_table.items()
             if (
                 k not in self.protected_keywords and
-                isinstance(v, ExpressionBlock) and
-                not any(
-                    isinstance(expression, Implication) and
-                    isinstance(expression.consequent, ExistentialPredicate)
-                    for expression in v
-                )
+                isinstance(v, ExpressionBlock)
             )
         }
 

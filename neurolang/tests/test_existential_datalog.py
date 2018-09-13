@@ -6,7 +6,8 @@ from .. import expression_walker
 from .. import expressions
 from ..expressions import ExpressionBlock, Query
 from ..existential_datalog import (
-    ExistentialDatalog, SolverExistentialDatalog, Implication
+    NonRecursiveExistentialDatalog, SolverNonRecursiveExistentialDatalog,
+    Implication
 )
 from ..solver_datalog_naive import NaiveDatalog
 from ..solver_datalog_naive import Fact
@@ -17,8 +18,8 @@ F_ = expressions.FunctionApplication
 EP_ = expressions.ExistentialPredicate
 
 
-class Solver(
-    ExistentialDatalog,
+class SolverWithoutExistentialResolution(
+    NonRecursiveExistentialDatalog,
     solver_datalog_extensional_db.ExtensionalDatabaseSolver,
     expression_walker.ExpressionBasicEvaluator,
 ):
@@ -26,50 +27,54 @@ class Solver(
 
 
 class SolverWithExistentialResolution(
-    SolverExistentialDatalog,
+    SolverNonRecursiveExistentialDatalog,
     solver_datalog_extensional_db.ExtensionalDatabaseSolver,
     expression_walker.ExpressionBasicEvaluator,
 ):
     pass
 
 
+def test_existential_intensional_database():
+    solver = SolverWithoutExistentialResolution()
+    x, y, P, Q = S_('x'), S_('y'), S_('P'), S_('Q')
+    solver.walk(Implication(P(x, y), Q(x)))
+    assert 'P' in solver.symbol_table
+    assert 'P' in solver.existential_intensional_database()
+    assert 'P' not in solver.intensional_database()
+
+
 def test_bad_existential_formulae():
 
-    solver = Solver()
+    solver = SolverWithoutExistentialResolution()
 
     x, y = S_('x'), S_('y')
     P, Q = S_('P'), S_('Q')
 
     with pytest.raises(expressions.NeuroLangException):
-        exp = Implication(EP_(y, P(x, y)), Q(x, y))
-        solver.walk(exp)
+        solver.walk(Implication(EP_(y, P(x, y)), Q(x, y)))
 
     with pytest.raises(expressions.NeuroLangException):
-        exp = Implication(EP_(y, P(x)), Q(x))
-        solver.walk(exp)
+        solver.walk(Implication(EP_(y, P(x)), Q(x)))
 
-    exp = Implication(EP_(y, P(x, y)), Q(x))
+    exp = Implication(P(x, y), Q(x))
     solver.walk(exp)
 
 
 def test_existential_statement_added_to_symbol_table():
-    solver = Solver()
+    solver = SolverWithoutExistentialResolution()
     x, y = S_('x'), S_('y')
     a, b, c = C_('a'), C_('b'), C_('c')
     P, Q = S_('P'), S_('Q')
-    intensional = Implication(EP_(y, P(x, y)), Q(x))
-    solver.walk(intensional)
+    solver.walk(Implication(P(x, y), Q(x)))
     assert 'P' in solver.symbol_table
     assert len(solver.symbol_table['P'].expressions) == 1
     assert isinstance(
         solver.symbol_table['P'].expressions[0].consequent,
         expressions.ExistentialPredicate
     )
-    solver = Solver()
+    solver = SolverWithoutExistentialResolution()
     z = S_('z')
-    intensional = ExpressionBlock(
-        (Implication(EP_(x, EP_(y, P(x, y, z))), Q(z)), )
-    )
+    solver.walk(Implication(P(x, y, z), Q(z)))
     solver.walk(intensional)
     assert 'P' in solver.symbol_table
 
@@ -90,8 +95,7 @@ def test_existential_statement_resolution():
     assert isinstance(result, expressions.Constant)
     assert result.value is not None
     assert result.value == frozenset({'a', 'b'})
-    intensional = ExpressionBlock((Implication(EP_(y, P(x, y)), Q(x)), ))
-    solver.walk(intensional)
+    solver.walk(Implication(P(x, y), Q(x)))
     query = Query(x, P(x, y))
     result = solver.walk(query)
     assert isinstance(result, expressions.Constant)
@@ -105,9 +109,9 @@ def test_existential_statement_resolution():
     assert result.value is not None
     assert result.value == frozenset({'a', 'b'})
 
-    # query = Query(u, P(v, u))
-    # result = solver.walk(query)
-    # assert not isinstance(result, expressions.Constant)
+    query = Query(u, P(v, u))
+    result = solver.walk(query)
+    assert not isinstance(result, expressions.Constant)
 
 
 def test_and_query_resolution():
@@ -128,13 +132,6 @@ def test_and_query_resolution():
     assert result.value is not None
     assert result.value == frozenset({'a'})
 
-    # query = Query(x, P(x) & Q(y))
-    # import pdb; pdb.set_trace()
-    # result = solver.walk(query)
-    # assert isinstance(result, expressions.Constant)
-    # assert result.value is not None
-    # assert result.value == frozenset({'a'})
-
 
 def test_multiple_eq_variables_in_consequent():
     solver = SolverWithExistentialResolution()
@@ -154,11 +151,14 @@ def test_multiple_eq_variables_in_consequent():
     assert result.value == frozenset({'a', 'b'})
 
 
-# def test_cannot_mix_existential_and_non_existential_rule_definitions():
-# solver = SolverWithExistentialResolution()
-# x, y = S_('x'), S_('y')
-# P, Q = S_('P'), S_('Q')
+def test_cannot_mix_existential_and_non_existential_rule_definitions():
+    solver = SolverWithoutExistentialResolution()
+    x, y = S_('x'), S_('y')
+    P, Q, R = S_('P'), S_('Q'), S_('R')
 
-# with pytest.raises(expressions.NeuroLangException):
-# exp = Implication(EP_(y, P(x, y)), Q(x, y))
-# solver.walk(exp)
+    solver.walk(Implication(P(x, y), Q(x)))
+    assert 'P' in solver.symbol_table
+    assert 'P' in solver.existential_intensional_database()
+
+    with pytest.raises(expressions.NeuroLangException):
+        solver.walk(Implication(P(x, y), Q(x, y)))
