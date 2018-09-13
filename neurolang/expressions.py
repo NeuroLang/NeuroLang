@@ -12,13 +12,15 @@ from contextlib import contextmanager
 from .exceptions import NeuroLangException
 from .type_system import is_leq_informative as is_subtype
 from .type_system import Unknown as ToBeInferred
+from .type_system import unify_types, NeuroLangTypeException
+from .type_system import get_args as get_type_args
 
 
 __all__ = [
     'Symbol', 'FunctionApplication', 'Statement',
     'Projection', 'ExistentialPredicate', 'UniversalPredicate',
     'ToBeInferred',
-    'typing_callable_from_annotated_function'
+    'typing_callable_from_annotated_function', 'get_type_args'
 ]
 
 
@@ -43,10 +45,6 @@ def expressions_behave_as_objects():
         del _expressions_behave_as_python_objects[thread_id]
 
 
-class NeuroLangTypeException(NeuroLangException):
-    pass
-
-
 def typing_callable_from_annotated_function(function):
     """Get typing.Callable type representing the annotated function type."""
     signature = inspect.signature(function)
@@ -66,16 +64,6 @@ def typing_callable_from_annotated_function(function):
     ]
 
 
-def get_type_args(type_):
-    if hasattr(type_, '__args__') and type_.__args__ is not None:
-        if is_subtype(type_, typing.Callable):
-            return list((list(type_.__args__[:-1]), type_.__args__[-1]))
-        else:
-            return type_.__args__
-    else:
-        return tuple()
-
-
 def get_type_and_value(value, symbol_table=None):
     if symbol_table is not None and isinstance(value, Symbol):
         value = symbol_table.get(value, value)
@@ -92,84 +80,6 @@ def get_type_and_value(value, symbol_table=None):
         )
     else:
         return type(value), value
-
-
-def is_subtype_old(left, right):
-    if (left is right) or (left == right):
-        return True
-    if right is typing.Any:
-        return True
-    elif left is typing.Any:
-        return right is typing.Any or right is ToBeInferred
-    elif left is ToBeInferred:
-        return True
-    elif right is ToBeInferred:
-        return left is ToBeInferred or left is typing.Any
-    elif hasattr(right, '__origin__') and right.__origin__ is not None:
-        if right.__origin__ is typing.Union:
-            return any(
-                is_subtype(left, r)
-                for r in right.__args__
-            )
-        elif issubclass(right, typing.Callable):
-            if issubclass(left, typing.Callable):
-                left_args, left_return = get_type_args(left)
-                right_args, right_return = get_type_args(right)
-
-                if len(left_args) != len(right_args):
-                    return False
-
-                return len(left_args) == 0 or (
-                    is_subtype(left_return, right_return) and all((
-                        is_subtype(left_arg, right_arg)
-                        for left_arg, right_arg in zip(left_args, right_args)
-                    ))
-                )
-            else:
-                return False
-        elif right.__origin__ is typing.Generic:
-            raise ValueError("typing Generic not supported")
-        elif issubclass(left, right.__origin__):
-            if issubclass(right, typing.Iterable):
-                return all(
-                    is_subtype(l, r) for l, r in zip(
-                        get_type_args(left), get_type_args(right)
-                    )
-                )
-            else:
-                return True
-        else:
-            return False
-    else:
-        if left is int:
-            return right in (float, complex, typing.SupportsInt)
-        elif left is float:
-            return right in (complex, typing.SupportsFloat)
-        elif right is int:
-            right = typing.SupportsInt
-        elif right is float:
-            right = typing.SupportsFloat
-        elif right is str:
-            right = typing.Text
-
-        return issubclass(left, right)
-
-
-def unify_types(t1, t2):
-    if t1 is ToBeInferred:
-        return t2
-    elif t2 is ToBeInferred:
-        return t1
-    elif is_subtype(t1, t2):
-        return t2
-    elif is_subtype(t2, t1):
-        return t1
-    else:
-        raise NeuroLangTypeException(
-            "The types {} and {} can't be unified".format(
-                t1, t2
-            )
-        )
 
 
 def type_validation_value(value, type_, symbol_table=None):

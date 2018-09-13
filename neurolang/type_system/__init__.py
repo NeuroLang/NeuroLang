@@ -5,6 +5,14 @@ from typing_inspect import (
     is_typevar
 )
 
+
+from ..exceptions import NeuroLangException
+
+
+class NeuroLangTypeException(NeuroLangException):
+    pass
+
+
 Unknown = typing.Any
 
 
@@ -119,3 +127,20 @@ def is_parameterized(type_):
         for p in
         (is_generic_type, is_callable_type, is_tuple_type, is_union_type)
     ) and get_origin(type_) is not type_
+
+
+def unify_types(t1, t2):
+    if t1 is Unknown:
+        return t2
+    elif t2 is Unknown:
+        return t1
+    elif is_leq_informative(t1, t2):
+        return t2
+    elif is_leq_informative(t2, t1):
+        return t1
+    else:
+        raise NeuroLangTypeException(
+            "The types {} and {} can't be unified".format(
+                t1, t2
+            )
+        )

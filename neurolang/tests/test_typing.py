@@ -28,36 +28,6 @@ def test_get_type_args():
     assert args == (int, )
 
 
-def test_is_subtype_base_types():
-    assert symbols_and_types.is_subtype(int, int)
-    assert symbols_and_types.is_subtype(int, float)
-    assert symbols_and_types.is_subtype(str, str)
-    assert not symbols_and_types.is_subtype(str, int)
-    assert symbols_and_types.is_subtype(int, typing.Union[int, str])
-    assert symbols_and_types.is_subtype(str, typing.Union[int, str])
-    assert not symbols_and_types.is_subtype(typing.Set, typing.Union[int, str])
-
-    assert symbols_and_types.is_subtype(
-        typing.Callable[[int], int], typing.Callable[[int], int]
-    )
-    assert symbols_and_types.is_subtype(
-        typing.Callable[[int], int], typing.Callable[[int], float]
-    )
-    assert not symbols_and_types.is_subtype(typing.Set, typing.Callable)
-
-    assert symbols_and_types.is_subtype(
-        typing.AbstractSet[int], typing.AbstractSet[int]
-    )
-    assert symbols_and_types.is_subtype(
-        typing.AbstractSet[int], typing.AbstractSet[float]
-    )
-
-    with pytest.raises(ValueError, message="typing Generic not supported"):
-        assert symbols_and_types.is_subtype(
-            typing.Set[int], typing.Generic[typing.T]
-        )
-
-
 def test_subclass():
     assert not issubclass(
         expressions.Constant[int], expressions.Constant[typing.AbstractSet]
