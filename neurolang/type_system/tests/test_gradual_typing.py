@@ -9,6 +9,7 @@ def test_is_leq_informative_type():
 
     assert is_leq_informative(int, Union[int, float])
     assert is_leq_informative(float, Union[int, float])
+    assert is_leq_informative(Union[float, int], Union[int, float, complex])
     assert ~is_leq_informative(str, Union[int, float])
     assert ~is_leq_informative(Union[int, float], int)
 

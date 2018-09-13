@@ -10,6 +10,8 @@ from warnings import warn
 import logging
 from contextlib import contextmanager
 from .exceptions import NeuroLangException
+from .type_system import is_leq_informative as is_subtype
+from .type_system import Unknown as ToBeInferred
 
 
 __all__ = [
@@ -20,7 +22,7 @@ __all__ = [
 ]
 
 
-ToBeInferred = typing.TypeVar('ToBeInferred', covariant=True)
+# ToBeInferred = typing.TypeVar('ToBeInferred', covariant=True)
 
 
 _lock = threading.RLock()
@@ -92,7 +94,7 @@ def get_type_and_value(value, symbol_table=None):
         return type(value), value
 
 
-def is_subtype(left, right):
+def is_subtype_old(left, right):
     if (left is right) or (left == right):
         return True
     if right is typing.Any:

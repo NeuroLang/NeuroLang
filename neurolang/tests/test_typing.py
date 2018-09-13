@@ -33,7 +33,6 @@ def test_is_subtype_base_types():
     assert symbols_and_types.is_subtype(int, float)
     assert symbols_and_types.is_subtype(str, str)
     assert not symbols_and_types.is_subtype(str, int)
-    assert symbols_and_types.is_subtype(int, typing.Any)
     assert symbols_and_types.is_subtype(int, typing.Union[int, str])
     assert symbols_and_types.is_subtype(str, typing.Union[int, str])
     assert not symbols_and_types.is_subtype(typing.Set, typing.Union[int, str])
