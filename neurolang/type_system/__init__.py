@@ -1,3 +1,9 @@
+'''
+Implementation of the type system based on Siek and Vachharajani,
+"Gradual Typing with Unification-based Inference", DLS 2008.
+'''
+
+
 import inspect
 import types
 from typing import (
