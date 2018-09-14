@@ -2,7 +2,7 @@ from functools import wraps
 import operator as op
 from typing import AbstractSet, Tuple
 from .. import neurolang as nl
-from ..symbols_and_types import is_subtype
+from ..symbols_and_types import is_leq_informative
 from ..expression_walker import ReplaceExpressionsByValues
 from ..expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 
@@ -168,7 +168,7 @@ class Symbol(Expression):
         if isinstance(symbol, Symbol):
             return(f'{self.symbol_name}: {symbol.type}')
         elif isinstance(symbol, nl.Constant):
-            if is_subtype(symbol.type, AbstractSet):
+            if is_leq_informative(symbol.type, AbstractSet):
                 contained = []
                 all_symbols = (
                     self.query_builder.solver.symbol_table.symbols_by_type(
@@ -198,8 +198,8 @@ class Symbol(Expression):
         symbol = self.symbol
         if (
             isinstance(symbol, nl.Constant) and (
-                is_subtype(symbol.type, AbstractSet) or
-                is_subtype(symbol.type, Tuple)
+                is_leq_informative(symbol.type, AbstractSet) or
+                is_leq_informative(symbol.type, Tuple)
             )
         ):
             all_symbols = (
@@ -224,8 +224,8 @@ class Symbol(Expression):
         symbol = self.symbol
         if (
             isinstance(symbol, nl.Constant) and (
-                is_subtype(symbol.type, AbstractSet) or
-                is_subtype(symbol.type, Tuple)
+                is_leq_informative(symbol.type, AbstractSet) or
+                is_leq_informative(symbol.type, Tuple)
             )
         ):
             return len(symbol.value)

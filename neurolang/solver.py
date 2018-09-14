@@ -10,8 +10,8 @@ from .exceptions import NeuroLangException
 from .expressions import (
     Expression, NonConstant, ExistentialPredicate, UniversalPredicate,
     Symbol, Constant,
-    FunctionApplication, Query, Definition, is_subtype,
-    ToBeInferred
+    FunctionApplication, Query, Definition, is_leq_informative,
+    Unknown
 )
 from .expression_walker import (
     add_match, ExpressionBasicEvaluator, ReplaceSymbolWalker,
@@ -281,7 +281,7 @@ class BooleanOperationsSolver(PatternWalker):
 
 class NumericOperationsSolver(PatternWalker[T]):
     @add_match(
-        FunctionApplication[ToBeInferred](Constant, (Expression[T],) * 2),
+        FunctionApplication[Unknown](Constant, (Expression[T],) * 2),
         lambda expression: expression.functor.value in (add, sub, mul, truediv)
     )
     def cast_binary(self, expression):
@@ -323,7 +323,7 @@ class FirstOrderLogicSolver(
     )
     def query_resolution(self, expression):
         out_query_type = expression.type
-        if out_query_type is ToBeInferred:
+        if out_query_type is Unknown:
             out_query_type = typing.AbstractSet[expression.head.type]
 
         result = []
@@ -403,7 +403,7 @@ class FirstOrderLogicSolver(
         '''
         if (
             isinstance(head, Constant) and
-            is_subtype(head.type, typing.Tuple) and
+            is_leq_informative(head.type, typing.Tuple) and
             all(isinstance(a, Symbol) for a in head.value)
         ):
             symbols_in_head = head.value

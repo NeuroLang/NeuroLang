@@ -5,7 +5,7 @@ from itertools import chain
 from . import expressions
 from .expressions import (
     ExpressionBlock,
-    ToBeInferred,
+    Unknown,
     Constant, Expression,
     Symbol,
     Lambda,
@@ -15,7 +15,7 @@ from .expressions import (
     UniversalPredicate,
     Query,
     Projection,
-    is_subtype,
+    is_leq_informative,
     get_type_args,
     get_type_and_value,
     type_validation_value,
@@ -26,12 +26,12 @@ from .expressions import (
 
 
 __all__ = [
-    'ToBeInferred',
+    'Unknown',
     'Symbol', 'Constant', 'Expression', 'FunctionApplication', 'Statement',
     'Projection', 'ExistentialPredicate', 'UniversalPredicate', 'Lambda',
     'Query',
     'TypedSymbolTable', 'ExpressionBlock',
-    'NeuroLangTypeException', 'is_subtype', 'type_validation_value',
+    'NeuroLangTypeException', 'is_leq_informative', 'type_validation_value',
     'unify_types',
     'get_Callable_arguments_and_return', 'get_type_and_value'
 ]
@@ -131,7 +131,7 @@ class TypedSymbolTable(collections.MutableMapping):
             if (
                 t is type_ or (
                     include_subtypes and
-                    t is not ToBeInferred and is_subtype(t, type_)
+                    t is not Unknown and is_leq_informative(t, type_)
                 )
             ):
                 ret.update(self._symbols_by_type[t])

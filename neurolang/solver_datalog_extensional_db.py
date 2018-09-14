@@ -2,7 +2,7 @@ from typing import AbstractSet, Any, Tuple
 from itertools import product
 
 from .expressions import (
-    FunctionApplication, Constant, NeuroLangTypeException, is_subtype
+    FunctionApplication, Constant, NeuroLangTypeException, is_leq_informative
 )
 from .expression_walker import (
     add_match, PatternWalker, ReplaceSymbolsByConstants
@@ -35,7 +35,7 @@ class ExtensionalDatabaseSolver(PatternWalker):
         else:
             element = Constant(expression.args)
 
-        if not is_subtype(element.type, expression.functor.type.__args__[0]):
+        if not is_leq_informative(element.type, expression.functor.type.__args__[0]):
             raise NeuroLangTypeException(
                 'Element type {element.type} does not '
                 'correspond with set type {functor.type}'

@@ -292,7 +292,7 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
                 (
                     hasattr(type(pattern), '__generic_class__') and
                     isinstance(expression, type(pattern).__generic_class__) and
-                    expressions.is_subtype(expression.type, pattern.type)
+                    expressions.is_leq_informative(expression.type, pattern.type)
                 ) or
                 isinstance(expression, type(pattern))
             ):

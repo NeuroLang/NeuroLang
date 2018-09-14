@@ -12,8 +12,8 @@ from ..exceptions import NeuroLangException
 from ..symbols_and_types import (
     Symbol, Constant, Expression, FunctionApplication, Statement, Query,
     Projection, ExistentialPredicate, ExpressionBlock, Lambda,
-    unify_types, ToBeInferred,
-    NeuroLangTypeException, is_subtype,
+    unify_types, Unknown,
+    NeuroLangTypeException, is_leq_informative,
     get_type_and_value
 )
 
@@ -307,11 +307,11 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
     def projection(self, ast):
         symbol = ast['identifier']
         item = ast['item']
-        if symbol.type is ToBeInferred:
+        if symbol.type is Unknown:
             return Projection(symbol, item)
-        elif is_subtype(symbol.type, typing.Tuple):
+        elif is_leq_informative(symbol.type, typing.Tuple):
             item_type, item = get_type_and_value(item)
-            if not is_subtype(item_type, typing.SupportsInt):
+            if not is_leq_informative(item_type, typing.SupportsInt):
                 raise NeuroLangTypeException(
                     "Tuple projection argument should be an int"
                 )
@@ -324,9 +324,9 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
                 raise NeuroLangTypeException(
                     "Tuple doesn't have %d items" % item
                 )
-        elif is_subtype(symbol.type, typing.Mapping):
+        elif is_leq_informative(symbol.type, typing.Mapping):
             key_type = symbol.type.__args__[0]
-            if not is_subtype(item_type, key_type):
+            if not is_leq_informative(item_type, key_type):
                 raise NeuroLangTypeException(
                     "key type does not agree with Mapping key %s" % key_type
                 )

@@ -10,9 +10,8 @@ from warnings import warn
 import logging
 from contextlib import contextmanager
 from .exceptions import NeuroLangException
-from .type_system import is_leq_informative as is_subtype
-from .type_system import Unknown as ToBeInferred
 from .type_system import (
+    is_leq_informative, Unknown,
     unify_types, NeuroLangTypeException,
 )
 from .type_system import get_args as get_type_args
@@ -22,11 +21,8 @@ from .type_system import infer_type as _infer_type
 __all__ = [
     'Symbol', 'FunctionApplication', 'Statement',
     'Projection', 'ExistentialPredicate', 'UniversalPredicate',
-    'ToBeInferred', 'get_type_args'
+    'Unknown', 'get_type_args'
 ]
-
-
-# ToBeInferred = typing.TypeVar('ToBeInferred', covariant=True)
 
 
 _lock = threading.RLock()
@@ -64,11 +60,11 @@ def get_type_and_value(value, symbol_table=None):
 
 
 def type_validation_value(value, type_):
-    if type_ is typing.Any or type_ is ToBeInferred:
+    if type_ is typing.Any or type_ is Unknown:
         return True
 
     value_type = infer_type(value)
-    return is_subtype(value_type, type_)
+    return is_leq_informative(value_type, type_)
     try:
         unify_types(value_type, type_)
         return True
@@ -114,7 +110,7 @@ class ParametricTypeClassMeta(type):
                             other.__generic_class__,
                             cls.__generic_class__
                         ) and
-                        is_subtype(other.type, cls.type)
+                        is_leq_informative(other.type, cls.type)
                     )
                 )
             )
@@ -148,7 +144,7 @@ class ExpressionMeta(ParametricTypeClassMeta):
     * Classes have an attribute `type` which is set through the syntax
       ClassName[TypeName]. If type is not specified then the `type`
       attribute defaults to `typing.Any` for the class and
-      `ToBeInferred` for the instance. In this case the `__no_explicit_type__`
+      `Unknown` for the instance. In this case the `__no_explicit_type__`
       attribute is set to `True`
     * Instances have an attribute for every argument in the `__init__`
       constructor method and it's set by default to the value passed
@@ -196,7 +192,7 @@ class ExpressionMeta(ParametricTypeClassMeta):
             self._symbols = set()
 
             if self.__no_explicit_type__:
-                self.type = ToBeInferred
+                self.type = Unknown
 
             if self.__is_pattern__:
                 parameters = inspect.signature(self.__class__).parameters
@@ -246,7 +242,7 @@ class Expression(metaclass=ExpressionMeta):
         if hasattr(self, '__annotations__') and len(self.__annotations__) > 0:
             variable_type = self.__annotations__.get('return', None)
         else:
-            variable_type = ToBeInferred
+            variable_type = Unknown
 
         return FunctionApplication[variable_type](
             self, args, kwargs,
@@ -271,7 +267,7 @@ class Expression(metaclass=ExpressionMeta):
 
     def get_wrapped_attribute(self, attr):
         return FunctionApplication(
-            Constant[typing.Callable[[self.type, str], ToBeInferred]](
+            Constant[typing.Callable[[self.type, str], Unknown]](
                 getattr,
             ),
             args=(self, Constant[str](attr))
@@ -406,11 +402,11 @@ class Constant(Expression):
                 if hasattr(value, attr):
                     setattr(self, attr, getattr(value, attr))
 
-            if auto_infer_type and self.type is ToBeInferred:
+            if auto_infer_type and self.type is Unknown:
                 if hasattr(value, '__annotations__'):
                     self.type = infer_type(value)
 
-        elif auto_infer_type and self.type is ToBeInferred:
+        elif auto_infer_type and self.type is Unknown:
             self.type = infer_type(self.value)
 
             self._symbols = set()
@@ -432,7 +428,7 @@ class Constant(Expression):
                 (self.value, self.type)
             )
 
-        if auto_infer_type and self.type is not ToBeInferred:
+        if auto_infer_type and self.type is not Unknown:
             self.change_type(self.type)
 
     def __verify_type__(self, value, type_):
@@ -447,13 +443,13 @@ class Constant(Expression):
         )
 
     def __eq__(self, other):
-        if self.type is ToBeInferred:
+        if self.type is Unknown:
             warn('Making a comparison with types needed to be inferred')
 
         if isinstance(other, Expression):
             types_equal = (
-                is_subtype(self.type, other.type) or
-                is_subtype(other.type, self.type)
+                is_leq_informative(self.type, other.type) or
+                is_leq_informative(other.type, self.type)
             )
             if types_equal:
                 if isinstance(other, Constant):
@@ -529,8 +525,8 @@ class FunctionApplication(Definition):
         self.args = args
         self.kwargs = kwargs
 
-        if self.type in (ToBeInferred, typing.Any):
-            if self.functor.type in (ToBeInferred, typing.Any):
+        if self.type in (Unknown, typing.Any):
+            if self.functor.type in (Unknown, typing.Any):
                 pass
             elif isinstance(self.functor.type, typing.Callable):
                 self.type = self.functor.type.__args__[-1]
@@ -538,8 +534,11 @@ class FunctionApplication(Definition):
                 raise NeuroLangTypeException("Functor is not an expression")
         else:
             if not (
-                self.functor.type in (ToBeInferred, typing.Any)
-                or is_subtype(self.functor.type.__args__[-1], self.type)
+                self.functor.type in (Unknown, typing.Any)
+                or is_leq_informative(
+                    self.functor.type.__args__[-1],
+                    self.type
+                )
             ):
                 raise NeuroLangTypeException(
                     "Functor return type not unifiable with application type"
@@ -584,12 +583,12 @@ class Projection(Definition):
         self, collection, item,
         auto_infer_projection_type=True
     ):
-        if self.type is ToBeInferred and auto_infer_projection_type:
-            if collection.type is not ToBeInferred:
-                if is_subtype(collection.type, typing.Tuple):
+        if self.type is Unknown and auto_infer_projection_type:
+            if collection.type is not Unknown:
+                if is_leq_informative(collection.type, typing.Tuple):
                     if (
                         isinstance(item, Constant) and
-                        is_subtype(item.type, typing.SupportsInt) and
+                        is_leq_informative(item.type, typing.SupportsInt) and
                         len(collection.type.__args__) > int(item.value)
                     ):
                         self.type = collection.type.__args__[
@@ -601,7 +600,7 @@ class Projection(Definition):
                                 int(item.value)
                             )
                         )
-                if is_subtype(collection.type, typing.Mapping):
+                if is_leq_informative(collection.type, typing.Mapping):
                     self.type = collection.type.__args__[1]
 
         self._symbols = collection._symbols
@@ -740,7 +739,7 @@ def op_bind(op):
     def f(*args):
         arg_types = [a.type for a in args]
         return FunctionApplication(
-            Constant[typing.Callable[arg_types, ToBeInferred]](
+            Constant[typing.Callable[arg_types, Unknown]](
                 op, auto_infer_type=False
             ),
             args,
@@ -754,7 +753,7 @@ def rop_bind(op):
     def f(self, value):
         arg_types = [a.type for a in (value, self)]
         return FunctionApplication(
-            Constant[typing.Callable[arg_types, ToBeInferred]](
+            Constant[typing.Callable[arg_types, Unknown]](
                 op, auto_infer_type=False
             ),
             args=(value, self),

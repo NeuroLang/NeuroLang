@@ -7,7 +7,7 @@ from ..expressions import (
     Constant,
     FunctionApplication, ExistentialPredicate, Query,
     get_type_and_value,
-    unify_types, is_subtype, ToBeInferred
+    unify_types, is_leq_informative, Unknown
 )
 from ..expression_walker import (
     add_match,
@@ -120,14 +120,14 @@ class SetBasedSolver(GenericSolver[T]):
     @add_match(ExistentialPredicate)
     def existential_predicate_no_process(self, expression):
         body = self.walk(expression.body)
-        if body.type is not ToBeInferred:
+        if body.type is not Unknown:
             return_type = unify_types(expression.type, body.type)
         else:
             return_type = expression.type
 
         if (
             isinstance(body, Constant) and
-            is_subtype(body.type, typing.AbstractSet)
+            is_leq_informative(body.type, typing.AbstractSet)
         ):
             body = body.cast(return_type)
             self.symbol_table[expression.head] = body

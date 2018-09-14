@@ -2,7 +2,7 @@ import pytest
 
 from .. import expressions
 from ..expressions import (
-    Expression, ToBeInferred, expressions_behave_as_objects
+    Expression, Unknown, expressions_behave_as_objects
 )
 
 from ..expression_walker import ExpressionBasicEvaluator
@@ -189,7 +189,7 @@ def test_typecast_check():
     s_float = s.cast(float)
 
     assert isinstance(s, expressions.Symbol)
-    assert s.type is ToBeInferred
+    assert s.type is Unknown
     assert isinstance(s_float, expressions.Symbol)
     assert isinstance(s_float, expressions.Symbol[float])
     assert issubclass(s.__class__, S_)
