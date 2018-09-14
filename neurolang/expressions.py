@@ -12,15 +12,17 @@ from contextlib import contextmanager
 from .exceptions import NeuroLangException
 from .type_system import is_leq_informative as is_subtype
 from .type_system import Unknown as ToBeInferred
-from .type_system import unify_types, NeuroLangTypeException
+from .type_system import (
+    unify_types, NeuroLangTypeException,
+)
 from .type_system import get_args as get_type_args
+from .type_system import infer_type as _infer_type
 
 
 __all__ = [
     'Symbol', 'FunctionApplication', 'Statement',
     'Projection', 'ExistentialPredicate', 'UniversalPredicate',
-    'ToBeInferred',
-    'typing_callable_from_annotated_function', 'get_type_args'
+    'ToBeInferred', 'get_type_args'
 ]
 
 
@@ -45,25 +47,6 @@ def expressions_behave_as_objects():
         del _expressions_behave_as_python_objects[thread_id]
 
 
-def typing_callable_from_annotated_function(function):
-    """Get typing.Callable type representing the annotated function type."""
-    signature = inspect.signature(function)
-    parameter_types = [
-        v.annotation if v.annotation is not inspect.Parameter.empty
-        else ToBeInferred
-        for v in signature.parameters.values()
-    ]
-
-    if signature.return_annotation is inspect.Parameter.empty:
-        return_annotation = ToBeInferred
-    else:
-        return_annotation = signature.return_annotation
-    return typing.Callable[
-        parameter_types,
-        return_annotation
-    ]
-
-
 def get_type_and_value(value, symbol_table=None):
     if symbol_table is not None and isinstance(value, Symbol):
         value = symbol_table.get(value, value)
@@ -73,84 +56,24 @@ def get_type_and_value(value, symbol_table=None):
         if isinstance(value, (Constant, Statement)):
             value = value.value
         return type_, value
-    elif isinstance(value, (types.FunctionType, types.MethodType)):
+    else:
         return (
-            typing_callable_from_annotated_function(value),
+            infer_type(value),
             value
         )
-    else:
-        return type(value), value
 
 
-def type_validation_value(value, type_, symbol_table=None):
+def type_validation_value(value, type_):
     if type_ is typing.Any or type_ is ToBeInferred:
         return True
 
-    if isinstance(value, Symbol):
-        if (symbol_table is not None):
-            value = symbol_table[value].value
-        else:
-            return is_subtype(value.type, type_)
-
-    if isinstance(value, Expression):
-        value_type, value = get_type_and_value(value)
-
-        if value is ...:
-            return is_subtype(value_type, type_)
-
-    if hasattr(type_, '__origin__') and type_.__origin__ is not None:
-        if type_.__origin__ == typing.Union:
-            return any(
-                type_validation_value(value, t, symbol_table=symbol_table)
-                for t in type_.__args__
-            )
-        elif issubclass(type_, typing.Callable):
-            value_type, _ = get_type_and_value(value)
-            return is_subtype(value_type, type_)
-        elif issubclass(type_, typing.Mapping):
-            return (
-                issubclass(type(value), type_.__origin__) and
-                ((type_.__args__ is None) or all((
-                    type_validation_value(
-                        k, type_.__args__[0], symbol_table=symbol_table
-                    ) and
-                    type_validation_value(
-                        v, type_.__args__[1], symbol_table=symbol_table
-                    )
-                    for k, v in value.items()
-                )))
-            )
-        elif issubclass(type_, typing.Tuple):
-            return (
-                issubclass(type(value), type_.__origin__) and
-                all((
-                    type_validation_value(
-                        v, t, symbol_table=symbol_table
-                    )
-                    for v, t in zip(value, type_.__args__)
-                ))
-            )
-        elif any(
-            issubclass(type_, t)
-            for t in (typing.AbstractSet, typing.Sequence, typing.Iterable)
-        ):
-            return (
-                issubclass(type(value), type_.__origin__) and
-                ((type_.__args__ is None) or all((
-                    type_validation_value(
-                        i, type_.__args__[0], symbol_table=symbol_table
-                    )
-                    for i in value
-                )))
-            )
-        else:
-            raise ValueError("Type %s not implemented in the checker" % type_)
-    elif isinstance(value, FunctionApplication):
-        return is_subtype(value.type, type_.type)
-    else:
-        return isinstance(
-            value, type_
-        )
+    value_type = infer_type(value)
+    return is_subtype(value_type, type_)
+    try:
+        unify_types(value_type, type_)
+        return True
+    except Exception:
+        return False
 
 
 class ParametricTypeClassMeta(type):
@@ -485,38 +408,23 @@ class Constant(Expression):
 
             if auto_infer_type and self.type is ToBeInferred:
                 if hasattr(value, '__annotations__'):
-                    self.type = typing_callable_from_annotated_function(value)
+                    self.type = infer_type(value)
+
         elif auto_infer_type and self.type is ToBeInferred:
-            if isinstance(self.value, tuple):
-                new_tuple = []
-                types = []
-                self._symbols = set()
+            self.type = infer_type(self.value)
+
+            self._symbols = set()
+            if (
+                not issubclass(self.type, typing.Text) and
+                issubclass(self.type, typing.Iterable)
+            ):
+                new_content = []
                 for a in self.value:
                     if not isinstance(a, Expression):
                         a = Constant(a)
-                    new_tuple.append(a)
-                    types.append(a.type)
                     self._symbols |= a._symbols
-                self.type = typing.Tuple[tuple(types)]
-                self.value = tuple(new_tuple)
-            elif isinstance(self.value, frozenset):
-                new_value = []
-                current_type = None
-                self._symbols = set()
-                for a in self.value:
-                    if not isinstance(a, Expression):
-                        a = Constant(a)
-                    new_value.append(a)
-                    self._symbols |= a._symbols
-                    new_type = a.type
-                    if current_type is None:
-                        current_type = new_type
-                    else:
-                        current_type = unify_types(current_type, new_type)
-                self.type = typing.AbstractSet[current_type]
-                self.value = frozenset(new_value)
-            else:
-                self.type = type(value)
+                    new_content.append(a)
+                self.value = type(self.value)(new_content)
 
         if not self.__verify_type__(self.value, self.type):
             raise NeuroLangTypeException(
@@ -813,6 +721,15 @@ class Query(Definition):
         )
 
 
+def infer_type(value, deep=False):
+    if isinstance(value, Expression):
+        return value.type
+    else:
+        return _infer_type(
+            value, deep=deep, recursive_callback=infer_type
+        )
+
+
 binary_opeations = (
     op.add, op.sub, op.mul
 )
@@ -821,7 +738,7 @@ binary_opeations = (
 def op_bind(op):
     @wraps(op)
     def f(*args):
-        arg_types = [get_type_and_value(a)[0] for a in args]
+        arg_types = [a.type for a in args]
         return FunctionApplication(
             Constant[typing.Callable[arg_types, ToBeInferred]](
                 op, auto_infer_type=False
@@ -835,7 +752,7 @@ def op_bind(op):
 def rop_bind(op):
     @wraps(op)
     def f(self, value):
-        arg_types = [get_type_and_value(a)[0] for a in (value, self)]
+        arg_types = [a.type for a in (value, self)]
         return FunctionApplication(
             Constant[typing.Callable[arg_types, ToBeInferred]](
                 op, auto_infer_type=False

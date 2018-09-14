@@ -1,7 +1,10 @@
 import pytest
 
 from typing import Union, Set, Callable, AbstractSet, Generic, T
-from .. import Unknown, is_leq_informative
+from .. import (
+    Unknown, is_leq_informative,
+    typing_callable_from_annotated_function, get_args
+)
 
 
 def test_is_leq_informative_type():
@@ -49,3 +52,22 @@ def test_is_leq_informative_base_types():
         assert is_leq_informative(
             Set[int], Generic[T]
         )
+
+
+def test_typing_callable_from_annotated_function():
+    def fun(a: int, b: str) -> float:
+        pass
+
+    t = typing_callable_from_annotated_function(fun)
+
+    assert t.__origin__ is Callable
+    assert t.__args__[0] is int and t.__args__[1] is str
+    assert t.__args__[2] is float
+
+
+def test_get_type_args():
+    args = get_args(AbstractSet)
+    assert args == tuple()
+
+    args = get_args(AbstractSet[int])
+    assert args == (int, )

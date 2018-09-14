@@ -1,6 +1,12 @@
-import typing
+import inspect
+import types
+from typing import (
+    Callable, Tuple, Set, AbstractSet, Mapping,
+    Sequence, Any, Generic, Text, _FinalTypingBase
+)
+
 from typing_inspect import (
-    get_args, get_origin,
+    get_origin,
     is_union_type, is_tuple_type, is_callable_type, is_generic_type,
     is_typevar
 )
@@ -13,12 +19,29 @@ class NeuroLangTypeException(NeuroLangException):
     pass
 
 
-Unknown = typing.Any
+class _Unknown(_FinalTypingBase, _root=True):
+    """Special type indicating an unknown type.
+
+    - Unknown is compatible with every type.
+    - Unknown is less informative than all types.
+    """
+
+    __slots__ = ()
+
+    def __instancecheck__(self, obj):
+        raise TypeError("Unknown cannot be used with isinstance().")
+
+    def __subclasscheck__(self, cls):
+        raise TypeError("Unknown cannot be used with issubclass().")
+
+
+Unknown = _Unknown(_root=True)
 
 
 type_order = {
     int: (float, complex),
-    float: (complex,)
+    float: (complex,),
+    Set: (AbstractSet,)
 }
 
 
@@ -50,8 +73,8 @@ def is_leq_informative(left, right):
     if not (is_type(left) and is_type(right)):
         raise ValueError('Both parameters need to be types')
     if (
-        get_origin(left) is typing.Generic or
-        get_origin(right) is typing.Generic
+        get_origin(left) is Generic or
+        get_origin(right) is Generic
     ):
         raise ValueError("typing Generic not supported")
     if left is right:
@@ -59,6 +82,10 @@ def is_leq_informative(left, right):
     elif left is Unknown:
         return True
     elif right is Unknown:
+        return False
+    elif right is Any:
+        return True
+    elif left is Any:
         return False
     elif is_union_type(right):
         type_parameters_right = get_args(right)
@@ -108,6 +135,7 @@ def is_type(type_):
     return (
         isinstance(type_, type) or
         type_ is Unknown or
+        type_ is Any or
         is_typevar(type_) or
         is_union_type(type_)
     )
@@ -144,3 +172,73 @@ def unify_types(t1, t2):
                 t1, t2
             )
         )
+
+
+def infer_type(value, deep=False, recursive_callback=None):
+    if recursive_callback is None:
+        recursive_callback = infer_type
+    if isinstance(value, (types.FunctionType, types.MethodType)):
+        return typing_callable_from_annotated_function(value)
+    elif isinstance(value, Tuple):
+        inner_types = tuple(
+            recursive_callback(v)
+            for v in value
+        )
+        return Tuple[inner_types]
+    elif isinstance(value, Text):
+        return type(value)
+    elif isinstance(value, (AbstractSet, Sequence)):
+        if len(value) == 0:
+            inner_type = Unknown
+        else:
+            it = iter(value)
+            element = next(it)
+            inner_type = recursive_callback(element)
+            if deep:
+                for element in it:
+                    inner_type = unify_types(
+                        inner_type, recursive_callback(it)
+                    )
+        if isinstance(value, AbstractSet):
+            return AbstractSet[inner_type]
+        elif isinstance(value, Sequence):
+            return Sequence[inner_type]
+    elif isinstance(value, Mapping):
+        it = iter(value.items())
+        k, v = next(it)
+        ktype = recursive_callback(k)
+        vtype = recursive_callback(v)
+        if deep:
+            for element in it:
+                ktype = unify_types(recursive_callback(k), ktype)
+                vtype = unify_types(recursive_callback(v), vtype)
+        return Mapping[ktype, vtype]
+    else:
+        return type(value)
+
+
+def typing_callable_from_annotated_function(function):
+    """Get typing.Callable type representing the annotated function type."""
+    signature = inspect.signature(function)
+    parameter_types = [
+        v.annotation if v.annotation is not inspect.Parameter.empty
+        else Unknown
+        for v in signature.parameters.values()
+    ]
+
+    if signature.return_annotation is inspect.Parameter.empty:
+        return_annotation = Unknown
+    else:
+        return_annotation = signature.return_annotation
+    return Callable[
+        parameter_types,
+        return_annotation
+    ]
+
+
+def get_args(type_):
+    ret = type_.__args__
+    if ret is None:
+        return ()
+    else:
+        return ret

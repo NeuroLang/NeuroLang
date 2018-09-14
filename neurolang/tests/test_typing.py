@@ -9,17 +9,6 @@ C_ = expressions.Constant
 S_ = expressions.Symbol
 
 
-def test_typing_callable_from_annotated_function():
-    def fun(a: int, b: str) -> float:
-        pass
-
-    t = symbols_and_types.typing_callable_from_annotated_function(fun)
-
-    assert t.__origin__ is typing.Callable
-    assert t.__args__[0] is int and t.__args__[1] is str
-    assert t.__args__[2] is float
-
-
 def test_get_type_args():
     args = symbols_and_types.get_type_args(typing.Set)
     assert args == tuple()
@@ -94,41 +83,38 @@ def test_type_validation_value():
     def f(a: int) -> int:
         return 0
 
-    symbol_table = {S_('r'): C_[typing.AbstractSet[str]]({'a'})}
-
     values = (
-        3, {3, 8}, 'try', f, (3, 'a'), C_[typing.Tuple[str, float]](('a', 3.)),
-        S_('r'), {'a': 3}
-    )  # yapf: disable
+        3, {3, 8}, 'try', f, (3, 'a'),
+        C_[typing.Tuple[str, float]](('a', 3.)), {'a': 3}
+    )
+
     types_ = (
         int, typing.AbstractSet[int], typing.Text, typing.Callable[[int], int],
         typing.Tuple[int, str], typing.Tuple[str, float],
-        symbol_table[S_('r')].type, typing.Mapping[str, int]
+        typing.Mapping[str, int]
     )
 
     for i, v in enumerate(values):
         assert symbols_and_types.type_validation_value(
-            v, typing.Any, symbol_table=symbol_table
+            v, typing.Any
         )
 
         for j, t in enumerate(types_):
             if i is j:
                 assert symbols_and_types.type_validation_value(
-                    v, t, symbol_table=symbol_table
+                    v, t
                 )
                 assert symbols_and_types.type_validation_value(
                     v,
                     typing.Union[t, types_[(i + 1) % len(types_)]],
-                    symbol_table=symbol_table
                 )
             else:
                 assert not symbols_and_types.type_validation_value(
-                    v, t, symbol_table=symbol_table
+                    v, t
                 )
                 assert not symbols_and_types.type_validation_value(
                     v,
-                    typing.Union[t, types_[(i + 1) % len(types_)]],
-                    symbol_table=symbol_table
+                    typing.Union[t, types_[(i + 1) % len(types_)]]
                 )
 
     with pytest.raises(ValueError, message="typing Generic not supported"):
