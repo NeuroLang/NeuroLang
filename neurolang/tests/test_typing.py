@@ -169,13 +169,6 @@ def test_TypedSymbolTable():
         stb[S_('s6')] = 5
 
 
-def test_get_callable_arguments_and_return():
-    c = typing.Callable[[int, str], float]
-    args, ret = symbols_and_types.get_Callable_arguments_and_return(c)
-    assert args == (int, str)
-    assert ret is float
-
-
 def test_free_variable_wrapping():
     def f(a: int) -> float:
         return 2. * int(a)

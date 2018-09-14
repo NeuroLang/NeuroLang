@@ -1,9 +1,10 @@
 import pytest
 
-from typing import Union, Set, Callable, AbstractSet, Generic, T
+from typing import Union, Set, Callable, AbstractSet, Generic, Tuple, T
 from .. import (
     Unknown, is_leq_informative,
-    typing_callable_from_annotated_function, get_args
+    typing_callable_from_annotated_function, get_args,
+    replace_type_variable
 )
 
 
@@ -71,3 +72,34 @@ def test_get_type_args():
 
     args = get_args(AbstractSet[int])
     assert args == (int, )
+
+
+def test_replace_subtype():
+    assert (
+        Set is replace_type_variable(
+            int, Set, T
+        )
+    )
+    assert (str is replace_type_variable(int, str, T))
+
+    assert (
+        Set[float] == replace_type_variable(
+            int, Set[float], T
+        )
+    )
+
+    assert (
+        Set[float] == replace_type_variable(
+            float, Set[T], T
+        )
+    )
+
+    assert (
+        Tuple[float, int] is replace_type_variable(
+            float, Tuple[T, int], T
+        )
+    )
+
+    assert (
+        Set[str] != replace_type_variable(float, Set[T], T)
+    )

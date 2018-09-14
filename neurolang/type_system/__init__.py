@@ -1,8 +1,8 @@
 import inspect
 import types
 from typing import (
-    Callable, Tuple, Set, AbstractSet, Mapping,
-    Sequence, Any, Generic, Text, _FinalTypingBase
+    Callable, Tuple, Set, AbstractSet, Mapping, TypeVar,
+    Iterable, Sequence, Any, Generic, Text, _FinalTypingBase
 )
 
 from typing_inspect import (
@@ -215,6 +215,28 @@ def infer_type(value, deep=False, recursive_callback=None):
         return Mapping[ktype, vtype]
     else:
         return type(value)
+
+
+def replace_type_variable(type_, type_hint, type_var=None):
+    if (
+        isinstance(type_hint, TypeVar) and
+        type_hint == type_var
+    ):
+        return type_
+    elif hasattr(type_hint, '__args__') and type_hint.__args__ is not None:
+        new_args = []
+        for arg in get_args(type_hint):
+            new_args.append(
+                replace_type_variable(type_, arg, type_var=type_var)
+            )
+        return type_hint.__origin__[tuple(new_args)]
+    elif isinstance(type_hint, Iterable):
+        return [
+            replace_type_variable(type_, arg, type_var=type_var)
+            for arg in type_hint
+        ]
+    else:
+        return type_hint
 
 
 def typing_callable_from_annotated_function(function):

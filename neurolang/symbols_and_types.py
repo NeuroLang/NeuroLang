@@ -32,12 +32,7 @@ __all__ = [
     'TypedSymbolTable', 'ExpressionBlock',
     'NeuroLangTypeException', 'is_leq_informative', 'type_validation_value',
     'unify_types',
-    'get_Callable_arguments_and_return'
 ]
-
-
-def get_Callable_arguments_and_return(callable):
-    return callable.__args__[:-1], callable.__args__[-1]
 
 
 def replace_type_variable(type_, type_hint, type_var=None):

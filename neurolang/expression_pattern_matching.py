@@ -12,8 +12,7 @@ import types
 from warnings import warn
 
 from . import expressions
-from .symbols_and_types import replace_type_variable
-
+from .type_system import replace_type_variable
 
 logging.addLevelName(logging.DEBUG - 1, 'FINEDEBUG')
 FINEDEBUG = logging.DEBUG - 1
