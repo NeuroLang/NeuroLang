@@ -15,7 +15,7 @@ class RelationalAlgebraSet(MutableSet):
         else:
             try:
                 self._set = pd.DataFrame.from_records(iter(iterable))
-                self._set = self._set.drop_duplicates()
+                self.tidy_up()
             except TypeError:
                 raise TypeError('Elements must be iterables')
 
@@ -193,4 +193,5 @@ class RelationalAlgebraSet(MutableSet):
         return res
 
     def tidy_up(self):
-        self._res.drop_duplicates()
+        if len(self._set) > 0:
+            self._set.drop_duplicates()

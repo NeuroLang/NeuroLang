@@ -8,7 +8,7 @@ from .expression_walker import (
 from .expressions import (
     Constant, Symbol, Query,
     Lambda, FunctionApplication,
-    ToBeInferred, is_subtype,
+    Unknown, is_leq_informative,
     NeuroLangTypeException
 )
 from .solver_datalog_naive import (
@@ -172,8 +172,8 @@ class DatalogSeminaiveEvaluator(DatalogBasic):
     def evaluate_function(self, expression):
         functor = expression.functor
         args = expression.args
-        if functor.type is not ToBeInferred:
-            if not is_subtype(functor.type, typing.Callable):
+        if functor.type is not Unknown:
+            if not is_leq_informative(functor.type, typing.Callable):
                 raise NeuroLangTypeException(
                     'Function {} is not of callable type'.format(functor)
                 )
@@ -183,7 +183,7 @@ class DatalogSeminaiveEvaluator(DatalogBasic):
                 raise NeuroLangTypeException(
                     'Function {} is not of callable type'.format(functor)
                 )
-            result_type = ToBeInferred
+            result_type = Unknown
 
         args = (a.value for a in args)
         result = Constant[result_type](

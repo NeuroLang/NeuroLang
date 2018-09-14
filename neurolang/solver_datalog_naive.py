@@ -21,13 +21,13 @@ from .expression_walker import (
 
 class RelationalAlgebraSetIR(RelationalAlgebraSet):
     def __init__(self, iterable=None):
-        self.type = ToBeInferred
+        self.type = Unknown
         if iterable is not None:
             new_in = set()
             try:
                 for e in iterable:
                     new_in.add(e.value)
-                    if self.type is ToBeInferred:
+                    if self.type is Unknown:
                         self.type = e.type
             except AttributeError:
                 raise NeuroLangException(
@@ -39,7 +39,7 @@ class RelationalAlgebraSetIR(RelationalAlgebraSet):
 
     def add(self, element):
         if isinstance(element, Constant):
-            if self.type is ToBeInferred:
+            if self.type is Unknown:
                 self.type = element.type
             element = element.value
             super().add(element)
