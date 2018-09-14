@@ -10,7 +10,7 @@ from ..expressions import (
     FunctionApplication, Lambda, ExpressionBlock,
     ExistentialPredicate, UniversalPredicate,
     Query,
-    is_subtype, NeuroLangException
+    is_leq_informative, NeuroLangException
 )
 
 S_ = Symbol
@@ -54,7 +54,7 @@ def test_facts_constants():
     assert isinstance(dl.symbol_table['Q'], Constant[AbstractSet])
     fact_set = dl.symbol_table['Q']
     assert isinstance(fact_set, Constant)
-    assert is_subtype(fact_set.type, AbstractSet)
+    assert is_leq_informative(fact_set.type, AbstractSet)
     assert {C_((C_(1), C_(2)))} == fact_set.value
 
     f2 = T_(S_('Q')(C_(3), C_(4)))

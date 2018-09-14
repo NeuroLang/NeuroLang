@@ -130,7 +130,8 @@ class RegionsSetSolver(SetBasedSolver[Region]):
     @nl.add_match(nl.FunctionApplication(nl.Constant(operator.invert), (nl.Constant[typing.AbstractSet],)))
     def rewrite_finite_domain_inversion(self, expression):
         set_constant = expression.args[0]
-        set_type, set_value = nl.get_type_and_value(set_constant)
+        set_type = set_constant.type
+        set_value = set_constant.value
         all_regions = frozenset(
             (
                 v.value for v in

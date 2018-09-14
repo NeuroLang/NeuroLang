@@ -12,7 +12,7 @@ from ..regions import (
     ExplicitVBR,
     take_principal_regions
 )
-from ..symbols_and_types import is_subtype
+from ..expressions import is_leq_informative
 
 __all__ = ['QueryBuilder']
 
@@ -67,7 +67,7 @@ class QueryBuilder:
     def functions(self):
         return [
             s.name for s in self.solver.symbol_table
-            if is_subtype(s.type, Callable)
+            if is_leq_informative(s.type, Callable)
         ]
 
     def execute_expression(self, expression, result_symbol_name=None):
@@ -175,7 +175,7 @@ class QueryBuilder:
         new_set = []
         for e in iterable:
             s = self.new_symbol(element_type).expression
-            if is_subtype(element_type, Tuple):
+            if is_leq_informative(element_type, Tuple):
                 c = nl.Constant[element_type](
                     tuple(nl.Constant(ee) for ee in e)
                 )

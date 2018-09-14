@@ -2,7 +2,7 @@ import pytest
 
 from typing import Callable, AbstractSet
 
-from ...symbols_and_types import TypedSymbolTable
+from ...expressions import TypedSymbolTable
 from .. import SetBasedSolver, FiniteDomainSet
 from ... import expressions
 from ...expressions import FunctionApplication, ExistentialPredicate
