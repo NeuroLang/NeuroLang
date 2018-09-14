@@ -17,7 +17,6 @@ from .expressions import (
     Projection,
     is_leq_informative,
     get_type_args,
-    get_type_and_value,
     type_validation_value,
     unify_types,
     NeuroLangTypeException,
@@ -33,7 +32,7 @@ __all__ = [
     'TypedSymbolTable', 'ExpressionBlock',
     'NeuroLangTypeException', 'is_leq_informative', 'type_validation_value',
     'unify_types',
-    'get_Callable_arguments_and_return', 'get_type_and_value'
+    'get_Callable_arguments_and_return'
 ]
 
 

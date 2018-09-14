@@ -55,30 +55,6 @@ def test_replace_subtype():
     )
 
 
-def test_get_type_and_value():
-    type_, value = symbols_and_types.get_type_and_value(3)
-    assert type_ is int
-    assert value == 3
-
-    type_, value = symbols_and_types.get_type_and_value(C_[int](3))
-    assert type_ is int
-    assert value == 3
-
-    type_, value = symbols_and_types.get_type_and_value(
-        S_('a'), {S_('a'): C_[int](3)}
-    )
-    assert type_ is int
-    assert value == 3
-
-    def f(a: int) -> int:
-        return 0
-
-    type_, value = symbols_and_types.get_type_and_value(f)
-
-    assert type_ is typing.Callable[[int], int]
-    assert value == f
-
-
 def test_type_validation_value():
     def f(a: int) -> int:
         return 0
@@ -207,9 +183,10 @@ def test_free_variable_wrapping():
     fva = C_(f)
     x = S_[int]('x')
     fvb = fva(x)
-    fva_type, fva_value = symbols_and_types.get_type_and_value(fva)
+    fva_type = fva.type
+    fva_value = fva.value
     assert fva_type is typing.Callable[[int], float]
     assert fva_value == f
 
-    assert symbols_and_types.get_type_and_value(fvb) == (float, fvb)
-    assert symbols_and_types.get_type_and_value(x) == (int, x)
+    assert fvb.type is float
+    assert x.type is int

@@ -43,22 +43,6 @@ def expressions_behave_as_objects():
         del _expressions_behave_as_python_objects[thread_id]
 
 
-def get_type_and_value(value, symbol_table=None):
-    if symbol_table is not None and isinstance(value, Symbol):
-        value = symbol_table.get(value, value)
-
-    if isinstance(value, Expression):
-        type_ = value.type
-        if isinstance(value, (Constant, Statement)):
-            value = value.value
-        return type_, value
-    else:
-        return (
-            infer_type(value),
-            value
-        )
-
-
 def type_validation_value(value, type_):
     if type_ is typing.Any or type_ is Unknown:
         return True

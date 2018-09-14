@@ -9,12 +9,12 @@ import tatsu
 from .ast import ASTWalker
 from .ast_tatsu import TatsuASTConverter
 from ..exceptions import NeuroLangException
-from ..symbols_and_types import (
+from ..expressions import (
     Symbol, Constant, Expression, FunctionApplication, Statement, Query,
     Projection, ExistentialPredicate, ExpressionBlock, Lambda,
     unify_types, Unknown,
     NeuroLangTypeException, is_leq_informative,
-    get_type_and_value
+    infer_type
 )
 
 
@@ -175,7 +175,7 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
 
     def assignment(self, ast):
         identifier = ast['identifier']
-        type_, _ = get_type_and_value(ast['argument'])
+        type_ = infer_type(ast['argument'])
         identifier = Symbol[type_](identifier.name)
         result = Statement[type_](
             identifier, ast['argument']
@@ -186,7 +186,7 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
         types_ = []
         values = []
         for element in ast['element']:
-            type_, _ = get_type_and_value(
+            type_ = infer_type(
                 element
             )
             types_.append(type_)
@@ -222,11 +222,11 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
 
     def sum(self, ast):
         arguments = ast['term']
-        result_type, _ = get_type_and_value(arguments[0])
+        result_type = infer_type(arguments[0])
         result = arguments[0]
         if 'op' in ast:
             for op, argument in zip(ast['op'], arguments[1:]):
-                argument_type, _ = get_type_and_value(argument)
+                argument_type = infer_type(argument)
                 result_type = unify_types(result_type, argument_type)
                 if op == '+':
                     result = result + argument
@@ -237,11 +237,11 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
 
     def product(self, ast):
         arguments = ast['factor']
-        result_type, _ = get_type_and_value(arguments[0])
+        result_type = infer_type(arguments[0])
         result = arguments[0]
         if 'op' in ast:
             for op, argument in zip(ast['op'], arguments[1:]):
-                argument_type, _ = get_type_and_value(argument)
+                argument_type = infer_type(argument)
                 result_type = unify_types(result_type, argument_type)
                 if op == '*':
                     result = result * argument
@@ -258,8 +258,8 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
 
         if 'exponent' in ast:
             exponent = ast['exponent']
-            result_type, _ = get_type_and_value(result)
-            exponent_type, _ = get_type_and_value(exponent)
+            result_type = infer_type(result)
+            exponent_type = infer_type(exponent)
             result = (
                 result ** exponent
             )
@@ -286,7 +286,8 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
         arguments = []
         argument_types = []
         for a in ast['argument']:
-            argument_type, value = get_type_and_value(a)
+            argument_type = infer_type(a)
+            value = a
             if isinstance(value, Statement):
                 value = value.lhs
             elif isinstance(value, Query):
@@ -310,7 +311,7 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
         if symbol.type is Unknown:
             return Projection(symbol, item)
         elif is_leq_informative(symbol.type, typing.Tuple):
-            item_type, item = get_type_and_value(item)
+            item_type = infer_type(item)
             if not is_leq_informative(item_type, typing.SupportsInt):
                 raise NeuroLangTypeException(
                     "Tuple projection argument should be an int"
@@ -409,7 +410,7 @@ class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
         if symbols is not None:
             for k, v in symbols.items():
                 if not isinstance(v, Constant):
-                    t, v = get_type_and_value(v)
+                    t = infer_type(v)
                     v = Constant[t](v)
                 self.symbol_table[Symbol[v.type](k)] = v
 
@@ -431,7 +432,7 @@ class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
                 for k, v in typing.get_type_hints(func).items():
                     func.__annotations__[k] = v
 
-                t, func = get_type_and_value(func)
+                t = infer_type(func)
                 self.symbol_table[Symbol[t](name)] = Constant[t](
                     func
                 )

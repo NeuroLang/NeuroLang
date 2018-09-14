@@ -6,7 +6,6 @@ from operator import (
 from ..expressions import (
     Constant,
     FunctionApplication, ExistentialPredicate, Query,
-    get_type_and_value,
     unify_types, is_leq_informative, Unknown
 )
 from ..expression_walker import (
@@ -61,13 +60,14 @@ class SetBasedSolver(GenericSolver[T]):
     @add_match(
         FunctionApplication(Constant(invert), (Constant[typing.AbstractSet],)),
         lambda expression: isinstance(
-            get_type_and_value(expression.args[0])[1],
+            expression.args[0].value,
             FiniteDomainSet
         )
     )
     def rewrite_finite_domain_inversion(self, expression):
         set_constant = expression.args[0]
-        set_type, set_value = get_type_and_value(set_constant)
+        set_type = set_constant.type
+        set_value = set_constant.value
         result = FiniteDomainSet(
             (
                 v.value for v in
@@ -89,9 +89,18 @@ class SetBasedSolver(GenericSolver[T]):
     )
     def rewrite_and_or(self, expression):
         f = expression.functor.value
-        a_type, a = get_type_and_value(expression.args[0])
-        b_type, b = get_type_and_value(expression.args[1])
-        e = Constant[a_type](
+        a_type = expression.args[0].type
+        b_type = expression.args[1].type
+        if isinstance(expression.args[0], Constant):
+            a = expression.args[0].value
+        else:
+            a = expression.args[0]
+        if isinstance(expression.args[1], Constant):
+            b = expression.args[1].value
+        else:
+            b = expression.args[1]
+
+        e = Constant[unify_types(a_type, b_type)](
             f(a, b)
         )
         return e

@@ -8,7 +8,7 @@ from .expressions import (
     ExpressionBlock,
     FunctionApplication, Statement, Query, Projection, Constant,
     Symbol, ExistentialPredicate, UniversalPredicate, Expression, Lambda,
-    get_type_and_value, Unknown, is_leq_informative, NeuroLangTypeException,
+    Unknown, is_leq_informative, NeuroLangTypeException,
     unify_types, NeuroLangException
 )
 
@@ -49,7 +49,9 @@ def expression_iterator(expression, include_level=False, dfs=True):
             if is_leq_informative(current_element[1].type, typing.Tuple):
                 c = current_element[1].value
                 children = product((None,), c)
-            elif is_leq_informative(current_element[1].type, typing.AbstractSet):
+            elif is_leq_informative(
+                current_element[1].type, typing.AbstractSet
+            ):
                 children = product((None,), current_element[1].value)
             else:
                 children = []
@@ -343,7 +345,9 @@ class ExpressionBasicEvaluator(SymbolTableEvaluator):
     )
     def evaluate_function(self, expression):
         functor = expression.functor
-        functor_type, functor_value = get_type_and_value(functor)
+        functor_type = functor.type
+        if isinstance(functor, Constant):
+            functor_value = functor.value
 
         if functor_type is not Unknown:
             if not is_leq_informative(functor_type, typing.Callable):
