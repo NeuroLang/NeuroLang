@@ -2,7 +2,7 @@ from functools import wraps
 import operator as op
 from typing import AbstractSet, Tuple
 from .. import neurolang as nl
-from ..symbols_and_types import is_leq_informative
+from ..expressions import is_leq_informative
 from ..expression_walker import ReplaceExpressionsByValues
 from ..expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 

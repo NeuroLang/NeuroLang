@@ -3,7 +3,7 @@ from itertools import product
 import logging
 import typing
 
-from .symbols_and_types import TypedSymbolTable
+from .expressions import TypedSymbolTable
 from .expressions import (
     ExpressionBlock,
     FunctionApplication, Statement, Query, Projection, Constant,

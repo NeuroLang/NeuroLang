@@ -1,60 +1,11 @@
-import typing
 import collections
 from itertools import chain
 
 from . import expressions
-from .expressions import (
-    ExpressionBlock,
-    Unknown,
-    Constant, Expression,
-    Symbol,
-    Lambda,
-    FunctionApplication,
-    Statement,
-    ExistentialPredicate,
-    UniversalPredicate,
-    Query,
-    Projection,
-    is_leq_informative,
-    get_type_args,
-    type_validation_value,
-    unify_types,
-    NeuroLangTypeException,
-    NeuroLangException
-)
+from .exceptions import NeuroLangException
 
 
-__all__ = [
-    'Unknown',
-    'Symbol', 'Constant', 'Expression', 'FunctionApplication', 'Statement',
-    'Projection', 'ExistentialPredicate', 'UniversalPredicate', 'Lambda',
-    'Query',
-    'TypedSymbolTable', 'ExpressionBlock',
-    'NeuroLangTypeException', 'is_leq_informative', 'type_validation_value',
-    'unify_types',
-]
-
-
-def replace_type_variable(type_, type_hint, type_var=None):
-    if (
-        isinstance(type_hint, typing.TypeVar) and
-        type_hint == type_var
-    ):
-        return type_
-    elif hasattr(type_hint, '__args__') and type_hint.__args__ is not None:
-        new_args = []
-        for arg in get_type_args(type_hint):
-            new_args.append(
-                replace_type_variable(type_, arg, type_var=type_var)
-            )
-        return type_hint.__origin__[tuple(new_args)]
-    elif isinstance(type_hint, typing.Iterable):
-        return [
-            replace_type_variable(type_, arg, type_var=type_var)
-            for arg in type_hint
-        ]
-    else:
-        return type_hint
+__all__ = ['TypedSymbolTable']
 
 
 class TypedSymbolTable(collections.MutableMapping):
@@ -125,7 +76,8 @@ class TypedSymbolTable(collections.MutableMapping):
             if (
                 t is type_ or (
                     include_subtypes and
-                    t is not Unknown and is_leq_informative(t, type_)
+                    t is not expressions.Unknown and
+                    expressions.is_leq_informative(t, type_)
                 )
             ):
                 ret.update(self._symbols_by_type[t])

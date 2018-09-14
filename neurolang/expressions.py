@@ -16,12 +16,13 @@ from .type_system import (
 )
 from .type_system import get_args as get_type_args
 from .type_system import infer_type as _infer_type
+from .typed_symbol_table import TypedSymbolTable
 
 
 __all__ = [
     'Symbol', 'FunctionApplication', 'Statement',
     'Projection', 'ExistentialPredicate', 'UniversalPredicate',
-    'Unknown', 'get_type_args'
+    'Unknown', 'get_type_args', 'TypedSymbolTable'
 ]
 
 

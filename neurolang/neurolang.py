@@ -6,7 +6,7 @@ from .expressions import *
 from .neurolang_compiler import NeuroLangIntermediateRepresentationCompiler
 from .solver import *
 from .exceptions import NeuroLangException
-from .symbols_and_types import (
+from .expressions import (
     Symbol, Constant, Expression, FunctionApplication, Statement, Query,
     Projection, ExistentialPredicate, Lambda,
     TypedSymbolTable, unify_types, Unknown,

@@ -12,7 +12,7 @@ from ..regions import (
     ExplicitVBR,
     take_principal_regions
 )
-from ..symbols_and_types import is_leq_informative
+from ..expressions import is_leq_informative
 
 __all__ = ['QueryBuilder']
 

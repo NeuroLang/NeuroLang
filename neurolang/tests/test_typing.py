@@ -2,7 +2,6 @@ import pytest
 
 import typing
 
-from .. import symbols_and_types
 from .. import expressions
 
 C_ = expressions.Constant
@@ -10,48 +9,16 @@ S_ = expressions.Symbol
 
 
 def test_get_type_args():
-    args = symbols_and_types.get_type_args(typing.Set)
+    args = expressions.get_type_args(typing.Set)
     assert args == tuple()
 
-    args = symbols_and_types.get_type_args(typing.Set[int])
+    args = expressions.get_type_args(typing.Set[int])
     assert args == (int, )
 
 
 def test_subclass():
     assert not issubclass(
         expressions.Constant[int], expressions.Constant[typing.AbstractSet]
-    )
-
-
-def test_replace_subtype():
-    assert (
-        typing.Set is symbols_and_types.replace_type_variable(
-            int, typing.Set, typing.T
-        )
-    )
-    assert (str is symbols_and_types.replace_type_variable(int, str, typing.T))
-
-    assert (
-        typing.Set[float] == symbols_and_types.replace_type_variable(
-            int, typing.Set[float], typing.T
-        )
-    )
-
-    assert (
-        typing.Set[float] == symbols_and_types.replace_type_variable(
-            float, typing.Set[typing.T], typing.T
-        )
-    )
-
-    assert (
-        typing.Tuple[float, int] is symbols_and_types.replace_type_variable(
-            float, typing.Tuple[typing.T, int], typing.T
-        )
-    )
-
-    assert (
-        typing.Set[str] != symbols_and_types.
-        replace_type_variable(float, typing.Set[typing.T], typing.T)
     )
 
 
@@ -71,30 +38,30 @@ def test_type_validation_value():
     )
 
     for i, v in enumerate(values):
-        assert symbols_and_types.type_validation_value(
+        assert expressions.type_validation_value(
             v, typing.Any
         )
 
         for j, t in enumerate(types_):
             if i is j:
-                assert symbols_and_types.type_validation_value(
+                assert expressions.type_validation_value(
                     v, t
                 )
-                assert symbols_and_types.type_validation_value(
+                assert expressions.type_validation_value(
                     v,
                     typing.Union[t, types_[(i + 1) % len(types_)]],
                 )
             else:
-                assert not symbols_and_types.type_validation_value(
+                assert not expressions.type_validation_value(
                     v, t
                 )
-                assert not symbols_and_types.type_validation_value(
+                assert not expressions.type_validation_value(
                     v,
                     typing.Union[t, types_[(i + 1) % len(types_)]]
                 )
 
     with pytest.raises(ValueError, message="typing Generic not supported"):
-        assert symbols_and_types.type_validation_value(
+        assert expressions.type_validation_value(
             None, typing.Generic[typing.T]
         )
 
@@ -106,12 +73,12 @@ def test_TypedSymbol():
     assert s.value == v
     assert s.type is t
 
-    with pytest.raises(symbols_and_types.NeuroLangTypeException):
+    with pytest.raises(expressions.NeuroLangTypeException):
         s = C_[t]('a')
 
 
 def test_TypedSymbolTable():
-    st = symbols_and_types.TypedSymbolTable()
+    st = expressions.TypedSymbolTable()
     s1 = C_[int](3)
     s2 = C_[int](4)
     s3 = C_[float](5.)
