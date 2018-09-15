@@ -27,7 +27,10 @@ destrieux_map = nib.load(destrieux_dataset['maps'])
 nl = fe.RegionFrontend()
 for label_number, name in destrieux_dataset['labels']:
     name = name.decode()
-    if not name.startswith('L ') or 'S_' not in name:
+    if (
+        not name.startswith('L ') or
+        not ('S_' in name or 'Lat_Fis' in name or 'Pole' in name)
+    ):
         continue
 
     # Create a region object
@@ -35,13 +38,12 @@ for label_number, name in destrieux_dataset['labels']:
 
     # Fine tune the symbol name
     name = 'L_' + name[2:].replace('-', '_')
-    nl.add_region(region, result_symbol_name=name)
-
+    nl.add_region(region, result_symbol_name=name.lower())
 
 ##################################################
 # Plot one of the symbols
 
-plotting.plot_roi(nl.symbols.L_S_central.value.spatial_image())
+plotting.plot_roi(nl.symbols.l_s_central.value.spatial_image())
 
 
 ###############################################################################
@@ -49,7 +51,7 @@ plotting.plot_roi(nl.symbols.L_S_central.value.spatial_image())
 # -----------------------------
 
 x = nl.new_region_symbol('x')
-q = nl.query(x, nl.symbols.anatomical_anterior_of(x, nl.symbols.L_S_central))
+q = nl.query(x, nl.symbols.anatomical_anterior_of(x, nl.symbols.l_s_central))
 print(q)
 
 ##################################################
@@ -66,8 +68,8 @@ for r in res:
 x = nl.new_region_symbol('x')
 q = nl.query(
     x,
-    nl.symbols.anatomical_anterior_of(x, nl.symbols.L_S_central) &
-    nl.symbols.anatomical_superior_of(x, nl.symbols.L_S_temporal_sup)
+    nl.symbols.anatomical_anterior_of(x, nl.symbols.l_s_central) &
+    nl.symbols.anatomical_superior_of(x, nl.symbols.l_s_temporal_sup)
 )
 print(q)
 
@@ -86,13 +88,45 @@ x = nl.new_region_symbol('x')
 y = nl.new_region_symbol('y')
 q = nl.query(
     x,
-    nl.symbols.anatomical_anterior_of(x, nl.symbols.L_S_central) &
+    nl.symbols.anatomical_anterior_of(x, nl.symbols.l_s_central) &
     ~nl.exists(
         y,
-        nl.symbols.anatomical_anterior_of(y, nl.symbols.L_S_central) &
+        nl.symbols.anatomical_anterior_of(y, nl.symbols.l_s_central) &
         nl.symbols.anatomical_anterior_of(x, y)
     )
 )
+print(q)
+
+##################################################
+#
+
+res = q.do()
+for r in res:
+    plotting.plot_roi(r.value.spatial_image(), title=r.symbol_name)
+
+
+###############################################################################
+# Use the set of results from a query in a different one
+# ------------------------------------------------------
+x = nl.new_region_symbol('x')
+temporal_lobe_query = nl.query(
+    x,
+    nl.symbols.anatomical_inferior_of(x, nl.symbols.l_s_parieto_occipital) &
+    nl.symbols.anatomical_anterior_of(x, nl.symbols.l_s_calcarine) &
+    nl.symbols.anatomical_posterior_of(x, nl.symbols.l_lat_fis_ant_vertical)
+)
+temporal_lobe = q.do(result_symbol_name='temporal_lobe')
+print(temporal_lobe)
+
+##################################################
+#
+
+q = nl.query(
+    x,
+    nl.symbols.isin(x, temporal_lobe) &
+    ~nl.symbols.anatomical_inferior_of(x, nl.symbols.l_s_temporal_inf)
+)
+
 print(q)
 
 ##################################################

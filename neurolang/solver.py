@@ -5,6 +5,7 @@ from operator import (
     add, sub, mul, truediv, pos, neg
 )
 import typing
+from warnings import warn
 
 from .exceptions import NeuroLangException
 from .expressions import (
@@ -341,11 +342,14 @@ class FirstOrderLogicSolver(
             body = rsw.walk(expression.body)
 
             res = self.walk(body)
-            if res.value:
-                if isinstance(expression.head, Symbol):
-                    result.append(symbol_values[0][0])
-                else:
-                    result.append(tuple(zip(*symbol_values))[0])
+            if isinstance(res, Constant):
+                if res.value is True:
+                    if isinstance(expression.head, Symbol):
+                        result.append(symbol_values[0][0])
+                    else:
+                        result.append(tuple(zip(*symbol_values))[0])
+            else:
+                warn('Query body could not be evaluated')
 
         return Constant[out_query_type](
             frozenset(result)
