@@ -123,7 +123,7 @@ print(temporal_lobe)
 
 q = nl.query(
     x,
-    temporal_lobe(x) &
+    nl.symbols.isin(x, temporal_lobe) &
     ~nl.symbols.anatomical_inferior_of(x, nl.symbols.l_s_temporal_inf)
 )
 

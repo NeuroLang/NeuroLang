@@ -38,6 +38,9 @@ def test_add_set():
     assert res.type is AbstractSet[Tuple[str, int]]
     assert res.value == v
 
+    exp = neurolang.symbols.isin(next(iter(s)), s)
+    assert exp.do().value is True
+
 
 def test_add_regions_and_query():
     neurolang = frontend.RegionFrontend()
