@@ -38,7 +38,15 @@ class ExtensionalDatabaseSolver(PatternWalker):
             element = Constant(expression.args)
 
         return_type = expression.functor.type.__args__[0]
-        if not is_leq_informative(element.type, return_type):
+        if not (
+            is_leq_informative(element.type, return_type) or (
+                is_subtype(element.type, type(None)) or
+                (
+                    is_subtype(element.type, Tuple) and
+                    any(typ is type(None) for typ in element.type.__args__)
+                )
+            )
+        ):
             raise NeuroLangTypeException(
                 'Element type {element.type} does not '
                 'correspond with set type {functor.type}'

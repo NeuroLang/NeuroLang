@@ -9,8 +9,7 @@ from ..existential_datalog import (
     NonRecursiveExistentialDatalog, SolverNonRecursiveExistentialDatalog,
     Implication
 )
-from ..solver_datalog_naive import NaiveDatalog
-from ..solver_datalog_naive import Fact
+from ..solver_datalog_naive import NaiveDatalog, Fact, UNDEFINED
 
 C_ = expressions.Constant
 S_ = expressions.Symbol
@@ -75,7 +74,6 @@ def test_existential_statement_added_to_symbol_table():
     solver = SolverWithoutExistentialResolution()
     z = S_('z')
     solver.walk(Implication(P(x, y, z), Q(z)))
-    solver.walk(intensional)
     assert 'P' in solver.symbol_table
 
 
@@ -109,9 +107,22 @@ def test_existential_statement_resolution():
     assert result.value is not None
     assert result.value == frozenset({'a', 'b'})
 
+
+def test_existential_statement_resolution_undefined():
+    solver = SolverWithExistentialResolution()
+    x, y = S_('x'), S_('y')
+    a, b, c = C_('a'), C_('b'), C_('c')
+    P, Q = S_('P'), S_('Q')
+    extensional = ExpressionBlock((
+        Fact(Q(a)),
+        Fact(Q(b)),
+    ))
+    solver.walk(extensional)
+    solver.walk(Implication(P(x, y), Q(x)))
+    u, v = S_('u'), S_('v')
     query = Query(u, P(v, u))
     result = solver.walk(query)
-    assert not isinstance(result, expressions.Constant)
+    assert result is UNDEFINED
 
 
 def test_and_query_resolution():
@@ -149,6 +160,22 @@ def test_multiple_eq_variables_in_consequent():
     assert isinstance(result, expressions.Constant)
     assert result.value is not None
     assert result.value == frozenset({'a', 'b'})
+
+
+def test_multiple_eq_variables_in_consequent_undefined():
+    solver = SolverWithExistentialResolution()
+    a, b = C_('a'), C_('b')
+    x, y, z = S_('x'), S_('y'), S_('z')
+    P, Q = S_('P'), S_('Q')
+    extensional = ExpressionBlock((
+        Fact(Q(a)),
+        Fact(Q(b)),
+    ))
+    solver.walk(extensional)
+    solver.walk(Implication(EP_(x, EP_(y, P(x, y, z))), Q(z)))
+    query = Query(x, P(x, y, z))
+    result = solver.walk(query)
+    assert result is UNDEFINED
 
 
 def test_cannot_mix_existential_and_non_existential_rule_definitions():

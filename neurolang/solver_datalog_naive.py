@@ -18,6 +18,14 @@ from .expression_walker import (
     add_match, PatternWalker, expression_iterator,
 )
 
+
+class Undefined:
+    pass
+
+
+UNDEFINED = Undefined()
+
+
 def _get_head_free_variables(expression_head):
     if isinstance(expression_head, Symbol):
         head_variables = {expression_head}
@@ -362,12 +370,10 @@ class NaiveDatalog(DatalogBasic):
                 'Head needs to be a tuple of symbols or a symbol'
             )
 
-        loop = product(
-            *((self.symbol_table[self.constant_set_name].value,) * len(head))
-        )
-
+        constant_set = self.symbol_table[self.constant_set_name].value
+        constant_set = constant_set.union({Constant(None)})
+        loop = product(*((constant_set, ) * len(head)))
         body = Lambda(head, expression.body)
-
         result = set()
 
         for args in loop:
@@ -376,12 +382,20 @@ class NaiveDatalog(DatalogBasic):
             fa = FunctionApplication(body, args)
             res = self.walk(fa)
             if isinstance(res, Constant) and res.value is True:
+                if any((
+                    isinstance(arg.value, Tuple) and
+                    any(element.value is None for element in arg.value)
+                    for arg in args
+                ) or any(arg.value is None for arg in args)):
+                    break
                 if len(head) > 1:
                     result.add(Constant(args))
                 else:
                     result.add(args[0].value[0])
+        else:
+            return Constant[AbstractSet[Any]](result)
 
-        return Constant[AbstractSet[Any]](result)
+        return UNDEFINED
 
 
 
