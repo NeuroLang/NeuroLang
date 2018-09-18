@@ -6,7 +6,7 @@ import numpy as np
 class AABB:
 
     def __init__(self, lb, ub):
-        self._limits = np.asanyarray((lb, ub), dtype=float).T
+        self._limits = np.asarray((lb, ub), dtype=float).T
         self._limits.setflags(write=False)
         self._lb = self._limits[:, 0]
         self._ub = self._limits[:, 1]
