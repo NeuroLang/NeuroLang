@@ -5,10 +5,10 @@ import typing
 
 from .expressions import TypedSymbolTable
 from .expressions import (
-    ExpressionBlock, FunctionApplication, Statement, Query, NullConstant,
-    Projection, Constant, Symbol, ExistentialPredicate, UniversalPredicate,
-    Expression, Lambda, Unknown, is_leq_informative, NeuroLangTypeException,
-    unify_types, NeuroLangException
+    ExpressionBlock, FunctionApplication, Statement, Query, Projection,
+    Constant, Symbol, ExistentialPredicate, UniversalPredicate, Expression,
+    Lambda, Unknown, is_leq_informative, NeuroLangTypeException, unify_types,
+    NeuroLangException
 )
 
 from .expression_pattern_matching import add_match, PatternMatcher
@@ -200,10 +200,6 @@ class ExpressionWalker(PatternWalker):
 
     @add_match(Constant)
     def constant(self, expression):
-        return expression
-
-    @add_match(NullConstant)
-    def null_constant(self, expression):
         return expression
 
     @add_match(Symbol)

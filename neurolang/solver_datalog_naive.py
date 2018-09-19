@@ -10,8 +10,8 @@ from .utils import OrderedSet
 
 from .expressions import (
     FunctionApplication, Constant, NeuroLangException, is_leq_informative,
-    Statement, Symbol, Lambda, ExpressionBlock, Expression, NullConstant,
-    Query, ExistentialPredicate, UniversalPredicate, Quantifier, Undefined
+    Statement, Symbol, Lambda, ExpressionBlock, Expression, Query,
+    ExistentialPredicate, UniversalPredicate, Quantifier
 )
 from .type_system import Unknown
 from .expression_walker import (
@@ -29,6 +29,20 @@ class Fact(Statement):
 
     def __repr__(self):
         return f'{self.fact}: {self.type} :- True'
+
+
+class Undefined(Constant):
+    def __repr__(self):
+        return 'UNDEFINED'
+
+
+class NullConstant(Constant):
+    def __repr__(self):
+        return 'NULL'
+
+
+UNDEFINED = Undefined(None)
+NULL = NullConstant[Any](None)
 
 
 class DatalogBasic(PatternWalker):
@@ -323,7 +337,7 @@ class NaiveDatalog(DatalogBasic):
             )
 
         constant_set = self.symbol_table[self.constant_set_name].value
-        constant_set = constant_set.union({NullConstant()})
+        constant_set = constant_set.union({NULL})
         loop = product(*((constant_set, ) * len(head)))
         body = Lambda(head, expression.body)
         result = set()
@@ -482,8 +496,8 @@ def query_introduce_existential_aux(body, head_variables):
 
 def args_contain_null(args):
     return any(
-        isinstance(a, NullConstant) or (
+        a is NULL or (
             is_leq_informative(a.type, Tuple) and
-            any(isinstance(e, NullConstant) for e in a.value)
+            any(e is NULL for e in a.value)
         ) for a in args
     )

@@ -4,12 +4,12 @@ from typing import Any
 from .. import solver_datalog_extensional_db
 from .. import expression_walker
 from .. import expressions
-from ..expressions import ExpressionBlock, Query, Undefined
+from ..expressions import ExpressionBlock, Query
 from ..existential_datalog import (
     NonRecursiveExistentialDatalog, SolverNonRecursiveExistentialDatalog,
     Implication
 )
-from ..solver_datalog_naive import NaiveDatalog, Fact
+from ..solver_datalog_naive import NaiveDatalog, Fact, UNDEFINED
 
 C_ = expressions.Constant
 S_ = expressions.Symbol
@@ -122,7 +122,7 @@ def test_existential_statement_resolution_undefined():
     u, v = S_('u'), S_('v')
     query = Query(u, P(v, u))
     result = solver.walk(query)
-    assert isinstance(result, Undefined)
+    assert result is UNDEFINED
 
 
 def test_and_query_resolution():
@@ -175,7 +175,7 @@ def test_multiple_eq_variables_in_consequent_undefined():
     solver.walk(Implication(EP_(x, EP_(y, P(x, y, z))), Q(z)))
     query = Query(x, P(x, y, z))
     result = solver.walk(query)
-    assert isinstance(result, Undefined)
+    assert result is UNDEFINED
 
 
 def test_cannot_mix_existential_and_non_existential_rule_definitions():

@@ -6,11 +6,9 @@ from .. import solver_datalog_naive as sdb
 from .. import solver_datalog_extensional_db
 from .. import expression_walker
 from ..expressions import (
-    Symbol, Constant, Statement,
-    FunctionApplication, Lambda, ExpressionBlock,
-    ExistentialPredicate, UniversalPredicate,
-    Query,
-    is_leq_informative, NeuroLangException
+    Symbol, Constant, Statement, FunctionApplication, Lambda, ExpressionBlock,
+    ExistentialPredicate, UniversalPredicate, Query, is_leq_informative,
+    NeuroLangException
 )
 
 S_ = Symbol

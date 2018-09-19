@@ -475,22 +475,6 @@ class Constant(Expression):
             )
 
 
-class Undefined(Constant[typing.Any]):
-    def __init__(self):
-        super().__init__('__undefined__')
-
-    def __repr__(self):
-        return 'UNDEFINED'
-
-
-class NullConstant(Constant[typing.Any]):
-    def __init__(self):
-        super().__init__('__null__')
-
-    def __repr__(self):
-        return 'NULL'
-
-
 class Lambda(Definition):
     def __init__(self, args, function_expression):
         self.args = args
