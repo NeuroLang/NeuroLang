@@ -10,61 +10,13 @@ from .utils import OrderedSet
 
 from .expressions import (
     FunctionApplication, Constant, NeuroLangException, is_leq_informative,
-    Statement, Symbol, Lambda, ExpressionBlock, Expression,
-    Query, ExistentialPredicate, UniversalPredicate, Quantifier
+    Statement, Symbol, Lambda, ExpressionBlock, Expression, NullConstant,
+    Query, ExistentialPredicate, UniversalPredicate, Quantifier, Undefined
 )
 from .type_system import Unknown
 from .expression_walker import (
     add_match, PatternWalker, expression_iterator,
 )
-
-
-class Undefined:
-    pass
-
-
-UNDEFINED = Undefined()
-
-
-def _get_head_free_variables(expression_head):
-    if isinstance(expression_head, Symbol):
-        head_variables = {expression_head}
-    elif isinstance(expression_head, tuple):
-        head_variables = set(e for e in expression_head)
-    elif (
-        isinstance(expression_head, Constant) and
-        is_leq_informative(expression_head.type, Tuple)
-    ):
-        head_variables = set(e for e in expression_head.value)
-    else:
-        raise NeuroLangException(
-            'Head needs to be a tuple of symbols or a symbol'
-        )
-    return head_variables
-
-
-def _query_introduce_existential(body, head_variables):
-    new_body = body
-    if isinstance(body, FunctionApplication):
-        if (
-            isinstance(body.functor, Constant) and
-            body.functor.value is and_
-        ):
-            new_body = FunctionApplication(
-                body.functor,
-                tuple(
-                    _query_introduce_existential(arg, head_variables)
-                    for arg in body.args
-                )
-            )
-        else:
-            fa_free_variables = extract_datalog_free_variables(body)
-            eq_variables = fa_free_variables - head_variables
-            for eq_variable in eq_variables:
-                new_body = ExistentialPredicate(
-                    eq_variable, new_body
-                )
-    return new_body
 
 
 class Fact(Statement):
@@ -343,14 +295,14 @@ class NaiveDatalog(DatalogBasic):
         Query,
         lambda e: (
             extract_datalog_free_variables(e.body) >
-            _get_head_free_variables(e.head)
+            get_head_free_variables(e.head)
         )
     )
     def query_introduce_existential(self, expression):
         return self.walk(Query(
             expression.head,
-            _query_introduce_existential(
-                expression.body, _get_head_free_variables(expression.head)
+            query_introduce_existential_aux(
+                expression.body, get_head_free_variables(expression.head)
             )
         ))
 
@@ -371,7 +323,7 @@ class NaiveDatalog(DatalogBasic):
             )
 
         constant_set = self.symbol_table[self.constant_set_name].value
-        constant_set = constant_set.union({Constant(None)})
+        constant_set = constant_set.union({NullConstant()})
         loop = product(*((constant_set, ) * len(head)))
         body = Lambda(head, expression.body)
         result = set()
@@ -382,11 +334,7 @@ class NaiveDatalog(DatalogBasic):
             fa = FunctionApplication(body, args)
             res = self.walk(fa)
             if isinstance(res, Constant) and res.value is True:
-                if any((
-                    isinstance(arg.value, Tuple) and
-                    any(element.value is None for element in arg.value)
-                    for arg in args
-                ) or any(arg.value is None for arg in args)):
+                if args_contain_null(args):
                     break
                 if len(head) > 1:
                     result.add(Constant(args))
@@ -395,8 +343,7 @@ class NaiveDatalog(DatalogBasic):
         else:
             return Constant[AbstractSet[Any]](result)
 
-        return UNDEFINED
-
+        return Undefined()
 
 
 def is_conjunctive_expression(expression):
@@ -490,3 +437,53 @@ def extract_datalog_predicates(expression):
     """
     edp = ExtractDatalogPredicates()
     return edp.walk(expression)
+
+
+def get_head_free_variables(expression_head):
+    if isinstance(expression_head, Symbol):
+        head_variables = {expression_head}
+    elif isinstance(expression_head, tuple):
+        head_variables = set(e for e in expression_head)
+    elif (
+        isinstance(expression_head, Constant) and
+        is_leq_informative(expression_head.type, Tuple)
+    ):
+        head_variables = set(e for e in expression_head.value)
+    else:
+        raise NeuroLangException(
+            'Head needs to be a tuple of symbols or a symbol'
+        )
+    return head_variables
+
+
+def query_introduce_existential_aux(body, head_variables):
+    new_body = body
+    if isinstance(body, FunctionApplication):
+        if (
+            isinstance(body.functor, Constant) and
+            body.functor.value is and_
+        ):
+            new_body = FunctionApplication(
+                body.functor,
+                tuple(
+                    query_introduce_existential_aux(arg, head_variables)
+                    for arg in body.args
+                )
+            )
+        else:
+            fa_free_variables = extract_datalog_free_variables(body)
+            eq_variables = fa_free_variables - head_variables
+            for eq_variable in eq_variables:
+                new_body = ExistentialPredicate(
+                    eq_variable, new_body
+                )
+    return new_body
+
+
+def args_contain_null(args):
+    return any(
+        isinstance(a, NullConstant) or (
+            is_leq_informative(a.type, Tuple) and
+            any(isinstance(e, NullConstant) for e in a.value)
+        ) for a in args
+    )
