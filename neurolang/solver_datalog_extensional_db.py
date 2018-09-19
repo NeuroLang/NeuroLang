@@ -40,9 +40,9 @@ class ExtensionalDatabaseSolver(PatternWalker):
         return_type = expression.functor.type.__args__[0]
         if not (
             is_leq_informative(element.type, return_type) or (
-                is_subtype(element.type, type(None)) or
+                is_leq_informative(element.type, type(None)) or
                 (
-                    is_subtype(element.type, Tuple) and
+                    is_leq_informative(element.type, Tuple) and
                     any(typ is type(None) for typ in element.type.__args__)
                 )
             )

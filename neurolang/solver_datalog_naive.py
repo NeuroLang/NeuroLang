@@ -11,9 +11,9 @@ from .utils import OrderedSet
 from .expressions import (
     FunctionApplication, Constant, NeuroLangException, is_leq_informative,
     Statement, Symbol, Lambda, ExpressionBlock, Expression,
-    Query, ExistentialPredicate, UniversalPredicate, Quantifier,
-    ToBeInferred
+    Query, ExistentialPredicate, UniversalPredicate, Quantifier
 )
+from .type_system import Unknown
 from .expression_walker import (
     add_match, PatternWalker, expression_iterator,
 )
@@ -33,7 +33,7 @@ def _get_head_free_variables(expression_head):
         head_variables = set(e for e in expression_head)
     elif (
         isinstance(expression_head, Constant) and
-        is_subtype(expression_head.type, Tuple)
+        is_leq_informative(expression_head.type, Tuple)
     ):
         head_variables = set(e for e in expression_head.value)
     else:
