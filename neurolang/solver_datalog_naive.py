@@ -10,7 +10,7 @@ from .utils import OrderedSet
 
 from .expressions import (
     FunctionApplication, Constant, NeuroLangException, is_leq_informative,
-    Statement, Symbol, Lambda, ExpressionBlock, Expression, Query,
+    Definition, Symbol, Lambda, ExpressionBlock, Expression, Query,
     ExistentialPredicate, UniversalPredicate, Quantifier
 )
 from .type_system import Unknown
@@ -19,16 +19,32 @@ from .expression_walker import (
 )
 
 
-class Fact(Statement):
-    def __init__(self, lhs):
-        super().__init__(lhs, Constant(True))
+class Implication(Definition):
+    """Expression of the form `P(x) \u2190 Q(x)`"""
+
+    def __init__(self, consequent, antecedent):
+        self.consequent = consequent
+        self.antecedent = antecedent
+        self._symbols = consequent._symbols | antecedent._symbols
+
+    def __repr__(self):
+        return 'Implication{{{} \u2190 {}}}'.format(
+            repr(self.consequent), repr(self.antecedent)
+        )
+
+
+class Fact(Implication):
+    def __init__(self, consequent):
+        super().__init__(consequent, Constant(True))
 
     @property
     def fact(self):
-        return self.lhs
+        return self.consequent
 
     def __repr__(self):
-        return f'{self.fact}: {self.type} :- True'
+        return 'Fact{{{} \u2190 {}}}'.format(
+            repr(self.consequent), True
+        )
 
 
 class Undefined(Constant):
@@ -107,56 +123,62 @@ class DatalogBasic(PatternWalker):
 
         return expression
 
-    @add_match(Statement(
+    @add_match(Implication(
         FunctionApplication[bool](Symbol, ...),
         Constant[bool](True)
     ))
     def statement_extensional(self, expression):
-        return self.walk(Fact[expression.type](expression.lhs))
+        return self.walk(Fact[expression.type](expression.consequent))
 
-    @add_match(Statement(
+    @add_match(Implication(
         FunctionApplication[bool](Symbol, ...),
         Expression
     ))
     def statement_intensional(self, expression):
-        lhs = expression.lhs
-        rhs = expression.rhs
+        consequent = expression.consequent
+        antecedent = expression.antecedent
 
-        if lhs.functor.name in self.protected_keywords:
+        if consequent.functor.name in self.protected_keywords:
             raise NeuroLangException(
                 f'symbol {self.constant_set_name} is protected'
             )
 
-        if not is_conjunctive_expression(rhs):
+        if not is_conjunctive_expression(antecedent):
             raise NeuroLangException(
-                f'Expression {rhs} is not conjunctive'
+                f'Expression {antecedent} is not conjunctive'
             )
 
-        lhs_symbols = lhs._symbols - lhs.functor._symbols
+        consequent_symbols = consequent._symbols - consequent.functor._symbols
 
-        if not lhs_symbols.issubset(rhs._symbols):
+        if not consequent_symbols.issubset(antecedent._symbols):
             raise NeuroLangException(
                 "All variables on the left need to be on the right"
             )
 
-        if lhs.functor.name in self.symbol_table:
-            value = self.symbol_table[lhs.functor.name]
+        if consequent.functor.name in self.symbol_table:
+            value = self.symbol_table[consequent.functor.name]
             if (
                 isinstance(value, Constant) and
                 is_leq_informative(value.type, AbstractSet)
             ):
                 raise NeuroLangException(
-                    'f{lhs.functor.name} has been previously '
+                    'f{consequent.functor.name} has been previously '
                     'defined as Fact or extensional database.'
                 )
-            eb = self.symbol_table[lhs.functor.name].expressions
+            eb = (
+                self.symbol_table[consequent.functor.name]
+                .antecedent.expressions
+            )
         else:
             eb = tuple()
 
-        lambda_ = Lambda(lhs.args, rhs)
+        lambda_ = Lambda(consequent.args, antecedent)
         eb = eb + (lambda_,)
 
-        self.symbol_table[lhs.functor.name] = ExpressionBlock(eb)
+        self.symbol_table[consequent.functor.name] = Implication(
+            antecedent,
+            ExpressionBlock(eb)
+        )
 
         return expression
 
@@ -165,7 +187,7 @@ class DatalogBasic(PatternWalker):
             k: v for k, v in self.symbol_table.items()
             if (
                 k not in self.protected_keywords and
-                isinstance(v, ExpressionBlock)
+                isinstance(v, Implication)
             )
         }
 
@@ -218,36 +240,45 @@ class NaiveDatalog(DatalogBasic):
             (Constant(expression.args),)
         ))
 
-    @add_match(Statement(
+    @add_match(Implication(
         FunctionApplication[bool](Symbol, ...),
-        Expression
+        ExpressionBlock
      ),
         lambda e: len(
-            extract_datalog_free_variables(e.rhs) -
-            extract_datalog_free_variables(e.lhs)
+            extract_datalog_free_variables(e.antecedent) -
+            extract_datalog_free_variables(e.consequent)
         ) > 0
     )
     def statement_intensional_add_existential(self, expression):
-        lhs = expression.lhs
-        rhs = expression.rhs
-        fv = (
-            extract_datalog_free_variables(rhs) -
-            extract_datalog_free_variables(lhs)
-        )
+        consequent = expression.consequent
+        fv_consequent = extract_datalog_free_variables(consequent)
+        new_exp_list = []
+        for exp in expression.antecedent.expressions:
+            fv = (
+                extract_datalog_free_variables(exp) -
+                fv_consequent
+            )
 
-        if len(fv) > 0:
-            for v in fv:
-                rhs = ExistentialPredicate[bool](v, rhs)
-        return self.walk(Statement[expression.type](lhs, rhs))
+            fe = exp.function_expression
+            if len(fv) > 0:
+                for v in fv:
+                    fe = ExistentialPredicate[bool](v, fe)
+            new_exp_list.append(Lambda[exp.type](exp.args, fe))
+
+        antecedent = ExpressionBlock(tuple(new_exp_list))
+        return self.walk(Implication[expression.type](consequent, antecedent))
 
     @add_match(
-        FunctionApplication(ExpressionBlock, ...),
+        FunctionApplication(
+            Implication(FunctionApplication, ExpressionBlock),
+            ...
+        ),
         lambda e: all(
             isinstance(a, Constant) for a in e.args
         )
     )
     def evaluate_datalog_expression(self, expression):
-        for exp in expression.functor.expressions:
+        for exp in expression.functor.antecedent.expressions:
             if (
                 isinstance(exp, Lambda) and
                 len(exp.args) != len(expression.args)
@@ -412,9 +443,12 @@ class ExtractDatalogFreeVariablesWalker(PatternWalker):
     def extract_variables_q(self, expression):
         return self.walk(expression.body) - expression.head._symbols
 
-    @add_match(Statement)
+    @add_match(Implication)
     def extract_variables_s(self, expression):
-        return self.walk(expression.rhs) - self.walk(expression.lhs)
+        return (
+            self.walk(expression.antecedent) -
+            self.walk(expression.consequent)
+        )
 
     @add_match(...)
     def _(self, expression):
