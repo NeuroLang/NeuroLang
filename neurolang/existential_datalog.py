@@ -93,10 +93,10 @@ class NonRecursiveExistentialDatalog(DatalogBasic):
         return self.walk(Implication(new_consequent, expression.antecedent))
 
     @add_match(Implication(ExistentialPredicate, ...))
-    def existential_predicate_in_head(self, expression):
+    def add_existential_implication_to_symbol_table(self, expression):
         """
         Add implication with a \u2203-quantified function application
-        consequent
+        consequent to the symbol table
         """
         consequent_body, eq_variables = (
             parse_implication_with_existential_consequent(expression)
