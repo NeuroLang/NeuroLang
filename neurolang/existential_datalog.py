@@ -2,7 +2,7 @@ from typing import AbstractSet, Any, Tuple
 
 from .expressions import (
     NeuroLangException, Definition, ExistentialPredicate, Constant, Symbol,
-    ExpressionBlock, Query, FunctionApplication, Lambda
+    ExpressionBlock, FunctionApplication, Lambda
 )
 from .solver_datalog_naive import (
     NaiveDatalog, DatalogBasic, extract_datalog_free_variables,
@@ -140,13 +140,6 @@ class NonRecursiveExistentialDatalog(DatalogBasic):
 class SolverNonRecursiveExistentialDatalog(
     NaiveDatalog, NonRecursiveExistentialDatalog
 ):
-    # @add_match(
-        # FunctionApplication(Lambda(..., ExistentialPredicate), ...),
-        # is_undefined_application_of_existential_predicate
-    # )
-    # def handle_undefined_case(self, expression):
-        # return True
-
     @add_match(
         FunctionApplication(Implication(ExistentialPredicate, ...), ...)
     )

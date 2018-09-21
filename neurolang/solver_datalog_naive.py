@@ -244,7 +244,6 @@ class NaiveDatalog(DatalogBasic):
         )
     )
     def evaluate_datalog_expression(self, expression):
-        import pdb; pdb.set_trace()
         for exp in expression.functor.expressions:
             if (
                 isinstance(exp, Lambda) and
