@@ -3,6 +3,7 @@ import pytest
 from typing import AbstractSet
 
 from .. import solver_datalog_naive as sdb
+from ..solver_datalog_naive import NULL, UNDEFINED
 from .. import solver_datalog_extensional_db
 from .. import expression_walker
 from ..expressions import (
@@ -29,6 +30,15 @@ class Datalog(
     expression_walker.ExpressionBasicEvaluator
 ):
     pass
+
+
+def test_fa_on_null_constant_resolves_to_undefined():
+    dl = Datalog()
+    P = S_('P')
+    x, y = S_('x'), S_('y')
+    assert not dl.walk(P(NULL))
+    assert not dl.walk(P(x, NULL, y))
+    assert not dl.walk(P(x, C_((NULL, y))))
 
 
 def test_no_facts():

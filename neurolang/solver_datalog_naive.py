@@ -201,6 +201,10 @@ class NaiveDatalog(DatalogBasic):
 
         return expression
 
+    @add_match(FunctionApplication, lambda e: any_arg_is_null(e.args))
+    def fa_on_null_constant(self, expression):
+        return False
+
     @add_match(
         FunctionApplication(Constant[AbstractSet], (Constant,)),
         lambda exp: not is_leq_informative(exp.args[0].type, Tuple)
@@ -348,7 +352,7 @@ class NaiveDatalog(DatalogBasic):
             fa = FunctionApplication(body, args)
             res = self.walk(fa)
             if isinstance(res, Constant) and res.value is True:
-                if args_contain_null(args):
+                if any_arg_is_null(args):
                     break
                 if len(head) > 1:
                     result.add(Constant(args))
@@ -357,7 +361,7 @@ class NaiveDatalog(DatalogBasic):
         else:
             return Constant[AbstractSet[Any]](result)
 
-        return Undefined()
+        return UNDEFINED
 
 
 def is_conjunctive_expression(expression):
@@ -494,10 +498,12 @@ def query_introduce_existential_aux(body, head_variables):
     return new_body
 
 
-def args_contain_null(args):
+def any_arg_is_null(args):
     return any(
-        a is NULL or (
-            is_leq_informative(a.type, Tuple) and
-            any(e is NULL for e in a.value)
-        ) for a in args
+        arg is NULL or (
+            isinstance(arg, Constant) and
+            is_leq_informative(arg.type, Tuple) and
+            any(x is NULL for x in arg.value)
+        )
+        for arg in args
     )
