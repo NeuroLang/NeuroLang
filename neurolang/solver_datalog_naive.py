@@ -169,6 +169,14 @@ class DatalogBasic(PatternWalker):
                 self.symbol_table[consequent.functor.name]
                 .expressions
             )
+
+            if len(eb[0].consequent.args) != len(expression.consequent.args):
+                raise NeuroLangException(
+                    f"{expression.consequent.functor} is already in the IDB "
+                    f"and has {len(expression.consequent.args)}. A new "
+                    "rule for this predicate can't have a different number "
+                    "of arguments"
+                )
         else:
             eb = tuple()
 
@@ -263,19 +271,36 @@ class NaiveDatalog(DatalogBasic):
 
     @add_match(
         FunctionApplication[bool](Implication, ...),
-        lambda e: len(
-            extract_datalog_free_variables(e.functor.antecedent) -
-            extract_datalog_free_variables(e.functor.consequent)
-        ) <= 0
+        lambda e: (
+            len(
+                extract_datalog_free_variables(e.functor.antecedent) -
+                extract_datalog_free_variables(e.functor.consequent)
+            ) <= 0
+        ) and all(
+            isinstance(a, Constant) for a in e.args
+        )
     )
     def function_application_idb(self, expression):
+        new_lambda_args = []
+        new_args = []
+        for la, a in zip(
+            expression.functor.consequent.args,
+            expression.args
+        ):
+            if isinstance(la, Constant):
+                if la != a:
+                    return Constant[bool](False)
+            else:
+                new_lambda_args.append(la)
+                new_args.append(a)
+
         return self.walk(
             FunctionApplication(
                 Lambda(
-                    expression.functor.consequent.args,
+                    tuple(new_lambda_args),
                     expression.functor.antecedent
                 ),
-                expression.args
+                tuple(new_args)
             )
         )
 

@@ -3,7 +3,7 @@ import pytest
 from typing import AbstractSet
 
 from .. import solver_datalog_naive as sdb
-from ..solver_datalog_naive import NULL, UNDEFINED
+from ..solver_datalog_naive import NULL
 from .. import solver_datalog_extensional_db
 from .. import expression_walker
 from ..expressions import (
@@ -88,6 +88,7 @@ def test_atoms_variables():
     x = S_('x')
     y = S_('y')
     Q = S_('Q')
+    R = S_('R')
     T = S_('T')
 
     f1 = Imp_(Q(x,), eq(x, x))
@@ -116,16 +117,35 @@ def test_atoms_variables():
     assert fact.consequent.args == (x, y)
     assert fact.antecedent == eq(x, y)
 
+    f3 = Imp_(R(x, C_(1)), eq(x, x))
+    dl.walk(f3)
+
+    assert 'R' in dl.symbol_table
+    assert isinstance(dl.symbol_table['R'], ExpressionBlock)
+    fact = dl.symbol_table['R'].expressions[-1]
+    assert isinstance(fact, sdb.Implication)
+    assert isinstance(fact.consequent, FunctionApplication)
+    assert fact.consequent.functor is R
+    assert fact.consequent.args == (x, C_(1))
+    assert fact.antecedent == eq(x, x)
+
     with pytest.raises(NeuroLangException):
         dl.walk(Imp_(Q(x), ...))
+
+    with pytest.raises(NeuroLangException):
+        dl.walk(Imp_(Q(x, y), eq(x, y)))
 
     f = Q(C_(10))
     g = T(C_(1), C_(5))
     h = T(C_(1), C_(1))
+    i = R(C_(2), C_(1))
+    g = R(C_(2), C_(2))
 
     assert dl.walk(f).value is True
     assert dl.walk(g).value is False
     assert dl.walk(h).value is True
+    assert dl.walk(i).value is True
+    assert dl.walk(g).value is False
 
 
 def test_facts_intensional():
