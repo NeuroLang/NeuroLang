@@ -252,11 +252,11 @@ def test_query_tuple():
     query = Q_((x, y), T(x, y))
     res = dl.walk(query)
 
-    assert res.value == {
+    assert res.value == set((
         C_((C_(1), C_(1))),
         C_((C_(1), C_(2))),
         C_((C_(1), C_(4))),
-    }
+    ))
 
 
 def test_extensional_database():
