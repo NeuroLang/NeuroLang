@@ -3,14 +3,13 @@ import pytest
 from typing import AbstractSet
 
 from .. import solver_datalog_naive as sdb
+from ..solver_datalog_naive import NULL, UNDEFINED
 from .. import solver_datalog_extensional_db
 from .. import expression_walker
 from ..expressions import (
-    Symbol, Constant, Statement,
-    FunctionApplication, Lambda, ExpressionBlock,
-    ExistentialPredicate, UniversalPredicate,
-    Query,
-    is_leq_informative, NeuroLangException
+    Symbol, Constant, Statement, FunctionApplication, Lambda, ExpressionBlock,
+    ExistentialPredicate, UniversalPredicate, Query, is_leq_informative,
+    NeuroLangException
 )
 
 S_ = Symbol
@@ -31,6 +30,17 @@ class Datalog(
     expression_walker.ExpressionBasicEvaluator
 ):
     pass
+
+
+def test_null_constant_resolves_to_undefined():
+    dl = Datalog()
+    P = S_('P')
+    dl.walk(T_(P(C_('a'))))
+    dl.walk(T_(P(C_('b'))))
+    assert 'P' in dl.symbol_table
+    res = dl.walk(P(NULL))
+    assert isinstance(res, Constant)
+    assert not res.value
 
 
 def test_no_facts():

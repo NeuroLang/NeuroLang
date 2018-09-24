@@ -3,8 +3,8 @@ from itertools import product
 from operator import contains
 
 from .expressions import (
-    Expression,
-    FunctionApplication, Constant, NeuroLangTypeException, is_leq_informative
+    Expression, FunctionApplication, Constant, NeuroLangTypeException,
+    is_leq_informative
 )
 from .expression_walker import (
     add_match, PatternWalker, ReplaceSymbolsByConstants

@@ -5,11 +5,10 @@ import typing
 
 from .expressions import TypedSymbolTable
 from .expressions import (
-    ExpressionBlock,
-    FunctionApplication, Statement, Query, Projection, Constant,
-    Symbol, ExistentialPredicate, UniversalPredicate, Expression, Lambda,
-    Unknown, is_leq_informative, NeuroLangTypeException,
-    unify_types, NeuroLangException
+    ExpressionBlock, FunctionApplication, Statement, Query, Projection,
+    Constant, Symbol, ExistentialPredicate, UniversalPredicate, Expression,
+    Lambda, Unknown, is_leq_informative, NeuroLangTypeException, unify_types,
+    NeuroLangException
 )
 
 from .expression_pattern_matching import add_match, PatternMatcher
