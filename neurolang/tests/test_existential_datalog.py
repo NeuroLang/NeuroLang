@@ -43,27 +43,18 @@ def test_existential_intensional_database():
 
 
 def test_bad_existential_formulae():
-
     solver = SolverWithoutExistentialResolution()
-
-    x, y = S_('x'), S_('y')
-    P, Q = S_('P'), S_('Q')
-
+    x, y, P, Q = S_('x'), S_('y'), S_('P'), S_('Q')
     with pytest.raises(expressions.NeuroLangException):
         solver.walk(Implication(EP_(y, P(x, y)), Q(x, y)))
-
     with pytest.raises(expressions.NeuroLangException):
         solver.walk(Implication(EP_(y, P(x)), Q(x)))
-
-    exp = Implication(EP_(y, P(x, y)), Q(x))
-    solver.walk(exp)
+    solver.walk(Implication(EP_(y, P(x, y)), Q(x)))
 
 
 def test_existential_statement_added_to_symbol_table():
     solver = SolverWithoutExistentialResolution()
-    x, y = S_('x'), S_('y')
-    a, b, c = C_('a'), C_('b'), C_('c')
-    P, Q = S_('P'), S_('Q')
+    x, y, z, P, Q = S_('x'), S_('y'), S_('z'), S_('P'), S_('Q')
     solver.walk(Implication(EP_(y, P(x, y)), Q(x)))
     assert 'P' in solver.symbol_table
     assert len(solver.symbol_table['P'].expressions) == 1
@@ -72,16 +63,14 @@ def test_existential_statement_added_to_symbol_table():
         expressions.ExistentialPredicate
     )
     solver = SolverWithoutExistentialResolution()
-    z = S_('z')
     solver.walk(Implication(EP_(x, EP_(y, P(x, y, z))), Q(z)))
     assert 'P' in solver.symbol_table
 
 
 def test_existential_statement_resolution():
     solver = SolverWithExistentialResolution()
-    x, y = S_('x'), S_('y')
-    a, b, c = C_('a'), C_('b'), C_('c')
-    P, Q = S_('P'), S_('Q')
+    x, Q = S_('x'), S_('Q')
+    a, b = C_('a'), C_('b')
     extensional = ExpressionBlock((
         Fact(Q(a)),
         Fact(Q(b)),
@@ -94,8 +83,8 @@ def test_existential_statement_resolution():
     assert result.value is not None
     assert result.value == frozenset({'a', 'b'})
 
+    y, P = S_('y'), S_('P')
     solver.walk(Implication(EP_(y, P(x, y)), Q(x)))
-
     query = Query(x, EP_(y, P(x, y)))
     result = solver.walk(query)
     assert isinstance(result, expressions.Constant)
@@ -112,9 +101,8 @@ def test_existential_statement_resolution():
 
 def test_existential_statement_resolution_undefined():
     solver = SolverWithExistentialResolution()
-    x, y = S_('x'), S_('y')
-    a, b, c = C_('a'), C_('b'), C_('c')
-    P, Q = S_('P'), S_('Q')
+    x, y, P, Q = S_('x'), S_('y'), S_('P'), S_('Q')
+    a, b = C_('a'), C_('b')
     extensional = ExpressionBlock((
         Fact(Q(a)),
         Fact(Q(b)),
@@ -129,9 +117,8 @@ def test_existential_statement_resolution_undefined():
 
 def test_function_application_on_null_returns_false():
     solver = SolverWithExistentialResolution()
-    P, Q = S_('P'), S_('Q')
+    x, y, P, Q = S_('x'), S_('y'), S_('P'), S_('Q')
     a, b = C_('a'), C_('b')
-    x, y = S_('x'), S_('y')
     extensional = ExpressionBlock((
         Fact(Q(a)),
         Fact(Q(b)),
@@ -145,9 +132,8 @@ def test_function_application_on_null_returns_false():
 
 def test_existential_and_query_resolution():
     solver = SolverWithExistentialResolution()
+    x, y, P, Q = S_('x'), S_('y'), S_('P'), S_('Q')
     a, b = C_('a'), C_('b')
-    x, y = S_('x'), S_('y')
-    P, Q = S_('P'), S_('Q')
     extensional = ExpressionBlock((
         Fact(Q(a)),
         Fact(Q(b)),
@@ -165,8 +151,7 @@ def test_existential_and_query_resolution():
 def test_multiple_existential_variables_in_consequent():
     solver = SolverWithExistentialResolution()
     a, b = C_('a'), C_('b')
-    x, y, z = S_('x'), S_('y'), S_('z')
-    P, Q = S_('P'), S_('Q')
+    x, y, z, P, Q = S_('x'), S_('y'), S_('z'), S_('P'), S_('Q')
     extensional = ExpressionBlock((
         Fact(Q(a)),
         Fact(Q(b)),
@@ -183,8 +168,7 @@ def test_multiple_existential_variables_in_consequent():
 def test_multiple_existential_variables_in_consequent_undefined():
     solver = SolverWithExistentialResolution()
     a, b = C_('a'), C_('b')
-    x, y, z = S_('x'), S_('y'), S_('z')
-    P, Q = S_('P'), S_('Q')
+    x, y, z, P, Q = S_('x'), S_('y'), S_('z'), S_('P'), S_('Q')
     extensional = ExpressionBlock((
         Fact(Q(a)),
         Fact(Q(b)),
@@ -198,12 +182,11 @@ def test_multiple_existential_variables_in_consequent_undefined():
 
 def test_cannot_mix_existential_and_non_existential_rule_definitions():
     solver = SolverWithoutExistentialResolution()
-    x, y = S_('x'), S_('y')
-    P, Q, R = S_('P'), S_('Q'), S_('R')
+    x, y, P, Q, R = S_('x'), S_('y'), S_('P'), S_('Q'), S_('R')
 
     solver.walk(Implication(EP_(y, P(x, y)), Q(x)))
     assert 'P' in solver.symbol_table
     assert 'P' in solver.existential_intensional_database()
 
     with pytest.raises(expressions.NeuroLangException):
-        solver.walk(Implication(P(x, y), Q(x, y)))
+        solver.walk(Implication(P(x, y), R(x, y)))
