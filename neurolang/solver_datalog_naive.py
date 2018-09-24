@@ -282,8 +282,12 @@ class SolverNonRecursiveDatalogNaive(DatalogBasic):
         for v in fv_antecedent:
             new_antecedent = ExistentialPredicate[bool](v, new_antecedent)
 
+        functor_type = expression.functor.type
         return self.walk(
-            Implication[expression.type](consequent, new_antecedent)
+            FunctionApplication[bool](
+                Implication[functor_type](consequent, new_antecedent),
+                expression.args
+            )
         )
 
     @add_match(
@@ -312,7 +316,7 @@ class SolverNonRecursiveDatalogNaive(DatalogBasic):
                 new_args.append(a)
 
         return self.walk(
-            FunctionApplication(
+            FunctionApplication[bool](
                 Lambda(
                     tuple(new_lambda_args),
                     expression.functor.antecedent
@@ -354,7 +358,7 @@ class SolverNonRecursiveDatalogNaive(DatalogBasic):
 
         body = Lambda(head, expression.body)
         for args in loop:
-            fa = FunctionApplication(body, args)
+            fa = FunctionApplication[bool](body, args)
             res = self.walk(fa)
             if isinstance(res, Constant) and res.value is False:
                 break
@@ -426,7 +430,7 @@ class SolverNonRecursiveDatalogNaive(DatalogBasic):
         for args in loop:
             if len(head) == 1:
                 args = (Constant(args),)
-            fa = FunctionApplication(body, args)
+            fa = FunctionApplication[bool](body, args)
             res = self.walk(fa)
             if isinstance(res, Constant) and res.value is True:
                 if any_arg_is_null(args):
