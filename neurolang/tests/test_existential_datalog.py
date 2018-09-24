@@ -35,7 +35,10 @@ class SolverWithExistentialResolution(
 
 def test_existential_intensional_database():
     solver = SolverWithoutExistentialResolution()
-    x, y, P, Q = S_('x'), S_('y'), S_('P'), S_('Q')
+    x = S_('x')
+    y = S_('y')
+    P = S_('P')
+    Q = S_('Q')
     solver.walk(Implication(EP_(y, P(x, y)), Q(x)))
     assert 'P' in solver.symbol_table
     assert 'P' in solver.existential_intensional_database()
@@ -44,7 +47,10 @@ def test_existential_intensional_database():
 
 def test_bad_existential_formulae():
     solver = SolverWithoutExistentialResolution()
-    x, y, P, Q = S_('x'), S_('y'), S_('P'), S_('Q')
+    x = S_('x')
+    y = S_('y')
+    P = S_('P')
+    Q = S_('Q')
     with pytest.raises(expressions.NeuroLangException):
         solver.walk(Implication(EP_(y, P(x, y)), Q(x, y)))
     with pytest.raises(expressions.NeuroLangException):
@@ -54,7 +60,11 @@ def test_bad_existential_formulae():
 
 def test_existential_statement_added_to_symbol_table():
     solver = SolverWithoutExistentialResolution()
-    x, y, z, P, Q = S_('x'), S_('y'), S_('z'), S_('P'), S_('Q')
+    x = S_('x')
+    y = S_('y')
+    z = S_('z')
+    P = S_('P')
+    Q = S_('Q')
     solver.walk(Implication(EP_(y, P(x, y)), Q(x)))
     assert 'P' in solver.symbol_table
     assert len(solver.symbol_table['P'].expressions) == 1
@@ -69,8 +79,11 @@ def test_existential_statement_added_to_symbol_table():
 
 def test_existential_statement_resolution():
     solver = SolverWithExistentialResolution()
-    x, Q = S_('x'), S_('Q')
-    a, b = C_('a'), C_('b')
+    x = S_('x')
+    P = S_('P')
+    Q = S_('Q')
+    a = C_('a')
+    b = C_('b')
     extensional = ExpressionBlock((
         Fact(Q(a)),
         Fact(Q(b)),
@@ -83,7 +96,8 @@ def test_existential_statement_resolution():
     assert result.value is not None
     assert result.value == frozenset({'a', 'b'})
 
-    y, P = S_('y'), S_('P')
+    y = S_('y')
+    P = S_('P')
     solver.walk(Implication(EP_(y, P(x, y)), Q(x)))
     query = Query(x, EP_(y, P(x, y)))
     result = solver.walk(query)
@@ -91,7 +105,8 @@ def test_existential_statement_resolution():
     assert result.value is not None
     assert result.value == frozenset({'a', 'b'})
 
-    u, v = S_('u'), S_('v')
+    u = S_('u')
+    v = S_('v')
     query = Query(u, EP_(v, P(u, v)))
     result = solver.walk(query)
     assert isinstance(result, expressions.Constant)
@@ -101,8 +116,12 @@ def test_existential_statement_resolution():
 
 def test_existential_statement_resolution_undefined():
     solver = SolverWithExistentialResolution()
-    x, y, P, Q = S_('x'), S_('y'), S_('P'), S_('Q')
-    a, b = C_('a'), C_('b')
+    x = S_('x')
+    y = S_('y')
+    P = S_('P')
+    Q = S_('Q')
+    a = C_('a')
+    b = C_('b')
     extensional = ExpressionBlock((
         Fact(Q(a)),
         Fact(Q(b)),
@@ -117,8 +136,12 @@ def test_existential_statement_resolution_undefined():
 
 def test_function_application_on_null_returns_false():
     solver = SolverWithExistentialResolution()
-    x, y, P, Q = S_('x'), S_('y'), S_('P'), S_('Q')
-    a, b = C_('a'), C_('b')
+    x = S_('x')
+    y = S_('y')
+    P = S_('P')
+    Q = S_('Q')
+    a = C_('a')
+    b = C_('b')
     extensional = ExpressionBlock((
         Fact(Q(a)),
         Fact(Q(b)),
@@ -132,8 +155,12 @@ def test_function_application_on_null_returns_false():
 
 def test_existential_and_query_resolution():
     solver = SolverWithExistentialResolution()
-    x, y, P, Q = S_('x'), S_('y'), S_('P'), S_('Q')
-    a, b = C_('a'), C_('b')
+    x = S_('x')
+    y = S_('y')
+    P = S_('P')
+    Q = S_('Q')
+    a = C_('a')
+    b = C_('b')
     extensional = ExpressionBlock((
         Fact(Q(a)),
         Fact(Q(b)),
@@ -150,8 +177,13 @@ def test_existential_and_query_resolution():
 
 def test_multiple_existential_variables_in_consequent():
     solver = SolverWithExistentialResolution()
-    a, b = C_('a'), C_('b')
-    x, y, z, P, Q = S_('x'), S_('y'), S_('z'), S_('P'), S_('Q')
+    x = S_('x')
+    y = S_('y')
+    z = S_('z')
+    P = S_('P')
+    Q = S_('Q')
+    a = C_('a')
+    b = C_('b')
     extensional = ExpressionBlock((
         Fact(Q(a)),
         Fact(Q(b)),
@@ -167,8 +199,13 @@ def test_multiple_existential_variables_in_consequent():
 
 def test_multiple_existential_variables_in_consequent_undefined():
     solver = SolverWithExistentialResolution()
-    a, b = C_('a'), C_('b')
-    x, y, z, P, Q = S_('x'), S_('y'), S_('z'), S_('P'), S_('Q')
+    x = S_('x')
+    y = S_('y')
+    z = S_('z')
+    P = S_('P')
+    Q = S_('Q')
+    a = C_('a')
+    b = C_('b')
     extensional = ExpressionBlock((
         Fact(Q(a)),
         Fact(Q(b)),
@@ -182,7 +219,12 @@ def test_multiple_existential_variables_in_consequent_undefined():
 
 def test_cannot_mix_existential_and_non_existential_rule_definitions():
     solver = SolverWithoutExistentialResolution()
-    x, y, P, Q, R = S_('x'), S_('y'), S_('P'), S_('Q'), S_('R')
+    x = S_('x')
+    y = S_('y')
+    z = S_('z')
+    P = S_('P')
+    Q = S_('Q')
+    R = S_('R')
 
     solver.walk(Implication(EP_(y, P(x, y)), Q(x)))
     assert 'P' in solver.symbol_table
