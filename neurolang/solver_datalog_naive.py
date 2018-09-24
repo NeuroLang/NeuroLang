@@ -201,9 +201,9 @@ class NaiveDatalog(DatalogBasic):
 
         return expression
 
-    # @add_match(FunctionApplication, lambda e: any_arg_is_null(e.args))
-    # def fa_on_null_constant(self, expression):
-        # return False
+    @add_match(FunctionApplication, lambda e: any_arg_is_null(e.args))
+    def fa_on_null_constant(self, expression):
+        return False
 
     @add_match(
         FunctionApplication(Constant[AbstractSet], (Constant,)),
@@ -341,7 +341,7 @@ class NaiveDatalog(DatalogBasic):
             )
 
         constant_set = self.symbol_table[self.constant_set_name].value
-        # constant_set = constant_set.union({NULL})
+        constant_set = constant_set.union({NULL})
         loop = product(*((constant_set, ) * len(head)))
         body = Lambda(head, expression.body)
         result = set()

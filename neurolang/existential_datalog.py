@@ -60,38 +60,6 @@ class NonRecursiveExistentialDatalog(DatalogBasic):
             )
         }
 
-    @add_match(
-        Implication,
-        lambda e: (
-            not isinstance(e, ExistentialPredicate) and (
-                extract_datalog_free_variables(e.consequent) >
-                extract_datalog_free_variables(e.antecedent)
-            )
-
-        )
-    )
-    def implication_add_existential_predicates(self, expression):
-        """Add missing ∃ quantifier to implication when needed.
-
-        A ∃ quantifier is added to the consequent expression for each
-        free variable present in the consequent but not in the
-        antecedent.
-
-        Examples
-        --------
-        The expression `P(x, y) <- Q(x)`
-        is converted to `∃y, P(x, y) <- Q(x)`
-
-        """
-        new_consequent = expression.consequent
-        eq_wannabe_variables = (
-            extract_datalog_free_variables(expression.consequent) -
-            extract_datalog_free_variables(expression.antecedent)
-        )
-        for eq_variable in eq_wannabe_variables:
-            new_consequent = ExistentialPredicate(eq_variable, new_consequent)
-        return self.walk(Implication(new_consequent, expression.antecedent))
-
     @add_match(Implication(ExistentialPredicate, ...))
     def add_existential_implication_to_symbol_table(self, expression):
         """
@@ -125,21 +93,29 @@ class NonRecursiveExistentialDatalog(DatalogBasic):
         return expression
 
 
-# def is_undefined_application_of_existential_implication(expression):
-    # if not any_arg_is_null(expression.args):
-        # return False
-    # lambda_args = expression.functor.args
-    # consequent_body, eq_variables = (
-        # parse_implication_with_existential_consequent(
-            # expression.functor.function_expression
-        # )
-    # )
-    # return any(arg in eq_variables for arg in lambda_args)
+def is_undefined_application_of_existential_implication(expression):
+    if not any_arg_is_null(expression.args):
+        return False
+    lambda_args = expression.functor.args
+    consequent_body, eq_variables = (
+        parse_implication_with_existential_consequent(
+            expression.functor.function_expression
+        )
+    )
+    return any(arg in eq_variables for arg in lambda_args)
 
 
 class SolverNonRecursiveExistentialDatalog(
     NaiveDatalog, NonRecursiveExistentialDatalog
 ):
+    @add_match(
+        FunctionApplication(Lambda(..., Implication), ...),
+        is_undefined_application_of_existential_implication
+    )
+    def lol(self, expression):
+        import pdb; pdb.set_trace()
+        return True
+
     @add_match(
         FunctionApplication(Implication(ExistentialPredicate, ...), ...)
     )

@@ -122,8 +122,7 @@ def test_existential_statement_resolution_undefined():
     solver.walk(extensional)
     solver.walk(Implication(EP_(y, P(x, y)), Q(x)))
     assert 'P' in solver.symbol_table
-    u, v = S_('u'), S_('v')
-    query = Query(u, EP_(u, P(v, u)))
+    query = Query(y, P(x, y))
     result = solver.walk(query)
     assert result is UNDEFINED
 
@@ -194,7 +193,7 @@ def test_cannot_mix_existential_and_non_existential_rule_definitions():
     x, y = S_('x'), S_('y')
     P, Q, R = S_('P'), S_('Q'), S_('R')
 
-    solver.walk(Implication(P(x, y), Q(x)))
+    solver.walk(Implication(EP_(y, P(x, y)), Q(x)))
     assert 'P' in solver.symbol_table
     assert 'P' in solver.existential_intensional_database()
 
