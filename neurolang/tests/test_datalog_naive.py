@@ -3,8 +3,8 @@ import pytest
 from typing import AbstractSet
 
 from .. import solver_datalog_naive as sdb
-from ..solver_datalog_naive import NULL
 from .. import solver_datalog_extensional_db
+from ..solver_datalog_naive import NULL
 from .. import expression_walker
 from ..expressions import (
     Symbol, Constant, FunctionApplication, Lambda, ExpressionBlock,

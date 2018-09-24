@@ -10,9 +10,10 @@ from .utils import OrderedSet
 
 from .expressions import (
     FunctionApplication, Constant, NeuroLangException, is_leq_informative,
-    Definition, Symbol, Lambda, ExpressionBlock, Expression, Query,
-    ExistentialPredicate, UniversalPredicate, Quantifier
+    Symbol, Lambda, ExpressionBlock, Expression, Definition,
+    Query, ExistentialPredicate, UniversalPredicate, Quantifier,
 )
+
 from .type_system import Unknown
 from .expression_walker import (
     add_match, PatternWalker, expression_iterator,
@@ -45,6 +46,20 @@ class Fact(Implication):
         return 'Fact{{{} \u2190 {}}}'.format(
             repr(self.consequent), True
         )
+
+
+class Undefined(Constant):
+    def __repr__(self):
+        return 'UNDEFINED'
+
+
+class NullConstant(Constant):
+    def __repr__(self):
+        return 'NULL'
+
+
+UNDEFINED = Undefined(None)
+NULL = NullConstant[Any](None)
 
 
 class Undefined(Constant):
