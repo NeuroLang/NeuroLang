@@ -162,7 +162,7 @@ def test_existential_and_query_resolution():
     assert result.value == frozenset({'a'})
 
 
-def test_multiple_eq_variables_in_consequent():
+def test_multiple_existential_variables_in_consequent():
     solver = SolverWithExistentialResolution()
     a, b = C_('a'), C_('b')
     x, y, z = S_('x'), S_('y'), S_('z')
@@ -180,7 +180,7 @@ def test_multiple_eq_variables_in_consequent():
     assert result.value == frozenset({'a', 'b'})
 
 
-def test_multiple_eq_variables_in_consequent_undefined():
+def test_multiple_existential_variables_in_consequent_undefined():
     solver = SolverWithExistentialResolution()
     a, b = C_('a'), C_('b')
     x, y, z = S_('x'), S_('y'), S_('z')
