@@ -127,15 +127,23 @@ def test_existential_statement_resolution_undefined():
     assert result is UNDEFINED
 
 
-def test_very_simple():
+def test_function_application_on_null_returns_false():
     solver = SolverWithExistentialResolution()
     P, Q = S_('P'), S_('Q')
+    a, b = C_('a'), C_('b')
     x, y = S_('x'), S_('y')
+    extensional = ExpressionBlock((
+        Fact(Q(a)),
+        Fact(Q(b)),
+    ))
+    solver.walk(extensional)
     f = Implication(EP_(y, P(x, y)), Q(x))
-    assert not solver.walk(f(NULL, NULL))
+    res = solver.walk(f(NULL, NULL))
+    assert isinstance(res, expressions.Constant)
+    assert not res.value
 
 
-def test_and_query_resolution():
+def test_existential_and_query_resolution():
     solver = SolverWithExistentialResolution()
     a, b = C_('a'), C_('b')
     x, y = S_('x'), S_('y')

@@ -201,9 +201,12 @@ class NaiveDatalog(DatalogBasic):
 
         return expression
 
-    @add_match(FunctionApplication, lambda e: any_arg_is_null(e.args))
+    @add_match(
+        FunctionApplication(Constant[AbstractSet], ...),
+        lambda e: any_arg_is_null(e.args)
+    )
     def fa_on_null_constant(self, expression):
-        return False
+        return Constant[bool](False)
 
     @add_match(
         FunctionApplication(Constant[AbstractSet], (Constant,)),

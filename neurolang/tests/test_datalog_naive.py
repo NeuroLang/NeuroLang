@@ -32,13 +32,15 @@ class Datalog(
     pass
 
 
-def test_fa_on_null_constant_resolves_to_undefined():
+def test_null_constant_resolves_to_undefined():
     dl = Datalog()
     P = S_('P')
-    x, y = S_('x'), S_('y')
-    assert not dl.walk(P(NULL))
-    assert not dl.walk(P(x, NULL, y))
-    assert not dl.walk(P(x, C_((NULL, y))))
+    dl.walk(T_(P(C_('a'))))
+    dl.walk(T_(P(C_('b'))))
+    assert 'P' in dl.symbol_table
+    res = dl.walk(P(NULL))
+    assert isinstance(res, Constant)
+    assert not res.value
 
 
 def test_no_facts():

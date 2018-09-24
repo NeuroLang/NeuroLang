@@ -9,6 +9,7 @@ from .solver_datalog_naive import (
     any_arg_is_null, NULL
 )
 from .expression_pattern_matching import add_match
+from .expression_walker import ReplaceSymbolWalker
 
 __all__ = [
     'Implication',
@@ -108,19 +109,19 @@ def is_undefined_application_of_existential_implication(expression):
 class SolverNonRecursiveExistentialDatalog(
     NaiveDatalog, NonRecursiveExistentialDatalog
 ):
-    @add_match(
-        FunctionApplication(Lambda(..., Implication), ...),
-        is_undefined_application_of_existential_implication
-    )
-    def lol(self, expression):
-        import pdb; pdb.set_trace()
-        return True
+    # @add_match(
+        # FunctionApplication(Lambda(..., ExistentialPredicate), ...),
+        # lambda e: any_arg_is_null(e.args)
+    # )
+    # def handle_undefined_case(self, expression):
+        # import pdb; pdb.set_trace()
+        # return self.eval_lambda(expression)
 
     @add_match(
         FunctionApplication(Implication(ExistentialPredicate, ...), ...)
     )
     def existential_consequent_implication_resolution(self, expression):
-        consequent_body, eq_variables = (
+        consequent_body, eq_vars = (
             parse_implication_with_existential_consequent(expression.functor)
         )
         return self.walk(
