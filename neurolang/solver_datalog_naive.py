@@ -152,7 +152,7 @@ class DatalogBasic(PatternWalker):
 
         if not consequent_symbols.issubset(antecedent._symbols):
             raise NeuroLangException(
-                "All variables on the left need to be on the right"
+                "All variables on the consequent need to be on the antecedent"
             )
 
         if consequent.functor.name in self.symbol_table:
@@ -167,18 +167,14 @@ class DatalogBasic(PatternWalker):
                 )
             eb = (
                 self.symbol_table[consequent.functor.name]
-                .antecedent.expressions
+                .expressions
             )
         else:
             eb = tuple()
 
-        lambda_ = Lambda(consequent.args, antecedent)
-        eb = eb + (lambda_,)
+        eb = eb + (expression,)
 
-        self.symbol_table[consequent.functor.name] = Implication(
-            antecedent,
-            ExpressionBlock(eb)
-        )
+        self.symbol_table[consequent.functor.name] = ExpressionBlock(eb)
 
         return expression
 
@@ -187,7 +183,7 @@ class DatalogBasic(PatternWalker):
             k: v for k, v in self.symbol_table.items()
             if (
                 k not in self.protected_keywords and
-                isinstance(v, Implication)
+                isinstance(v, ExpressionBlock)
             )
         }
 
@@ -240,53 +236,58 @@ class NaiveDatalog(DatalogBasic):
             (Constant(expression.args),)
         ))
 
-    @add_match(Implication(
-        FunctionApplication[bool](Symbol, ...),
-        ExpressionBlock
-     ),
+    @add_match(
+        FunctionApplication[bool](Implication, ...),
         lambda e: len(
-            extract_datalog_free_variables(e.antecedent) -
-            extract_datalog_free_variables(e.consequent)
+            extract_datalog_free_variables(e.functor.antecedent) -
+            extract_datalog_free_variables(e.functor.consequent)
         ) > 0
     )
     def statement_intensional_add_existential(self, expression):
-        consequent = expression.consequent
+        consequent = expression.functor.consequent
+        antecedent = expression.functor.antecedent
+
         fv_consequent = extract_datalog_free_variables(consequent)
-        new_exp_list = []
-        for exp in expression.antecedent.expressions:
-            fv = (
-                extract_datalog_free_variables(exp) -
-                fv_consequent
-            )
+        fv_antecedent = (
+            extract_datalog_free_variables(antecedent) -
+            fv_consequent
+        )
 
-            fe = exp.function_expression
-            if len(fv) > 0:
-                for v in fv:
-                    fe = ExistentialPredicate[bool](v, fe)
-            new_exp_list.append(Lambda[exp.type](exp.args, fe))
+        new_antecedent = antecedent
+        for v in fv_antecedent:
+            new_antecedent = ExistentialPredicate[bool](v, new_antecedent)
 
-        antecedent = ExpressionBlock(tuple(new_exp_list))
-        return self.walk(Implication[expression.type](consequent, antecedent))
+        return self.walk(
+            Implication[expression.type](consequent, new_antecedent)
+        )
 
     @add_match(
-        FunctionApplication(
-            Implication(FunctionApplication, ExpressionBlock),
-            ...
-        ),
+        FunctionApplication[bool](Implication, ...),
+        lambda e: len(
+            extract_datalog_free_variables(e.functor.antecedent) -
+            extract_datalog_free_variables(e.functor.consequent)
+        ) <= 0
+    )
+    def function_application_idb(self, expression):
+        return self.walk(
+            FunctionApplication(
+                Lambda(
+                    expression.functor.consequent.args,
+                    expression.functor.antecedent
+                ),
+                expression.args
+            )
+        )
+
+    @add_match(
+        FunctionApplication(ExpressionBlock, ...),
         lambda e: all(
             isinstance(a, Constant) for a in e.args
         )
     )
     def evaluate_datalog_expression(self, expression):
-        for exp in expression.functor.antecedent.expressions:
-            if (
-                isinstance(exp, Lambda) and
-                len(exp.args) != len(expression.args)
-            ):
-                continue
-
+        for exp in expression.functor.expressions:
             fa = FunctionApplication(exp, expression.args)
-
             res = self.walk(fa)
             if isinstance(res, Constant) and res.value is True:
                 break

@@ -88,35 +88,40 @@ def test_atoms_variables():
     x = S_('x')
     y = S_('y')
     Q = S_('Q')
+    T = S_('T')
 
     f1 = Imp_(Q(x,), eq(x, x))
 
     dl.walk(f1)
 
     assert 'Q' in dl.symbol_table
-    isinstance(dl.symbol_table['Q'], ExpressionBlock)
-    fact = dl.symbol_table['Q'].antecedent.expressions[-1]
-    assert isinstance(fact, Lambda)
-    assert len(fact.args) == 1
-    assert fact.function_expression == eq(x, x)
+    assert isinstance(dl.symbol_table['Q'], ExpressionBlock)
+    fact = dl.symbol_table['Q'].expressions[-1]
+    assert isinstance(fact, sdb.Implication)
+    assert isinstance(fact.consequent, FunctionApplication)
+    assert fact.consequent.functor is Q
+    assert fact.consequent.args == (x,)
+    assert fact.antecedent == eq(x, x)
 
-    f2 = Imp_(Q(x, y), eq(x, y))
+    f2 = Imp_(T(x, y), eq(x, y))
 
     dl.walk(f2)
 
-    assert 'Q' in dl.symbol_table
-    isinstance(dl.symbol_table['Q'], ExpressionBlock)
-    fact = dl.symbol_table['Q'].antecedent.expressions[-1]
-    assert isinstance(fact, Lambda)
-    assert len(fact.args) == 2
-    assert fact.function_expression == eq(x, y)
+    assert 'T' in dl.symbol_table
+    assert isinstance(dl.symbol_table['T'], ExpressionBlock)
+    fact = dl.symbol_table['T'].expressions[-1]
+    assert isinstance(fact, sdb.Implication)
+    assert isinstance(fact.consequent, FunctionApplication)
+    assert fact.consequent.functor is T
+    assert fact.consequent.args == (x, y)
+    assert fact.antecedent == eq(x, y)
 
     with pytest.raises(NeuroLangException):
         dl.walk(Imp_(Q(x), ...))
 
     f = Q(C_(10))
-    g = Q(C_(1), C_(5))
-    h = Q(C_(1), C_(1))
+    g = T(C_(1), C_(5))
+    h = T(C_(1), C_(1))
 
     assert dl.walk(f).value is True
     assert dl.walk(g).value is False
@@ -159,7 +164,7 @@ def test_facts_intensional():
     res = dl.walk(T(C_(1), C_(4)))
     assert res.value is True
 
-    res = dl.walk(R(C_(1), C_(5)))
+    res = dl.walk(T(C_(1), C_(5)))
     assert res.value is False
 
     res = dl.walk(U(C_(1)))
