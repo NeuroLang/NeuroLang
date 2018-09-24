@@ -25,7 +25,7 @@ T_ = sdb.Fact
 
 
 class Datalog(
-    sdb.NaiveDatalog,
+    sdb.SolverNonRecursiveDatalogNaive,
     solver_datalog_extensional_db.ExtensionalDatabaseSolver,
     expression_walker.ExpressionBasicEvaluator
 ):

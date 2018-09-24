@@ -170,12 +170,14 @@ class DatalogBasic(PatternWalker):
                 .expressions
             )
 
-            if len(eb[0].consequent.args) != len(expression.consequent.args):
+            if (
+                not isinstance(eb[0].consequent, FunctionApplication) or
+                len(extract_datalog_free_variables(eb[0].consequent.args)) !=
+                len(expression.consequent.args)
+            ):
                 raise NeuroLangException(
-                    f"{expression.consequent.functor} is already in the IDB "
-                    f"and has {len(expression.consequent.args)}. A new "
-                    "rule for this predicate can't have a different number "
-                    "of arguments"
+                    f"{eb[0].consequent} is already in the IDB "
+                    f"with different signature."
                 )
         else:
             eb = tuple()
@@ -202,7 +204,7 @@ class DatalogBasic(PatternWalker):
         return ret
 
 
-class NaiveDatalog(DatalogBasic):
+class SolverNonRecursiveDatalogNaive(DatalogBasic):
     '''
     Naive resolution system of Datalog.
     '''

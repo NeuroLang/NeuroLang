@@ -3,7 +3,7 @@ from .expressions import (
     ExpressionBlock, FunctionApplication, Lambda
 )
 from .solver_datalog_naive import (
-    NaiveDatalog, DatalogBasic, Implication,
+    SolverNonRecursiveDatalogNaive, DatalogBasic, Implication,
 )
 
 from .expression_pattern_matching import add_match
@@ -78,7 +78,7 @@ class NonRecursiveExistentialDatalog(DatalogBasic):
 
 
 class SolverNonRecursiveExistentialDatalog(
-    NaiveDatalog, NonRecursiveExistentialDatalog
+    SolverNonRecursiveDatalogNaive, NonRecursiveExistentialDatalog
 ):
     @add_match(
         FunctionApplication(Implication(ExistentialPredicate, ...), ...)
