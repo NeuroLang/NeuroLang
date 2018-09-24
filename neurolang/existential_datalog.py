@@ -3,12 +3,10 @@ from .expressions import (
     ExpressionBlock, FunctionApplication, Lambda
 )
 from .solver_datalog_naive import (
-    NaiveDatalog, DatalogBasic,
-    any_arg_is_null, NULL, Implication
+    NaiveDatalog, DatalogBasic, Implication,
 )
 
 from .expression_pattern_matching import add_match
-from .expression_walker import ReplaceSymbolWalker
 
 __all__ = [
     'Implication',
