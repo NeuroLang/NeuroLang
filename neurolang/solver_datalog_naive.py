@@ -245,6 +245,32 @@ class SolverNonRecursiveDatalogNaive(DatalogBasic):
         return expression
 
     @add_match(
+        Implication(FunctionApplication, ...),
+        lambda e: len(
+            extract_datalog_free_variables(e.antecedent) -
+            extract_datalog_free_variables(e.consequent)
+        ) > 0
+    )
+    def implication_add_existential(self, expression):
+        consequent = expression.consequent
+        antecedent = expression.antecedent
+
+        fv_consequent = extract_datalog_free_variables(consequent)
+        fv_antecedent = (
+            extract_datalog_free_variables(antecedent) -
+            fv_consequent
+        )
+
+        new_antecedent = antecedent
+        for v in fv_antecedent:
+            new_antecedent = ExistentialPredicate[bool](v, new_antecedent)
+
+        out_type = expression.type
+        return self.walk(
+            Implication[out_type](consequent, new_antecedent)
+        )
+
+    @add_match(
         FunctionApplication(Constant[AbstractSet], ...),
         lambda e: any_arg_is_null(e.args)
     )
@@ -263,40 +289,11 @@ class SolverNonRecursiveDatalogNaive(DatalogBasic):
 
     @add_match(
         FunctionApplication[bool](Implication, ...),
-        lambda e: len(
-            extract_datalog_free_variables(e.functor.antecedent) -
-            extract_datalog_free_variables(e.functor.consequent)
-        ) > 0
-    )
-    def statement_intensional_add_existential(self, expression):
-        consequent = expression.functor.consequent
-        antecedent = expression.functor.antecedent
-
-        fv_consequent = extract_datalog_free_variables(consequent)
-        fv_antecedent = (
-            extract_datalog_free_variables(antecedent) -
-            fv_consequent
-        )
-
-        new_antecedent = antecedent
-        for v in fv_antecedent:
-            new_antecedent = ExistentialPredicate[bool](v, new_antecedent)
-
-        functor_type = expression.functor.type
-        return self.walk(
-            FunctionApplication[bool](
-                Implication[functor_type](consequent, new_antecedent),
-                expression.args
-            )
-        )
-
-    @add_match(
-        FunctionApplication[bool](Implication, ...),
         lambda e: (
             len(
                 extract_datalog_free_variables(e.functor.antecedent) -
                 extract_datalog_free_variables(e.functor.consequent)
-            ) <= 0
+            ) == 0
         ) and all(
             isinstance(a, Constant) for a in e.args
         )
@@ -304,6 +301,7 @@ class SolverNonRecursiveDatalogNaive(DatalogBasic):
     def function_application_idb(self, expression):
         new_lambda_args = []
         new_args = []
+        arg_types = []
         for la, a in zip(
             expression.functor.consequent.args,
             expression.args
@@ -314,10 +312,11 @@ class SolverNonRecursiveDatalogNaive(DatalogBasic):
             else:
                 new_lambda_args.append(la)
                 new_args.append(a)
+                arg_types.append(a.type)
 
         return self.walk(
             FunctionApplication[bool](
-                Lambda(
+                Lambda[Callable[arg_types, bool]](
                     tuple(new_lambda_args),
                     expression.functor.antecedent
                 ),
@@ -331,19 +330,19 @@ class SolverNonRecursiveDatalogNaive(DatalogBasic):
             isinstance(a, Constant) for a in e.args
         )
     )
-    def evaluate_datalog_expression(self, expression):
+    def evaluate_datalog_conjunction(self, expression):
         for exp in expression.functor.expressions:
-            fa = FunctionApplication(exp, expression.args)
+            fa = FunctionApplication[bool](exp, expression.args)
             res = self.walk(fa)
             if isinstance(res, Constant) and res.value is True:
                 break
         else:
-            return Constant(False)
+            return Constant[bool](False)
 
-        return Constant(True)
+        return Constant[bool](True)
 
     @add_match(ExistentialPredicate)
-    def existential_predicate_ndl(self, expression):
+    def existential_predicate_nrndl(self, expression):
         if isinstance(expression.head, Symbol):
             head = (expression.head,)
         elif (
@@ -358,7 +357,7 @@ class SolverNonRecursiveDatalogNaive(DatalogBasic):
 
         body = Lambda(head, expression.body)
         for args in loop:
-            fa = FunctionApplication(body, args)
+            fa = FunctionApplication[bool](body, args)
             res = self.walk(fa)
             if isinstance(res, Constant) and res.value is True:
                 break
@@ -397,12 +396,12 @@ class SolverNonRecursiveDatalogNaive(DatalogBasic):
                 'Head needs to be a tuple of symbols or a symbol'
             )
 
+        head_type = [arg.type for arg in head]
         constant_set = self.symbol_table[self.constant_set_name].value
         constant_set = constant_set.union({NULL})
         loop = product(*((constant_set, ) * len(head)))
-        body = Lambda(head, expression.body)
+        body = Lambda[Callable[head_type, bool]](head, expression.body)
         result = set()
-
         for args in loop:
             fa = FunctionApplication[bool](body, args)
             res = self.walk(fa)
