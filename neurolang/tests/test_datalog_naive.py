@@ -8,7 +8,7 @@ from ..solver_datalog_naive import NULL
 from .. import expression_walker
 from ..expressions import (
     Symbol, Constant, FunctionApplication, Lambda, ExpressionBlock,
-    ExistentialPredicate, UniversalPredicate, Query, is_leq_informative,
+    ExistentialPredicate, Query, is_leq_informative,
     NeuroLangException
 )
 
@@ -19,7 +19,6 @@ F_ = FunctionApplication
 L_ = Lambda
 B_ = ExpressionBlock
 EP_ = ExistentialPredicate
-UP_ = UniversalPredicate
 Q_ = Query
 T_ = sdb.Fact
 
@@ -154,7 +153,6 @@ def test_facts_intensional():
     Q = S_('Q')
     R = S_('R')
     T = S_('T')
-    U = S_('U')
     x = S_('x')
     y = S_('y')
     z = S_('z')
@@ -169,7 +167,6 @@ def test_facts_intensional():
     intensional = ExpressionBlock((
         Imp_(R(x, y, z), Q(x, y) & Q(y, z)),
         Imp_(T(x, z), EP_(y, Q(x, y) & Q(y, z))),
-        Imp_(U(x), UP_(y, Q(x, y))),
     ))
 
     dl.walk(extensional)
@@ -185,12 +182,6 @@ def test_facts_intensional():
     assert res.value is True
 
     res = dl.walk(T(C_(1), C_(5)))
-    assert res.value is False
-
-    res = dl.walk(U(C_(1)))
-    assert res.value is True
-
-    res = dl.walk(U(C_(2)))
     assert res.value is False
 
     with pytest.raises(NeuroLangException):

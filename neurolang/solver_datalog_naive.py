@@ -11,7 +11,7 @@ from .utils import OrderedSet
 from .expressions import (
     FunctionApplication, Constant, NeuroLangException, is_leq_informative,
     Symbol, Lambda, ExpressionBlock, Expression, Definition,
-    Query, ExistentialPredicate, UniversalPredicate, Quantifier,
+    Query, ExistentialPredicate, Quantifier,
 )
 
 from .type_system import Unknown
@@ -342,30 +342,6 @@ class SolverNonRecursiveDatalogNaive(DatalogBasic):
 
         return Constant(True)
 
-    @add_match(UniversalPredicate)
-    def universal_predicate_ndl(self, expression):
-        if isinstance(expression.head, Symbol):
-            head = (expression.head,)
-        elif (
-            isinstance(expression.head, Constant) and
-            is_leq_informative(expression.head.type, Tuple)
-        ):
-            head = expression.head.value
-
-        loop = product(
-            *((self.symbol_table[self.constant_set_name].value,) * len(head))
-        )
-
-        body = Lambda(head, expression.body)
-        for args in loop:
-            fa = FunctionApplication[bool](body, args)
-            res = self.walk(fa)
-            if isinstance(res, Constant) and res.value is False:
-                break
-        else:
-            return Constant(True)
-        return Constant(False)
-
     @add_match(ExistentialPredicate)
     def existential_predicate_ndl(self, expression):
         if isinstance(expression.head, Symbol):
@@ -428,17 +404,15 @@ class SolverNonRecursiveDatalogNaive(DatalogBasic):
         result = set()
 
         for args in loop:
-            if len(head) == 1:
-                args = (Constant(args),)
             fa = FunctionApplication[bool](body, args)
             res = self.walk(fa)
             if isinstance(res, Constant) and res.value is True:
                 if any_arg_is_null(args):
                     break
-                if len(head) > 1:
-                    result.add(Constant(args))
+                if len(head) == 1:
+                    result.add(args[0])
                 else:
-                    result.add(args[0].value[0])
+                    result.add(Constant(args))
         else:
             return Constant[AbstractSet[Any]](result)
 
