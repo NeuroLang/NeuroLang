@@ -5,14 +5,16 @@ from .expressions import (
     ExpressionBlock, FunctionApplication, Lambda
 )
 from .solver_datalog_naive import (
-    NaiveDatalog, DatalogBasic, extract_datalog_free_variables,
+    NaiveDatalog,
+    DatalogBasic,
+    extract_datalog_free_variables,
 )
 from .expression_pattern_matching import add_match
 from .expression_walker import ReplaceSymbolWalker
 
 __all__ = [
     'Implication',
-    'NonRecursiveExistentialDatalog',
+    'ExistentialDatalog',
     'SolverNonRecursiveExistentialDatalog',
 ]
 
@@ -31,7 +33,7 @@ class Implication(Definition):
         )
 
 
-class NonRecursiveExistentialDatalog(DatalogBasic):
+class ExistentialDatalog(DatalogBasic):
     def existential_intensional_database(self):
         return {
             k: v
@@ -93,9 +95,7 @@ class NonRecursiveExistentialDatalog(DatalogBasic):
         return expression
 
 
-class SolverNonRecursiveExistentialDatalog(
-    NaiveDatalog, NonRecursiveExistentialDatalog
-):
+class SolverNonRecursiveExistentialDatalog(NaiveDatalog, ExistentialDatalog):
     @add_match(
         FunctionApplication(Implication(ExistentialPredicate, ...), ...)
     )

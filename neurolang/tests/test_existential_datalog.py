@@ -6,8 +6,7 @@ from .. import expression_walker
 from .. import expressions
 from ..expressions import ExpressionBlock, Query
 from ..existential_datalog import (
-    NonRecursiveExistentialDatalog, SolverNonRecursiveExistentialDatalog,
-    Implication
+    ExistentialDatalog, SolverNonRecursiveExistentialDatalog, Implication
 )
 from ..solver_datalog_naive import NaiveDatalog, Fact, UNDEFINED, NULL
 
@@ -18,7 +17,7 @@ EP_ = expressions.ExistentialPredicate
 
 
 class SolverWithoutExistentialResolution(
-    NonRecursiveExistentialDatalog,
+    ExistentialDatalog,
     solver_datalog_extensional_db.ExtensionalDatabaseSolver,
     expression_walker.ExpressionBasicEvaluator,
 ):
