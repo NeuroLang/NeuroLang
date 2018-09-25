@@ -3,14 +3,12 @@ from .expressions import (
     Expression, ExpressionBlock, FunctionApplication, Symbol, Constant,
     Definition, ExistentialPredicate
 )
-from .expressions import typing_callable_from_annotated_function
 from .solver_datalog_naive import DatalogBasic, NaiveDatalog
 from .expression_pattern_matching import add_match
 from .existential_datalog import (
     Implication, NonRecursiveExistentialDatalog,
     SolverNonRecursiveExistentialDatalog
 )
-from . import guard
 
 
 class DeltaTerm(Expression):
@@ -36,7 +34,7 @@ class DeltaAtom(Definition):
             if not isinstance(t, DeltaTerm)
         ):
             raise NeuroLangException(
-                'All terms in Δ-atom that are not the Δ-term '
+                'All terms in a Δ-atom that are not the Δ-term '
                 'must be symbols or constants'
             )
         self.name = name
@@ -54,6 +52,16 @@ class NonRecursiveGenerativeDatalog(NonRecursiveExistentialDatalog):
         )
     )
     def from_fa_to_delta_atom(self, expression):
+        """
+        Convert to Δ-atom any function application on terms where at
+        least one term is a Δ-term (with a parameterized distribution).
+
+        Note
+        ----
+        A valid Δ-atom must contain one and only one Δ-term.
+        An exception is raised if more than one Δ-term is present
+
+        """
         if not isinstance(expression.consequent.functor, Symbol):
             raise NeuroLangException(
                 'Cannot get DeltaAtom name if functor not a symbol'
@@ -69,6 +77,11 @@ class NonRecursiveGenerativeDatalog(NonRecursiveExistentialDatalog):
 
     @add_match(Implication(DeltaAtom, ...))
     def gdatalog_rule(self, expression):
+        """
+        Add a definition of a GDatalog[Δ] rule to the GDB (Generative
+        Database).
+
+        """
         consequent_name = get_gd_rule_consequent_name(expression)
         if consequent_name in self.symbol_table:
             raise NeuroLangException('GDatalog[Δ] rule already defined')
