@@ -8,7 +8,7 @@ from ..expressions import ExpressionBlock, Query
 from ..existential_datalog import (
     ExistentialDatalog, SolverNonRecursiveExistentialDatalog, Implication
 )
-from ..solver_datalog_naive import NaiveDatalog, Fact, UNDEFINED, NULL
+from ..solver_datalog_naive import Fact, UNDEFINED, NULL
 
 C_ = expressions.Constant
 S_ = expressions.Symbol

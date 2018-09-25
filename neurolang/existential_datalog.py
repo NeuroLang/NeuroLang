@@ -1,36 +1,18 @@
-from typing import AbstractSet, Any, Tuple
-
 from .expressions import (
-    NeuroLangException, Definition, ExistentialPredicate, Constant, Symbol,
+    NeuroLangException, ExistentialPredicate, Symbol,
     ExpressionBlock, FunctionApplication, Lambda
 )
 from .solver_datalog_naive import (
-    NaiveDatalog,
-    DatalogBasic,
-    extract_datalog_free_variables,
+    SolverNonRecursiveDatalogNaive, DatalogBasic, Implication,
 )
+
 from .expression_pattern_matching import add_match
-from .expression_walker import ReplaceSymbolWalker
 
 __all__ = [
     'Implication',
     'ExistentialDatalog',
     'SolverNonRecursiveExistentialDatalog',
 ]
-
-
-class Implication(Definition):
-    """Expression of the form `P(x) <- Q(x)`"""
-
-    def __init__(self, consequent, antecedent):
-        self.consequent = consequent
-        self.antecedent = antecedent
-        self._symbols = consequent._symbols | antecedent._symbols
-
-    def __repr__(self):
-        return 'Implication{{{} \u2190 {}}}'.format(
-            repr(self.consequent), repr(self.antecedent)
-        )
 
 
 class ExistentialDatalog(DatalogBasic):
@@ -95,7 +77,9 @@ class ExistentialDatalog(DatalogBasic):
         return expression
 
 
-class SolverNonRecursiveExistentialDatalog(NaiveDatalog, ExistentialDatalog):
+class SolverNonRecursiveExistentialDatalog(
+    SolverNonRecursiveDatalogNaive, ExistentialDatalog
+):
     @add_match(
         FunctionApplication(Implication(ExistentialPredicate, ...), ...)
     )
