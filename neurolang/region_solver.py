@@ -7,6 +7,9 @@ from .expression_walker import PatternWalker
 from .expressions import Constant
 
 
+REFINE_OVERLAPPING = True
+
+
 class RegionSolver(PatternWalker[Region]):
     type_name = 'Region'
 
@@ -18,12 +21,22 @@ class RegionSolver(PatternWalker[Region]):
             'overlapping': 'O'
         }
 
+        refine_overlapping = kwargs.get(
+            'refine_overlapping',
+            REFINE_OVERLAPPING
+        )
+
+        max_tree_depth_level = kwargs.get(
+            'max_tree_depth_level',
+            None
+        )
+
         def build_function(relation, refine_overlapping=False):
             def f(self, x: Region, y: Region) -> bool:
                 return bool(cardinal_relation(
                     x, y, relation,
                     refine_overlapping=refine_overlapping,
-                    stop_at=None
+                    stop_at=max_tree_depth_level
                 ))
             return f
 
@@ -31,32 +44,26 @@ class RegionSolver(PatternWalker[Region]):
 
             def func(self, x: Region, y: Region) -> bool:
 
-                is_in_direction = cardinal_relation(
-                    x, y, relation,
-                    refine_overlapping=refine_overlapping,
-                    stop_at=None
-                )
-
-                is_in_inverse_direction = cardinal_relation(
-                    x, y, inverse_directions[relation],
-                    refine_overlapping=refine_overlapping,
-                    stop_at=None
-                )
-
-                is_overlapping = cardinal_relation(
-                    x, y, cardinal_operations['overlapping'],
-                    refine_overlapping=refine_overlapping,
-                    stop_at=None
-                )
-
                 return bool(
-                    is_in_direction and
-                    not is_in_inverse_direction and
-                    not is_overlapping)
+                    cardinal_relation(
+                        x, y, relation,
+                        refine_overlapping=refine_overlapping,
+                        stop_at=max_tree_depth_level
+                    ) and not (
+                        cardinal_relation(
+                            x, y, inverse_directions[relation],
+                            refine_overlapping=refine_overlapping,
+                            stop_at=max_tree_depth_level
+                        ) or
+                        cardinal_relation(
+                            x, y, cardinal_operations['overlapping'],
+                            refine_overlapping=refine_overlapping,
+                            stop_at=max_tree_depth_level
+                        )
+                    )
+                )
 
             return func
-
-        refine_overlapping = kwargs.get('refine_overlapping', False)
 
         for key, value in cardinal_operations.items():
             setattr(

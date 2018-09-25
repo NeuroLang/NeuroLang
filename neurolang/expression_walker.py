@@ -5,11 +5,10 @@ import typing
 
 from .expressions import TypedSymbolTable
 from .expressions import (
-    ExpressionBlock,
-    FunctionApplication, Statement, Query, Projection, Constant,
-    Symbol, ExistentialPredicate, UniversalPredicate, Expression, Lambda,
-    Unknown, is_leq_informative, NeuroLangTypeException,
-    unify_types, NeuroLangException
+    ExpressionBlock, FunctionApplication, Statement, Query, Projection,
+    Constant, Symbol, ExistentialPredicate, UniversalPredicate, Expression,
+    Lambda, Unknown, is_leq_informative, NeuroLangTypeException, unify_types,
+    NeuroLangException
 )
 
 from .expression_pattern_matching import add_match, PatternMatcher
@@ -206,6 +205,11 @@ class ExpressionWalker(PatternWalker):
     @add_match(Symbol)
     def symbol(self, expression):
         return expression
+
+    @add_match(...)
+    def _(self, expression):
+        children = [self.walk(e) for e in expression.unapply()]
+        return expression.apply(*children)
 
 
 class ReplaceSymbolWalker(ExpressionWalker):

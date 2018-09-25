@@ -64,10 +64,18 @@ class ParametricTypeClassMeta(type):
         d['type'] = type_
         d['__generic_class__'] = cls
         d['__no_explicit_type__'] = False
+        d['__parameterized__'] = True
         return cls.__class__(
             cls.__name__, cls.__bases__,
             d
         )
+
+    def __new__(cls, name, bases, attributes, **kwargs):
+        attributes['__parameterized__'] = attributes.get(
+            '__parameterized__', False
+        )
+        obj = super().__new__(cls, name, bases, attributes, **kwargs)
+        return obj
 
     def __repr__(cls):
         r = cls.__name__
@@ -80,26 +88,23 @@ class ParametricTypeClassMeta(type):
         return r
 
     def __subclasscheck__(cls, other):
-        return (
-            super().__subclasscheck__(other) or
-            (
-                hasattr(other, '__generic_class__') and
-                (
-                    (
-                        not hasattr(cls, '__generic_class__') and
-                        issubclass(other.__generic_class__, cls)
-                    ) or
-                    (
-                        hasattr(cls, '__generic_class__') and
-                        issubclass(
-                            other.__generic_class__,
-                            cls.__generic_class__
-                        ) and
-                        is_leq_informative(other.type, cls.type)
-                    )
+        if other is cls:
+            return True
+        elif (
+            isinstance(other, ParametricTypeClassMeta) and
+            other.__parameterized__
+        ):
+            if cls.__parameterized__:
+                return issubclass(
+                    other.__generic_class__,
+                    cls.__generic_class__
+                ) and is_leq_informative(other.type, cls.type)
+            else:
+                return issubclass(
+                    other.__generic_class__, cls
                 )
-            )
-        )
+        else:
+            return super().__subclasscheck__(other)
 
     def __instancecheck__(cls, other):
         return (

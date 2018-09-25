@@ -8,7 +8,7 @@ from .. import solver_datalog_naive as sdb
 from .. import solver_datalog_extensional_db
 from .. import expression_walker
 from ..expressions import (
-    Symbol, Constant, Statement,
+    Symbol, Constant,
     FunctionApplication, Lambda, ExpressionBlock,
     ExistentialPredicate, UniversalPredicate,
     Query,
@@ -16,7 +16,7 @@ from ..expressions import (
 
 S_ = Symbol
 C_ = Constant
-St_ = Statement
+Imp_ = sdb.Implication
 F_ = FunctionApplication
 L_ = Lambda
 B_ = ExpressionBlock
@@ -84,8 +84,8 @@ def test_intensional_single_case(extensional_single_double):
     y = S_('y')
 
     intensional_1 = B_((
-        St_(R(x), Q(x, C_(2))),
-        St_(S(x), Q(x, x)),
+        Imp_(R(x), Q(x, C_(2))),
+        Imp_(S(x), Q(x, x)),
     ))
     dl.walk(intensional_1)
 
@@ -102,9 +102,9 @@ def test_intensional_single_case(extensional_single_double):
     assert res == {C_((C_(0),))}
 
     intensional_3 = B_((
-        St_(T(x), Q(x, C_(2))),
-        St_(T(x), Q(x, x)),
-        St_(U(x), Q(x, y) & Q(y, x)),
+        Imp_(T(x), Q(x, C_(2))),
+        Imp_(T(x), Q(x, x)),
+        Imp_(U(x), Q(x, y) & Q(y, x)),
     ))
     dl.walk(intensional_3)
 
@@ -136,8 +136,8 @@ def test_intensional_recursive(extensional_single_double):
     z = S_('z')
 
     intensional = B_((
-        St_(R(x, y), Q(x, y)),
-        St_(R(x, y), Q(x, z) & R(z, y)),
+        Imp_(R(x, y), Q(x, y)),
+        Imp_(R(x, y), Q(x, z) & R(z, y)),
     ))
 
     dl.walk(intensional)
@@ -158,8 +158,8 @@ def test_intensional_recursive(extensional_single_double):
 
     S = S_('S')
     program_2 = B_((
-        St_(S(x, y), R(x, y)),
-        St_(S(x, y), R(x, z) & S(z, y)),
+        Imp_(S(x, y), R(x, y)),
+        Imp_(S(x, y), R(x, z) & S(z, y)),
     ))
 
     dl.walk(program_2)
@@ -191,7 +191,7 @@ def test_intensional_defined(extensional_single_double):
     t = C_[Callable[[int], bool]](lambda x: x % 2 == 0)
 
     intensional = B_((
-        St_(R(x, y), T(y) & Q(x, y) & T(x)),
+        Imp_(R(x, y), T(y) & Q(x, y) & T(x)),
     ))
 
     dl.walk(intensional)
