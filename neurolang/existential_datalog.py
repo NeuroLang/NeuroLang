@@ -10,12 +10,12 @@ from .expression_pattern_matching import add_match
 
 __all__ = [
     'Implication',
-    'NonRecursiveExistentialDatalog',
+    'ExistentialDatalog',
     'SolverNonRecursiveExistentialDatalog',
 ]
 
 
-class NonRecursiveExistentialDatalog(DatalogBasic):
+class ExistentialDatalog(DatalogBasic):
     def existential_intensional_database(self):
         return {
             k: v
@@ -78,7 +78,7 @@ class NonRecursiveExistentialDatalog(DatalogBasic):
 
 
 class SolverNonRecursiveExistentialDatalog(
-    SolverNonRecursiveDatalogNaive, NonRecursiveExistentialDatalog
+    SolverNonRecursiveDatalogNaive, ExistentialDatalog
 ):
     @add_match(
         FunctionApplication(Implication(ExistentialPredicate, ...), ...)
