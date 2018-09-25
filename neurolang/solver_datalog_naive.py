@@ -180,10 +180,7 @@ class DatalogBasic(PatternWalker):
                     'f{consequent.functor.name} has been previously '
                     'defined as Fact or extensional database.'
                 )
-            eb = (
-                self.symbol_table[consequent.functor.name]
-                .expressions
-            )
+            eb = self.symbol_table[consequent.functor.name].expressions
 
             if (
                 not isinstance(eb[0].consequent, FunctionApplication) or
@@ -289,9 +286,7 @@ class SolverNonRecursiveDatalogNaive(DatalogBasic):
 
     @add_match(
         FunctionApplication[bool](Implication, ...),
-        lambda e: all(
-            isinstance(a, Constant) for a in e.args
-        )
+        lambda e: all(isinstance(a, Constant) for a in e.args)
     )
     def function_application_idb(self, expression):
         new_lambda_args = []
