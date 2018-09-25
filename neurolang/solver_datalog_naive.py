@@ -289,12 +289,7 @@ class SolverNonRecursiveDatalogNaive(DatalogBasic):
 
     @add_match(
         FunctionApplication[bool](Implication, ...),
-        lambda e: (
-            len(
-                extract_datalog_free_variables(e.functor.antecedent) -
-                extract_datalog_free_variables(e.functor.consequent)
-            ) == 0
-        ) and all(
+        lambda e: all(
             isinstance(a, Constant) for a in e.args
         )
     )
@@ -469,6 +464,14 @@ class ExtractDatalogFreeVariablesWalker(PatternWalker):
             self.walk(expression.antecedent) -
             self.walk(expression.consequent)
         )
+
+    @add_match(ExpressionBlock)
+    def extract_variables_eb(self, expression):
+        res = set()
+        for exp in expression.expressions:
+            res |= self.walk(exp)
+
+        return res
 
     @add_match(...)
     def _(self, expression):
