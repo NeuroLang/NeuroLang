@@ -232,3 +232,13 @@ def test_cannot_mix_existential_and_non_existential_rule_definitions():
 
     with pytest.raises(NeuroLangException):
         solver.walk(Implication(P(x, y), R(x, y)))
+
+
+def test_existential_rule_with_constant_in_consequent():
+    solver = SolverWithoutExistentialResolution()
+    x = S_('x')
+    y = S_('y')
+    P = S_('P')
+    Q = S_('Q')
+    solver.walk(Implication(EP_(y, P(x, y, C_(1))), Q(x)))
+    assert 'P' in solver.symbol_table

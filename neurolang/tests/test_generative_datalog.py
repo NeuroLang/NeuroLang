@@ -4,12 +4,10 @@ from .. import solver_datalog_extensional_db
 from .. import expression_walker
 from ..exceptions import NeuroLangException
 from ..expressions import ExpressionBlock, Constant, Symbol, Query, Statement
-from ..existential_datalog import (
-    Implication, SolverNonRecursiveExistentialDatalog
-)
+from ..existential_datalog import Implication
 from ..generative_datalog import (
-    SolverNonRecursiveGenerativeDatalog, TranslateGDatalogToEDatalog,
-    DeltaTerm, DeltaAtom
+    GenerativeDatalog, SolverNonRecursiveGenerativeDatalog,
+    TranslateGDatalogToEDatalog, DeltaTerm, DeltaAtom
 )
 
 C_ = Constant
@@ -27,8 +25,8 @@ class GenerativeDatalogTestSolver(
 
 class TranslateGDatalogToEDatalogTestSolver(
     solver_datalog_extensional_db.ExtensionalDatabaseSolver,
-    TranslateGDatalogToEDatalog, SolverNonRecursiveExistentialDatalog,
-    expression_walker.ExpressionBasicEvaluator
+    TranslateGDatalogToEDatalog,
+    GenerativeDatalog,
 ):
     pass
 
@@ -55,6 +53,10 @@ def test_translation_of_gdatalog_program_to_edatalog_program():
     x = S_('x')
     solver.walk(Implication(P(x, DeltaTerm('Flip', C_(0.5))), Q(x)))
     assert 'P' in solver.intensional_database()
+
+    # block = ExpressionBlock((
+        # Implication(P(x, DeltaTerm('Flip', C_(0.5))), Q(x)),
+    # ))
 
 
 def test_burglar():
