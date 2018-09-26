@@ -220,6 +220,7 @@ def test_query_tuple():
 
     Q = S_('Q')
     R = S_('R')
+    S = S_('S')
     T = S_('T')
     x = S_('x')
     y = S_('y')
@@ -235,6 +236,7 @@ def test_query_tuple():
     intensional = ExpressionBlock((
         Imp_(R(x, y, z), Q(x, y) & Q(y, z)),
         Imp_(T(x, z), Q(x, y) & Q(y, z)),
+        Imp_(S(C_(100), x), Q(x, x))
     ))
 
     dl.walk(extensional)
@@ -247,6 +249,13 @@ def test_query_tuple():
         C_((C_(1), C_(1))),
         C_((C_(1), C_(2))),
         C_((C_(1), C_(4))),
+    ))
+
+    query = Q_((x, y), S(x, y))
+    res = dl.walk(query)
+
+    assert res.value == set((
+        C_((C_(100), C_(1))),
     ))
 
 

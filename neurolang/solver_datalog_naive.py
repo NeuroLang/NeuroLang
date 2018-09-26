@@ -267,6 +267,17 @@ class SolverNonRecursiveDatalogNaive(DatalogBasic):
             Implication[out_type](consequent, new_antecedent)
         )
 
+    @add_match(Implication(
+        FunctionApplication[bool](Symbol, ...),
+        Expression
+    ))
+    def statement_intensional(self, expression):
+        expression = super().statement_intensional(expression)
+        consequent = expression.consequent
+        new_constants = {a for a in consequent.args if isinstance(a, Constant)}
+        self.symbol_table[self.constant_set_name].value.update(new_constants)
+        return expression
+
     @add_match(
         FunctionApplication(Constant[AbstractSet], ...),
         lambda e: any_arg_is_null(e.args)
