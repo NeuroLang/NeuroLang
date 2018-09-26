@@ -3,6 +3,7 @@ import pytest
 from .. import solver_datalog_extensional_db
 from .. import expression_walker
 from .. import expressions
+from ..exceptions import NeuroLangException
 from ..expressions import ExpressionBlock, Query
 from ..existential_datalog import (
     ExistentialDatalog, SolverNonRecursiveExistentialDatalog, Implication
@@ -49,9 +50,9 @@ def test_bad_existential_formulae():
     y = S_('y')
     P = S_('P')
     Q = S_('Q')
-    with pytest.raises(expressions.NeuroLangException):
+    with pytest.raises(NeuroLangException):
         solver.walk(Implication(EP_(y, P(x, y)), Q(x, y)))
-    with pytest.raises(expressions.NeuroLangException):
+    with pytest.raises(NeuroLangException):
         solver.walk(Implication(EP_(y, P(x)), Q(x)))
     solver.walk(Implication(EP_(y, P(x, y)), Q(x)))
 
@@ -227,5 +228,5 @@ def test_cannot_mix_existential_and_non_existential_rule_definitions():
     assert 'P' in solver.symbol_table
     assert 'P' in solver.existential_intensional_database()
 
-    with pytest.raises(expressions.NeuroLangException):
+    with pytest.raises(NeuroLangException):
         solver.walk(Implication(P(x, y), R(x, y)))

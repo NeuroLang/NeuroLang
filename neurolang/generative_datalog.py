@@ -1,32 +1,60 @@
+from typing import Tuple
+
 from .expressions import NeuroLangException
 from .expressions import (
     Expression, ExpressionBlock, FunctionApplication, Symbol, Constant,
     Definition, ExistentialPredicate
 )
-from .solver_datalog_naive import DatalogBasic, NaiveDatalog
+from .expression_walker import PatternWalker
 from .expression_pattern_matching import add_match
 from .existential_datalog import (
-    Implication, NonRecursiveExistentialDatalog,
-    SolverNonRecursiveExistentialDatalog
+    Implication, ExistentialDatalog, SolverNonRecursiveExistentialDatalog
 )
 
 
+class DeltaSymbol(Symbol):
+    def __init__(self, dist_name, n_terms):
+        self.dist_name = dist_name
+        self.n_terms = n_terms
+        super().__init__('Result')
+
+    def __repr__(self):
+        return f'Δ-Symbol{{{self.name}({self.dist_name}, {self.n_terms})}}'
+
+    def __hash__(self):
+        return hash((self.dist_name, self.n_terms))
+
+
 class DeltaTerm(Expression):
-    def __init__(self, dist_name, dist_parameters, event_signature):
+    def __init__(self, dist_name, *dist_parameters):
         self.dist_name = dist_name
         self.dist_parameters = dist_parameters
-        self.event_signature = event_signature
-        self._symbols = set.union(*(e._symbols for e in self.event_signature))
+        if len(self.dist_parameters) > 0:
+            self._symbols = set.union(
+                *(p._symbols for p in self.dist_parameters)
+            )
+        else:
+            self._symbols = set()
 
-    def repr(self):
-        return f'Δ-term {self.name}({self.parameters})'
+    def __eq__(self, other):
+        return (
+            super().__eq__(other) and self.dist_name == other.dist_name and
+            self.dist_parameters == other.dist_parameters
+        )
+
+    def __repr__(self):
+        return f'Δ-term{{{self.dist_name}({self.dist_parameters})}}'
 
 
 class DeltaAtom(Definition):
     def __init__(self, name, terms):
+        if not isinstance(terms, Tuple):
+            raise NeuroLangException('Expected terms to be a tuple')
         delta_terms = [t for t in terms if isinstance(t, DeltaTerm)]
         if len(delta_terms) != 1:
-            raise NeuroLangException('A Δ-atom must contain a single Δ-term')
+            raise NeuroLangException(
+                'A Δ-atom must contain one and only one Δ-term'
+            )
         if not all(
             not isinstance(t, DeltaTerm) and
             (isinstance(t, Constant) or isinstance(t, Symbol))
@@ -39,11 +67,18 @@ class DeltaAtom(Definition):
             )
         self.name = name
         self.terms = terms
-        self.delta_term = next(iter(delta_terms))
         self._symbols = set.union(*(term._symbols for term in self.terms))
 
+    @property
+    def delta_term(self):
+        return next(t for t in self.terms if isinstance(t, DeltaTerm))
 
-class NonRecursiveGenerativeDatalog(NonRecursiveExistentialDatalog):
+    def __repr__(self):
+        terms_str = ', '.join(repr(t) for t in self.terms)
+        return f'Δ-atom{{{self.name}({terms_str})}}'
+
+
+class GenerativeDatalog(ExistentialDatalog):
     @add_match(
         Implication(FunctionApplication, ...),
         lambda expression: any(
@@ -70,7 +105,7 @@ class NonRecursiveGenerativeDatalog(NonRecursiveExistentialDatalog):
             Implication(
                 DeltaAtom(
                     expression.consequent.functor.name,
-                    expression.consequent.functor.args
+                    expression.consequent.args
                 ), expression.antecedent
             )
         )
@@ -100,8 +135,40 @@ class NonRecursiveGenerativeDatalog(NonRecursiveExistentialDatalog):
         }
 
 
+class TranslateGDatalogToEDatalog(GenerativeDatalog):
+    @add_match(Implication(DeltaAtom, ...))
+    def convert_gdatalog_rule_to_edatalog_rules(self, expression):
+        delta_atom = expression.consequent
+        y = Symbol('y')
+        result_terms = (
+            delta_atom.delta_term.dist_parameters +
+            (Constant(delta_atom.name), ) +
+            tuple(t for t in delta_atom.terms
+                  if not isinstance(t, DeltaTerm)) + (y, )
+        )
+        result_atom = FunctionApplication(
+            DeltaSymbol(
+                delta_atom.delta_term.dist_name, len(delta_atom.terms)
+            ), result_terms
+        )
+        first_rule = Implication(
+            ExistentialPredicate(y, result_atom), expression.antecedent
+        )
+        second_rule = Implication(
+            FunctionApplication(
+                Symbol(delta_atom.name),
+                tuple(
+                    term if not isinstance(term, DeltaTerm) else y
+                    for term in delta_atom.terms
+                )
+            ), expression.antecedent & result_atom
+        )
+        self.walk(first_rule)
+        self.walk(second_rule)
+
+
 class SolverNonRecursiveGenerativeDatalog(
-    SolverNonRecursiveExistentialDatalog, NonRecursiveGenerativeDatalog
+    SolverNonRecursiveExistentialDatalog, GenerativeDatalog
 ):
     pass
 
