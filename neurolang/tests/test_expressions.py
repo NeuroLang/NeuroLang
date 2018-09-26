@@ -176,6 +176,19 @@ def test_compatibility_for_pattern_matching():
             assert getattr(instance, argname) == ...
 
 
+def test_equality():
+    assert C_(1) == C_(1)
+    assert C_(1) != C_(2)
+    assert S_('a') == S_('a')
+    assert S_('a') != S_('b')
+    assert S_('a')(C_(1)) == S_('a')(C_(1))
+    assert S_('a')(C_(1)) != S_('b')(C_(1))
+    assert S_('a')(C_(1)) != S_('a')(C_(2))
+
+    assert C_((C_(1), C_(2))) == C_((C_(1), C_(2)))
+    assert C_((C_(1), C_(2))) != C_((C_(1), C_(3)))
+
+
 def test_instance_check():
     c = C_[int](2)
     assert isinstance(c, expressions.Constant)

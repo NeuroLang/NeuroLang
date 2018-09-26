@@ -314,7 +314,7 @@ class Expression(metaclass=ExpressionMeta):
 
         for child in self.__children__:
             val = getattr(self, child)
-            val_other = getattr(self, child)
+            val_other = getattr(other, child)
 
             if isinstance(val, (list, tuple)):
                 if not all(v == o for v, o in zip(val, val_other)):
