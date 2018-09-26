@@ -5,7 +5,7 @@ from .expressions import (
     Expression, ExpressionBlock, FunctionApplication, Symbol, Constant,
     Definition, ExistentialPredicate
 )
-from .expression_walker import PatternWalker
+from .expression_walker import ExpressionBasicEvaluator
 from .expression_pattern_matching import add_match
 from .existential_datalog import (
     Implication, ExistentialDatalog, SolverNonRecursiveExistentialDatalog
@@ -135,7 +135,21 @@ class GenerativeDatalog(ExistentialDatalog):
         }
 
 
-class TranslateGDatalogToEDatalog(GenerativeDatalog):
+class TranslateGDatalogToEDatalog(ExpressionBasicEvaluator):
+    @add_match(
+        ExpressionBlock,
+        lambda block: any(is_gdatalog_rule(e) for e in block.expressions)
+    )
+    def convert_expression_block_to_edatalog(self, block):
+        new_eb = tuple()
+        for exp in block.expressions:
+            res = self.walk(exp)
+            if isinstance(res, ExpressionBlock):
+                new_eb += res.expressions
+            else:
+                new_eb += (res, )
+        return self.walk(ExpressionBlock(new_eb))
+
     @add_match(Implication(DeltaAtom, ...))
     def convert_gdatalog_rule_to_edatalog_rules(self, expression):
         delta_atom = expression.consequent
@@ -163,8 +177,7 @@ class TranslateGDatalogToEDatalog(GenerativeDatalog):
                 )
             ), expression.antecedent & result_atom
         )
-        self.walk(first_rule)
-        self.walk(second_rule)
+        return self.walk(ExpressionBlock((first_rule, second_rule)))
 
 
 class SolverNonRecursiveGenerativeDatalog(
