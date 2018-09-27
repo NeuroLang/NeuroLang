@@ -111,7 +111,7 @@ class GenerativeDatalog(ExistentialDatalog):
         )
 
     @add_match(Implication(DeltaAtom, ...))
-    def gdatalog_rule(self, expression):
+    def add_gdatalog_rule_to_symbol_table(self, expression):
         """
         Add a definition of a GDatalog[Δ] rule to the GDB (Generative
         Database).
@@ -119,9 +119,15 @@ class GenerativeDatalog(ExistentialDatalog):
         """
         consequent_name = get_gd_rule_consequent_name(expression)
         if consequent_name in self.symbol_table:
-            raise NeuroLangException('GDatalog[Δ] rule already defined')
+            block = self.symbol_table[consequent_name]
+            if not isinstance(block, ExpressionBlock):
+                raise NeuroLangException('Expected expression block in table')
+            new_block = add_to_expression_block(block, expression)
+            self.symbol_table[consequent_name] = new_block
         else:
-            self.symbol_table[consequent_name] = expression
+            self.symbol_table[consequent_name] = \
+                ExpressionBlock((expression, ))
+        return expression
 
     def generative_database(self):
         return {
@@ -181,14 +187,16 @@ class TranslateGDatalogToEDatalog(ExpressionBasicEvaluator):
 
 
 class SolverNonRecursiveGenerativeDatalog(
-    SolverNonRecursiveExistentialDatalog, GenerativeDatalog
+    GenerativeDatalog, SolverNonRecursiveExistentialDatalog
 ):
     pass
 
 
 def add_to_expression_block(eb, to_add):
     expressions = eb.expressions
-    if isinstance(to_add, Expression):
+    if isinstance(to_add, ExpressionBlock):
+        expressions += to_add.expressions
+    elif isinstance(to_add, Expression):
         expressions += (to_add, )
     else:
         if (
