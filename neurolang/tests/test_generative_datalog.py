@@ -9,6 +9,7 @@ from ..generative_datalog import (
     GenerativeDatalog, SolverNonRecursiveGenerativeDatalog,
     TranslateGDatalogToEDatalog, DeltaTerm, DeltaAtom
 )
+from ..solver_datalog_naive import Fact
 
 C_ = Constant
 S_ = Symbol
@@ -54,9 +55,36 @@ def test_translation_of_gdatalog_program_to_edatalog_program():
     solver.walk(Implication(P(x, DeltaTerm('Flip', C_(0.5))), Q(x)))
     assert 'P' in solver.intensional_database()
 
-    # block = ExpressionBlock((
-        # Implication(P(x, DeltaTerm('Flip', C_(0.5))), Q(x)),
-    # ))
+
+def test_non_generative_rule_preserved_when_block_translated():
+    x = S_('x')
+    y = S_('y')
+    z = S_('z')
+    P = S_('P')
+    Q = S_('Q')
+    W = S_('W')
+    K = S_('K')
+    Z = S_('Z')
+    a = C_('a')
+    b = C_('b')
+    block = ExpressionBlock((
+        Implication(P(x, DeltaTerm('Flip', C_(0.5))), Q(x)),
+        Fact(Q(a)),
+        Fact(Q(b)),
+        Implication(Z(x, y, z),
+                    W(x, y) & K(y, z)),
+    ))
+    translator = TranslateGDatalogToEDatalogTestSolver()
+    translated_block = translator.walk(block)
+    assert Fact(Q(a)) in translated_block.expressions
+    assert (
+        Implication(P(x, DeltaTerm('Flip', C_(0.5))),
+                    Q(x)) not in translated_block.expressions
+    )
+    assert (
+        Implication(Z(x, y, z),
+                    W(x, y) & K(y, z)) in translated_block.expressions
+    )
 
 
 def test_burglar():
@@ -71,10 +99,7 @@ def test_burglar():
     Alarm = S_('Alarm')
     Flip = C_('Flip')
     x, h, b, c, r = S_('x'), S_('h'), S_('b'), S_('c'), S_('r')
-
-    extensional = ExpressionBlock(())
-
-    intensional = ExpressionBlock((
+    program = ExpressionBlock((
         Implication(Unit(h, c), House(h, c)),
         Implication(Unit(b, c), Business(b, c)),
         Implication(Earthquake(c, DeltaTerm(Flip, C_(0.01))), City(c, r)),
@@ -89,3 +114,4 @@ def test_burglar():
         Implication(Trig(x, DeltaTerm(Flip, C_(0.9))), Burglary(x, c, C_(1))),
         Implication(Alarm(x), Trig(x, C_(1)))
     ))
+    solver.walk(program)
