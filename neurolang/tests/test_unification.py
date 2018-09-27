@@ -13,7 +13,7 @@ def test_unification():
     z = S_('z')
 
     assert most_general_unifier(a(x), a(x)) == (dict(), a(x))
-    assert most_general_unifier(a(x), a(y)) == (dict(x=y), a(y))
+    assert most_general_unifier(a(x), a(y)) == (dict(x=y), a(x))
     assert most_general_unifier(a(x, y), a(y, y)) == (dict(x=y), a(y, y))
     assert most_general_unifier(a(x, z), a(y, y)) == (dict(x=y, z=y), a(y, y))
     assert most_general_unifier(a(C_(1), z), a(y, y)) ==\
