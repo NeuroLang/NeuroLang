@@ -112,48 +112,6 @@ class GenerativeDatalogSugarRemover(ExpressionBasicEvaluator):
         )
 
 
-class GenerativeDatalog(GenerativeDatalogSugarRemover, ExistentialDatalog):
-    @add_match(Implication(DeltaAtom, ...))
-    def add_gdatalog_rule_to_symbol_table(self, expression):
-        """
-        Add a definition of a GDatalog[Δ] rule to the GDB (Generative
-        Database).
-
-        """
-        consequent_name = get_gd_rule_consequent_name(expression)
-        if consequent_name in self.symbol_table:
-            block = self.symbol_table[consequent_name]
-            if consequent_name in self.intensional_database():
-                raise NeuroLangException(
-                    f"`{consequent_name}' already defined in IDB"
-                )
-            elif consequent_name in self.existential_intensional_database():
-                raise NeuroLangException(
-                    f"`{consequent_name}' already defined in E-IDB"
-                )
-            elif consequent_name in self.extensional_database():
-                raise NeuroLangException(
-                    f"`{consequent_name}' already defined in EDB"
-                )
-            new_block = add_to_expression_block(block, expression)
-            self.symbol_table[consequent_name] = new_block
-        else:
-            self.symbol_table[consequent_name] = \
-                ExpressionBlock((expression, ))
-        return expression
-
-    def generative_database(self):
-        return {
-            k: v
-            for k, v in self.symbol_table.items()
-            if (
-                isinstance(v, Implication) and
-                isinstance(v.consequent, FunctionApplication) and
-                any(isinstance(arg, DeltaTerm) for arg in v.consequent.args)
-            )
-        }
-
-
 class TranslateGDatalogToEDatalog(ExpressionBasicEvaluator):
     @add_match(
         ExpressionBlock,
@@ -207,7 +165,7 @@ class TranslateGDatalogToEDatalog(ExpressionBasicEvaluator):
 
 
 class SolverNonRecursiveGenerativeDatalog(
-    GenerativeDatalog, SolverNonRecursiveExistentialDatalog
+    SolverNonRecursiveExistentialDatalog
 ):
     pass
 

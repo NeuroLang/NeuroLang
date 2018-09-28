@@ -6,9 +6,8 @@ from ..exceptions import NeuroLangException
 from ..expressions import ExpressionBlock, Constant, Symbol, Query, Statement
 from ..existential_datalog import Implication
 from ..generative_datalog import (
-    GenerativeDatalog, GenerativeDatalogSugarRemover,
-    SolverNonRecursiveGenerativeDatalog, TranslateGDatalogToEDatalog,
-    DeltaTerm, DeltaAtom
+    GenerativeDatalogSugarRemover, SolverNonRecursiveGenerativeDatalog,
+    TranslateGDatalogToEDatalog, DeltaTerm, DeltaAtom
 )
 from ..solver_datalog_naive import Fact
 
