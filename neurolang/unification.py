@@ -22,7 +22,6 @@ def most_general_unifier(expression1, expression2):
 
     substitution = dict()
     while True:
-        print(expression1, expression2)
         for arg1, arg2 in zip(expression1.args, expression2.args):
             if arg1 != arg2:
                 break
@@ -62,3 +61,21 @@ def merge_substitutions(subs1, subs2):
     res = subs1.copy()
     res.update(subs2)
     return res
+
+
+def compose_substitutions(subs1, subs2):
+    new_subs = dict()
+    new_subs = {
+        k: v for k, v in subs2.items()
+        if k not in subs1
+    }
+
+    for k, v in subs1.items():
+        if isinstance(v, exp.Symbol):
+            new_value = subs2.get(k, v)
+            if new_value != k:
+                new_subs[k] = new_value
+        else:
+            new_subs[k] = v
+
+    return new_subs
