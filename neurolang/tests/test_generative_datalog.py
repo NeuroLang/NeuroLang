@@ -6,8 +6,9 @@ from ..exceptions import NeuroLangException
 from ..expressions import ExpressionBlock, Constant, Symbol, Query, Statement
 from ..existential_datalog import Implication
 from ..generative_datalog import (
-    GenerativeDatalog, SolverNonRecursiveGenerativeDatalog,
-    TranslateGDatalogToEDatalog, DeltaTerm, DeltaAtom
+    GenerativeDatalog, GenerativeDatalogSugarRemover,
+    SolverNonRecursiveGenerativeDatalog, TranslateGDatalogToEDatalog,
+    DeltaTerm, DeltaAtom
 )
 from ..solver_datalog_naive import Fact
 
@@ -25,9 +26,8 @@ class GenerativeDatalogTestSolver(
 
 
 class TranslateGDatalogToEDatalogTestSolver(
-    solver_datalog_extensional_db.ExtensionalDatabaseSolver,
+    GenerativeDatalogSugarRemover,
     TranslateGDatalogToEDatalog,
-    GenerativeDatalog,
 ):
     pass
 
@@ -52,8 +52,9 @@ def test_translation_of_gdatalog_program_to_edatalog_program():
     P = S_('P')
     Q = S_('Q')
     x = S_('x')
-    solver.walk(Implication(P(x, DeltaTerm('Flip', C_(0.5))), Q(x)))
-    assert 'P' in solver.intensional_database()
+    res = solver.walk(Implication(P(x, DeltaTerm('Flip', C_(0.5))), Q(x)))
+    assert isinstance(res, ExpressionBlock)
+    assert len(res.expressions) == 2
 
 
 def test_non_generative_rule_preserved_when_block_translated():
@@ -88,7 +89,6 @@ def test_non_generative_rule_preserved_when_block_translated():
 
 
 def test_burglar():
-    solver = GenerativeDatalogTestSolver()
     City = S_('City')
     House = S_('House')
     Business = S_('Business')
@@ -114,4 +114,12 @@ def test_burglar():
         Implication(Trig(x, DeltaTerm(Flip, C_(0.9))), Burglary(x, c, C_(1))),
         Implication(Alarm(x), Trig(x, C_(1)))
     ))
-    solver.walk(program)
+
+    translator = TranslateGDatalogToEDatalogTestSolver()
+    translated = translator.walk(program)
+    assert not any(
+        isinstance(e, ExpressionBlock) for e in translated.expressions
+    )
+
+    solver = GenerativeDatalogTestSolver()
+    solver.walk(translated)

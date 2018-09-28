@@ -1,3 +1,4 @@
+from uuid import uuid1
 from typing import Tuple
 
 from .expressions import NeuroLangException
@@ -78,7 +79,7 @@ class DeltaAtom(Definition):
         return f'Δ-atom{{{self.name}({terms_str})}}'
 
 
-class GenerativeDatalog(ExistentialDatalog):
+class GenerativeDatalogSugarRemover(ExpressionBasicEvaluator):
     @add_match(
         Implication(FunctionApplication, ...),
         lambda expression: any(
@@ -110,6 +111,8 @@ class GenerativeDatalog(ExistentialDatalog):
             )
         )
 
+
+class GenerativeDatalog(GenerativeDatalogSugarRemover, ExistentialDatalog):
     @add_match(Implication(DeltaAtom, ...))
     def add_gdatalog_rule_to_symbol_table(self, expression):
         """
@@ -120,8 +123,18 @@ class GenerativeDatalog(ExistentialDatalog):
         consequent_name = get_gd_rule_consequent_name(expression)
         if consequent_name in self.symbol_table:
             block = self.symbol_table[consequent_name]
-            if not isinstance(block, ExpressionBlock):
-                raise NeuroLangException('Expected expression block in table')
+            if consequent_name in self.intensional_database():
+                raise NeuroLangException(
+                    f"`{consequent_name}' already defined in IDB"
+                )
+            elif consequent_name in self.existential_intensional_database():
+                raise NeuroLangException(
+                    f"`{consequent_name}' already defined in E-IDB"
+                )
+            elif consequent_name in self.extensional_database():
+                raise NeuroLangException(
+                    f"`{consequent_name}' already defined in EDB"
+                )
             new_block = add_to_expression_block(block, expression)
             self.symbol_table[consequent_name] = new_block
         else:
@@ -144,22 +157,25 @@ class GenerativeDatalog(ExistentialDatalog):
 class TranslateGDatalogToEDatalog(ExpressionBasicEvaluator):
     @add_match(
         ExpressionBlock,
-        lambda block: any(is_gdatalog_rule(e) for e in block.expressions)
+        lambda block: any(
+            is_gdatalog_rule(e) or is_gdatalog_rule_wannabe(e)
+            for e in block.expressions
+        )
     )
     def convert_expression_block_to_edatalog(self, block):
-        new_eb = tuple()
+        expressions = tuple()
         for exp in block.expressions:
             res = self.walk(exp)
             if isinstance(res, ExpressionBlock):
-                new_eb += res.expressions
+                expressions += res.expressions
             else:
-                new_eb += (res, )
-        return self.walk(ExpressionBlock(new_eb))
+                expressions += (res, )
+        return self.walk(ExpressionBlock(expressions))
 
     @add_match(Implication(DeltaAtom, ...))
     def convert_gdatalog_rule_to_edatalog_rules(self, expression):
         delta_atom = expression.consequent
-        y = Symbol('y')
+        y = Symbol[delta_atom.delta_term.type]('y_' + str(uuid1()))
         result_terms = (
             delta_atom.delta_term.dist_parameters +
             (Constant(delta_atom.name), ) +
@@ -184,6 +200,10 @@ class TranslateGDatalogToEDatalog(ExpressionBasicEvaluator):
             ), expression.antecedent & result_atom
         )
         return self.walk(ExpressionBlock((first_rule, second_rule)))
+
+    @add_match(Expression)
+    def other_expressions(self, expression):
+        return expression
 
 
 class SolverNonRecursiveGenerativeDatalog(
@@ -219,8 +239,16 @@ def is_gdatalog_rule(exp):
     )
 
 
+def is_gdatalog_rule_wannabe(exp):
+    return (
+        isinstance(exp, Implication) and
+        isinstance(exp.consequent, FunctionApplication) and
+        sum(isinstance(arg, DeltaTerm) for arg in exp.consequent.args) == 1
+    )
+
+
 def get_gd_rule_consequent_name(gd_rule):
-    if not is_gdatalog_rule:
+    if not is_gdatalog_rule(gd_rule):
         raise NeuroLangException('Must be a GDatalog[Δ] rule')
     else:
         body = gd_rule.consequent
