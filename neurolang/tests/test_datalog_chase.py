@@ -65,7 +65,7 @@ def test_non_recursive_predicate_chase():
     dl = Datalog()
     dl.walk(datalog_program)
 
-    res = dc.build_chase(dl)
+    res = dc.build_chase_tree(dl)
 
     DeltaI = {
         T: C_({C_((C_(1), C_(3)))})

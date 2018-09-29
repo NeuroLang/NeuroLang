@@ -6,7 +6,7 @@ from .expressions import Constant
 from . import solver_datalog_naive as sdb
 
 
-def chase_step(instance, rule):
+def chase_step(instance, rule, restriction_instance=None):
     rule_predicates = sdb.extract_datalog_predicates(rule.antecedent)
 
     substitutions = [{}]
@@ -16,10 +16,17 @@ def chase_step(instance, rule):
         while len(substitutions) > 0:
             substitution = substitutions.pop()
             subs_pred = unification.apply_substitution(predicate, substitution)
-            if functor not in instance:
+            if (
+                restriction_instance is not None and
+                functor in restriction_instance
+            ):
+                element_set = restriction_instance[functor].value
+            elif functor in instance:
+                element_set = instance[functor].value
+            else:
                 continue
 
-            for element in instance[functor].value:
+            for element in element_set:
                 mgu_substituted = unification.most_general_unifier(
                     subs_pred, functor(*element.value)
                 )
@@ -41,6 +48,11 @@ def chase_step(instance, rule):
 
     if rule.consequent.functor in instance:
         new_tuples -= instance[rule.consequent.functor].value
+    if (
+        restriction_instance is not None and
+        rule.consequent.functor in restriction_instance
+    ):
+        new_tuples -= restriction_instance[rule.consequent.functor].value
 
     if len(new_tuples) == 0:
         return {}
@@ -105,7 +117,8 @@ def build_chase_solution(datalog_instance):
     while len(DeltaI) > 0:
         instance = merge_instances(instance, DeltaI)
         DeltaI = merge_instances(*(
-            chase_step(instance, rule) for rule in rules
+            chase_step(instance, rule, restriction_instance=DeltaI)
+            for rule in rules
         ))
 
     return instance
