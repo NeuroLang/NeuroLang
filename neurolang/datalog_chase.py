@@ -8,40 +8,58 @@ from . import solver_datalog_naive as sdb
 
 def chase_step(instance, rule, restriction_instance=None):
     rule_predicates = sdb.extract_datalog_predicates(rule.antecedent)
+    predicate_functors_instance = {}
+    head_functor = rule.consequent.functor
+    for predicate in rule_predicates:
+        functor = predicate.functor
+        if (
+            functor == head_functor and
+            functor in predicate_functors_instance
+        ):
+            raise ValueError(f'Non-linear rule {rule}, solver non supported')
+
+        if (
+            restriction_instance is not None and
+            functor in restriction_instance
+        ):
+            predicate_functors_instance[functor] =\
+                restriction_instance[functor].value
+        elif functor in instance:
+            predicate_functors_instance[functor] =\
+                instance[functor].value
+        else:
+            return dict()
 
     substitutions = [{}]
-    for i, predicate in enumerate(rule_predicates):
+    for predicate in rule_predicates:
         functor = predicate.functor
         new_substitutions = []
-        while len(substitutions) > 0:
-            substitution = substitutions.pop()
-            subs_pred = unification.apply_substitution(predicate, substitution)
-            if (
-                restriction_instance is not None and
-                functor in restriction_instance
-            ):
-                element_set = restriction_instance[functor].value
-            elif functor in instance:
-                element_set = instance[functor].value
-            else:
-                continue
+        for substitution in substitutions:
+            subs_args = unification.apply_substitution_arguments(
+                predicate.args, substitution
+            )
 
-            for element in element_set:
-                mgu_substituted = unification.most_general_unifier(
-                    subs_pred, functor(*element.value)
+            for element in predicate_functors_instance[functor]:
+                mgu_substituted = unification.most_general_unifier_arguments(
+                    subs_args,
+                    element.value
                 )
 
                 if mgu_substituted is not None:
+                    new_substitution = mgu_substituted[0]
                     new_substitutions.append(
                         unification.compose_substitutions(
-                            substitution, mgu_substituted[0]
+                            substitution, new_substitution
                         )
                     )
+
         substitutions = new_substitutions
 
     new_tuples = set(
         Constant(
-            unification.apply_substitution(rule.consequent, substitution).args
+            unification.apply_substitution_arguments(
+                rule.consequent.args, substitution
+            )
         )
         for substitution in substitutions
     )

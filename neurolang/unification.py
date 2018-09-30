@@ -20,13 +20,48 @@ def most_general_unifier(expression1, expression2):
     ):
         return None
 
+    unifier = most_general_unifier_arguments(
+        expression1.args, expression2.args
+    )
+
+    if unifier is None:
+        return unifier
+    else:
+        return (
+            unifier[0],
+            expression1.apply(expression1.functor, unifier[1])
+        )
+
+
+def apply_substitution(function_application, substitution):
+    return exp.FunctionApplication[function_application.type](
+        function_application.functor,
+        apply_substitution_arguments(function_application.args, substitution)
+    )
+
+
+def most_general_unifier_arguments(args1, args2):
+    '''
+    Obtain the most general unifier (MGU) between argument tuples.
+    If the MGU exists it returns the substitution and the unified arguments.
+    If the MGU doesn't exist it returns None.
+    '''
+    if not (
+        isinstance(args1, tuple) and
+        isinstance(args2, tuple)
+    ):
+        return ValueError("We can only unify argument tuples")
+
+    if len(args1) != len(args2):
+        return None
+
     substitution = dict()
     while True:
-        for arg1, arg2 in zip(expression1.args, expression2.args):
+        for arg1, arg2 in zip(args1, args2):
             if arg1 != arg2:
                 break
         else:
-            return substitution, expression1
+            return substitution, args1
 
         if isinstance(arg1, exp.Symbol):
             substitution[arg1] = arg2
@@ -35,15 +70,12 @@ def most_general_unifier(expression1, expression2):
         else:
             return None
 
-        expression1 = apply_substitution(expression1, substitution)
-        expression2 = apply_substitution(expression2, substitution)
+        args1 = apply_substitution_arguments(args1, substitution)
+        args2 = apply_substitution_arguments(args2, substitution)
 
 
-def apply_substitution(function_application, substitution):
-    return exp.FunctionApplication[function_application.type](
-        function_application.functor,
-        tuple(substitution.get(a, a) for a in function_application.args)
-    )
+def apply_substitution_arguments(arguments, substitution):
+    return tuple(substitution.get(a, a) for a in arguments)
 
 
 def merge_substitutions(subs1, subs2):
