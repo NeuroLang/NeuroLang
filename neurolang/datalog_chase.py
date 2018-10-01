@@ -12,19 +12,21 @@ def chase_step(instance, rule, restriction_instance=None):
     head_functor = rule.consequent.functor
     for predicate in rule_predicates:
         functor = predicate.functor
-        if (
-            functor == head_functor and
-            functor in predicate_functors_instance
-        ):
-            raise ValueError(f'Non-linear rule {rule}, solver non supported')
+        if restriction_instance is not None:
+            if (
+                functor == head_functor and
+                functor in predicate_functors_instance
+            ):
+                raise ValueError(
+                    f'Non-linear rule {rule}, solver non supported'
+                )
 
-        if (
-            restriction_instance is not None and
-            functor in restriction_instance
-        ):
-            predicate_functors_instance[functor] =\
-                restriction_instance[functor].value
-        elif functor in instance:
+            if functor in restriction_instance:
+                predicate_functors_instance[functor] =\
+                    restriction_instance[functor].value
+                continue
+
+        if functor in instance:
             predicate_functors_instance[functor] =\
                 instance[functor].value
         else:
@@ -103,7 +105,7 @@ def merge_instances(*args):
 ChaseNode = namedtuple('ChaseNode', 'instance children')
 
 
-def build_chase_tree(datalog_instance):
+def build_chase_tree(datalog_instance, chase_set=chase_step):
     root = ChaseNode(datalog_instance.extensional_database(), dict())
     rules = []
     for v in datalog_instance.intensional_database().values():
@@ -124,7 +126,7 @@ def build_chase_tree(datalog_instance):
     return root
 
 
-def build_chase_solution(datalog_instance):
+def build_chase_solution(datalog_instance, chase_step=chase_step):
     rules = []
     for v in datalog_instance.intensional_database().values():
         for rule in v.expressions:
