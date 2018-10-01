@@ -17,12 +17,15 @@ class Datalog(
     solver_datalog_extensional_db.ExtensionalDatabaseSolver,
     ew.ExpressionBasicEvaluator
 ):
-    pass
+    def function_gt(self, x: int, y: int)->bool:
+        return x > y
 
 
 def test_non_recursive_predicate_chase_step():
     Q = S_('Q')
     T = S_('T')
+    S = S_('S')
+    gt = S_('gt')
     x = S_('x')
     y = S_('y')
     z = S_('z')
@@ -30,22 +33,30 @@ def test_non_recursive_predicate_chase_step():
     datalog_program = Eb_((
         Fact_(Q(C_(1), C_(2))),
         Fact_(Q(C_(2), C_(3))),
-        Imp_(T(x, y), Q(x, z) & Q(z, y))
+        Fact_(Q(C_(8), C_(6))),
+        Imp_(T(x, y), Q(x, z) & Q(z, y)),
+        Imp_(S(x, y), Q(x, y) & gt(x, y))
     ))
 
     dl = Datalog()
     dl.walk(datalog_program)
 
     I0 = dl.extensional_database()
-    idb = dl.intensional_database()
-    rule = next(iter(idb.values())).expressions[0]
-    DeltaI = dc.chase_step(I0, rule)
+
+    rule = datalog_program.expressions[-1]
+    DeltaI = dc.chase_step(dl, I0, dl.builtins(), rule)
     assert DeltaI == {
-        T: C_({C_((C_(1), C_(3)))})
+        S: C_({C_((C_(8), C_(6)))}),
+    }
+
+    rule = datalog_program.expressions[-2]
+    DeltaI = dc.chase_step(dl, I0, dl.builtins(), rule)
+    assert DeltaI == {
+        T: C_({C_((C_(1), C_(3)))}),
     }
 
     I1 = dc.merge_instances(I0, DeltaI)
-    DeltaI = dc.chase_step(I1, rule)
+    DeltaI = dc.chase_step(dl, I1, dl.builtins(), rule)
     assert len(DeltaI) == 0
 
 
