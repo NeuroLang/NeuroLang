@@ -1,6 +1,6 @@
 import numpy as np
 from uuid import uuid1
-from typing import AbstractSet, Callable, Tuple
+from typing import AbstractSet, Callable, Tuple, Container
 from neurolang.frontend.neurosynth_utils import NeuroSynthHandler
 from .query_resolution_expressions import (
     Expression, Symbol,
@@ -159,6 +159,31 @@ class QueryBuilder:
             )
 
         return self.add_symbol(region, result_symbol_name)
+
+    def add_region_set(self, region_set, result_symbol_name=None):
+        if not isinstance(region_set, Container):
+            raise ValueError(f"region must be instance of {self.set_type}")
+
+        new_set = set()
+
+        for region in region_set:
+            if not (
+                isinstance(region, Symbol) and
+                issubclass(region.type, Region)
+            ):
+                raise ValueError('Elements must be Region symbols')
+
+            new_set.add(nl.Symbol[Region](region.symbol_name))
+
+        if result_symbol_name is None:
+            result_symbol_name = str(uuid1())
+
+        set_type = AbstractSet[Region]
+        symbol = nl.Symbol[set_type](result_symbol_name)
+        self.solver.symbol_table[symbol] = nl.Constant[set_type](
+            frozenset(new_set)
+        )
+        return Symbol(self, result_symbol_name)
 
     def add_tuple_set(self, iterable, types, name=None):
         if not isinstance(types, tuple) or len(types) == 1:
