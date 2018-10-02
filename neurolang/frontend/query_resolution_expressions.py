@@ -2,7 +2,7 @@ from functools import wraps
 import operator as op
 from typing import AbstractSet, Tuple
 from .. import neurolang as nl
-from ..expressions import is_leq_informative
+from ..expressions import is_leq_informative, FunctionApplication
 from ..expression_walker import ReplaceExpressionsByValues
 from ..expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 
@@ -23,20 +23,13 @@ class Expression:
         )
 
     def __call__(self, *args, **kwargs):
-        new_args = [
+        new_args = tuple(
             a.expression if isinstance(a, Expression)
             else nl.Constant(a)
             for a in args
-        ]
+        )
 
-        new_kwargs = {
-            k: (
-                v.expression if isinstance(v, Expression)
-                else nl.Constant(v)
-            )
-            for k, v in kwargs.items()
-        }
-        new_expression = self.expression(*new_args, **new_kwargs)
+        new_expression = FunctionApplication(self.expression, new_args)
         return Operation(
                 self.query_builder, new_expression, self, args)
 
@@ -236,9 +229,16 @@ class Symbol(Expression):
         else:
             return self.expression == other
 
+    def __hash__(self):
+        return hash(self.expression)
+
     @property
     def symbol(self):
         return self.query_builder.solver.symbol_table[self.symbol_name]
+
+    @property
+    def neurolang_symbol(self):
+        return nl.Symbol[self.type](self.symbol_name)
 
     @property
     def expression(self):
