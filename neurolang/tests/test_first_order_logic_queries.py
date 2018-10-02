@@ -9,7 +9,7 @@ S_ = expressions.Symbol
 
 
 def test_simple_symbol_query():
-    ds = solver.DatalogSolver(TypedSymbolTable())
+    ds = solver.FirstOrderLogicSolver(TypedSymbolTable())
 
     for s in range(5):
         sym = S_[int](str(s))
@@ -34,7 +34,7 @@ def test_simple_symbol_query():
 
 
 def test_multiple_symbol_query():
-    ds = solver.DatalogSolver(TypedSymbolTable())
+    ds = solver.FirstOrderLogicSolver(TypedSymbolTable())
 
     for s in range(5):
         sym = S_[int](str(s))
@@ -67,7 +67,7 @@ def test_multiple_symbol_query():
 
 
 def test_tuple_symbol_query():
-    ds = solver.DatalogSolver(TypedSymbolTable())
+    ds = solver.FirstOrderLogicSolver(TypedSymbolTable())
 
     for s in range(5):
         sym = S_[typing.Tuple[int, str]](str(s))
@@ -96,7 +96,7 @@ def test_tuple_symbol_query():
 
 
 def test_existential_predicate():
-    ds = solver.DatalogSolver(TypedSymbolTable())
+    ds = solver.FirstOrderLogicSolver(TypedSymbolTable())
 
     for s in range(5):
         sym = S_[int](str(s))
@@ -127,7 +127,7 @@ def test_existential_predicate():
 
 
 def test_existential_predicate_trivial():
-    ds = solver.DatalogSolver(TypedSymbolTable())
+    ds = solver.FirstOrderLogicSolver(TypedSymbolTable())
 
     for s in range(5):
         sym = S_[int](str(s))
@@ -160,7 +160,7 @@ def test_existential_predicate_trivial():
 
 
 def test_existential_predicate_not_solved():
-    ds = solver.DatalogSolver(TypedSymbolTable())
+    ds = solver.FirstOrderLogicSolver(TypedSymbolTable())
 
     for s in range(5):
         sym = S_[int](str(s))
@@ -184,7 +184,7 @@ def test_existential_predicate_not_solved():
 
 
 def test_universal_predicate():
-    ds = solver.DatalogSolver(TypedSymbolTable())
+    ds = solver.FirstOrderLogicSolver(TypedSymbolTable())
 
     for s in range(5):
         sym = S_[int](str(s))
@@ -215,7 +215,7 @@ def test_universal_predicate():
 
 
 def test_universal_predicate_trivial():
-    ds = solver.DatalogSolver(TypedSymbolTable())
+    ds = solver.FirstOrderLogicSolver(TypedSymbolTable())
 
     for s in range(5):
         sym = S_[int](str(s))
@@ -248,7 +248,7 @@ def test_universal_predicate_trivial():
 
 
 def test_universal_predicate_not_solved():
-    ds = solver.DatalogSolver(TypedSymbolTable())
+    ds = solver.FirstOrderLogicSolver(TypedSymbolTable())
 
     for s in range(5):
         sym = S_[int](str(s))

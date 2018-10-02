@@ -6,11 +6,7 @@ import numpy as np
 class AABB:
 
     def __init__(self, lb, ub):
-        _lb = np.asanyarray(lb, dtype=float)
-        _ub = np.asanyarray(ub, dtype=float)
-        _lb.setflags(write=False)
-        _ub.setflags(write=False)
-        self._limits = np.c_[_lb, _ub]
+        self._limits = np.asarray((lb, ub), dtype=float).T
         self._limits.setflags(write=False)
         self._lb = self._limits[:, 0]
         self._ub = self._limits[:, 1]
@@ -48,7 +44,7 @@ class AABB:
                     np.maximum(self.ub, other.ub))
 
     def contains(self, other):
-        return ((other.lb >= self.lb).sum() + (other.ub <= self.ub).sum()) == 6
+        return all(other.lb >= self.lb) and all(other.ub <= self.ub)
 
     def overlaps(self, other):
         return ((other.ub > self.lb).sum() +
@@ -112,7 +108,6 @@ class Tree:
         return self.add_in_direction('right', box, regions)
 
     def add_in_direction(self, direction, box, regions=set()):
-
         for region_id in regions:
             self.expand_region_box(region_id, box)
         n = self.root

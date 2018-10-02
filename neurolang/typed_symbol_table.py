@@ -1,68 +1,11 @@
-import typing
 import collections
 from itertools import chain
 
 from . import expressions
-from .expressions import (
-    typing_callable_from_annotated_function,
-    ExpressionBlock,
-    ToBeInferred,
-    Constant, Expression,
-    Symbol,
-    Lambda,
-    FunctionApplication,
-    Statement,
-    ExistentialPredicate,
-    UniversalPredicate,
-    Query,
-    Projection,
-    is_subtype,
-    get_type_args,
-    get_type_and_value,
-    type_validation_value,
-    unify_types,
-    NeuroLangTypeException,
-    NeuroLangException
-)
+from .exceptions import NeuroLangException
 
 
-__all__ = [
-    'ToBeInferred',
-    'Symbol', 'Constant', 'Expression', 'FunctionApplication', 'Statement',
-    'Projection', 'ExistentialPredicate', 'UniversalPredicate', 'Lambda',
-    'Query',
-    'TypedSymbolTable', 'ExpressionBlock',
-    'typing_callable_from_annotated_function',
-    'NeuroLangTypeException', 'is_subtype', 'type_validation_value',
-    'unify_types',
-    'get_Callable_arguments_and_return', 'get_type_and_value'
-]
-
-
-def get_Callable_arguments_and_return(callable):
-    return callable.__args__[:-1], callable.__args__[-1]
-
-
-def replace_type_variable(type_, type_hint, type_var=None):
-    if (
-        isinstance(type_hint, typing.TypeVar) and
-        type_hint == type_var
-    ):
-        return type_
-    elif hasattr(type_hint, '__args__') and type_hint.__args__ is not None:
-        new_args = []
-        for arg in get_type_args(type_hint):
-            new_args.append(
-                replace_type_variable(type_, arg, type_var=type_var)
-            )
-        return type_hint.__origin__[tuple(new_args)]
-    elif isinstance(type_hint, typing.Iterable):
-        return [
-            replace_type_variable(type_, arg, type_var=type_var)
-            for arg in type_hint
-        ]
-    else:
-        return type_hint
+__all__ = ['TypedSymbolTable']
 
 
 class TypedSymbolTable(collections.MutableMapping):
@@ -133,7 +76,8 @@ class TypedSymbolTable(collections.MutableMapping):
             if (
                 t is type_ or (
                     include_subtypes and
-                    t is not ToBeInferred and is_subtype(t, type_)
+                    t is not expressions.Unknown and
+                    expressions.is_leq_informative(t, type_)
                 )
             ):
                 ret.update(self._symbols_by_type[t])

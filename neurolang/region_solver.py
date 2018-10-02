@@ -91,7 +91,7 @@ class RegionSolver(PatternWalker[Region]):
         self, regexp: typing.Text
     ) -> typing.AbstractSet[Region]:
         regions = []
-        for k, v in self.symbol_table.symbols_by_type(Region).items():
+        for k in self.symbol_table.symbols_by_type(Region):
             if re.search(regexp, k.name):
                 regions.append(k)
 

@@ -1,7 +1,7 @@
 from pytest import raises
 
 from .. import expression_walker
-from .. import symbols_and_types
+from .. import expressions
 from .. import neurolang as nl
 
 from typing import Callable, AbstractSet, Tuple
@@ -12,7 +12,7 @@ F_ = nl.FunctionApplication
 
 
 def test_symbol_table_as_parameter():
-    symbol_table = symbols_and_types.TypedSymbolTable()
+    symbol_table = expressions.TypedSymbolTable()
     solver = expression_walker.SymbolTableEvaluator(symbol_table)
     s = S_('S1')
     c = C_[str]('S')

@@ -1,5 +1,5 @@
 from ..region_solver import RegionsSetSolver
-from ...symbols_and_types import TypedSymbolTable
+from ...expressions import TypedSymbolTable
 from ... import neurolang as nl
 from typing import AbstractSet, Callable
 from ...regions import Region, ExplicitVBR, take_principal_regions
@@ -430,17 +430,6 @@ def test_paper_composition_ex():
     assert res == frozenset([c])
 
 
-@pytest.mark.skip(reason="need to fix neurosynth-based test")
-def test_term_defined_regions_creation():
-
-    solver = RegionsSetSolver(TypedSymbolTable())
-    solver.symbol_table[nl.Symbol[str]('term')] = nl.Constant[str]('emotion')
-    obtained = do_query_of_regions_from_term(
-        solver, 'term', 'neurosynth_term'
-    ).value
-    assert not obtained == frozenset([])
-
-
 def do_query_of_regions_from_term(
     solver, elem, relation, output_symbol_name='q'
 ):
@@ -456,91 +445,6 @@ def do_query_of_regions_from_term(
     solver.walk(query)
 
     return solver.symbol_table[output_symbol_name]
-
-
-@pytest.mark.skip(reason="need to fix neurosynth-based test")
-def test_term_defined_relative_position():
-
-    solver = RegionsSetSolver(TypedSymbolTable())
-    solver.symbol_table[nl.Symbol[str]('term')
-                        ] = nl.Constant[str]('temporal lobe')
-    temporal_lobe = do_query_of_regions_from_term(
-        solver, 'term', 'neurosynth_term', output_symbol_name='TEMPORAL LOBE'
-    )
-
-    solver.symbol_table[nl.Symbol[solver.type]('temporal_region')] = (
-        nl.Constant[solver.type](
-            get_singleton_element_from_frozenset(temporal_lobe.value)
-        )
-    )
-
-    superior_relation = 'anterior_of'
-    predicate = nl.FunctionApplication[solver.set_type](
-        nl.Symbol[Callable[[solver.set_type], solver.type]](superior_relation),
-        (nl.Symbol[solver.type]('temporal_region'), )
-    )
-
-    anterior_region = ExplicitVBR(np.array([[50, 90, 50]]), np.eye(4))
-    solver.symbol_table[nl.Symbol[solver.set_type]('anterior_region')
-                        ] = nl.Constant[solver.type](anterior_region)
-
-    query = nl.Query[solver.set_type](
-        nl.Symbol[solver.set_type]('p2'), predicate
-    )
-    solver.walk(query)
-
-    assert solver.symbol_table['p2'].value == frozenset([anterior_region])
-
-
-@pytest.mark.skip(reason="need to fix neurosynth-based test")
-def test_term_defined_solve_overlapping():
-
-    solver = RegionsSetSolver(TypedSymbolTable())
-    solver.symbol_table[nl.Symbol[str]('term')] = nl.Constant[str]('gambling')
-    gambling = do_query_of_regions_from_term(
-        solver, 'term', 'neurosynth_term', output_symbol_name='GAMBLING'
-    )
-
-    a_gambling_region = get_singleton_element_from_frozenset(
-        take_principal_regions(gambling.value, 1)
-    )
-    solver.symbol_table[nl.Symbol[solver.type]('gambling')
-                        ] = nl.Constant[solver.type](a_gambling_region)
-
-    center = a_gambling_region.bounding_box.ub
-    a_voxels = nib.affines.apply_affine(
-        np.linalg.inv(a_gambling_region.affine),
-        np.array([center - 1, center + 1])
-    )
-
-    solver.symbol_table[nl.Symbol[solver.type]('OVERLAPPING_RECTANGLE')
-                        ] = nl.Constant[solver.type](
-                            ExplicitVBR(a_voxels, a_gambling_region.affine)
-                        )
-
-    predicate = nl.FunctionApplication[solver.set_type](
-        nl.Symbol[Callable[[solver.set_type], solver.type]]('overlapping'),
-        (nl.Symbol[solver.type]('gambling'), )
-    )
-
-    query = nl.Query[solver.set_type](
-        nl.Symbol[solver.set_type]('p1'), predicate
-    )
-    solver.walk(query)
-    assert solver.symbol_table['p1'].value == set()
-
-    assert cardinal_relation(
-        a_gambling_region,
-        ExplicitVBR(a_voxels, a_gambling_region.affine),
-        'O',
-        refine_overlapping=False
-    )
-    assert not cardinal_relation(
-        a_gambling_region,
-        ExplicitVBR(a_voxels, a_gambling_region.affine),
-        'O',
-        refine_overlapping=True
-    )
 
 
 def test_regexp_region_union():

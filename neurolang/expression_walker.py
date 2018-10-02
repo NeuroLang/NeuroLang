@@ -3,13 +3,12 @@ from itertools import product
 import logging
 import typing
 
-from .symbols_and_types import TypedSymbolTable
+from .expressions import TypedSymbolTable
 from .expressions import (
-    ExpressionBlock,
-    FunctionApplication, Statement, Query, Projection, Constant,
-    Symbol, ExistentialPredicate, UniversalPredicate, Expression, Lambda,
-    get_type_and_value, ToBeInferred, is_subtype, NeuroLangTypeException,
-    unify_types, NeuroLangException
+    ExpressionBlock, FunctionApplication, Statement, Query, Projection,
+    Constant, Symbol, ExistentialPredicate, UniversalPredicate, Expression,
+    Lambda, Unknown, is_leq_informative, NeuroLangTypeException, unify_types,
+    NeuroLangException
 )
 
 from .expression_pattern_matching import add_match, PatternMatcher
@@ -46,10 +45,12 @@ def expression_iterator(expression, include_level=False, dfs=True):
         if isinstance(current_element[1], Symbol):
             children = []
         elif isinstance(current_element[1], Constant):
-            if is_subtype(current_element[1].type, typing.Tuple):
+            if is_leq_informative(current_element[1].type, typing.Tuple):
                 c = current_element[1].value
                 children = product((None,), c)
-            elif is_subtype(current_element[1].type, typing.AbstractSet):
+            elif is_leq_informative(
+                current_element[1].type, typing.AbstractSet
+            ):
                 children = product((None,), current_element[1].value)
             else:
                 children = []
@@ -75,7 +76,7 @@ def expression_iterator(expression, include_level=False, dfs=True):
             dfs and
             not (
                 isinstance(expression, Constant) and
-                is_subtype(expression.type, typing.AbstractSet)
+                is_leq_informative(expression.type, typing.AbstractSet)
             )
         ):
             try:
@@ -343,10 +344,12 @@ class ExpressionBasicEvaluator(SymbolTableEvaluator):
     )
     def evaluate_function(self, expression):
         functor = expression.functor
-        functor_type, functor_value = get_type_and_value(functor)
+        functor_type = functor.type
+        if isinstance(functor, Constant):
+            functor_value = functor.value
 
-        if functor_type is not ToBeInferred:
-            if not is_subtype(functor_type, typing.Callable):
+        if functor_type is not Unknown:
+            if not is_leq_informative(functor_type, typing.Callable):
                 raise NeuroLangTypeException(
                     'Function {} is not of callable type'.format(functor)
                 )
@@ -356,11 +359,11 @@ class ExpressionBasicEvaluator(SymbolTableEvaluator):
                 raise NeuroLangTypeException(
                     'Function {} is not of callable type'.format(functor)
                 )
-            result_type = ToBeInferred
+            result_type = Unknown
 
         rebv = ReplaceExpressionsByValues(self.symbol_table)
         args = rebv.walk(expression.args)
-        kwargs = {k: rebv(v) for k, v in expression.kwargs.items()}
+        kwargs = {k: rebv.walk(v) for k, v in expression.kwargs.items()}
         result = Constant[result_type](
             functor_value(*args, **kwargs)
         )
@@ -376,7 +379,7 @@ class ExpressionBasicEvaluator(SymbolTableEvaluator):
         if (
             len(args) != len(lambda_args) or
             not all(
-                is_subtype(l.type, a.type)
+                is_leq_informative(l.type, a.type)
                 for l, a in zip(lambda_args, args)
             )
         ):

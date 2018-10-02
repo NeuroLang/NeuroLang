@@ -2,7 +2,7 @@ from functools import wraps
 import operator as op
 from typing import AbstractSet, Tuple
 from .. import neurolang as nl
-from ..symbols_and_types import is_subtype
+from ..expressions import is_leq_informative, FunctionApplication
 from ..expression_walker import ReplaceExpressionsByValues
 from ..expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 
@@ -23,20 +23,13 @@ class Expression:
         )
 
     def __call__(self, *args, **kwargs):
-        new_args = [
+        new_args = tuple(
             a.expression if isinstance(a, Expression)
             else nl.Constant(a)
             for a in args
-        ]
+        )
 
-        new_kwargs = {
-            k: (
-                v.expression if isinstance(v, Expression)
-                else nl.Constant(v)
-            )
-            for k, v in kwargs.items()
-        }
-        new_expression = self.expression(*new_args, **new_kwargs)
+        new_expression = FunctionApplication(self.expression, new_args)
         return Operation(
                 self.query_builder, new_expression, self, args)
 
@@ -168,7 +161,7 @@ class Symbol(Expression):
         if isinstance(symbol, Symbol):
             return(f'{self.symbol_name}: {symbol.type}')
         elif isinstance(symbol, nl.Constant):
-            if is_subtype(symbol.type, AbstractSet):
+            if is_leq_informative(symbol.type, AbstractSet):
                 contained = []
                 all_symbols = (
                     self.query_builder.solver.symbol_table.symbols_by_type(
@@ -183,6 +176,11 @@ class Symbol(Expression):
                                 break
                     if isinstance(s, nl.Symbol):
                         contained.append(s.name)
+                    if isinstance(s, tuple):
+                        t = '('
+                        for e in s:
+                            t += (e.name + ', ')
+                        contained.append(t[:-2] + ')')
                 return (f'{self.symbol_name}: {symbol.type} = {contained}')
             else:
                 return (f'{self.symbol_name}: {symbol.type} = {symbol.value}')
@@ -193,8 +191,8 @@ class Symbol(Expression):
         symbol = self.symbol
         if (
             isinstance(symbol, nl.Constant) and (
-                is_subtype(symbol.type, AbstractSet) or
-                is_subtype(symbol.type, Tuple)
+                is_leq_informative(symbol.type, AbstractSet) or
+                is_leq_informative(symbol.type, Tuple)
             )
         ):
             all_symbols = (
@@ -219,8 +217,8 @@ class Symbol(Expression):
         symbol = self.symbol
         if (
             isinstance(symbol, nl.Constant) and (
-                is_subtype(symbol.type, AbstractSet) or
-                is_subtype(symbol.type, Tuple)
+                is_leq_informative(symbol.type, AbstractSet) or
+                is_leq_informative(symbol.type, Tuple)
             )
         ):
             return len(symbol.value)
@@ -231,9 +229,16 @@ class Symbol(Expression):
         else:
             return self.expression == other
 
+    def __hash__(self):
+        return hash(self.expression)
+
     @property
     def symbol(self):
         return self.query_builder.solver.symbol_table[self.symbol_name]
+
+    @property
+    def neurolang_symbol(self):
+        return nl.Symbol[self.type](self.symbol_name)
 
     @property
     def expression(self):

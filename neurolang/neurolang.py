@@ -6,11 +6,11 @@ from .expressions import *
 from .neurolang_compiler import NeuroLangIntermediateRepresentationCompiler
 from .solver import *
 from .exceptions import NeuroLangException
-from .symbols_and_types import (
+from .expressions import (
     Symbol, Constant, Expression, FunctionApplication, Statement, Query,
     Projection, ExistentialPredicate, Lambda,
-    TypedSymbolTable, unify_types, ToBeInferred,
-    NeuroLangTypeException, is_subtype,
+    TypedSymbolTable, unify_types, Unknown,
+    NeuroLangTypeException, is_leq_informative,
 )
 from .expression_walker import (
     add_match,
@@ -27,6 +27,6 @@ __all__ = [
     'add_match', 'NeuroLangIntermediateRepresentationCompiler', 'Expression',
     'Constant', 'Symbol', 'FunctionApplication', 'Lambda', 'Projection',
     'Statement', 'Query', 'ExistentialPredicate', 'UniversalPredicate',
-    'TypedSymbolTable', 'ToBeInferred', 'is_subtype', 'unify_types',
+    'TypedSymbolTable', 'Unknown', 'is_leq_informative', 'unify_types',
     'ExpressionBasicEvaluator', 'NeuroLangTypeException'
 ]

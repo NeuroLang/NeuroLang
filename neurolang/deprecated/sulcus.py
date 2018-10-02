@@ -1,5 +1,5 @@
 from .solver import SetBasedSolver, FiniteDomain, add_match
-from .expressions import is_subtype, get_type_and_value, Expression, Predicate, Query
+from .expressions import is_leq_informative, get_type_and_value, Expression, Predicate, Query
 from typing import Set
 from pprint import pprint
 from io import StringIO
@@ -73,7 +73,7 @@ class SulcusSolver(SetBasedSolver):
             "anterior_to", "posterior_to", "superior_to", "inferior_to"
         ):
             predicate = ast['identifier'].name[:-3]
-            if not is_subtype(argument_type, self.type):
+            if not is_leq_informative(argument_type, self.type):
                 raise ValueError()
             return Expression(
                 argument[predicate],
@@ -81,7 +81,7 @@ class SulcusSolver(SetBasedSolver):
                 symbol_table=self.symbol_table
             )
         if ast['identifier'].name == 'with_limb':
-            if not is_subtype(argument_type, self.type):
+            if not is_leq_informative(argument_type, self.type):
                 raise
             return argument
         else:
