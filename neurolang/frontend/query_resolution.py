@@ -189,7 +189,7 @@ class QueryBuilder:
         symbol = self.new_symbol(set_type, name=name)
         self.solver.symbol_table[symbol.expression] = constant
 
-        return self.symbols[symbol]
+        return symbol  # Symbol(self, result_symbol_name)
 
     def create_region(self, spatial_image, label=1):
         region = ExplicitVBR(
