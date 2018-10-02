@@ -237,6 +237,10 @@ class Symbol(Expression):
         return self.query_builder.solver.symbol_table[self.symbol_name]
 
     @property
+    def neurolang_symbol(self):
+        return nl.Symbol[self.type](self.symbol_name)
+
+    @property
     def expression(self):
         return self.symbol
 

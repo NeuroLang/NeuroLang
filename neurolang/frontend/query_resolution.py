@@ -1,6 +1,6 @@
 import numpy as np
 from uuid import uuid1
-from typing import AbstractSet, Callable, Tuple, Container
+from typing import AbstractSet, Callable, Tuple
 from neurolang.frontend.neurosynth_utils import NeuroSynthHandler
 from .query_resolution_expressions import (
     Expression, Symbol,
@@ -137,19 +137,19 @@ class QueryBuilder:
             symbol, predicate
         )
 
-    def add_symbol(self, value, result_symbol_name=None):
-        if result_symbol_name is None:
-            result_symbol_name = str(uuid1())
+    def add_symbol(self, value, name=None):
+        if name is None:
+            name = str(uuid1())
 
         if isinstance(value, Expression):
             value = value.expression
         else:
             value = nl.Constant(value)
 
-        symbol = nl.Symbol[value.type](result_symbol_name)
+        symbol = nl.Symbol[value.type](name)
         self.solver.symbol_table[symbol] = value
 
-        return Symbol(self, result_symbol_name)
+        return Symbol(self, name)
 
     def add_region(self, region, result_symbol_name=None):
         if not isinstance(region, self.solver.type):
@@ -160,30 +160,8 @@ class QueryBuilder:
 
         return self.add_symbol(region, result_symbol_name)
 
-    def add_region_set(self, region_set, result_symbol_name=None):
-        if not isinstance(region_set, Container):
-            raise ValueError(f"region must be instance of {self.set_type}")
-
-        new_set = set()
-
-        for region in region_set:
-            if not (
-                isinstance(region, Symbol) and
-                issubclass(region.type, Region)
-            ):
-                raise ValueError('Elements must be Region symbols')
-
-            new_set.add(nl.Symbol[Region](region.symbol_name))
-
-        if result_symbol_name is None:
-            result_symbol_name = str(uuid1())
-
-        set_type = AbstractSet[Region]
-        symbol = nl.Symbol[set_type](result_symbol_name)
-        self.solver.symbol_table[symbol] = nl.Constant[set_type](
-            frozenset(new_set)
-        )
-        return Symbol(self, result_symbol_name)
+    def add_region_set(self, region_set, name=None):
+        return self.add_tuple_set(region_set, Region, name=name)
 
     def add_tuple_set(self, iterable, types, name=None):
         if not isinstance(types, tuple) or len(types) == 1:
@@ -199,22 +177,28 @@ class QueryBuilder:
         element_type = set_type.__args__[0]
         new_set = []
         for e in iterable:
-            s = self.new_symbol(element_type).expression
-            if is_leq_informative(element_type, Tuple):
-                c = nl.Constant[element_type](
-                    tuple(nl.Constant(ee) for ee in e)
-                )
+            if not(isinstance(e, Symbol)):
+                s = nl.Symbol[element_type](str(uuid1()))
+                if is_leq_informative(element_type, Tuple):
+                    c = nl.Constant[element_type](
+                        tuple(nl.Constant(ee) for ee in e)
+                    )
+                else:
+                    c = nl.Constant[element_type](e)
+                self.solver.symbol_table[s] = c
             else:
-                c = nl.Constant[element_type](e)
-            self.solver.symbol_table[s] = c
+                s = e.neurolang_symbol
             new_set.append(s)
 
         constant = nl.Constant[set_type](frozenset(new_set))
 
-        symbol = self.new_symbol(set_type, name=name)
-        self.solver.symbol_table[symbol.expression] = constant
+        if name is None:
+            name = str(uuid1())
 
-        return symbol  # Symbol(self, result_symbol_name)
+        symbol = nl.Symbol[set_type](name)
+        self.solver.symbol_table[symbol] = constant
+
+        return Symbol(self, name)
 
     def create_region(self, spatial_image, label=1):
         region = ExplicitVBR(
