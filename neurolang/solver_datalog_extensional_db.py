@@ -1,8 +1,10 @@
 from typing import AbstractSet, Any, Tuple
 from itertools import product
+from operator import contains
 
 from .expressions import (
-    FunctionApplication, Constant, NeuroLangTypeException, is_subtype
+    Expression, FunctionApplication, Constant, NeuroLangTypeException,
+    is_leq_informative
 )
 from .expression_walker import (
     add_match, PatternWalker, ReplaceSymbolsByConstants
@@ -35,7 +37,8 @@ class ExtensionalDatabaseSolver(PatternWalker):
         else:
             element = Constant(expression.args)
 
-        if not is_subtype(element.type, expression.functor.type.__args__[0]):
+        return_type = expression.functor.type.__args__[0]
+        if not is_leq_informative(element.type, return_type):
             raise NeuroLangTypeException(
                 'Element type {element.type} does not '
                 'correspond with set type {functor.type}'
@@ -45,6 +48,12 @@ class ExtensionalDatabaseSolver(PatternWalker):
         predset = rsc.walk(expression.functor).value
         ret = element in predset
         return Constant[bool](ret)
+
+    @add_match(FunctionApplication(
+        Constant(contains), (..., Expression[AbstractSet])
+    ))
+    def expression_contains(self, expression):
+        return self.walk(expression.args[1](expression.args[0]))
 
     def function_isin(self, element: Any, set: AbstractSet) -> bool:
         '''Function for checking that an element is in a set'''

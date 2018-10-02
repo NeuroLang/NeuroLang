@@ -112,7 +112,7 @@ def test_numeric_operations_solver():
 
     e = S_[int]('a') - S_[int]('b')
 
-    assert e.type == expressions.ToBeInferred
+    assert e.type == expressions.Unknown
     assert s.walk(e).type == int
 
 
@@ -155,12 +155,12 @@ def test_boolean_operations_rewrite_cast():
 
     or_ = a | b
 
-    assert or_.type == expressions.ToBeInferred
+    assert or_.type == expressions.Unknown
     assert s.walk(or_).type == bool
 
     and_ = a & b
 
-    assert and_.type == expressions.ToBeInferred
+    assert and_.type == expressions.Unknown
     assert s.walk(and_).type == bool
 
 
@@ -298,7 +298,7 @@ def test_boolean_operations_rewrite_conj_composition_order():
 
 
 def test_boolean_operations_conjunction_distribution():
-    s = solver.DatalogSolver()
+    s = solver.FirstOrderLogicSolver()
     a, b, c = S_('a'), S_('b'), S_('c')
     e = (a & b) & c
     we = s.walk(e)

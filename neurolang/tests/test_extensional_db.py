@@ -1,5 +1,6 @@
 from typing import AbstractSet, Tuple
 from itertools import product
+from operator import contains
 
 import pytest
 
@@ -74,6 +75,22 @@ def test_tuple_set():
     with pytest.raises(NeuroLangTypeException):
         f = F_(s1, (C_(2), ))
         ts.walk(f)
+
+
+def test_contains():
+    ts = ExtensionalTestSolver()
+
+    s1 = C_[AbstractSet[int]](frozenset(C_(i) for i in range(5)))
+
+    fa = F_(C_(contains), (C_(2), s1))
+    res = ts.walk(fa)
+
+    assert isinstance(res, expressions.Constant[bool]) and res.value
+
+    fa = F_(C_(contains), (C_(20), s1))
+    res = ts.walk(fa)
+
+    assert isinstance(res, expressions.Constant[bool]) and not res.value
 
 
 def test_simple_set_in_function():

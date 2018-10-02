@@ -2,14 +2,14 @@ import pytest
 
 from .. import expressions
 from ..expressions import (
-    Expression, ToBeInferred, expressions_behave_as_objects
+    Expression, Unknown, expressions_behave_as_objects
 )
 
 from ..expression_walker import ExpressionBasicEvaluator
 
 import operator as op
 import inspect
-from typing import Set, Callable
+from typing import AbstractSet, Callable
 
 C_ = expressions.Constant
 S_ = expressions.Symbol
@@ -93,7 +93,7 @@ def test_symbol_method_and_operator():
         fve = a[C_(2)]
 
     assert evaluate(a, a=C_(1)) == 1
-    assert evaluate(fva, a=C_[Set[int]](set((C_(1),)))) == 1
+    assert evaluate(fva, a=C_[AbstractSet[int]](set((C_(1),)))) == 1
     assert evaluate(fvb, a=C_(1)) == -3
     assert evaluate(fvc, a=C_(1)) == 3
     assert evaluate(fvc * C_(2), a=C_(1)) == 6
@@ -105,7 +105,7 @@ def test_constant_method_and_operator():
     with expressions_behave_as_objects():
         a = C_[int](1)
         fva = a + C_(1)
-        b = C_[Set[int]]({C_(1)})
+        b = C_[AbstractSet[int]]({C_(1)})
         fvb = b.__len__()
         fbc = b.union(C_({C_(1), C_(2)}))
 
@@ -176,6 +176,19 @@ def test_compatibility_for_pattern_matching():
             assert getattr(instance, argname) == ...
 
 
+def test_equality():
+    assert C_(1) == C_(1)
+    assert C_(1) != C_(2)
+    assert S_('a') == S_('a')
+    assert S_('a') != S_('b')
+    assert S_('a')(C_(1)) == S_('a')(C_(1))
+    assert S_('a')(C_(1)) != S_('b')(C_(1))
+    assert S_('a')(C_(1)) != S_('a')(C_(2))
+
+    assert C_((C_(1), C_(2))) == C_((C_(1), C_(2)))
+    assert C_((C_(1), C_(2))) != C_((C_(1), C_(3)))
+
+
 def test_instance_check():
     c = C_[int](2)
     assert isinstance(c, expressions.Constant)
@@ -189,7 +202,7 @@ def test_typecast_check():
     s_float = s.cast(float)
 
     assert isinstance(s, expressions.Symbol)
-    assert s.type is ToBeInferred
+    assert s.type is Unknown
     assert isinstance(s_float, expressions.Symbol)
     assert isinstance(s_float, expressions.Symbol[float])
     assert issubclass(s.__class__, S_)
