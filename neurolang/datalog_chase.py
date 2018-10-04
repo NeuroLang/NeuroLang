@@ -175,8 +175,8 @@ def build_chase_tree(datalog_program, chase_set=chase_step):
     builtins = datalog_program.builtins()
     root = ChaseNode(datalog_program.extensional_database(), dict())
     rules = []
-    for v in datalog_program.intensional_database().values():
-        for rule in v.expressions:
+    for expression_block in datalog_program.intensional_database().values():
+        for rule in expression_block.expressions:
             rules.append(rule)
 
     nodes_to_process = [root]
