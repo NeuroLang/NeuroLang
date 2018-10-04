@@ -12,46 +12,25 @@ from .unification import (
 
 
 def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
-    rule_predicates = sdb.extract_datalog_predicates(rule.antecedent)
-    predicate_functors_instance = {}
-    head_functor = rule.consequent.functor
-    restricted_predicates = []
-    nonrestricted_predicates = []
-    builtin_predicates = []
-    for predicate in rule_predicates:
-        functor = predicate.functor
-        if restriction_instance is not None:
-            if (
-                functor == head_functor and
-                functor in predicate_functors_instance
-            ):
-                raise ValueError(
-                    f'Non-linear rule {rule}, solver non supported'
-                )
 
-            if functor in restriction_instance:
-                predicate_functors_instance[functor] =\
-                    restriction_instance[functor].value
-                restricted_predicates.append(predicate)
-                continue
+    rule_predicates = extract_rule_predicates(
+        rule, instance, builtins, restriction_instance=restriction_instance
+    )
 
-        if functor in instance:
-            predicate_functors_instance[functor] =\
-                instance[functor].value
-            nonrestricted_predicates.append(predicate)
-        elif functor in builtins:
-            builtin_predicates.append(predicate)
-        else:
-            return dict()
+    if all(len(predicate_list) == 0 for predicate_list in rule_predicates):
+        return {}
 
-    rule_predicates = chain(
+    restricted_predicates, nonrestricted_predicates, builtin_predicates =\
+        rule_predicates
+
+    rule_predicates_iterator = chain(
         restricted_predicates,
         nonrestricted_predicates,
         builtin_predicates
     )
 
     substitutions = [{}]
-    for predicate in rule_predicates:
+    for predicate, representation in rule_predicates_iterator:
         functor = predicate.functor
         new_substitutions = []
         for substitution in substitutions:
@@ -59,26 +38,13 @@ def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
                 predicate.args, substitution
             )
 
-            if functor in predicate_functors_instance:
-                for element in predicate_functors_instance[functor]:
-                    mgu_substituted = most_general_unifier_arguments(
-                        subs_args,
-                        element.value
-                    )
-
-                    if mgu_substituted is not None:
-                        new_substitution = mgu_substituted[0]
-                        new_substitutions.append(
-                            compose_substitutions(
-                                substitution, new_substitution
-                            )
-                        )
-            elif functor in builtins:
+            if functor in builtins:
                 mgu_substituted = most_general_unifier_arguments(
                     subs_args, predicate.args
                 )
 
                 if mgu_substituted is not None:
+                    new_substitution = mgu_substituted[0]
                     predicate_res = datalog.walk(
                         predicate.apply(functor, mgu_substituted[1])
                     )
@@ -91,9 +57,72 @@ def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
                                 substitution, new_substitution
                             )
                         )
+            else:
+                for element in representation:
+                    mgu_substituted = most_general_unifier_arguments(
+                        subs_args,
+                        element.value
+                    )
+
+                    if mgu_substituted is not None:
+                        new_substitution = mgu_substituted[0]
+                        new_substitutions.append(
+                            compose_substitutions(
+                                substitution, new_substitution
+                            )
+                        )
 
         substitutions = new_substitutions
 
+    return compute_result_set(
+        rule, substitutions, instance, restriction_instance
+    )
+
+
+def extract_rule_predicates(
+    rule, instance, builtins, restriction_instance=None
+):
+    head_functor = rule.consequent.functor
+    rule_predicates = sdb.extract_datalog_predicates(rule.antecedent)
+    restricted_predicates = []
+    nonrestricted_predicates = []
+    builtin_predicates = []
+    recursive_calls = 0
+    for predicate in rule_predicates:
+        functor = predicate.functor
+        if restriction_instance is not None:
+            if functor == head_functor:
+                recursive_calls += 1
+            if recursive_calls > 1:
+                raise ValueError(
+                    'Non-linear rule {rule}, solver non supported'
+                )
+
+            if functor in restriction_instance:
+                restricted_predicates.append(
+                    (predicate, restriction_instance[functor].value)
+                )
+                continue
+
+        if functor in instance:
+            nonrestricted_predicates.append(
+                (predicate, instance[functor].value)
+            )
+        elif functor in builtins:
+            builtin_predicates.append((predicate, builtins[functor]))
+        else:
+            return ([], [], [])
+
+    return (
+        restricted_predicates,
+        nonrestricted_predicates,
+        builtin_predicates
+    )
+
+
+def compute_result_set(
+    rule, substitutions, instance, restriction_instance=None
+):
     new_tuples = set(
         Constant(
             apply_substitution_arguments(
