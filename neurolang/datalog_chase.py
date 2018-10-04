@@ -1,15 +1,14 @@
-from itertools import chain
 from collections import namedtuple
+from itertools import chain
 from typing import AbstractSet
 
+from .expressions import Constant
+from . import solver_datalog_naive as sdb
 from .unification import (
     apply_substitution_arguments,
     compose_substitutions,
     most_general_unifier_arguments
 )
-
-from .expressions import Constant
-from . import solver_datalog_naive as sdb
 
 
 def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
