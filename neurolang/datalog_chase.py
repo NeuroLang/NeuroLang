@@ -183,11 +183,11 @@ def build_chase_tree(datalog_program, chase_set=chase_step):
     while len(nodes_to_process) > 0:
         node = nodes_to_process.pop()
         for rule in rules:
-            DeltaI = chase_step(
+            instance_update = chase_step(
                 datalog_program, node.instance, builtins, rule
             )
-            if len(DeltaI) > 0:
-                new_instance = merge_instances(node.instance, DeltaI)
+            if len(instance_update) > 0:
+                new_instance = merge_instances(node.instance, instance_update)
                 new_node = ChaseNode(new_instance, dict())
                 nodes_to_process.append(new_node)
                 node.children[rule] = new_node
@@ -203,13 +203,13 @@ def build_chase_solution(datalog_program, chase_step=chase_step):
 
     instance = dict()
     builtins = datalog_program.builtins()
-    DeltaI = datalog_program.extensional_database()
-    while len(DeltaI) > 0:
-        instance = merge_instances(instance, DeltaI)
-        DeltaI = merge_instances(*(
+    instance_update = datalog_program.extensional_database()
+    while len(instance_update) > 0:
+        instance = merge_instances(instance, instance_update)
+        instance_update = merge_instances(*(
             chase_step(
                 datalog_program, instance, builtins, rule,
-                restriction_instance=DeltaI
+                restriction_instance=instance_update
             )
             for rule in rules
         ))

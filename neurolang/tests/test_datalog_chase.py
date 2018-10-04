@@ -41,23 +41,23 @@ def test_non_recursive_predicate_chase_step():
     dl = Datalog()
     dl.walk(datalog_program)
 
-    I0 = dl.extensional_database()
+    instance_0 = dl.extensional_database()
 
     rule = datalog_program.expressions[-1]
-    DeltaI = dc.chase_step(dl, I0, dl.builtins(), rule)
-    assert DeltaI == {
+    instance_update = dc.chase_step(dl, instance_0, dl.builtins(), rule)
+    assert instance_update == {
         S: C_({C_((C_(8), C_(6)))}),
     }
 
     rule = datalog_program.expressions[-2]
-    DeltaI = dc.chase_step(dl, I0, dl.builtins(), rule)
-    assert DeltaI == {
+    instance_update = dc.chase_step(dl, instance_0, dl.builtins(), rule)
+    assert instance_update == {
         T: C_({C_((C_(1), C_(3)))}),
     }
 
-    I1 = dc.merge_instances(I0, DeltaI)
-    DeltaI = dc.chase_step(dl, I1, dl.builtins(), rule)
-    assert len(DeltaI) == 0
+    instance_1 = dc.merge_instances(instance_0, instance_update)
+    instance_update = dc.chase_step(dl, instance_1, dl.builtins(), rule)
+    assert len(instance_update) == 0
 
 
 def test_non_recursive_predicate_chase():
@@ -78,16 +78,16 @@ def test_non_recursive_predicate_chase():
 
     res = dc.build_chase_tree(dl)
 
-    DeltaI = {
+    instance_update = {
         T: C_({C_((C_(1), C_(3)))})
     }
 
-    I1 = DeltaI.copy()
-    I1.update(dl.extensional_database())
+    instance_1 = instance_update.copy()
+    instance_1.update(dl.extensional_database())
 
     assert res.instance == dl.extensional_database()
     assert res.children == {
-        datalog_program.expressions[-1]: dc.ChaseNode(I1, dict())
+        datalog_program.expressions[-1]: dc.ChaseNode(instance_1, dict())
     }
 
 
@@ -110,19 +110,19 @@ def test_recursive_predicate_chase_tree():
 
     res = dc.build_chase_tree(dl)
 
-    DeltaI = {T: dl.extensional_database()[Q]}
+    instance_update = {T: dl.extensional_database()[Q]}
 
-    I1 = DeltaI.copy()
-    I1.update(dl.extensional_database())
+    instance_1 = instance_update.copy()
+    instance_1.update(dl.extensional_database())
 
     assert res.instance == dl.extensional_database()
     assert len(res.children) == 1
     first_child = res.children[datalog_program.expressions[-2]]
-    assert first_child.instance == I1
+    assert first_child.instance == instance_1
     assert len(first_child.children) == 1
     second_child = first_child.children[datalog_program.expressions[-1]]
 
-    I2 = {
+    instance_2 = {
         Q: C_({
             C_((C_(1), C_(2))),
             C_((C_(2), C_(3))),
@@ -135,7 +135,7 @@ def test_recursive_predicate_chase_tree():
     }
 
     assert len(second_child.children) == 0
-    assert second_child.instance == I2
+    assert second_child.instance == instance_2
 
 
 def test_nonrecursive_predicate_chase_solution(N=10):
