@@ -197,8 +197,8 @@ def build_chase_tree(datalog_program, chase_set=chase_step):
 
 def build_chase_solution(datalog_program, chase_step=chase_step):
     rules = []
-    for v in datalog_program.intensional_database().values():
-        for rule in v.expressions:
+    for expression_block in datalog_program.intensional_database().values():
+        for rule in expression_block.expressions:
             rules.append(rule)
 
     instance = dict()
