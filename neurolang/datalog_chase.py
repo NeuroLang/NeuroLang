@@ -25,8 +25,7 @@ def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
 
     rule_predicates_iterator = chain(
         restricted_predicates,
-        nonrestricted_predicates,
-        builtin_predicates
+        nonrestricted_predicates
     )
 
     substitutions = [{}]
@@ -38,40 +37,49 @@ def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
                 predicate.args, substitution
             )
 
-            if functor in builtins:
+            for element in representation:
                 mgu_substituted = most_general_unifier_arguments(
-                    subs_args, predicate.args
+                    subs_args,
+                    element.value
                 )
 
                 if mgu_substituted is not None:
                     new_substitution = mgu_substituted[0]
-                    predicate_res = datalog.walk(
-                        predicate.apply(functor, mgu_substituted[1])
-                    )
-                    if (
-                        isinstance(predicate_res, Constant) and
-                        predicate_res.value is True
-                    ):
-                        new_substitutions.append(
-                            compose_substitutions(
-                                substitution, new_substitution
-                            )
+                    new_substitutions.append(
+                        compose_substitutions(
+                            substitution, new_substitution
                         )
-            else:
-                for element in representation:
-                    mgu_substituted = most_general_unifier_arguments(
-                        subs_args,
-                        element.value
                     )
 
-                    if mgu_substituted is not None:
-                        new_substitution = mgu_substituted[0]
-                        new_substitutions.append(
-                            compose_substitutions(
-                                substitution, new_substitution
-                            )
-                        )
+        substitutions = new_substitutions
 
+    for predicate, _ in builtin_predicates:
+        functor = predicate.functor
+        new_substitutions = []
+        for substitution in substitutions:
+            subs_args = apply_substitution_arguments(
+                predicate.args, substitution
+            )
+
+            mgu_substituted = most_general_unifier_arguments(
+                subs_args, predicate.args
+            )
+
+            if mgu_substituted is not None:
+                predicate_res = datalog.walk(
+                    predicate.apply(functor, mgu_substituted[1])
+                )
+
+                if (
+                    isinstance(predicate_res, Constant[bool]) and
+                    predicate_res.value
+                ):
+                    new_substitution = mgu_substituted[0]
+                    new_substitutions.append(
+                        compose_substitutions(
+                            substitution, new_substitution
+                        )
+                    )
         substitutions = new_substitutions
 
     return compute_result_set(
