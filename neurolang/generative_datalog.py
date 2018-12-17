@@ -111,6 +111,15 @@ class GenerativeDatalogSugarRemover(ExpressionBasicEvaluator):
             )
         )
 
+    # @add_match(ExpressionBlock)
+    # def expression_block(self, block):
+        # expressions = tuple(self.walk(exp) for exp in block.expressions)
+        # return ExpressionBlock(expressions)
+
+    # @add_match(Expression)
+    # def expression(self, expression):
+        # return expression
+
 
 class TranslateGDatalogToEDatalog(ExpressionBasicEvaluator):
     @add_match(

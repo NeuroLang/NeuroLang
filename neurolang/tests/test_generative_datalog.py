@@ -119,6 +119,37 @@ def test_burglar():
     assert not any(
         isinstance(e, ExpressionBlock) for e in translated.expressions
     )
+    solver = GenerativeDatalogTestSolver()
+    solver.walk(translated)
 
+
+def test_pcs_example():
+    Bernoulli = C_('Bernoulli')
+    Uniform = C_('Uniform')
+    Gender = S_('Gender')
+    Subject = S_('Subject')
+    pGender = S_('pGender')
+    pHasLPC = S_('pHasLPC')
+    pHasRPC = S_('pHasRPC')
+    HasLPC = S_('HasLPC')
+    HasRPC = S_('HasRPC')
+    x = S_('x')
+    p = S_('p')
+    program = ExpressionBlock((
+        Implication(Gender(x, DeltaTerm(Bernoulli, p)),
+                    Subject(x) & pGender(p)),
+        Implication(HasLPC(x, DeltaTerm(Bernoulli, p)),
+                    Subject(x) & pHasLPC(p)),
+        Implication(HasRPC(x, DeltaTerm(Bernoulli, p)),
+                    Subject(x) & pHasRPC(p)),
+        Implication(pGender(DeltaTerm(Uniform, C_(0), C_(1))), C_('True')),
+        Implication(pHasLPC(DeltaTerm(Uniform, C_(0), C_(1))), C_('True')),
+        Implication(pHasRPC(DeltaTerm(Uniform, C_(0), C_(1))), C_('True')),
+    ))
+    translator = TranslateGDatalogToEDatalogTestSolver()
+    translated = translator.walk(program)
+    assert not any(
+        isinstance(e, ExpressionBlock) for e in translated.expressions
+    )
     solver = GenerativeDatalogTestSolver()
     solver.walk(translated)
