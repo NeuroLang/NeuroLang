@@ -3,7 +3,7 @@ import pytest
 from .. import solver_datalog_extensional_db
 from .. import expression_walker
 from ..exceptions import NeuroLangException
-from ..expressions import ExpressionBlock, Constant, Symbol, Query, Statement
+from ..expressions import ExpressionBlock, Constant, Symbol, Query
 from ..existential_datalog import Implication
 from ..generative_datalog import (
     GenerativeDatalogSugarRemover, SolverNonRecursiveGenerativeDatalog,
@@ -13,7 +13,6 @@ from ..solver_datalog_naive import Fact
 
 C_ = Constant
 S_ = Symbol
-St_ = Statement
 
 
 class GenerativeDatalogTestSolver(
@@ -136,12 +135,18 @@ def test_pcs_example():
     x = S_('x')
     p = S_('p')
     program = ExpressionBlock((
-        Implication(Gender(x, DeltaTerm(Bernoulli, p)),
-                    Subject(x) & pGender(p)),
-        Implication(HasLPC(x, DeltaTerm(Bernoulli, p)),
-                    Subject(x) & pHasLPC(p)),
-        Implication(HasRPC(x, DeltaTerm(Bernoulli, p)),
-                    Subject(x) & pHasRPC(p)),
+        Implication(
+            Gender(x, DeltaTerm(Bernoulli, p)),
+            Subject(x) & pGender(p)
+        ),
+        Implication(
+            HasLPC(x, DeltaTerm(Bernoulli, p)),
+            Subject(x) & pHasLPC(p)
+        ),
+        Implication(
+            HasRPC(x, DeltaTerm(Bernoulli, p)),
+            Subject(x) & pHasRPC(p)
+        ),
         Implication(pGender(DeltaTerm(Uniform, C_(0), C_(1))), C_('True')),
         Implication(pHasLPC(DeltaTerm(Uniform, C_(0), C_(1))), C_('True')),
         Implication(pHasRPC(DeltaTerm(Uniform, C_(0), C_(1))), C_('True')),
