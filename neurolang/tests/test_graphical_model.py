@@ -7,6 +7,7 @@ S_ = Symbol
 
 P = S_('P')
 Q = S_('Q')
+R = S_('R')
 x = S_('x')
 y = S_('y')
 a = C_(2)
@@ -45,3 +46,23 @@ def test_graphical_model_conversion_simple():
     assert gm.parents['Q'] == {'Q_1'}
     assert gm.parents['Q_1'] == {'P'}
     assert gm.parents['P'] == set()
+    assert gm.cpds['P'](gm.parents['P']) == {P(a), P(b)}
+    assert gm.cpds['Q'](gm.parents['Q']) == {Q(a, b), Q(b, a)}
+
+    program = ExpressionBlock((
+        Fact(P(a, b)),
+        Fact(P(b, a)),
+        Implication(Q(x), P(x, x)),
+        Implication(R(x),
+                    P(x, y) & P(y, x)),
+    ))
+    gm = GraphicalModelSolver()
+    gm.walk(program)
+    assert gm.parents['Q'] == {'Q_1'}
+    assert gm.parents['Q_1'] == {'P'}
+    assert gm.parents['R'] == {'R_1'}
+    assert gm.parents['R_1'] == {'P'}
+    assert gm.cpds['Q'](gm.parents['Q']) == set()
+    assert gm.cpds['R'](gm.parents['R']) == {R(b), R(a)}
+    assert gm.sample('Q') == set()
+    assert gm.sample('R') == {R(b), R(a)}

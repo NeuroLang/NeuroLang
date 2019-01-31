@@ -113,19 +113,26 @@ class GraphicalModelSolver(ExpressionWalker):
 
     def make_rule_cpd(self, rule):
         def cpd(parents):
-            return infer(rule, set.union(*parents))
+            return infer(rule, set.union(*[self.sample(p) for p in parents]))
 
         return cpd
 
     def make_predicate_union_cpd(self, predicate):
         def cpd(parents):
-            return set.union(*parents)
+            if len(parents) == 0:
+                return set()
+            return set.union(*[self.sample(p) for p in parents])
+
         return cpd
 
     def make_delta_term_cpd(self, delta_term):
         if delta_term.dist_name == 'bernoulli':
 
             def cpd(parents):
+                if len(parents) > 0:
+                    raise NeuroLangException(
+                        'Expected empty set of parents for delta term'
+                    )
                 return np.random.randint(2)
 
             return cpd
@@ -146,20 +153,23 @@ class GraphicalModelSolver(ExpressionWalker):
         predicate = expression.consequent.functor.name
         self.intensional_predicate_rule_count[predicate] += 1
         count = self.intensional_predicate_rule_count[predicate]
-        x_rule = f'{predicate}_{count}'
-        self.random_variables.add(x_rule)
+        rule_var_name = f'{predicate}_{count}'
+        self.random_variables.add(rule_var_name)
         self.random_variables.add(predicate)
-        self.parents[predicate].add(x_rule)
-        self.cpds[x_rule] = self.make_rule_cpd(expression)
+        self.parents[predicate].add(rule_var_name)
+        self.cpds[rule_var_name] = self.make_rule_cpd(expression)
         self.cpds[predicate] = self.make_predicate_union_cpd(predicate)
         antecedent_literals = get_antecedent_literals(expression)
         antecedent_predicates = [l.functor.name for l in antecedent_literals]
         for predicate in antecedent_predicates:
-            self.parents[x_rule].add(predicate)
+            self.parents[rule_var_name].add(predicate)
         if isinstance(expression.consequent, DeltaAtom):
             delta_term = expression.consequenet.delta_term
             x_delta_term = f'\Delta_{predicate}^{count}'
             self.random_variables.add(x_delta_term)
-            self.parents[x_rule].add(x_delta_term)
+            self.parents[rule_var_name].add(x_delta_term)
             self.cpds[x_delta_term] = self.make_delta_term_cpd(delta_term)
         return expression
+
+    def sample(self, variable):
+        return self.cpds[variable](self.parents[variable])
