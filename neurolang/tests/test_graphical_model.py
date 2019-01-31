@@ -37,5 +37,11 @@ def test_graphical_model_conversion_simple():
         Implication(Q(x, y),
                     P(x) & P(y)),
     ))
-    solver = GraphicalModelSolver()
-    solver.walk(program)
+    gm = GraphicalModelSolver()
+    gm.walk(program)
+    for predicate in ['P', 'Q']:
+        assert predicate in gm.random_variables
+        assert predicate in gm.cpds
+    assert gm.parents['Q'] == {'Q_1'}
+    assert gm.parents['Q_1'] == {'P'}
+    assert gm.parents['P'] == set()
