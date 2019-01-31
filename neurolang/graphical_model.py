@@ -111,13 +111,18 @@ class GraphicalModelSolver(ExpressionWalker):
 
         return cpd
 
-    def make_rule_infer1_cpd(rule):
+    def make_rule_cpd(self, rule):
         def cpd(parents):
             return infer(rule, set.union(*parents))
 
         return cpd
 
-    def make_delta_term_cpd(delta_term):
+    def make_predicate_union_cpd(self, predicate):
+        def cpd(parents):
+            return set.union(*parents)
+        return cpd
+
+    def make_delta_term_cpd(self, delta_term):
         if delta_term.dist_name == 'bernoulli':
 
             def cpd(parents):
@@ -141,11 +146,12 @@ class GraphicalModelSolver(ExpressionWalker):
         predicate = expression.consequent.functor.name
         self.intensional_predicate_rule_count[predicate] += 1
         count = self.intensional_predicate_rule_count[predicate]
-        x_rule = f'X_{predicate}^{count}'
-        x_predicate = f'X_{predicate}'
+        x_rule = f'{predicate}_{count}'
         self.random_variables.add(x_rule)
-        self.random_variables.add(x_predicate)
-        self.parents[x_predicate].add(x_rule)
+        self.random_variables.add(predicate)
+        self.parents[predicate].add(x_rule)
+        self.cpds[x_rule] = self.make_rule_cpd(expression)
+        self.cpds[predicate] = self.make_predicate_union_cpd(predicate)
         antecedent_literals = get_antecedent_literals(expression)
         antecedent_predicates = [l.functor.name for l in antecedent_literals]
         for predicate in antecedent_predicates:
@@ -155,5 +161,5 @@ class GraphicalModelSolver(ExpressionWalker):
             x_delta_term = f'\Delta_{predicate}^{count}'
             self.random_variables.add(x_delta_term)
             self.parents[x_rule].add(x_delta_term)
-            self.cpds[x_delta_term] = make_delta_term_cpd(delta_term)
+            self.cpds[x_delta_term] = self.make_delta_term_cpd(delta_term)
         return expression
