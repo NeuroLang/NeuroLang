@@ -1,6 +1,10 @@
 from ..expressions import Symbol, Constant, ExpressionBlock
-from ..solver_datalog_naive import Fact, Implication
+from ..expression_pattern_matching import add_match
+from ..solver_datalog_naive import Fact, Implication, DatalogBasic
 from ..graphical_model import produce, infer, GraphicalModelSolver
+from ..generative_datalog import (
+    DeltaTerm, DeltaAtom, GenerativeDatalogSugarRemover
+)
 
 C_ = Constant
 S_ = Symbol
@@ -12,6 +16,14 @@ x = S_('x')
 y = S_('y')
 a = C_(2)
 b = C_(3)
+
+
+class GenerativeDatalogSugarRemoverTest(
+    GenerativeDatalogSugarRemover, DatalogBasic
+):
+    @add_match(Implication(DeltaAtom, ...))
+    def ignore_gdatalog_rule(self, rule):
+        return rule
 
 
 def test_produce():
@@ -42,12 +54,12 @@ def test_graphical_model_conversion_simple():
     gm.walk(program)
     for predicate in ['P', 'Q']:
         assert predicate in gm.random_variables
-        assert predicate in gm.cpds
+        assert predicate in gm.samplers
     assert gm.parents['Q'] == {'Q_1'}
     assert gm.parents['Q_1'] == {'P'}
     assert gm.parents['P'] == set()
-    assert gm.cpds['P'](gm.parents['P']) == {P(a), P(b)}
-    assert gm.cpds['Q'](gm.parents['Q']) == {Q(a, b), Q(b, a)}
+    assert gm.samplers['P'](gm.parents['P']) == {P(a), P(b)}
+    assert gm.samplers['Q'](gm.parents['Q']) == {Q(a, b), Q(b, a)}
 
     program = ExpressionBlock((
         Fact(P(a, b)),
@@ -62,7 +74,21 @@ def test_graphical_model_conversion_simple():
     assert gm.parents['Q_1'] == {'P'}
     assert gm.parents['R'] == {'R_1'}
     assert gm.parents['R_1'] == {'P'}
-    assert gm.cpds['Q'](gm.parents['Q']) == set()
-    assert gm.cpds['R'](gm.parents['R']) == {R(b), R(a)}
+    assert gm.samplers['Q'](gm.parents['Q']) == set()
+    assert gm.samplers['R'](gm.parents['R']) == {R(b), R(a)}
     assert gm.sample('Q') == set()
     assert gm.sample('R') == {R(b), R(a)}
+
+
+def test_delta_term():
+    program = ExpressionBlock((
+        Fact(P(a)),
+        Implication(Q(x, DeltaTerm(C_('bernoulli'), x)), P(x)),
+    ))
+    sugar_remover = GenerativeDatalogSugarRemoverTest()
+    program = sugar_remover.walk(program)
+    gm = GraphicalModelSolver()
+    gm.walk(program)
+    assert 'Q' in gm.random_variables
+    assert 'Q_1' in gm.random_variables
+    s = gm.sample('Q')
