@@ -17,7 +17,7 @@ class DeltaSymbol(Symbol):
     def __init__(self, dist_name, n_terms):
         self.dist_name = dist_name
         self.n_terms = n_terms
-        super().__init__('Result')
+        super().__init__(f'Result_{self.dist_name}_{self.n_terms}')
 
     def __repr__(self):
         return f'Δ-Symbol{{{self.name}({self.dist_name}, {self.n_terms})}}'
@@ -48,7 +48,7 @@ class DeltaTerm(Expression):
 
 
 class DeltaAtom(Definition):
-    def __init__(self, name, terms):
+    def __init__(self, functor, terms):
         if not isinstance(terms, Tuple):
             raise NeuroLangException('Expected terms to be a tuple')
         delta_terms = [t for t in terms if isinstance(t, DeltaTerm)]
@@ -57,8 +57,7 @@ class DeltaAtom(Definition):
                 'A Δ-atom must contain one and only one Δ-term'
             )
         if not all(
-            not isinstance(t, DeltaTerm) and
-            (isinstance(t, Constant) or isinstance(t, Symbol))
+            isinstance(t, Constant) or isinstance(t, Symbol)
             for t in terms
             if not isinstance(t, DeltaTerm)
         ):
@@ -66,7 +65,7 @@ class DeltaAtom(Definition):
                 'All terms in a Δ-atom that are not the Δ-term '
                 'must be symbols or constants'
             )
-        self.name = name
+        self.functor = functor
         self.terms = terms
         self._symbols = set.union(*(term._symbols for term in self.terms))
 
@@ -74,9 +73,21 @@ class DeltaAtom(Definition):
     def delta_term(self):
         return next(t for t in self.terms if isinstance(t, DeltaTerm))
 
+    @property
+    def terms_without_dterm(self):
+        return tuple(t for t in self.terms if not isinstance(t, DeltaTerm))
+
+    @property
+    def delta_term_index(self):
+        for i, term in enumerate(self.terms):
+            if isinstance(term, DeltaTerm): return i
+        raise NeuroLangException(
+            'Delta term not found: not supposed to happen'
+        )
+
     def __repr__(self):
         terms_str = ', '.join(repr(t) for t in self.terms)
-        return f'Δ-atom{{{self.name}({terms_str})}}'
+        return f'Δ-atom{{{self.functor.name}({terms_str})}}'
 
 
 class GenerativeDatalogSugarRemover(ExpressionBasicEvaluator):
@@ -105,20 +116,10 @@ class GenerativeDatalogSugarRemover(ExpressionBasicEvaluator):
         return self.walk(
             Implication(
                 DeltaAtom(
-                    expression.consequent.functor.name,
-                    expression.consequent.args
+                    expression.consequent.functor, expression.consequent.args
                 ), expression.antecedent
             )
         )
-
-    # @add_match(ExpressionBlock)
-    # def expression_block(self, block):
-        # expressions = tuple(self.walk(exp) for exp in block.expressions)
-        # return ExpressionBlock(expressions)
-
-    # @add_match(Expression)
-    # def expression(self, expression):
-        # return expression
 
 
 class TranslateGDatalogToEDatalog(ExpressionBasicEvaluator):
@@ -145,7 +146,7 @@ class TranslateGDatalogToEDatalog(ExpressionBasicEvaluator):
         y = Symbol[delta_atom.delta_term.type]('y_' + str(uuid1()))
         result_terms = (
             delta_atom.delta_term.dist_parameters +
-            (Constant(delta_atom.name), ) +
+            (Constant(delta_atom.functor.name), ) +
             tuple(t for t in delta_atom.terms
                   if not isinstance(t, DeltaTerm)) + (y, )
         )
@@ -159,7 +160,7 @@ class TranslateGDatalogToEDatalog(ExpressionBasicEvaluator):
         )
         second_rule = Implication(
             FunctionApplication(
-                Symbol(delta_atom.name),
+                Symbol(delta_atom.functor.name),
                 tuple(
                     term if not isinstance(term, DeltaTerm) else y
                     for term in delta_atom.terms
@@ -224,4 +225,4 @@ def get_gd_rule_consequent_name(gd_rule):
         if not isinstance(body, DeltaAtom):
             raise NeuroLangException('Consequent core must be a Δ-atom')
         else:
-            return body.name
+            return body.functor.name

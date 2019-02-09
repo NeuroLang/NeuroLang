@@ -32,15 +32,13 @@ class TranslateGDatalogToEDatalogTestSolver(
 
 def test_delta_atom_without_delta_term():
     with pytest.raises(NeuroLangException):
-        DeltaAtom('TestAtom', (S_('x'), ))
+        DeltaAtom(S_('TestAtom'), (S_('x'), ))
 
 
 def test_delta_atom_delta_term():
-    delta_atom = DeltaAtom('TestAtom', (S_('x'), S_('y'), DeltaTerm('Hi')))
+    delta_atom = DeltaAtom(S_('P'), (S_('x'), S_('y'), DeltaTerm('Hi')))
     assert delta_atom.delta_term == DeltaTerm('Hi')
-    delta_atom = DeltaAtom(
-        'TestAtom', (S_('x'), S_('y'), DeltaTerm('Hi', C_(2)))
-    )
+    delta_atom = DeltaAtom(S_('P'), (S_('x'), S_('y'), DeltaTerm('Hi', C_(2))))
     assert delta_atom.delta_term == DeltaTerm('Hi', C_(2))
     assert delta_atom.delta_term != DeltaTerm('Hi')
 
@@ -123,8 +121,8 @@ def test_burglar():
 
 
 def test_pcs_example():
-    Bernoulli = C_('Bernoulli')
-    Uniform = C_('Uniform')
+    Bernoulli = C_('bernoulli')
+    Uniform = C_('uniform')
     Gender = S_('Gender')
     Subject = S_('Subject')
     pGender = S_('pGender')

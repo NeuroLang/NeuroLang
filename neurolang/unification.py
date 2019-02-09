@@ -1,56 +1,57 @@
-from . import expressions as exp
+from .expressions import FunctionApplication, Symbol
+from .generative_datalog import DeltaTerm, DeltaAtom
 
 
-def most_general_unifier(expression1, expression2):
+def check_type_and_get_terms(exp):
+    if isinstance(exp, FunctionApplication):
+        terms = exp.args
+    elif isinstance(exp, DeltaAtom):
+        terms = exp.terms
+    else:
+        raise NeuroLangException(
+            'Expression was expected to be an atom or a Δ-atom, '
+            'but got {}'.format(type(exp))
+        )
+    return terms
+
+
+def most_general_unifier(exp1, exp2):
     '''
-    Obtain the most general unifier (MGU) between two function applications.
+    Obtain the most general unifier (MGU) between two literals.
     If the MGU exists it returns the substitution and the unified expression.
     If the MGU doesn't exist it returns None.
     '''
-    if not (
-        isinstance(expression1, exp.FunctionApplication) and
-        isinstance(expression2, exp.FunctionApplication) and
-        len(expression1.args) == len(expression2.args)
-    ):
-        raise ValueError("We can only unify function applications")
+    terms1 = check_type_and_get_terms(exp1)
+    terms2 = check_type_and_get_terms(exp2)
 
-    if not (
-        expression1.functor == expression2.functor and
-        len(expression1.args) == len(expression2.args)
-    ):
+    if exp1.functor != exp2.functor or len(terms1) != len(terms2):
         return None
 
-    unifier = most_general_unifier_arguments(
-        expression1.args, expression2.args
-    )
+    unifier = most_general_unifier_arguments(terms1, terms2)
 
     if unifier is None:
         return unifier
     else:
-        return (
-            unifier[0],
-            expression1.apply(expression1.functor, unifier[1])
+        return (unifier[0], exp1.apply(exp1.functor, unifier[1]))
+
+
+def apply_substitution(literal, substitution):
+    return FunctionApplication[literal.type](
+        literal.functor,
+        apply_substitution_arguments(
+            check_type_and_get_terms(literal), substitution
         )
-
-
-def apply_substitution(function_application, substitution):
-    return exp.FunctionApplication[function_application.type](
-        function_application.functor,
-        apply_substitution_arguments(function_application.args, substitution)
     )
 
 
 def most_general_unifier_arguments(args1, args2):
-    '''
-    Obtain the most general unifier (MGU) between argument tuples.
+    '''Obtain the most general unifier (MGU) between argument tuples.
+
     If the MGU exists it returns the substitution and the unified arguments.
     If the MGU doesn't exist it returns None.
     '''
-    if not (
-        isinstance(args1, tuple) and
-        isinstance(args2, tuple)
-    ):
-        return ValueError("We can only unify argument tuples")
+    if not isinstance(args1, tuple) or not isinstance(args2, tuple):
+        return ValueError('We can only unify argument tuples')
 
     if len(args1) != len(args2):
         return None
@@ -63,9 +64,9 @@ def most_general_unifier_arguments(args1, args2):
         else:
             return substitution, args1
 
-        if isinstance(arg1, exp.Symbol):
+        if isinstance(arg1, Symbol):
             substitution[arg1] = arg2
-        elif isinstance(arg2, exp.Symbol):
+        elif isinstance(arg2, Symbol):
             substitution[arg2] = arg1
         else:
             return None
@@ -82,7 +83,10 @@ def apply_substitution(function_application, substitution):
 
 
 def apply_substitution_arguments(arguments, substitution):
-    return tuple(substitution.get(a, a) for a in arguments)
+    return tuple(
+        a if isinstance(a, DeltaTerm) else substitution.get(a, a)
+        for a in arguments
+    )
 
 
 def merge_substitutions(subs1, subs2):
@@ -91,11 +95,7 @@ def merge_substitutions(subs1, subs2):
         subs1 = subs2
         subs2 = aux
 
-    if any(
-        v != subs2[k]
-        for k, v in subs1.items()
-        if k in subs2
-    ):
+    if any(v != subs2[k] for k, v in subs1.items() if k in subs2):
         return None
     res = subs1.copy()
     res.update(subs2)
@@ -104,13 +104,10 @@ def merge_substitutions(subs1, subs2):
 
 def compose_substitutions(subs1, subs2):
     new_subs = dict()
-    new_subs = {
-        k: v for k, v in subs2.items()
-        if k not in subs1
-    }
+    new_subs = {k: v for k, v in subs2.items() if k not in subs1}
 
     for k, v in subs1.items():
-        if isinstance(v, exp.Symbol):
+        if isinstance(v, Symbol):
             new_value = subs2.get(k, v)
             if new_value != k:
                 new_subs[k] = new_value

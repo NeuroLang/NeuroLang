@@ -1,16 +1,62 @@
+from uuid import uuid1
 import operator
 import itertools
 import copy
 from collections import defaultdict
+import logging
+
+import numpy as np
 
 from .expressions import (
-    NeuroLangException, FunctionApplication, Constant, Definition
+    NeuroLangException, FunctionApplication, Constant, Symbol, Definition
 )
 from .solver_datalog_naive import Implication, Fact
 from .expression_walker import ExpressionWalker
 from .expression_pattern_matching import add_match
 from . import unification
-from .generative_datalog import DeltaAtom
+from .generative_datalog import DeltaAtom, DeltaTerm
+
+# def replace_delta_term_with_new_predicate(rule, rule_uid):
+# '''Replace the delta-term of a rule with a new predicate.
+
+# Example
+# -------
+# The rule
+
+# Q(x, DeltaTerm('bernoulli', (x, ))) <- P(x)
+
+# is converted to
+
+# Q_uid(x, y) <- P(x) & Δ_Q_uid('bernoulli', x, y)
+
+# '''
+# if not isinstance(rule.consequent, DeltaAtom):
+# raise NeuroLangException('Expected delta-atom as consequent')
+# # create new intensional predicate using the rule unique id
+# new_predicate = f'{rule.consequent.functor}_{rule_uid}'
+# dterm_predicate = Symbol(f'Δ_{new_predicate}')
+# y = Symbol('y_{}'.format(str(uuid1()))),
+# new_consequent = DeltaAtom[rule.consequent.type](
+# Symbol(new_predicate),
+# (y if isinstance(t, DeltaTerm) else t for t in rule.consequent.terms)
+# )
+# new_literal = FunctionApplication[bool](
+# Symbol(dterm_predicate),
+# (
+# )
+# new_antecedent = rule.antecedent & new_literal
+# return Implication[rule.type](new_consequent, new_antecedent)
+
+
+def replace_fa_functor_name(fa, new_functor_name):
+    return FunctionApplication[fa.type](Symbol(new_functor_name), fa.args)
+
+
+def sample_from_distribution(dist_name):
+    if dist_name == 'bernoulli':
+        return np.random.randint(2)
+    else:
+        raise NeuroLangException(f'Unknown distribution: {dist_name}')
 
 
 def get_antecedent_literals(rule):
@@ -83,6 +129,20 @@ def infer(rule, facts):
     See Logic Programming and Databases, section 7.1.1
 
     '''
+
+    # if isinstance(rule.consequent, DeltaAtom):
+    # datom = rule.consequent
+    # dterm = datom.delta_term
+    # y = Symbol[dterm.type]('y_' + str(uuid1()))
+    # new_consequent = FunctionApplication(
+    # datom.functor, (
+    # y if isinstance(term, DeltaTerm) else term
+    # for term in consequent.terms
+    # )
+    # )
+    # new_antecedent = (rule.antecedent & FunctionApplication[dterm.type]())
+    # rule = Implication(new_consquent, new_antecedent)
+
     n = len(get_antecedent_literals(rule))
     result = set()
     for facts in itertools.permutations(facts, n):
@@ -99,77 +159,106 @@ class GraphicalModelSolver(ExpressionWalker):
         self.facts = defaultdict(set)
         self.parents = defaultdict(set)
         self.intensional_predicate_rule_count = defaultdict(int)
-        self.cpds = dict()
+        self.samplers = dict()
 
-    def make_edb_cpd(self, predicate):
-        def cpd(parents):
+    def make_edb_sampler(self, predicate):
+        def f(parents):
             if len(parents) != 0:
                 raise NeuroLangException(
                     'Expected empty set of parents for extensional predicate'
                 )
             return self.facts[predicate]
 
-        return cpd
+        return f
 
-    def make_rule_cpd(self, rule):
-        def cpd(parents):
-            return infer(rule, set.union(*[self.sample(p) for p in parents]))
+    def make_rule_sampler(self, rule_var_name, rule):
+        new_rule = Implication[rule.type](
+            replace_fa_functor_name(rule.consequent, rule_var_name),
+            rule.antecedent
+        )
+        def f(parents):
+            facts = set.union(*[self.sample(p) for p in parents])
+            return infer(new_rule, facts)
 
-        return cpd
+        return f
 
-    def make_predicate_union_cpd(self, predicate):
-        def cpd(parents):
+    def make_union_sampler(self, predicate):
+        def f(parents):
             if len(parents) == 0:
                 return set()
-            return set.union(*[self.sample(p) for p in parents])
+            return set.union(
+                *[
+                    set([
+                        replace_fa_functor_name(x, predicate)
+                        for x in self.sample(p)
+                    ])
+                    for p in parents
+                ]
+            )
 
-        return cpd
+        return f
 
-    def make_delta_term_cpd(self, delta_term):
-        if delta_term.dist_name == 'bernoulli':
-
-            def cpd(parents):
-                if len(parents) > 0:
-                    raise NeuroLangException(
-                        'Expected empty set of parents for delta term'
+    def make_gdatalog_rule_sampler(self, rule_var_name, rule):
+        def f(parents):
+            # set of facts sampled from parents
+            facts = set.union(*[self.sample(p) for p in parents])
+            # create temporary rule without delta term
+            tmp_rule = Implication(
+                FunctionApplication(
+                    Symbol('TMP'), rule.consequent.terms_without_dterm
+                ), rule.antecedent
+            )
+            tmp_facts = infer(tmp_rule, facts)
+            facts_with_dterm_sample = set()
+            dterm_index = rule.consequent.delta_term_index
+            dterm = rule.consequent.terms[dterm_index]
+            for fact in tmp_facts:
+                sample = sample_from_distribution(dterm.dist_name)
+                args_with_dterm = list(fact.args)
+                args_with_dterm.insert(dterm_index, Constant(sample))
+                facts_with_dterm_sample.add(
+                    FunctionApplication[fact.type](
+                        Symbol(rule_var_name), tuple(args_with_dterm)
                     )
-                return np.random.randint(2)
+                )
+            return facts_with_dterm_sample
 
-            return cpd
-        else:
-            raise NeuroLangException('Unknown distribution')
+        return f
 
     @add_match(Fact)
     def fact(self, expression):
         predicate = expression.consequent.functor.name
         if predicate not in self.random_variables:
             self.random_variables.add(predicate)
-            self.cpds[predicate] = self.make_edb_cpd(predicate)
+            self.samplers[predicate] = self.make_edb_sampler(predicate)
         self.facts[predicate].add(expression.consequent)
         return expression
 
     @add_match(Implication(Definition, ...))
-    def add_gdatalog_rule(self, expression):
-        predicate = expression.consequent.functor.name
+    def add_gdatalog_rule(self, rule):
+        predicate = rule.consequent.functor.name
         self.intensional_predicate_rule_count[predicate] += 1
         count = self.intensional_predicate_rule_count[predicate]
         rule_var_name = f'{predicate}_{count}'
         self.random_variables.add(rule_var_name)
         self.random_variables.add(predicate)
         self.parents[predicate].add(rule_var_name)
-        self.cpds[rule_var_name] = self.make_rule_cpd(expression)
-        self.cpds[predicate] = self.make_predicate_union_cpd(predicate)
-        antecedent_literals = get_antecedent_literals(expression)
+        self.samplers[predicate] = self.make_union_sampler(predicate)
+        antecedent_literals = get_antecedent_literals(rule)
         antecedent_predicates = [l.functor.name for l in antecedent_literals]
-        for predicate in antecedent_predicates:
-            self.parents[rule_var_name].add(predicate)
-        if isinstance(expression.consequent, DeltaAtom):
-            delta_term = expression.consequenet.delta_term
-            x_delta_term = f'\Delta_{predicate}^{count}'
-            self.random_variables.add(x_delta_term)
-            self.parents[rule_var_name].add(x_delta_term)
-            self.cpds[x_delta_term] = self.make_delta_term_cpd(delta_term)
-        return expression
+        for pred in antecedent_predicates:
+            self.parents[rule_var_name].add(pred)
+        if isinstance(rule.consequent, DeltaAtom):
+            dterm = rule.consequent.delta_term
+            self.samplers[rule_var_name] = self.make_gdatalog_rule_sampler(
+                rule_var_name, rule
+            )
+        else:
+            self.samplers[rule_var_name] = self.make_rule_sampler(
+                rule_var_name, rule
+            )
+        return rule
 
     def sample(self, variable):
-        return self.cpds[variable](self.parents[variable])
+        logging.debug('sampling %(variable)s', {'variable': variable})
+        return self.samplers[variable](self.parents[variable])
