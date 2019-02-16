@@ -1,7 +1,5 @@
-from uuid import uuid1
 import operator
 import itertools
-import copy
 from collections import defaultdict
 import logging
 
@@ -16,47 +14,46 @@ from .expression_pattern_matching import add_match
 from . import unification
 from .generative_datalog import DeltaAtom, DeltaTerm
 
-# def replace_delta_term_with_new_predicate(rule, rule_uid):
-# '''Replace the delta-term of a rule with a new predicate.
-
-# Example
-# -------
-# The rule
-
-# Q(x, DeltaTerm('bernoulli', (x, ))) <- P(x)
-
-# is converted to
-
-# Q_uid(x, y) <- P(x) & Δ_Q_uid('bernoulli', x, y)
-
-# '''
-# if not isinstance(rule.consequent, DeltaAtom):
-# raise NeuroLangException('Expected delta-atom as consequent')
-# # create new intensional predicate using the rule unique id
-# new_predicate = f'{rule.consequent.functor}_{rule_uid}'
-# dterm_predicate = Symbol(f'Δ_{new_predicate}')
-# y = Symbol('y_{}'.format(str(uuid1()))),
-# new_consequent = DeltaAtom[rule.consequent.type](
-# Symbol(new_predicate),
-# (y if isinstance(t, DeltaTerm) else t for t in rule.consequent.terms)
-# )
-# new_literal = FunctionApplication[bool](
-# Symbol(dterm_predicate),
-# (
-# )
-# new_antecedent = rule.antecedent & new_literal
-# return Implication[rule.type](new_consequent, new_antecedent)
-
 
 def replace_fa_functor_name(fa, new_functor_name):
     return FunctionApplication[fa.type](Symbol(new_functor_name), fa.args)
 
 
-def sample_from_distribution(dist_name):
+def sample_from_bernoulli(params):
+    if len(params) != 1:
+        raise NeuroLangException(
+            f'Expected one and only one parameter for '
+            'bernoulli distribution, got {}'.format(len(params))
+        )
+    if not isinstance(params[0], Constant) and params[0].type is float:
+        raise NeuroLangException(
+            f'Expected bernoulli param to be a float, '
+            'got {}'.format(type(params[0]))
+        )
+    p = params[0].value
+    print(p)
+    return int(np.random.choice([1, 0], p=[p, 1 - p]))
+
+
+def sample_from_distribution(dist_name, dist_params):
     if dist_name == 'bernoulli':
-        return np.random.randint(2)
+        return sample_from_bernoulli(dist_params)
     else:
         raise NeuroLangException(f'Unknown distribution: {dist_name}')
+
+
+def get_datom_vars(datom):
+    if not isinstance(datom, DeltaAtom):
+        raise NeuroLangException(f'Expected DeltaAtom, got: {type(datom)}')
+    datom_vars = set()
+    for term in datom.terms:
+        if isinstance(term, Symbol):
+            datom_vars.add(term.name)
+        elif isinstance(term, DeltaTerm):
+            for param in term.dist_params:
+                if isinstance(param, Symbol):
+                    datom_vars.add(param.name)
+    return datom_vars
 
 
 def get_antecedent_literals(rule):
@@ -85,8 +82,9 @@ def produce(rule, facts):
         any(not isinstance(f, FunctionApplication) for f in facts)
     ):
         raise Exception(
-            'Expected a list/tuple of function applications but got {}'
-            .format(type(facts))
+            'Expected a list/tuple of function applications but got {}'.format(
+                type(facts)
+            )
         )
     consequent = rule.consequent
     antecedent_literals = get_antecedent_literals(rule)
@@ -130,19 +128,6 @@ def infer(rule, facts):
 
     '''
 
-    # if isinstance(rule.consequent, DeltaAtom):
-    # datom = rule.consequent
-    # dterm = datom.delta_term
-    # y = Symbol[dterm.type]('y_' + str(uuid1()))
-    # new_consequent = FunctionApplication(
-    # datom.functor, (
-    # y if isinstance(term, DeltaTerm) else term
-    # for term in consequent.terms
-    # )
-    # )
-    # new_antecedent = (rule.antecedent & FunctionApplication[dterm.type]())
-    # rule = Implication(new_consquent, new_antecedent)
-
     n = len(get_antecedent_literals(rule))
     result = set()
     for facts in itertools.permutations(facts, n):
@@ -176,6 +161,7 @@ class GraphicalModelSolver(ExpressionWalker):
             replace_fa_functor_name(rule.consequent, rule_var_name),
             rule.antecedent
         )
+
         def f(parents):
             facts = set.union(*[self.sample(p) for p in parents])
             return infer(new_rule, facts)
@@ -199,26 +185,52 @@ class GraphicalModelSolver(ExpressionWalker):
         return f
 
     def make_gdatalog_rule_sampler(self, rule_var_name, rule):
+        datom = rule.consequent
+        if not isinstance(datom, DeltaAtom):
+            raise NeuroLangException(
+                f'Expected DeltaAtom: got: {type(datom)}'
+            )
+        dterm = datom.delta_term
+
         def f(parents):
             # set of facts sampled from parents
             facts = set.union(*[self.sample(p) for p in parents])
+            csqt_vars = list(get_datom_vars(datom))
             # create temporary rule without delta term
             tmp_rule = Implication(
                 FunctionApplication(
-                    Symbol('TMP'), rule.consequent.terms_without_dterm
+                    Symbol('TMP'), tuple(Symbol(s) for s in csqt_vars)
                 ), rule.antecedent
             )
             tmp_facts = infer(tmp_rule, facts)
             facts_with_dterm_sample = set()
-            dterm_index = rule.consequent.delta_term_index
-            dterm = rule.consequent.terms[dterm_index]
             for fact in tmp_facts:
-                sample = sample_from_distribution(dterm.dist_name)
-                args_with_dterm = list(fact.args)
-                args_with_dterm.insert(dterm_index, Constant(sample))
+                var_map = {
+                    var: value
+                    for var, value in zip(csqt_vars, fact.args)
+                }
+                dist_params = [
+                    var_map[arg.name] if isinstance(arg, Symbol) else arg
+                    for arg in dterm.dist_params
+                ]
+                sample = sample_from_distribution(dterm.dist_name, dist_params)
+                logging.debug(f'{dterm.dist_name}: {sample}')
+
+                def substitute_term(term):
+                    if isinstance(term, Symbol):
+                        return var_map[term.name]
+                    elif isinstance(term, Constant):
+                        return term
+                    elif isinstance(term, DeltaTerm):
+                        return Constant(sample)
+                    else:
+                        raise NeuroLangException(
+                            'Unexpected term type: {type(term)}'
+                        )
                 facts_with_dterm_sample.add(
                     FunctionApplication[fact.type](
-                        Symbol(rule_var_name), tuple(args_with_dterm)
+                        Symbol(rule_var_name),
+                        tuple(substitute_term(term) for term in datom.terms)
                     )
                 )
             return facts_with_dterm_sample
@@ -249,7 +261,6 @@ class GraphicalModelSolver(ExpressionWalker):
         for pred in antecedent_predicates:
             self.parents[rule_var_name].add(pred)
         if isinstance(rule.consequent, DeltaAtom):
-            dterm = rule.consequent.delta_term
             self.samplers[rule_var_name] = self.make_gdatalog_rule_sampler(
                 rule_var_name, rule
             )

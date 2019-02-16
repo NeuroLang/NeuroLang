@@ -1,7 +1,9 @@
 from ..expressions import Symbol, Constant, ExpressionBlock
 from ..expression_pattern_matching import add_match
 from ..solver_datalog_naive import Fact, Implication, DatalogBasic
-from ..graphical_model import produce, infer, GraphicalModelSolver
+from ..graphical_model import (
+    produce, infer, get_datom_vars, GraphicalModelSolver
+)
 from ..generative_datalog import (
     DeltaTerm, DeltaAtom, GenerativeDatalogSugarRemover
 )
@@ -12,8 +14,10 @@ S_ = Symbol
 P = S_('P')
 Q = S_('Q')
 R = S_('R')
+Z = S_('Z')
 x = S_('x')
 y = S_('y')
+z = S_('z')
 a = C_(2)
 b = C_(3)
 
@@ -24,6 +28,10 @@ class GenerativeDatalogSugarRemoverTest(
     @add_match(Implication(DeltaAtom, ...))
     def ignore_gdatalog_rule(self, rule):
         return rule
+
+
+def sugar_remove(program):
+    return GenerativeDatalogSugarRemoverTest().walk(program)
 
 
 def test_produce():
@@ -80,15 +88,53 @@ def test_graphical_model_conversion_simple():
     assert gm.sample('R') == {R(b), R(a)}
 
 
+def test_get_datom_vars():
+    datom = DeltaAtom(Q, (x, DeltaTerm(C_('hello'), C_(0.5), x, y), y))
+    assert get_datom_vars(datom) == {'x', 'y'}
+
+
 def test_delta_term():
     program = ExpressionBlock((
         Fact(P(a)),
-        Implication(Q(x, DeltaTerm(C_('bernoulli'), x)), P(x)),
+        Implication(Q(x, DeltaTerm(C_('bernoulli'), C_(0.5))), P(x)),
     ))
-    sugar_remover = GenerativeDatalogSugarRemoverTest()
-    program = sugar_remover.walk(program)
+    program = sugar_remove(program)
     gm = GraphicalModelSolver()
     gm.walk(program)
     assert 'Q' in gm.random_variables
     assert 'Q_1' in gm.random_variables
-    s = gm.sample('Q')
+    assert gm.sample('Q') in [{Q(a, C_(0))}, {Q(a, C_(1))}]
+
+
+def test_2levels_model():
+    program = ExpressionBlock((
+        Fact(P(a)),
+        Implication(Q(x, DeltaTerm(C_('bernoulli'), C_(0.5))), P(x)),
+        Implication(R(x, DeltaTerm(C_('bernoulli'), C_(0.5))), Q(x, y)),
+    ))
+    program = sugar_remove(program)
+    gm = GraphicalModelSolver()
+    gm.walk(program)
+    assert gm.sample('R') in [{R(a, C_(0))}, {R(a, C_(1))}]
+
+    program = sugar_remove(
+        ExpressionBlock((
+            Fact(P(a)),
+            Fact(P(b)),
+            Implication(Q(x, DeltaTerm(C_('bernoulli'), C_(0.5))), P(x)),
+            Implication(Z(C_(0.1)), Q(x, C_(0))),
+            Implication(Z(C_(0.9)), Q(x, C_(1))),
+            Implication(R(x, DeltaTerm(C_('bernoulli'), z)),
+                        Q(x, y) & Z(z)),
+        ))
+    )
+    gm = GraphicalModelSolver()
+    gm.walk(program)
+    assert gm.random_variables == {
+        'P', 'Q_1', 'Q', 'Z_1', 'Z_2', 'Z', 'R_1', 'R'
+    }
+    gm.sample('R')
+
+
+def test_direct_connection():
+    '''Test for when X and Y are directly connected via an edge X -> Y'''

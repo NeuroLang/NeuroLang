@@ -9,7 +9,7 @@ from .expressions import (
 from .expression_walker import ExpressionBasicEvaluator
 from .expression_pattern_matching import add_match
 from .existential_datalog import (
-    Implication, ExistentialDatalog, SolverNonRecursiveExistentialDatalog
+    Implication, SolverNonRecursiveExistentialDatalog
 )
 
 
@@ -27,24 +27,22 @@ class DeltaSymbol(Symbol):
 
 
 class DeltaTerm(Expression):
-    def __init__(self, dist_name, *dist_parameters):
+    def __init__(self, dist_name, *dist_params):
         self.dist_name = dist_name
-        self.dist_parameters = dist_parameters
-        if len(self.dist_parameters) > 0:
-            self._symbols = set.union(
-                *(p._symbols for p in self.dist_parameters)
-            )
+        self.dist_params = dist_params
+        if len(self.dist_params) > 0:
+            self._symbols = set.union(*(p._symbols for p in self.dist_params))
         else:
             self._symbols = set()
 
     def __eq__(self, other):
         return (
             super().__eq__(other) and self.dist_name == other.dist_name and
-            self.dist_parameters == other.dist_parameters
+            self.dist_params == other.dist_params
         )
 
     def __repr__(self):
-        return f'Δ-term{{{self.dist_name}({self.dist_parameters})}}'
+        return f'Δ-term{{{self.dist_name}({self.dist_params})}}'
 
 
 class DeltaAtom(Definition):
@@ -92,11 +90,8 @@ class DeltaAtom(Definition):
 
 class GenerativeDatalogSugarRemover(ExpressionBasicEvaluator):
     @add_match(
-        Implication(FunctionApplication, ...),
-        lambda expression: any(
-            isinstance(arg, DeltaTerm)
-            for arg in expression.consequent.args
-        )
+        Implication(FunctionApplication, ...), lambda expression:
+        any(isinstance(arg, DeltaTerm) for arg in expression.consequent.args)
     )
     def from_fa_to_delta_atom(self, expression):
         """
@@ -124,8 +119,7 @@ class GenerativeDatalogSugarRemover(ExpressionBasicEvaluator):
 
 class TranslateGDatalogToEDatalog(ExpressionBasicEvaluator):
     @add_match(
-        ExpressionBlock,
-        lambda block: any(
+        ExpressionBlock, lambda block: any(
             is_gdatalog_rule(e) or is_gdatalog_rule_wannabe(e)
             for e in block.expressions
         )
@@ -145,10 +139,10 @@ class TranslateGDatalogToEDatalog(ExpressionBasicEvaluator):
         delta_atom = expression.consequent
         y = Symbol[delta_atom.delta_term.type]('y_' + str(uuid1()))
         result_terms = (
-            delta_atom.delta_term.dist_parameters +
-            (Constant(delta_atom.functor.name), ) +
-            tuple(t for t in delta_atom.terms
-                  if not isinstance(t, DeltaTerm)) + (y, )
+            delta_atom.delta_term.dist_params +
+            (Constant(delta_atom.functor.name), ) + tuple(
+                t for t in delta_atom.terms if not isinstance(t, DeltaTerm)
+            ) + (y, )
         )
         result_atom = FunctionApplication(
             DeltaSymbol(
