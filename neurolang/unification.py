@@ -36,9 +36,9 @@ def most_general_unifier(exp1, exp2):
 
 
 def apply_substitution(literal, substitution):
-    return FunctionApplication[literal.type](
+    return literal.__class__(
         literal.functor,
-        apply_substitution_arguments(
+        apply_substitution_args(
             check_type_and_get_terms(literal), substitution
         )
     )
@@ -68,6 +68,11 @@ def most_general_unifier_arguments(args1, args2):
             substitution[arg1] = arg2
         elif isinstance(arg2, Symbol):
             substitution[arg2] = arg1
+        elif isinstance(arg1, DeltaTerm) and isinstance(arg2, DeltaTerm):
+            for p1, p2 in zip(arg1.dist_parameters, arg2.dist_parameters):
+                if p1 != p2:
+                    substitution[p1] = p2
+                    break
         else:
             return None
 
@@ -75,17 +80,18 @@ def most_general_unifier_arguments(args1, args2):
         expression2 = apply_substitution(expression2, substitution)
 
 
-def apply_substitution(function_application, substitution):
-    return exp.FunctionApplication[function_application.type](
-        function_application.functor,
-        tuple(substitution.get(a, a) for a in function_application.args)
+def apply_substitution_to_delta_term(delta_term, substitution):
+    return DeltaTerm(
+        delta_term.dist_name,
+        *tuple(substitution.get(p, p) for p in delta_term.dist_parameters)
     )
 
 
-def apply_substitution_arguments(arguments, substitution):
+def apply_substitution_args(args, substitution):
     return tuple(
-        a if isinstance(a, DeltaTerm) else substitution.get(a, a)
-        for a in arguments
+        apply_substitution_to_delta_term(arg, substitution)
+        if isinstance(arg, DeltaTerm) else substitution.get(arg, arg)
+        for arg in args
     )
 
 
