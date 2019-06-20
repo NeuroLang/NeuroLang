@@ -6,7 +6,8 @@ import logging
 import numpy as np
 
 from .expressions import (
-    NeuroLangException, FunctionApplication, Constant, Symbol, Definition
+    Expression, NeuroLangException, FunctionApplication, Constant, Symbol,
+    Definition
 )
 from .solver_datalog_naive import Implication, Fact
 from .expression_walker import ExpressionWalker
@@ -76,6 +77,11 @@ def get_antecedent_literals(rule):
     return aux_get_antecedent_literals(rule.antecedent)
 
 
+def get_antecedent_predicate_names(rule):
+    antecedent_literals = get_antecedent_literals(rule)
+    return [literal.functor.name for literal in antecedent_literals]
+
+
 def produce(rule, facts):
     if (
         not isinstance(facts, (list, tuple)) or
@@ -135,6 +141,47 @@ def infer(rule, facts):
         if new is not None:
             result.add(new)
     return result
+
+
+def group_facts_by_predicate(facts, predicates):
+    result = defaultdict(set)
+    for fact in facts:
+        pred = fact.consequent.functor.name
+        if pred in predicates:
+            result[pred].add(fact)
+    return [result[pred] for pred in predicates]
+
+
+def delta_infer1(rule, facts):
+    antecedent_predicate_names = set(get_antecedent_predicate_names(rule))
+    facts_by_predicate = group_facts_by_predicate(
+        facts, antecedent_predicate_names
+    )
+    result = set()
+    for fact_list in itertools.product(*facts_by_predicate):
+        new = produce(rule, fact_list)
+        if new is not None:
+            result = result.union(new)
+    if isinstance(rule.consequent, DeltaAtom):
+        new_result = set()
+        delta_facts = [f for f in result if isinstance(f, DeltaAtom)]
+        normal_facts = {f for f in result if not isinstance(f, DeltaAtom)}
+        possible_substitutions_and_probs = [
+            get_dterm_cpd(f.dterm) for f in delta_facts
+        ]
+        for possible_values in itertools.product(
+            *[get_dterm_cpd(f.dterm) for f in delta_facts]
+        ):
+            substituted_facts = {f for f, _ in poss
+            new_result.add((normal_facts.union(substituted_facts))
+    else:
+        return {(result, 1)}
+
+
+class PossibleOutcome(Expression):
+    def __init__(self, fact_set, probability):
+        self.fact_set = fact_set
+        self.probability = probability
 
 
 class GraphicalModelSolver(ExpressionWalker):
@@ -256,9 +303,8 @@ class GraphicalModelSolver(ExpressionWalker):
         self.random_variables.add(predicate)
         self.parents[predicate].add(rule_var_name)
         self.samplers[predicate] = self.make_union_sampler(predicate)
-        antecedent_literals = get_antecedent_literals(rule)
-        antecedent_predicates = [l.functor.name for l in antecedent_literals]
-        for pred in antecedent_predicates:
+        antecedent_predicate_names = get_antecedent_predicate_names(rule)
+        for pred in antecedent_predicate_names:
             self.parents[rule_var_name].add(pred)
         if isinstance(rule.consequent, DeltaAtom):
             self.samplers[rule_var_name] = self.make_gdatalog_rule_sampler(

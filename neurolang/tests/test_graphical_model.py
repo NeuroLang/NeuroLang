@@ -20,6 +20,10 @@ y = S_('y')
 z = S_('z')
 a = C_(2)
 b = C_(3)
+p = S_('p')
+p_a = C_(0.2)
+p_b = C_(0.7)
+bernoulli = C_('bernoulli')
 
 
 class GenerativeDatalogSugarRemoverTest(
@@ -40,6 +44,14 @@ def test_produce():
     result = produce(rule, [fact.fact])
     assert result is not None
     assert result == Q(a)
+
+
+def test_delta_produce():
+    fact_a = Fact(P(a, p_a))
+    fact_b = Fact(P(b, p_b))
+    rule = Implication(Q(x, DeltaTerm(bernoulli, p)), P(x, p))
+    assert produce(rule, [fact_a.fact]) == Q(a, DeltaTerm(bernoulli, p_a))
+    assert produce(rule, [fact_b.fact]) == Q(b, DeltaTerm(bernoulli, p_b))
 
 
 def test_infer():
@@ -96,7 +108,7 @@ def test_get_datom_vars():
 def test_delta_term():
     program = ExpressionBlock((
         Fact(P(a)),
-        Implication(Q(x, DeltaTerm(C_('bernoulli'), C_(0.5))), P(x)),
+        Implication(Q(x, DeltaTerm(bernoulli, x)), P(x)),
     ))
     program = sugar_remove(program)
     gm = GraphicalModelSolver()
