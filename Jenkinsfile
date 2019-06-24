@@ -7,6 +7,7 @@ pipeline {
           make test
         }
 
+        pysh(script: 'tox', returnStatus: true, returnStdout: true)
       }
     }
   }
