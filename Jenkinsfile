@@ -4,10 +4,9 @@ pipeline {
     stage('Test') {
       steps {
         script {
-          make test
+          sh 'python --version'
         }
 
-        pysh(script: 'tox', returnStatus: true, returnStdout: true)
       }
     }
   }
