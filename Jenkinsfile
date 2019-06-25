@@ -1,9 +1,7 @@
 pipeline {
   agent any
   tools {
-    PythonInstallation 'anaconda-python-package'
-    PythonInstallation 'Anaconda-CPython-3.6'
-    PythonInstallation 'Anaconda-CPython-3.7'
+    Python 'Anaconda-CPython-3.6'
   }
   stages {
     stage('tox') {
