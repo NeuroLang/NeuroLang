@@ -1,8 +1,6 @@
 pipeline {
   agent any
-  tools {
-    Python 'Anaconda-CPython-3.6'
-  }
+  tool name: 'Anaconda-CPython-3.6', type: 'jenkins.plugins.shiningpanda.tools.PythonInstallation'
   stages {
     stage('tox') {
       steps {
