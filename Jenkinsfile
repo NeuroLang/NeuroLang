@@ -6,6 +6,7 @@ pipeline {
         script {
           sh '''
 python <<end
+import os
 import tox
 
 os.chdir(os.getenv("WORKSPACE"))
