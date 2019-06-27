@@ -294,7 +294,7 @@ class SphericalVolume(ImplicitVBR):
 
 
 class PlanarVolume(ImplicitVBR):
-    def __init__(self, origin, vector, direction=1, limit=1000):
+    def __init__(self, origin, vector, direction=1, limit=200):
         self._origin = np.array(origin)
 
         if not np.any([vector[i] > 0 for i in range(len(vector))]):
