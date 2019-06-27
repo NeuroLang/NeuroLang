@@ -234,6 +234,10 @@ class ImplicitVBR(VolumetricBrainRegion):
 
     def to_explicit_vbr(self, affine, image_shape):
         voxels_coordinates = self.to_ijk(affine)
+        voxels_coordinates = voxels_coordinates[
+            np.all(voxels_coordinates >= (0, 0, 0), axis=1) *
+            np.all(voxels_coordinates < image_shape, axis=1)
+        ]
         return ExplicitVBR(voxels_coordinates, affine, image_shape)
 
 
@@ -290,7 +294,7 @@ class SphericalVolume(ImplicitVBR):
 
 
 class PlanarVolume(ImplicitVBR):
-    def __init__(self, origin, vector, direction=1, limit=1000):
+    def __init__(self, origin, vector, direction=1, limit=200):
         self._origin = np.array(origin)
 
         if not np.any([vector[i] > 0 for i in range(len(vector))]):
@@ -306,10 +310,10 @@ class PlanarVolume(ImplicitVBR):
             raise ValueError('Limit must be a positive value')
         self._limit = limit
 
-        box_limit = np.asanyarray((self._dir * self._limit,) * 3, dtype=int)
-        box_limit_in_plane = np.asanyarray(
-            self.project_point_to_plane(box_limit), dtype=int) * -1
-        lb, ub = sorted([box_limit, box_limit_in_plane], key=lambda x: x[0])
+        corner_one = self._origin + self._dir * self._limit
+        corner_two = self._origin - self._dir * self._limit
+        ub = np.maximum(corner_one, corner_two)
+        lb = np.minimum(corner_one, corner_two)
         self._bounding_box = AABB(lb, ub)
 
     def project_point_to_plane(self, point):
@@ -329,7 +333,25 @@ class PlanarVolume(ImplicitVBR):
                         int(max(bounds_voxels[:, i])))
                   for i in range(bb.dim)]
 
-        return np.array(list(product(*ranges)))
+        ijk_coords = np.array(list(product(*ranges)))
+        origin_ijk = nib.affines.apply_affine(
+            np.linalg.inv(affine),
+            self._origin
+        )
+
+        vector_ijk = np.dot(
+            np.linalg.inv(affine[:3, :3]),
+            self._vector
+        )
+
+        vector_ijk /= np.linalg.norm(vector_ijk)
+
+        plane_ijk_dist = np.dot(
+            ijk_coords - origin_ijk, vector_ijk
+        )
+
+        plane_ijk = ijk_coords[np.abs(plane_ijk_dist) <= 1]
+        return plane_ijk
 
     def __contains__(self, point):
         point = np.atleast_2d(point)
