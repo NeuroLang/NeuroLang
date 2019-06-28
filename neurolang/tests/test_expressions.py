@@ -260,3 +260,10 @@ def test_nested_universals():
     exp = U_(x, U_(y, P(x) & Q(y)))
 
     assert exp._symbols == {Q, P}
+
+
+def test_constant_unknown():
+
+    x = C_(Unknown)
+
+    assert x.type is Unknown
