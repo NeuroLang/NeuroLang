@@ -80,7 +80,7 @@ def test_replace_subtype():
             int, Set, T
         )
     )
-    assert (str is replace_type_variable(int, str, T))
+    assert str is replace_type_variable(int, str, T)
 
     assert (
         Set[float] == replace_type_variable(

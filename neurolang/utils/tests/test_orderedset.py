@@ -7,5 +7,5 @@ def test_ordered_set():
 
     assert all(a_ in os for a_ in a)
     assert len(os) == len(a) - 1
-    assert (o_ == a_ for o_, a_ in zip(os, [5, 4, 3, 2, 1]))
+    assert all(o_ == a_ for o_, a_ in zip(os, [5, 4, 3, 2, 1]))
     assert all(os[i] == a[i] for i in range(4))

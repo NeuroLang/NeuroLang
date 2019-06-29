@@ -30,7 +30,7 @@ def test_tuple():
             (None, expression, 0),
             (None, expression.value[0], 1),
             (None, expression.value[1], 1)
-        ]  # yapf: disable
+        ]
         assert walk == [r[:2] for r in res]
 
         walk = list(
@@ -52,7 +52,7 @@ def test_function_application():
             ('args', expression.args, 1),
             (None, expression.args[0], 2),
             (None, expression.args[1], 2)
-        ]  # yapf: disable
+        ]
         assert walk == [r[:2] for r in res]
 
         walk = list(

@@ -314,7 +314,7 @@ class Expression(metaclass=ExpressionMeta):
             if isinstance(val, (list, tuple)):
                 if not all(v == o for v, o in zip(val, val_other)):
                     break
-            elif not(val == val_other):
+            elif not val == val_other:
                 break
         else:
             return True
@@ -387,25 +387,14 @@ class Constant(Expression):
                 if hasattr(value, attr):
                     setattr(self, attr, getattr(value, attr))
 
-            if auto_infer_type and self.type is Unknown:
-                if hasattr(value, '__annotations__'):
+            if (
+                auto_infer_type and self.type is Unknown and
+                hasattr(value, '__annotations__')
+            ):
                     self.type = infer_type(value)
 
         elif auto_infer_type and self.type is Unknown:
-            self.type = infer_type(self.value)
-
-            self._symbols = set()
-            if (
-                not issubclass(self.type, typing.Text) and
-                issubclass(self.type, typing.Iterable)
-            ):
-                new_content = []
-                for a in self.value:
-                    if not isinstance(a, Expression):
-                        a = Constant(a)
-                    self._symbols |= a._symbols
-                    new_content.append(a)
-                self.value = type(self.value)(new_content)
+            self.__auto_infer_type__()
 
         if not self.__verify_type__(self.value, self.type):
             raise NeuroLangTypeException(
@@ -415,6 +404,21 @@ class Constant(Expression):
 
         if auto_infer_type and self.type is not Unknown:
             self.change_type(self.type)
+
+    def __auto_infer_type__(self):
+        self.type = infer_type(self.value)
+        self._symbols = set()
+        if (
+            not issubclass(self.type, typing.Text) and
+            issubclass(self.type, typing.Iterable)
+        ):
+            new_content = []
+            for a in self.value:
+                if not isinstance(a, Expression):
+                    a = Constant(a)
+                self._symbols |= a._symbols
+                new_content.append(a)
+            self.value = type(self.value)(new_content)
 
     def __verify_type__(self, value, type_):
         return (
@@ -568,25 +572,27 @@ class Projection(Definition):
         self, collection, item,
         auto_infer_projection_type=True
     ):
-        if self.type is Unknown and auto_infer_projection_type:
-            if collection.type is not Unknown:
-                if is_leq_informative(collection.type, typing.Tuple):
-                    if (
-                        isinstance(item, Constant) and
-                        is_leq_informative(item.type, typing.SupportsInt) and
-                        len(collection.type.__args__) > int(item.value)
-                    ):
-                        self.type = collection.type.__args__[
+        if (
+            self.type is Unknown and auto_infer_projection_type and
+            collection.type is not Unknown
+        ):
+            if is_leq_informative(collection.type, typing.Tuple):
+                if (
+                    isinstance(item, Constant) and
+                    is_leq_informative(item.type, typing.SupportsInt) and
+                    len(collection.type.__args__) > int(item.value)
+                ):
+                    self.type = collection.type.__args__[
+                        int(item.value)
+                    ]
+                else:
+                    raise NeuroLangTypeException(
+                        "Not {} elements in tuple".format(
                             int(item.value)
-                        ]
-                    else:
-                        raise NeuroLangTypeException(
-                            "Not {} elements in tuple".format(
-                                int(item.value)
-                            )
                         )
-                if is_leq_informative(collection.type, typing.Mapping):
-                    self.type = collection.type.__args__[1]
+                    )
+            if is_leq_informative(collection.type, typing.Mapping):
+                self.type = collection.type.__args__[1]
 
         self._symbols = collection._symbols
         self._symbols |= item._symbols

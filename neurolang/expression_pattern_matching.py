@@ -43,9 +43,11 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
         for base in bases:
             repeated_methods = set(dir(base)).intersection(classdict)
             repeated_methods.difference_update(overwriteable_properties)
-            if '__init__' in repeated_methods:
-                if getattr(base, '__init__') is object.__init__:
-                    repeated_methods.remove('__init__')
+            if (
+                '__init__' in repeated_methods and
+                getattr(base, '__init__') is object.__init__
+            ):
+                repeated_methods.remove('__init__')
             if len(repeated_methods) > 1:
                 warn_message = (
                     f"Warning in class {name} "
@@ -57,6 +59,17 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
             classdict
         )
 
+        current_type = cls.__infer_type__(classdict, bases)
+
+        classdict['type'] = current_type
+
+        new_cls = super().__new__(cls, name, bases, classdict)
+        if needs_replacement:
+            cls.__replace_type_in_patterns__(new_cls, src_type, dst_type)
+
+        return new_cls
+
+    def __infer_type__(classdict, bases):
         current_type = classdict.get('type', Any)
         for base in bases:
             if hasattr(base, 'type'):
@@ -71,14 +84,7 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
                 else:
                     current_type = UndeterminedType
                     break
-
-        classdict['type'] = current_type
-
-        new_cls = super().__new__(cls, name, bases, classdict)
-        if needs_replacement:
-            cls.__replace_type_in_patterns__(new_cls, src_type, dst_type)
-
-        return new_cls
+        return current_type
 
     def __infer_patterns__(classdict):
         src_type = None
@@ -238,7 +244,7 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
             guard_match = pattern_match and (
                 guard is None or guard(expression)
             )
-            if (pattern_match and guard_match):
+            if pattern_match and guard_match:
                 logging.info('\tMATCH %(name)s', {'name': name})
                 logging.info('\t\tpattern: %(pattern)s', {'pattern': pattern})
                 logging.info('\t\tguard: %(guard)s', {'guard': guard})
@@ -285,41 +291,31 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
           :class:`Expression` matches when
           ``instance == expression``
         """
+        result = False
         if pattern is ...:
-            return True
+            result = True
         elif isclass(pattern):
             if issubclass(pattern, expressions.Expression):
-                res = isinstance(expression, pattern)
-                if res:
+                result = isinstance(expression, pattern)
+                if result:
                     logging.log(FINEDEBUG, "\t\tmatch type")
-                return res
             else:
                 raise ValueError(
                     'Class pattern matching only implemented '
                     'for Expression subclasses'
                 )
         elif isinstance(pattern, expressions.Expression):
-            return self.pattern_match_expression(pattern, expression)
+            result = self.pattern_match_expression(pattern, expression)
         elif isinstance(pattern, tuple) and isinstance(expression, tuple):
-            if len(pattern) != len(expression):
-                return False
-            for p, e in zip(pattern, expression):
-                if not self.pattern_match(p, e):
-                    return False
-            else:
-                logging.log(
-                    FINEDEBUG,
-                    "\t\t\t\tMatch tuples %(expression)s with %(pattern)s",
-                    {'expression': expression, 'pattern': pattern}
-                )
-                return True
+            result = self.pattern_match_tuple(pattern, expression)
         else:
             logging.log(
                 FINEDEBUG,
                 "\t\t\t\tMatch other %(pattern)s vs %(expression)s",
                 {'expression': expression, 'pattern': pattern}
             )
-            return pattern == expression
+            result = pattern == expression
+        return result
 
     def pattern_match_expression(self, pattern, expression):
         if not (
@@ -345,50 +341,83 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
                 isclass(expression.type) and
                 issubclass(expression.type, Tuple)
             ):
-                if (
-                    len(pattern.type.__args__) !=
-                    len(expression.type.__args__)
-                ):
-                    result = False
-                else:
-                    for p, e in zip(pattern.value, expression.value):
-                        if not self.pattern_match(p, e):
-                            result = False
-                            break
-                    else:
-                        logging.log(
-                            FINEDEBUG,
-                            "\t\t\t\t\tMatched tuple's expression instance "
-                            "%(expression)s with %(pattern)s",
-                            {'expression': expression, 'pattern': pattern}
-                        )
-                        result = True
+                result = self.pattern_match_expression_tuple(expression, pattern)
             else:
                 result = False
         else:
-            parameters = signature(pattern.__class__)
-            logging.log(
-                FINEDEBUG,
-                "\t\t\t\tTrying to match parameters "
-                "%(expression)s with %(pattern)s",
-                {'expression': expression, 'pattern': pattern}
-            )
-            for argname, arg in parameters.items():
-                if arg.default is not inspect.Parameter.empty:
-                    continue
-                p = getattr(pattern, argname)
-                e = getattr(expression, argname)
-                match = self.pattern_match(p, e)
-                if not match:
+            result = self.pattern_match_expression_parameters(pattern, expression)
+        return result
+
+    def pattern_match_expression_parameters(self, pattern, expression):
+        parameters = signature(pattern.__class__)
+        logging.log(
+            FINEDEBUG,
+            "\t\t\t\tTrying to match parameters "
+            "%(expression)s with %(pattern)s",
+            {'expression': expression, 'pattern': pattern}
+        )
+        for argname, arg in parameters.items():
+            if arg.default is not inspect.Parameter.empty:
+                continue
+            p = getattr(pattern, argname)
+            e = getattr(expression, argname)
+            match = self.pattern_match(p, e)
+            if not match:
+                result = False
+                break
+            else:
+                logging.log(
+                    FINEDEBUG,
+                    "\t\t\t\t\tmatch %(p)s vs %(e)s",
+                    {'p': p, 'e': e}
+                )
+        else:
+            result = True
+        return result
+
+    def pattern_match_expression_tuple(self, expression, pattern):
+        result = True
+        if (
+            len(pattern.type.__args__) !=
+            len(expression.type.__args__)
+        ):
+            result = False
+        else:
+            if pattern.value is ...:
+                pattern_value = (
+                    expressions.Constant[pattern.type.__args__[i]](...)
+                    for i in range(len(pattern.type.__args__))
+                )
+            else:
+                pattern_value = pattern.value
+            for p, e in zip(pattern_value, expression.value):
+                if not self.pattern_match(p, e):
                     result = False
                     break
-                else:
-                    logging.log(
-                        FINEDEBUG,
-                        "\t\t\t\t\tmatch %(p)s vs %(e)s",
-                        {'p': p, 'e': e}
-                    )
             else:
+                logging.log(
+                    FINEDEBUG,
+                    "\t\t\t\t\tMatched tuple's expression instance "
+                    "%(expression)s with %(pattern)s",
+                    {'expression': expression, 'pattern': pattern}
+                )
+                result = True
+        return result
+
+    def pattern_match_tuple(self, pattern, expression):
+        if len(pattern) != len(expression):
+            result = False
+        else:
+            for p, e in zip(pattern, expression):
+                if not self.pattern_match(p, e):
+                    result = False
+                    break
+            else:
+                logging.log(
+                    FINEDEBUG,
+                    "\t\t\t\tMatch tuples %(expression)s with %(pattern)s",
+                    {'expression': expression, 'pattern': pattern}
+                )
                 result = True
         return result
 
