@@ -50,11 +50,6 @@ def type_validation_value(value, type_):
 
     value_type = infer_type(value)
     return is_leq_informative(value_type, type_)
-    try:
-        unify_types(value_type, type_)
-        return True
-    except Exception:
-        return False
 
 
 class ParametricTypeClassMeta(type):
