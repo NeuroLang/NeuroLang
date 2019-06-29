@@ -727,7 +727,7 @@ binary_opeations = (
 
 def op_bind(op):
     @wraps(op)
-    def f(*args):
+    def fun(*args):
         arg_types = [a.type for a in args]
         return FunctionApplication(
             Constant[typing.Callable[arg_types, Unknown]](
@@ -736,12 +736,12 @@ def op_bind(op):
             args,
         )
 
-    return f
+    return fun
 
 
 def rop_bind(op):
     @wraps(op)
-    def f(self, value):
+    def fun(self, value):
         arg_types = [a.type for a in (value, self)]
         return FunctionApplication(
             Constant[typing.Callable[arg_types, Unknown]](
@@ -750,7 +750,7 @@ def rop_bind(op):
             args=(value, self),
         )
 
-    return f
+    return fun
 
 
 for operator_name in dir(op):

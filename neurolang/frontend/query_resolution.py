@@ -17,7 +17,7 @@ from ..expressions import is_leq_informative
 __all__ = ['QueryBuilder']
 
 
-class QueryBuilder:
+class QueryBuilder(object):
     def __init__(self, solver):
         self.solver = solver
         self.set_type = AbstractSet[self.solver.type]
@@ -200,7 +200,8 @@ class QueryBuilder:
 
         return Symbol(self, name)
 
-    def create_region(self, spatial_image, label=1):
+    @staticmethod
+    def create_region(spatial_image, label=1):
         region = ExplicitVBR(
             np.transpose((spatial_image.get_data() == label).nonzero()),
             spatial_image.affine, img_dim=spatial_image.shape
@@ -250,7 +251,7 @@ class QueryBuilder:
         return QuerySymbolsProxy(self)
 
 
-class QuerySymbolsProxy:
+class QuerySymbolsProxy(object):
     def __init__(self, query_builder):
         self._query_builder = query_builder
 
