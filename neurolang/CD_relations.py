@@ -55,7 +55,7 @@ def cardinal_relation(
     if region is reference_region:
         return False
 
-    if (type(region) is Region and type(reference_region) is Region):
+    if type(region) is Region and type(reference_region) is Region:
         mat = direction_matrix([region.bounding_box],
                                [reference_region.bounding_box])
         return is_in_direction(mat, directions)
@@ -78,19 +78,27 @@ def cardinal_relation(
         region.voxels = region.to_ijk(reference_region.affine)
 
     if region == reference_region:
-        return False
+        result = False
+    else:
+        mat = direction_matrix([region.bounding_box],
+                               [reference_region.bounding_box])
+        if not (refine_overlapping and 'O' in directions) and is_in_direction(
+            mat, directions
+        ):
+            result = True
+        else:
+            overlap = is_in_direction(mat, 'O')
+            if (
+                    overlap and
+                    refine_overlapping and
+                    isinstance(region, ExplicitVBR)
+            ):
+                mat = overlap_resolution(
+                        region, reference_region, directions, stop_at
+                    )
+            result = is_in_direction(mat, directions)
 
-    mat = direction_matrix([region.bounding_box],
-                           [reference_region.bounding_box])
-    if not (refine_overlapping and 'O' in directions) and is_in_direction(
-        mat, directions
-    ):
-        return True
-
-    overlap = is_in_direction(mat, 'O')
-    if overlap and refine_overlapping and isinstance(region, ExplicitVBR):
-        mat = overlap_resolution(region, reference_region, directions, stop_at)
-    return is_in_direction(mat, directions)
+    return result
 
 
 def overlap_resolution(
@@ -135,7 +143,7 @@ def overlap_resolution(
             [reg.box for reg in current_reference_region_level]
         )
 
-        if (directions is not None and is_in_direction(mat, directions)):
+        if directions is not None and is_in_direction(mat, directions):
             break
 
         overlap = is_in_direction(mat, 'O')
@@ -196,5 +204,5 @@ def direction_matrix(region_bbs, another_region_bbs):
                               tensor).squeeze()
             res += tensor.astype(
                 bool, copy=False
-            )  # np.logical_or(res, tensor)
+            )
     return res.astype(int, copy=False)
