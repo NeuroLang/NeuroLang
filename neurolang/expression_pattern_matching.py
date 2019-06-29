@@ -53,29 +53,9 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
                 )
                 warn(warn_message)
 
-        patterns = []
-        if (
-            '__generic_class__' in classdict and
-            hasattr(classdict['__generic_class__'], 'type') and
-            isinstance(classdict['__generic_class__'].type, TypeVar)
-        ):
-            needs_replacement = True
-            src_type = classdict['__generic_class__'].type
-            dst_type = classdict['type']
-        else:
-            needs_replacement = False
-
-        for v in classdict.values():
-            if callable(v) and hasattr(v, 'pattern') and hasattr(v, 'guard'):
-                pattern = getattr(v, 'pattern')
-                if needs_replacement:
-                    pattern = __pattern_replace_type__(
-                        pattern, src_type, dst_type
-                    )
-                patterns.append(
-                    (pattern, getattr(v, 'guard'), v)
-                )
-        classdict['__patterns__'] = patterns
+        src_type, dst_type, needs_replacement = cls.__infer_patterns__(
+            classdict
+        )
 
         current_type = classdict.get('type', Any)
         for base in bases:
@@ -96,37 +76,66 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
 
         new_cls = super().__new__(cls, name, bases, classdict)
         if needs_replacement:
-            for attribute_name in dir(new_cls):
-                attribute = getattr(new_cls, attribute_name, None)
-                if (
-                    attribute is None or
-                    not hasattr(attribute, '__annotations__')
-                ):
-                    continue
-                if isinstance(
-                    attribute,
-                    (types.FunctionType, types.MethodType)
-                ):
-                    new_attribute = types.FunctionType(
-                        attribute.__code__, attribute.__globals__,
-                        name=attribute.__name__,
-                        argdefs=attribute.__defaults__,
-                        closure=attribute.__closure__
-                    )
-                else:
-                    new_attribute = copy.copy(attribute)
-                annotations = getattr(attribute, '__annotations__')
-                if annotations:
-                    new_annotations = {
-                        k: replace_type_variable(
-                            dst_type, v, type_var=src_type
-                        )
-                        for k, v in annotations.items()
-                    }
-                    setattr(new_attribute, '__annotations__', new_annotations)
-                    setattr(new_cls, attribute_name, new_attribute)
+            cls.__replace_type_in_patterns__(new_cls, src_type, dst_type)
 
         return new_cls
+
+    def __infer_patterns__(cls, classdict):
+        if (
+            '__generic_class__' in classdict and
+            hasattr(classdict['__generic_class__'], 'type') and
+            isinstance(classdict['__generic_class__'].type, TypeVar)
+        ):
+            needs_replacement = True
+            src_type = classdict['__generic_class__'].type
+            dst_type = classdict['type']
+        else:
+            needs_replacement = False
+
+        patterns = []
+        for v in classdict.values():
+            if callable(v) and hasattr(v, 'pattern') and hasattr(v, 'guard'):
+                pattern = getattr(v, 'pattern')
+                if needs_replacement:
+                    pattern = __pattern_replace_type__(
+                        pattern, src_type, dst_type
+                    )
+                patterns.append(
+                    (pattern, getattr(v, 'guard'), v)
+                )
+        classdict['__patterns__'] = patterns
+        return src_type, dst_type, needs_replacement
+
+    def __replace_type_in_patterns__(cls, new_cls, src_type, dst_type):
+        for attribute_name in dir(new_cls):
+            attribute = getattr(new_cls, attribute_name, None)
+            if (
+                attribute is None or
+                not hasattr(attribute, '__annotations__')
+            ):
+                continue
+            if isinstance(
+                attribute,
+                (types.FunctionType, types.MethodType)
+            ):
+                new_attribute = types.FunctionType(
+                    attribute.__code__, attribute.__globals__,
+                    name=attribute.__name__,
+                    argdefs=attribute.__defaults__,
+                    closure=attribute.__closure__
+                )
+            else:
+                new_attribute = copy.copy(attribute)
+            annotations = getattr(attribute, '__annotations__')
+            if annotations:
+                new_annotations = {
+                    k: replace_type_variable(
+                        dst_type, v, type_var=src_type
+                    )
+                    for k, v in annotations.items()
+                }
+                setattr(new_attribute, '__annotations__', new_annotations)
+                setattr(new_cls, attribute_name, new_attribute)
 
 
 def __pattern_replace_type__(pattern, src_type, dst_type):
@@ -291,7 +300,9 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
                 (
                     hasattr(type(pattern), '__generic_class__') and
                     isinstance(expression, type(pattern).__generic_class__) and
-                    expressions.is_leq_informative(expression.type, pattern.type)
+                    expressions.is_leq_informative(
+                        expression.type, pattern.type
+                    )
                 ) or
                 isinstance(expression, type(pattern))
             ):
