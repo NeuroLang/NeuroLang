@@ -80,7 +80,10 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
 
         return new_cls
 
-    def __infer_patterns__(cls, classdict):
+    def __infer_patterns__(classdict):
+        src_type = None
+        dst_type = None
+        needs_replacement = False
         if (
             '__generic_class__' in classdict and
             hasattr(classdict['__generic_class__'], 'type') and
@@ -106,7 +109,7 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
         classdict['__patterns__'] = patterns
         return src_type, dst_type, needs_replacement
 
-    def __replace_type_in_patterns__(cls, new_cls, src_type, dst_type):
+    def __replace_type_in_patterns__(new_cls, src_type, dst_type):
         for attribute_name in dir(new_cls):
             attribute = getattr(new_cls, attribute_name, None)
             if (
@@ -296,72 +299,7 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
                     'for Expression subclasses'
                 )
         elif isinstance(pattern, expressions.Expression):
-            if not (
-                (
-                    hasattr(type(pattern), '__generic_class__') and
-                    isinstance(expression, type(pattern).__generic_class__) and
-                    expressions.is_leq_informative(
-                        expression.type, pattern.type
-                    )
-                ) or
-                isinstance(expression, type(pattern))
-            ):
-                logging.log(
-                    FINEDEBUG,
-                    "\t\t\t\t%(expression)s is not instance of pattern "
-                    "class %(class)s",
-                    {'expression': expression, 'class': pattern.__class__}
-                )
-                return False
-
-            if isclass(pattern.type) and issubclass(pattern.type, Tuple):
-                logging.log(FINEDEBUG, "\t\t\t\tMatch tuple")
-                if (
-                    isclass(expression.type) and
-                    issubclass(expression.type, Tuple)
-                ):
-                    if (
-                        len(pattern.type.__args__) !=
-                        len(expression.type.__args__)
-                    ):
-                        return False
-                    for p, e in zip(pattern.value, expression.value):
-                        if not self.pattern_match(p, e):
-                            return False
-                    else:
-                        logging.log(
-                            FINEDEBUG,
-                            "\t\t\t\t\tMatched tuple's expression instance "
-                            "%(expression)s with %(pattern)s",
-                            {'expression': expression, 'pattern': pattern}
-                        )
-                        return True
-                else:
-                    return False
-            else:
-                parameters = signature(pattern.__class__)
-                logging.log(
-                    FINEDEBUG,
-                    "\t\t\t\tTrying to match parameters "
-                    "%(expression)s with %(pattern)s",
-                    {'expression': expression, 'pattern': pattern}
-                )
-                for argname, arg in parameters.items():
-                    if arg.default is not inspect.Parameter.empty:
-                        continue
-                    p = getattr(pattern, argname)
-                    e = getattr(expression, argname)
-                    match = self.pattern_match(p, e)
-                    if not match:
-                        return False
-                    else:
-                        logging.log(
-                            FINEDEBUG,
-                            "\t\t\t\t\tmatch %(p)s vs %(e)s",
-                            {'p': p, 'e': e}
-                        )
-                else:
-                    return True
+            return self.pattern_match_expression(pattern, expression)
         elif isinstance(pattern, tuple) and isinstance(expression, tuple):
             if len(pattern) != len(expression):
                 return False
@@ -382,6 +320,77 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
                 {'expression': expression, 'pattern': pattern}
             )
             return pattern == expression
+
+    def pattern_match_expression(self, pattern, expression):
+        if not (
+            (
+                hasattr(type(pattern), '__generic_class__') and
+                isinstance(expression, type(pattern).__generic_class__) and
+                expressions.is_leq_informative(
+                    expression.type, pattern.type
+                )
+            ) or
+            isinstance(expression, type(pattern))
+        ):
+            logging.log(
+                FINEDEBUG,
+                "\t\t\t\t%(expression)s is not instance of pattern "
+                "class %(class)s",
+                {'expression': expression, 'class': pattern.__class__}
+            )
+            result = False
+        elif isclass(pattern.type) and issubclass(pattern.type, Tuple):
+            logging.log(FINEDEBUG, "\t\t\t\tMatch tuple")
+            if (
+                isclass(expression.type) and
+                issubclass(expression.type, Tuple)
+            ):
+                if (
+                    len(pattern.type.__args__) !=
+                    len(expression.type.__args__)
+                ):
+                    result = False
+                else:
+                    for p, e in zip(pattern.value, expression.value):
+                        if not self.pattern_match(p, e):
+                            result = False
+                            break
+                    else:
+                        logging.log(
+                            FINEDEBUG,
+                            "\t\t\t\t\tMatched tuple's expression instance "
+                            "%(expression)s with %(pattern)s",
+                            {'expression': expression, 'pattern': pattern}
+                        )
+                        result = True
+            else:
+                result = False
+        else:
+            parameters = signature(pattern.__class__)
+            logging.log(
+                FINEDEBUG,
+                "\t\t\t\tTrying to match parameters "
+                "%(expression)s with %(pattern)s",
+                {'expression': expression, 'pattern': pattern}
+            )
+            for argname, arg in parameters.items():
+                if arg.default is not inspect.Parameter.empty:
+                    continue
+                p = getattr(pattern, argname)
+                e = getattr(expression, argname)
+                match = self.pattern_match(p, e)
+                if not match:
+                    result = False
+                    break
+                else:
+                    logging.log(
+                        FINEDEBUG,
+                        "\t\t\t\t\tmatch %(p)s vs %(e)s",
+                        {'p': p, 'e': e}
+                    )
+            else:
+                result = True
+        return result
 
 
 @lru_cache(maxsize=128)
