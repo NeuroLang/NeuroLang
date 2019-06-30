@@ -1,5 +1,5 @@
 [run]
-omit = */tests/*
+omit = */test_*
 
 [report]
 # Regexes for lines to exclude from consideration
