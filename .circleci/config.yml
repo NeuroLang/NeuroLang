@@ -56,7 +56,6 @@ jobs:
             python-codacy-coverage -r coverage.xml
       - run:
           name: run sonar
-          context: sonarqube
           command: |
             echo ${SONAR_LOGIN} ${CIRCLE_PR_NUMBER}
             sh sonar-scanner-3.3.0.1492-linux/bin/sonar-scanner -Dsonar.projectKey=parietal:neurolang:PR${CIRCLE_PR_NUMBER}:v0.01 -Dsonar.login=${SONAR_LOGIN}
