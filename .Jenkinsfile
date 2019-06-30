@@ -31,14 +31,14 @@ pipeline {
       steps {
         script {
           sh '''
-python <<<end
+python -c '
 import tox
 
 os.chdir(os.getenv("WORKSPACE"))
 tox.cmdline()  # environment is selected by ``TOXENV`` env variable
 
 end
-'''
+'
         }
 
       }
