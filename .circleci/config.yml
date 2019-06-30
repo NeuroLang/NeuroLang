@@ -54,22 +54,17 @@ jobs:
             export CODACY_PROJECT_TOKEN=6387048a8e7c4cc4a801b9848eb0b156
             make test
             python-codacy-coverage -r coverage.xml
+
       - run:
-          branches:
-            ignore: master
           name: run sonar
           command: |
-            echo ${SONAR_LOGIN} ${CIRCLE_PR_NUMBER}
-            sh sonar-scanner-3.3.0.1492-linux/bin/sonar-scanner -Dsonar.projectKey=parietal:neurolang:PR${CIRCLE_PR_NUMBER}:v0.01 -Dsonar.login=${SONAR_LOGIN}
-            sh sonar-scanner-3.3.0.1492-linux/bin/sonar-scanner -Dsonar.projectKey=parietal:neurolang:PR${CIRCLE_PR_NUMBER}:v0.01 -Dsonar.github.pullRequest=${CIRCLE_PR_NUMBER} -Dsonar.github.oauth=${GITHUB_NC_OATH} -Dsonar.login=${SONAR_LOGIN} -Dsonar.analysis.mode=issues
-      - run:
-          branches:
-            only: master
-          name: run sonar
-          command: |
-            echo ${SONAR_LOGIN} ${CIRCLE_PR_NUMBER}
-            sh sonar-scanner-3.3.0.1492-linux/bin/sonar-scanner -Dsonar.projectKey=parietal:neurolang:master:v0.01 -Dsonar.login=${SONAR_LOGIN}
-            sh sonar-scanner-3.3.0.1492-linux/bin/sonar-scanner -Dsonar.projectKey=parietal:neurolang:master:v0.01 -Dsonar.github.oauth=${GITHUB_NC_OATH} -Dsonar.login=${SONAR_LOGIN} -Dsonar.analysis.mode=issues
+            if [ -z ${CIRCLE_PR_NUMBER} ]; then
+              sh sonar-scanner-3.3.0.1492-linux/bin/sonar-scanner -Dsonar.projectKey=parietal:neurolang:PR${CIRCLE_PR_NUMBER}:v0.01 -Dsonar.login=${SONAR_LOGIN}
+              sh sonar-scanner-3.3.0.1492-linux/bin/sonar-scanner -Dsonar.projectKey=parietal:neurolang:PR${CIRCLE_PR_NUMBER}:v0.01 -Dsonar.github.pullRequest=${CIRCLE_PR_NUMBER} -Dsonar.github.oauth=${GITHUB_NC_OATH} -Dsonar.login=${SONAR_LOGIN} -Dsonar.analysis.mode=issues
+            else
+              sh sonar-scanner-3.3.0.1492-linux/bin/sonar-scanner -Dsonar.projectKey=parietal:neurolang:master:v0.01 -Dsonar.login=${SONAR_LOGIN}
+              sh sonar-scanner-3.3.0.1492-linux/bin/sonar-scanner -Dsonar.projectKey=parietal:neurolang:master:v0.01 -Dsonar.github.oauth=${GITHUB_NC_OATH} -Dsonar.login=${SONAR_LOGIN} -Dsonar.analysis.mode=issues
+            fi
       - store_artifacts:
           path: test-reports
           destination: test-reports
