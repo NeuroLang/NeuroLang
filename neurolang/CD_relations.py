@@ -60,22 +60,9 @@ def cardinal_relation(
                                [reference_region.bounding_box])
         return is_in_direction(mat, directions)
 
-    if isinstance(region, ImplicitVBR):
-        if isinstance(reference_region, ImplicitVBR):
-            raise NotImplemented(
-                f'Comparison between two implicit regions '
-                f'can\'t be performed: {region}, {reference_region}'
-            )
-        region = region.to_explicit_vbr(
-            reference_region.affine, reference_region.image_dim
-        )
-    if isinstance(reference_region, ImplicitVBR):
-        reference_region = reference_region.to_explicit_vbr(
-            region.affine, region.image_dim
-        )
-
-    if np.any(region.affine != reference_region.affine):
-        region.voxels = region.to_ijk(reference_region.affine)
+    region, reference_region = cardinal_relation_prepare_regions(
+        region, reference_region
+    )
 
     if region == reference_region:
         result = False
@@ -99,6 +86,26 @@ def cardinal_relation(
             result = is_in_direction(mat, directions)
 
     return result
+
+
+def cardinal_relation_prepare_regions(region, reference_region):
+    if isinstance(region, ImplicitVBR):
+        if isinstance(reference_region, ImplicitVBR):
+            raise NotImplemented(
+                f'Comparison between two implicit regions '
+                f'can\'t be performed: {region}, {reference_region}'
+            )
+        region = region.to_explicit_vbr(
+            reference_region.affine, reference_region.image_dim
+        )
+    if isinstance(reference_region, ImplicitVBR):
+        reference_region = reference_region.to_explicit_vbr(
+            region.affine, region.image_dim
+        )
+
+    if np.any(region.affine != reference_region.affine):
+        region.voxels = region.to_ijk(reference_region.affine)
+    return region, reference_region
 
 
 def overlap_resolution(
