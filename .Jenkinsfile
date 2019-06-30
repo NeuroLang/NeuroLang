@@ -30,7 +30,10 @@ pipeline {
     stage('step') {
       steps {
         script {
-          sh 'python --version'
+          #!/bin/env python
+          import tox
+          os.chdir(os.getenv("WORKSPACE"))
+          tox.cmdline() # environment is selected by ``TOXENV`` env variable
         }
 
       }
