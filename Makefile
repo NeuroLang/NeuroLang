@@ -13,8 +13,8 @@ flake8:
 	@echo "flake8 passed"
 
 test:
-	$(PYTEST) --cov=neurolang --cov-config .coveragerc --cov-report xml --cov-report term-missing \
-	  -vv neurolang neurolang
+	$(PYTEST) --cov=neurolang --cov-config=.coveragerc --cov-report=xml --cov-report=term-missing \
+	  -vv neurolang neurolang --junitxml=utest.xml
 
 ctags:
 	# make tags for symbol based navigation in emacs and vim
