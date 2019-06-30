@@ -1,3 +1,4 @@
+<<<<<<< 569359a413244715c3fd382bf3f73a76dacc8e34
 pipeline {
   agent any
   stages {
@@ -21,3 +22,19 @@ end
     }
   }
 }
+||||||| merged common ancestors
+=======
+pipeline {
+  agent any
+  stages {
+    stage('step') {
+      steps {
+        script {
+          sh 'python --version'
+        }
+
+      }
+    }
+  }
+}
+>>>>>>> Skipping shiningpanda
