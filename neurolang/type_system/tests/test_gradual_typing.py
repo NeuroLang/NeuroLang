@@ -1,11 +1,49 @@
 import pytest
 
-from typing import Union, Set, Callable, AbstractSet, Generic, Tuple, T
+from typing import (
+    Union, Set, Callable, AbstractSet, Generic, Tuple, T, SupportsInt
+)
 from .. import (
     Unknown, is_leq_informative,
     typing_callable_from_annotated_function, get_args, get_origin,
-    replace_type_variable
+    replace_type_variable, is_parameterized, is_parametrical
 )
+
+
+def test_parametrical():
+    assert is_parametrical(Set)
+    assert is_parametrical(AbstractSet)
+    assert is_parametrical(Union)
+    assert is_parametrical(Callable)
+    assert not is_parametrical(Set[int])
+    assert not is_parametrical(AbstractSet[int])
+    assert not is_parametrical(Union[int, float])
+    assert not is_parametrical(Callable[[int], float])
+    assert not is_parametrical(int)
+    assert not is_parametrical(T)
+    assert not is_parametrical(SupportsInt)
+
+
+def test_parameterized():
+    assert not is_parameterized(Set)
+    assert not is_parameterized(AbstractSet)
+    assert not is_parameterized(Union)
+    assert not is_parameterized(Callable)
+    assert is_parameterized(Set[int])
+    assert is_parameterized(AbstractSet[int])
+    assert is_parameterized(Union[int, float])
+    assert is_parameterized(Callable[[int], float])
+    assert not is_parameterized(int)
+    assert not is_parameterized(T)
+    assert not is_parameterized(SupportsInt)
+
+
+def test_get_type_args():
+    args = get_args(AbstractSet)
+    assert args == tuple()
+
+    args = get_args(AbstractSet[int])
+    assert args == (int, )
 
 
 def test_is_leq_informative_type():
@@ -66,14 +104,6 @@ def test_typing_callable_from_annotated_function():
     assert issubclass(origin, Callable)
     assert args[0] is int and args[1] is str
     assert args[2] is float
-
-
-def test_get_type_args():
-    args = get_args(AbstractSet)
-    assert args == tuple()
-
-    args = get_args(AbstractSet[int])
-    assert args == (int, )
 
 
 def test_replace_subtype():

@@ -401,8 +401,8 @@ class Constant(Expression):
 
             self._symbols = set()
             if (
-                not issubclass(self.type, typing.Text) and
-                issubclass(self.type, typing.Iterable)
+                not is_leq_informative(self.type, typing.Text) and
+                is_leq_informative(self.type, typing.Iterable)
             ):
                 new_content = []
                 for a in self.value:

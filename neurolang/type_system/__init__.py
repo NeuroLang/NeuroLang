@@ -10,6 +10,7 @@ from typing import (
     Callable, Tuple, Set, AbstractSet, Mapping, TypeVar,
     Iterable, Sequence, Any, Generic, Text
 )
+import sys
 
 from typing_inspect import (
     get_origin,
@@ -20,16 +21,17 @@ from typing_inspect import (
 
 from ..exceptions import NeuroLangException
 
-from sys import version_info as _version
+
+NEW_TYPING = sys.version_info[:3] >= (3, 7, 0)
 
 
 class NeuroLangTypeException(NeuroLangException):
     pass
 
 
-if _version[0] != 3 and _version[1] < 6:
+if sys.version_info < (3, 6, 0):
     raise ImportError("Only python 3.6 and over compatible")
-if _version[1] == 6:
+if not NEW_TYPING:
     from typing import _FinalTypingBase
 
     class _Unknown(_FinalTypingBase, _root=True):
@@ -169,7 +171,7 @@ def is_leq_informative(left, right):
         if is_parameterized(left):
             left = get_origin(left)
         return issubclass(left, right)
-    elif is_parametrical(left):
+    elif is_parametrical(left) or is_parameterized(left):
         return False
     elif left in type_order and right in type_order[left]:
         return True
@@ -190,11 +192,21 @@ def is_type(type_):
 
 
 def is_parametrical(type_):
-    return any(
+    is_parametrical_generic = any(
         p(type_)
         for p in
         (is_generic_type, is_callable_type, is_tuple_type, is_union_type)
-    ) and (_version[1] < 7 or type_._special)
+    ) and not getattr(type_, '_is_protocol', False)
+
+    if is_parametrical_generic:
+        if NEW_TYPING:
+            return getattr(type_, '_special', False) or (
+                is_union_type(type_) and not hasattr(type_, '__args__')
+            )
+        else:
+            return type_.__args__ is None
+    else:
+        return False
 
 
 def is_parameterized(type_):
@@ -204,10 +216,18 @@ def is_parameterized(type_):
         (is_generic_type, is_callable_type, is_tuple_type, is_union_type)
     )
 
-    if _version[1] < 7:
-        return is_parametrical_generic and get_origin(type_) is not type_
+    if is_parametrical_generic:
+        if NEW_TYPING:
+            return not (
+                getattr(type_, '_special', False) or (
+                    is_union_type(type_) and not hasattr(type_, '__args__')
+                ) or
+                getattr(type_, '_is_protocol', False)
+            )
+        else:
+            return get_origin(type_) is not type_
     else:
-        return is_parametrical_generic and not type_._special
+        return False
 
 
 def unify_types(t1, t2):
@@ -282,7 +302,7 @@ def replace_type_variable(type_, type_hint, type_var=None):
         )
         new_args = tuple(new_args)
         origin = get_origin(type_hint)
-        if _version[1] >= 7 and isinstance(type_hint, _GenericAlias):
+        if NEW_TYPING and isinstance(type_hint, _GenericAlias):
             new_type = type_hint.copy_with(new_args)
         else:
             new_type = origin[new_args]
