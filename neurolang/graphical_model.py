@@ -6,6 +6,7 @@ from collections import defaultdict
 import logging
 
 import numpy as np
+import sympy
 
 from .expressions import (
     Expression, NeuroLangException, FunctionApplication, Constant, Symbol,
@@ -16,37 +17,6 @@ from .expression_walker import ExpressionWalker
 from .expression_pattern_matching import add_match
 from . import unification
 from .generative_datalog import DeltaAtom, DeltaTerm
-
-# def replace_delta_term_with_new_predicate(rule, rule_uid):
-# '''Replace the delta-term of a rule with a new predicate.
-
-# Example
-# -------
-# The rule
-
-# Q(x, DeltaTerm('bernoulli', (x, ))) <- P(x)
-
-# is converted to
-
-# Q_uid(x, y) <- P(x) & Δ_Q_uid('bernoulli', x, y)
-
-# '''
-# if not isinstance(rule.consequent, DeltaAtom):
-# raise NeuroLangException('Expected delta-atom as consequent')
-# # create new intensional predicate using the rule unique id
-# new_predicate = f'{rule.consequent.functor}_{rule_uid}'
-# dterm_predicate = Symbol(f'Δ_{new_predicate}')
-# y = Symbol('y_{}'.format(str(uuid1()))),
-# new_consequent = DeltaAtom[rule.consequent.type](
-# Symbol(new_predicate),
-# (y if isinstance(t, DeltaTerm) else t for t in rule.consequent.terms)
-# )
-# new_literal = FunctionApplication[bool](
-# Symbol(dterm_predicate),
-# (
-# )
-# new_antecedent = rule.antecedent & new_literal
-# return Implication[rule.type](new_consequent, new_antecedent)
 
 
 def replace_fa_functor_name(fa, new_functor_name):
@@ -148,37 +118,165 @@ def infer(rule, facts):
 def group_facts_by_predicate(facts, predicates):
     result = defaultdict(set)
     for fact in facts:
-        pred = fact.consequent.functor.name
+        pred = fact.functor.name
         if pred in predicates:
             result[pred].add(fact)
-    return [result[pred] for pred in predicates]
+    return result
 
 
-def substitute_dterm(fa, value):
-    return FunctionApplication[fa.type](
-        fa.functor, value if isinstance(arg, DeltaTerm) else arg
-        for arg in fa.args
+def substitute_dterm(datom, value):
+    return FunctionApplication[datom.type](
+        datom.functor,
+        tuple(
+            value if isinstance(term, DeltaTerm) else term
+            for term in datom.terms
+        )
     )
 
+
+def repr_fact(fact):
+    return '{}({})'.format(
+        fact.functor.name, ', '.join([str(arg.value) for arg in fact.args])
+    )
+
+
+def repr_factset(factset):
+    return '{{ {} }}'.format(', '.join([repr_fact(fact) for fact in factset]))
+
+
+def pprint_dist(dist):
+    for factset, prob in dist:
+        print('{} \t {}'.format(repr_factset(factset), prob))
+
+
+class ProbabilityDistrlibution(Expression):
+    def prob(self, value):
+        raise NeuroLangException('Not implemented in this abstract class')
+
+
+class DiscreteCPD(ProbabilityDistrlibution):
+    def __init__(self, cpd_map):
+        self.cpd_map = cpd_map
+
+    def prob(self, value):
+        if value not in self.cpd_map:
+            raise NeuroLangException(
+                f'Value {value} not in range of distribution'
+            )
+        return self.cpd_map[value]
+
+    @property
+    def support(self):
+        return set(self.cpd_map.keys())
+
+
+def const_repr(exp):
+    if isinstance(exp, Constant):
+        return str(exp.value)
+    elif isinstance(exp, Symbol):
+        return exp.name
+    else:
+        return '( {} )'.format(repr(exp))
+
+
+class ArithmeticOperation(Expression):
+    def __init__(self, lhs, rhs):
+        self.lhs = lhs
+        self.rhs = rhs
+
+
+class Addition(ArithmeticOperation):
+    def __repr__(self):
+        return '{} + {}'.format(const_repr(self.lhs), const_repr(self.rhs))
+
+
+class Subtraction(ArithmeticOperation):
+    def __repr__(self):
+        return '{} - {}'.format(const_repr(self.lhs), const_repr(self.rhs))
+
+
+class Multiplication(ArithmeticOperation):
+    def __repr__(self):
+        return '{} · {}'.format(const_repr(self.lhs), const_repr(self.rhs))
+
+
+def to_sympy_aux(exp):
+    if isinstance(exp, Constant):
+        return sympy.sympify(exp.value)
+    elif isinstance(exp, Symbol):
+        return sympy.sympify(exp.name)
+    elif isinstance(exp, ArithmeticOperation):
+        return to_sympy(exp)
+
+
+def to_sympy(exp):
+    if isinstance(exp, Addition):
+        return to_sympy_aux(exp.lhs) + to_sympy_aux(exp.rhs)
+    elif isinstance(exp, Subtraction):
+        return to_sympy_aux(exp.lhs) - to_sympy_aux(exp.rhs)
+    elif isinstance(exp, Multiplication):
+        return to_sympy_aux(exp.lhs) * to_sympy_aux(exp.rhs)
+    else:
+        raise NeuroLangException('invalide type: {}'.format(type(exp)))
+
+
+def arithmetic_eq(exp1, exp2):
+    return (to_sympy(exp1) - to_sympy(exp2)) == 0
+
+
+def multiply_n_expressions(*expressions):
+    if len(expressions) == 1:
+        return expressions[0]
+    else:
+        return Multiplication(
+            expressions[0], multiply_n_expressions(*expressions[1:])
+        )
+
+
+def get_dterm_dist(dterm):
+    if dterm.dist_name == 'bernoulli':
+        return DiscreteCPD({
+            Constant[int](1):
+            dterm.dist_params[0],
+            Constant[int](0):
+            Subtraction(Constant[int](1), dterm.dist_params[0])
+        })
+    else:
+        raise NeuroLangException(
+            f'Unknown probability distribution: {dterm.dist_name}'
+        )
 
 
 def delta_infer1(rule, facts):
-    antecedent_predicate_names = set(get_antecedent_predicate_names(rule))
+    antecedent_predicate_names = get_antecedent_predicate_names(rule)
     facts_by_predicate = group_facts_by_predicate(
-        facts, antecedent_predicate_names
+        facts, set(antecedent_predicate_names)
     )
-    result = set()
-    for fact_list in itertools.product(*facts_by_predicate):
+    antecedent_facts = tuple(
+        facts_by_predicate[pred] for pred in antecedent_predicate_names
+    )
+    inferred_facts = set()
+    for fact_list in itertools.product(*antecedent_facts):
         new = produce(rule, fact_list)
         if new is not None:
-            result = result.union(new)
+            inferred_facts.add(new)
     if isinstance(rule.consequent, DeltaAtom):
         new_result = set()
-        delta_facts = [f for f in result if isinstance(f, DeltaAtom)]
-        normal_facts = {f for f in result if not isinstance(f, DeltaAtom)}
-
+        for cpd_entries in itertools.product(
+            *[
+                get_dterm_dist(dfact.delta_term).cpd_map.items()
+                for dfact in inferred_facts
+            ]
+        ):
+            new_facts = set(
+                substitute_dterm(dfact, entry[0])
+                for dfact, entry in zip(inferred_facts, cpd_entries)
+            )
+            prob = multiply_n_expressions(*[entry[1] for entry in cpd_entries])
+            new_result.add((frozenset(new_facts), prob))
+        return new_result
     else:
-        return {(result, 1)}
+        return {(frozenset(inferred_facts), Constant[int](1))}
 
 
 class PossibleOutcome(Expression):

@@ -2,7 +2,8 @@ from ..expressions import Symbol, Constant, ExpressionBlock
 from ..expression_pattern_matching import add_match
 from ..solver_datalog_naive import Fact, Implication, DatalogBasic
 from ..graphical_model import (
-    produce, infer, get_datom_vars, GraphicalModelSolver
+    produce, infer, GraphicalModelSolver, delta_infer1, substitute_dterm,
+    pprint_dist, Multiplication, Addition, Subtraction, arithmetic_eq
 )
 from ..generative_datalog import (
     DeltaTerm, DeltaAtom, GenerativeDatalogSugarRemover
@@ -21,6 +22,8 @@ z = S_('z')
 a = C_(2)
 b = C_(3)
 p = S_('p')
+symb_p_a = S_('p_a')
+symb_p_b = S_('p_b')
 p_a = C_(0.2)
 p_b = C_(0.7)
 bernoulli = C_('bernoulli')
@@ -46,6 +49,22 @@ def test_produce():
     assert result == Q(a)
 
 
+def test_substitute_dterm():
+    fa = DeltaAtom(Q, (x, DeltaTerm(bernoulli, p)))
+    assert substitute_dterm(fa, a) == Q(x, a)
+
+
+def test_arithmetic():
+    assert arithmetic_eq(Addition(x, y), Addition(y, x))
+    assert arithmetic_eq(Multiplication(x, y), Multiplication(y, x))
+    assert arithmetic_eq(
+        Addition(x, Addition(y, z)), Addition(Addition(y, z), x)
+    )
+    assert arithmetic_eq(
+        Addition(x, Addition(y, z)), Addition(Addition(x, y), z)
+    )
+
+
 def test_delta_produce():
     fact_a = Fact(P(a, p_a))
     fact_b = Fact(P(b, p_b))
@@ -61,6 +80,13 @@ def test_infer():
 
     rule2 = Implication(Q(x, y), P(x) & P(y))
     assert infer(rule2, facts) == {Q(a, b), Q(b, a)}
+
+
+def test_delta_infer1():
+    fact_a = Fact(P(a, symb_p_a))
+    fact_b = Fact(P(b, symb_p_b))
+    rule = Implication(DeltaAtom(Q, (x, DeltaTerm(bernoulli, p))), P(x, p))
+    result = delta_infer1(rule, {fact_a.fact, fact_b.fact})
 
 
 def test_graphical_model_conversion_simple():
@@ -98,11 +124,6 @@ def test_graphical_model_conversion_simple():
     assert gm.samplers['R'](gm.parents['R']) == {R(b), R(a)}
     assert gm.sample('Q') == set()
     assert gm.sample('R') == {R(b), R(a)}
-
-
-def test_get_datom_vars():
-    datom = DeltaAtom(Q, (x, DeltaTerm(C_('hello'), C_(0.5), x, y), y))
-    assert get_datom_vars(datom) == {'x', 'y'}
 
 
 def test_delta_term():
