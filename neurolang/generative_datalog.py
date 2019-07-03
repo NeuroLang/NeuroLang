@@ -44,6 +44,9 @@ class DeltaTerm(Expression):
     def __repr__(self):
         return f'Δ-term{{{self.dist_name}({self.dist_params})}}'
 
+    def __hash__(self):
+        return hash((self.dist_name, self.dist_params))
+
 
 class DeltaAtom(Definition):
     def __init__(self, functor, terms):
@@ -140,9 +143,9 @@ class TranslateGDatalogToEDatalog(ExpressionBasicEvaluator):
         y = Symbol[delta_atom.delta_term.type]('y_' + str(uuid1()))
         result_terms = (
             delta_atom.delta_term.dist_params +
-            (Constant(delta_atom.functor.name), ) + tuple(
-                t for t in delta_atom.terms if not isinstance(t, DeltaTerm)
-            ) + (y, )
+            (Constant(delta_atom.functor.name), ) +
+            tuple(t for t in delta_atom.terms
+                  if not isinstance(t, DeltaTerm)) + (y, )
         )
         result_atom = FunctionApplication(
             DeltaSymbol(
