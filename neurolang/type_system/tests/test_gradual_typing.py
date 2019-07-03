@@ -3,7 +3,7 @@ import pytest
 from typing import Union, Set, Callable, AbstractSet, Generic, Tuple, T
 from .. import (
     Unknown, is_leq_informative,
-    typing_callable_from_annotated_function, get_args,
+    typing_callable_from_annotated_function, get_args, get_origin,
     replace_type_variable
 )
 
@@ -61,9 +61,11 @@ def test_typing_callable_from_annotated_function():
 
     t = typing_callable_from_annotated_function(fun)
 
-    assert t.__origin__ is Callable
-    assert t.__args__[0] is int and t.__args__[1] is str
-    assert t.__args__[2] is float
+    origin = get_origin(Callable)
+    args = get_args(t)
+    assert issubclass(origin, Callable)
+    assert args[0] is int and args[1] is str
+    assert args[2] is float
 
 
 def test_get_type_args():
@@ -95,7 +97,7 @@ def test_replace_subtype():
     )
 
     assert (
-        Tuple[float, int] is replace_type_variable(
+        Tuple[float, int] == replace_type_variable(
             float, Tuple[T, int], T
         )
     )
