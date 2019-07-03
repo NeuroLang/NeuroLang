@@ -121,14 +121,17 @@ def is_leq_informative(left, right):
             type_parameters_left = get_args(left)
             type_parameters_right = get_args(right)
 
-            return (
-                len(type_parameters_left) == len(type_parameters_right) and
-                all(
-                    is_leq_informative(t_left, t_right)
-                    for t_left, t_right in
-                    zip(type_parameters_left, type_parameters_right)
-                )
+            if len(type_parameters_left) != len(type_parameters_right):
+                return False
+
+            return all(
+                is_leq_informative(t_left, t_right)
+                for t_left, t_right in
+                zip(type_parameters_left, type_parameters_right)
             )
+
+        elif is_parametrical(left):
+            return False
         else:
             return is_leq_informative(left, generic_right)
     elif left in type_order and right in type_order[left]:
@@ -147,7 +150,7 @@ def is_type(type_):
     )
 
 
-def is_parameteritrical(type_):
+def is_parametrical(type_):
     return any(
         p(type_)
         for p in
