@@ -87,6 +87,22 @@ def test_delta_infer1():
     fact_b = Fact(P(b, symb_p_b))
     rule = Implication(DeltaAtom(Q, (x, DeltaTerm(bernoulli, p))), P(x, p))
     result = delta_infer1(rule, {fact_a.fact, fact_b.fact})
+    result_as_dict = dict(result)
+    dist = {
+        frozenset({Q(a, C_(0)), Q(b, C_(0))}):
+        Multiplication(
+            Subtraction(C_(1), symb_p_a), Subtraction(C_(1), symb_p_b)
+        ),
+        frozenset({Q(a, C_(1)), Q(b, C_(0))}):
+        Multiplication(symb_p_a, Subtraction(C_(1), symb_p_b)),
+        frozenset({Q(a, C_(0)), Q(b, C_(1))}):
+        Multiplication(Subtraction(C_(1), symb_p_a), symb_p_b),
+        frozenset({Q(a, C_(1)), Q(b, C_(1))}):
+        Multiplication(symb_p_a, symb_p_b),
+    }
+    for outcome, prob in dist.items():
+        assert outcome in result_as_dict
+        assert arithmetic_eq(prob, result_as_dict[outcome])
 
 
 def test_graphical_model_conversion_simple():
