@@ -19,6 +19,7 @@ from collections import OrderedDict
 class StratifiedDatalog():
 
     _idb_symbols = []
+    _imp_symbols = []
     _negative_graph = {}
 
     def solve(self, expression_block):
@@ -47,11 +48,10 @@ class StratifiedDatalog():
 
 
     def _check_stratification(self, expression_block):
-
         sEval = SymbolEvaluator()
-        sol = sEval.walk(expression_block)
+        self._imp_symbols = sEval.walk(expression_block)
         for k, v in enumerate(self._idb_symbols):
-            for s in sol[k]:
+            for s in self._imp_symbols[k]:
                 if hasattr(s, 'functor') and s.functor == invert:
                     name = s.args[0].functor.name
                     if name in self._idb_symbols:
@@ -75,7 +75,6 @@ class StratifiedDatalog():
 
 class SymbolEvaluator(PatternWalker):
 
-    _symbols = {}
 
     @add_match(Implication)
     def eval_implication(self, expression):
