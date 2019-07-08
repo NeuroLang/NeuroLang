@@ -4,7 +4,7 @@ import scipy.ndimage
 from itertools import product
 
 from .exceptions import NeuroLangException
-from .brain_tree import AABB, Tree, aabb_from_vertices
+from .aabb_tree import AABB, Tree, aabb_from_vertices, Node
 
 __all__ = [
     'region_union', 'region_intersection', 'region_difference',
@@ -105,11 +105,17 @@ class VolumetricBrainRegion(Region):
 
 
 class ExplicitVBR(VolumetricBrainRegion):
-    def __init__(self, voxels, affine_matrix, img_dim=None):
+    def __init__(
+        self, voxels, affine_matrix, img_dim=None, prebuild_tree=False
+    ):
         self.voxels = np.asanyarray(voxels, dtype=int)
         self.affine = affine_matrix
+        self.affine_inv = np.linalg.inv(self.affine)
         self.image_dim = img_dim
-        self._aabb_tree = None
+        if prebuild_tree:
+            self._aabb_tree = self.build_tree()
+        else:
+            self._aabb_tree = None
 
     @property
     def bounding_box(self):
@@ -122,55 +128,68 @@ class ExplicitVBR(VolumetricBrainRegion):
         return self._aabb_tree
 
     def generate_bounding_box(self, voxels_ijk):
-        voxels_xyz = nib.affines.apply_affine(self.affine, voxels_ijk)
-        voxels_xyz_u = nib.affines.apply_affine(self.affine, voxels_ijk + 1)
-        voxels_xyz = np.concatenate((voxels_xyz, voxels_xyz_u), axis=0)
+        voxels_xyz = nib.affines.apply_affine(
+            self.affine, np.concatenate((voxels_ijk, voxels_ijk + 1), axis=0)
+        )
         return aabb_from_vertices(voxels_xyz)
 
     def build_tree(self):
         box = self.generate_bounding_box(self.voxels)
-
-        nodes = {}
-        nodes[0] = [box.lb, box.ub, self.voxels]
         tree = Tree()
         tree.add(box)
-        last_added = 0
-        i = 1
 
-        make_tree = True
         affine_matrix_inv = np.linalg.inv(self.affine)
-        middle = np.zeros(box.dim)
 
-        while make_tree:
-            parent = ((i + 1) // 2) - 1
+        stack = list([(box.lb, box.ub, self.voxels, tree.root)])
+        while stack:
+            node = stack.pop()
+            lb, ub, parent_voxels, tree_node = node
 
-            if parent in nodes:
-                lb, ub, parent_voxels = nodes[parent]
-                ax = np.argmax(ub - lb)
-                middle[:] = 0
-                middle[ax] = (lb[ax] + ub[ax]) / 2
-                middle_voxel = nib.affines.apply_affine(
-                    affine_matrix_inv, middle)[ax]
-                # this only works if the affine matrix is diagonal
+            # this only works if the affine matrix is diagonal
+            middle_point_xyz = (lb + ub) / 2
+            middle_point_ijk = nib.affines.apply_affine(
+                affine_matrix_inv, middle_point_xyz
+            )
 
-                b1_voxs = parent_voxels[parent_voxels.T[ax] <= middle_voxel]
-                if len(b1_voxs) != 0 and len(b1_voxs) != len(parent_voxels):
-                    box1 = self.generate_bounding_box(b1_voxs)
-                    tree.add_left(box1)
-                    nodes[i] = [box1.lb, box1.ub, b1_voxs]
-                    last_added = i
+            axes = np.argsort(ub - lb)
+            for ax in axes:
+                left_mask = parent_voxels.T[ax] <= middle_point_ijk[ax]
+                voxels_left = parent_voxels[left_mask]
+                if 0 < len(voxels_left) < len(parent_voxels):
+                    break
+            else:
+                continue
 
-                b2_voxs = parent_voxels[parent_voxels.T[ax] > middle_voxel]
-                if len(b2_voxs) != 0 and len(b2_voxs) != len(parent_voxels):
-                    box2 = self.generate_bounding_box(b2_voxs)
-                    tree.add_right(box2)
-                    nodes[i + 1] = [box2.lb, box2.ub, b2_voxs]
-                    last_added = i + 1
+            height = tree_node.height - 1
 
-                if last_added == parent:
-                    make_tree = False
+            box_left = self.generate_bounding_box(voxels_left)
+            tree_node.left = Node(
+                box=box_left, parent=tree_node, height=height
+            )
+            stack.append(
+                (box_left.lb, box_left.ub, voxels_left, tree_node.left)
+            )
 
-            i += 2
+            voxels_right = parent_voxels[~left_mask]
+            box_right = self.generate_bounding_box(voxels_right)
+            tree_node.right = Node(
+                box=box_right, parent=tree_node, height=height
+            )
+            stack.append(
+                (box_right.lb, box_right.ub, voxels_right, tree_node.right)
+            )
+
+            tree.height = -height
+
+        stack = [tree.root]
+        while stack:
+            node = stack.pop()
+            node.height = tree.height + node.height
+            if node.left is not None:
+                stack.append(node.left)
+            if node.right is not None:
+                stack.append(node.right)
+
         return tree
 
     def to_xyz(self):
@@ -235,6 +254,99 @@ class ImplicitVBR(VolumetricBrainRegion):
     def to_explicit_vbr(self, affine, image_shape):
         voxels_coordinates = self.to_ijk(affine)
         return ExplicitVBR(voxels_coordinates, affine, image_shape)
+
+
+class BoundigBoxSequenceElement(ImplicitVBR):
+    def __init__(self, bounding_box_sequence):
+        self.bounding_box_sequence = bounding_box_sequence
+        self._bounding_box = self.generate_bounding_box(
+            self.bounding_box_sequence
+        )
+        self._aabb_tree = None
+
+    @staticmethod
+    def generate_bounding_box(bounding_box_sequence):
+        res = bounding_box_sequence[0]
+        for bb in bounding_box_sequence[1:]:
+            res = res.union(bb)
+        return res
+
+    @property
+    def aabb_tree(self):
+        if self._aabb_tree is None:
+            self._aabb_tree = self.build_tree()
+        return self._aabb_tree
+
+    def to_ijk(self, affine):
+        midpoints_xyz = np.array([
+            (b.ub + b.lb) / 2
+            for b in self.bounding_box_sequence
+        ])
+        voxel_coordinates = np.round(nib.affines.apply_affine(
+            np.linalg.inv(affine), midpoints_xyz
+        ))
+        return voxel_coordinates
+
+    def build_tree(self):
+        box = self._bounding_box
+        tree = Tree()
+        tree.add(box)
+
+        stack = list([(box.lb, box.ub, self.bounding_box_sequence, tree.root)])
+        while stack:
+            node = stack.pop()
+            lb, ub, parent_boxes, tree_node = node
+
+            # this only works if the affine matrix is diagonal
+            middle_point_xyz = (lb + ub) / 2
+
+            axes = np.argsort(ub - lb)
+            for ax in axes:
+                ub_box_lower = ub.copy()
+                ub_box_lower[ax] = middle_point_xyz[ax]
+                box_lower = AABB(lb, ub_box_lower)
+
+                boxes_lower = []
+                boxes_higher = []
+                for box in parent_boxes:
+                    if box_lower.contains(box):
+                        boxes_lower.append(box)
+                    else:
+                        boxes_higher.append(box)
+
+                if 0 < len(boxes_lower) < len(parent_boxes):
+                    break
+            else:
+                continue
+
+            height = tree_node.height - 1
+            box_left = self.generate_bounding_box(boxes_lower)
+            tree_node.left = Node(
+                box=box_left, parent=tree_node, height=height
+            )
+            stack.append(
+                (box_left.lb, box_left.ub, boxes_lower, tree_node.left)
+            )
+
+            box_right = self.generate_bounding_box(boxes_higher)
+            tree_node.right = Node(
+                box=box_right, parent=tree_node, height=height
+            )
+            stack.append(
+                (box_right.lb, box_right.ub, boxes_higher, tree_node.right)
+            )
+            tree.height = -height
+
+        stack = [tree.root]
+        while stack:
+            node = stack.pop()
+            node.height = tree.height + node.height
+            if node.left is not None:
+                stack.append(node.left)
+            if node.right is not None:
+                stack.append(node.right)
+
+        return tree
 
 
 class SphericalVolume(ImplicitVBR):

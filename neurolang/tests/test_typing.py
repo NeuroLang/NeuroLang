@@ -2,61 +2,18 @@ import pytest
 
 import typing
 
-from .. import symbols_and_types
 from .. import expressions
 
 C_ = expressions.Constant
 S_ = expressions.Symbol
 
 
-def test_typing_callable_from_annotated_function():
-    def fun(a: int, b: str) -> float:
-        pass
-
-    t = symbols_and_types.typing_callable_from_annotated_function(fun)
-
-    assert t.__origin__ is typing.Callable
-    assert t.__args__[0] is int and t.__args__[1] is str
-    assert t.__args__[2] is float
-
-
 def test_get_type_args():
-    args = symbols_and_types.get_type_args(typing.Set)
+    args = expressions.get_type_args(typing.Set)
     assert args == tuple()
 
-    args = symbols_and_types.get_type_args(typing.Set[int])
+    args = expressions.get_type_args(typing.Set[int])
     assert args == (int, )
-
-
-def test_is_subtype_base_types():
-    assert symbols_and_types.is_subtype(int, int)
-    assert symbols_and_types.is_subtype(int, float)
-    assert symbols_and_types.is_subtype(str, str)
-    assert not symbols_and_types.is_subtype(str, int)
-    assert symbols_and_types.is_subtype(int, typing.Any)
-    assert symbols_and_types.is_subtype(int, typing.Union[int, str])
-    assert symbols_and_types.is_subtype(str, typing.Union[int, str])
-    assert not symbols_and_types.is_subtype(typing.Set, typing.Union[int, str])
-
-    assert symbols_and_types.is_subtype(
-        typing.Callable[[int], int], typing.Callable[[int], int]
-    )
-    assert symbols_and_types.is_subtype(
-        typing.Callable[[int], int], typing.Callable[[int], float]
-    )
-    assert not symbols_and_types.is_subtype(typing.Set, typing.Callable)
-
-    assert symbols_and_types.is_subtype(
-        typing.AbstractSet[int], typing.AbstractSet[int]
-    )
-    assert symbols_and_types.is_subtype(
-        typing.AbstractSet[int], typing.AbstractSet[float]
-    )
-
-    with pytest.raises(ValueError, message="typing Generic not supported"):
-        assert symbols_and_types.is_subtype(
-            typing.Set[int], typing.Generic[typing.T]
-        )
 
 
 def test_subclass():
@@ -65,105 +22,46 @@ def test_subclass():
     )
 
 
-def test_replace_subtype():
-    assert (
-        typing.Set is symbols_and_types.replace_type_variable(
-            int, typing.Set, typing.T
-        )
-    )
-    assert (str is symbols_and_types.replace_type_variable(int, str, typing.T))
-
-    assert (
-        typing.Set[float] == symbols_and_types.replace_type_variable(
-            int, typing.Set[float], typing.T
-        )
-    )
-
-    assert (
-        typing.Set[float] == symbols_and_types.replace_type_variable(
-            float, typing.Set[typing.T], typing.T
-        )
-    )
-
-    assert (
-        typing.Tuple[float, int] is symbols_and_types.replace_type_variable(
-            float, typing.Tuple[typing.T, int], typing.T
-        )
-    )
-
-    assert (
-        typing.Set[str] != symbols_and_types.
-        replace_type_variable(float, typing.Set[typing.T], typing.T)
-    )
-
-
-def test_get_type_and_value():
-    type_, value = symbols_and_types.get_type_and_value(3)
-    assert type_ is int
-    assert value == 3
-
-    type_, value = symbols_and_types.get_type_and_value(C_[int](3))
-    assert type_ is int
-    assert value == 3
-
-    type_, value = symbols_and_types.get_type_and_value(
-        S_('a'), {S_('a'): C_[int](3)}
-    )
-    assert type_ is int
-    assert value == 3
-
-    def f(a: int) -> int:
-        return 0
-
-    type_, value = symbols_and_types.get_type_and_value(f)
-
-    assert type_ is typing.Callable[[int], int]
-    assert value == f
-
-
 def test_type_validation_value():
     def f(a: int) -> int:
         return 0
 
-    symbol_table = {S_('r'): C_[typing.AbstractSet[str]]({'a'})}
-
     values = (
-        3, {3, 8}, 'try', f, (3, 'a'), C_[typing.Tuple[str, float]](('a', 3.)),
-        S_('r'), {'a': 3}
-    )  # yapf: disable
+        3, {3, 8}, 'try', f, (3, 'a'),
+        C_[typing.Tuple[str, float]](('a', 3.)), {'a': 3}
+    )
+
     types_ = (
         int, typing.AbstractSet[int], typing.Text, typing.Callable[[int], int],
         typing.Tuple[int, str], typing.Tuple[str, float],
-        symbol_table[S_('r')].type, typing.Mapping[str, int]
+        typing.Mapping[str, int]
     )
 
     for i, v in enumerate(values):
-        assert symbols_and_types.type_validation_value(
-            v, typing.Any, symbol_table=symbol_table
+        assert expressions.type_validation_value(
+            v, typing.Any
         )
 
         for j, t in enumerate(types_):
             if i is j:
-                assert symbols_and_types.type_validation_value(
-                    v, t, symbol_table=symbol_table
+                assert expressions.type_validation_value(
+                    v, t
                 )
-                assert symbols_and_types.type_validation_value(
+                assert expressions.type_validation_value(
                     v,
                     typing.Union[t, types_[(i + 1) % len(types_)]],
-                    symbol_table=symbol_table
                 )
             else:
-                assert not symbols_and_types.type_validation_value(
-                    v, t, symbol_table=symbol_table
+                assert not expressions.type_validation_value(
+                    v, t
                 )
-                assert not symbols_and_types.type_validation_value(
+                assert not expressions.type_validation_value(
                     v,
-                    typing.Union[t, types_[(i + 1) % len(types_)]],
-                    symbol_table=symbol_table
+                    typing.Union[t, types_[(i + 1) % len(types_)]]
                 )
 
     with pytest.raises(ValueError, message="typing Generic not supported"):
-        assert symbols_and_types.type_validation_value(
+        assert expressions.type_validation_value(
             None, typing.Generic[typing.T]
         )
 
@@ -175,12 +73,12 @@ def test_TypedSymbol():
     assert s.value == v
     assert s.type is t
 
-    with pytest.raises(symbols_and_types.NeuroLangTypeException):
+    with pytest.raises(expressions.NeuroLangTypeException):
         s = C_[t]('a')
 
 
 def test_TypedSymbolTable():
-    st = symbols_and_types.TypedSymbolTable()
+    st = expressions.TypedSymbolTable()
     s1 = C_[int](3)
     s2 = C_[int](4)
     s3 = C_[float](5.)
@@ -238,13 +136,6 @@ def test_TypedSymbolTable():
         stb[S_('s6')] = 5
 
 
-def test_get_callable_arguments_and_return():
-    c = typing.Callable[[int, str], float]
-    args, ret = symbols_and_types.get_Callable_arguments_and_return(c)
-    assert args == (int, str)
-    assert ret is float
-
-
 def test_free_variable_wrapping():
     def f(a: int) -> float:
         return 2. * int(a)
@@ -252,9 +143,10 @@ def test_free_variable_wrapping():
     fva = C_(f)
     x = S_[int]('x')
     fvb = fva(x)
-    fva_type, fva_value = symbols_and_types.get_type_and_value(fva)
+    fva_type = fva.type
+    fva_value = fva.value
     assert fva_type is typing.Callable[[int], float]
     assert fva_value == f
 
-    assert symbols_and_types.get_type_and_value(fvb) == (float, fvb)
-    assert symbols_and_types.get_type_and_value(x) == (int, x)
+    assert fvb.type is float
+    assert x.type is int

@@ -4,33 +4,42 @@ from typing import AbstractSet
 
 from .. import solver_datalog_naive as sdb
 from .. import solver_datalog_extensional_db
+from ..solver_datalog_naive import NULL
 from .. import expression_walker
 from ..expressions import (
-    Symbol, Constant, Statement,
-    FunctionApplication, Lambda, ExpressionBlock,
-    ExistentialPredicate, UniversalPredicate,
-    Query,
-    is_subtype, NeuroLangException
+    Symbol, Constant, FunctionApplication, Lambda, ExpressionBlock,
+    ExistentialPredicate, Query, is_leq_informative,
+    NeuroLangException
 )
 
 S_ = Symbol
 C_ = Constant
-St_ = Statement
+Imp_ = sdb.Implication
 F_ = FunctionApplication
 L_ = Lambda
 B_ = ExpressionBlock
 EP_ = ExistentialPredicate
-UP_ = UniversalPredicate
 Q_ = Query
 T_ = sdb.Fact
 
 
 class Datalog(
+    sdb.SolverNonRecursiveDatalogNaive,
     solver_datalog_extensional_db.ExtensionalDatabaseSolver,
-    sdb.NaiveDatalog,
     expression_walker.ExpressionBasicEvaluator
 ):
     pass
+
+
+def test_null_constant_resolves_to_undefined():
+    dl = Datalog()
+    P = S_('P')
+    dl.walk(T_(P(C_('a'))))
+    dl.walk(T_(P(C_('b'))))
+    assert 'P' in dl.symbol_table
+    res = dl.walk(P(NULL))
+    assert isinstance(res, Constant)
+    assert not res.value
 
 
 def test_no_facts():
@@ -54,7 +63,7 @@ def test_facts_constants():
     assert isinstance(dl.symbol_table['Q'], Constant[AbstractSet])
     fact_set = dl.symbol_table['Q']
     assert isinstance(fact_set, Constant)
-    assert is_subtype(fact_set.type, AbstractSet)
+    assert is_leq_informative(fact_set.type, AbstractSet)
     assert {C_((C_(1), C_(2)))} == fact_set.value
 
     f2 = T_(S_('Q')(C_(3), C_(4)))
@@ -78,39 +87,64 @@ def test_atoms_variables():
     x = S_('x')
     y = S_('y')
     Q = S_('Q')
+    R = S_('R')
+    T = S_('T')
 
-    f1 = St_(Q(x,), eq(x, x))
+    f1 = Imp_(Q(x,), eq(x, x))
 
     dl.walk(f1)
 
     assert 'Q' in dl.symbol_table
-    isinstance(dl.symbol_table['Q'], ExpressionBlock)
+    assert isinstance(dl.symbol_table['Q'], ExpressionBlock)
     fact = dl.symbol_table['Q'].expressions[-1]
-    assert isinstance(fact, Lambda)
-    assert len(fact.args) == 1
-    assert fact.function_expression == eq(x, x)
+    assert isinstance(fact, sdb.Implication)
+    assert isinstance(fact.consequent, FunctionApplication)
+    assert fact.consequent.functor is Q
+    assert fact.consequent.args == (x,)
+    assert fact.antecedent == eq(x, x)
 
-    f2 = St_(Q(x, y), eq(x, y))
+    f2 = Imp_(T(x, y), eq(x, y))
 
     dl.walk(f2)
 
-    assert 'Q' in dl.symbol_table
-    isinstance(dl.symbol_table['Q'], ExpressionBlock)
-    fact = dl.symbol_table['Q'].expressions[-1]
-    assert isinstance(fact, Lambda)
-    assert len(fact.args) == 2
-    assert fact.function_expression == eq(x, y)
+    assert 'T' in dl.symbol_table
+    assert isinstance(dl.symbol_table['T'], ExpressionBlock)
+    fact = dl.symbol_table['T'].expressions[-1]
+    assert isinstance(fact, sdb.Implication)
+    assert isinstance(fact.consequent, FunctionApplication)
+    assert fact.consequent.functor is T
+    assert fact.consequent.args == (x, y)
+    assert fact.antecedent == eq(x, y)
+
+    f3 = Imp_(R(x, C_(1)), eq(x, x))
+    dl.walk(f3)
+
+    assert 'R' in dl.symbol_table
+    assert isinstance(dl.symbol_table['R'], ExpressionBlock)
+    fact = dl.symbol_table['R'].expressions[-1]
+    assert isinstance(fact, sdb.Implication)
+    assert isinstance(fact.consequent, FunctionApplication)
+    assert fact.consequent.functor is R
+    assert fact.consequent.args == (x, C_(1))
+    assert fact.antecedent == eq(x, x)
 
     with pytest.raises(NeuroLangException):
-        dl.walk(St_(Q(x), ...))
+        dl.walk(Imp_(Q(x), ...))
+
+    with pytest.raises(NeuroLangException):
+        dl.walk(Imp_(Q(x, y), eq(x, y)))
 
     f = Q(C_(10))
-    g = Q(C_(1), C_(5))
-    h = Q(C_(1), C_(1))
+    g = T(C_(1), C_(5))
+    h = T(C_(1), C_(1))
+    i = R(C_(2), C_(1))
+    g = R(C_(2), C_(2))
 
     assert dl.walk(f).value is True
     assert dl.walk(g).value is False
     assert dl.walk(h).value is True
+    assert dl.walk(i).value is True
+    assert dl.walk(g).value is False
 
 
 def test_facts_intensional():
@@ -119,7 +153,6 @@ def test_facts_intensional():
     Q = S_('Q')
     R = S_('R')
     T = S_('T')
-    U = S_('U')
     x = S_('x')
     y = S_('y')
     z = S_('z')
@@ -132,9 +165,8 @@ def test_facts_intensional():
     ))
 
     intensional = ExpressionBlock((
-        St_(R(x, y, z), Q(x, y) & Q(y, z)),
-        St_(T(x, z), EP_(y, Q(x, y) & Q(y, z))),
-        St_(U(x), UP_(y, Q(x, y))),
+        Imp_(R(x, y, z), Q(x, y) & Q(y, z)),
+        Imp_(T(x, z), EP_(y, Q(x, y) & Q(y, z))),
     ))
 
     dl.walk(extensional)
@@ -149,17 +181,11 @@ def test_facts_intensional():
     res = dl.walk(T(C_(1), C_(4)))
     assert res.value is True
 
-    res = dl.walk(R(C_(1), C_(5)))
-    assert res.value is False
-
-    res = dl.walk(U(C_(1)))
-    assert res.value is True
-
-    res = dl.walk(U(C_(2)))
+    res = dl.walk(T(C_(1), C_(5)))
     assert res.value is False
 
     with pytest.raises(NeuroLangException):
-        res = dl.walk(St_(Q(x, y), Q(x)))
+        res = dl.walk(Imp_(Q(x, y), Q(x)))
 
 
 def test_query_single_element():
@@ -194,6 +220,7 @@ def test_query_tuple():
 
     Q = S_('Q')
     R = S_('R')
+    S = S_('S')
     T = S_('T')
     x = S_('x')
     y = S_('y')
@@ -207,8 +234,9 @@ def test_query_tuple():
     ))
 
     intensional = ExpressionBlock((
-        St_(R(x, y, z), Q(x, y) & Q(y, z)),
-        St_(T(x, z), Q(x, y) & Q(y, z)),
+        Imp_(R(x, y, z), Q(x, y) & Q(y, z)),
+        Imp_(T(x, z), Q(x, y) & Q(y, z)),
+        Imp_(S(C_(100), x), Q(x, x))
     ))
 
     dl.walk(extensional)
@@ -217,11 +245,18 @@ def test_query_tuple():
     query = Q_((x, y), T(x, y))
     res = dl.walk(query)
 
-    assert res.value == {
+    assert res.value == set((
         C_((C_(1), C_(1))),
         C_((C_(1), C_(2))),
         C_((C_(1), C_(4))),
-    }
+    ))
+
+    query = Q_((x, y), S(x, y))
+    res = dl.walk(query)
+
+    assert res.value == set((
+        C_((C_(100), C_(1))),
+    ))
 
 
 def test_extensional_database():
@@ -245,9 +280,9 @@ def test_extensional_database():
     ))
 
     intensional = ExpressionBlock((
-        St_(R(x, y, z), R0(x, y, z)),
-        St_(R(x, y, z), Q(x, y) & Q(y, z)),
-        St_(T(x, z), Q(x, y) & Q(y, z)),
+        Imp_(R(x, y, z), R0(x, y, z)),
+        Imp_(R(x, y, z), Q(x, y) & Q(y, z)),
+        Imp_(T(x, z), Q(x, y) & Q(y, z)),
     ))
 
     dl.walk(extensional)
@@ -301,8 +336,8 @@ def test_intensional_recursive():
     ))
 
     intensional = ExpressionBlock((
-        St_(R(x, y), Q(x, y)),
-        St_(R(x, y), R(x, z) & R(z, y))
+        Imp_(R(x, y), Q(x, y)),
+        Imp_(R(x, y), R(x, z) & R(z, y))
     ))
 
     dl = Datalog()
@@ -327,31 +362,31 @@ def test_conjunctive_expression():
     y = S_('y')
 
     assert sdb.is_conjunctive_expression(
-        St_(R(x), Q())
+        Imp_(R(x), Q())
     )
 
     assert sdb.is_conjunctive_expression(
-        St_(R(x), Q(x))
+        Imp_(R(x), Q(x))
     )
 
     assert sdb.is_conjunctive_expression(
-        St_(R(x), Q(x) & R(y, C_(1)))
+        Imp_(R(x), Q(x) & R(y, C_(1)))
     )
 
     assert not sdb.is_conjunctive_expression(
-        St_(Q(x, y), R(x) | R(y))
+        Imp_(Q(x, y), R(x) | R(y))
     )
 
     assert not sdb.is_conjunctive_expression(
-        St_(Q(x, y), R(x) & R(y) | R(x))
+        Imp_(Q(x, y), R(x) & R(y) | R(x))
     )
 
     assert not sdb.is_conjunctive_expression(
-        St_(Q(x, y), ~R(x))
+        Imp_(Q(x, y), ~R(x))
     )
 
     assert not sdb.is_conjunctive_expression(
-        St_(Q(x, y), R(Q(x)))
+        Imp_(Q(x, y), R(Q(x)))
     )
 
 
@@ -365,16 +400,16 @@ def test_not_conjunctive():
     y = S_('y')
 
     with pytest.raises(NeuroLangException):
-        dl.walk(St_(Q(x, y), R(x) | R(y)))
+        dl.walk(Imp_(Q(x, y), R(x) | R(y)))
 
     with pytest.raises(NeuroLangException):
-        dl.walk(St_(Q(x, y), R(x) & R(y) | R(x)))
+        dl.walk(Imp_(Q(x, y), R(x) & R(y) | R(x)))
 
     with pytest.raises(NeuroLangException):
-        dl.walk(St_(Q(x, y), ~R(x)))
+        dl.walk(Imp_(Q(x, y), ~R(x)))
 
     with pytest.raises(NeuroLangException):
-        dl.walk(St_(Q(x, y), R(Q(x))))
+        dl.walk(Imp_(Q(x, y), R(Q(x))))
 
 
 def test_extract_free_variables():
@@ -389,8 +424,8 @@ def test_extract_free_variables():
     assert sdb.extract_datalog_free_variables(Q(x, C_(1))) == {x}
     assert sdb.extract_datalog_free_variables(Q(x) & R(y)) == {x, y}
     assert sdb.extract_datalog_free_variables(EP_(x, Q(x, y))) == {y}
-    assert sdb.extract_datalog_free_variables(St_(R(x), Q(x, y))) == {y}
-    assert sdb.extract_datalog_free_variables(St_(R(x), Q(y) & Q(x))) == {y}
+    assert sdb.extract_datalog_free_variables(Imp_(R(x), Q(x, y))) == {y}
+    assert sdb.extract_datalog_free_variables(Imp_(R(x), Q(y) & Q(x))) == {y}
 
     with pytest.raises(NeuroLangException):
         assert sdb.extract_datalog_free_variables(Q(x) | R(y))
@@ -407,3 +442,38 @@ def test_equality_operation():
 
     assert dl.walk(S_('equals')(C_(1), C_(1))).value is True
     assert dl.walk(S_('equals')(C_(1), C_(2))).value is False
+
+
+def test_existential_predicate():
+    solver = Datalog()
+    a, b = C_('a'), C_('b')
+    x = S_('x')
+    Q = S_('Q')
+    extensional = ExpressionBlock((
+        sdb.Fact(Q(a)),
+        sdb.Fact(Q(b)),
+    ))
+    solver.walk(extensional)
+
+    exp = EP_(x, Q(x))
+    result = solver.walk(exp)
+
+    assert result.value is True
+
+
+def test_and_query_resolution():
+    solver = Datalog()
+    a, b = C_('a'), C_('b')
+    x, y = S_('x'), S_('y')
+    P, Q = S_('P'), S_('Q')
+    extensional = ExpressionBlock((
+        sdb.Fact(Q(a)),
+        sdb.Fact(Q(b)),
+        sdb.Fact(P(a)),
+    ))
+    solver.walk(extensional)
+
+    query = Query(x, EP_(y, P(x) & Q(y)))
+    result = solver.walk(query)
+
+    assert result.value == {a}

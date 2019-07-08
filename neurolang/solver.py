@@ -5,13 +5,14 @@ from operator import (
     add, sub, mul, truediv, pos, neg
 )
 import typing
+from warnings import warn
 
 from .exceptions import NeuroLangException
 from .expressions import (
     Expression, NonConstant, ExistentialPredicate, UniversalPredicate,
     Symbol, Constant,
-    FunctionApplication, Query, Definition, is_subtype,
-    ToBeInferred
+    FunctionApplication, Query, Definition, is_leq_informative,
+    Unknown
 )
 from .expression_walker import (
     add_match, ExpressionBasicEvaluator, ReplaceSymbolWalker,
@@ -217,7 +218,7 @@ class BooleanRewriteSolver(PatternWalker):
             did not modify its expression.
 
         '''
-        first_arg, second_arg = expression.args
+        first_arg = expression.args[0]
         # we walk on the first argument
         walk_first_result = self.walk(first_arg)
         # and replace that argument with the result of the walk
@@ -279,7 +280,7 @@ class BooleanOperationsSolver(PatternWalker):
 
 class NumericOperationsSolver(PatternWalker[T]):
     @add_match(
-        FunctionApplication[ToBeInferred](Constant, (Expression[T],) * 2),
+        FunctionApplication[Unknown](Constant, (Expression[T],) * 2),
         lambda expression: expression.functor.value in (add, sub, mul, truediv)
     )
     def cast_binary(self, expression):
@@ -301,7 +302,7 @@ class NumericOperationsSolver(PatternWalker[T]):
         return self.walk(expression.cast(expression.args[0].type))
 
 
-class DatalogSolver(
+class FirstOrderLogicSolver(
         BooleanRewriteSolver,
         BooleanOperationsSolver,
         NumericOperationsSolver[int],
@@ -309,7 +310,7 @@ class DatalogSolver(
         GenericSolver
 ):
     '''
-    WIP Solver with queries having the semantics of Datalog.
+    WIP non-recursive first order logic query solver.
     For now predicates work only on constants on the symbols table
     '''
 
@@ -321,7 +322,7 @@ class DatalogSolver(
     )
     def query_resolution(self, expression):
         out_query_type = expression.type
-        if out_query_type is ToBeInferred:
+        if out_query_type is Unknown:
             out_query_type = typing.AbstractSet[expression.head.type]
 
         result = []
@@ -339,11 +340,14 @@ class DatalogSolver(
             body = rsw.walk(expression.body)
 
             res = self.walk(body)
-            if res.value:
-                if isinstance(expression.head, Symbol):
-                    result.append(symbol_values[0][0])
-                else:
-                    result.append(tuple(zip(*symbol_values))[0])
+            if isinstance(res, Constant):
+                if res.value is True:
+                    if isinstance(expression.head, Symbol):
+                        result.append(symbol_values[0][0])
+                    else:
+                        result.append(tuple(zip(*symbol_values))[0])
+            else:
+                warn('Query body could not be evaluated')
 
         return Constant[out_query_type](
             frozenset(result)
@@ -401,7 +405,7 @@ class DatalogSolver(
         '''
         if (
             isinstance(head, Constant) and
-            is_subtype(head.type, typing.Tuple) and
+            is_leq_informative(head.type, typing.Tuple) and
             all(isinstance(a, Symbol) for a in head.value)
         ):
             symbols_in_head = head.value

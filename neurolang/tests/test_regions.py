@@ -8,7 +8,7 @@ from ..regions import (
     region_union, region_intersection, region_difference)
 from ..CD_relations import direction_matrix, cardinal_relation, is_in_direction
 from ..exceptions import NeuroLangException
-from ..brain_tree import AABB, Tree
+from ..aabb_tree import AABB, Tree
 
 
 def _generate_random_box(size_bounds, *args):

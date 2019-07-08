@@ -53,52 +53,52 @@ def get_intervals_relations(intervals, other_region_intervals):
 
 def v_before(i1, i2):
     if i1[0] < i1[1] < i2[0] < i2[1]:
-        return np.array((1, 0, 0))
+        return (1, 0, 0)
     elif i2[0] < i2[1] < i1[0] < i1[1]:
-        return np.array((0, 0, 1))
+        return (0, 0, 1)
     return None
 
 
 def v_overlaps(i1, i2):
     if i1[0] < i2[0] < i1[1] < i2[1]:
-        return np.array((1, 1, 0))
+        return (1, 1, 0)
     elif i2[0] < i1[0] < i2[1] < i1[1]:
-        return np.array((0, 1, 1))
+        return (0, 1, 1)
     return None
 
 
 def v_during(i1, i2):
     if i2[0] < i1[0] < i1[1] < i2[1]:
-        return np.array((0, 1, 0))
+        return (0, 1, 0)
     elif i1[0] < i2[0] < i2[1] < i1[1]:
-        return np.array((1, 1, 1))
+        return (1, 1, 1)
     return None
 
 
 def v_meets(i1, i2):
     if i1[0] < i1[1] == i2[0] < i2[1]:
-        return np.array((1, 0, 0))
+        return (1, 0, 0)
     elif i2[0] < i2[1] == i1[0] < i1[1]:
-        return np.array((0, 0, 1))
+        return (0, 0, 1)
     return None
 
 
 def v_starts(i1, i2):
     if i1[0] == i2[0] < i1[1] < i2[1]:
-        return np.array((0, 1, 0))
+        return (0, 1, 0)
     elif i2[0] == i1[0] < i2[1] < i1[1]:
-        return np.array((0, 1, 1))
+        return (0, 1, 1)
     return None
 
 
 def v_finishes(i1, i2):
     if i2[0] < i1[0] < i1[1] == i2[1]:
-        return np.array((0, 1, 0))
+        return (0, 1, 0)
     elif i1[0] < i2[0] < i2[1] == i1[1]:
-        return np.array((1, 1, 0))
+        return (1, 1, 0)
 
 
 def v_equals(i1, i2):
     if i1[0] == i2[0] < i1[1] == i2[1]:
-        return np.array((0, 1, 0))
+        return (0, 1, 0)
     return None

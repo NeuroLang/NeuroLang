@@ -36,10 +36,15 @@ jobs:
             pip install pytest
             pip install pytest-cov
             pip install codacy-coverage
+          name: install sonar
+          command: |
+            curl -O https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-3.3.0.1492-linux.zip
+            unzip -o sonar-scanner-cli-3.3.0.1492-linux.zip
 
       - save_cache:
           paths:
             - ./venv
+            - sonar-scanner-3.3.0.1492-linux
           key: v1-dependencies-{{ checksum "requirements.txt" }}
         
       - run:
@@ -50,6 +55,16 @@ jobs:
             make test
             python-codacy-coverage -r coverage.xml
 
+      - run:
+          name: run sonar
+          command: |
+            if [ -z ${CIRCLE_PR_NUMBER} ]; then
+              sh sonar-scanner-3.3.0.1492-linux/bin/sonar-scanner -Dsonar.projectKey=parietal:neurolang:master:v0.01 -Dsonar.login=${SONAR_LOGIN}
+              sh sonar-scanner-3.3.0.1492-linux/bin/sonar-scanner -Dsonar.projectKey=parietal:neurolang:master:v0.01 -Dsonar.github.oauth=${GITHUB_NC_OATH} -Dsonar.login=${SONAR_LOGIN} -Dsonar.analysis.mode=issues
+            else
+              sh sonar-scanner-3.3.0.1492-linux/bin/sonar-scanner -Dsonar.projectKey=parietal:neurolang:PR${CIRCLE_PR_NUMBER}:v0.01 -Dsonar.login=${SONAR_LOGIN}
+              sh sonar-scanner-3.3.0.1492-linux/bin/sonar-scanner -Dsonar.projectKey=parietal:neurolang:PR${CIRCLE_PR_NUMBER}:v0.01 -Dsonar.github.pullRequest=${CIRCLE_PR_NUMBER} -Dsonar.github.oauth=${GITHUB_NC_OATH} -Dsonar.login=${SONAR_LOGIN} -Dsonar.analysis.mode=issues
+            fi
       - store_artifacts:
           path: test-reports
           destination: test-reports
