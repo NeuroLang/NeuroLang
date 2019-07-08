@@ -19,9 +19,10 @@ class StratifiedDatalog():
     _imp_symbols = []
     _negative_graph = {}
 
+
     def solve(self, expression_block):
         """Main function. Given an expression block, calculates 
-        and returns the stratified program if possible 
+        and returns the stratified program if possible.
 
         Parameters
         ----------
@@ -70,7 +71,7 @@ class StratifiedDatalog():
 
     def _check_stratification(self, expression_block):
         """Given an expression block, this function construct 
-        a graph of negative relations and check for stratifiability 
+        a graph of negative relations and check for stratifiability.
 
         Parameters
         ----------
@@ -105,6 +106,7 @@ class StratifiedDatalog():
                     return False
 
         return True
+
 
     def _stratify(self, expression_block):
         """Given an expression block, this function reorder it

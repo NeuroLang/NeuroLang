@@ -6,9 +6,7 @@ from operator import and_, or_, invert
 
 from ..stratified_datalog import StratifiedDatalog
 
-from ..existential_datalog import (
-    Implication
-)
+from ..existential_datalog import Implication
 
 C_ = expressions.Constant
 S_ = expressions.Symbol
