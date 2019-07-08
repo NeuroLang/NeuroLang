@@ -12,7 +12,7 @@ def most_general_unifier(expression1, expression2):
         isinstance(expression2, exp.FunctionApplication) and
         len(expression1.args) == len(expression2.args)
     ):
-        return ValueError("We can only unify function applications")
+        raise ValueError("We can only unify function applications")
 
     if not (
         expression1.functor == expression2.functor and
