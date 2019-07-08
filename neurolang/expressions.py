@@ -404,14 +404,14 @@ class Constant(Expression):
             auto_infer_type and self.type is Unknown and
             hasattr(value, '__annotations__')
         ):
-                self.type = infer_type(value)
+            self.type = infer_type(value)
 
     def __auto_infer_type__(self):
         self.type = infer_type(self.value)
         self._symbols = set()
         if (
-            not issubclass(self.type, typing.Text) and
-            issubclass(self.type, typing.Iterable)
+            not is_leq_informative(self.type, typing.Text) and
+            is_leq_informative(self.type, typing.Iterable)
         ):
             new_content = []
             for a in self.value:
