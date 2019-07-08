@@ -186,7 +186,8 @@ def test_basic_directionality():
 
 def test_explicit_region():
 
-    def randint(): return random.randint(0, 1000)
+    def randint():
+        return random.randint(0, 1000)
 
     voxels = [(randint(), randint(), randint()) for _ in range(50)]
     affine = np.eye(4)
@@ -259,7 +260,8 @@ def test_spherical_volumetric_region():
     assert not (1, 1, 1) in unit_sphere
     unit_sphere.to_ijk(np.eye(4))
 
-    def randint(): return random.randint(0, 1000)
+    def randint():
+        return random.randint(0, 1000)
 
     samples = 500
     voxels = sorted(
@@ -300,7 +302,8 @@ def test_planar_region():
 
 def test_points_contained_in_implicit_regions():
 
-    def randpoint(i, j): return tuple(random.randint(i, j, size=3))
+    def randpoint(i, j):
+        return tuple(random.randint(i, j, size=3))
 
     sphere = SphericalVolume((0, 0, 0), 10)
     points = [[i, i, i] for i in range(5)] in sphere
@@ -418,7 +421,8 @@ def test_union_implicit_regions():
                 return False
         return True
 
-    def randint(): return random.randint(0, 100)
+    def randint():
+        return random.randint(0, 100)
 
     radius = 5
     sphere = SphericalVolume((randint(), randint(), randint()), radius)
@@ -431,7 +435,8 @@ def test_union_implicit_regions():
 
 def test_regions_union_intersection():
 
-    def randint(): return random.randint(70, 100)
+    def randint():
+        return random.randint(70, 100)
 
     voxels = [(randint(), randint(), randint()) for _ in range(50)]
     affine = np.array([
@@ -454,7 +459,8 @@ def test_regions_union_intersection():
 
 def test_intersection_difference():
 
-    def randint(): return random.randint(1, 5)
+    def randint():
+        return random.randint(1, 5)
     affine = np.eye(4)
     center = (randint(), randint(), randint())
     radius = randint()
