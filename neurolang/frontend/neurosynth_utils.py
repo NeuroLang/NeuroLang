@@ -46,7 +46,8 @@ class NeuroSynthHandler:
 
         return dataset
 
-    def download_ns_dataset(self, path):
+    @staticmethod
+    def download_ns_dataset(path):
         if not os.path.exists(path):
             os.makedirs(path)
         ns.dataset.download(path=path, unpack=True)
