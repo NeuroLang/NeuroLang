@@ -159,7 +159,7 @@ class Boundary(BoundedAABB):
         return np.all(self._lb == other._lb) and np.all(self._ub == other._ub)
 
 
-class Node:
+class Node(object):
 
     def __init__(self,
                  box: BoundedAABB,
@@ -181,7 +181,7 @@ class Node:
         return self.left is None
 
 
-class Tree:
+class Tree(object):
 
     def __init__(self) -> None:
         self.root = None  # type: Union[Node, None]

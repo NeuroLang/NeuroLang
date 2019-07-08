@@ -53,7 +53,7 @@ def region_set_algebraic_op(op, region_set, affine=None, n_dim=3):
     return ExplicitVBR(result_voxels, affine, max_dim)
 
 
-class Region:
+class Region(object):
     def __init__(self, lb, ub):
         if not np.all([lb[i] < ub[i] for i in range(len(lb))]):
             raise NeuroLangException(

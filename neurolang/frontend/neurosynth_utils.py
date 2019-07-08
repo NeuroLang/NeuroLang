@@ -8,7 +8,7 @@ except ModuleNotFoundError:
     raise ImportError("Neurosynth not installed in the system")
 
 
-class NeuroSynthHandler:
+class NeuroSynthHandler(object):
     def __init__(self, ns_dataset=None):
         self._dataset = ns_dataset
 
