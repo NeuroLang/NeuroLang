@@ -3,7 +3,7 @@ from copy import deepcopy
 import numpy as np
 
 
-class AABB:
+class AABB(object):
 
     def __init__(self, lb, ub):
         self._limits = np.asarray((lb, ub), dtype=float).T
@@ -66,7 +66,7 @@ def aabb_from_vertices(vertices):
     return AABB(lb, ub)
 
 
-class Node:
+class Node(object):
 
     def __init__(self, box, parent=None, left=None, right=None, height=0,
                  regions=set()):
@@ -87,7 +87,7 @@ class Node:
                 .format(self.regions, self.box, self.is_leaf))
 
 
-class Tree:
+class Tree(object):
 
     def __init__(self):
         self.root = None

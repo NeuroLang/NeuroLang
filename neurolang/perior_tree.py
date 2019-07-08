@@ -1,4 +1,4 @@
-from typing import Union, Tuple, Set
+from typing import Union, Tuple, Set, Dict
 from .aabb_tree import AABB
 import numpy as np
 from copy import deepcopy
@@ -201,16 +201,15 @@ class Boundary(BoundedAABB):
         return np.all(self._lb == other._lb) and np.all(self._ub == other._ub)
 
 
-class Node:
-    def __init__(
-        self,
-        box: BoundedAABB,
-        parent: Union[None, 'Node'] = None,
-        left: Union[None, 'Node'] = None,
-        right: Union[None, 'Node'] = None,
-        height: int = 0,
-        region_ids: Set[int] = set()
-    ) -> None:
+class Node(object):
+
+    def __init__(self,
+                 box: BoundedAABB,
+                 parent: Union[None, 'Node'] = None,
+                 left: Union[None, 'Node'] = None,
+                 right: Union[None, 'Node'] = None,
+                 height: int = 0,
+                 region_ids: Set[int] = set()) -> None:
 
         self.box = box
         self.parent = parent
@@ -224,7 +223,8 @@ class Node:
         return self.left is None
 
 
-class Tree:
+class Tree(object):
+
     def __init__(self) -> None:
         self.root = None  # type: Union[Node, None]
         self.region_boxes = dict()  # type: Dict[int, BoundedAABB]
