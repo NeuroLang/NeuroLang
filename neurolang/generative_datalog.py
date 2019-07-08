@@ -26,7 +26,7 @@ class DeltaSymbol(Symbol):
         return hash((self.dist_name, self.n_terms))
 
 
-class DeltaTerm(Expression):
+class DeltaTerm(Definition):
     def __init__(self, dist_name, *dist_params):
         self.dist_name = dist_name
         self.dist_params = dist_params
