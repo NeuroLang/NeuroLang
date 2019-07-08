@@ -22,11 +22,14 @@ Eb_ = expressions.ExpressionBlock
 def test_graph():
     x = S_('x')
     y = S_('y')
+    z = S_('z')
 
-    imp = Implication(x, and_(y, y))
+    imp0 = Implication(x(), and_(invert(y()), invert(z())))
+    imp1 = Implication(x(), z())
+    imp2 = Implication(y(), x())
 
     program = Eb_((
-        imp
+        imp0, imp1, imp2
     ))
 
     sDatalog = StratifiedDatalog()
