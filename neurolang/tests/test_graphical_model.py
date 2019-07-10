@@ -1,11 +1,11 @@
+import numpy as np
+
 from ..expressions import Symbol, Constant, ExpressionBlock
 from ..expression_pattern_matching import add_match
 from ..solver_datalog_naive import Fact, Implication, DatalogBasic
 from ..graphical_model import (
-    produce,
-    infer,
-    GDatalogToGraphicalModelTranslator,
-    substitute_dterm,
+    produce, infer, GraphicalModel, GDatalogToGraphicalModelTranslator,
+    substitute_dterm, gdatalog2gm, sort_rvs, delta_infer1
 )
 from ..generative_datalog import (
     DeltaTerm, DeltaAtom, GenerativeDatalogSugarRemover
@@ -24,11 +24,31 @@ z = S_('z')
 a = C_(2)
 b = C_(3)
 p = S_('p')
-symb_p_a = S_('p_a')
-symb_p_b = S_('p_b')
 p_a = C_(0.2)
 p_b = C_(0.7)
 bernoulli = C_('bernoulli')
+
+program_1 = ExpressionBlock((
+    Fact(P(a)),
+    Fact(P(b)),
+    Implication(Q(x, y),
+                P(x) & P(y)),
+))
+program_2 = ExpressionBlock((
+    Fact(P(a, b)),
+    Fact(P(b, a)),
+    Implication(Q(x), P(x, x)),
+    Implication(R(x),
+                P(x, y) & P(y, x)),
+))
+program_3 = ExpressionBlock((
+    Fact(P(a)),
+    Fact(P(b)),
+    Implication(DeltaAtom(Q, (x, DeltaTerm(bernoulli, C_(0.7)))), P(x)),
+    Implication(Z(x, C_(0.2)), Q(x, C_(1))),
+    Implication(Z(x, C_(0.8)), Q(x, C_(0))),
+    Implication(DeltaAtom(R, (x, DeltaTerm(bernoulli, y))), Z(x, y)),
+))
 
 
 class GenerativeDatalogSugarRemoverTest(
@@ -73,52 +93,43 @@ def test_infer():
     assert infer(rule2, facts) == {Q(a, b), Q(b, a)}
 
 
-# def test_delta_infer1():
-    # fact_a = Fact(P(a, symb_p_a))
-    # fact_b = Fact(P(b, symb_p_b))
-    # rule = Implication(DeltaAtom(Q, (x, DeltaTerm(bernoulli, p))), P(x, p))
-    # result = delta_infer1(rule, {fact_a.fact, fact_b.fact})
-    # result_as_dict = dict(result)
-    # dist = {
-        # frozenset({Q(a, C_(0)), Q(b, C_(0))}):
-        # Multiplication(
-            # Subtraction(C_(1), symb_p_a), Subtraction(C_(1), symb_p_b)
-        # ),
-        # frozenset({Q(a, C_(1)), Q(b, C_(0))}):
-        # Multiplication(symb_p_a, Subtraction(C_(1), symb_p_b)),
-        # frozenset({Q(a, C_(0)), Q(b, C_(1))}):
-        # Multiplication(Subtraction(C_(1), symb_p_a), symb_p_b),
-        # frozenset({Q(a, C_(1)), Q(b, C_(1))}):
-        # Multiplication(symb_p_a, symb_p_b),
-    # }
-    # for outcome, prob in dist.items():
-        # assert outcome in result_as_dict
-        # assert arithmetic_eq(prob, result_as_dict[outcome])
+def test_delta_infer1():
+    fact_a = Fact(P(a, p_a))
+    fact_b = Fact(P(b, p_b))
+    rule = Implication(DeltaAtom(Q, (x, DeltaTerm(bernoulli, p))), P(x, p))
+    result = delta_infer1(rule, {fact_a.fact, fact_b.fact})
+    result_as_dict = dict(result)
+    expected_dist = {
+        frozenset({Q(a, C_(0)), Q(b, C_(0))}):
+        (1 - p_a.value) * (1 - p_b.value),
+        frozenset({Q(a, C_(1)), Q(b, C_(0))}): p_a.value * (1 - p_b.value),
+        frozenset({Q(a, C_(0)), Q(b, C_(1))}): (1 - p_a.value) * p_b.value,
+        frozenset({Q(a, C_(1)), Q(b, C_(1))}): p_a.value * p_b.value,
+    }
+    for outcome, prob in expected_dist.items():
+        assert outcome in result_as_dict
+        assert np.allclose([prob], [result_as_dict[outcome]])
+
+
+def test_sort_rv():
+    gm = gdatalog2gm(program_1)
+    assert gm.parents['Q_1'] == {'P'}
+    assert gm.parents['Q'] == {'Q_1'}
+    assert sort_rvs(gm) == ['P', 'Q_1', 'Q']
 
 
 def test_gdatalog_translation_to_gm():
-    program = ExpressionBlock((
-        Fact(P(a)),
-        Fact(P(b)),
-        Implication(Q(x, y),
-                    P(x) & P(y)),
-    ))
-    gm = GDatalogToGraphicalModelTranslator().walk(program)
-    assert 'P' in gm.random_variables
-    assert 'Q_1' in gm.random_variables
-    assert gm.parents['Q_1'] == {'P'}
+    gm = gdatalog2gm(program_1)
+    assert set(gm.random_variables.keys()) == {'P', 'Q', 'Q_1'}
     assert gm.parents['P'] == set()
-
-    program = ExpressionBlock((
-        Fact(P(a, b)),
-        Fact(P(b, a)),
-        Implication(Q(x), P(x, x)),
-        Implication(R(x),
-                    P(x, y) & P(y, x)),
-    ))
-    gm = GDatalogToGraphicalModelTranslator().walk(program)
     assert gm.parents['Q_1'] == {'P'}
+    assert gm.parents['Q'] == {'Q_1'}
+
+    gm = gdatalog2gm(program_2)
+    assert gm.parents['Q_1'] == {'P'}
+    assert gm.parents['Q'] == {'Q_1'}
     assert gm.parents['R_1'] == {'P'}
+    assert gm.parents['R'] == {'R_1'}
 
 
 def test_delta_term():
@@ -127,7 +138,7 @@ def test_delta_term():
         Implication(Q(x, DeltaTerm(bernoulli, x)), P(x)),
     ))
     program = sugar_remove(program)
-    gm = GDatalogToGraphicalModelTranslator().walk(program)
+    gm = gdatalog2gm(program)
     assert 'Q_1' in gm.random_variables
 
 
@@ -138,7 +149,7 @@ def test_2levels_model():
         Implication(R(x, DeltaTerm(bernoulli, C_(0.5))), Q(x, y)),
     ))
     program = sugar_remove(program)
-    gm = GDatalogToGraphicalModelTranslator().walk(program)
+    gm = gdatalog2gm(program)
 
     program = sugar_remove(
         ExpressionBlock((
@@ -151,5 +162,7 @@ def test_2levels_model():
                         Q(x, y) & Z(z)),
         ))
     )
-    gm = GDatalogToGraphicalModelTranslator().walk(program)
-    assert set(gm.random_variables.keys()) == {'P', 'Q_1', 'Z_1', 'Z_2', 'R_1'}
+    gm = gdatalog2gm(program)
+    assert set(gm.random_variables.keys()) == {
+        'P', 'Q_1', 'Q', 'Z_1', 'Z_2', 'Z', 'R_1', 'R'
+    }
