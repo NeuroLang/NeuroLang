@@ -16,9 +16,7 @@ from .expression_walker import (
     PatternWalker,
 )
 
-from .exceptions import (
-    NeuroLangDataLogNonStratifiable,
-)
+from .exceptions import (NeuroLangDataLogNonStratifiable, NeuroLangException)
 
 from operator import invert, and_, or_
 
@@ -64,8 +62,8 @@ class StratifiedDatalog():
         expression_block : ExpressionBlock
             The implication to be checked.
         """
-        if self.is_negated_predicate(implication.consequent):
-            raise NeuroLangDataLogNonStratifiable(
+        if self._is_negation(implication.consequent):
+            raise NeuroLangException(
                 f'Symbol in the consequent can not be \
                     negated: {implication.consequent}'
             )
@@ -91,7 +89,7 @@ class StratifiedDatalog():
         self._imp_symbols = sEval.walk(expression_block)
         for k, v in enumerate(self._idb_symbols):
             for s in self._imp_symbols[k]:
-                if self.is_negated_predicate(s):
+                if self._is_negation(s):
                     name = s.args[0].functor.name
                     if name in self._idb_symbols:
                         if k in self._negative_graph:
@@ -133,7 +131,7 @@ class StratifiedDatalog():
             new_pos = key
             for ith_idb in range(key + 1, len(self._idb_symbols)):
                 for imp_symbol in imp_symbols:
-                    if self.is_negated_predicate(imp_symbol):
+                    if self._is_negation(imp_symbol):
                         if (
                             self._idb_symbols[ith_idb] ==
                             imp_symbol.args[0].functor
@@ -151,7 +149,7 @@ class StratifiedDatalog():
 
         return ExpressionBlock(tuple(stratified_rules))
 
-    def is_negated_predicate(self, expression):
+    def _is_negation(self, expression):
         if isinstance(
             expression, FunctionApplication
         ) and expression.functor == invert:
@@ -198,3 +196,4 @@ class ConsequentSymbols(PatternWalker):
             eval_block.append(eval_exp)
 
         return eval_block
+        

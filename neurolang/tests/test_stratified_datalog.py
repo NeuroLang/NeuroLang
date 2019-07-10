@@ -56,6 +56,16 @@ def test_consequent_symbols():
     assert con[6] == [w]
 
 
+def test_empty_program():
+    program = Eb_(())
+
+    sDatalog = StratifiedDatalog()
+    stratified = sDatalog.solve(program)
+
+    assert stratified.expressions == ()
+    assert stratified == program
+
+
 def test_negated_consequent():
     x = S_('x')
     y = S_('y')
@@ -69,7 +79,7 @@ def test_negated_consequent():
 
     sDatalog = StratifiedDatalog()
     with pytest.raises(
-        exceptions.NeuroLangDataLogNonStratifiable,
+        exceptions.NeuroLangException,
         match=r"Symbol in the consequent can not be .*"
     ):
         sDatalog.solve(program)
@@ -128,3 +138,4 @@ def test_positive_cicle():
 
     assert stratified.expressions[0] == imp0
     assert stratified.expressions[1] == imp1
+    
