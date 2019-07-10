@@ -69,6 +69,7 @@ class StratifiedDatalog():
             )
 
         for symbol in implication.consequent._symbols:
+            print(symbol)
             self._idb_symbols.append(symbol)
 
     def _check_stratification(self, expression_block: ExpressionBlock):
