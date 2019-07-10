@@ -1,12 +1,15 @@
 import pytest
 
-from .. import expressions
+from .. import expressions, exceptions
 
 from operator import and_, or_, invert
 
-from ..stratified_datalog import StratifiedDatalog
+from ..stratified_datalog import StratifiedDatalog, ConsequentSymbols
 
-from ..existential_datalog import Implication
+from ..solver_datalog_naive import (
+    Implication,
+    Fact,
+)
 
 C_ = expressions.Constant
 S_ = expressions.Symbol
@@ -15,6 +18,41 @@ L_ = expressions.Lambda
 E_ = expressions.ExistentialPredicate
 U_ = expressions.UniversalPredicate
 Eb_ = expressions.ExpressionBlock
+
+
+def test_consequent_symbols():
+    w = S_('w')
+    x = S_('x')
+    y = S_('y')
+    z = S_('z')
+
+    imp0 = Implication(y(), invert(x()))
+    imp1 = Implication(invert(x()), and_(y(), invert(z())))
+    imp2 = Implication(invert(x()), or_(invert(y()), invert(z())))
+    imp3 = Implication(x(), z())
+    imp4 = Fact(w())
+    imp5 = Implication(w(), and_(C_(False), z()))
+    imp6 = Implication(w(), w)
+
+    program = Eb_((
+        imp0,
+        imp1,
+        imp2,
+        imp3,
+        imp4,
+        imp5,
+        imp6,
+    ))
+
+    cSymbols = ConsequentSymbols()
+    con = cSymbols.walk(program)
+
+    assert con[0] == [invert(x())]
+    assert con[1] == [y, invert(z())]
+    assert con[2] == [invert(y()), invert(z())]
+    assert con[3] == [z]
+    assert con[4] == []
+    assert con[5] == [w]
 
 
 def test_negated_consequent():
@@ -26,14 +64,14 @@ def test_negated_consequent():
     imp1 = Implication(invert(x()), and_(y(), invert(z())))
     imp2 = Implication(x(), z())
 
-    program = Eb_((
-        imp0, imp1, imp2
-    ))
+    program = Eb_((imp0, imp1, imp2))
 
     sDatalog = StratifiedDatalog()
-    with pytest.raises(expressions.NeuroLangException, 
-        match=r"Symbol in the consequent can not be .*"):
-            sDatalog.solve(program)
+    with pytest.raises(
+        exceptions.NeuroLangDataLogNonStratifiable,
+        match=r"Symbol in the consequent can not be .*"
+    ):
+        sDatalog.solve(program)
 
 
 def test_valid_stratification():
@@ -45,9 +83,7 @@ def test_valid_stratification():
     imp1 = Implication(x(), and_(y(), invert(z())))
     imp2 = Implication(x(), z())
 
-    program = Eb_((
-        imp0, imp1, imp2
-    ))
+    program = Eb_((imp0, imp1, imp2))
 
     sDatalog = StratifiedDatalog()
     stratified = sDatalog.solve(program)
@@ -66,14 +102,14 @@ def test_imposible_stratification():
     imp1 = Implication(x(), and_(invert(y()), invert(z())))
     imp2 = Implication(x(), z())
 
-    program = Eb_((
-        imp0, imp1, imp2
-    ))
+    program = Eb_((imp0, imp1, imp2))
 
     sDatalog = StratifiedDatalog()
-    with pytest.raises(expressions.NeuroLangException, 
-        match=r"The program cannot be stratifiable"):
-            sDatalog.solve(program)
+    with pytest.raises(
+        exceptions.NeuroLangDataLogNonStratifiable,
+        match=r"The program cannot be stratifiable"
+    ):
+        sDatalog.solve(program)
 
 
 def test_positive_cicle():
@@ -84,13 +120,10 @@ def test_positive_cicle():
     imp0 = Implication(y(), x())
     imp1 = Implication(x(), and_(y(), invert(z())))
 
-    program = Eb_((
-        imp0, imp1
-    ))
+    program = Eb_((imp0, imp1))
 
     sDatalog = StratifiedDatalog()
     stratified = sDatalog.solve(program)
 
     assert stratified.expressions[0] == imp0
     assert stratified.expressions[1] == imp1
-    

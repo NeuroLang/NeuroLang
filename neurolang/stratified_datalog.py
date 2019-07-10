@@ -1,24 +1,33 @@
 from .expressions import (
-    FunctionApplication, Constant, NeuroLangException,
-    Symbol, ExpressionBlock, Expression,
+    FunctionApplication,
+    Constant,
+    Symbol,
+    ExpressionBlock,
+    Expression,
 )
 
 from .solver_datalog_naive import (
-    Implication, Fact,
+    Implication,
+    Fact,
 )
 
 from .expression_walker import (
-    add_match, PatternWalker,
+    add_match,
+    PatternWalker,
+)
+
+from .exceptions import (
+    NeuroLangDataLogNonStratifiable,
 )
 
 from operator import invert, and_, or_
+
 
 class StratifiedDatalog():
 
     _idb_symbols = []
     _imp_symbols = []
     _negative_graph = {}
-
 
     def solve(self, expression_block):
         """Main function. Given an expression block, calculates 
@@ -42,10 +51,9 @@ class StratifiedDatalog():
         if stratifiable:
             return self._stratify(expression_block)
         else:
-            raise NeuroLangException(
+            raise NeuroLangDataLogNonStratifiable(
                 f'The program cannot be stratifiable'
             )
-
 
     def _add_idb_symbol(self, implication):
         """Given an implication, this function validates that the consequent
@@ -56,18 +64,14 @@ class StratifiedDatalog():
         expression_block : ExpressionBlock
             The implication to be checked.
         """
-        if (
-                hasattr(implication.consequent.functor, 'value') and 
-                implication.consequent.functor == invert
-        ):
-            raise NeuroLangException(
+        if self.is_negated_predicate(implication.consequent):
+            raise NeuroLangDataLogNonStratifiable(
                 f'Symbol in the consequent can not be \
                     negated: {implication.consequent}'
             )
 
         for symbol in implication.consequent._symbols:
             self._idb_symbols.append(symbol)
-
 
     def _check_stratification(self, expression_block):
         """Given an expression block, this function construct 
@@ -83,11 +87,11 @@ class StratifiedDatalog():
         bool
             True if the program is or can be stratified. False otherwise.
         """
-        sEval = SymbolEvaluator()
+        sEval = ConsequentSymbols()
         self._imp_symbols = sEval.walk(expression_block)
         for k, v in enumerate(self._idb_symbols):
             for s in self._imp_symbols[k]:
-                if hasattr(s, 'functor') and s.functor == invert:
+                if self.is_negated_predicate(s):
                     name = s.args[0].functor.name
                     if name in self._idb_symbols:
                         if k in self._negative_graph:
@@ -96,17 +100,16 @@ class StratifiedDatalog():
                             self._negative_graph[v.name] = rel
                         else:
                             self._negative_graph[v.name] = [name]
-        
+
         for key, values in self._negative_graph.items():
             for in_value in values:
                 if (
-                    in_value in self._negative_graph and 
+                    in_value in self._negative_graph and
                     key in self._negative_graph[in_value]
                 ):
                     return False
 
         return True
-
 
     def _stratify(self, expression_block):
         """Given an expression block, this function reorder it
@@ -128,67 +131,64 @@ class StratifiedDatalog():
         for key, _ in enumerate(expression_block.expressions):
             imp_symbols = self._imp_symbols[key]
             new_pos = key
-            for ith_idb in range(key+1, len(self._idb_symbols)):
+            for ith_idb in range(key + 1, len(self._idb_symbols)):
                 for imp_symbol in imp_symbols:
-                    if (
-                        hasattr(imp_symbol, 'functor') and
-                        imp_symbol.functor == invert
-                    ):
+                    if self.is_negated_predicate(imp_symbol):
                         if (
-                            self._idb_symbols[ith_idb] == 
+                            self._idb_symbols[ith_idb] ==
                             imp_symbol.args[0].functor
                         ):
                             new_pos += 1
-            
+
             if new_pos != key:
                 moved += 1
                 stratified_index.append(new_pos)
             else:
-                stratified_index.append(new_pos-moved)
+                stratified_index.append(new_pos - moved)
 
         new_order = sorted(zip(stratified_index, expression_block.expressions))
-        stratified_rules = [x for i, x in new_order]
+        stratified_rules = [x for _, x in new_order]
 
         return ExpressionBlock(tuple(stratified_rules))
 
+    def is_negated_predicate(self, expression):
+        if isinstance(
+            expression, FunctionApplication
+        ) and expression.functor == invert:
+            return True
 
-class SymbolEvaluator(PatternWalker):
+        return False
 
 
+class ConsequentSymbols(PatternWalker):
     @add_match(Implication)
     def eval_implication(self, expression):
-        ant = self.walk(expression.antecedent)
-        return ant
-
+        return self.walk(expression.antecedent)
 
     @add_match(FunctionApplication(Constant(invert), ...))
     def eval_function_invert_application(self, expression):
         return [expression]
 
-
     @add_match(FunctionApplication(Constant(...), ...))
     def eval_function_application_comb(self, expression):
         res = []
         for arg in expression.args:
-            res.append(self.walk(arg)[0])
-        
-        return res
+            out = self.walk(arg)
+            res += out
 
+        return res
 
     @add_match(FunctionApplication(Symbol, ...))
     def eval_function_application(self, expression):
-        return [self.walk(expression.functor)]
+        return self.walk(expression.functor)
 
-    
     @add_match(Symbol)
     def eval_symbol(self, expression):
-        return expression
-
+        return [expression]
 
     @add_match(Constant)
     def eval_constant(self, expression):
-        return expression
-
+        return []
 
     @add_match(ExpressionBlock)
     def eval_expression_block(self, expression):
