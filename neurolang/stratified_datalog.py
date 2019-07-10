@@ -22,10 +22,10 @@ from operator import invert, and_, or_
 
 
 class StratifiedDatalog():
-
-    _idb_symbols = []
-    _imp_symbols = []
-    _negative_graph = {}
+    def __init__(self):
+        self._idb_symbols = []
+        self._imp_symbols = []
+        self._negative_graph = {}
 
     def stratify(self, expression_block: ExpressionBlock):
         """Main function. Given an expression block, calculates 
@@ -53,7 +53,7 @@ class StratifiedDatalog():
                 f'The program cannot be stratifiable'
             )
 
-    def _add_idb_symbol(self, implication : Implication):
+    def _add_idb_symbol(self, implication: Implication):
         """Given an implication, this function validates that the consequent
         is not denied and saves all the symbols of the intentional database.
 
@@ -69,7 +69,6 @@ class StratifiedDatalog():
             )
 
         for symbol in implication.consequent._symbols:
-            print(symbol)
             self._idb_symbols.append(symbol)
 
     def _check_stratification(self, expression_block: ExpressionBlock):
