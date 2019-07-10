@@ -27,7 +27,7 @@ class StratifiedDatalog():
     _imp_symbols = []
     _negative_graph = {}
 
-    def solve(self, expression_block):
+    def stratify(self, expression_block: ExpressionBlock):
         """Main function. Given an expression block, calculates 
         and returns the stratified program if possible.
 
@@ -47,13 +47,13 @@ class StratifiedDatalog():
         stratifiable = self._check_stratification(expression_block)
 
         if stratifiable:
-            return self._stratify(expression_block)
+            return self._solve(expression_block)
         else:
             raise NeuroLangDataLogNonStratifiable(
                 f'The program cannot be stratifiable'
             )
 
-    def _add_idb_symbol(self, implication):
+    def _add_idb_symbol(self, implication : Implication):
         """Given an implication, this function validates that the consequent
         is not denied and saves all the symbols of the intentional database.
 
@@ -71,7 +71,7 @@ class StratifiedDatalog():
         for symbol in implication.consequent._symbols:
             self._idb_symbols.append(symbol)
 
-    def _check_stratification(self, expression_block):
+    def _check_stratification(self, expression_block: ExpressionBlock):
         """Given an expression block, this function construct 
         a graph of negative relations and check for stratifiability.
 
@@ -109,7 +109,7 @@ class StratifiedDatalog():
 
         return True
 
-    def _stratify(self, expression_block):
+    def _solve(self, expression_block: ExpressionBlock):
         """Given an expression block, this function reorder it
         in an stratified way. No change is made if it is not necessary. 
 

@@ -60,7 +60,7 @@ def test_empty_program():
     program = Eb_(())
 
     sDatalog = StratifiedDatalog()
-    stratified = sDatalog.solve(program)
+    stratified = sDatalog.stratify(program)
 
     assert stratified.expressions == ()
     assert stratified == program
@@ -82,7 +82,7 @@ def test_negated_consequent():
         exceptions.NeuroLangException,
         match=r"Symbol in the consequent can not be .*"
     ):
-        sDatalog.solve(program)
+        sDatalog.stratify(program)
 
 
 def test_valid_stratification():
@@ -97,7 +97,7 @@ def test_valid_stratification():
     program = Eb_((imp0, imp1, imp2))
 
     sDatalog = StratifiedDatalog()
-    stratified = sDatalog.solve(program)
+    stratified = sDatalog.stratify(program)
 
     assert stratified.expressions[0] == imp1
     assert stratified.expressions[1] == imp2
@@ -120,7 +120,7 @@ def test_imposible_stratification():
         exceptions.NeuroLangDataLogNonStratifiable,
         match=r"The program cannot be stratifiable"
     ):
-        sDatalog.solve(program)
+        sDatalog.stratify(program)
 
 
 def test_positive_cicle():
@@ -134,8 +134,7 @@ def test_positive_cicle():
     program = Eb_((imp0, imp1))
 
     sDatalog = StratifiedDatalog()
-    stratified = sDatalog.solve(program)
+    stratified = sDatalog.stratify(program)
 
     assert stratified.expressions[0] == imp0
     assert stratified.expressions[1] == imp1
-    
