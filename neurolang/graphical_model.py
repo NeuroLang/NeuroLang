@@ -7,7 +7,6 @@ import logging
 from typing import Set, FrozenSet
 
 import numpy as np
-import sympy
 
 from .expressions import (
     Expression, NeuroLangException, FunctionApplication, Constant, Symbol,
