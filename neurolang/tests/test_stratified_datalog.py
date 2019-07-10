@@ -52,7 +52,8 @@ def test_consequent_symbols():
     assert con[2] == [invert(y()), invert(z())]
     assert con[3] == [z]
     assert con[4] == []
-    assert con[5] == [w]
+    assert con[5] == [z]
+    assert con[6] == [w]
 
 
 def test_negated_consequent():
