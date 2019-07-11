@@ -75,8 +75,7 @@ class StratifiedDatalog():
                     negated: {implication.consequent}'
             )
 
-        for symbol in implication.consequent._symbols:
-            self._idb_symbols.append(symbol)
+        self._idb_symbols.append(implication.consequent.functor)
 
     def _check_stratification(self, expression_block: ExpressionBlock):
         """Given an expression block, this function construct
