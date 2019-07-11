@@ -159,7 +159,6 @@ class UnionFactSetCPDFunctor(FactSetTableCPDFunctor):
     def __init__(self, predicate):
         self.predicate = predicate
 
-
 class GraphicalModel(Expression):
     def __init__(self):
         self.rv_to_cpd_functor = dict()
@@ -234,6 +233,12 @@ def sort_rvs_aux(gm, rv, parents, result):
         result.append(rv)
 
 
+<<<<<<< HEAD
+=======
+class FactSetCPD(Expression[Set[Fact]]):
+    pass
+
+>>>>>>> 56f2fc79f6da7dec835e714de936feaeac927371
 def delta_infer1(rule, facts):
     antecedent_predicate_names = get_antecedent_predicate_names(rule)
     facts_by_predicate = group_facts_by_predicate(
