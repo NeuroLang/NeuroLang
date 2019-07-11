@@ -4,7 +4,7 @@ import itertools
 import copy
 from collections import defaultdict
 import logging
-from typing import Set, FrozenSet
+from typing import Set, FrozenSet, Tuple, Iterable, Callable
 
 import numpy as np
 
@@ -13,7 +13,7 @@ from .expressions import (
     Definition, ExpressionBlock
 )
 from .solver_datalog_naive import Implication, Fact
-from .expression_walker import ExpressionWalker
+from .expression_walker import PatternWalker
 from .expression_pattern_matching import add_match
 from . import unification
 from .generative_datalog import DeltaAtom, DeltaTerm
@@ -138,44 +138,35 @@ def get_constant_dterm_dist(dterm):
         })
 
 
+FactSet = FrozenSet[Fact]
+FactSetSymbol = Symbol[FactSet]
+FactSetTableCPD = FrozenSet[Tuple[FactSet, float]]
+FactSetTableCPDFunctor = Callable[[Iterable[FactSet]], FactSetTableCPD]
 
 
-class FactSetRV(Definition):
-    def __init__(self, name):
-        if not isinstance(name, Constant) or name.type is not str:
-            raise NeuroLangException(
-                'Name of random variable expected to be a Constant[str]'
-            )
-        self.name = name
-
-    def __hash__(self):
-        return hash(self.name)
-
-
-class UnionFactSetRV(FactSetRV):
+class ExtensionalPredicateCPDFunctor(FactSetTableCPDFunctor):
     def __init__(self, predicate):
-        super().__init__(Constant[str](predicate))
         self.predicate = predicate
+        self.facts = set()
 
 
-class ExtensionalFactSetRV(FactSetRV):
+class InferredFactSetCPDFunctor(FactSetTableCPDFunctor):
+    def __init__(self, rule):
+        self.rule = rule
+
+
+class UnionFactSetCPDFunctor(FactSetTableCPDFunctor):
     def __init__(self, predicate):
-        super().__init__(Constant[str](predicate))
         self.predicate = predicate
-        self.ground_facts = set()
-
-
-class IntensionalFactSetRV(FactSetRV):
-    def __init__(self, predicate, rule_id):
-        super().__init__(Constant[str](f'{predicate}_{rule_id}'))
-        self.predicate = predicate
-        self.rule_id = rule_id
 
 
 class GraphicalModel(Expression):
     def __init__(self):
-        self.random_variables = dict()
-        self.parents = defaultdict(set)
+        self.rv_to_cpd_functor = dict()
+        self.parents = defaultdict(frozenset)
+
+    def add_parenting(self, child, parent):
+        self.parents[child] = self.parents[child].union({parent})
 
 
 class GDatalogToGraphicalModelTranslator(ExpressionWalker):
@@ -195,32 +186,33 @@ class GDatalogToGraphicalModelTranslator(ExpressionWalker):
     @add_match(Fact)
     def fact(self, expression):
         predicate = expression.consequent.functor.name
-        if predicate not in self.gm.random_variables:
-            rv = ExtensionalFactSetRV(predicate)
-            self.gm.random_variables[predicate] = rv
-        else:
-            rv = self.gm.random_variables[predicate]
-        rv.ground_facts.add(expression.fact)
+        rv_symbol = FactSetSymbol(predicate)
+        if rv_symbol not in self.gm.rv_to_cpd_functor:
+            self.gm.rv_to_cpd_functor[rv_symbol] = (
+                ExtensionalPredicateCPDFunctor(predicate)
+            )
+            self.gm.rv_to_cpd_functor[rv_symbol].facts.add(expression)
 
     @add_match(Implication(Definition, ...))
     def rule(self, rule):
         predicate = rule.consequent.functor.name
         self.intensional_predicate_rule_count[predicate] += 1
         rule_id = self.intensional_predicate_rule_count[predicate]
-        rv_name = f'{predicate}_{rule_id}'
-        rv = IntensionalFactSetRV(predicate, rule_id)
-        if rv_name in self.gm.random_variables:
+        rule_rv_symbol = FactSetSymbol(f'{predicate}_{rule_id}')
+        pred_rv_symbol = FactSetSymbol(f'{predicate}')
+        if rule_rv_symbol in self.gm.rv_to_cpd_functor:
             raise NeuroLangException(
-                f'Random variable {rv_name} already efined'
+                f'Random variable {rule_rv_symbol} already defined'
             )
-        self.gm.random_variables[rv_name] = rv
-        self.gm.parents[rv_name] = set()
-        for pred in get_antecedent_predicate_names(rule):
-            self.gm.parents[rv_name].add(pred)
-        if predicate not in self.gm.random_variables:
-            rv = UnionFactSetRV(predicate)
-            self.gm.random_variables[predicate] = rv
-            self.gm.parents[predicate].add(rv_name)
+        self.gm.rv_to_cpd_functor[rule_rv_symbol
+                                  ] = (InferredFactSetCPDFunctor(rule))
+        for antecedent_pred in get_antecedent_predicate_names(rule):
+            antecedent_rv_symbol = FactSetSymbol(f'{antecedent_pred}')
+            self.gm.add_parenting(rule_rv_symbol, antecedent_rv_symbol)
+        if pred_rv_symbol not in self.gm.rv_to_cpd_functor:
+            self.gm.rv_to_cpd_functor[pred_rv_symbol] = \
+                UnionFactSetCPDFunctor(predicate)
+            self.gm.add_parenting(pred_rv_symbol, rule_rv_symbol)
 
 
 def gdatalog2gm(program):
@@ -231,7 +223,7 @@ def gdatalog2gm(program):
 
 def sort_rvs(gm):
     result = list()
-    sort_rvs_aux(gm, '__dummy__', set(gm.random_variables.keys()), result)
+    sort_rvs_aux(gm, '__dummy__', set(gm.rv_to_cpd_functor.keys()), result)
     return result[:-1]
 
 
@@ -241,9 +233,6 @@ def sort_rvs_aux(gm, rv, parents, result):
     if rv not in result:
         result.append(rv)
 
-
-class FactSetCPD(Expression[Set[Fact]]):
-    pass
 
 def delta_infer1(rule, facts):
     antecedent_predicate_names = get_antecedent_predicate_names(rule)
@@ -277,36 +266,26 @@ def delta_infer1(rule, facts):
         return frozenset({(frozenset(inferred_facts), Constant[int](1))})
 
 
-class InferredFactSetCPD(FactSetCPD):
-    def __init__(self, rule):
-        self.rule = rule
-
-    def __call__(self, parent_facts):
-        return delta_infer1(self.rule, parent_facts)
-
-
-class ConstantFactSetCPD(FactSetCPD):
-    def __init__(self, value):
-        if (
-            not isinstance(value, Constant) or
-            value.type is not FrozenSet[Fact]
-        ):
-            raise NeuroLangException(
-                'Expected value to be a Constant[FrozenSet[Fact]]'
-            )
-        self.value = value
-
-    def __call__(self):
-        return frozenset({(self.value, Constant(1.0))})
-
-
-class GraphicalModelSolver(ExpressionWalker):
+class GraphicalModelSolver(PatternWalker):
     @add_match(GraphicalModel)
     def graphical_model(self, graphical_model):
-        dependency_ordered_rvs = sort_rvs(graphical_model)
-        cpds = set(self.walk(rv) for rv in dependency_ordered_rvs)
-        return factset_union_cpd(cpds)
+        pass
 
-    @add_match(ExtensionalFactSetRV)
-    def extensional_rv(self, rv):
-        return ConstantFactSetCPD(frozenset(rv.facts))
+    @add_match(FunctionApplication(ExtensionalPredicateCPDFunctor, ...))
+    def extensional_predicate_cpd(self, expression):
+        return frozenset({
+            (frozenset(expression.functor.facts), Constant[float](1.0))
+        })
+
+    @add_match(FunctionApplication(UnionFactSetCPDFunctor, ...))
+    def union_cpd(self, expression):
+        parent_values = expression.args
+        return frozenset({
+            (frozenset().union(*parent_values), Constant[float](1.0))
+        })
+
+    @add_match(FunctionApplication(InferredFactSetCPDFunctor, ...))
+    def rule_cpd(self, expression):
+        parent_values = expression.args
+        rule = expression.functor.rule
+        return delta_infer1(rule, frozenset().union(*parent_values))
