@@ -21,6 +21,7 @@ example_expressions = dict(
     q_a=Query(S_('a'), F_(C_(lambda x: x % 2 == 0), (C_[int](2), ))),
     t_a=C_((C_[float](1.), S_('a'))),
     t_b=C_((C_[str]('a'), S_('a'))),
+    t_c=C_((1, 2)),
     p_a=Projection(C_((C_[str]('a'), S_('a'))), C_[int](1)),
 )
 
@@ -145,7 +146,15 @@ def test_match_expression_value():
 
 def test_match_expression_tuple():
     class PM(PatternMatcher):
-        @add_match(expressions.Constant((expressions.Constant[float](...), )))
+        @add_match(
+            expressions.Constant[typing.Tuple[int, int]](...)
+        )
+        def ___(self, expression):
+            return expression
+
+        @add_match(
+            expressions.Constant((expressions.Constant[float](...), ))
+        )
         def __(self, expression):
             return False
 
@@ -159,6 +168,8 @@ def test_match_expression_tuple():
 
     for k, e in example_expressions.items():
         if k == 't_a':
+            assert pm.match(e) is e
+        elif k == 't_c':
             assert pm.match(e) is e
         else:
             with raises(NeuroLangPatternMatchingNoMatch):
@@ -183,13 +194,13 @@ def test_pattern_matching_parametric_type():
         def ___(self, expression):
             return expression
 
-    PM_int = PM[int]
-    assert PM_int.__patterns__[0][0] == expressions.Constant[int]
+    pm_int = PM[int]
+    assert pm_int.__patterns__[0][0] == expressions.Constant[int]
     assert isinstance(
-        PM_int.__patterns__[1][0], expressions.FunctionApplication
+        pm_int.__patterns__[1][0], expressions.FunctionApplication
     )
-    assert PM_int.__patterns__[1][0].args[0] is expressions.Constant[int]
-    assert PM_int.__patterns__[2][0] == expressions.Constant
+    assert pm_int.__patterns__[1][0].args[0] is expressions.Constant[int]
+    assert pm_int.__patterns__[2][0] == expressions.Constant
 
 
 def test_pattern_matching_wrong_args():
