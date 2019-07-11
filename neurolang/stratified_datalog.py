@@ -70,7 +70,7 @@ class StratifiedDatalog():
 
         Parameters
         ----------
-        expression_block : ExpressionBlock
+        implication : Implication
             The implication to be checked.
         """
         if self._is_negation(implication.consequent):
