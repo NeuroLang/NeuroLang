@@ -48,6 +48,10 @@ class StratifiedDatalog():
         ExpressionBlock
             The stratified version of the program.
         """
+        self._idb_symbols = []
+        self._imp_symbols = []
+        self._negative_graph = {}
+
         for rule in expression_block.expressions:
             self._add_idb_symbol(rule)
 
