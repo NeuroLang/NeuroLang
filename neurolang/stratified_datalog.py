@@ -94,7 +94,6 @@ class StratifiedDatalog():
         """
         cons_symb = ConsequentSymbols()
         self._imp_symbols = cons_symb.walk(expression_block)
-        
         self._create_graph()
 
         for key, values in self._negative_graph.items():
@@ -232,7 +231,7 @@ class StratifiedDatalog():
 class ConsequentSymbols(PatternWalker):
     '''This class implements a PatternWalker who is in charge of going through
     an expression block and obtaining the symbols present in the antecedent of
-    each one of the available implications. '''
+    each one of the available implications.'''
 
     @add_match(Implication)
     def eval_implication(self, expression):
