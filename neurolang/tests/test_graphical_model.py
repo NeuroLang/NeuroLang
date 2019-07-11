@@ -120,7 +120,7 @@ def test_sort_rv():
 
 def test_gdatalog_translation_to_gm():
     gm = gdatalog2gm(program_1)
-    assert set(gm.random_variables.keys()) == {'P', 'Q', 'Q_1'}
+    assert set(gm.rv_to_cpd_functor.keys()) == {'P', 'Q', 'Q_1'}
     assert gm.parents['P'] == set()
     assert gm.parents['Q_1'] == {'P'}
     assert gm.parents['Q'] == {'Q_1'}
@@ -139,7 +139,7 @@ def test_delta_term():
     ))
     program = sugar_remove(program)
     gm = gdatalog2gm(program)
-    assert 'Q_1' in gm.random_variables
+    assert 'Q_1' in gm.rv_to_cpd_functor
 
 
 def test_2levels_model():
@@ -163,6 +163,6 @@ def test_2levels_model():
         ))
     )
     gm = gdatalog2gm(program)
-    assert set(gm.random_variables.keys()) == {
+    assert set(gm.rv_to_cpd_functor.keys()) == {
         'P', 'Q_1', 'Q', 'Z_1', 'Z_2', 'Z', 'R_1', 'R'
     }

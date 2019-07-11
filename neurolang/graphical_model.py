@@ -144,20 +144,21 @@ FactSetTableCPD = FrozenSet[Tuple[FactSet, float]]
 FactSetTableCPDFunctor = Callable[[Iterable[FactSet]], FactSetTableCPD]
 
 
-class ExtensionalPredicateCPDFunctor(FactSetTableCPDFunctor):
+class ExtensionalPredicateCPDFunctor(Definition[FactSetTableCPDFunctor]):
     def __init__(self, predicate):
         self.predicate = predicate
         self.facts = set()
 
 
-class InferredFactSetCPDFunctor(FactSetTableCPDFunctor):
+class InferredFactSetCPDFunctor(Definition[FactSetTableCPDFunctor]):
     def __init__(self, rule):
         self.rule = rule
 
 
-class UnionFactSetCPDFunctor(FactSetTableCPDFunctor):
+class UnionFactSetCPDFunctor(Definition[FactSetTableCPDFunctor]):
     def __init__(self, predicate):
         self.predicate = predicate
+
 
 class GraphicalModel(Expression):
     def __init__(self):
@@ -168,7 +169,7 @@ class GraphicalModel(Expression):
         self.parents[child] = self.parents[child].union({parent})
 
 
-class GDatalogToGraphicalModelTranslator(ExpressionWalker):
+class GDatalogToGraphicalModelTranslator(PatternWalker):
     '''Expression walker generating the graphical model
     representation of a GDatalog[Δ] program.
     '''
@@ -233,12 +234,6 @@ def sort_rvs_aux(gm, rv, parents, result):
         result.append(rv)
 
 
-<<<<<<< HEAD
-=======
-class FactSetCPD(Expression[Set[Fact]]):
-    pass
-
->>>>>>> 56f2fc79f6da7dec835e714de936feaeac927371
 def delta_infer1(rule, facts):
     antecedent_predicate_names = get_antecedent_predicate_names(rule)
     facts_by_predicate = group_facts_by_predicate(
