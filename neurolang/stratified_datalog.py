@@ -94,6 +94,24 @@ class StratifiedDatalog():
         """
         cons_symb = ConsequentSymbols()
         self._imp_symbols = cons_symb.walk(expression_block)
+        
+        self._create_graph()
+
+        for key, values in self._negative_graph.items():
+            for in_value in values:
+                if (
+                    in_value in self._negative_graph and
+                    key in self._negative_graph[in_value]
+                ):
+                    return False
+
+        return True
+
+
+    def _create_graph(self):
+        """This function iterate over every expression in the main block
+        and create a graph with the negative symbols."""
+
         for k, v in enumerate(self._idb_symbols):
             for s in self._imp_symbols[k]:
                 if (
@@ -108,19 +126,10 @@ class StratifiedDatalog():
                     else:
                         self._negative_graph[v.name] = [name]
 
-        for key, values in self._negative_graph.items():
-            for in_value in values:
-                if (
-                    in_value in self._negative_graph and
-                    key in self._negative_graph[in_value]
-                ):
-                    return False
-
-        return True
 
     def _solve(self, expression_block: ExpressionBlock):
         """Given an expression block, this function reorder it
-        in an stratified way. No change is made if it is not necessary. 
+        in an stratified way. No change is made if it is not necessary.
 
         Parameters
         ----------
@@ -184,9 +193,9 @@ class StratifiedDatalog():
         return new_block
 
     def _calculate_new_position(self, actual_position):
-        """Given the actual position of the expression, this function return a 
+        """Given the actual position of the expression, this function return a
         new position that try accomplish the constraints of the stratification.
-        No change is made if it is not necessary. 
+        No change is made if it is not necessary.
 
         Parameters
         ----------
