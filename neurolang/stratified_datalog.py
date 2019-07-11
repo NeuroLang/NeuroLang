@@ -1,3 +1,5 @@
+'''Implementation of negation by stratification'''
+
 from .expressions import (
     FunctionApplication,
     Constant,
@@ -22,13 +24,18 @@ from operator import invert, and_, or_
 
 
 class StratifiedDatalog():
+    '''Main class for solving stratifications in Datalog. Given an
+    expression block, this class checks that there is a stratification
+    and if so, calculates it, returning a new expression block with
+    the respective stratified program.'''
+
     def __init__(self):
         self._idb_symbols = []
         self._imp_symbols = []
         self._negative_graph = {}
 
     def stratify(self, expression_block: ExpressionBlock):
-        """Main function. Given an expression block, calculates 
+        """Main function. Given an expression block, calculates
         and returns the stratified program if possible.
 
         Parameters
@@ -72,7 +79,7 @@ class StratifiedDatalog():
             self._idb_symbols.append(symbol)
 
     def _check_stratification(self, expression_block: ExpressionBlock):
-        """Given an expression block, this function construct 
+        """Given an expression block, this function construct
         a graph of negative relations and check for stratifiability.
 
         Parameters
@@ -85,19 +92,21 @@ class StratifiedDatalog():
         bool
             True if the program is or can be stratified. False otherwise.
         """
-        sEval = ConsequentSymbols()
-        self._imp_symbols = sEval.walk(expression_block)
+        cons_symb = ConsequentSymbols()
+        self._imp_symbols = cons_symb.walk(expression_block)
         for k, v in enumerate(self._idb_symbols):
             for s in self._imp_symbols[k]:
-                if self._is_negation(s):
+                if (
+                    StratifiedDatalog._is_negation(s) and
+                    s.args[0].functor.name in self._idb_symbols
+                ):
                     name = s.args[0].functor.name
-                    if name in self._idb_symbols:
-                        if k in self._negative_graph:
-                            rel = self._negative_graph[v]
-                            rel.append(name)
-                            self._negative_graph[v.name] = rel
-                        else:
-                            self._negative_graph[v.name] = [name]
+                    if k in self._negative_graph:
+                        rel = self._negative_graph[v]
+                        rel.append(name)
+                        self._negative_graph[v.name] = rel
+                    else:
+                        self._negative_graph[v.name] = [name]
 
         for key, values in self._negative_graph.items():
             for in_value in values:
@@ -123,33 +132,86 @@ class StratifiedDatalog():
         ExpressionBlock
             The stratified version of the program.
         """
-        stratified_index = []
+        new_block = ExpressionBlock(expression_block.expressions)
+        temp_block = ExpressionBlock(())
 
-        moved = 0
-        for key, _ in enumerate(expression_block.expressions):
-            imp_symbols = self._imp_symbols[key]
-            new_pos = key
-            for ith_idb in range(key + 1, len(self._idb_symbols)):
-                for imp_symbol in imp_symbols:
-                    if self._is_negation(imp_symbol):
-                        if (
-                            self._idb_symbols[ith_idb] ==
-                            imp_symbol.args[0].functor
-                        ):
-                            new_pos += 1
+        while new_block.expressions != temp_block.expressions:
+            stratified_index = []
+            moved = 0
+            temp_block.expressions = new_block.expressions
+            for key, _ in enumerate(temp_block.expressions):
+                new_pos = self._calculate_new_position(key)
 
-            if new_pos != key:
-                moved += 1
-                stratified_index.append(new_pos)
-            else:
-                stratified_index.append(new_pos - moved)
+                if new_pos == key and key <= max(stratified_index, default=0):
+                    stratified_index.append(new_pos - moved)
+                elif new_pos == key and key > max(stratified_index):
+                    stratified_index.append(new_pos)
+                else:
+                    moved += 1
+                    stratified_index.append(new_pos)
 
-        new_order = sorted(zip(stratified_index, expression_block.expressions))
-        stratified_rules = [x for _, x in new_order]
+            new_block = self._reorder(stratified_index, temp_block)
 
-        return ExpressionBlock(tuple(stratified_rules))
+        return new_block
 
-    def _is_negation(self, expression):
+    def _reorder(self, new_positions, block):
+        """Given a list of position and an expression block, this function
+        reorder the block and also update the order of the global variables.
+
+        Parameters
+        ----------
+        new_positions : list
+            The list with the new positions
+        expression_block : ExpressionBlock
+            The expression block defining the program to be reordered.
+
+        Returns
+        -------
+        ExpressionBlock
+            The reordered version of the program.
+        """
+
+        new_block_order = sorted(zip(new_positions, block.expressions))
+        reordered_block = [x for _, x in new_block_order]
+        new_block = ExpressionBlock(tuple(reordered_block))
+
+        new_idb_order = sorted(zip(new_positions, self._idb_symbols))
+        self._idb_symbols = [x for _, x in new_idb_order]
+
+        new_imp_order = sorted(zip(new_positions, self._imp_symbols))
+        self._imp_symbols = [x for _, x in new_imp_order]
+
+        return new_block
+
+    def _calculate_new_position(self, actual_position):
+        """Given the actual position of the expression, this function return a 
+        new position that try accomplish the constraints of the stratification.
+        No change is made if it is not necessary. 
+
+        Parameters
+        ----------
+        actual_position : int
+            The actual position of the expression in the main block.
+
+        Returns
+        -------
+        int
+            The new position of the expression.
+        """
+        imp_symbols = self._imp_symbols[actual_position]
+        new_pos = actual_position
+        for ith_idb in range(actual_position + 1, len(self._idb_symbols)):
+            for imp_symbol in imp_symbols:
+                if (
+                    StratifiedDatalog._is_negation(imp_symbol) and
+                    self._idb_symbols[ith_idb] == imp_symbol.args[0].functor
+                ):
+                    new_pos = ith_idb
+
+        return new_pos
+
+    @staticmethod
+    def _is_negation(expression):
         if isinstance(
             expression, FunctionApplication
         ) and expression.functor == invert:
@@ -159,6 +221,10 @@ class StratifiedDatalog():
 
 
 class ConsequentSymbols(PatternWalker):
+    '''This class implements a PatternWalker who is in charge of going through
+    an expression block and obtaining the symbols present in the antecedent of
+    each one of the available implications. '''
+
     @add_match(Implication)
     def eval_implication(self, expression):
         return self.walk(expression.antecedent)
@@ -196,4 +262,3 @@ class ConsequentSymbols(PatternWalker):
             eval_block.append(eval_exp)
 
         return eval_block
-        

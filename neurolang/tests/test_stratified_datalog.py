@@ -103,6 +103,36 @@ def test_valid_stratification():
     assert stratified.expressions[1] == imp2
     assert stratified.expressions[2] == imp0
 
+    w = S_('w')
+
+    imp0 = Implication(y(), invert(x()))
+    imp1 = Implication(w(), and_(y(), invert(z())))
+    imp2 = Implication(x(), z())
+
+    program = Eb_((imp0, imp1, imp2))
+
+    sDatalog = StratifiedDatalog()
+    stratified = sDatalog.stratify(program)
+
+    assert stratified.expressions[0] == imp1
+    assert stratified.expressions[1] == imp2
+    assert stratified.expressions[2] == imp0
+
+    imp0 = Implication(y(), invert(x()))
+    imp1 = Implication(w(), and_(y(), invert(z())))
+    imp2 = Implication(x(), z())
+    imp3 = Implication(z(), invert(y()))
+
+    program = Eb_((imp0, imp1, imp2, imp3))
+
+    sDatalog = StratifiedDatalog()
+    stratified = sDatalog.stratify(program)
+
+    assert stratified.expressions[0] == imp2
+    assert stratified.expressions[1] == imp0
+    assert stratified.expressions[2] == imp3
+    assert stratified.expressions[3] == imp1
+
 
 def test_imposible_stratification():
     x = S_('x')
