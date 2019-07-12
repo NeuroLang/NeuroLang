@@ -177,8 +177,6 @@ def test_different_consts():
     a = C_('a')
     b = C_('b')
 
-    assert x(a) != x(b)
-
     imp0 = Implication(y(), invert(x(a)))
     imp1 = Implication(x(b), and_(y(), invert(z(b))))
     imp2 = Implication(x(b), z(a))
