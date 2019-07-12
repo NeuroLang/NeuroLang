@@ -168,3 +168,24 @@ def test_positive_cicle():
 
     assert stratified.expressions[0] == imp0
     assert stratified.expressions[1] == imp1
+
+
+def test_different_consts():
+    x = S_('x')
+    y = S_('y')
+    z = S_('z')
+    a = C_('a')
+    b = C_('b')
+
+    imp0 = Implication(y(), invert(x(a)))
+    imp1 = Implication(x(b), and_(y(), invert(z(b))))
+    imp2 = Implication(x(b), z(a))
+
+    program = Eb_((imp0, imp1, imp2))
+
+    sDatalog = StratifiedDatalog()
+    stratified = sDatalog.stratify(program)
+
+    assert stratified.expressions[0] == imp0
+    assert stratified.expressions[1] == imp1
+    assert stratified.expressions[2] == imp2

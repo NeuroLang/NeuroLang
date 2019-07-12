@@ -112,8 +112,8 @@ class StratifiedDatalog():
 
     def _create_graph(self):
         """This function iterate over every expression in the main block
-        and create a graph with the negative symbols."""
-
+        and create a graph with the negative symbols.
+        """
         for k, v in enumerate(self._idb_symbols):
             for s in self._imp_symbols[k]:
                 if (
