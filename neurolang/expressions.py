@@ -312,8 +312,12 @@ class Expression(metaclass=ExpressionMeta):
             val_other = getattr(other, child)
 
             if isinstance(val, (list, tuple)):
-                if not all(v == o for v, o in zip_longest(val, val_other)):
-                    break
+                if len(val) == len(val_other):
+                    if not all(v == o for v, o in zip(val, val_other)):
+                        break
+                else:
+                    if not all(v == o for v, o in zip_longest(val, val_other)):
+                        break
             elif not val == val_other:
                 break
         else:
