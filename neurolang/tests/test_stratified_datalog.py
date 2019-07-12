@@ -48,11 +48,11 @@ def test_consequent_symbols():
     con = cSymbols.walk(program)
 
     assert con[0] == [invert(x())]
-    assert con[1] == [y, invert(z())]
+    assert con[1] == [y(), invert(z())]
     assert con[2] == [invert(y()), invert(z())]
-    assert con[3] == [z]
+    assert con[3] == [z()]
     assert con[4] == []
-    assert con[5] == [z]
+    assert con[5] == [z()]
     assert con[6] == [w]
 
 

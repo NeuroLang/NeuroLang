@@ -102,8 +102,8 @@ class StratifiedDatalog():
         for key, values in self._negative_graph.items():
             for in_value in values:
                 if (
-                    in_value in self._negative_graph and
-                    key in self._negative_graph[in_value]
+                    str(in_value) in self._negative_graph and
+                    key in self._negative_graph[str(in_value)]
                 ):
                     return False
 
@@ -120,12 +120,13 @@ class StratifiedDatalog():
                     StratifiedDatalog._is_negation(s) and
                     s.args[0] in self._idb_symbols
                 ):
-                    if v.functor.name in self._negative_graph:
+                    name = str(v)
+                    if name in self._negative_graph:
                         rel = self._negative_graph[v]
-                        rel.append(s.args[0])
-                        self._negative_graph[v.functor.name] = rel
+                        rel.append(str(s.args[0]))
+                        self._negative_graph[name] = rel
                     else:
-                        self._negative_graph[v.functor.name] = [s.args[0]]
+                        self._negative_graph[name] = [str(s.args[0])]
 
 
     def _solve(self, expression_block: ExpressionBlock):
