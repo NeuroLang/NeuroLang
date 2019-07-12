@@ -79,7 +79,7 @@ class StratifiedDatalog():
                     negated: {implication.consequent}'
             )
 
-        self._idb_symbols.append(implication.consequent.functor)
+        self._idb_symbols.append(implication.consequent)
 
     def _check_stratification(self, expression_block: ExpressionBlock):
         """Given an expression block, this function construct
@@ -118,15 +118,14 @@ class StratifiedDatalog():
             for s in self._imp_symbols[k]:
                 if (
                     StratifiedDatalog._is_negation(s) and
-                    s.args[0].functor.name in self._idb_symbols
+                    s.args[0] in self._idb_symbols
                 ):
-                    name = s.args[0].functor.name
-                    if k in self._negative_graph:
+                    if v.functor.name in self._negative_graph:
                         rel = self._negative_graph[v]
-                        rel.append(name)
-                        self._negative_graph[v.name] = rel
+                        rel.append(s.args[0])
+                        self._negative_graph[v.functor.name] = rel
                     else:
-                        self._negative_graph[v.name] = [name]
+                        self._negative_graph[v.functor.name] = [s.args[0]]
 
 
     def _solve(self, expression_block: ExpressionBlock):
@@ -215,7 +214,7 @@ class StratifiedDatalog():
             for imp_symbol in imp_symbols:
                 if (
                     StratifiedDatalog._is_negation(imp_symbol) and
-                    self._idb_symbols[ith_idb] == imp_symbol.args[0].functor
+                    self._idb_symbols[ith_idb] == imp_symbol.args[0]
                 ):
                     new_pos = ith_idb
 
@@ -255,7 +254,7 @@ class ConsequentSymbols(PatternWalker):
 
     @add_match(FunctionApplication(Symbol, ...))
     def eval_function_application(self, expression):
-        return self.walk(expression.functor)
+        return [expression]
 
     @add_match(Symbol)
     def eval_symbol(self, expression):
