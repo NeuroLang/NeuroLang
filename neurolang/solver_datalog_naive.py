@@ -215,6 +215,9 @@ class DatalogBasic(PatternWalker):
             del ret[keyword]
         return ret
 
+    def builtins(self):
+        return self.symbol_table.symbols_by_type(Callable)
+
 
 class SolverNonRecursiveDatalogNaive(DatalogBasic):
     '''

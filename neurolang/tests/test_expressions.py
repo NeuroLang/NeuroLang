@@ -176,6 +176,9 @@ def test_equality():
     assert C_((C_(1), C_(2))) == C_((C_(1), C_(2)))
     assert C_((C_(1), C_(2))) != C_((C_(1), C_(3)))
 
+    assert C_((C_(1), C_(2))) != C_((C_(1)))
+    assert S_('a')(C_(1)) != S_('a')(C_(1), C_(2))
+    
 
 def test_instance_check():
     c = C_[int](2)
