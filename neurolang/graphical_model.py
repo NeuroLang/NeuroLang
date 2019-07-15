@@ -4,7 +4,7 @@ import itertools
 import copy
 from collections import defaultdict
 import logging
-from typing import Set, FrozenSet, Tuple, Iterable, Callable
+from typing import Set, FrozenSet, Tuple, Iterable, Callable, AbstractSet
 
 import numpy as np
 
@@ -13,7 +13,7 @@ from .expressions import (
     Definition, ExpressionBlock
 )
 from .solver_datalog_naive import Implication, Fact
-from .expression_walker import PatternWalker
+from .expression_walker import ExpressionWalker
 from .expression_pattern_matching import add_match
 from . import unification
 from .generative_datalog import DeltaAtom, DeltaTerm
@@ -47,11 +47,10 @@ def get_antecedent_predicate_names(rule):
 def produce(rule, facts):
     if (
         not isinstance(facts, (list, tuple)) or
-        any(not isinstance(f, FunctionApplication) for f in facts)
+        any(not isinstance(f, Fact) for f in facts)
     ):
         raise Exception(
-            'Expected a list/tuple of function applications but got {}'
-            .format(type(facts))
+            'Expected a list/tuple of facts but got {}'.format(type(facts))
         )
     consequent = rule.consequent
     antecedent_literals = get_antecedent_literals(rule)
@@ -61,7 +60,7 @@ def produce(rule, facts):
         )
     for i in range(len(antecedent_literals)):
         res = unification.most_general_unifier(
-            antecedent_literals[i], facts[i]
+            antecedent_literals[i], facts[i].fact
         )
         if res is None:
             return None
@@ -74,40 +73,13 @@ def produce(rule, facts):
                 antecedent_literals[j] = unification.apply_substitution(
                     antecedent_literals[j], unifier
                 )
-    return consequent
-
-
-def infer(rule, facts):
-    '''
-    Return the set of facts that can be inferred in one step from a set of
-    facts by applying the Elementary Production (EP) inference rule.
-
-    Arguments
-    ---------
-    rule : Implication
-        Rule used for inferring new facts from the original set of facts.
-    facts : set of function applications on constants
-        Available facts on which the rule will be applied.
-
-    Note
-    ----
-    See Logic Programming and Databases, section 7.1.1
-
-    '''
-
-    n = len(get_antecedent_literals(rule))
-    result = set()
-    for facts in itertools.permutations(facts, n):
-        new = produce(rule, facts)
-        if new is not None:
-            result.add(new)
-    return result
+    return Fact(consequent)
 
 
 def group_facts_by_predicate(facts, predicates):
     result = defaultdict(set)
     for fact in facts:
-        pred = fact.functor.name
+        pred = fact.consequent.functor.name
         if pred in predicates:
             result[pred].add(fact)
     return result
@@ -127,7 +99,7 @@ def is_dterm_constant(dterm):
     return all(isinstance(param, Constant) for param in dterm.dist_params)
 
 
-def get_constant_dterm_dist(dterm):
+def get_constant_dterm_table_cpd(dterm):
     if not is_dterm_constant(dterm):
         raise NeuroLangException('Expected a constant Δ-term')
     if dterm.dist_name == Constant[str]('bernoulli'):
@@ -138,24 +110,25 @@ def get_constant_dterm_dist(dterm):
         })
 
 
-FactSet = FrozenSet[Fact]
+FactSet = AbstractSet[Fact]
 FactSetSymbol = Symbol[FactSet]
-FactSetTableCPD = FrozenSet[Tuple[FactSet, float]]
-FactSetTableCPDFunctor = Callable[[Iterable[FactSet]], FactSetTableCPD]
+FactSetTableCPD = AbstractSet[Tuple[FactSet, float]]
+FactSetTableCPDFunctor = Definition[Callable[[Iterable[FactSet]],
+                                             FactSetTableCPD]]
 
 
-class ExtensionalPredicateCPDFunctor(Definition[FactSetTableCPDFunctor]):
+class ExtensionalTableCPDFunctor(FactSetTableCPDFunctor):
     def __init__(self, predicate):
         self.predicate = predicate
         self.facts = set()
 
 
-class InferredFactSetCPDFunctor(Definition[FactSetTableCPDFunctor]):
+class IntensionalTableCPDFunctor(FactSetTableCPDFunctor):
     def __init__(self, rule):
         self.rule = rule
 
 
-class UnionFactSetCPDFunctor(Definition[FactSetTableCPDFunctor]):
+class UnionFactSetTableCPDFunctor(FactSetTableCPDFunctor):
     def __init__(self, predicate):
         self.predicate = predicate
 
@@ -165,11 +138,11 @@ class GraphicalModel(Expression):
         self.rv_to_cpd_functor = dict()
         self.parents = defaultdict(frozenset)
 
-    def add_parenting(self, child, parent):
+    def add_parent(self, child, parent):
         self.parents[child] = self.parents[child].union({parent})
 
 
-class GDatalogToGraphicalModelTranslator(PatternWalker):
+class GDatalogToGraphicalModelTranslator(ExpressionWalker):
     '''Expression walker generating the graphical model
     representation of a GDatalog[Δ] program.
     '''
@@ -189,9 +162,9 @@ class GDatalogToGraphicalModelTranslator(PatternWalker):
         rv_symbol = FactSetSymbol(predicate)
         if rv_symbol not in self.gm.rv_to_cpd_functor:
             self.gm.rv_to_cpd_functor[rv_symbol] = (
-                ExtensionalPredicateCPDFunctor(predicate)
+                ExtensionalTableCPDFunctor(predicate)
             )
-            self.gm.rv_to_cpd_functor[rv_symbol].facts.add(expression)
+        self.gm.rv_to_cpd_functor[rv_symbol].facts.add(expression)
 
     @add_match(Implication(Definition, ...))
     def rule(self, rule):
@@ -205,14 +178,14 @@ class GDatalogToGraphicalModelTranslator(PatternWalker):
                 f'Random variable {rule_rv_symbol} already defined'
             )
         self.gm.rv_to_cpd_functor[rule_rv_symbol
-                                  ] = (InferredFactSetCPDFunctor(rule))
+                                  ] = (IntensionalTableCPDFunctor(rule))
         for antecedent_pred in get_antecedent_predicate_names(rule):
             antecedent_rv_symbol = FactSetSymbol(f'{antecedent_pred}')
-            self.gm.add_parenting(rule_rv_symbol, antecedent_rv_symbol)
+            self.gm.add_parent(rule_rv_symbol, antecedent_rv_symbol)
         if pred_rv_symbol not in self.gm.rv_to_cpd_functor:
             self.gm.rv_to_cpd_functor[pred_rv_symbol] = \
-                UnionFactSetCPDFunctor(predicate)
-            self.gm.add_parenting(pred_rv_symbol, rule_rv_symbol)
+                UnionFactSetTableCPDFunctor(predicate)
+            self.gm.add_parent(pred_rv_symbol, rule_rv_symbol)
 
 
 def gdatalog2gm(program):
@@ -251,41 +224,79 @@ def delta_infer1(rule, facts):
         new_result = set()
         for cpd_entries in itertools.product(
             *[
-                get_constant_dterm_dist(dfact.delta_term)
+                get_constant_dterm_table_cpd(dfact.consequent.delta_term)
                 for dfact in inferred_facts
             ]
         ):
             new_facts = set(
-                substitute_dterm(dfact, entry[0])
+                Fact(substitute_dterm(dfact.consequent, entry[0]))
                 for dfact, entry in zip(inferred_facts, cpd_entries)
             )
             prob = np.prod([entry[1].value for entry in cpd_entries])
-            new_result.add((frozenset(new_facts), prob))
+            new_result.add((frozenset(new_facts), Constant[float](prob)))
         return frozenset(new_result)
     else:
-        return frozenset({(frozenset(inferred_facts), Constant[int](1))})
+        return frozenset({(frozenset(inferred_facts), Constant[float](1.0))})
 
 
-class GraphicalModelSolver(PatternWalker):
+class GraphicalModelSolver(ExpressionWalker):
     @add_match(GraphicalModel)
     def graphical_model(self, graphical_model):
-        pass
+        dependency_ordered_rvs = sort_rvs(graphical_model)
+        results = dict()
+        self.generate_possible_outcomes_aux(
+            graphical_model, dependency_ordered_rvs, 0, dict(),
+            Constant[float](1.0), results
+        )
+        return results
 
-    @add_match(FunctionApplication(ExtensionalPredicateCPDFunctor, ...))
-    def extensional_predicate_cpd(self, expression):
-        return frozenset({
-            (frozenset(expression.functor.facts), Constant[float](1.0))
-        })
+    def generate_possible_outcomes_aux(
+        self, gm, ordered_rvs, rv_idx, rv_values, result_prob, results
+    ):
+        if rv_idx >= len(ordered_rvs):
+            result = frozenset.union(*rv_values.values())
+            if result in results:
+                old_prob = results[result].value
+                new_prob = old_prob + result_prob.value
+                results[result] = Constant[float](new_prob)
+            else:
+                results[result] = result_prob
+        else:
+            rv_symbol = ordered_rvs[rv_idx]
+            cpd_functor = gm.rv_to_cpd_functor[rv_symbol]
+            parent_rvs = gm.parents[rv_symbol]
+            parent_values = tuple(
+                Constant[FactSet](rv_values[rv]) for rv in parent_rvs
+            )
+            cpd = self.walk(cpd_functor(*parent_values)).value
+            for facts, prob in cpd:
+                new_rv_values = rv_values.copy()
+                new_rv_values[rv_symbol] = facts
+                self.generate_possible_outcomes_aux(
+                    gm, ordered_rvs, rv_idx + 1, new_rv_values,
+                    Constant[float](result_prob.value * prob.value), results
+                )
 
-    @add_match(FunctionApplication(UnionFactSetCPDFunctor, ...))
-    def union_cpd(self, expression):
-        parent_values = expression.args
-        return frozenset({
-            (frozenset().union(*parent_values), Constant[float](1.0))
-        })
+    @add_match(FunctionApplication(ExtensionalTableCPDFunctor, ...))
+    def extensional_table_cpd(self, expression):
+        return Constant[FactSetTableCPD](
+            frozenset({
+                (frozenset(expression.functor.facts), Constant[float](1.0))
+            })
+        )
 
-    @add_match(FunctionApplication(InferredFactSetCPDFunctor, ...))
-    def rule_cpd(self, expression):
-        parent_values = expression.args
+    @add_match(FunctionApplication(UnionFactSetTableCPDFunctor, ...))
+    def union_table_cpd(self, expression):
+        parent_facts = frozenset(
+        ).union(*[arg.value for arg in expression.args])
+        return Constant[FactSetTableCPD](
+            frozenset({(parent_facts, Constant[float](1.0))})
+        )
+
+    @add_match(FunctionApplication(IntensionalTableCPDFunctor, ...))
+    def intensional_table_cpd(self, expression):
+        parent_facts = frozenset(
+        ).union(*[arg.value for arg in expression.args])
         rule = expression.functor.rule
-        return delta_infer1(rule, frozenset().union(*parent_values))
+        result = Constant[FactSetTableCPD](delta_infer1(rule, parent_facts))
+        return result

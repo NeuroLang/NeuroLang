@@ -1,3 +1,4 @@
+from .exceptions import NeuroLangException
 from .expressions import FunctionApplication, Symbol
 from .generative_datalog import DeltaTerm, DeltaAtom
 
