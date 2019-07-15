@@ -1,6 +1,10 @@
 import pytest
 
 from .. import expressions, exceptions
+from .. import solver_datalog_naive as sdb
+from .. import solver_datalog_extensional_db
+from .. import expression_walker as ew
+from .. import datalog_chase as dc
 
 from operator import and_, or_, invert
 
@@ -18,6 +22,14 @@ L_ = expressions.Lambda
 E_ = expressions.ExistentialPredicate
 U_ = expressions.UniversalPredicate
 Eb_ = expressions.ExpressionBlock
+
+class Datalog(
+    sdb.DatalogBasic,
+    solver_datalog_extensional_db.ExtensionalDatabaseSolver,
+    ew.ExpressionBasicEvaluator
+):
+    def function_gt(self, x: int, y: int)->bool:
+        return x > y
 
 
 def test_consequent_symbols():
@@ -219,3 +231,33 @@ def test_different_consts():
     assert stratified.expressions[1] == imp2
     assert stratified.expressions[2] == imp3
     assert stratified.expressions[3] == imp1
+
+
+def test_equal_stratification():
+    x = S_('x')
+    y = S_('y')
+    z = S_('z')
+    Q = S_('Q')
+    T = S_('T')
+    R = S_('R')
+
+    program = Eb_((
+        Fact(Q(C_(1), C_(2))),
+        Fact(Q(C_(2), C_(3))),
+        #Fact(R(C_(1), C_(3))),
+        Implication(T(x, y), Q(x, z) & Q(z, y)),
+        Implication(R(x, y), invert(T(x,y)))
+    ))
+
+    #instance_update = {
+    #    T: C_({C_((C_(1), C_(3)))})
+    #}
+
+    sDatalog = StratifiedDatalog()
+    stratified = sDatalog.stratify(program)
+
+    dl = Datalog()
+    dl.walk(stratified)
+
+    solution_instance = dc.build_chase_solution(dl)
+    assert 1 == 1
