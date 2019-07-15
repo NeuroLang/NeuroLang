@@ -4,7 +4,7 @@ import itertools
 import copy
 from collections import defaultdict
 import logging
-from typing import Set, FrozenSet, Tuple, Iterable, Callable, AbstractSet
+from typing import Set, Tuple, Iterable, Callable, AbstractSet, Mapping
 
 import numpy as np
 
@@ -112,7 +112,7 @@ def get_constant_dterm_table_cpd(dterm):
 
 FactSet = AbstractSet[Fact]
 FactSetSymbol = Symbol[FactSet]
-FactSetTableCPD = AbstractSet[Tuple[FactSet, float]]
+FactSetTableCPD = Mapping[FactSet, float]
 FactSetTableCPDFunctor = Definition[Callable[[Iterable[FactSet]],
                                              FactSetTableCPD]]
 
@@ -221,7 +221,7 @@ def delta_infer1(rule, facts):
         if new is not None:
             inferred_facts.add(new)
     if isinstance(rule.consequent, DeltaAtom):
-        new_result = set()
+        result = dict()
         for cpd_entries in itertools.product(
             *[
                 get_constant_dterm_table_cpd(dfact.consequent.delta_term)
@@ -233,10 +233,10 @@ def delta_infer1(rule, facts):
                 for dfact, entry in zip(inferred_facts, cpd_entries)
             )
             prob = np.prod([entry[1].value for entry in cpd_entries])
-            new_result.add((frozenset(new_facts), Constant[float](prob)))
-        return frozenset(new_result)
+            result[frozenset(new_facts)] = Constant[float](prob)
+        return result
     else:
-        return frozenset({(frozenset(inferred_facts), Constant[float](1.0))})
+        return {frozenset(inferred_facts): Constant[float](1.0)}
 
 
 class GraphicalModelSolver(ExpressionWalker):
@@ -269,7 +269,7 @@ class GraphicalModelSolver(ExpressionWalker):
                 Constant[FactSet](rv_values[rv]) for rv in parent_rvs
             )
             cpd = self.walk(cpd_functor(*parent_values)).value
-            for facts, prob in cpd:
+            for facts, prob in cpd.items():
                 new_rv_values = rv_values.copy()
                 new_rv_values[rv_symbol] = facts
                 self.generate_possible_outcomes_aux(
@@ -279,19 +279,16 @@ class GraphicalModelSolver(ExpressionWalker):
 
     @add_match(FunctionApplication(ExtensionalTableCPDFunctor, ...))
     def extensional_table_cpd(self, expression):
-        return Constant[FactSetTableCPD](
-            frozenset({
-                (frozenset(expression.functor.facts), Constant[float](1.0))
-            })
-        )
+        return Constant[FactSetTableCPD]({
+            frozenset(expression.functor.facts):
+            Constant[float](1.0)
+        })
 
     @add_match(FunctionApplication(UnionFactSetTableCPDFunctor, ...))
     def union_table_cpd(self, expression):
         parent_facts = frozenset(
         ).union(*[arg.value for arg in expression.args])
-        return Constant[FactSetTableCPD](
-            frozenset({(parent_facts, Constant[float](1.0))})
-        )
+        return Constant[FactSetTableCPD]({parent_facts: Constant[float](1.0)})
 
     @add_match(FunctionApplication(IntensionalTableCPDFunctor, ...))
     def intensional_table_cpd(self, expression):

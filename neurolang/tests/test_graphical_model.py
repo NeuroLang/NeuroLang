@@ -73,7 +73,7 @@ def test_produce():
     rule = Implication(Q(x), P(x))
     result = produce(rule, [fact])
     assert result is not None
-    assert result == Q(a)
+    assert result == Fact(Q(a))
 
 
 def test_substitute_dterm():
@@ -85,8 +85,8 @@ def test_delta_produce():
     fact_a = Fact(P(a, p_a))
     fact_b = Fact(P(b, p_b))
     rule = Implication(Q(x, DeltaTerm(bernoulli, p)), P(x, p))
-    assert produce(rule, [fact_a]) == Q(a, DeltaTerm(bernoulli, p_a))
-    assert produce(rule, [fact_b]) == Q(b, DeltaTerm(bernoulli, p_b))
+    assert produce(rule, [fact_a]) == Fact(Q(a, DeltaTerm(bernoulli, p_a)))
+    assert produce(rule, [fact_b]) == Fact(Q(b, DeltaTerm(bernoulli, p_b)))
 
 
 def test_delta_infer1():
@@ -96,15 +96,18 @@ def test_delta_infer1():
     result = delta_infer1(rule, frozenset({fact_a, fact_b}))
     result_as_dict = dict(result)
     expected_dist = {
-        frozenset({Q(a, C_(0)), Q(b, C_(0))}):
+        frozenset({Fact(Q(a, C_(0))), Fact(Q(b, C_(0)))}):
         (1 - p_a.value) * (1 - p_b.value),
-        frozenset({Q(a, C_(1)), Q(b, C_(0))}): p_a.value * (1 - p_b.value),
-        frozenset({Q(a, C_(0)), Q(b, C_(1))}): (1 - p_a.value) * p_b.value,
-        frozenset({Q(a, C_(1)), Q(b, C_(1))}): p_a.value * p_b.value,
+        frozenset({Fact(Q(a, C_(1))), Fact(Q(b, C_(0)))}):
+        p_a.value * (1 - p_b.value),
+        frozenset({Fact(Q(a, C_(0))), Fact(Q(b, C_(1)))}):
+        (1 - p_a.value) * p_b.value,
+        frozenset({Fact(Q(a, C_(1))), Fact(Q(b, C_(1)))}):
+        p_a.value * p_b.value,
     }
     for outcome, prob in expected_dist.items():
         assert outcome in result_as_dict
-        assert np.allclose([prob], [result_as_dict[outcome]])
+        assert np.allclose([prob], [result_as_dict[outcome].value])
 
 
 def test_sort_rv():
@@ -167,15 +170,25 @@ def test_gm_solver():
 
     outcomes = GraphicalModelSolver().walk(gdatalog2gm(program_4))
     expected_outcomes = {
-        frozenset({Fact(P(a)), Fact(Q(a, C_(1))), Fact(R(a, C_(1)))}):
+        frozenset({Fact(P(a)),
+                   Fact(Q(a, C_(1))),
+                   Fact(R(a, C_(1)))}):
         C_(0.2 * 0.9),
-        frozenset({Fact(P(a)), Fact(Q(a, C_(1))), Fact(R(a, C_(0)))}):
+        frozenset({Fact(P(a)),
+                   Fact(Q(a, C_(1))),
+                   Fact(R(a, C_(0)))}):
         C_(0.2 * 0.1),
-        frozenset({Fact(P(a)), Fact(Q(a, C_(0))), Fact(R(a, C_(0)))}):
+        frozenset({Fact(P(a)),
+                   Fact(Q(a, C_(0))),
+                   Fact(R(a, C_(0)))}):
         C_(0.8 * 0.1),
-        frozenset({Fact(P(a)), Fact(Q(a, C_(0))), Fact(R(a, C_(1)))}):
+        frozenset({Fact(P(a)),
+                   Fact(Q(a, C_(0))),
+                   Fact(R(a, C_(1)))}):
         C_(0.8 * 0.9),
     }
     for outcome, prob in expected_outcomes.items():
         assert outcome in outcomes
         assert np.allclose([prob.value], [outcomes[outcome].value])
+
+    outcomes = GraphicalModelSolver().walk(gdatalog2gm(program_3))
