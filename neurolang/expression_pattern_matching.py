@@ -253,7 +253,7 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
                     '\t\tresult: %(result_expression)s',
                     {'result_expression': result_expression}
                 )
-                return result_expression
+                break
             else:
                 logging.debug('\tNOMATCH %(name)s', {'name': name})
                 logging.debug(
@@ -266,6 +266,8 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
                 )
         else:
             raise NeuroLangPatternMatchingNoMatch(f'No match for {expression}')
+
+        return result_expression
 
     def pattern_match(self, pattern, expression):
         """Return ``True`` if ``pattern`` matches ``expression``.
