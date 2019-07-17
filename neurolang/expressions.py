@@ -275,7 +275,8 @@ class Expression(metaclass=ExpressionMeta):
         else:
             ret = self.__class__[type_](*args)
 
-        assert ret.type is type_
+        if ret.type is not type_:
+            raise NeuroLangTypeException('Cast impossible')
         return ret
 
     def unapply(self):
