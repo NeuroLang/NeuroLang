@@ -5,12 +5,10 @@ from .expressions import (
     Constant,
     Symbol,
     ExpressionBlock,
-    Expression,
 )
 
 from .solver_datalog_naive import (
     Implication,
-    Fact,
 )
 
 from .expression_walker import (
@@ -20,7 +18,7 @@ from .expression_walker import (
 
 from .exceptions import (NeuroLangDataLogNonStratifiable, NeuroLangException)
 
-from operator import invert, and_, or_
+from operator import invert, and_
 
 
 class StratifiedDatalog():
@@ -103,7 +101,7 @@ class StratifiedDatalog():
             for in_value in values:
                 if (
                     in_value in self._negative_graph and
-                    key.__hash__() in self._negative_graph[in_value]
+                    hash(key) in self._negative_graph[in_value]
                 ):
                     return False
 
@@ -120,13 +118,13 @@ class StratifiedDatalog():
                     StratifiedDatalog._is_negation(s) and
                     s.args[0] in self._idb_symbols
                 ):
-                    name = v.__hash__()
+                    name = hash(v)
                     if name in self._negative_graph:
                         rel = self._negative_graph[name]
-                        rel.append(s.args[0].__hash__())
+                        rel.append(hash(s.args[0]))
                         self._negative_graph[name] = rel
                     else:
-                        self._negative_graph[name] = [s.args[0].__hash__()]
+                        self._negative_graph[name] = [hash(s.args[0])]
 
 
     def _solve(self, expression_block: ExpressionBlock):

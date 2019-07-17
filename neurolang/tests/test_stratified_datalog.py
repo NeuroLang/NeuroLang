@@ -23,7 +23,7 @@ U_ = expressions.UniversalPredicate
 Eb_ = expressions.ExpressionBlock
 
 class Datalog(
-    sdb.DatalogBasicNegation,
+    sdb.DatalogBasic,
     solver_datalog_extensional_db.ExtensionalDatabaseSolver,
     ew.ExpressionBasicEvaluator
 ):
