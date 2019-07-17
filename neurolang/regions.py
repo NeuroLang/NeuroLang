@@ -192,8 +192,12 @@ class ExplicitVBR(VolumetricBrainRegion):
 
         return tree
 
-    def to_xyz(self):
-        return nib.affines.apply_affine(self.affine, self.voxels)
+    def to_xyz(self, affine=None):
+        if affine is None or np.allclose(affine, self.affine):
+            affine = self.affine
+        else:
+            affine = np.dot(affine, np.linalg.inv(self.affine))
+        return nib.affines.apply_affine(affine, self.voxels)
 
     def to_ijk(self, affine):
         return nib.affines.apply_affine(

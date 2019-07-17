@@ -275,7 +275,8 @@ class Expression(metaclass=ExpressionMeta):
         else:
             ret = self.__class__[type_](*args)
 
-        assert ret.type is type_
+        if ret.type is not type_:
+            raise NeuroLangTypeException('Cast impossible')
         return ret
 
     def unapply(self):
@@ -312,7 +313,10 @@ class Expression(metaclass=ExpressionMeta):
             val_other = getattr(other, child)
 
             if isinstance(val, (list, tuple)):
-                if not all(v == o for v, o in zip(val, val_other)):
+                if (
+                    len(val) != len(val_other) or
+                    not all(v == o for v, o in zip(val, val_other))
+                ):
                     break
             elif not val == val_other:
                 break
