@@ -26,6 +26,7 @@ jobs:
           - v1-dependencies-{{ checksum "requirements.txt" }}
           # fallback to using the latest cache if no exact match is found
           - v1-dependencies-
+
       - run:
           name: install dependencies
           command: |
@@ -35,10 +36,14 @@ jobs:
             pip install pytest
             pip install pytest-cov
             pip install codacy-coverage
+
+      - run:
           name: install sonar
           command: |
             curl -O https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-3.3.0.1492-linux.zip
             unzip -o sonar-scanner-cli-3.3.0.1492-linux.zip
+
+      - run:
           name: Setup Code Climate test-reporter
           command: |
             # download test reporter as a static binary
