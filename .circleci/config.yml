@@ -59,7 +59,7 @@ jobs:
             export CC_TEST_REPORTER_ID=8b40c7b919b1734ebd87f91c3033557f84b8c737db91057bdf75d16251440c59
             ./cc-test-reporter before-build
             make test
-            ./cc-test-reporter after-build --coverage-input-type coverage.py --exit-code $
+            ./cc-test-reporter after-build --coverage-input-type coverage.py --exit-code $?
             python-codacy-coverage -r coverage.xml
 
       - run:
