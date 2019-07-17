@@ -18,7 +18,7 @@ from .expression_walker import (
 
 from .exceptions import (NeuroLangDataLogNonStratifiable, NeuroLangException)
 
-from operator import invert, and_
+from operator import invert
 
 
 class StratifiedDatalog():
