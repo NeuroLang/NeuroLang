@@ -102,13 +102,15 @@ class Tree:
             self.region_boxes[region_id] = \
                 self.region_boxes[region_id].union(added_box)
 
-    def add_left(self, box, regions=[]):
+    def add_left(self, box, regions=None):
         return self.add_in_direction('left', box, regions)
 
-    def add_right(self, box, regions=[]):
+    def add_right(self, box, regions=None):
         return self.add_in_direction('right', box, regions)
 
-    def add_in_direction(self, direction, box, regions=[]):
+    def add_in_direction(self, direction, box, regions=None):
+        if regions is None:
+            regions = set()
         for region_id in regions:
             self.expand_region_box(region_id, box)
         n = self.root
@@ -133,8 +135,9 @@ class Tree:
             self.height = max(self.height, n.height)
             n = n.parent
 
-    def add(self, box, regions=[]):
-
+    def add(self, box, regions=None):
+        if regions is None:
+            regions = set()
         for region_id in regions:
             self.expand_region_box(region_id, box)
 
