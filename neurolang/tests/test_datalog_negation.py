@@ -8,8 +8,6 @@ from .. import datalog_negative_chase as dc
 
 from operator import and_, or_, invert
 
-from ..stratified_datalog import StratifiedDatalog, ConsequentSymbols
-
 from ..solver_datalog_naive import (
     Implication,
     Fact,
