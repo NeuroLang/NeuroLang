@@ -341,11 +341,15 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
                 isclass(expression.type) and
                 issubclass(expression.type, Tuple)
             ):
-                result = self.pattern_match_expression_tuple(expression, pattern)
+                result = self.pattern_match_expression_tuple(
+                    expression, pattern
+                )
             else:
                 result = False
         else:
-            result = self.pattern_match_expression_parameters(pattern, expression)
+            result = self.pattern_match_expression_parameters(
+                pattern, expression
+            )
         return result
 
     def pattern_match_expression_parameters(self, pattern, expression):
