@@ -152,14 +152,14 @@ class BoundedAABB(AABB):
 
     def cardinal_tiles(self) -> np.array:
         res = np.empty((1, 9), dtype=object)
-        range = abs(self.width)
+        range_ = abs(self.width)
 
         index = 0
         for j in [1, 0, -1]:
-            lb = self._lb + np.asanyarray((-range[0], j * range[1]))
-            ub = self._ub + np.asanyarray((-range[0], j * range[1]))
+            lb = self._lb + np.asanyarray((-range_[0], j * range_[1]))
+            ub = self._ub + np.asanyarray((-range_[0], j * range_[1]))
             for i in [0, 1, 2]:
-                increase = np.asanyarray((range[0], 0)) * i
+                increase = np.asanyarray((range_[0], 0)) * i
                 res[0, index] = BoundedAABB(
                     tuple(lb + increase), tuple(ub + increase),
                     self._bound_area
@@ -226,8 +226,8 @@ class Node:
 
 class Tree:
     def __init__(self) -> None:
-        self.root = None  # type: Union[Node, None]
-        self.region_boxes = dict()  # type: Dict[int, BoundedAABB]
+        self.root = None
+        self.region_boxes = dict()
         self.height = 0
 
     def expand_region_box(
