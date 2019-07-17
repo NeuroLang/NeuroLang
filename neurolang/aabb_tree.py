@@ -167,16 +167,14 @@ class Tree:
             # cost of merging new box with current box
             cost = 2 * combined_volume
             inherit_cost = 2 * (combined_volume - n.box.volume)
-            if n.left is not None and n.left.is_leaf:
-                cost_left = box.union(n.left.box).volume + inherit_cost
-            else:
-                cost_left = (box.union(n.left.box).volume -
-                             n.left.box.volume + inherit_cost)
-            if n.right is not None and n.right.is_leaf:
-                cost_right = box.union(n.right.box).volume + inherit_cost
-            else:
-                cost_right = (box.union(n.right.box).volume -
-                              n.right.box.volume + inherit_cost)
+            cost_left = box.union(n.left.box).volume + inherit_cost
+            if n.left is None or not n.left.is_leaf:
+                cost_left -= n.left.box.volume
+
+            cost_right = box.union(n.right.box).volume + inherit_cost
+            if n.right is None or not n.right.is_leaf:
+                cost_right -= n.right.box.volume
+
             if (cost < cost_left) and (cost < cost_right):
                 break
             # if it's cheaper to go left, we go left
