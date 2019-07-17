@@ -17,7 +17,7 @@ from ..expressions import is_leq_informative
 __all__ = ['QueryBuilder']
 
 
-class QueryBuilder:
+class QueryBuilder(object):
     def __init__(self, solver):
         self.solver = solver
         self.set_type = AbstractSet[self.solver.type]
@@ -84,16 +84,16 @@ class QueryBuilder:
     def types(self):
         return self.solver.symbol_table.types
 
-    def new_symbol(self, type, name=None):
-        if isinstance(type, (tuple, list)):
-            type = tuple(type)
-            type = Tuple[type]
+    def new_symbol(self, type_, name=None):
+        if isinstance(type_, (tuple, list)):
+            type_ = tuple(type_)
+            type_ = Tuple[type_]
 
         if name is None:
             name = str(uuid1())
         return Expression(
             self,
-            nl.Symbol[type](name)
+            nl.Symbol[type_](name)
         )
 
     def new_region_symbol(self, name=None):
@@ -137,19 +137,19 @@ class QueryBuilder:
             symbol, predicate
         )
 
-    def add_symbol(self, value, result_symbol_name=None):
-        if result_symbol_name is None:
-            result_symbol_name = str(uuid1())
+    def add_symbol(self, value, name=None):
+        if name is None:
+            name = str(uuid1())
 
         if isinstance(value, Expression):
             value = value.expression
         else:
             value = nl.Constant(value)
 
-        symbol = nl.Symbol[value.type](result_symbol_name)
+        symbol = nl.Symbol[value.type](name)
         self.solver.symbol_table[symbol] = value
 
-        return Symbol(self, result_symbol_name)
+        return Symbol(self, name)
 
     def add_region(self, region, result_symbol_name=None):
         if not isinstance(region, self.solver.type):
@@ -159,6 +159,9 @@ class QueryBuilder:
             )
 
         return self.add_symbol(region, result_symbol_name)
+
+    def add_region_set(self, region_set, name=None):
+        return self.add_tuple_set(region_set, Region, name=name)
 
     def add_tuple_set(self, iterable, types, name=None):
         if not isinstance(types, tuple) or len(types) == 1:
@@ -174,24 +177,31 @@ class QueryBuilder:
         element_type = set_type.__args__[0]
         new_set = []
         for e in iterable:
-            s = self.new_symbol(element_type).expression
-            if is_leq_informative(element_type, Tuple):
-                c = nl.Constant[element_type](
-                    tuple(nl.Constant(ee) for ee in e)
-                )
+            if not(isinstance(e, Symbol)):
+                s = nl.Symbol[element_type](str(uuid1()))
+                if is_leq_informative(element_type, Tuple):
+                    c = nl.Constant[element_type](
+                        tuple(nl.Constant(ee) for ee in e)
+                    )
+                else:
+                    c = nl.Constant[element_type](e)
+                self.solver.symbol_table[s] = c
             else:
-                c = nl.Constant[element_type](e)
-            self.solver.symbol_table[s] = c
+                s = e.neurolang_symbol
             new_set.append(s)
 
         constant = nl.Constant[set_type](frozenset(new_set))
 
-        symbol = self.new_symbol(set_type, name=name)
-        self.solver.symbol_table[symbol.expression] = constant
+        if name is None:
+            name = str(uuid1())
 
-        return self.symbols[symbol]
+        symbol = nl.Symbol[set_type](name)
+        self.solver.symbol_table[symbol] = constant
 
-    def create_region(self, spatial_image, label=1):
+        return Symbol(self, name)
+
+    @staticmethod
+    def create_region(spatial_image, label=1):
         region = ExplicitVBR(
             np.transpose((spatial_image.get_data() == label).nonzero()),
             spatial_image.affine, img_dim=spatial_image.shape
@@ -241,7 +251,7 @@ class QueryBuilder:
         return QuerySymbolsProxy(self)
 
 
-class QuerySymbolsProxy:
+class QuerySymbolsProxy(object):
     def __init__(self, query_builder):
         self._query_builder = query_builder
 

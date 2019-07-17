@@ -1,5 +1,8 @@
 [run]
-omit = */tests/*
+omit = 
+  */test_*
+  neurolang/deprecated
+branch=True
 
 [report]
 # Regexes for lines to exclude from consideration

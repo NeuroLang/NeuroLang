@@ -57,8 +57,6 @@ def test_symbol_application():
     fva = oadd(a, C_[int](3))
     fvb = osub(fva, C_[int](10))
     fvc = omul(fvb, b)
-    fvd = F_(a, None, kwargs={'c': b})
-    fve = F_(a, None, kwargs={'c': op.add(b, C_(2))})
 
     assert a in fva._symbols and (len(fva._symbols) == 1)
     assert evaluate(fva, a=C_(2)) == 5
@@ -71,16 +69,6 @@ def test_symbol_application():
     ) == evaluate(
         fvc, a=C_(2), b=C_(3)
     ) == -15
-    return
-    assert evaluate(
-        evaluate(fvd, a=C_(lambda *args, **kwargs: kwargs['c'])), b=C_(2)
-    ) == 2
-    assert evaluate(
-        evaluate(fvd, b=C_(2)), a=lambda *args, **kwargs: kwargs['c']
-    ) == 2
-    assert evaluate(
-        evaluate(fve, b=C_(2)), a=lambda *args, **kwargs: kwargs['c']
-    ) == 4
 
 
 def test_symbol_method_and_operator():
@@ -175,6 +163,22 @@ def test_compatibility_for_pattern_matching():
         for argname in argnames:
             assert getattr(instance, argname) == ...
 
+
+def test_equality():
+    assert C_(1) == C_(1)
+    assert C_(1) != C_(2)
+    assert S_('a') == S_('a')
+    assert S_('a') != S_('b')
+    assert S_('a')(C_(1)) == S_('a')(C_(1))
+    assert S_('a')(C_(1)) != S_('b')(C_(1))
+    assert S_('a')(C_(1)) != S_('a')(C_(2))
+
+    assert C_((C_(1), C_(2))) == C_((C_(1), C_(2)))
+    assert C_((C_(1), C_(2))) != C_((C_(1), C_(3)))
+
+    assert C_((C_(1), C_(2))) != C_((C_(1)))
+    assert S_('a')(C_(1)) != S_('a')(C_(1), C_(2))
+    
 
 def test_instance_check():
     c = C_[int](2)

@@ -10,13 +10,13 @@ def methdispatch(func):
 
     def wrapper(*args, **kw):
         return dispatcher.dispatch(args[1].__class__)(*args, **kw)
+
     wrapper.register = dispatcher.register
     update_wrapper(wrapper, func)
     return wrapper
 
 
 class BoundedAABB(AABB):
-
     def __init__(self, lb: tuple, ub: tuple, bounded_area: 'Boundary') -> None:
         super().__init__(lb, ub)
         self._bound_area = bounded_area
@@ -25,11 +25,14 @@ class BoundedAABB(AABB):
         return self._lb if i == 0 else self._ub
 
     def __repr__(self):
-        return 'BoundedAABB(lb={}, up={}, boundedTo={})'.format(tuple(self._lb), tuple(self._ub), self._bound_area)
-
+        return 'BoundedAABB(lb={}, up={}, boundedTo={})'.format(
+            tuple(self._lb), tuple(self._ub), self._bound_area
+        )
 
     def __eq__(self, other: 'BoundedAABB') -> bool:
-        return np.all(self._lb == other._lb) and np.all(self._ub == other._ub) and self._bound_area == other._bound_area
+        return np.all(self._lb == other._lb) and np.all(
+            self._ub == other._ub
+        ) and self._bound_area == other._bound_area
 
     @property
     def center(self) -> np.array:
@@ -44,8 +47,9 @@ class BoundedAABB(AABB):
         return self._ub - self._lb
 
     def adjust_to_bound(self) -> None:
-        self._lb, self._ub = self._bound_area.adjust_position(np.array(self._lb)), self._bound_area.adjust_position(np.array(self._ub))
-
+        self._lb, self._ub = self._bound_area.adjust_position(
+            np.array(self._lb)
+        ), self._bound_area.adjust_position(np.array(self._ub))
 
     @methdispatch
     def expand(self, arg):
@@ -53,32 +57,57 @@ class BoundedAABB(AABB):
 
     @expand.register(tuple)
     def _(self, point: tuple):
-        center = np.array([self._lb[i] + self.width[i] / 2 for i in range(len(self._lb))])
-        dc = np.array(self._bound_area.adjust_direction(tuple(np.array(point) - center)))
+        center = np.array([
+            self._lb[i] + self.width[i] / 2 for i in range(len(self._lb))
+        ])
+        dc = np.array(
+            self._bound_area.adjust_direction(tuple(np.array(point) - center))
+        )
         p = center + dc
-        l = self._bound_area.adjust_position(np.array(min(tuple(self._lb), tuple(p))))
-        u = self._bound_area.adjust_position(np.array(max(tuple(self._ub), tuple(p))))
+        l = self._bound_area.adjust_position(
+            np.array(min(tuple(self._lb), tuple(p)))
+        )
+        u = self._bound_area.adjust_position(
+            np.array(max(tuple(self._ub), tuple(p)))
+        )
 
         return BoundedAABB(l, u, self._bound_area)
 
     @expand.register(object)
     def _(self, another_box: 'BoundedAABB'):
-        center = np.array([self._lb[i] + self.width[i] / 2 for i in range(len(self._lb))])
-        box2_center = np.array([another_box[0][i] + another_box.width[i] / 2 for i in range(len(another_box[0]))])
+        center = np.array([
+            self._lb[i] + self.width[i] / 2 for i in range(len(self._lb))
+        ])
+        box2_center = np.array([
+            another_box[0][i] + another_box.width[i] / 2
+            for i in range(len(another_box[0]))
+        ])
 
-        dc = np.array(self._bound_area.adjust_direction(tuple(box2_center - center)))
+        dc = np.array(
+            self._bound_area.adjust_direction(tuple(box2_center - center))
+        )
         l1, u1 = tuple(self._lb), tuple(self._ub)
-        l2, u2 = tuple((center + dc) - another_box.width/2), tuple((center + dc) + another_box.width/2)
+        l2, u2 = tuple((center + dc) -
+                       another_box.width / 2), tuple((center + dc) +
+                                                     another_box.width / 2)
 
-        l, u = self._bound_area.adjust_position(np.array(min(l1, l2))), self._bound_area.adjust_position(np.array(max(u1, u2)))
+        l, u = self._bound_area.adjust_position(
+            np.array(min(l1, l2))
+        ), self._bound_area.adjust_position(np.array(max(u1, u2)))
         return BoundedAABB(l, u, self._bound_area)
 
     def intersects(self, other: 'BoundedAABB') -> bool:
-        center = np.array([self._lb[i] + self.width[i] / 2 for i in range(len(self._lb))])
-        box2_center = np.array([other[0][i] + other.width[i] / 2 for i in range(len(other[0]))])
-        dc = np.array(self._bound_area.adjust_direction(tuple(center - box2_center)))
-        radius = self.width/2
-        other_radius = other.width/2
+        center = np.array([
+            self._lb[i] + self.width[i] / 2 for i in range(len(self._lb))
+        ])
+        box2_center = np.array([
+            other[0][i] + other.width[i] / 2 for i in range(len(other[0]))
+        ])
+        dc = np.array(
+            self._bound_area.adjust_direction(tuple(center - box2_center))
+        )
+        radius = self.width / 2
+        other_radius = other.width / 2
         return np.all(abs(dc) <= other_radius + radius)
 
     @methdispatch
@@ -87,16 +116,24 @@ class BoundedAABB(AABB):
 
     @contains.register(object)
     def _(self, other: 'BoundedAABB') -> bool:
-        center = np.array([self._lb[i] + self.width[i] / 2 for i in range(len(self._lb))])
-        box2_center = np.array([other._lb[i] + other.width[i] / 2 for i in range(len(other._lb))])
-        dc = np.array(self._bound_area.adjust_direction(tuple(center - box2_center)))
-        radius = self.width/2
-        other_radius = other.width/2
+        center = np.array([
+            self._lb[i] + self.width[i] / 2 for i in range(len(self._lb))
+        ])
+        box2_center = np.array([
+            other._lb[i] + other.width[i] / 2 for i in range(len(other._lb))
+        ])
+        dc = np.array(
+            self._bound_area.adjust_direction(tuple(center - box2_center))
+        )
+        radius = self.width / 2
+        other_radius = other.width / 2
         return np.all(abs(dc) <= radius - other_radius)
 
     @contains.register(tuple)
     def _(self, point: tuple) -> bool:
-        center = np.array([self._lb[i] + self.width[i] / 2 for i in range(len(self._lb))])
+        center = np.array([
+            self._lb[i] + self.width[i] / 2 for i in range(len(self._lb))
+        ])
 
         dc = np.array(self._bound_area.adjust_direction(tuple(point - center)))
         radius = self.width / 2
@@ -115,21 +152,24 @@ class BoundedAABB(AABB):
 
     def cardinal_tiles(self) -> np.array:
         res = np.empty((1, 9), dtype=object)
-        range = abs(self.width)
+        range_ = abs(self.width)
 
         index = 0
         for j in [1, 0, -1]:
-            lb = self._lb + np.asanyarray((-range[0], j * range[1]))
-            ub = self._ub + np.asanyarray((-range[0], j * range[1]))
+            lb = self._lb + np.asanyarray((-range_[0], j * range_[1]))
+            ub = self._ub + np.asanyarray((-range_[0], j * range_[1]))
             for i in [0, 1, 2]:
-                increase = np.asanyarray((range[0], 0)) * i
-                res[0, index] = BoundedAABB(tuple(lb + increase), tuple(ub + increase), self._bound_area)
+                increase = np.asanyarray((range_[0], 0)) * i
+                res[0, index] = BoundedAABB(
+                    tuple(lb + increase), tuple(ub + increase),
+                    self._bound_area
+                )
                 index += 1
 
         return res
 
-class Boundary(BoundedAABB):
 
+class Boundary(BoundedAABB):
     def __init__(self, lb, ub) -> None:
         self._lb = np.asanyarray(lb)
         self._ub = np.asanyarray(ub)
@@ -153,21 +193,24 @@ class Boundary(BoundedAABB):
         return tuple(res)
 
     def __repr__(self):
-        return 'Boundry(lowerBound={}, upperBound={})'.format(tuple(self._lb), tuple(self._ub))
+        return 'Boundry(lowerBound={}, upperBound={})'.format(
+            tuple(self._lb), tuple(self._ub)
+        )
 
     def __eq__(self, other) -> bool:
         return np.all(self._lb == other._lb) and np.all(self._ub == other._ub)
 
 
 class Node:
-
-    def __init__(self,
-                 box: BoundedAABB,
-                 parent: Union[None, 'Node'] = None,
-                 left: Union[None, 'Node'] = None,
-                 right: Union[None, 'Node'] = None,
-                 height: int = 0,
-                 region_ids: Set[int] = set()) -> None:
+    def __init__(
+        self,
+        box: BoundedAABB,
+        parent: Union[None, 'Node'] = None,
+        left: Union[None, 'Node'] = None,
+        right: Union[None, 'Node'] = None,
+        height: int = 0,
+        region_ids: Set[int] = set()
+    ) -> None:
 
         self.box = box
         self.parent = parent
@@ -182,13 +225,14 @@ class Node:
 
 
 class Tree:
-
     def __init__(self) -> None:
-        self.root = None  # type: Union[Node, None]
-        self.region_boxes = dict()  # type: Dict[int, BoundedAABB]
+        self.root = None
+        self.region_boxes = dict()
         self.height = 0
 
-    def expand_region_box(self, region_id: int, added_box: BoundedAABB) -> None:
+    def expand_region_box(
+        self, region_id: int, added_box: BoundedAABB
+    ) -> None:
         if region_id not in self.region_boxes:
             self.region_boxes[region_id] = added_box
         else:
@@ -217,23 +261,29 @@ class Tree:
             if n.left.is_leaf:
                 cost_left = box.expand(n.left.box).volume + inherit_cost
             else:
-                cost_left = (box.expand(n.left.box).volume -
-                             n.left.box.volume + inherit_cost)
+                cost_left = (
+                    box.expand(n.left.box).volume - n.left.box.volume +
+                    inherit_cost
+                )
             if n.right.is_leaf:
                 cost_right = box.expand(n.right.box).volume + inherit_cost
             else:
-                cost_right = (box.expand(n.right.box).volume -
-                              n.right.box.volume + inherit_cost)
+                cost_right = (
+                    box.expand(n.right.box).volume - n.right.box.volume +
+                    inherit_cost
+                )
             if (cost < cost_left) and (cost < cost_right):
                 break
             n = n.left if cost_left < cost_right else n.right
 
         old_parent = n.parent
-        new_parent = Node(box=box.expand(n.box),
-                          left=n,
-                          parent=old_parent,
-                          height=n.height + 1,
-                          region_ids=region_ids)
+        new_parent = Node(
+            box=box.expand(n.box),
+            left=n,
+            parent=old_parent,
+            height=n.height + 1,
+            region_ids=region_ids
+        )
         n.parent = new_parent
         new_node = Node(box=box, parent=new_parent, region_ids=region_ids)
         new_parent.right = new_node
@@ -273,11 +323,17 @@ class Tree:
     def query_regions_axdir(self, region_id: int, axis: int,
                             direction: int) -> Set[int]:
         if direction not in {-1, 1}:
-            raise Exception('bad direction value: {}, expected to be in {}'
-                            .format(direction, {-1, 1}))
+            raise Exception(
+                'bad direction value: {}, expected to be in {}'.format(
+                    direction, {-1, 1}
+                )
+            )
         if axis not in {0, 1, 2}:
-            raise Exception('bad axis value: {}, expected to be in {}'
-                            .format(axis, {0, 1, 2}))
+            raise Exception(
+                'bad axis value: {}, expected to be in {}'.format(
+                    axis, {0, 1, 2}
+                )
+            )
         if region_id not in self.region_boxes or self.root is None:
             return set()
         region_box = self.region_boxes[region_id]

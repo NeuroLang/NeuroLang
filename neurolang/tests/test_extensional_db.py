@@ -120,7 +120,7 @@ def test_join():
         e1.value + e2.value
         for e1, e2 in product(set1.value, set2.value)
         if e1.value[1] == e2.value[0]
-    )  # yapf: disable
+    )
 
     fa = F_(S_('join'), (set1, C_(1), set2, C_(0)))
     res = ts.walk(fa)
@@ -140,7 +140,7 @@ def test_join_notuple():
         (e1.value, ) + e2.value
         for e1, e2 in product(set1.value, set2.value)
         if e1 == e2.value[1]
-    )  # yapf: disable
+    )
 
     fa = F_(S_('join'), (set1, C_(0), set2, C_(1)))
     res = ts.walk(fa)

@@ -45,15 +45,7 @@ def expression_iterator(expression, include_level=False, dfs=True):
         if isinstance(current_element[1], Symbol):
             children = []
         elif isinstance(current_element[1], Constant):
-            if is_leq_informative(current_element[1].type, typing.Tuple):
-                c = current_element[1].value
-                children = product((None,), c)
-            elif is_leq_informative(
-                current_element[1].type, typing.AbstractSet
-            ):
-                children = product((None,), current_element[1].value)
-            else:
-                children = []
+            children = expression_iterator_constant(current_element)
         elif isinstance(current_element[1], tuple):
             c = current_element[1]
             children = product((None,), c)
@@ -88,6 +80,19 @@ def expression_iterator(expression, include_level=False, dfs=True):
         extend(children)
 
         yield current_element
+
+
+def expression_iterator_constant(current_element):
+    if is_leq_informative(current_element[1].type, typing.Tuple):
+        c = current_element[1].value
+        children = product((None,), c)
+    elif is_leq_informative(
+        current_element[1].type, typing.AbstractSet
+    ):
+        children = product((None,), current_element[1].value)
+    else:
+        children = []
+    return children
 
 
 class PatternWalker(PatternMatcher):

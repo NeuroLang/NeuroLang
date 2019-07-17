@@ -8,8 +8,9 @@ import inspect
 import types
 from typing import (
     Callable, Tuple, Set, AbstractSet, Mapping, TypeVar,
-    Iterable, Sequence, Any, Generic, Text, _FinalTypingBase
+    Iterable, Sequence, Any, Generic, Text
 )
+import sys
 
 from typing_inspect import (
     get_origin,
@@ -21,27 +22,60 @@ from typing_inspect import (
 from ..exceptions import NeuroLangException
 
 
+NEW_TYPING = sys.version_info[:3] >= (3, 7, 0)
+
+
 class NeuroLangTypeException(NeuroLangException):
     pass
 
 
-class _Unknown(_FinalTypingBase, _root=True):
-    """Special type indicating an unknown type.
+if sys.version_info < (3, 6, 0):
+    raise ImportError("Only python 3.6 and over compatible")
+if not NEW_TYPING:
+    from typing import _FinalTypingBase
 
-    - Unknown is compatible with every type.
-    - Unknown is less informative than all types.
-    """
+    class _Unknown(_FinalTypingBase, _root=True):
+        """Special type indicating an unknown type.
 
-    __slots__ = ()
+        - Unknown is compatible with every type.
+        - Unknown is less informative than all types.
+        """
 
-    def __instancecheck__(self, obj):
-        raise TypeError("Unknown cannot be used with isinstance().")
+        __slots__ = ()
 
-    def __subclasscheck__(self, cls):
-        raise TypeError("Unknown cannot be used with issubclass().")
+        def __instancecheck__(self, obj):
+            raise TypeError("Unknown cannot be used with isinstance().")
 
+        def __subclasscheck__(self, cls):
+            raise TypeError("Unknown cannot be used with issubclass().")
 
-Unknown = _Unknown(_root=True)
+    Unknown = _Unknown(_root=True)
+else:
+    from typing import _SpecialForm, _Final, _Immutable, _GenericAlias
+
+    Unknown = _SpecialForm(
+        'Unknown', doc="""
+        Special type indicating an unknown type.
+
+        - Unknown is compatible with every type.
+        - Unknown is less informative than all types.
+        """
+    )
+
+    class Unknown(_Final, _Immutable, _root=True):
+        """Special type indicating an unknown type.
+
+        - Unknown is compatible with every type.
+        - Unknown is less informative than all types.
+        """
+
+        __slots__ = ()
+
+        def __instancecheck__(self, obj):
+            raise TypeError("Unknown cannot be used with isinstance().")
+
+        def __subclasscheck__(self, cls):
+            raise TypeError("Unknown cannot be used with issubclass().")
 
 
 type_order = {
@@ -121,16 +155,24 @@ def is_leq_informative(left, right):
             type_parameters_left = get_args(left)
             type_parameters_right = get_args(right)
 
-            return (
-                len(type_parameters_left) == len(type_parameters_right) and
-                all(
-                    is_leq_informative(t_left, t_right)
-                    for t_left, t_right in
-                    zip(type_parameters_left, type_parameters_right)
-                )
+            if len(type_parameters_left) != len(type_parameters_right):
+                return False
+
+            return all(
+                is_leq_informative(t_left, t_right)
+                for t_left, t_right in
+                zip(type_parameters_left, type_parameters_right)
             )
+        elif is_parametrical(left):
+            return False
         else:
             return is_leq_informative(left, generic_right)
+    elif is_parametrical(right):
+        if is_parameterized(left):
+            left = get_origin(left)
+        return issubclass(left, right)
+    elif is_parametrical(left) or is_parameterized(left):
+        return False
     elif left in type_order and right in type_order[left]:
         return True
     else:
@@ -143,24 +185,49 @@ def is_type(type_):
         type_ is Unknown or
         type_ is Any or
         is_typevar(type_) or
-        is_union_type(type_)
+        is_union_type(type_) or
+        is_parameterized(type_) or
+        is_parametrical(type_)
     )
 
 
-def is_parameteritrical(type_):
-    return any(
+def is_parametrical(type_):
+    is_parametrical_generic = any(
         p(type_)
         for p in
         (is_generic_type, is_callable_type, is_tuple_type, is_union_type)
-    )
+    ) and not getattr(type_, '_is_protocol', False)
+
+    if is_parametrical_generic:
+        if NEW_TYPING:
+            return getattr(type_, '_special', False) or (
+                is_union_type(type_) and not hasattr(type_, '__args__')
+            )
+        else:
+            return type_.__args__ is None
+    else:
+        return False
 
 
 def is_parameterized(type_):
-    return any(
+    is_parametrical_generic = any(
         p(type_)
         for p in
         (is_generic_type, is_callable_type, is_tuple_type, is_union_type)
-    ) and get_origin(type_) is not type_
+    )
+
+    if is_parametrical_generic:
+        if NEW_TYPING:
+            return not (
+                getattr(type_, '_special', False) or (
+                    is_union_type(type_) and not hasattr(type_, '__args__')
+                ) or
+                getattr(type_, '_is_protocol', False)
+            )
+        else:
+            return get_origin(type_) is not type_
+    else:
+        return False
 
 
 def unify_types(t1, t2):
@@ -229,13 +296,17 @@ def replace_type_variable(type_, type_hint, type_var=None):
         type_hint == type_var
     ):
         return type_
-    elif hasattr(type_hint, '__args__') and type_hint.__args__ is not None:
-        new_args = []
-        for arg in get_args(type_hint):
-            new_args.append(
-                replace_type_variable(type_, arg, type_var=type_var)
-            )
-        return type_hint.__origin__[tuple(new_args)]
+    elif is_parameterized(type_hint):
+        new_args = replace_type_variable(
+            type_, get_args(type_hint), type_var=type_var
+        )
+        new_args = tuple(new_args)
+        origin = get_origin(type_hint)
+        if NEW_TYPING and isinstance(type_hint, _GenericAlias):
+            new_type = type_hint.copy_with(new_args)
+        else:
+            new_type = origin[new_args]
+        return new_type
     elif isinstance(type_hint, Iterable):
         return [
             replace_type_variable(type_, arg, type_var=type_var)
@@ -265,8 +336,12 @@ def typing_callable_from_annotated_function(function):
 
 
 def get_args(type_):
-    ret = type_.__args__
-    if ret is None:
-        return ()
+    if is_parameterized(type_):
+        ret = type_.__args__
+        if ret is None:
+            ret = tuple()
+    elif is_parametrical(type_):
+        ret = tuple()
     else:
-        return ret
+        raise ValueError(f"Not {type_} is not a generic type")
+    return ret

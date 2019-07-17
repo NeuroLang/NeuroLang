@@ -295,6 +295,9 @@ class DatalogBasic(PatternWalker):
             del ret[keyword]
         return ret
 
+    def builtins(self):
+        return self.symbol_table.symbols_by_type(Callable)
+
 
 class SolverNonRecursiveDatalogNaive(DatalogBasic):
     '''
@@ -348,6 +351,17 @@ class SolverNonRecursiveDatalogNaive(DatalogBasic):
         return self.walk(
             Implication[out_type](consequent, new_antecedent)
         )
+
+    @add_match(Implication(
+        FunctionApplication[bool](Symbol, ...),
+        Expression
+    ))
+    def statement_intensional(self, expression):
+        expression = super().statement_intensional(expression)
+        consequent = expression.consequent
+        new_constants = {a for a in consequent.args if isinstance(a, Constant)}
+        self.symbol_table[self.constant_set_name].value.update(new_constants)
+        return expression
 
     @add_match(
         FunctionApplication(Constant[AbstractSet], ...),

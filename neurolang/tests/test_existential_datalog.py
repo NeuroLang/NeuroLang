@@ -1,5 +1,4 @@
 import pytest
-from typing import Any
 
 from .. import solver_datalog_extensional_db
 from .. import expression_walker
@@ -220,7 +219,6 @@ def test_cannot_mix_existential_and_non_existential_rule_definitions():
     solver = SolverWithoutExistentialResolution()
     x = S_('x')
     y = S_('y')
-    z = S_('z')
     P = S_('P')
     Q = S_('Q')
     R = S_('R')
