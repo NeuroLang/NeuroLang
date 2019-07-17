@@ -239,7 +239,9 @@ class Tree:
             self.region_boxes[region_id] = \
                 self.region_boxes[region_id].expand(added_box)
 
-    def add(self, box: BoundedAABB, region_ids: Set[int] = set()) -> None:
+    def add(self, box: BoundedAABB, region_ids: Set[int] = None) -> None:
+        if region_ids is None:
+            region_ids = set()
 
         for region_id in region_ids:
             self.expand_region_box(region_id, box)
