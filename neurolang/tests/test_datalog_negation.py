@@ -4,9 +4,9 @@ from .. import expressions, exceptions
 from .. import solver_datalog_negation as sdn
 from .. import solver_datalog_extensional_db
 from .. import expression_walker as ew
-from .. import datalog_negative_chase as dc
+from .. import datalog_negation_chase as dc
 
-from operator import and_, or_, invert
+from operator import and_, invert
 
 from ..solver_datalog_naive import (
     Implication,
