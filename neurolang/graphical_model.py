@@ -1,4 +1,3 @@
-from uuid import uuid1
 import operator
 import itertools
 import copy
