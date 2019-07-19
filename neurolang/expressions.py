@@ -89,23 +89,27 @@ class ParametricTypeClassMeta(type):
             isinstance(other, ParametricTypeClassMeta) and
             other.__parameterized__
         ):
-            if cls.__parameterized__:
-                return issubclass(
-                    other.__generic_class__,
-                    cls.__generic_class__
-                ) and is_leq_informative(other.type, cls.type)
-            else:
-                return issubclass(
-                    other.__generic_class__, cls
-                )
+            return cls.__subclasscheck__parameterized(other)
         else:
             return super().__subclasscheck__(other)
+
+    def __subclasscheck__parameterized(cls, other):
+        if cls.__parameterized__:
+            return issubclass(
+                other.__generic_class__,
+                cls.__generic_class__
+            ) and is_leq_informative(other.type, cls.type)
+        else:
+            return issubclass(
+                other.__generic_class__, cls
+            )
 
     def __instancecheck__(cls, other):
         return (
             super().__instancecheck__(other) or
             issubclass(other.__class__, cls)
         )
+
 
 
 def __check_expression_is_pattern__(expression):
@@ -156,17 +160,34 @@ class ExpressionMeta(ParametricTypeClassMeta):
             if parameter.default is inspect.Parameter.empty
         ][1:]
 
+        def init_process_pattern(self, args):
+            parameters = inspect.signature(self.__class__).parameters
+            cls_argnames = [
+                argname for argname, arg in parameters.items()
+                if arg.default is inspect.Parameter.empty
+            ]
+            if len(cls_argnames) != len(args):
+                raise TypeError(
+                    f'Pattern {self.__class__} with '
+                    'wrong number of parameters. '
+                    f'Parameters are {cls_argnames}'
+                )
+
+            for argname, value in zip(cls_argnames, args):
+                setattr(self, argname, value)
+
         @wraps(orig_init)
         def new_init(self, *args, **kwargs):
             generic_pattern_match = True
             for arg in args:
-                if __check_expression_is_pattern__(arg):
-                    break
                 if (
-                    isinstance(arg, (tuple, list)) and
-                    any(
-                        __check_expression_is_pattern__(a)
-                        for a in arg
+                    __check_expression_is_pattern__(arg) or
+                    (
+                        isinstance(arg, (tuple, list)) and
+                        any(
+                            __check_expression_is_pattern__(a)
+                            for a in arg
+                        )
                     )
                 ):
                     break
@@ -180,21 +201,7 @@ class ExpressionMeta(ParametricTypeClassMeta):
                 self.type = Unknown
 
             if self.__is_pattern__:
-                parameters = inspect.signature(self.__class__).parameters
-                cls_argnames = [
-                    argname for argname, arg in parameters.items()
-                    if arg.default is inspect.Parameter.empty
-                ]
-                if len(cls_argnames) != len(args):
-                    raise TypeError(
-                        f'Pattern {self.__class__} with '
-                        'wrong number of parameters. '
-                        f'Parameters are {cls_argnames}'
-                    )
-
-                for argname, value in zip(cls_argnames, args):
-                    setattr(self, argname, value)
-
+                init_process_pattern(self, args)
             else:
                 return orig_init(self, *args, **kwargs)
 
