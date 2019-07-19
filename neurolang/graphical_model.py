@@ -1,9 +1,7 @@
 import operator
 import itertools
-import copy
 from collections import defaultdict
-import logging
-from typing import Set, Tuple, Iterable, Callable, AbstractSet, Mapping
+from typing import Set, Iterable, Callable, AbstractSet, Mapping
 
 import numpy as np
 
@@ -57,7 +55,8 @@ def produce(rule, facts):
         raise Exception(
             'Expected same number of facts as number of antecedent literals'
         )
-    for i in range(len(antecedent_literals)):
+    n = len(facts)
+    for i in range(n):
         res = unification.most_general_unifier(
             antecedent_literals[i], facts[i].fact
         )
@@ -65,7 +64,7 @@ def produce(rule, facts):
             return None
         else:
             unifier, _ = res
-            for j in range(len(antecedent_literals)):
+            for j in range(n):
                 consequent = unification.apply_substitution(
                     consequent, unifier
                 )
