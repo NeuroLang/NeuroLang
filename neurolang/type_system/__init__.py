@@ -118,65 +118,75 @@ def is_leq_informative(left, right):
     ):
         raise ValueError("typing Generic not supported")
     if left is right:
-        return True
+        result = True
     elif left is Unknown:
-        return True
+        result = True
     elif right is Unknown:
-        return False
+        result = False
     elif right is Any:
-        return True
+        result = True
     elif left is Any:
-        return False
+        result = False
     elif is_union_type(right):
-        type_parameters_right = get_args(right)
-        if is_union_type(left):
-            type_parameters_left = get_args(left)
-            return all(
-                any(
-                    is_leq_informative(l, r)
-                    for r in type_parameters_right
-                )
-                for l in type_parameters_left
-            )
-        else:
-            return any(
-                is_leq_informative(left, parameter)
-                for parameter in get_args(right)
-            )
+        result = is_leq_informative_union(left, right)
     elif is_union_type(left):
-        return False
+        result = False
     elif is_parameterized(right):
-        generic_right = get_origin(right)
-
-        if is_parameterized(left):
-            if not is_leq_informative(get_origin(left), generic_right):
-                return False
-
-            type_parameters_left = get_args(left)
-            type_parameters_right = get_args(right)
-
-            if len(type_parameters_left) != len(type_parameters_right):
-                return False
-
-            return all(
-                is_leq_informative(t_left, t_right)
-                for t_left, t_right in
-                zip(type_parameters_left, type_parameters_right)
-            )
-        elif is_parametrical(left):
-            return False
-        else:
-            return is_leq_informative(left, generic_right)
+        result = is_leq_informative_parameterized_right(left, right)
     elif is_parametrical(right):
         if is_parameterized(left):
             left = get_origin(left)
-        return issubclass(left, right)
+        result = issubclass(left, right)
     elif is_parametrical(left) or is_parameterized(left):
-        return False
+        result = False
     elif left in type_order and right in type_order[left]:
-        return True
+        result = True
     else:
-        return issubclass(left, right)
+        result = issubclass(left, right)
+
+    return result
+
+
+def is_leq_informative_union(left, right):
+    type_parameters_right = get_args(right)
+    if is_union_type(left):
+        type_parameters_left = get_args(left)
+        return all(
+            any(
+                is_leq_informative(l, r)
+                for r in type_parameters_right
+            )
+            for l in type_parameters_left
+        )
+    else:
+        return any(
+            is_leq_informative(left, parameter)
+            for parameter in get_args(right)
+        )
+
+
+def is_leq_informative_parameterized_right(left, right):
+    generic_right = get_origin(right)
+
+    if is_parameterized(left):
+        if not is_leq_informative(get_origin(left), generic_right):
+            return False
+
+        type_parameters_left = get_args(left)
+        type_parameters_right = get_args(right)
+
+        if len(type_parameters_left) != len(type_parameters_right):
+            return False
+
+        return all(
+            is_leq_informative(t_left, t_right)
+            for t_left, t_right in
+            zip(type_parameters_left, type_parameters_right)
+        )
+    elif is_parametrical(left):
+        return False
+    else:
+        return is_leq_informative(left, generic_right)
 
 
 def is_type(type_):
@@ -250,44 +260,53 @@ def unify_types(t1, t2):
 def infer_type(value, deep=False, recursive_callback=None):
     if recursive_callback is None:
         recursive_callback = infer_type
+
     if isinstance(value, (types.FunctionType, types.MethodType)):
-        return typing_callable_from_annotated_function(value)
+        result = typing_callable_from_annotated_function(value)
     elif isinstance(value, Tuple):
         inner_types = tuple(
             recursive_callback(v)
             for v in value
         )
-        return Tuple[inner_types]
+        result = Tuple[inner_types]
     elif isinstance(value, Text):
-        return type(value)
+        result = type(value)
     elif isinstance(value, (AbstractSet, Sequence)):
-        if len(value) == 0:
-            inner_type = Unknown
-        else:
-            it = iter(value)
-            element = next(it)
-            inner_type = recursive_callback(element)
-            if deep:
-                for element in it:
-                    inner_type = unify_types(
-                        inner_type, recursive_callback(it)
-                    )
-        if isinstance(value, AbstractSet):
-            return AbstractSet[inner_type]
-        elif isinstance(value, Sequence):
-            return Sequence[inner_type]
+        result = infer_type_iterables(
+            value, deep=deep, recursive_callback=recursive_callback
+        )
     elif isinstance(value, Mapping):
         it = iter(value.items())
         k, v = next(it)
         ktype = recursive_callback(k)
         vtype = recursive_callback(v)
         if deep:
-            for element in it:
+            for k, v in it:
                 ktype = unify_types(recursive_callback(k), ktype)
                 vtype = unify_types(recursive_callback(v), vtype)
-        return Mapping[ktype, vtype]
+        result = Mapping[ktype, vtype]
     else:
-        return type(value)
+        result = type(value)
+
+    return result
+
+
+def infer_type_iterables(value, deep=True, recursive_callback=infer_type):
+    if len(value) == 0:
+        inner_type = Unknown
+    else:
+        it = iter(value)
+        element = next(it)
+        inner_type = recursive_callback(element)
+        if deep:
+            for element in it:
+                inner_type = unify_types(
+                    inner_type, recursive_callback(it)
+                )
+    if isinstance(value, AbstractSet):
+        return AbstractSet[inner_type]
+    elif isinstance(value, Sequence):
+        return Sequence[inner_type]
 
 
 def replace_type_variable(type_, type_hint, type_var=None):

@@ -147,20 +147,8 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
 
         if category in self.type_name_map:
             category = self.type_name_map[category]
+            self._verify_query_spelling_arity(category, link)
 
-            if (
-                hasattr(category, '__origin__') and
-                category.__origin__ is typing.AbstractSet
-            ):
-                if 'are' not in link:
-                    raise NeuroLangException(
-                        'Plural type queries need to be linked with "are"'
-                    )
-            else:
-                if 'is' not in link:
-                    raise NeuroLangException(
-                        'Singular type queries need to be linked with "are"'
-                    )
         identifier = identifier.cast(category)
         value = ast['statement'].cast(category)
 
@@ -172,6 +160,19 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
             identifier, value
         )
         return result
+
+    @staticmethod
+    def _verify_query_spelling_arity(category, link):
+        if is_leq_informative(category, typing.AbstractSet):
+            if 'are' not in link:
+                raise NeuroLangException(
+                    'Plural type queries need to be linked with "are"'
+                )
+        else:
+            if 'is' not in link:
+                raise NeuroLangException(
+                    'Singular type queries need to be linked with "are"'
+                )
 
     def assignment(self, ast):
         identifier = ast['identifier']
