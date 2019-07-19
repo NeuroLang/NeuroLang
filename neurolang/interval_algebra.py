@@ -41,7 +41,7 @@ def get_intervals_relations(intervals, other_region_intervals):
     obtained_relation_per_axis = [''] * len(intervals)
     relations = [before, overlaps, during, meets, starts, finishes, equals]
     for f in relations:
-        for i in range(len(obtained_relation_per_axis)):
+        for i, _ in enumerate(obtained_relation_per_axis):
             if f(intervals[i], other_region_intervals[i]):
                 obtained_relation_per_axis[i] = str(f.__name__[0])
             elif f(other_region_intervals[i], intervals[i]):

@@ -87,7 +87,7 @@ def test_is_leq_informative_base_types():
         AbstractSet[int], AbstractSet[float]
     )
 
-    with pytest.raises(ValueError, message="Generic not supported"):
+    with pytest.raises(ValueError, match="Generic not supported"):
         assert is_leq_informative(
             Set[int], Generic[T]
         )
@@ -112,7 +112,7 @@ def test_replace_subtype():
             int, Set, T
         )
     )
-    assert (str is replace_type_variable(int, str, T))
+    assert str is replace_type_variable(int, str, T)
 
     assert (
         Set[float] == replace_type_variable(

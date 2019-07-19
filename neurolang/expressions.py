@@ -50,11 +50,6 @@ def type_validation_value(value, type_):
 
     value_type = infer_type(value)
     return is_leq_informative(value_type, type_)
-    try:
-        unify_types(value_type, type_)
-        return True
-    except Exception:
-        return False
 
 
 class ParametricTypeClassMeta(type):
@@ -94,17 +89,20 @@ class ParametricTypeClassMeta(type):
             isinstance(other, ParametricTypeClassMeta) and
             other.__parameterized__
         ):
-            if cls.__parameterized__:
-                return issubclass(
-                    other.__generic_class__,
-                    cls.__generic_class__
-                ) and is_leq_informative(other.type, cls.type)
-            else:
-                return issubclass(
-                    other.__generic_class__, cls
-                )
+            return cls.__subclasscheck__parameterized(other)
         else:
             return super().__subclasscheck__(other)
+
+    def __subclasscheck__parameterized(cls, other):
+        if cls.__parameterized__:
+            return issubclass(
+                other.__generic_class__,
+                cls.__generic_class__
+            ) and is_leq_informative(other.type, cls.type)
+        else:
+            return issubclass(
+                other.__generic_class__, cls
+            )
 
     def __instancecheck__(cls, other):
         return (
@@ -161,17 +159,34 @@ class ExpressionMeta(ParametricTypeClassMeta):
             if parameter.default is inspect.Parameter.empty
         ][1:]
 
+        def init_process_pattern(self, args):
+            parameters = inspect.signature(self.__class__).parameters
+            cls_argnames = [
+                argname for argname, arg in parameters.items()
+                if arg.default is inspect.Parameter.empty
+            ]
+            if len(cls_argnames) != len(args):
+                raise TypeError(
+                    f'Pattern {self.__class__} with '
+                    'wrong number of parameters. '
+                    f'Parameters are {cls_argnames}'
+                )
+
+            for argname, value in zip(cls_argnames, args):
+                setattr(self, argname, value)
+
         @wraps(orig_init)
         def new_init(self, *args, **kwargs):
             generic_pattern_match = True
             for arg in args:
-                if __check_expression_is_pattern__(arg):
-                    break
                 if (
-                    isinstance(arg, (tuple, list)) and
-                    any(
-                        __check_expression_is_pattern__(a)
-                        for a in arg
+                    __check_expression_is_pattern__(arg) or
+                    (
+                        isinstance(arg, (tuple, list)) and
+                        any(
+                            __check_expression_is_pattern__(a)
+                            for a in arg
+                        )
                     )
                 ):
                     break
@@ -185,21 +200,7 @@ class ExpressionMeta(ParametricTypeClassMeta):
                 self.type = Unknown
 
             if self.__is_pattern__:
-                parameters = inspect.signature(self.__class__).parameters
-                cls_argnames = [
-                    argname for argname, arg in parameters.items()
-                    if arg.default is inspect.Parameter.empty
-                ]
-                if len(cls_argnames) != len(args):
-                    raise TypeError(
-                        f'Pattern {self.__class__} with '
-                        'wrong number of parameters. '
-                        f'Parameters are {cls_argnames}'
-                    )
-
-                for argname, value in zip(cls_argnames, args):
-                    setattr(self, argname, value)
-
+                init_process_pattern(self, args)
             else:
                 return orig_init(self, *args, **kwargs)
 
@@ -280,7 +281,8 @@ class Expression(metaclass=ExpressionMeta):
         else:
             ret = self.__class__[type_](*args)
 
-        assert ret.type is type_
+        if ret.type is not type_:
+            raise NeuroLangTypeException('Cast impossible')
         return ret
 
     def unapply(self):
@@ -317,9 +319,12 @@ class Expression(metaclass=ExpressionMeta):
             val_other = getattr(other, child)
 
             if isinstance(val, (list, tuple)):
-                if not all(v == o for v, o in zip(val, val_other)):
+                if (
+                    len(val) != len(val_other) or
+                    not all(v == o for v, o in zip(val, val_other))
+                ):
                     break
-            elif not(val == val_other):
+            elif not val == val_other:
                 break
         else:
             return True
@@ -387,31 +392,9 @@ class Constant(Expression):
         self.verify_type = verify_type
 
         if callable(self.value):
-            self.__wrapped__ = value
-            for attr in WRAPPER_ASSIGNMENTS:
-                if hasattr(value, attr):
-                    setattr(self, attr, getattr(value, attr))
-
-            if auto_infer_type and self.type is Unknown:
-                if hasattr(value, '__annotations__'):
-                    self.type = infer_type(value)
-
+            self.__init_callable_literal__(value, auto_infer_type)
         elif auto_infer_type and self.type is Unknown:
-            self.type = infer_type(self.value)
-
-            self._symbols = set()
-            if (
-                not is_leq_informative(self.type, typing.Text) and
-                is_leq_informative(self.type, typing.Iterable)
-            ):
-                new_content = []
-                for a in self.value:
-                    if not isinstance(a, Expression):
-                        a = Constant(a)
-                    self._symbols |= a._symbols
-                    new_content.append(a)
-                self.value = type(self.value)(new_content)
-
+            self.__auto_infer_type__()
         if not self.__verify_type__(self.value, self.type):
             raise NeuroLangTypeException(
                 "The value %s does not correspond to the type %s" %
@@ -420,6 +403,33 @@ class Constant(Expression):
 
         if auto_infer_type and self.type is not Unknown:
             self.change_type(self.type)
+
+    def __init_callable_literal__(self, value, auto_infer_type):
+        self.__wrapped__ = value
+        for attr in WRAPPER_ASSIGNMENTS:
+            if hasattr(value, attr):
+                setattr(self, attr, getattr(value, attr))
+
+        if (
+            auto_infer_type and self.type is Unknown and
+            hasattr(value, '__annotations__')
+        ):
+            self.type = infer_type(value)
+
+    def __auto_infer_type__(self):
+        self.type = infer_type(self.value)
+        self._symbols = set()
+        if (
+            not is_leq_informative(self.type, typing.Text) and
+            is_leq_informative(self.type, typing.Iterable)
+        ):
+            new_content = []
+            for a in self.value:
+                if not isinstance(a, Expression):
+                    a = Constant(a)
+                self._symbols |= a._symbols
+                new_content.append(a)
+            self.value = type(self.value)(new_content)
 
     def __verify_type__(self, value, type_):
         return (
@@ -573,25 +583,11 @@ class Projection(Definition):
         self, collection, item,
         auto_infer_projection_type=True
     ):
-        if self.type is Unknown and auto_infer_projection_type:
-            if collection.type is not Unknown:
-                if is_leq_informative(collection.type, typing.Tuple):
-                    if (
-                        isinstance(item, Constant) and
-                        is_leq_informative(item.type, typing.SupportsInt) and
-                        len(collection.type.__args__) > int(item.value)
-                    ):
-                        self.type = collection.type.__args__[
-                            int(item.value)
-                        ]
-                    else:
-                        raise NeuroLangTypeException(
-                            "Not {} elements in tuple".format(
-                                int(item.value)
-                            )
-                        )
-                if is_leq_informative(collection.type, typing.Mapping):
-                    self.type = collection.type.__args__[1]
+        if (
+            self.type is Unknown and auto_infer_projection_type and
+            collection.type is not Unknown
+        ):
+            self._auto_infer_type(collection, item)
 
         self._symbols = collection._symbols
         self._symbols |= item._symbols
@@ -603,6 +599,25 @@ class Projection(Definition):
         return u"\u03C3{{{}[{}]: {}}}".format(
             self.collection, self.item, self.__type_repr__
         )
+
+    def _auto_infer_type(self, collection, item):
+        if is_leq_informative(collection.type, typing.Tuple):
+            if (
+                isinstance(item, Constant) and
+                is_leq_informative(item.type, typing.SupportsInt) and
+                len(collection.type.__args__) > int(item.value)
+            ):
+                self.type = collection.type.__args__[
+                    int(item.value)
+                ]
+            else:
+                raise NeuroLangTypeException(
+                    "Not {} elements in tuple".format(
+                        int(item.value)
+                    )
+                )
+        if is_leq_informative(collection.type, typing.Mapping):
+            self.type = collection.type.__args__[1]
 
 
 class Quantifier(Definition):
@@ -716,7 +731,7 @@ binary_opeations = (
 
 def op_bind(op):
     @wraps(op)
-    def f(*args):
+    def fun(*args):
         arg_types = [a.type for a in args]
         return FunctionApplication(
             Constant[typing.Callable[arg_types, Unknown]](
@@ -725,12 +740,12 @@ def op_bind(op):
             args,
         )
 
-    return f
+    return fun
 
 
 def rop_bind(op):
     @wraps(op)
-    def f(self, value):
+    def fun(self, value):
         arg_types = [a.type for a in (value, self)]
         return FunctionApplication(
             Constant[typing.Callable[arg_types, Unknown]](
@@ -739,7 +754,7 @@ def rop_bind(op):
             args=(value, self),
         )
 
-    return f
+    return fun
 
 
 for operator_name in dir(op):

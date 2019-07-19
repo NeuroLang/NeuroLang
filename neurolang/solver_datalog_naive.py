@@ -62,20 +62,6 @@ UNDEFINED = Undefined(None)
 NULL = NullConstant[Any](None)
 
 
-class Undefined(Constant):
-    def __repr__(self):
-        return 'UNDEFINED'
-
-
-class NullConstant(Constant):
-    def __repr__(self):
-        return 'NULL'
-
-
-UNDEFINED = Undefined(None)
-NULL = NullConstant[Any](None)
-
-
 class DatalogBasic(PatternWalker):
     '''
     Implementation of Datalog grammar in terms of
@@ -214,6 +200,9 @@ class DatalogBasic(PatternWalker):
         for keyword in self.protected_keywords:
             del ret[keyword]
         return ret
+
+    def builtins(self):
+        return self.symbol_table.symbols_by_type(Callable)
 
 
 class SolverNonRecursiveDatalogNaive(DatalogBasic):

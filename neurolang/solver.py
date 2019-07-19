@@ -57,7 +57,7 @@ class BooleanRewriteSolver(PatternWalker):
     )
     def cast_unary(self, expression):
         functor, args = expression.functor, expression.args
-        new_functor = functor.cast(typing.Callable[[bool, bool], bool])
+        new_functor = functor.cast(typing.Callable[[bool], bool])
         new_application = FunctionApplication[bool](new_functor, args)
         return self.walk(new_application)
 
@@ -284,14 +284,16 @@ class NumericOperationsSolver(PatternWalker[T]):
         lambda expression: expression.functor.value in (add, sub, mul, truediv)
     )
     def cast_binary(self, expression):
-        type = expression.args[0].type
-        functor = expression.functor.cast(typing.Callable[[type, type], type])
+        type_ = expression.args[0].type
+        functor = expression.functor.cast(
+            typing.Callable[[type_, type_], type_]
+        )
         if functor is not expression.functor:
-            new_expression = FunctionApplication[type](
+            new_expression = FunctionApplication[type_](
                 functor, expression.args
             )
         else:
-            new_expression = expression.cast(type)
+            new_expression = expression.cast(type_)
         return self.walk(new_expression)
 
     @add_match(

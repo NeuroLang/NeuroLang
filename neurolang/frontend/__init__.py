@@ -18,9 +18,9 @@ import numpy as np
 __all__ = ['RegionFrontend', 'QueryBuilder']
 
 
-def function_isin(element: Any, set: AbstractSet) -> bool:
+def function_isin(element: Any, set_: AbstractSet) -> bool:
     '''Function for checking that an element is in a set'''
-    return element in set
+    return element in set_
 
 
 class RegionFrontendSolver(
