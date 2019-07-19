@@ -22,8 +22,8 @@ def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
     if all(len(predicate_list) == 0 for predicate_list in rule_predicates):
         return {}
 
-    restricted_predicates, nonrestricted_predicates, negative_predicates, builtin_predicates =\
-        rule_predicates
+    restricted_predicates, nonrestricted_predicates, negative_predicates, \
+            negative_builtin_predicates, builtin_predicates = rule_predicates
 
     rule_predicates_iterator = chain(
         restricted_predicates,
@@ -110,6 +110,35 @@ def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
                     )
         substitutions = new_substitutions
 
+    for predicate, _ in negative_builtin_predicates:
+        functor = predicate.functor
+        new_substitutions = []
+        for substitution in substitutions:
+            subs_args = apply_substitution_arguments(
+                predicate.args, substitution
+            )
+
+            mgu_substituted = most_general_unifier_arguments(
+                subs_args, predicate.args
+            )
+
+            if mgu_substituted is not None:
+                predicate_res = datalog.walk(
+                    predicate.apply(functor, mgu_substituted[1])
+                )
+
+                if (
+                    isinstance(predicate_res, Constant[bool]) and
+                    not predicate_res.value
+                ):
+                    new_substitution = mgu_substituted[0]
+                    new_substitutions.append(
+                        compose_substitutions(
+                            substitution, new_substitution
+                        )
+                    )
+        substitutions = new_substitutions
+
     return compute_result_set(
         rule, substitutions, instance, restriction_instance
     )
@@ -120,9 +149,10 @@ def extract_rule_predicates(
 ):
     head_functor = rule.consequent.functor
     rule_predicates = sdb.extract_datalog_predicates(rule.antecedent)
-    restricted_predicates = []
-    nonrestricted_predicates = []
+    restricted_predicates = [] 
+    nonrestricted_predicates = [] 
     negative_predicates = []
+    negative_builtin_predicates = [] 
     builtin_predicates = []
     recursive_calls = 0
     for predicate in rule_predicates:
@@ -147,6 +177,8 @@ def extract_rule_predicates(
             )
         elif functor in builtins:
             builtin_predicates.append((predicate, builtins[functor]))
+        elif functor == invert and predicate.args[0].functor in builtins:
+            negative_builtin_predicates.append((predicate.args[0], builtins[predicate.args[0].functor]))
         elif functor == invert:
             negative_predicates.append((predicate.args[0], instance[predicate.args[0].functor].value))
         else:
@@ -156,7 +188,8 @@ def extract_rule_predicates(
         restricted_predicates,
         nonrestricted_predicates,
         negative_predicates,
-        builtin_predicates
+        negative_builtin_predicates,
+        builtin_predicates,
     )
 
 
