@@ -87,7 +87,7 @@ def test_is_leq_informative_base_types():
         AbstractSet[int], AbstractSet[float]
     )
 
-    with pytest.raises(ValueError, message="Generic not supported"):
+    with pytest.raises(ValueError, match="Generic not supported"):
         assert is_leq_informative(
             Set[int], Generic[T]
         )

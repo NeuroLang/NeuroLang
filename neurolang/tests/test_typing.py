@@ -60,7 +60,7 @@ def test_type_validation_value():
                     typing.Union[t, types_[(i + 1) % len(types_)]]
                 )
 
-    with pytest.raises(ValueError, message="typing Generic not supported"):
+    with pytest.raises(ValueError, match="typing Generic not supported"):
         assert expressions.type_validation_value(
             None, typing.Generic[typing.T]
         )
