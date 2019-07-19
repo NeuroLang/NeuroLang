@@ -118,31 +118,33 @@ def is_leq_informative(left, right):
     ):
         raise ValueError("typing Generic not supported")
     if left is right:
-        return True
+        result = True
     elif left is Unknown:
-        return True
+        result = True
     elif right is Unknown:
-        return False
+        result = False
     elif right is Any:
-        return True
+        result = True
     elif left is Any:
-        return False
+        result = False
     elif is_union_type(right):
-        return is_leq_informative_union(left, right)
+        result = is_leq_informative_union(left, right)
     elif is_union_type(left):
-        return False
+        result = False
     elif is_parameterized(right):
-        return is_leq_informative_parameterized_right(left, right)
+        result = is_leq_informative_parameterized_right(left, right)
     elif is_parametrical(right):
         if is_parameterized(left):
             left = get_origin(left)
-        return issubclass(left, right)
+        result = issubclass(left, right)
     elif is_parametrical(left) or is_parameterized(left):
-        return False
+        result = False
     elif left in type_order and right in type_order[left]:
-        return True
+        result = True
     else:
-        return issubclass(left, right)
+        result = issubclass(left, right)
+
+    return result
 
 
 def is_leq_informative_union(left, right):
