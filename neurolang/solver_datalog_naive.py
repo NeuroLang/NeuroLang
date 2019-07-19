@@ -140,20 +140,6 @@ UNDEFINED = Undefined(None)
 NULL = NullConstant[Any](None)
 
 
-class Undefined(Constant):
-    def __repr__(self):
-        return 'UNDEFINED'
-
-
-class NullConstant(Constant):
-    def __repr__(self):
-        return 'NULL'
-
-
-UNDEFINED = Undefined(None)
-NULL = NullConstant[Any](None)
-
-
 class DatalogBasic(PatternWalker):
     '''
     Implementation of Datalog grammar in terms of
