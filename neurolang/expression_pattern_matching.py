@@ -40,20 +40,7 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
             '__generic_class__',
         )
 
-        for base in bases:
-            repeated_methods = set(dir(base)).intersection(classdict)
-            repeated_methods.difference_update(overwriteable_properties)
-            if (
-                '__init__' in repeated_methods and
-                getattr(base, '__init__') is object.__init__
-            ):
-                repeated_methods.remove('__init__')
-            if len(repeated_methods) > 1:
-                warn_message = (
-                    f"Warning in class {name} "
-                    f"overwrites {repeated_methods} from base {base}"
-                )
-                warn(warn_message)
+        cls.__check_bases__(name, bases, classdict, overwriteable_properties)
 
         src_type, dst_type, needs_replacement = cls.__infer_patterns__(
             classdict
@@ -68,6 +55,22 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
             cls.__replace_type_in_patterns__(new_cls, src_type, dst_type)
 
         return new_cls
+
+    def __check_bases__(name, bases, classdict, overwriteable_properties):
+        for base in bases:
+            repeated_methods = set(dir(base)).intersection(classdict)
+            repeated_methods.difference_update(overwriteable_properties)
+            if (
+                '__init__' in repeated_methods and
+                getattr(base, '__init__') is object.__init__
+            ):
+                repeated_methods.remove('__init__')
+            if len(repeated_methods) > 1:
+                warn_message = (
+                    f"Warning in class {name} "
+                    f"overwrites {repeated_methods} from base {base}"
+                )
+                warn(warn_message)
 
     def __infer_type__(classdict, bases):
         current_type = classdict.get('type', Any)
@@ -362,6 +365,8 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
             "%(expression)s with %(pattern)s",
             {'expression': expression, 'pattern': pattern}
         )
+
+        result = False
         for argname, arg in parameters.items():
             if arg.default is not inspect.Parameter.empty:
                 continue
@@ -369,7 +374,6 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
             e = getattr(expression, argname)
             match = self.pattern_match(p, e)
             if not match:
-                result = False
                 break
             else:
                 logging.log(
