@@ -111,7 +111,6 @@ class ParametricTypeClassMeta(type):
         )
 
 
-
 def __check_expression_is_pattern__(expression):
     '''
     Checks whether the Expression is a pattern for
@@ -588,23 +587,7 @@ class Projection(Definition):
             self.type is Unknown and auto_infer_projection_type and
             collection.type is not Unknown
         ):
-            if is_leq_informative(collection.type, typing.Tuple):
-                if (
-                    isinstance(item, Constant) and
-                    is_leq_informative(item.type, typing.SupportsInt) and
-                    len(collection.type.__args__) > int(item.value)
-                ):
-                    self.type = collection.type.__args__[
-                        int(item.value)
-                    ]
-                else:
-                    raise NeuroLangTypeException(
-                        "Not {} elements in tuple".format(
-                            int(item.value)
-                        )
-                    )
-            if is_leq_informative(collection.type, typing.Mapping):
-                self.type = collection.type.__args__[1]
+            self._auto_infer_type(collection, item)
 
         self._symbols = collection._symbols
         self._symbols |= item._symbols
@@ -616,6 +599,25 @@ class Projection(Definition):
         return u"\u03C3{{{}[{}]: {}}}".format(
             self.collection, self.item, self.__type_repr__
         )
+
+    def _auto_infer_type(self, collection, item):
+        if is_leq_informative(collection.type, typing.Tuple):
+            if (
+                isinstance(item, Constant) and
+                is_leq_informative(item.type, typing.SupportsInt) and
+                len(collection.type.__args__) > int(item.value)
+            ):
+                self.type = collection.type.__args__[
+                    int(item.value)
+                ]
+            else:
+                raise NeuroLangTypeException(
+                    "Not {} elements in tuple".format(
+                        int(item.value)
+                    )
+                )
+        if is_leq_informative(collection.type, typing.Mapping):
+            self.type = collection.type.__args__[1]
 
 
 class Quantifier(Definition):
