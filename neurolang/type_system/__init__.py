@@ -281,7 +281,7 @@ def infer_type(value, deep=False, recursive_callback=None):
         ktype = recursive_callback(k)
         vtype = recursive_callback(v)
         if deep:
-            for element in it:
+            for k, v in it:
                 ktype = unify_types(recursive_callback(k), ktype)
                 vtype = unify_types(recursive_callback(v), vtype)
         result = Mapping[ktype, vtype]
