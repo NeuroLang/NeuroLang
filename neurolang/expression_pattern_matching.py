@@ -75,18 +75,17 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
     def __infer_type__(classdict, bases):
         current_type = classdict.get('type', Any)
         for base in bases:
-            if hasattr(base, 'type'):
-                if (
-                    current_type is Any or
-                    base.type is Any or
-                    isinstance(base.type, TypeVar) or
-                    current_type is base.type
-                ):
-                    if current_type is Any:
-                        current_type = base.type
-                else:
-                    current_type = UndeterminedType
-                    break
+            if not hasattr(base, 'type'):
+                continue
+            if current_type is Any:
+                current_type = base.type
+            elif not (
+                base.type is Any or
+                isinstance(base.type, TypeVar) or
+                current_type is base.type
+            ):
+                current_type = UndeterminedType
+                break
         return current_type
 
     def __infer_patterns__(classdict):
@@ -297,13 +296,13 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
           ``instance == expression``
         """
         result = False
+        log_message = None
         if pattern is ...:
             result = True
         elif isclass(pattern):
             if issubclass(pattern, expressions.Expression):
                 result = isinstance(expression, pattern)
-                if result:
-                    logging.log(FINEDEBUG, "\t\tmatch type")
+                log_message = "\t\tmatch type"
             else:
                 raise ValueError(
                     'Class pattern matching only implemented '
@@ -314,12 +313,15 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
         elif isinstance(pattern, tuple) and isinstance(expression, tuple):
             result = self.pattern_match_tuple(pattern, expression)
         else:
-            logging.log(
-                FINEDEBUG,
-                "\t\t\t\tMatch other %(pattern)s vs %(expression)s",
-                {'expression': expression, 'pattern': pattern}
-            )
+            log_message = "\t\t\t\tMatch other %(pattern)s vs %(expression)s",
             result = pattern == expression
+
+        logging.log(
+            FINEDEBUG,
+            log_message,
+            {'expression': expression, 'pattern': pattern}
+        )
+
         return result
 
     def pattern_match_expression(self, pattern, expression):
