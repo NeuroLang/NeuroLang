@@ -5,8 +5,7 @@ from typing import AbstractSet
 from .expressions import Constant
 from . import solver_datalog_naive as sdb
 from .unification import (
-    apply_substitution_arguments,
-    compose_substitutions,
+    apply_substitution_arguments, compose_substitutions,
     most_general_unifier_arguments
 )
 
@@ -26,8 +25,7 @@ def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
             negative_builtin_predicates, builtin_predicates = rule_predicates
 
     rule_predicates_iterator = chain(
-        restricted_predicates,
-        nonrestricted_predicates
+        restricted_predicates, nonrestricted_predicates
     )
 
     substitutions = [{}]
@@ -41,16 +39,13 @@ def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
 
             for element in representation:
                 mgu_substituted = most_general_unifier_arguments(
-                    subs_args,
-                    element.value
+                    subs_args, element.value
                 )
 
                 if mgu_substituted is not None:
                     new_substitution = mgu_substituted[0]
                     new_substitutions.append(
-                        compose_substitutions(
-                            substitution, new_substitution
-                        )
+                        compose_substitutions(substitution, new_substitution)
                     )
 
         substitutions = new_substitutions
@@ -65,8 +60,7 @@ def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
 
             for element in representation:
                 mgu_substituted = most_general_unifier_arguments(
-                    subs_args,
-                    element.value
+                    subs_args, element.value
                 )
 
                 if mgu_substituted is not None:
@@ -74,9 +68,7 @@ def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
             else:
                 new_substitution = {predicate: element.value}
                 new_substitutions.append(
-                    compose_substitutions(
-                        substitution, new_substitution
-                    )
+                    compose_substitutions(substitution, new_substitution)
                 )
 
         substitutions = new_substitutions
@@ -104,9 +96,7 @@ def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
                 ):
                     new_substitution = mgu_substituted[0]
                     new_substitutions.append(
-                        compose_substitutions(
-                            substitution, new_substitution
-                        )
+                        compose_substitutions(substitution, new_substitution)
                     )
         substitutions = new_substitutions
 
@@ -133,9 +123,7 @@ def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
                 ):
                     new_substitution = mgu_substituted[0]
                     new_substitutions.append(
-                        compose_substitutions(
-                            substitution, new_substitution
-                        )
+                        compose_substitutions(substitution, new_substitution)
                     )
         substitutions = new_substitutions
 
@@ -149,10 +137,10 @@ def extract_rule_predicates(
 ):
     head_functor = rule.consequent.functor
     rule_predicates = sdb.extract_datalog_predicates(rule.antecedent)
-    restricted_predicates = [] 
-    nonrestricted_predicates = [] 
+    restricted_predicates = []
+    nonrestricted_predicates = []
     negative_predicates = []
-    negative_builtin_predicates = [] 
+    negative_builtin_predicates = []
     builtin_predicates = []
     recursive_calls = 0
     for predicate in rule_predicates:
@@ -178,9 +166,13 @@ def extract_rule_predicates(
         elif functor in builtins:
             builtin_predicates.append((predicate, builtins[functor]))
         elif functor == invert and predicate.args[0].functor in builtins:
-            negative_builtin_predicates.append((predicate.args[0], builtins[predicate.args[0].functor]))
+            negative_builtin_predicates.append(
+                (predicate.args[0], builtins[predicate.args[0].functor])
+            )
         elif functor == invert:
-            negative_predicates.append((predicate.args[0], instance[predicate.args[0].functor].value))
+            negative_predicates.append(
+                (predicate.args[0], instance[predicate.args[0].functor].value)
+            )
         else:
             return ([], [], [], [])
 
@@ -198,11 +190,8 @@ def compute_result_set(
 ):
     new_tuples = set(
         Constant(
-            apply_substitution_arguments(
-                rule.consequent.args, substitution
-            )
-        )
-        for substitution in substitutions
+            apply_substitution_arguments(rule.consequent.args, substitution)
+        ) for substitution in substitutions
     )
 
     if rule.consequent.functor in instance:
@@ -233,9 +222,7 @@ def merge_instances(*args):
                 new_instance[k] = v
             else:
                 new_set = new_instance[k]
-                new_set = Constant[new_set.type](
-                    v.value | new_set.value
-                )
+                new_set = Constant[new_set.type](v.value | new_set.value)
                 new_instance[k] = new_set
 
     return new_instance
@@ -279,12 +266,16 @@ def build_chase_solution(datalog_program, chase_step=chase_step):
     instance_update = datalog_program.extensional_database()
     while len(instance_update) > 0:
         instance = merge_instances(instance, instance_update)
-        instance_update = merge_instances(*(
-            chase_step(
-                datalog_program, instance, builtins, rule,
-                restriction_instance=instance_update
+        instance_update = merge_instances(
+            *(
+                chase_step(
+                    datalog_program,
+                    instance,
+                    builtins,
+                    rule,
+                    restriction_instance=instance_update
+                ) for rule in rules
             )
-            for rule in rules
-        ))
+        )
 
     return instance

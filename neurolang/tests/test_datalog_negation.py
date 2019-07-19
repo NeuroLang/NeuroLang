@@ -21,12 +21,13 @@ E_ = expressions.ExistentialPredicate
 U_ = expressions.UniversalPredicate
 Eb_ = expressions.ExpressionBlock
 
+
 class Datalog(
     sdn.DatalogBasicNegation,
     solver_datalog_extensional_db.ExtensionalDatabaseSolver,
     ew.ExpressionBasicEvaluator
 ):
-    def function_gt(self, x: int, y: int)->bool:
+    def function_gt(self, x: int, y: int) -> bool:
         return x > y
 
 
@@ -48,10 +49,16 @@ def test_stratified_and_chase():
         Fact(V(C_(4))),
         Fact(G(C_(1), C_(2))),
         Fact(G(C_(2), C_(3))),
-        Implication(T(x, y), V(x) & V(y) & G(x, y)),
-        Implication(T(x, y), G(x, z) & T(z, y)),
-        Implication(ET(x, y), V(x) & V(y) & invert(G(x, y)) & equals(x, y)),
-        Implication(NT(x, y), V(x) & V(y) & invert(G(x, y)) & invert(equals(x, y))),
+        Implication(T(x, y),
+                    V(x) & V(y) & G(x, y)),
+        Implication(T(x, y),
+                    G(x, z) & T(z, y)),
+        Implication(ET(x, y),
+                    V(x) & V(y) & invert(G(x, y)) & equals(x, y)),
+        Implication(
+            NT(x, y),
+            V(x) & V(y) & invert(G(x, y)) & invert(equals(x, y))
+        ),
     ))
 
     dl = Datalog()
@@ -60,26 +67,30 @@ def test_stratified_and_chase():
     solution_instance = dc.build_chase_solution(dl)
 
     final_instance = {
-        G: C_({
+        G:
+        C_({
             C_((C_(1), C_(2))),
             C_((C_(2), C_(3))),
         }),
-        V: C_({
-            C_((C_(2),)),
-            C_((C_(3),)),
-            C_((C_(1),)),
-            C_((C_(4),)),
+        V:
+        C_({
+            C_((C_(2), )),
+            C_((C_(3), )),
+            C_((C_(1), )),
+            C_((C_(4), )),
         }),
-        ET: C_({
+        ET:
+        C_({
             C_((C_(1), C_(1))),
             C_((C_(3), C_(3))),
-            C_((C_(4), C_(4))), 
+            C_((C_(4), C_(4))),
             C_((C_(2), C_(2))),
         }),
-        NT: C_({
+        NT:
+        C_({
             C_((C_(3), C_(2))),
             C_((C_(1), C_(3))),
-            C_((C_(4), C_(1))), 
+            C_((C_(4), C_(1))),
             C_((C_(3), C_(1))),
             C_((C_(2), C_(1))),
             C_((C_(1), C_(4))),
@@ -88,11 +99,10 @@ def test_stratified_and_chase():
             C_((C_(3), C_(4))),
             C_((C_(2), C_(4))),
         }),
-        T: C_({
-            C_((C_(1), C_(2))),
+        T:
+        C_({C_((C_(1), C_(2))),
             C_((C_(1), C_(3))),
-            C_((C_(2), C_(3)))
-        })
+            C_((C_(2), C_(3)))})
     }
 
     assert solution_instance == final_instance
