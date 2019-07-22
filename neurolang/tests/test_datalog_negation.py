@@ -106,3 +106,34 @@ def test_stratified_and_chase():
     }
 
     assert solution_instance == final_instance
+
+
+def test_negative_fact():
+    V = S_('V')
+    G = S_('G')
+    T = S_('T')
+    CT = S_('CT')
+    x = S_('x')
+    y = S_('y')
+    z = S_('z')
+
+    program = Eb_((
+        Fact(V(C_(1))),
+        Fact(V(C_(2))),
+        Fact(V(C_(3))),
+        Fact(V(C_(4))),
+        Fact(G(C_(1), C_(2))),
+        Fact(G(C_(2), C_(3))),
+        sdn.NegativeFact(G(C_(6), C_(6))),
+        Implication(T(x, y), V(x) & V(y) & G(x, y)),
+        Implication(T(x, y), G(x, z) & T(z, y)),
+        Implication(CT(x, y), V(x) & V(y) & invert(G(x, y))),
+    ))
+
+    dl = Datalog()
+    dl.walk(program)
+
+    solution_instance = dc.build_chase_solution(dl)
+    assert solution_instance == solution_instance
+
+
