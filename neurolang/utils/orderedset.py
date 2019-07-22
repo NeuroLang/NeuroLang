@@ -14,18 +14,18 @@ class OrderedSet(MutableSet, Sequence):
             if i not in self._list:
                 self._list.append(i)
 
-    def add(self, element):
-        if element not in self._set:
-            self._set.add(element)
-            self._list.append(element)
+    def add(self, value):
+        if value not in self._set:
+            self._set.add(value)
+            self._list.append(value)
 
-    def discard(self, element):
-        if element in self._set:
-            self._set.discard(element)
-            self._list.remove(element)
+    def discard(self, value):
+        if value in self._set:
+            self._set.discard(value)
+            self._list.remove(value)
 
-    def __contains__(self, element):
-        return element in self._set
+    def __contains__(self, value):
+        return value in self._set
 
     def __len__(self):
         return len(self._set)
@@ -36,8 +36,8 @@ class OrderedSet(MutableSet, Sequence):
     def __getitem__(self, slice_):
         return self._list[slice_]
 
-    def index(self, element):
-        return self._list.index(element)
+    def index(self, value, start=0, stop=None):
+        return self._list.index(value, start=start, stop=stop)
 
     def __repr__(self):
         return 'OrderedSet(' + ','.join(repr(i) for i in self) + ')'

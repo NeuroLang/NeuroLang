@@ -84,7 +84,7 @@ class SolverNonRecursiveExistentialDatalog(
         FunctionApplication(Implication(ExistentialPredicate, ...), ...)
     )
     def existential_consequent_implication_resolution(self, expression):
-        consequent_body, eq_vars = (
+        consequent_body, _ = (
             parse_implication_with_existential_consequent(expression.functor)
         )
         return self.walk(

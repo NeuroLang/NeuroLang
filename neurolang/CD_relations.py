@@ -91,7 +91,7 @@ def cardinal_relation(
 def cardinal_relation_prepare_regions(region, reference_region):
     if isinstance(region, ImplicitVBR):
         if isinstance(reference_region, ImplicitVBR):
-            raise NotImplemented(
+            raise NotImplementedError(
                 f'Comparison between two implicit regions '
                 f'can\'t be performed: {region}, {reference_region}'
             )
