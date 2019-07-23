@@ -80,11 +80,9 @@ def evaluate_builtins(builtin_predicates, substitutions, datalog):
         functor = predicate.functor
         new_substitutions = []
         for substitution in substitutions:
-            new_substitution = unify_builtin_substitution(
+            new_substitutions += unify_builtin_substitution(
                 predicate, substitution, datalog, functor
             )
-            if new_substitution is not None:
-                new_substitutions.append(new_substitution)
         substitutions = new_substitutions
     return substitutions
 
@@ -107,11 +105,10 @@ def unify_builtin_substitution(predicate, substitution, datalog, functor):
             isinstance(predicate_res, Constant[bool]) and
             predicate_res.value
         ):
-            return compose_substitutions(
+            return [compose_substitutions(
                 substitution, mgu_substituted[0]
-            )
-    else:
-        return None
+            )]
+    return []
 
 
 def extract_rule_predicates(
