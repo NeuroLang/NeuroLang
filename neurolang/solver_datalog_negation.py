@@ -91,7 +91,6 @@ class DatalogBasicNegation(DatalogBasic):
 
     @add_match(NegativeFact)
     def negative_fact(self, expression):
-        #negated_fact = expression.fact
         fact = expression.fact.args[0]
         if fact.functor.name in self.protected_keywords:
             raise NeuroLangException(
