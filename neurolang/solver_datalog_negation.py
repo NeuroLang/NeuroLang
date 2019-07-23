@@ -1,18 +1,18 @@
-from typing import AbstractSet, Any, Tuple, Callable
+from typing import AbstractSet, Tuple, Callable
 from operator import and_, invert
 
 from .type_system import Unknown
 from .expression_walker import add_match, expression_iterator
 
 from .solver_datalog_naive import (
-    DatalogBasic, Implication,
+    DatalogBasic,
+    Implication,
     extract_datalog_free_variables,
 )
 
 from .expressions import (
-    Symbol, NonConstant, FunctionApplication,
-    NeuroLangException, is_leq_informative, ExpressionBlock,
-    Constant
+    Symbol, NonConstant, FunctionApplication, NeuroLangException,
+    is_leq_informative, ExpressionBlock, Constant
 )
 
 
@@ -29,16 +29,15 @@ class NegativeFact(Implication):
             repr(self.antecedent), True
         )
 
-class DatalogBasicNegation(DatalogBasic):
 
+class DatalogBasicNegation(DatalogBasic):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.negated_symbols = {}
 
-    @add_match(Implication(
-        FunctionApplication[bool](Symbol, ...),
-        NonConstant
-    ))
+    @add_match(
+        Implication(FunctionApplication[bool](Symbol, ...), NonConstant)
+    )
     def statement_intensional(self, expression):
         consequent = expression.consequent
         antecedent = expression.antecedent
@@ -74,8 +73,8 @@ class DatalogBasicNegation(DatalogBasic):
 
             if (
                 not isinstance(eb[0].consequent, FunctionApplication) or
-                len(extract_datalog_free_variables(eb[0].consequent.args)) !=
-                len(expression.consequent.args)
+                len(extract_datalog_free_variables(eb[0].consequent.args)
+                    ) != len(expression.consequent.args)
             ):
                 raise NeuroLangException(
                     f"{eb[0].consequent} is already in the IDB "
@@ -84,7 +83,7 @@ class DatalogBasicNegation(DatalogBasic):
         else:
             eb = tuple()
 
-        eb = eb + (expression,)
+        eb = eb + (expression, )
 
         self.symbol_table[consequent.functor.name] = ExpressionBlock(eb)
 
@@ -99,10 +98,7 @@ class DatalogBasicNegation(DatalogBasic):
                 f'symbol {self.constant_set_name} is protected'
             )
 
-        if any(
-            not isinstance(a, Constant)
-            for a in fact.args
-        ):
+        if any(not isinstance(a, Constant) for a in fact.args):
             raise NeuroLangException(
                 'Facts can only have constants as arguments'
             )
@@ -131,24 +127,15 @@ class DatalogBasicNegation(DatalogBasic):
 
         return expression
 
+
 def is_conjunctive_negation(expression):
     return all(
-        not isinstance(exp, FunctionApplication) or
-        (
+        not isinstance(exp, FunctionApplication) or (
             isinstance(exp, FunctionApplication) and
-            (
-                (
-                    isinstance(exp.functor, Constant) and
-                    (
-                        exp.functor.value is and_ or
-                        exp.functor.value is invert
-                    )
-                ) or all(
-                    not isinstance(arg, FunctionApplication)
-                    for arg in exp.args
-                )
-            )
-        )
-        for _, exp in expression_iterator(expression)
+            ((
+                isinstance(exp.functor, Constant) and
+                (exp.functor.value is and_ or exp.functor.value is invert)
+            ) or
+             all(not isinstance(arg, FunctionApplication) for arg in exp.args))
+        ) for _, exp in expression_iterator(expression)
     )
-
