@@ -80,31 +80,38 @@ def evaluate_builtins(builtin_predicates, substitutions, datalog):
         functor = predicate.functor
         new_substitutions = []
         for substitution in substitutions:
-            subs_args = apply_substitution_arguments(
-                predicate.args, substitution
+            new_substitution = unify_builtin_substitution(
+                predicate, substitution, datalog, functor
             )
-
-            mgu_substituted = most_general_unifier_arguments(
-                subs_args, predicate.args
-            )
-
-            if mgu_substituted is not None:
-                predicate_res = datalog.walk(
-                    predicate.apply(functor, mgu_substituted[1])
-                )
-
-                if (
-                    isinstance(predicate_res, Constant[bool]) and
-                    predicate_res.value
-                ):
-                    new_substitution = mgu_substituted[0]
-                    new_substitutions.append(
-                        compose_substitutions(
-                            substitution, new_substitution
-                        )
-                    )
+            if new_substitution is not None:
+                new_substitutions.append(new_substitution)
         substitutions = new_substitutions
     return substitutions
+
+
+def unify_builtin_substitution(predicate, substitution, datalog, functor):
+    subs_args = apply_substitution_arguments(
+        predicate.args, substitution
+    )
+
+    mgu_substituted = most_general_unifier_arguments(
+        subs_args, predicate.args
+    )
+
+    if mgu_substituted is not None:
+        predicate_res = datalog.walk(
+            predicate.apply(functor, mgu_substituted[1])
+        )
+
+        if (
+            isinstance(predicate_res, Constant[bool]) and
+            predicate_res.value
+        ):
+            return compose_substitutions(
+                substitution, mgu_substituted[0]
+            )
+    else:
+        return None
 
 
 def extract_rule_predicates(
