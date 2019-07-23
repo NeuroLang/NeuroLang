@@ -11,7 +11,7 @@ from .unification import (
 )
 
 
-def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
+def chase_step(datalog, instance, builtins, rule, restriction_instance=[]):
 
     rule_predicates = extract_rule_predicates(
         rule, instance, builtins, restriction_instance=restriction_instance
@@ -99,7 +99,7 @@ def evaluate_builtins(builtin_predicates, substitutions, datalog):
 
 
 def extract_rule_predicates(
-    rule, instance, builtins, restriction_instance=None
+    rule, instance, builtins, restriction_instance=[]
 ):
     head_functor = rule.consequent.functor
     rule_predicates = sdb.extract_datalog_predicates(rule.antecedent)
@@ -109,21 +109,19 @@ def extract_rule_predicates(
     recursive_calls = 0
     for predicate in rule_predicates:
         functor = predicate.functor
-        if restriction_instance is not None:
-            if functor == head_functor:
-                recursive_calls += 1
+
+        if functor == head_functor:
+            recursive_calls += 1
             if recursive_calls > 1:
                 raise ValueError(
                     'Non-linear rule {rule}, solver non supported'
                 )
 
-            if functor in restriction_instance:
-                restricted_predicates.append(
-                    (predicate, restriction_instance[functor].value)
-                )
-                continue
-
-        if functor in instance:
+        if functor in restriction_instance:
+            restricted_predicates.append(
+                (predicate, restriction_instance[functor].value)
+            )
+        elif functor in instance:
             nonrestricted_predicates.append(
                 (predicate, instance[functor].value)
             )
@@ -140,7 +138,7 @@ def extract_rule_predicates(
 
 
 def compute_result_set(
-    rule, substitutions, instance, restriction_instance=None
+    rule, substitutions, instance, restriction_instance=[]
 ):
     new_tuples = set(
         Constant(
@@ -153,10 +151,7 @@ def compute_result_set(
 
     if rule.consequent.functor in instance:
         new_tuples -= instance[rule.consequent.functor].value
-    if (
-        restriction_instance is not None and
-        rule.consequent.functor in restriction_instance
-    ):
+    if (rule.consequent.functor in restriction_instance):
         new_tuples -= restriction_instance[rule.consequent.functor].value
 
     if len(new_tuples) == 0:
@@ -202,16 +197,24 @@ def build_chase_tree(datalog_program, chase_set=chase_step):
     while len(nodes_to_process) > 0:
         node = nodes_to_process.pop()
         for rule in rules:
-            instance_update = chase_step(
-                datalog_program, node.instance, builtins, rule
+            build_nodes_from_rules(
+                datalog_program, node, builtins, rule, nodes_to_process
             )
-            if len(instance_update) > 0:
-                new_instance = merge_instances(node.instance, instance_update)
-                new_node = ChaseNode(new_instance, dict())
-                nodes_to_process.append(new_node)
-                node.children[rule] = new_node
 
     return root
+
+
+def build_nodes_from_rules(
+    datalog_program, node, builtins, rule, nodes_to_process
+):
+    instance_update = chase_step(
+        datalog_program, node.instance, builtins, rule
+    )
+    if len(instance_update) > 0:
+        new_instance = merge_instances(node.instance, instance_update)
+        new_node = ChaseNode(new_instance, dict())
+        nodes_to_process.append(new_node)
+        node.children[rule] = new_node
 
 
 def build_chase_solution(datalog_program, chase_step=chase_step):
