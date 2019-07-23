@@ -162,30 +162,35 @@ class Symbol(Expression):
             return(f'{self.symbol_name}: {symbol.type}')
         elif isinstance(symbol, nl.Constant):
             if is_leq_informative(symbol.type, AbstractSet):
-                contained = []
-                all_symbols = (
-                    self.query_builder.solver.symbol_table.symbols_by_type(
-                        symbol.type.__args__[0]
-                    )
-                )
-                for s in symbol.value:
-                    if isinstance(s, nl.Constant):
-                        for k, v in all_symbols.items():
-                            if isinstance(v, nl.Constant) and s is v.value:
-                                contained.append(k.name)
-                                break
-                    if isinstance(s, nl.Symbol):
-                        contained.append(s.name)
-                    if isinstance(s, tuple):
-                        t = '('
-                        for e in s:
-                            t += (e.name + ', ')
-                        contained.append(t[:-2] + ')')
-                return (f'{self.symbol_name}: {symbol.type} = {contained}')
+                value = self._repr_iterable_value(symbol)
             else:
-                return (f'{self.symbol_name}: {symbol.type} = {symbol.value}')
+                value = symbol.value
+
+            return (f'{self.symbol_name}: {symbol.type} = {value}')
         else:
             raise ValueError('...')
+
+    def _repr_iterable_value(self, symbol):
+        contained = []
+        all_symbols = (
+            self.query_builder.solver.symbol_table.symbols_by_type(
+                symbol.type.__args__[0]
+            )
+        )
+        for s in symbol.value:
+            if isinstance(s, nl.Constant):
+                for k, v in all_symbols.items():
+                    if isinstance(v, nl.Constant) and s is v.value:
+                        contained.append(k.name)
+                        break
+            elif isinstance(s, nl.Symbol):
+                contained.append(s.name)
+            elif isinstance(s, tuple):
+                t = '('
+                for e in s:
+                    t += (e.name + ', ')
+                contained.append(t[:-2] + ')')
+        return contained
 
     def __iter__(self):
         symbol = self.symbol
