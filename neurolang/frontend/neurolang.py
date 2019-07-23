@@ -367,21 +367,46 @@ class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
 
         self.type_name_map.update({'int': int, 'str': str, 'float': float})
 
-        for mixin_class in self.__class__.mro():
-            if (
-                hasattr(mixin_class, 'type') and
-                hasattr(mixin_class, 'type_name')
-            ):
-                self.type_name_map[mixin_class.type_name] = mixin_class.type
+        self._init_type_from_mixins()
 
-                if hasattr(mixin_class, 'type_name_plural'):
-                    type_name_plural = mixin_class.type_name_plural
+        functions = self._init_functions(functions)
+
+        if symbols is not None:
+            for k, v in symbols.items():
+                if not isinstance(v, Constant):
+                    t = infer_type(v)
+                    v = Constant[t](v)
+                self.symbol_table[Symbol[v.type](k)] = v
+
+        self._init_function_symbols(functions)
+
+        self.nli = NeuroLangIntermediateRepresentation(
+            type_name_map=self.type_name_map
+        )
+
+    def _init_function_symbols(self, functions):
+        if functions is not None:
+            for f in functions:
+                if isinstance(f, tuple):
+                    func = f[0]
+                    name = f[1]
                 else:
-                    type_name_plural = mixin_class.type_name + 's'
+                    func = f
+                    name = f.__name__
 
-                self.type_name_map[type_name_plural] = \
-                    typing.AbstractSet[mixin_class.type]
+                signature = inspect.signature(func)
+                argument_types = iter(signature.parameters.values())
+                next(argument_types)
 
+                for k, v in typing.get_type_hints(func).items():
+                    func.__annotations__[k] = v
+
+                t = infer_type(func)
+                self.symbol_table[Symbol[t](name)] = Constant[t](
+                    func
+                )
+
+    def _init_functions(self, functions):
         for type_name, type_ in self.type_name_map.items():
             for name, member in inspect.getmembers(type_):
                 if not inspect.isfunction(member) or name.startswith('_'):
@@ -407,40 +432,23 @@ class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
                 functions = functions + [
                     (member, type_name + '_' + name)
                 ]
+        return functions
 
-        if symbols is not None:
-            for k, v in symbols.items():
-                if not isinstance(v, Constant):
-                    t = infer_type(v)
-                    v = Constant[t](v)
-                self.symbol_table[Symbol[v.type](k)] = v
+    def _init_type_from_mixins(self):
+        for mixin_class in self.__class__.mro():
+            if (
+                hasattr(mixin_class, 'type') and
+                hasattr(mixin_class, 'type_name')
+            ):
+                self.type_name_map[mixin_class.type_name] = mixin_class.type
 
-        if functions is not None:
-            for f in functions:
-                if isinstance(f, tuple):
-                    func = f[0]
-                    name = f[1]
+                if hasattr(mixin_class, 'type_name_plural'):
+                    type_name_plural = mixin_class.type_name_plural
                 else:
-                    func = f
-                    name = f.__name__
+                    type_name_plural = mixin_class.type_name + 's'
 
-                signature = inspect.signature(func)
-                parameters_items = iter(signature.parameters.items())
-
-                argument_types = iter(signature.parameters.values())
-                next(argument_types)
-
-                for k, v in typing.get_type_hints(func).items():
-                    func.__annotations__[k] = v
-
-                t = infer_type(func)
-                self.symbol_table[Symbol[t](name)] = Constant[t](
-                    func
-                )
-
-        self.nli = NeuroLangIntermediateRepresentation(
-            type_name_map=self.type_name_map
-        )
+                self.type_name_map[type_name_plural] = \
+                    typing.AbstractSet[mixin_class.type]
 
     def get_intermediate_representation(self, ast, **kwargs):
         if isinstance(ast, str):
