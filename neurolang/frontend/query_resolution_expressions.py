@@ -172,11 +172,10 @@ class Symbol(Expression):
 
     def _repr_iterable_value(self, symbol):
         contained = []
-        all_symbols = (
-            self.query_builder.solver.symbol_table.symbols_by_type(
-                symbol.type.__args__[0]
-            )
+        all_symbols = self.query_builder.solver.symbol_table.symbols_by_type(
+            symbol.type.__args__[0]
         )
+
         for s in symbol.value:
             if isinstance(s, nl.Constant):
                 for k, v in all_symbols.items():
@@ -186,10 +185,8 @@ class Symbol(Expression):
             elif isinstance(s, nl.Symbol):
                 contained.append(s.name)
             elif isinstance(s, tuple):
-                t = '('
-                for e in s:
-                    t += (e.name + ', ')
-                contained.append(t[:-2] + ')')
+                t = ', '.join(e.name for e in s)
+                contained.append(f'({t})')
         return contained
 
     def __iter__(self):
@@ -207,7 +204,7 @@ class Symbol(Expression):
         all_symbols = self.query_builder.solver.symbol_table.symbols_by_type(
             symbol.type.__args__[0]
         )
-        
+
         for s in symbol.value:
             if isinstance(s, nl.Constant):
                 for k, v in all_symbols.items():
