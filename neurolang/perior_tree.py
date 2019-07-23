@@ -1,4 +1,4 @@
-from typing import Union, Tuple, Set, Dict
+from typing import Union, Tuple, Set
 from .aabb_tree import AABB
 import numpy as np
 from copy import deepcopy
