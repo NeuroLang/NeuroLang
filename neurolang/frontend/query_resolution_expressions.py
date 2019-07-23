@@ -7,7 +7,7 @@ from ..expression_walker import ReplaceExpressionsByValues
 from ..expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 
 
-class Expression:
+class Expression(object):
     def __init__(self, query_builder, expression):
         self.query_builder = query_builder
         self.expression = expression
@@ -166,7 +166,7 @@ class Symbol(Expression):
             else:
                 value = symbol.value
 
-            return (f'{self.symbol_name}: {symbol.type} = {value}')
+            return f'{self.symbol_name}: {symbol.type} = {value}'
         else:
             raise ValueError('...')
 
