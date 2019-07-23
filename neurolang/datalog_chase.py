@@ -211,24 +211,25 @@ def build_chase_tree(datalog_program, chase_set=chase_step):
     while len(nodes_to_process) > 0:
         node = nodes_to_process.pop()
         for rule in rules:
-            build_nodes_from_rules(
-                datalog_program, node, builtins, rule, nodes_to_process
+            new_node = build_nodes_from_rules(
+                datalog_program, node, builtins, rule
             )
-
+            if new_node is not None:
+                nodes_to_process.append(new_node)
     return root
 
 
-def build_nodes_from_rules(
-    datalog_program, node, builtins, rule, nodes_to_process
-):
+def build_nodes_from_rules(datalog_program, node, builtins, rule):
     instance_update = chase_step(
         datalog_program, node.instance, builtins, rule
     )
     if len(instance_update) > 0:
         new_instance = merge_instances(node.instance, instance_update)
         new_node = ChaseNode(new_instance, dict())
-        nodes_to_process.append(new_node)
         node.children[rule] = new_node
+        return new_node
+    else:
+        return None
 
 
 def build_chase_solution(datalog_program, chase_step=chase_step):
