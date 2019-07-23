@@ -28,9 +28,20 @@ def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
         nonrestricted_predicates
     )
 
+    substitutions = obtain_substitutions(rule_predicates_iterator)
+
+    substitutions = evaluate_builtins(
+        builtin_predicates, substitutions, datalog
+    )
+
+    return compute_result_set(
+        rule, substitutions, instance, restriction_instance
+    )
+
+
+def obtain_substitutions(rule_predicates_iterator):
     substitutions = [{}]
     for predicate, representation in rule_predicates_iterator:
-        functor = predicate.functor
         new_substitutions = []
         for substitution in substitutions:
             subs_args = apply_substitution_arguments(
@@ -52,7 +63,10 @@ def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
                     )
 
         substitutions = new_substitutions
+    return substitutions
 
+
+def evaluate_builtins(builtin_predicates, substitutions, datalog):
     for predicate, _ in builtin_predicates:
         functor = predicate.functor
         new_substitutions = []
@@ -81,10 +95,7 @@ def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
                         )
                     )
         substitutions = new_substitutions
-
-    return compute_result_set(
-        rule, substitutions, instance, restriction_instance
-    )
+    return substitutions
 
 
 def extract_rule_predicates(
