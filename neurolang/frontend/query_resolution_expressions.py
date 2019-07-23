@@ -194,29 +194,28 @@ class Symbol(Expression):
 
     def __iter__(self):
         symbol = self.symbol
-        if (
+        if not (
             isinstance(symbol, nl.Constant) and (
                 is_leq_informative(symbol.type, AbstractSet) or
                 is_leq_informative(symbol.type, Tuple)
             )
         ):
-            all_symbols = (
-                self.query_builder.solver.symbol_table.symbols_by_type(
-                    symbol.type.__args__[0]
-                )
-            )
-            for s in symbol.value:
-                if isinstance(s, nl.Constant):
-                    for k, v in all_symbols.items():
-                        if isinstance(v, nl.Constant) and s is v.value:
-                            yield Symbol(self.query_builder, k.name)
-                            break
-                if isinstance(s, nl.Symbol):
-                    yield Symbol(self.query_builder, s.name)
-        else:
             raise TypeError(
                 f'Symbol of type {self.symbol.type} is not iterable'
             )
+
+        all_symbols = self.query_builder.solver.symbol_table.symbols_by_type(
+            symbol.type.__args__[0]
+        )
+        
+        for s in symbol.value:
+            if isinstance(s, nl.Constant):
+                for k, v in all_symbols.items():
+                    if isinstance(v, nl.Constant) and s is v.value:
+                        yield Symbol(self.query_builder, k.name)
+                        break
+            if isinstance(s, nl.Symbol):
+                yield Symbol(self.query_builder, s.name)
 
     def __len__(self):
         symbol = self.symbol
