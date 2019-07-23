@@ -11,7 +11,9 @@ from .unification import (
 )
 
 
-def chase_step(datalog, instance, builtins, rule, restriction_instance=[]):
+def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
+    if restriction_instance is None:
+        restriction_instance = set()
 
     rule_predicates = extract_rule_predicates(
         rule, instance, builtins, restriction_instance=restriction_instance
@@ -99,8 +101,11 @@ def evaluate_builtins(builtin_predicates, substitutions, datalog):
 
 
 def extract_rule_predicates(
-    rule, instance, builtins, restriction_instance=[]
+    rule, instance, builtins, restriction_instance=None
 ):
+    if restriction_instance is None:
+        restriction_instance = set()
+
     head_functor = rule.consequent.functor
     rule_predicates = sdb.extract_datalog_predicates(rule.antecedent)
     restricted_predicates = []
@@ -138,8 +143,10 @@ def extract_rule_predicates(
 
 
 def compute_result_set(
-    rule, substitutions, instance, restriction_instance=[]
+    rule, substitutions, instance, restriction_instance=None
 ):
+    if restriction_instance is None:
+        restriction_instance = set()
     new_tuples = set(
         Constant(
             apply_substitution_arguments(
@@ -151,7 +158,7 @@ def compute_result_set(
 
     if rule.consequent.functor in instance:
         new_tuples -= instance[rule.consequent.functor].value
-    if (rule.consequent.functor in restriction_instance):
+    elif rule.consequent.functor in restriction_instance:
         new_tuples -= restriction_instance[rule.consequent.functor].value
 
     if len(new_tuples) == 0:
