@@ -56,7 +56,7 @@ class BoundedAABB(AABB):
         print(arg)
 
     @expand.register(tuple)
-    def _(self, point: tuple):
+    def expand_tuple(self, point: tuple):
         center = np.array([
             self._lb[i] + self.width[i] / 2 for i in range(len(self._lb))
         ])
@@ -64,17 +64,17 @@ class BoundedAABB(AABB):
             self._bound_area.adjust_direction(tuple(np.array(point) - center))
         )
         p = center + dc
-        l = self._bound_area.adjust_position(
+        lb = self._bound_area.adjust_position(
             np.array(min(tuple(self._lb), tuple(p)))
         )
-        u = self._bound_area.adjust_position(
+        ub = self._bound_area.adjust_position(
             np.array(max(tuple(self._ub), tuple(p)))
         )
 
-        return BoundedAABB(l, u, self._bound_area)
+        return BoundedAABB(lb, ub, self._bound_area)
 
     @expand.register(object)
-    def _(self, another_box: 'BoundedAABB'):
+    def expand_object(self, another_box: 'BoundedAABB'):
         center = np.array([
             self._lb[i] + self.width[i] / 2 for i in range(len(self._lb))
         ])
@@ -130,7 +130,7 @@ class BoundedAABB(AABB):
         return np.all(abs(dc) <= radius - other_radius)
 
     @contains.register(tuple)
-    def _(self, point: tuple) -> bool:
+    def contains_tuple(self, point: tuple) -> bool:
         center = np.array([
             self._lb[i] + self.width[i] / 2 for i in range(len(self._lb))
         ])
@@ -209,13 +209,15 @@ class Node(object):
                  left: Union[None, 'Node'] = None,
                  right: Union[None, 'Node'] = None,
                  height: int = 0,
-                 region_ids: Set[int] = set()) -> None:
+                 region_ids: Set[int] = None) -> None:
 
         self.box = box
         self.parent = parent
         self.left = left
         self.right = right
         self.height = height
+        if region_ids is None:
+            region_ids = set()
         self.region_ids = region_ids
 
     @property
