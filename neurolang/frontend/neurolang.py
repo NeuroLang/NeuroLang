@@ -387,7 +387,7 @@ class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
     def _init_function_symbols(self, functions):
         if functions is None:
             return
-           
+
         for f in functions:
             if isinstance(f, tuple):
                 func = f[0]
@@ -411,12 +411,12 @@ class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
     def _init_functions(self, functions):
         for type_name, type_ in self.type_name_map.items():
             for name, member in inspect.getmembers(type_):
-                if not inspect.isfunction(member) or name.startswith('_'):
-                    continue
-                if self._update_member_signature(member, type_):
-                    functions = functions + [
-                        (member, type_name + '_' + name)
-                    ]
+                if (
+                    (inspect.isfunction(member) or name.startswith('_')) and
+                    self._update_member_signature(member, type_)
+                ):
+                    functions += [(member, type_name + '_' + name)]
+
         return functions
 
     def _update_member_signature(self, member, type_):
