@@ -412,7 +412,7 @@ class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
         for type_name, type_ in self.type_name_map.items():
             for name, member in inspect.getmembers(type_):
                 if (
-                    (inspect.isfunction(member) or name.startswith('_')) and
+                    (not inspect.isfunction(member) or name.startswith('_')) and
                     self._update_member_signature(member, type_)
                 ):
                     functions += [(member, type_name + '_' + name)]
