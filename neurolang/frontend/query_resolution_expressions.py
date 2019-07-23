@@ -177,17 +177,26 @@ class Symbol(Expression):
         )
 
         for s in symbol.value:
-            if isinstance(s, nl.Constant):
-                for k, v in all_symbols.items():
-                    if isinstance(v, nl.Constant) and s is v.value:
-                        contained.append(k.name)
-                        break
-            elif isinstance(s, nl.Symbol):
-                contained.append(s.name)
-            elif isinstance(s, tuple):
-                t = ', '.join(e.name for e in s)
-                contained.append(f'({t})')
+            representation = self._repr_iterable_value_symbol(s, all_symbols)
+            if representation is not None:
+                contained.append(representation)
+
         return contained
+
+    def _repr_iterable_value_symbol(self, symbol, all_symbols):
+        representation = None
+        if isinstance(symbol, nl.Constant):
+            for k, v in all_symbols.items():
+                if isinstance(v, nl.Constant) and symbol is v.value:
+                    representation = k.name
+                    break
+        elif isinstance(symbol, nl.Symbol):
+            representation = s.name
+        elif isinstance(symbol, tuple):
+            t = ', '.join(e.name for e in symbol)
+            representation = f'({t})'
+        
+        return representation
 
     def __iter__(self):
         symbol = self.symbol
