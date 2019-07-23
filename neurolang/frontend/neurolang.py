@@ -387,7 +387,7 @@ class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
     def _init_function_symbols(self, functions):
         if functions is None:
             return
-            
+           
         for f in functions:
             if isinstance(f, tuple):
                 func = f[0]
