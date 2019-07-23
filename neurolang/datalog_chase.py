@@ -46,26 +46,33 @@ def obtain_substitutions(rule_predicates_iterator):
     for predicate, representation in rule_predicates_iterator:
         new_substitutions = []
         for substitution in substitutions:
-            subs_args = apply_substitution_arguments(
-                predicate.args, substitution
+            new_substitutions += unify_substitution(
+                predicate, substitution, representation
             )
-
-            for element in representation:
-                mgu_substituted = most_general_unifier_arguments(
-                    subs_args,
-                    element.value
-                )
-
-                if mgu_substituted is not None:
-                    new_substitution = mgu_substituted[0]
-                    new_substitutions.append(
-                        compose_substitutions(
-                            substitution, new_substitution
-                        )
-                    )
-
         substitutions = new_substitutions
     return substitutions
+
+
+def unify_substitution(predicate, substitution, representation):
+    new_substitutions = []
+    subs_args = apply_substitution_arguments(
+        predicate.args, substitution
+    )
+
+    for element in representation:
+        mgu_substituted = most_general_unifier_arguments(
+            subs_args,
+            element.value
+        )
+
+        if mgu_substituted is not None:
+            new_substitution = mgu_substituted[0]
+            new_substitutions.append(
+                compose_substitutions(
+                    substitution, new_substitution
+                )
+            )
+    return new_substitutions
 
 
 def evaluate_builtins(builtin_predicates, substitutions, datalog):
