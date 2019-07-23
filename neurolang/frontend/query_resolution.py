@@ -84,16 +84,16 @@ class QueryBuilder(object):
     def types(self):
         return self.solver.symbol_table.types
 
-    def new_symbol(self, type, name=None):
-        if isinstance(type, (tuple, list)):
-            type = tuple(type)
-            type = Tuple[type]
+    def new_symbol(self, type_, name=None):
+        if isinstance(type_, (tuple, list)):
+            type_ = tuple(type_)
+            type_ = Tuple[type_]
 
         if name is None:
             name = str(uuid1())
         return Expression(
             self,
-            nl.Symbol[type](name)
+            nl.Symbol[type_](name)
         )
 
     def new_region_symbol(self, name=None):

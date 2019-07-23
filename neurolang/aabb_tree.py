@@ -69,12 +69,13 @@ def aabb_from_vertices(vertices):
 class Node(object):
 
     def __init__(self, box, parent=None, left=None, right=None, height=0,
-                 regions=set()):
-
+                 regions=None):
         self.box = box
         self.parent = parent
         self.left = left
         self.right = right
+        if regions is None:
+            regions = set()
         self.regions = regions
         self.height = height
 
@@ -101,13 +102,15 @@ class Tree(object):
             self.region_boxes[region_id] = \
                 self.region_boxes[region_id].union(added_box)
 
-    def add_left(self, box, regions=set()):
+    def add_left(self, box, regions=None):
         return self.add_in_direction('left', box, regions)
 
-    def add_right(self, box, regions=set()):
+    def add_right(self, box, regions=None):
         return self.add_in_direction('right', box, regions)
 
-    def add_in_direction(self, direction, box, regions=set()):
+    def add_in_direction(self, direction, box, regions=None):
+        if regions is None:
+            regions = set()
         for region_id in regions:
             self.expand_region_box(region_id, box)
         n = self.root
@@ -132,8 +135,9 @@ class Tree(object):
             self.height = max(self.height, n.height)
             n = n.parent
 
-    def add(self, box, regions=set()):
-
+    def add(self, box, regions=None):
+        if regions is None:
+            regions = set()
         for region_id in regions:
             self.expand_region_box(region_id, box)
 
@@ -163,16 +167,14 @@ class Tree(object):
             # cost of merging new box with current box
             cost = 2 * combined_volume
             inherit_cost = 2 * (combined_volume - n.box.volume)
-            if n.left is not None and n.left.is_leaf:
-                cost_left = box.union(n.left.box).volume + inherit_cost
-            else:
-                cost_left = (box.union(n.left.box).volume -
-                             n.left.box.volume + inherit_cost)
-            if n.right is not None and n.right.is_leaf:
-                cost_right = box.union(n.right.box).volume + inherit_cost
-            else:
-                cost_right = (box.union(n.right.box).volume -
-                              n.right.box.volume + inherit_cost)
+            cost_left = box.union(n.left.box).volume + inherit_cost
+            if n.left is None or not n.left.is_leaf:
+                cost_left -= n.left.box.volume
+
+            cost_right = box.union(n.right.box).volume + inherit_cost
+            if n.right is None or not n.right.is_leaf:
+                cost_right -= n.right.box.volume
+
             if (cost < cost_left) and (cost < cost_right):
                 break
             # if it's cheaper to go left, we go left
