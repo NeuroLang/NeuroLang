@@ -191,11 +191,11 @@ class Symbol(Expression):
                     representation = k.name
                     break
         elif isinstance(symbol, nl.Symbol):
-            representation = s.name
+            representation = symbol.name
         elif isinstance(symbol, tuple):
             t = ', '.join(e.name for e in symbol)
             representation = f'({t})'
-        
+
         return representation
 
     def __iter__(self):
