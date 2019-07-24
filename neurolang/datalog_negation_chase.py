@@ -1,6 +1,7 @@
 from collections import namedtuple
 from itertools import chain
 from typing import AbstractSet
+from operator import invert
 
 from .expressions import Constant
 from . import solver_datalog_naive as sdb
@@ -10,8 +11,6 @@ from .unification import (
 )
 
 from .exceptions import NeuroLangException
-
-from operator import invert
 
 
 def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
