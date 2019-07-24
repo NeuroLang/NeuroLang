@@ -35,5 +35,6 @@ class ASTWalker(object):
             logging.debug("\tpassing through")
             return ast
 
-    def _default(self, ast):
+    @staticmethod
+    def _default(ast):
         return ast

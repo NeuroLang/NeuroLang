@@ -1,4 +1,4 @@
-class NeuroLangIntermediateRepresentationCompiler:
+class NeuroLangIntermediateRepresentationCompiler(object):
     def __init__(self, solver, symbols=None):
         self.solver = solver
         if symbols is not None:
