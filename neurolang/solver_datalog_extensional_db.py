@@ -55,9 +55,9 @@ class ExtensionalDatabaseSolver(PatternWalker):
     def expression_contains(self, expression):
         return self.walk(expression.args[1](expression.args[0]))
 
-    def function_isin(self, element: Any, set: AbstractSet) -> bool:
+    def function_isin(self, element: Any, set_: AbstractSet) -> bool:
         '''Function for checking that an element is in a set'''
-        return element in set
+        return element in set_
 
     def function_join(
         self, set1: AbstractSet, elem1: int, set2: AbstractSet, elem2: int

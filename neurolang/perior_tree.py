@@ -56,7 +56,7 @@ class BoundedAABB(AABB):
         print(arg)
 
     @expand.register(tuple)
-    def _(self, point: tuple):
+    def expand_tuple(self, point: tuple):
         center = np.array([
             self._lb[i] + self.width[i] / 2 for i in range(len(self._lb))
         ])
@@ -64,17 +64,17 @@ class BoundedAABB(AABB):
             self._bound_area.adjust_direction(tuple(np.array(point) - center))
         )
         p = center + dc
-        l = self._bound_area.adjust_position(
+        lb = self._bound_area.adjust_position(
             np.array(min(tuple(self._lb), tuple(p)))
         )
-        u = self._bound_area.adjust_position(
+        ub = self._bound_area.adjust_position(
             np.array(max(tuple(self._ub), tuple(p)))
         )
 
-        return BoundedAABB(l, u, self._bound_area)
+        return BoundedAABB(lb, ub, self._bound_area)
 
     @expand.register(object)
-    def _(self, another_box: 'BoundedAABB'):
+    def expand_object(self, another_box: 'BoundedAABB'):
         center = np.array([
             self._lb[i] + self.width[i] / 2 for i in range(len(self._lb))
         ])
@@ -130,7 +130,7 @@ class BoundedAABB(AABB):
         return np.all(abs(dc) <= radius - other_radius)
 
     @contains.register(tuple)
-    def _(self, point: tuple) -> bool:
+    def contains_tuple(self, point: tuple) -> bool:
         center = np.array([
             self._lb[i] + self.width[i] / 2 for i in range(len(self._lb))
         ])
@@ -152,14 +152,14 @@ class BoundedAABB(AABB):
 
     def cardinal_tiles(self) -> np.array:
         res = np.empty((1, 9), dtype=object)
-        range = abs(self.width)
+        range_ = abs(self.width)
 
         index = 0
         for j in [1, 0, -1]:
-            lb = self._lb + np.asanyarray((-range[0], j * range[1]))
-            ub = self._ub + np.asanyarray((-range[0], j * range[1]))
+            lb = self._lb + np.asanyarray((-range_[0], j * range_[1]))
+            ub = self._ub + np.asanyarray((-range_[0], j * range_[1]))
             for i in [0, 1, 2]:
-                increase = np.asanyarray((range[0], 0)) * i
+                increase = np.asanyarray((range_[0], 0)) * i
                 res[0, index] = BoundedAABB(
                     tuple(lb + increase), tuple(ub + increase),
                     self._bound_area
@@ -201,22 +201,23 @@ class Boundary(BoundedAABB):
         return np.all(self._lb == other._lb) and np.all(self._ub == other._ub)
 
 
-class Node:
-    def __init__(
-        self,
-        box: BoundedAABB,
-        parent: Union[None, 'Node'] = None,
-        left: Union[None, 'Node'] = None,
-        right: Union[None, 'Node'] = None,
-        height: int = 0,
-        region_ids: Set[int] = set()
-    ) -> None:
+class Node(object):
+
+    def __init__(self,
+                 box: BoundedAABB,
+                 parent: Union[None, 'Node'] = None,
+                 left: Union[None, 'Node'] = None,
+                 right: Union[None, 'Node'] = None,
+                 height: int = 0,
+                 region_ids: Set[int] = None) -> None:
 
         self.box = box
         self.parent = parent
         self.left = left
         self.right = right
         self.height = height
+        if region_ids is None:
+            region_ids = set()
         self.region_ids = region_ids
 
     @property
@@ -224,10 +225,11 @@ class Node:
         return self.left is None
 
 
-class Tree:
+class Tree(object):
+
     def __init__(self) -> None:
-        self.root = None  # type: Union[Node, None]
-        self.region_boxes = dict()  # type: Dict[int, BoundedAABB]
+        self.root = None
+        self.region_boxes = dict()
         self.height = 0
 
     def expand_region_box(
@@ -239,7 +241,9 @@ class Tree:
             self.region_boxes[region_id] = \
                 self.region_boxes[region_id].expand(added_box)
 
-    def add(self, box: BoundedAABB, region_ids: Set[int] = set()) -> None:
+    def add(self, box: BoundedAABB, region_ids: Set[int] = None) -> None:
+        if region_ids is None:
+            region_ids = set()
 
         for region_id in region_ids:
             self.expand_region_box(region_id, box)

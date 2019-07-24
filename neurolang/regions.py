@@ -53,7 +53,7 @@ def region_set_algebraic_op(op, region_set, affine=None, n_dim=3):
     return ExplicitVBR(result_voxels, affine, max_dim)
 
 
-class Region:
+class Region(object):
     def __init__(self, lb, ub):
         if not np.all([lb[i] < ub[i] for i in range(len(lb))]):
             raise NeuroLangException(
@@ -192,8 +192,12 @@ class ExplicitVBR(VolumetricBrainRegion):
 
         return tree
 
-    def to_xyz(self):
-        return nib.affines.apply_affine(self.affine, self.voxels)
+    def to_xyz(self, affine=None):
+        if affine is None or np.allclose(affine, self.affine):
+            affine = self.affine
+        else:
+            affine = np.dot(affine, np.linalg.inv(self.affine))
+        return nib.affines.apply_affine(affine, self.voxels)
 
     def to_ijk(self, affine):
         return nib.affines.apply_affine(
