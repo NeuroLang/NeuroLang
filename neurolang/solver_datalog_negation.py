@@ -3,13 +3,11 @@ from operator import and_, invert
 
 from .type_system import Unknown
 from .expression_walker import add_match, expression_iterator
-
 from .solver_datalog_naive import (
     DatalogBasic,
     Implication,
     extract_datalog_free_variables,
 )
-
 from .expressions import (
     Symbol, NonConstant, FunctionApplication, NeuroLangException,
     is_leq_informative, ExpressionBlock, Constant
@@ -17,6 +15,10 @@ from .expressions import (
 
 
 class NegativeFact(Implication):
+    '''This class defines negative facts. They are composed of an inverted
+    antecedent and False in the consequent. It is not necessary that the 
+    initialization parameter is inverted.'''
+
     def __init__(self, antecedent):
         super().__init__(Constant(False), invert(antecedent))
 
@@ -31,6 +33,10 @@ class NegativeFact(Implication):
 
 
 class DatalogBasicNegation(DatalogBasic):
+    '''Datalog solver that implements negation. Adds the possibility of 
+    inverted terms when checking that expressions are in conjunctive 
+    normal form.'''
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.negated_symbols = {}
