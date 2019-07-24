@@ -11,6 +11,7 @@ from typing import (
     Iterable, Sequence, Any, Generic, Text
 )
 import sys
+from itertools import islice
 
 from typing_inspect import (
     get_origin,
@@ -288,13 +289,13 @@ def infer_type(value, deep=False, recursive_callback=None):
 def infer_type_iterables(value, deep=True, recursive_callback=infer_type):
     inner_type = Unknown
     it = iter(value)
-    element = next(it)
-    inner_type = unify_types(recursive_callback(element), inner_type)
-    if deep:
-        for element in it:
-            inner_type = unify_types(
-                recursive_callback(element), inner_type
-            )
+    if not deep:
+        it = islice(it, 1)
+
+    for element in it:
+        inner_type = unify_types(
+            recursive_callback(element), inner_type
+        )
     if isinstance(value, AbstractSet):
         return AbstractSet[inner_type]
     elif isinstance(value, Sequence):
@@ -305,13 +306,12 @@ def infer_type_mapping(value,  deep=True, recursive_callback=infer_type):
     ktype = Unknown
     vtype = Unknown
     it = iter(value.items())
-    k, v = next(it)
-    ktype = unify_types(recursive_callback(k), ktype)
-    vtype = unify_types(recursive_callback(v), vtype)
-    if deep:
-        for k, v in it:
-            ktype = unify_types(recursive_callback(k), ktype)
-            vtype = unify_types(recursive_callback(v), vtype)
+    if not deep:
+        it = islice(it, 1)
+
+    for k, v in it:
+        ktype = unify_types(recursive_callback(k), ktype)
+        vtype = unify_types(recursive_callback(v), vtype)
     return Mapping[ktype, vtype]
 
 

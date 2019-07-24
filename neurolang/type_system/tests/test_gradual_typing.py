@@ -149,11 +149,14 @@ def test_infer_type():
     assert infer_type(tuple([1, 'a'])) is Tuple[int, str]
     assert infer_type(lambda x: x) is Callable[[Unknown], Unknown]
     assert infer_type(a) is Callable[[int, str], bool]
+
+    assert infer_type(frozenset()) is AbstractSet[Unknown]
     assert infer_type(frozenset([1])) is AbstractSet[int]
-    assert infer_type(dict(a=2)) is Mapping[str, int]
     assert infer_type(frozenset([1, 3.]), deep=True) is AbstractSet[float]
     assert infer_type(frozenset([1, 3]), deep=True) is AbstractSet[int]
-
     with pytest.raises(NeuroLangTypeException):
         infer_type(frozenset([1, 'a']), deep=True)
+
+    assert infer_type(dict()) is Mapping[Unknown, Unknown]
+    assert infer_type(dict(a=2)) is Mapping[str, int]
 
