@@ -8,7 +8,7 @@ except ModuleNotFoundError:
     raise ImportError("Neurosynth not installed in the system")
 
 
-class NeuroSynthHandler:
+class NeuroSynthHandler(object):
     def __init__(self, ns_dataset=None):
         self._dataset = ns_dataset
 
@@ -46,7 +46,8 @@ class NeuroSynthHandler:
 
         return dataset
 
-    def download_ns_dataset(self, path):
+    @staticmethod
+    def download_ns_dataset(path):
         if not os.path.exists(path):
             os.makedirs(path)
         ns.dataset.download(path=path, unpack=True)

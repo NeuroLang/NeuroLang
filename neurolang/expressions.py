@@ -89,17 +89,20 @@ class ParametricTypeClassMeta(type):
             isinstance(other, ParametricTypeClassMeta) and
             other.__parameterized__
         ):
-            if cls.__parameterized__:
-                return issubclass(
-                    other.__generic_class__,
-                    cls.__generic_class__
-                ) and is_leq_informative(other.type, cls.type)
-            else:
-                return issubclass(
-                    other.__generic_class__, cls
-                )
+            return cls.__subclasscheck__parameterized(other)
         else:
             return super().__subclasscheck__(other)
+
+    def __subclasscheck__parameterized(cls, other):
+        if cls.__parameterized__:
+            return issubclass(
+                other.__generic_class__,
+                cls.__generic_class__
+            ) and is_leq_informative(other.type, cls.type)
+        else:
+            return issubclass(
+                other.__generic_class__, cls
+            )
 
     def __instancecheck__(cls, other):
         return (
@@ -156,17 +159,34 @@ class ExpressionMeta(ParametricTypeClassMeta):
             if parameter.default is inspect.Parameter.empty
         ][1:]
 
+        def init_process_pattern(self, args):
+            parameters = inspect.signature(self.__class__).parameters
+            cls_argnames = [
+                argname for argname, arg in parameters.items()
+                if arg.default is inspect.Parameter.empty
+            ]
+            if len(cls_argnames) != len(args):
+                raise TypeError(
+                    f'Pattern {self.__class__} with '
+                    'wrong number of parameters. '
+                    f'Parameters are {cls_argnames}'
+                )
+
+            for argname, value in zip(cls_argnames, args):
+                setattr(self, argname, value)
+
         @wraps(orig_init)
         def new_init(self, *args, **kwargs):
             generic_pattern_match = True
             for arg in args:
-                if __check_expression_is_pattern__(arg):
-                    break
                 if (
-                    isinstance(arg, (tuple, list)) and
-                    any(
-                        __check_expression_is_pattern__(a)
-                        for a in arg
+                    __check_expression_is_pattern__(arg) or
+                    (
+                        isinstance(arg, (tuple, list)) and
+                        any(
+                            __check_expression_is_pattern__(a)
+                            for a in arg
+                        )
                     )
                 ):
                     break
@@ -180,21 +200,7 @@ class ExpressionMeta(ParametricTypeClassMeta):
                 self.type = Unknown
 
             if self.__is_pattern__:
-                parameters = inspect.signature(self.__class__).parameters
-                cls_argnames = [
-                    argname for argname, arg in parameters.items()
-                    if arg.default is inspect.Parameter.empty
-                ]
-                if len(cls_argnames) != len(args):
-                    raise TypeError(
-                        f'Pattern {self.__class__} with '
-                        'wrong number of parameters. '
-                        f'Parameters are {cls_argnames}'
-                    )
-
-                for argname, value in zip(cls_argnames, args):
-                    setattr(self, argname, value)
-
+                init_process_pattern(self, args)
             else:
                 return orig_init(self, *args, **kwargs)
 
@@ -581,23 +587,7 @@ class Projection(Definition):
             self.type is Unknown and auto_infer_projection_type and
             collection.type is not Unknown
         ):
-            if is_leq_informative(collection.type, typing.Tuple):
-                if (
-                    isinstance(item, Constant) and
-                    is_leq_informative(item.type, typing.SupportsInt) and
-                    len(collection.type.__args__) > int(item.value)
-                ):
-                    self.type = collection.type.__args__[
-                        int(item.value)
-                    ]
-                else:
-                    raise NeuroLangTypeException(
-                        "Not {} elements in tuple".format(
-                            int(item.value)
-                        )
-                    )
-            if is_leq_informative(collection.type, typing.Mapping):
-                self.type = collection.type.__args__[1]
+            self._auto_infer_type(collection, item)
 
         self._symbols = collection._symbols
         self._symbols |= item._symbols
@@ -609,6 +599,25 @@ class Projection(Definition):
         return u"\u03C3{{{}[{}]: {}}}".format(
             self.collection, self.item, self.__type_repr__
         )
+
+    def _auto_infer_type(self, collection, item):
+        if is_leq_informative(collection.type, typing.Tuple):
+            if (
+                isinstance(item, Constant) and
+                is_leq_informative(item.type, typing.SupportsInt) and
+                len(collection.type.__args__) > int(item.value)
+            ):
+                self.type = collection.type.__args__[
+                    int(item.value)
+                ]
+            else:
+                raise NeuroLangTypeException(
+                    "Not {} elements in tuple".format(
+                        int(item.value)
+                    )
+                )
+        if is_leq_informative(collection.type, typing.Mapping):
+            self.type = collection.type.__args__[1]
 
 
 class Quantifier(Definition):
