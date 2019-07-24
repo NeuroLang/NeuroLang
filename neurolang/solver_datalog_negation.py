@@ -13,7 +13,6 @@ from .expressions import (
     is_leq_informative, ExpressionBlock, Constant
 )
 
-
 class NegativeFact(Implication):
     '''This class defines negative facts. They are composed of an inverted
     antecedent and False in the consequent. It is not necessary that the 
@@ -30,7 +29,6 @@ class NegativeFact(Implication):
         return 'NegativeFact{{{} \u2190 {}}}'.format(
             repr(self.antecedent), True
         )
-
 
 class DatalogBasicNegation(DatalogBasic):
     '''Datalog solver that implements negation. Adds the possibility of 
@@ -131,7 +129,6 @@ class DatalogBasicNegation(DatalogBasic):
         fact_set.value.add(Constant(fact.args))
 
         return expression
-
 
 def is_conjunctive_negation(expression):
     return all(
