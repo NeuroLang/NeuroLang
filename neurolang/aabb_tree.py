@@ -3,7 +3,7 @@ from copy import deepcopy
 import numpy as np
 
 
-class AABB:
+class AABB(object):
 
     def __init__(self, lb, ub):
         self._limits = np.asarray((lb, ub), dtype=float).T
@@ -66,7 +66,7 @@ def aabb_from_vertices(vertices):
     return AABB(lb, ub)
 
 
-class Node:
+class Node(object):
 
     def __init__(self, box, parent=None, left=None, right=None, height=0,
                  regions=None):
@@ -88,7 +88,7 @@ class Node:
                 .format(self.regions, self.box, self.is_leaf))
 
 
-class Tree:
+class Tree(object):
 
     def __init__(self):
         self.root = None
@@ -167,16 +167,14 @@ class Tree:
             # cost of merging new box with current box
             cost = 2 * combined_volume
             inherit_cost = 2 * (combined_volume - n.box.volume)
-            if n.left is not None and n.left.is_leaf:
-                cost_left = box.union(n.left.box).volume + inherit_cost
-            else:
-                cost_left = (box.union(n.left.box).volume -
-                             n.left.box.volume + inherit_cost)
-            if n.right is not None and n.right.is_leaf:
-                cost_right = box.union(n.right.box).volume + inherit_cost
-            else:
-                cost_right = (box.union(n.right.box).volume -
-                              n.right.box.volume + inherit_cost)
+            cost_left = box.union(n.left.box).volume + inherit_cost
+            if n.left is None or not n.left.is_leaf:
+                cost_left -= n.left.box.volume
+
+            cost_right = box.union(n.right.box).volume + inherit_cost
+            if n.right is None or not n.right.is_leaf:
+                cost_right -= n.right.box.volume
+
             if (cost < cost_left) and (cost < cost_right):
                 break
             # if it's cheaper to go left, we go left
