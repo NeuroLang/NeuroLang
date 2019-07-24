@@ -4,16 +4,17 @@ from typing import AbstractSet
 from operator import invert
 
 from .expressions import Constant
+from .exceptions import NeuroLangException
 from . import solver_datalog_naive as sdb
 from .unification import (
     apply_substitution_arguments, compose_substitutions,
     most_general_unifier_arguments
 )
 
-from .exceptions import NeuroLangException
-
 
 def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
+    if restriction_instance is None:
+        restriction_instance = set()
 
     rule_predicates = extract_rule_predicates(
         rule, instance, builtins, restriction_instance=restriction_instance
@@ -23,119 +24,155 @@ def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
         return {}
 
     restricted_predicates, nonrestricted_predicates, negative_predicates, \
-            negative_builtin_predicates, builtin_predicates = rule_predicates
+        builtin_predicates, negative_builtin_predicates = rule_predicates
 
     rule_predicates_iterator = chain(
         restricted_predicates, nonrestricted_predicates
     )
 
-    substitutions = [{}]
-    for predicate, representation in rule_predicates_iterator:
-        functor = predicate.functor
-        new_substitutions = []
-        for substitution in substitutions:
-            subs_args = apply_substitution_arguments(
-                predicate.args, substitution
-            )
+    substitutions = obtain_substitutions(rule_predicates_iterator)
 
-            for element in representation:
-                mgu_substituted = most_general_unifier_arguments(
-                    subs_args, element.value
-                )
+    substitutions = obtain_negative_substitutions(
+        negative_predicates, substitutions
+    )
 
-                if mgu_substituted is not None:
-                    new_substitution = mgu_substituted[0]
-                    new_substitutions.append(
-                        compose_substitutions(substitution, new_substitution)
-                    )
+    substitutions = evaluate_builtins(
+        builtin_predicates, substitutions, datalog
+    )
 
-        substitutions = new_substitutions
-
-    for predicate, representation in negative_predicates:
-        functor = predicate.functor
-        new_substitutions = []
-        for substitution in substitutions:
-            subs_args = apply_substitution_arguments(
-                predicate.args, substitution
-            )
-
-            for element in representation:
-                mgu_substituted = most_general_unifier_arguments(
-                    subs_args, element.value
-                )
-
-                if mgu_substituted is not None:
-                    break
-            else:
-                new_substitution = {predicate: element.value}
-                new_substitutions.append(
-                    compose_substitutions(substitution, new_substitution)
-                )
-
-        substitutions = new_substitutions
-
-    for predicate, _ in builtin_predicates:
-        functor = predicate.functor
-        new_substitutions = []
-        for substitution in substitutions:
-            subs_args = apply_substitution_arguments(
-                predicate.args, substitution
-            )
-
-            mgu_substituted = most_general_unifier_arguments(
-                subs_args, predicate.args
-            )
-
-            if mgu_substituted is not None:
-                predicate_res = datalog.walk(
-                    predicate.apply(functor, mgu_substituted[1])
-                )
-
-                if (
-                    isinstance(predicate_res, Constant[bool]) and
-                    predicate_res.value
-                ):
-                    new_substitution = mgu_substituted[0]
-                    new_substitutions.append(
-                        compose_substitutions(substitution, new_substitution)
-                    )
-        substitutions = new_substitutions
-
-    for predicate, _ in negative_builtin_predicates:
-        functor = predicate.functor
-        new_substitutions = []
-        for substitution in substitutions:
-            subs_args = apply_substitution_arguments(
-                predicate.args, substitution
-            )
-
-            mgu_substituted = most_general_unifier_arguments(
-                subs_args, predicate.args
-            )
-
-            if mgu_substituted is not None:
-                predicate_res = datalog.walk(
-                    predicate.apply(functor, mgu_substituted[1])
-                )
-
-                if (
-                    isinstance(predicate_res, Constant[bool]) and
-                    not predicate_res.value
-                ):
-                    new_substitution = mgu_substituted[0]
-                    new_substitutions.append(
-                        compose_substitutions(substitution, new_substitution)
-                    )
-        substitutions = new_substitutions
+    substitutions = evaluate_negative_builtins(
+        negative_builtin_predicates, substitutions, datalog
+    )
 
     return compute_result_set(
         rule, substitutions, instance, restriction_instance
     )
 
 
+def obtain_substitutions(rule_predicates_iterator):
+    substitutions = [{}]
+    for predicate, representation in rule_predicates_iterator:
+        new_substitutions = []
+        for substitution in substitutions:
+            new_substitutions += unify_substitution(
+                predicate, substitution, representation
+            )
+        substitutions = new_substitutions
+    return substitutions
+
+
+def obtain_negative_substitutions(negative_predicates, substitutions):
+    for predicate, representation in negative_predicates:
+        new_substitutions = []
+        for substitution in substitutions:
+            new_substitutions += unify_negative_substitution(
+                predicate, substitution, representation
+            )
+        substitutions = new_substitutions
+    return substitutions
+
+
+def unify_substitution(predicate, substitution, representation):
+    new_substitutions = []
+    subs_args = apply_substitution_arguments(predicate.args, substitution)
+
+    for element in representation:
+        mgu_substituted = most_general_unifier_arguments(
+            subs_args, element.value
+        )
+
+        if mgu_substituted is not None:
+            new_substitution = mgu_substituted[0]
+            new_substitutions.append(
+                compose_substitutions(substitution, new_substitution)
+            )
+    return new_substitutions
+
+
+def unify_negative_substitution(predicate, substitution, representation):
+    new_substitutions = []
+    subs_args = apply_substitution_arguments(predicate.args, substitution)
+
+    for element in representation:
+        mgu_substituted = most_general_unifier_arguments(
+            subs_args, element.value
+        )
+
+        if mgu_substituted is not None:
+            break
+    else:
+        new_substitution = {predicate: element.value}
+        new_substitutions.append(
+            compose_substitutions(substitution, new_substitution)
+        )
+    return new_substitutions
+
+
+def evaluate_builtins(builtin_predicates, substitutions, datalog):
+    for predicate, _ in builtin_predicates:
+        functor = predicate.functor
+        new_substitutions = []
+        for substitution in substitutions:
+            new_substitutions += unify_builtin_substitution(
+                predicate, substitution, datalog, functor
+            )
+        substitutions = new_substitutions
+    return substitutions
+
+
+def evaluate_negative_builtins(builtin_predicates, substitutions, datalog):
+    for predicate, _ in builtin_predicates:
+        functor = predicate.functor
+        new_substitutions = []
+        for substitution in substitutions:
+            new_substitutions += unify_negative_builtin_substitution(
+                predicate, substitution, datalog, functor
+            )
+        substitutions = new_substitutions
+    return substitutions
+
+
+def unify_builtin_substitution(predicate, substitution, datalog, functor):
+    subs_args = apply_substitution_arguments(predicate.args, substitution)
+
+    mgu_substituted = most_general_unifier_arguments(subs_args, predicate.args)
+
+    if mgu_substituted is not None:
+        predicate_res = datalog.walk(
+            predicate.apply(functor, mgu_substituted[1])
+        )
+
+        if (isinstance(predicate_res, Constant[bool]) and predicate_res.value):
+            return [compose_substitutions(substitution, mgu_substituted[0])]
+    return []
+
+
+def unify_negative_builtin_substitution(
+    predicate, substitution, datalog, functor
+):
+    subs_args = apply_substitution_arguments(predicate.args, substitution)
+
+    mgu_substituted = most_general_unifier_arguments(subs_args, predicate.args)
+
+    if mgu_substituted is not None:
+        predicate_res = datalog.walk(
+            predicate.apply(functor, mgu_substituted[1])
+        )
+
+        if (
+            isinstance(predicate_res, Constant[bool]) and
+            not predicate_res.value
+        ):
+            return [compose_substitutions(substitution, mgu_substituted[0])]
+    return []
+
+
 def extract_rule_predicates(
     rule, instance, builtins, restriction_instance=None
 ):
+    if restriction_instance is None:
+        restriction_instance = set()
+
     head_functor = rule.consequent.functor
     rule_predicates = sdb.extract_datalog_predicates(rule.antecedent)
     restricted_predicates = []
@@ -146,21 +183,19 @@ def extract_rule_predicates(
     recursive_calls = 0
     for predicate in rule_predicates:
         functor = predicate.functor
-        if restriction_instance is not None:
-            if functor == head_functor:
-                recursive_calls += 1
+
+        if functor == head_functor:
+            recursive_calls += 1
             if recursive_calls > 1:
                 raise ValueError(
                     'Non-linear rule {rule}, solver non supported'
                 )
 
-            if functor in restriction_instance:
-                restricted_predicates.append(
-                    (predicate, restriction_instance[functor].value)
-                )
-                continue
-
-        if functor in instance:
+        if functor in restriction_instance:
+            restricted_predicates.append(
+                (predicate, restriction_instance[functor].value)
+            )
+        elif functor in instance:
             nonrestricted_predicates.append(
                 (predicate, instance[functor].value)
             )
@@ -181,14 +216,16 @@ def extract_rule_predicates(
         restricted_predicates,
         nonrestricted_predicates,
         negative_predicates,
-        negative_builtin_predicates,
         builtin_predicates,
+        negative_builtin_predicates,
     )
 
 
 def compute_result_set(
     rule, substitutions, instance, restriction_instance=None
 ):
+    if restriction_instance is None:
+        restriction_instance = set()
     new_tuples = set(
         Constant(
             apply_substitution_arguments(rule.consequent.args, substitution)
@@ -197,10 +234,7 @@ def compute_result_set(
 
     if rule.consequent.functor in instance:
         new_tuples -= instance[rule.consequent.functor].value
-    if (
-        restriction_instance is not None and
-        rule.consequent.functor in restriction_instance
-    ):
+    elif rule.consequent.functor in restriction_instance:
         new_tuples -= restriction_instance[rule.consequent.functor].value
 
     if len(new_tuples) == 0:
@@ -244,16 +278,25 @@ def build_chase_tree(datalog_program, chase_set=chase_step):
     while len(nodes_to_process) > 0:
         node = nodes_to_process.pop()
         for rule in rules:
-            instance_update = chase_step(
-                datalog_program, node.instance, builtins, rule
+            new_node = build_nodes_from_rules(
+                datalog_program, node, builtins, rule
             )
-            if len(instance_update) > 0:
-                new_instance = merge_instances(node.instance, instance_update)
-                new_node = ChaseNode(new_instance, dict())
+            if new_node is not None:
                 nodes_to_process.append(new_node)
-                node.children[rule] = new_node
-
     return root
+
+
+def build_nodes_from_rules(datalog_program, node, builtins, rule):
+    instance_update = chase_step(
+        datalog_program, node.instance, builtins, rule
+    )
+    if len(instance_update) > 0:
+        new_instance = merge_instances(node.instance, instance_update)
+        new_node = ChaseNode(new_instance, dict())
+        node.children[rule] = new_node
+        return new_node
+    else:
+        return None
 
 
 def build_chase_solution(datalog_program, chase_step=chase_step):
