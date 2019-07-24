@@ -1,6 +1,5 @@
 from collections import namedtuple
 from itertools import chain
-from typing import AbstractSet
 from operator import invert
 
 from .expressions import Constant
