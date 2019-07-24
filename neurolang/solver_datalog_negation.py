@@ -33,7 +33,7 @@ class NegativeFact(Implication):
 
 
 class DatalogBasicNegation(DatalogBasic):
-    '''Datalog solver that implements negation. Adds the possibility of 
+    '''Datalog solver that implements negation. Adds the possibility of
     inverted terms when checking that expressions are in conjunctive
     normal form.'''
 
