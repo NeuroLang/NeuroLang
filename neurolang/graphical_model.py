@@ -1,7 +1,7 @@
 import operator
 import itertools
 from collections import defaultdict
-from typing import Set, Iterable, Callable, AbstractSet, Mapping
+from typing import Iterable, Callable, AbstractSet, Mapping
 
 import numpy as np
 

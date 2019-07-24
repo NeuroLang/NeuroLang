@@ -1,5 +1,5 @@
 from uuid import uuid1
-from typing import Tuple
+from typing import Tuple, Iterable
 
 from .expressions import NeuroLangException
 from .expressions import (
@@ -177,22 +177,33 @@ class SolverNonRecursiveGenerativeDatalog(
     pass
 
 
-def add_to_expression_block(eb, to_add):
-    expressions = eb.expressions
+def add_to_expression_block(block, to_add):
+    '''Add expressions to an `ExpressionBlock`.
+
+    Parameters
+    ----------
+    block: ExpressionBlock
+        The initial `ExpressionBlock` to which expressions will be added.
+    to_add: Expression, ExpressionBlock or Expression/ExpressionBlock iterable
+        `Expression`s to be added to the `ExpressionBlock`.
+
+    Returns
+    -------
+    new_block: ExpressionBlock
+        A new `ExpressionBlock` containing the new expressions.
+
+    '''
     if isinstance(to_add, ExpressionBlock):
-        expressions += to_add.expressions
+        return ExpressionBlock(block.expressions + to_add.expressions)
     elif isinstance(to_add, Expression):
-        expressions += (to_add, )
+        return ExpressionBlock(block.expressions + (to_add, ))
+    elif isinstance(to_add, Iterable):
+        new_block = block
+        for item in to_add:
+            new_block = add_to_expression_block(new_block, item)
+        return new_block
     else:
-        if (
-            not isinstance(to_add, (list, tuple)) or
-            not all(isinstance(e, Expression) for e in to_add)
-        ):
-            raise NeuroLangException(
-                'to_add must be expression or list|tuple of expressions'
-            )
-        expressions += tuple(to_add)
-    return ExpressionBlock(expressions)
+        raise NeuroLangException(f'Cannot add {to_add} to expression block')
 
 
 def is_gdatalog_rule(exp):

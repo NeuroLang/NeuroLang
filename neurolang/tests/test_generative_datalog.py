@@ -6,8 +6,9 @@ from ..exceptions import NeuroLangException
 from ..expressions import ExpressionBlock, Constant, Symbol, Query
 from ..existential_datalog import Implication
 from ..generative_datalog import (
-    GenerativeDatalogSugarRemover, SolverNonRecursiveGenerativeDatalog,
-    TranslateGDatalogToEDatalog, DeltaTerm, DeltaAtom
+    add_to_expression_block, GenerativeDatalogSugarRemover,
+    SolverNonRecursiveGenerativeDatalog, TranslateGDatalogToEDatalog,
+    DeltaTerm, DeltaAtom
 )
 from ..solver_datalog_naive import Fact
 
@@ -156,3 +157,32 @@ def test_pcs_example():
     )
     solver = GenerativeDatalogTestSolver()
     solver.walk(translated)
+
+
+def test_add_to_expression_block():
+    x = S_('x')
+    y = S_('y')
+    z = S_('z')
+    P = S_('P')
+    Q = S_('Q')
+    block1 = ExpressionBlock((P(x), ))
+    block2 = ExpressionBlock((
+        Q(z),
+        Q(y),
+        Q(x),
+    ))
+    block3 = ExpressionBlock((
+        P(z),
+        P(y),
+    ))
+    assert P(y) in add_to_expression_block(block1, P(y)).expressions
+    for expression in block2.expressions:
+        new_block = add_to_expression_block(block1, block2)
+        assert expression in new_block.expressions
+        new_block = add_to_expression_block(block1, [block2])
+        assert expression in new_block.expressions
+    for expression in (
+        block1.expressions + block2.expressions + block3.expressions
+    ):
+        new_block = add_to_expression_block(block1, [block2, block3])
+        assert expression in new_block.expressions
