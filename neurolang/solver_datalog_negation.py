@@ -16,7 +16,7 @@ from .expressions import (
 
 class NegativeFact(Implication):
     '''This class defines negative facts. They are composed of an inverted
-    antecedent and False in the consequent. It is not necessary that the 
+    antecedent and False in the consequent. It is not necessary that the
     initialization parameter is inverted.'''
 
     def __init__(self, antecedent):
@@ -34,7 +34,7 @@ class NegativeFact(Implication):
 
 class DatalogBasicNegation(DatalogBasic):
     '''Datalog solver that implements negation. Adds the possibility of 
-    inverted terms when checking that expressions are in conjunctive 
+    inverted terms when checking that expressions are in conjunctive
     normal form.'''
 
     def __init__(self, *args, **kwargs):
