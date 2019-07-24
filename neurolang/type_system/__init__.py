@@ -327,7 +327,9 @@ def replace_type_variable(type_, type_hint, type_var=None):
         )
         new_args = tuple(new_args)
         origin = get_origin(type_hint)
-        return replace_type_variable_fix_python36_37(type_hint, origin, new_args)
+        return replace_type_variable_fix_python36_37(
+            type_hint, origin, new_args
+        )
     elif isinstance(type_hint, Iterable):
         return [
             replace_type_variable(type_, arg, type_var=type_var)
