@@ -39,7 +39,7 @@ def most_general_unifier(exp1, exp2):
 def apply_substitution(literal, substitution):
     return literal.__class__(
         literal.functor,
-        apply_substitution_args(
+        apply_substitution_arguments(
             check_type_and_get_terms(literal), substitution
         )
     )
@@ -77,8 +77,8 @@ def most_general_unifier_arguments(args1, args2):
         else:
             return None
 
-        args1 = apply_substitution_args(args1, substitution)
-        args2 = apply_substitution_args(args2, substitution)
+        args1 = apply_substitution_arguments(args1, substitution)
+        args2 = apply_substitution_arguments(args2, substitution)
 
 
 def apply_substitution_to_delta_term(delta_term, substitution):
@@ -88,7 +88,7 @@ def apply_substitution_to_delta_term(delta_term, substitution):
     )
 
 
-def apply_substitution_args(args, substitution):
+def apply_substitution_arguments(args, substitution):
     return tuple(
         apply_substitution_to_delta_term(arg, substitution)
         if isinstance(arg, DeltaTerm) else substitution.get(arg, arg)

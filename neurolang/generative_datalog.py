@@ -195,22 +195,20 @@ def add_to_expression_block(block, to_add):
     '''
     if isinstance(to_add, ExpressionBlock):
         return ExpressionBlock(block.expressions + to_add.expressions)
-    elif isinstance(to_add, Expression):
+    if isinstance(to_add, Expression):
         return ExpressionBlock(block.expressions + (to_add, ))
-    elif isinstance(to_add, Iterable):
+    if isinstance(to_add, Iterable):
         new_block = block
         for item in to_add:
             new_block = add_to_expression_block(new_block, item)
         return new_block
-    else:
-        raise NeuroLangException(f'Cannot add {to_add} to expression block')
+    raise NeuroLangException(f'Cannot add {to_add} to expression block')
 
 
 def is_gdatalog_rule(exp):
     return (
         isinstance(exp, Implication) and
         isinstance(exp.consequent, DeltaAtom) and
-        # check that there is one and only one delta term in consequent
         sum(isinstance(t, DeltaTerm) for t in exp.consequent.terms) == 1
     )
 
