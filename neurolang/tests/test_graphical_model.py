@@ -3,11 +3,11 @@ import numpy as np
 from ..expressions import Symbol, Constant, ExpressionBlock
 from ..expression_pattern_matching import add_match
 from ..solver_datalog_naive import Fact, Implication, DatalogBasic
-from ..graphical_model import (
+from ..probabilistic.graphical_model import (
     produce, GraphicalModel, GDatalogToGraphicalModelTranslator,
     substitute_dterm, gdatalog2gm, sort_rvs, delta_infer1, GraphicalModelSolver
 )
-from ..generative_datalog import (
+from ..probabilistic.ppdl import (
     DeltaTerm, DeltaAtom, GenerativeDatalogSugarRemover
 )
 

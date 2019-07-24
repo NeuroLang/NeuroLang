@@ -1,14 +1,14 @@
 from uuid import uuid1
 from typing import Tuple, Iterable
 
-from .expressions import NeuroLangException
-from .expressions import (
+from ..expressions import NeuroLangException
+from ..expressions import (
     Expression, ExpressionBlock, FunctionApplication, Symbol, Constant,
     Definition, ExistentialPredicate
 )
-from .expression_walker import ExpressionBasicEvaluator
-from .expression_pattern_matching import add_match
-from .existential_datalog import (
+from ..expression_walker import ExpressionBasicEvaluator
+from ..expression_pattern_matching import add_match
+from ..existential_datalog import (
     Implication, SolverNonRecursiveExistentialDatalog
 )
 

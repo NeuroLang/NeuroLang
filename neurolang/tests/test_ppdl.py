@@ -5,7 +5,7 @@ from .. import expression_walker
 from ..exceptions import NeuroLangException
 from ..expressions import ExpressionBlock, Constant, Symbol, Query
 from ..existential_datalog import Implication
-from ..generative_datalog import (
+from ..probabilistic.ppdl import (
     add_to_expression_block, GenerativeDatalogSugarRemover,
     SolverNonRecursiveGenerativeDatalog, TranslateGDatalogToEDatalog,
     DeltaTerm, DeltaAtom

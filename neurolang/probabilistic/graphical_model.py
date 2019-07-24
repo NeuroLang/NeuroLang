@@ -5,15 +5,15 @@ from typing import Iterable, Callable, AbstractSet, Mapping
 
 import numpy as np
 
-from .expressions import (
+from ..expressions import (
     Expression, NeuroLangException, FunctionApplication, Constant, Symbol,
     Definition, ExpressionBlock
 )
-from .solver_datalog_naive import Implication, Fact
-from .expression_walker import ExpressionWalker
-from .expression_pattern_matching import add_match
+from ..solver_datalog_naive import Implication, Fact
+from ..expression_walker import ExpressionWalker
+from ..expression_pattern_matching import add_match
 from . import unification
-from .generative_datalog import DeltaAtom, DeltaTerm
+from .ppdl import DeltaAtom, DeltaTerm
 
 
 def get_antecedent_literals(rule):
