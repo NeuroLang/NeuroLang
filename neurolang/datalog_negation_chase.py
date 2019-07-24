@@ -10,6 +10,10 @@ from .unification import (
     apply_substitution_arguments, compose_substitutions,
     most_general_unifier_arguments
 )
+from .datalog_chase import (
+    merge_instances, obtain_substitutions, evaluate_builtins,
+    compute_result_set
+)
 
 
 def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
@@ -49,18 +53,6 @@ def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
     )
 
 
-def obtain_substitutions(rule_predicates_iterator):
-    substitutions = [{}]
-    for predicate, representation in rule_predicates_iterator:
-        new_substitutions = []
-        for substitution in substitutions:
-            new_substitutions += unify_substitution(
-                predicate, substitution, representation
-            )
-        substitutions = new_substitutions
-    return substitutions
-
-
 def obtain_negative_substitutions(negative_predicates, substitutions):
     for predicate, representation in negative_predicates:
         new_substitutions = []
@@ -70,23 +62,6 @@ def obtain_negative_substitutions(negative_predicates, substitutions):
             )
         substitutions = new_substitutions
     return substitutions
-
-
-def unify_substitution(predicate, substitution, representation):
-    new_substitutions = []
-    subs_args = apply_substitution_arguments(predicate.args, substitution)
-
-    for element in representation:
-        mgu_substituted = most_general_unifier_arguments(
-            subs_args, element.value
-        )
-
-        if mgu_substituted is not None:
-            new_substitution = mgu_substituted[0]
-            new_substitutions.append(
-                compose_substitutions(substitution, new_substitution)
-            )
-    return new_substitutions
 
 
 def unify_negative_substitution(predicate, substitution, representation):
@@ -108,18 +83,6 @@ def unify_negative_substitution(predicate, substitution, representation):
     return new_substitutions
 
 
-def evaluate_builtins(builtin_predicates, substitutions, datalog):
-    for predicate, _ in builtin_predicates:
-        functor = predicate.functor
-        new_substitutions = []
-        for substitution in substitutions:
-            new_substitutions += unify_builtin_substitution(
-                predicate, substitution, datalog, functor
-            )
-        substitutions = new_substitutions
-    return substitutions
-
-
 def evaluate_negative_builtins(builtin_predicates, substitutions, datalog):
     for predicate, _ in builtin_predicates:
         functor = predicate.functor
@@ -130,21 +93,6 @@ def evaluate_negative_builtins(builtin_predicates, substitutions, datalog):
             )
         substitutions = new_substitutions
     return substitutions
-
-
-def unify_builtin_substitution(predicate, substitution, datalog, functor):
-    subs_args = apply_substitution_arguments(predicate.args, substitution)
-
-    mgu_substituted = most_general_unifier_arguments(subs_args, predicate.args)
-
-    if mgu_substituted is not None:
-        predicate_res = datalog.walk(
-            predicate.apply(functor, mgu_substituted[1])
-        )
-
-        if (isinstance(predicate_res, Constant[bool]) and predicate_res.value):
-            return [compose_substitutions(substitution, mgu_substituted[0])]
-    return []
 
 
 def unify_negative_builtin_substitution(
@@ -219,48 +167,6 @@ def extract_rule_predicates(
         builtin_predicates,
         negative_builtin_predicates,
     )
-
-
-def compute_result_set(
-    rule, substitutions, instance, restriction_instance=None
-):
-    if restriction_instance is None:
-        restriction_instance = set()
-    new_tuples = set(
-        Constant(
-            apply_substitution_arguments(rule.consequent.args, substitution)
-        ) for substitution in substitutions
-    )
-
-    if rule.consequent.functor in instance:
-        new_tuples -= instance[rule.consequent.functor].value
-    elif rule.consequent.functor in restriction_instance:
-        new_tuples -= restriction_instance[rule.consequent.functor].value
-
-    if len(new_tuples) == 0:
-        return {}
-    else:
-        set_type = next(iter(new_tuples)).type
-        new_instance = {
-            rule.consequent.functor:
-            Constant[AbstractSet[set_type]](new_tuples)
-        }
-        return new_instance
-
-
-def merge_instances(*args):
-    new_instance = args[0].copy()
-
-    for next_instance in args:
-        for k, v in next_instance.items():
-            if k not in new_instance:
-                new_instance[k] = v
-            else:
-                new_set = new_instance[k]
-                new_set = Constant[new_set.type](v.value | new_set.value)
-                new_instance[k] = new_set
-
-    return new_instance
 
 
 ChaseNode = namedtuple('ChaseNode', 'instance children')
