@@ -184,7 +184,7 @@ class DatalogBasic(PatternWalker):
             for arg in consequent.args
         ):
             raise NeuroLangException(
-                f'The consequent {consequent} can not have'
+                f'The consequent {consequent} can not have '
                 'function applications as arguments'
             )
 
