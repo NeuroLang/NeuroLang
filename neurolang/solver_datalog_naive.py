@@ -180,12 +180,12 @@ class DatalogBasic(PatternWalker):
             )
 
         if any(
-            isinstance(arg, FunctionApplication)
+            not isinstance(arg, (Constant, Symbol))
             for arg in consequent.args
         ):
             raise NeuroLangException(
-                f'The consequent {consequent} can not have '
-                'function applications as arguments'
+                f'The consequent {consequent} can only be '
+                'constants or symbols'
             )
 
         consequent_symbols = consequent._symbols - consequent.functor._symbols
