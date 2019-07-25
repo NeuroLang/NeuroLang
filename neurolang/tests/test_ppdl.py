@@ -2,11 +2,12 @@ import pytest
 
 from .. import solver_datalog_extensional_db
 from .. import expression_walker
+from ..expression_walker import ExpressionBasicEvaluator
 from ..exceptions import NeuroLangException
 from ..expressions import ExpressionBlock, Constant, Symbol, Query
 from ..existential_datalog import Implication
 from ..probabilistic.ppdl import (
-    add_to_expression_block, GenerativeDatalogSugarRemover,
+    add_to_expression_block, GenerativeDatalog, GenerativeDatalogSugarRemover,
     SolverNonRecursiveGenerativeDatalog, TranslateGDatalogToEDatalog,
     DeltaTerm, DeltaAtom
 )
@@ -15,11 +16,25 @@ from ..solver_datalog_naive import Fact
 C_ = Constant
 S_ = Symbol
 
+x = S_('x')
+y = S_('y')
+z = S_('z')
+P = S_('P')
+Q = S_('Q')
+W = S_('W')
+K = S_('K')
+Z = S_('Z')
+a = C_('a')
+b = C_('b')
+
+
+class GenerativeDatalogTest(GenerativeDatalog, ExpressionBasicEvaluator):
+    pass
+
 
 class GenerativeDatalogTestSolver(
     solver_datalog_extensional_db.ExtensionalDatabaseSolver,
-    SolverNonRecursiveGenerativeDatalog,
-    expression_walker.ExpressionBasicEvaluator
+    SolverNonRecursiveGenerativeDatalog, ExpressionBasicEvaluator
 ):
     pass
 
@@ -44,27 +59,31 @@ def test_delta_atom_delta_term():
     assert delta_atom.delta_term != DeltaTerm('Hi')
 
 
+def test_generative_datalog():
+    tau_1 = Implication(DeltaAtom(P, (x, DeltaTerm('Flip', C_(0.5)))), Q(x))
+    program = ExpressionBlock((tau_1, ))
+    gdatalog = GenerativeDatalogTest()
+    gdatalog.walk(program)
+    assert tau_1 in gdatalog.symbol_table[P].expressions
+
+
+def test_gdatalog_several_dterms_in_datom():
+    with pytest.raises(NeuroLangException):
+        tau = Implication(
+            DeltaAtom(
+                P, (x, DeltaTerm('Flip', C_(0.5)), DeltaTerm('Flip', C_(0.2)))
+            ), Q(x)
+        )
+
+
 def test_translation_of_gdatalog_program_to_edatalog_program():
     solver = TranslateGDatalogToEDatalogTestSolver()
-    P = S_('P')
-    Q = S_('Q')
-    x = S_('x')
     res = solver.walk(Implication(P(x, DeltaTerm('Flip', C_(0.5))), Q(x)))
     assert isinstance(res, ExpressionBlock)
     assert len(res.expressions) == 2
 
 
 def test_non_generative_rule_preserved_when_block_translated():
-    x = S_('x')
-    y = S_('y')
-    z = S_('z')
-    P = S_('P')
-    Q = S_('Q')
-    W = S_('W')
-    K = S_('K')
-    Z = S_('Z')
-    a = C_('a')
-    b = C_('b')
     block = ExpressionBlock((
         Implication(P(x, DeltaTerm('Flip', C_(0.5))), Q(x)),
         Fact(Q(a)),

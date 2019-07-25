@@ -6,11 +6,12 @@ from ..expressions import (
     Expression, ExpressionBlock, FunctionApplication, Symbol, Constant,
     Definition, ExistentialPredicate
 )
-from ..expression_walker import ExpressionBasicEvaluator
+from ..expression_walker import ExpressionBasicEvaluator, PatternWalker
 from ..expression_pattern_matching import add_match
 from ..existential_datalog import (
     Implication, SolverNonRecursiveExistentialDatalog
 )
+from ..solver_datalog_naive import DatalogBasic, is_conjunctive_expression
 
 
 class DeltaSymbol(Symbol):
@@ -89,6 +90,33 @@ class DeltaAtom(Definition):
     def __repr__(self):
         terms_str = ', '.join(repr(t) for t in self.terms)
         return f'Δ-atom{{{self.functor.name}({terms_str})}}'
+
+
+class GenerativeDatalog(DatalogBasic):
+    @add_match(Implication(DeltaAtom, ...))
+    def gdatalog_rule(self, rule):
+        predicate = rule.consequent.functor.name
+
+        if predicate in self.protected_keywords:
+            raise NeuroLangException(f'symbol {predicate} is protected')
+
+        if not is_conjunctive_expression(rule.antecedent):
+            raise NeuroLangException('Rule antecedent has to be a conjunction')
+
+        if predicate in self.symbol_table:
+            eb = self.symbol_table[predicate]
+        else:
+            eb = ExpressionBlock(tuple())
+
+        self.symbol_table[predicate] = add_to_expression_block(eb, rule)
+
+        return rule
+
+
+class NoObjectUncertaintyGenerativeDatalog(DatalogBasic):
+    @add_match(Implication(DeltaAtom, ...))
+    def gdatalog_rule(self, rule):
+        pass
 
 
 class GenerativeDatalogSugarRemover(ExpressionBasicEvaluator):
