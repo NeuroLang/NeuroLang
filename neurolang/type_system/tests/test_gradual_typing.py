@@ -1,12 +1,14 @@
 import pytest
 
 from typing import (
-    Union, Set, Callable, AbstractSet, Generic, Tuple, T, SupportsInt
+    Union, Set, Callable, AbstractSet, Generic, Tuple, T, SupportsInt,
+    Any, Mapping
 )
 from .. import (
     Unknown, is_leq_informative,
     typing_callable_from_annotated_function, get_args, get_origin,
-    replace_type_variable, is_parameterized, is_parametrical
+    replace_type_variable, is_parameterized, is_parametrical,
+    infer_type, NeuroLangTypeException
 )
 
 
@@ -49,6 +51,7 @@ def test_get_type_args():
 def test_is_leq_informative_type():
     assert is_leq_informative(Unknown, int)
     assert not is_leq_informative(int, Unknown)
+    assert not is_leq_informative(Any, int)
 
     assert is_leq_informative(int, Union[int, float])
     assert is_leq_informative(float, Union[int, float])
@@ -135,3 +138,25 @@ def test_replace_subtype():
     assert (
         Set[str] != replace_type_variable(float, Set[T], T)
     )
+
+
+def test_infer_type():
+
+    def a(x: int, y:str) -> bool:
+        return False
+
+    assert infer_type(1) is int
+    assert infer_type(tuple([1, 'a'])) is Tuple[int, str]
+    assert infer_type(lambda x: x) is Callable[[Unknown], Unknown]
+    assert infer_type(a) is Callable[[int, str], bool]
+
+    assert infer_type(frozenset()) is AbstractSet[Unknown]
+    assert infer_type(frozenset([1])) is AbstractSet[int]
+    assert infer_type(frozenset([1, 3.]), deep=True) is AbstractSet[float]
+    assert infer_type(frozenset([1, 3]), deep=True) is AbstractSet[int]
+    with pytest.raises(NeuroLangTypeException):
+        infer_type(frozenset([1, 'a']), deep=True)
+
+    assert infer_type(dict()) is Mapping[Unknown, Unknown]
+    assert infer_type(dict(a=2)) is Mapping[str, int]
+

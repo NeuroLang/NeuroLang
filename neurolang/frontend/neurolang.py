@@ -367,46 +367,9 @@ class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
 
         self.type_name_map.update({'int': int, 'str': str, 'float': float})
 
-        for mixin_class in self.__class__.mro():
-            if (
-                hasattr(mixin_class, 'type') and
-                hasattr(mixin_class, 'type_name')
-            ):
-                self.type_name_map[mixin_class.type_name] = mixin_class.type
+        self._init_plural_type_names()
 
-                if hasattr(mixin_class, 'type_name_plural'):
-                    type_name_plural = mixin_class.type_name_plural
-                else:
-                    type_name_plural = mixin_class.type_name + 's'
-
-                self.type_name_map[type_name_plural] = \
-                    typing.AbstractSet[mixin_class.type]
-
-        for type_name, type_ in self.type_name_map.items():
-            for name, member in inspect.getmembers(type_):
-                if not inspect.isfunction(member) or name.startswith('_'):
-                    continue
-                signature = inspect.signature(member)
-                parameters_items = iter(signature.parameters.items())
-
-                next(parameters_items)
-                if (
-                    signature.return_annotation == inspect._empty or
-                    any(
-                        v == inspect._empty for k, v in parameters_items
-                    )
-                ):
-                    continue
-
-                argument_types = iter(signature.parameters.values())
-                next(argument_types)
-
-                member.__annotations__['self'] = type_
-                for k, v in typing.get_type_hints(member).items():
-                    member.__annotations__[k] = v
-                functions = functions + [
-                    (member, type_name + '_' + name)
-                ]
+        functions = self._init_functions(functions)
 
         if symbols is not None:
             for k, v in symbols.items():
@@ -415,32 +378,84 @@ class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
                     v = Constant[t](v)
                 self.symbol_table[Symbol[v.type](k)] = v
 
-        if functions is not None:
-            for f in functions:
-                if isinstance(f, tuple):
-                    func = f[0]
-                    name = f[1]
-                else:
-                    func = f
-                    name = f.__name__
-
-                signature = inspect.signature(func)
-                parameters_items = iter(signature.parameters.items())
-
-                argument_types = iter(signature.parameters.values())
-                next(argument_types)
-
-                for k, v in typing.get_type_hints(func).items():
-                    func.__annotations__[k] = v
-
-                t = infer_type(func)
-                self.symbol_table[Symbol[t](name)] = Constant[t](
-                    func
-                )
+        self._init_function_symbols(functions)
 
         self.nli = NeuroLangIntermediateRepresentation(
             type_name_map=self.type_name_map
         )
+
+    def _init_function_symbols(self, functions):
+        if functions is None:
+            return
+
+        for f in functions:
+            if isinstance(f, tuple):
+                func = f[0]
+                name = f[1]
+            else:
+                func = f
+                name = f.__name__
+
+            signature = inspect.signature(func)
+            argument_types = iter(signature.parameters.values())
+            next(argument_types)
+
+            for k, v in typing.get_type_hints(func).items():
+                func.__annotations__[k] = v
+
+            t = infer_type(func)
+            self.symbol_table[Symbol[t](name)] = Constant[t](
+                func
+            )
+
+    def _init_functions(self, functions):
+        for type_name, type_ in self.type_name_map.items():
+            for name, member in inspect.getmembers(type_):
+                if (
+                    (not inspect.isfunction(member) or name.startswith('_'))
+                    and self._update_member_signature(member, type_)
+                ):
+                    functions += [(member, type_name + '_' + name)]
+
+        return functions
+
+    def _update_member_signature(self, member, type_):
+        signature = inspect.signature(member)
+        parameters_items = iter(signature.parameters.items())
+
+        next(parameters_items)
+        if (
+            signature.return_annotation == inspect._empty or
+            any(
+                v == inspect._empty for k, v in parameters_items
+            )
+        ):
+            return False
+        argument_types = iter(signature.parameters.values())
+        next(argument_types)
+
+        member.__annotations__['self'] = type_
+        for k, v in typing.get_type_hints(member).items():
+            member.__annotations__[k] = v
+        return True
+
+    def _init_plural_type_names(self):
+        for mixin_class in self.__class__.mro():
+            if not (
+                hasattr(mixin_class, 'type') and
+                hasattr(mixin_class, 'type_name')
+            ):
+                continue
+
+            self.type_name_map[mixin_class.type_name] = mixin_class.type
+
+            if hasattr(mixin_class, 'type_name_plural'):
+                type_name_plural = mixin_class.type_name_plural
+            else:
+                type_name_plural = mixin_class.type_name + 's'
+
+            self.type_name_map[type_name_plural] = \
+                typing.AbstractSet[mixin_class.type]
 
     def get_intermediate_representation(self, ast, **kwargs):
         if isinstance(ast, str):
