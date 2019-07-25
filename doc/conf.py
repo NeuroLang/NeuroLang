@@ -15,10 +15,11 @@
 
 import sys
 import os
+import sphinx
 
 # General information about the project.
 project = 'neurolang'
-copyright = '2015, Demian Wassermann'
+copyright = '2017, Demian Wassermann'
 
 currentdir = os.path.abspath(os.path.dirname(__file__))
 ver_file = os.path.join(currentdir, '..', project, 'version.py')
@@ -45,19 +46,30 @@ needs_sphinx = '1.0'  # numpydoc requires sphinc >= 1.0
 sys.path.append(os.path.abspath('sphinxext'))
 
 extensions = ['sphinx.ext.autodoc',
-              'sphinx.ext.doctest',
-              'sphinx.ext.intersphinx',
-              'sphinx.ext.todo',
-              'sphinx.ext.coverage',
-              'sphinx.ext.ifconfig',
               'sphinx.ext.autosummary',
-              'sphinx.ext.mathjax',
-              'math_dollar',  # has to go before numpydoc
-              'numpydoc',
-              'github',
+              ('sphinx.ext.imgmath'  # only available for sphinx >= 1.4
+                  if sphinx.version_info[:2] >= (1, 4)
+                  else 'sphinx.ext.pngmath'),
+              'sphinx.ext.intersphinx',
+              'numpydoc.numpydoc',
               'sphinx_gallery.gen_gallery',
-              'sphinxcontrib.restbuilder',
               ]
+
+# 
+# extensions = ['sphinx.ext.autodoc',
+#               'sphinx.ext.doctest',
+#               'sphinx.ext.intersphinx',
+#               'sphinx.ext.todo',
+#               'sphinx.ext.coverage',
+#               'sphinx.ext.ifconfig',
+#               'sphinx.ext.autosummary',
+#               'sphinx.ext.mathjax',
+#               'math_dollar',  # has to go before numpydoc
+#               'numpydoc.numpydoc',
+#               'github',
+#               'sphinx_gallery.gen_gallery',
+#               'sphinxcontrib.restbuilder',
+#               ]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
