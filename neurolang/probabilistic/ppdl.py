@@ -1,3 +1,4 @@
+import operator
 from uuid import uuid1
 from typing import Tuple, Iterable
 
@@ -12,6 +13,26 @@ from ..existential_datalog import (
     Implication, SolverNonRecursiveExistentialDatalog
 )
 from ..solver_datalog_naive import DatalogBasic, is_conjunctive_expression
+
+
+def get_antecedent_literals(rule):
+    if not isinstance(rule, Implication):
+        raise NeuroLangException('Implication expected')
+
+    def aux_get_antecedent_literals(expression):
+        if not (
+            isinstance(expression, FunctionApplication) and
+            isinstance(expression.functor, Constant) and
+            expression.functor.value == operator.and_
+        ):
+            return [expression]
+        else:
+            return (
+                aux_get_antecedent_literals(expression.args[0]) +
+                aux_get_antecedent_literals(expression.args[1])
+            )
+
+    return aux_get_antecedent_literals(rule.antecedent)
 
 
 def get_antecedent_predicate_names(rule):

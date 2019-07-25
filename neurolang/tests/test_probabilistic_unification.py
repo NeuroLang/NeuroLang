@@ -3,7 +3,7 @@ from ..probabilistic.unification import (
     apply_substitution_to_delta_term, apply_substitution
 )
 from .. import expressions
-from ..probabilistic.ppdl import DeltaTerm, DeltaAtom
+from ..probabilistic.ppdl import DeltaTerm
 
 C_ = expressions.Constant
 S_ = expressions.Symbol
@@ -31,17 +31,15 @@ def test_apply_substitution_to_delta_atom():
     P = S_('P')
     x = S_('x')
     dterm = DeltaTerm(dist_name, parameter_symbol)
-    datom = DeltaAtom(P, (x, dterm))
+    datom = S_('P')(x, dterm)
     substitution = {parameter_symbol: new_parameter_symbol}
     new_datom = apply_substitution(datom, substitution)
-    assert new_datom == DeltaAtom(
-        P, (x, DeltaTerm(dist_name, new_parameter_symbol))
-    )
+    assert new_datom == S_('P')(x, DeltaTerm(dist_name, new_parameter_symbol))
 
 
 def test_unification_of_delta_atom():
-    a = DeltaAtom(S_('P'), (S_('x'), DeltaTerm(C_('bernoulli'), S_('p'))))
-    b = DeltaAtom(S_('P'), (S_('y'), DeltaTerm(C_('bernoulli'), S_('q'))))
+    a = S_('P')(S_('x'), DeltaTerm(C_('bernoulli'), S_('p')))
+    b = S_('P')(S_('y'), DeltaTerm(C_('bernoulli'), S_('q')))
     mgu = most_general_unifier(a, b)
     assert mgu is not None
     unifier, new_exp = mgu

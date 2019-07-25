@@ -1,13 +1,11 @@
 from ..exceptions import NeuroLangException
 from ..expressions import FunctionApplication, Symbol
-from .ppdl import DeltaTerm, DeltaAtom
+from .ppdl import DeltaTerm
 
 
 def check_type_and_get_terms(exp):
     if isinstance(exp, FunctionApplication):
         terms = exp.args
-    elif isinstance(exp, DeltaAtom):
-        terms = exp.terms
     else:
         raise NeuroLangException(
             'Expression was expected to be an atom or a Δ-atom, '

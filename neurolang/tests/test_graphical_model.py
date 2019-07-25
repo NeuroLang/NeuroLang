@@ -7,9 +7,7 @@ from ..probabilistic.graphical_model import (
     produce, GraphicalModel, GDatalogToGraphicalModelTranslator,
     substitute_dterm, gdatalog2gm, sort_rvs, delta_infer1, GraphicalModelSolver
 )
-from ..probabilistic.ppdl import (
-    DeltaTerm, DeltaAtom, GenerativeDatalogSugarRemover
-)
+from ..probabilistic.ppdl import (DeltaTerm, is_gdatalog_rule)
 
 C_ = Constant
 S_ = Symbol
@@ -44,28 +42,16 @@ program_2 = ExpressionBlock((
 program_3 = ExpressionBlock((
     Fact(P(a)),
     Fact(P(b)),
-    Implication(DeltaAtom(Q, (x, DeltaTerm(bernoulli, C_(0.7)))), P(x)),
+    Implication(Q(x, DeltaTerm(bernoulli, C_(0.7))), P(x)),
     Implication(Z(x, C_(0.2)), Q(x, C_(1))),
     Implication(Z(x, C_(0.8)), Q(x, C_(0))),
-    Implication(DeltaAtom(R, (x, DeltaTerm(bernoulli, y))), Z(x, y)),
+    Implication(R(x, DeltaTerm(bernoulli, y)), Z(x, y)),
 ))
 program_4 = ExpressionBlock((
     Fact(P(a)),
-    Implication(DeltaAtom(Q, (x, DeltaTerm(bernoulli, C_(0.2)))), P(x)),
-    Implication(DeltaAtom(R, (x, DeltaTerm(bernoulli, C_(0.9)))), Q(x, y)),
+    Implication(Q(x, DeltaTerm(bernoulli, C_(0.2))), P(x)),
+    Implication(R(x, DeltaTerm(bernoulli, C_(0.9))), Q(x, y)),
 ))
-
-
-class GenerativeDatalogSugarRemoverTest(
-    GenerativeDatalogSugarRemover, DatalogBasic
-):
-    @add_match(Implication(DeltaAtom, ...))
-    def ignore_gdatalog_rule(self, rule):
-        return rule
-
-
-def sugar_remove(program):
-    return GenerativeDatalogSugarRemoverTest().walk(program)
 
 
 def test_produce():
@@ -77,7 +63,7 @@ def test_produce():
 
 
 def test_substitute_dterm():
-    fa = DeltaAtom(Q, (x, DeltaTerm(bernoulli, p)))
+    fa = Q(x, DeltaTerm(bernoulli, p))
     assert substitute_dterm(fa, a) == Q(x, a)
 
 
@@ -92,7 +78,7 @@ def test_delta_produce():
 def test_delta_infer1():
     fact_a = Fact(P(a, p_a))
     fact_b = Fact(P(b, p_b))
-    rule = Implication(DeltaAtom(Q, (x, DeltaTerm(bernoulli, p))), P(x, p))
+    rule = Implication(Q(x, DeltaTerm(bernoulli, p)), P(x, p))
     result = delta_infer1(rule, frozenset({fact_a, fact_b}))
     result_as_dict = dict(result)
     expected_dist = {
@@ -136,26 +122,22 @@ def test_delta_term():
         Fact(P(a)),
         Implication(Q(x, DeltaTerm(bernoulli, x)), P(x)),
     ))
-    program = sugar_remove(program)
     gm = gdatalog2gm(program)
     assert 'Q_1' in gm.rv_to_cpd_functor
 
 
 def test_2levels_model():
-    program = sugar_remove(program_4)
-    gm = gdatalog2gm(program)
+    gm = gdatalog2gm(program_4)
 
-    program = sugar_remove(
-        ExpressionBlock((
-            Fact(P(a)),
-            Fact(P(b)),
-            Implication(Q(x, DeltaTerm(bernoulli, C_(0.5))), P(x)),
-            Implication(Z(C_(0.1)), Q(x, C_(0))),
-            Implication(Z(C_(0.9)), Q(x, C_(1))),
-            Implication(R(x, DeltaTerm(bernoulli, z)),
-                        Q(x, y) & Z(z)),
-        ))
-    )
+    program = ExpressionBlock((
+        Fact(P(a)),
+        Fact(P(b)),
+        Implication(Q(x, DeltaTerm(bernoulli, C_(0.5))), P(x)),
+        Implication(Z(C_(0.1)), Q(x, C_(0))),
+        Implication(Z(C_(0.9)), Q(x, C_(1))),
+        Implication(R(x, DeltaTerm(bernoulli, z)),
+                    Q(x, y) & Z(z)),
+    ))
     gm = gdatalog2gm(program)
     assert set(gm.rv_to_cpd_functor.keys()) == {
         'P', 'Q_1', 'Q', 'Z_1', 'Z_2', 'Z', 'R_1', 'R'

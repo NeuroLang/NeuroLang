@@ -13,29 +13,10 @@ from ..solver_datalog_naive import Implication, Fact
 from ..expression_walker import ExpressionWalker
 from ..expression_pattern_matching import add_match
 from . import unification
-from .ppdl import DeltaAtom, DeltaTerm, get_antecedent_predicate_names
-
-
-def get_antecedent_literals(rule):
-    if not isinstance(rule, Implication):
-        raise NeuroLangException('Implication expected')
-
-    def aux_get_antecedent_literals(expression):
-        if not (
-            isinstance(expression, FunctionApplication) and
-            isinstance(expression.functor, Constant) and
-            expression.functor.value == operator.and_
-        ):
-            return [expression]
-        else:
-            return (
-                aux_get_antecedent_literals(expression.args[0]) +
-                aux_get_antecedent_literals(expression.args[1])
-            )
-
-    return aux_get_antecedent_literals(rule.antecedent)
-
-
+from .ppdl import (
+    DeltaTerm, get_antecedent_predicate_names, get_antecedent_literals,
+    is_gdatalog_rule, get_dterm
+)
 
 
 def produce(rule, facts):
@@ -84,8 +65,7 @@ def substitute_dterm(datom, value):
     return FunctionApplication[datom.type](
         datom.functor,
         tuple(
-            value if isinstance(term, DeltaTerm) else term
-            for term in datom.terms
+            value if isinstance(arg, DeltaTerm) else arg for arg in datom.args
         )
     )
 
@@ -215,11 +195,11 @@ def delta_infer1(rule, facts):
         new = produce(rule, fact_list)
         if new is not None:
             inferred_facts.add(new)
-    if isinstance(rule.consequent, DeltaAtom):
+    if is_gdatalog_rule(rule):
         result = dict()
         for cpd_entries in itertools.product(
             *[
-                get_constant_dterm_table_cpd(dfact.consequent.delta_term)
+                get_constant_dterm_table_cpd(get_dterm(dfact.consequent))
                 for dfact in inferred_facts
             ]
         ):

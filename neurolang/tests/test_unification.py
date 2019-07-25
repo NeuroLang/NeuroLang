@@ -2,7 +2,6 @@ from ..unification import (
     most_general_unifier, merge_substitutions, apply_substitution
 )
 from .. import expressions
-from ..probabilistic.ppdl import DeltaTerm, DeltaAtom
 
 C_ = expressions.Constant
 S_ = expressions.Symbol
