@@ -1,14 +1,11 @@
-from .interval_algebra import (
-    v_before, v_overlaps, v_during,
-    v_meets, v_starts, v_finishes, v_equals
-)
-
-from .regions import Region, ExplicitVBR, ImplicitVBR
-
 from functools import lru_cache
 
 import numpy as np
 from scipy.linalg import kron
+
+from .interval_algebra import (v_before, v_during, v_equals, v_finishes,
+                               v_meets, v_overlaps, v_starts)
+from .regions import ExplicitVBR, ImplicitVBR, Region
 
 __all__ = ['cardinal_relation']
 
