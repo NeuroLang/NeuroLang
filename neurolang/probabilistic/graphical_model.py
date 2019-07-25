@@ -13,7 +13,7 @@ from ..solver_datalog_naive import Implication, Fact
 from ..expression_walker import ExpressionWalker
 from ..expression_pattern_matching import add_match
 from . import unification
-from .ppdl import DeltaAtom, DeltaTerm
+from .ppdl import DeltaAtom, DeltaTerm, get_antecedent_predicate_names
 
 
 def get_antecedent_literals(rule):
@@ -36,9 +36,6 @@ def get_antecedent_literals(rule):
     return aux_get_antecedent_literals(rule.antecedent)
 
 
-def get_antecedent_predicate_names(rule):
-    antecedent_literals = get_antecedent_literals(rule)
-    return [literal.functor.name for literal in antecedent_literals]
 
 
 def produce(rule, facts):

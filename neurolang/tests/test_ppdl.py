@@ -7,9 +7,9 @@ from ..exceptions import NeuroLangException
 from ..expressions import ExpressionBlock, Constant, Symbol, Query
 from ..existential_datalog import Implication
 from ..probabilistic.ppdl import (
-    add_to_expression_block, GenerativeDatalog, GenerativeDatalogSugarRemover,
+    add_to_expression_block, GenerativeDatalog,
     SolverNonRecursiveGenerativeDatalog, TranslateGDatalogToEDatalog,
-    DeltaTerm, DeltaAtom
+    DeltaTerm, get_dterm
 )
 from ..solver_datalog_naive import Fact
 
@@ -40,40 +40,29 @@ class GenerativeDatalogTestSolver(
 
 
 class TranslateGDatalogToEDatalogTestSolver(
-    GenerativeDatalogSugarRemover,
     TranslateGDatalogToEDatalog,
 ):
     pass
 
 
-def test_delta_atom_without_delta_term():
-    with pytest.raises(NeuroLangException):
-        DeltaAtom(S_('TestAtom'), (S_('x'), ))
-
-
-def test_delta_atom_delta_term():
-    delta_atom = DeltaAtom(S_('P'), (S_('x'), S_('y'), DeltaTerm('Hi')))
-    assert delta_atom.delta_term == DeltaTerm('Hi')
-    delta_atom = DeltaAtom(S_('P'), (S_('x'), S_('y'), DeltaTerm('Hi', C_(2))))
-    assert delta_atom.delta_term == DeltaTerm('Hi', C_(2))
-    assert delta_atom.delta_term != DeltaTerm('Hi')
+def test_get_dterm():
+    datom = P(x, y, DeltaTerm('Hi'))
+    assert get_dterm(datom) == DeltaTerm('Hi')
+    datom = P(x, y, DeltaTerm('Hi', C_(2)))
+    assert get_dterm(datom) == DeltaTerm('Hi', C_(2))
 
 
 def test_generative_datalog():
-    tau_1 = Implication(DeltaAtom(P, (x, DeltaTerm('Flip', C_(0.5)))), Q(x))
+    tau_1 = Implication(P(x, DeltaTerm('Flip', C_(0.5))), Q(x))
     program = ExpressionBlock((tau_1, ))
     gdatalog = GenerativeDatalogTest()
     gdatalog.walk(program)
     assert tau_1 in gdatalog.symbol_table[P].expressions
 
-
-def test_gdatalog_several_dterms_in_datom():
     with pytest.raises(NeuroLangException):
-        tau = Implication(
-            DeltaAtom(
-                P, (x, DeltaTerm('Flip', C_(0.5)), DeltaTerm('Flip', C_(0.2)))
-            ), Q(x)
-        )
+        tau_2 = Implication(P(x, DeltaTerm('Flip'), DeltaTerm('Flap')), Q(x))
+        gdatalog = GenerativeDatalogTest()
+        gdatalog.walk(ExpressionBlock((tau_2, )))
 
 
 def test_translation_of_gdatalog_program_to_edatalog_program():
