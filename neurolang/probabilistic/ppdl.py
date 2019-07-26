@@ -52,6 +52,40 @@ def get_dterm(datom):
     return next(arg for arg in datom.args if isinstance(arg, DeltaTerm))
 
 
+def get_dterm_index(datom):
+    return next(
+        i for i, arg in enumerate(datom.args) if isinstance(arg, DeltaTerm)
+    )
+
+
+def add_to_expression_block(block, to_add):
+    '''Add expressions to an `ExpressionBlock`.
+
+    Parameters
+    ----------
+    block: ExpressionBlock
+        The initial `ExpressionBlock` to which expressions will be added.
+    to_add: Expression, ExpressionBlock or Expression/ExpressionBlock iterable
+        `Expression`s to be added to the `ExpressionBlock`.
+
+    Returns
+    -------
+    new_block: ExpressionBlock
+        A new `ExpressionBlock` containing the new expressions.
+
+    '''
+    if isinstance(to_add, ExpressionBlock):
+        return ExpressionBlock(block.expressions + to_add.expressions)
+    if isinstance(to_add, Expression):
+        return ExpressionBlock(block.expressions + (to_add, ))
+    if isinstance(to_add, Iterable):
+        new_block = block
+        for item in to_add:
+            new_block = add_to_expression_block(new_block, item)
+        return new_block
+    raise NeuroLangException(f'Cannot add {to_add} to expression block')
+
+
 class DeltaSymbol(Symbol):
     def __init__(self, dist_name, n_terms):
         self.dist_name = dist_name
@@ -111,7 +145,31 @@ class GenerativeDatalog(DatalogBasic):
         return rule
 
 
-def check_gdatalog_no_object_uncertainty(gdatalog):
+def get_antecedent_constant_idxs(rule):
+    '''Get indexes of constants occurring in antecedent predicates.'''
+    constant_idxs = dict()
+    for antecedent in get_antecedent_literals(rule):
+        predicate = antecedent.functor.name
+        idxs = {
+            i
+            for i, arg in enumerate(antecedent.args)
+            if isinstance(arg, Constant)
+        }
+        if len(idxs) > 0:
+            constant_idxs[predicate] = idxs
+    return constant_idxs
+
+
+def get_predicate_probabilistic_rules(gdatalog, predicate):
+    if predicate not in gdatalog.symbol_table:
+        return set()
+    return set(
+        rule for rule in gdatalog.symbol_table[predicate].expressions
+        if is_gdatalog_rule(rule)
+    )
+
+
+def can_lead_to_object_uncertainty(gdatalog):
     '''Makes sure no object uncertainty can happen.
 
     Object uncertainty happens when there is a rule in the program such that:
@@ -122,19 +180,29 @@ def check_gdatalog_no_object_uncertainty(gdatalog):
     Parameters
     ----------
     gdatalog: GenerativeDatalog
-        Instance that walked the GDatalog[Δ] program.
+        Instance that already walked the GDatalog[Δ] program.
 
     Returns
     -------
     has_object_uncertainty: bool
         Whether the program can generate object uncertainty or not.
     '''
-    for k, v in gdatalog.symbol_table.items():
+    for key, value in gdatalog.symbol_table.items():
         if (
-            k not in gdatalog.protected_keywords and
-            isinstance(v, ExpressionBlock)
+            key not in gdatalog.protected_keywords and
+            isinstance(value, ExpressionBlock)
         ):
-            antecedent_predicatse = get_antecedent_predicate_names
+            for rule in value.expressions:
+                for antecedent_predicate, constant_idxs in (
+                    get_antecedent_constant_idxs(rule).items()
+                ):
+                    for rule in get_predicate_probabilistic_rules(
+                        gdatalog, antecedent_predicate
+                    ):
+                        dterm_idx = get_dterm_index(rule.consequent)
+                        if any(idx == dterm_idx for idx in constant_idxs):
+                            return True
+    return False
 
 
 class TranslateGDatalogToEDatalog(ExpressionBasicEvaluator):
@@ -188,31 +256,3 @@ class SolverNonRecursiveGenerativeDatalog(
     SolverNonRecursiveExistentialDatalog
 ):
     pass
-
-
-def add_to_expression_block(block, to_add):
-    '''Add expressions to an `ExpressionBlock`.
-
-    Parameters
-    ----------
-    block: ExpressionBlock
-        The initial `ExpressionBlock` to which expressions will be added.
-    to_add: Expression, ExpressionBlock or Expression/ExpressionBlock iterable
-        `Expression`s to be added to the `ExpressionBlock`.
-
-    Returns
-    -------
-    new_block: ExpressionBlock
-        A new `ExpressionBlock` containing the new expressions.
-
-    '''
-    if isinstance(to_add, ExpressionBlock):
-        return ExpressionBlock(block.expressions + to_add.expressions)
-    if isinstance(to_add, Expression):
-        return ExpressionBlock(block.expressions + (to_add, ))
-    if isinstance(to_add, Iterable):
-        new_block = block
-        for item in to_add:
-            new_block = add_to_expression_block(new_block, item)
-        return new_block
-    raise NeuroLangException(f'Cannot add {to_add} to expression block')
