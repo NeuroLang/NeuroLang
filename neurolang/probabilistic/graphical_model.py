@@ -1,4 +1,3 @@
-import operator
 import itertools
 from collections import defaultdict
 from typing import Iterable, Callable, AbstractSet, Mapping
