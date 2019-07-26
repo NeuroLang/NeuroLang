@@ -9,15 +9,17 @@ C_ = expressions.Constant
 S_ = expressions.Symbol
 F_ = expressions.FunctionApplication
 
+bernoulli = S_('bernoulli')
+p = S_('p')
+q = S_('q')
+P = S_('P')
+x = S_('x')
+y = S_('y')
 
 def test_apply_substitution_to_delta_term():
-    dist_name = C_('bernoulli')
-    parameter_symbol = S_('p')
-    new_parameter_symbol = S_('q')
-    dterm = DeltaTerm(dist_name, parameter_symbol)
-    substitution = {parameter_symbol: new_parameter_symbol}
-    new_dterm = apply_substitution_to_delta_term(dterm, substitution)
-    assert new_dterm == DeltaTerm(dist_name, new_parameter_symbol)
+    dterm = DeltaTerm(bernoulli, (p, ))
+    new_dterm = apply_substitution_to_delta_term(dterm, {p: q})
+    assert new_dterm == DeltaTerm(bernoulli, (q, ))
 
     substitution = {S_('random_symbol'): S_('another_random_symbol')}
     new_dterm = apply_substitution_to_delta_term(dterm, substitution)
@@ -25,22 +27,15 @@ def test_apply_substitution_to_delta_term():
 
 
 def test_apply_substitution_to_delta_atom():
-    dist_name = C_('bernoulli')
-    parameter_symbol = S_('p')
-    new_parameter_symbol = S_('q')
-    P = S_('P')
-    x = S_('x')
-    dterm = DeltaTerm(dist_name, parameter_symbol)
-    datom = S_('P')(x, dterm)
-    substitution = {parameter_symbol: new_parameter_symbol}
-    new_datom = apply_substitution(datom, substitution)
-    assert new_datom == S_('P')(x, DeltaTerm(dist_name, new_parameter_symbol))
+    datom = P(x, DeltaTerm(bernoulli, (p, )))
+    new_datom = apply_substitution(datom, {p: q})
+    assert new_datom == P(x, DeltaTerm(bernoulli, (q, )))
 
 
 def test_unification_of_delta_atom():
-    a = S_('P')(S_('x'), DeltaTerm(C_('bernoulli'), S_('p')))
-    b = S_('P')(S_('y'), DeltaTerm(C_('bernoulli'), S_('q')))
+    a = P(x, DeltaTerm(bernoulli, (p, )))
+    b = P(y, DeltaTerm(bernoulli, (q, )))
     mgu = most_general_unifier(a, b)
     assert mgu is not None
     unifier, new_exp = mgu
-    assert unifier == {S_('x'): S_('y'), S_('p'): S_('q')}
+    assert unifier == {x: y, p: q}

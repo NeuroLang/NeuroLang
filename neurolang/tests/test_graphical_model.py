@@ -7,7 +7,7 @@ from ..probabilistic.graphical_model import (
     produce, GraphicalModel, GDatalogToGraphicalModelTranslator,
     substitute_dterm, gdatalog2gm, sort_rvs, delta_infer1, GraphicalModelSolver
 )
-from ..probabilistic.ppdl import (DeltaTerm, is_gdatalog_rule)
+from ..probabilistic.ppdl import DeltaTerm, is_gdatalog_rule
 
 C_ = Constant
 S_ = Symbol
@@ -24,7 +24,7 @@ b = C_(3)
 p = S_('p')
 p_a = C_(0.2)
 p_b = C_(0.7)
-bernoulli = C_('bernoulli')
+bernoulli = S_('bernoulli')
 
 program_1 = ExpressionBlock((
     Fact(P(a)),
@@ -42,15 +42,15 @@ program_2 = ExpressionBlock((
 program_3 = ExpressionBlock((
     Fact(P(a)),
     Fact(P(b)),
-    Implication(Q(x, DeltaTerm(bernoulli, C_(0.7))), P(x)),
+    Implication(Q(x, DeltaTerm(bernoulli, (C_(0.7), ))), P(x)),
     Implication(Z(x, C_(0.2)), Q(x, C_(1))),
     Implication(Z(x, C_(0.8)), Q(x, C_(0))),
-    Implication(R(x, DeltaTerm(bernoulli, y)), Z(x, y)),
+    Implication(R(x, DeltaTerm(bernoulli, (y, ))), Z(x, y)),
 ))
 program_4 = ExpressionBlock((
     Fact(P(a)),
-    Implication(Q(x, DeltaTerm(bernoulli, C_(0.2))), P(x)),
-    Implication(R(x, DeltaTerm(bernoulli, C_(0.9))), Q(x, y)),
+    Implication(Q(x, DeltaTerm(bernoulli, (C_(0.2), ))), P(x)),
+    Implication(R(x, DeltaTerm(bernoulli, (C_(0.9), ))), Q(x, y)),
 ))
 
 
@@ -63,22 +63,22 @@ def test_produce():
 
 
 def test_substitute_dterm():
-    fa = Q(x, DeltaTerm(bernoulli, p))
+    fa = Q(x, DeltaTerm(bernoulli, (p, )))
     assert substitute_dterm(fa, a) == Q(x, a)
 
 
 def test_delta_produce():
     fact_a = Fact(P(a, p_a))
     fact_b = Fact(P(b, p_b))
-    rule = Implication(Q(x, DeltaTerm(bernoulli, p)), P(x, p))
-    assert produce(rule, [fact_a]) == Fact(Q(a, DeltaTerm(bernoulli, p_a)))
-    assert produce(rule, [fact_b]) == Fact(Q(b, DeltaTerm(bernoulli, p_b)))
+    rule = Implication(Q(x, DeltaTerm(bernoulli, (p, ))), P(x, p))
+    assert produce(rule, [fact_a]) == Fact(Q(a, DeltaTerm(bernoulli, (p_a, ))))
+    assert produce(rule, [fact_b]) == Fact(Q(b, DeltaTerm(bernoulli, (p_b, ))))
 
 
 def test_delta_infer1():
     fact_a = Fact(P(a, p_a))
     fact_b = Fact(P(b, p_b))
-    rule = Implication(Q(x, DeltaTerm(bernoulli, p)), P(x, p))
+    rule = Implication(Q(x, DeltaTerm(bernoulli, (p, ))), P(x, p))
     result = delta_infer1(rule, frozenset({fact_a, fact_b}))
     result_as_dict = dict(result)
     expected_dist = {
@@ -120,7 +120,7 @@ def test_gdatalog_translation_to_gm():
 def test_delta_term():
     program = ExpressionBlock((
         Fact(P(a)),
-        Implication(Q(x, DeltaTerm(bernoulli, x)), P(x)),
+        Implication(Q(x, DeltaTerm(bernoulli, (x, ))), P(x)),
     ))
     gm = gdatalog2gm(program)
     assert 'Q_1' in gm.rv_to_cpd_functor
@@ -132,10 +132,10 @@ def test_2levels_model():
     program = ExpressionBlock((
         Fact(P(a)),
         Fact(P(b)),
-        Implication(Q(x, DeltaTerm(bernoulli, C_(0.5))), P(x)),
+        Implication(Q(x, DeltaTerm(bernoulli, (C_(0.5), ))), P(x)),
         Implication(Z(C_(0.1)), Q(x, C_(0))),
         Implication(Z(C_(0.9)), Q(x, C_(1))),
-        Implication(R(x, DeltaTerm(bernoulli, z)),
+        Implication(R(x, DeltaTerm(bernoulli, (z, ))),
                     Q(x, y) & Z(z)),
     ))
     gm = gdatalog2gm(program)

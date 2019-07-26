@@ -99,26 +99,9 @@ class DeltaSymbol(Symbol):
         return hash((self.dist_name, self.n_terms))
 
 
-class DeltaTerm(Definition):
-    def __init__(self, dist_name, *dist_params):
-        self.dist_name = dist_name
-        self.dist_params = dist_params
-        if len(self.dist_params) > 0:
-            self._symbols = set.union(*(p._symbols for p in self.dist_params))
-        else:
-            self._symbols = set()
-
-    def __eq__(self, other):
-        return (
-            super().__eq__(other) and self.dist_name == other.dist_name and
-            self.dist_params == other.dist_params
-        )
-
+class DeltaTerm(FunctionApplication):
     def __repr__(self):
-        return f'Δ-term{{{self.dist_name}({self.dist_params})}}'
-
-    def __hash__(self):
-        return hash((self.dist_name, self.dist_params))
+        return f'Δ-term{{{self.functor}({self.args})}}'
 
 
 class GenerativeDatalog(DatalogBasic):
@@ -226,12 +209,12 @@ class TranslateGDatalogToEDatalog(ExpressionBasicEvaluator):
         dterm = get_dterm(datom)
         y = Symbol[dterm.type]('y_' + str(uuid1()))
         result_args = (
-            dterm.dist_params + (Constant(datom.functor.name), ) +
+            dterm.args + (Constant(datom.functor.name), ) +
             tuple(arg for arg in datom.args
                   if not isinstance(arg, DeltaTerm)) + (y, )
         )
         result_atom = FunctionApplication(
-            DeltaSymbol(dterm.dist_name, len(datom.args)), result_args
+            DeltaSymbol(dterm.functor.name, len(datom.args)), result_args
         )
         first_rule = Implication(
             ExistentialPredicate(y, result_atom), expression.antecedent

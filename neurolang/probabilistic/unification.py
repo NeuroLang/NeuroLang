@@ -68,7 +68,7 @@ def most_general_unifier_arguments(args1, args2):
         elif isinstance(arg2, Symbol):
             substitution[arg2] = arg1
         elif isinstance(arg1, DeltaTerm) and isinstance(arg2, DeltaTerm):
-            for p1, p2 in zip(arg1.dist_params, arg2.dist_params):
+            for p1, p2 in zip(arg1.args, arg2.args):
                 if p1 != p2:
                     substitution[p1] = p2
                     break
@@ -79,10 +79,10 @@ def most_general_unifier_arguments(args1, args2):
         args2 = apply_substitution_arguments(args2, substitution)
 
 
-def apply_substitution_to_delta_term(delta_term, substitution):
+def apply_substitution_to_delta_term(dterm, substitution):
     return DeltaTerm(
-        delta_term.dist_name,
-        *tuple(substitution.get(p, p) for p in delta_term.dist_params)
+        dterm.functor,
+        tuple(substitution.get(p, p) for p in dterm.args)
     )
 
 

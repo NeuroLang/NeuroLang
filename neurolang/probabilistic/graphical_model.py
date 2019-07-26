@@ -71,14 +71,14 @@ def substitute_dterm(datom, value):
 
 
 def is_dterm_constant(dterm):
-    return all(isinstance(param, Constant) for param in dterm.dist_params)
+    return all(isinstance(param, Constant) for param in dterm.args)
 
 
 def get_constant_dterm_table_cpd(dterm):
     if not is_dterm_constant(dterm):
         raise NeuroLangException('Expected a constant Δ-term')
-    if dterm.dist_name == Constant[str]('bernoulli'):
-        p = dterm.dist_params[0].value
+    if dterm.functor.name == Constant[str]('bernoulli'):
+        p = dterm.args[0].value
         return frozenset({
             (Constant[int](1), Constant[float](p)),
             (Constant[int](0), Constant[float](1.0 - p)),

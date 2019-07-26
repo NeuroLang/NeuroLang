@@ -28,7 +28,7 @@ Z = S_('Z')
 a = C_('a')
 b = C_('b')
 
-bernoulli = C_('bernoulli')
+bernoulli = S_('bernoulli')
 
 
 class GenerativeDatalogTest(GenerativeDatalog, ExpressionBasicEvaluator):
@@ -49,14 +49,14 @@ class TranslateGDatalogToEDatalogTestSolver(
 
 
 def test_get_dterm():
-    datom = P(x, y, DeltaTerm('Hi'))
-    assert get_dterm(datom) == DeltaTerm('Hi')
-    datom = P(x, y, DeltaTerm('Hi', C_(2)))
-    assert get_dterm(datom) == DeltaTerm('Hi', C_(2))
+    datom = P(x, y, DeltaTerm(S_('Hi'), tuple()))
+    assert get_dterm(datom) == DeltaTerm(S_('Hi'), tuple())
+    datom = P(x, y, DeltaTerm(S_('Hi'), (C_(2), )))
+    assert get_dterm(datom) == DeltaTerm(S_('Hi'), (C_(2), ))
 
 
 def test_generative_datalog():
-    tau_1 = Implication(P(x, DeltaTerm(bernoulli, C_(0.5))), Q(x))
+    tau_1 = Implication(P(x, DeltaTerm(bernoulli, (C_(0.5), ))), Q(x))
     program = ExpressionBlock((tau_1, ))
     gdatalog = GenerativeDatalogTest()
     gdatalog.walk(program)
@@ -64,7 +64,10 @@ def test_generative_datalog():
 
     with pytest.raises(NeuroLangException):
         tau_2 = Implication(
-            P(x, DeltaTerm(bernoulli), DeltaTerm(C_('Flap'))), Q(x)
+            P(
+                x, DeltaTerm(bernoulli, tuple()),
+                DeltaTerm(S_('Flap'), tuple())
+            ), Q(x)
         )
         gdatalog = GenerativeDatalogTest()
         gdatalog.walk(ExpressionBlock((tau_2, )))
@@ -76,7 +79,7 @@ def test_check_gdatalog_object_uncertainty():
         P(b),
         Implication(Q(
             x,
-            DeltaTerm(bernoulli, C_(0.5)),
+            DeltaTerm(bernoulli, (C_(0.5), )),
         ), P(x)),
         Implication(R(x), Q(x, C_(0))),
     ))
@@ -85,9 +88,7 @@ def test_check_gdatalog_object_uncertainty():
     assert can_lead_to_object_uncertainty(gdatalog)
 
     program = ExpressionBlock((
-        P(a),
-        P(b),
-        Implication(Q(x, DeltaTerm(bernoulli, C_(0.5))), P(x)),
+        P(a), P(b), Implication(Q(x, DeltaTerm(bernoulli, (C_(0.5), ))), P(x)),
         Implication(R(x), Q(x, y))
     ))
     gdatalog = GenerativeDatalogTest()
@@ -97,14 +98,16 @@ def test_check_gdatalog_object_uncertainty():
 
 def test_translation_of_gdatalog_program_to_edatalog_program():
     solver = TranslateGDatalogToEDatalogTestSolver()
-    res = solver.walk(Implication(P(x, DeltaTerm(bernoulli, C_(0.5))), Q(x)))
+    res = solver.walk(
+        Implication(P(x, DeltaTerm(bernoulli, (C_(0.5), ))), Q(x))
+    )
     assert isinstance(res, ExpressionBlock)
     assert len(res.expressions) == 2
 
 
 def test_non_generative_rule_preserved_when_block_translated():
     block = ExpressionBlock((
-        Implication(P(x, DeltaTerm(bernoulli, C_(0.5))), Q(x)),
+        Implication(P(x, DeltaTerm(bernoulli, (C_(0.5), ))), Q(x)),
         Fact(Q(a)),
         Fact(Q(b)),
         Implication(Z(x, y, z),
@@ -114,7 +117,7 @@ def test_non_generative_rule_preserved_when_block_translated():
     translated_block = translator.walk(block)
     assert Fact(Q(a)) in translated_block.expressions
     assert (
-        Implication(P(x, DeltaTerm(bernoulli, C_(0.5))),
+        Implication(P(x, DeltaTerm(bernoulli, (C_(0.5), ))),
                     Q(x)) not in translated_block.expressions
     )
     assert (
@@ -136,17 +139,19 @@ def test_burglar():
     program = ExpressionBlock((
         Implication(Unit(h, c), House(h, c)),
         Implication(Unit(b, c), Business(b, c)),
-        Implication(Earthquake(c, DeltaTerm(bernoulli, C_(0.01))), City(c, r)),
         Implication(
-            Burglary(x, c, DeltaTerm(bernoulli, r)),
+            Earthquake(c, DeltaTerm(bernoulli, (C_(0.01), ))), City(c, r)
+        ),
+        Implication(
+            Burglary(x, c, DeltaTerm(bernoulli, (r, ))),
             Unit(x, c) & City(c, r)
         ),
         Implication(
-            Trig(x, DeltaTerm(bernoulli, C_(0.6))),
+            Trig(x, DeltaTerm(bernoulli, (C_(0.6), ))),
             Unit(x, c) & Earthquake(c, C_(1))
         ),
         Implication(
-            Trig(x, DeltaTerm(bernoulli, C_(0.9))), Burglary(x, c, C_(1))
+            Trig(x, DeltaTerm(bernoulli, (C_(0.9), ))), Burglary(x, c, C_(1))
         ), Implication(Alarm(x), Trig(x, C_(1)))
     ))
 
@@ -160,7 +165,7 @@ def test_burglar():
 
 
 def test_pcs_example():
-    Uniform = C_('uniform')
+    Uniform = S_('uniform')
     Gender = S_('Gender')
     Subject = S_('Subject')
     pGender = S_('pGender')
@@ -172,20 +177,20 @@ def test_pcs_example():
     p = S_('p')
     program = ExpressionBlock((
         Implication(
-            Gender(x, DeltaTerm(bernoulli, p)),
+            Gender(x, DeltaTerm(bernoulli, (p, ))),
             Subject(x) & pGender(p)
         ),
         Implication(
-            HasLPC(x, DeltaTerm(bernoulli, p)),
+            HasLPC(x, DeltaTerm(bernoulli, (p, ))),
             Subject(x) & pHasLPC(p)
         ),
         Implication(
-            HasRPC(x, DeltaTerm(bernoulli, p)),
+            HasRPC(x, DeltaTerm(bernoulli, (p, ))),
             Subject(x) & pHasRPC(p)
         ),
-        Implication(pGender(DeltaTerm(Uniform, C_(0), C_(1))), C_('True')),
-        Implication(pHasLPC(DeltaTerm(Uniform, C_(0), C_(1))), C_('True')),
-        Implication(pHasRPC(DeltaTerm(Uniform, C_(0), C_(1))), C_('True')),
+        Implication(pGender(DeltaTerm(Uniform, (C_(0), C_(1)))), C_('True')),
+        Implication(pHasLPC(DeltaTerm(Uniform, (C_(0), C_(1)))), C_('True')),
+        Implication(pHasRPC(DeltaTerm(Uniform, (C_(0), C_(1)))), C_('True')),
     ))
     translator = TranslateGDatalogToEDatalogTestSolver()
     translated = translator.walk(program)
