@@ -101,11 +101,11 @@ class DatalogBasic(PatternWalker):
             )
 
         self._initialize_fact_set_if_needed(fact)
-        fact_set = self.symbol_table[fact.functor.name]
+        fact_set = self.symbol_table[fact.functor]
 
         if isinstance(fact_set, ExpressionBlock):
             raise NeuroLangException(
-                f'{fact.functor.name} has been previously '
+                f'{fact.functor} has been previously '
                 'define as intensional predicate.'
             )
 
@@ -114,7 +114,7 @@ class DatalogBasic(PatternWalker):
         return expression
 
     def _initialize_fact_set_if_needed(self, fact):
-        if fact.functor.name not in self.symbol_table:
+        if fact.functor not in self.symbol_table:
             if fact.functor.type is Unknown:
                 c = Constant(fact.args)
                 set_type = c.type
@@ -123,7 +123,7 @@ class DatalogBasic(PatternWalker):
             else:
                 raise NeuroLangException('Fact functor type incorrect')
 
-            self.symbol_table[fact.functor.name] = \
+            self.symbol_table[fact.functor] = \
                 Constant[AbstractSet[set_type]](set())
 
     @add_match(Implication(
@@ -143,17 +143,17 @@ class DatalogBasic(PatternWalker):
 
         self._validate_implication_syntax(consequent, antecedent)
 
-        if consequent.functor.name in self.symbol_table:
-            value = self.symbol_table[consequent.functor.name]
+        if consequent.functor in self.symbol_table:
+            value = self.symbol_table[consequent.functor]
             if (
                 isinstance(value, Constant) and
                 is_leq_informative(value.type, AbstractSet)
             ):
                 raise NeuroLangException(
-                    'f{consequent.functor.name} has been previously '
+                    'f{consequent.functor} has been previously '
                     'defined as Fact or extensional database.'
                 )
-            eb = self.symbol_table[consequent.functor.name].expressions
+            eb = self.symbol_table[consequent.functor].expressions
 
             if (
                 not isinstance(eb[0].consequent, FunctionApplication) or
@@ -169,7 +169,7 @@ class DatalogBasic(PatternWalker):
 
         eb = eb + (expression,)
 
-        self.symbol_table[consequent.functor.name] = ExpressionBlock(eb)
+        self.symbol_table[consequent.functor] = ExpressionBlock(eb)
 
         return expression
 
