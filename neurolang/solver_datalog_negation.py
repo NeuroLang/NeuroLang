@@ -63,7 +63,6 @@ class DatalogBasicNegation(DatalogBasic):
             eb = self.symbol_table[consequent.functor.name].expressions
             self._is_in_idb(expression, eb)
 
-
         else:
             eb = tuple()
 
@@ -86,24 +85,24 @@ class DatalogBasicNegation(DatalogBasic):
 
     def _is_previously_defined(self, value):
         if (
-                isinstance(value, Constant) and
-                is_leq_informative(value.type, AbstractSet)
-            ):
-                raise NeuroLangException(
-                    'f{consequent.functor.name} has been previously '
-                    'defined as Fact or extensional database.'
-                )
+            isinstance(value, Constant) and
+            is_leq_informative(value.type, AbstractSet)
+        ):
+            raise NeuroLangException(
+                'f{consequent.functor.name} has been previously '
+                'defined as Fact or extensional database.'
+            )
 
     def _is_in_idb(self, expression, eb):
         if (
-                not isinstance(eb[0].consequent, FunctionApplication) or
-                len(extract_datalog_free_variables(eb[0].consequent.args)
-                    ) != len(expression.consequent.args)
-            ):
-                raise NeuroLangException(
-                    f"{eb[0].consequent} is already in the IDB "
-                    f"with different signature."
-                )
+            not isinstance(eb[0].consequent, FunctionApplication) or
+            len(extract_datalog_free_variables(eb[0].consequent.args)
+                ) != len(expression.consequent.args)
+        ):
+            raise NeuroLangException(
+                f"{eb[0].consequent} is already in the IDB "
+                f"with different signature."
+            )
 
     @add_match(NegativeFact)
     def negative_fact(self, expression):
