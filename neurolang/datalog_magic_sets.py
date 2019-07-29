@@ -252,10 +252,11 @@ def adorn_code(query, datalog):
             continue
 
         for rule in rules.expressions:
-            adorned_antecedent = adorn_antecedent(
+            adorned_antecedent, to_adorn = adorn_antecedent(
                 rule, adornment,
-                edb, adorn_stack, rewritten_rules
+                edb, rewritten_rules
             )
+            adorn_stack += to_adorn
             new_consequent = consequent.functor(*rule.consequent.args)
             rewritten_program.append(
                 Implication(new_consequent, adorned_antecedent)
@@ -266,10 +267,11 @@ def adorn_code(query, datalog):
 
 
 def adorn_antecedent(
-    rule, adornment, edb, adorn_stack, rewritten_rules
+    rule, adornment, edb, rewritten_rules
 ):
     consequent = rule.consequent
     antecedent = rule.antecedent
+    to_adorn = []
 
     bound_variables = {
         arg for arg, ad in zip(consequent.args, adornment)
@@ -304,13 +306,13 @@ def adorn_antecedent(
             not in_edb and is_adorned and
             adorned_predicate.functor not in rewritten_rules
         ):
-            adorn_stack.append(adorned_predicate)
+            to_adorn.append(adorned_predicate)
 
         if adorned_antecedent is None:
             adorned_antecedent = adorned_predicate
         else:
             adorned_antecedent = adorned_antecedent & adorned_predicate
-    return adorned_antecedent
+    return adorned_antecedent, to_adorn
 
 
 def adorn_predicate(
