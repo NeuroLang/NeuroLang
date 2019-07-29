@@ -6,7 +6,11 @@ from .. import expressions, exceptions
 from .. import solver_datalog_naive as sdb
 from .. import solver_datalog_extensional_db
 from .. import expression_walker as ew
-from ..stratified_datalog import StratifiedDatalog, ConsequentSymbols
+from ..stratified_datalog import (
+    StratifiedDatalog,
+    ConsequentSymbols,
+    NeuroLangDataLogNonStratifiable
+)
 from ..solver_datalog_naive import (
     Implication,
     Fact,
@@ -156,7 +160,7 @@ def test_imposible_stratification():
 
     sDatalog = StratifiedDatalog()
     with pytest.raises(
-        exceptions.NeuroLangDataLogNonStratifiable,
+        NeuroLangDataLogNonStratifiable,
         match=r"The program cannot be stratifiable.*"
     ):
         sDatalog.stratify(program)
