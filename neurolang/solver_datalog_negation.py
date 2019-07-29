@@ -117,17 +117,7 @@ class DatalogBasicNegation(DatalogBasic):
                 'Facts can only have constants as arguments'
             )
 
-        if fact.functor.name not in self.negated_symbols:
-            if fact.functor.type is Unknown:
-                c = Constant(fact.args)
-                set_type = c.type
-            elif isinstance(fact.functor.type, Callable):
-                set_type = Tuple[fact.functor.type.__args__[:-1]]
-            else:
-                raise NeuroLangException('Fact functor type incorrect')
-
-            self.negated_symbols[fact.functor.name] = \
-                Constant[AbstractSet[set_type]](set())
+        self._not_in_negated_symbol(fact)
 
         fact_set = self.negated_symbols[fact.functor.name]
 
@@ -140,6 +130,19 @@ class DatalogBasicNegation(DatalogBasic):
         fact_set.value.add(Constant(fact.args))
 
         return expression
+
+    def _not_in_negated_symbol(self, fact):
+        if fact.functor.name not in self.negated_symbols:
+            if fact.functor.type is Unknown:
+                c = Constant(fact.args)
+                set_type = c.type
+            elif isinstance(fact.functor.type, Callable):
+                set_type = Tuple[fact.functor.type.__args__[:-1]]
+            else:
+                raise NeuroLangException('Fact functor type incorrect')
+
+            self.negated_symbols[fact.functor.name] = \
+                Constant[AbstractSet[set_type]](set())
 
 
 def is_conjunctive_negation(expression):
