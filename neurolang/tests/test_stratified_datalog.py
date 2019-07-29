@@ -1,14 +1,12 @@
 import pytest
 
+from operator import and_, or_, invert
+
 from .. import expressions, exceptions
 from .. import solver_datalog_naive as sdb
 from .. import solver_datalog_extensional_db
 from .. import expression_walker as ew
-
-from operator import and_, or_, invert
-
 from ..stratified_datalog import StratifiedDatalog, ConsequentSymbols
-
 from ..solver_datalog_naive import (
     Implication,
     Fact,
