@@ -107,7 +107,6 @@ class StratifiedDatalog():
 
         return True
 
-
     def _create_graph(self):
         """This function iterate over every expression in the main block
         and create a graph with the negative symbols.
@@ -125,7 +124,6 @@ class StratifiedDatalog():
                         self._negative_graph[name] = rel
                     else:
                         self._negative_graph[name] = [hash(s.args[0])]
-
 
     def _solve(self, expression_block: ExpressionBlock):
         """Given an expression block, this function reorder it
@@ -145,23 +143,27 @@ class StratifiedDatalog():
         temp_block = ExpressionBlock(())
 
         while new_block.expressions != temp_block.expressions:
-            stratified_index = []
-            moved = 0
             temp_block.expressions = new_block.expressions
-            for key, _ in enumerate(temp_block.expressions):
-                new_pos = self._calculate_new_position(key)
-
-                if new_pos == key and key <= max(stratified_index, default=0):
-                    stratified_index.append(new_pos - moved)
-                elif new_pos == key and key > max(stratified_index):
-                    stratified_index.append(new_pos)
-                else:
-                    moved += 1
-                    stratified_index.append(new_pos)
+            stratified_index = self._calc_index(temp_block)
 
             new_block = self._reorder(stratified_index, temp_block)
 
         return new_block
+
+    def _calc_index(self, temp_block):
+        stratified_index = []
+        moved = 0
+        for key, _ in enumerate(temp_block.expressions):
+            new_pos = self._calculate_new_position(key)
+            if new_pos == key and key <= max(stratified_index, default=0):
+                stratified_index.append(new_pos - moved)
+            elif new_pos == key and key > max(stratified_index):
+                stratified_index.append(new_pos)
+            else:
+                moved += 1
+                stratified_index.append(new_pos)
+
+        return stratified_index
 
     def _reorder(self, new_positions, block):
         """Given a list of position and an expression block, this function
