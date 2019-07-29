@@ -106,12 +106,12 @@ class VolumetricBrainRegion(Region):
 
 class ExplicitVBR(VolumetricBrainRegion):
     def __init__(
-        self, voxels, affine_matrix, img_dim=None, prebuild_tree=False
+        self, voxels, affine_matrix, image_dim=None, prebuild_tree=False
     ):
         self.voxels = np.asanyarray(voxels, dtype=int)
         self.affine = affine_matrix
         self.affine_inv = np.linalg.inv(self.affine)
-        self.image_dim = img_dim
+        self.image_dim = image_dim
         if prebuild_tree:
             self._aabb_tree = self.build_tree()
         else:
@@ -218,8 +218,8 @@ class ExplicitVBR(VolumetricBrainRegion):
         return out
 
     def __eq__(self, other):
-        return (np.all(self.affine == other.affine) and
-                np.all(self.voxels == other.voxels))
+        return (np.array_equiv(self.affine, other.affine) and
+                np.array_equiv(self.voxels, other.voxels))
 
     def __repr__(self):
         return f'Region(VBR= affine:{self.affine}, voxels:{self.voxels})'
@@ -397,7 +397,7 @@ class SphericalVolume(ImplicitVBR):
         return hash(self.bounding_box.limits.tobytes())
 
     def __eq__(self, other):
-        return (np.all(self._center == other._center) and
+        return (np.array_equiv(self._center, other._center) and
                 self._radius == other._radius)
 
     def __repr__(self):
@@ -457,8 +457,8 @@ class PlanarVolume(ImplicitVBR):
         return hash(self.bounding_box.limits.tobytes())
 
     def __eq__(self, other):
-        return (np.all(self._origin == other._origin) and
-                np.all(self._vector == other._vector))
+        return (np.array_equiv(self._origin, other._origin) and
+                np.array_equiv(self._vector, other._vector))
 
     def __repr__(self):
         return (f'PlanarVolume(Origin={tuple(self._origin)},'

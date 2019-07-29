@@ -62,7 +62,9 @@ instance/
 .scrapy
 
 # Sphinx documentation
-docs/_build/
+doc/_build
+doc/auto_examples
+doc/gen_api
 
 # PyBuilder
 target/
@@ -122,4 +124,6 @@ prof/
 
 # other
 scratch
+.scannerwork
+.vscode
 *orig
