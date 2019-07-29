@@ -147,7 +147,7 @@ def test_valid_stratification():
     assert stratified.expressions[3] == imp1
 
 
-def test_imposible_stratification():
+def test_impossible_stratification():
     x = S_('x')
     y = S_('y')
     z = S_('z')
