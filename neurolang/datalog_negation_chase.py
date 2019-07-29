@@ -213,13 +213,7 @@ def build_chase_solution(datalog_program, chase_step=chase_step):
     instance = dict()
     builtins = datalog_program.builtins()
     instance_update = datalog_program.extensional_database()
-
-    for symbol, args in datalog_program.negated_symbols.items():
-        instance_values = [x for x in instance_update[symbol].value]
-        if symbol in instance_update and next(
-            iter(args.value)
-        ) in instance_values:
-            raise NeuroLangException(f'There is a contradiction in your facts')
+    check_contradiction(datalog_program, instance_update)
 
     while len(instance_update) > 0:
         instance = merge_instances(instance, instance_update)
@@ -236,3 +230,12 @@ def build_chase_solution(datalog_program, chase_step=chase_step):
         )
 
     return instance
+
+
+def check_contradiction(datalog_program, instance_update):
+    for symbol, args in datalog_program.negated_symbols.items():
+        instance_values = [x for x in instance_update[symbol].value]
+        if symbol in instance_update and next(
+            iter(args.value)
+        ) in instance_values:
+            raise NeuroLangException(f'There is a contradiction in your facts')

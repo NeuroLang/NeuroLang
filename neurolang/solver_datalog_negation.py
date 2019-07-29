@@ -51,15 +51,7 @@ class DatalogBasicNegation(DatalogBasic):
         consequent = expression.consequent
         antecedent = expression.antecedent
 
-        if consequent.functor.name in self.protected_keywords:
-            raise NeuroLangException(
-                f'symbol {self.constant_set_name} is protected'
-            )
-
-        if not is_conjunctive_negation(antecedent):
-            raise NeuroLangException(
-                f'Expression {antecedent} is not conjunctive'
-            )
+        self._check_implication(consequent, antecedent)
 
         consequent_symbols = consequent._symbols - consequent.functor._symbols
 
@@ -70,25 +62,10 @@ class DatalogBasicNegation(DatalogBasic):
 
         if consequent.functor.name in self.symbol_table:
             value = self.symbol_table[consequent.functor.name]
-            if (
-                isinstance(value, Constant) and
-                is_leq_informative(value.type, AbstractSet)
-            ):
-                raise NeuroLangException(
-                    'f{consequent.functor.name} has been previously '
-                    'defined as Fact or extensional database.'
-                )
+            self._is_previously_defined(value)
             eb = self.symbol_table[consequent.functor.name].expressions
+            self._is_in_idb(expression, eb)
 
-            if (
-                not isinstance(eb[0].consequent, FunctionApplication) or
-                len(extract_datalog_free_variables(eb[0].consequent.args)
-                    ) != len(expression.consequent.args)
-            ):
-                raise NeuroLangException(
-                    f"{eb[0].consequent} is already in the IDB "
-                    f"with different signature."
-                )
         else:
             eb = tuple()
 
@@ -98,6 +75,37 @@ class DatalogBasicNegation(DatalogBasic):
 
         return expression
 
+    def _check_implication(self, consequent, antecedent):
+        if consequent.functor.name in self.protected_keywords:
+            raise NeuroLangException(
+                f'symbol {self.constant_set_name} is protected'
+            )
+
+        if not is_conjunctive_negation(antecedent):
+            raise NeuroLangException(
+                f'Expression {antecedent} is not conjunctive'
+            )
+
+    def _is_previously_defined(self, value):
+        if (
+            isinstance(value, Constant) and
+            is_leq_informative(value.type, AbstractSet)
+        ):
+            raise NeuroLangException(
+                'f{consequent.functor.name} has been previously '
+                'defined as Fact or extensional database.'
+            )
+
+    def _is_in_idb(self, expression, eb):
+        if (
+            not isinstance(eb[0].consequent, FunctionApplication) or
+            len(extract_datalog_free_variables(eb[0].consequent.args)
+                ) != len(expression.consequent.args)
+        ):
+            raise NeuroLangException(
+                f"{eb[0].consequent} is already in the IDB "
+                f"with different signature."
+            )
 
     @add_match(NegativeFact)
     def negative_fact(self, expression):
@@ -112,17 +120,7 @@ class DatalogBasicNegation(DatalogBasic):
                 'Facts can only have constants as arguments'
             )
 
-        if fact.functor.name not in self.negated_symbols:
-            if fact.functor.type is Unknown:
-                c = Constant(fact.args)
-                set_type = c.type
-            elif isinstance(fact.functor.type, Callable):
-                set_type = Tuple[fact.functor.type.__args__[:-1]]
-            else:
-                raise NeuroLangException('Fact functor type incorrect')
-
-            self.negated_symbols[fact.functor.name] = \
-                Constant[AbstractSet[set_type]](set())
+        self._not_in_negated_symbol(fact)
 
         fact_set = self.negated_symbols[fact.functor.name]
 
@@ -135,6 +133,19 @@ class DatalogBasicNegation(DatalogBasic):
         fact_set.value.add(Constant(fact.args))
 
         return expression
+
+    def _not_in_negated_symbol(self, fact):
+        if fact.functor.name not in self.negated_symbols:
+            if fact.functor.type is Unknown:
+                c = Constant(fact.args)
+                set_type = c.type
+            elif isinstance(fact.functor.type, Callable):
+                set_type = Tuple[fact.functor.type.__args__[:-1]]
+            else:
+                raise NeuroLangException('Fact functor type incorrect')
+
+            self.negated_symbols[fact.functor.name] = \
+                Constant[AbstractSet[set_type]](set())
 
 
 def is_conjunctive_negation(expression):
