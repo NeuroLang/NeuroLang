@@ -101,7 +101,7 @@ class StratifiedDatalog():
             for in_value in values:
                 if (
                     in_value in self._negative_graph and
-                    hash(key) in self._negative_graph[in_value]
+                    key in self._negative_graph[in_value]
                 ):
                     return False
 

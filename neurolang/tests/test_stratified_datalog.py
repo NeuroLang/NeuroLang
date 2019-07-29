@@ -157,7 +157,7 @@ def test_imposible_stratification():
     sDatalog = StratifiedDatalog()
     with pytest.raises(
         exceptions.NeuroLangDataLogNonStratifiable,
-        match=r"The program cannot be stratifiable"
+        match=r"The program cannot be stratifiable.*"
     ):
         sDatalog.stratify(program)
 

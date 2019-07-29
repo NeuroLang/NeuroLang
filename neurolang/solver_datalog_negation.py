@@ -22,9 +22,11 @@ class NegativeFact(Implication):
     def __init__(self, antecedent):
         super().__init__(Constant(False), invert(antecedent))
 
+
     @property
     def fact(self):
         return self.antecedent
+
 
     def __repr__(self):
         return 'NegativeFact{{{} \u2190 {}}}'.format(
@@ -40,6 +42,7 @@ class DatalogBasicNegation(DatalogBasic):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.negated_symbols = {}
+
 
     @add_match(
         Implication(FunctionApplication[bool](Symbol, ...), NonConstant)
@@ -94,6 +97,7 @@ class DatalogBasicNegation(DatalogBasic):
         self.symbol_table[consequent.functor.name] = ExpressionBlock(eb)
 
         return expression
+
 
     @add_match(NegativeFact)
     def negative_fact(self, expression):
