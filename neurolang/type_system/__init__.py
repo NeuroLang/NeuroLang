@@ -11,6 +11,7 @@ from typing import (
     Iterable, Sequence, Any, Generic, Text
 )
 import sys
+from itertools import islice
 
 from typing_inspect import (
     get_origin,
@@ -276,15 +277,9 @@ def infer_type(value, deep=False, recursive_callback=None):
             value, deep=deep, recursive_callback=recursive_callback
         )
     elif isinstance(value, Mapping):
-        it = iter(value.items())
-        k, v = next(it)
-        ktype = recursive_callback(k)
-        vtype = recursive_callback(v)
-        if deep:
-            for k, v in it:
-                ktype = unify_types(recursive_callback(k), ktype)
-                vtype = unify_types(recursive_callback(v), vtype)
-        result = Mapping[ktype, vtype]
+        result = infer_type_mapping(
+            value, deep=deep, recursive_callback=recursive_callback
+        )
     else:
         result = type(value)
 
@@ -292,21 +287,32 @@ def infer_type(value, deep=False, recursive_callback=None):
 
 
 def infer_type_iterables(value, deep=True, recursive_callback=infer_type):
-    if len(value) == 0:
-        inner_type = Unknown
-    else:
-        it = iter(value)
-        element = next(it)
-        inner_type = recursive_callback(element)
-        if deep:
-            for element in it:
-                inner_type = unify_types(
-                    inner_type, recursive_callback(it)
-                )
+    inner_type = Unknown
+    it = iter(value)
+    if not deep:
+        it = islice(it, 1)
+
+    for element in it:
+        inner_type = unify_types(
+            recursive_callback(element), inner_type
+        )
     if isinstance(value, AbstractSet):
         return AbstractSet[inner_type]
     elif isinstance(value, Sequence):
         return Sequence[inner_type]
+
+
+def infer_type_mapping(value,  deep=True, recursive_callback=infer_type):
+    ktype = Unknown
+    vtype = Unknown
+    it = iter(value.items())
+    if not deep:
+        it = islice(it, 1)
+
+    for k, v in it:
+        ktype = unify_types(recursive_callback(k), ktype)
+        vtype = unify_types(recursive_callback(v), vtype)
+    return Mapping[ktype, vtype]
 
 
 def replace_type_variable(type_, type_hint, type_var=None):
@@ -321,11 +327,9 @@ def replace_type_variable(type_, type_hint, type_var=None):
         )
         new_args = tuple(new_args)
         origin = get_origin(type_hint)
-        if NEW_TYPING and isinstance(type_hint, _GenericAlias):
-            new_type = type_hint.copy_with(new_args)
-        else:
-            new_type = origin[new_args]
-        return new_type
+        return replace_type_variable_fix_python36_37(
+            type_hint, origin, new_args
+        )
     elif isinstance(type_hint, Iterable):
         return [
             replace_type_variable(type_, arg, type_var=type_var)
@@ -333,6 +337,14 @@ def replace_type_variable(type_, type_hint, type_var=None):
         ]
     else:
         return type_hint
+
+
+def replace_type_variable_fix_python36_37(type_hint, origin, new_args):
+        if NEW_TYPING and isinstance(type_hint, _GenericAlias):
+            new_type = type_hint.copy_with(new_args)
+        else:
+            new_type = origin[new_args]
+        return new_type
 
 
 def typing_callable_from_annotated_function(function):
