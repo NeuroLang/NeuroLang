@@ -1,5 +1,4 @@
 import pytest
-from operator import and_, invert
 
 from .. import expressions, exceptions
 from .. import solver_datalog_negation as sdn
@@ -52,10 +51,10 @@ def test_stratified_and_chase():
         Implication(T(x, y),
                     G(x, z) & T(z, y)),
         Implication(ET(x, y),
-                    V(x) & V(y) & invert(G(x, y)) & equals(x, y)),
+                    V(x) & V(y) & ~(G(x, y)) & equals(x, y)),
         Implication(
             NT(x, y),
-            V(x) & V(y) & invert(G(x, y)) & invert(equals(x, y))
+            V(x) & V(y) & ~(G(x, y)) & ~(equals(x, y))
         ),
     ))
 
@@ -128,7 +127,7 @@ def test_negative_fact():
         Implication(T(x, y),
                     G(x, z) & T(z, y)),
         Implication(CT(x, y),
-                    V(x) & V(y) & invert(G(x, y))),
+                    V(x) & V(y) & ~(G(x, y))),
     ))
 
     dl = Datalog()
