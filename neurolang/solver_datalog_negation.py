@@ -1,4 +1,4 @@
-from typing import AbstractSet, Any, Tuple, Callable
+from typing import AbstractSet, Tuple, Callable
 from operator import and_, invert
 
 from .type_system import Unknown
