@@ -16,9 +16,13 @@ from .expression_walker import (
     PatternWalker,
 )
 
-from .exceptions import (NeuroLangDataLogNonStratifiable, NeuroLangException)
+from .exceptions import NeuroLangException
 
 from operator import invert
+
+
+class NeuroLangDataLogNonStratifiable(NeuroLangException):
+    pass
 
 
 class StratifiedDatalog():
@@ -39,7 +43,7 @@ class StratifiedDatalog():
         Parameters
         ----------
         expression_block : ExpressionBlock
-            The expression block defining the program to be solved.
+            The expression block defining the program to be stratified.
 
         Returns
         -------
@@ -64,7 +68,7 @@ class StratifiedDatalog():
 
     def _add_idb_symbol(self, implication: Implication):
         """Given an implication, this function validates that the consequent
-        is not denied and saves all the symbols of the intentional database.
+        is not negated and saves all the symbols of the intentional database.
 
         Parameters
         ----------
@@ -86,7 +90,7 @@ class StratifiedDatalog():
         Parameters
         ----------
         expression_block : ExpressionBlock
-            The expression block defining the program to be solved.
+            The expression block defining the program to be stratified.
 
         Returns
         -------
@@ -128,14 +132,14 @@ class StratifiedDatalog():
         else:
             self._negative_graph[name] = [hash(s.args[0])]
 
-    def _solve(self, expression_block: ExpressionBlock):
+    def _solve(self, expression_block):
         """Given an expression block, this function reorder it
         in an stratified way. No change is made if it is not necessary.
 
         Parameters
         ----------
         expression_block : ExpressionBlock
-            The expression block defining the program to be solved.
+            The expression block defining the program to be stratified
 
         Returns
         -------
@@ -235,7 +239,7 @@ class StratifiedDatalog():
 
 
 class ConsequentSymbols(PatternWalker):
-    '''This class implements a PatternWalker who is in charge of going through
+    '''This class implements a PatternWalker in charge of going through
     an expression block and obtaining the symbols present in the antecedent of
     each one of the available implications.'''
 
