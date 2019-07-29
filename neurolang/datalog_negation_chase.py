@@ -213,7 +213,6 @@ def build_chase_solution(datalog_program, chase_step=chase_step):
     instance = dict()
     builtins = datalog_program.builtins()
     instance_update = datalog_program.extensional_database()
-
     check_contradiction(datalog_program, instance_update)
 
     while len(instance_update) > 0:
@@ -231,6 +230,7 @@ def build_chase_solution(datalog_program, chase_step=chase_step):
         )
 
     return instance
+
 
 def check_contradiction(datalog_program, instance_update):
     for symbol, args in datalog_program.negated_symbols.items():
