@@ -118,12 +118,15 @@ class StratifiedDatalog():
                     s.args[0] in self._idb_symbols
                 ):
                     name = hash(v)
-                    if name in self._negative_graph:
-                        rel = self._negative_graph[name]
-                        rel.append(hash(s.args[0]))
-                        self._negative_graph[name] = rel
-                    else:
-                        self._negative_graph[name] = [hash(s.args[0])]
+                    self._set_negative_graph(name, s)
+
+    def _set_negative_graph(self, name, s):
+        if name in self._negative_graph:
+            rel = self._negative_graph[name]
+            rel.append(hash(s.args[0]))
+            self._negative_graph[name] = rel
+        else:
+            self._negative_graph[name] = [hash(s.args[0])]
 
     def _solve(self, expression_block: ExpressionBlock):
         """Given an expression block, this function reorder it
