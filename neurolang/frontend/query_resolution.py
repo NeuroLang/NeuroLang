@@ -279,6 +279,18 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
         self.current_program = []
 
+    def new_symbol(self, type_=sdb.Unknown, name=None):
+        if isinstance(type_, (tuple, list)):
+            type_ = tuple(type_)
+            type_ = Tuple[type_]
+
+        if name is None:
+            name = str(uuid1())
+        return Expression(
+            self,
+            nl.Symbol[type_](name)
+        )
+
     def assign(self, consequent, antecedent):
         if (
             isinstance(antecedent.expression, nl.Constant) and
@@ -300,15 +312,18 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
     def query(self, head, predicate):
         self.solver.symbol_table = self.solver.symbol_table.create_scope()
-        functor = head.expression.functor
-        self.assign(head, predicate)
+        functor_orig = head.expression.functor
+        new_head = self.new_symbol()(*head.arguments)
+        functor = new_head.expression.functor
+        self.assign(new_head, predicate)
         solution = build_chase_solution(self.solver)
-        solution_set = solution[functor.name]
-        out_symbol = nl.Symbol[solution_set.type](functor.name)
+        solution_set = solution.get(functor.name, nl.Constant(set()))
+        out_symbol = nl.Symbol[solution_set.type](functor_orig.name)
         tuple_type = solution_set.type.__args__[0]
+        self.current_program = self.current_program[:-1]
         self.solver.symbol_table = self.solver.symbol_table.enclosing_scope
         self.add_tuple_set(
-            solution_set.value, tuple_type, name=functor.name
+            solution_set.value, tuple_type, name=functor_orig.name
         )
         return Symbol(self, out_symbol.name)
 

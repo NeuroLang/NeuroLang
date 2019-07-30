@@ -1,4 +1,4 @@
-from .query_resolution import QueryBuilderFirstOrder
+from .query_resolution import QueryBuilderFirstOrder, QueryBuilderDatalog
 from ..expression_walker import (
     add_match, Symbol, FunctionApplication, Constant
 )
@@ -10,6 +10,8 @@ from ..regions import (
 )
 from ..utils.data_manipulation import parse_region_label_map
 from .. import neurolang as nl
+from ..solver_datalog_naive import DatalogBasic
+from ..expression_walker import ExpressionBasicEvaluator
 
 from typing import Any, AbstractSet, Callable
 import numpy as np
@@ -82,3 +84,37 @@ class RegionFrontend(QueryBuilderFirstOrder):
                 self.add_region(
                     region.to_explicit_vbr(affine, dim), region_symbol_name
                 )
+
+
+class NeurolangDL(QueryBuilderDatalog):
+
+    def __init__(self, solver=None):
+        if solver is None:
+            solver = RegionFrontendDatalogSolver()
+        super().__init__(solver)
+        isin_symbol = Symbol[Callable[[Any, AbstractSet[Any]], bool]]('isin')
+        self.solver.symbol_table[isin_symbol] = Constant(function_isin)
+
+    def sphere(self, center, radius, result_symbol_name=None):
+
+        sr = SphericalVolume(center, radius)
+        symbol = self.add_region(sr, result_symbol_name)
+        return symbol
+
+    def make_implicit_regions_explicit(self, affine, dim):
+
+        for region_symbol_name in self.region_names:
+            region_symbol = self.get_symbol(region_symbol_name)
+            region = region_symbol.value
+            if isinstance(region, ImplicitVBR):
+                self.add_region(
+                    region.to_explicit_vbr(affine, dim), region_symbol_name
+                )
+
+
+class RegionFrontendDatalogSolver(
+        RegionSolver,
+        DatalogBasic,
+        ExpressionBasicEvaluator
+):
+    pass

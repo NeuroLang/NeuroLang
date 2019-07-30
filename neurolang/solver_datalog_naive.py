@@ -150,7 +150,7 @@ class DatalogBasic(PatternWalker):
                 is_leq_informative(value.type, AbstractSet)
             ):
                 raise NeuroLangException(
-                    'f{consequent.functor.name} has been previously '
+                    f'{consequent.functor.name} has been previously '
                     'defined as Fact or extensional database.'
                 )
             eb = self.symbol_table[consequent.functor].expressions

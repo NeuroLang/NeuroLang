@@ -29,7 +29,15 @@ class Expression(object):
             for a in args
         )
 
-        new_expression = FunctionApplication(self.expression, new_args)
+        if (
+            self.query_builder.logic_programming and
+            isinstance(self, Symbol)
+        ):
+            functor = self.neurolang_symbol
+        else:
+            functor = self.expression
+
+        new_expression = FunctionApplication(functor, new_args)
         return Operation(
                 self.query_builder, new_expression, self, args)
 
@@ -37,13 +45,19 @@ class Expression(object):
         if not isinstance(value, Expression):
             value = Expression(self.query_builder, nl.Constant(value))
         if self.query_builder.logic_programming:
-            self.query_builder.assign(self(*key), value)
+            if isinstance(key, tuple):
+                self.query_builder.assign(self(*key), value)
+            else:
+                self.query_builder.assign(self(key), value)
         else:
             super().__setitem__(key, value)
 
     def __getitem__(self, key):
         if self.query_builder.logic_programming:
-            return self(*key)
+            if isinstance(key, tuple):
+                return self(*key)
+            else:
+                return self(key)
         else:
             super().__getitem__(key)
 
