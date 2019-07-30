@@ -4,17 +4,20 @@ from typing import AbstractSet, Callable, Tuple
 from neurolang.frontend.neurosynth_utils import NeuroSynthHandler
 from .query_resolution_expressions import (
     Expression, Symbol,
-    Query, Exists, All
+    Query, Exists, All,
+    Implication, Fact
 )
 from .. import neurolang as nl
+from .. import solver_datalog_naive as sdb
 from ..region_solver import Region
+from ..datalog_chase import build_chase_solution
 from ..regions import (
     ExplicitVBR,
     take_principal_regions
 )
 from ..expressions import is_leq_informative
 
-__all__ = ['QueryBuilder']
+__all__ = ['QueryBuilderFirstOrder']
 
 
 class QueryBuilderBase(object):
@@ -47,6 +50,10 @@ class QueryBuilderBase(object):
     @property
     def types(self):
         return self.solver.symbol_table.types
+
+    @property
+    def symbols(self):
+        return QuerySymbolsProxy(self)
 
     def new_symbol(self, type_, name=None):
         if isinstance(type_, (tuple, list)):
@@ -107,7 +114,9 @@ class QueryBuilderBase(object):
         for e in iterable:
             if not(isinstance(e, Symbol)):
                 s = nl.Symbol[element_type](str(uuid1()))
-                if is_leq_informative(element_type, Tuple):
+                if isinstance(e, nl.Constant):
+                    c = e.cast(element_type)
+                elif is_leq_informative(element_type, Tuple):
                     c = nl.Constant[element_type](
                         tuple(nl.Constant(ee) for ee in e)
                     )
@@ -191,13 +200,27 @@ class RegionMixin(object):
         return self[atlas_symbol]
 
 
-class QueryBuilder(RegionMixin, QueryBuilderBase):
+class NeuroSynthMixin(object):
+    def load_neurosynth_term_region(
+        self, term: str, n_components=None, result_symbol_name=None
+    ):
+        if not hasattr(self, 'neurosynth_db'):
+            self.neurosynth_db = NeuroSynthHandler()
+
+        if not result_symbol_name:
+            result_symbol_name = str(uuid1())
+        region_set = self.neurosynth_db.ns_region_set_from_term(term)
+        if n_components:
+            region_set = take_principal_regions(region_set, n_components)
+
+        return self.add_tuple_set(region_set, ExplicitVBR, result_symbol_name)
+
+
+class QueryBuilderFirstOrder(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
     def __init__(self, solver, logic_programming=False):
         super().__init__(
             solver, logic_programming=logic_programming
         )
-
-        self.neurosynth_db = NeuroSynthHandler()
 
     def execute_expression(self, expression, result_symbol_name=None):
         if result_symbol_name is None:
@@ -247,20 +270,51 @@ class QueryBuilder(RegionMixin, QueryBuilderBase):
             symbol, predicate
         )
 
-    def load_neurosynth_term_region(
-        self, term: str, n_components=None, result_symbol_name=None
-    ):
-        if not result_symbol_name:
-            result_symbol_name = str(uuid1())
-        region_set = self.neurosynth_db.ns_region_set_from_term(term)
-        if n_components:
-            region_set = take_principal_regions(region_set, n_components)
 
-        return self.add_tuple_set(region_set, ExplicitVBR, result_symbol_name)
+class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
+    def __init__(self, solver):
+        super().__init__(
+            solver, logic_programming=True
+        )
 
-    @property
-    def symbols(self):
-        return QuerySymbolsProxy(self)
+        self.current_program = []
+
+    def assign(self, consequent, antecedent):
+        if (
+            isinstance(antecedent.expression, nl.Constant) and
+            antecedent.expression.value is True
+        ):
+            expression = sdb.Fact(consequent.expression)
+            self.current_program.append(
+                Fact(self, expression, consequent)
+            )
+        else:
+            expression = sdb.Implication(
+                consequent.expression,
+                antecedent.expression
+            )
+            self.current_program.append(
+                Implication(self, expression, consequent, antecedent)
+            )
+        self.solver.walk(self.current_program[-1].expression)
+
+    def query(self, head, predicate):
+        self.solver.symbol_table = self.solver.symbol_table.create_scope()
+        functor = head.expression.functor
+        self.assign(head, predicate)
+        solution = build_chase_solution(self.solver)
+        solution_set = solution[functor.name]
+        out_symbol = nl.Symbol[solution_set.type](functor.name)
+        tuple_type = solution_set.type.__args__[0]
+        self.solver.symbol_table = self.solver.symbol_table.enclosing_scope
+        self.add_tuple_set(
+            solution_set.value, tuple_type, name=functor.name
+        )
+        return Symbol(self, out_symbol.name)
+
+    def reset_program(self):
+        self.symbol_table.clear()
+        self.current_program = []
 
 
 class QuerySymbolsProxy(object):

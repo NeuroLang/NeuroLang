@@ -33,6 +33,20 @@ class Expression(object):
         return Operation(
                 self.query_builder, new_expression, self, args)
 
+    def __setitem__(self, key, value):
+        if not isinstance(value, Expression):
+            value = Expression(self.query_builder, nl.Constant(value))
+        if self.query_builder.logic_programming:
+            self.query_builder.assign(self(*key), value)
+        else:
+            super().__setitem__(key, value)
+
+    def __getitem__(self, key):
+        if self.query_builder.logic_programming:
+            return self(*key)
+        else:
+            super().__getitem__(key)
+
     def __repr__(self):
         if isinstance(self.expression, nl.Constant):
             return repr(self.expression.value)
@@ -168,7 +182,7 @@ class Symbol(Expression):
 
             return f'{self.symbol_name}: {symbol.type} = {value}'
         else:
-            raise ValueError('...')
+            return f'{self.symbol_name}: {symbol.type}'
 
     def _repr_iterable_value(self, symbol):
         contained = []
@@ -220,7 +234,8 @@ class Symbol(Expression):
                     if isinstance(v, nl.Constant) and s is v.value:
                         yield Symbol(self.query_builder, k.name)
                         break
-            if isinstance(s, nl.Symbol):
+                    yield Expression(self.query_builder, nl.Constant(s))
+            else:
                 yield Symbol(self.query_builder, s.name)
 
     def __len__(self):
@@ -302,4 +317,30 @@ class All(Expression):
         return u'\u2200{s}: {p}'.format(
             s=repr(self.symbol),
             p=repr(self.predicate)
+        )
+
+
+class Implication(Expression):
+    def __init__(self, query_builder, expression, antecedent, consequent):
+        self.expression = expression
+        self.query_builder = query_builder
+        self.antecedent = antecedent
+        self.consequent = consequent
+
+    def __repr__(self):
+        return u'{a} \u2190 {c}'.format(
+            a=repr(self.antecedent),
+            c=repr(self.consequent)
+        )
+
+
+class Fact(Expression):
+    def __init__(self, query_builder, expression, antecedent):
+        self.expression = expression
+        self.query_builder = query_builder
+        self.antecedent = antecedent
+
+    def __repr__(self):
+        return u'{a}'.format(
+            a=repr(self.antecedent),
         )

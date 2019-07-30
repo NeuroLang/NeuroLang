@@ -1,4 +1,4 @@
-from .query_resolution import QueryBuilder
+from .query_resolution import QueryBuilderFirstOrder
 from ..expression_walker import (
     add_match, Symbol, FunctionApplication, Constant
 )
@@ -39,7 +39,7 @@ class RegionFrontendSolver(
         return self.walk(expression.args[1](expression.args[0]))
 
 
-class RegionFrontend(QueryBuilder):
+class RegionFrontend(QueryBuilderFirstOrder):
 
     def __init__(self, solver=None):
         if solver is None:
