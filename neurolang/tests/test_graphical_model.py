@@ -5,7 +5,8 @@ from ..expression_pattern_matching import add_match
 from ..solver_datalog_naive import Fact, Implication, DatalogBasic
 from ..probabilistic.graphical_model import (
     produce, GraphicalModel, GDatalogToGraphicalModelTranslator,
-    substitute_dterm, gdatalog2gm, sort_rvs, delta_infer1, GraphicalModelSolver
+    substitute_dterm, gdatalog2gm, sort_rvs, delta_infer1,
+    TableCPDGraphicalModelSolver, ConditionalProbabilityQuery, FactSet
 )
 from ..probabilistic.ppdl import DeltaTerm, is_gdatalog_rule
 
@@ -145,12 +146,18 @@ def test_2levels_model():
 
 
 def test_gm_solver():
-    outcomes = GraphicalModelSolver().walk(gdatalog2gm(program_1))
+    solver = TableCPDGraphicalModelSolver()
+    solver.walk(program_1)
+    query = ConditionalProbabilityQuery(Constant[FactSet](set()))
+    outcomes = solver.conditional_probability_query_resolution(query)
     assert len(outcomes) == 1
     outcome = list(outcomes.items())[0]
     assert outcome[1].value == 1.0
 
-    outcomes = GraphicalModelSolver().walk(gdatalog2gm(program_4))
+    solver = TableCPDGraphicalModelSolver()
+    solver.walk(program_4)
+    query = ConditionalProbabilityQuery(Constant[FactSet](set()))
+    outcomes = solver.conditional_probability_query_resolution(query)
     expected_outcomes = {
         frozenset({Fact(P(a)),
                    Fact(Q(a, C_(1))),
@@ -173,4 +180,40 @@ def test_gm_solver():
         assert outcome in outcomes
         assert np.allclose([prob.value], [outcomes[outcome].value])
 
-    outcomes = GraphicalModelSolver().walk(gdatalog2gm(program_3))
+    outcomes = TableCPDGraphicalModelSolver().walk(program_3)
+
+
+def test_conditional_probability_query_resolution():
+    solver = TableCPDGraphicalModelSolver()
+    solver.walk(program_4)
+    evidence = Constant[FactSet](frozenset({Fact(Q(a, C_(0)))}))
+    query = ConditionalProbabilityQuery(evidence)
+    outcomes = solver.conditional_probability_query_resolution(query)
+    expected_outcomes = {
+        frozenset({Fact(P(a)),
+                   Fact(Q(a, C_(0))),
+                   Fact(R(a, C_(0)))}): C_(0.1),
+        frozenset({Fact(P(a)),
+                   Fact(Q(a, C_(0))),
+                   Fact(R(a, C_(1)))}): C_(0.9),
+    }
+    for outcome, prob in expected_outcomes.items():
+        assert outcome in outcomes
+        assert np.allclose([prob.value], [outcomes[outcome].value])
+
+    evidence = Constant[FactSet](
+        frozenset({
+            Fact(Q(a, C_(0))),
+            Fact(R(a, C_(1))),
+        })
+    )
+    query = ConditionalProbabilityQuery(evidence)
+    outcomes = solver.conditional_probability_query_resolution(query)
+    expected_outcomes = {
+        frozenset({Fact(P(a)),
+                   Fact(Q(a, C_(0))),
+                   Fact(R(a, C_(1)))}): C_(1.0),
+    }
+    for outcome, prob in expected_outcomes.items():
+        assert outcome in outcomes
+        assert np.allclose([prob.value], [outcomes[outcome].value])

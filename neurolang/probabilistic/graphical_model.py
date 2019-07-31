@@ -213,21 +213,45 @@ def delta_infer1(rule, facts):
         return {frozenset(inferred_facts): Constant[float](1.0)}
 
 
-class GraphicalModelSolver(ExpressionWalker):
-    @add_match(GraphicalModel)
-    def graphical_model(self, graphical_model):
-        dependency_ordered_rvs = sort_rvs(graphical_model)
+class ConditionalProbabilityQuery(Definition):
+    def __init__(self, evidence):
+        if not isinstance(evidence, Constant[FactSet]):
+            raise NeuroLangException('Expected evidence to be a fact set')
+        self.evidence = evidence
+
+
+class TableCPDGraphicalModelSolver(ExpressionWalker):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.graphical_model = None
+        self.ordered_rvs = None
+
+    @add_match(ExpressionBlock)
+    def program(self, program):
+        if self.graphical_model is not None:
+            raise NeuroLangException('GraphicalModel already constructed')
+        self.graphical_model = gdatalog2gm(program)
+        self.ordered_rvs = sort_rvs(self.graphical_model)
+
+    @add_match(ConditionalProbabilityQuery)
+    def conditional_probability_query_resolution(self, query):
+        return self.generate_possible_outcomes(evidence=query.evidence)
+
+    def generate_possible_outcomes(self, evidence=None):
+        if self.graphical_model is None:
+            raise NeuroLangException(
+                'No GraphicalModel generated. Try walking a program'
+            )
         results = dict()
         self.generate_possible_outcomes_aux(
-            graphical_model, dependency_ordered_rvs, 0, dict(),
-            Constant[float](1.0), results
+            0, dict(), Constant[float](1.0), results, evidence=evidence
         )
         return results
 
     def generate_possible_outcomes_aux(
-        self, gm, ordered_rvs, rv_idx, rv_values, result_prob, results
+        self, rv_idx, rv_values, result_prob, results, evidence=None
     ):
-        if rv_idx >= len(ordered_rvs):
+        if rv_idx >= len(self.ordered_rvs):
             result = frozenset.union(*rv_values.values())
             if result in results:
                 old_prob = results[result].value
@@ -236,19 +260,39 @@ class GraphicalModelSolver(ExpressionWalker):
             else:
                 results[result] = result_prob
         else:
-            rv_symbol = ordered_rvs[rv_idx]
-            cpd_functor = gm.rv_to_cpd_functor[rv_symbol]
-            parent_rvs = gm.parents[rv_symbol]
+            rv_symbol = self.ordered_rvs[rv_idx]
+            cpd_functor = self.graphical_model.rv_to_cpd_functor[rv_symbol]
+            parent_rvs = self.graphical_model.parents[rv_symbol]
             parent_values = tuple(
                 Constant[FactSet](rv_values[rv]) for rv in parent_rvs
             )
             cpd = self.walk(cpd_functor(*parent_values)).value
+            if (
+                evidence is not None and
+                isinstance(cpd_functor, IntensionalTableCPDFunctor)
+            ):
+                predicate_evidence = {
+                    fact
+                    for fact in evidence.value
+                    if fact.consequent.functor.name ==
+                    cpd_functor.rule.consequent.functor.name
+                }
+                if len(predicate_evidence) > 0:
+                    cpd = {
+                        value: prob
+                        for value, prob in cpd.items()
+                        if predicate_evidence <= value
+                    }
+                    sum_prob = sum(prob.value for prob in cpd.values())
+                    for value, prob in cpd.items():
+                        cpd[value] = Constant[float](prob.value / sum_prob)
             for facts, prob in cpd.items():
                 new_rv_values = rv_values.copy()
                 new_rv_values[rv_symbol] = facts
                 self.generate_possible_outcomes_aux(
-                    gm, ordered_rvs, rv_idx + 1, new_rv_values,
-                    Constant[float](result_prob.value * prob.value), results
+                    rv_idx + 1, new_rv_values,
+                    Constant[float](result_prob.value * prob.value), results,
+                    evidence=evidence
                 )
 
     @add_match(FunctionApplication(ExtensionalTableCPDFunctor, ...))

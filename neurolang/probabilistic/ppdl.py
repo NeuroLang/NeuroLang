@@ -153,7 +153,8 @@ def get_predicate_probabilistic_rules(gdatalog, predicate):
 
 
 def can_lead_to_object_uncertainty(gdatalog):
-    '''Makes sure no object uncertainty can happen.
+    '''Figure out if a walked GDatalog[Δ] program can lead to object
+    uncertainty.
 
     Object uncertainty happens when there is a rule in the program such that:
         - there exist an atom in the antecedent of the rule such that the

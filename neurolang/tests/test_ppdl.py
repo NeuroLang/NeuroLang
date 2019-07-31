@@ -228,3 +228,4 @@ def test_add_to_expression_block():
     ):
         new_block = add_to_expression_block(block1, [block2, block3])
         assert expression in new_block.expressions
+
