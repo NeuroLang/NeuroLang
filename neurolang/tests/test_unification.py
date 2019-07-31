@@ -8,6 +8,7 @@ F_ = expressions.FunctionApplication
 
 def test_unification():
     a = S_('a')
+    b = S_('b')
     x = S_('x')
     y = S_('y')
     z = S_('z')
@@ -19,6 +20,7 @@ def test_unification():
     assert most_general_unifier(a(C_(1), z), a(y, y)) ==\
         (dict(y=C_(1), z=C_(1)), a(C_(1), C_(1)))
     assert most_general_unifier(a(C_(1), C_(2)), a(y, y)) is None
+    assert most_general_unifier(a(b(x)), a(b(y))) == (dict(x=y), a(y))
 
 
 def test_merge_substitutions():
