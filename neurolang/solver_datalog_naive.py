@@ -212,7 +212,8 @@ class DatalogBasic(PatternWalker):
     def extensional_database(self):
         ret = self.symbol_table.symbols_by_type(AbstractSet)
         for keyword in self.protected_keywords:
-            del ret[keyword]
+            if keyword in ret:
+                del ret[keyword]
         return ret
 
     def builtins(self):
