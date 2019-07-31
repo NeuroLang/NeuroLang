@@ -143,6 +143,8 @@ def extract_rule_predicates(
             )
         elif functor in builtins:
             builtin_predicates.append((predicate, builtins[functor]))
+        elif isinstance(functor, Constant):
+            builtin_predicates.append((predicate, functor))
         else:
             return ([], [], [])
 
