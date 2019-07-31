@@ -13,7 +13,7 @@ from .unification import (
 
 def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
     if restriction_instance is None:
-        restriction_instance = set()
+        restriction_instance = dict()
 
     rule_predicates = extract_rule_predicates(
         rule, instance, builtins, restriction_instance=restriction_instance
@@ -115,7 +115,7 @@ def extract_rule_predicates(
     rule, instance, builtins, restriction_instance=None
 ):
     if restriction_instance is None:
-        restriction_instance = set()
+        restriction_instance = dict()
 
     head_functor = rule.consequent.functor
     rule_predicates = sdb.extract_datalog_predicates(rule.antecedent)
@@ -159,7 +159,7 @@ def compute_result_set(
     rule, substitutions, instance, restriction_instance=None
 ):
     if restriction_instance is None:
-        restriction_instance = set()
+        restriction_instance = dict()
     new_tuples = set(
         Constant(
             apply_substitution_arguments(
