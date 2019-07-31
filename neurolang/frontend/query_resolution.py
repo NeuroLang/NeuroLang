@@ -1,21 +1,17 @@
-import numpy as np
-from uuid import uuid1
 from typing import AbstractSet, Callable, Tuple
-from .neurosynth_utils import NeuroSynthHandler
-from .query_resolution_expressions import (
-    Expression, Symbol,
-    Query, Exists, All,
-    Implication, Fact
-)
+from uuid import uuid1
+
+import numpy as np
+
 from .. import neurolang as nl
 from .. import solver_datalog_naive as sdb
-from ..region_solver import Region
 from ..datalog_chase import build_chase_solution
-from ..regions import (
-    ExplicitVBR,
-    take_principal_regions
-)
-from ..expressions import is_leq_informative
+from ..expressions import is_leq_informative, Unknown
+from ..region_solver import Region
+from ..regions import ExplicitVBR, take_principal_regions
+from .neurosynth_utils import NeuroSynthHandler
+from .query_resolution_expressions import (All, Exists, Expression, Fact,
+                                           Implication, Query, Symbol)
 
 __all__ = ['QueryBuilderFirstOrder']
 
@@ -94,7 +90,7 @@ class QueryBuilderBase(object):
 
         return Symbol(self, name)
 
-    def add_tuple_set(self, iterable, types, name=None):
+    def add_tuple_set(self, iterable, types=Unknown, name=None):
         if not isinstance(types, tuple) or len(types) == 1:
             if isinstance(types, tuple) and len(types) == 1:
                 types = types[0]
@@ -168,7 +164,7 @@ class RegionMixin(object):
         return self.add_symbol(region, name)
 
     def add_region_set(self, region_set, name=None):
-        return self.add_tuple_set(region_set, Region, name=name)
+        return self.add_tuple_set(region_set, name=name, types=Region)
 
     @staticmethod
     def create_region(spatial_image, label=1):
@@ -222,7 +218,8 @@ class NeuroSynthMixin(object):
         region_set = ((t,) for t in region_set)
         return self.add_tuple_set(
             region_set,
-            name
+            types=Tuple[ExplicitVBR],
+            name=name
         )
 
 
@@ -340,7 +337,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         self.symbol_table.clear()
         self.current_program = []
 
-    def add_tuple_set(self, iterable, name=None):
+    def add_tuple_set(self, iterable, name=None, types=Unknown):
         if (
             isinstance(iterable, Expression) and
             is_leq_informative(iterable.type, AbstractSet[Tuple])

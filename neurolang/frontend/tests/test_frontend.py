@@ -48,14 +48,14 @@ def test_add_regions_and_query():
     inferior = Region((0, 0, 0), (1, 1, 1))
     superior = Region((0, 0, 4), (1, 1, 5))
 
-    neurolang.add_region(inferior, result_symbol_name='inferior_region')
-    neurolang.add_region(superior, result_symbol_name='superior_region')
+    neurolang.add_region(inferior, name='inferior_region')
+    neurolang.add_region(superior, name='superior_region')
     assert neurolang.symbols.inferior_region.value == inferior
     assert neurolang.symbols.superior_region.value == superior
 
     result_symbol = neurolang.symbols.superior_of(
         superior, inferior
-    ).do(result_symbol_name='is_superior_test')
+    ).do(name='is_superior_test')
     assert result_symbol.value
     assert neurolang.get_symbol('is_superior_test').value
 
@@ -63,7 +63,7 @@ def test_add_regions_and_query():
     query = neurolang.query(
         x, neurolang.symbols.superior_of(x, neurolang.symbols.inferior_region)
     )
-    query_result = query.do(result_symbol_name='result_of_test_query')
+    query_result = query.do(name='result_of_test_query')
 
     assert isinstance(query_result, Symbol)
     assert isinstance(query_result.value, frozenset)
@@ -75,7 +75,7 @@ def test_query_regions_from_region_set():
     neurolang = frontend.RegionFrontend()
 
     central = ExplicitVBR(np.array([[0, 0, 5], [1, 1, 8]]), np.eye(4))
-    neurolang.add_region(central, result_symbol_name='reference_region')
+    neurolang.add_region(central, name='reference_region')
 
     i1 = ExplicitVBR(np.array([[0, 0, 2], [1, 1, 3]]), np.eye(4))
     i2 = ExplicitVBR(np.array([[0, 0, -1], [1, 1, 2]]), np.eye(4))
@@ -87,7 +87,7 @@ def test_query_regions_from_region_set():
     query_result = neurolang.query(
         x,
         neurolang.symbols.inferior_of(x, neurolang.symbols.reference_region)
-    ).do(result_symbol_name='result_of_test_query')
+    ).do(name='result_of_test_query')
 
     assert len(query_result.value) == len(regions)
     assert query_result.value == {i1, i2, i3}
@@ -98,7 +98,7 @@ def test_query_new_predicate():
 
     central = ExplicitVBR(np.array([[0, 0, 5], [1, 1, 8]]), np.eye(4))
     reference_symbol = neurolang.add_region(
-        central, result_symbol_name='reference_region'
+        central, name='reference_region'
     )
 
     inferior_posterior = ExplicitVBR(
@@ -124,7 +124,7 @@ def test_query_new_predicate():
 
     x = neurolang.new_region_symbol(name='x')
     query = neurolang.query(x, posterior_and_inferior(x, reference_symbol))
-    query_result = query.do(result_symbol_name='result_of_test_query')
+    query_result = query.do(name='result_of_test_query')
     assert len(query_result.value) == 1
     assert next(iter(query_result.value)) == inferior_posterior
 
@@ -134,8 +134,8 @@ def test_load_spherical_volume():
 
     inferior = ExplicitVBR(np.array([[0, 0, 0], [1, 1, 1]]), np.eye(4))
 
-    neurolang.add_region(inferior, result_symbol_name='inferior_region')
-    neurolang.sphere((0, 0, 0), 1, result_symbol_name='unit_sphere')
+    neurolang.add_region(inferior, name='inferior_region')
+    neurolang.sphere((0, 0, 0), 1, name='unit_sphere')
 
     assert (
         neurolang.symbols['unit_sphere'].value == SphericalVolume((0, 0, 0), 1)
@@ -162,11 +162,11 @@ def test_multiple_symbols_query():
     neurolang = frontend.RegionFrontend()
     r1 = ExplicitVBR(np.array([[0, 0, 5], [1, 1, 10]]), np.eye(4))
     r2 = ExplicitVBR(np.array([[0, 0, -10], [1, 1, -5]]), np.eye(4))
-    neurolang.add_region(r1, result_symbol_name='r1')
-    neurolang.add_region(r2, result_symbol_name='r2')
+    neurolang.add_region(r1, name='r1')
+    neurolang.add_region(r2, name='r2')
 
     central = ExplicitVBR(np.array([[0, 0, 1], [1, 1, 1]]), np.eye(4))
-    neurolang.add_region(central, result_symbol_name='reference_region')
+    neurolang.add_region(central, name='reference_region')
 
     x = neurolang.new_region_symbol(name='x')
     y = neurolang.new_region_symbol(name='y')
@@ -183,11 +183,11 @@ def test_tuple_symbol_multiple_types_query():
     neurolang = frontend.RegionFrontend()
     r1 = ExplicitVBR(np.array([[0, 0, 5], [1, 1, 10]]), np.eye(4))
     r2 = ExplicitVBR(np.array([[0, 0, -10], [1, 1, -5]]), np.eye(4))
-    neurolang.add_region(r1, result_symbol_name='r1')
-    neurolang.add_region(r2, result_symbol_name='r2')
+    neurolang.add_region(r1, name='r1')
+    neurolang.add_region(r2, name='r2')
 
     central = ExplicitVBR(np.array([[0, 0, 1], [1, 1, 1]]), np.eye(4))
-    neurolang.add_region(central, result_symbol_name='reference_region')
+    neurolang.add_region(central, name='reference_region')
 
     x = neurolang.new_region_symbol(name='x')
     z = neurolang.new_symbol(int, name='max_value')
@@ -222,7 +222,7 @@ def test_quantifier_expressions():
     neurolang.add_tuple_set(regions, ExplicitVBR)
 
     central = ExplicitVBR(np.array([[0, 0, 15], [1, 1, 20]]), np.eye(4))
-    neurolang.add_region(central, result_symbol_name='reference_region')
+    neurolang.add_region(central, name='reference_region')
 
     x = neurolang.new_region_symbol(name='x')
     res = neurolang.all(
@@ -253,5 +253,5 @@ def test_neurosynth_region(mock_ns_regions):
     res = neurolang[s]
     mock_ns_regions.assert_called()
 
-    assert res.type is AbstractSet[ExplicitVBR]
-    assert res.value == frozenset(mock_ns_regions.return_value)
+    assert res.type is AbstractSet[Tuple[ExplicitVBR]]
+    assert res.value == frozenset((t,) for t in mock_ns_regions.return_value)

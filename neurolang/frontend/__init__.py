@@ -69,10 +69,10 @@ class RegionFrontend(QueryBuilderFirstOrder):
 
         return res
 
-    def sphere(self, center, radius, result_symbol_name=None):
+    def sphere(self, center, radius, name=None):
 
         sr = SphericalVolume(center, radius)
-        symbol = self.add_region(sr, result_symbol_name)
+        symbol = self.add_region(sr, name)
         return symbol
 
     def make_implicit_regions_explicit(self, affine, dim):
@@ -95,10 +95,10 @@ class NeurolangDL(QueryBuilderDatalog):
         isin_symbol = Symbol[Callable[[Any, AbstractSet[Any]], bool]]('isin')
         self.solver.symbol_table[isin_symbol] = Constant(function_isin)
 
-    def sphere(self, center, radius, result_symbol_name=None):
+    def sphere(self, center, radius, name=None):
 
         sr = SphericalVolume(center, radius)
-        symbol = self.add_region(sr, result_symbol_name)
+        symbol = self.add_region(sr, name)
         return symbol
 
     def make_implicit_regions_explicit(self, affine, dim):

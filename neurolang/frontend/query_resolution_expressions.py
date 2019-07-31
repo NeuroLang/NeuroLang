@@ -17,10 +17,10 @@ class Expression(object):
     def type(self):
         return self.expression.type
 
-    def do(self, result_symbol_name=None):
+    def do(self, name=None):
         return self.query_builder.execute_expression(
             self.expression,
-            result_symbol_name=result_symbol_name
+            name=name
         )
 
     def __call__(self, *args, **kwargs):
@@ -79,12 +79,16 @@ binary_opeations = (
 def op_bind(op):
     @wraps(op)
     def f(self, *args):
-        new_args = [
+        new_args = tuple((
             arg.expression if isinstance(arg, Expression)
             else nl.Constant(arg)
             for arg in args
-        ]
-        new_expression = op(self.expression, *new_args)
+        ))
+        constant_op = nl.Constant(op)
+        new_expression = FunctionApplication(
+            constant_op, (self.expression,) + new_args
+        )
+        # constant_op(self.expression, *new_args)
         return Operation(
             self.query_builder, new_expression, op,
             (self,) + args, infix=len(args) > 0
@@ -110,6 +114,8 @@ def rop_bind(op):
     return f
 
 
+force_linking = [op.eq, op.ne, op.gt, op.lt, op.ge, op.le]
+
 for operator_name in dir(op):
     operator = getattr(op, operator_name)
     if operator_name.startswith('_'):
@@ -119,7 +125,7 @@ for operator_name in dir(op):
     if name.endswith('___'):
         name = name[:-1]
 
-    if not hasattr(Expression, name):
+    if operator in force_linking or not hasattr(Expression, name):
         setattr(Expression, name, op_bind(operator))
 
 
@@ -226,25 +232,22 @@ class Symbol(Expression):
                 else:
                     raise nl.NeuroLangException(f'element {v} invalid in set')
         else:
-            yield self.__iter__old_style(symbol)
-
-    def __iter__old_style(self, symbol):
-        all_symbols = (
-            self.query_builder
-            .solver.symbol_table.symbols_by_type(
-                symbol.type.__args__[0]
+            all_symbols = (
+                self.query_builder
+                .solver.symbol_table.symbols_by_type(
+                    symbol.type.__args__[0]
+                )
             )
-        )
 
-        for s in symbol.value:
-            if isinstance(s, nl.Constant):
-                for k, v in all_symbols.items():
-                    if isinstance(v, nl.Constant) and s is v.value:
-                        yield Symbol(self.query_builder, k.name)
-                        break
-                    yield Expression(self.query_builder, nl.Constant(s))
-            else:
-                yield Symbol(self.query_builder, s.name)
+            for s in symbol.value:
+                if isinstance(s, nl.Constant):
+                    for k, v in all_symbols.items():
+                        if isinstance(v, nl.Constant) and s is v.value:
+                            yield Symbol(self.query_builder, k.name)
+                            break
+                        yield Expression(self.query_builder, nl.Constant(s))
+                else:
+                    yield Symbol(self.query_builder, s.name)
 
     def __len__(self):
         symbol = self.symbol
