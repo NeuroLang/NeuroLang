@@ -1,6 +1,8 @@
+import operator as op
+from typing import Callable
+
 from .. import expressions
 from .. import solver_datalog_naive as sdb
-from .. import solver_datalog_extensional_db
 from .. import expression_walker as ew
 from .. import datalog_chase as dc
 
@@ -14,11 +16,49 @@ Eb_ = expressions.ExpressionBlock
 
 class Datalog(
     sdb.DatalogBasic,
-    solver_datalog_extensional_db.ExtensionalDatabaseSolver,
     ew.ExpressionBasicEvaluator
 ):
     def function_gt(self, x: int, y: int)->bool:
         return x > y
+
+
+def test_python_builtin_chase_step():
+    Q = S_('Q')
+    T = S_('T')
+    S = S_('S')
+    gt = C_[Callable[[expressions.Unknown, expressions.Unknown], bool]](op.gt)
+    x = S_('x')
+    y = S_('y')
+    z = S_('z')
+
+    datalog_program = Eb_((
+        Fact_(Q(C_(1), C_(2))),
+        Fact_(Q(C_(2), C_(3))),
+        Fact_(Q(C_(8), C_(6))),
+        Imp_(T(x, y), Q(x, z) & Q(z, y)),
+        Imp_(S(x, y), Q(x, y) & gt(x, y))
+    ))
+
+    dl = Datalog()
+    dl.walk(datalog_program)
+
+    instance_0 = dl.extensional_database()
+
+    rule = datalog_program.expressions[-1]
+    instance_update = dc.chase_step(dl, instance_0, dl.builtins(), rule)
+    assert instance_update == {
+        S: C_({C_((C_(8), C_(6)))}),
+    }
+
+    rule = datalog_program.expressions[-2]
+    instance_update = dc.chase_step(dl, instance_0, dl.builtins(), rule)
+    assert instance_update == {
+        T: C_({C_((C_(1), C_(3)))}),
+    }
+
+    instance_1 = dc.merge_instances(instance_0, instance_update)
+    instance_update = dc.chase_step(dl, instance_1, dl.builtins(), rule)
+    assert len(instance_update) == 0
 
 
 def test_non_recursive_predicate_chase_step():
