@@ -232,6 +232,3 @@ def test_different_consts():
     assert stratified.expressions[1] == imp2
     assert stratified.expressions[2] == imp3
     assert stratified.expressions[3] == imp1
-
-
-

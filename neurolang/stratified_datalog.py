@@ -66,7 +66,7 @@ class StratifiedDatalog():
                 f'The program cannot be stratifiable'
             )
 
-    def _add_idb_symbol(self, implication: Implication):
+    def _add_idb_symbol(self, implication):
         """Given an implication, this function validates that the consequent
         is not negated and saves all the symbols of the intentional database.
 
