@@ -1,7 +1,7 @@
 import numpy as np
 from uuid import uuid1
 from typing import AbstractSet, Callable, Tuple
-from neurolang.frontend.neurosynth_utils import NeuroSynthHandler
+from .neurosynth_utils import NeuroSynthHandler
 from .query_resolution_expressions import (
     Expression, Symbol,
     Query, Exists, All,
@@ -27,15 +27,15 @@ class QueryBuilderBase(object):
         self.logic_programming = logic_programming
 
         for k, v in self.solver.included_functions.items():
-            self.solver.symbol_table[nl.Symbol[v.type](k)] = v
+            self.symbol_table[nl.Symbol[v.type](k)] = v
 
         for k, v in self.solver.included_functions.items():
-            self.solver.symbol_table[nl.Symbol[v.type](k)] = v
+            self.symbol_table[nl.Symbol[v.type](k)] = v
 
     def get_symbol(self, symbol_name):
         if isinstance(symbol_name, Expression):
             symbol_name = symbol_name.expression.name
-        if symbol_name not in self.solver.symbol_table:
+        if symbol_name not in self.symbol_table:
             raise ValueError('')
         return Symbol(self, symbol_name)
 
@@ -45,11 +45,15 @@ class QueryBuilderBase(object):
         return self.get_symbol(symbol_name)
 
     def __contains__(self, symbol):
-        return symbol in self.solver.symbol_table
+        return symbol in self.symbol_table
 
     @property
     def types(self):
-        return self.solver.symbol_table.types
+        return self.symbol_table.types
+
+    @property
+    def symbol_table(self):
+        return self.solver.symbol_table
 
     @property
     def symbols(self):
@@ -70,7 +74,7 @@ class QueryBuilderBase(object):
     @property
     def functions(self):
         return [
-            s.name for s in self.solver.symbol_table
+            s.name for s in self.symbol_table
             if is_leq_informative(s.type, Callable)
         ]
 
@@ -80,11 +84,13 @@ class QueryBuilderBase(object):
 
         if isinstance(value, Expression):
             value = value.expression
+        elif isinstance(value, nl.Constant):
+            pass
         else:
             value = nl.Constant(value)
 
         symbol = nl.Symbol[value.type](name)
-        self.solver.symbol_table[symbol] = value
+        self.symbol_table[symbol] = value
 
         return Symbol(self, name)
 
@@ -104,7 +110,7 @@ class QueryBuilderBase(object):
             name = str(uuid1())
 
         symbol = nl.Symbol[set_type](name)
-        self.solver.symbol_table[symbol] = constant
+        self.symbol_table[symbol] = constant
 
         return Symbol(self, name)
 
@@ -122,7 +128,7 @@ class QueryBuilderBase(object):
                     )
                 else:
                     c = nl.Constant[element_type](e)
-                self.solver.symbol_table[s] = c
+                self.symbol_table[s] = c
             else:
                 s = e.neurolang_symbol
             new_set.append(s)
@@ -135,7 +141,7 @@ class RegionMixin(object):
     def region_names(self):
         return [
             s.name for s in
-            self.solver.symbol_table.symbols_by_type(
+            self.symbol_table.symbols_by_type(
                 Region
             )
         ]
@@ -144,7 +150,7 @@ class RegionMixin(object):
     def region_set_names(self):
         return [
             s.name for s in
-            self.solver.symbol_table.symbols_by_type(
+            self.symbol_table.symbols_by_type(
                 self.set_type
             )
         ]
@@ -152,14 +158,14 @@ class RegionMixin(object):
     def new_region_symbol(self, name=None):
         return self.new_symbol(Region, name=name)
 
-    def add_region(self, region, result_symbol_name=None):
+    def add_region(self, region, name=None):
         if not isinstance(region, self.solver.type):
             raise ValueError(
                 f"type mismatch between region and solver type:"
                 f" {self.solver.type}"
             )
 
-        return self.add_symbol(region, result_symbol_name)
+        return self.add_symbol(region, name)
 
     def add_region_set(self, region_set, name=None):
         return self.add_tuple_set(region_set, Region, name=name)
@@ -180,13 +186,13 @@ class RegionMixin(object):
             if len(region.voxels) == 0:
                 continue
             symbol = nl.Symbol[Region](label_name)
-            self.solver.symbol_table[symbol] = nl.Constant[Region](region)
-            self.solver.symbol_table[self.new_symbol(str).expression] = (
+            self.symbol_table[symbol] = nl.Constant[Region](region)
+            self.symbol_table[self.new_symbol(str).expression] = (
                 nl.Constant[str](label_name)
             )
 
             tuple_symbol = self.new_symbol(Tuple[str, Region]).expression
-            self.solver.symbol_table[tuple_symbol] = (
+            self.symbol_table[tuple_symbol] = (
                 nl.Constant[Tuple[str, Region]](
                     (nl.Constant[str](label_name), symbol)
                 )
@@ -196,24 +202,28 @@ class RegionMixin(object):
             frozenset(atlas_set)
         )
         atlas_symbol = nl.Symbol[atlas_set.type](name)
-        self.solver.symbol_table[atlas_symbol] = atlas_set
+        self.symbol_table[atlas_symbol] = atlas_set
         return self[atlas_symbol]
 
 
 class NeuroSynthMixin(object):
     def load_neurosynth_term_region(
-        self, term: str, n_components=None, result_symbol_name=None
+        self, term: str, n_components=None, name=None
     ):
         if not hasattr(self, 'neurosynth_db'):
             self.neurosynth_db = NeuroSynthHandler()
 
-        if not result_symbol_name:
-            result_symbol_name = str(uuid1())
+        if not name:
+            name = str(uuid1())
         region_set = self.neurosynth_db.ns_region_set_from_term(term)
         if n_components:
             region_set = take_principal_regions(region_set, n_components)
 
-        return self.add_tuple_set(region_set, ExplicitVBR, result_symbol_name)
+        region_set = ((t,) for t in region_set)
+        return self.add_tuple_set(
+            region_set,
+            name
+        )
 
 
 class QueryBuilderFirstOrder(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
@@ -222,15 +232,15 @@ class QueryBuilderFirstOrder(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             solver, logic_programming=logic_programming
         )
 
-    def execute_expression(self, expression, result_symbol_name=None):
-        if result_symbol_name is None:
-            result_symbol_name = str(uuid1())
+    def execute_expression(self, expression, name=None):
+        if name is None:
+            name = str(uuid1())
 
         result = self.solver.walk(expression)
-        self.solver.symbol_table[nl.Symbol[result.type](
-            result_symbol_name
+        self.symbol_table[nl.Symbol[result.type](
+            name
         )] = result
-        return Symbol(self, result_symbol_name)
+        return Symbol(self, name)
 
     def query(self, head, predicate):
 
@@ -311,7 +321,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         self.solver.walk(self.current_program[-1].expression)
 
     def query(self, head, predicate):
-        self.solver.symbol_table = self.solver.symbol_table.create_scope()
+        self.solver.symbol_table = self.symbol_table.create_scope()
         functor_orig = head.expression.functor
         new_head = self.new_symbol()(*head.arguments)
         functor = new_head.expression.functor
@@ -319,17 +329,33 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         solution = build_chase_solution(self.solver)
         solution_set = solution.get(functor.name, nl.Constant(set()))
         out_symbol = nl.Symbol[solution_set.type](functor_orig.name)
-        tuple_type = solution_set.type.__args__[0]
         self.current_program = self.current_program[:-1]
-        self.solver.symbol_table = self.solver.symbol_table.enclosing_scope
+        self.solver.symbol_table = self.symbol_table.enclosing_scope
         self.add_tuple_set(
-            solution_set.value, tuple_type, name=functor_orig.name
+            solution_set.value, name=functor_orig.name
         )
         return Symbol(self, out_symbol.name)
 
     def reset_program(self):
         self.symbol_table.clear()
         self.current_program = []
+
+    def add_tuple_set(self, iterable, name=None):
+        if (
+            isinstance(iterable, Expression) and
+            is_leq_informative(iterable.type, AbstractSet[Tuple])
+        ):
+            constant = iterable.expression
+        else:
+            constant = nl.Constant(frozenset(iterable))
+
+        if name is None:
+            name = str(uuid1())
+
+        symbol = nl.Symbol[constant.type](name)
+        self.symbol_table[symbol] = constant
+
+        return Symbol(self, name)
 
 
 class QuerySymbolsProxy(object):
@@ -346,26 +372,26 @@ class QuerySymbolsProxy(object):
         return self._query_builder.get_symbol(attr)
 
     def __setitem__(self, key, value):
-        return self._query_builder.add_symbol(value, result_symbol_name=key)
+        return self._query_builder.add_symbol(value, name=key)
 
     def __contains__(self, symbol):
-        return symbol in self._query_builder.solver.symbol_table
+        return symbol in self._query_builder.symbol_table
 
     def __len__(self):
-        return len(self._query_builder.solver.symbol_table)
+        return len(self._query_builder.symbol_table)
 
     def __dir__(self):
         init = object.__dir__(self)
         init += [
             symbol.name
-            for symbol in self._query_builder.solver.symbol_table
+            for symbol in self._query_builder.symbol_table
         ]
         return init
 
     def __repr__(self):
         init = [
             symbol.name
-            for symbol in self._query_builder.solver.symbol_table
+            for symbol in self._query_builder.symbol_table
         ]
 
         return f'QuerySymbolsProxy with symbols {init}'

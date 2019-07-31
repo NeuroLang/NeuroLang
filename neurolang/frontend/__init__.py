@@ -17,7 +17,7 @@ from typing import Any, AbstractSet, Callable
 import numpy as np
 
 
-__all__ = ['RegionFrontend', 'QueryBuilder']
+__all__ = ['RegionFrontend', 'QueryBuilderDatalog', 'QueryBuilderFirstOrder']
 
 
 def function_isin(element: Any, set_: AbstractSet) -> bool:

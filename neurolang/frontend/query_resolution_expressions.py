@@ -1,6 +1,7 @@
-from functools import wraps
 import operator as op
 from typing import AbstractSet, Tuple
+from functools import wraps
+
 from .. import neurolang as nl
 from ..expressions import is_leq_informative, FunctionApplication
 from ..expression_walker import ReplaceExpressionsByValues
@@ -71,7 +72,7 @@ class Expression(object):
 
 
 binary_opeations = (
-    op.add, op.sub, op.mul
+    op.add, op.sub, op.mul, op.ge, op.le, op.gt, op.lt, op.eq
 )
 
 
@@ -190,7 +191,7 @@ class Symbol(Expression):
             return(f'{self.symbol_name}: {symbol.type}')
         elif isinstance(symbol, nl.Constant):
             if is_leq_informative(symbol.type, AbstractSet):
-                value = self._repr_iterable_value(symbol)
+                value = list(self)
             else:
                 value = symbol.value
 
@@ -200,31 +201,9 @@ class Symbol(Expression):
 
     def _repr_iterable_value(self, symbol):
         contained = []
-        all_symbols = self.query_builder.solver.symbol_table.symbols_by_type(
-            symbol.type.__args__[0]
-        )
-
-        for s in symbol.value:
-            representation = self._repr_iterable_value_symbol(s, all_symbols)
-            if representation is not None:
-                contained.append(representation)
-
+        for v in self:
+            contained.append(repr(v))
         return contained
-
-    def _repr_iterable_value_symbol(self, symbol, all_symbols):
-        representation = None
-        if isinstance(symbol, nl.Constant):
-            for k, v in all_symbols.items():
-                if isinstance(v, nl.Constant) and symbol is v.value:
-                    representation = k.name
-                    break
-        elif isinstance(symbol, nl.Symbol):
-            representation = symbol.name
-        elif isinstance(symbol, tuple):
-            t = ', '.join(e.name for e in symbol)
-            representation = f'({t})'
-
-        return representation
 
     def __iter__(self):
         symbol = self.symbol
@@ -238,8 +217,23 @@ class Symbol(Expression):
                 f'Symbol of type {self.symbol.type} is not iterable'
             )
 
-        all_symbols = self.query_builder.solver.symbol_table.symbols_by_type(
-            symbol.type.__args__[0]
+        if self.query_builder.logic_programming:
+            for v in symbol.value:
+                if isinstance(v, nl.Constant):
+                    yield self._rsbv.walk(v.value)
+                elif isinstance(v, nl.Symbol):
+                    yield Symbol(self.query_builder, v)
+                else:
+                    raise nl.NeuroLangException(f'element {v} invalid in set')
+        else:
+            yield self.__iter__old_style(symbol)
+
+    def __iter__old_style(self, symbol):
+        all_symbols = (
+            self.query_builder
+            .solver.symbol_table.symbols_by_type(
+                symbol.type.__args__[0]
+            )
         )
 
         for s in symbol.value:
