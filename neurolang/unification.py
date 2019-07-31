@@ -27,14 +27,15 @@ def most_general_unifier(expression1, expression2):
     else:
         return (
             unifier[0],
-            expression1.apply(expression1.functor, unifier[1])
+            apply_substitution(expression1, unifier[0])
+            # expression1.apply(expression1.functor, unifier[1])
         )
 
 
 def most_general_unifier_extract_arguments(expression1, expression2):
     expression_stack = [(expression1, expression2)]
-    args1 = []
-    args2 = []
+    args1 = tuple()
+    args2 = tuple()
     while expression_stack:
         exp1, exp2 = expression_stack.pop()
         if not (
@@ -51,11 +52,9 @@ def most_general_unifier_extract_arguments(expression1, expression2):
             elif is_application1 or is_application2:
                 break
             else:
-                args1.append(arg1)
-                args2.append(arg2)
+                args1 += (arg1,)
+                args2 += (arg2,)
     else:
-        args1 = tuple(args1)
-        args2 = tuple(args2)
         return args1, args2
 
     return None, None
@@ -103,7 +102,13 @@ def most_general_unifier_arguments(args1, args2):
 
 
 def apply_substitution_arguments(arguments, substitution):
-    return tuple(substitution.get(a, a) for a in arguments)
+    new_args = tuple()
+    for a in arguments:
+        if isinstance(a, exp.FunctionApplication):
+            new_args += (apply_substitution(a, substitution),)
+        else:
+            new_args += (substitution.get(a, a),)
+    return new_args
 
 
 def merge_substitutions(subs1, subs2):

@@ -20,7 +20,9 @@ def test_unification():
     assert most_general_unifier(a(C_(1), z), a(y, y)) ==\
         (dict(y=C_(1), z=C_(1)), a(C_(1), C_(1)))
     assert most_general_unifier(a(C_(1), C_(2)), a(y, y)) is None
-    assert most_general_unifier(a(b(x)), a(b(y))) == (dict(x=y), a(y))
+    assert most_general_unifier(a(b(x)), a(b(y))) == (dict(x=y), a(b(y)))
+    assert most_general_unifier(a(b(x), z), a(b(y), y)) ==\
+        (dict(x=y, z=y), a(b(y), y))
 
 
 def test_merge_substitutions():
