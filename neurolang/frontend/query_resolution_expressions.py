@@ -1,5 +1,5 @@
 import operator as op
-from typing import AbstractSet, Tuple
+from typing import AbstractSet, Tuple, Callable
 from functools import wraps
 
 from .. import neurolang as nl
@@ -82,13 +82,13 @@ def op_bind(op):
         new_args = tuple((
             arg.expression if isinstance(arg, Expression)
             else nl.Constant(arg)
-            for arg in args
+            for arg in (self,) + args
         ))
-        constant_op = nl.Constant(op)
-        new_expression = FunctionApplication(
-            constant_op, (self.expression,) + new_args
+        arg_types = [a.type for a in new_args]
+        functor = nl.Constant[Callable[arg_types, nl.Unknown]](
+            op, auto_infer_type=False
         )
-        # constant_op(self.expression, *new_args)
+        new_expression = functor(*new_args)
         return Operation(
             self.query_builder, new_expression, op,
             (self,) + args, infix=len(args) > 0
@@ -100,6 +100,7 @@ def op_bind(op):
 def rop_bind(op):
     @wraps(op)
     def f(self, value):
+        raise NotImplementedError()
         original_value = value
         if isinstance(value, Expression):
             value = value.expression
