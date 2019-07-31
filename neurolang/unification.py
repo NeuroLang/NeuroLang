@@ -11,6 +11,9 @@ def most_general_unifier(expression1, expression2):
         expression1, expression2
     )
 
+    if args1 is None or args2 is None:
+        return None
+
     unifier = most_general_unifier_arguments(args1, args2)
 
     if unifier is None:
@@ -32,10 +35,7 @@ def most_general_unifier_extract_arguments(expression1, expression2):
             expression1.functor == expression2.functor and
             len(expression1.args) == len(expression2.args)
         ):
-            raise ValueError(
-                "We can only unify function applications with equal "
-                f"arities {expression1} {expression2}"
-            )
+            return None, None
 
         for arg1, arg2 in zip(expression1.args, expression2.args):
             is_application1 = isinstance(arg1, exp.FunctionApplication)
@@ -43,10 +43,7 @@ def most_general_unifier_extract_arguments(expression1, expression2):
             if is_application1 and is_application2:
                 expression_stack.append((arg1, arg2))
             elif is_application1 or is_application2:
-                raise ValueError(
-                    "We can only unify function applications with equal "
-                    f"arities {expression1} {expression2}"
-                )
+                return None, None
             else:
                 args1 += (arg1,)
                 args2 += (arg2,)

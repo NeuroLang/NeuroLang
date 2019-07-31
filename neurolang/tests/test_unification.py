@@ -1,5 +1,3 @@
-import pytest
-
 from ..unification import most_general_unifier, merge_substitutions
 from .. import expressions
 
@@ -26,11 +24,8 @@ def test_unification():
     assert most_general_unifier(a(b(x), z), a(b(y), y)) ==\
         (dict(x=y, z=y), a(b(y), y))
 
-    with pytest.raises(ValueError):
-        most_general_unifier(a(x, y), a(x))
-
-    with pytest.raises(ValueError):
-        most_general_unifier(a(b(x), y), a(x, y))
+    assert most_general_unifier(a(x, y), a(x)) is None
+    assert most_general_unifier(a(b(x), y), a(x, y)) is None
 
 
 def test_merge_substitutions():
