@@ -7,19 +7,10 @@ def most_general_unifier(expression1, expression2):
     If the MGU exists it returns the substitution and the unified expression.
     If the MGU doesn't exist it returns None.
     '''
-    if not (
-        isinstance(expression1, exp.FunctionApplication) and
-        isinstance(expression2, exp.FunctionApplication) and
-        len(expression1.args) == len(expression2.args)
-    ):
-        raise ValueError("We can only unify function applications")
-
     args1, args2 = most_general_unifier_extract_arguments(
         expression1, expression2
     )
 
-    if args1 is None or args2 is None:
-        return None
     unifier = most_general_unifier_arguments(args1, args2)
 
     if unifier is None:
@@ -28,7 +19,6 @@ def most_general_unifier(expression1, expression2):
         return (
             unifier[0],
             apply_substitution(expression1, unifier[0])
-            # expression1.apply(expression1.functor, unifier[1])
         )
 
 
@@ -37,27 +27,31 @@ def most_general_unifier_extract_arguments(expression1, expression2):
     args1 = tuple()
     args2 = tuple()
     while expression_stack:
-        exp1, exp2 = expression_stack.pop()
+        expression1, expression2 = expression_stack.pop()
         if not (
-            exp1.functor == exp2.functor and
-            len(exp1.args) == len(exp2.args)
+            expression1.functor == expression2.functor and
+            len(expression1.args) == len(expression2.args)
         ):
-            break
+            raise ValueError(
+                "We can only unify function applications with equal "
+                f"arities {expression1} {expression2}"
+            )
 
-        for arg1, arg2 in zip(exp1.args, exp2.args):
+        for arg1, arg2 in zip(expression1.args, expression2.args):
             is_application1 = isinstance(arg1, exp.FunctionApplication)
             is_application2 = isinstance(arg2, exp.FunctionApplication)
             if is_application1 and is_application2:
                 expression_stack.append((arg1, arg2))
             elif is_application1 or is_application2:
-                break
+                raise ValueError(
+                    "We can only unify function applications with equal "
+                    f"arities {expression1} {expression2}"
+                )
             else:
                 args1 += (arg1,)
                 args2 += (arg2,)
-    else:
-        return args1, args2
 
-    return None, None
+    return args1, args2
 
 
 def apply_substitution(function_application, substitution):
