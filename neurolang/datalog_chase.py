@@ -78,15 +78,33 @@ def unify_substitution(predicate, substitution, representation):
 
 
 def evaluate_builtins(builtin_predicates, substitutions, datalog):
-    for predicate, _ in builtin_predicates:
-        functor = predicate.functor
-        new_substitutions = []
-        for substitution in substitutions:
-            new_substitutions += unify_builtin_substitution(
-                predicate, substitution, datalog, functor
-            )
-        substitutions = new_substitutions
-    return substitutions
+    new_substitutions = []
+    predicates = [p for p, _ in builtin_predicates]
+    for substitution in substitutions:
+        new_substitution = substitution
+        predicates_to_evaluate = predicates
+        evaluate = True
+        while evaluate:
+            evaluate = False
+            new_predicates_to_evaluate = []
+            for predicate in predicates_to_evaluate:
+                functor = predicate.functor
+                subs = unify_builtin_substitution(
+                    predicate, new_substitution, datalog, functor
+                )
+                if subs is None:
+                    new_predicates_to_evaluate.append(predicate)
+                else:
+                    new_substitution = compose_substitutions(
+                        substitution, subs
+                    )
+                    evaluate = True
+            predicates_to_evaluate = new_predicates_to_evaluate
+
+        if len(predicates_to_evaluate) == 0:
+            new_substitutions.append(new_substitution)
+
+    return new_substitutions
 
 
 def unify_builtin_substitution(predicate, substitution, datalog, functor):
@@ -98,7 +116,7 @@ def unify_builtin_substitution(predicate, substitution, datalog, functor):
         isinstance(evaluated_predicate, Constant[bool]) and
         evaluated_predicate.value
     ):
-        return [substitution]
+        return substitution
     elif is_equality_between_constant_and_symbol(evaluated_predicate):
         if isinstance(evaluated_predicate.args[0], Symbol):
             substitution = {
@@ -108,9 +126,9 @@ def unify_builtin_substitution(predicate, substitution, datalog, functor):
             substitution = {
                 evaluated_predicate.args[1]: evaluated_predicate.args[0]
             }
-        return [substitution]
+        return substitution
     else:
-        return []
+        return None
 
 
 def is_equality_between_constant_and_symbol(predicate):
