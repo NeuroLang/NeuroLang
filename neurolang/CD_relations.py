@@ -1,14 +1,11 @@
-from .interval_algebra import (
-    v_before, v_overlaps, v_during,
-    v_meets, v_starts, v_finishes, v_equals
-)
-
-from .regions import Region, ExplicitVBR, ImplicitVBR
-
 from functools import lru_cache
 
 import numpy as np
 from scipy.linalg import kron
+
+from .interval_algebra import (v_before, v_during, v_equals, v_finishes,
+                               v_meets, v_overlaps, v_starts)
+from .regions import ExplicitVBR, ImplicitVBR, Region
 
 __all__ = ['cardinal_relation']
 
@@ -103,8 +100,13 @@ def cardinal_relation_prepare_regions(region, reference_region):
             region.affine, region.image_dim
         )
 
-    if np.any(region.affine != reference_region.affine):
-        region.voxels = region.to_ijk(reference_region.affine)
+    if not np.array_equiv(region.affine, reference_region.affine):
+        region = ExplicitVBR(
+            region.to_ijk(reference_region.affine),
+            affine_matrix=reference_region.affine,
+            image_dim=reference_region.image_dim
+        )
+
     return region, reference_region
 
 
