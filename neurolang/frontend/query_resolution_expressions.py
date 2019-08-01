@@ -164,7 +164,7 @@ class Operation(Expression):
         else:
             op_repr = repr(self.operator)
 
-        self.__repr_arguments(op_repr)
+        return self.__repr_arguments(op_repr)
 
     def __repr_arguments(self, op_repr):
         arguments_repr = []
