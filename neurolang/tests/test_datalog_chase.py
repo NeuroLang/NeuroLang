@@ -22,6 +22,38 @@ class Datalog(
         return x > y
 
 
+def test_python_builtin_equaltiy_chase_step():
+    Q = S_('Q')
+    S = S_('S')
+    eq = C_[Callable[[expressions.Unknown, expressions.Unknown], bool]](op.eq)
+    x = S_('x')
+    y = S_('y')
+    z = S_('z')
+
+    datalog_program = Eb_((
+        Fact_(Q(C_(1), C_(2))),
+        Fact_(Q(C_(2), C_(3))),
+        Imp_(S(y), Q(x, z) & eq(z + C_(1), y)),
+        Imp_(S(y), Q(x, z) & eq(y, z + C_(1))),
+    ))
+
+    dl = Datalog()
+    dl.walk(datalog_program)
+
+    instance_0 = dl.extensional_database()
+
+    rule = datalog_program.expressions[-2]
+    instance_update = dc.chase_step(dl, instance_0, dl.builtins(), rule)
+    res = {
+        S: C_({C_((3,)), C_((4,))}),
+    }
+    assert instance_update == res
+
+    rule = datalog_program.expressions[-1]
+    instance_update = dc.chase_step(dl, instance_0, dl.builtins(), rule)
+    assert instance_update == res
+
+
 def test_python_builtin_chase_step():
     Q = S_('Q')
     T = S_('T')
@@ -59,6 +91,31 @@ def test_python_builtin_chase_step():
     instance_1 = dc.merge_instances(instance_0, instance_update)
     instance_update = dc.chase_step(dl, instance_1, dl.builtins(), rule)
     assert len(instance_update) == 0
+
+
+def test_python_nested_builtin_chase_step():
+    Q = S_('Q')
+    S = S_('S')
+    gt = C_[Callable[[expressions.Unknown, expressions.Unknown], bool]](op.gt)
+    x = S_('x')
+    y = S_('y')
+
+    datalog_program = Eb_((
+        Fact_(Q(C_(8), C_(15))),
+        Fact_(Q(C_(8), C_(9))),
+        Imp_(S(x, y), Q(x, y) & gt(x, y - C_(2))),
+    ))
+
+    dl = Datalog()
+    dl.walk(datalog_program)
+
+    instance_0 = dl.extensional_database()
+
+    rule = datalog_program.expressions[-1]
+    instance_update = dc.chase_step(dl, instance_0, dl.builtins(), rule)
+    assert instance_update == {
+        S: C_({C_((C_(8), C_(9)))}),
+    }
 
 
 def test_non_recursive_predicate_chase_step():
