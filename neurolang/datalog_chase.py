@@ -99,13 +99,7 @@ def unify_builtin_substitution(predicate, substitution, datalog, functor):
         evaluated_predicate.value
     ):
         return [substitution]
-    elif (
-        isinstance(evaluated_predicate, FunctionApplication) and
-        isinstance(evaluated_predicate.functor, Constant) and
-        evaluated_predicate.functor.value is eq and
-        any(isinstance(arg, Constant) for arg in evaluated_predicate.args) and
-        any(isinstance(arg, Symbol) for arg in evaluated_predicate.args)
-    ):
+    elif is_equality_between_constant_and_symbol(evaluated_predicate):
         if isinstance(evaluated_predicate.args[0], Symbol):
             substitution = {
                 evaluated_predicate.args[0]: evaluated_predicate.args[1]
@@ -117,6 +111,16 @@ def unify_builtin_substitution(predicate, substitution, datalog, functor):
         return [substitution]
     else:
         return []
+
+
+def is_equality_between_constant_and_symbol(predicate):
+    return (
+        isinstance(predicate, FunctionApplication) and
+        isinstance(predicate.functor, Constant) and
+        predicate.functor.value is eq and
+        any(isinstance(arg, Constant) for arg in predicate.args) and
+        any(isinstance(arg, Symbol) for arg in predicate.args)
+    )
 
 
 def extract_rule_predicates(
