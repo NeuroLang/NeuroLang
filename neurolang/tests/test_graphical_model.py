@@ -217,3 +217,23 @@ def test_conditional_probability_query_resolution():
     for outcome, prob in expected_outcomes.items():
         assert outcome in outcomes
         assert np.allclose([prob.value], [outcomes[outcome].value])
+
+
+def test_conditional_probability_query_resolution_multiple_rules_same_pred():
+    program = ExpressionBlock((
+        Fact(P(a)),
+        Implication(Q(x, DeltaTerm(bernoulli, (C_(0.2), ))), P(x)),
+        Implication(Q(x, DeltaTerm(bernoulli, (C_(0.1), ))), P(x)),
+    ))
+    evidence = Constant[FactSet]({Fact(Q(a, C_(0)))})
+    query = ConditionalProbabilityQuery(evidence)
+    solver = TableCPDGraphicalModelSolver()
+    solver.walk(program)
+    outcomes = solver.conditional_probability_query_resolution(query)
+    expected_outcomes = {
+        frozenset({Fact(P(a)), Fact(Q(a, C_(0)))}): C_(0.7),
+        frozenset({Fact(P(a)), Fact(Q(a, C_(0))), Fact(Q(a, C_(1)))}): C_(0.3),
+    }
+    for outcome, prob in expected_outcomes.items():
+        assert outcome in outcomes
+        assert np.allclose([prob.value], [outcomes[outcome].value])

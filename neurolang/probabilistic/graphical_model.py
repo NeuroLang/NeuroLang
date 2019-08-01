@@ -290,8 +290,10 @@ class TableCPDGraphicalModelSolver(ExpressionWalker):
                 new_rv_values = rv_values.copy()
                 new_rv_values[rv_symbol] = facts
                 self.generate_possible_outcomes_aux(
-                    rv_idx + 1, new_rv_values,
-                    Constant[float](result_prob.value * prob.value), results,
+                    rv_idx + 1,
+                    new_rv_values,
+                    Constant[float](result_prob.value * prob.value),
+                    results,
                     evidence=evidence
                 )
 
