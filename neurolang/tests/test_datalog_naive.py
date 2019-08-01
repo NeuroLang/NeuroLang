@@ -362,31 +362,31 @@ def test_conjunctive_expression():
     y = S_('y')
 
     assert sdb.is_conjunctive_expression(
-        Imp_(R(x), Q())
+        Q()
     )
 
     assert sdb.is_conjunctive_expression(
-        Imp_(R(x), Q(x))
+        Q(x)
     )
 
     assert sdb.is_conjunctive_expression(
-        Imp_(R(x), Q(x) & R(y, C_(1)))
+        Q(x) & R(y, C_(1))
     )
 
     assert not sdb.is_conjunctive_expression(
-        Imp_(Q(x, y), R(x) | R(y))
+        R(x) | R(y)
     )
 
     assert not sdb.is_conjunctive_expression(
-        Imp_(Q(x, y), R(x) & R(y) | R(x))
+        R(x) & R(y) | R(x)
     )
 
     assert not sdb.is_conjunctive_expression(
-        Imp_(Q(x, y), ~R(x))
+        ~R(x)
     )
 
     assert not sdb.is_conjunctive_expression(
-        Imp_(Q(x, y), R(Q(x)))
+        R(Q(x))
     )
 
 
@@ -410,6 +410,41 @@ def test_not_conjunctive():
 
     with pytest.raises(NeuroLangException):
         dl.walk(Imp_(Q(x, y), R(Q(x))))
+
+
+def test_conjunctive_expression_with_nested():
+    Q = S_('Q')
+    R = S_('R')
+    x = S_('x')
+    y = S_('y')
+
+    assert sdb.is_conjunctive_expression_with_nested_predicates(
+        Q()
+    )
+
+    assert sdb.is_conjunctive_expression_with_nested_predicates(
+        Q(x)
+    )
+
+    assert sdb.is_conjunctive_expression_with_nested_predicates(
+        Q(x) & R(y, C_(1))
+    )
+
+    assert sdb.is_conjunctive_expression_with_nested_predicates(
+        Q(x) & R(Q(y), C_(1))
+    )
+
+    assert not sdb.is_conjunctive_expression_with_nested_predicates(
+        R(x) | R(y)
+    )
+
+    assert not sdb.is_conjunctive_expression_with_nested_predicates(
+        R(x) & R(y) | R(x)
+    )
+
+    assert not sdb.is_conjunctive_expression_with_nested_predicates(
+        ~R(x)
+    )
 
 
 def test_extract_free_variables():

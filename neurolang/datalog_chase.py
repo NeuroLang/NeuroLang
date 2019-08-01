@@ -1,10 +1,12 @@
 from collections import namedtuple
 from itertools import chain
+from operator import eq
 from typing import AbstractSet
 
-from .expressions import Constant
+from .expressions import Constant, Symbol, FunctionApplication
 from . import solver_datalog_naive as sdb
 from .unification import (
+    apply_substitution,
     apply_substitution_arguments,
     compose_substitutions,
     most_general_unifier_arguments
@@ -88,27 +90,37 @@ def evaluate_builtins(builtin_predicates, substitutions, datalog):
 
 
 def unify_builtin_substitution(predicate, substitution, datalog, functor):
-    subs_args = apply_substitution_arguments(
-        predicate.args, substitution
+    substituted_predicate = apply_substitution(
+        predicate, substitution
     )
+    evaluated_predicate = datalog.walk(substituted_predicate)
+    if (
+        isinstance(evaluated_predicate, Constant[bool]) and
+        evaluated_predicate.value
+    ):
+        return [substitution]
+    elif is_equality_between_constant_and_symbol(evaluated_predicate):
+        if isinstance(evaluated_predicate.args[0], Symbol):
+            substitution = {
+                evaluated_predicate.args[0]: evaluated_predicate.args[1]
+            }
+        else:
+            substitution = {
+                evaluated_predicate.args[1]: evaluated_predicate.args[0]
+            }
+        return [substitution]
+    else:
+        return []
 
-    mgu_substituted = most_general_unifier_arguments(
-        subs_args, predicate.args
+
+def is_equality_between_constant_and_symbol(predicate):
+    return (
+        isinstance(predicate, FunctionApplication) and
+        isinstance(predicate.functor, Constant) and
+        predicate.functor.value is eq and
+        any(isinstance(arg, Constant) for arg in predicate.args) and
+        any(isinstance(arg, Symbol) for arg in predicate.args)
     )
-
-    if mgu_substituted is not None:
-        predicate_res = datalog.walk(
-            predicate.apply(functor, mgu_substituted[1])
-        )
-
-        if (
-            isinstance(predicate_res, Constant[bool]) and
-            predicate_res.value
-        ):
-            return [compose_substitutions(
-                substitution, mgu_substituted[0]
-            )]
-    return []
 
 
 def extract_rule_predicates(
