@@ -78,18 +78,44 @@ def unify_substitution(predicate, substitution, representation):
 
 
 def evaluate_builtins(builtin_predicates, substitutions, datalog):
-    for predicate, _ in builtin_predicates:
-        functor = predicate.functor
-        new_substitutions = []
-        for substitution in substitutions:
-            new_substitutions += unify_builtin_substitution(
-                predicate, substitution, datalog, functor
+    new_substitutions = []
+    predicates = [p for p, _ in builtin_predicates]
+    for substitution in substitutions:
+        new_substitution = evaluate_builtins_predicates(
+            predicates, substitution, datalog
+        )
+        if new_substitution is not None:
+            new_substitutions.append(new_substitution)
+    return new_substitutions
+
+
+def evaluate_builtins_predicates(
+    predicates_to_evaluate, substitution, datalog
+):
+    predicates_to_evaluate = predicates_to_evaluate.copy()
+    unresolved_predicates = []
+    while predicates_to_evaluate:
+        predicate = predicates_to_evaluate.pop(0)
+
+        subs = unify_builtin_substitution(
+            predicate, substitution, datalog
+        )
+        if subs is None:
+            unresolved_predicates.append(predicate)
+        else:
+            substitution = compose_substitutions(
+                substitution, subs
             )
-        substitutions = new_substitutions
-    return substitutions
+            predicates_to_evaluate += unresolved_predicates
+            unresolved_predicates = []
+
+    if len(unresolved_predicates) == 0:
+        return substitution
+    else:
+        return None
 
 
-def unify_builtin_substitution(predicate, substitution, datalog, functor):
+def unify_builtin_substitution(predicate, substitution, datalog):
     substituted_predicate = apply_substitution(
         predicate, substitution
     )
@@ -98,19 +124,11 @@ def unify_builtin_substitution(predicate, substitution, datalog, functor):
         isinstance(evaluated_predicate, Constant[bool]) and
         evaluated_predicate.value
     ):
-        return [substitution]
+        return substitution
     elif is_equality_between_constant_and_symbol(evaluated_predicate):
-        if isinstance(evaluated_predicate.args[0], Symbol):
-            substitution = {
-                evaluated_predicate.args[0]: evaluated_predicate.args[1]
-            }
-        else:
-            substitution = {
-                evaluated_predicate.args[1]: evaluated_predicate.args[0]
-            }
-        return [substitution]
+        return unify_builtin_substitution_equality(evaluated_predicate)
     else:
-        return []
+        return None
 
 
 def is_equality_between_constant_and_symbol(predicate):
@@ -121,6 +139,18 @@ def is_equality_between_constant_and_symbol(predicate):
         any(isinstance(arg, Constant) for arg in predicate.args) and
         any(isinstance(arg, Symbol) for arg in predicate.args)
     )
+
+
+def unify_builtin_substitution_equality(evaluated_predicate):
+    if isinstance(evaluated_predicate.args[0], Symbol):
+        substitution = {
+            evaluated_predicate.args[0]: evaluated_predicate.args[1]
+        }
+    else:
+        substitution = {
+            evaluated_predicate.args[1]: evaluated_predicate.args[0]
+        }
+    return substitution
 
 
 def extract_rule_predicates(
@@ -227,7 +257,7 @@ def build_chase_tree(datalog_program, chase_set=chase_step):
 
     nodes_to_process = [root]
     while len(nodes_to_process) > 0:
-        node = nodes_to_process.pop()
+        node = nodes_to_process.pop(0)
         for rule in rules:
             new_node = build_nodes_from_rules(
                 datalog_program, node, builtins, rule
