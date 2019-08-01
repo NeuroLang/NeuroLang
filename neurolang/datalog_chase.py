@@ -81,33 +81,40 @@ def evaluate_builtins(builtin_predicates, substitutions, datalog):
     new_substitutions = []
     predicates = [p for p, _ in builtin_predicates]
     for substitution in substitutions:
-        new_substitution = substitution
-        predicates_to_evaluate = predicates
-        evaluate = True
-        while evaluate:
-            evaluate = False
-            new_predicates_to_evaluate = []
-            for predicate in predicates_to_evaluate:
-                functor = predicate.functor
-                subs = unify_builtin_substitution(
-                    predicate, new_substitution, datalog, functor
-                )
-                if subs is None:
-                    new_predicates_to_evaluate.append(predicate)
-                else:
-                    new_substitution = compose_substitutions(
-                        substitution, subs
-                    )
-                    evaluate = True
-            predicates_to_evaluate = new_predicates_to_evaluate
-
-        if len(predicates_to_evaluate) == 0:
+        new_substitution = evaluate_builtins_predicates(
+            predicates, substitution, datalog
+        )
+        if new_substitution is not None:
             new_substitutions.append(new_substitution)
-
     return new_substitutions
 
 
-def unify_builtin_substitution(predicate, substitution, datalog, functor):
+def evaluate_builtins_predicates(
+    predicates_to_evaluate, substitution, datalog
+):
+    evaluate = True
+    while evaluate:
+        evaluate = False
+        new_predicates_to_evaluate = []
+        for predicate in predicates_to_evaluate:
+            subs = unify_builtin_substitution(
+                predicate, substitution, datalog
+            )
+            if subs is None:
+                new_predicates_to_evaluate.append(predicate)
+            else:
+                substitution = compose_substitutions(
+                    substitution, subs
+                )
+                evaluate = True
+        predicates_to_evaluate = new_predicates_to_evaluate
+    if len(predicates_to_evaluate) == 0:
+        return substitution
+    else:
+        return None
+
+
+def unify_builtin_substitution(predicate, substitution, datalog):
     substituted_predicate = apply_substitution(
         predicate, substitution
     )
