@@ -195,10 +195,10 @@ class DatalogBasic(PatternWalker):
                 "All variables on the consequent need to be on the antecedent"
             )
 
-        if not is_conjunctive_expression(antecedent):
-            raise NeuroLangException(
-                f'Expression {antecedent} is not conjunctive'
-            )
+        # if not is_conjunctive_expression(antecedent):
+        #    raise NeuroLangException(
+        #        f'Expression {antecedent} is not conjunctive'
+        #    )
 
     def intensional_database(self):
         return {
