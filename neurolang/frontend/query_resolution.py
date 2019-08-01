@@ -337,7 +337,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         self.symbol_table.clear()
         self.current_program = []
 
-    def add_tuple_set(self, iterable, name=None, types=Unknown):
+    def add_tuple_set(self, iterable, types=Unknown, name=None):
         if (
             isinstance(iterable, Expression) and
             is_leq_informative(iterable.type, AbstractSet[Tuple])
