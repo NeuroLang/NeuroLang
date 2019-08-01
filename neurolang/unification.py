@@ -52,7 +52,7 @@ def most_general_unifier_extract_arguments(expression1, expression2):
 
 
 def apply_substitution(function_application, substitution):
-    return exp.FunctionApplication[function_application.type](
+    return type(function_application)(
         function_application.functor,
         apply_substitution_arguments(function_application.args, substitution)
     )
