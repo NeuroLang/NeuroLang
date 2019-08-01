@@ -115,21 +115,26 @@ class QueryBuilderBase(object):
         new_set = []
         for e in iterable:
             if not(isinstance(e, Symbol)):
-                s = nl.Symbol[element_type](str(uuid1()))
-                if isinstance(e, nl.Constant):
-                    c = e.cast(element_type)
-                elif is_leq_informative(element_type, Tuple):
-                    c = nl.Constant[element_type](
-                        tuple(nl.Constant(ee) for ee in e)
-                    )
-                else:
-                    c = nl.Constant[element_type](e)
+                s, c = self._create_symbol_and_get_constant(e, element_type)
                 self.symbol_table[s] = c
             else:
                 s = e.neurolang_symbol
             new_set.append(s)
 
         return nl.Constant[set_type](frozenset(new_set))
+
+    @staticmethod
+    def _create_symbol_and_get_constant(element, element_type):
+        symbol = nl.Symbol[element_type](str(uuid1()))
+        if isinstance(element, nl.Constant):
+            constant = element.cast(element_type)
+        elif is_leq_informative(element_type, Tuple):
+            constant = nl.Constant[element_type](
+                tuple(nl.Constant(ee) for ee in element)
+            )
+        else:
+            constant = nl.Constant[element_type](element)
+        return symbol, constant
 
 
 class RegionMixin(object):

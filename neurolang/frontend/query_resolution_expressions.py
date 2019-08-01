@@ -45,11 +45,11 @@ class Expression(object):
     def __setitem__(self, key, value):
         if not isinstance(value, Expression):
             value = Expression(self.query_builder, nl.Constant(value))
+
         if self.query_builder.logic_programming:
-            if isinstance(key, tuple):
-                self.query_builder.assign(self(*key), value)
-            else:
-                self.query_builder.assign(self(key), value)
+            if not isinstance(key, tuple):
+                key = (key,)
+            self.query_builder.assign(self(*key), value)
         else:
             super().__setitem__(key, value)
 
@@ -164,6 +164,9 @@ class Operation(Expression):
         else:
             op_repr = repr(self.operator)
 
+        self.__repr_arguments(op_repr)
+
+    def __repr_arguments(self, op_repr):
         arguments_repr = []
         for a in self.arguments:
             if isinstance(a, Operation):
@@ -225,30 +228,36 @@ class Symbol(Expression):
             )
 
         if self.query_builder.logic_programming:
-            for v in symbol.value:
-                if isinstance(v, nl.Constant):
-                    yield self._rsbv.walk(v.value)
-                elif isinstance(v, nl.Symbol):
-                    yield Symbol(self.query_builder, v)
-                else:
-                    raise nl.NeuroLangException(f'element {v} invalid in set')
+            return self.__iter_logic_programming(symbol)
         else:
-            all_symbols = (
-                self.query_builder
-                .solver.symbol_table.symbols_by_type(
-                    symbol.type.__args__[0]
-                )
-            )
+            return self.__iter_non_logic_programming(symbol)
 
-            for s in symbol.value:
-                if isinstance(s, nl.Constant):
-                    for k, v in all_symbols.items():
-                        if isinstance(v, nl.Constant) and s is v.value:
-                            yield Symbol(self.query_builder, k.name)
-                            break
-                        yield Expression(self.query_builder, nl.Constant(s))
-                else:
-                    yield Symbol(self.query_builder, s.name)
+    def __iter_logic_programming(self, symbol):
+        for v in symbol.value:
+            if isinstance(v, nl.Constant):
+                yield self._rsbv.walk(v.value)
+            elif isinstance(v, nl.Symbol):
+                yield Symbol(self.query_builder, v)
+            else:
+                raise nl.NeuroLangException(f'element {v} invalid in set')
+
+    def __iter_non_logic_programming(self, symbol):
+        all_symbols = (
+            self.query_builder
+            .solver.symbol_table.symbols_by_type(
+                symbol.type.__args__[0]
+            )
+        )
+
+        for s in symbol.value:
+            if not isinstance(s, nl.Constant):
+                yield Symbol(self.query_builder, s.name)
+                continue
+            for k, v in all_symbols.items():
+                if isinstance(v, nl.Constant) and s is v.value:
+                    yield Symbol(self.query_builder, k.name)
+                    break
+                yield Expression(self.query_builder, nl.Constant(s))
 
     def __len__(self):
         symbol = self.symbol
