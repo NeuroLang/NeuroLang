@@ -157,6 +157,53 @@ def test_non_recursive_predicate_chase_step():
     assert len(instance_update) == 0
 
 
+def test_python_multiple_builtins():
+    Q = S_('Q')
+    S = S_('S')
+    eq = C_[Callable[[expressions.Unknown, expressions.Unknown], bool]](op.eq)
+    w = S_('w')
+    x = S_('x')
+    y = S_('y')
+    z = S_('z')
+
+    datalog_program = Eb_((
+        Fact_(Q(C_(1), C_(2))),
+        Fact_(Q(C_(2), C_(3))),
+        Imp_(S(w), Q(x, z) & eq(z + C_(1), y) & eq(y, w)),
+    ))
+
+    dl = Datalog()
+    dl.walk(datalog_program)
+
+    instance_0 = dl.extensional_database()
+
+    rule = datalog_program.expressions[-1]
+    instance_update = dc.chase_step(dl, instance_0, dl.builtins(), rule)
+    res = {
+        S: C_({C_((3,)), C_((4,))}),
+    }
+    assert instance_update == res
+
+    datalog_program = Eb_((
+        Fact_(Q(C_(1), C_(2))),
+        Fact_(Q(C_(2), C_(3))),
+        Imp_(S(w), Q(x, z) & eq(y, w) & eq(z + C_(1), y)),
+    ))
+
+    dl = Datalog()
+    dl.walk(datalog_program)
+
+    instance_0 = dl.extensional_database()
+
+    rule = datalog_program.expressions[-1]
+    instance_update = dc.chase_step(dl, instance_0, dl.builtins(), rule)
+    res = {
+        S: C_({C_((3,)), C_((4,))}),
+    }
+    assert instance_update == res
+
+
+
 def test_non_recursive_predicate_chase():
     Q = S_('Q')
     T = S_('T')

@@ -30,7 +30,7 @@ def most_general_unifier_extract_arguments(expression1, expression2):
     args1 = tuple()
     args2 = tuple()
     while expression_stack:
-        expression1, expression2 = expression_stack.pop()
+        expression1, expression2 = expression_stack.pop(0)
         if not (
             expression1.functor == expression2.functor and
             len(expression1.args) == len(expression2.args)
