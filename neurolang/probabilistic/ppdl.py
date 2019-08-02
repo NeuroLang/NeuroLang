@@ -13,24 +13,29 @@ from ..existential_datalog import Implication
 from ..solver_datalog_naive import DatalogBasic, is_conjunctive_expression
 
 
+def is_conjunction(expression):
+    return (
+        isinstance(expression, FunctionApplication) and
+        isinstance(expression.functor, Constant) and
+        expression.functor.value == operator.and_
+    )
+
+
+def get_conjunction_literals(expression):
+    if is_conjunction(expression):
+        return (
+            get_conjunction_literals(expression.args[0]) +
+            get_conjunction_literals(expression.args[1])
+        )
+    else:
+        return [expression]
+
+
 def get_antecedent_literals(rule):
     if not isinstance(rule, Implication):
         raise NeuroLangException('Implication expected')
 
-    def aux_get_antecedent_literals(expression):
-        if not (
-            isinstance(expression, FunctionApplication) and
-            isinstance(expression.functor, Constant) and
-            expression.functor.value == operator.and_
-        ):
-            return [expression]
-        else:
-            return (
-                aux_get_antecedent_literals(expression.args[0]) +
-                aux_get_antecedent_literals(expression.args[1])
-            )
-
-    return aux_get_antecedent_literals(rule.antecedent)
+    return get_conjunction_literals(rule.antecedent)
 
 
 def get_antecedent_predicate_names(rule):
@@ -56,8 +61,8 @@ def get_dterm_index(datom):
     )
 
 
-def add_to_expression_block(block, to_add):
-    '''Add expressions to an `ExpressionBlock`.
+def append_to_expression_block(block, to_add):
+    '''Append expression(s) to an `ExpressionBlock`.
 
     Parameters
     ----------
@@ -79,7 +84,7 @@ def add_to_expression_block(block, to_add):
     if isinstance(to_add, Iterable):
         new_block = block
         for item in to_add:
-            new_block = add_to_expression_block(new_block, item)
+            new_block = append_to_expression_block(new_block, item)
         return new_block
     raise NeuroLangException(f'Cannot add {to_add} to expression block')
 
@@ -121,24 +126,24 @@ class GenerativeDatalog(DatalogBasic):
         else:
             eb = ExpressionBlock(tuple())
 
-        self.symbol_table[predicate] = add_to_expression_block(eb, rule)
+        self.symbol_table[predicate] = append_to_expression_block(eb, rule)
 
         return rule
 
 
-def get_antecedent_constant_idxs(rule):
+def get_antecedent_constant_indexes(rule):
     '''Get indexes of constants occurring in antecedent predicates.'''
-    constant_idxs = dict()
+    constant_indexes = dict()
     for antecedent in get_antecedent_literals(rule):
         predicate = antecedent.functor.name
-        idxs = {
+        indexes = {
             i
             for i, arg in enumerate(antecedent.args)
             if isinstance(arg, Constant)
         }
-        if len(idxs) > 0:
-            constant_idxs[predicate] = idxs
-    return constant_idxs
+        if len(indexes) > 0:
+            constant_indexes[predicate] = indexes
+    return constant_indexes
 
 
 def get_predicate_probabilistic_rules(gdatalog, predicate):
@@ -175,14 +180,14 @@ def can_lead_to_object_uncertainty(gdatalog):
             isinstance(value, ExpressionBlock)
         ):
             for rule in value.expressions:
-                for antecedent_predicate, constant_idxs in (
-                    get_antecedent_constant_idxs(rule).items()
+                for antecedent_predicate, constant_indexes in (
+                    get_antecedent_constant_indexes(rule).items()
                 ):
                     for rule in get_predicate_probabilistic_rules(
                         gdatalog, antecedent_predicate
                     ):
                         dterm_idx = get_dterm_index(rule.consequent)
-                        if any(idx == dterm_idx for idx in constant_idxs):
+                        if any(idx == dterm_idx for idx in constant_indexes):
                             return True
     return False
 
