@@ -61,7 +61,7 @@ def get_dterm_index(datom):
     )
 
 
-def extend_expression_block(block, to_add):
+def concatenate_to_expression_block(block, to_add):
     '''
     Extend `ExpressionBlock` with another `ExpressionBlock` or
     an iterable of `Expression`.
@@ -128,7 +128,9 @@ class GenerativeDatalog(DatalogBasic):
         else:
             eb = ExpressionBlock(tuple())
 
-        self.symbol_table[predicate] = extend_expression_block(eb, [rule])
+        self.symbol_table[predicate] = concatenate_to_expression_block(
+            eb, [rule]
+        )
 
         return rule
 
