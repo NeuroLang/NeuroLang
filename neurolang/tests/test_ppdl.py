@@ -9,7 +9,7 @@ from ..existential_datalog import (
     Implication, SolverNonRecursiveExistentialDatalog
 )
 from ..probabilistic.ppdl import (
-    append_to_expression_block, GenerativeDatalog, TranslateGDatalogToEDatalog,
+    extend_expression_block, GenerativeDatalog, TranslateGDatalogToEDatalog,
     DeltaTerm, get_dterm, can_lead_to_object_uncertainty
 )
 from ..solver_datalog_naive import Fact
@@ -230,7 +230,7 @@ def test_pcs_example():
     solver.walk(translated)
 
 
-def test_append_to_expression_block():
+def test_extend_expression_block():
     x = S_('x')
     y = S_('y')
     z = S_('z')
@@ -246,14 +246,16 @@ def test_append_to_expression_block():
         P(z),
         P(y),
     ))
-    assert P(y) in append_to_expression_block(block1, P(y)).expressions
+    assert P(y) in extend_expression_block(block1, [P(y)]).expressions
     for expression in block2.expressions:
-        new_block = append_to_expression_block(block1, block2)
+        new_block = extend_expression_block(block1, block2)
         assert expression in new_block.expressions
-        new_block = append_to_expression_block(block1, [block2])
+        new_block = extend_expression_block(block1, block2)
         assert expression in new_block.expressions
     for expression in (
         block1.expressions + block2.expressions + block3.expressions
     ):
-        new_block = append_to_expression_block(block1, [block2, block3])
+        new_block = extend_expression_block(
+            extend_expression_block(block1, block2), block3
+        )
         assert expression in new_block.expressions

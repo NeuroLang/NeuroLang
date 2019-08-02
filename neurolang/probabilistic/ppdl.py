@@ -61,14 +61,16 @@ def get_dterm_index(datom):
     )
 
 
-def append_to_expression_block(block, to_add):
-    '''Append expression(s) to an `ExpressionBlock`.
+def extend_expression_block(block, to_add):
+    '''
+    Extend `ExpressionBlock` with another `ExpressionBlock` or
+    an iterable of `Expression`.
 
     Parameters
     ----------
     block: ExpressionBlock
         The initial `ExpressionBlock` to which expressions will be added.
-    to_add: Expression, ExpressionBlock or Expression/ExpressionBlock iterable
+    to_add: ExpressionBlock or Expression iterable
         `Expression`s to be added to the `ExpressionBlock`.
 
     Returns
@@ -79,14 +81,11 @@ def append_to_expression_block(block, to_add):
     '''
     if isinstance(to_add, ExpressionBlock):
         return ExpressionBlock(block.expressions + to_add.expressions)
-    if isinstance(to_add, Expression):
-        return ExpressionBlock(block.expressions + (to_add, ))
     if isinstance(to_add, Iterable):
-        new_block = block
-        for item in to_add:
-            new_block = append_to_expression_block(new_block, item)
-        return new_block
-    raise NeuroLangException(f'Cannot add {to_add} to expression block')
+        if not all(isinstance(item, Expression) for item in to_add):
+            raise NeuroLangException('Expected iterable on expressions')
+        return ExpressionBlock(block.expressions + tuple(to_add))
+    raise NeuroLangException('Expected ExpressionBlock or Expression iterable')
 
 
 class DeltaSymbol(Symbol):
@@ -96,7 +95,10 @@ class DeltaSymbol(Symbol):
         super().__init__(f'Result_{self.dist_name}_{self.n_terms}')
 
     def __repr__(self):
-        return f'Δ-Symbol{{{self.name}({self.dist_name}, {self.n_terms})}}'
+        return (
+            f'Δ-Symbol{{{self.name}({self.dist_name}, '
+            '{self.n_terms}): {self.type}}}'
+        )
 
     def __hash__(self):
         return hash((self.dist_name, self.n_terms))
@@ -104,7 +106,7 @@ class DeltaSymbol(Symbol):
 
 class DeltaTerm(FunctionApplication):
     def __repr__(self):
-        return f'Δ-term{{{self.functor}({self.args})}}'
+        return f'Δ-term{{{self.functor}({self.args}): {self.type}}}'
 
 
 class GenerativeDatalog(DatalogBasic):
@@ -126,7 +128,7 @@ class GenerativeDatalog(DatalogBasic):
         else:
             eb = ExpressionBlock(tuple())
 
-        self.symbol_table[predicate] = append_to_expression_block(eb, rule)
+        self.symbol_table[predicate] = extend_expression_block(eb, [rule])
 
         return rule
 
