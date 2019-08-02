@@ -5,7 +5,7 @@ from typing import Iterable
 from ..expressions import NeuroLangException
 from ..expressions import (
     Expression, ExpressionBlock, FunctionApplication, Symbol, Constant,
-    Definition, ExistentialPredicate
+    ExistentialPredicate
 )
 from ..expression_walker import ExpressionBasicEvaluator
 from ..expression_pattern_matching import add_match
