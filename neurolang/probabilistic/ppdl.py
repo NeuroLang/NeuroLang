@@ -21,11 +21,11 @@ def is_conjunction(expression):
     )
 
 
-def get_conjunction_literals(expression):
+def get_conjunction_atoms(expression):
     if is_conjunction(expression):
         return (
-            get_conjunction_literals(expression.args[0]) +
-            get_conjunction_literals(expression.args[1])
+            get_conjunction_atoms(expression.args[0]) +
+            get_conjunction_atoms(expression.args[1])
         )
     else:
         return [expression]
@@ -35,7 +35,7 @@ def get_antecedent_literals(rule):
     if not isinstance(rule, Implication):
         raise NeuroLangException('Implication expected')
 
-    return get_conjunction_literals(rule.antecedent)
+    return get_conjunction_atoms(rule.antecedent)
 
 
 def get_antecedent_predicate_names(rule):

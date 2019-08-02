@@ -90,7 +90,9 @@ def test_generative_datalog():
     program = ExpressionBlock((tau_1, ))
     gdatalog = GenerativeDatalogTest()
     gdatalog.walk(program)
-    assert tau_1 in gdatalog.symbol_table[P].expressions
+    edb = gdatalog.extensional_database()
+    idb = gdatalog.intensional_database()
+    assert tau_1 in idb['P'].expressions
 
     with pytest.raises(NeuroLangException):
         tau_2 = Implication(
@@ -100,7 +102,11 @@ def test_generative_datalog():
             ), Q(x)
         )
         gdatalog = GenerativeDatalogTest()
-        gdatalog.walk(ExpressionBlock((tau_2, )))
+        gdatalog.walk(ExpressionBlock((tau_2, Fact(Q(C_(2))))))
+        edb = gdatalog.extensional_database()
+        idb = gdatalog.intensional_database()
+        assert tau_2 in idb['P'].expressions
+        assert Fact(Q(C_(2))) in edb['Q']
 
 
 def test_check_gdatalog_object_uncertainty():
