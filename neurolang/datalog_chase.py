@@ -79,7 +79,7 @@ def unify_substitution(predicate, substitution, representation):
 
 def evaluate_builtins(builtin_predicates, substitutions, datalog):
     new_substitutions = []
-    predicates = [p for p, _ in builtin_predicates]
+    predicates = [datalog.walk(p) for p, _ in builtin_predicates]
     for substitution in substitutions:
         new_substitution = evaluate_builtins_predicates(
             predicates, substitution, datalog
