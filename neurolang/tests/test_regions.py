@@ -499,6 +499,5 @@ def test_cardinal_relation_prepare_regions():
     assert r1 is not sphere_1_evbr and r2 == r1
 
     r1, r2 = cardinal_relation_prepare_regions(sphere_1_evbr, sphere_2_evbr)
-    assert r1 is not sphere_1_evbr
+    assert r1 is sphere_1_evbr
     assert r2 is sphere_2_evbr
-    assert np.allclose(r1.affine, r2.affine)

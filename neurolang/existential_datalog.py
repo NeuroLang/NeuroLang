@@ -1,9 +1,11 @@
 from .expressions import (
-    NeuroLangException, ExistentialPredicate, Symbol,
+    NeuroLangException, ExistentialPredicate, Symbol, Constant,
     ExpressionBlock, FunctionApplication, Lambda
 )
 from .solver_datalog_naive import (
-    SolverNonRecursiveDatalogNaive, DatalogBasic, Implication,
+    SolverNonRecursiveDatalogNaive,
+    DatalogBasic,
+    Implication,
 )
 
 from .expression_pattern_matching import add_match
@@ -109,10 +111,10 @@ def parse_implication_with_existential_consequent(expression):
         raise NeuroLangException(
             'Expected core of consequent to be a function application'
         )
-    if not all(isinstance(arg, Symbol) for arg in e.args):
+    if not all(isinstance(arg, (Symbol, Constant)) for arg in e.args):
         raise NeuroLangException(
             'Expected core of consequent to be '
-            'a function application on symbols only'
+            'a function application on symbols and constants only'
         )
     if not isinstance(e.functor, Symbol):
         raise NeuroLangException(
