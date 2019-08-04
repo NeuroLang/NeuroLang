@@ -1,4 +1,5 @@
 from functools import lru_cache
+from itertools import product, chain
 
 import numpy as np
 from scipy.linalg import kron
@@ -50,7 +51,7 @@ def cardinal_relation(
     stop_at=None
 ):
     if region is reference_region:
-        return False
+        return directions == 'O'
 
     if type(region) is Region and type(reference_region) is Region:
         mat = direction_matrix([region.bounding_box],
@@ -62,7 +63,7 @@ def cardinal_relation(
     )
 
     if region == reference_region:
-        result = False
+        result = directions == 'O'
     else:
         mat = direction_matrix([region.bounding_box],
                                [reference_region.bounding_box])
@@ -109,59 +110,58 @@ def overlap_resolution(
     if stop_at == 0:
         raise ValueError("stop_at must be larger than 0")
 
-    current_region_level = [region.aabb_tree.root]
-    current_reference_region_level = [reference_region.aabb_tree.root]
-    level = 0
-
-    overlap = True
-
-    max_depth_reached_reg = False
-    max_depth_reached_ref = False
+    region_stack = [
+        (region.aabb_tree.root, reference_region.aabb_tree.root, 0)
+    ]
 
     directions = directions.replace('O', '')
     if len(directions) == 0:
         directions = None
 
-    while (((stop_at is None) or (level < stop_at)) and
-           (not (max_depth_reached_reg and max_depth_reached_ref)) and
-           overlap):
-        if not max_depth_reached_reg:
-            current_region_next_level = tree_next_level(current_region_level)
-            if current_region_next_level:
-                current_region_level = current_region_next_level
-            else:
-                max_depth_reached_reg = True
+    total_mat = direction_matrix(
+        [region_stack[0][0].box], [region_stack[0][1].box]
+    ) * 0
+    overlap_indices = np.ix_(*is_in_direction_indices(total_mat.ndim, 'O'))
+    while region_stack:
+        region, reference_region, level = region_stack.pop(0)
 
-        if not max_depth_reached_ref:
-            current_ref_region_next_level = tree_next_level(
-                current_reference_region_level
-            )
-            if current_ref_region_next_level:
-                current_reference_region_level = current_ref_region_next_level
-            else:
-                max_depth_reached_ref = True
-        mat = direction_matrix(
-            [reg.box for reg in current_region_level],
-            [reg.box for reg in current_reference_region_level]
-        )
+        mat = direction_matrix([region.box], [reference_region.box])
+        total_mat += mat
 
-        if directions is not None and is_in_direction(mat, directions):
+        if (
+            is_in_direction(mat, 'O') and
+            (stop_at is None or level < stop_at - 1)
+        ):
+            region_nl = tree_next_level(region)
+            ref_region_nl = tree_next_level(reference_region)
+
+            stack_update = [
+                (r, ref, level + 1)
+                for r, ref in chain(
+                    product(region_nl, ref_region_nl),
+                    product((region,), ref_region_nl),
+                    product(region_nl, (reference_region,))
+                )
+            ]
+
+            if len(stack_update) > 0:
+                total_mat[overlap_indices] = 0
+                region_stack += stack_update
+            elif directions is None:
+                break
+
+        elif directions is not None and is_in_direction(mat, directions):
             break
 
-        overlap = is_in_direction(mat, 'O')
-        level += 1
-
-    return mat
+    return total_mat.clip(0, 1)
 
 
-def tree_next_level(nodes):
+def tree_next_level(node):
     result = []
-    for node in nodes:
-        if node.left is not None:
-            result.append(node.left)
-        if node.right is not None:
-            result.append(node.right)
-
+    if node.left is not None:
+        result.append(node.left)
+    if node.right is not None:
+        result.append(node.right)
     return result
 
 
@@ -196,7 +196,7 @@ def relation_vectors(intervals, other_region_intervals):
 
 
 def direction_matrix(region_bbs, another_region_bbs):
-    res = np.zeros((3, ) * region_bbs[0].dim, dtype=bool)
+    res = np.zeros((3, ) * region_bbs[0].dim, dtype=int)
     for bb in region_bbs:
         for another_region_bb in another_region_bbs:
             rp_vector = relation_vectors(bb.limits, another_region_bb.limits)
@@ -204,7 +204,5 @@ def direction_matrix(region_bbs, another_region_bbs):
             for i in range(1, len(rp_vector)):
                 tensor = kron(rp_vector[i].reshape((3, ) + (1, ) * i),
                               tensor).squeeze()
-            res += tensor.astype(
-                bool, copy=False
-            )
-    return res.astype(int, copy=False)
+            res += tensor
+    return res.clip(0, 1)
