@@ -172,10 +172,11 @@ class RegionMixin(object):
         return self.add_tuple_set(region_set, name=name, types=Region)
 
     @staticmethod
-    def create_region(spatial_image, label=1):
+    def create_region(spatial_image, label=1, prebuild_tree=False):
         region = ExplicitVBR(
             np.transpose((spatial_image.get_data() == label).nonzero()),
-            spatial_image.affine, image_dim=spatial_image.shape
+            spatial_image.affine, image_dim=spatial_image.shape,
+            prebuild_tree=prebuild_tree
         )
 
         return region
