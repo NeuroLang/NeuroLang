@@ -112,10 +112,9 @@ class ExplicitVBR(VolumetricBrainRegion):
         self.affine = affine_matrix
         self.affine_inv = np.linalg.inv(self.affine)
         self.image_dim = image_dim
+        self._aabb_tree = None
         if prebuild_tree:
-            self._aabb_tree = self.build_tree()
-        else:
-            self._aabb_tree = None
+            self.build_tree()
 
     @property
     def bounding_box(self):
@@ -124,7 +123,7 @@ class ExplicitVBR(VolumetricBrainRegion):
     @property
     def aabb_tree(self):
         if self._aabb_tree is None:
-            self._aabb_tree = self.build_tree()
+            self.build_tree()
         return self._aabb_tree
 
     def generate_bounding_box(self, voxels_ijk):
@@ -190,6 +189,7 @@ class ExplicitVBR(VolumetricBrainRegion):
             if node.right is not None:
                 stack.append(node.right)
 
+        self._aabb_tree = tree
         return tree
 
     def to_xyz(self, affine=None):
@@ -278,7 +278,7 @@ class BoundigBoxSequenceElement(ImplicitVBR):
     @property
     def aabb_tree(self):
         if self._aabb_tree is None:
-            self._aabb_tree = self.build_tree()
+            self.build_tree()
         return self._aabb_tree
 
     def to_ijk(self, affine):
