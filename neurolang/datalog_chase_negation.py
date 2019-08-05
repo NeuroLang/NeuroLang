@@ -53,7 +53,8 @@ class DatalogChaseNegation(DatalogChase):
         for predicate, representation in negative_predicates:
             new_substitutions = []
             for substitution in substitutions:
-                new_substitutions += DatalogChaseNegation.unify_negative_substitution(
+                new_substitutions += DatalogChaseNegation\
+                .unify_negative_substitution(
                     predicate, substitution, representation
                 )
             substitutions = new_substitutions
@@ -146,8 +147,10 @@ class DatalogChaseNegation(DatalogChase):
                 )
             elif functor in self.builtins:
                 builtin_predicates.append((predicate, self.builtins[functor]))
-            elif functor == invert and predicate.args[
-                0].functor in self.builtins:
+            elif (
+                functor == invert and
+                predicate.args[0].functor in self.builtins
+            ):
                 negative_builtin_predicates.append((
                     predicate.args[0], self.builtins[predicate.args[0].functor]
                 ))
