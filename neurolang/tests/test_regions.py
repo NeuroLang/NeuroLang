@@ -4,7 +4,7 @@ from numpy import random
 
 import nibabel as nib
 
-from ..aabb_tree import AABB, Tree
+from ..aabb_tree import AABB
 from ..CD_relations import (
     cardinal_relation, direction_matrix, is_in_direction,
     cardinal_relation_prepare_regions
@@ -326,6 +326,9 @@ def test_refinement_of_not_overlapping():
         np.array([[0, 0, 0], [6, 0, 0], [6, 6, 1]]), np.eye(4)
     )
     other_region = ExplicitVBR(np.array([[0, 6, 0]]), np.eye(4))
+
+    assert not cardinal_relation(triangle, triangle, 'O')
+
     assert cardinal_relation(
         other_region, triangle, 'O', refine_overlapping=False
     )
@@ -336,6 +339,11 @@ def test_refinement_of_not_overlapping():
     assert not cardinal_relation(
         other_region, triangle, 'O', refine_overlapping=True
     )
+
+    assert not cardinal_relation(
+        triangle, other_region, 'O', refine_overlapping=True
+    )
+
     for r in ['L', 'A']:
         assert cardinal_relation(
             other_region, triangle, r, refine_overlapping=True
