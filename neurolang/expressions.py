@@ -369,9 +369,9 @@ class Symbol(NonConstant):
 
     def __eq__(self, other):
         return (
-            (isinstance(other, Symbol) or isinstance(other, str)) and
-            hash(self) == hash(other)
-        )
+            hash(self) == hash(other) and
+            (isinstance(other, Symbol) or isinstance(other, str))
+         )
 
     def __hash__(self):
         return hash(self.name)
@@ -447,21 +447,19 @@ class Constant(Expression):
             warn('Making a comparison with types needed to be inferred')
 
         if isinstance(other, Expression):
-            types_equal = (
+            if isinstance(other, Constant):
+                value_equal = other.value == self.value
+            else:
+                value_equal = hash(other) == hash(self)
+
+            return value_equal and (
                 is_leq_informative(self.type, other.type) or
                 is_leq_informative(other.type, self.type)
             )
-            if types_equal:
-                if isinstance(other, Constant):
-                    return other.value == self.value
-                else:
-                    return hash(other) == hash(self)
-            else:
-                return False
         else:
             return (
-                type_validation_value(other, self.type) and
-                hash(other) == hash(self)
+                hash(other) == hash(self) and
+                type_validation_value(other, self.type)
             )
 
     def __hash__(self):

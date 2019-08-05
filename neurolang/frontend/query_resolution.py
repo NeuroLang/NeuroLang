@@ -173,19 +173,21 @@ class RegionMixin(object):
 
     @staticmethod
     def create_region(spatial_image, label=1, prebuild_tree=False):
+        voxels = np.transpose((spatial_image.get_data() == label).nonzero())
+        if len(voxels) == 0:
+            return None
         region = ExplicitVBR(
-            np.transpose((spatial_image.get_data() == label).nonzero()),
+            voxels,
             spatial_image.affine, image_dim=spatial_image.shape,
             prebuild_tree=prebuild_tree
         )
-
         return region
 
     def add_atlas_set(self, name, atlas_labels, spatial_image):
         atlas_set = set()
         for label_number, label_name in atlas_labels:
             region = self.create_region(spatial_image, label=label_number)
-            if len(region.voxels) == 0:
+            if region is None:
                 continue
             symbol = nl.Symbol[Region](label_name)
             self.symbol_table[symbol] = nl.Constant[Region](region)
