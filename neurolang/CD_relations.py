@@ -56,7 +56,7 @@ def cardinal_relation(
     stop_at=None
 ):
     if region is reference_region:
-        return directions == 'O'
+        return False
 
     if type(region) is Region and type(reference_region) is Region:
         mat = direction_matrix(region.bounding_box,
