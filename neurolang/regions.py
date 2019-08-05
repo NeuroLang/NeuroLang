@@ -106,12 +106,12 @@ class VolumetricBrainRegion(Region):
 
 class ExplicitVBR(VolumetricBrainRegion):
     def __init__(
-        self, voxels, affine_matrix, img_dim=None, prebuild_tree=False
+        self, voxels, affine_matrix, image_dim=None, prebuild_tree=False
     ):
         self.voxels = np.asanyarray(voxels, dtype=int)
         self.affine = affine_matrix
         self.affine_inv = np.linalg.inv(self.affine)
-        self.image_dim = img_dim
+        self.image_dim = image_dim
         if prebuild_tree:
             self._aabb_tree = self.build_tree()
         else:

@@ -204,7 +204,7 @@ class QueryBuilder(object):
     def create_region(spatial_image, label=1):
         region = ExplicitVBR(
             np.transpose((spatial_image.get_data() == label).nonzero()),
-            spatial_image.affine, img_dim=spatial_image.shape
+            spatial_image.affine, image_dim=spatial_image.shape
         )
 
         return region

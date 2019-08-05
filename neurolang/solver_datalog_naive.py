@@ -4,7 +4,7 @@ surely very slow
 '''
 from typing import AbstractSet, Any, Tuple, Callable
 from itertools import product
-from operator import and_
+from operator import and_, or_, invert, xor
 
 from .utils import OrderedSet
 
@@ -100,18 +100,7 @@ class DatalogBasic(PatternWalker):
                 'Facts can only have constants as arguments'
             )
 
-        if fact.functor.name not in self.symbol_table:
-            if fact.functor.type is Unknown:
-                c = Constant(fact.args)
-                set_type = c.type
-            elif isinstance(fact.functor.type, Callable):
-                set_type = Tuple[fact.functor.type.__args__[:-1]]
-            else:
-                raise NeuroLangException('Fact functor type incorrect')
-
-            self.symbol_table[fact.functor.name] = \
-                Constant[AbstractSet[set_type]](set())
-
+        self._initialize_fact_set_if_needed(fact)
         fact_set = self.symbol_table[fact.functor.name]
 
         if isinstance(fact_set, ExpressionBlock):
@@ -123,6 +112,19 @@ class DatalogBasic(PatternWalker):
         fact_set.value.add(Constant(fact.args))
 
         return expression
+
+    def _initialize_fact_set_if_needed(self, fact):
+        if fact.functor.name not in self.symbol_table:
+            if fact.functor.type is Unknown:
+                c = Constant(fact.args)
+                set_type = c.type
+            elif isinstance(fact.functor.type, Callable):
+                set_type = Tuple[fact.functor.type.__args__[:-1]]
+            else:
+                raise NeuroLangException('Fact functor type incorrect')
+
+            self.symbol_table[fact.functor.name] = \
+                Constant[AbstractSet[set_type]](set())
 
     @add_match(Implication(
         FunctionApplication[bool](Symbol, ...),
@@ -139,22 +141,7 @@ class DatalogBasic(PatternWalker):
         consequent = expression.consequent
         antecedent = expression.antecedent
 
-        if consequent.functor.name in self.protected_keywords:
-            raise NeuroLangException(
-                f'symbol {self.constant_set_name} is protected'
-            )
-
-        if not is_conjunctive_expression(antecedent):
-            raise NeuroLangException(
-                f'Expression {antecedent} is not conjunctive'
-            )
-
-        consequent_symbols = consequent._symbols - consequent.functor._symbols
-
-        if not consequent_symbols.issubset(antecedent._symbols):
-            raise NeuroLangException(
-                "All variables on the consequent need to be on the antecedent"
-            )
+        self._validate_implication_syntax(consequent, antecedent)
 
         if consequent.functor.name in self.symbol_table:
             value = self.symbol_table[consequent.functor.name]
@@ -186,6 +173,38 @@ class DatalogBasic(PatternWalker):
 
         return expression
 
+    def _validate_implication_syntax(self, consequent, antecedent):
+        if consequent.functor.name in self.protected_keywords:
+            raise NeuroLangException(
+                f'symbol {self.constant_set_name} is protected'
+            )
+
+        if any(
+            not isinstance(arg, (Constant, Symbol))
+            for arg in consequent.args
+        ):
+            raise NeuroLangException(
+                f'The consequent {consequent} can only be '
+                'constants or symbols'
+            )
+
+        consequent_symbols = consequent._symbols - consequent.functor._symbols
+
+        if not consequent_symbols.issubset(antecedent._symbols):
+            raise NeuroLangException(
+                "All variables on the consequent need to be on the antecedent"
+            )
+
+        if not is_conjunctive_expression(consequent):
+            raise NeuroLangException(
+               f'Expression {consequent} is not conjunctive'
+            )
+
+        if not is_conjunctive_expression_with_nested_predicates(antecedent):
+            raise NeuroLangException(
+               f'Expression {antecedent} is not conjunctive'
+            )
+
     def intensional_database(self):
         return {
             k: v for k, v in self.symbol_table.items()
@@ -198,7 +217,8 @@ class DatalogBasic(PatternWalker):
     def extensional_database(self):
         ret = self.symbol_table.symbols_by_type(AbstractSet)
         for keyword in self.protected_keywords:
-            del ret[keyword]
+            if keyword in ret:
+                del ret[keyword]
         return ret
 
     def builtins(self):
@@ -425,6 +445,24 @@ def is_conjunctive_expression(expression):
         )
         for _, exp in expression_iterator(expression)
     )
+
+
+def is_conjunctive_expression_with_nested_predicates(expression):
+    stack = [expression]
+    while stack:
+        exp = stack.pop()
+        if isinstance(exp, FunctionApplication):
+            if isinstance(exp.functor, Constant):
+                if exp.functor is and_:
+                    stack += exp.args
+                    continue
+                elif exp.functor in (or_, invert, xor):
+                    return False
+            stack += [
+                arg for arg in exp.args
+                if isinstance(arg, FunctionApplication)
+            ]
+    return True
 
 
 class ExtractDatalogFreeVariablesWalker(PatternWalker):
