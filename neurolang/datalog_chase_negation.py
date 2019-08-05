@@ -130,7 +130,9 @@ class DatalogChaseNegation(DatalogChase):
         for predicate in rule_predicates:
             functor = predicate.functor
 
-            recursive_calls = self.check_non_linear(head_functor, functor, recursive_calls)
+            recursive_calls = self.check_non_linear(
+                head_functor, functor, recursive_calls
+            )
 
             if functor in restriction_instance:
                 restricted_predicates.append(
@@ -175,7 +177,6 @@ class DatalogChaseNegation(DatalogChase):
                     'Non-linear rule {rule}, solver non supported'
                 )
         return recursive_calls
-
 
     def check_constraints(self, instance_update):
         for symbol, args in self.datalog_program.negated_symbols.items():
