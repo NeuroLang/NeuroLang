@@ -6,17 +6,16 @@ from typing import AbstractSet
 from .expressions import Constant, Symbol, FunctionApplication
 from . import solver_datalog_naive as sdb
 from .unification import (
-    apply_substitution,
-    apply_substitution_arguments,
-    compose_substitutions,
+    apply_substitution, apply_substitution_arguments, compose_substitutions,
     most_general_unifier_arguments
 )
 
-class DatalogChase():
 
+class DatalogChase():
     def build_chase_solution(self, datalog_program):
         rules = []
-        for expression_block in datalog_program.intensional_database().values():
+        for expression_block in datalog_program.intensional_database().values(
+        ):
             for rule in expression_block.expressions:
                 rules.append(rule)
 
@@ -26,26 +25,34 @@ class DatalogChase():
         self.check_constraints(datalog_program, instance_update)
         while len(instance_update) > 0:
             instance = self.merge_instances(instance, instance_update)
-            instance_update = self.merge_instances(*(
-                self.chase_step(
-                    datalog_program, instance, builtins, rule,
-                    restriction_instance=instance_update
+            instance_update = self.merge_instances(
+                *(
+                    self.chase_step(
+                        datalog_program,
+                        instance,
+                        builtins,
+                        rule,
+                        restriction_instance=instance_update
+                    ) for rule in rules
                 )
-                for rule in rules
-            ))
+            )
 
         return instance
-
 
     def check_constraints(self, datalog_program, instance_update):
         pass
 
-    def chase_step(self, datalog, instance, builtins, rule, restriction_instance=None):
+    def chase_step(
+        self, datalog, instance, builtins, rule, restriction_instance=None
+    ):
         if restriction_instance is None:
             restriction_instance = dict()
 
         rule_predicates = self.extract_rule_predicates(
-            rule, instance, builtins, restriction_instance=restriction_instance
+            rule,
+            instance,
+            builtins,
+            restriction_instance=restriction_instance
         )
 
         if all(len(predicate_list) == 0 for predicate_list in rule_predicates):
@@ -55,8 +62,7 @@ class DatalogChase():
             rule_predicates
 
         rule_predicates_iterator = chain(
-            restricted_predicates,
-            nonrestricted_predicates
+            restricted_predicates, nonrestricted_predicates
         )
 
         substitutions = self.obtain_substitutions(rule_predicates_iterator)
@@ -69,7 +75,6 @@ class DatalogChase():
             rule, substitutions, instance, restriction_instance
         )
 
-
     def obtain_substitutions(self, rule_predicates_iterator):
         substitutions = [{}]
         for predicate, representation in rule_predicates_iterator:
@@ -81,28 +86,21 @@ class DatalogChase():
             substitutions = new_substitutions
         return substitutions
 
-
     def unify_substitution(self, predicate, substitution, representation):
         new_substitutions = []
-        subs_args = apply_substitution_arguments(
-            predicate.args, substitution
-        )
+        subs_args = apply_substitution_arguments(predicate.args, substitution)
 
         for element in representation:
             mgu_substituted = most_general_unifier_arguments(
-                subs_args,
-                element.value
+                subs_args, element.value
             )
 
             if mgu_substituted is not None:
                 new_substitution = mgu_substituted[0]
                 new_substitutions.append(
-                    compose_substitutions(
-                        substitution, new_substitution
-                    )
+                    compose_substitutions(substitution, new_substitution)
                 )
         return new_substitutions
-
 
     def evaluate_builtins(self, builtin_predicates, substitutions, datalog):
         new_substitutions = []
@@ -114,7 +112,6 @@ class DatalogChase():
             if new_substitution is not None:
                 new_substitutions.append(new_substitution)
         return new_substitutions
-
 
     def evaluate_builtins_predicates(
         self, predicates_to_evaluate, substitution, datalog
@@ -130,9 +127,7 @@ class DatalogChase():
             if subs is None:
                 unresolved_predicates.append(predicate)
             else:
-                substitution = compose_substitutions(
-                    substitution, subs
-                )
+                substitution = compose_substitutions(substitution, subs)
                 predicates_to_evaluate += unresolved_predicates
                 unresolved_predicates = []
 
@@ -141,11 +136,8 @@ class DatalogChase():
         else:
             return None
 
-
     def unify_builtin_substitution(self, predicate, substitution, datalog):
-        substituted_predicate = apply_substitution(
-            predicate, substitution
-        )
+        substituted_predicate = apply_substitution(predicate, substitution)
         evaluated_predicate = datalog.walk(substituted_predicate)
         if (
             isinstance(evaluated_predicate, Constant[bool]) and
@@ -153,10 +145,11 @@ class DatalogChase():
         ):
             return substitution
         elif self.is_equality_between_constant_and_symbol(evaluated_predicate):
-            return self.unify_builtin_substitution_equality(evaluated_predicate)
+            return self.unify_builtin_substitution_equality(
+                evaluated_predicate
+            )
         else:
             return None
-
 
     def is_equality_between_constant_and_symbol(self, predicate):
         return (
@@ -166,7 +159,6 @@ class DatalogChase():
             any(isinstance(arg, Constant) for arg in predicate.args) and
             any(isinstance(arg, Symbol) for arg in predicate.args)
         )
-
 
     def unify_builtin_substitution_equality(self, evaluated_predicate):
         if isinstance(evaluated_predicate.args[0], Symbol):
@@ -178,7 +170,6 @@ class DatalogChase():
                 evaluated_predicate.args[1]: evaluated_predicate.args[0]
             }
         return substitution
-
 
     def extract_rule_predicates(
         self, rule, instance, builtins, restriction_instance=None
@@ -218,11 +209,8 @@ class DatalogChase():
                 return ([], [], [])
 
         return (
-            restricted_predicates,
-            nonrestricted_predicates,
-            builtin_predicates
+            restricted_predicates, nonrestricted_predicates, builtin_predicates
         )
-
 
     def compute_result_set(
         self, rule, substitutions, instance, restriction_instance=None
@@ -234,8 +222,7 @@ class DatalogChase():
                 apply_substitution_arguments(
                     rule.consequent.args, substitution
                 )
-            )
-            for substitution in substitutions
+            ) for substitution in substitutions
         )
 
         if rule.consequent.functor in instance:
@@ -253,7 +240,6 @@ class DatalogChase():
             }
             return new_instance
 
-
     def merge_instances(self, *args):
         new_instance = args[0].copy()
 
@@ -263,22 +249,19 @@ class DatalogChase():
                     new_instance[k] = v
                 else:
                     new_set = new_instance[k]
-                    new_set = Constant[new_set.type](
-                        v.value | new_set.value
-                    )
+                    new_set = Constant[new_set.type](v.value | new_set.value)
                     new_instance[k] = new_set
 
         return new_instance
 
-
     ChaseNode = namedtuple('ChaseNode', 'instance children')
-
 
     def build_chase_tree(self, datalog_program, chase_set=chase_step):
         builtins = datalog_program.builtins()
         root = self.ChaseNode(datalog_program.extensional_database(), dict())
         rules = []
-        for expression_block in datalog_program.intensional_database().values():
+        for expression_block in datalog_program.intensional_database().values(
+        ):
             for rule in expression_block.expressions:
                 rules.append(rule)
 
@@ -293,7 +276,6 @@ class DatalogChase():
                     nodes_to_process.append(new_node)
         return root
 
-
     def build_nodes_from_rules(self, datalog_program, node, builtins, rule):
         instance_update = self.chase_step(
             datalog_program, node.instance, builtins, rule
@@ -305,5 +287,3 @@ class DatalogChase():
             return new_node
         else:
             return None
-
-

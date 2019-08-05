@@ -53,10 +53,8 @@ def test_stratified_and_chase():
                     G(x, z) & T(z, y)),
         Implication(ET(x, y),
                     V(x) & V(y) & ~(G(x, y)) & equals(x, y)),
-        Implication(
-            NT(x, y),
-            V(x) & V(y) & ~(G(x, y)) & ~(equals(x, y))
-        ),
+        Implication(NT(x, y),
+                    V(x) & V(y) & ~(G(x, y)) & ~(equals(x, y))),
     ))
 
     dl = Datalog()

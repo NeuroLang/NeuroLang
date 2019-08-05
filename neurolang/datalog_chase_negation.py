@@ -1,4 +1,3 @@
-from collections import namedtuple
 from itertools import chain
 from operator import invert
 
@@ -11,15 +10,19 @@ from .unification import (
 )
 from .datalog_chase import DatalogChase
 
+
 class DatalogChaseNegation(DatalogChase):
-
-
-    def chase_step(self, datalog, instance, builtins, rule, restriction_instance=None):
+    def chase_step(
+        self, datalog, instance, builtins, rule, restriction_instance=None
+    ):
         if restriction_instance is None:
             restriction_instance = set()
 
         rule_predicates = self.extract_rule_predicates(
-            rule, instance, builtins, restriction_instance=restriction_instance
+            rule,
+            instance,
+            builtins,
+            restriction_instance=restriction_instance
         )
 
         if all(len(predicate_list) == 0 for predicate_list in rule_predicates):
@@ -50,8 +53,9 @@ class DatalogChaseNegation(DatalogChase):
             rule, substitutions, instance, restriction_instance
         )
 
-
-    def obtain_negative_substitutions(self, negative_predicates, substitutions):
+    def obtain_negative_substitutions(
+        self, negative_predicates, substitutions
+    ):
         for predicate, representation in negative_predicates:
             new_substitutions = []
             for substitution in substitutions:
@@ -61,8 +65,9 @@ class DatalogChaseNegation(DatalogChase):
             substitutions = new_substitutions
         return substitutions
 
-
-    def unify_negative_substitution(self, predicate, substitution, representation):
+    def unify_negative_substitution(
+        self, predicate, substitution, representation
+    ):
         new_substitutions = []
         subs_args = apply_substitution_arguments(predicate.args, substitution)
 
@@ -80,8 +85,9 @@ class DatalogChaseNegation(DatalogChase):
             )
         return new_substitutions
 
-
-    def evaluate_negative_builtins(self, builtin_predicates, substitutions, datalog):
+    def evaluate_negative_builtins(
+        self, builtin_predicates, substitutions, datalog
+    ):
         for predicate, _ in builtin_predicates:
             functor = predicate.functor
             new_substitutions = []
@@ -92,13 +98,14 @@ class DatalogChaseNegation(DatalogChase):
             substitutions = new_substitutions
         return substitutions
 
-
     def unify_negative_builtin_substitution(
         self, predicate, substitution, datalog, functor
     ):
         subs_args = apply_substitution_arguments(predicate.args, substitution)
 
-        mgu_substituted = most_general_unifier_arguments(subs_args, predicate.args)
+        mgu_substituted = most_general_unifier_arguments(
+            subs_args, predicate.args
+        )
 
         if mgu_substituted is not None:
             predicate_res = datalog.walk(
@@ -109,9 +116,10 @@ class DatalogChaseNegation(DatalogChase):
                 isinstance(predicate_res, Constant[bool]) and
                 not predicate_res.value
             ):
-                return [compose_substitutions(substitution, mgu_substituted[0])]
+                return [
+                    compose_substitutions(substitution, mgu_substituted[0])
+                ]
         return []
-
 
     def extract_rule_predicates(
         self, rule, instance, builtins, restriction_instance=None
@@ -152,9 +160,10 @@ class DatalogChaseNegation(DatalogChase):
                     (predicate.args[0], builtins[predicate.args[0].functor])
                 )
             elif functor == invert:
-                negative_predicates.append(
-                    (predicate.args[0], instance[predicate.args[0].functor].value)
-                )
+                negative_predicates.append((
+                    predicate.args[0],
+                    instance[predicate.args[0].functor].value
+                ))
             else:
                 return ([], [], [], [])
 
@@ -172,4 +181,6 @@ class DatalogChaseNegation(DatalogChase):
             if symbol in instance_update and next(
                 iter(args.value)
             ) in instance_values:
-                raise NeuroLangException(f'There is a contradiction in your facts')
+                raise NeuroLangException(
+                    f'There is a contradiction in your facts'
+                )
