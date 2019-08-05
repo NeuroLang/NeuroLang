@@ -1,5 +1,5 @@
 from functools import lru_cache
-from itertools import product, chain
+from itertools import product
 
 import numpy as np
 from scipy.linalg import kron
@@ -43,6 +43,11 @@ inverse_directions = {
 }
 
 
+relations = [
+    v_before, v_overlaps, v_during, v_meets, v_starts, v_finishes, v_equals
+]
+
+
 def cardinal_relation(
     region,
     reference_region,
@@ -54,8 +59,8 @@ def cardinal_relation(
         return directions == 'O'
 
     if type(region) is Region and type(reference_region) is Region:
-        mat = direction_matrix([region.bounding_box],
-                               [reference_region.bounding_box])
+        mat = direction_matrix(region.bounding_box,
+                               reference_region.bounding_box)
         return is_in_direction(mat, directions)
 
     region, reference_region = cardinal_relation_prepare_regions(
@@ -65,8 +70,8 @@ def cardinal_relation(
     if region == reference_region:
         result = directions == 'O'
     else:
-        mat = direction_matrix([region.bounding_box],
-                               [reference_region.bounding_box])
+        mat = direction_matrix(region.bounding_box,
+                               reference_region.bounding_box)
         if not (refine_overlapping and 'O' in directions) and is_in_direction(
             mat, directions
         ):
@@ -119,29 +124,29 @@ def overlap_resolution(
         directions = None
 
     total_mat = direction_matrix(
-        [region_stack[0][0].box], [region_stack[0][1].box]
+        region_stack[0][0].box, region_stack[0][1].box
     ) * 0
-    overlap_indices = np.ix_(*is_in_direction_indices(total_mat.ndim, 'O'))
+    overlap_indices = is_in_direction_indices(total_mat.ndim, 'O')
     while region_stack:
-        region, reference_region, level = region_stack.pop(0)
+        region, reference_region, level = region_stack.pop()
 
-        mat = direction_matrix([region.box], [reference_region.box])
+        mat = direction_matrix(region.box, reference_region.box)
         total_mat += mat
 
         if (
             is_in_direction(mat, 'O') and
             (stop_at is None or level < stop_at - 1)
         ):
-            region_nl = tree_next_level(region)
-            ref_region_nl = tree_next_level(reference_region)
+            region_nl = region.children
+            ref_region_nl = reference_region.children
+            if len(region_nl) == 0 and len(ref_region_nl) > 0:
+                region_nl = (region,)
+            elif len(region_nl) > 0 and len(ref_region_nl) == 0:
+                ref_region_nl = (reference_region,)
 
             stack_update = [
                 (r, ref, level + 1)
-                for r, ref in chain(
-                    product(region_nl, ref_region_nl),
-                    product((region,), ref_region_nl),
-                    product(region_nl, (reference_region,))
-                )
+                for r, ref in product(region_nl, ref_region_nl)
             ]
 
             if len(stack_update) > 0:
@@ -156,53 +161,43 @@ def overlap_resolution(
     return total_mat.clip(0, 1)
 
 
-def tree_next_level(node):
-    result = []
-    if node.left is not None:
-        result.append(node.left)
-    if node.right is not None:
-        result.append(node.right)
-    return result
-
-
 @lru_cache(maxsize=128)
 def is_in_direction_indices(n, direction):
     indices = [[0, 1, 2]] * n
     for i in direction:
         for dim in directions_dim_space[i]:
             indices[n - 1 - dim] = matrix_positions_per_directions[i]
-    return indices
+    return np.ix_(*indices)
 
 
 def is_in_direction(matrix, direction):
     indices = is_in_direction_indices(matrix.ndim, direction)
-    return np.any(matrix[np.ix_(*indices)] == 1)
+    return np.any(matrix[indices] == 1)
 
 
 def relation_vectors(intervals, other_region_intervals):
-    obtained_vectors = []
-    relations = [
-        v_before, v_overlaps, v_during, v_meets, v_starts, v_finishes, v_equals
-    ]
+    obtained_vectors = np.empty(
+        (min(len(intervals), len(other_region_intervals)), 3)
+    )
+    ov = 0
     for interval, other_region_interval in zip(
         intervals, other_region_intervals
     ):
         for f in relations:
             vector = f(interval, other_region_interval)
             if vector is not None:
-                obtained_vectors.append(vector)
+                obtained_vectors[ov] = vector
+                ov += 1
                 break
-    return np.array(obtained_vectors)
+    return obtained_vectors[:ov]
 
 
-def direction_matrix(region_bbs, another_region_bbs):
-    res = np.zeros((3, ) * region_bbs[0].dim, dtype=int)
-    for bb in region_bbs:
-        for another_region_bb in another_region_bbs:
-            rp_vector = relation_vectors(bb.limits, another_region_bb.limits)
-            tensor = rp_vector[0].reshape(1, 3)
-            for i in range(1, len(rp_vector)):
-                tensor = kron(rp_vector[i].reshape((3, ) + (1, ) * i),
-                              tensor).squeeze()
-            res += tensor
-    return res.clip(0, 1)
+def direction_matrix(region_bb, another_region_bb):
+    rp_vector = relation_vectors(region_bb.limits, another_region_bb.limits)
+    tensor = rp_vector[0].reshape(1, 3)
+    for i in range(1, len(rp_vector)):
+        tensor = kron(
+            rp_vector[i].reshape((3, ) + (1, ) * i),
+            tensor
+        ).squeeze()
+    return tensor.clip(0, 1)
