@@ -4,7 +4,7 @@ surely very slow
 '''
 from typing import AbstractSet, Any, Tuple, Callable
 from itertools import product
-from operator import and_
+from operator import and_, or_, invert, xor
 
 from .utils import OrderedSet
 
@@ -195,9 +195,14 @@ class DatalogBasic(PatternWalker):
                 "All variables on the consequent need to be on the antecedent"
             )
 
-        if not is_conjunctive_expression(antecedent):
+        if not is_conjunctive_expression(consequent):
             raise NeuroLangException(
-                f'Expression {antecedent} is not conjunctive'
+               f'Expression {consequent} is not conjunctive'
+            )
+
+        if not is_conjunctive_expression_with_nested_predicates(antecedent):
+            raise NeuroLangException(
+               f'Expression {antecedent} is not conjunctive'
             )
 
     def intensional_database(self):
@@ -212,7 +217,8 @@ class DatalogBasic(PatternWalker):
     def extensional_database(self):
         ret = self.symbol_table.symbols_by_type(AbstractSet)
         for keyword in self.protected_keywords:
-            del ret[keyword]
+            if keyword in ret:
+                del ret[keyword]
         return ret
 
     def builtins(self):
@@ -439,6 +445,24 @@ def is_conjunctive_expression(expression):
         )
         for _, exp in expression_iterator(expression)
     )
+
+
+def is_conjunctive_expression_with_nested_predicates(expression):
+    stack = [expression]
+    while stack:
+        exp = stack.pop()
+        if isinstance(exp, FunctionApplication):
+            if isinstance(exp.functor, Constant):
+                if exp.functor is and_:
+                    stack += exp.args
+                    continue
+                elif exp.functor in (or_, invert, xor):
+                    return False
+            stack += [
+                arg for arg in exp.args
+                if isinstance(arg, FunctionApplication)
+            ]
+    return True
 
 
 class ExtractDatalogFreeVariablesWalker(PatternWalker):

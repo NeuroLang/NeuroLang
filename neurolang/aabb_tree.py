@@ -72,20 +72,51 @@ class Node(object):
                  regions=None):
         self.box = box
         self.parent = parent
-        self.left = left
-        self.right = right
+        self._left = left
+        self._right = right
         if regions is None:
             regions = set()
         self.regions = regions
         self.height = height
+        self._update_state()
+
+    @property
+    def left(self):
+        return self._left
+
+    @property
+    def right(self):
+        return self._right
+
+    @left.setter
+    def left(self, value):
+        self._left = value
+        self._update_state()
+
+    @right.setter
+    def right(self, value):
+        self._right = value
+        self._update_state()
 
     @property
     def is_leaf(self):
-        return self.left is None and self.right is None
+        return self._is_leaf
+
+    @property
+    def children(self):
+        return self._children
 
     def __repr__(self):
         return ('Node(regions={}, box={}, is_leaf={})'
                 .format(self.regions, self.box, self.is_leaf))
+
+    def _update_state(self):
+        self._is_leaf = self.left is None and self.right is None
+        self._children = []
+        if self.left is not None:
+            self._children.append(self.left)
+        if self.right is not None:
+            self._children.append(self.right)
 
 
 class Tree(object):
