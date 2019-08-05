@@ -60,8 +60,8 @@ def test_stratified_and_chase():
     dl = Datalog()
     dl.walk(program)
 
-    dc = DatalogChaseNegation()
-    solution_instance = dc.build_chase_solution(dl)
+    dc = DatalogChaseNegation(dl)
+    solution_instance = dc.build_chase_solution()
 
     final_instance = {
         G:
@@ -132,8 +132,8 @@ def test_negative_fact():
 
     dl = Datalog()
     dl.walk(program)
-    dc = DatalogChaseNegation()
+    dc = DatalogChaseNegation(dl)
     with pytest.raises(
         exceptions.NeuroLangException, match=r'There is a contradiction .*'
     ):
-        dc.build_chase_solution(dl)
+        dc.build_chase_solution()

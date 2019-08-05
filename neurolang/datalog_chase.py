@@ -12,47 +12,41 @@ from .unification import (
 
 
 class DatalogChase():
-    def build_chase_solution(self, datalog_program):
-        rules = []
+    def __init__(self, datalog_program):
+        self.datalog_program = datalog_program
+        self.rules = []
         for expression_block in datalog_program.intensional_database().values(
         ):
             for rule in expression_block.expressions:
-                rules.append(rule)
+                self.rules.append(rule)
 
+        self.builtins = datalog_program.builtins()
+
+    def build_chase_solution(self):
         instance = dict()
-        builtins = datalog_program.builtins()
-        instance_update = datalog_program.extensional_database()
-        self.check_constraints(datalog_program, instance_update)
+        instance_update = self.datalog_program.extensional_database()
+        self.check_constraints(instance_update)
         while len(instance_update) > 0:
             instance = self.merge_instances(instance, instance_update)
             instance_update = self.merge_instances(
                 *(
                     self.chase_step(
-                        datalog_program,
-                        instance,
-                        builtins,
-                        rule,
-                        restriction_instance=instance_update
-                    ) for rule in rules
+                        instance, rule, restriction_instance=instance_update
+                    ) for rule in self.rules
                 )
             )
 
         return instance
 
-    def check_constraints(self, datalog_program, instance_update):
+    def check_constraints(self, instance_update):
         pass
 
-    def chase_step(
-        self, datalog, instance, builtins, rule, restriction_instance=None
-    ):
+    def chase_step(self, instance, rule, restriction_instance=None):
         if restriction_instance is None:
             restriction_instance = dict()
 
         rule_predicates = self.extract_rule_predicates(
-            rule,
-            instance,
-            builtins,
-            restriction_instance=restriction_instance
+            rule, instance, restriction_instance=restriction_instance
         )
 
         if all(len(predicate_list) == 0 for predicate_list in rule_predicates):
@@ -68,25 +62,27 @@ class DatalogChase():
         substitutions = self.obtain_substitutions(rule_predicates_iterator)
 
         substitutions = self.evaluate_builtins(
-            builtin_predicates, substitutions, datalog
+            builtin_predicates, substitutions
         )
 
         return self.compute_result_set(
             rule, substitutions, instance, restriction_instance
         )
 
-    def obtain_substitutions(self, rule_predicates_iterator):
+    @staticmethod
+    def obtain_substitutions(rule_predicates_iterator):
         substitutions = [{}]
         for predicate, representation in rule_predicates_iterator:
             new_substitutions = []
             for substitution in substitutions:
-                new_substitutions += self.unify_substitution(
+                new_substitutions += DatalogChase.unify_substitution(
                     predicate, substitution, representation
                 )
             substitutions = new_substitutions
         return substitutions
 
-    def unify_substitution(self, predicate, substitution, representation):
+    @staticmethod
+    def unify_substitution(predicate, substitution, representation):
         new_substitutions = []
         subs_args = apply_substitution_arguments(predicate.args, substitution)
 
@@ -102,28 +98,26 @@ class DatalogChase():
                 )
         return new_substitutions
 
-    def evaluate_builtins(self, builtin_predicates, substitutions, datalog):
+    def evaluate_builtins(self, builtin_predicates, substitutions):
         new_substitutions = []
         predicates = [p for p, _ in builtin_predicates]
         for substitution in substitutions:
             new_substitution = self.evaluate_builtins_predicates(
-                predicates, substitution, datalog
+                predicates, substitution
             )
             if new_substitution is not None:
                 new_substitutions.append(new_substitution)
         return new_substitutions
 
     def evaluate_builtins_predicates(
-        self, predicates_to_evaluate, substitution, datalog
+        self, predicates_to_evaluate, substitution
     ):
         predicates_to_evaluate = predicates_to_evaluate.copy()
         unresolved_predicates = []
         while predicates_to_evaluate:
             predicate = predicates_to_evaluate.pop(0)
 
-            subs = self.unify_builtin_substitution(
-                predicate, substitution, datalog
-            )
+            subs = self.unify_builtin_substitution(predicate, substitution)
             if subs is None:
                 unresolved_predicates.append(predicate)
             else:
@@ -136,9 +130,9 @@ class DatalogChase():
         else:
             return None
 
-    def unify_builtin_substitution(self, predicate, substitution, datalog):
+    def unify_builtin_substitution(self, predicate, substitution):
         substituted_predicate = apply_substitution(predicate, substitution)
-        evaluated_predicate = datalog.walk(substituted_predicate)
+        evaluated_predicate = self.datalog_program.walk(substituted_predicate)
         if (
             isinstance(evaluated_predicate, Constant[bool]) and
             evaluated_predicate.value
@@ -151,7 +145,8 @@ class DatalogChase():
         else:
             return None
 
-    def is_equality_between_constant_and_symbol(self, predicate):
+    @staticmethod
+    def is_equality_between_constant_and_symbol(predicate):
         return (
             isinstance(predicate, FunctionApplication) and
             isinstance(predicate.functor, Constant) and
@@ -160,7 +155,8 @@ class DatalogChase():
             any(isinstance(arg, Symbol) for arg in predicate.args)
         )
 
-    def unify_builtin_substitution_equality(self, evaluated_predicate):
+    @staticmethod
+    def unify_builtin_substitution_equality(evaluated_predicate):
         if isinstance(evaluated_predicate.args[0], Symbol):
             substitution = {
                 evaluated_predicate.args[0]: evaluated_predicate.args[1]
@@ -172,7 +168,7 @@ class DatalogChase():
         return substitution
 
     def extract_rule_predicates(
-        self, rule, instance, builtins, restriction_instance=None
+        self, rule, instance, restriction_instance=None
     ):
         if restriction_instance is None:
             restriction_instance = dict()
@@ -201,8 +197,8 @@ class DatalogChase():
                 nonrestricted_predicates.append(
                     (predicate, instance[functor].value)
                 )
-            elif functor in builtins:
-                builtin_predicates.append((predicate, builtins[functor]))
+            elif functor in self.builtins:
+                builtin_predicates.append((predicate, self.builtins[functor]))
             elif isinstance(functor, Constant):
                 builtin_predicates.append((predicate, functor))
             else:
@@ -256,12 +252,13 @@ class DatalogChase():
 
     ChaseNode = namedtuple('ChaseNode', 'instance children')
 
-    def build_chase_tree(self, datalog_program, chase_set=chase_step):
-        builtins = datalog_program.builtins()
-        root = self.ChaseNode(datalog_program.extensional_database(), dict())
+    def build_chase_tree(self, chase_set=chase_step):
+        root = self.ChaseNode(
+            self.datalog_program.extensional_database(), dict()
+        )
         rules = []
-        for expression_block in datalog_program.intensional_database().values(
-        ):
+        for expression_block in self.datalog_program.intensional_database(
+        ).values():
             for rule in expression_block.expressions:
                 rules.append(rule)
 
@@ -269,17 +266,13 @@ class DatalogChase():
         while len(nodes_to_process) > 0:
             node = nodes_to_process.pop(0)
             for rule in rules:
-                new_node = self.build_nodes_from_rules(
-                    datalog_program, node, builtins, rule
-                )
+                new_node = self.build_nodes_from_rules(node, rule)
                 if new_node is not None:
                     nodes_to_process.append(new_node)
         return root
 
-    def build_nodes_from_rules(self, datalog_program, node, builtins, rule):
-        instance_update = self.chase_step(
-            datalog_program, node.instance, builtins, rule
-        )
+    def build_nodes_from_rules(self, node, rule):
+        instance_update = self.chase_step(node.instance, rule)
         if len(instance_update) > 0:
             new_instance = self.merge_instances(node.instance, instance_update)
             new_node = self.ChaseNode(new_instance, dict())

@@ -12,17 +12,12 @@ from .datalog_chase import DatalogChase
 
 
 class DatalogChaseNegation(DatalogChase):
-    def chase_step(
-        self, datalog, instance, builtins, rule, restriction_instance=None
-    ):
+    def chase_step(self, instance, rule, restriction_instance=None):
         if restriction_instance is None:
             restriction_instance = set()
 
         rule_predicates = self.extract_rule_predicates(
-            rule,
-            instance,
-            builtins,
-            restriction_instance=restriction_instance
+            rule, instance, restriction_instance=restriction_instance
         )
 
         if all(len(predicate_list) == 0 for predicate_list in rule_predicates):
@@ -42,32 +37,30 @@ class DatalogChaseNegation(DatalogChase):
         )
 
         substitutions = self.evaluate_builtins(
-            builtin_predicates, substitutions, datalog
+            builtin_predicates, substitutions
         )
 
         substitutions = self.evaluate_negative_builtins(
-            negative_builtin_predicates, substitutions, datalog
+            negative_builtin_predicates, substitutions
         )
 
         return self.compute_result_set(
             rule, substitutions, instance, restriction_instance
         )
 
-    def obtain_negative_substitutions(
-        self, negative_predicates, substitutions
-    ):
+    @staticmethod
+    def obtain_negative_substitutions(negative_predicates, substitutions):
         for predicate, representation in negative_predicates:
             new_substitutions = []
             for substitution in substitutions:
-                new_substitutions += self.unify_negative_substitution(
+                new_substitutions += DatalogChaseNegation.unify_negative_substitution(
                     predicate, substitution, representation
                 )
             substitutions = new_substitutions
         return substitutions
 
-    def unify_negative_substitution(
-        self, predicate, substitution, representation
-    ):
+    @staticmethod
+    def unify_negative_substitution(predicate, substitution, representation):
         new_substitutions = []
         subs_args = apply_substitution_arguments(predicate.args, substitution)
 
@@ -85,21 +78,19 @@ class DatalogChaseNegation(DatalogChase):
             )
         return new_substitutions
 
-    def evaluate_negative_builtins(
-        self, builtin_predicates, substitutions, datalog
-    ):
+    def evaluate_negative_builtins(self, builtin_predicates, substitutions):
         for predicate, _ in builtin_predicates:
             functor = predicate.functor
             new_substitutions = []
             for substitution in substitutions:
                 new_substitutions += self.unify_negative_builtin_substitution(
-                    predicate, substitution, datalog, functor
+                    predicate, substitution, functor
                 )
             substitutions = new_substitutions
         return substitutions
 
     def unify_negative_builtin_substitution(
-        self, predicate, substitution, datalog, functor
+        self, predicate, substitution, functor
     ):
         subs_args = apply_substitution_arguments(predicate.args, substitution)
 
@@ -108,7 +99,7 @@ class DatalogChaseNegation(DatalogChase):
         )
 
         if mgu_substituted is not None:
-            predicate_res = datalog.walk(
+            predicate_res = self.datalog_program.walk(
                 predicate.apply(functor, mgu_substituted[1])
             )
 
@@ -122,7 +113,7 @@ class DatalogChaseNegation(DatalogChase):
         return []
 
     def extract_rule_predicates(
-        self, rule, instance, builtins, restriction_instance=None
+        self, rule, instance, restriction_instance=None
     ):
         if restriction_instance is None:
             restriction_instance = set()
@@ -153,12 +144,13 @@ class DatalogChaseNegation(DatalogChase):
                 nonrestricted_predicates.append(
                     (predicate, instance[functor].value)
                 )
-            elif functor in builtins:
-                builtin_predicates.append((predicate, builtins[functor]))
-            elif functor == invert and predicate.args[0].functor in builtins:
-                negative_builtin_predicates.append(
-                    (predicate.args[0], builtins[predicate.args[0].functor])
-                )
+            elif functor in self.builtins:
+                builtin_predicates.append((predicate, self.builtins[functor]))
+            elif functor == invert and predicate.args[
+                0].functor in self.builtins:
+                negative_builtin_predicates.append((
+                    predicate.args[0], self.builtins[predicate.args[0].functor]
+                ))
             elif functor == invert:
                 negative_predicates.append((
                     predicate.args[0],
@@ -175,8 +167,8 @@ class DatalogChaseNegation(DatalogChase):
             negative_builtin_predicates,
         )
 
-    def check_constraints(self, datalog_program, instance_update):
-        for symbol, args in datalog_program.negated_symbols.items():
+    def check_constraints(self, instance_update):
+        for symbol, args in self.datalog_program.negated_symbols.items():
             instance_values = [x for x in instance_update[symbol].value]
             if symbol in instance_update and next(
                 iter(args.value)

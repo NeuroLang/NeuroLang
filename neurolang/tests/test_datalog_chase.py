@@ -41,15 +41,15 @@ def test_python_builtin_equaltiy_chase_step():
     instance_0 = dl.extensional_database()
 
     rule = datalog_program.expressions[-2]
-    dc = DatalogChase()
-    instance_update = dc.chase_step(dl, instance_0, dl.builtins(), rule)
+    dc = DatalogChase(dl)
+    instance_update = dc.chase_step(instance_0, rule)
     res = {
         S: C_({C_((3, )), C_((4, ))}),
     }
     assert instance_update == res
 
     rule = datalog_program.expressions[-1]
-    instance_update = dc.chase_step(dl, instance_0, dl.builtins(), rule)
+    instance_update = dc.chase_step(instance_0, rule)
     assert instance_update == res
 
 
@@ -75,20 +75,20 @@ def test_python_builtin_chase_step():
     instance_0 = dl.extensional_database()
 
     rule = datalog_program.expressions[-1]
-    dc = DatalogChase()
-    instance_update = dc.chase_step(dl, instance_0, dl.builtins(), rule)
+    dc = DatalogChase(dl)
+    instance_update = dc.chase_step(instance_0, rule)
     assert instance_update == {
         S: C_({C_((C_(8), C_(6)))}),
     }
 
     rule = datalog_program.expressions[-2]
-    instance_update = dc.chase_step(dl, instance_0, dl.builtins(), rule)
+    instance_update = dc.chase_step(instance_0, rule)
     assert instance_update == {
         T: C_({C_((C_(1), C_(3)))}),
     }
 
     instance_1 = dc.merge_instances(instance_0, instance_update)
-    instance_update = dc.chase_step(dl, instance_1, dl.builtins(), rule)
+    instance_update = dc.chase_step(instance_1, rule)
     assert len(instance_update) == 0
 
 
@@ -112,8 +112,8 @@ def test_python_nested_builtin_chase_step():
     instance_0 = dl.extensional_database()
 
     rule = datalog_program.expressions[-1]
-    dc = DatalogChase()
-    instance_update = dc.chase_step(dl, instance_0, dl.builtins(), rule)
+    dc = DatalogChase(dl)
+    instance_update = dc.chase_step(instance_0, rule)
     assert instance_update == {
         S: C_({C_((C_(8), C_(9)))}),
     }
@@ -141,20 +141,20 @@ def test_non_recursive_predicate_chase_step():
     instance_0 = dl.extensional_database()
 
     rule = datalog_program.expressions[-1]
-    dc = DatalogChase()
-    instance_update = dc.chase_step(dl, instance_0, dl.builtins(), rule)
+    dc = DatalogChase(dl)
+    instance_update = dc.chase_step(instance_0, rule)
     assert instance_update == {
         S: C_({C_((C_(8), C_(6)))}),
     }
 
     rule = datalog_program.expressions[-2]
-    instance_update = dc.chase_step(dl, instance_0, dl.builtins(), rule)
+    instance_update = dc.chase_step(instance_0, rule)
     assert instance_update == {
         T: C_({C_((C_(1), C_(3)))}),
     }
 
     instance_1 = dc.merge_instances(instance_0, instance_update)
-    instance_update = dc.chase_step(dl, instance_1, dl.builtins(), rule)
+    instance_update = dc.chase_step(instance_1, rule)
     assert len(instance_update) == 0
 
 
@@ -180,8 +180,8 @@ def test_python_multiple_builtins():
     instance_0 = dl.extensional_database()
 
     rule = datalog_program.expressions[-1]
-    dc = DatalogChase()
-    instance_update = dc.chase_step(dl, instance_0, dl.builtins(), rule)
+    dc = DatalogChase(dl)
+    instance_update = dc.chase_step(instance_0, rule)
     res = {
         S: C_({C_((3, )), C_((4, ))}),
     }
@@ -200,7 +200,8 @@ def test_python_multiple_builtins():
     instance_0 = dl.extensional_database()
 
     rule = datalog_program.expressions[-1]
-    instance_update = dc.chase_step(dl, instance_0, dl.builtins(), rule)
+    dc = DatalogChase(dl)
+    instance_update = dc.chase_step(instance_0, rule)
     res = {
         S: C_({C_((3, )), C_((4, ))}),
     }
@@ -224,8 +225,8 @@ def test_non_recursive_predicate_chase():
     dl = Datalog()
     dl.walk(datalog_program)
 
-    dc = DatalogChase()
-    res = dc.build_chase_tree(dl)
+    dc = DatalogChase(dl)
+    res = dc.build_chase_tree()
 
     instance_update = {T: C_({C_((C_(1), C_(3)))})}
 
@@ -254,8 +255,8 @@ def test_recursive_predicate_chase_tree():
     dl = Datalog()
     dl.walk(datalog_program)
 
-    dc = DatalogChase()
-    res = dc.build_chase_tree(dl)
+    dc = DatalogChase(dl)
+    res = dc.build_chase_tree()
 
     instance_update = {T: dl.extensional_database()[Q]}
 
@@ -299,8 +300,8 @@ def test_nonrecursive_predicate_chase_solution(N=10):
     dl = Datalog()
     dl.walk(datalog_program)
 
-    dc = DatalogChase()
-    solution_instance = dc.build_chase_solution(dl)
+    dc = DatalogChase(dl)
+    solution_instance = dc.build_chase_solution()
 
     final_instance = {
         Q: C_({C_((C_(i), C_(i + 1)))
@@ -328,8 +329,8 @@ def test_recursive_predicate_chase_solution():
     dl = Datalog()
     dl.walk(datalog_program)
 
-    dc = DatalogChase()
-    solution_instance = dc.build_chase_solution(dl)
+    dc = DatalogChase(dl)
+    solution_instance = dc.build_chase_solution()
 
     final_instance = {
         Q: C_({
