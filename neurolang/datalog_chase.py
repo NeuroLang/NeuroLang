@@ -23,7 +23,7 @@ class DatalogChase():
         self.builtins = datalog_program.builtins()
 
     def __call__(self):
-        self.build_chase_solution():
+        self.build_chase_solution()
 
     def build_chase_solution(self):
         instance = dict()
