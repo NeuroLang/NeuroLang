@@ -22,6 +22,9 @@ class DatalogChase():
 
         self.builtins = datalog_program.builtins()
 
+    def __call__(self):
+        self.build_chase_solution():
+
     def build_chase_solution(self):
         instance = dict()
         instance_update = self.datalog_program.extensional_database()
