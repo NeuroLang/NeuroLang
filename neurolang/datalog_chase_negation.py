@@ -56,7 +56,7 @@ class DatalogChaseNegation(DatalogChase):
                 new_substitutions += DatalogChaseNegation\
                     .unify_negative_substitution(
                         predicate, substitution, representation
-                )
+                    )
             substitutions = new_substitutions
         return substitutions
 
@@ -130,12 +130,7 @@ class DatalogChaseNegation(DatalogChase):
         for predicate in rule_predicates:
             functor = predicate.functor
 
-            if functor == head_functor:
-                recursive_calls += 1
-                if recursive_calls > 1:
-                    raise ValueError(
-                        'Non-linear rule {rule}, solver non supported'
-                    )
+            recursive_calls = self.check_non_linear(head_functor, functor, recursive_calls)
 
             if functor in restriction_instance:
                 restricted_predicates.append(
@@ -159,8 +154,10 @@ class DatalogChaseNegation(DatalogChase):
                     predicate.args[0],
                     instance[predicate.args[0].functor].value
                 ))
+            elif isinstance(functor, Constant):
+                builtin_predicates.append((predicate, functor))
             else:
-                return ([], [], [], [])
+                return ([], [], [], [], [])
 
         return (
             restricted_predicates,
@@ -169,6 +166,16 @@ class DatalogChaseNegation(DatalogChase):
             builtin_predicates,
             negative_builtin_predicates,
         )
+
+    def check_non_linear(self, head_functor, functor, recursive_calls):
+        if functor == head_functor:
+            recursive_calls += 1
+            if recursive_calls > 1:
+                raise ValueError(
+                    'Non-linear rule {rule}, solver non supported'
+                )
+        return recursive_calls
+
 
     def check_constraints(self, instance_update):
         for symbol, args in self.datalog_program.negated_symbols.items():
