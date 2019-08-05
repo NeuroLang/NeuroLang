@@ -4,11 +4,12 @@ from .. import expressions, exceptions
 from .. import solver_datalog_negation as sdn
 from .. import solver_datalog_extensional_db
 from .. import expression_walker as ew
-from .. import datalog_negation_chase as dc
 from ..solver_datalog_naive import (
     Implication,
     Fact,
 )
+
+from ..datalog_chase_negation import DatalogChaseNegation
 
 C_ = expressions.Constant
 S_ = expressions.Symbol
@@ -61,6 +62,7 @@ def test_stratified_and_chase():
     dl = Datalog()
     dl.walk(program)
 
+    dc = DatalogChaseNegation()
     solution_instance = dc.build_chase_solution(dl)
 
     final_instance = {
@@ -132,6 +134,7 @@ def test_negative_fact():
 
     dl = Datalog()
     dl.walk(program)
+    dc = DatalogChaseNegation()
     with pytest.raises(
         exceptions.NeuroLangException, match=r'There is a contradiction .*'
     ):
