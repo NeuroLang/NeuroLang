@@ -53,7 +53,7 @@ def test_coordinates():
 
 
 def _dir_matrix(region, other_region):
-    return direction_matrix([region.bounding_box], [other_region.bounding_box])
+    return direction_matrix(region.bounding_box, other_region.bounding_box)
 
 
 def test_regions_dir_matrix():
@@ -318,50 +318,6 @@ def test_points_contained_in_implicit_regions():
     points = [pr.project_point_to_plane(randpoint(1, 250)) for _ in range(30)]
     assert points in pr
     assert not (1, 1, 1) in pr
-
-
-def test_regions_with_multiple_bb_directionality():
-    r1 = Region((0, 0, 0), (6, 6, 1))
-    r2 = Region((6, 0, 0), (12, 6, 1))
-    assert is_in_direction(_dir_matrix(r1, r2), 'L')
-    r2 = Region((2, -3, 0), (5, 3, 1))
-    assert is_in_direction(_dir_matrix(r1, r2), 'LR')
-
-    region = ExplicitVBR(np.array([[0, 0, 0], [5, 5, 0]]), np.eye(4))
-    other_region = ExplicitVBR(np.array([[3, 0, 0]]), np.eye(4))
-    assert is_in_direction(_dir_matrix(other_region, region), 'O')
-    for r in ['L', 'R', 'P', 'A', 'I', 'S']:
-        assert not is_in_direction(_dir_matrix(other_region, region), r)
-
-    tree = Tree()
-    tree.add(region.bounding_box)
-    tree.add(AABB((0, 0, 0), (2.5, 5, 1)))
-    tree.add(AABB((2.5, 0, 0), (5, 5, 1)))
-    region_bbs = [tree.root.left.box, tree.root.right.box]
-    assert is_in_direction(
-        direction_matrix([other_region.bounding_box], region_bbs), 'O'
-    )
-
-    region_bbs = [
-      AABB((0, 0, 0), (2.5, 2.5, 1)),
-      AABB((0, 2.5, 0), (2.5, 5, 1)),
-      AABB((2.5, 2.5, 0), (5, 5, 1)),
-    ]
-
-    for region in region_bbs:
-        tree.add(region)
-
-    assert is_in_direction(
-        direction_matrix([other_region.bounding_box], region_bbs), 'P'
-    )
-    assert is_in_direction(
-        direction_matrix([other_region.bounding_box], region_bbs), 'R'
-    )
-
-    for r in ['L', 'A', 'I', 'S', 'O']:
-        assert not is_in_direction(
-            direction_matrix([other_region.bounding_box], region_bbs), r
-        )
 
 
 def test_refinement_of_not_overlapping():
