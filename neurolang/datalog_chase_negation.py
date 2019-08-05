@@ -54,8 +54,8 @@ class DatalogChaseNegation(DatalogChase):
             new_substitutions = []
             for substitution in substitutions:
                 new_substitutions += DatalogChaseNegation\
-                .unify_negative_substitution(
-                    predicate, substitution, representation
+                    .unify_negative_substitution(
+                        predicate, substitution, representation
                 )
             substitutions = new_substitutions
         return substitutions
