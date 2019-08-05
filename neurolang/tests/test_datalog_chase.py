@@ -225,7 +225,6 @@ def test_python_multiple_builtins():
     assert instance_update == res
 
 
-
 def test_non_recursive_predicate_chase():
     Q = S_('Q')
     T = S_('T')
