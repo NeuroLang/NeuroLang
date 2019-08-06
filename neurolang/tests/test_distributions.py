@@ -51,7 +51,7 @@ def test_conditional_table_distribution():
     observed_jellyfishes = {'chironex_fleckeri', 'moon_jelly'}
     condition = lambda value: value in observed_jellyfishes
     beach_jellyfish_dist = TableDistribution(beach_jellyfish_table)
-    beach_jellyfish_dist = beach_jellyfish_dist.given(condition)
+    beach_jellyfish_dist = beach_jellyfish_dist.conditioned_on(condition)
     beach_dangerosity = beach_jellyfish_dist.expectation(
         lambda v: jellyfish_dangerosity[v]
     )
