@@ -9,6 +9,7 @@ from ..probabilistic.graphical_model import (
     TableCPDGraphicalModelSolver, ConditionalProbabilityQuery, FactSet
 )
 from ..probabilistic.ppdl import DeltaTerm, is_gdatalog_rule
+from ..probabilistic.distributions import TableDistribution
 
 C_ = Constant
 S_ = Symbol
@@ -81,8 +82,7 @@ def test_delta_infer1():
     fact_b = Fact(P(b, p_b))
     rule = Implication(Q(x, DeltaTerm(bernoulli, (p, ))), P(x, p))
     result = delta_infer1(rule, frozenset({fact_a, fact_b}))
-    result_as_dict = result.value.table
-    expected_dist = {
+    expected_dist = TableDistribution({
         frozenset({Fact(Q(a, C_(0))), Fact(Q(b, C_(0)))}):
         (1 - p_a.value) * (1 - p_b.value),
         frozenset({Fact(Q(a, C_(1))), Fact(Q(b, C_(0)))}):
@@ -91,10 +91,8 @@ def test_delta_infer1():
         (1 - p_a.value) * p_b.value,
         frozenset({Fact(Q(a, C_(1))), Fact(Q(b, C_(1)))}):
         p_a.value * p_b.value,
-    }
-    for outcome, prob in expected_dist.items():
-        assert outcome in result_as_dict
-        assert np.allclose([prob], [result_as_dict[outcome]])
+    })
+    assert expected_dist == result.value
 
 
 def test_sort_rv():
@@ -158,29 +156,25 @@ def test_gm_solver():
     solver.walk(program_4)
     query = ConditionalProbabilityQuery(Constant[FactSet](set()))
     outcomes = solver.conditional_probability_query_resolution(query)
-    expected_outcomes = {
+    expected_dist = TableDistribution({
         frozenset({Fact(P(a)),
                    Fact(Q(a, C_(1))),
                    Fact(R(a, C_(1), C_(1)))}):
-        C_(0.2 * 0.9),
+        0.2 * 0.9,
         frozenset({Fact(P(a)),
                    Fact(Q(a, C_(1))),
                    Fact(R(a, C_(1), C_(0)))}):
-        C_(0.2 * 0.1),
+        0.2 * 0.1,
         frozenset({Fact(P(a)),
                    Fact(Q(a, C_(0))),
                    Fact(R(a, C_(0), C_(0)))}):
-        C_(0.8 * 0.1),
+        0.8 * 0.1,
         frozenset({Fact(P(a)),
                    Fact(Q(a, C_(0))),
                    Fact(R(a, C_(0), C_(1)))}):
-        C_(0.8 * 0.9),
-    }
-    for outcome, prob in expected_outcomes.items():
-        assert outcome in outcomes.value.table
-        assert np.allclose([prob.value], [outcomes.value.table[outcome]])
-
-    outcomes = TableCPDGraphicalModelSolver().walk(program_3)
+        0.8 * 0.9,
+    })
+    assert expected_dist == outcomes.value
 
 
 def test_conditional_probability_query_resolution():
@@ -189,7 +183,7 @@ def test_conditional_probability_query_resolution():
     evidence = Constant[FactSet](frozenset({Fact(Q(a, C_(0)))}))
     query = ConditionalProbabilityQuery(evidence)
     outcomes = solver.conditional_probability_query_resolution(query)
-    expected_outcomes = {
+    expected_dist = {
         frozenset({Fact(P(a)),
                    Fact(Q(a, C_(0))),
                    Fact(R(a, C_(0), C_(0)))}):
@@ -199,7 +193,7 @@ def test_conditional_probability_query_resolution():
                    Fact(R(a, C_(0), C_(1)))}):
         C_(0.9),
     }
-    for outcome, prob in expected_outcomes.items():
+    for outcome, prob in expected_dist.items():
         assert outcome in outcomes.value.table
         assert np.allclose([prob.value], [outcomes.value.table[outcome]])
 
@@ -211,13 +205,13 @@ def test_conditional_probability_query_resolution():
     )
     query = ConditionalProbabilityQuery(evidence)
     outcomes = solver.conditional_probability_query_resolution(query)
-    expected_outcomes = {
+    expected_dist = {
         frozenset({Fact(P(a)),
                    Fact(Q(a, C_(0))),
                    Fact(R(a, C_(0), C_(1)))}):
         C_(1.0),
     }
-    for outcome, prob in expected_outcomes.items():
+    for outcome, prob in expected_dist.items():
         assert outcome in outcomes.value.table
         assert np.allclose([prob.value], [outcomes.value.table[outcome]])
 
@@ -233,14 +227,10 @@ def test_conditional_probability_query_resolution_multiple_rules_same_pred():
     solver = TableCPDGraphicalModelSolver()
     solver.walk(program)
     outcomes = solver.conditional_probability_query_resolution(query)
-    expected_outcomes = {
-        frozenset({Fact(P(a)), Fact(Q(a, C_(0)))}):
-        C_(1.0 / 3.0),
+    expected_dist = TableDistribution({
+        frozenset({Fact(P(a)), Fact(Q(a, C_(0)))}): 1.0 / 3.0,
         frozenset({Fact(P(a)),
                    Fact(Q(a, C_(0))),
-                   Fact(Q(a, C_(1)))}):
-        C_(2.0 / 3.0),
-    }
-    for outcome, prob in expected_outcomes.items():
-        assert outcome in outcomes.value.table
-        assert np.allclose([prob.value], [outcomes.value.table[outcome]])
+                   Fact(Q(a, C_(1)))}): 2.0 / 3.0,
+    })
+    assert expected_dist == outcomes.value
