@@ -235,15 +235,8 @@ class TableCPDGraphicalModelSolver(ExpressionWalker):
     @add_match(ConditionalProbabilityQuery)
     def conditional_probability_query_resolution(self, query):
         outcomes = self.generate_possible_outcomes()
-        sum_prob = 0.
-        filtered = dict()
-        for outcome, prob in outcomes.value.table.items():
-            if query.evidence.value <= outcome:
-                sum_prob += prob
-                filtered[outcome] = prob
-        for outcome, prob in filtered.items():
-            filtered[outcome] = prob / sum_prob
-        return Constant[TableDistribution](TableDistribution(filtered))
+        matches_query = lambda outcome: query.evidence.value <= outcome
+        return Constant(outcomes.value.conditioned_on(matches_query))
 
     def generate_possible_outcomes(self):
         if self.graphical_model is None:
