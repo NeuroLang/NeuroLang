@@ -1,18 +1,21 @@
 import numpy as np
 
 from ..exceptions import NeuroLangException
-from ..expressions import Definition, Constant
 
 
-class Distribution(Definition):
-    def __init__(self, **parameters):
-        pass
+class InvalidProbabilityDistribution(NeuroLangException):
+    pass
 
+
+class Distribution:
     def probability(self, value):
         raise NeuroLangException('Not implemented for abstract class')
 
     @property
     def support(self):
+        raise NeuroLangException('Not implemented for abstract class')
+
+    def expectation(self, fun):
         raise NeuroLangException('Not implemented for abstract class')
 
 
@@ -21,15 +24,37 @@ class DiscreteDistribution(Distribution):
 
 
 class TableDistribution(DiscreteDistribution):
-    def __init__(self, table, **parameters):
-        super().__init__(**parameters)
-        if not np.isclose(sum(v.value for v in table.values()), 1.0):
-            raise NeuroLangException('Table probabilities do not sum to 1')
+    def __init__(self, table):
+        if not np.isclose(sum(v for v in table.values()), 1.0):
+            raise InvalidProbabilityDistribution(
+                'Table probabilities do not sum to 1'
+            )
         self.table = table
 
     def probability(self, value):
-        return self.table.get(value, Constant[float](0.))
+        return self.table.get(value, 0.0)
 
     @property
     def support(self):
         return frozenset(self.table.keys())
+
+    def expectation(self, fun):
+        return sum(fun(value) * prob for value, prob in self.table.items())
+
+    def given(self, condition):
+        new_table = {
+            value: prob
+            for value, prob in self.table.items()
+            if condition(value)
+        }
+        sum_prob = sum(prob for prob in new_table.values())
+        for value, prob in new_table.items():
+            new_table[value] = prob / sum_prob
+        return TableDistribution(new_table)
+
+    def __repr__(self):
+        return 'TableDistribution[\n{}\n]'.format(
+            '\n'.join([
+                f'{value}: {prob}' for value, prob in self.table.items()
+            ])
+        )
