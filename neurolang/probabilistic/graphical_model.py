@@ -16,6 +16,7 @@ from .ppdl import (
     DeltaTerm, get_antecedent_predicate_names, get_antecedent_literals,
     is_gdatalog_rule, get_dterm
 )
+from .distributions import TableDistribution
 
 
 def produce(rule, facts):
@@ -64,7 +65,8 @@ def substitute_dterm(datom, value):
     return FunctionApplication[datom.type](
         datom.functor,
         tuple(
-            value if isinstance(arg, DeltaTerm) else arg for arg in datom.args
+            Constant(value) if isinstance(arg, DeltaTerm) else arg
+            for arg in datom.args
         )
     )
 
@@ -78,10 +80,7 @@ def get_constant_dterm_table_cpd(dterm):
         raise NeuroLangException('Expected a constant Δ-term')
     if dterm.functor.name == Constant[str]('bernoulli'):
         p = dterm.args[0].value
-        return frozenset({
-            (Constant[int](1), Constant[float](p)),
-            (Constant[int](0), Constant[float](1.0 - p)),
-        })
+        return TableDistribution({1: p, 0: 1.0 - p})
 
 
 FactSet = AbstractSet[Fact]
@@ -195,22 +194,22 @@ def delta_infer1(rule, facts):
         if new is not None:
             inferred_facts.add(new)
     if is_gdatalog_rule(rule):
-        result = dict()
+        table = dict()
         for cpd_entries in itertools.product(
             *[
                 get_constant_dterm_table_cpd(get_dterm(dfact.consequent))
-                for dfact in inferred_facts
+                .table.items() for dfact in inferred_facts
             ]
         ):
-            new_facts = set(
+            new_facts = frozenset(
                 Fact(substitute_dterm(dfact.consequent, entry[0]))
                 for dfact, entry in zip(inferred_facts, cpd_entries)
             )
-            prob = np.prod([entry[1].value for entry in cpd_entries])
-            result[frozenset(new_facts)] = Constant[float](prob)
-        return result
+            prob = np.prod([entry[1] for entry in cpd_entries])
+            table[new_facts] = prob
     else:
-        return {frozenset(inferred_facts): Constant[float](1.0)}
+        table = {frozenset(inferred_facts): 1.0}
+    return Constant[TableDistribution](TableDistribution(table))
 
 
 class ConditionalProbabilityQuery(Definition):
@@ -238,13 +237,13 @@ class TableCPDGraphicalModelSolver(ExpressionWalker):
         outcomes = self.generate_possible_outcomes()
         sum_prob = 0.
         filtered = dict()
-        for outcome, prob in outcomes.items():
+        for outcome, prob in outcomes.value.table.items():
             if query.evidence.value <= outcome:
-                sum_prob += prob.value
+                sum_prob += prob
                 filtered[outcome] = prob
         for outcome, prob in filtered.items():
-            filtered[outcome] = Constant[float](prob.value / sum_prob)
-        return filtered
+            filtered[outcome] = prob / sum_prob
+        return Constant[TableDistribution](TableDistribution(filtered))
 
     def generate_possible_outcomes(self):
         if self.graphical_model is None:
@@ -252,10 +251,8 @@ class TableCPDGraphicalModelSolver(ExpressionWalker):
                 'No GraphicalModel generated. Try walking a program'
             )
         results = dict()
-        self.generate_possible_outcomes_aux(
-            0, dict(), Constant[float](1.0), results
-        )
-        return results
+        self.generate_possible_outcomes_aux(0, dict(), 1.0, results)
+        return Constant[TableDistribution](TableDistribution(results))
 
     def generate_possible_outcomes_aux(
         self, rv_idx, rv_values, result_prob, results
@@ -263,44 +260,45 @@ class TableCPDGraphicalModelSolver(ExpressionWalker):
         if rv_idx >= len(self.ordered_rvs):
             result = frozenset.union(*rv_values.values())
             if result in results:
-                old_prob = results[result].value
-                new_prob = old_prob + result_prob.value
-                results[result] = Constant[float](new_prob)
+                old_prob = results[result]
+                new_prob = old_prob + result_prob
+                results[result] = new_prob
             else:
                 results[result] = result_prob
         else:
             rv_symbol = self.ordered_rvs[rv_idx]
             cpd_functor = self.graphical_model.rv_to_cpd_functor[rv_symbol]
             parent_rvs = self.graphical_model.parents[rv_symbol]
-            parent_values = tuple(
-                Constant[FactSet](rv_values[rv]) for rv in parent_rvs
-            )
-            cpd = self.walk(cpd_functor(*parent_values)).value
-            for facts, prob in cpd.items():
+            parent_values = tuple(Constant(rv_values[rv]) for rv in parent_rvs)
+            cpd = self.walk(cpd_functor(*parent_values))
+            for facts, prob in cpd.value.table.items():
                 new_rv_values = rv_values.copy()
                 new_rv_values[rv_symbol] = facts
                 self.generate_possible_outcomes_aux(
-                    rv_idx + 1, new_rv_values,
-                    Constant[float](result_prob.value * prob.value), results
+                    rv_idx + 1, new_rv_values, result_prob * prob, results
                 )
 
     @add_match(FunctionApplication(ExtensionalTableCPDFunctor, ...))
     def extensional_table_cpd(self, expression):
-        return Constant[FactSetTableCPD]({
-            frozenset(expression.functor.facts):
-            Constant[float](1.0)
-        })
+        return Constant[TableDistribution](
+            TableDistribution({
+                frozenset(expression.functor.facts): 1.0
+            })
+        )
 
     @add_match(FunctionApplication(UnionFactSetTableCPDFunctor, ...))
     def union_table_cpd(self, expression):
         parent_facts = frozenset(
         ).union(*[arg.value for arg in expression.args])
-        return Constant[FactSetTableCPD]({parent_facts: Constant[float](1.0)})
+        return Constant[TableDistribution](
+            TableDistribution({
+                parent_facts: 1.0
+            })
+        )
 
     @add_match(FunctionApplication(IntensionalTableCPDFunctor, ...))
     def intensional_table_cpd(self, expression):
         parent_facts = frozenset(
         ).union(*[arg.value for arg in expression.args])
         rule = expression.functor.rule
-        result = Constant[FactSetTableCPD](delta_infer1(rule, parent_facts))
-        return result
+        return delta_infer1(rule, parent_facts)

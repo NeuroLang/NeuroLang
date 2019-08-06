@@ -81,7 +81,7 @@ def test_delta_infer1():
     fact_b = Fact(P(b, p_b))
     rule = Implication(Q(x, DeltaTerm(bernoulli, (p, ))), P(x, p))
     result = delta_infer1(rule, frozenset({fact_a, fact_b}))
-    result_as_dict = dict(result)
+    result_as_dict = result.value.table
     expected_dist = {
         frozenset({Fact(Q(a, C_(0))), Fact(Q(b, C_(0)))}):
         (1 - p_a.value) * (1 - p_b.value),
@@ -94,7 +94,7 @@ def test_delta_infer1():
     }
     for outcome, prob in expected_dist.items():
         assert outcome in result_as_dict
-        assert np.allclose([prob], [result_as_dict[outcome].value])
+        assert np.allclose([prob], [result_as_dict[outcome]])
 
 
 def test_sort_rv():
@@ -150,9 +150,9 @@ def test_gm_solver():
     solver.walk(program_1)
     query = ConditionalProbabilityQuery(Constant[FactSet](set()))
     outcomes = solver.conditional_probability_query_resolution(query)
-    assert len(outcomes) == 1
-    outcome = list(outcomes.items())[0]
-    assert outcome[1].value == 1.0
+    assert len(outcomes.value.table) == 1
+    outcome = list(outcomes.value.table.items())[0]
+    assert outcome[1] == 1.0
 
     solver = TableCPDGraphicalModelSolver()
     solver.walk(program_4)
@@ -177,8 +177,8 @@ def test_gm_solver():
         C_(0.8 * 0.9),
     }
     for outcome, prob in expected_outcomes.items():
-        assert outcome in outcomes
-        assert np.allclose([prob.value], [outcomes[outcome].value])
+        assert outcome in outcomes.value.table
+        assert np.allclose([prob.value], [outcomes.value.table[outcome]])
 
     outcomes = TableCPDGraphicalModelSolver().walk(program_3)
 
@@ -200,8 +200,8 @@ def test_conditional_probability_query_resolution():
         C_(0.9),
     }
     for outcome, prob in expected_outcomes.items():
-        assert outcome in outcomes
-        assert np.allclose([prob.value], [outcomes[outcome].value])
+        assert outcome in outcomes.value.table
+        assert np.allclose([prob.value], [outcomes.value.table[outcome]])
 
     evidence = Constant[FactSet](
         frozenset({
@@ -218,8 +218,8 @@ def test_conditional_probability_query_resolution():
         C_(1.0),
     }
     for outcome, prob in expected_outcomes.items():
-        assert outcome in outcomes
-        assert np.allclose([prob.value], [outcomes[outcome].value])
+        assert outcome in outcomes.value.table
+        assert np.allclose([prob.value], [outcomes.value.table[outcome]])
 
 
 def test_conditional_probability_query_resolution_multiple_rules_same_pred():
@@ -234,11 +234,13 @@ def test_conditional_probability_query_resolution_multiple_rules_same_pred():
     solver.walk(program)
     outcomes = solver.conditional_probability_query_resolution(query)
     expected_outcomes = {
-        frozenset({Fact(P(a)), Fact(Q(a, C_(0)))}): C_(1.0 / 3.0),
+        frozenset({Fact(P(a)), Fact(Q(a, C_(0)))}):
+        C_(1.0 / 3.0),
         frozenset({Fact(P(a)),
                    Fact(Q(a, C_(0))),
-                   Fact(Q(a, C_(1)))}): C_(2.0 / 3.0),
+                   Fact(Q(a, C_(1)))}):
+        C_(2.0 / 3.0),
     }
     for outcome, prob in expected_outcomes.items():
-        assert outcome in outcomes
-        assert np.allclose([prob.value], [outcomes[outcome].value])
+        assert outcome in outcomes.value.table
+        assert np.allclose([prob.value], [outcomes.value.table[outcome]])
