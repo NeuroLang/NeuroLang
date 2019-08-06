@@ -41,7 +41,11 @@ class TableDistribution(DiscreteDistribution):
     def expectation(self, fun):
         return sum(fun(value) * prob for value, prob in self.table.items())
 
-    def given(self, condition):
+    def conditioned_on(self, condition):
+        '''
+        Compute a new distribution for random variable Y(X) such that
+        P(Y(X)) = P(X | C(X) = True), where C is a condition function.
+        '''
         new_table = {
             value: prob
             for value, prob in self.table.items()
