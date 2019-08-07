@@ -197,12 +197,12 @@ class DatalogBasic(PatternWalker):
 
         if not is_conjunctive_expression(consequent):
             raise NeuroLangException(
-               f'Expression {consequent} is not conjunctive'
+                f'Expression {consequent} is not conjunctive'
             )
 
         if not is_conjunctive_expression_with_nested_predicates(antecedent):
             raise NeuroLangException(
-               f'Expression {antecedent} is not conjunctive'
+                f'Expression {antecedent} is not conjunctive'
             )
 
     def intensional_database(self):

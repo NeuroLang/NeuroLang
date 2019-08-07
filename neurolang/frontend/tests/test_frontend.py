@@ -239,7 +239,7 @@ def test_neurosynth_region(mock_ns_regions):
         ExplicitVBR(np.array([[1, 0, 0], [1, 1, 0]]), np.eye(4))
     }
     neurolang = frontend.RegionFrontend()
-    s = neurolang.load_neurosynth_term_region(
+    s = neurolang.load_neurosynth_term_regions(
         'gambling', 10, 'gambling_regions'
     )
     res = neurolang[s]
