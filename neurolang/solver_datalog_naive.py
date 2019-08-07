@@ -105,7 +105,7 @@ class DatalogBasic(PatternWalker):
 
         if isinstance(fact_set, ExpressionBlock):
             raise NeuroLangException(
-                f'{fact.functor.name} has been previously '
+                f'{fact.functor} has been previously '
                 'define as intensional predicate.'
             )
 
@@ -131,7 +131,7 @@ class DatalogBasic(PatternWalker):
         Constant[bool](True)
     ))
     def statement_extensional(self, expression):
-        return self.walk(Fact[expression.type](expression.consequent))
+        return self.walk(Fact(expression.consequent))
 
     @add_match(Implication(
         FunctionApplication[bool](Symbol, ...),
