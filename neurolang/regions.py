@@ -113,12 +113,13 @@ class ExplicitVBR(VolumetricBrainRegion):
         self.affine_inv = np.linalg.inv(self.affine)
         self.image_dim = image_dim
         self._aabb_tree = None
+        self._bounding_box = self.generate_bounding_box(self.voxels)
         if prebuild_tree:
             self.build_tree()
 
     @property
     def bounding_box(self):
-        return self.aabb_tree.root.box
+        return self._bounding_box
 
     @property
     def aabb_tree(self):
@@ -133,7 +134,7 @@ class ExplicitVBR(VolumetricBrainRegion):
         return aabb_from_vertices(voxels_xyz)
 
     def build_tree(self):
-        box = self.generate_bounding_box(self.voxels)
+        box = self._bounding_box
         tree = Tree()
         tree.add(box)
 
@@ -381,10 +382,15 @@ class SphericalVolume(ImplicitVBR):
                         int(max(bounds_voxels[:, i])))
                   for i in range(bb.dim)]
 
-        voxel_coordinates = np.array([point for point in
-                                      np.array(list(product(*ranges))) if
-                                      nib.affines.apply_affine(affine, point)
-                                      in self])
+        if all(r.start == r.stop for r in ranges):
+            voxel_coordinates = np.array([[r.start for r in ranges]])
+        else:
+            voxel_coordinates = np.array([
+                point for point in
+                np.array(list(product(*ranges))) if
+                nib.affines.apply_affine(affine, point) in self
+            ])
+
         return voxel_coordinates
 
     def __contains__(self, point):
