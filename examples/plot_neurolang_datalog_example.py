@@ -51,7 +51,7 @@ destrieux = nl.add_tuple_set(d, name='destrieux')
 def region_volume(region: fe.ExplicitVBR) -> float:
     volume = (
         len(region.voxels) *
-        float(np.abs(np.product(np.linalg.eigvals(region.affine[:-1, :-1]))))
+        float(np.product(np.abs(np.linalg.eigvals(region.affine[:-1, :-1]))))
     )
     return volume
 
