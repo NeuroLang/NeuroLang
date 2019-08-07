@@ -106,13 +106,6 @@ def cardinal_relation_prepare_regions(region, reference_region):
             region.affine, region.image_dim
         )
 
-    if not np.array_equiv(region.affine, reference_region.affine):
-        region = ExplicitVBR(
-            region.to_ijk(reference_region.affine),
-            affine_matrix=reference_region.affine,
-            image_dim=reference_region.image_dim
-        )
-
     return region, reference_region
 
 

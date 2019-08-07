@@ -150,7 +150,7 @@ class DatalogBasic(PatternWalker):
                 is_leq_informative(value.type, AbstractSet)
             ):
                 raise NeuroLangException(
-                    'f{consequent.functor} has been previously '
+                    f'{consequent.functor.name} has been previously '
                     'defined as Fact or extensional database.'
                 )
             eb = self.symbol_table[consequent.functor].expressions
@@ -174,7 +174,7 @@ class DatalogBasic(PatternWalker):
         return expression
 
     def _validate_implication_syntax(self, consequent, antecedent):
-        if consequent.functor.name in self.protected_keywords:
+        if consequent.functor in self.protected_keywords:
             raise NeuroLangException(
                 f'symbol {self.constant_set_name} is protected'
             )
@@ -197,12 +197,12 @@ class DatalogBasic(PatternWalker):
 
         if not is_conjunctive_expression(consequent):
             raise NeuroLangException(
-               f'Expression {consequent} is not conjunctive'
+                f'Expression {consequent} is not conjunctive'
             )
 
         if not is_conjunctive_expression_with_nested_predicates(antecedent):
             raise NeuroLangException(
-               f'Expression {antecedent} is not conjunctive'
+                f'Expression {antecedent} is not conjunctive'
             )
 
     def intensional_database(self):
@@ -223,6 +223,15 @@ class DatalogBasic(PatternWalker):
 
     def builtins(self):
         return self.symbol_table.symbols_by_type(Callable)
+
+    def add_extensional_predicate_from_tuples(
+        self, symbol, iterable, type_=Unknown
+    ):
+        constant = Constant(frozenset(iterable))
+        if type_ is not Unknown:
+            constant = constant.cast(AbstractSet[type_])
+        symbol = symbol.cast(constant.type)
+        self.symbol_table[symbol] = constant
 
 
 class SolverNonRecursiveDatalogNaive(DatalogBasic):

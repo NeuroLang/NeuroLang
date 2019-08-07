@@ -22,6 +22,28 @@ class Datalog(
         return x > y
 
 
+def test_builtin_equality_only():
+    Q = S_('Q')
+    x = S_('x')
+    eq = C_[Callable[[expressions.Unknown, expressions.Unknown], bool]](op.eq)
+
+    datalog_program = Eb_((
+        Imp_(Q(x), eq(x, C_(5) + C_(7))),
+    ))
+
+    dl = Datalog()
+    dl.walk(datalog_program)
+
+    instance_0 = dl.extensional_database()
+
+    rule = datalog_program.expressions[0]
+    instance_update = dc.chase_step(dl, instance_0, dl.builtins(), rule)
+    res = {
+        Q: C_({C_((12,))}),
+    }
+    assert instance_update == res
+
+
 def test_python_builtin_equaltiy_chase_step():
     Q = S_('Q')
     S = S_('S')
@@ -201,7 +223,6 @@ def test_python_multiple_builtins():
         S: C_({C_((3,)), C_((4,))}),
     }
     assert instance_update == res
-
 
 
 def test_non_recursive_predicate_chase():
