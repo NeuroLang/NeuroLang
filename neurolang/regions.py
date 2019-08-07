@@ -382,10 +382,15 @@ class SphericalVolume(ImplicitVBR):
                         int(max(bounds_voxels[:, i])))
                   for i in range(bb.dim)]
 
-        voxel_coordinates = np.array([point for point in
-                                      np.array(list(product(*ranges))) if
-                                      nib.affines.apply_affine(affine, point)
-                                      in self])
+        if all(r.start == r.stop for r in ranges):
+            voxel_coordinates = np.array([[r.start for r in ranges]])
+        else:
+            voxel_coordinates = np.array([
+                point for point in
+                np.array(list(product(*ranges))) if
+                nib.affines.apply_affine(affine, point) in self
+            ])
+
         return voxel_coordinates
 
     def __contains__(self, point):

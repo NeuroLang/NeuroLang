@@ -129,25 +129,85 @@ def test_query_new_predicate():
     assert next(iter(query_result.value)) == inferior_posterior
 
 
-def test_load_spherical_volume():
+def test_load_spherical_volume_first_order():
     neurolang = frontend.RegionFrontend()
 
     inferior = ExplicitVBR(np.array([[0, 0, 0], [1, 1, 1]]), np.eye(4))
 
     neurolang.add_region(inferior, name='inferior_region')
-    neurolang.sphere((0, 0, 0), 1, name='unit_sphere')
-
+    neurolang.sphere((0, 0, 0), .5, name='unit_sphere')
     assert (
-        neurolang.symbols['unit_sphere'].value == SphericalVolume((0, 0, 0), 1)
+        neurolang.symbols['unit_sphere'].value ==
+        SphericalVolume((0, 0, 0), .5)
     )
 
     x = neurolang.new_region_symbol(name='x')
-    query_result = neurolang.query(
+    query = neurolang.query(
         x, neurolang.symbols.overlapping(x, neurolang.symbols.unit_sphere)
-    ).do()
-
+    )
+    query_result = query.do()
     assert len(query_result.value) == 1
     assert next(iter(query_result.value)) == inferior
+
+    neurolang.make_implicit_regions_explicit(np.eye(4), (500, 500, 500))
+    query = neurolang.query(
+        x, neurolang.symbols.overlapping(x, neurolang.symbols.unit_sphere)
+    )
+    query_result = query.do()
+    sphere_constant = neurolang.symbols['unit_sphere'].value
+    assert (
+        isinstance(sphere_constant, ExplicitVBR) and
+        np.array_equal(sphere_constant.affine, np.eye(4)) and
+        sphere_constant.image_dim == (500, 500, 500) and
+        np.array_equal(sphere_constant.voxels, [[0, 0, 0]])
+    )
+    assert len(query_result.value) == 1
+    assert next(iter(query_result.value)) == inferior
+
+
+def test_load_spherical_volume_datalog():
+    neurolang = frontend.NeurolangDL()
+
+    inferior = ExplicitVBR(np.array([[0, 0, 0], [1, 1, 1]]), np.eye(4))
+
+    regions = neurolang.add_tuple_set(
+       {(inferior, 'inferior_region')}, name='regions'
+    )
+    neurolang.sphere((0, 0, 0), .5, name='unit_sphere')
+    assert (
+        neurolang.symbols['unit_sphere'].value ==
+        SphericalVolume((0, 0, 0), .5)
+    )
+
+    q = neurolang.new_symbol()
+    x = neurolang.new_region_symbol(name='x')
+    n = neurolang.new_region_symbol(name='n')
+    query = neurolang.query(
+        q(x),
+        neurolang.symbols.overlapping(x, neurolang.symbols.unit_sphere) &
+        regions(x, n)
+    )
+
+    assert len(query.value) == 1
+    assert next(iter(query.value))[0] == inferior
+
+    neurolang.make_implicit_regions_explicit(np.eye(4), (500, 500, 500))
+    query = neurolang.query(
+        q(x),
+        neurolang.symbols.overlapping(x, neurolang.symbols.unit_sphere) &
+        regions(x, n)
+    )
+
+    assert len(query.value) == 1
+    assert next(iter(query.value))[0] == inferior
+
+    sphere_constant = neurolang.symbols['unit_sphere'].value
+    assert (
+        isinstance(sphere_constant, ExplicitVBR) and
+        np.array_equal(sphere_constant.affine, np.eye(4)) and
+        sphere_constant.image_dim == (500, 500, 500) and
+        np.array_equal(sphere_constant.voxels, [[0, 0, 0]])
+    )
 
 
 def test_multiple_symbols_query():
