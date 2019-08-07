@@ -82,7 +82,7 @@ class ParametricTypeClassMeta(type):
             r += '[{}]'.format(c)
         return r
 
-    @lru_cache(maxsize=128) 
+    @lru_cache(maxsize=128)
     def __subclasscheck__(cls, other):
         if other is cls:
             return True

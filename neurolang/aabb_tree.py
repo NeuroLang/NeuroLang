@@ -114,14 +114,16 @@ class Node(object):
                 .format(self.regions, self.box, self.is_leaf))
 
     def _update_state(self):
-        if self._needs_update:
-            self._is_leaf = self.left is None and self.right is None
-            self._children = []
-            if self.left is not None:
-                self._children.append(self.left)
-            if self.right is not None:
-                self._children.append(self.right)
-            self._needs_update = False
+        if not self._needs_update:
+            return
+
+        self._is_leaf = self.left is None and self.right is None
+        self._children = []
+        if self.left is not None:
+            self._children.append(self.left)
+        if self.right is not None:
+            self._children.append(self.right)
+        self._needs_update = False
 
 
 class Tree(object):

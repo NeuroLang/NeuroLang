@@ -169,15 +169,8 @@ class Operation(Expression):
     def __repr_arguments(self, op_repr):
         arguments_repr = []
         for a in self.arguments:
-            if isinstance(a, Operation):
-                arguments_repr.append(
-                    '( {} )'.format(repr(a))
-                )
-            elif isinstance(a, Symbol):
-                arguments_repr.append(a.symbol_name)
-            else:
-                arguments_repr.append(repr(a))
-
+            arg_repr = self.__repr_arguments_arg(a)
+            arguments_repr.append(arg_repr)
         if self.infix:
             return ' {} '.format(op_repr).join(arguments_repr)
         else:
@@ -185,6 +178,15 @@ class Operation(Expression):
                 op_repr,
                 ', '.join(arguments_repr)
             )
+
+    def __repr_arguments_arg(self, a):
+        if isinstance(a, Operation):
+            arg_repr = '( {} )'.format(repr(a))
+        elif isinstance(a, Symbol):
+            arg_repr = a.symbol_name
+        else:
+            arg_repr = repr(a)
+        return arg_repr
 
 
 class Symbol(Expression):
