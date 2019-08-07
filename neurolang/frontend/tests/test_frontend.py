@@ -141,21 +141,13 @@ def test_load_spherical_volume():
         neurolang.symbols['unit_sphere'].value == SphericalVolume((0, 0, 0), 1)
     )
 
-    def inferior_overlaps_unit_sphere():
-        x = neurolang.new_region_symbol(name='x')
-        query_result = neurolang.query(
-            x, neurolang.symbols.overlapping(x, neurolang.symbols.unit_sphere)
-        ).do()
+    x = neurolang.new_region_symbol(name='x')
+    query_result = neurolang.query(
+        x, neurolang.symbols.overlapping(x, neurolang.symbols.unit_sphere)
+    ).do()
 
-        assert len(query_result.value) == 1
-        assert next(iter(query_result.value)) == inferior
-
-    inferior_overlaps_unit_sphere()
-
-    neurolang.make_implicit_regions_explicit(np.eye(4), (5, ) * 3)
-    assert isinstance(neurolang.symbols.unit_sphere.value, ExplicitVBR)
-
-    inferior_overlaps_unit_sphere()
+    assert len(query_result.value) == 1
+    assert next(iter(query_result.value)) == inferior
 
 
 def test_multiple_symbols_query():

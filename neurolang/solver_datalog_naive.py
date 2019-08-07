@@ -224,6 +224,15 @@ class DatalogBasic(PatternWalker):
     def builtins(self):
         return self.symbol_table.symbols_by_type(Callable)
 
+    def add_extensional_predicate_from_tuples(
+        self, symbol, iterable, type_=Unknown
+    ):
+        constant = Constant(frozenset(iterable))
+        if type_ is not Unknown:
+            constant = constant.cast(AbstractSet[type_])
+        symbol = symbol.cast(constant.type)
+        self.symbol_table[symbol] = constant
+
 
 class SolverNonRecursiveDatalogNaive(DatalogBasic):
     '''

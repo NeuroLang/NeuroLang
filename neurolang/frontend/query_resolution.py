@@ -90,16 +90,16 @@ class QueryBuilderBase(object):
 
         return Symbol(self, name)
 
-    def add_tuple_set(self, iterable, types=Unknown, name=None):
-        if not isinstance(types, tuple) or len(types) == 1:
-            if isinstance(types, tuple) and len(types) == 1:
-                types = types[0]
+    def add_tuple_set(self, iterable, type_=Unknown, name=None):
+        if not isinstance(type_, tuple) or len(type_) == 1:
+            if isinstance(type_, tuple) and len(type_) == 1:
+                type_ = type_[0]
                 iterable = (e[0] for e in iterable)
 
-            set_type = AbstractSet[types]
+            set_type = AbstractSet[type_]
         else:
-            types = tuple(types)
-            set_type = AbstractSet[Tuple[types]]
+            type_ = tuple(type_)
+            set_type = AbstractSet[Tuple[type_]]
 
         constant = self._add_tuple_set_elements(iterable, set_type)
         if name is None:
@@ -169,7 +169,7 @@ class RegionMixin(object):
         return self.add_symbol(region, name)
 
     def add_region_set(self, region_set, name=None):
-        return self.add_tuple_set(region_set, name=name, types=Region)
+        return self.add_tuple_set(region_set, name=name, type_=Region)
 
     @staticmethod
     def create_region(spatial_image, label=1, prebuild_tree=False):
@@ -211,7 +211,7 @@ class RegionMixin(object):
 
 
 class NeuroSynthMixin(object):
-    def load_neurosynth_term_region(
+    def load_neurosynth_term_regions(
         self, term: str, n_components=None, name=None
     ):
         if not hasattr(self, 'neurosynth_db'):
@@ -226,7 +226,7 @@ class NeuroSynthMixin(object):
         region_set = ((t,) for t in region_set)
         return self.add_tuple_set(
             region_set,
-            types=Tuple[ExplicitVBR],
+            type_=Tuple[ExplicitVBR],
             name=name
         )
 
@@ -345,20 +345,14 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         self.symbol_table.clear()
         self.current_program = []
 
-    def add_tuple_set(self, iterable, types=Unknown, name=None):
-        if (
-            isinstance(iterable, Expression) and
-            is_leq_informative(iterable.type, AbstractSet[Tuple])
-        ):
-            constant = iterable.expression
-        else:
-            constant = nl.Constant(frozenset(iterable))
-
+    def add_tuple_set(self, iterable, type_=Unknown, name=None):
         if name is None:
             name = str(uuid1())
 
-        symbol = nl.Symbol[constant.type](name)
-        self.symbol_table[symbol] = constant
+        symbol = nl.Symbol[type_](name)
+        self.solver.add_extensional_predicate_from_tuples(
+            symbol, iterable, type_=type_
+        )
 
         return Symbol(self, name)
 

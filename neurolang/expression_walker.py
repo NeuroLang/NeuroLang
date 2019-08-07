@@ -325,6 +325,15 @@ class SymbolTableEvaluator(ExpressionWalker):
         else:
             return self.walk(Statement[statement.type](statement.lhs, rhs))
 
+    def push_scope(self):
+        self.symbol_table = self.symbol_table.create_scope()
+
+    def pop_scope(self):
+        es = self.symbol_table.enclosing_scope
+        if es is None:
+            raise NeuroLangException('No enclosing scope')
+        self.symbol_table = self.symbol_table.enclosing_scope
+
 
 class ExpressionBasicEvaluator(SymbolTableEvaluator):
     @add_match(Projection(Constant(...), Constant(...)))
