@@ -8,7 +8,9 @@ from .. import solver_datalog_naive as sdb
 from ..datalog_chase import build_chase_solution
 from ..expressions import is_leq_informative, Unknown
 from ..region_solver import Region
-from ..regions import ExplicitVBR, take_principal_regions
+from ..regions import (
+   ExplicitVBR, take_principal_regions, SphericalVolume, ImplicitVBR
+)
 from .neurosynth_utils import NeuroSynthHandler
 from .query_resolution_expressions import (All, Exists, Expression, Fact,
                                            Implication, Query, Symbol)
@@ -208,6 +210,20 @@ class RegionMixin(object):
         atlas_symbol = nl.Symbol[atlas_set.type](name)
         self.symbol_table[atlas_symbol] = atlas_set
         return self[atlas_symbol]
+
+    def sphere(self, center, radius, name=None):
+        sr = SphericalVolume(center, radius)
+        symbol = self.add_region(sr, name)
+        return symbol
+
+    def make_implicit_regions_explicit(self, affine, dim):
+        for region_symbol_name in self.region_names:
+            region_symbol = self.get_symbol(region_symbol_name)
+            region = region_symbol.value
+            if isinstance(region, ImplicitVBR):
+                self.add_region(
+                    region.to_explicit_vbr(affine, dim), region_symbol_name
+                )
 
 
 class NeuroSynthMixin(object):
