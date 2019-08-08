@@ -119,9 +119,13 @@ def execute_joins(new_representations, join_columns_predicates):
         substitution = {}
         for var, joins in join_columns_predicates.items():
             p, i = joins[0]
-            value = tuples[p].value[i]
-            if all(tuples[p].value[i].value == value.value for p, i in joins[1:]):
-                substitution[var] = value
+            constant = tuples[p].value[i]
+            value = constant.value
+            if all(
+                tuples[p].value[i].value == value
+                for p, i in joins[1:]
+            ):
+                substitution[var] = constant
             else:
                 break
         else:
