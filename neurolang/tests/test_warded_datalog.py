@@ -6,7 +6,6 @@ from .. import solver_datalog_extensional_db
 from .. import expression_walker as ew
 from ..solver_datalog_naive import (Implication, Fact)
 from ..existential_datalog import ExistentialDatalog
-from ..datalog_chase_warded import DatalogChaseWarded
 from ..warded_datalog import (WardedDatalog, NeuroLangDataLogNonWarded)
 
 
