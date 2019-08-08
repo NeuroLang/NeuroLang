@@ -1,6 +1,6 @@
 from .expressions import (
     Symbol, Constant, ExpressionBlock,
-    FunctionApplication,
+    FunctionApplication, ExistentialPredicate
 )
 from .expression_walker import (
     PatternWalker, add_match, expression_iterator
@@ -53,13 +53,18 @@ class WardedDatalog(PatternWalker):
 
     @add_match(Fact)
     def warded_fact(self, expression):
-        pass
+        return set()
         #symbols = set()
         #for arg in expression.fact.args:
         #    symbol = self.walk(arg)
         #    symbols = symbols.union(symbol)
 
         #return symbols
+
+    @add_match(Implication(ExistentialPredicate, ...))
+    def warded_existencial(self, expression):
+        new_implication = Implication(expression.consequent.body, expression.antecedent)
+        self.walk(new_implication)
 
 
     @add_match(Implication)
@@ -119,6 +124,12 @@ class CheckDangerousVariables(PatternWalker):
     @add_match(Fact)
     def check_dangerous_fact(self, expression):
         pass
+
+
+    @add_match(Implication(ExistentialPredicate, ...))
+    def warded_existencial(self, expression):
+        new_implication = Implication(expression.consequent.body, expression.antecedent)
+        self.walk(new_implication)
 
 
     @add_match(Implication)
