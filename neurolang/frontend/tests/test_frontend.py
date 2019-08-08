@@ -1,3 +1,4 @@
+import pytest
 import numpy as np
 from neurolang import frontend
 from typing import AbstractSet, Tuple
@@ -128,7 +129,7 @@ def test_query_new_predicate():
     assert len(query_result.value) == 1
     assert next(iter(query_result.value)) == inferior_posterior
 
-
+@pytest.mark.skip()
 def test_load_spherical_volume_first_order():
     neurolang = frontend.RegionFrontend()
 
