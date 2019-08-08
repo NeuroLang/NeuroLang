@@ -7,15 +7,10 @@ from .. import expression_walker as ew
 from ..solver_datalog_naive import (Implication, Fact)
 from ..existential_datalog import ExistentialDatalog
 from ..datalog_chase_warded import DatalogChaseWarded
-from ..warded_datalog import (
-    WardedDatalog, NeuroLangDataLogNonWarded
-)
+from ..warded_datalog import (WardedDatalog, NeuroLangDataLogNonWarded)
 
 
-class Datalog(
-    ExistentialDatalog,
-    ew.ExpressionBasicEvaluator
-):
+class Datalog(ExistentialDatalog, ew.ExpressionBasicEvaluator):
     def function_gt(self, x: int, y: int) -> bool:
         return x > y
 
@@ -59,6 +54,7 @@ def test_warded_walker():
 
     assert warded == True
 
+
 def test_variables_outside_ward():
     P = S_('P')
     Q = S_('Q')
@@ -75,8 +71,7 @@ def test_variables_outside_ward():
 
     wd = WardedDatalog()
     with pytest.raises(
-        NeuroLangDataLogNonWarded,
-        match=r".*outside the ward.*"
+        NeuroLangDataLogNonWarded, match=r".*outside the ward.*"
     ):
         wd.walk(datalog_program)
 
@@ -100,10 +95,10 @@ def test_more_one_atom():
 
     wd = WardedDatalog()
     with pytest.raises(
-        NeuroLangDataLogNonWarded,
-        match=r".*that appear in more than one atom.*"
+        NeuroLangDataLogNonWarded, match=r".*that appear in more than.*"
     ):
         wd.walk(datalog_program)
+
 
 def test_warded_chase():
     hsbc = C_('HSBC')
