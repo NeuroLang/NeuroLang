@@ -6,7 +6,7 @@ from .. import solver_datalog_extensional_db
 from .. import expression_walker as ew
 from ..solver_datalog_naive import (Implication, Fact)
 from ..existential_datalog import ExistentialDatalog
-from ..warded_datalog import (WardedDatalog, NeuroLangDataLogNonWarded)
+from ..warded_datalog import (CheckWardedDatalog, NeuroLangNonWardedException)
 
 
 class Datalog(ExistentialDatalog, ew.ExpressionBasicEvaluator):
@@ -37,7 +37,7 @@ def test_warded_walker():
                     Q(x, z) & P(x)),
     ))
 
-    wd = WardedDatalog()
+    wd = CheckWardedDatalog()
     warded = wd.walk(datalog_program)
 
     assert warded == True
@@ -48,7 +48,7 @@ def test_warded_walker():
                     Q(x, y) & P(y)),
     ))
 
-    wd = WardedDatalog()
+    wd = CheckWardedDatalog()
     warded = wd.walk(datalog_program)
 
     assert warded == True
@@ -68,9 +68,9 @@ def test_variables_outside_ward():
                     Q(x, y) & P(x)),
     ))
 
-    wd = WardedDatalog()
+    wd = CheckWardedDatalog()
     with pytest.raises(
-        NeuroLangDataLogNonWarded, match=r".*outside the ward.*"
+        NeuroLangNonWardedException, match=r".*outside the ward.*"
     ):
         wd.walk(datalog_program)
 
@@ -92,9 +92,9 @@ def test_more_one_atom():
                     Q(x, y) & P(y) & R(x, z) & S(z)),
     ))
 
-    wd = WardedDatalog()
+    wd = CheckWardedDatalog()
     with pytest.raises(
-        NeuroLangDataLogNonWarded, match=r".*that appear in more than.*"
+        NeuroLangNonWardedException, match=r".*that appear in more than.*"
     ):
         wd.walk(datalog_program)
 
@@ -136,7 +136,7 @@ def test_warded_chase():
         Implication(company(x), _company(x)),
     ))
 
-    wd = WardedDatalog()
+    wd = CheckWardedDatalog()
     warded = wd.walk(datalog_program)
 
     dl = Datalog()

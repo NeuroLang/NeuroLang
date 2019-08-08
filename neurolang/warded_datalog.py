@@ -8,11 +8,11 @@ from .solver_datalog_naive import (Implication, Fact)
 from .exceptions import NeuroLangException
 
 
-class NeuroLangDataLogNonWarded(NeuroLangException):
+class NeuroLangNonWardedException(NeuroLangException):
     pass
 
 
-class WardedDatalog(PatternWalker):
+class CheckWardedDatalog(PatternWalker):
     def __init__(self):
         self.can_be_dangerous = dict({})
 
@@ -49,7 +49,7 @@ class WardedDatalog(PatternWalker):
         return set()
 
     @add_match(Implication(ExistentialPredicate, ...))
-    def warded_existencial(self, expression):
+    def warded_existential(self, expression):
         new_implication = Implication(
             expression.consequent.body, expression.antecedent
         )
@@ -109,7 +109,7 @@ class CheckDangerousVariables(PatternWalker):
         pass
 
     @add_match(Implication(ExistentialPredicate, ...))
-    def warded_existencial(self, expression):
+    def warded_existential(self, expression):
         new_implication = Implication(
             expression.consequent.body, expression.antecedent
         )
@@ -133,7 +133,7 @@ class CheckDangerousVariables(PatternWalker):
                 dangerous_var, expression.antecedent
             )
             if not single_body:
-                raise NeuroLangDataLogNonWarded(
+                raise NeuroLangNonWardedException(
                     f'The program is not warded: \
                         there are dangerous variables \
                             outside the ward in {expression.antecedent}'
@@ -146,7 +146,7 @@ class CheckDangerousVariables(PatternWalker):
                 dangerous.add(key)
 
         if len(dangerous) > 1:
-            raise NeuroLangDataLogNonWarded(
+            raise NeuroLangNonWardedException(
                 f'The program is not warded: \
                     there are dangerous variables \
                         that appear in more than \
