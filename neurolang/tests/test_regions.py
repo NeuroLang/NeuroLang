@@ -4,7 +4,7 @@ from numpy import random
 
 import nibabel as nib
 
-from ..aabb_tree import AABB, Tree
+from ..aabb_tree import AABB
 from ..CD_relations import (
     cardinal_relation, direction_matrix, is_in_direction,
     cardinal_relation_prepare_regions
@@ -53,7 +53,7 @@ def test_coordinates():
 
 
 def _dir_matrix(region, other_region):
-    return direction_matrix([region.bounding_box], [other_region.bounding_box])
+    return direction_matrix(region.bounding_box, other_region.bounding_box)
 
 
 def test_regions_dir_matrix():
@@ -320,56 +320,15 @@ def test_points_contained_in_implicit_regions():
     assert not (1, 1, 1) in pr
 
 
-def test_regions_with_multiple_bb_directionality():
-    r1 = Region((0, 0, 0), (6, 6, 1))
-    r2 = Region((6, 0, 0), (12, 6, 1))
-    assert is_in_direction(_dir_matrix(r1, r2), 'L')
-    r2 = Region((2, -3, 0), (5, 3, 1))
-    assert is_in_direction(_dir_matrix(r1, r2), 'LR')
-
-    region = ExplicitVBR(np.array([[0, 0, 0], [5, 5, 0]]), np.eye(4))
-    other_region = ExplicitVBR(np.array([[3, 0, 0]]), np.eye(4))
-    assert is_in_direction(_dir_matrix(other_region, region), 'O')
-    for r in ['L', 'R', 'P', 'A', 'I', 'S']:
-        assert not is_in_direction(_dir_matrix(other_region, region), r)
-
-    tree = Tree()
-    tree.add(region.bounding_box)
-    tree.add(AABB((0, 0, 0), (2.5, 5, 1)))
-    tree.add(AABB((2.5, 0, 0), (5, 5, 1)))
-    region_bbs = [tree.root.left.box, tree.root.right.box]
-    assert is_in_direction(
-        direction_matrix([other_region.bounding_box], region_bbs), 'O'
-    )
-
-    region_bbs = [
-      AABB((0, 0, 0), (2.5, 2.5, 1)),
-      AABB((0, 2.5, 0), (2.5, 5, 1)),
-      AABB((2.5, 2.5, 0), (5, 5, 1)),
-    ]
-
-    for region in region_bbs:
-        tree.add(region)
-
-    assert is_in_direction(
-        direction_matrix([other_region.bounding_box], region_bbs), 'P'
-    )
-    assert is_in_direction(
-        direction_matrix([other_region.bounding_box], region_bbs), 'R'
-    )
-
-    for r in ['L', 'A', 'I', 'S', 'O']:
-        assert not is_in_direction(
-            direction_matrix([other_region.bounding_box], region_bbs), r
-        )
-
-
 def test_refinement_of_not_overlapping():
 
     triangle = ExplicitVBR(
         np.array([[0, 0, 0], [6, 0, 0], [6, 6, 1]]), np.eye(4)
     )
     other_region = ExplicitVBR(np.array([[0, 6, 0]]), np.eye(4))
+
+    assert not cardinal_relation(triangle, triangle, 'O')
+
     assert cardinal_relation(
         other_region, triangle, 'O', refine_overlapping=False
     )
@@ -380,6 +339,11 @@ def test_refinement_of_not_overlapping():
     assert not cardinal_relation(
         other_region, triangle, 'O', refine_overlapping=True
     )
+
+    assert not cardinal_relation(
+        triangle, other_region, 'O', refine_overlapping=True
+    )
+
     for r in ['L', 'A']:
         assert cardinal_relation(
             other_region, triangle, r, refine_overlapping=True
@@ -499,6 +463,5 @@ def test_cardinal_relation_prepare_regions():
     assert r1 is not sphere_1_evbr and r2 == r1
 
     r1, r2 = cardinal_relation_prepare_regions(sphere_1_evbr, sphere_2_evbr)
-    assert r1 is not sphere_1_evbr
+    assert r1 is sphere_1_evbr
     assert r2 is sphere_2_evbr
-    assert np.allclose(r1.affine, r2.affine)
