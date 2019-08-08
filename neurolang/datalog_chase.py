@@ -1,5 +1,5 @@
-from collections import namedtuple
-from itertools import chain
+from collections import namedtuple, OrderedDict
+from itertools import chain, product
 from operator import eq
 from typing import AbstractSet
 
@@ -43,7 +43,7 @@ def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
     )
 
 
-def obtain_substitutions(rule_predicates_iterator):
+def obtain_substitutions_mgu(rule_predicates_iterator):
     substitutions = [{}]
     for predicate, representation in rule_predicates_iterator:
         new_substitutions = []
@@ -75,6 +75,61 @@ def unify_substitution(predicate, substitution, representation):
                 )
             )
     return new_substitutions
+
+
+def obtain_substitutions_relational_algebra(rule_predicates_iterator):
+    new_representations, join_columns_predicates = \
+        filter_constants_obtain_joins(rule_predicates_iterator)
+
+    substitutions = execute_joins(new_representations, join_columns_predicates)
+
+    return substitutions
+
+
+def filter_constants_obtain_joins(rule_predicates_iterator):
+    join_columns_predicates = OrderedDict()
+    new_representations = []
+    for p, pred_rep in enumerate(rule_predicates_iterator):
+        predicate, representation = pred_rep
+        select_constants = []
+        for i, arg in enumerate(predicate.args):
+            if isinstance(arg, Constant):
+                select_constants.append((i, arg.value))
+            else:
+                if arg not in join_columns_predicates:
+                    join_columns_predicates[arg] = [(p, i)]
+                else:
+                    join_columns_predicates[arg].append((p, i))
+
+        if len(select_constants) > 0:
+            new_representation = [
+                t for t in representation
+                if all(t.value[i].value == c for i, c in select_constants)
+            ]
+        else:
+            new_representation = representation
+
+        new_representations.append(new_representation)
+    return new_representations, join_columns_predicates
+
+
+def execute_joins(new_representations, join_columns_predicates):
+    substitutions = []
+    for tuples in product(*new_representations):
+        substitution = {}
+        for var, joins in join_columns_predicates.items():
+            p, i = joins[0]
+            value = tuples[p].value[i]
+            if all(tuples[p].value[i].value == value.value for p, i in joins[1:]):
+                substitution[var] = value
+            else:
+                break
+        else:
+            substitutions.append(substitution)
+    return substitutions
+
+
+obtain_substitutions = obtain_substitutions_relational_algebra
 
 
 def evaluate_builtins(builtin_predicates, substitutions, datalog):
