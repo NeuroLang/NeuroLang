@@ -47,12 +47,6 @@ class WardedDatalog(PatternWalker):
     @add_match(Fact)
     def warded_fact(self, expression):
         return set()
-        #symbols = set()
-        #for arg in expression.fact.args:
-        #    symbol = self.walk(arg)
-        #    symbols = symbols.union(symbol)
-
-        #return symbols
 
     @add_match(Implication(ExistentialPredicate, ...))
     def warded_existencial(self, expression):
@@ -163,18 +157,14 @@ class CheckDangerousVariables(PatternWalker):
 
     def get_name(self, expression, position):
         names = [expression.args[index] for index in position]
-        #TODO Remove this conditional
-        if len(names) > 1:
-            raise NeuroLangException(f'DEBUG: Unexpected length')
         return names[0]
 
     def check_var_single_body(self, var, expression):
         founded = False
         for exp in expression_iterator(expression):
-            if exp[0] is 'args':
-                if not founded and var in exp[1]:
-                    founded = True
-                elif founded and var in exp[1]:
-                    return False
+            if exp[0] is 'args' and not founded and var in exp[1]:
+                founded = True
+            elif exp[0] is 'args' and founded and var in exp[1]:
+                return False
 
         return True
