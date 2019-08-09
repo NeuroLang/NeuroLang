@@ -62,7 +62,9 @@ class WardedDatalogDangerousVariableExtraction(PatternWalker):
         for var in free_vars:
             if var in consequent:
                 position = self.calc_position(var, expression.consequent)
-                can_be_dangerous = self.merge_position(can_be_dangerous, position)
+                can_be_dangerous = self.merge_position(
+                    can_be_dangerous, position
+                )
 
         return can_be_dangerous
 
@@ -132,11 +134,9 @@ class WardedDatalogDangerousVariableCheck(PatternWalker):
         if len(dangerous_symbol) == 1 and next(
             iter(dangerous_symbol)
         ) in expression.antecedent._symbols:
-            var = dangerous_symbol.pop()
-            dangerous_pos = self.can_be_dangerous[var].pop()
 
-            dangerous_vars = self.get_name(
-                expression.consequent, dangerous_pos
+            dangerous_vars = self.get_dangerous_vars(
+                dangerous_symbol, expression
             )
             for dangerous_var in dangerous_vars:
                 single_body = self.check_var_single_body(
@@ -148,6 +148,16 @@ class WardedDatalogDangerousVariableCheck(PatternWalker):
                             there are dangerous variables \
                                 outside the ward in {expression.antecedent}'
                     )
+
+    def get_dangerous_vars(self, dangerous_symbol, expression):
+        var = dangerous_symbol.pop()
+        dangerous_pos = self.can_be_dangerous[var].pop()
+
+        dangerous_vars = self.get_name(
+            expression.consequent, dangerous_pos
+        )
+
+        return dangerous_vars
 
     def check_dangerous(self, expression):
         dangerous = set()
