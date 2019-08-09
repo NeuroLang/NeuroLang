@@ -6,7 +6,11 @@ from .. import solver_datalog_extensional_db
 from .. import expression_walker as ew
 from ..solver_datalog_naive import (Implication, Fact)
 from ..existential_datalog import ExistentialDatalog
-from ..warded_datalog import (CheckWardedDatalog, NeuroLangNonWardedException)
+from ..warded_datalog import (
+    WardedDatalogDangerousVariableExtraction,
+    WardedDatalogDangerousVariableCheck,
+    NeuroLangNonWardedException,
+)
 
 
 class Datalog(ExistentialDatalog, ew.ExpressionBasicEvaluator):
@@ -37,10 +41,14 @@ def test_warded_walker():
                     Q(x, z) & P(x)),
     ))
 
-    wd = CheckWardedDatalog()
-    warded = wd.walk(datalog_program)
+    wde = WardedDatalogDangerousVariableExtraction()
+    can_be_dangerous = wde.walk(datalog_program)
 
-    assert warded == True
+    extraction_result = dict({R: [[1]]})
+    assert can_be_dangerous == extraction_result
+
+    wdc = WardedDatalogDangerousVariableCheck(can_be_dangerous)
+    wdc.walk(datalog_program)
 
     datalog_program = Eb_((
         Implication(Ep_(z, Q(z, x)), P(x)),
@@ -48,10 +56,14 @@ def test_warded_walker():
                     Q(x, y) & P(y)),
     ))
 
-    wd = CheckWardedDatalog()
-    warded = wd.walk(datalog_program)
+    wde = WardedDatalogDangerousVariableExtraction()
+    can_be_dangerous = wde.walk(datalog_program)
 
-    assert warded == True
+    extraction_result = dict({Q: [[0]]})
+    assert can_be_dangerous == extraction_result
+
+    wdc = WardedDatalogDangerousVariableCheck(can_be_dangerous)
+    wdc.walk(datalog_program)
 
 
 def test_variables_outside_ward():
@@ -68,11 +80,18 @@ def test_variables_outside_ward():
                     Q(x, y) & P(x)),
     ))
 
-    wd = CheckWardedDatalog()
+    wde = WardedDatalogDangerousVariableExtraction()
+    can_be_dangerous = wde.walk(datalog_program)
+
+    extraction_result = dict({Q: [[0]]})
+    assert can_be_dangerous == extraction_result
+
+    wdc = WardedDatalogDangerousVariableCheck(can_be_dangerous)
+
     with pytest.raises(
         NeuroLangNonWardedException, match=r".*outside the ward.*"
     ):
-        wd.walk(datalog_program)
+        wdc.walk(datalog_program)
 
 
 def test_more_one_atom():
@@ -92,11 +111,18 @@ def test_more_one_atom():
                     Q(x, y) & P(y) & R(x, z) & S(z)),
     ))
 
-    wd = CheckWardedDatalog()
+    wde = WardedDatalogDangerousVariableExtraction()
+    can_be_dangerous = wde.walk(datalog_program)
+
+    extraction_result = dict({Q: [[0]], R: [[0]]})
+    assert can_be_dangerous == extraction_result
+
+    wdc = WardedDatalogDangerousVariableCheck(can_be_dangerous)
+
     with pytest.raises(
         NeuroLangNonWardedException, match=r".*that appear in more than.*"
     ):
-        wd.walk(datalog_program)
+        wdc.walk(datalog_program)
 
 
 def test_warded_chase():
@@ -136,10 +162,14 @@ def test_warded_chase():
         Implication(company(x), _company(x)),
     ))
 
-    wd = CheckWardedDatalog()
-    warded = wd.walk(datalog_program)
+    wde = WardedDatalogDangerousVariableExtraction()
+    can_be_dangerous = wde.walk(datalog_program)
+
+    extraction_result = dict({owns: [[0, 1], [1], [0, 1], [0, 1]]})
+    assert can_be_dangerous == extraction_result
+
+    wdc = WardedDatalogDangerousVariableCheck(can_be_dangerous)
+    wdc.walk(datalog_program)
 
     dl = Datalog()
     dl.walk(datalog_program)
-
-    assert warded == True

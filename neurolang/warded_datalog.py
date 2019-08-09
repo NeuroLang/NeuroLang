@@ -12,19 +12,15 @@ class NeuroLangNonWardedException(NeuroLangException):
     pass
 
 
-class CheckWardedDatalog(PatternWalker):
-    def __init__(self):
-        self.can_be_dangerous = dict({})
-
+class WardedDatalogDangerousVariableExtraction(PatternWalker):
     @add_match(ExpressionBlock)
     def warded_expression_block(self, expression):
+        can_be_dangerous = dict({})
         for rule in expression.expressions:
-            self.walk(rule)
+            symbols = self.walk(rule)
+            can_be_dangerous = self.merge_dicts(can_be_dangerous, symbols)
 
-        cdv = CheckDangerousVariables(self.can_be_dangerous)
-        cdv.walk(expression)
-
-        return True
+        return can_be_dangerous
 
     @add_match(FunctionApplication(Constant, ...))
     def warded_function_constant(self, expression):
@@ -46,14 +42,14 @@ class CheckWardedDatalog(PatternWalker):
 
     @add_match(Fact)
     def warded_fact(self, expression):
-        return set()
+        return dict({})
 
     @add_match(Implication(ExistentialPredicate, ...))
     def warded_existential(self, expression):
         new_implication = Implication(
             expression.consequent.body, expression.antecedent
         )
-        self.walk(new_implication)
+        return self.walk(new_implication)
 
     @add_match(Implication)
     def warded_implication(self, expression):
@@ -61,13 +57,13 @@ class CheckWardedDatalog(PatternWalker):
         consequent = self.walk(expression.consequent)
 
         free_vars = antecedent.symmetric_difference(consequent)
-
+        can_be_dangerous = dict({})
         for var in free_vars:
             if var in consequent:
                 position = self.calc_position(var, expression.consequent)
-                self.can_be_dangerous = self.merge_dicts(
-                    self.can_be_dangerous, position
-                )
+                can_be_dangerous = self.merge_dicts(can_be_dangerous, position)
+
+        return can_be_dangerous
 
     @add_match(Symbol)
     def warded_symbol(self, expression):
@@ -80,7 +76,7 @@ class CheckWardedDatalog(PatternWalker):
     def calc_position(self, var, expression):
         for exp in expression_iterator(expression):
             if var in exp[1].args:
-                return dict({exp[1].functor: [exp[1].args.index(var)]})
+                return dict({exp[1].functor: exp[1].args.index(var)})
 
     def merge_dicts(self, to_update_dic, new_dict):
         for key, value in new_dict.items():
@@ -94,7 +90,7 @@ class CheckWardedDatalog(PatternWalker):
         return to_update_dic
 
 
-class CheckDangerousVariables(PatternWalker):
+class WardedDatalogDangerousVariableCheck(PatternWalker):
     def __init__(self, can_be_dangerous):
         self.can_be_dangerous = can_be_dangerous
         self.dangerous_vars = {}
@@ -127,17 +123,19 @@ class CheckDangerousVariables(PatternWalker):
             var = dangerous_symbol.pop()
             dangerous_pos = self.can_be_dangerous[var].pop()
 
-            dangerous_var = self.get_name(expression.consequent, dangerous_pos)
-
-            single_body = self.check_var_single_body(
-                dangerous_var, expression.antecedent
+            dangerous_vars = self.get_name(
+                expression.consequent, dangerous_pos
             )
-            if not single_body:
-                raise NeuroLangNonWardedException(
-                    f'The program is not warded: \
-                        there are dangerous variables \
-                            outside the ward in {expression.antecedent}'
+            for dangerous_var in dangerous_vars:
+                single_body = self.check_var_single_body(
+                    dangerous_var, expression.antecedent
                 )
+                if not single_body:
+                    raise NeuroLangNonWardedException(
+                        f'The program is not warded: \
+                            there are dangerous variables \
+                                outside the ward in {expression.antecedent}'
+                    )
 
     def check_dangerous(self, expression):
         dangerous = set()
@@ -156,8 +154,7 @@ class CheckDangerousVariables(PatternWalker):
         return dangerous
 
     def get_name(self, expression, position):
-        names = [expression.args[index] for index in position]
-        return names[0]
+        return [expression.args[index] for index in position]
 
     def check_var_single_body(self, var, expression):
         founded = False
