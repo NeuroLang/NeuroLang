@@ -44,7 +44,7 @@ def test_warded_walker():
     wde = WardedDatalogDangerousVariableExtraction()
     can_be_dangerous = wde.walk(datalog_program)
 
-    extraction_result = dict({R: [[1]]})
+    extraction_result = dict({R: [{1}]})
     assert can_be_dangerous == extraction_result
 
     wdc = WardedDatalogDangerousVariableCheck(can_be_dangerous)
@@ -59,7 +59,7 @@ def test_warded_walker():
     wde = WardedDatalogDangerousVariableExtraction()
     can_be_dangerous = wde.walk(datalog_program)
 
-    extraction_result = dict({Q: [[0]]})
+    extraction_result = dict({Q: [{0}]})
     assert can_be_dangerous == extraction_result
 
     wdc = WardedDatalogDangerousVariableCheck(can_be_dangerous)
@@ -83,7 +83,7 @@ def test_variables_outside_ward():
     wde = WardedDatalogDangerousVariableExtraction()
     can_be_dangerous = wde.walk(datalog_program)
 
-    extraction_result = dict({Q: [[0]]})
+    extraction_result = dict({Q: [{0}]})
     assert can_be_dangerous == extraction_result
 
     wdc = WardedDatalogDangerousVariableCheck(can_be_dangerous)
@@ -114,7 +114,7 @@ def test_more_one_atom():
     wde = WardedDatalogDangerousVariableExtraction()
     can_be_dangerous = wde.walk(datalog_program)
 
-    extraction_result = dict({Q: [[0]], R: [[0]]})
+    extraction_result = dict({Q: [{0}], R: [{0}]})
     assert can_be_dangerous == extraction_result
 
     wdc = WardedDatalogDangerousVariableCheck(can_be_dangerous)
@@ -165,7 +165,7 @@ def test_warded_chase():
     wde = WardedDatalogDangerousVariableExtraction()
     can_be_dangerous = wde.walk(datalog_program)
 
-    extraction_result = dict({owns: [[0, 1], [1], [0, 1], [0, 1]]})
+    extraction_result = dict({owns: [{0, 1}, {1}, {0, 1}, {0, 1}]})
     assert can_be_dangerous == extraction_result
 
     wdc = WardedDatalogDangerousVariableCheck(can_be_dangerous)

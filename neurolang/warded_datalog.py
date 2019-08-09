@@ -6,6 +6,7 @@ from .expression_walker import (PatternWalker, add_match, expression_iterator)
 from .solver_datalog_naive import (Implication, Fact)
 
 from .exceptions import NeuroLangException
+from .utils.orderedset import OrderedSet
 
 
 class NeuroLangNonWardedException(NeuroLangException):
@@ -24,19 +25,19 @@ class WardedDatalogDangerousVariableExtraction(PatternWalker):
 
     @add_match(FunctionApplication(Constant, ...))
     def warded_function_constant(self, expression):
-        symbols = set()
+        symbols = OrderedSet()
         for arg in expression.args:
             temp = self.walk(arg)
-            symbols = symbols.union(temp)
+            symbols |= temp
 
         return symbols
 
     @add_match(FunctionApplication)
     def warded_function_application(self, expression):
-        symbols = set()
+        symbols = OrderedSet()
         for arg in expression.args:
             symbol = self.walk(arg)
-            symbols = symbols.union(symbol)
+            symbols |= symbol
 
         return symbols
 
@@ -56,18 +57,18 @@ class WardedDatalogDangerousVariableExtraction(PatternWalker):
         antecedent = self.walk(expression.antecedent)
         consequent = self.walk(expression.consequent)
 
-        free_vars = antecedent.symmetric_difference(consequent)
+        free_vars = antecedent._set.symmetric_difference(consequent._set)
         can_be_dangerous = dict({})
         for var in free_vars:
             if var in consequent:
                 position = self.calc_position(var, expression.consequent)
-                can_be_dangerous = self.merge_dicts(can_be_dangerous, position)
+                can_be_dangerous = self.merge_position(can_be_dangerous, position)
 
         return can_be_dangerous
 
     @add_match(Symbol)
     def warded_symbol(self, expression):
-        return set(expression.name)
+        return OrderedSet(expression.name)
 
     @add_match(Constant)
     def warded_constant(self, expression):
@@ -77,6 +78,17 @@ class WardedDatalogDangerousVariableExtraction(PatternWalker):
         for exp in expression_iterator(expression):
             if var in exp[1].args:
                 return dict({exp[1].functor: exp[1].args.index(var)})
+
+    def merge_position(self, to_update_dic, new_dict):
+        for key, value in new_dict.items():
+            if key in to_update_dic:
+                old_values = to_update_dic[key]
+                old_values.add(value)
+                to_update_dic[key] = old_values
+            else:
+                to_update_dic[key] = set([value])
+
+        return to_update_dic
 
     def merge_dicts(self, to_update_dic, new_dict):
         for key, value in new_dict.items():
