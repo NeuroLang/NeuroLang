@@ -131,6 +131,10 @@ class WardedDatalogDangerousVariableCheck(PatternWalker):
         consequent = self.check_dangerous(expression.consequent)
 
         dangerous_symbol = antecedent.intersection(consequent)
+
+        self.check_single_body(dangerous_symbol, expression)
+
+    def check_single_body(self, dangerous_symbol, expression):
         if len(dangerous_symbol) == 1 and next(
             iter(dangerous_symbol)
         ) in expression.antecedent._symbols:
