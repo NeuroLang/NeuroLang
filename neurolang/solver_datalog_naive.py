@@ -3,10 +3,10 @@ Naive implementation of non-typed datalog. There's no optimizations and will be
 surely very slow
 '''
 from typing import AbstractSet, Any, Tuple, Callable
-from itertools import product
+from itertools import product, tee
 from operator import and_, or_, invert, xor
 
-from .utils import OrderedSet
+from .utils import OrderedSet, RelationalAlgebraSet
 
 from .expressions import (
     FunctionApplication, Constant, NeuroLangException, is_leq_informative,
@@ -62,6 +62,34 @@ UNDEFINED = Undefined(None)
 NULL = NullConstant[Any](None)
 
 
+class WrappedExpressionIterable:
+    def __init__(self, iterable=None):
+        if iterable is not None:
+            it1, it2 = tee(iterable)
+            if isinstance(next(it1), Constant[Tuple]):
+                iterable = list(e.value for e in it2)
+
+        super().__init__(iterable)
+
+    def __iter__(self):
+        r = list(super().__iter__())
+        return (
+            Constant(t)
+            for t in super().__iter__()
+        )
+
+    def add(self, element):
+        if isinstance(element, Constant[Tuple]):
+            element = element.value
+        super().add(element)
+
+
+class WrappedRelationalAlgebraSet(
+    WrappedExpressionIterable, RelationalAlgebraSet
+):
+        pass
+
+
 class DatalogBasic(PatternWalker):
     '''
     Implementation of Datalog grammar in terms of
@@ -109,7 +137,7 @@ class DatalogBasic(PatternWalker):
                 'define as intensional predicate.'
             )
 
-        fact_set.value.add(Constant(fact.args))
+        fact_set.value.add(fact.args)
 
         return expression
 
@@ -124,7 +152,7 @@ class DatalogBasic(PatternWalker):
                 raise NeuroLangException('Fact functor type incorrect')
 
             self.symbol_table[fact.functor] = \
-                Constant[AbstractSet[set_type]](set())
+                Constant[AbstractSet[set_type]](WrappedRelationalAlgebraSet())
 
     @add_match(Implication(
         FunctionApplication[bool](Symbol, ...),

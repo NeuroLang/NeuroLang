@@ -17,6 +17,7 @@ def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
     if restriction_instance is None:
         restriction_instance = dict()
 
+    rule_head = rule.consequent
     rule_predicates = extract_rule_predicates(
         rule, instance, builtins, restriction_instance=restriction_instance
     )
@@ -32,7 +33,7 @@ def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
         nonrestricted_predicates
     )
 
-    substitutions = obtain_substitutions(rule_predicates_iterator)
+    substitutions = obtain_substitutions(rule_head, rule_predicates_iterator)
 
     substitutions = evaluate_builtins(
         builtin_predicates, substitutions, datalog
@@ -43,7 +44,7 @@ def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
     )
 
 
-def obtain_substitutions_mgu(rule_predicates_iterator):
+def obtain_substitutions_mgu(rule_head, rule_predicates_iterator):
     substitutions = [{}]
     for predicate, representation in rule_predicates_iterator:
         new_substitutions = []
@@ -77,7 +78,7 @@ def unify_substitution(predicate, substitution, representation):
     return new_substitutions
 
 
-def obtain_substitutions_relational_algebra(rule_predicates_iterator):
+def obtain_substitutions_relational_algebra(rule_head, rule_predicates_iterator):
     new_representations, join_columns_predicates = \
         filter_constants_obtain_joins(rule_predicates_iterator)
 
@@ -87,6 +88,34 @@ def obtain_substitutions_relational_algebra(rule_predicates_iterator):
 
 
 def filter_constants_obtain_joins(rule_predicates_iterator):
+    join_columns_predicates = OrderedDict()
+    new_representations = []
+    for p, pred_rep in enumerate(rule_predicates_iterator):
+        predicate, representation = pred_rep
+        select_constants = {}
+        for i, arg in enumerate(predicate.args):
+            if isinstance(arg, Constant):
+                select_constants[i] = arg.value
+            else:
+                if arg not in join_columns_predicates:
+                    join_columns_predicates[arg] = [(p, i)]
+                else:
+                    join_columns_predicates[arg].append((p, i))
+
+        if len(select_constants) > 0:
+            new_representation = representation.selection(select_constants)
+            # new_representation = [
+            #    t for t in representation
+            #    if all(t.value[i].value == c for i, c in select_constants)
+            # ]
+        else:
+            new_representation = representation
+
+        new_representations.append(new_representation)
+    return new_representations, join_columns_predicates
+
+
+def filter_constants_obtain_joins_old(rule_predicates_iterator):
     join_columns_predicates = OrderedDict()
     new_representations = []
     for p, pred_rep in enumerate(rule_predicates_iterator):
@@ -114,6 +143,42 @@ def filter_constants_obtain_joins(rule_predicates_iterator):
 
 
 def execute_joins(new_representations, join_columns_predicates):
+    displacements = {i: 0 for i, _ in enumerate(new_representations)}
+    for joins in join_columns_predicates.values:
+        if len(joins) == 1:
+            continue
+        join = joins[0]
+        result = new_representations[join[0]]
+        for i, join in enumerate(joins):
+            join_cols = (
+                displacements[joins[i][0]] + joins[i][1],
+                displacements[join[0]] + join[1]
+            )
+            result = result.natural_join(
+                new_representations[join[0]], join_cols
+            )
+
+
+    substitutions = []
+    for tuples in product(*new_representations):
+        substitution = {}
+        for var, joins in join_columns_predicates.items():
+            p, i = joins[0]
+            constant = tuples[p].value[i]
+            value = constant.value
+            if all(
+                tuples[p].value[i].value == value
+                for p, i in joins[1:]
+            ):
+                substitution[var] = constant
+            else:
+                break
+        else:
+            substitutions.append(substitution)
+    return substitutions
+
+
+def execute_joins_old(new_representations, join_columns_predicates):
     substitutions = []
     for tuples in product(*new_representations):
         substitution = {}
