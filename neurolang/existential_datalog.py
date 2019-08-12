@@ -69,7 +69,7 @@ class ExistentialDatalog(DatalogBasic):
         if consequent_name in self.symbol_table:
             if consequent_name in self.intensional_database():
                 raise NeuroLangException(
-                    'A rule cannot be both in IDB and E-IDB'
+                    'A rule cannot be both in IDB and \u2203-IDB'
                 )
             expressions = self.symbol_table[consequent_name].expressions
         else:
