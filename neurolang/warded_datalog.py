@@ -2,7 +2,9 @@ from .expressions import (
     Symbol, Constant, ExpressionBlock, FunctionApplication,
     ExistentialPredicate
 )
-from .expression_walker import (PatternWalker, add_match, expression_iterator)
+from .expression_walker import (
+    PatternWalker, add_match, expression_iterator
+)
 from .solver_datalog_naive import (Implication, Fact)
 
 from .exceptions import NeuroLangException
@@ -19,7 +21,9 @@ class WardedDatalogDangerousVariableExtraction(PatternWalker):
         can_be_dangerous = dict({})
         for rule in expression.expressions:
             symbols = self.walk(rule)
-            can_be_dangerous = self.merge_dicts(can_be_dangerous, symbols)
+            can_be_dangerous = self.merge_new_dangerous_vars(
+                can_be_dangerous, symbols
+            )
 
         return can_be_dangerous
 
@@ -62,7 +66,7 @@ class WardedDatalogDangerousVariableExtraction(PatternWalker):
         for var in free_vars:
             if var in consequent:
                 position = self.calc_position(var, expression.consequent)
-                can_be_dangerous = self.merge_position(
+                can_be_dangerous = self.merge_new_positions(
                     can_be_dangerous, position
                 )
 
@@ -81,7 +85,7 @@ class WardedDatalogDangerousVariableExtraction(PatternWalker):
             if var in exp[1].args:
                 return dict({exp[1].functor: exp[1].args.index(var)})
 
-    def merge_position(self, to_update_dic, new_dict):
+    def merge_new_positions(self, to_update_dic, new_dict):
         for key, value in new_dict.items():
             if key in to_update_dic:
                 old_values = to_update_dic[key]
@@ -92,7 +96,7 @@ class WardedDatalogDangerousVariableExtraction(PatternWalker):
 
         return to_update_dic
 
-    def merge_dicts(self, to_update_dic, new_dict):
+    def merge_new_dangerous_vars(self, to_update_dic, new_dict):
         for key, value in new_dict.items():
             if key in to_update_dic:
                 old_values = to_update_dic[key]
