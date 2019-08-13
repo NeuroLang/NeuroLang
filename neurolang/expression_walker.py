@@ -48,25 +48,20 @@ def expression_iterator(expression, include_level=False, dfs=True):
             children = expression_iterator_constant(current_element)
         elif isinstance(current_element[1], tuple):
             c = current_element[1]
-            children = product((None,), c)
+            children = product((None, ), c)
         elif isinstance(current_element[1], Expression):
             c = current_element[1].__children__
 
-            children = (
-                (name, getattr(current_element[1], name))
-                for name in c
-            )
+            children = ((name, getattr(current_element[1], name))
+                        for name in c)
 
         if include_level:
             current_level = current_element[-1] + 1
-            children = [
-                (name, value, current_level)
-                for name, value in children
-            ]
+            children = [(name, value, current_level)
+                        for name, value in children]
 
         if (
-            dfs and
-            not (
+            dfs and not (
                 isinstance(expression, Constant) and
                 is_leq_informative(expression.type, typing.AbstractSet)
             )
@@ -85,11 +80,9 @@ def expression_iterator(expression, include_level=False, dfs=True):
 def expression_iterator_constant(current_element):
     if is_leq_informative(current_element[1].type, typing.Tuple):
         c = current_element[1].value
-        children = product((None,), c)
-    elif is_leq_informative(
-        current_element[1].type, typing.AbstractSet
-    ):
-        children = product((None,), current_element[1].value)
+        children = product((None, ), c)
+    elif is_leq_informative(current_element[1].type, typing.AbstractSet):
+        children = product((None, ), current_element[1].value)
     else:
         children = []
     return children
@@ -99,10 +92,7 @@ class PatternWalker(PatternMatcher):
     def walk(self, expression):
         logging.debug("walking %(expression)s", {'expression': expression})
         if isinstance(expression, tuple):
-            result = [
-                self.walk(e)
-                for e in expression
-            ]
+            result = [self.walk(e) for e in expression]
             result = tuple(result)
             return result
         return self.match(expression)
@@ -110,106 +100,104 @@ class PatternWalker(PatternMatcher):
 
 class ExpressionWalker(PatternWalker):
     @add_match(ExpressionBlock)
-    def expression_block(self, expression):
-        return ExpressionBlock[expression.type](
-            tuple(self.walk(e) for e in expression.expressions)
+    def expression_block(self, block):
+        return ExpressionBlock[block.type](
+            tuple(self.walk(expression) for expression in block.expressions)
         )
 
     @add_match(Statement)
-    def statement(self, expression):
-        return Statement[expression.type](
-            expression.lhs, self.walk(expression.rhs)
+    def statement(self, statement):
+        return Statement[statement.type](
+            statement.lhs, self.walk(statement.rhs)
         )
 
     @add_match(FunctionApplication)
-    def function(self, expression):
-        functor = self.walk(expression.functor)
-        args = tuple(self.walk(e) for e in expression.args)
-        kwargs = {k: self.walk(v) for k, v in expression.kwargs}
+    def function(self, function_application):
+        functor = self.walk(function_application.functor)
+        args = tuple(self.walk(arg) for arg in function_application.args)
+        kwargs = {k: self.walk(v) for k, v in function_application.kwargs}
 
         if (
-            functor is not expression.functor or
-            any(
+            functor is not function_application.functor or any(
                 arg is not new_arg
-                for arg, new_arg in zip(expression.args, args)
+                for arg, new_arg in zip(function_application.args, args)
             ) or any(
-                kwargs[k] is not expression.kwargs[k]
-                for k in expression.kwargs
+                kwargs[k] is not function_application.kwargs[k]
+                for k in function_application.kwargs
             )
         ):
             result = functor(*args, **kwargs)
             return self.walk(result)
         else:
-            return expression
+            return function_application
 
     @add_match(Query)
-    def query(self, expression):
-        body = self.walk(expression.body)
+    def query(self, query):
+        body = self.walk(query.body)
 
-        if body is not expression.body:
-            return self.walk(Query[expression.type](
-                expression.head, body
-            ))
+        if body is not query.body:
+            return self.walk(Query[query.type](query.head, body))
         else:
-            return expression
+            return query
 
     @add_match(ExistentialPredicate)
-    def existential_predicate(self, expression):
-        body = self.walk(expression.body)
+    def existential_predicate(self, existential_predicate):
+        body = self.walk(existential_predicate.body)
 
-        if body is not expression.body:
-            return self.walk(ExistentialPredicate[expression.type](
-                expression.head, body
-            ))
+        if body is not existential_predicate.body:
+            return self.walk(
+                ExistentialPredicate[existential_predicate.type](
+                    existential_predicate.head, body
+                )
+            )
         else:
-            return expression
+            return existential_predicate
 
     @add_match(UniversalPredicate)
-    def universal_predicate(self, expression):
-        body = self.walk(expression.body)
+    def universal_predicate(self, universal_predicate):
+        body = self.walk(universal_predicate.body)
 
-        if body is not expression.body:
-            return self.walk(UniversalPredicate[expression.type](
-                expression.head, body
-            ))
+        if body is not universal_predicate.body:
+            return self.walk(
+                UniversalPredicate[universal_predicate.type](
+                    universal_predicate.head, body
+                )
+            )
         else:
-            return expression
+            return universal_predicate
 
     @add_match(Projection)
-    def projection(self, expression):
-        collection = self.walk(expression.collection)
-        item = self.walk(expression.item)
+    def projection(self, projection):
+        collection = self.walk(projection.collection)
+        item = self.walk(projection.item)
 
-        if (
-            collection is expression.collection and
-            item is expression.item
-        ):
-            return expression
+        if (collection is projection.collection and item is projection.item):
+            return projection
         else:
             result = Projection(collection, item)
             return self.walk(result)
 
     @add_match(Lambda)
-    def lambda_(self, expression):
-        args = self.walk(expression.args)
-        function_expression = self.walk(expression.function_expression)
+    def lambda_expression(self, lambda_expression):
+        args = self.walk(lambda_expression.args)
+        function_expression = self.walk(lambda_expression.function_expression)
 
         if (
-            all(a is a_ for a, a_ in zip(args, expression.args)) and
-            function_expression is expression.function_expression
+            all(a is a_ for a, a_ in zip(args, lambda_expression.args)) and
+            function_expression is lambda_expression.function_expression
         ):
-            return expression
+            return lambda_expression
         else:
-            res = Lambda[expression.type](args, function_expression)
+            res = Lambda[lambda_expression.type](args, function_expression)
             return self.walk(res)
 
     @add_match(Constant)
-    def constant(self, expression):
-        return expression
+    def constant(self, constant):
+        return constant
 
     @add_match(Symbol)
-    def symbol(self, expression):
-        return expression
+    def symbol(self, symbol):
+        return symbol
 
 
 class ReplaceSymbolWalker(ExpressionWalker):
@@ -217,13 +205,13 @@ class ReplaceSymbolWalker(ExpressionWalker):
         self.symbol_replacements = symbol_replacements
 
     @add_match(Symbol)
-    def replace_free_variable(self, expression):
-        if expression.name in self.symbol_replacements:
-            replacement = self.symbol_replacements[expression.name]
-            replacement_type = unify_types(expression.type, replacement.type)
+    def replace_free_variable(self, symbol):
+        if symbol.name in self.symbol_replacements:
+            replacement = self.symbol_replacements[symbol.name]
+            replacement_type = unify_types(symbol.type, replacement.type)
             return replacement.cast(replacement_type)
         else:
-            return expression
+            return symbol
 
 
 class ReplaceSymbolsByConstants(ExpressionWalker):
@@ -231,24 +219,29 @@ class ReplaceSymbolsByConstants(ExpressionWalker):
         self.symbol_table = symbol_table
 
     @add_match(Symbol)
-    def symbol(self, expression):
-        new_expression = self.symbol_table.get(expression, expression)
+    def symbol(self, symbol):
+        new_expression = self.symbol_table.get(symbol, symbol)
         if isinstance(new_expression, Constant):
             return new_expression
         else:
-            return expression
+            return symbol
 
     @add_match(Constant[typing.AbstractSet])
-    def constant_abstract_set(self, expression):
-        return expression.__class__(type(expression.value)(
-            self.walk(e) for e in expression.value
-        ))
+    def constant_abstract_set(self, constant_abstract_set):
+        return constant_abstract_set.__class__(
+            type(constant_abstract_set.value)(
+                self.walk(expression)
+                for expression in constant_abstract_set.value
+            )
+        )
 
     @add_match(Constant[typing.Tuple])
-    def constant_tuple(self, expression):
-        return expression.__class__(tuple(
-            self.walk(e) for e in expression.value
-        ))
+    def constant_tuple(self, constant_tuple):
+        return constant_tuple.__class__(
+            tuple(
+                self.walk(expression) for expression in constant_tuple.value
+            )
+        )
 
 
 class ReplaceExpressionsByValues(ExpressionWalker):
@@ -256,29 +249,31 @@ class ReplaceExpressionsByValues(ExpressionWalker):
         self.symbol_table = symbol_table
 
     @add_match(Symbol)
-    def symbol(self, expression):
-        new_expression = self.symbol_table.get(expression, expression)
+    def symbol(self, symbol):
+        new_expression = self.symbol_table.get(symbol, symbol)
         if isinstance(new_expression, Constant):
             return self.walk(new_expression)
         else:
             raise NeuroLangException(
-                f'{expression} could not be evaluated '
+                f'{symbol} could not be evaluated '
                 'to a constant'
             )
 
     @add_match(Constant[typing.AbstractSet])
-    def constant_abstract_set(self, expression):
+    def constant_abstract_set(self, constant_abstract_set):
         return frozenset(
-            self.walk(e) for e in expression.value
+            self.walk(expression) for expression in constant_abstract_set.value
         )
 
     @add_match(Constant[typing.Tuple])
-    def constant_tuple(self, expression):
-        return tuple(self.walk(e) for e in expression.value)
+    def constant_tuple(self, constant_tuple):
+        return tuple(
+            self.walk(expression) for expression in constant_tuple.value
+        )
 
     @add_match(Constant)
-    def constant_value(self, expression):
-        return expression.value
+    def constant(self, constant):
+        return constant.value
 
 
 class SymbolTableEvaluator(ExpressionWalker):
@@ -290,14 +285,14 @@ class SymbolTableEvaluator(ExpressionWalker):
         self.add_functions_to_symbol_table()
 
     @add_match(Symbol)
-    def symbol_from_table(self, expression):
+    def symbol_from_table(self, symbol):
         try:
-            return self.symbol_table.get(expression, expression)
+            return self.symbol_table.get(symbol, symbol)
         except KeyError:
             if self.simplify_mode:
-                return expression
+                return symbol
             else:
-                raise ValueError(f'{expression} not in symbol table')
+                raise ValueError(f'{symbol} not in symbol table')
 
     @property
     def included_functions(self):
@@ -319,26 +314,31 @@ class SymbolTableEvaluator(ExpressionWalker):
         top_scope.enclosing_scope = keyword_symbol_table
 
     @add_match(Statement)
-    def statement(self, expression):
-        rhs = self.walk(expression.rhs)
-        return_type = unify_types(expression.type, rhs.type)
+    def statement(self, statement):
+        rhs = self.walk(statement.rhs)
+        return_type = unify_types(statement.type, rhs.type)
         rhs.change_type(return_type)
-        expression.lhs.change_type(return_type)
-        if rhs is expression.rhs:
-            self.symbol_table[expression.lhs] = rhs
-            return expression
+        statement.lhs.change_type(return_type)
+        if rhs is statement.rhs:
+            self.symbol_table[statement.lhs] = rhs
+            return statement
         else:
-            return self.walk(
-                Statement[expression.type](expression.lhs, rhs)
-            )
+            return self.walk(Statement[statement.type](statement.lhs, rhs))
+
+    def push_scope(self):
+        self.symbol_table = self.symbol_table.create_scope()
+
+    def pop_scope(self):
+        es = self.symbol_table.enclosing_scope
+        if es is None:
+            raise NeuroLangException('No enclosing scope')
+        self.symbol_table = self.symbol_table.enclosing_scope
 
 
 class ExpressionBasicEvaluator(SymbolTableEvaluator):
     @add_match(Projection(Constant(...), Constant(...)))
-    def evaluate_projection(self, expression):
-        return (
-            expression.collection.value[int(expression.item.value)]
-        )
+    def evaluate_projection(self, projection):
+        return (projection.collection.value[int(projection.item.value)])
 
     @add_match(
         FunctionApplication(Constant(...), ...),
@@ -347,8 +347,8 @@ class ExpressionBasicEvaluator(SymbolTableEvaluator):
             for _, arg in expression_iterator(e.args)
         )
     )
-    def evaluate_function(self, expression):
-        functor = expression.functor
+    def evaluate_function(self, function_application):
+        functor = function_application.functor
         functor_type = functor.type
         if isinstance(functor, Constant):
             functor_value = functor.value
@@ -367,23 +367,21 @@ class ExpressionBasicEvaluator(SymbolTableEvaluator):
             result_type = Unknown
 
         rebv = ReplaceExpressionsByValues(self.symbol_table)
-        args = rebv.walk(expression.args)
-        kwargs = {k: rebv.walk(v) for k, v in expression.kwargs.items()}
-        result = Constant[result_type](
-            functor_value(*args, **kwargs)
-        )
+        args = rebv.walk(function_application.args)
+        kwargs = {
+            k: rebv.walk(v)
+            for k, v in function_application.kwargs.items()
+        }
+        result = Constant[result_type](functor_value(*args, **kwargs))
         return result
 
-    @add_match(
-        FunctionApplication(Lambda, ...)
-    )
-    def eval_lambda(self, expression):
-        lambda_ = expression.functor
-        args = expression.args
+    @add_match(FunctionApplication(Lambda, ...))
+    def eval_lambda(self, function_application):
+        lambda_ = function_application.functor
+        args = function_application.args
         lambda_args = lambda_.args
         if (
-            len(args) != len(lambda_args) or
-            not all(
+            len(args) != len(lambda_args) or not all(
                 is_leq_informative(l.type, a.type)
                 for l, a in zip(lambda_args, args)
             )
@@ -393,9 +391,8 @@ class ExpressionBasicEvaluator(SymbolTableEvaluator):
                 f'argument tuple for {lambda_args}'
             )
 
-        if len(
-            lambda_.function_expression._symbols.intersection(lambda_args)
-        ) > 0:
+        if len(lambda_.function_expression._symbols.intersection(lambda_args)
+               ) > 0:
             rsw = ReplaceSymbolWalker(dict(zip(lambda_args, args)))
             return self.walk(rsw.walk(lambda_.function_expression))
         else:

@@ -7,34 +7,52 @@ def most_general_unifier(expression1, expression2):
     If the MGU exists it returns the substitution and the unified expression.
     If the MGU doesn't exist it returns None.
     '''
-    if not (
-        isinstance(expression1, exp.FunctionApplication) and
-        isinstance(expression2, exp.FunctionApplication) and
-        len(expression1.args) == len(expression2.args)
-    ):
-        raise ValueError("We can only unify function applications")
+    args1, args2 = most_general_unifier_extract_arguments(
+        expression1, expression2
+    )
 
-    if not (
-        expression1.functor == expression2.functor and
-        len(expression1.args) == len(expression2.args)
-    ):
+    if args1 is None or args2 is None:
         return None
 
-    unifier = most_general_unifier_arguments(
-        expression1.args, expression2.args
-    )
+    unifier = most_general_unifier_arguments(args1, args2)
 
     if unifier is None:
         return unifier
     else:
         return (
             unifier[0],
-            expression1.apply(expression1.functor, unifier[1])
+            apply_substitution(expression1, unifier[0])
         )
 
 
+def most_general_unifier_extract_arguments(expression1, expression2):
+    expression_stack = [(expression1, expression2)]
+    args1 = tuple()
+    args2 = tuple()
+    while expression_stack:
+        expression1, expression2 = expression_stack.pop(0)
+        if not (
+            expression1.functor == expression2.functor and
+            len(expression1.args) == len(expression2.args)
+        ):
+            return None, None
+
+        for arg1, arg2 in zip(expression1.args, expression2.args):
+            is_application1 = isinstance(arg1, exp.FunctionApplication)
+            is_application2 = isinstance(arg2, exp.FunctionApplication)
+            if is_application1 and is_application2:
+                expression_stack.append((arg1, arg2))
+            elif is_application1 or is_application2:
+                return None, None
+            else:
+                args1 += (arg1,)
+                args2 += (arg2,)
+
+    return args1, args2
+
+
 def apply_substitution(function_application, substitution):
-    return exp.FunctionApplication[function_application.type](
+    return type(function_application)(
         function_application.functor,
         apply_substitution_arguments(function_application.args, substitution)
     )
@@ -75,7 +93,13 @@ def most_general_unifier_arguments(args1, args2):
 
 
 def apply_substitution_arguments(arguments, substitution):
-    return tuple(substitution.get(a, a) for a in arguments)
+    new_args = tuple()
+    for a in arguments:
+        if isinstance(a, exp.FunctionApplication):
+            new_args += (apply_substitution(a, substitution),)
+        else:
+            new_args += (substitution.get(a, a),)
+    return new_args
 
 
 def merge_substitutions(subs1, subs2):

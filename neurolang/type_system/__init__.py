@@ -195,10 +195,11 @@ def is_type(type_):
         isinstance(type_, type) or
         type_ is Unknown or
         type_ is Any or
-        is_typevar(type_) or
-        is_union_type(type_) or
         is_parameterized(type_) or
-        is_parametrical(type_)
+        is_parametrical(type_) or
+        is_typevar(type_) or
+        is_union_type(type_)
+
     )
 
 

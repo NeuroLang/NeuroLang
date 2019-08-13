@@ -1,6 +1,7 @@
-from functools import wraps
 import operator as op
-from typing import AbstractSet, Tuple
+from typing import AbstractSet, Tuple, Callable
+from functools import wraps
+
 from .. import neurolang as nl
 from ..expressions import is_leq_informative, FunctionApplication
 from ..expression_walker import ReplaceExpressionsByValues
@@ -16,10 +17,10 @@ class Expression(object):
     def type(self):
         return self.expression.type
 
-    def do(self, result_symbol_name=None):
+    def do(self, name=None):
         return self.query_builder.execute_expression(
             self.expression,
-            result_symbol_name=result_symbol_name
+            name=name
         )
 
     def __call__(self, *args, **kwargs):
@@ -29,9 +30,37 @@ class Expression(object):
             for a in args
         )
 
-        new_expression = FunctionApplication(self.expression, new_args)
+        if (
+            self.query_builder.logic_programming and
+            isinstance(self, Symbol)
+        ):
+            functor = self.neurolang_symbol
+        else:
+            functor = self.expression
+
+        new_expression = FunctionApplication(functor, new_args)
         return Operation(
                 self.query_builder, new_expression, self, args)
+
+    def __setitem__(self, key, value):
+        if not isinstance(value, Expression):
+            value = Expression(self.query_builder, nl.Constant(value))
+
+        if self.query_builder.logic_programming:
+            if not isinstance(key, tuple):
+                key = (key,)
+            self.query_builder.assign(self(*key), value)
+        else:
+            super().__setitem__(key, value)
+
+    def __getitem__(self, key):
+        if self.query_builder.logic_programming:
+            if isinstance(key, tuple):
+                return self(*key)
+            else:
+                return self(key)
+        else:
+            super().__getitem__(key)
 
     def __repr__(self):
         if isinstance(self.expression, nl.Constant):
@@ -43,19 +72,23 @@ class Expression(object):
 
 
 binary_opeations = (
-    op.add, op.sub, op.mul
+    op.add, op.sub, op.mul, op.ge, op.le, op.gt, op.lt, op.eq
 )
 
 
 def op_bind(op):
     @wraps(op)
     def f(self, *args):
-        new_args = [
+        new_args = tuple((
             arg.expression if isinstance(arg, Expression)
             else nl.Constant(arg)
-            for arg in args
-        ]
-        new_expression = op(self.expression, *new_args)
+            for arg in (self,) + args
+        ))
+        arg_types = [a.type for a in new_args]
+        functor = nl.Constant[Callable[arg_types, nl.Unknown]](
+            op, auto_infer_type=False
+        )
+        new_expression = functor(*new_args)
         return Operation(
             self.query_builder, new_expression, op,
             (self,) + args, infix=len(args) > 0
@@ -67,6 +100,7 @@ def op_bind(op):
 def rop_bind(op):
     @wraps(op)
     def f(self, value):
+        raise NotImplementedError()
         original_value = value
         if isinstance(value, Expression):
             value = value.expression
@@ -81,6 +115,8 @@ def rop_bind(op):
     return f
 
 
+force_linking = [op.eq, op.ne, op.gt, op.lt, op.ge, op.le]
+
 for operator_name in dir(op):
     operator = getattr(op, operator_name)
     if operator_name.startswith('_'):
@@ -90,7 +126,7 @@ for operator_name in dir(op):
     if name.endswith('___'):
         name = name[:-1]
 
-    if not hasattr(Expression, name):
+    if operator in force_linking or not hasattr(Expression, name):
         setattr(Expression, name, op_bind(operator))
 
 
@@ -128,17 +164,13 @@ class Operation(Expression):
         else:
             op_repr = repr(self.operator)
 
+        return self.__repr_arguments(op_repr)
+
+    def __repr_arguments(self, op_repr):
         arguments_repr = []
         for a in self.arguments:
-            if isinstance(a, Operation):
-                arguments_repr.append(
-                    '( {} )'.format(repr(a))
-                )
-            elif isinstance(a, Symbol):
-                arguments_repr.append(a.symbol_name)
-            else:
-                arguments_repr.append(repr(a))
-
+            arg_repr = self.__repr_arguments_arg(a)
+            arguments_repr.append(arg_repr)
         if self.infix:
             return ' {} '.format(op_repr).join(arguments_repr)
         else:
@@ -146,6 +178,15 @@ class Operation(Expression):
                 op_repr,
                 ', '.join(arguments_repr)
             )
+
+    def __repr_arguments_arg(self, a):
+        if isinstance(a, Operation):
+            arg_repr = '( {} )'.format(repr(a))
+        elif isinstance(a, Symbol):
+            arg_repr = a.symbol_name
+        else:
+            arg_repr = repr(a)
+        return arg_repr
 
 
 class Symbol(Expression):
@@ -162,41 +203,19 @@ class Symbol(Expression):
             return(f'{self.symbol_name}: {symbol.type}')
         elif isinstance(symbol, nl.Constant):
             if is_leq_informative(symbol.type, AbstractSet):
-                value = self._repr_iterable_value(symbol)
+                value = list(self)
             else:
                 value = symbol.value
 
             return f'{self.symbol_name}: {symbol.type} = {value}'
         else:
-            raise ValueError('...')
+            return f'{self.symbol_name}: {symbol.type}'
 
     def _repr_iterable_value(self, symbol):
         contained = []
-        all_symbols = self.query_builder.solver.symbol_table.symbols_by_type(
-            symbol.type.__args__[0]
-        )
-
-        for s in symbol.value:
-            representation = self._repr_iterable_value_symbol(s, all_symbols)
-            if representation is not None:
-                contained.append(representation)
-
+        for v in self:
+            contained.append(repr(v))
         return contained
-
-    def _repr_iterable_value_symbol(self, symbol, all_symbols):
-        representation = None
-        if isinstance(symbol, nl.Constant):
-            for k, v in all_symbols.items():
-                if isinstance(v, nl.Constant) and symbol is v.value:
-                    representation = k.name
-                    break
-        elif isinstance(symbol, nl.Symbol):
-            representation = symbol.name
-        elif isinstance(symbol, tuple):
-            t = ', '.join(e.name for e in symbol)
-            representation = f'({t})'
-
-        return representation
 
     def __iter__(self):
         symbol = self.symbol
@@ -210,18 +229,37 @@ class Symbol(Expression):
                 f'Symbol of type {self.symbol.type} is not iterable'
             )
 
-        all_symbols = self.query_builder.solver.symbol_table.symbols_by_type(
-            symbol.type.__args__[0]
+        if self.query_builder.logic_programming:
+            return self.__iter_logic_programming(symbol)
+        else:
+            return self.__iter_non_logic_programming(symbol)
+
+    def __iter_logic_programming(self, symbol):
+        for v in symbol.value:
+            if isinstance(v, nl.Constant):
+                yield self._rsbv.walk(v.value)
+            elif isinstance(v, nl.Symbol):
+                yield Symbol(self.query_builder, v)
+            else:
+                raise nl.NeuroLangException(f'element {v} invalid in set')
+
+    def __iter_non_logic_programming(self, symbol):
+        all_symbols = (
+            self.query_builder
+            .solver.symbol_table.symbols_by_type(
+                symbol.type.__args__[0]
+            )
         )
 
         for s in symbol.value:
-            if isinstance(s, nl.Constant):
-                for k, v in all_symbols.items():
-                    if isinstance(v, nl.Constant) and s is v.value:
-                        yield Symbol(self.query_builder, k.name)
-                        break
-            if isinstance(s, nl.Symbol):
+            if not isinstance(s, nl.Constant):
                 yield Symbol(self.query_builder, s.name)
+                continue
+            for k, v in all_symbols.items():
+                if isinstance(v, nl.Constant) and s is v.value:
+                    yield Symbol(self.query_builder, k.name)
+                    break
+                yield Expression(self.query_builder, nl.Constant(s))
 
     def __len__(self):
         symbol = self.symbol
@@ -302,4 +340,30 @@ class All(Expression):
         return u'\u2200{s}: {p}'.format(
             s=repr(self.symbol),
             p=repr(self.predicate)
+        )
+
+
+class Implication(Expression):
+    def __init__(self, query_builder, expression, antecedent, consequent):
+        self.expression = expression
+        self.query_builder = query_builder
+        self.antecedent = antecedent
+        self.consequent = consequent
+
+    def __repr__(self):
+        return u'{a} \u2190 {c}'.format(
+            a=repr(self.antecedent),
+            c=repr(self.consequent)
+        )
+
+
+class Fact(Expression):
+    def __init__(self, query_builder, expression, antecedent):
+        self.expression = expression
+        self.query_builder = query_builder
+        self.antecedent = antecedent
+
+    def __repr__(self):
+        return u'{a}'.format(
+            a=repr(self.antecedent),
         )
