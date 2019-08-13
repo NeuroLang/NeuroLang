@@ -11,6 +11,7 @@ from .expressions import Constant, ExistentialPredicate
 from .solver_datalog_naive import Implication
 from .expression_walker import expression_iterator
 
+
 class DatalogExistentialChaseOblivious(DatalogChase):
     '''
     Based on definitions 2.5 and 2.7 of Cali et. al. [1]_.
@@ -31,8 +32,9 @@ class DatalogExistentialChaseOblivious(DatalogChase):
             restriction_instance = dict()
 
         substitutions = [{}]
-        if isinstance(rule, Implication) & isinstance(rule.consequent, ExistentialPredicate):
-           substitutions = self.replace_fresh_null(rule)
+        if isinstance(rule, Implication
+                      ) & isinstance(rule.consequent, ExistentialPredicate):
+            substitutions = self.replace_fresh_null(rule)
 
         rule_predicates = self.extract_rule_predicates(
             rule, instance, restriction_instance=restriction_instance
@@ -48,7 +50,9 @@ class DatalogExistentialChaseOblivious(DatalogChase):
             restricted_predicates, nonrestricted_predicates
         )
 
-        substitutions = self.obtain_substitutions(rule_predicates_iterator, substitutions)
+        substitutions = self.obtain_substitutions(
+            rule_predicates_iterator, substitutions
+        )
 
         substitutions = self.evaluate_builtins(
             builtin_predicates, substitutions
@@ -72,11 +76,8 @@ class DatalogExistentialChaseOblivious(DatalogChase):
             functor = rule.consequent.functor
 
         new_tuples = set(
-            Constant(
-                apply_substitution_arguments(
-                    args, substitution
-                )
-            ) for substitution in substitutions
+            Constant(apply_substitution_arguments(args, substitution))
+            for substitution in substitutions
         )
 
         if functor in instance:
@@ -89,8 +90,7 @@ class DatalogExistentialChaseOblivious(DatalogChase):
         else:
             set_type = next(iter(new_tuples)).type
             new_instance = {
-                functor:
-                Constant[AbstractSet[set_type]](new_tuples)
+                functor: Constant[AbstractSet[set_type]](new_tuples)
             }
             return new_instance
 

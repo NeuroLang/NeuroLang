@@ -18,6 +18,7 @@ L_ = expressions.Lambda
 Ep_ = expressions.ExistentialPredicate
 Eb_ = expressions.ExpressionBlock
 
+
 class Datalog(ExistentialDatalog, ew.ExpressionBasicEvaluator):
     def function_gt(self, x: int, y: int) -> bool:
         return x > y
@@ -46,17 +47,14 @@ def test_stratified_and_chase():
         Implication(R1(x, y), R1e(x, y)),
         Implication(R2(x), R3(x, y)),
         Implication(Ep_(z, R3(y, z)), R1(x, y)),
-        Implication(Ep_(z, R1(y, z)), R1(x, y) & R2(y)),
+        Implication(Ep_(z, R1(y, z)),
+                    R1(x, y) & R2(y)),
         Implication(R2(y), R1(x, y)),
     ))
 
     dl = Datalog()
     dl.walk(datalog_program)
 
-    rules = []
-
     dcw = DatalogExistentialChaseOblivious(dl, max_iterations=10)
-    with pytest.raises(
-        NeuroLangRecursionException,
-    ):
+    with pytest.raises(NeuroLangRecursionException, ):
         dcw.build_chase_solution()
