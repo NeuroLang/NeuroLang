@@ -25,7 +25,7 @@ class DatalogExistentialChaseOblivious(DatalogChase):
 
     def __init__(self, datalog_program, **kwargs):
         super().__init__(datalog_program, **kwargs)
-        self.fresh_nulls = dict({})
+        self.total_fresh_nulls = 0
 
     def chase_step(self, instance, rule, restriction_instance=None):
         if restriction_instance is None:
@@ -95,10 +95,9 @@ class DatalogExistentialChaseOblivious(DatalogChase):
             return new_instance
 
     def new_fresh_null(self):
-        total = len(self.fresh_nulls)
-        name = f'NULL {total+1}'
+        name = f'NULL {self.total_fresh_nulls}'
         fresh_null = NullConstant[Unknown](name, auto_infer_type=False)
-        self.fresh_nulls[name] = fresh_null
+        self.total_fresh_nulls += 1
 
         return fresh_null
 
