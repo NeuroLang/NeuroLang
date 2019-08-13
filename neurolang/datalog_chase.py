@@ -3,22 +3,30 @@ from itertools import chain
 from operator import eq
 from typing import AbstractSet
 
-from .expressions import Constant, Symbol, FunctionApplication
+from .expressions import Constant, Symbol, FunctionApplication, ExistentialPredicate
 from . import solver_datalog_naive as sdb
 from .unification import (
     apply_substitution, apply_substitution_arguments, compose_substitutions,
     most_general_unifier_arguments
 )
+from .exceptions import NeuroLangException
+
+class NeuroLangRecursionException(NeuroLangException):
+    pass
 
 
 class DatalogChase():
-    def __init__(self, datalog_program):
+    def __init__(self, datalog_program, rules=None, max_iterations=300):
         self.datalog_program = datalog_program
-        self.rules = []
-        for expression_block in datalog_program.intensional_database().values(
-        ):
-            for rule in expression_block.expressions:
-                self.rules.append(rule)
+        self.max_iterations = max_iterations
+        if rules is None:
+            self.rules = []
+            for expression_block in datalog_program.intensional_database().values(
+            ):
+                for rule in expression_block.expressions:
+                    self.rules.append(rule)
+        else:
+            self.rules = rules
 
         self.builtins = datalog_program.builtins()
 
@@ -29,6 +37,7 @@ class DatalogChase():
         instance = dict()
         instance_update = self.datalog_program.extensional_database()
         self.check_constraints(instance_update)
+        iterations = 0
         while len(instance_update) > 0:
             instance = self.merge_instances(instance, instance_update)
             instance_update = self.merge_instances(
@@ -38,6 +47,10 @@ class DatalogChase():
                     ) for rule in self.rules
                 )
             )
+
+            iterations += 1
+            if iterations > self.max_iterations:
+                raise NeuroLangRecursionException()
 
         return instance
 
@@ -62,7 +75,8 @@ class DatalogChase():
             restricted_predicates, nonrestricted_predicates
         )
 
-        substitutions = self.obtain_substitutions(rule_predicates_iterator)
+        substitutions = [{}]
+        substitutions = self.obtain_substitutions(rule_predicates_iterator, substitutions)
 
         substitutions = self.evaluate_builtins(
             builtin_predicates, substitutions
@@ -73,8 +87,7 @@ class DatalogChase():
         )
 
     @staticmethod
-    def obtain_substitutions(rule_predicates_iterator):
-        substitutions = [{}]
+    def obtain_substitutions(rule_predicates_iterator, substitutions):
         for predicate, representation in rule_predicates_iterator:
             new_substitutions = []
             for substitution in substitutions:
@@ -175,7 +188,10 @@ class DatalogChase():
         if restriction_instance is None:
             restriction_instance = dict()
 
-        head_functor = rule.consequent.functor
+        if isinstance(rule.consequent, ExistentialPredicate):
+            head_functor = rule.consequent.body.functor
+        else:
+            head_functor = rule.consequent.functor
         rule_predicates = sdb.extract_datalog_predicates(rule.antecedent)
         restricted_predicates = []
         nonrestricted_predicates = []
@@ -258,16 +274,11 @@ class DatalogChase():
         root = self.ChaseNode(
             self.datalog_program.extensional_database(), dict()
         )
-        rules = []
-        for expression_block in self.datalog_program.intensional_database(
-        ).values():
-            for rule in expression_block.expressions:
-                rules.append(rule)
 
         nodes_to_process = [root]
         while len(nodes_to_process) > 0:
             node = nodes_to_process.pop(0)
-            for rule in rules:
+            for rule in self.rules:
                 new_node = self.build_nodes_from_rules(node, rule)
                 if new_node is not None:
                     nodes_to_process.append(new_node)

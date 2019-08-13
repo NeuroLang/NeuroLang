@@ -33,7 +33,8 @@ def test_builtin_equality_only():
     instance_0 = dl.extensional_database()
 
     rule = datalog_program.expressions[0]
-    instance_update = dc.chase_step(dl, instance_0, dl.builtins(), rule)
+    dc = DatalogChase(dl)
+    instance_update = dc.chase_step(instance_0, rule)
     res = {
         Q: C_({C_((12,))}),
     }

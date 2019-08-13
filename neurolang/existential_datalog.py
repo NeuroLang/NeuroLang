@@ -32,7 +32,7 @@ class ExistentialDatalog(DatalogBasic):
             )
         }
 
-    def intensional_database(self):
+    def non_existential_intensional_database(self):
         return {
             k: v
             for k, v in self.symbol_table.items()
@@ -67,10 +67,6 @@ class ExistentialDatalog(DatalogBasic):
                     "in consequent's body"
                 )
         if consequent_name in self.symbol_table:
-            if consequent_name in self.intensional_database():
-                raise NeuroLangException(
-                    'A rule cannot be both in IDB and \u2203-IDB'
-                )
             expressions = self.symbol_table[consequent_name].expressions
         else:
             expressions = tuple()

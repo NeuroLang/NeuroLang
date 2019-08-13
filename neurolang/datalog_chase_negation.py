@@ -30,7 +30,8 @@ class DatalogChaseNegation(DatalogChase):
             restricted_predicates, nonrestricted_predicates
         )
 
-        substitutions = self.obtain_substitutions(rule_predicates_iterator)
+        substitutions = [{}]
+        substitutions = self.obtain_substitutions(rule_predicates_iterator, substitutions)
 
         substitutions = self.obtain_negative_substitutions(
             negative_predicates, substitutions
