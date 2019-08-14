@@ -54,14 +54,14 @@ def type_validation_value(value, type_):
 
 class ParametricTypeClassMeta(type):
     @lru_cache(maxsize=None)
-    def __getitem__(cls, type_):
-        d = dict(cls.__dict__)
+    def __getitem__(self, type_):
+        d = dict(self.__dict__)
         d['type'] = type_
-        d['__generic_class__'] = cls
+        d['__generic_class__'] = self
         d['__no_explicit_type__'] = False
         d['__parameterized__'] = True
-        return cls.__class__(
-            cls.__name__, cls.__bases__,
+        return self.__class__(
+            self.__name__, self.__bases__,
             d
         )
 
@@ -72,47 +72,47 @@ class ParametricTypeClassMeta(type):
         obj = super().__new__(cls, name, bases, attributes, **kwargs)
         return obj
 
-    def __repr__(cls):
-        r = cls.__name__
-        if hasattr(cls, 'type'):
-            if isinstance(cls.type, type):
-                c = cls.type.__name__
+    def __repr__(self):
+        r = self.__name__
+        if hasattr(self, 'type'):
+            if isinstance(self.type, type):
+                c = self.type.__name__
             else:
-                c = repr(cls.type)
+                c = repr(self.type)
             r += '[{}]'.format(c)
         return r
 
     @lru_cache(maxsize=128)
-    def __subclasscheck__(cls, other):
-        if other is cls:
+    def __subclasscheck__(self, other):
+        if other is self:
             return True
         elif (
             isinstance(other, ParametricTypeClassMeta) and
             other.__parameterized__
         ):
-            return cls.__subclasscheck__parameterized(other)
+            return self.__subclasscheck__parameterized(other)
         else:
             return super().__subclasscheck__(other)
 
-    def __subclasscheck__parameterized(cls, other):
-        if cls.__parameterized__:
+    def __subclasscheck__parameterized(self, other):
+        if self.__parameterized__:
             return issubclass(
                 other.__generic_class__,
-                cls.__generic_class__
-            ) and is_leq_informative(other.type, cls.type)
+                self.__generic_class__
+            ) and is_leq_informative(other.type, self.type)
         else:
             return issubclass(
-                other.__generic_class__, cls
+                other.__generic_class__, self
             )
 
-    def __instancecheck__(cls, other):
+    def __instancecheck__(self, other):
         return (
             super().__instancecheck__(other) or
-            issubclass(other.__class__, cls)
+            issubclass(other.__class__, self)
         )
 
 
-def __check_expression_is_pattern__(expression):
+def _check_expression_is_pattern(expression):
     '''
     Checks whether the Expression is a pattern for
     pattern matching instead of an instance representing
@@ -181,11 +181,11 @@ class ExpressionMeta(ParametricTypeClassMeta):
             generic_pattern_match = True
             for arg in args:
                 if (
-                    __check_expression_is_pattern__(arg) or
+                    _check_expression_is_pattern(arg) or
                     (
                         isinstance(arg, (tuple, list)) and
                         any(
-                            __check_expression_is_pattern__(a)
+                            _check_expression_is_pattern(a)
                             for a in arg
                         )
                     )

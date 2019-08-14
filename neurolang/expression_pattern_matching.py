@@ -30,7 +30,7 @@ class NeuroLangPatternMatchingNoMatch(expressions.NeuroLangException):
 
 class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
     @classmethod
-    def __prepare__(self, name, bases):
+    def __prepare__(cls, name, bases):
         return OrderedDict()
 
     def __new__(cls, name, bases, classdict):
@@ -56,6 +56,7 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
 
         return new_cls
 
+    @staticmethod
     def __check_bases__(name, bases, classdict, overwriteable_properties):
         for base in bases:
             repeated_methods = set(dir(base)).intersection(classdict)
@@ -72,6 +73,7 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
                 )
                 warn(warn_message)
 
+    @staticmethod
     def __infer_type__(classdict, bases):
         current_type = classdict.get('type', Any)
         for base in bases:
@@ -88,6 +90,7 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
                 break
         return current_type
 
+    @staticmethod
     def __infer_patterns__(classdict):
         src_type = None
         dst_type = None
@@ -108,7 +111,7 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
             if callable(v) and hasattr(v, 'pattern') and hasattr(v, 'guard'):
                 pattern = getattr(v, 'pattern')
                 if needs_replacement:
-                    pattern = __pattern_replace_type__(
+                    pattern = _pattern_replace_type(
                         pattern, src_type, dst_type
                     )
                 patterns.append(
@@ -117,6 +120,7 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
         classdict['__patterns__'] = patterns
         return src_type, dst_type, needs_replacement
 
+    @staticmethod
     def __replace_type_in_patterns__(new_cls, src_type, dst_type):
         for attribute_name in dir(new_cls):
             attribute = getattr(new_cls, attribute_name, None)
@@ -149,7 +153,7 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
                 setattr(new_cls, attribute_name, new_attribute)
 
 
-def __pattern_replace_type__(pattern, src_type, dst_type):
+def _pattern_replace_type(pattern, src_type, dst_type):
     if (
         isclass(pattern) and
         issubclass(pattern, expressions.Expression) and
@@ -170,7 +174,7 @@ def __pattern_replace_type__(pattern, src_type, dst_type):
             if arg.default is not inspect.Parameter.empty:
                 continue
             args.append(
-                __pattern_replace_type__(
+                _pattern_replace_type(
                     getattr(pattern, argname),
                     src_type,
                     dst_type
@@ -187,7 +191,7 @@ def __pattern_replace_type__(pattern, src_type, dst_type):
         pattern = pattern_class(*args)
     elif isinstance(pattern, tuple):
         pattern = tuple(
-            __pattern_replace_type__(p, src_type, dst_type)
+            _pattern_replace_type(p, src_type, dst_type)
             for p in pattern
         )
     return pattern
@@ -225,8 +229,8 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
           instance to be executed upon pattern and match being ``True``.
         """
         return chain(*(
-                pm.__patterns__ for pm in self.__class__.mro()
-                if hasattr(pm, '__patterns__')
+            pm.__patterns__ for pm in self.__class__.mro()
+            if hasattr(pm, '__patterns__')
         ))
 
     def match(self, expression):
