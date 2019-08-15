@@ -303,7 +303,7 @@ def test_recursive_predicate_chase_tree():
     assert second_child.instance == instance_2
 
 
-def test_nonrecursive_predicate_chase_solution(N=3):
+def test_nonrecursive_predicate_chase_solution(N=10):
     Q = S_('Q')
     T = S_('T')
     x = S_('x')
@@ -362,7 +362,7 @@ def test_nonrecursive_predicate_chase_solution_constant(N=10):
                 for i in range(N)
             }),
             T: C_({
-                C_((C_(i), C_(i + 2)))
+                C_((C_(i + 2),))
                 for i in (1,)
             })
         }

@@ -174,33 +174,6 @@ def filter_constants_obtain_joins(args_to_project, rule_predicates_iterator):
     return new_representations, joins, vars
 
 
-def filter_constants_obtain_joins_old(rule_predicates_iterator):
-    join_columns_predicates = OrderedDict()
-    new_representations = []
-    for p, pred_rep in enumerate(rule_predicates_iterator):
-        predicate, representation = pred_rep
-        select_constants = []
-        for i, arg in enumerate(predicate.args):
-            if isinstance(arg, Constant):
-                select_constants.append((i, arg.value))
-            else:
-                if arg not in join_columns_predicates:
-                    join_columns_predicates[arg] = [(p, i)]
-                else:
-                    join_columns_predicates[arg].append((p, i))
-
-        if len(select_constants) > 0:
-            new_representation = [
-                t for t in representation
-                if all(t.value[i].value == c for i, c in select_constants)
-            ]
-        else:
-            new_representation = representation
-
-        new_representations.append(new_representation)
-    return new_representations, join_columns_predicates
-
-
 def execute_joins(representations, joins):
     join_replacements = {}
     representations = OrderedDict(
@@ -221,67 +194,9 @@ def execute_joins(representations, joins):
                 join_replacements[(join[0], i)] = (main_var[0], r1_a + i)
             r1_a = r1.arity
             del representations[join[0]]
-            # r1 = r12.projection(*list(range(r1_a)))
-            # r2 = r12.projection(*list(range(r1_a, r1_a + r2.arity)))
-            # representations[join[0]] = r2
         representations[main_var[0]] = r1
 
     return representations, join_replacements
-
-
-def execute_joins_old(new_representations, join_columns_predicates):
-    displacements = {i: 0 for i, _ in enumerate(new_representations)}
-    for joins in join_columns_predicates.values:
-        if len(joins) == 1:
-            continue
-        join = joins[0]
-        result = new_representations[join[0]]
-        for i, join in enumerate(joins):
-            join_cols = (
-                displacements[joins[i][0]] + joins[i][1],
-                displacements[join[0]] + join[1]
-            )
-            result = result.natural_join(
-                new_representations[join[0]], join_cols
-            )
-
-    substitutions = []
-    for tuples in product(*new_representations):
-        substitution = {}
-        for var, joins in join_columns_predicates.items():
-            p, i = joins[0]
-            constant = tuples[p].value[i]
-            value = constant.value
-            if all(
-                tuples[p].value[i].value == value
-                for p, i in joins[1:]
-            ):
-                substitution[var] = constant
-            else:
-                break
-        else:
-            substitutions.append(substitution)
-    return substitutions
-
-
-def execute_joins_old_2(new_representations, join_columns_predicates):
-    substitutions = []
-    for tuples in product(*new_representations):
-        substitution = {}
-        for var, joins in join_columns_predicates.items():
-            p, i = joins[0]
-            constant = tuples[p].value[i]
-            value = constant.value
-            if all(
-                tuples[p].value[i].value == value
-                for p, i in joins[1:]
-            ):
-                substitution[var] = constant
-            else:
-                break
-        else:
-            substitutions.append(substitution)
-    return substitutions
 
 
 obtain_substitutions = obtain_substitutions_relational_algebra
@@ -501,20 +416,12 @@ def build_chase_solution(datalog_program, chase_step=chase_step):
     instance_update = datalog_program.extensional_database()
     while len(instance_update) > 0:
         instance = merge_instances(instance, instance_update)
-        instance_updates = []
-        for rule in rules:
-            upd = chase_step(
+        instance_update = merge_instances(*(
+            chase_step(
                 datalog_program, instance, builtins, rule,
                 restriction_instance=instance_update
             )
-            instance_updates.append(upd)
-        instance_update = merge_instances(*instance_updates)
-        # instance_update = merge_instances(*(
-        #    chase_step(
-        #        datalog_program, instance, builtins, rule,
-        #        restriction_instance=instance_update
-        #    )
-        #    for rule in rules
-        # ))
+            for rule in rules
+        ))
 
     return instance

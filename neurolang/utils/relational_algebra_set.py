@@ -9,7 +9,7 @@ class RelationalAlgebraSet(MutableSet):
         if iterable is not None:
             it = iter(iterable)
             self._container = pd.DataFrame(
-                iterable,
+                list(iterable),
                 index=[hash(e) for e in it]
             )
             if len(self._container > 0):

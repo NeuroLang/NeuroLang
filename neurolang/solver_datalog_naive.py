@@ -239,7 +239,7 @@ class DatalogBasic(PatternWalker):
     @staticmethod
     def new_set(iterable=None):
         return WrappedRelationalAlgebraSet(iterable=iterable)
-        
+
     def intensional_database(self):
         return {
             k: v for k, v in self.symbol_table.items()
@@ -262,7 +262,7 @@ class DatalogBasic(PatternWalker):
     def add_extensional_predicate_from_tuples(
         self, symbol, iterable, type_=Unknown
     ):
-        constant = Constant(frozenset(iterable))
+        constant = Constant(self.new_set(iterable))
         if type_ is not Unknown:
             constant = constant.cast(AbstractSet[type_])
         symbol = symbol.cast(constant.type)
