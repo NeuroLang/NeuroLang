@@ -327,14 +327,16 @@ def compute_result_set(
 ):
     if restriction_instance is None:
         restriction_instance = dict()
-    new_tuples = datalog.new_set(
-        Constant(
+    new_tuples = list(
+        tuple(
+            v.value for v in
             apply_substitution_arguments(
                 rule.consequent.args, substitution
             )
         )
         for substitution in substitutions
     )
+    new_tuples = datalog.new_set(new_tuples)
 
     if rule.consequent.functor in instance:
         new_tuples -= instance[rule.consequent.functor].value

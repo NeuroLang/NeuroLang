@@ -84,6 +84,8 @@ else:
 
 type_order = {
     np.int64: (np.int,),
+    np.bool_: (bool,),
+    bool: (np.bool_,),
     int: (np.int64, float, complex),
     float: (np.float64, complex,),
     Set: (AbstractSet,)

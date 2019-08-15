@@ -83,7 +83,13 @@ class RelationalAlgebraSet(MutableSet):
                 selection &= x[i] == j
             return selection
 
-        new_container = self._container[crit]
+        it = iter(select_criteria.items())
+        col, value = next(it)
+        ix = self._container[col] == value
+        for col, value in it:
+            ix &= self._container[col] == value
+
+        new_container = self._container[ix]
 
         output = type(self)()
         output._container = new_container

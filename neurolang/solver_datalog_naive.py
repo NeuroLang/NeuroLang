@@ -83,7 +83,12 @@ class WrappedExpressionIterable:
     def add(self, element):
         if isinstance(element, Constant[Tuple]):
             element = element.value
-        super().add(element)
+        element_ = tuple()
+        for e in element:
+            if isinstance(e, Constant):
+                e = e.value
+            element_ += (e,)
+        super().add(element_)
 
 
 class WrappedRelationalAlgebraSet(
@@ -268,10 +273,16 @@ class DatalogBasic(PatternWalker):
                 type_ = first.type
             else:
                 type_ = Constant(first).type
-            iterable = list(iterable)
 
+        # iterable = [
+        #    tuple(
+        #        Constant[t_](v)
+        #        for t_, v in zip(type_.__args__, t)
+        #    )
+        #    for t in iterable
+        # ]
         constant = Constant[AbstractSet[type_]](
-            self.new_set(iterable),
+            self.new_set(list(iterable)),
             auto_infer_type=False,
             verify_type=False
         )
