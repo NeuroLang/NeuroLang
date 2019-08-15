@@ -13,7 +13,9 @@ class RelationalAlgebraSet(MutableSet):
                 index=[hash(e) for e in it]
             )
             if len(self._container > 0):
-                self._container.drop_duplicates(inplace=True)
+                duplicated = self._container.index.duplicated()
+                if duplicated.any():
+                    self._container = self._container.loc[~duplicated].dropna()
 
     def __contains__(self, element):
         return (
@@ -53,7 +55,9 @@ class RelationalAlgebraSet(MutableSet):
         )
 
         if drop_duplicates:
-            container.drop_duplicates(inplace=True)
+            duplicated = container.index.duplicated()
+            if duplicated.any():
+                container = container.loc[~duplicated].dropna()
 
         return container
 
@@ -101,10 +105,8 @@ class RelationalAlgebraSet(MutableSet):
             right_on=right_on,
             sort=False,
         )
-        # new_container = new_container.iloc[:, len(left_on):]
         output = type(self)()
         output._container = self._renew_index(new_container)
-        # output._container.columns = range(0, output._container.shape[1])
         return output
 
     def copy(self):
@@ -120,3 +122,28 @@ class RelationalAlgebraSet(MutableSet):
             self._container.reset_index()
             .drop('index', axis=1)
         )
+
+    def __or__(self, other):
+        if self is other:
+            return self.copy()
+        elif isinstance(other, RelationalAlgebraSet):
+            other = other._container
+            new_container = self._container.append(
+                other.loc[~other.index.isin(self._container.index)]
+            )
+            output = output = type(self)()
+            output._container = new_container
+            return output
+        else:
+            return super().__or__(self, other)
+
+    def __and__(self, other):
+        if isinstance(other, RelationalAlgebraSet):
+            index_intersection = self._container.index & other._container.index
+            new_container = self._container.loc[index_intersection]
+            output = output = type(self)()
+            output._container = new_container
+            return output
+
+        else:
+            return super().__and__(self, other)

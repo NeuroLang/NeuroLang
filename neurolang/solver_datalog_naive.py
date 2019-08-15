@@ -75,7 +75,6 @@ class WrappedExpressionIterable:
         super().__init__(iterable)
 
     def __iter__(self):
-        r = list(super().__iter__())
         return (
             Constant(t)
             for t in super().__iter__()
@@ -262,9 +261,20 @@ class DatalogBasic(PatternWalker):
     def add_extensional_predicate_from_tuples(
         self, symbol, iterable, type_=Unknown
     ):
-        constant = Constant(self.new_set(iterable))
-        if type_ is not Unknown:
-            constant = constant.cast(AbstractSet[type_])
+        if type_ is Unknown:
+            iterable, iterable_ = tee(iter(iterable))
+            first = next(iterable_)
+            if isinstance(first, Expression):
+                type_ = first.type
+            else:
+                type_ = Constant(first).type
+            iterable = list(iterable)
+
+        constant = Constant[AbstractSet[type_]](
+            self.new_set(iterable),
+            auto_infer_type=False,
+            verify_type=False
+        )
         symbol = symbol.cast(constant.type)
         self.symbol_table[symbol] = constant
 
