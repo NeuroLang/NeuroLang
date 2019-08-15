@@ -1,5 +1,5 @@
 from collections import namedtuple, OrderedDict
-from itertools import chain, product
+from itertools import chain, product, tee
 from operator import eq
 from typing import AbstractSet
 
@@ -17,34 +17,58 @@ def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
     if restriction_instance is None:
         restriction_instance = dict()
 
-    rule_head = rule.consequent
     rule_predicates = extract_rule_predicates(
         rule, instance, builtins, restriction_instance=restriction_instance
     )
 
     if all(len(predicate_list) == 0 for predicate_list in rule_predicates):
-        return {}
+        return dict()
 
     restricted_predicates, nonrestricted_predicates, builtin_predicates =\
         rule_predicates
+
+    args_to_project = extract_variable_arguments(rule.consequent)
+    builtin_predicates, builtin_predicates_ = tee(builtin_predicates)
+    for predicate, _ in builtin_predicates_:
+        args_to_project += extract_variable_arguments(predicate)
+    new_args_to_project = tuple()
+    for i, a in enumerate(args_to_project):
+        if a not in args_to_project[:i]:
+            new_args_to_project += (a,)
+    args_to_project = new_args_to_project
 
     rule_predicates_iterator = chain(
         restricted_predicates,
         nonrestricted_predicates
     )
 
-    substitutions = obtain_substitutions(rule_head, rule_predicates_iterator)
+    substitutions = obtain_substitutions(
+        args_to_project, rule_predicates_iterator
+    )
 
     substitutions = evaluate_builtins(
         builtin_predicates, substitutions, datalog
     )
 
     return compute_result_set(
+        datalog,
         rule, substitutions, instance, restriction_instance
     )
 
 
-def obtain_substitutions_mgu(rule_head, rule_predicates_iterator):
+def extract_variable_arguments(predicate):
+    stack = list(predicate.args[::-1])
+    variables = tuple()
+    while stack:
+        arg = stack.pop()
+        if isinstance(arg, Symbol):
+            variables += (arg,)
+        elif isinstance(arg, FunctionApplication):
+            stack += arg.args[::-1]
+    return variables
+
+
+def obtain_substitutions_mgu(args_to_project, rule_predicates_iterator):
     substitutions = [{}]
     for predicate, representation in rule_predicates_iterator:
         new_substitutions = []
@@ -78,41 +102,76 @@ def unify_substitution(predicate, substitution, representation):
     return new_substitutions
 
 
-def obtain_substitutions_relational_algebra(rule_head, rule_predicates_iterator):
-    new_representations, join_columns_predicates = \
-        filter_constants_obtain_joins(rule_predicates_iterator)
+def obtain_substitutions_relational_algebra(
+    args_to_project, rule_predicates_iterator
+):
+    new_representations, joins, vars = \
+        filter_constants_obtain_joins(
+            args_to_project, rule_predicates_iterator
+        )
 
-    substitutions = execute_joins(new_representations, join_columns_predicates)
+    new_representations, var_replacements = execute_joins(
+        new_representations, joins
+    )
+
+    projections_per_relationship = OrderedDict()
+    var_names = []
+    for v, pos in vars.items():
+        if v not in args_to_project:
+            continue
+        r, c = var_replacements.get(pos, pos)
+        if r not in projections_per_relationship:
+            projections_per_relationship[r] = tuple()
+        projections_per_relationship[r] += (c,)
+        var_names.append(v)
+
+    projected_representations = [
+        new_representations[r].projection(*cs)
+        for r, cs in projections_per_relationship.items()
+    ]
+
+    substitutions = []
+    for tuples in product(*projected_representations):
+        subs = {
+            var: value
+            for var, value in zip(
+                var_names,
+                chain(*(t.value for t in tuples))
+            )
+        }
+        substitutions.append(subs)
 
     return substitutions
 
 
-def filter_constants_obtain_joins(rule_predicates_iterator):
-    join_columns_predicates = OrderedDict()
+def filter_constants_obtain_joins(args_to_project, rule_predicates_iterator):
+    selections = {}
+    joins = {}
+    projections = {}
+    vars = {}
     new_representations = []
     for p, pred_rep in enumerate(rule_predicates_iterator):
         predicate, representation = pred_rep
-        select_constants = {}
         for i, arg in enumerate(predicate.args):
             if isinstance(arg, Constant):
-                select_constants[i] = arg.value
+                if p not in selections:
+                    selections[p] = dict()
+                selections[p][i] = arg.value
             else:
-                if arg not in join_columns_predicates:
-                    join_columns_predicates[arg] = [(p, i)]
+                if arg in args_to_project and arg not in projections:
+                    projections[arg] = (p, i)
+                if arg not in vars:
+                    vars[arg] = (p, i)
+                    joins[(p, i)] = []
                 else:
-                    join_columns_predicates[arg].append((p, i))
+                    joins[vars[arg]].append((p, i))
 
-        if len(select_constants) > 0:
-            new_representation = representation.selection(select_constants)
-            # new_representation = [
-            #    t for t in representation
-            #    if all(t.value[i].value == c for i, c in select_constants)
-            # ]
+        if p in selections:
+            new_representation = representation.selection(selections[p])
         else:
             new_representation = representation
-
         new_representations.append(new_representation)
-    return new_representations, join_columns_predicates
+    return new_representations, joins, vars
 
 
 def filter_constants_obtain_joins_old(rule_predicates_iterator):
@@ -142,7 +201,35 @@ def filter_constants_obtain_joins_old(rule_predicates_iterator):
     return new_representations, join_columns_predicates
 
 
-def execute_joins(new_representations, join_columns_predicates):
+def execute_joins(representations, joins):
+    join_replacements = {}
+    representations = OrderedDict(
+        (i, r)
+        for i, r in enumerate(representations)
+    )
+    for main_var, joins in joins.items():
+        main_var = join_replacements.get(main_var, main_var)
+        r1 = representations[main_var[0]]
+        col1 = main_var[1]
+        r1_a = r1.arity
+        for join in joins:
+            join = join_replacements.get(join, join)
+            r2 = representations[join[0]]
+            r12 = r1.natural_join(r2, ((col1, join[1]),))
+            r1 = r12
+            for i in range(r2.arity):
+                join_replacements[(join[0], i)] = (main_var[0], r1_a + i)
+            r1_a = r1.arity
+            del representations[join[0]]
+            # r1 = r12.projection(*list(range(r1_a)))
+            # r2 = r12.projection(*list(range(r1_a, r1_a + r2.arity)))
+            # representations[join[0]] = r2
+        representations[main_var[0]] = r1
+
+    return representations, join_replacements
+
+
+def execute_joins_old(new_representations, join_columns_predicates):
     displacements = {i: 0 for i, _ in enumerate(new_representations)}
     for joins in join_columns_predicates.values:
         if len(joins) == 1:
@@ -157,7 +244,6 @@ def execute_joins(new_representations, join_columns_predicates):
             result = result.natural_join(
                 new_representations[join[0]], join_cols
             )
-
 
     substitutions = []
     for tuples in product(*new_representations):
@@ -178,7 +264,7 @@ def execute_joins(new_representations, join_columns_predicates):
     return substitutions
 
 
-def execute_joins_old(new_representations, join_columns_predicates):
+def execute_joins_old_2(new_representations, join_columns_predicates):
     substitutions = []
     for tuples in product(*new_representations):
         substitution = {}
@@ -322,11 +408,11 @@ def extract_rule_predicates(
 
 
 def compute_result_set(
-    rule, substitutions, instance, restriction_instance=None
+    datalog, rule, substitutions, instance, restriction_instance=None
 ):
     if restriction_instance is None:
         restriction_instance = dict()
-    new_tuples = set(
+    new_tuples = datalog.new_set(
         Constant(
             apply_substitution_arguments(
                 rule.consequent.args, substitution
@@ -341,7 +427,7 @@ def compute_result_set(
         new_tuples -= restriction_instance[rule.consequent.functor].value
 
     if len(new_tuples) == 0:
-        return {}
+        return dict()
     else:
         set_type = next(iter(new_tuples)).type
         new_instance = {
@@ -415,12 +501,20 @@ def build_chase_solution(datalog_program, chase_step=chase_step):
     instance_update = datalog_program.extensional_database()
     while len(instance_update) > 0:
         instance = merge_instances(instance, instance_update)
-        instance_update = merge_instances(*(
-            chase_step(
+        instance_updates = []
+        for rule in rules:
+            upd = chase_step(
                 datalog_program, instance, builtins, rule,
                 restriction_instance=instance_update
             )
-            for rule in rules
-        ))
+            instance_updates.append(upd)
+        instance_update = merge_instances(*instance_updates)
+        # instance_update = merge_instances(*(
+        #    chase_step(
+        #        datalog_program, instance, builtins, rule,
+        #        restriction_instance=instance_update
+        #    )
+        #    for rule in rules
+        # ))
 
     return instance

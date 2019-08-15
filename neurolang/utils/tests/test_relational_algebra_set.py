@@ -5,11 +5,13 @@ def test_relational_algebra_set_semantics_empty():
     ras = RelationalAlgebraSet()
 
     assert len(ras) == 0
+    assert ras.arity == 0
     assert list(iter(ras)) == []
 
     ras.add((0, 1))
     assert (0, 1) in ras
     assert len(ras) == 1
+    assert ras.arity == 2
 
 
 def test_relational_algebra_set_semantics():
@@ -59,10 +61,15 @@ def test_relational_algebra_ra_natural_join():
     a = [(i, i * 2) for i in range(5)]
     b = [(i * 2, i * 3) for i in range(5)]
     c = [(i, i * 2, i * 2, i * 3) for i in range(5)]
+    d = [(i, i * 2, i, i * 2) for i in range(5)]
 
     ras_a = RelationalAlgebraSet(a)
     ras_b = RelationalAlgebraSet(b)
     ras_c = RelationalAlgebraSet(c)
+    ras_d = RelationalAlgebraSet(d)
 
     res = ras_a.natural_join(ras_b, [(1, 0)])
     assert res == ras_c
+
+    res = ras_a.natural_join(ras_a, [(0, 0)])
+    assert res == ras_d

@@ -11,7 +11,9 @@ class RelationalAlgebraSet(MutableSet):
             self._container = pd.DataFrame(
                 iterable,
                 index=[hash(e) for e in it]
-            ).drop_duplicates()
+            )
+            if len(self._container > 0):
+                self._container.drop_duplicates(inplace=True)
 
     def __contains__(self, element):
         return (
@@ -38,7 +40,10 @@ class RelationalAlgebraSet(MutableSet):
             self._container.loc[hash(element)] = element
 
     def discard(self, element):
-        self._container.drop(index=hash(element), inplace=True)
+        try:
+            self._container.drop(index=hash(element), inplace=True)
+        except KeyError:
+            pass
 
     @staticmethod
     def _renew_index(container, drop_duplicates=True):
@@ -51,6 +56,13 @@ class RelationalAlgebraSet(MutableSet):
             container.drop_duplicates(inplace=True)
 
         return container
+
+    @property
+    def arity(self):
+        if self._container is None:
+            return 0
+        else:
+            return len(self._container.columns)
 
     def projection(self, *columns):
         new_container = self._container[list(columns)]
@@ -73,19 +85,38 @@ class RelationalAlgebraSet(MutableSet):
         output._container = new_container
         return output
 
-    def natural_join(self, other, join_indices):
-        other = other._container
-        orig_columns = other.columns
-        self_n_columns = len(self._container.columns)
-        other.columns += self_n_columns
+    def natural_join(self, other, join_indices, return_mappings=False):
+        other = pd.DataFrame(
+            other._container.values,
+            index=other._container.index,
+            columns=range(self.arity, other._container.shape[1] + self.arity),
+            copy=False
+        )
         left_on, right_on = zip(*join_indices)
+        left_on = list(left_on)
+        right_on = list(l + self.arity for l in right_on)
         new_container = self._container.merge(
             other,
-            left_on=list(left_on),
-            right_on=list(i + self_n_columns for i in right_on)
+            left_on=left_on,
+            right_on=right_on,
+            sort=False,
         )
-        other.columns = orig_columns
+        # new_container = new_container.iloc[:, len(left_on):]
         output = type(self)()
         output._container = self._renew_index(new_container)
-        output._container.columns = range(0, output._container.shape[1])
+        # output._container.columns = range(0, output._container.shape[1])
         return output
+
+    def copy(self):
+        output = type(self)()
+        if self._container is not None:
+            output._container = self._container.copy()
+        return output
+
+    def __repr__(self):
+        if self._container is None:
+            return '{}'
+        return repr(
+            self._container.reset_index()
+            .drop('index', axis=1)
+        )

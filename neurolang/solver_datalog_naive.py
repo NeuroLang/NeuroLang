@@ -66,8 +66,11 @@ class WrappedExpressionIterable:
     def __init__(self, iterable=None):
         if iterable is not None:
             it1, it2 = tee(iterable)
-            if isinstance(next(it1), Constant[Tuple]):
-                iterable = list(e.value for e in it2)
+            try:
+                if isinstance(next(it1), Constant[Tuple]):
+                    iterable = list(e.value for e in it2)
+            except StopIteration:
+                pass
 
         super().__init__(iterable)
 
@@ -233,6 +236,10 @@ class DatalogBasic(PatternWalker):
                 f'Expression {antecedent} is not conjunctive'
             )
 
+    @staticmethod
+    def new_set(iterable=None):
+        return WrappedRelationalAlgebraSet(iterable=iterable)
+        
     def intensional_database(self):
         return {
             k: v for k, v in self.symbol_table.items()
