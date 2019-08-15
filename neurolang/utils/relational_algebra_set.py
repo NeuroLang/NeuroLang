@@ -147,3 +147,11 @@ class RelationalAlgebraSet(MutableSet):
 
         else:
             return super().__and__(self, other)
+
+    def __isub__(self, other):
+        if isinstance(other, RelationalAlgebraSet):
+            diff_ix = ~self._container.index.isin(other._container.index)
+            self._container = self._container.loc[diff_ix]
+            return self
+        else:
+            return super().__isub__(self, other)
