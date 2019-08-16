@@ -15,15 +15,15 @@ from .solver_datalog_naive import (
 class SymbolAdorned(Symbol):
     """Symbol with adornments"""
 
-    def __init__(self, name, adornment, number):
+    def __init__(self, name, adornment, number=None):
         self.adornment = adornment
         self.number = number
         super().__init__(name)
 
     def __eq__(self, other):
         return (
-            isinstance(other, SymbolAdorned) and
-            hash(self) == hash(other)
+            hash(self) == hash(other) and
+            isinstance(other, type(self))
         )
 
     def __hash__(self):
@@ -186,23 +186,33 @@ def magic_predicate(predicate, i=None):
 
 def reachable_adorned_code(query, datalog):
     adorned_code = adorn_code(query, datalog)
-    reachable_code = []
     adorned_datalog = type(datalog)()
     adorned_datalog.walk(adorned_code)
-    adorned_idb = adorned_datalog.intensional_database()
     # assume that the query rule is the first
     adorned_query = adorned_code.expressions[0]
-    to_reach = [adorned_query.consequent.functor]
+    return reachable_code(adorned_query, adorned_datalog)
+
+
+def reachable_code(query, datalog):
+    if not hasattr(query, '__iter__'):
+        query = [query]
+
+    reachable_code = []
+    idb = datalog.intensional_database()
+    to_reach = [
+        q.consequent.functor
+        for q in query
+    ]
     reached = set()
     while to_reach:
         p = to_reach.pop()
         reached.add(p)
-        rules = adorned_idb[p]
+        rules = idb[p]
         for rule in rules.expressions:
             reachable_code.append(rule)
             for predicate in extract_datalog_predicates(rule.antecedent):
                 functor = predicate.functor
-                if functor not in reached and functor in adorned_idb:
+                if functor not in reached and functor in idb:
                     to_reach.append(functor)
 
     return ExpressionBlock(reachable_code)

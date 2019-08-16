@@ -1,0 +1,79 @@
+@@eol_comments :: /#.*?$/
+@@whitespace :: /[\s\t\n\r\\ ]/
+@@keyword :: or and not in import
+@@keyword :: medial_of lateral_of superior_of inferior_of
+@@keyword :: anterior_of posterior_of
+@@keyword :: endpoints_in both_endpoints_in
+
+start = WMQL_Script;
+
+WMQL_Script = { @+:WMQL_Statement [';'] ~ } $;
+
+WMQL_Statement = WMQL_Query | module_import ;
+
+WMQL_Query = assignment | blocked_assignment;
+
+module_import::module_import = "import" ','.{filename+:filename};
+
+assignment::assignment = identifier:identifier "=" value:expression;
+
+blocked_assignment::blocked_assignment = identifier:identifier "|=" value:expression;
+
+expression = disjunction;
+
+disjunction::disjunction = ("or"|"+").{term+:term};
+
+term::term = ("and"|"*").{factor+:factor};
+
+factor = exclusion
+       | negation
+       | atom;
+
+exclusion::exclusion = include:atom NOTIN exclude+:atom { NOTIN exclude+:atom };
+
+NOTIN = 'not in'
+      | '-';
+
+atom = '('~@:disjunction ')'
+     | function_evaluation
+     | literal;
+
+function_evaluation::function_evaluation = name:name'('argument:expression')';
+
+negation::negation = ("not"|"-") factor:factor;
+
+
+literal = identifier 
+        | number 
+        | text;
+
+identifier::identifier = name:name['.'hemisphere:hemisphere];
+
+hemisphere = "left"
+           |  "right"
+           |  "side"
+           |  "opposite";
+
+name = /[a-zA-Z_][a-zA-Z0-9_]*/;
+
+function_name = "anterior_of"
+              |  "posterior_of"
+              |  "superior_of"
+              |  "inferior_of"
+              |  "lateral_of"
+              |  "medial_of"
+              |  "endpoints_in"
+              |  "both_endpoints_in" 
+              |  "only";
+
+
+filename = /[a-zA-Z0-9_\.]+/;
+
+number::number = n:/[0-9]+/;
+
+text::text = "'"t:/[^']+/"'"
+           | '"'t:/[^"]+/'"';
+
+string = /[a-zA-Z0-9_\.\*\+]+/;
+
+NEWLINE = /[\u000C\r\n]+/;
