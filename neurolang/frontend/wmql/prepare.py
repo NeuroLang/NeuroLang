@@ -13,10 +13,11 @@ def prepare_datalog_ir_program(
     endpoints_in_symbol_name='endpoints_in',
 ):
     """
-    Given a Datalog Program representation initalise the following EDB sets:
+    Given a Datalog Program representation initialise the following EDB sets:
     * `tract_traversals(tract_id, region_id)`: of tract id and the atlas region
                               traversed by the tract, `tracts`
-    * `tracts(tract_id, region)`: of tract id and the tracts as VBR regions.
+    * `tracts(tract_id, region)`: of tract id and the tracts as `ExplicitVBR`
+                                  regions.
     * `endpoints_in(tract_id, region)`: of tract id and the regions where its
                                         endpoints reach.
 
@@ -28,12 +29,12 @@ def prepare_datalog_ir_program(
 
     tr = tractography.Tractography(tracts=[])
 
-    desikan_map = nib.load(atlas_filename)
+    atlas_map = nib.load(atlas_filename)
     tracts_trk = nib.trackvis.read(tracts_filename, points_space='rasmm')
 
     tr = tractography.Tractography(tracts=[t[0] for t in tracts_trk[0]])
     tli = tract_label_indices.TractographySpatialIndexing(
-        tr.tracts(), desikan_map.get_data(), desikan_map.affine, 0., 2.
+        tr.tracts(), atlas_map.get_data(), atlas_map.affine, 0., 2.
     )
 
     tract_traversals_ = []
