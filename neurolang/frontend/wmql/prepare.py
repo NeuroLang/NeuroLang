@@ -6,7 +6,12 @@ from .. import ExplicitVBR
 from ...solver_datalog_naive import Symbol
 
 
-def prepare_datalog_ir_program(datalog, atlas_filename, tracts_filename):
+def prepare_datalog_ir_program(
+    datalog, atlas_filename, tracts_filename,
+    tracts_symbol_name='tracts',
+    tract_traversals_symbol_name='tract_traversals',
+    endpoints_in_symbol_name='endpoints_in',
+):
     """
     Given a Datalog Program representation initalise the following EDB sets:
     * `tract_traversals(tract_id, region_id)`: of tract id and the atlas region
@@ -40,16 +45,19 @@ def prepare_datalog_ir_program(datalog, atlas_filename, tracts_filename):
             tract_traversals_.append((tract, label))
 
     datalog.add_extensional_predicate_from_tuples(
-        Symbol('tract_traversals'), tract_traversals_
+        Symbol(tract_traversals_symbol_name), tract_traversals_
     )
-    datalog.add_extensional_predicate_from_tuples(Symbol('tracts'), tracts_)
+    datalog.add_extensional_predicate_from_tuples(
+        Symbol(tracts_symbol_name),
+        tracts_
+    )
 
     endpoints_in = []
     for ending in tli.ending_tracts_labels:
         for tract, label in ending.items():
             endpoints_in.append((tract, label))
     datalog.add_extensional_predicate_from_tuples(
-        Symbol('endpoints_in'), endpoints_in
+        Symbol(endpoints_in_symbol_name), endpoints_in
     )
 
     return datalog
