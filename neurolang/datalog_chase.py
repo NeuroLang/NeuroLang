@@ -1,5 +1,5 @@
-from collections import namedtuple, OrderedDict
-from itertools import chain, product, tee
+from collections import namedtuple
+from itertools import chain, tee
 from operator import eq
 from typing import AbstractSet
 
@@ -10,6 +10,10 @@ from .unification import (
     apply_substitution_arguments,
     compose_substitutions,
     most_general_unifier_arguments
+)
+from .relational_algebra import (
+    Column, Selection, Product, Projection, eq_,
+    RelationAlgebraRewriteOptimiser, RelationAlgebraSolver
 )
 
 
@@ -102,104 +106,74 @@ def unify_substitution(predicate, substitution, representation):
     return new_substitutions
 
 
-def obtain_substitutions_relational_algebra(
+def translate_to_ra_plus(
+    args_to_project,
+    rule_predicates_iterator
+):
+    seen_vars = dict()
+    selections = []
+    column = -1
+    new_representations = tuple()
+    projections = tuple()
+    projected_var_names = dict()
+    rule_predicates_iterator = list(rule_predicates_iterator)
+    for p, pred_rep in enumerate(rule_predicates_iterator):
+        predicate, representation = pred_rep
+        local_selections = []
+        for i, arg in enumerate(predicate.args):
+            column += 1
+            c = Constant[Column](Column(column))
+            if isinstance(arg, Constant):
+                l_c = Constant[Column](Column(i))
+                local_selections.append((l_c, arg))
+            elif isinstance(arg, Symbol):
+                if arg in seen_vars:
+                    selections.append((seen_vars[arg], c))
+                else:
+                    if arg in args_to_project:
+                        projected_var_names[arg] = len(projections)
+                        projections += (c,)
+                    seen_vars[arg] = c
+        new_representation = sdb.Constant[AbstractSet](representation)
+        for s1, s2 in local_selections:
+            new_representation = Selection(new_representation, eq_(s1, s2))
+        new_representations += (new_representation,)
+    if len(new_representations) > 0:
+        relation = Product(new_representations)
+        for s1, s2 in selections:
+            relation = Selection(relation, eq_(s1, s2))
+        relation = Projection(relation, projections)
+    else:
+        relation = Constant[AbstractSet](set())
+    return relation, projected_var_names
+
+
+def obtain_substitutions_relational_algebra_plus(
     args_to_project, rule_predicates_iterator
 ):
-    new_representations, joins, vars = \
-        filter_constants_obtain_joins(
-            args_to_project, rule_predicates_iterator
-        )
-
-    new_representations, var_replacements = execute_joins(
-        new_representations, joins
+    ra_code, projected_var_names = translate_to_ra_plus(
+        args_to_project,
+        rule_predicates_iterator
     )
+    ra_code = RelationAlgebraRewriteOptimiser().walk(ra_code)
 
-    projections_per_relationship = OrderedDict()
-    var_names = []
-    for v, pos in vars.items():
-        if v not in args_to_project:
-            continue
-        r, c = var_replacements.get(pos, pos)
-        if r not in projections_per_relationship:
-            projections_per_relationship[r] = tuple()
-        projections_per_relationship[r] += (c,)
-        var_names.append(v)
-
-    projected_representations = [
-        new_representations[r].projection(*cs)
-        for r, cs in projections_per_relationship.items()
-    ]
+    if not isinstance(ra_code, Constant) or len(ra_code.value) > 0:
+        result = RelationAlgebraSolver().walk(ra_code)
+    else:
+        return [{}]
 
     substitutions = []
-    for tuples in product(*projected_representations):
+    for tuple_ in result.value:
         subs = {
-            var: value
-            for var, value in zip(
-                var_names,
-                chain(*(t.value for t in tuples))
-            )
+            var: tuple_.value[col]
+            for var, col in projected_var_names.items()
         }
         substitutions.append(subs)
 
     return substitutions
 
 
-def filter_constants_obtain_joins(args_to_project, rule_predicates_iterator):
-    selections = {}
-    joins = {}
-    projections = {}
-    vars = {}
-    new_representations = []
-    for p, pred_rep in enumerate(rule_predicates_iterator):
-        predicate, representation = pred_rep
-        for i, arg in enumerate(predicate.args):
-            if isinstance(arg, Constant):
-                if p not in selections:
-                    selections[p] = dict()
-                selections[p][i] = arg.value
-            else:
-                if arg in args_to_project and arg not in projections:
-                    projections[arg] = (p, i)
-                if arg not in vars:
-                    vars[arg] = (p, i)
-                    joins[(p, i)] = []
-                else:
-                    joins[vars[arg]].append((p, i))
-
-        if p in selections:
-            new_representation = representation.selection(selections[p])
-        else:
-            new_representation = representation
-        new_representations.append(new_representation)
-    return new_representations, joins, vars
-
-
-def execute_joins(representations, joins):
-    join_replacements = {}
-    representations = OrderedDict(
-        (i, r)
-        for i, r in enumerate(representations)
-    )
-    for main_var, joins in joins.items():
-        main_var = join_replacements.get(main_var, main_var)
-        r1 = representations[main_var[0]]
-        col1 = main_var[1]
-        r1_a = r1.arity
-        for join in joins:
-            join = join_replacements.get(join, join)
-            r2 = representations[join[0]]
-            r12 = r1.natural_join(r2, ((col1, join[1]),))
-            r1 = r12
-            for i in range(r2.arity):
-                join_replacements[(join[0], i)] = (main_var[0], r1_a + i)
-            r1_a = r1.arity
-            del representations[join[0]]
-        representations[main_var[0]] = r1
-
-    return representations, join_replacements
-
-
-obtain_substitutions = obtain_substitutions_relational_algebra
+obtain_substitutions = obtain_substitutions_relational_algebra_plus
 
 
 def evaluate_builtins(builtin_predicates, substitutions, datalog):
