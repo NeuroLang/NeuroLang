@@ -9,6 +9,7 @@ from ...solver_datalog_naive import Symbol
 def prepare_datalog_ir_program(
     datalog, atlas_filename, tracts_filename,
     tracts_symbol_name='tracts',
+    regions_symbol_name='regions',
     tract_traversals_symbol_name='tract_traversals',
     endpoints_in_symbol_name='endpoints_in',
 ):
@@ -18,8 +19,10 @@ def prepare_datalog_ir_program(
                               traversed by the tract, `tracts`
     * `tracts(tract_id, region)`: of tract id and the tracts as `ExplicitVBR`
                                   regions.
-    * `endpoints_in(tract_id, region)`: of tract id and the regions where its
-                                        endpoints reach.
+    * `regions(region_id, region)`: of region id and the template regions
+                                    as `ExplicitVBR` regions.
+    * `endpoints_in(tract_id, region_id)`: of tract id and the regions where
+                                        its endpoints reach.
 
     :param datalog DatalogBasic: datalog IR instance to add the EDB elements
                                  to.
@@ -30,6 +33,8 @@ def prepare_datalog_ir_program(
     tr = tractography.Tractography(tracts=[])
 
     atlas_map = nib.load(atlas_filename)
+    atlas_im = atlas_map.get_data()
+    atlas_affine = atlas_map.affine
     tracts_trk = nib.trackvis.read(tracts_filename, points_space='rasmm')
 
     tr = tractography.Tractography(tracts=[t[0] for t in tracts_trk[0]])
@@ -39,18 +44,31 @@ def prepare_datalog_ir_program(
 
     tract_traversals_ = []
     tracts_ = []
+    eye_4 = np.eye(4)
     for tract, labels in tli.crossing_tracts_labels.items():
-        tract_region = ExplicitVBR(tli.tractography[tract], np.eye(4))
+        tract_region = ExplicitVBR(tli.tractography[tract], eye_4)
         tracts_.append((tract, tract_region))
         for label in labels:
             tract_traversals_.append((tract, label))
-
     datalog.add_extensional_predicate_from_tuples(
-        Symbol(tract_traversals_symbol_name), tract_traversals_
+        Symbol(tract_traversals_symbol_name),
+        tract_traversals_
     )
     datalog.add_extensional_predicate_from_tuples(
         Symbol(tracts_symbol_name),
         tracts_
+    )
+
+    regions = []
+    for label in tli.crossing_labels_tracts:
+        region = ExplicitVBR(
+            np.transpose((atlas_im == label).nonzero()),
+            atlas_affine
+        )
+        regions.append((label, region))
+    datalog.add_extensional_predicate_from_tuples(
+        Symbol(regions_symbol_name),
+        regions
     )
 
     endpoints_in = []
