@@ -57,7 +57,7 @@ def test_relational_algebra_ra_selection():
     assert ras_0 == a_sel
 
 
-def test_relational_algebra_ra_natural_join():
+def test_relational_algebra_ra_equijoin():
     a = [(i, i * 2) for i in range(5)]
     b = [(i * 2, i * 3) for i in range(5)]
     c = [(i, i * 2, i * 2, i * 3) for i in range(5)]
@@ -68,8 +68,8 @@ def test_relational_algebra_ra_natural_join():
     ras_c = RelationalAlgebraSet(c)
     ras_d = RelationalAlgebraSet(d)
 
-    res = ras_a.natural_join(ras_b, [(1, 0)])
+    res = ras_a.equijoin(ras_b, [(1, 0)])
     assert res == ras_c
 
-    res = ras_a.natural_join(ras_a, [(0, 0)])
+    res = ras_a.equijoin(ras_a, [(0, 0)])
     assert res == ras_d

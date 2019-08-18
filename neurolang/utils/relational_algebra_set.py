@@ -1,5 +1,7 @@
+from itertools import product
 from typing import MutableSet
 
+import numpy as np
 import pandas as pd
 
 
@@ -75,14 +77,6 @@ class RelationalAlgebraSet(MutableSet):
         return output
 
     def selection(self, select_criteria):
-        def crit(x):
-            it = iter(select_criteria.items())
-            i, j = next(it)
-            selection = x[i] == j
-            for i, j in it:
-                selection &= x[i] == j
-            return selection
-
         it = iter(select_criteria.items())
         col, value = next(it)
         ix = self._container[col] == value
@@ -95,7 +89,20 @@ class RelationalAlgebraSet(MutableSet):
         output._container = new_container
         return output
 
-    def natural_join(self, other, join_indices, return_mappings=False):
+    def selection_columns(self, select_criteria):
+        it = iter(select_criteria.items())
+        col1, col2 = next(it)
+        ix = self._container[col1] == self._container[col2]
+        for col, value in it:
+            ix &= self._container[col1] == self._container[col2]
+
+        new_container = self._container[ix]
+
+        output = type(self)()
+        output._container = new_container
+        return output
+
+    def equijoin(self, other, join_indices, return_mappings=False):
         other = pd.DataFrame(
             other._container.values,
             index=other._container.index,
@@ -114,6 +121,16 @@ class RelationalAlgebraSet(MutableSet):
         output = type(self)()
         output._container = self._renew_index(new_container)
         return output
+
+    def cross_product(self, other):
+        new_container = [
+            tuple(t1) + tuple(t2)
+            for t1, t2 in product(
+                self._container.values,
+                other._container.values
+            )
+        ]
+        return type(self)(new_container)
 
     def copy(self):
         output = type(self)()
