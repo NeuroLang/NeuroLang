@@ -1,5 +1,5 @@
 from operator import eq
-from typing import AbstractSet
+from typing import AbstractSet, Tuple
 
 from . import expressions
 from . import solver_datalog_naive as sdb
@@ -105,16 +105,20 @@ class RelationAlgebraSolver(ew.ExpressionWalker):
     @ew.add_match(EquiJoin)
     def equijoin(self, equijoin):
         left = self.walk(equijoin.relation_left).value
-        columns_left = equijoin.columns_left.value
+        columns_left = (c.value for c in equijoin.columns_left.value)
         right = self.walk(equijoin.relation_right).value
-        columns_right = equijoin.columns_right.value
-        return C_[AbstractSet](left, right, (columns_left, columns_right))
+        columns_right = (c.value for c in equijoin.columns_right.value)
+        res = left.equijoin(right, list(zip(columns_left, columns_right)))
+        return C_[AbstractSet](res)
 
 
 class RelationAlgebraRewriteOptimiser(ew.ExpressionWalker):
-    @ew.add_match(Selection(C_[AbstractSet], ...))
-    def selection_on_relation(self, selection):
-        return selection
+    @ew.add_match(Projection)
+    def projection(self, projection):
+        return Projection(
+            self.walk(projection.relation),
+            projection.attributes
+        )
 
     @ew.add_match(Selection(Product, FA_(eq_, (C_[Column], C_[Column]))))
     def selection_between_columns_product(self, selection):
@@ -136,11 +140,12 @@ class RelationAlgebraRewriteOptimiser(ew.ExpressionWalker):
                     res = self.walk(
                         EquiJoin(
                             Product(relations_left),
-                            C_[Column](Column(column_left)),
-                            Product(relations_right), C_[Column](
-                                Column(
-                                    column_max - accum_arity + arity_relation
-                                )
+                            C_[Tuple[Column]](
+                                (C_[Column](Column(column_min)),)
+                            ),
+                            Product(relations_right),
+                            C_[Tuple[Column]](
+                                (C_[Column](Column(column_max - accum_arity)),)
                             )
                         )
                     )
@@ -203,6 +208,10 @@ class RelationAlgebraRewriteOptimiser(ew.ExpressionWalker):
                 selection.relation.columns_right
             )
         )
+
+    @ew.add_match(Selection(C_[AbstractSet], ...))
+    def selection_on_relation(self, selection):
+        return selection
 
     @ew.add_match(...)
     def any_other_case(self, expression):

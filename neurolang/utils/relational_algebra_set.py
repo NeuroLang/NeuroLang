@@ -1,7 +1,6 @@
 from itertools import product
 from typing import MutableSet
 
-import numpy as np
 import pandas as pd
 
 
@@ -123,14 +122,16 @@ class RelationalAlgebraSet(MutableSet):
         return output
 
     def cross_product(self, other):
-        new_container = [
+        new_container = pd.DataFrame([
             tuple(t1) + tuple(t2)
             for t1, t2 in product(
                 self._container.values,
                 other._container.values
             )
-        ]
-        return type(self)(new_container)
+        ])
+        result = type(self)()
+        result._container = self._renew_index(new_container)
+        return result
 
     def copy(self):
         output = type(self)()
