@@ -1,11 +1,40 @@
-from collections.abc import Set
+from functools import lru_cache
+from collections.abc import Set, Mapping, MutableSet
 
 from ..solver_datalog_naive import Fact
+from ..exceptions import NeuroLangException
+
+
+class MapInstance(Mapping):
+    def __init__(self, elements):
+        if any(
+            not isinstance(tuple_set, Set) or
+            isinstance(tuple_set, MutableSet)
+            for tuple_set in elements.values()
+        ):
+            raise NeuroLangException('Expected immutable tuple sets')
+        self.elements = elements
+        self.cached_hash = None
+
+    def __getitem__(self, predicate):
+        return self.elements[predicate]
+
+    def __iter__(self):
+        return iter(self.elements)
+
+    def __len__(self):
+        return len(self.elements)
+
+    def __hash__(self):
+        if self.cached_hash is None:
+            self.cached_hash = hash(tuple(zip(self.elements.items())))
+        return self.cached_hash
 
 
 class SetInstance(Set):
     def __init__(self, elements):
         self.elements = elements
+        self.cached_hash = None
 
     def __contains__(self, fact):
         predicate = fact.consequent.functor
@@ -24,7 +53,6 @@ class SetInstance(Set):
                 yield Fact(predicate(*t))
 
     def __hash__(self):
-        return hash(frozenset(self))
-
-    def as_map_instance(self):
-        return MapInstance(self.elements)
+        if self.cached_hash is None:
+            self.cached_hash = hash(tuple(zip(self.elements.items())))
+        return self.cached_hash
