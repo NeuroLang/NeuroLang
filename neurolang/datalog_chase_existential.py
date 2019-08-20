@@ -9,7 +9,7 @@ from .solver_datalog_naive import (
     extract_datalog_free_variables,
 )
 from .unification import (
-    apply_substitution, apply_substitution_arguments, compose_substitutions,
+    apply_substitution_arguments,
 )
 from .expressions import Constant
 
