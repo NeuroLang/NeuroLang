@@ -13,6 +13,7 @@ from .unification import (
 )
 from .expressions import Constant
 
+
 class DatalogExistentialChaseRestricted(DatalogChase):
     '''
     Based on definitions 2.5 and 2.7 of Cali et. al. [1]_.
@@ -136,7 +137,6 @@ class DatalogExistentialChaseRestricted(DatalogChase):
             else:
                 return False
         return True
-
 
     def both_null_or_differents(self, key, var, instance_values):
         if var.value not in self.fresh_nulls and var == instance_values[key]:

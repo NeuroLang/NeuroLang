@@ -11,6 +11,7 @@ from .unification import (
 )
 from .exceptions import NeuroLangException
 
+
 class NeuroLangRecursionException(NeuroLangException):
     pass
 
@@ -26,8 +27,8 @@ class DatalogChase():
     def _set_rules(self, datalog_program, rules):
         if rules is None:
             self.rules = []
-            for expression_block in datalog_program.intensional_database().values(
-            ):
+            for expression_block in \
+                datalog_program.intensional_database().values():
                 for rule in expression_block.expressions:
                     self.rules.append(rule)
         else:
@@ -79,7 +80,9 @@ class DatalogChase():
         )
 
         substitutions = [{}]
-        substitutions = self.obtain_substitutions(rule_predicates_iterator, substitutions)
+        substitutions = self.obtain_substitutions(
+            rule_predicates_iterator, substitutions
+        )
 
         substitutions = self.evaluate_builtins(
             builtin_predicates, substitutions
@@ -190,7 +193,6 @@ class DatalogChase():
     ):
         if restriction_instance is None:
             restriction_instance = dict()
-
 
         head_functor = rule.consequent.functor
         rule_predicates = sdb.extract_datalog_predicates(rule.antecedent)
