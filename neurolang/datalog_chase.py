@@ -28,7 +28,7 @@ class DatalogChase():
         if rules is None:
             self.rules = []
             for expression_block in \
-                datalog_program.intensional_database().values():
+                    datalog_program.intensional_database().values():
                 for rule in expression_block.expressions:
                     self.rules.append(rule)
         else:
