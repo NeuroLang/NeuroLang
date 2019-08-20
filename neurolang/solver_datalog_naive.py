@@ -114,7 +114,13 @@ class WrappedExpressionIterable:
 class WrappedRelationalAlgebraSet(
     WrappedExpressionIterable, RelationalAlgebraSet
 ):
-        pass
+    def __contains__(self, element):
+        if not isinstance(element, Constant):
+            element = self._normalise_element(element)
+        return (
+            self._container is not None and
+            hash(element) in self._container.index
+        )
 
 
 class DatalogBasic(PatternWalker):

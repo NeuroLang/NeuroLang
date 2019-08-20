@@ -188,7 +188,7 @@ class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
         else:
             self._container.loc[e_hash] = value
 
-    def discard(self, value):   
+    def discard(self, value):
         try:
             value = self._normalise_element(value)
             self._container.drop(index=hash(value), inplace=True)
