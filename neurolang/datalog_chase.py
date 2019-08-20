@@ -21,7 +21,6 @@ class DatalogChase():
         self.datalog_program = datalog_program
         self.max_iterations = max_iterations
         self._set_rules(rules)
-
         self.builtins = datalog_program.builtins()
 
     def _set_rules(self, rules):
