@@ -5,7 +5,7 @@ from ..solver_datalog_naive import Fact
 from ..exceptions import NeuroLangException
 
 
-class MapInstance(Mapping):
+class Instance:
     def __init__(self, elements):
         if any(
             not isinstance(tuple_set, Set) or
@@ -16,6 +16,13 @@ class MapInstance(Mapping):
         self.elements = elements
         self.cached_hash = None
 
+    def __hash__(self):
+        if self.cached_hash is None:
+            self.cached_hash = hash(tuple(zip(self.elements.items())))
+        return self.cached_hash
+
+
+class MapInstance(Instance, Mapping):
     def __getitem__(self, predicate):
         return self.elements[predicate]
 
@@ -25,17 +32,8 @@ class MapInstance(Mapping):
     def __len__(self):
         return len(self.elements)
 
-    def __hash__(self):
-        if self.cached_hash is None:
-            self.cached_hash = hash(tuple(zip(self.elements.items())))
-        return self.cached_hash
 
-
-class SetInstance(Set):
-    def __init__(self, elements):
-        self.elements = elements
-        self.cached_hash = None
-
+class SetInstance(Instance, Set):
     def __contains__(self, fact):
         predicate = fact.consequent.functor
         tuple_values = fact.consequent.args
@@ -51,8 +49,3 @@ class SetInstance(Set):
         for predicate, tuples in self.elements.items():
             for t in tuples:
                 yield Fact(predicate(*t))
-
-    def __hash__(self):
-        if self.cached_hash is None:
-            self.cached_hash = hash(tuple(zip(self.elements.items())))
-        return self.cached_hash
