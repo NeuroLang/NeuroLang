@@ -57,6 +57,12 @@ class NullConstant(Constant):
     def __repr__(self):
         return 'NULL'
 
+    def __eq__(self, other):
+        return self is other
+
+    def __hash__(self):
+        return id(self)
+
 
 UNDEFINED = Undefined(None)
 NULL = NullConstant[Any](None)

@@ -16,7 +16,7 @@ class NeuroLangRecursionException(NeuroLangException):
 
 
 class DatalogChase():
-    def __init__(self, datalog_program, rules=None, max_iterations=300):
+    def __init__(self, datalog_program, rules=None, max_iterations=500):
         self.datalog_program = datalog_program
         self.max_iterations = max_iterations
         if rules is None:
@@ -188,10 +188,8 @@ class DatalogChase():
         if restriction_instance is None:
             restriction_instance = dict()
 
-        if isinstance(rule.consequent, ExistentialPredicate):
-            head_functor = rule.consequent.body.functor
-        else:
-            head_functor = rule.consequent.functor
+
+        head_functor = rule.consequent.functor
         rule_predicates = sdb.extract_datalog_predicates(rule.antecedent)
         restricted_predicates = []
         nonrestricted_predicates = []

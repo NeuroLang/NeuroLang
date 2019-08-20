@@ -70,9 +70,10 @@ class ExistentialDatalog(DatalogBasic):
             expressions = self.symbol_table[consequent_name].expressions
         else:
             expressions = tuple()
-        expressions += (expression, )
+        new_expression = Implication(consequent_body, expression.antecedent)
+        expressions += (new_expression, )
         self.symbol_table[consequent_name] = ExpressionBlock(expressions)
-        return expression
+        return new_expression
 
 
 class SolverNonRecursiveExistentialDatalog(
