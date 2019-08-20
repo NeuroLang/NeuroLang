@@ -1,4 +1,4 @@
-from .. import datalog_chase
+from ..datalog_chase import DatalogChase
 from .. import datalog_magic_sets
 from .. import expression_walker
 from .. import solver_datalog_naive
@@ -50,5 +50,6 @@ def test_resolution_works():
     dl.walk(mr)
     dl.walk(edb)
 
-    solution = datalog_chase.build_chase_solution(dl)
+    datalog_chase = DatalogChase(dl)
+    solution = datalog_chase.build_chase_solution()
     assert solution[goal].value == {C_((e,)) for e in (b, c, d)}
