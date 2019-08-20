@@ -3,7 +3,9 @@ from typing import AbstractSet
 
 from .datalog_chase import DatalogChase
 from .solver_datalog_naive import (
-    NullConstant, Any, Unknown,
+    NullConstant,
+    Any,
+    Unknown,
     extract_datalog_predicates,
     extract_datalog_free_variables,
 )
@@ -69,9 +71,15 @@ class DatalogExistentialChaseRestricted(DatalogChase):
         )
 
     def get_free_variables(self, rule):
-        free_variable_consequent = extract_datalog_free_variables(rule.consequent)
-        free_variable_antecedent = extract_datalog_free_variables(rule.antecedent)
-        free_variables = free_variable_consequent._set.difference(free_variable_antecedent._set)
+        free_variable_consequent = extract_datalog_free_variables(
+            rule.consequent
+        )
+        free_variable_antecedent = extract_datalog_free_variables(
+            rule.antecedent
+        )
+        free_variables = free_variable_consequent._set.difference(
+            free_variable_antecedent._set
+        )
 
         return free_variables
 
@@ -93,7 +101,9 @@ class DatalogExistentialChaseRestricted(DatalogChase):
                 new_tuples.add(Constant(new_args))
 
         if functor in instance:
-            new_tuples = self.restricted_evaluation(new_tuples, instance[functor].value)
+            new_tuples = self.restricted_evaluation(
+                new_tuples, instance[functor].value
+            )
         elif functor in restriction_instance:
             new_tuples -= restriction_instance[functor].value
 
@@ -123,7 +133,8 @@ class DatalogExistentialChaseRestricted(DatalogChase):
         for k, v in enumerate(new_values):
             if v.value not in self.fresh_nulls and v == instance_values[k]:
                 continue
-            elif v.value in self.fresh_nulls and instance_values[k] in self.fresh_nulls:
+            elif v.value in self.fresh_nulls and instance_values[
+                k] in self.fresh_nulls:
                 continue
             else:
                 return False
@@ -146,7 +157,12 @@ class DatalogExistentialChaseRestricted(DatalogChase):
         return [substitutions]
 
     def remove_nulls(self, new_args):
-        without_nulls = tuple(filter(lambda arg_tuple: not isinstance(arg_tuple, NullConstant), new_args))
+        without_nulls = tuple(
+            filter(
+                lambda arg_tuple: not isinstance(arg_tuple, NullConstant),
+                new_args
+            )
+        )
         return without_nulls
 
 
@@ -201,9 +217,15 @@ class DatalogExistentialChaseOblivious(DatalogChase):
         )
 
     def get_free_variables(self, rule):
-        free_variable_consequent = extract_datalog_free_variables(rule.consequent)
-        free_variable_antecedent = extract_datalog_free_variables(rule.antecedent)
-        free_variables = free_variable_consequent._set.difference(free_variable_antecedent._set)
+        free_variable_consequent = extract_datalog_free_variables(
+            rule.consequent
+        )
+        free_variable_antecedent = extract_datalog_free_variables(
+            rule.antecedent
+        )
+        free_variables = free_variable_consequent._set.difference(
+            free_variable_antecedent._set
+        )
 
         return free_variables
 
@@ -255,5 +277,10 @@ class DatalogExistentialChaseOblivious(DatalogChase):
         return [substitutions]
 
     def remove_nulls(self, new_args):
-        without_nulls = tuple(filter(lambda arg_tuple: not isinstance(arg_tuple, NullConstant), new_args))
+        without_nulls = tuple(
+            filter(
+                lambda arg_tuple: not isinstance(arg_tuple, NullConstant),
+                new_args
+            )
+        )
         return without_nulls

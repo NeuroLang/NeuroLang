@@ -39,11 +39,10 @@ def test_finite_chase():
     y = S_('y')
 
     datalog_program = Eb_((
-        Fact(P(C_(1))),
-        Fact(P(C_(2))),
-        Fact(R(C_(1), C_(2))),
-        Implication(Ep_(x, K(y, x)), P(y)),
-        Implication(K(y, x), R(z, y) & K(z, x))
+        Fact(P(C_(1))), Fact(P(C_(2))), Fact(R(C_(1), C_(2))),
+        Implication(Ep_(x, K(y, x)),
+                    P(y)), Implication(K(y, x),
+                                       R(z, y) & K(z, x))
     ))
 
     dl = Datalog()
@@ -55,17 +54,14 @@ def test_finite_chase():
     NULL = NullConstant('NULL', auto_infer_type=False)
 
     final_instance = {
-        P:
-        C_({
-            C_((C_[int](1),)),
-            C_((C_[int](2),)),
+        P: C_({
+            C_((C_[int](1), )),
+            C_((C_[int](2), )),
         }),
-        K:
-        C_({
+        K: C_({
             C_((NULL, C_[int](1))),
         }),
-        R:
-        C_({
+        R: C_({
             C_((C_[int](1), C_[int](2))),
         })
     }
@@ -81,7 +77,6 @@ def test_finite_chase():
 def test_infinite_chase():
     '''
     Example 2.9 of Cali et. al. [1]_.
-
 
     .. [1] Calì, A., G. Gottlob, and M. Kifer. “Taming the Infinite Chase:
     Query Answering under Expressive Relational Constraints.”
@@ -116,30 +111,49 @@ def test_infinite_chase():
 
     final_instance = {
         R1:
-            C_({
-                C_((C_[int](1), C_[int](2),)),
-                C_((C_[int](2), NULL,)),
-                C_((NULL, NULL,)),
-            }),
+        C_({
+            C_((
+                C_[int](1),
+                C_[int](2),
+            )),
+            C_((
+                C_[int](2),
+                NULL,
+            )),
+            C_((
+                NULL,
+                NULL,
+            )),
+        }),
         R2:
-            C_({
-                C_((C_[int](2),)),
-                C_((NULL,)),
-            }),
+        C_({
+            C_((C_[int](2), )),
+            C_((NULL, )),
+        }),
         R3:
-            C_({
-                C_((C_[int](2), NULL,)),
-                C_((NULL, NULL,)),
-            }),
+        C_({
+            C_((
+                C_[int](2),
+                NULL,
+            )),
+            C_((
+                NULL,
+                NULL,
+            )),
+        }),
     }
 
     for key, value in enumerate(solution_instance[R1].value):
         if key == 0:
-            assert value.value[0] == C_[int](1) and value.value[1] == C_[int](2)
+            assert value.value[0] == C_[int](1) and value.value[1] == C_[int
+                                                                         ](2)
         elif key == 1:
-            assert value.value[0] == C_[int](2) and isinstance(value.value[1], NullConstant)
+            assert value.value[0] == C_[int](2) and isinstance(
+                value.value[1], NullConstant
+            )
         else:
-            isinstance(value.value[0], NullConstant) and isinstance(value.value[1], NullConstant)
+            isinstance(value.value[0], NullConstant
+                       ) and isinstance(value.value[1], NullConstant)
 
     for key, value in enumerate(solution_instance[R2].value):
         if key == 0:
@@ -149,7 +163,9 @@ def test_infinite_chase():
 
     for key, value in enumerate(solution_instance[R3].value):
         if key == 0:
-            assert value.value[0] == C_[int](2) and isinstance(value.value[1], NullConstant)
+            assert value.value[0] == C_[int](2) and isinstance(
+                value.value[1], NullConstant
+            )
         else:
-            isinstance(value.value[0], NullConstant) and isinstance(value.value[1], NullConstant)
-
+            isinstance(value.value[0], NullConstant
+                       ) and isinstance(value.value[1], NullConstant)
