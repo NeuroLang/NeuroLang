@@ -12,17 +12,23 @@ from .unification import (
 
 
 class DatalogChase():
-    def __init__(self, datalog_program):
+    def __init__(self, datalog_program, rules=None):
         self.datalog_program = datalog_program
-        self.rules = []
-        for expression_block in datalog_program.intensional_database().values(
-        ):
-            for rule in expression_block.expressions:
-                self.rules.append(rule)
+        self._set_rules(rules)
 
         self.builtins = datalog_program.builtins()
 
-    def __call__(self):
+    def _set_rules(self, rules):
+        if rules is None:
+            self.rules = []
+            for expression_block in \
+                    self.datalog_program.intensional_database().values():
+                self.rules += expression_block.expressions
+        else:
+            self.rules = rules
+
+    def __call__(self, rules=None):
+        self._set_rules(rules)
         self.build_chase_solution()
 
     def build_chase_solution(self):
