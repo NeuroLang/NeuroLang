@@ -2,16 +2,16 @@ from itertools import chain
 from typing import AbstractSet
 
 from .datalog_chase import DatalogChase
+from .expressions import Constant
+from .unification import (
+    apply_substitution_arguments,
+)
 from .solver_datalog_naive import (
     extract_datalog_free_variables,
     NullConstant,
     Any,
     Unknown,
 )
-from .unification import (
-    apply_substitution_arguments,
-)
-from .expressions import Constant
 
 
 class DatalogExistentialChaseRestricted(DatalogChase):
