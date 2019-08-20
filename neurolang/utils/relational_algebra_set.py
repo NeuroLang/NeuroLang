@@ -1,10 +1,10 @@
 from itertools import product
-from typing import MutableSet
+from collections.abc import MutableSet, Set
 
 import pandas as pd
 
 
-class RelationalAlgebraSet(MutableSet):
+class RelationalAlgebraFrozenSet(Set):
     def __init__(self, iterable=None):
         self._container = None
         if iterable is not None:
@@ -13,7 +13,7 @@ class RelationalAlgebraSet(MutableSet):
                 list(iterable),
                 index=[hash(e) for e in it]
             )
-            if len(self._container > 0):
+            if len(self._container) > 0:
                 duplicated = self._container.index.duplicated()
                 if duplicated.any():
                     self._container = self._container.loc[~duplicated].dropna()
@@ -34,19 +34,6 @@ class RelationalAlgebraSet(MutableSet):
         if self._container is None:
             return 0
         return len(self._container)
-
-    def add(self, element):
-        e_hash = hash(element)
-        if self._container is None:
-            self._container = pd.DataFrame([element], index=[e_hash])
-        else:
-            self._container.loc[hash(element)] = element
-
-    def discard(self, element):
-        try:
-            self._container.drop(index=hash(element), inplace=True)
-        except KeyError:
-            pass
 
     @staticmethod
     def _renew_index(container, drop_duplicates=True):
@@ -184,6 +171,21 @@ class RelationalAlgebraSet(MutableSet):
 
         else:
             return super().__and__(self, other)
+
+
+class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
+    def add(self, element):
+        e_hash = hash(element)
+        if self._container is None:
+            self._container = pd.DataFrame([element], index=[e_hash])
+        else:
+            self._container.loc[hash(element)] = element
+
+    def discard(self, element):
+        try:
+            self._container.drop(index=hash(element), inplace=True)
+        except KeyError:
+            pass
 
     def __isub__(self, other):
         if isinstance(other, RelationalAlgebraSet):

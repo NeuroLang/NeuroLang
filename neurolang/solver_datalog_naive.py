@@ -17,6 +17,7 @@ from .expressions import (
 from .type_system import Unknown
 from .expression_walker import (
     add_match, PatternWalker, expression_iterator,
+    ReplaceExpressionsByValues
 )
 
 
@@ -69,7 +70,8 @@ class WrappedExpressionIterable:
             it1, it2 = tee(iterable)
             try:
                 if isinstance(next(it1), Constant[Tuple]):
-                    iterable = list(e.value for e in it2)
+                    rebv = ReplaceExpressionsByValues({})
+                    iterable = list(rebv.walk(e) for e in it2)
             except StopIteration:
                 pass
 
