@@ -101,7 +101,7 @@ class RelationalAlgebraSet(MutableSet):
         it = iter(select_criteria.items())
         col1, col2 = next(it)
         ix = self._container[col1] == self._container[col2]
-        for col, value in it:
+        for co1, col2 in it:
             ix &= self._container[col1] == self._container[col2]
 
         new_container = self._container[ix]
