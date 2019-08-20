@@ -81,13 +81,15 @@ def get_constant_dterm_table_cpd(dterm):
     if dterm.functor.name == Constant[str]('bernoulli'):
         p = dterm.args[0].value
         return TableDistribution({1: p, 0: 1.0 - p})
+    else:
+        raise NeuroLangException(f'Unknown distribution {dterm.functor.name}')
 
 
 FactSet = AbstractSet[Fact]
 FactSetSymbol = Symbol[FactSet]
 FactSetTableCPD = Mapping[FactSet, float]
-FactSetTableCPDFunctor = Definition[Callable[[Iterable[FactSet]],
-                                             FactSetTableCPD]]
+FactSetTableCPDFunctor = Definition[
+    Callable[[Iterable[FactSet]], FactSetTableCPD]]
 
 
 class ExtensionalTableCPDFunctor(FactSetTableCPDFunctor):
@@ -119,7 +121,6 @@ class GDatalogToGraphicalModelTranslator(ExpressionWalker):
     '''Expression walker generating the graphical model
     representation of a GDatalog[Δ] program.
     '''
-
     def __init__(self):
         self.gm = GraphicalModel()
         self.intensional_predicate_rule_count = defaultdict(int)
@@ -150,8 +151,9 @@ class GDatalogToGraphicalModelTranslator(ExpressionWalker):
             raise NeuroLangException(
                 f'Random variable {rule_rv_symbol} already defined'
             )
-        self.gm.rv_to_cpd_functor[rule_rv_symbol
-                                  ] = (IntensionalTableCPDFunctor(rule))
+        self.gm.rv_to_cpd_functor[rule_rv_symbol] = (
+            IntensionalTableCPDFunctor(rule)
+        )
         for antecedent_pred in get_antecedent_predicate_names(rule):
             antecedent_rv_symbol = FactSetSymbol(f'{antecedent_pred}')
             self.gm.add_parent(rule_rv_symbol, antecedent_rv_symbol)
@@ -197,8 +199,9 @@ def delta_infer1(rule, facts):
         table = dict()
         for cpd_entries in itertools.product(
             *[
-                get_constant_dterm_table_cpd(get_dterm(dfact.consequent))
-                .table.items() for dfact in inferred_facts
+                get_constant_dterm_table_cpd(get_dterm(dfact.consequent)
+                                             ).table.items()
+                for dfact in inferred_facts
             ]
         ):
             new_facts = frozenset(
@@ -274,9 +277,7 @@ class TableCPDGraphicalModelSolver(ExpressionWalker):
     @add_match(FunctionApplication(ExtensionalTableCPDFunctor, ...))
     def extensional_table_cpd(self, expression):
         return Constant[TableDistribution](
-            TableDistribution({
-                frozenset(expression.functor.facts): 1.0
-            })
+            TableDistribution({frozenset(expression.functor.facts): 1.0})
         )
 
     @add_match(FunctionApplication(UnionFactSetTableCPDFunctor, ...))
@@ -284,9 +285,7 @@ class TableCPDGraphicalModelSolver(ExpressionWalker):
         parent_facts = frozenset(
         ).union(*[arg.value for arg in expression.args])
         return Constant[TableDistribution](
-            TableDistribution({
-                parent_facts: 1.0
-            })
+            TableDistribution({parent_facts: 1.0})
         )
 
     @add_match(FunctionApplication(IntensionalTableCPDFunctor, ...))
