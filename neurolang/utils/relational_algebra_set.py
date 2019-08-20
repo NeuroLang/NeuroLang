@@ -8,15 +8,10 @@ class RelationalAlgebraFrozenSet(Set):
     def __init__(self, iterable=None):
         self._container = None
         if iterable is not None:
-            it = iter(iterable)
             self._container = pd.DataFrame(
                 list(iterable),
-                index=[hash(e) for e in it]
             )
-            if len(self._container) > 0:
-                duplicated = self._container.index.duplicated()
-                if duplicated.any():
-                    self._container = self._container.loc[~duplicated].dropna()
+            self._container = self._renew_index(self._container)
 
     def __contains__(self, element):
         return (
@@ -88,7 +83,7 @@ class RelationalAlgebraFrozenSet(Set):
         it = iter(select_criteria.items())
         col1, col2 = next(it)
         ix = self._container[col1] == self._container[col2]
-        for co1, col2 in it:
+        for col1, col2 in it:
             ix &= self._container[col1] == self._container[col2]
 
         new_container = self._container[ix]
@@ -159,7 +154,7 @@ class RelationalAlgebraFrozenSet(Set):
             output._container = new_container
             return output
         else:
-            return super().__or__(self, other)
+            return super().__or__(other)
 
     def __and__(self, other):
         if isinstance(other, RelationalAlgebraSet):
@@ -170,20 +165,20 @@ class RelationalAlgebraFrozenSet(Set):
             return output
 
         else:
-            return super().__and__(self, other)
+            return super().__and__(other)
 
 
 class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
-    def add(self, element):
-        e_hash = hash(element)
+    def add(self, value):
+        e_hash = hash(value)
         if self._container is None:
-            self._container = pd.DataFrame([element], index=[e_hash])
+            self._container = pd.DataFrame([value], index=[e_hash])
         else:
-            self._container.loc[hash(element)] = element
+            self._container.loc[hash(value)] = value
 
-    def discard(self, element):
+    def discard(self, value):
         try:
-            self._container.drop(index=hash(element), inplace=True)
+            self._container.drop(index=hash(value), inplace=True)
         except KeyError:
             pass
 
@@ -193,4 +188,4 @@ class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
             self._container = self._container.loc[diff_ix]
             return self
         else:
-            return super().__isub__(self, other)
+            return super().__isub__(other)

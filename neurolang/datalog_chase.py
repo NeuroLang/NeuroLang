@@ -117,7 +117,7 @@ def translate_to_ra_plus(
     projections = tuple()
     projected_var_names = dict()
     rule_predicates_iterator = list(rule_predicates_iterator)
-    for p, pred_rep in enumerate(rule_predicates_iterator):
+    for _, pred_rep in enumerate(rule_predicates_iterator):
         predicate, representation = pred_rep
         local_selections = []
         for i, arg in enumerate(predicate.args):
