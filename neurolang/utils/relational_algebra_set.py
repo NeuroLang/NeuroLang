@@ -14,10 +14,21 @@ class RelationalAlgebraFrozenSet(Set):
             self._container = self._renew_index(self._container)
 
     def __contains__(self, element):
+        element = self._normalise_element(element)
         return (
             self._container is not None and
             hash(element) in self._container.index
         )
+
+    @staticmethod
+    def _normalise_element(element):
+        if isinstance(element, tuple):
+            pass
+        elif hasattr(element, '__iter__'):
+            element = tuple(element)
+        else:
+            element = (element,)
+        return element
 
     def __iter__(self):
         if self._container is not None:
@@ -170,14 +181,16 @@ class RelationalAlgebraFrozenSet(Set):
 
 class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
     def add(self, value):
+        value = self._normalise_element(value)
         e_hash = hash(value)
         if self._container is None:
             self._container = pd.DataFrame([value], index=[e_hash])
         else:
-            self._container.loc[hash(value)] = value
+            self._container.loc[e_hash] = value
 
-    def discard(self, value):
+    def discard(self, value):   
         try:
+            value = self._normalise_element(value)
             self._container.drop(index=hash(value), inplace=True)
         except KeyError:
             pass
