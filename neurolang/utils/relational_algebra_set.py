@@ -76,7 +76,7 @@ class RelationalAlgebraSet(MutableSet):
         output = type(self)()
         output._container = self._renew_index(
             new_container,
-            drop_duplicates=False
+            drop_duplicates=True
         )
         return output
 
