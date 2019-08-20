@@ -410,5 +410,6 @@ class RelationalAlgebraOptimiser(
     """
     Mixing that optimises through relational algebra expressions by
     rewriting.
+    equi-selection/product compositions into equijoins.
     """
     pass
