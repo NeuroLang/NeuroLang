@@ -13,7 +13,7 @@ from .unification import (
 )
 from .relational_algebra import (
     Column, Selection, Product, Projection, eq_,
-    RelationAlgebraRewriteOptimiser, RelationAlgebraSolver
+    RelationalAlgebraOptimiser, RelationalAlgebraSolver
 )
 
 
@@ -158,9 +158,9 @@ def obtain_substitutions_relational_algebra_plus(
         args_to_project,
         rule_predicates_iterator
     )
-    ra_code_opt = RelationAlgebraRewriteOptimiser().walk(ra_code)
+    ra_code_opt = RelationalAlgebraOptimiser().walk(ra_code)
     if not isinstance(ra_code_opt, Constant) or len(ra_code_opt.value) > 0:
-        result = RelationAlgebraSolver().walk(ra_code_opt)
+        result = RelationalAlgebraSolver().walk(ra_code_opt)
     else:
         return [{}]
 
