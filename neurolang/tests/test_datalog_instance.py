@@ -17,8 +17,21 @@ def test_set_instance_contains_facts():
     assert F_(Q(C_(4))) not in instance
     assert hash(instance) is not None
 
+
 def test_map_instance_contains_facts():
     elements = {Q: frozenset({(C_(2), ), (C_(3), )})}
     instance = MapInstance(elements)
     assert Q in instance
     assert hash(instance) is not None
+
+
+def test_construct_instance_from_factset():
+    factset = {
+        F_(Q(C_(1))),
+        F_(Q(C_(2))),
+        F_(Q(C_(3))),
+    }
+    instance = SetInstance(factset)
+    assert instance.elements == {
+        Q: frozenset({(C_(1), ), (C_(2), ), (C_(3), )})
+    }

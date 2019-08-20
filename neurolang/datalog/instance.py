@@ -1,17 +1,31 @@
+from collections import defaultdict
 from collections.abc import Set, Mapping, MutableSet
 
 from ..solver_datalog_naive import Fact
 from ..exceptions import NeuroLangException
 
 
+def factset_as_dict(factset):
+    result = defaultdict(set)
+    for fact in factset:
+        predicate = fact.consequent.functor
+        result[predicate].add(tuple(fact.consequent.args))
+    for predicate in result:
+        result[predicate] = frozenset(result[predicate])
+    return result
+
+
 class Instance:
     def __init__(self, elements):
-        if any(
-            not isinstance(tuple_set, Set) or
-            isinstance(tuple_set, MutableSet)
-            for tuple_set in elements.values()
-        ):
-            raise NeuroLangException('Expected immutable tuple sets')
+        if isinstance(elements, Mapping):
+            if any(
+                not isinstance(tuple_set, Set) or
+                isinstance(tuple_set, MutableSet)
+                for tuple_set in elements.values()
+            ):
+                raise NeuroLangException('Expected immutable tuple sets')
+        else:
+            elements = factset_as_dict(elements)
         self.elements = elements
         self.cached_hash = None
 
