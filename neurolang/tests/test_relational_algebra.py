@@ -86,3 +86,55 @@ def test_selection_reorder():
     s_in1 = Selection(C_(R1), eq_(C_(Column(0)), C_(Column(1))))
     s_out1 = Selection(s_in1, eq_(C_(Column(1)), C_(Column(1))))
     assert raop.walk(s_out1) == s_out
+
+
+def test_push_and_infer_equijoins():
+    raop = RelationalAlgebraOptimiser()
+    inner = Product((C_(R1), C_(R2)))
+    formula1 = eq_(C_(Column(0)), C_(Column(1)))
+    s = Selection(inner, formula1)
+    assert raop.walk(s) == Product((Selection(C_(R1), formula1), C_(R2)))
+
+    inner = Product((C_(R1), C_(R2)))
+    formula2 = eq_(C_(Column(2)), C_(Column(3)))
+    s = Selection(inner, formula2)
+    assert raop.walk(s) == Product((C_(R1), Selection(C_(R2), formula1)))
+
+    inner = Product((C_(R1), C_(R2)))
+    formula3 = eq_(C_(Column(0)), C_(Column(3)))
+    s = Selection(inner, formula3)
+    assert raop.walk(s) == EquiJoin(
+        C_(R1),
+        (C_(Column(0)),),
+        C_(R2),
+        (C_(Column(1)),),
+    )
+
+    inner = Product((C_(R1), C_(R2), C_(R1)))
+    formula3 = eq_(C_(Column(0)), C_(Column(3)))
+    s = Selection(inner, formula3)
+    assert raop.walk(s) == Product((
+        EquiJoin(
+            C_(R1),
+            (C_(Column(0)),),
+            C_(R2),
+            (C_(Column(1)),),
+        ),
+        C_(R1)
+    ))
+
+    raop = RelationalAlgebraOptimiser()
+    inner = Product((C_(R1), C_(R2)))
+    formula4 = eq_(C_(Column(0)), C_(1))
+    s = Selection(inner, formula4)
+    assert raop.walk(s) == Product(
+        (Selection(C_(R1), formula4), C_(R2))
+    )
+
+    raop = RelationalAlgebraOptimiser()
+    inner = Product((C_(R1), C_(R2)))
+    formula5 = eq_(C_(Column(2)), C_(1))
+    s = Selection(inner, formula5)
+    assert raop.walk(s) == Product(
+        (C_(R1), Selection(C_(R2), formula4))
+    )
