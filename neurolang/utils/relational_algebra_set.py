@@ -70,12 +70,19 @@ class RelationalAlgebraSet(MutableSet):
             return len(self._container.columns)
 
     def projection(self, *columns):
+        if len(self) == 0:
+            return type(self)()
         new_container = self._container[list(columns)]
         output = type(self)()
-        output._container = self._renew_index(new_container)
+        output._container = self._renew_index(
+            new_container,
+            drop_duplicates=True
+        )
         return output
 
     def selection(self, select_criteria):
+        if len(self) == 0:
+            return type(self)()
         it = iter(select_criteria.items())
         col, value = next(it)
         ix = self._container[col] == value
@@ -89,6 +96,8 @@ class RelationalAlgebraSet(MutableSet):
         return output
 
     def selection_columns(self, select_criteria):
+        if len(self) == 0:
+            return type(self)()
         it = iter(select_criteria.items())
         col1, col2 = next(it)
         ix = self._container[col1] == self._container[col2]
@@ -102,6 +111,8 @@ class RelationalAlgebraSet(MutableSet):
         return output
 
     def equijoin(self, other, join_indices, return_mappings=False):
+        if len(self) == 0 or len(other) == 0:
+            return type(self)()
         other = pd.DataFrame(
             other._container.values,
             index=other._container.index,
@@ -122,6 +133,8 @@ class RelationalAlgebraSet(MutableSet):
         return output
 
     def cross_product(self, other):
+        if len(self) == 0:
+            return type(self)()
         new_container = pd.DataFrame([
             tuple(t1) + tuple(t2)
             for t1, t2 in product(

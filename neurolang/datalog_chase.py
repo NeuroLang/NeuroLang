@@ -139,7 +139,10 @@ def translate_to_ra_plus(
             new_representation = Selection(new_representation, eq_(s1, s2))
         new_representations += (new_representation,)
     if len(new_representations) > 0:
-        relation = Product(new_representations)
+        if len(new_representations) == 1:
+            relation = new_representations[0]
+        else:
+            relation = Product(new_representations)
         for s1, s2 in selections:
             relation = Selection(relation, eq_(s1, s2))
         relation = Projection(relation, projections)
@@ -155,13 +158,18 @@ def obtain_substitutions_relational_algebra_plus(
         args_to_project,
         rule_predicates_iterator
     )
-    ra_code = RelationAlgebraRewriteOptimiser().walk(ra_code)
-
-    if not isinstance(ra_code, Constant) or len(ra_code.value) > 0:
-        result = RelationAlgebraSolver().walk(ra_code)
+    ra_code_opt = RelationAlgebraRewriteOptimiser().walk(ra_code)
+    if not isinstance(ra_code_opt, Constant) or len(ra_code_opt.value) > 0:
+        result = RelationAlgebraSolver().walk(ra_code_opt)
     else:
         return [{}]
 
+    substitutions = compute_substitutions(result, projected_var_names)
+
+    return substitutions
+
+
+def compute_substitutions(result, projected_var_names):
     substitutions = []
     for tuple_ in result.value:
         subs = {
@@ -169,7 +177,6 @@ def obtain_substitutions_relational_algebra_plus(
             for var, col in projected_var_names.items()
         }
         substitutions.append(subs)
-
     return substitutions
 
 
