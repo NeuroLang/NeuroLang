@@ -3,10 +3,10 @@ from typing import AbstractSet
 
 from .datalog_chase import DatalogChase
 from .solver_datalog_naive import (
+    extract_datalog_free_variables,
     NullConstant,
     Any,
     Unknown,
-    extract_datalog_free_variables,
 )
 from .unification import (
     apply_substitution_arguments,
@@ -78,6 +78,17 @@ class DatalogExistentialChaseRestricted(DatalogChase):
 
         return free_variables
 
+    def calc_fired_triggers(self, substitutions, rule, args):
+        new_tuples = set()
+        for substitution in substitutions:
+            new_args = apply_substitution_arguments(args, substitution)
+            trigger = (rule, self.remove_nulls(new_args))
+            if trigger not in self.fired_triggers:
+                self.fired_triggers.add(trigger)
+                new_tuples.add(Constant(new_args))
+
+        return new_tuples
+
     def compute_result_set(
         self, rule, substitutions, instance, restriction_instance=None
     ):
@@ -87,13 +98,7 @@ class DatalogExistentialChaseRestricted(DatalogChase):
         args = rule.consequent.args
         functor = rule.consequent.functor
 
-        new_tuples = set()
-        for substitution in substitutions:
-            new_args = apply_substitution_arguments(args, substitution)
-            trigger = (rule, self.remove_nulls(new_args))
-            if trigger not in self.fired_triggers:
-                self.fired_triggers.add(trigger)
-                new_tuples.add(Constant(new_args))
+        new_tuples = self.calc_fired_triggers(substitutions, rule, args)
 
         if functor in instance:
             new_tuples = self.restricted_evaluation(
@@ -126,14 +131,23 @@ class DatalogExistentialChaseRestricted(DatalogChase):
 
     def compare_predicates_values(self, new_values, instance_values):
         for k, v in enumerate(new_values):
-            if v.value not in self.fresh_nulls and v == instance_values[k]:
-                continue
-            elif v.value in self.fresh_nulls and instance_values[
-                k] in self.fresh_nulls:
+            if self.both_null_or_differents(k, v, instance_values):
                 continue
             else:
                 return False
         return True
+
+
+    def both_null_or_differents(self, key, var, instance_values):
+        if var.value not in self.fresh_nulls and var == instance_values[key]:
+            return True
+        elif (
+            var.value in self.fresh_nulls and
+            instance_values[key] in self.fresh_nulls
+        ):
+            return True
+        else:
+            return False
 
     def new_fresh_null(self):
         name = f'NULL {len(self.fresh_nulls)}'

@@ -19,6 +19,11 @@ class DatalogChase():
     def __init__(self, datalog_program, rules=None, max_iterations=500):
         self.datalog_program = datalog_program
         self.max_iterations = max_iterations
+        self._set_rules(datalog_program, rules)
+
+        self.builtins = datalog_program.builtins()
+
+    def _set_rules(self, datalog_program, rules):
         if rules is None:
             self.rules = []
             for expression_block in datalog_program.intensional_database().values(
@@ -27,8 +32,6 @@ class DatalogChase():
                     self.rules.append(rule)
         else:
             self.rules = rules
-
-        self.builtins = datalog_program.builtins()
 
     def __call__(self):
         self.build_chase_solution()
