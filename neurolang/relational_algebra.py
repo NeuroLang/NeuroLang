@@ -361,8 +361,8 @@ class RelationalAlgebraRewriteSelections(ew.PatternWalker):
     @ew.add_match(Selection(Product, FA_(eq_, (C_[Column], ...))))
     def selection_by_constant_on_product(self, selection):
         return self.walk(Product(
-            (Selection(selection.relations[0], selection.formula),) +
-            selection.relations[1:]
+            (Selection(selection.relation.relations[0], selection.formula),) +
+            selection.relation.relations[1:]
         ))
 
     @staticmethod

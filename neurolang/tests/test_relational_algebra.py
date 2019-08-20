@@ -63,3 +63,26 @@ def test_product():
     sol = RelationalAlgebraSolver().walk(s).value
 
     assert sol == R1.cross_product(R2).cross_product(R1)
+
+
+def test_selection_reorder():
+    raop = RelationalAlgebraOptimiser()
+    s = Selection(C_(R1), eq_(C_(Column(0)), C_(1)))
+    assert raop.walk(s) is s
+
+    s1 = Selection(C_(R1), eq_(C_(1), C_(Column(0))))
+    assert raop.walk(s1) == s
+
+    s = Selection(C_(R1), eq_(C_(Column(0)), C_(Column(1))))
+    assert raop.walk(s) is s
+
+    s1 = Selection(C_(R1), eq_(C_(Column(1)), C_(Column(0))))
+    assert raop.walk(s1) == s
+
+    s_in = Selection(C_(R1), eq_(C_(Column(1)), C_(Column(1))))
+    s_out = Selection(s_in, eq_(C_(Column(0)), C_(Column(1))))
+    assert raop.walk(s_out) is s_out
+
+    s_in1 = Selection(C_(R1), eq_(C_(Column(0)), C_(Column(1))))
+    s_out1 = Selection(s_in1, eq_(C_(Column(1)), C_(Column(1))))
+    assert raop.walk(s_out1) == s_out
