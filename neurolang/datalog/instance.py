@@ -1,35 +1,30 @@
-from collections.abc import Set, Mapping
+from collections.abc import Set
+
+from ..solver_datalog_naive import Fact
 
 
-class SetFactCollection(Set):
+class SetInstance(Set):
     def __init__(self, elements):
         self.elements = elements
 
-    def __iter__(self):
-        return iter(self.elements)
-
-    def __contains__(self, value):
-        return value in self.elements
-
-    def __len__(self):
-        return len(self.elements)
-
-    def as_mapping(self):
-        return MappingFactCollection(self.elements)
-
-
-class MappingFactCollection(Mapping):
-    def __init__(self, elements):
-        self.elements = elements
-
-    def __getitem__(self, k):
-        return self.elements.get(k)
-
-    def __iter__(self):
-        return iter(self.elements)
+    def __contains__(self, fact):
+        predicate = fact.consequent.functor
+        tuple_values = fact.consequent.args
+        return (
+            predicate in self.elements and
+            tuple_values in self.elements[predicate]
+        )
 
     def __len__(self):
-        return len(self.elements)
+        return sum(len(v) for v in self.elements.values())
 
-    def as_set(self):
-        return SetFactCollection(self.elements)
+    def __iter__(self):
+        for predicate, tuples in self.elements.items():
+            for t in tuples:
+                yield Fact(predicate(*t))
+
+    def __hash__(self):
+        return hash(frozenset(self))
+
+    def as_map_instance(self):
+        return MapInstance(self.elements)
