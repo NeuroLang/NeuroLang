@@ -1,4 +1,3 @@
-from functools import lru_cache
 from collections.abc import Set, Mapping, MutableSet
 
 from ..solver_datalog_naive import Fact
