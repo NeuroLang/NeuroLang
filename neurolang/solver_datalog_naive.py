@@ -64,6 +64,7 @@ NULL = NullConstant[Any](None)
 
 class WrappedExpressionIterable:
     def __init__(self, iterable=None):
+        self.__row_type = None
         if iterable is not None:
             it1, it2 = tee(iterable)
             try:
@@ -75,8 +76,15 @@ class WrappedExpressionIterable:
         super().__init__(iterable)
 
     def __iter__(self):
+        type_ = self.row_type
         return (
-            Constant(t)
+            Constant[type_](
+                tuple(
+                    Constant[e_t](e, verify_type=False)
+                    for e_t, e in zip(type_.__args__, t)
+                ),
+                verify_type=False
+            )
             for t in super().__iter__()
         )
 
@@ -89,6 +97,16 @@ class WrappedExpressionIterable:
                 e = e.value
             element_ += (e,)
         super().add(element_)
+
+    @property
+    def row_type(self):
+        if len(self) == 0:
+            return None
+
+        if self.__row_type is None:
+            self.__row_type = Constant(next(super().__iter__())).type
+
+        return self.__row_type
 
 
 class WrappedRelationalAlgebraSet(
@@ -159,7 +177,10 @@ class DatalogBasic(PatternWalker):
                 raise NeuroLangException('Fact functor type incorrect')
 
             self.symbol_table[fact.functor] = \
-                Constant[AbstractSet[set_type]](WrappedRelationalAlgebraSet())
+                Constant[AbstractSet[set_type]](
+                    WrappedRelationalAlgebraSet(),
+                    verify_type=False
+                )
 
     @add_match(Implication(
         FunctionApplication[bool](Symbol, ...),
