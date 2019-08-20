@@ -6,6 +6,7 @@ from .solver_datalog_naive import (
     SolverNonRecursiveDatalogNaive,
     DatalogBasic,
     Implication,
+    extract_datalog_free_variables
 )
 
 from .expression_pattern_matching import add_match
@@ -26,7 +27,7 @@ class ExistentialDatalog(DatalogBasic):
                 k not in self.protected_keywords and
                 isinstance(v, ExpressionBlock) and all(
                     isinstance(expression, Implication) and
-                    isinstance(expression.consequent, ExistentialPredicate)
+                    len(self.get_free_variables(expression)) > 0
                     for expression in v.expressions
                 )
             )
@@ -40,11 +41,24 @@ class ExistentialDatalog(DatalogBasic):
                 k not in self.protected_keywords and
                 isinstance(v, ExpressionBlock) and not any(
                     isinstance(expression, Implication) and
-                    isinstance(expression.consequent, ExistentialPredicate)
+                    len(self.get_free_variables(expression)) > 0
                     for expression in v.expressions
                 )
             )
         }
+
+    def get_free_variables(self, rule):
+        free_variable_consequent = extract_datalog_free_variables(
+            rule.consequent
+        )
+        free_variable_antecedent = extract_datalog_free_variables(
+            rule.antecedent
+        )
+        free_variables = free_variable_consequent._set.difference(
+            free_variable_antecedent._set
+        )
+
+        return free_variables
 
     @add_match(Implication(ExistentialPredicate, ...))
     def add_existential_implication_to_symbol_table(self, expression):

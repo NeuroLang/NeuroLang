@@ -3,7 +3,7 @@ from itertools import chain
 from operator import eq
 from typing import AbstractSet
 
-from .expressions import Constant, Symbol, FunctionApplication, ExistentialPredicate
+from .expressions import Constant, Symbol, FunctionApplication
 from . import solver_datalog_naive as sdb
 from .unification import (
     apply_substitution, apply_substitution_arguments, compose_substitutions,

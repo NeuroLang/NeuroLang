@@ -41,7 +41,7 @@ def test_existential_intensional_database():
     solver.walk(Implication(EP_(y, P(x, y)), Q(x)))
     assert 'P' in solver.symbol_table
     assert 'P' in solver.existential_intensional_database()
-    assert 'P' not in solver.intensional_database()
+    assert 'P' not in solver.non_existential_intensional_database()
 
 
 def test_bad_existential_formulae():
@@ -67,10 +67,7 @@ def test_existential_statement_added_to_symbol_table():
     solver.walk(Implication(EP_(y, P(x, y)), Q(x)))
     assert 'P' in solver.symbol_table
     assert len(solver.symbol_table['P'].expressions) == 1
-    assert isinstance(
-        solver.symbol_table['P'].expressions[0].consequent,
-        expressions.ExistentialPredicate
-    )
+
     solver = SolverWithoutExistentialResolution()
     solver.walk(Implication(EP_(x, EP_(y, P(x, y, z))), Q(z)))
     assert 'P' in solver.symbol_table
@@ -215,7 +212,11 @@ def test_multiple_existential_variables_in_consequent_undefined():
     result = solver.walk(query)
     assert result is UNDEFINED
 
-
+'''
+    After the modification included to remove the ExistentialPredicates
+    during the program compilation, this test has no sense anymore.
+'''
+@pytest.mark.skip()
 def test_cannot_mix_existential_and_non_existential_rule_definitions():
     solver = SolverWithoutExistentialResolution()
     x = S_('x')
