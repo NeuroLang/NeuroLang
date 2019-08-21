@@ -24,13 +24,13 @@ class DatalogChase():
         self.builtins = datalog_program.builtins()
 
     def _set_rules(self, rules):
+        self.rules = []
         if rules is None:
-            self.rules = []
             for expression_block in \
                     self.datalog_program.intensional_database().values():
                 self.rules += expression_block.expressions
         else:
-            self.rules = rules
+            self.rules += rules.expressions
 
     def build_chase_solution(self):
         instance = dict()

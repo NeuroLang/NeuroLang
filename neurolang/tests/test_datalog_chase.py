@@ -270,7 +270,9 @@ def test_recursive_predicate_chase_tree():
     z = S_('z')
 
     datalog_program = Eb_((
-        Fact_(Q(C_(1), C_(2))), Fact_(Q(C_(2), C_(3))), Imp_(T(x, y), Q(x, y)),
+        Fact_(Q(C_(1), C_(2))),
+        Fact_(Q(C_(2), C_(3))),
+        Imp_(T(x, y), Q(x, y)),
         Imp_(T(x, y),
              Q(x, z) & T(z, y))
     ))
@@ -344,7 +346,9 @@ def test_recursive_predicate_chase_solution_and_call():
     z = S_('z')
 
     datalog_program = Eb_((
-        Fact_(Q(C_(1), C_(2))), Fact_(Q(C_(2), C_(3))), Imp_(T(x, y), Q(x, y)),
+        Fact_(Q(C_(1), C_(2))),
+        Fact_(Q(C_(2), C_(3))),
+        Imp_(T(x, y), Q(x, y)),
         Imp_(T(x, y),
              Q(x, z) & T(z, y))
     ))
