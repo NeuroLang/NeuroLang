@@ -17,7 +17,7 @@ def factset_as_dict(factset):
 
 
 class Instance:
-    def __init__(self, elements):
+    def __init__(self, elements=dict()):
         if isinstance(elements, Mapping):
             if any(
                 not isinstance(tuple_set, Set) or
@@ -34,6 +34,23 @@ class Instance:
         if self.cached_hash is None:
             self.cached_hash = hash(tuple(zip(self.elements.items())))
         return self.cached_hash
+
+    @staticmethod
+    def union(*instances):
+        if len(instances) == 0:
+            return SetInstance(dict())
+        new_elements = dict()
+        all_predicates = set()
+        for instance in instances:
+            all_predicates |= instance.elements.keys()
+        for predicate in all_predicates:
+            new_elements[predicate] = frozenset.union(
+                *[
+                    instance.elements.get(predicate, frozenset())
+                    for instance in instances
+                ]
+            )
+        return SetInstance(new_elements)
 
     def __or__(self, other):
         new_elements = dict()
@@ -84,6 +101,12 @@ class MapInstance(Instance, Mapping):
 
 
 class SetInstance(Instance, Set):
+    def __getitem__(self, predicate):
+        return frozenset(
+            Fact(predicate(*t))
+            for t in self.elements.get(predicate, frozenset())
+        )
+
     def __contains__(self, fact):
         predicate = fact.consequent.functor
         tuple_values = fact.consequent.args
