@@ -5,8 +5,8 @@ from ..expression_pattern_matching import add_match
 from ..solver_datalog_naive import Fact, Implication, DatalogBasic
 from ..probabilistic.graphical_model import (
     produce, GraphicalModel, GDatalogToGraphicalModelTranslator,
-    substitute_dterm, gdatalog2gm, sort_rvs, delta_infer1,
-    TableCPDGraphicalModelSolver, ConditionalProbabilityQuery, FactSet
+    substitute_dterm, gdatalog2gm, delta_infer1, TableCPDGraphicalModelSolver,
+    ConditionalProbabilityQuery, FactSet
 )
 from ..probabilistic.ppdl import DeltaTerm, is_gdatalog_rule
 from ..probabilistic.distributions import TableDistribution
@@ -96,11 +96,11 @@ def test_delta_infer1():
     assert expected_dist == result.value
 
 
-def test_sort_rv():
+def test_get_dependency_sorted_random_variables():
     gm = gdatalog2gm(program_1)
     assert gm.parents['Q_1'] == {'P'}
     assert gm.parents['Q'] == {'Q_1'}
-    assert sort_rvs(gm) == ['P', 'Q_1', 'Q']
+    assert gm.get_dependency_sorted_random_variables() == ['P', 'Q_1', 'Q']
 
 
 def test_gdatalog_translation_to_gm():
@@ -139,9 +139,8 @@ def test_2levels_model():
                     Q(x, y) & Z(z)),
     ))
     gm = gdatalog2gm(program)
-    assert set(gm.rv_to_cpd_functor.keys()) == {
-        'P', 'Q_1', 'Q', 'Z_1', 'Z_2', 'Z', 'R_1', 'R'
-    }
+    assert set(gm.rv_to_cpd_functor.keys()
+               ) == {'P', 'Q_1', 'Q', 'Z_1', 'Z_2', 'Z', 'R_1', 'R'}
 
 
 def test_gm_solver():
@@ -229,9 +228,11 @@ def test_conditional_probability_query_resolution_multiple_rules_same_pred():
     solver.walk(program)
     outcomes = solver.conditional_probability_query_resolution(query)
     expected_dist = TableDistribution({
-        frozenset({Fact(P(a)), Fact(Q(a, C_(0)))}): 1.0 / 3.0,
+        frozenset({Fact(P(a)), Fact(Q(a, C_(0)))}):
+        1.0 / 3.0,
         frozenset({Fact(P(a)),
                    Fact(Q(a, C_(0))),
-                   Fact(Q(a, C_(1)))}): 2.0 / 3.0,
+                   Fact(Q(a, C_(1)))}):
+        2.0 / 3.0,
     })
     assert expected_dist == outcomes.value

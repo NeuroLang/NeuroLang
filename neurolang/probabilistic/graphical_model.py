@@ -105,8 +105,28 @@ class GraphicalModel(Expression):
         self.rv_to_cpd_functor = dict()
         self.parents = defaultdict(frozenset)
 
+    @property
+    def random_variables(self):
+        return frozenset(self.rv_to_cpd_functor.keys())
+
     def add_parent(self, child, parent):
         self.parents[child] = self.parents[child].union({parent})
+
+    def get_dependency_sorted_random_variables(
+        self,
+        result=list(),
+        rv=None,
+        parents=None,
+    ):
+        if rv is None:
+            parents = self.random_variables
+        for parent in parents:
+            self.get_dependency_sorted_random_variables(
+                result, parent, self.parents[parent]
+            )
+        if rv is not None and rv not in result:
+            result.append(rv)
+        return result
 
 
 class GDatalogToGraphicalModelTranslator(ExpressionWalker):
@@ -158,19 +178,6 @@ def gdatalog2gm(program):
     translator = GDatalogToGraphicalModelTranslator()
     translator.walk(program)
     return translator.gm
-
-
-def sort_rvs(gm):
-    result = list()
-    sort_rvs_aux(gm, '__dummy__', set(gm.rv_to_cpd_functor.keys()), result)
-    return result[:-1]
-
-
-def sort_rvs_aux(gm, rv, parents, result):
-    for parent_rv in parents:
-        sort_rvs_aux(gm, parent_rv, gm.parents[parent_rv], result)
-    if rv not in result:
-        result.append(rv)
 
 
 def delta_infer1(rule, instance):
