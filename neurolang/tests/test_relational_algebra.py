@@ -87,6 +87,38 @@ def test_selection_reorder():
     s_out1 = Selection(s_in1, eq_(C_(Column(1)), C_(Column(1))))
     assert raop.walk(s_out1) == s_out
 
+    s2 = Selection(
+        EquiJoin(
+            C_(R1), (C_(Column(0)),),
+            C_(R2), (C_(Column(0)),)
+        ),
+        eq_(C_(Column(0)), C_(1))
+    )
+    s2_res = EquiJoin(
+        Selection(C_(R1), eq_(C_(Column(0)), C_(1))), 
+        (C_(Column(0)),),
+        C_(R2), (C_(Column(0)),)
+    )
+
+    assert raop.walk(s2) == s2_res
+
+    s2 = Selection(
+        EquiJoin(
+            C_(R1), (C_(Column(0)),),
+            C_(R2), (C_(Column(0)),)
+        ),
+        eq_(C_(Column(2)), C_(1))
+    )
+    s2_res = EquiJoin(
+        C_(R1),
+        (C_(Column(0)),),
+        Selection(C_(R2), eq_(C_(Column(0)), C_(1))),
+        (C_(Column(0)),)
+    )
+
+    assert raop.walk(s2) == s2_res
+
+
 
 def test_push_and_infer_equijoins():
     raop = RelationalAlgebraOptimiser()

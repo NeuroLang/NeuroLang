@@ -318,10 +318,17 @@ class RelationalAlgebraRewriteSelections(ew.PatternWalker):
         column = selection.formula.args[0].value
         relation_left = selection.relation.relation_left
         relation_right = selection.relation.relation_right
-        if column < self.get_arity(relation_left):
+        left_arity = self.get_arity(relation_left)
+        if column < left_arity:
             relation_left = Selection(relation_left, selection.formula)
         else:
-            relation_right = Selection(relation_right, selection.formula)
+            relation_right = Selection(
+                relation_right,
+                eq_(
+                    C_(Column(int(selection.formula.args[0].value) - left_arity)),
+                    selection.formula.args[1]
+                )
+            )
 
         return self.walk(
             EquiJoin(
