@@ -17,7 +17,9 @@ def factset_as_dict(factset):
 
 
 class Instance:
-    def __init__(self, elements):
+    def __init__(self, elements=None):
+        if elements is None:
+            elements = dict()
         if isinstance(elements, Mapping):
             if any(
                 not isinstance(tuple_set, Set) or
@@ -67,6 +69,12 @@ class Instance:
                 self.elements[predicate] & other.elements[predicate]
             )
         return self.__class__(new_elements)
+
+    def copy(self):
+        new_copy = type(self)()
+        new_copy.elements = self.elements.copy()
+        new_copy.hash = self.cached_hash
+        return new_copy
 
 
 class MapInstance(Instance, Mapping):
