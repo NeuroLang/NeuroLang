@@ -317,7 +317,9 @@ class DatalogChaseRelationalAlgebraMixin:
         rule_predicates_iterator = list(rule_predicates_iterator)
         for _, pred_ra in enumerate(rule_predicates_iterator):
             ra_expression_arity = pred_ra[1].arity
-            new_ra_expression = self.translate_predicate(pred_ra, column, args_to_project)
+            new_ra_expression = self.translate_predicate(
+                pred_ra, column, args_to_project
+            )
             new_ra_expressions += (new_ra_expression,)
             column += ra_expression_arity
         if len(new_ra_expressions) > 0:
@@ -342,21 +344,29 @@ class DatalogChaseRelationalAlgebraMixin:
         local_selections = []
         for i, arg in enumerate(predicate.args):
             c = Constant[Column](Column(column + i))
-            if isinstance(arg, Constant):
-                l_c = Constant[Column](Column(i))
-                local_selections.append((l_c, arg))
-            elif isinstance(arg, Symbol):
-                if arg in self.seen_vars:
-                    self.selections.append((self.seen_vars[arg], c))
-                else:
-                    if arg in args_to_project:
-                        self.projected_var_names[arg] = len(self.projections)
-                        self.projections += (c,)
-                    self.seen_vars[arg] = c
+            local_column = Constant[Column](Column(i))
+            self.translate_predicate_process_argument(
+                arg, local_selections, local_column, c, args_to_project
+            )
         new_ra_expression = sdb.Constant[AbstractSet](ra_expression)
         for s1, s2 in local_selections:
             new_ra_expression = Selection(new_ra_expression, eq_(s1, s2))
         return new_ra_expression
+
+    def translate_predicate_process_argument(
+        self, arg, local_selections, local_column,
+        global_column, args_to_project
+    ):
+        if isinstance(arg, Constant):
+            local_selections.append((local_column, arg))
+        elif isinstance(arg, Symbol):
+            if arg in self.seen_vars:
+                self.selections.append((self.seen_vars[arg], global_column))
+            else:
+                if arg in args_to_project:
+                    self.projected_var_names[arg] = len(self.projections)
+                    self.projections += (global_column,)
+                self.seen_vars[arg] = global_column
 
     def compute_substitutions(self, result, projected_var_names):
         substitutions = []
