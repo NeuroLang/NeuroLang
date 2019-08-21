@@ -1,4 +1,3 @@
-from collections import defaultdict
 from collections.abc import Set, Mapping, MutableSet
 
 from ..solver_datalog_naive import Fact
@@ -6,9 +5,11 @@ from ..exceptions import NeuroLangException
 
 
 def factset_as_dict(factset):
-    result = defaultdict(set)
+    result = dict()
     for fact in factset:
         predicate = fact.consequent.functor
+        if predicate not in result:
+            result[predicate] = set()
         result[predicate].add(tuple(fact.consequent.args))
     for predicate in result:
         result[predicate] = frozenset(result[predicate])
@@ -33,6 +34,39 @@ class Instance:
         if self.cached_hash is None:
             self.cached_hash = hash(tuple(zip(self.elements.items())))
         return self.cached_hash
+
+    def __or__(self, other):
+        new_elements = dict()
+        for predicate in (
+            set(self.elements.keys()).union(set(other.elements.keys()))
+        ):
+            new_elements[predicate] = frozenset(
+                self.elements.get(predicate, frozenset()).union(
+                    other.elements.get(predicate, frozenset())
+                )
+            )
+        return self.__class__(new_elements)
+
+    def __sub__(self, other):
+        new_elements = dict()
+        for predicate in self.elements.keys():
+            if predicate in other.elements:
+                tuples = self.elements[predicate] - other.elements[predicate]
+                if len(tuples) > 0:
+                    new_elements[predicate] = tuples
+            else:
+                new_elements[predicate] = self.elements[predicate]
+        return self.__class__(new_elements)
+
+    def __and__(self, other):
+        new_elements = dict()
+        for predicate in (
+            set(self.elements.keys()) & set(other.elements.keys())
+        ):
+            new_elements[predicate] = (
+                self.elements[predicate] & other.elements[predicate]
+            )
+        return self.__class__(new_elements)
 
 
 class MapInstance(Instance, Mapping):
