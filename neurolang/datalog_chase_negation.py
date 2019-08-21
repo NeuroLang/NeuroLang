@@ -29,7 +29,7 @@ class DatalogChaseNegationGeneral(DatalogChaseGeneral):
         )
 
         if all(len(predicate_list) == 0 for predicate_list in rule_predicates):
-            return {}
+            return dict()
 
         restricted_predicates, nonrestricted_predicates, negative_predicates, \
             builtin_predicates, negative_builtin_predicates = rule_predicates
@@ -57,7 +57,7 @@ class DatalogChaseNegationGeneral(DatalogChaseGeneral):
             args_to_project,
             negative_predicates,
             substitutions
-        ),
+        )
 
         substitutions = self.evaluate_builtins(
             builtin_predicates, substitutions
@@ -196,7 +196,13 @@ class DatalogChaseNegationMGUMixin(DatalogChaseMGUMixin):
                         predicate, substitution, representation
                     )
             substitutions = new_substitutions
-        return substitutions
+        return [
+            {
+                k: v for k, v in substitution.items()
+                if k in args_to_project
+            }
+            for substitution in substitutions
+        ]
 
     @staticmethod
     def unify_negative_substitution(predicate, substitution, representation):

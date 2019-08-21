@@ -220,6 +220,7 @@ class DatalogChaseGeneral():
     ):
         if restriction_instance is None:
             restriction_instance = dict()
+
         new_tuples = self.datalog_program.new_set(
             Constant(
                 apply_substitution_arguments(
@@ -386,7 +387,7 @@ class DatalogChaseMGUMixin:
         for predicate, representation in rule_predicates_iterator:
             new_substitutions = []
             for substitution in substitutions:
-                new_substitutions += DatalogChase.unify_substitution(
+                new_substitutions += DatalogChaseMGUMixin.unify_substitution(
                     predicate, substitution, representation
                 )
             substitutions = new_substitutions
