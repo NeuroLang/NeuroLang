@@ -183,19 +183,6 @@ class DatalogChaseNegationGeneral(DatalogChaseGeneral):
 class DatalogChaseNegationRelationalAlgebraMixin(DatalogChaseRelationalAlgebraMixin):
     def obtain_negative_substitutions(self, args_to_project, rule_predicates_iterator, substitutions):
         raise NotImplementedError()
-        '''ra_code, projected_var_names = self.translate_to_ra_plus(
-            args_to_project,
-            rule_predicates_iterator
-        )
-        ra_code_opt = RelationalAlgebraOptimiser().walk(ra_code)
-        if not isinstance(ra_code_opt, Constant) or len(ra_code_opt.value) > 0:
-            result = RelationalAlgebraSolver().walk(ra_code_opt)
-        else:
-            return [{}]
-
-        substitutions = self.compute_substitutions(result, projected_var_names)
-
-        return substitutions'''
 
 class DatalogChaseNegationMGUMixin(DatalogChaseMGUMixin):
 
