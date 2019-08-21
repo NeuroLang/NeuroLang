@@ -14,7 +14,7 @@ from .datalog_chase import (
     DatalogChaseMGUMixin,
 )
 from .relational_algebra import (
-    RelationalAlgebraOptimiser,
+    RelationalAlgebraOptimiser
 )
 
 
