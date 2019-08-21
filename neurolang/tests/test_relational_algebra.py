@@ -1,13 +1,9 @@
-from pytest import raises
-
 from ..relational_algebra import (
     C_, Column, eq_,
     Selection, Projection, EquiJoin, Product,
     RelationalAlgebraSolver,
-    RelationalAlgebraRewriteSelections,
     RelationalAlgebraOptimiser
 )
-from ..utils import RelationalAlgebraSet
 from ..solver_datalog_naive import WrappedRelationalAlgebraSet
 
 
@@ -104,10 +100,48 @@ def test_push_selection_equijoins():
     s2_res = EquiJoin(
         Selection(
             C_(R1),
-            eq_(C_(Column(0)), C_(Column(1)))
+            eq_(C_(Column(0)), C_(1))
         ),
         (C_(Column(0)),),
         C_(R2), (C_(Column(0)),)
+    )
+
+    assert raop.walk(s2) == s2_res
+
+    s2 = Selection(
+        EquiJoin(
+            C_(R1), (C_(Column(0)),),
+            C_(R2), (C_(Column(0)),)
+        ),
+        eq_(C_(Column(2)), C_(1))
+    )
+    s2_res = EquiJoin(
+        C_(R1),
+        (C_(Column(0)),),
+        Selection(
+            C_(R2),
+            eq_(C_(Column(0)), C_(1))
+        ),
+        (C_(Column(0)),)
+    )
+
+    assert raop.walk(s2) == s2_res
+
+    s2 = Selection(
+        EquiJoin(
+            C_(R1), (C_(Column(0)),),
+            C_(R2), (C_(Column(0)),)
+        ),
+        eq_(C_(Column(0)), C_(Column(1)))
+    )
+    s2_res = EquiJoin(
+        Selection(
+            C_(R1),
+            eq_(C_(Column(0)), C_(Column(1)))
+        ),
+        (C_(Column(0)),),
+        C_(R2),
+        (C_(Column(0)),)
     )
 
     assert raop.walk(s2) == s2_res
@@ -129,7 +163,7 @@ def test_push_selection_equijoins():
         (C_(Column(0)),)
     )
 
-    assert raop.walk(s2) == s2_res
+    assert raop.walk(s2) == s2_res 
 
     s2 = Selection(
         EquiJoin(
