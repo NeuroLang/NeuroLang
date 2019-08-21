@@ -18,6 +18,28 @@ class Datalog(sdb.DatalogBasic, ew.ExpressionBasicEvaluator):
         return x > y
 
 
+def test_builtin_equality_only():
+    Q = S_('Q')
+    x = S_('x')
+    eq = C_[Callable[[expressions.Unknown, expressions.Unknown], bool]](op.eq)
+
+    datalog_program = Eb_((
+        Imp_(Q(x), eq(x, C_(5) + C_(7))),
+    ))
+
+    dl = Datalog()
+    dl.walk(datalog_program)
+
+    instance_0 = dl.extensional_database()
+
+    rule = datalog_program.expressions[0]
+    instance_update = dc.chase_step(dl, instance_0, dl.builtins(), rule)
+    res = {
+        Q: C_({C_((12,))}),
+    }
+    assert instance_update == res
+
+
 def test_python_builtin_equaltiy_chase_step():
     Q = S_('Q')
     S = S_('S')
@@ -313,6 +335,39 @@ def test_nonrecursive_predicate_chase_solution(N=10):
     }
 
     assert solution_instance == final_instance
+
+
+def test_nonrecursive_predicate_chase_solution_constant(N=10):
+        Q = S_('Q')
+        T = S_('T')
+        y = S_('y')
+        z = S_('z')
+
+        datalog_program = Eb_(
+            tuple(
+                Fact_(Q(C_(i), C_(i + 1)))
+                for i in range(N)
+            ) +
+            (Imp_(T(y), Q(C_(1), z) & Q(z, y)),)
+        )
+
+        dl = Datalog()
+        dl.walk(datalog_program)
+
+        solution_instance = dc.build_chase_solution(dl)
+
+        final_instance = {
+            Q: C_({
+                C_((C_(i), C_(i + 1)))
+                for i in range(N)
+            }),
+            T: C_({
+                C_((C_(i + 2),))
+                for i in (1,)
+            })
+        }
+
+        assert solution_instance == final_instance
 
 
 def test_recursive_predicate_chase_solution():

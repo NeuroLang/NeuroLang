@@ -35,6 +35,7 @@ def test_null_constant_resolves_to_undefined():
     dl = Datalog()
     P = S_('P')
     dl.walk(T_(P(C_('a'))))
+
     dl.walk(T_(P(C_('b'))))
     assert 'P' in dl.symbol_table
     res = dl.walk(P(NULL))
@@ -64,7 +65,8 @@ def test_facts_constants():
     fact_set = dl.symbol_table['Q']
     assert isinstance(fact_set, Constant)
     assert is_leq_informative(fact_set.type, AbstractSet)
-    assert {C_((C_(1), C_(2)))} == fact_set.value
+    expected_result = {C_((C_(1), C_(2)))}
+    assert expected_result == fact_set.value
 
     f2 = T_(S_('Q')(C_(3), C_(4)))
     dl.walk(f2)

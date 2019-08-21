@@ -1,5 +1,5 @@
 from collections import namedtuple
-from itertools import chain
+from itertools import chain, tee
 from operator import eq
 from typing import AbstractSet
 
@@ -8,6 +8,10 @@ from . import solver_datalog_naive as sdb
 from .unification import (
     apply_substitution, apply_substitution_arguments, compose_substitutions,
     most_general_unifier_arguments
+)
+from .relational_algebra import (
+    Column, Selection, Product, Projection, eq_,
+    RelationalAlgebraOptimiser, RelationalAlgebraSolver
 )
 
 

@@ -20,6 +20,9 @@ from typing_inspect import (
 )
 
 
+import numpy as np
+
+
 from ..exceptions import NeuroLangException
 
 
@@ -80,8 +83,11 @@ else:
 
 
 type_order = {
-    int: (float, complex),
-    float: (complex,),
+    np.int64: (np.int,),
+    np.bool_: (bool,),
+    bool: (np.bool_,),
+    int: (np.int64, float, complex),
+    float: (np.float64, complex,),
     Set: (AbstractSet,)
 }
 
@@ -195,10 +201,11 @@ def is_type(type_):
         isinstance(type_, type) or
         type_ is Unknown or
         type_ is Any or
-        is_typevar(type_) or
-        is_union_type(type_) or
         is_parameterized(type_) or
-        is_parametrical(type_)
+        is_parametrical(type_) or
+        is_typevar(type_) or
+        is_union_type(type_)
+
     )
 
 
