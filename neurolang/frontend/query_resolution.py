@@ -123,7 +123,7 @@ class QueryBuilderBase(object):
                 s = e.neurolang_symbol
             new_set.append(s)
 
-        return nl.Constant[set_type](frozenset(new_set))
+        return nl.Constant[set_type](self.solver.new_set(new_set))
 
     @staticmethod
     def _create_symbol_and_get_constant(element, element_type):

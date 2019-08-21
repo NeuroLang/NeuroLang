@@ -3,10 +3,10 @@ Naive implementation of non-typed datalog. There's no optimizations and will be
 surely very slow
 '''
 from typing import AbstractSet, Any, Tuple, Callable
-from itertools import product
+from itertools import product, tee
 from operator import and_, or_, invert, xor
 
-from .utils import OrderedSet
+from .utils import OrderedSet, RelationalAlgebraSet
 
 from .expressions import (
     FunctionApplication, Constant, NeuroLangException, is_leq_informative,
@@ -17,6 +17,7 @@ from .expressions import (
 from .type_system import Unknown
 from .expression_walker import (
     add_match, PatternWalker, expression_iterator,
+    ReplaceExpressionsByValues
 )
 
 
@@ -60,6 +61,66 @@ class NullConstant(Constant):
 
 UNDEFINED = Undefined(None)
 NULL = NullConstant[Any](None)
+
+
+class WrappedExpressionIterable:
+    def __init__(self, iterable=None):
+        self.__row_type = None
+        if iterable is not None:
+            it1, it2 = tee(iterable)
+            try:
+                if isinstance(next(it1), Constant[Tuple]):
+                    rebv = ReplaceExpressionsByValues({})
+                    iterable = list(rebv.walk(e) for e in it2)
+            except StopIteration:
+                pass
+
+        super().__init__(iterable)
+
+    def __iter__(self):
+        type_ = self.row_type
+        return (
+            Constant[type_](
+                tuple(
+                    Constant[e_t](e, verify_type=False)
+                    for e_t, e in zip(type_.__args__, t)
+                ),
+                verify_type=False
+            )
+            for t in super().__iter__()
+        )
+
+    def add(self, element):
+        if isinstance(element, Constant[Tuple]):
+            element = element.value
+        element_ = tuple()
+        for e in element:
+            if isinstance(e, Constant):
+                e = e.value
+            element_ += (e,)
+        super().add(element_)
+
+    @property
+    def row_type(self):
+        if len(self) == 0:
+            return None
+
+        if self.__row_type is None:
+            self.__row_type = Constant(next(super().__iter__())).type
+
+        return self.__row_type
+
+
+class WrappedRelationalAlgebraSet(
+    WrappedExpressionIterable, RelationalAlgebraSet
+):
+    def __contains__(self, element):
+        if not isinstance(element, Constant):
+            element = self._normalise_element(element)
+        return (
+            self._container is not None and
+            hash(element) in self._container.index
+        )
 
 
 class DatalogBasic(PatternWalker):
@@ -109,7 +170,7 @@ class DatalogBasic(PatternWalker):
                 'define as intensional predicate.'
             )
 
-        fact_set.value.add(Constant(fact.args))
+        fact_set.value.add(fact.args)
 
         return expression
 
@@ -124,7 +185,10 @@ class DatalogBasic(PatternWalker):
                 raise NeuroLangException('Fact functor type incorrect')
 
             self.symbol_table[fact.functor] = \
-                Constant[AbstractSet[set_type]](set())
+                Constant[AbstractSet[set_type]](
+                    WrappedRelationalAlgebraSet(),
+                    verify_type=False
+                )
 
     @add_match(Implication(
         FunctionApplication[bool](Symbol, ...),
@@ -205,6 +269,10 @@ class DatalogBasic(PatternWalker):
                 f'Expression {antecedent} is not conjunctive'
             )
 
+    @staticmethod
+    def new_set(iterable=None):
+        return WrappedRelationalAlgebraSet(iterable=iterable)
+
     def intensional_database(self):
         return {
             k: v for k, v in self.symbol_table.items()
@@ -227,9 +295,26 @@ class DatalogBasic(PatternWalker):
     def add_extensional_predicate_from_tuples(
         self, symbol, iterable, type_=Unknown
     ):
-        constant = Constant(frozenset(iterable))
-        if type_ is not Unknown:
-            constant = constant.cast(AbstractSet[type_])
+        if type_ is Unknown:
+            iterable, iterable_ = tee(iter(iterable))
+            first = next(iterable_)
+            if isinstance(first, Expression):
+                type_ = first.type
+            else:
+                type_ = Constant(first).type
+
+        # iterable = [
+        #    tuple(
+        #        Constant[t_](v)
+        #        for t_, v in zip(type_.__args__, t)
+        #    )
+        #    for t in iterable
+        # ]
+        constant = Constant[AbstractSet[type_]](
+            self.new_set(list(iterable)),
+            auto_infer_type=False,
+            verify_type=False
+        )
         symbol = symbol.cast(constant.type)
         self.symbol_table[symbol] = constant
 

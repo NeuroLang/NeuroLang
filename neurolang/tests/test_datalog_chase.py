@@ -225,7 +225,7 @@ def test_python_multiple_builtins():
     assert instance_update == res
 
 
-def test_non_recursive_predicate_chase():
+def test_non_recursive_predicate_chase_tree():
     Q = S_('Q')
     T = S_('T')
     x = S_('x')
@@ -337,6 +337,39 @@ def test_nonrecursive_predicate_chase_solution(N=10):
     assert solution_instance == final_instance
 
 
+def test_nonrecursive_predicate_chase_solution_constant(N=10):
+        Q = S_('Q')
+        T = S_('T')
+        y = S_('y')
+        z = S_('z')
+
+        datalog_program = Eb_(
+            tuple(
+                Fact_(Q(C_(i), C_(i + 1)))
+                for i in range(N)
+            ) +
+            (Imp_(T(y), Q(C_(1), z) & Q(z, y)),)
+        )
+
+        dl = Datalog()
+        dl.walk(datalog_program)
+
+        solution_instance = dc.build_chase_solution(dl)
+
+        final_instance = {
+            Q: C_({
+                C_((C_(i), C_(i + 1)))
+                for i in range(N)
+            }),
+            T: C_({
+                C_((C_(i + 2),))
+                for i in (1,)
+            })
+        }
+
+        assert solution_instance == final_instance
+
+
 def test_recursive_predicate_chase_solution():
     Q = S_('Q')
     T = S_('T')
@@ -348,7 +381,7 @@ def test_recursive_predicate_chase_solution():
         Fact_(Q(C_(1), C_(2))),
         Fact_(Q(C_(2), C_(3))),
         Imp_(T(x, y), Q(x, y)),
-        Imp_(T(x, y), Q(x, z) & T(z, y))
+        Imp_(T(x, y), Q(x, z) & T(z, y)),
     ))
 
     dl = Datalog()

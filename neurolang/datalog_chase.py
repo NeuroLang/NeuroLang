@@ -1,5 +1,5 @@
 from collections import namedtuple
-from itertools import chain
+from itertools import chain, tee
 from operator import eq
 from typing import AbstractSet
 
@@ -10,6 +10,10 @@ from .unification import (
     apply_substitution_arguments,
     compose_substitutions,
     most_general_unifier_arguments
+)
+from .relational_algebra import (
+    Column, Selection, Product, Projection, eq_,
+    RelationalAlgebraOptimiser, RelationalAlgebraSolver
 )
 
 
@@ -22,28 +26,53 @@ def chase_step(datalog, instance, builtins, rule, restriction_instance=None):
     )
 
     if all(len(predicate_list) == 0 for predicate_list in rule_predicates):
-        return {}
+        return dict()
 
     restricted_predicates, nonrestricted_predicates, builtin_predicates =\
         rule_predicates
+
+    args_to_project = extract_variable_arguments(rule.consequent)
+    builtin_predicates, builtin_predicates_ = tee(builtin_predicates)
+    for predicate, _ in builtin_predicates_:
+        args_to_project += extract_variable_arguments(predicate)
+    new_args_to_project = tuple()
+    for i, a in enumerate(args_to_project):
+        if a not in args_to_project[:i]:
+            new_args_to_project += (a,)
+    args_to_project = new_args_to_project
 
     rule_predicates_iterator = chain(
         restricted_predicates,
         nonrestricted_predicates
     )
 
-    substitutions = obtain_substitutions(rule_predicates_iterator)
+    substitutions = obtain_substitutions(
+        args_to_project, rule_predicates_iterator
+    )
 
     substitutions = evaluate_builtins(
         builtin_predicates, substitutions, datalog
     )
 
     return compute_result_set(
+        datalog,
         rule, substitutions, instance, restriction_instance
     )
 
 
-def obtain_substitutions(rule_predicates_iterator):
+def extract_variable_arguments(predicate):
+    stack = list(predicate.args[::-1])
+    variables = tuple()
+    while stack:
+        arg = stack.pop()
+        if isinstance(arg, Symbol):
+            variables += (arg,)
+        elif isinstance(arg, FunctionApplication):
+            stack += arg.args[::-1]
+    return variables
+
+
+def obtain_substitutions_mgu(args_to_project, rule_predicates_iterator):
     substitutions = [{}]
     for predicate, representation in rule_predicates_iterator:
         new_substitutions = []
@@ -75,6 +104,83 @@ def unify_substitution(predicate, substitution, representation):
                 )
             )
     return new_substitutions
+
+
+def translate_to_ra_plus(
+    args_to_project,
+    rule_predicates_iterator
+):
+    seen_vars = dict()
+    selections = []
+    column = -1
+    new_representations = tuple()
+    projections = tuple()
+    projected_var_names = dict()
+    rule_predicates_iterator = list(rule_predicates_iterator)
+    for _, pred_rep in enumerate(rule_predicates_iterator):
+        predicate, representation = pred_rep
+        local_selections = []
+        for i, arg in enumerate(predicate.args):
+            column += 1
+            c = Constant[Column](Column(column))
+            if isinstance(arg, Constant):
+                l_c = Constant[Column](Column(i))
+                local_selections.append((l_c, arg))
+            elif isinstance(arg, Symbol):
+                if arg in seen_vars:
+                    selections.append((seen_vars[arg], c))
+                else:
+                    if arg in args_to_project:
+                        projected_var_names[arg] = len(projections)
+                        projections += (c,)
+                    seen_vars[arg] = c
+        new_representation = sdb.Constant[AbstractSet](representation)
+        for s1, s2 in local_selections:
+            new_representation = Selection(new_representation, eq_(s1, s2))
+        new_representations += (new_representation,)
+    if len(new_representations) > 0:
+        if len(new_representations) == 1:
+            relation = new_representations[0]
+        else:
+            relation = Product(new_representations)
+        for s1, s2 in selections:
+            relation = Selection(relation, eq_(s1, s2))
+        relation = Projection(relation, projections)
+    else:
+        relation = Constant[AbstractSet](set())
+    return relation, projected_var_names
+
+
+def obtain_substitutions_relational_algebra_plus(
+    args_to_project, rule_predicates_iterator
+):
+    ra_code, projected_var_names = translate_to_ra_plus(
+        args_to_project,
+        rule_predicates_iterator
+    )
+    ra_code_opt = RelationalAlgebraOptimiser().walk(ra_code)
+    if not isinstance(ra_code_opt, Constant) or len(ra_code_opt.value) > 0:
+        result = RelationalAlgebraSolver().walk(ra_code_opt)
+    else:
+        return [{}]
+
+    substitutions = compute_substitutions(result, projected_var_names)
+
+    return substitutions
+
+
+def compute_substitutions(result, projected_var_names):
+    substitutions = []
+    for tuple_ in result.value:
+        subs = {
+            var: tuple_.value[col]
+            for var, col in projected_var_names.items()
+        }
+        substitutions.append(subs)
+    return substitutions
+
+
+obtain_substitutions = obtain_substitutions_relational_algebra_plus
 
 
 def evaluate_builtins(builtin_predicates, substitutions, datalog):
@@ -198,18 +304,20 @@ def extract_rule_predicates(
 
 
 def compute_result_set(
-    rule, substitutions, instance, restriction_instance=None
+    datalog, rule, substitutions, instance, restriction_instance=None
 ):
     if restriction_instance is None:
         restriction_instance = dict()
-    new_tuples = set(
-        Constant(
+    new_tuples = list(
+        tuple(
+            v.value for v in
             apply_substitution_arguments(
                 rule.consequent.args, substitution
             )
         )
         for substitution in substitutions
     )
+    new_tuples = datalog.new_set(new_tuples)
 
     if rule.consequent.functor in instance:
         new_tuples -= instance[rule.consequent.functor].value
@@ -217,7 +325,7 @@ def compute_result_set(
         new_tuples -= restriction_instance[rule.consequent.functor].value
 
     if len(new_tuples) == 0:
-        return {}
+        return dict()
     else:
         set_type = next(iter(new_tuples)).type
         new_instance = {
