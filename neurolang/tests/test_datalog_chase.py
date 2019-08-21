@@ -4,7 +4,7 @@ from typing import Callable
 from .. import expressions
 from .. import solver_datalog_naive as sdb
 from .. import expression_walker as ew
-from ..datalog_chase import DatalogChase
+from ..datalog_chase import DatalogChase, ChaseNode
 
 C_ = expressions.Constant
 S_ = expressions.Symbol
@@ -33,7 +33,8 @@ def test_builtin_equality_only():
     instance_0 = dl.extensional_database()
 
     rule = datalog_program.expressions[0]
-    instance_update = dc.chase_step(dl, instance_0, dl.builtins(), rule)
+    dc = DatalogChase(dl)
+    instance_update = dc.chase_step(instance_0, rule)
     res = {
         Q: C_({C_((12,))}),
     }
@@ -257,7 +258,7 @@ def test_non_recursive_predicate_chase():
 
     assert res.instance == dl.extensional_database()
     assert res.children == {
-        datalog_program.expressions[-1]: dc.ChaseNode(instance_1, dict())
+        datalog_program.expressions[-1]: ChaseNode(instance_1, dict())
     }
 
 
@@ -354,7 +355,8 @@ def test_nonrecursive_predicate_chase_solution_constant(N=10):
         dl = Datalog()
         dl.walk(datalog_program)
 
-        solution_instance = dc.build_chase_solution(dl)
+        dc = DatalogChase(dl)
+        solution_instance = dc.build_chase_solution()
 
         final_instance = {
             Q: C_({

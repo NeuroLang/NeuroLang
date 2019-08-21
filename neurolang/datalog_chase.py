@@ -6,13 +6,15 @@ from typing import AbstractSet
 from .expressions import Constant, Symbol, FunctionApplication
 from . import solver_datalog_naive as sdb
 from .unification import (
-    apply_substitution, apply_substitution_arguments, compose_substitutions,
-    most_general_unifier_arguments
+    apply_substitution, apply_substitution_arguments, compose_substitutions
 )
 from .relational_algebra import (
     Column, Selection, Product, Projection, eq_,
     RelationalAlgebraOptimiser, RelationalAlgebraSolver
 )
+
+
+ChaseNode = namedtuple('ChaseNode', 'instance children')
 
 
 class DatalogChase():
@@ -59,16 +61,28 @@ class DatalogChase():
         )
 
         if all(len(predicate_list) == 0 for predicate_list in rule_predicates):
-            return {}
+            return dict()
 
         restricted_predicates, nonrestricted_predicates, builtin_predicates =\
             rule_predicates
+
+        args_to_project = self.extract_variable_arguments(rule.consequent)
+        builtin_predicates, builtin_predicates_ = tee(builtin_predicates)
+        for predicate, _ in builtin_predicates_:
+            args_to_project += self.extract_variable_arguments(predicate)
+        new_args_to_project = tuple()
+        for i, a in enumerate(args_to_project):
+            if a not in args_to_project[:i]:
+                new_args_to_project += (a,)
+        args_to_project = new_args_to_project
 
         rule_predicates_iterator = chain(
             restricted_predicates, nonrestricted_predicates
         )
 
-        substitutions = self.obtain_substitutions(rule_predicates_iterator)
+        substitutions = self.obtain_substitutions(
+            args_to_project, rule_predicates_iterator
+        )
 
         substitutions = self.evaluate_builtins(
             builtin_predicates, substitutions
@@ -79,33 +93,86 @@ class DatalogChase():
         )
 
     @staticmethod
-    def obtain_substitutions(rule_predicates_iterator):
-        substitutions = [{}]
-        for predicate, representation in rule_predicates_iterator:
-            new_substitutions = []
-            for substitution in substitutions:
-                new_substitutions += DatalogChase.unify_substitution(
-                    predicate, substitution, representation
-                )
-            substitutions = new_substitutions
+    def extract_variable_arguments(predicate):
+        stack = list(predicate.args[::-1])
+        variables = tuple()
+        while stack:
+            arg = stack.pop()
+            if isinstance(arg, Symbol):
+                variables += (arg,)
+            elif isinstance(arg, FunctionApplication):
+                stack += arg.args[::-1]
+        return variables
+
+    def obtain_substitutions(self, args_to_project, rule_predicates_iterator):
+        ra_code, projected_var_names = self.translate_to_ra_plus(
+            args_to_project,
+            rule_predicates_iterator
+        )
+        ra_code_opt = RelationalAlgebraOptimiser().walk(ra_code)
+        if not isinstance(ra_code_opt, Constant) or len(ra_code_opt.value) > 0:
+            result = RelationalAlgebraSolver().walk(ra_code_opt)
+        else:
+            return [{}]
+
+        substitutions = self.compute_substitutions(result, projected_var_names)
+
         return substitutions
 
-    @staticmethod
-    def unify_substitution(predicate, substitution, representation):
-        new_substitutions = []
-        subs_args = apply_substitution_arguments(predicate.args, substitution)
+    def translate_to_ra_plus(
+        self,
+        args_to_project,
+        rule_predicates_iterator
+    ):
+        seen_vars = dict()
+        selections = []
+        column = -1
+        new_representations = tuple()
+        projections = tuple()
+        projected_var_names = dict()
+        rule_predicates_iterator = list(rule_predicates_iterator)
+        for _, pred_rep in enumerate(rule_predicates_iterator):
+            predicate, representation = pred_rep
+            local_selections = []
+            for i, arg in enumerate(predicate.args):
+                column += 1
+                c = Constant[Column](Column(column))
+                if isinstance(arg, Constant):
+                    l_c = Constant[Column](Column(i))
+                    local_selections.append((l_c, arg))
+                elif isinstance(arg, Symbol):
+                    if arg in seen_vars:
+                        selections.append((seen_vars[arg], c))
+                    else:
+                        if arg in args_to_project:
+                            projected_var_names[arg] = len(projections)
+                            projections += (c,)
+                        seen_vars[arg] = c
+            new_representation = sdb.Constant[AbstractSet](representation)
+            for s1, s2 in local_selections:
+                new_representation = Selection(new_representation, eq_(s1, s2))
+            new_representations += (new_representation,)
+        if len(new_representations) > 0:
+            if len(new_representations) == 1:
+                relation = new_representations[0]
+            else:
+                relation = Product(new_representations)
+            for s1, s2 in selections:
+                relation = Selection(relation, eq_(s1, s2))
+            relation = Projection(relation, projections)
+        else:
+            relation = Constant[AbstractSet](self.datalog_program.new_set())
+        return relation, projected_var_names
 
-        for element in representation:
-            mgu_substituted = most_general_unifier_arguments(
-                subs_args, element.value
-            )
-
-            if mgu_substituted is not None:
-                new_substitution = mgu_substituted[0]
-                new_substitutions.append(
-                    compose_substitutions(substitution, new_substitution)
-                )
-        return new_substitutions
+    def compute_substitutions(self, result, projected_var_names):
+        substitutions = []
+        for tuple_ in result.value:
+            subs = {
+                var: tuple_.value[col]
+                for var, col in projected_var_names.items()
+            }
+            substitutions.append(subs)
+        return substitutions
 
     def evaluate_builtins(self, builtin_predicates, substitutions):
         new_substitutions = []
@@ -222,7 +289,7 @@ class DatalogChase():
     ):
         if restriction_instance is None:
             restriction_instance = dict()
-        new_tuples = set(
+        new_tuples = self.datalog_program.new_set(
             Constant(
                 apply_substitution_arguments(
                     rule.consequent.args, substitution
@@ -236,7 +303,7 @@ class DatalogChase():
             new_tuples -= restriction_instance[rule.consequent.functor].value
 
         if len(new_tuples) == 0:
-            return {}
+            return dict()
         else:
             set_type = next(iter(new_tuples)).type
             new_instance = {
@@ -259,10 +326,8 @@ class DatalogChase():
 
         return new_instance
 
-    ChaseNode = namedtuple('ChaseNode', 'instance children')
-
     def build_chase_tree(self, chase_set=chase_step):
-        root = self.ChaseNode(
+        root = ChaseNode(
             self.datalog_program.extensional_database(), dict()
         )
         rules = []
@@ -284,7 +349,7 @@ class DatalogChase():
         instance_update = self.chase_step(node.instance, rule)
         if len(instance_update) > 0:
             new_instance = self.merge_instances(node.instance, instance_update)
-            new_node = self.ChaseNode(new_instance, dict())
+            new_node = ChaseNode(new_instance, dict())
             node.children[rule] = new_node
             return new_node
         else:
