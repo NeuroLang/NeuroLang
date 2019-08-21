@@ -33,15 +33,8 @@ class DatalogChaseNegationGeneral(DatalogChaseGeneral):
         restricted_predicates, nonrestricted_predicates, negative_predicates, \
             builtin_predicates, negative_builtin_predicates = rule_predicates
 
-        args_to_project = self.extract_variable_arguments(rule.consequent)
         builtin_predicates, builtin_predicates_ = tee(builtin_predicates)
-        for predicate, _ in builtin_predicates_:
-            args_to_project += self.extract_variable_arguments(predicate)
-        new_args_to_project = tuple()
-        for i, a in enumerate(args_to_project):
-            if a not in args_to_project[:i]:
-                new_args_to_project += (a, )
-        args_to_project = new_args_to_project
+        args_to_project = self.get_args_to_project(rule, builtin_predicates_)
 
         rule_predicates_iterator = chain(
             restricted_predicates, nonrestricted_predicates
@@ -66,6 +59,17 @@ class DatalogChaseNegationGeneral(DatalogChaseGeneral):
         return self.compute_result_set(
             rule, substitutions, instance, restriction_instance
         )
+
+    def get_args_to_project(self, rule, builtin_predicates_):
+        args_to_project = self.extract_variable_arguments(rule.consequent)
+        for predicate, _ in builtin_predicates_:
+            args_to_project += self.extract_variable_arguments(predicate)
+        new_args_to_project = tuple()
+        for i, a in enumerate(args_to_project):
+            if a not in args_to_project[:i]:
+                new_args_to_project += (a,)
+        args_to_project = new_args_to_project
+        return args_to_project
 
     def evaluate_negative_builtins(self, builtin_predicates, substitutions):
         for predicate, _ in builtin_predicates:
