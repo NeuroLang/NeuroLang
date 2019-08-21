@@ -45,6 +45,9 @@ class MapInstance(Instance, Mapping):
     def __len__(self):
         return len(self.elements)
 
+    def as_set(self):
+        return SetInstance(self.elements)
+
 
 class SetInstance(Instance, Set):
     def __contains__(self, fact):
@@ -62,3 +65,6 @@ class SetInstance(Instance, Set):
         for predicate, tuples in self.elements.items():
             for t in tuples:
                 yield Fact(predicate(*t))
+
+    def as_map(self):
+        return MapInstance(self.elements)
