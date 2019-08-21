@@ -32,10 +32,6 @@ class DatalogChase():
         else:
             self.rules = rules
 
-    def __call__(self, rules=None):
-        self._set_rules(rules)
-        self.build_chase_solution()
-
     def build_chase_solution(self):
         instance = dict()
         instance_update = self.datalog_program.extensional_database()
