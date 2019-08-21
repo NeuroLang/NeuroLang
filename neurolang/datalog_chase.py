@@ -308,45 +308,55 @@ class DatalogChaseRelationalAlgebraMixin:
         args_to_project,
         rule_predicates_iterator
     ):
-        seen_vars = dict()
-        selections = []
-        column = -1
-        new_representations = tuple()
-        projections = tuple()
-        projected_var_names = dict()
+        self.seen_vars = dict()
+        self.selections = []
+        self.projections = tuple()
+        self.projected_var_names = dict()
+        column = 0
+        new_ra_expressions = tuple()
         rule_predicates_iterator = list(rule_predicates_iterator)
-        for _, pred_rep in enumerate(rule_predicates_iterator):
-            predicate, representation = pred_rep
-            local_selections = []
-            for i, arg in enumerate(predicate.args):
-                column += 1
-                c = Constant[Column](Column(column))
-                if isinstance(arg, Constant):
-                    l_c = Constant[Column](Column(i))
-                    local_selections.append((l_c, arg))
-                elif isinstance(arg, Symbol):
-                    if arg in seen_vars:
-                        selections.append((seen_vars[arg], c))
-                    else:
-                        if arg in args_to_project:
-                            projected_var_names[arg] = len(projections)
-                            projections += (c,)
-                        seen_vars[arg] = c
-            new_representation = sdb.Constant[AbstractSet](representation)
-            for s1, s2 in local_selections:
-                new_representation = Selection(new_representation, eq_(s1, s2))
-            new_representations += (new_representation,)
-        if len(new_representations) > 0:
-            if len(new_representations) == 1:
-                relation = new_representations[0]
+        for _, pred_ra in enumerate(rule_predicates_iterator):
+            ra_expression_arity = pred_ra[1].arity
+            new_ra_expression = self.translate_predicate(pred_ra, column, args_to_project)
+            new_ra_expressions += (new_ra_expression,)
+            column += ra_expression_arity
+        if len(new_ra_expressions) > 0:
+            if len(new_ra_expressions) == 1:
+                relation = new_ra_expressions[0]
             else:
-                relation = Product(new_representations)
-            for s1, s2 in selections:
+                relation = Product(new_ra_expressions)
+            for s1, s2 in self.selections:
                 relation = Selection(relation, eq_(s1, s2))
-            relation = Projection(relation, projections)
+            relation = Projection(relation, self.projections)
         else:
             relation = Constant[AbstractSet](self.datalog_program.new_set())
+        projected_var_names = self.projected_var_names
+        del self.seen_vars
+        del self.selections
+        del self.projections
+        del self.projected_var_names
         return relation, projected_var_names
+
+    def translate_predicate(self, pred_ra, column, args_to_project):
+        predicate, ra_expression = pred_ra
+        local_selections = []
+        for i, arg in enumerate(predicate.args):
+            c = Constant[Column](Column(column + i))
+            if isinstance(arg, Constant):
+                l_c = Constant[Column](Column(i))
+                local_selections.append((l_c, arg))
+            elif isinstance(arg, Symbol):
+                if arg in self.seen_vars:
+                    self.selections.append((self.seen_vars[arg], c))
+                else:
+                    if arg in args_to_project:
+                        self.projected_var_names[arg] = len(self.projections)
+                        self.projections += (c,)
+                    self.seen_vars[arg] = c
+        new_ra_expression = sdb.Constant[AbstractSet](ra_expression)
+        for s1, s2 in local_selections:
+            new_ra_expression = Selection(new_ra_expression, eq_(s1, s2))
+        return new_ra_expression
 
     def compute_substitutions(self, result, projected_var_names):
         substitutions = []
