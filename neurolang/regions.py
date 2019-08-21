@@ -106,25 +106,25 @@ class VolumetricBrainRegion(Region):
 
 class ExplicitVBR(VolumetricBrainRegion):
     def __init__(
-        self, voxels, affine_matrix, img_dim=None, prebuild_tree=False
+        self, voxels, affine_matrix, image_dim=None, prebuild_tree=False
     ):
         self.voxels = np.asanyarray(voxels, dtype=int)
         self.affine = affine_matrix
         self.affine_inv = np.linalg.inv(self.affine)
-        self.image_dim = img_dim
+        self.image_dim = image_dim
+        self._aabb_tree = None
+        self._bounding_box = self.generate_bounding_box(self.voxels)
         if prebuild_tree:
-            self._aabb_tree = self.build_tree()
-        else:
-            self._aabb_tree = None
+            self.build_tree()
 
     @property
     def bounding_box(self):
-        return self.aabb_tree.root.box
+        return self._bounding_box
 
     @property
     def aabb_tree(self):
         if self._aabb_tree is None:
-            self._aabb_tree = self.build_tree()
+            self.build_tree()
         return self._aabb_tree
 
     def generate_bounding_box(self, voxels_ijk):
@@ -134,7 +134,7 @@ class ExplicitVBR(VolumetricBrainRegion):
         return aabb_from_vertices(voxels_xyz)
 
     def build_tree(self):
-        box = self.generate_bounding_box(self.voxels)
+        box = self._bounding_box
         tree = Tree()
         tree.add(box)
 
@@ -190,6 +190,7 @@ class ExplicitVBR(VolumetricBrainRegion):
             if node.right is not None:
                 stack.append(node.right)
 
+        self._aabb_tree = tree
         return tree
 
     def to_xyz(self, affine=None):
@@ -218,8 +219,8 @@ class ExplicitVBR(VolumetricBrainRegion):
         return out
 
     def __eq__(self, other):
-        return (np.all(self.affine == other.affine) and
-                np.all(self.voxels == other.voxels))
+        return (np.array_equiv(self.affine, other.affine) and
+                np.array_equiv(self.voxels, other.voxels))
 
     def __repr__(self):
         return f'Region(VBR= affine:{self.affine}, voxels:{self.voxels})'
@@ -278,7 +279,7 @@ class BoundigBoxSequenceElement(ImplicitVBR):
     @property
     def aabb_tree(self):
         if self._aabb_tree is None:
-            self._aabb_tree = self.build_tree()
+            self.build_tree()
         return self._aabb_tree
 
     def to_ijk(self, affine):
@@ -381,10 +382,15 @@ class SphericalVolume(ImplicitVBR):
                         int(max(bounds_voxels[:, i])))
                   for i in range(bb.dim)]
 
-        voxel_coordinates = np.array([point for point in
-                                      np.array(list(product(*ranges))) if
-                                      nib.affines.apply_affine(affine, point)
-                                      in self])
+        if all(r.start == r.stop for r in ranges):
+            voxel_coordinates = np.array([[r.start for r in ranges]])
+        else:
+            voxel_coordinates = np.array([
+                point for point in
+                np.array(list(product(*ranges))) if
+                nib.affines.apply_affine(affine, point) in self
+            ])
+
         return voxel_coordinates
 
     def __contains__(self, point):
@@ -397,7 +403,7 @@ class SphericalVolume(ImplicitVBR):
         return hash(self.bounding_box.limits.tobytes())
 
     def __eq__(self, other):
-        return (np.all(self._center == other._center) and
+        return (np.array_equiv(self._center, other._center) and
                 self._radius == other._radius)
 
     def __repr__(self):
@@ -457,8 +463,8 @@ class PlanarVolume(ImplicitVBR):
         return hash(self.bounding_box.limits.tobytes())
 
     def __eq__(self, other):
-        return (np.all(self._origin == other._origin) and
-                np.all(self._vector == other._vector))
+        return (np.array_equiv(self._origin, other._origin) and
+                np.array_equiv(self._vector, other._vector))
 
     def __repr__(self):
         return (f'PlanarVolume(Origin={tuple(self._origin)},'

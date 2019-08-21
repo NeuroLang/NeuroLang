@@ -427,3 +427,7 @@ class FirstOrderLogicSolver(
             for sym in symbols_in_head
         ))
         return OrderedDict(zip(symbols_in_head, constants))
+
+    @staticmethod
+    def new_set(iterable):
+        return frozenset(iterable)

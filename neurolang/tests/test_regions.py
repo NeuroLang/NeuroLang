@@ -1,20 +1,23 @@
 import numpy as np
-import nibabel as nib
-from numpy import random
 import pytest
-from ..regions import (
-    Region,
-    ExplicitVBR, SphericalVolume, PlanarVolume,
-    region_union, region_intersection, region_difference)
-from ..CD_relations import direction_matrix, cardinal_relation, is_in_direction
+from numpy import random
+
+import nibabel as nib
+
+from ..aabb_tree import AABB
+from ..CD_relations import (
+    cardinal_relation, direction_matrix, is_in_direction,
+    cardinal_relation_prepare_regions
+)
 from ..exceptions import NeuroLangException
-from ..aabb_tree import AABB, Tree
+from ..regions import (ExplicitVBR, PlanarVolume, Region, SphericalVolume,
+                       region_difference, region_intersection, region_union)
 
 
 def _generate_random_box(size_bounds, *args):
-    N = len(args)
+    n = len(args)
     lower_bound = np.array([np.random.uniform(*b) for b in tuple(args)])
-    upper_bound = lower_bound + np.random.uniform(*size_bounds, size=N)
+    upper_bound = lower_bound + np.random.uniform(*size_bounds, size=n)
     return Region(lower_bound, upper_bound)
 
 
@@ -50,7 +53,7 @@ def test_coordinates():
 
 
 def _dir_matrix(region, other_region):
-    return direction_matrix([region.bounding_box], [other_region.bounding_box])
+    return direction_matrix(region.bounding_box, other_region.bounding_box)
 
 
 def test_regions_dir_matrix():
@@ -198,18 +201,18 @@ def test_explicit_region():
     assert np.all(vbr.bounding_box.lb <= 1000)
 
     affine = np.eye(4)
-    brain_stem = ExplicitVBR(voxels, affine)
-    assert np.array_equal(brain_stem.voxels, brain_stem.to_ijk(affine))
+    region1 = ExplicitVBR(voxels, affine)
+    assert np.array_equal(region1.voxels, region1.to_ijk(affine))
 
     affine = np.eye(4) * 2
     affine[-1] = 1
-    brain_stem = ExplicitVBR(voxels, affine)
-    assert np.array_equal(brain_stem.voxels, brain_stem.to_ijk(affine))
+    region1 = ExplicitVBR(voxels, affine)
+    assert np.array_equal(region1.voxels, region1.to_ijk(affine))
 
     affine = np.eye(4)
     affine[:, -1] = np.array([1, 1, 1, 1])
-    brain_stem = ExplicitVBR(voxels, affine)
-    assert np.array_equal(brain_stem.voxels, brain_stem.to_ijk(affine))
+    region1 = ExplicitVBR(voxels, affine)
+    assert np.array_equal(region1.voxels, region1.to_ijk(affine))
 
     affine = np.array([
         [-0.69999999, 0., 0., 90.],
@@ -217,8 +220,8 @@ def test_explicit_region():
         [0., 0., 0.69999999, -72.],
         [0., 0., 0., 1.]
     ]).round(2)
-    brain_stem = ExplicitVBR(voxels, affine)
-    assert np.array_equal(brain_stem.voxels, brain_stem.to_ijk(affine))
+    region1 = ExplicitVBR(voxels, affine)
+    assert np.array_equal(region1.voxels, region1.to_ijk(affine))
 
 
 def test_build_tree_one_voxel_regions():
@@ -317,56 +320,15 @@ def test_points_contained_in_implicit_regions():
     assert not (1, 1, 1) in pr
 
 
-def test_regions_with_multiple_bb_directionality():
-    r1 = Region((0, 0, 0), (6, 6, 1))
-    r2 = Region((6, 0, 0), (12, 6, 1))
-    assert is_in_direction(_dir_matrix(r1, r2), 'L')
-    r2 = Region((2, -3, 0), (5, 3, 1))
-    assert is_in_direction(_dir_matrix(r1, r2), 'LR')
-
-    region = ExplicitVBR(np.array([[0, 0, 0], [5, 5, 0]]), np.eye(4))
-    other_region = ExplicitVBR(np.array([[3, 0, 0]]), np.eye(4))
-    assert is_in_direction(_dir_matrix(other_region, region), 'O')
-    for r in ['L', 'R', 'P', 'A', 'I', 'S']:
-        assert not is_in_direction(_dir_matrix(other_region, region), r)
-
-    tree = Tree()
-    tree.add(region.bounding_box)
-    tree.add(AABB((0, 0, 0), (2.5, 5, 1)))
-    tree.add(AABB((2.5, 0, 0), (5, 5, 1)))
-    region_bbs = [tree.root.left.box, tree.root.right.box]
-    assert is_in_direction(
-        direction_matrix([other_region.bounding_box], region_bbs), 'O'
-    )
-
-    region_bbs = [
-      AABB((0, 0, 0), (2.5, 2.5, 1)),
-      AABB((0, 2.5, 0), (2.5, 5, 1)),
-      AABB((2.5, 2.5, 0), (5, 5, 1)),
-    ]
-
-    for region in region_bbs:
-        tree.add(region)
-
-    assert is_in_direction(
-        direction_matrix([other_region.bounding_box], region_bbs), 'P'
-    )
-    assert is_in_direction(
-        direction_matrix([other_region.bounding_box], region_bbs), 'R'
-    )
-
-    for r in ['L', 'A', 'I', 'S', 'O']:
-        assert not is_in_direction(
-            direction_matrix([other_region.bounding_box], region_bbs), r
-        )
-
-
 def test_refinement_of_not_overlapping():
 
     triangle = ExplicitVBR(
         np.array([[0, 0, 0], [6, 0, 0], [6, 6, 1]]), np.eye(4)
     )
     other_region = ExplicitVBR(np.array([[0, 6, 0]]), np.eye(4))
+
+    assert not cardinal_relation(triangle, triangle, 'O')
+
     assert cardinal_relation(
         other_region, triangle, 'O', refine_overlapping=False
     )
@@ -377,6 +339,11 @@ def test_refinement_of_not_overlapping():
     assert not cardinal_relation(
         other_region, triangle, 'O', refine_overlapping=True
     )
+
+    assert not cardinal_relation(
+        triangle, other_region, 'O', refine_overlapping=True
+    )
+
     for r in ['L', 'A']:
         assert cardinal_relation(
             other_region, triangle, r, refine_overlapping=True
@@ -448,7 +415,7 @@ def test_regions_union_intersection():
     region = ExplicitVBR(voxels, affine, tuple([2, 2, 2]))
     union = region_union([region], affine)
     assert union.bounding_box == region.bounding_box
-    #
+
     center = region.bounding_box.ub
     radius = 30
     sphere = SphericalVolume(center, radius)
@@ -473,3 +440,28 @@ def test_intersection_difference():
     union = region_union([sphere, other_sphere], affine)
     intersect2 = region_difference([union, d1, d2], affine)
     assert intersect.bounding_box == intersect2.bounding_box
+
+
+def test_cardinal_relation_prepare_regions():
+    sphere_1 = SphericalVolume((0, 0, 0), 10)
+    affine_1 = np.eye(4)
+    affine_2 = np.diag((2, 2, 2, 1))
+
+    sphere_1_evbr = sphere_1.to_explicit_vbr(affine_1, (100, 100, 100))
+    sphere_2_evbr = sphere_1.to_explicit_vbr(affine_2, (100, 100, 100))
+
+    r1, r2 = cardinal_relation_prepare_regions(sphere_1_evbr, sphere_1_evbr)
+    assert r1 is sphere_1_evbr
+    assert r2 is sphere_1_evbr
+
+    r1, r2 = cardinal_relation_prepare_regions(sphere_1_evbr, sphere_1)
+    assert r1 is sphere_1_evbr
+    assert r2 is not sphere_1_evbr and r2 == r1
+
+    r1, r2 = cardinal_relation_prepare_regions(sphere_1, sphere_1_evbr)
+    assert r2 is sphere_1_evbr
+    assert r1 is not sphere_1_evbr and r2 == r1
+
+    r1, r2 = cardinal_relation_prepare_regions(sphere_1_evbr, sphere_2_evbr)
+    assert r1 is sphere_1_evbr
+    assert r2 is sphere_2_evbr
