@@ -15,7 +15,6 @@ from .datalog_chase import (
 )
 from .relational_algebra import (
     RelationalAlgebraOptimiser,
-    RelationalAlgebraSolver,
 )
 
 
@@ -41,7 +40,7 @@ class DatalogChaseNegationGeneral(DatalogChaseGeneral):
         new_args_to_project = tuple()
         for i, a in enumerate(args_to_project):
             if a not in args_to_project[:i]:
-                new_args_to_project += (a,)
+                new_args_to_project += (a, )
         args_to_project = new_args_to_project
 
         rule_predicates_iterator = chain(
@@ -49,14 +48,11 @@ class DatalogChaseNegationGeneral(DatalogChaseGeneral):
         )
 
         substitutions = self.obtain_substitutions(
-            args_to_project,
-            rule_predicates_iterator
+            args_to_project, rule_predicates_iterator
         )
 
         substitutions = self.obtain_negative_substitutions(
-            args_to_project,
-            negative_predicates,
-            substitutions
+            args_to_project, negative_predicates, substitutions
         )
 
         substitutions = self.evaluate_builtins(
@@ -180,14 +176,21 @@ class DatalogChaseNegationGeneral(DatalogChaseGeneral):
                     f'There is a contradiction in your facts'
                 )
 
-class DatalogChaseNegationRelationalAlgebraMixin(DatalogChaseRelationalAlgebraMixin):
-    def obtain_negative_substitutions(self, args_to_project, rule_predicates_iterator, substitutions):
+
+class DatalogChaseNegationRelationalAlgebraMixin(
+    DatalogChaseRelationalAlgebraMixin
+):
+    def obtain_negative_substitutions(
+        self, args_to_project, rule_predicates_iterator, substitutions
+    ):
         raise NotImplementedError()
 
-class DatalogChaseNegationMGUMixin(DatalogChaseMGUMixin):
 
+class DatalogChaseNegationMGUMixin(DatalogChaseMGUMixin):
     @staticmethod
-    def obtain_negative_substitutions(args_to_project, negative_predicates, substitutions):
+    def obtain_negative_substitutions(
+        args_to_project, negative_predicates, substitutions
+    ):
         for predicate, representation in negative_predicates:
             new_substitutions = []
             for substitution in substitutions:
@@ -196,13 +199,12 @@ class DatalogChaseNegationMGUMixin(DatalogChaseMGUMixin):
                         predicate, substitution, representation
                     )
             substitutions = new_substitutions
-        return [
-            {
-                k: v for k, v in substitution.items()
-                if k in args_to_project
-            }
-            for substitution in substitutions
-        ]
+        return [{
+            k: v
+            for k, v in substitution.items()
+            if k in args_to_project
+        }
+                for substitution in substitutions]
 
     @staticmethod
     def unify_negative_substitution(predicate, substitution, representation):
@@ -223,5 +225,8 @@ class DatalogChaseNegationMGUMixin(DatalogChaseMGUMixin):
             )
         return new_substitutions
 
-class DatalogChaseNegation(DatalogChaseNegationGeneral, DatalogChaseNegationMGUMixin):
+
+class DatalogChaseNegation(
+    DatalogChaseNegationGeneral, DatalogChaseNegationMGUMixin
+):
     pass
