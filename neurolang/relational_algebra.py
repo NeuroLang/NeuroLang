@@ -304,6 +304,8 @@ class RelationalAlgebraRewriteSelections(ew.PatternWalker):
                 C_[Column](Column(column_max))
             )
             relation_right = Selection(relation_right, new_formula)
+        else:
+            return selection
 
         return self.walk(
             EquiJoin(

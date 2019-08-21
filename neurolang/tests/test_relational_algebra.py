@@ -64,6 +64,10 @@ def test_product():
 
     assert sol == R1.cross_product(R2).cross_product(R1)
 
+    s = Product(tuple())
+    sol = RelationalAlgebraSolver().walk(s).value
+    assert len(sol) == 0
+
 
 def test_selection_reorder():
     raop = RelationalAlgebraOptimiser()
@@ -87,6 +91,9 @@ def test_selection_reorder():
     s_out1 = Selection(s_in1, eq_(C_(Column(1)), C_(Column(1))))
     assert raop.walk(s_out1) == s_out
 
+
+def test_push_selection_equijoins():
+    raop = RelationalAlgebraOptimiser()
     s2 = Selection(
         EquiJoin(
             C_(R1), (C_(Column(0)),),
@@ -95,7 +102,10 @@ def test_selection_reorder():
         eq_(C_(Column(0)), C_(1))
     )
     s2_res = EquiJoin(
-        Selection(C_(R1), eq_(C_(Column(0)), C_(1))), 
+        Selection(
+            C_(R1),
+            eq_(C_(Column(0)), C_(Column(1)))
+        ),
         (C_(Column(0)),),
         C_(R2), (C_(Column(0)),)
     )
@@ -107,17 +117,28 @@ def test_selection_reorder():
             C_(R1), (C_(Column(0)),),
             C_(R2), (C_(Column(0)),)
         ),
-        eq_(C_(Column(2)), C_(1))
+        eq_(C_(Column(2)), C_(Column(3)))
     )
     s2_res = EquiJoin(
         C_(R1),
         (C_(Column(0)),),
-        Selection(C_(R2), eq_(C_(Column(0)), C_(1))),
+        Selection(
+            C_(R2),
+            eq_(C_(Column(0)), C_(Column(1)))
+        ),
         (C_(Column(0)),)
     )
 
     assert raop.walk(s2) == s2_res
 
+    s2 = Selection(
+        EquiJoin(
+            C_(R1), (C_(Column(0)),),
+            C_(R2), (C_(Column(0)),)
+        ),
+        eq_(C_(Column(1)), C_(Column(2)))
+    )
+    assert raop.walk(s2) == s2
 
 
 def test_push_and_infer_equijoins():
