@@ -366,19 +366,3 @@ def test_recursive_predicate_chase_solution_and_call():
     }
 
     assert solution_instance == final_instance
-
-    dc()
-
-    solution_instance = dc.build_chase_solution()
-
-    final_instance = {
-        Q: C_({
-            C_((C_(1), C_(2))),
-            C_((C_(2), C_(3))),
-        }),
-        T: C_({C_((C_(1), C_(2))),
-               C_((C_(2), C_(3))),
-               C_((C_(1), C_(3)))})
-    }
-
-    assert solution_instance == final_instance
