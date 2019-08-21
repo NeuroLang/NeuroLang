@@ -34,13 +34,12 @@ def get_conjunction_atoms(expression):
 def get_antecedent_literals(rule):
     if not isinstance(rule, Implication):
         raise NeuroLangException('Implication expected')
-
     return get_conjunction_atoms(rule.antecedent)
 
 
-def get_antecedent_predicate_names(rule):
+def get_antecedent_predicates(rule):
     antecedent_literals = get_antecedent_literals(rule)
-    return [literal.functor.name for literal in antecedent_literals]
+    return [literal.functor for literal in antecedent_literals]
 
 
 def is_gdatalog_rule(exp):
@@ -110,8 +109,10 @@ class DeltaTerm(FunctionApplication):
 
 
 class GenerativeDatalog(DatalogBasic):
-    @add_match(Implication(FunctionApplication, ...), lambda exp:
-               any(isinstance(arg, DeltaTerm) for arg in exp.consequent.args))
+    @add_match(
+        Implication(FunctionApplication, ...), lambda exp:
+        any(isinstance(arg, DeltaTerm) for arg in exp.consequent.args)
+    )
     def gdatalog_rule(self, rule):
         if not is_gdatalog_rule(rule):
             raise NeuroLangException(f'Invalid gdatalog rule: {rule}')
@@ -218,8 +219,8 @@ class TranslateGDatalogToEDatalog(ExpressionBasicEvaluator):
         y = Symbol[dterm.type]('y_' + str(uuid1()))
         result_args = (
             dterm.args + (Constant(datom.functor.name), ) +
-            tuple(arg for arg in datom.args
-                  if not isinstance(arg, DeltaTerm)) + (y, )
+            tuple(arg for arg in datom.args if not isinstance(arg, DeltaTerm)
+                  ) + (y, )
         )
         result_atom = FunctionApplication(
             DeltaSymbol(dterm.functor.name, len(datom.args)), result_args

@@ -13,10 +13,11 @@ from ..expression_walker import ExpressionWalker
 from ..expression_pattern_matching import add_match
 from .. import unification
 from .ppdl import (
-    DeltaTerm, get_antecedent_predicate_names, get_antecedent_literals,
+    DeltaTerm, get_antecedent_predicates, get_antecedent_literals,
     is_gdatalog_rule, get_dterm
 )
 from .distributions import TableDistribution
+from ..datalog.instance import SetInstance
 
 
 def produce(rule, facts):
@@ -50,15 +51,6 @@ def produce(rule, facts):
                     antecedent_literals[j], unifier
                 )
     return Fact(consequent)
-
-
-def group_facts_by_predicate(facts, predicates):
-    result = defaultdict(set)
-    for fact in facts:
-        pred = fact.consequent.functor.name
-        if pred in predicates:
-            result[pred].add(fact)
-    return result
 
 
 def substitute_dterm(datom, value):
@@ -154,9 +146,8 @@ class GDatalogToGraphicalModelTranslator(ExpressionWalker):
         self.gm.rv_to_cpd_functor[rule_rv_symbol] = (
             IntensionalTableCPDFunctor(rule)
         )
-        for antecedent_pred in get_antecedent_predicate_names(rule):
-            antecedent_rv_symbol = FactSetSymbol(f'{antecedent_pred}')
-            self.gm.add_parent(rule_rv_symbol, antecedent_rv_symbol)
+        for antecedent_pred in get_antecedent_predicates(rule):
+            self.gm.add_parent(rule_rv_symbol, antecedent_pred)
         if pred_rv_symbol not in self.gm.rv_to_cpd_functor:
             self.gm.rv_to_cpd_functor[pred_rv_symbol] = \
                 UnionFactSetTableCPDFunctor(predicate)
@@ -182,13 +173,11 @@ def sort_rvs_aux(gm, rv, parents, result):
         result.append(rv)
 
 
-def delta_infer1(rule, facts):
-    antecedent_predicate_names = get_antecedent_predicate_names(rule)
-    facts_by_predicate = group_facts_by_predicate(
-        facts, set(antecedent_predicate_names)
-    )
+def delta_infer1(rule, instance):
+    if not isinstance(instance, SetInstance):
+        raise NeuroLangException('Expected instance to be a SetInstance')
     antecedent_facts = tuple(
-        facts_by_predicate[pred] for pred in antecedent_predicate_names
+        instance[pred] for pred in get_antecedent_predicates(rule)
     )
     inferred_facts = set()
     for fact_list in itertools.product(*antecedent_facts):

@@ -10,6 +10,7 @@ from ..probabilistic.graphical_model import (
 )
 from ..probabilistic.ppdl import DeltaTerm, is_gdatalog_rule
 from ..probabilistic.distributions import TableDistribution
+from ..datalog.instance import SetInstance
 
 C_ = Constant
 S_ = Symbol
@@ -81,7 +82,7 @@ def test_delta_infer1():
     fact_a = Fact(P(a, p_a))
     fact_b = Fact(P(b, p_b))
     rule = Implication(Q(x, DeltaTerm(bernoulli, (p, ))), P(x, p))
-    result = delta_infer1(rule, frozenset({fact_a, fact_b}))
+    result = delta_infer1(rule, SetInstance(frozenset({fact_a, fact_b})))
     expected_dist = TableDistribution({
         frozenset({Fact(Q(a, C_(0))), Fact(Q(b, C_(0)))}):
         (1 - p_a.value) * (1 - p_b.value),
