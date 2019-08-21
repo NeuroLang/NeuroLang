@@ -327,7 +327,10 @@ class RelationalAlgebraRewriteSelections(ew.PatternWalker):
             relation_right = Selection(
                 relation_right,
                 eq_(
-                    C_(Column(int(selection.formula.args[0].value) - left_arity)),
+                    C_(Column(
+                        int(selection.formula.args[0].value) -
+                        left_arity
+                    )),
                     selection.formula.args[1]
                 )
             )
