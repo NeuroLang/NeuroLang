@@ -62,3 +62,20 @@ def test_pattern_walker_wrong_args():
             )
             def __(self, expression):
                 return expression
+
+
+def test_symbol_table_scopes():
+    symbol_table = expressions.TypedSymbolTable()
+    solver = expression_walker.SymbolTableEvaluator(symbol_table)
+    s = S_('S1')
+    c = C_[str]('S')
+    symbol_table[s] = c
+    assert solver.symbol_table[s] is c
+    solver.push_scope()
+    assert len(solver.symbol_table) == 0
+    assert solver.symbol_table[s] == c
+    solver.pop_scope()
+    assert solver.symbol_table[s] is c
+    with raises(expressions.NeuroLangException):
+        solver.pop_scope()
+        solver.pop_scope()

@@ -255,7 +255,7 @@ class ReplaceExpressionsByValues(ExpressionWalker):
             return self.walk(new_expression)
         else:
             raise NeuroLangException(
-                f'{expression} could not be evaluated '
+                f'{symbol} could not be evaluated '
                 'to a constant'
             )
 
@@ -292,7 +292,7 @@ class SymbolTableEvaluator(ExpressionWalker):
             if self.simplify_mode:
                 return symbol
             else:
-                raise ValueError(f'{expression} not in symbol table')
+                raise ValueError(f'{symbol} not in symbol table')
 
     @property
     def included_functions(self):
@@ -324,6 +324,15 @@ class SymbolTableEvaluator(ExpressionWalker):
             return statement
         else:
             return self.walk(Statement[statement.type](statement.lhs, rhs))
+
+    def push_scope(self):
+        self.symbol_table = self.symbol_table.create_scope()
+
+    def pop_scope(self):
+        es = self.symbol_table.enclosing_scope
+        if es is None:
+            raise NeuroLangException('No enclosing scope')
+        self.symbol_table = self.symbol_table.enclosing_scope
 
 
 class ExpressionBasicEvaluator(SymbolTableEvaluator):

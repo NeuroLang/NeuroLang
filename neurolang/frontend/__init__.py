@@ -1,21 +1,21 @@
-from .query_resolution import QueryBuilder
+from .query_resolution import QueryBuilderFirstOrder, QueryBuilderDatalog
 from ..expression_walker import (
     add_match, Symbol, FunctionApplication, Constant
 )
 from ..solver import FirstOrderLogicSolver
 from ..solver_datalog_extensional_db import ExtensionalDatabaseSolver
 from ..region_solver import RegionSolver
-from ..regions import (
-    ExplicitVBR, ImplicitVBR, SphericalVolume
-)
+from ..regions import ExplicitVBR
 from ..utils.data_manipulation import parse_region_label_map
 from .. import neurolang as nl
+from ..solver_datalog_naive import DatalogBasic
+from ..expression_walker import ExpressionBasicEvaluator
 
 from typing import Any, AbstractSet, Callable
 import numpy as np
 
 
-__all__ = ['RegionFrontend', 'QueryBuilder']
+__all__ = ['RegionFrontend', 'QueryBuilderDatalog', 'QueryBuilderFirstOrder']
 
 
 def function_isin(element: Any, set_: AbstractSet) -> bool:
@@ -39,7 +39,7 @@ class RegionFrontendSolver(
         return self.walk(expression.args[1](expression.args[0]))
 
 
-class RegionFrontend(QueryBuilder):
+class RegionFrontend(QueryBuilderFirstOrder):
 
     def __init__(self, solver=None):
         if solver is None:
@@ -67,18 +67,18 @@ class RegionFrontend(QueryBuilder):
 
         return res
 
-    def sphere(self, center, radius, result_symbol_name=None):
 
-        sr = SphericalVolume(center, radius)
-        symbol = self.add_region(sr, result_symbol_name)
-        return symbol
+class NeurolangDL(QueryBuilderDatalog):
 
-    def make_implicit_regions_explicit(self, affine, dim):
+    def __init__(self, solver=None):
+        if solver is None:
+            solver = RegionFrontendDatalogSolver()
+        super().__init__(solver)
 
-        for region_symbol_name in self.region_names:
-            region_symbol = self.get_symbol(region_symbol_name)
-            region = region_symbol.value
-            if isinstance(region, ImplicitVBR):
-                self.add_region(
-                    region.to_explicit_vbr(affine, dim), region_symbol_name
-                )
+
+class RegionFrontendDatalogSolver(
+        RegionSolver,
+        DatalogBasic,
+        ExpressionBasicEvaluator
+):
+    pass

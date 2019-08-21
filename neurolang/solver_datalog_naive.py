@@ -3,10 +3,10 @@ Naive implementation of non-typed datalog. There's no optimizations and will be
 surely very slow
 '''
 from typing import AbstractSet, Any, Tuple, Callable
-from itertools import product
+from itertools import product, tee
 from operator import and_, or_, invert, xor
 
-from .utils import OrderedSet
+from .utils import OrderedSet, RelationalAlgebraSet
 
 from .expressions import (
     FunctionApplication, Constant, NeuroLangException, is_leq_informative,
@@ -17,6 +17,7 @@ from .expressions import (
 from .type_system import Unknown
 from .expression_walker import (
     add_match, PatternWalker, expression_iterator,
+    ReplaceExpressionsByValues
 )
 
 
@@ -62,6 +63,66 @@ UNDEFINED = Undefined(None)
 NULL = NullConstant[Any](None)
 
 
+class WrappedExpressionIterable:
+    def __init__(self, iterable=None):
+        self.__row_type = None
+        if iterable is not None:
+            it1, it2 = tee(iterable)
+            try:
+                if isinstance(next(it1), Constant[Tuple]):
+                    rebv = ReplaceExpressionsByValues({})
+                    iterable = list(rebv.walk(e) for e in it2)
+            except StopIteration:
+                pass
+
+        super().__init__(iterable)
+
+    def __iter__(self):
+        type_ = self.row_type
+        return (
+            Constant[type_](
+                tuple(
+                    Constant[e_t](e, verify_type=False)
+                    for e_t, e in zip(type_.__args__, t)
+                ),
+                verify_type=False
+            )
+            for t in super().__iter__()
+        )
+
+    def add(self, element):
+        if isinstance(element, Constant[Tuple]):
+            element = element.value
+        element_ = tuple()
+        for e in element:
+            if isinstance(e, Constant):
+                e = e.value
+            element_ += (e,)
+        super().add(element_)
+
+    @property
+    def row_type(self):
+        if len(self) == 0:
+            return None
+
+        if self.__row_type is None:
+            self.__row_type = Constant(next(super().__iter__())).type
+
+        return self.__row_type
+
+
+class WrappedRelationalAlgebraSet(
+    WrappedExpressionIterable, RelationalAlgebraSet
+):
+    def __contains__(self, element):
+        if not isinstance(element, Constant):
+            element = self._normalise_element(element)
+        return (
+            self._container is not None and
+            hash(element) in self._container.index
+        )
+
+
 class DatalogBasic(PatternWalker):
     '''
     Implementation of Datalog grammar in terms of
@@ -101,20 +162,20 @@ class DatalogBasic(PatternWalker):
             )
 
         self._initialize_fact_set_if_needed(fact)
-        fact_set = self.symbol_table[fact.functor.name]
+        fact_set = self.symbol_table[fact.functor]
 
         if isinstance(fact_set, ExpressionBlock):
             raise NeuroLangException(
-                f'{fact.functor.name} has been previously '
+                f'{fact.functor} has been previously '
                 'define as intensional predicate.'
             )
 
-        fact_set.value.add(Constant(fact.args))
+        fact_set.value.add(fact.args)
 
         return expression
 
     def _initialize_fact_set_if_needed(self, fact):
-        if fact.functor.name not in self.symbol_table:
+        if fact.functor not in self.symbol_table:
             if fact.functor.type is Unknown:
                 c = Constant(fact.args)
                 set_type = c.type
@@ -123,15 +184,18 @@ class DatalogBasic(PatternWalker):
             else:
                 raise NeuroLangException('Fact functor type incorrect')
 
-            self.symbol_table[fact.functor.name] = \
-                Constant[AbstractSet[set_type]](set())
+            self.symbol_table[fact.functor] = \
+                Constant[AbstractSet[set_type]](
+                    WrappedRelationalAlgebraSet(),
+                    verify_type=False
+                )
 
     @add_match(Implication(
         FunctionApplication[bool](Symbol, ...),
         Constant[bool](True)
     ))
     def statement_extensional(self, expression):
-        return self.walk(Fact[expression.type](expression.consequent))
+        return self.walk(Fact(expression.consequent))
 
     @add_match(Implication(
         FunctionApplication[bool](Symbol, ...),
@@ -143,17 +207,17 @@ class DatalogBasic(PatternWalker):
 
         self._validate_implication_syntax(consequent, antecedent)
 
-        if consequent.functor.name in self.symbol_table:
-            value = self.symbol_table[consequent.functor.name]
+        if consequent.functor in self.symbol_table:
+            value = self.symbol_table[consequent.functor]
             if (
                 isinstance(value, Constant) and
                 is_leq_informative(value.type, AbstractSet)
             ):
                 raise NeuroLangException(
-                    'f{consequent.functor.name} has been previously '
+                    f'{consequent.functor.name} has been previously '
                     'defined as Fact or extensional database.'
                 )
-            eb = self.symbol_table[consequent.functor.name].expressions
+            eb = self.symbol_table[consequent.functor].expressions
 
             if (
                 not isinstance(eb[0].consequent, FunctionApplication) or
@@ -169,12 +233,12 @@ class DatalogBasic(PatternWalker):
 
         eb = eb + (expression,)
 
-        self.symbol_table[consequent.functor.name] = ExpressionBlock(eb)
+        self.symbol_table[consequent.functor] = ExpressionBlock(eb)
 
         return expression
 
     def _validate_implication_syntax(self, consequent, antecedent):
-        if consequent.functor.name in self.protected_keywords:
+        if consequent.functor in self.protected_keywords:
             raise NeuroLangException(
                 f'symbol {self.constant_set_name} is protected'
             )
@@ -197,13 +261,17 @@ class DatalogBasic(PatternWalker):
 
         if not is_conjunctive_expression(consequent):
             raise NeuroLangException(
-               f'Expression {consequent} is not conjunctive'
+                f'Expression {consequent} is not conjunctive'
             )
 
         if not is_conjunctive_expression_with_nested_predicates(antecedent):
             raise NeuroLangException(
-               f'Expression {antecedent} is not conjunctive'
+                f'Expression {antecedent} is not conjunctive'
             )
+
+    @staticmethod
+    def new_set(iterable=None):
+        return WrappedRelationalAlgebraSet(iterable=iterable)
 
     def intensional_database(self):
         return {
@@ -223,6 +291,32 @@ class DatalogBasic(PatternWalker):
 
     def builtins(self):
         return self.symbol_table.symbols_by_type(Callable)
+
+    def add_extensional_predicate_from_tuples(
+        self, symbol, iterable, type_=Unknown
+    ):
+        if type_ is Unknown:
+            iterable, iterable_ = tee(iter(iterable))
+            first = next(iterable_)
+            if isinstance(first, Expression):
+                type_ = first.type
+            else:
+                type_ = Constant(first).type
+
+        # iterable = [
+        #    tuple(
+        #        Constant[t_](v)
+        #        for t_, v in zip(type_.__args__, t)
+        #    )
+        #    for t in iterable
+        # ]
+        constant = Constant[AbstractSet[type_]](
+            self.new_set(list(iterable)),
+            auto_infer_type=False,
+            verify_type=False
+        )
+        symbol = symbol.cast(constant.type)
+        self.symbol_table[symbol] = constant
 
 
 class SolverNonRecursiveDatalogNaive(DatalogBasic):
