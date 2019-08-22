@@ -47,23 +47,6 @@ class Instance:
                 )
         return '{{ {} }}'.format(', '.join(facts_as_string))
 
-    @staticmethod
-    def union(*instances):
-        if len(instances) == 0:
-            return SetInstance(dict())
-        new_elements = dict()
-        all_predicates = set()
-        for instance in instances:
-            all_predicates |= instance.elements.keys()
-        for predicate in all_predicates:
-            new_elements[predicate] = frozenset.union(
-                *[
-                    instance.elements.get(predicate, frozenset())
-                    for instance in instances
-                ]
-            )
-        return SetInstance(new_elements)
-
     def __or__(self, other):
         new_elements = dict()
         for predicate in (
@@ -137,6 +120,23 @@ class SetInstance(Instance, Set):
         for predicate, tuples in self.elements.items():
             for t in tuples:
                 yield Fact(predicate(*t))
+
+    @staticmethod
+    def union(*instances):
+        if len(instances) == 0:
+            return SetInstance(dict())
+        new_elements = dict()
+        all_predicates = set()
+        for instance in instances:
+            all_predicates |= instance.elements.keys()
+        for predicate in all_predicates:
+            new_elements[predicate] = frozenset.union(
+                *[
+                    instance.elements.get(predicate, frozenset())
+                    for instance in instances
+                ]
+            )
+        return SetInstance(new_elements)
 
     def as_map(self):
         return MapInstance(self.elements)

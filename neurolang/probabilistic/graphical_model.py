@@ -38,7 +38,7 @@ def produce(rule, facts):
     consequent = rule.consequent
     antecedent_literals = get_antecedent_literals(rule)
     if len(antecedent_literals) != len(facts):
-        raise Exception(
+        raise NeuroLangException(
             'Expected same number of facts as number of antecedent literals'
         )
     n = len(facts)
@@ -200,11 +200,11 @@ def delta_infer1(rule, instance):
     if is_gdatalog_rule(rule):
         table = dict()
         for cpd_entries in itertools.product(
-            *[
+            *(
                 get_constant_dterm_table_cpd(get_dterm(dfact.consequent)
                                              ).table.items()
                 for dfact in inferred_facts
-            ]
+            )
         ):
             new_facts = frozenset(
                 Fact(substitute_dterm(dfact.consequent, entry[0]))

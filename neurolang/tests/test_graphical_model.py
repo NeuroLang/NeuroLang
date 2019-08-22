@@ -262,7 +262,7 @@ def test_conditional_probability_query_resolution_multiple_rules_same_pred():
     assert expected_dist == outcomes.value
 
 
-def test_map_query_resolution():
+def test_map_query_resolution_simple():
     program = ExpressionBlock((
         Fact(P(a)),
         Implication(Q(x, DeltaTerm(bernoulli, (C_(0.9), ))), P(x)),
