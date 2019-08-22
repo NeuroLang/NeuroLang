@@ -67,15 +67,8 @@ class DatalogChaseGeneral():
         restricted_predicates, nonrestricted_predicates, builtin_predicates =\
             rule_predicates
 
-        args_to_project = self.extract_variable_arguments(rule.consequent)
         builtin_predicates, builtin_predicates_ = tee(builtin_predicates)
-        for predicate, _ in builtin_predicates_:
-            args_to_project += self.extract_variable_arguments(predicate)
-        new_args_to_project = tuple()
-        for i, a in enumerate(args_to_project):
-            if a not in args_to_project[:i]:
-                new_args_to_project += (a,)
-        args_to_project = new_args_to_project
+        args_to_project = self.get_args_to_project(rule, builtin_predicates_)
 
         rule_predicates_iterator = chain(
             restricted_predicates, nonrestricted_predicates
@@ -92,6 +85,17 @@ class DatalogChaseGeneral():
         return self.compute_result_set(
             rule, substitutions, instance, restriction_instance
         )
+
+    def get_args_to_project(self, rule, builtin_predicates_):
+        args_to_project = self.extract_variable_arguments(rule.consequent)
+        for predicate, _ in builtin_predicates_:
+            args_to_project += self.extract_variable_arguments(predicate)
+        new_args_to_project = tuple()
+        for i, a in enumerate(args_to_project):
+            if a not in args_to_project[:i]:
+                new_args_to_project += (a,)
+        args_to_project = new_args_to_project
+        return args_to_project
 
     @staticmethod
     def extract_variable_arguments(predicate):
@@ -220,6 +224,7 @@ class DatalogChaseGeneral():
     ):
         if restriction_instance is None:
             restriction_instance = dict()
+
         new_tuples = self.datalog_program.new_set(
             Constant(
                 apply_substitution_arguments(
@@ -386,7 +391,7 @@ class DatalogChaseMGUMixin:
         for predicate, representation in rule_predicates_iterator:
             new_substitutions = []
             for substitution in substitutions:
-                new_substitutions += DatalogChase.unify_substitution(
+                new_substitutions += DatalogChaseMGUMixin.unify_substitution(
                     predicate, substitution, representation
                 )
             substitutions = new_substitutions
