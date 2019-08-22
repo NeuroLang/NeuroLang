@@ -6,9 +6,7 @@ from ..solver_datalog_naive import Fact, Implication, DatalogBasic
 from ..probabilistic.graphical_model import (
     produce, GraphicalModel, GDatalogToGraphicalModelTranslator,
     substitute_dterm, gdatalog2gm, delta_infer1,
-    solve_conditional_probability_query,
-    extract_instance_query_atom_assignments,
-    extract_instance_query_atoms_assignments
+    solve_conditional_probability_query, solve_map_query
 )
 from ..probabilistic.ppdl import DeltaTerm, is_gdatalog_rule
 from ..probabilistic.distributions import TableDistribution
@@ -262,3 +260,17 @@ def test_conditional_probability_query_resolution_multiple_rules_same_pred():
         2.0 / 3.0,
     })
     assert expected_dist == outcomes.value
+
+
+def test_map_query_resolution():
+    program = ExpressionBlock((
+        Fact(P(a)),
+        Implication(Q(x, DeltaTerm(bernoulli, (C_(0.9), ))), P(x)),
+    ))
+    gm = gdatalog2gm(program)
+    query_atoms = frozenset({Q(x, y)})
+    evidence = SetInstance()
+    solution = solve_map_query(gm, query_atoms, evidence)
+    assert solution == SetInstance({
+        Q: frozenset({(a, C_(1))}),
+    })

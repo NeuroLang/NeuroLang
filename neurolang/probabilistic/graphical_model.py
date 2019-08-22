@@ -14,7 +14,7 @@ from ..expressions import (
 from ..solver_datalog_naive import (
     Implication, Fact, extract_datalog_free_variables, DatalogBasic
 )
-from ..expression_walker import ExpressionWalker
+from ..expression_walker import ExpressionWalker, ExpressionBasicEvaluator
 from ..expression_pattern_matching import add_match
 from .. import unification
 from .ppdl import (
@@ -295,17 +295,22 @@ def construct_conjunction(atoms):
     return Constant(operator.and_)(atoms[0], construct_conjunction(atoms[1:]))
 
 
+class Datalog(DatalogBasic, ExpressionBasicEvaluator):
+    pass
+
+
 def solve_map_query(graphical_model, query_atoms, evidence):
     if not all(is_valid_query_atom(atom) for atom in query_atoms):
         raise NeuroLangException('Invalid query atoms')
     if not isinstance(evidence, Instance):
         raise NeuroLangException('Evidence must be a Datalog instance')
     free_variables = set.union(
-        *[extract_datalog_free_variables(atom) for atom in query_atoms]
+        *[set(extract_datalog_free_variables(atom)) for atom in query_atoms]
     )
     query_predicate = Symbol('__q__')
     query_rule = Implication(
-        query_predicate(*free_variables), construct_conjunction(query_atoms)
+        query_predicate(*free_variables),
+        construct_conjunction(list(query_atoms))
     )
     outcomes = solve_conditional_probability_query(graphical_model, evidence)
     prob_table = defaultdict(float)
@@ -315,19 +320,23 @@ def solve_map_query(graphical_model, query_atoms, evidence):
         program = ExpressionBlock(
             tuple(fact for fact in outcome) + (query_rule, )
         )
-        datalog = DatalogBasic()
+        datalog = Datalog()
         datalog.walk(program)
         chaser = DatalogChase(datalog)
-        solution_instance = chaser.build_chase_solution()
-        for tuple_value in solution_instance[query_predicate]:
+        solution_instance = SetInstance({
+            predicate: frozenset({t.value for t in const_tuple_values.value})
+            for predicate, const_tuple_values in
+            chaser.build_chase_solution().items()
+        })
+        for tuple_value in solution_instance.elements[query_predicate]:
             prob_table[tuple_value] += prob
             if prob_table[tuple_value] >= max_prob:
                 most_probable_tuple_value = tuple_value
                 max_prob = prob_table[tuple_value]
-    substitution = frozenset({
+    substitution = {
         var: value
         for var, value in zip(free_variables, most_probable_tuple_value)
-    })
+    }
     return SetInstance({
         atom.functor: frozenset({apply_substitution(atom, substitution).args})
         for atom in query_atoms
