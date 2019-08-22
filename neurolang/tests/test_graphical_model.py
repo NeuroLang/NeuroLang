@@ -5,8 +5,8 @@ from ..expression_pattern_matching import add_match
 from ..solver_datalog_naive import Fact, Implication, DatalogBasic
 from ..probabilistic.graphical_model import (
     produce, GraphicalModel, GDatalogToGraphicalModelTranslator,
-    substitute_dterm, gdatalog2gm, delta_infer1, TableCPDGraphicalModelSolver,
-    ConditionalProbabilityQuery, FactSet
+    substitute_dterm, gdatalog2gm, delta_infer1,
+    solve_conditional_probability_query
 )
 from ..probabilistic.ppdl import DeltaTerm, is_gdatalog_rule
 from ..probabilistic.distributions import TableDistribution
@@ -84,16 +84,20 @@ def test_delta_infer1():
     rule = Implication(Q(x, DeltaTerm(bernoulli, (p, ))), P(x, p))
     result = delta_infer1(rule, SetInstance(frozenset({fact_a, fact_b})))
     expected_dist = TableDistribution({
-        frozenset({Fact(Q(a, C_(0))), Fact(Q(b, C_(0)))}):
+        SetInstance(frozenset({Fact(Q(a, C_(0))),
+                               Fact(Q(b, C_(0)))})):
         (1 - p_a.value) * (1 - p_b.value),
-        frozenset({Fact(Q(a, C_(1))), Fact(Q(b, C_(0)))}):
+        SetInstance(frozenset({Fact(Q(a, C_(1))),
+                               Fact(Q(b, C_(0)))})):
         p_a.value * (1 - p_b.value),
-        frozenset({Fact(Q(a, C_(0))), Fact(Q(b, C_(1)))}):
+        SetInstance(frozenset({Fact(Q(a, C_(0))),
+                               Fact(Q(b, C_(1)))})):
         (1 - p_a.value) * p_b.value,
-        frozenset({Fact(Q(a, C_(1))), Fact(Q(b, C_(1)))}):
+        SetInstance(frozenset({Fact(Q(a, C_(1))),
+                               Fact(Q(b, C_(1)))})):
         p_a.value * p_b.value,
     })
-    assert expected_dist == result.value
+    assert expected_dist == result
 
 
 def test_get_dependency_sorted_random_variables():
@@ -143,77 +147,96 @@ def test_2levels_model():
                ) == {'P', 'Q_1', 'Q', 'Z_1', 'Z_2', 'Z', 'R_1', 'R'}
 
 
-def test_gm_solver():
-    solver = TableCPDGraphicalModelSolver()
-    solver.walk(program_1)
-    query = ConditionalProbabilityQuery(Constant[FactSet](set()))
-    outcomes = solver.conditional_probability_query_resolution(query)
+def test_gm_solver_program_1():
+    gm = gdatalog2gm(program_1)
+    outcomes = solve_conditional_probability_query(gm, SetInstance())
     assert len(outcomes.value.table) == 1
     outcome = list(outcomes.value.table.items())[0]
     assert outcome[1] == 1.0
 
-    solver = TableCPDGraphicalModelSolver()
-    solver.walk(program_4)
-    query = ConditionalProbabilityQuery(Constant[FactSet](set()))
-    outcomes = solver.conditional_probability_query_resolution(query)
+
+def test_gm_solver_program_4():
+    gm = gdatalog2gm(program_4)
+    outcomes = solve_conditional_probability_query(gm, SetInstance())
     expected_dist = TableDistribution({
-        frozenset({Fact(P(a)),
-                   Fact(Q(a, C_(1))),
-                   Fact(R(a, C_(1), C_(1)))}):
+        SetInstance(
+            frozenset({
+                Fact(P(a)),
+                Fact(Q(a, C_(1))),
+                Fact(R(a, C_(1), C_(1)))
+            })
+        ):
         0.2 * 0.9,
-        frozenset({Fact(P(a)),
-                   Fact(Q(a, C_(1))),
-                   Fact(R(a, C_(1), C_(0)))}):
+        SetInstance(
+            frozenset({
+                Fact(P(a)),
+                Fact(Q(a, C_(1))),
+                Fact(R(a, C_(1), C_(0)))
+            })
+        ):
         0.2 * 0.1,
-        frozenset({Fact(P(a)),
-                   Fact(Q(a, C_(0))),
-                   Fact(R(a, C_(0), C_(0)))}):
+        SetInstance(
+            frozenset({
+                Fact(P(a)),
+                Fact(Q(a, C_(0))),
+                Fact(R(a, C_(0), C_(0)))
+            })
+        ):
         0.8 * 0.1,
-        frozenset({Fact(P(a)),
-                   Fact(Q(a, C_(0))),
-                   Fact(R(a, C_(0), C_(1)))}):
+        SetInstance(
+            frozenset({
+                Fact(P(a)),
+                Fact(Q(a, C_(0))),
+                Fact(R(a, C_(0), C_(1)))
+            })
+        ):
         0.8 * 0.9,
     })
     assert expected_dist == outcomes.value
 
 
 def test_conditional_probability_query_resolution():
-    solver = TableCPDGraphicalModelSolver()
-    solver.walk(program_4)
-    evidence = Constant[FactSet](frozenset({Fact(Q(a, C_(0)))}))
-    query = ConditionalProbabilityQuery(evidence)
-    outcomes = solver.conditional_probability_query_resolution(query)
-    expected_dist = {
-        frozenset({Fact(P(a)),
-                   Fact(Q(a, C_(0))),
-                   Fact(R(a, C_(0), C_(0)))}):
-        C_(0.1),
-        frozenset({Fact(P(a)),
-                   Fact(Q(a, C_(0))),
-                   Fact(R(a, C_(0), C_(1)))}):
-        C_(0.9),
-    }
-    for outcome, prob in expected_dist.items():
-        assert outcome in outcomes.value.table
-        assert np.allclose([prob.value], [outcomes.value.table[outcome]])
+    gm = gdatalog2gm(program_4)
+    evidence = SetInstance(frozenset({Fact(Q(a, C_(0)))}))
+    outcomes = solve_conditional_probability_query(gm, evidence)
+    expected_dist = TableDistribution({
+        SetInstance(
+            frozenset({
+                Fact(P(a)),
+                Fact(Q(a, C_(0))),
+                Fact(R(a, C_(0), C_(0)))
+            })
+        ):
+        0.1,
+        SetInstance(
+            frozenset({
+                Fact(P(a)),
+                Fact(Q(a, C_(0))),
+                Fact(R(a, C_(0), C_(1)))
+            })
+        ):
+        0.9,
+    })
+    assert expected_dist == outcomes.value
 
-    evidence = Constant[FactSet](
+    evidence = SetInstance(
         frozenset({
             Fact(Q(a, C_(0))),
             Fact(R(a, C_(0), C_(1))),
         })
     )
-    query = ConditionalProbabilityQuery(evidence)
-    outcomes = solver.conditional_probability_query_resolution(query)
-    expected_dist = {
-        frozenset({Fact(P(a)),
-                   Fact(Q(a, C_(0))),
-                   Fact(R(a, C_(0), C_(1)))}):
-        C_(1.0),
-    }
-    for outcome, prob in expected_dist.items():
-        assert outcome in outcomes.value.table
-        assert np.allclose([prob.value], [outcomes.value.table[outcome]])
+    outcomes = solve_conditional_probability_query(gm, evidence)
+    expected_dist = TableDistribution({
+        SetInstance(
+            frozenset({
+                Fact(P(a)),
+                Fact(Q(a, C_(0))),
+                Fact(R(a, C_(0), C_(1)))
+            })
+        ):
+        1.0,
+    })
+    assert expected_dist == outcomes.value
 
 
 def test_conditional_probability_query_resolution_multiple_rules_same_pred():
@@ -222,17 +245,17 @@ def test_conditional_probability_query_resolution_multiple_rules_same_pred():
         Implication(Q(x, DeltaTerm(bernoulli, (C_(0.5), ))), P(x)),
         Implication(Q(x, DeltaTerm(bernoulli, (C_(0.5), ))), P(x)),
     ))
-    evidence = Constant[FactSet]({Fact(Q(a, C_(0)))})
-    query = ConditionalProbabilityQuery(evidence)
-    solver = TableCPDGraphicalModelSolver()
-    solver.walk(program)
-    outcomes = solver.conditional_probability_query_resolution(query)
+    evidence = SetInstance({Fact(Q(a, C_(0)))})
+    gm = gdatalog2gm(program)
+    outcomes = solve_conditional_probability_query(gm, evidence)
     expected_dist = TableDistribution({
-        frozenset({Fact(P(a)), Fact(Q(a, C_(0)))}):
+        SetInstance(frozenset({Fact(P(a)), Fact(Q(a, C_(0)))})):
         1.0 / 3.0,
-        frozenset({Fact(P(a)),
-                   Fact(Q(a, C_(0))),
-                   Fact(Q(a, C_(1)))}):
+        SetInstance(
+            frozenset({Fact(P(a)),
+                       Fact(Q(a, C_(0))),
+                       Fact(Q(a, C_(1)))})
+        ):
         2.0 / 3.0,
     })
     assert expected_dist == outcomes.value

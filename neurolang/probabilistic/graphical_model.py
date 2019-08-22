@@ -1,6 +1,8 @@
 import itertools
 from collections import defaultdict
 from typing import Iterable, Callable, AbstractSet, Mapping
+from copy import deepcopy
+import logging
 
 import numpy as np
 
@@ -17,7 +19,7 @@ from .ppdl import (
     is_gdatalog_rule, get_dterm
 )
 from .distributions import TableDistribution
-from ..datalog.instance import SetInstance
+from ..datalog.instance import Instance, SetInstance
 
 
 def produce(rule, facts):
@@ -77,25 +79,23 @@ def get_constant_dterm_table_cpd(dterm):
         raise NeuroLangException(f'Unknown distribution {dterm.functor.name}')
 
 
-FactSet = AbstractSet[Fact]
-FactSetSymbol = Symbol[FactSet]
-FactSetTableCPD = Mapping[FactSet, float]
-FactSetTableCPDFunctor = Definition[
-    Callable[[Iterable[FactSet]], FactSetTableCPD]]
+InstanceTableCPD = Mapping[Instance, float]
+InstanceTableCPDFunctor = Definition[
+    Callable[[Iterable[Instance]], InstanceTableCPD]]
 
 
-class ExtensionalTableCPDFunctor(FactSetTableCPDFunctor):
+class ExtensionalTableCPDFunctor(InstanceTableCPDFunctor):
     def __init__(self, predicate):
         self.predicate = predicate
         self.facts = set()
 
 
-class IntensionalTableCPDFunctor(FactSetTableCPDFunctor):
+class IntensionalTableCPDFunctor(InstanceTableCPDFunctor):
     def __init__(self, rule):
         self.rule = rule
 
 
-class UnionFactSetTableCPDFunctor(FactSetTableCPDFunctor):
+class UnionInstanceTableCPDFunctor(InstanceTableCPDFunctor):
     def __init__(self, predicate):
         self.predicate = predicate
 
@@ -114,11 +114,12 @@ class GraphicalModel(Expression):
 
     def get_dependency_sorted_random_variables(
         self,
-        result=list(),
+        result=None,
         rv=None,
         parents=None,
     ):
         if rv is None:
+            result = list()
             parents = self.random_variables
         for parent in parents:
             self.get_dependency_sorted_random_variables(
@@ -145,7 +146,7 @@ class GDatalogToGraphicalModelTranslator(ExpressionWalker):
     @add_match(Fact)
     def fact(self, expression):
         predicate = expression.consequent.functor.name
-        rv_symbol = FactSetSymbol(predicate)
+        rv_symbol = Symbol(predicate)
         if rv_symbol not in self.gm.rv_to_cpd_functor:
             self.gm.rv_to_cpd_functor[rv_symbol] = (
                 ExtensionalTableCPDFunctor(predicate)
@@ -157,8 +158,8 @@ class GDatalogToGraphicalModelTranslator(ExpressionWalker):
         predicate = rule.consequent.functor.name
         self.intensional_predicate_rule_count[predicate] += 1
         rule_id = self.intensional_predicate_rule_count[predicate]
-        rule_rv_symbol = FactSetSymbol(f'{predicate}_{rule_id}')
-        pred_rv_symbol = FactSetSymbol(f'{predicate}')
+        rule_rv_symbol = Symbol(f'{predicate}_{rule_id}')
+        pred_rv_symbol = Symbol(f'{predicate}')
         if rule_rv_symbol in self.gm.rv_to_cpd_functor:
             raise NeuroLangException(
                 f'Random variable {rule_rv_symbol} already defined'
@@ -170,7 +171,7 @@ class GDatalogToGraphicalModelTranslator(ExpressionWalker):
             self.gm.add_parent(rule_rv_symbol, antecedent_pred)
         if pred_rv_symbol not in self.gm.rv_to_cpd_functor:
             self.gm.rv_to_cpd_functor[pred_rv_symbol] = \
-                UnionFactSetTableCPDFunctor(predicate)
+                UnionInstanceTableCPDFunctor(predicate)
             self.gm.add_parent(pred_rv_symbol, rule_rv_symbol)
 
 
@@ -205,88 +206,71 @@ def delta_infer1(rule, instance):
                 for dfact, entry in zip(inferred_facts, cpd_entries)
             )
             prob = np.prod([entry[1] for entry in cpd_entries])
-            table[new_facts] = prob
+            table[SetInstance(new_facts)] = prob
     else:
-        table = {frozenset(inferred_facts): 1.0}
-    return Constant[TableDistribution](TableDistribution(table))
+        table = {SetInstance(frozenset(inferred_facts)): 1.0}
+    return TableDistribution(table)
 
 
-class ConditionalProbabilityQuery(Definition):
-    def __init__(self, evidence):
-        if not isinstance(evidence, Constant[FactSet]):
-            raise NeuroLangException('Expected evidence to be a fact set')
-        self.evidence = evidence
+def check_is_instance(value):
+    if not isinstance(value, Instance):
+        raise NeuroLangException('Expected an Instance')
 
 
-class TableCPDGraphicalModelSolver(ExpressionWalker):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.graphical_model = None
-        self.ordered_rvs = None
-
-    @add_match(ExpressionBlock)
-    def program(self, program):
-        if self.graphical_model is not None:
-            raise NeuroLangException('GraphicalModel already constructed')
-        self.graphical_model = gdatalog2gm(program)
-        self.ordered_rvs = sort_rvs(self.graphical_model)
-
-    @add_match(ConditionalProbabilityQuery)
-    def conditional_probability_query_resolution(self, query):
-        outcomes = self.generate_possible_outcomes()
-        matches_query = lambda outcome: query.evidence.value <= outcome
-        return Constant(outcomes.value.conditioned_on(matches_query))
-
-    def generate_possible_outcomes(self):
-        if self.graphical_model is None:
-            raise NeuroLangException(
-                'No GraphicalModel generated. Try walking a program'
-            )
-        results = dict()
-        self.generate_possible_outcomes_aux(0, dict(), 1.0, results)
-        return Constant[TableDistribution](TableDistribution(results))
-
-    def generate_possible_outcomes_aux(
-        self, rv_idx, rv_values, result_prob, results
-    ):
-        if rv_idx >= len(self.ordered_rvs):
-            result = frozenset.union(*rv_values.values())
-            if result in results:
-                old_prob = results[result]
+def generate_graphical_model_possible_outcomes(
+    graphical_model,
+    rv_idx=None,
+    ordered_rvs=None,
+    rv_values=None,
+    result_prob=1.0,
+    outcomes=None,
+):
+    if ordered_rvs is None:
+        outcomes = dict()
+        rv_values = dict()
+        ordered_rvs = graphical_model.get_dependency_sorted_random_variables()
+        generate_graphical_model_possible_outcomes(
+            graphical_model, 0, ordered_rvs, rv_values, result_prob, outcomes
+        )
+        return Constant[TableDistribution](TableDistribution(outcomes))
+    else:
+        if rv_idx >= len(ordered_rvs):
+            result = SetInstance.union(*rv_values.values())
+            if result in outcomes:
+                old_prob = outcomes[result]
                 new_prob = old_prob + result_prob
-                results[result] = new_prob
+                outcomes[result] = new_prob
             else:
-                results[result] = result_prob
+                outcomes[result] = result_prob
         else:
-            rv_symbol = self.ordered_rvs[rv_idx]
-            cpd_functor = self.graphical_model.rv_to_cpd_functor[rv_symbol]
-            parent_rvs = self.graphical_model.parents[rv_symbol]
-            parent_values = tuple(Constant(rv_values[rv]) for rv in parent_rvs)
-            cpd = self.walk(cpd_functor(*parent_values))
-            for facts, prob in cpd.value.table.items():
+            rv_symbol = ordered_rvs[rv_idx]
+            cpd_functor = graphical_model.rv_to_cpd_functor[rv_symbol]
+            parent_rvs = graphical_model.parents[rv_symbol]
+            parent_values = tuple(rv_values[rv] for rv in parent_rvs)
+            if isinstance(cpd_functor, ExtensionalTableCPDFunctor):
+                cpd = TableDistribution({
+                    Instance(frozenset(cpd_functor.facts)):
+                    1.0
+                })
+            elif isinstance(cpd_functor, UnionInstanceTableCPDFunctor):
+                cpd = TableDistribution({
+                    SetInstance.union(*parent_values): 1.0
+                })
+            elif isinstance(cpd_functor, IntensionalTableCPDFunctor):
+                cpd = delta_infer1(
+                    cpd_functor.rule, SetInstance.union(*parent_values)
+                )
+            for facts, prob in cpd.table.items():
                 new_rv_values = rv_values.copy()
                 new_rv_values[rv_symbol] = facts
-                self.generate_possible_outcomes_aux(
-                    rv_idx + 1, new_rv_values, result_prob * prob, results
+                generate_graphical_model_possible_outcomes(
+                    graphical_model, rv_idx + 1, ordered_rvs, new_rv_values,
+                    result_prob * prob, outcomes
                 )
 
-    @add_match(FunctionApplication(ExtensionalTableCPDFunctor, ...))
-    def extensional_table_cpd(self, expression):
-        return Constant[TableDistribution](
-            TableDistribution({frozenset(expression.functor.facts): 1.0})
-        )
 
-    @add_match(FunctionApplication(UnionFactSetTableCPDFunctor, ...))
-    def union_table_cpd(self, expression):
-        parent_facts = frozenset(
-        ).union(*[arg.value for arg in expression.args])
-        return Constant[TableDistribution](
-            TableDistribution({parent_facts: 1.0})
-        )
-
-    @add_match(FunctionApplication(IntensionalTableCPDFunctor, ...))
-    def intensional_table_cpd(self, expression):
-        parent_facts = frozenset(
-        ).union(*[arg.value for arg in expression.args])
-        rule = expression.functor.rule
-        return delta_infer1(rule, parent_facts)
+def solve_conditional_probability_query(graphical_model, evidence):
+    check_is_instance(evidence)
+    outcomes = generate_graphical_model_possible_outcomes(graphical_model)
+    matches_query = lambda outcome: evidence <= outcome
+    return Constant(outcomes.value.conditioned_on(matches_query))

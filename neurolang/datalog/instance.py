@@ -32,8 +32,20 @@ class Instance:
 
     def __hash__(self):
         if self.cached_hash is None:
-            self.cached_hash = hash(tuple(zip(self.elements.items())))
+            self.cached_hash = hash(frozenset(zip(self.elements.items())))
         return self.cached_hash
+
+    def __repr__(self):
+        facts_as_string = []
+        for predicate, tuples in self.elements.items():
+            for tupl in tuples:
+                facts_as_string.append(
+                    '{}({})'.format(
+                        predicate.name,
+                        ', '.join([str(const.value) for const in tupl])
+                    )
+                )
+        return '{{ {} }}'.format(', '.join(facts_as_string))
 
     @staticmethod
     def union(*instances):
@@ -84,6 +96,9 @@ class Instance:
                 self.elements[predicate] & other.elements[predicate]
             )
         return self.__class__(new_elements)
+
+    def __eq__(self, other):
+        return hash(self) == hash(other)
 
 
 class MapInstance(Instance, Mapping):
