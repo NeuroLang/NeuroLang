@@ -24,6 +24,7 @@ from .ppdl import (
 from .distributions import TableDistribution
 from ..datalog.instance import Instance, SetInstance
 from ..datalog_chase import DatalogChase
+from ..unification import apply_substitution
 
 
 def produce(rule, facts):
@@ -288,48 +289,6 @@ def is_valid_query_atom(atom):
     )
 
 
-def extract_instance_query_atom_assignments(instance, atom):
-    '''Extract assignments to a query atom in a Datalog instance.
-
-    Given a query atom whose terms are either constants or free variables,
-    extract from a given Datalog instance all assignment to the free
-    variables in the atom.
-
-    '''
-    predicate = atom.functor
-    if predicate not in instance.elements:
-        return set()
-    const_idxs = set(
-        i for i, arg in enumerate(atom.args) if isinstance(arg, Constant)
-    )
-    return set(
-        tuple_val for tuple_val in instance.elements[predicate]
-        if all(tuple_val[idx] == atom.args[idx] for idx in const_idxs)
-    )
-
-
-def extract_instance_query_atoms_assignments(instance, query_atoms):
-    '''Extract assigments of a set of query atoms in a Datalog instance.'''
-    query_atoms = list(query_atoms)
-    query_atom_predicates = [atom.functor for atom in query_atoms]
-    atoms_assignment = []
-    for atom in query_atoms:
-        atom_assignment = extract_instance_query_atom_assignments(
-            instance, atom
-        )
-        if len(atom_assignment) == 0:
-            return set()
-        atoms_assignment.append(atom_assignment)
-    return {
-        SetInstance({
-            predicate: frozenset({assignment})
-            for predicate, assignment in
-            zip(query_atom_predicates, assignments)
-        })
-        for assignments in itertools.product(*atoms_assignment)
-    }
-
-
 def construct_conjunction(atoms):
     if len(atoms) == 1:
         return atoms[0]
@@ -349,7 +308,9 @@ def solve_map_query(graphical_model, query_atoms, evidence):
         query_predicate(*free_variables), construct_conjunction(query_atoms)
     )
     outcomes = solve_conditional_probability_query(graphical_model, evidence)
-    substitution_table = defaultdict(float)
+    prob_table = defaultdict(float)
+    max_prob = 0.
+    most_probable_tuple_value = None
     for outcome, prob in outcomes.value.table.items():
         program = ExpressionBlock(
             tuple(fact for fact in outcome) + (query_rule, )
@@ -358,3 +319,16 @@ def solve_map_query(graphical_model, query_atoms, evidence):
         datalog.walk(program)
         chaser = DatalogChase(datalog)
         solution_instance = chaser.build_chase_solution()
+        for tuple_value in solution_instance[query_predicate]:
+            prob_table[tuple_value] += prob
+            if prob_table[tuple_value] >= max_prob:
+                most_probable_tuple_value = tuple_value
+                max_prob = prob_table[tuple_value]
+    substitution = frozenset({
+        var: value
+        for var, value in zip(free_variables, most_probable_tuple_value)
+    })
+    return SetInstance({
+        atom.functor: frozenset({apply_substitution(atom, substitution).args})
+        for atom in query_atoms
+    })
