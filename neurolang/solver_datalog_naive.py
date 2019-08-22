@@ -17,6 +17,7 @@ from .expressions import (
 from .type_system import Unknown
 from .expression_walker import (
     add_match, PatternWalker, expression_iterator,
+    ReplaceExpressionsByValues
 )
 
 
@@ -69,7 +70,8 @@ class WrappedExpressionIterable:
             it1, it2 = tee(iterable)
             try:
                 if isinstance(next(it1), Constant[Tuple]):
-                    iterable = list(e.value for e in it2)
+                    rebv = ReplaceExpressionsByValues({})
+                    iterable = list(rebv.walk(e) for e in it2)
             except StopIteration:
                 pass
 
@@ -112,7 +114,13 @@ class WrappedExpressionIterable:
 class WrappedRelationalAlgebraSet(
     WrappedExpressionIterable, RelationalAlgebraSet
 ):
-        pass
+    def __contains__(self, element):
+        if not isinstance(element, Constant):
+            element = self._normalise_element(element)
+        return (
+            self._container is not None and
+            hash(element) in self._container.index
+        )
 
 
 class DatalogBasic(PatternWalker):

@@ -1,28 +1,34 @@
 from itertools import product
-from typing import MutableSet
+from collections.abc import MutableSet, Set
 
 import pandas as pd
 
 
-class RelationalAlgebraSet(MutableSet):
+class RelationalAlgebraFrozenSet(Set):
     def __init__(self, iterable=None):
         self._container = None
         if iterable is not None:
-            it = iter(iterable)
             self._container = pd.DataFrame(
                 list(iterable),
-                index=[hash(e) for e in it]
             )
-            if len(self._container > 0):
-                duplicated = self._container.index.duplicated()
-                if duplicated.any():
-                    self._container = self._container.loc[~duplicated].dropna()
+            self._container = self._renew_index(self._container)
 
     def __contains__(self, element):
+        element = self._normalise_element(element)
         return (
             self._container is not None and
             hash(element) in self._container.index
         )
+
+    @staticmethod
+    def _normalise_element(element):
+        if isinstance(element, tuple):
+            pass
+        elif hasattr(element, '__iter__'):
+            element = tuple(element)
+        else:
+            element = (element,)
+        return element
 
     def __iter__(self):
         if self._container is not None:
@@ -34,19 +40,6 @@ class RelationalAlgebraSet(MutableSet):
         if self._container is None:
             return 0
         return len(self._container)
-
-    def add(self, element):
-        e_hash = hash(element)
-        if self._container is None:
-            self._container = pd.DataFrame([element], index=[e_hash])
-        else:
-            self._container.loc[hash(element)] = element
-
-    def discard(self, element):
-        try:
-            self._container.drop(index=hash(element), inplace=True)
-        except KeyError:
-            pass
 
     @staticmethod
     def _renew_index(container, drop_duplicates=True):
@@ -101,7 +94,7 @@ class RelationalAlgebraSet(MutableSet):
         it = iter(select_criteria.items())
         col1, col2 = next(it)
         ix = self._container[col1] == self._container[col2]
-        for col, value in it:
+        for col1, col2 in it:
             ix &= self._container[col1] == self._container[col2]
 
         new_container = self._container[ix]
@@ -156,9 +149,8 @@ class RelationalAlgebraSet(MutableSet):
         if self._container is None:
             return '{}'
         return repr(
-            self._container.shape
-            # self._container.reset_index()
-            # .drop('index', axis=1)
+            self._container.reset_index()
+            .drop('index', axis=1)
         )
 
     def __or__(self, other):
@@ -173,7 +165,7 @@ class RelationalAlgebraSet(MutableSet):
             output._container = new_container
             return output
         else:
-            return super().__or__(self, other)
+            return super().__or__(other)
 
     def __and__(self, other):
         if isinstance(other, RelationalAlgebraSet):
@@ -184,7 +176,24 @@ class RelationalAlgebraSet(MutableSet):
             return output
 
         else:
-            return super().__and__(self, other)
+            return super().__and__(other)
+
+
+class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
+    def add(self, value):
+        value = self._normalise_element(value)
+        e_hash = hash(value)
+        if self._container is None:
+            self._container = pd.DataFrame([value], index=[e_hash])
+        else:
+            self._container.loc[e_hash] = value
+
+    def discard(self, value):
+        try:
+            value = self._normalise_element(value)
+            self._container.drop(index=hash(value), inplace=True)
+        except KeyError:
+            pass
 
     def __isub__(self, other):
         if isinstance(other, RelationalAlgebraSet):
@@ -192,4 +201,4 @@ class RelationalAlgebraSet(MutableSet):
             self._container = self._container.loc[diff_ix]
             return self
         else:
-            return super().__isub__(self, other)
+            return super().__isub__(other)
