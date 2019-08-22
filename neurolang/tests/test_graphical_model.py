@@ -6,7 +6,9 @@ from ..solver_datalog_naive import Fact, Implication, DatalogBasic
 from ..probabilistic.graphical_model import (
     produce, GraphicalModel, GDatalogToGraphicalModelTranslator,
     substitute_dterm, gdatalog2gm, delta_infer1,
-    solve_conditional_probability_query
+    solve_conditional_probability_query,
+    extract_instance_query_atom_assignments,
+    extract_instance_query_atoms_assignments
 )
 from ..probabilistic.ppdl import DeltaTerm, is_gdatalog_rule
 from ..probabilistic.distributions import TableDistribution
@@ -24,6 +26,7 @@ y = S_('y')
 z = S_('z')
 a = C_(2)
 b = C_(3)
+c = C_(4)
 p = S_('p')
 p_a = C_(0.2)
 p_b = C_(0.7)
@@ -259,3 +262,40 @@ def test_conditional_probability_query_resolution_multiple_rules_same_pred():
         2.0 / 3.0,
     })
     assert expected_dist == outcomes.value
+
+
+def test_extract_instance_query_atom_assignments():
+    instance = SetInstance({
+        P: frozenset({(a, C_(5)), (b, C_(10))}),
+    })
+    assert (
+        extract_instance_query_atom_assignments(instance,
+                                                P(x, y)) == {(a, C_(5)),
+                                                             (b, C_(10))}
+    )
+    assert (
+        extract_instance_query_atom_assignments(instance, P(a, y)) == {
+            (a, C_(5)),
+        }
+    )
+
+
+def test_extract_instance_query_atoms_assignments():
+    instance = SetInstance({
+        P: frozenset({(a, C_(5)), (b, C_(10))}),
+        Q: frozenset({(a, ), (c, )}),
+    })
+    query_atoms = {P(x, y), Q(a)}
+    assignments = extract_instance_query_atoms_assignments(
+        instance, query_atoms
+    )
+    assert assignments == {
+        SetInstance({
+            P: frozenset({(a, C_(5))}),
+            Q: frozenset({(a, )}),
+        }),
+        SetInstance({
+            P: frozenset({(b, C_(10))}),
+            Q: frozenset({(a, )}),
+        }),
+    }

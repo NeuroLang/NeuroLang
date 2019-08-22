@@ -2,6 +2,7 @@ import itertools
 from collections import defaultdict
 from typing import Iterable, Callable, AbstractSet, Mapping
 from copy import deepcopy
+import operator
 import logging
 
 import numpy as np
@@ -10,7 +11,9 @@ from ..expressions import (
     Expression, NeuroLangException, FunctionApplication, Constant, Symbol,
     Definition, ExpressionBlock
 )
-from ..solver_datalog_naive import Implication, Fact
+from ..solver_datalog_naive import (
+    Implication, Fact, extract_datalog_free_variables, DatalogBasic
+)
 from ..expression_walker import ExpressionWalker
 from ..expression_pattern_matching import add_match
 from .. import unification
@@ -20,6 +23,7 @@ from .ppdl import (
 )
 from .distributions import TableDistribution
 from ..datalog.instance import Instance, SetInstance
+from ..datalog_chase import DatalogChase
 
 
 def produce(rule, facts):
@@ -273,4 +277,84 @@ def solve_conditional_probability_query(graphical_model, evidence):
     check_is_instance(evidence)
     outcomes = generate_graphical_model_possible_outcomes(graphical_model)
     matches_query = lambda outcome: evidence <= outcome
-    return Constant(outcomes.value.conditioned_on(matches_query))
+    return Constant[TableDistribution](
+        outcomes.value.conditioned_on(matches_query)
+    )
+
+
+def is_valid_query_atom(atom):
+    return isinstance(atom, FunctionApplication) and all(
+        isinstance(arg, (Symbol, Constant)) for arg in atom.args
+    )
+
+
+def extract_instance_query_atom_assignments(instance, atom):
+    '''Extract assignments to a query atom in a Datalog instance.
+
+    Given a query atom whose terms are either constants or free variables,
+    extract from a given Datalog instance all assignment to the free
+    variables in the atom.
+
+    '''
+    predicate = atom.functor
+    if predicate not in instance.elements:
+        return set()
+    const_idxs = set(
+        i for i, arg in enumerate(atom.args) if isinstance(arg, Constant)
+    )
+    return set(
+        tuple_val for tuple_val in instance.elements[predicate]
+        if all(tuple_val[idx] == atom.args[idx] for idx in const_idxs)
+    )
+
+
+def extract_instance_query_atoms_assignments(instance, query_atoms):
+    '''Extract assigments of a set of query atoms in a Datalog instance.'''
+    query_atoms = list(query_atoms)
+    query_atom_predicates = [atom.functor for atom in query_atoms]
+    atoms_assignment = []
+    for atom in query_atoms:
+        atom_assignment = extract_instance_query_atom_assignments(
+            instance, atom
+        )
+        if len(atom_assignment) == 0:
+            return set()
+        atoms_assignment.append(atom_assignment)
+    return {
+        SetInstance({
+            predicate: frozenset({assignment})
+            for predicate, assignment in
+            zip(query_atom_predicates, assignments)
+        })
+        for assignments in itertools.product(*atoms_assignment)
+    }
+
+
+def construct_conjunction(atoms):
+    if len(atoms) == 1:
+        return atoms[0]
+    return Constant(operator.and_)(atoms[0], construct_conjunction(atoms[1:]))
+
+
+def solve_map_query(graphical_model, query_atoms, evidence):
+    if not all(is_valid_query_atom(atom) for atom in query_atoms):
+        raise NeuroLangException('Invalid query atoms')
+    if not isinstance(evidence, Instance):
+        raise NeuroLangException('Evidence must be a Datalog instance')
+    free_variables = set.union(
+        *[extract_datalog_free_variables(atom) for atom in query_atoms]
+    )
+    query_predicate = Symbol('__q__')
+    query_rule = Implication(
+        query_predicate(*free_variables), construct_conjunction(query_atoms)
+    )
+    outcomes = solve_conditional_probability_query(graphical_model, evidence)
+    substitution_table = defaultdict(float)
+    for outcome, prob in outcomes.value.table.items():
+        program = ExpressionBlock(
+            tuple(fact for fact in outcome) + (query_rule, )
+        )
+        datalog = DatalogBasic()
+        datalog.walk(program)
+        chaser = DatalogChase(datalog)
+        solution_instance = chaser.build_chase_solution()
