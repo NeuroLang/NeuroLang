@@ -32,7 +32,7 @@ def produce(rule, facts):
         not isinstance(facts, (list, tuple)) or
         any(not isinstance(f, Fact) for f in facts)
     ):
-        raise Exception(
+        raise NeuroLangException(
             'Expected a list/tuple of facts but got {}'.format(type(facts))
         )
     consequent = rule.consequent
