@@ -28,6 +28,8 @@ class ExtractDatalogFreeVariablesWalker(PatternWalker):
         for a in args:
             if isinstance(a, Symbol):
                 variables.add(a)
+            elif isinstance(a, FunctionApplication):
+                variables |= self.walk(a)
             elif isinstance(a, Constant):
                 pass
             else:
@@ -52,6 +54,10 @@ class ExtractDatalogFreeVariablesWalker(PatternWalker):
             res |= self.walk(exp)
 
         return res
+
+    @add_match(Symbol)
+    def extract_variables_symbol(self, expression):
+        return OrderedSet((expression,))
 
     @add_match(...)
     def _(self, expression):
@@ -128,25 +134,3 @@ def extract_datalog_predicates(expression):
     """
     edp = ExtractDatalogPredicates()
     return edp.walk(expression)
-
-
-def extract_arguments(expression):
-    """
-    Extracts all free variables from expressions which are either
-    terms, or nested function applications.
-
-    Arguments:
-        expression {Expression} -- the expression to process.
-
-    Returns:
-        OrderedSet -- all free variables in the expression ignoring functors.
-    """
-    stack = [expression]
-    variables = tuple()
-    while stack:
-        arg = stack.pop()
-        if isinstance(arg, Symbol):
-            variables += (arg,)
-        elif isinstance(arg, FunctionApplication):
-            stack += arg.args[::-1]
-    return variables

@@ -3,6 +3,7 @@ from itertools import chain, tee
 from operator import eq
 from typing import AbstractSet
 
+from ..utils import OrderedSet
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..relational_algebra import (Column, Product, Projection,
                                   RelationalAlgebraOptimiser,
@@ -10,7 +11,8 @@ from ..relational_algebra import (Column, Product, Projection,
 from ..unification import (apply_substitution, apply_substitution_arguments,
                            compose_substitutions,
                            most_general_unifier_arguments)
-from .expression_processing import (extract_arguments,
+from .expression_processing import (
+                                    extract_datalog_free_variables,
                                     extract_datalog_predicates)
 
 ChaseNode = namedtuple('ChaseNode', 'instance children')
@@ -87,17 +89,16 @@ class DatalogChaseGeneral():
     def get_args_to_project(self, rule, builtin_predicates_):
         args_to_project = self.extract_variable_arguments(rule.consequent)
         for predicate, _ in builtin_predicates_:
-            args_to_project += self.extract_variable_arguments(predicate)
-        new_args_to_project = tuple()
+            args_to_project |= self.extract_variable_arguments(predicate)
+        new_args_to_project = OrderedSet()
         for i, a in enumerate(args_to_project):
-            if a not in args_to_project[:i]:
-                new_args_to_project += (a,)
+            new_args_to_project.add(a)
         args_to_project = new_args_to_project
         return args_to_project
 
     @staticmethod
     def extract_variable_arguments(predicate):
-        return extract_arguments(predicate)
+        return extract_datalog_free_variables(predicate)
 
     def evaluate_builtins(self, builtin_predicates, substitutions):
         new_substitutions = []

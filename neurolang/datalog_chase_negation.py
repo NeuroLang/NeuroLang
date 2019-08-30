@@ -1,21 +1,15 @@
 from itertools import chain, tee
 from operator import invert
 
-from .expressions import Constant
-from .exceptions import NeuroLangException
 from . import solver_datalog_naive as sdb
-from .unification import (
-    apply_substitution_arguments, compose_substitutions,
-    most_general_unifier_arguments
-)
-from .datalog_chase import (
-    DatalogChaseGeneral,
-    DatalogChaseRelationalAlgebraMixin,
-    DatalogChaseMGUMixin,
-)
-from .relational_algebra import (
-    RelationalAlgebraOptimiser
-)
+from .datalog_chase import (DatalogChaseGeneral, DatalogChaseMGUMixin,
+                            DatalogChaseRelationalAlgebraMixin)
+from .exceptions import NeuroLangException
+from .expressions import Constant
+from .relational_algebra import RelationalAlgebraOptimiser
+from .unification import (apply_substitution_arguments, compose_substitutions,
+                          most_general_unifier_arguments)
+from .utils import OrderedSet
 
 
 class DatalogChaseNegationGeneral(DatalogChaseGeneral):
@@ -63,11 +57,10 @@ class DatalogChaseNegationGeneral(DatalogChaseGeneral):
     def get_args_to_project(self, rule, builtin_predicates_):
         args_to_project = self.extract_variable_arguments(rule.consequent)
         for predicate, _ in builtin_predicates_:
-            args_to_project += self.extract_variable_arguments(predicate)
-        new_args_to_project = tuple()
+            args_to_project |= self.extract_variable_arguments(predicate)
+        new_args_to_project = OrderedSet()
         for i, a in enumerate(args_to_project):
-            if a not in args_to_project[:i]:
-                new_args_to_project += (a,)
+            new_args_to_project.add(a)
         args_to_project = new_args_to_project
         return args_to_project
 
