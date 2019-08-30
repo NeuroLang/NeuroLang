@@ -455,22 +455,17 @@ def test_extract_free_variables():
     y = S_('y')
 
     emptyset = set()
-    assert extract_datalog_free_variables(Q) == emptyset
+    assert extract_datalog_free_variables(Q()) == emptyset
+    assert extract_datalog_free_variables(x) == {x}
     assert extract_datalog_free_variables(Q(x, y)) == {x, y}
     assert extract_datalog_free_variables(Q(x, C_(1))) == {x}
     assert extract_datalog_free_variables(Q(x) & R(y)) == {x, y}
     assert extract_datalog_free_variables(EP_(x, Q(x, y))) == {y}
     assert extract_datalog_free_variables(Imp_(R(x), Q(x, y))) == {y}
     assert extract_datalog_free_variables(Imp_(R(x), Q(y) & Q(x))) == {y}
-
-    with pytest.raises(NeuroLangException):
-        assert extract_datalog_free_variables(Q(x) | R(y))
-
-    with pytest.raises(NeuroLangException):
-        assert extract_datalog_free_variables(Q(R(y)))
-
-    with pytest.raises(NeuroLangException):
-        assert extract_datalog_free_variables(~(R(y)))
+    assert extract_datalog_free_variables(Q(R(y))) == {y}
+    assert extract_datalog_free_variables(Q(x) | R(y)) == {x, y}
+    assert extract_datalog_free_variables(~(R(y))) == {y}
 
 
 def test_equality_operation():
