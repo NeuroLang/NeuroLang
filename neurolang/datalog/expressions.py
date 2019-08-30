@@ -1,3 +1,8 @@
+"""
+Expressions for the intermediate representation of a
+Datalog program.
+"""
+
 from typing import Any
 
 from ..expressions import (

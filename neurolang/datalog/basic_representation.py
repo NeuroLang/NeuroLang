@@ -1,3 +1,11 @@
+"""
+Compiler for the intermediate representation of a Datalog program.
+The :class:`DatalogProgram` class processes the
+intermediate representation of a program and extracts
+the extensional, intensional, and builtin
+sets.
+"""
+
 from itertools import tee
 from typing import AbstractSet, Any, Callable, Tuple
 
@@ -261,13 +269,6 @@ class DatalogProgram(PatternWalker):
             else:
                 type_ = Constant(first).type
 
-        # iterable = [
-        #    tuple(
-        #        Constant[t_](v)
-        #        for t_, v in zip(type_.__args__, t)
-        #    )
-        #    for t in iterable
-        # ]
         constant = Constant[AbstractSet[type_]](
             self.new_set(list(iterable)),
             auto_infer_type=False,

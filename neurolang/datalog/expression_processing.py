@@ -1,3 +1,8 @@
+"""
+Utilities to process intermediate representations of
+Datalog programs.
+"""
+
 from operator import and_, invert, or_, xor
 
 from ..expression_walker import PatternWalker, add_match, expression_iterator
