@@ -3,18 +3,14 @@ from itertools import chain, tee
 from operator import eq
 from typing import AbstractSet
 
-from ..expressions import Constant, Symbol, FunctionApplication
-from ..unification import (
-    apply_substitution, apply_substitution_arguments, compose_substitutions,
-    most_general_unifier_arguments
-)
-from ..relational_algebra import (
-    Column, Selection, Product, Projection, eq_,
-    RelationalAlgebraOptimiser, RelationalAlgebraSolver
-)
-
-from . import extract_datalog_predicates
-
+from ..expressions import Constant, FunctionApplication, Symbol
+from ..relational_algebra import (Column, Product, Projection,
+                                  RelationalAlgebraOptimiser,
+                                  RelationalAlgebraSolver, Selection, eq_)
+from ..unification import (apply_substitution, apply_substitution_arguments,
+                           compose_substitutions,
+                           most_general_unifier_arguments)
+from .expression_processing import extract_datalog_predicates
 
 ChaseNode = namedtuple('ChaseNode', 'instance children')
 
