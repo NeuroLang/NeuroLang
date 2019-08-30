@@ -10,7 +10,8 @@ from ..relational_algebra import (Column, Product, Projection,
 from ..unification import (apply_substitution, apply_substitution_arguments,
                            compose_substitutions,
                            most_general_unifier_arguments)
-from .expression_processing import extract_datalog_predicates
+from .expression_processing import (extract_arguments,
+                                    extract_datalog_predicates)
 
 ChaseNode = namedtuple('ChaseNode', 'instance children')
 
@@ -96,15 +97,7 @@ class DatalogChaseGeneral():
 
     @staticmethod
     def extract_variable_arguments(predicate):
-        stack = list(predicate.args[::-1])
-        variables = tuple()
-        while stack:
-            arg = stack.pop()
-            if isinstance(arg, Symbol):
-                variables += (arg,)
-            elif isinstance(arg, FunctionApplication):
-                stack += arg.args[::-1]
-        return variables
+        return extract_arguments(predicate)
 
     def evaluate_builtins(self, builtin_predicates, substitutions):
         new_substitutions = []
