@@ -65,6 +65,20 @@ class RegionSolver(PatternWalker[Region]):
 
             return func
 
+        def wmql_direction_function(relation, refine_overlapping=False):
+
+            def func(self, x: Region, y: Region) -> bool:
+
+                return not bool(
+                    cardinal_relation(
+                        x, y, inverse_directions[relation],
+                        refine_overlapping=refine_overlapping,
+                        stop_at=max_tree_depth_level
+                    )
+                )
+
+            return func
+
         for key, value in cardinal_operations.items():
             setattr(
                 cls, f'function_{key}',
@@ -81,6 +95,12 @@ class RegionSolver(PatternWalker[Region]):
             setattr(
                 cls, f'function_anatomical_{key}',
                 anatomical_direction_function(
+                    value, refine_overlapping=refine_overlapping
+                )
+            )
+            setattr(
+                cls, f'function_wmql_{key}',
+                wmql_direction_function(
                     value, refine_overlapping=refine_overlapping
                 )
             )

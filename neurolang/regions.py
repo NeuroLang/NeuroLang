@@ -9,7 +9,7 @@ from .aabb_tree import AABB, Tree, aabb_from_vertices, Node
 __all__ = [
     'region_union', 'region_intersection', 'region_difference',
     'region_set_from_masked_data', 'take_principal_regions',
-    'Region', 'VolumetricBrainRegion',
+    'Region', 'VolumetricBrainRegion', 'PointSet',
     'ImplicitVBR', 'ExplicitVBR',
     'SphericalVolume', 'PlanarVolume'
 ]
@@ -102,6 +102,135 @@ class VolumetricBrainRegion(Region):
 
     def remove_empty_bounding_boxes(self):
         raise NotImplementedError()
+
+
+class PointSet(VolumetricBrainRegion):
+    def __init__(
+        self, points_ijk, affine_matrix, image_dim=None, prebuild_tree=False
+    ):
+        self.points_ijk = np.asanyarray(points_ijk, dtype=float)
+        self.affine = affine_matrix
+        self.affine_inv = np.linalg.inv(self.affine)
+        self.image_dim = image_dim
+        self._aabb_tree = None
+        self._bounding_box = self.generate_bounding_box(self.points_ijk)
+        if prebuild_tree:
+            self.build_tree()
+
+    @property
+    def bounding_box(self):
+        return self._bounding_box
+
+    @property
+    def aabb_tree(self):
+        if self._aabb_tree is None:
+            self.build_tree()
+        return self._aabb_tree
+
+    def generate_bounding_box(self, points_ijk):
+        points_xyz = nib.affines.apply_affine(
+            self.affine, points_ijk
+        )
+        return aabb_from_vertices(points_xyz)
+
+    def build_tree(self):
+        box = self._bounding_box
+        tree = Tree()
+        tree.add(box)
+
+        affine_matrix_inv = np.linalg.inv(self.affine)
+
+        stack = list([(box.lb, box.ub, self.points_ijk, tree.root)])
+        while stack:
+            node = stack.pop()
+            lb, ub, parent_voxels, tree_node = node
+
+            # this only works if the affine matrix is diagonal
+            middle_point_xyz = (lb + ub) / 2
+            middle_point_ijk = nib.affines.apply_affine(
+                affine_matrix_inv, middle_point_xyz
+            )
+
+            axes = np.argsort(ub - lb)
+            for ax in axes:
+                left_mask = parent_voxels.T[ax] <= middle_point_ijk[ax]
+                points_left = parent_voxels[left_mask]
+                if 0 < len(points_left) < len(parent_voxels):
+                    break
+            else:
+                continue
+
+            height = tree_node.height - 1
+
+            box_left = self.generate_bounding_box(points_left)
+            tree_node.left = Node(
+                box=box_left, parent=tree_node, height=height
+            )
+            stack.append(
+                (box_left.lb, box_left.ub, points_left, tree_node.left)
+            )
+
+            points_right = parent_voxels[~left_mask]
+            box_right = self.generate_bounding_box(points_right)
+            tree_node.right = Node(
+                box=box_right, parent=tree_node, height=height
+            )
+            stack.append(
+                (box_right.lb, box_right.ub, points_right, tree_node.right)
+            )
+
+            tree.height = -height
+
+        stack = [tree.root]
+        while stack:
+            node = stack.pop()
+            node.height = tree.height + node.height
+            if node.left is not None:
+                stack.append(node.left)
+            if node.right is not None:
+                stack.append(node.right)
+
+        self._aabb_tree = tree
+        return tree
+
+    def to_xyz(self, affine=None):
+        if affine is None or np.allclose(affine, self.affine):
+            affine = self.affine
+        else:
+            affine = np.dot(affine, np.linalg.inv(self.affine))
+        return nib.affines.apply_affine(affine, self.points_ijk)
+
+    def to_ijk(self, affine):
+        return nib.affines.apply_affine(
+            np.linalg.solve(affine, self.affine),
+            self.points_ijk)
+
+    def spatial_image(self, out=None, value=1):
+        if out is None:
+            mask = np.zeros(self.image_dim, dtype=np.int16)
+            out = nib.spatialimages.SpatialImage(mask, self.affine)
+        elif (out.shape != self.image_dim and
+              not np.allclose(out.affine, self.affine)):
+            raise ValueError("Image data has incompatible dimensionality")
+        else:
+            mask = out.get_data()
+
+        discrete_points_ijk = np.round(self.points_ijk).astype(int)
+        mask[tuple(discrete_points_ijk.T)] = value
+        return out
+
+    def __eq__(self, other):
+        return (np.array_equiv(self.affine, other.affine) and
+                np.array_equiv(self.points_ijk, other.voxels))
+
+    def __repr__(self):
+        return (
+            f'Region(PointSet= affine:{self.affine},'
+            f' points_ijk:{self.points_ijk})'
+        )
+
+    def __hash__(self):
+        return hash((self.points_ijk.tobytes(), self.affine.tobytes()))
 
 
 class ExplicitVBR(VolumetricBrainRegion):

@@ -10,8 +10,10 @@ from ..CD_relations import (
     cardinal_relation_prepare_regions
 )
 from ..exceptions import NeuroLangException
-from ..regions import (ExplicitVBR, PlanarVolume, Region, SphericalVolume,
-                       region_difference, region_intersection, region_union)
+from ..regions import (
+    ExplicitVBR, PlanarVolume, Region, SphericalVolume, PointSet,
+    region_difference, region_intersection, region_union
+)
 
 
 def _generate_random_box(size_bounds, *args):
@@ -465,3 +467,71 @@ def test_cardinal_relation_prepare_regions():
     r1, r2 = cardinal_relation_prepare_regions(sphere_1_evbr, sphere_2_evbr)
     assert r1 is sphere_1_evbr
     assert r2 is sphere_2_evbr
+
+
+def test_point_set():
+
+    def randint():
+        return random.randint(0, 1000)
+
+    voxels = [(randint(), randint(), randint()) for _ in range(50)]
+    affine = np.eye(4)
+    point_set = PointSet(voxels, affine)
+    assert np.array_equal(point_set.to_ijk(affine), point_set.points_ijk)
+    assert point_set.aabb_tree is not None
+    assert np.all(point_set.bounding_box.lb >= 0)
+    assert np.all(point_set.bounding_box.lb <= 1000)
+
+    affine = np.eye(4)
+    region1 = PointSet(voxels, affine)
+    assert np.array_equal(region1.points_ijk, region1.to_ijk(affine))
+
+    affine = np.eye(4) * 2
+    affine[-1] = 1
+    region1 = PointSet(voxels, affine)
+    assert np.array_equal(region1.points_ijk, region1.to_ijk(affine))
+
+    affine = np.eye(4)
+    affine[:, -1] = np.array([1, 1, 1, 1])
+    region1 = PointSet(voxels, affine)
+    assert np.array_equal(region1.points_ijk, region1.to_ijk(affine))
+
+    affine = np.array([
+        [-0.69999999, 0., 0., 90.],
+        [0., 0.69999999, 0., -126.],
+        [0., 0., 0.69999999, -72.],
+        [0., 0., 0., 1.]
+    ]).round(2)
+    region1 = PointSet(voxels, affine)
+    assert np.array_equal(region1.points_ijk, region1.to_ijk(affine))
+
+
+def test_build_tree_one_point_point_set():
+
+    region = PointSet(np.array([[2, 2, 2]]), np.eye(4))
+    assert region.bounding_box == AABB((2, 2, 2), (3, 3, 3))
+    assert region.aabb_tree.height == 0
+
+    other_region = PointSet(np.array([[2, 2, 2]]), np.diag((10, 10, 10, 1)))
+    assert other_region.bounding_box == AABB((20, 20, 20), (30, 30, 30))
+    assert other_region.aabb_tree.height == 0
+    assert is_in_direction(_dir_matrix(other_region, region), 'SA')
+
+
+def test_tree_of_convex_point_set():
+    cube = PointSet(np.array([[0, 0, 0], [5, 5, 5]]), np.eye(4))
+    assert cube.aabb_tree.height == 1
+    triangle = PointSet(
+        np.array([[0, 0, 0], [2, 0, 1], [5, 5, 5]]), np.eye(4)
+    )
+    assert triangle.aabb_tree.height == 2
+
+    region = PointSet(
+        np.array([[0, 0, 0], [2, 2, 1], [5, 5, 0], [8, 8, 0]]), np.eye(4)
+    )
+    assert region.aabb_tree.height == 2
+
+    region = PointSet(
+        np.array([[0, 0, 0], [2, 2, 1], [5, 5, 0], [10, 10, 0]]), np.eye(4)
+    )
+    assert region.aabb_tree.height == 3

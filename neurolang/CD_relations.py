@@ -22,11 +22,11 @@ directions_dim_space = {
 }
 
 matrix_positions_per_directions = {
-    'L': [0],
     'O': [1],
-    'R': [2],
-    'P': [0],
-    'A': [2],
+    'R': [0],
+    'L': [2],
+    'A': [0],
+    'P': [2],
     'I': [0],
     'S': [2],
     'F': [2]

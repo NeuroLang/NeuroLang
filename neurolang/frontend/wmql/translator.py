@@ -22,6 +22,8 @@ __all__ = ['WMQLDatalogSemantics', 'wmql_grammar']
 class WMQLDatalogSemantics(NodeWalker):
     def __init__(
         self,
+        tracts_symbol_name='tracts',
+        regions_symbol_name='regions',
         tract_traversals_symbol_name='tract_traversals',
         endpoints_in_symbol_name='endpoints_in',
         parser=None, paths=None
@@ -29,6 +31,8 @@ class WMQLDatalogSemantics(NodeWalker):
         self.aux_predicate_number = 0
         self.aux_variable_number = 0
         self.aux_implications = []
+        self.tracts_symbol_name = tracts_symbol_name
+        self.regions_symbol_name = regions_symbol_name
         self.tract_traversals_symbol_name = tract_traversals_symbol_name
         self.endpoints_in_symbol_name = endpoints_in_symbol_name
         self.parser = parser
@@ -116,23 +120,56 @@ class WMQLDatalogSemantics(NodeWalker):
         return (factor_tracts, factor_regions)
 
     def walk_function_evaluation(self, fe, **kwargs):
+        p_tracts, p_regions = self.get_fresh_functor(tracts_regions=True)
+        x = Symbol('x')
+        kwargs_aux = kwargs.copy()
+        del kwargs_aux['code']
+        kwargs_aux['query_var'] = x
+        parameter_tracts, parameter_regions = self.walk(
+            fe.argument, **kwargs_aux
+        )
+        kwargs['code'] += [
+            Implication(p_regions(x), parameter_regions),
+            Implication(p_tracts(x), parameter_tracts)
+        ]
+
+        x = self.get_fresh_variable()
         if fe.name == 'endpoints_in':
-            x = self.get_fresh_variable()
-            _, p_regions = self.get_fresh_functor(tracts_regions=True)
+            f_name = self.endpoints_in_symbol_name
             r_tracts = (
-               Symbol(self.endpoints_in_symbol_name)(kwargs['query_var'], x)
-               & p_regions(x)
+                Symbol(f_name)(kwargs['query_var'], x)
+                & p_regions(x)
             )
             r_regions = p_regions(kwargs['query_var'])
-            kwargs_aux = kwargs.copy()
-            x = Symbol('x')
-            kwargs_aux['query_var'] = x
-            parameter_tracts, parameter_regions = self.walk(
-                fe.argument, **kwargs_aux
+        elif fe.name in (
+            'anterior_of', 'posterior_of',
+            'superior_of', 'inferior_of'
+            'left_of', 'right_of',
+        ):
+            tract = self.get_fresh_variable()
+            region = self.get_fresh_variable()
+            region_id = self.get_fresh_variable()
+            f_name = f'wmql_{fe.name}'
+            r_tracts = (
+                Symbol(self.tracts_symbol_name)(kwargs['query_var'], tract) &
+                Symbol(self.regions_symbol_name)(region_id, region) &
+                p_regions(region_id) &
+                Symbol(f_name)(tract, region)
             )
-            kwargs['code'] += [Implication(p_regions(x), parameter_regions)]
+            p_tracts2, _ = self.get_fresh_functor(tracts_regions=True)
+            kwargs['code'] += [
+                Implication(p_tracts2(kwargs['query_var']), r_tracts)
+            ]
+            r_tracts = p_tracts2(kwargs['query_var'])
+            r_regions = (
+                Symbol(
+                    self.tract_traversals_symbol_name
+                )(x, kwargs['query_var'])
+                & p_tracts2(x)
+            )
         else:
-            raise NotImplemented()
+            raise NotImplementedError()
+
         return (r_tracts, r_regions)
 
     def walk_factor(self, factor, **kwargs):

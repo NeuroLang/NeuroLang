@@ -2,7 +2,7 @@ import nibabel as nib
 import numpy as np
 from tract_querier import tract_label_indices, tractography
 
-from .. import ExplicitVBR
+from ...regions import ExplicitVBR, PointSet
 from ...solver_datalog_naive import Symbol
 
 
@@ -17,7 +17,7 @@ def prepare_datalog_ir_program(
     Given a Datalog Program representation initialise the following EDB sets:
     * `tract_traversals(tract_id, region_id)`: of tract id and the atlas region
                               traversed by the tract, `tracts`
-    * `tracts(tract_id, region)`: of tract id and the tracts as `ExplicitVBR`
+    * `tracts(tract_id, region)`: of tract id and the tracts as `PointSet`
                                   regions.
     * `regions(region_id, region)`: of region id and the template regions
                                     as `ExplicitVBR` regions.
@@ -46,7 +46,10 @@ def prepare_datalog_ir_program(
     tracts_ = []
     eye_4 = np.eye(4)
     for tract, labels in tli.crossing_tracts_labels.items():
-        tract_region = ExplicitVBR(tli.tractography[tract], eye_4)
+        points = tli.tractography[tract]
+        if len(points) == 0:
+            continue
+        tract_region = PointSet(points, eye_4)
         tracts_.append((tract, tract_region))
         for label in labels:
             tract_traversals_.append((tract, label))
