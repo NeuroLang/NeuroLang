@@ -382,14 +382,23 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
 
 class QuerySymbolsProxy(object):
-    def __init__(self, query_builder):
+    def __init__(self, query_builder, dynamic_mode=False):
         self._query_builder = query_builder
+        self._dynamic_mode = dynamic_mode
 
     def __getattr__(self, attr):
-        try:
+        if attr in self._query_builder:
             return self._query_builder.get_symbol(attr)
-        except ValueError:
-            raise AttributeError()
+        else:
+            try:
+                return super().__getattribute__(attr)
+            except AttributeError:
+                if self._dynamic_mode:
+                    return self._query_builder.new_symbol(
+                        sdb.Unknown, name=attr
+                    )
+                else:
+                    raise
 
     def __getitem__(self, attr):
         return self._query_builder.get_symbol(attr)
