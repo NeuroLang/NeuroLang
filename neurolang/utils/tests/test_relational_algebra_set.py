@@ -73,3 +73,22 @@ def test_relational_algebra_ra_equijoin():
 
     res = ras_a.equijoin(ras_a, [(0, 0)])
     assert res == ras_d
+
+
+def test_groupby():
+    a = [
+        (i, i * j)
+        for i in (1, 2)
+        for j in (2, 3, 4)
+    ]
+
+    b = [(1, j) for j in (2, 3, 4)]
+    c = [(2, 2 * j) for j in (2, 3, 4)]
+
+    ras_a = RelationalAlgebraSet(a)
+    ras_b = RelationalAlgebraSet(b)
+    ras_c = RelationalAlgebraSet(c)
+
+    res = list(ras_a.groupby(0))
+    assert res[0] == (1, ras_b)
+    assert res[1] == (2, ras_c)
