@@ -175,17 +175,9 @@ class Chase(DatalogChase):
 
         substitutions = []
         for g_id, group in grouped_iterator:
-            agg_substitution = tuple(
-                Constant[AbstractSet](
-                    frozenset(
-                        v.value[0] for v in group.projection(args.index(v))
-                    ),
-                    auto_infer_type=False,
-                    verify_type=False
-                ) for v in fvs_aggregation
+            substitution = self.compute_group_substitution(
+                group, args, fvs_aggregation, agg_application, agg_fresh_var
             )
-            fa_ = agg_application.functor(*agg_substitution)
-            substitution = {agg_fresh_var: self.datalog_program.walk(fa_)}
 
             if len(group_vars) == 1:
                 substitution[group_vars[0]] = Constant(g_id)
@@ -197,3 +189,19 @@ class Chase(DatalogChase):
 
             substitutions.append(substitution)
         return fvs, substitutions
+
+    def compute_group_substitution(
+        self, group, args, fvs_aggregation, agg_application, agg_fresh_var
+    ):
+        agg_substitution = tuple(
+            Constant[AbstractSet](
+                frozenset(
+                    v.value[0] for v in group.projection(args.index(v))
+                ),
+                auto_infer_type=False,
+                verify_type=False
+            ) for v in fvs_aggregation
+        )
+        fa_ = agg_application.functor(*agg_substitution)
+        substitution = {agg_fresh_var: self.datalog_program.walk(fa_)}
+        return substitution
