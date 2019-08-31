@@ -24,7 +24,7 @@ from . import (
     Implication, extract_datalog_free_variables,
     is_conjunctive_expression_with_nested_predicates
 )
-from .chase import DatalogChase, apply_substitution_arguments
+from . import chase
 
 
 class AggregationApplication(FunctionApplication):
@@ -115,7 +115,7 @@ def extract_aggregation_atom_free_variables(atom):
     )
 
 
-class Chase(DatalogChase):
+class Chase(chase.Chase):
     def check_constraints(self, instance_update):
         warn(
             "No check performed. Should implement check for stratified"
@@ -139,7 +139,9 @@ class Chase(DatalogChase):
 
         args = extract_datalog_free_variables(rule.consequent)
         new_tuples = self.datalog_program.new_set(
-            Constant[Tuple](apply_substitution_arguments(args, substitution))
+            Constant[Tuple](
+                chase.apply_substitution_arguments(args, substitution)
+            )
             for substitution in substitutions
         )
 
@@ -148,7 +150,9 @@ class Chase(DatalogChase):
         )
 
         new_tuples = self.datalog_program.new_set(
-            Constant[Tuple](apply_substitution_arguments(fvs, substitution))
+            Constant[Tuple](
+                chase.apply_substitution_arguments(fvs, substitution)
+            )
             for substitution in substitutions
         )
 

@@ -18,7 +18,7 @@ from .expression_processing import (
 ChaseNode = namedtuple('ChaseNode', 'instance children')
 
 
-class DatalogChaseGeneral():
+class ChaseGeneral():
     def __init__(self, datalog_program, rules=None):
         self.datalog_program = datalog_program
         self._set_rules(rules)
@@ -291,7 +291,7 @@ class DatalogChaseGeneral():
             return None
 
 
-class DatalogChaseRelationalAlgebraMixin:
+class ChaseRelationalAlgebraMixin:
     def obtain_substitutions(self, args_to_project, rule_predicates_iterator):
         ra_code, projected_var_names = self.translate_to_ra_plus(
             args_to_project,
@@ -383,14 +383,14 @@ class DatalogChaseRelationalAlgebraMixin:
         return substitutions
 
 
-class DatalogChaseMGUMixin:
+class ChaseMGUMixin:
     @staticmethod
     def obtain_substitutions(args_to_project, rule_predicates_iterator):
         substitutions = [{}]
         for predicate, representation in rule_predicates_iterator:
             new_substitutions = []
             for substitution in substitutions:
-                new_substitutions += DatalogChaseMGUMixin.unify_substitution(
+                new_substitutions += ChaseMGUMixin.unify_substitution(
                     predicate, substitution, representation
                 )
             substitutions = new_substitutions
@@ -420,5 +420,5 @@ class DatalogChaseMGUMixin:
         return new_substitutions
 
 
-class DatalogChase(DatalogChaseGeneral, DatalogChaseRelationalAlgebraMixin):
+class Chase(ChaseGeneral, ChaseRelationalAlgebraMixin):
     pass
