@@ -65,19 +65,20 @@ class DatalogWithAggregationMixin(PatternWalker):
                 f'symbol {self.constant_set_name} is protected'
             )
 
-        seen_aggregation = False
+        seen_aggregations = 0
         for arg in consequent.args:
             if isinstance(arg, AggregationApplication):
-                if seen_aggregation:
-                    raise NeuroLangException(
-                        f'Only one aggregation allowed in {consequent}'
-                    )
-                seen_aggregation = True
+                seen_aggregations += 1
                 aggregation_functor = arg.functor
             elif not isinstance(arg, (Constant, Symbol)):
                 raise NeuroLangException(
                     f'The consequent {consequent} can only be '
                     'constants, symbols'
+                )
+
+            if seen_aggregations > 1:
+                raise NeuroLangException(
+                    f'Only one aggregation allowed in {consequent}'
                 )
 
         consequent_symbols = (
@@ -151,20 +152,9 @@ class Chase(DatalogChase):
             for substitution in substitutions
         )
 
-        if rule.consequent.functor in instance:
-            new_tuples -= instance[rule.consequent.functor].value
-        elif rule.consequent.functor in restriction_instance:
-            new_tuples -= restriction_instance[rule.consequent.functor].value
-
-        if len(new_tuples) == 0:
-            return dict()
-        else:
-            set_type = next(iter(new_tuples)).type
-            new_instance = {
-                rule.consequent.functor:
-                Constant[AbstractSet[set_type]](new_tuples)
-            }
-            return new_instance
+        return self.compute_instance_update(
+            rule, new_tuples, instance, restriction_instance
+        )
 
     def compute_aggregation_substitutions(self, rule, new_tuples, args):
         fvs, fvs_aggregation, agg_fresh_var, agg_application = \

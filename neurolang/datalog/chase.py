@@ -224,20 +224,28 @@ class DatalogChaseGeneral():
             ) for substitution in substitutions
         )
 
+        return self.compute_instance_update(
+            rule, new_tuples, instance, restriction_instance
+        )
+
+    def compute_instance_update(
+        self, rule, new_tuples, instance, restriction_instance
+    ):
         if rule.consequent.functor in instance:
             new_tuples -= instance[rule.consequent.functor].value
         elif rule.consequent.functor in restriction_instance:
             new_tuples -= restriction_instance[rule.consequent.functor].value
 
         if len(new_tuples) == 0:
-            return dict()
+            instance_update = dict()
         else:
             set_type = next(iter(new_tuples)).type
             new_instance = {
                 rule.consequent.functor:
                 Constant[AbstractSet[set_type]](new_tuples)
             }
-            return new_instance
+            instance_update = new_instance
+        return instance_update
 
     def merge_instances(self, *args):
         new_instance = args[0].copy()
