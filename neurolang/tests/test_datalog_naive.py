@@ -1,30 +1,29 @@
-import pytest
-
 from typing import AbstractSet
 
-from .. import solver_datalog_naive as sdb
-from .. import solver_datalog_extensional_db
-from ..solver_datalog_naive import NULL
-from .. import expression_walker
-from ..expressions import (
-    Symbol, Constant, FunctionApplication, Lambda, ExpressionBlock,
-    ExistentialPredicate, Query, is_leq_informative,
-    NeuroLangException
-)
+import pytest
+
+from .. import expression_walker, solver_datalog_extensional_db
+from ..datalog import (Fact, Implication, extract_datalog_free_variables,
+                       is_conjunctive_expression,
+                       is_conjunctive_expression_with_nested_predicates)
+from ..expressions import (Constant, ExistentialPredicate, ExpressionBlock,
+                           FunctionApplication, Lambda, NeuroLangException,
+                           Query, Symbol, is_leq_informative)
+from ..solver_datalog_naive import NULL, SolverNonRecursiveDatalogNaive
 
 S_ = Symbol
 C_ = Constant
-Imp_ = sdb.Implication
+Imp_ = Implication
 F_ = FunctionApplication
 L_ = Lambda
 B_ = ExpressionBlock
 EP_ = ExistentialPredicate
 Q_ = Query
-T_ = sdb.Fact
+T_ = Fact
 
 
 class Datalog(
-    sdb.SolverNonRecursiveDatalogNaive,
+    SolverNonRecursiveDatalogNaive,
     solver_datalog_extensional_db.ExtensionalDatabaseSolver,
     expression_walker.ExpressionBasicEvaluator
 ):
@@ -99,7 +98,7 @@ def test_atoms_variables():
     assert 'Q' in dl.symbol_table
     assert isinstance(dl.symbol_table['Q'], ExpressionBlock)
     fact = dl.symbol_table['Q'].expressions[-1]
-    assert isinstance(fact, sdb.Implication)
+    assert isinstance(fact, Implication)
     assert isinstance(fact.consequent, FunctionApplication)
     assert fact.consequent.functor is Q
     assert fact.consequent.args == (x,)
@@ -112,7 +111,7 @@ def test_atoms_variables():
     assert 'T' in dl.symbol_table
     assert isinstance(dl.symbol_table['T'], ExpressionBlock)
     fact = dl.symbol_table['T'].expressions[-1]
-    assert isinstance(fact, sdb.Implication)
+    assert isinstance(fact, Implication)
     assert isinstance(fact.consequent, FunctionApplication)
     assert fact.consequent.functor is T
     assert fact.consequent.args == (x, y)
@@ -124,7 +123,7 @@ def test_atoms_variables():
     assert 'R' in dl.symbol_table
     assert isinstance(dl.symbol_table['R'], ExpressionBlock)
     fact = dl.symbol_table['R'].expressions[-1]
-    assert isinstance(fact, sdb.Implication)
+    assert isinstance(fact, Implication)
     assert isinstance(fact.consequent, FunctionApplication)
     assert fact.consequent.functor is R
     assert fact.consequent.args == (x, C_(1))
@@ -363,31 +362,31 @@ def test_conjunctive_expression():
     x = S_('x')
     y = S_('y')
 
-    assert sdb.is_conjunctive_expression(
+    assert is_conjunctive_expression(
         Q()
     )
 
-    assert sdb.is_conjunctive_expression(
+    assert is_conjunctive_expression(
         Q(x)
     )
 
-    assert sdb.is_conjunctive_expression(
+    assert is_conjunctive_expression(
         Q(x) & R(y, C_(1))
     )
 
-    assert not sdb.is_conjunctive_expression(
+    assert not is_conjunctive_expression(
         R(x) | R(y)
     )
 
-    assert not sdb.is_conjunctive_expression(
+    assert not is_conjunctive_expression(
         R(x) & R(y) | R(x)
     )
 
-    assert not sdb.is_conjunctive_expression(
+    assert not is_conjunctive_expression(
         ~R(x)
     )
 
-    assert not sdb.is_conjunctive_expression(
+    assert not is_conjunctive_expression(
         R(Q(x))
     )
 
@@ -420,31 +419,31 @@ def test_conjunctive_expression_with_nested():
     x = S_('x')
     y = S_('y')
 
-    assert sdb.is_conjunctive_expression_with_nested_predicates(
+    assert is_conjunctive_expression_with_nested_predicates(
         Q()
     )
 
-    assert sdb.is_conjunctive_expression_with_nested_predicates(
+    assert is_conjunctive_expression_with_nested_predicates(
         Q(x)
     )
 
-    assert sdb.is_conjunctive_expression_with_nested_predicates(
+    assert is_conjunctive_expression_with_nested_predicates(
         Q(x) & R(y, C_(1))
     )
 
-    assert sdb.is_conjunctive_expression_with_nested_predicates(
+    assert is_conjunctive_expression_with_nested_predicates(
         Q(x) & R(Q(y), C_(1))
     )
 
-    assert not sdb.is_conjunctive_expression_with_nested_predicates(
+    assert not is_conjunctive_expression_with_nested_predicates(
         R(x) | R(y)
     )
 
-    assert not sdb.is_conjunctive_expression_with_nested_predicates(
+    assert not is_conjunctive_expression_with_nested_predicates(
         R(x) & R(y) | R(x)
     )
 
-    assert not sdb.is_conjunctive_expression_with_nested_predicates(
+    assert not is_conjunctive_expression_with_nested_predicates(
         ~R(x)
     )
 
@@ -456,22 +455,17 @@ def test_extract_free_variables():
     y = S_('y')
 
     emptyset = set()
-    assert sdb.extract_datalog_free_variables(Q) == emptyset
-    assert sdb.extract_datalog_free_variables(Q(x, y)) == {x, y}
-    assert sdb.extract_datalog_free_variables(Q(x, C_(1))) == {x}
-    assert sdb.extract_datalog_free_variables(Q(x) & R(y)) == {x, y}
-    assert sdb.extract_datalog_free_variables(EP_(x, Q(x, y))) == {y}
-    assert sdb.extract_datalog_free_variables(Imp_(R(x), Q(x, y))) == {y}
-    assert sdb.extract_datalog_free_variables(Imp_(R(x), Q(y) & Q(x))) == {y}
-
-    with pytest.raises(NeuroLangException):
-        assert sdb.extract_datalog_free_variables(Q(x) | R(y))
-
-    with pytest.raises(NeuroLangException):
-        assert sdb.extract_datalog_free_variables(Q(R(y)))
-
-    with pytest.raises(NeuroLangException):
-        assert sdb.extract_datalog_free_variables(~(R(y)))
+    assert extract_datalog_free_variables(Q()) == emptyset
+    assert extract_datalog_free_variables(x) == {x}
+    assert extract_datalog_free_variables(Q(x, y)) == {x, y}
+    assert extract_datalog_free_variables(Q(x, C_(1))) == {x}
+    assert extract_datalog_free_variables(Q(x) & R(y)) == {x, y}
+    assert extract_datalog_free_variables(EP_(x, Q(x, y))) == {y}
+    assert extract_datalog_free_variables(Imp_(R(x), Q(x, y))) == {y}
+    assert extract_datalog_free_variables(Imp_(R(x), Q(y) & Q(x))) == {y}
+    assert extract_datalog_free_variables(Q(R(y))) == {y}
+    assert extract_datalog_free_variables(Q(x) | R(y)) == {x, y}
+    assert extract_datalog_free_variables(~(R(y))) == {y}
 
 
 def test_equality_operation():
@@ -487,8 +481,8 @@ def test_existential_predicate():
     x = S_('x')
     Q = S_('Q')
     extensional = ExpressionBlock((
-        sdb.Fact(Q(a)),
-        sdb.Fact(Q(b)),
+        Fact(Q(a)),
+        Fact(Q(b)),
     ))
     solver.walk(extensional)
 
@@ -504,9 +498,9 @@ def test_and_query_resolution():
     x, y = S_('x'), S_('y')
     P, Q = S_('P'), S_('Q')
     extensional = ExpressionBlock((
-        sdb.Fact(Q(a)),
-        sdb.Fact(Q(b)),
-        sdb.Fact(P(a)),
+        Fact(Q(a)),
+        Fact(Q(b)),
+        Fact(P(a)),
     ))
     solver.walk(extensional)
 
