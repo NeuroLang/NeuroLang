@@ -184,6 +184,9 @@ class RelationalAlgebraFrozenSet(Set):
             group_set._container = group
             yield g_id, group_set
 
+    def itervalues(self):
+        return iter(self._container.values.squeeze())
+
 
 class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
     def add(self, value):

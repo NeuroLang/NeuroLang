@@ -6,7 +6,6 @@ from .datalog_chase import (DatalogChaseGeneral, DatalogChaseMGUMixin,
                             DatalogChaseRelationalAlgebraMixin)
 from .exceptions import NeuroLangException
 from .expressions import Constant
-from .relational_algebra import RelationalAlgebraOptimiser
 from .unification import (apply_substitution_arguments, compose_substitutions,
                           most_general_unifier_arguments)
 from .utils import OrderedSet
