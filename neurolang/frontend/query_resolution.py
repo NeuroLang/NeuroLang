@@ -5,7 +5,7 @@ import numpy as np
 
 from .. import neurolang as nl
 from .. import solver_datalog_naive as sdb
-from ..datalog_chase import build_chase_solution
+from ..datalog_chase import DatalogChase
 from ..expressions import is_leq_informative, Unknown
 from ..region_solver import Region
 from ..regions import (
@@ -123,7 +123,7 @@ class QueryBuilderBase(object):
                 s = e.neurolang_symbol
             new_set.append(s)
 
-        return nl.Constant[set_type](frozenset(new_set))
+        return nl.Constant[set_type](self.solver.new_set(new_set))
 
     @staticmethod
     def _create_symbol_and_get_constant(element, element_type):
@@ -347,7 +347,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         new_head = self.new_symbol()(*head.arguments)
         functor = new_head.expression.functor
         self.assign(new_head, predicate)
-        solution = build_chase_solution(self.solver)
+        solution = DatalogChase(self.solver).build_chase_solution()
         solution_set = solution.get(functor.name, nl.Constant(set()))
         out_symbol = nl.Symbol[solution_set.type](functor_orig.name)
         self.current_program = self.current_program[:-1]

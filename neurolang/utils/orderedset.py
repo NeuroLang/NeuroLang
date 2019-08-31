@@ -37,7 +37,7 @@ class OrderedSet(MutableSet, Sequence):
         return self._list[slice_]
 
     def index(self, value, start=0, stop=None):
-        return self._list.index(value, start=start, stop=stop)
+        return self._list[start: stop].index(value)
 
     def __repr__(self):
         return 'OrderedSet(' + ','.join(repr(i) for i in self) + ')'

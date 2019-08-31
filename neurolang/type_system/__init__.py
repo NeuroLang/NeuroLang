@@ -20,6 +20,9 @@ from typing_inspect import (
 )
 
 
+import numpy as np
+
+
 from ..exceptions import NeuroLangException
 
 
@@ -80,8 +83,11 @@ else:
 
 
 type_order = {
-    int: (float, complex),
-    float: (complex,),
+    np.int64: (np.int,),
+    np.bool_: (bool,),
+    bool: (np.bool_,),
+    int: (np.int64, float, complex),
+    float: (np.float64, complex,),
     Set: (AbstractSet,)
 }
 
