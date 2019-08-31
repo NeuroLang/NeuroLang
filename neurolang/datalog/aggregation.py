@@ -19,7 +19,6 @@ from ..expression_walker import PatternWalker, add_match
 from ..expressions import (
     Constant, Expression, ExpressionBlock, FunctionApplication, Symbol
 )
-from ..type_system import is_leq_informative
 from ..utils import OrderedSet
 from . import (
     Implication, extract_datalog_free_variables,
@@ -50,26 +49,7 @@ class DatalogWithAggregationMixin(PatternWalker):
         self._validate_aggregation_implication_syntax(consequent, antecedent)
 
         if consequent.functor in self.symbol_table:
-            value = self.symbol_table[consequent.functor]
-            if (
-                isinstance(value, Constant) and
-                is_leq_informative(value.type, AbstractSet)
-            ):
-                raise NeuroLangException(
-                    f'{consequent.functor.name} has been previously '
-                    'defined as Fact or extensional database.'
-                )
-            eb = self.symbol_table[consequent.functor].expressions
-
-            if (
-                not isinstance(eb[0].consequent, FunctionApplication) or
-                len(extract_datalog_free_variables(eb[0].consequent.args)
-                    ) != len(expression.consequent.args)
-            ):
-                raise NeuroLangException(
-                    f"{eb[0].consequent} is already in the IDB "
-                    f"with different signature."
-                )
+            eb = self._new_intensional_internal_representation(consequent)
         else:
             eb = tuple()
 
@@ -119,7 +99,7 @@ class DatalogWithAggregationMixin(PatternWalker):
 def extract_aggregation_atom_free_variables(atom):
     free_variables = OrderedSet()
     aggregation_fresh_variable = Symbol(str(uuid1()))
-    for i, arg in enumerate(atom.args):
+    for arg in atom.args:
         free_variables_arg = extract_datalog_free_variables(arg)
         if isinstance(arg, AggregationApplication):
             free_variables_aggregation = free_variables_arg
@@ -162,6 +142,31 @@ class Chase(DatalogChase):
             for substitution in substitutions
         )
 
+        fvs, substitutions = self.compute_aggregation_substitutions(
+            rule, new_tuples, args
+        )
+
+        new_tuples = self.datalog_program.new_set(
+            Constant[Tuple](apply_substitution_arguments(fvs, substitution))
+            for substitution in substitutions
+        )
+
+        if rule.consequent.functor in instance:
+            new_tuples -= instance[rule.consequent.functor].value
+        elif rule.consequent.functor in restriction_instance:
+            new_tuples -= restriction_instance[rule.consequent.functor].value
+
+        if len(new_tuples) == 0:
+            return dict()
+        else:
+            set_type = next(iter(new_tuples)).type
+            new_instance = {
+                rule.consequent.functor:
+                Constant[AbstractSet[set_type]](new_tuples)
+            }
+            return new_instance
+
+    def compute_aggregation_substitutions(self, rule, new_tuples, args):
         fvs, fvs_aggregation, agg_fresh_var, agg_application = \
             extract_aggregation_atom_free_variables(rule.consequent)
 
@@ -201,23 +206,4 @@ class Chase(DatalogChase):
                 })
 
             substitutions.append(substitution)
-
-        new_tuples = self.datalog_program.new_set(
-            Constant[Tuple](apply_substitution_arguments(fvs, substitution))
-            for substitution in substitutions
-        )
-
-        if rule.consequent.functor in instance:
-            new_tuples -= instance[rule.consequent.functor].value
-        elif rule.consequent.functor in restriction_instance:
-            new_tuples -= restriction_instance[rule.consequent.functor].value
-
-        if len(new_tuples) == 0:
-            return dict()
-        else:
-            set_type = next(iter(new_tuples)).type
-            new_instance = {
-                rule.consequent.functor:
-                Constant[AbstractSet[set_type]](new_tuples)
-            }
-            return new_instance
+        return fvs, substitutions

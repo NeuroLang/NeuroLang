@@ -174,26 +174,7 @@ class DatalogProgram(PatternWalker):
         self._validate_implication_syntax(consequent, antecedent)
 
         if consequent.functor in self.symbol_table:
-            value = self.symbol_table[consequent.functor]
-            if (
-                isinstance(value, Constant) and
-                is_leq_informative(value.type, AbstractSet)
-            ):
-                raise NeuroLangException(
-                    f'{consequent.functor.name} has been previously '
-                    'defined as Fact or extensional database.'
-                )
-            eb = self.symbol_table[consequent.functor].expressions
-
-            if (
-                not isinstance(eb[0].consequent, FunctionApplication) or
-                len(extract_datalog_free_variables(eb[0].consequent.args)) !=
-                len(expression.consequent.args)
-            ):
-                raise NeuroLangException(
-                    f"{eb[0].consequent} is already in the IDB "
-                    f"with different signature."
-                )
+            eb = self._new_intensional_internal_representation(consequent)
         else:
             eb = tuple()
 
@@ -202,6 +183,30 @@ class DatalogProgram(PatternWalker):
         self.symbol_table[consequent.functor] = ExpressionBlock(eb)
 
         return expression
+
+    def _new_intensional_internal_representation(self, consequent):
+        value = self.symbol_table[consequent.functor]
+        if (
+            isinstance(value, Constant) and
+            is_leq_informative(value.type, AbstractSet)
+        ):
+            raise NeuroLangException(
+                f'{consequent.functor.name} has been previously '
+                'defined as Fact or extensional database.'
+            )
+        eb = self.symbol_table[consequent.functor].expressions
+
+        if (
+            not isinstance(eb[0].consequent, FunctionApplication) or
+            len(extract_datalog_free_variables(eb[0].consequent.args)) !=
+            len(consequent.args)
+        ):
+            raise NeuroLangException(
+                f"{eb[0].consequent} is already in the IDB "
+                f"with different signature."
+            )
+
+        return eb
 
     def _validate_implication_syntax(self, consequent, antecedent):
         if consequent.functor in self.protected_keywords:
