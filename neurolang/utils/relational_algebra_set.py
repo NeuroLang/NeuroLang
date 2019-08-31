@@ -178,6 +178,15 @@ class RelationalAlgebraFrozenSet(Set):
         else:
             return super().__and__(other)
 
+    def groupby(self, columns):
+        for g_id, group in self._container.groupby(columns):
+            group_set = type(self)()
+            group_set._container = group
+            yield g_id, group_set
+
+    def itervalues(self):
+        return iter(self._container.values.squeeze())
+
 
 class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
     def add(self, value):
