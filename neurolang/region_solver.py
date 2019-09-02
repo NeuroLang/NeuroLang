@@ -4,7 +4,6 @@ import re
 from .CD_relations import cardinal_relation, inverse_directions
 from .regions import Region, region_union
 from .expression_walker import PatternWalker
-from .expressions import Constant
 
 
 REFINE_OVERLAPPING = True
@@ -120,15 +119,4 @@ class RegionSolver(PatternWalker[Region]):
     def function_region_union(
         self, region_set: typing.AbstractSet[Region]
     ) -> Region:
-
-        new_region_set = []
-        for region in region_set:
-            region = self.walk(region)
-            if not isinstance(region, Constant):
-                raise ValueError(
-                    "Region union can only be evaluated on resolved regions"
-                )
-
-            new_region_set.append(region.value)
-
-        return region_union(new_region_set)
+        return region_union(region_set)

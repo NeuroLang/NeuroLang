@@ -36,11 +36,8 @@ def region_set_algebraic_op(op, region_set, affine=None, n_dim=3):
     max_dim = (0,) * n_dim
     voxels_set_of_regions = []
     for region in rs:
-        if isinstance(region, ImplicitVBR):
-            region = region.to_explicit_vbr(affine, max_dim)
-
         if not isinstance(region, ExplicitVBR):
-            raise ValueError(f'Invalid type of region in set: {region}')
+            region = region.to_explicit_vbr(affine, max_dim)
 
         if (region.image_dim is not None and
                 any(map(lambda x, y: x > y, region.image_dim, max_dim))):
@@ -102,6 +99,10 @@ class VolumetricBrainRegion(Region):
 
     def remove_empty_bounding_boxes(self):
         raise NotImplementedError()
+
+    def to_explicit_vbr(self, affine, image_shape):
+        voxels_coordinates = self.to_ijk(affine)
+        return ExplicitVBR(voxels_coordinates, affine, image_shape)
 
 
 class PointSet(VolumetricBrainRegion):
@@ -384,10 +385,6 @@ class ImplicitVBR(VolumetricBrainRegion):
 
     def to_xyz(self, affine):
         raise NotImplementedError()
-
-    def to_explicit_vbr(self, affine, image_shape):
-        voxels_coordinates = self.to_ijk(affine)
-        return ExplicitVBR(voxels_coordinates, affine, image_shape)
 
 
 class BoundigBoxSequenceElement(ImplicitVBR):

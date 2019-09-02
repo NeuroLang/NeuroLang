@@ -61,8 +61,8 @@ def _dir_matrix(region, other_region):
 def test_regions_dir_matrix():
 
     # 2d regions (R-L, P-A)
-    r1 = Region((0, 0), (1, 1))
-    r2 = Region((0, 5), (1, 6))
+    r2 = Region((0, 0), (1, 1))
+    r1 = Region((0, 5), (1, 6))
     assert is_in_direction(_dir_matrix(r1, r2), 'P')
 
     # r1 A:B:P:RA:R:RP r2

@@ -9,7 +9,7 @@ from ...solver_datalog_naive import (
     Implication, Unknown,
 )
 from ...datalog_magic_sets import SymbolAdorned
-
+from ...datalog.aggregation import AggregationApplication
 
 EBNF_FILE_NAME = os.path.join(os.path.dirname(__file__), 'wmql.ebnf')
 with open(EBNF_FILE_NAME) as f:
@@ -26,6 +26,7 @@ class WMQLDatalogSemantics(NodeWalker):
         regions_symbol_name='regions',
         tract_traversals_symbol_name='tract_traversals',
         endpoints_in_symbol_name='endpoints_in',
+        region_union_symbol_name='region_union',
         parser=None, paths=None
     ):
         self.aux_predicate_number = 0
@@ -35,6 +36,7 @@ class WMQLDatalogSemantics(NodeWalker):
         self.regions_symbol_name = regions_symbol_name
         self.tract_traversals_symbol_name = tract_traversals_symbol_name
         self.endpoints_in_symbol_name = endpoints_in_symbol_name
+        self.region_union_symbol_name = region_union_symbol_name
         self.parser = parser
         if paths is None:
             self.paths = []
@@ -149,12 +151,21 @@ class WMQLDatalogSemantics(NodeWalker):
             tract = self.get_fresh_variable()
             region = self.get_fresh_variable()
             region_id = self.get_fresh_variable()
+            _, region_aggregated = self.get_fresh_functor(tracts_regions=True)
+
+            kwargs['code'].append(Implication(
+                region_aggregated(AggregationApplication(
+                    Symbol(self.region_union_symbol_name),
+                    (region,)
+                )),
+                Symbol(self.regions_symbol_name)(region_id, region) &
+                p_regions(region_id)
+            ))
+
             f_name = f'wmql_{fe.name}'
             r_tracts = (
                 Symbol(self.tracts_symbol_name)(kwargs['query_var'], tract) &
-                Symbol(self.regions_symbol_name)(region_id, region) &
-                p_regions(region_id) &
-                Symbol(f_name)(tract, region)
+                Symbol(f_name)(tract, region) & region_aggregated(region)
             )
             p_tracts2, _ = self.get_fresh_functor(tracts_regions=True)
             kwargs['code'] += [
