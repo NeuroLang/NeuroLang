@@ -95,10 +95,10 @@ def is_conjunctive_expression_with_nested_predicates(expression):
         exp = stack.pop()
         if isinstance(exp, FunctionApplication):
             if isinstance(exp.functor, Constant):
-                if exp.functor is and_:
+                if exp.functor.value is and_:
                     stack += exp.args
                     continue
-                elif exp.functor in (or_, invert, xor):
+                elif any(exp.functor.value is op for op in (or_, invert, xor)):
                     return False
             stack += [
                 arg for arg in exp.args
