@@ -1,17 +1,17 @@
-from ..datalog_chase import DatalogChase
-from .. import datalog_magic_sets
-from .. import expression_walker
-from .. import solver_datalog_naive
+from .. import datalog, expression_walker, expressions
+from ..datalog import magic_sets
+from ..datalog.chase import Chase
 
-C_ = solver_datalog_naive.Constant
-S_ = solver_datalog_naive.Symbol
-Imp_ = solver_datalog_naive.Implication
-F_ = solver_datalog_naive.Fact
-Eb_ = solver_datalog_naive.ExpressionBlock
+
+C_ = expressions.Constant
+S_ = expressions.Symbol
+Imp_ = datalog.Implication
+F_ = datalog.Fact
+Eb_ = expressions.ExpressionBlock
 
 
 class Datalog(
-    solver_datalog_naive.DatalogBasic,
+    datalog.DatalogProgram,
     expression_walker.ExpressionBasicEvaluator
 ):
     pass
@@ -44,11 +44,11 @@ def test_resolution_works():
     dl = Datalog()
     dl.walk(code)
     dl.walk(edb)
-    goal, mr = datalog_magic_sets.magic_rewrite(q(x), dl)
+    goal, mr = magic_sets.magic_rewrite(q(x), dl)
 
     dl = Datalog()
     dl.walk(mr)
     dl.walk(edb)
 
-    solution = DatalogChase(dl).build_chase_solution()
+    solution = Chase(dl).build_chase_solution()
     assert solution[goal].value == {C_((e,)) for e in (b, c, d)}

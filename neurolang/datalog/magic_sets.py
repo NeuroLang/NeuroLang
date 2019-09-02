@@ -4,12 +4,8 @@ Magic Sets [1] rewriting implementation for Datalog.
 [1] F. Bancilhon, D. Maier, Y. Sagiv, J. D. Ullman, in ACM PODS ’86, pp. 1–15.
 '''
 
-
-from .solver_datalog_naive import (
-    Implication, Symbol,
-    ExpressionBlock, Constant,
-    extract_datalog_predicates,
-)
+from ..expressions import Constant, ExpressionBlock, Symbol
+from . import Implication, extract_datalog_predicates
 
 
 class SymbolAdorned(Symbol):
