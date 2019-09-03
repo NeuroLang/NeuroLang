@@ -268,13 +268,13 @@ class RelationalAlgebraRewriteSelections(ew.PatternWalker):
 
         i, accum_arity, column = self.split_relations_column(relations, column)
         column += accum_arity
-        inner_relations = relations[:i + 1]
+        inner_relations = tuple(relations[:i + 1])
         if len(inner_relations) == 1:
             inner_relations = inner_relations[0]
         else:
             inner_relations = Product(inner_relations)
 
-        outer_relations = relations[i + 1:]
+        outer_relations = tuple(relations[i + 1:])
 
         arg_left = selection.formula.args[0]
 

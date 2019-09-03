@@ -212,6 +212,35 @@ def test_load_spherical_volume_datalog():
     )
 
 
+def test_neurolang_dl_aggregation():
+    neurolang = frontend.NeurolangDL()
+    q = neurolang.new_symbol(name='q')
+    p = neurolang.new_symbol(name='p')
+    r = neurolang.new_symbol(name='r')
+    x = neurolang.new_symbol(name='x')
+    y = neurolang.new_symbol(name='y')
+
+    @neurolang.add_symbol
+    def sum_(x):
+        return sum(x)
+
+    for i in range(10):
+        q[i % 2, i] = True
+
+    p[x, sum_(y)] = q[x, y]
+
+    sol = neurolang.query(r(x, y), p(x, y))
+
+    res_q = {
+        (0, 2 + 4 + 8),
+        (1, 1 + 5 + 9)
+    }
+
+    assert len(sol) == 2
+    assert sol[r] == res_q
+    assert sol[p] == res_q
+
+
 def test_multiple_symbols_query():
     neurolang = frontend.RegionFrontend()
     r1 = ExplicitVBR(np.array([[0, 0, 5], [1, 1, 10]]), np.eye(4))
