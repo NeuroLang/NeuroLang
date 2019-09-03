@@ -56,7 +56,7 @@ class QueryBuilderBase(object):
     def symbols(self):
         return QuerySymbolsProxy(self)
 
-    def new_symbol(self, type_, name=None):
+    def new_symbol(self, type_=Unknown, name=None):
         if isinstance(type_, (tuple, list)):
             type_ = tuple(type_)
             type_ = Tuple[type_]
@@ -158,7 +158,7 @@ class RegionMixin(object):
         ]
 
     def new_region_symbol(self, name=None):
-        return self.new_symbol(Region, name=name)
+        return self.new_symbol(type_=Region, name=name)
 
     def add_region(self, region, name=None):
         if not isinstance(region, self.solver.type):
@@ -192,11 +192,11 @@ class RegionMixin(object):
                 continue
             symbol = exp.Symbol[Region](label_name)
             self.symbol_table[symbol] = exp.Constant[Region](region)
-            self.symbol_table[self.new_symbol(str).expression] = (
+            self.symbol_table[self.new_symbol(type_=str).expression] = (
                 exp.Constant[str](label_name)
             )
 
-            tuple_symbol = self.new_symbol(Tuple[str, Region]).expression
+            tuple_symbol = self.new_symbol(type_=Tuple[str, Region]).expression
             self.symbol_table[tuple_symbol] = (
                 exp.Constant[Tuple[str, Region]](
                     (exp.Constant[str](label_name), symbol)
@@ -308,18 +308,6 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         )
         self.chase_class = chase_class
         self.current_program = []
-
-    def new_symbol(self, type_=Unknown, name=None):
-        if isinstance(type_, (tuple, list)):
-            type_ = tuple(type_)
-            type_ = Tuple[type_]
-
-        if name is None:
-            name = str(uuid1())
-        return Expression(
-            self,
-            exp.Symbol[type_](name)
-        )
 
     def assign(self, consequent, antecedent):
         if (
