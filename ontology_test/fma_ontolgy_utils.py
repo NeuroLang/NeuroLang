@@ -25,7 +25,7 @@ class FMAOntology():
 
     def process_nodes(self, main_label):
         labels=[]
-        for main in self._ontology.search(label = main_label):
+        for main in self._ontology.search(label=main_label):
             subs = list(main.subclasses())
             while subs:
                 subc = subs.pop(0)
@@ -36,7 +36,7 @@ class FMAOntology():
 
     def process_subclasses(self, main_label, apply=None):
         subclasses = dict()
-        for main in self._ontology.search(label = main_label):
+        for main in self._ontology.search(label=main_label):
             subs = [main]
             while subs:
                 subc = subs.pop(0)
@@ -57,7 +57,7 @@ class FMAOntology():
 
     def process_synonyms(self, main_label, apply=None):
         synonyms = dict()
-        for main in self._ontology.search(label = main_label):
+        for main in self._ontology.search(label=main_label):
             subs = [main]
             while subs:
                 subc = subs.pop(0)
