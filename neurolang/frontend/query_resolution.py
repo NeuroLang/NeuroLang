@@ -331,31 +331,35 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                 Fact(self, expression, consequent)
             )
         else:
-            new_args = tuple()
-            changed = False
-            for arg in consequent.expression.args:
-                if isinstance(arg, exp.FunctionApplication):
-                    arg = aggregation.AggregationApplication(
-                        arg.functor, arg.args
-                    )
-                    changed = True
-                new_args += (arg,)
-
-            if changed:
-                consequent_expression = exp.FunctionApplication(
-                    consequent.expression.functor,
-                    new_args
-                )
-            else:
-                consequent_expression = consequent.expression
-            expression = datalog.Implication(
-                consequent_expression,
-                antecedent.expression
-            )
-            self.current_program.append(
-                Implication(self, expression, consequent, antecedent)
-            )
+            self._assign_intensional_rule(consequent, antecedent)
         self.solver.walk(self.current_program[-1].expression)
+
+    def _assign_intensional_rule(self, consequent, antecedent):
+        new_args = tuple()
+        changed = False
+        consequent_expression = consequent.expression
+
+        for arg in consequent.expression.args:
+            if isinstance(arg, exp.FunctionApplication):
+                arg = aggregation.AggregationApplication(
+                    arg.functor, arg.args
+                )
+                changed = True
+            new_args += (arg,)
+
+        if changed:
+            consequent_expression = exp.FunctionApplication(
+                consequent.expression.functor,
+                new_args
+            )
+
+        expression = datalog.Implication(
+            consequent_expression,
+            antecedent.expression
+        )
+        self.current_program.append(
+            Implication(self, expression, consequent, antecedent)
+        )
 
     def query(self, head, predicate):
         self.solver.symbol_table = self.symbol_table.create_scope()
