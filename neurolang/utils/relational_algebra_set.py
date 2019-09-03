@@ -106,12 +106,12 @@ class RelationalAlgebraFrozenSet(Set):
     def equijoin(self, other, join_indices, return_mappings=False):
         if len(self) == 0 or len(other) == 0:
             return type(self)()
-        other = pd.DataFrame(
-            other._container.values,
-            index=other._container.index,
-            columns=range(self.arity, other._container.shape[1] + self.arity),
-            copy=False
+        other_columns = range(
+            self.arity,
+            other._container.shape[1] + self.arity
         )
+        other = other._container.copy(deep=False)
+        other.columns = other_columns
         left_on, right_on = zip(*join_indices)
         left_on = list(left_on)
         right_on = list(l + self.arity for l in right_on)

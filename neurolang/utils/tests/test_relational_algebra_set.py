@@ -75,6 +75,19 @@ def test_relational_algebra_ra_equijoin():
     assert res == ras_d
 
 
+def test_relational_algebra_ra_equijoin_mixed_types():
+    a = [(chr(ord('a') + i), i * 2) for i in range(5)]
+    b = [(i * 2, i * 3) for i in range(5)]
+    c = [(chr(ord('a') + i), i * 2, i * 2, i * 3) for i in range(5)]
+
+    ras_a = RelationalAlgebraSet(a)
+    ras_b = RelationalAlgebraSet(b)
+    ras_c = RelationalAlgebraSet(c)
+
+    res = ras_a.equijoin(ras_b, [(1, 0)])
+    assert res == ras_c
+
+
 def test_groupby():
     a = [
         (i, i * j)

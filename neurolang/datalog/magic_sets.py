@@ -4,12 +4,8 @@ Magic Sets [1] rewriting implementation for Datalog.
 [1] F. Bancilhon, D. Maier, Y. Sagiv, J. D. Ullman, in ACM PODS ’86, pp. 1–15.
 '''
 
-
-from .solver_datalog_naive import (
-    Implication, Symbol,
-    ExpressionBlock, Constant,
-    extract_datalog_predicates,
-)
+from ..expressions import Constant, ExpressionBlock, Symbol
+from . import Implication, extract_datalog_predicates
 
 
 class SymbolAdorned(Symbol):
@@ -194,11 +190,15 @@ def reachable_adorned_code(query, datalog):
     adorned_query = adorned_code.expressions[0]
     to_reach = [adorned_query.consequent.functor]
     reached = set()
+    seen_rules = set()
     while to_reach:
         p = to_reach.pop()
         reached.add(p)
         rules = adorned_idb[p]
         for rule in rules.expressions:
+            if rule in seen_rules:
+                continue
+            seen_rules.add(rule)
             reachable_code.append(rule)
             for predicate in extract_datalog_predicates(rule.antecedent):
                 functor = predicate.functor

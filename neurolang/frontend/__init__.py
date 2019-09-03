@@ -8,7 +8,8 @@ from ..region_solver import RegionSolver
 from ..regions import ExplicitVBR
 from ..utils.data_manipulation import parse_region_label_map
 from .. import neurolang as nl
-from ..solver_datalog_naive import DatalogBasic
+from ..datalog import DatalogProgram
+from ..datalog.aggregation import DatalogWithAggregationMixin, Chase
 from ..expression_walker import ExpressionBasicEvaluator
 
 from typing import Any, AbstractSet, Callable
@@ -73,12 +74,13 @@ class NeurolangDL(QueryBuilderDatalog):
     def __init__(self, solver=None):
         if solver is None:
             solver = RegionFrontendDatalogSolver()
-        super().__init__(solver)
+        super().__init__(solver, chase_class=Chase)
 
 
 class RegionFrontendDatalogSolver(
         RegionSolver,
-        DatalogBasic,
+        DatalogWithAggregationMixin,
+        DatalogProgram,
         ExpressionBasicEvaluator
 ):
     pass
