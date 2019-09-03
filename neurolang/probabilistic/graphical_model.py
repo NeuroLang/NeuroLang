@@ -1,9 +1,7 @@
 import itertools
 from collections import defaultdict
-from typing import Iterable, Callable, AbstractSet, Mapping
-from copy import deepcopy
+from typing import Iterable, Callable, Mapping
 import operator
-import logging
 
 import numpy as np
 
@@ -324,7 +322,8 @@ def solve_map_query(graphical_model, query_atoms, evidence):
         datalog.walk(program)
         chaser = DatalogChase(datalog)
         solution_instance = SetInstance({
-            predicate: frozenset({t.value for t in const_tuple_values.value})
+            predicate: frozenset({t.value
+                                  for t in const_tuple_values.value})
             for predicate, const_tuple_values in
             chaser.build_chase_solution().items()
         })

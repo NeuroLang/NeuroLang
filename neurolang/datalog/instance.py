@@ -17,7 +17,9 @@ def factset_as_dict(factset):
 
 
 class Instance:
-    def __init__(self, elements=dict()):
+    def __init__(self, elements=None):
+        if elements is None:
+            elements = dict()
         if isinstance(elements, Mapping):
             if any(
                 not isinstance(tuple_set, Set) or
