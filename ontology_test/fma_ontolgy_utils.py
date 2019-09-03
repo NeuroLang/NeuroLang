@@ -1,4 +1,5 @@
-from owlready2 import  get_ontology
+from owlready2 import get_ontology
+
 
 class FMAOntology():
 
@@ -30,6 +31,7 @@ class FMAOntology():
                 subc = subs.pop(0)
                 labels.append(subc.label[0])
                 subs = subs + list(subc.subclasses())
+        labels = list(dict.fromkeys(labels))
         return labels
 
     def process_subclasses(self, main_label, apply=None):
