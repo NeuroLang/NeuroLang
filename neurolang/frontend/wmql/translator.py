@@ -8,7 +8,7 @@ from ...solver_datalog_naive import (
     Symbol, Constant,
     Implication, Unknown,
 )
-from ...datalog_magic_sets import SymbolAdorned
+from ...datalog.magic_sets import SymbolAdorned
 from ...datalog.aggregation import AggregationApplication
 
 EBNF_FILE_NAME = os.path.join(os.path.dirname(__file__), 'wmql.ebnf')
