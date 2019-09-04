@@ -190,15 +190,15 @@ def reachable_adorned_code(query, datalog):
     adorned_query = adorned_code.expressions[0]
     to_reach = [adorned_query.consequent.functor]
     reached = set()
-    rules_added = set()
+    seen_rules = set()
     while to_reach:
         p = to_reach.pop()
         reached.add(p)
         rules = adorned_idb[p]
         for rule in rules.expressions:
-            if rule in rules_added:
+            if rule in seen_rules:
                 continue
-            rules_added.add(rule)
+            seen_rules.add(rule)
             reachable_code.append(rule)
             for predicate in extract_datalog_predicates(rule.antecedent):
                 functor = predicate.functor
