@@ -29,6 +29,8 @@ class QueryBuilderBase(object):
         for k, v in self.solver.included_functions.items():
             self.symbol_table[exp.Symbol[v.type](k)] = v
 
+        self._symbols_proxy = QuerySymbolsProxy(self)
+
     def get_symbol(self, symbol_name):
         if isinstance(symbol_name, Expression):
             symbol_name = symbol_name.expression.name
@@ -54,7 +56,11 @@ class QueryBuilderBase(object):
 
     @property
     def symbols(self):
-        return QuerySymbolsProxy(self)
+        return self._symbols_proxy
+
+    @property
+    def environment(self):
+        return self._symbols_proxy
 
     def new_symbol(self, type_=Unknown, name=None):
         if isinstance(type_, (tuple, list)):
@@ -90,6 +96,9 @@ class QueryBuilderBase(object):
         self.symbol_table[symbol] = value
 
         return Symbol(self, name)
+
+    def del_symbol(self, name):
+        del self.symbol_table[name]
 
     def add_tuple_set(self, iterable, type_=Unknown, name=None):
         if not isinstance(type_, tuple) or len(type_) == 1:
@@ -382,23 +391,37 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
 
 class QuerySymbolsProxy(object):
-    def __init__(self, query_builder, dynamic_mode=False):
+    def __init__(self, query_builder):
+        self._dynamic_mode = False
         self._query_builder = query_builder
-        self._dynamic_mode = dynamic_mode
 
-    def __getattr__(self, attr):
-        if attr in self._query_builder:
-            return self._query_builder.get_symbol(attr)
+    def __getattr__(self, name):
+        if name in self.__getattribute__('_query_builder'):
+            return self._query_builder.get_symbol(name)
         else:
             try:
-                return super().__getattribute__(attr)
+                return super().__getattribute__(name)
             except AttributeError:
                 if self._dynamic_mode:
                     return self._query_builder.new_symbol(
-                        sdb.Unknown, name=attr
+                        Unknown, name=name
                     )
                 else:
                     raise
+
+    def __setattr__(self, name, value):
+        if name == '_dynamic_mode':
+            return super().__setattr__(name, value)
+        elif self._dynamic_mode:
+            return self._query_builder.add_symbol(value, name=name)
+        else:
+            return super().__setattr__(name, value)
+
+    def __delattr__(self, name):
+        if self._dynamic_mode and name:
+            self._query_builder.del_symbol(name)
+        else:
+            super().__delattr__(name)
 
     def __getitem__(self, attr):
         return self._query_builder.get_symbol(attr)
@@ -427,3 +450,12 @@ class QuerySymbolsProxy(object):
         ]
 
         return f'QuerySymbolsProxy with symbols {init}'
+
+    def __enter__(self):
+        self._old_dynamic_mode = False
+        self._dynamic_mode = True
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self._dynamic_mode = self._old_dynamic_mode
+        del self._old_dynamic_mode
