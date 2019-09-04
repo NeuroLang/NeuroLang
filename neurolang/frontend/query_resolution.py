@@ -97,15 +97,18 @@ class QueryBuilderBase(object):
         return Symbol(self, name)
 
     def _obtain_symbol_name(self, name, value):
-        if name is None:
-            if hasattr(value, '__qualname__'):
-                if '.' in value.__qualname__:
-                    ix = value.__qualname__.rindex('.')
-                    name = value.__qualname__[ix + 1:]
-                else:
-                    name = value.__qualname__
-            else:
-                name = str(uuid1())
+        if name is not None:
+            return name
+
+        if not hasattr(value, '__qualname__'):
+            return str(uuid1())
+
+        if '.' in value.__qualname__:
+            ix = value.__qualname__.rindex('.')
+            name = value.__qualname__[ix + 1:]
+        else:
+            name = value.__qualname__
+
         return name
 
     def del_symbol(self, name):
@@ -409,16 +412,16 @@ class QuerySymbolsProxy(object):
     def __getattr__(self, name):
         if name in self.__getattribute__('_query_builder'):
             return self._query_builder.get_symbol(name)
-        else:
-            try:
-                return super().__getattribute__(name)
-            except AttributeError:
-                if self._dynamic_mode:
-                    return self._query_builder.new_symbol(
-                        Unknown, name=name
-                    )
-                else:
-                    raise
+
+        try:
+            return super().__getattribute__(name)
+        except AttributeError:
+            if self._dynamic_mode:
+                return self._query_builder.new_symbol(
+                    Unknown, name=name
+                )
+            else:
+                raise
 
     def __setattr__(self, name, value):
         if name == '_dynamic_mode':
