@@ -82,8 +82,7 @@ class QueryBuilderBase(object):
         ]
 
     def add_symbol(self, value, name=None):
-        if name is None:
-            name = str(uuid1())
+        name = self._obtain_symbol_name(name, value)
 
         if isinstance(value, Expression):
             value = value.expression
@@ -96,6 +95,18 @@ class QueryBuilderBase(object):
         self.symbol_table[symbol] = value
 
         return Symbol(self, name)
+
+    def _obtain_symbol_name(self, name, value):
+        if name is None:
+            if hasattr(value, '__qualname__'):
+                if '.' in value.__qualname__:
+                    ix = value.__qualname__.rindex('.')
+                    name = value.__qualname__[ix + 1:]
+                else:
+                    name = value.__qualname__
+            else:
+                name = str(uuid1())
+        return name
 
     def del_symbol(self, name):
         del self.symbol_table[name]
