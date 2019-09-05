@@ -375,7 +375,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             consequent_expression,
             antecedent.expression
         )
-        return expression.expression
+        return expression
 
     def query(self, head, predicate):
         self.solver.symbol_table = self.symbol_table.create_scope()
@@ -399,7 +399,9 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         if name is None:
             name = str(uuid1())
 
-        symbol = exp.Symbol[type_](name)
+        if isinstance(type_, tuple):
+            type_ = Tuple[type_]
+        symbol = exp.Symbol[AbstractSet[type_]](name)
         self.solver.add_extensional_predicate_from_tuples(
             symbol, iterable, type_=type_
         )
@@ -473,6 +475,6 @@ class QuerySymbolsProxy(object):
         self._dynamic_mode = True
         return self
 
-    def __exit__(self, type, value, traceback):
+    def __exit__(self, type_, value, traceback):
         self._dynamic_mode = self._old_dynamic_mode
         del self._old_dynamic_mode
