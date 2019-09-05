@@ -1,24 +1,85 @@
-import pytest
-import numpy as np
-from neurolang import frontend
-from typing import AbstractSet, Tuple
-from ..query_resolution_expressions import Symbol
-from ...regions import Region, ExplicitVBR, SphericalVolume
+from typing import AbstractSet, Tuple, Callable
 from unittest.mock import patch
 
+import numpy as np
+import pytest
 
-def test_new_symbol():
-    neurolang = frontend.RegionFrontend()
+from neurolang import frontend
+from neurolang.frontend import query_resolution
+
+from ...datalog import DatalogProgram
+from ...expression_walker import ExpressionBasicEvaluator
+from ...regions import ExplicitVBR, Region, SphericalVolume
+from ...type_system import Unknown
+from ..query_resolution_expressions import Symbol
+
+
+def test_symbol_management():
+    class Solver(
+        DatalogProgram,
+        ExpressionBasicEvaluator
+    ):
+        pass
+
+    neurolang = query_resolution.QueryBuilderBase(Solver())
 
     sym = neurolang.new_symbol(int)
     assert sym.expression.type is int
 
-    sym_ = neurolang.new_symbol((float, int))
+    sym_ = neurolang.new_symbol(type_=(float, int))
     assert sym_.expression.type is Tuple[float, int]
     assert sym.expression.name != sym_.expression.name
 
-    sym = neurolang.new_symbol(int, name='a')
-    assert sym.expression.name == 'a'
+    a = neurolang.new_symbol(int, name='a')
+    assert a.expression.name == 'a'
+
+    b = neurolang.add_symbol(1, name='b')
+    assert 'b' in neurolang.symbols
+    assert b.value == 1
+    assert b.type is int
+    assert neurolang.symbols.b == b
+
+    with pytest.raises(AttributeError):
+        assert neurolang.symbols.c
+
+    @neurolang.add_symbol
+    def id(x: int)->int:
+        return x
+
+    assert 'id' in neurolang.symbols
+    assert id == neurolang.symbols.id
+    assert id == neurolang.symbols['id']
+    assert id.type == Callable[[int], int]
+
+
+def test_symbol_environment():
+    class Solver(
+        DatalogProgram,
+        ExpressionBasicEvaluator
+    ):
+        pass
+
+    neurolang = query_resolution.QueryBuilderBase(Solver())
+
+    b = neurolang.add_symbol(1, name='b')
+    neurolang.symbols._dynamic_mode = True
+    assert 'c' not in neurolang.symbols
+    c = neurolang.symbols.c
+    assert c.type is Unknown
+    assert c.expression.name == 'c'
+    del neurolang.symbols.b
+    assert b not in neurolang.symbols
+    neurolang.symbols._dynamic_mode = False
+
+    with neurolang.environment as e:
+        assert 'c' not in e
+        c = e.c
+        assert c.type is Unknown
+        assert c.expression.name == 'c'
+
+        e.d = 5
+        assert e.d.value == 5
+        assert e.d.type is int
 
 
 def test_add_set():
