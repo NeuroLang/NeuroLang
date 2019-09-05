@@ -1,4 +1,4 @@
-from typing import AbstractSet, Tuple, Callable
+from typing import AbstractSet, Callable, Tuple
 from unittest.mock import patch
 
 import numpy as np
@@ -7,10 +7,12 @@ import pytest
 from neurolang import frontend
 from neurolang.frontend import query_resolution
 
-from ...datalog import DatalogProgram
+from ... import expressions as exp
+from ...datalog import DatalogProgram, Fact, Implication
 from ...expression_walker import ExpressionBasicEvaluator
 from ...regions import ExplicitVBR, Region, SphericalVolume
 from ...type_system import Unknown
+from .. import query_resolution_expressions as qre
 from ..query_resolution_expressions import Symbol
 
 
@@ -399,3 +401,36 @@ def test_neurosynth_region(mock_ns_regions):
 
     assert res.type is AbstractSet[Tuple[ExplicitVBR]]
     assert res.value == frozenset((t,) for t in mock_ns_regions.return_value)
+
+
+def test_translate_expression_to_fronted_expression():
+    qr = frontend.NeurolangDL()
+    tr = qre.TranslateExpressionToFrontEndExpression(qr)
+
+    assert tr.walk(exp.Constant(1)) == 1
+
+    symbol_exp = exp.Symbol('a')
+    symbol_fe = tr.walk(symbol_exp)
+    assert symbol_fe.expression == symbol_exp
+    assert symbol_fe.query_builder == tr.query_builder
+
+    fa_exp = symbol_exp(exp.Constant(1))
+    fa_fe = symbol_fe(1)
+    fa_fe_tr = tr.walk(fa_exp)
+    assert fa_fe_tr.expression == fa_exp
+    assert fa_fe_tr == fa_fe
+
+    fact_exp = Fact(fa_exp)
+    fact_fe = tr.walk(fact_exp)
+    assert fact_fe.expression == fact_exp
+    assert fact_fe.consequent == fa_fe
+
+    imp_exp = Implication(
+        symbol_exp(exp.Symbol('x')),
+        exp.Symbol('b')(exp.Symbol('x'))
+    )
+    imp_fe = tr.walk(imp_exp)
+    assert imp_fe.expression == imp_exp
+    assert imp_fe.consequent == tr.walk(imp_exp.consequent)
+    assert imp_fe.antecedent == tr.walk(imp_exp.antecedent)
+
