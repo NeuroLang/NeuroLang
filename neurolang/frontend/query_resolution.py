@@ -375,7 +375,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             consequent_expression,
             antecedent.expression
         )
-        return expression.expression
+        return expression
 
     def query(self, head, predicate):
         self.solver.symbol_table = self.symbol_table.create_scope()
