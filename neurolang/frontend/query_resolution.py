@@ -473,6 +473,6 @@ class QuerySymbolsProxy(object):
         self._dynamic_mode = True
         return self
 
-    def __exit__(self, type, value, traceback):
+    def __exit__(self, type_, value, traceback):
         self._dynamic_mode = self._old_dynamic_mode
         del self._old_dynamic_mode
