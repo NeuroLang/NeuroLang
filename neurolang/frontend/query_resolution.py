@@ -4,15 +4,16 @@ from uuid import uuid1
 import numpy as np
 
 from .. import datalog
-from ..datalog import aggregation
 from .. import expressions as exp
+from ..datalog import aggregation
 from ..region_solver import Region
 from ..regions import (ExplicitVBR, ImplicitVBR, SphericalVolume,
                        take_principal_regions)
 from ..type_system import Unknown, is_leq_informative
 from .neurosynth_utils import NeuroSynthHandler
-from .query_resolution_expressions import (All, Exists, Expression, Fact,
-                                           Implication, Query, Symbol)
+from .query_resolution_expressions import (
+    All, Exists, Expression, Query, Symbol,
+    TranslateExpressionToFrontEndExpression)
 
 __all__ = ['QueryBuilderFirstOrder', 'QueryBuilderDatalog']
 
@@ -330,7 +331,16 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             solver, logic_programming=True
         )
         self.chase_class = chase_class
-        self.current_program = []
+        self.frontend_translator = \
+            TranslateExpressionToFrontEndExpression(self)
+
+    @property
+    def current_program(self):
+        cp = []
+        for rules in self.solver.intensional_database().values():
+            for rule in rules.expressions:
+                cp.append(self.frontend_translator.walk(rule))
+        return cp
 
     def assign(self, consequent, antecedent):
         if (
@@ -338,12 +348,9 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             antecedent.expression.value is True
         ):
             expression = datalog.Fact(consequent.expression)
-            self.current_program.append(
-                Fact(self, expression, consequent)
-            )
         else:
-            self._assign_intensional_rule(consequent, antecedent)
-        self.solver.walk(self.current_program[-1].expression)
+            expression = self._assign_intensional_rule(consequent, antecedent)
+        self.solver.walk(expression)
 
     def _assign_intensional_rule(self, consequent, antecedent):
         new_args = tuple()
@@ -368,9 +375,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             consequent_expression,
             antecedent.expression
         )
-        self.current_program.append(
-            Implication(self, expression, consequent, antecedent)
-        )
+        return expression.expression
 
     def query(self, head, predicate):
         self.solver.symbol_table = self.symbol_table.create_scope()
@@ -381,7 +386,6 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         solution = self.chase_class(self.solver).build_chase_solution()
         solution_set = solution.get(functor.name, exp.Constant(set()))
         out_symbol = exp.Symbol[solution_set.type](functor_orig.name)
-        self.current_program = self.current_program[:-1]
         self.solver.symbol_table = self.symbol_table.enclosing_scope
         self.add_tuple_set(
             solution_set.value, name=functor_orig.name
@@ -390,7 +394,6 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
     def reset_program(self):
         self.symbol_table.clear()
-        self.current_program = []
 
     def add_tuple_set(self, iterable, type_=Unknown, name=None):
         if name is None:
