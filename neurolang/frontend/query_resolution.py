@@ -399,7 +399,9 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         if name is None:
             name = str(uuid1())
 
-        symbol = exp.Symbol[type_](name)
+        if isinstance(type_, tuple):
+            type_ = Tuple[type_]
+        symbol = exp.Symbol[AbstractSet[type_]](name)
         self.solver.add_extensional_predicate_from_tuples(
             symbol, iterable, type_=type_
         )

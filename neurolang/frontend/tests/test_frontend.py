@@ -106,6 +106,25 @@ def test_add_set():
     assert exp.do().value is True
 
 
+def test_add_set_neurolangdl():
+    neurolang = frontend.NeurolangDL()
+
+    s = neurolang.add_tuple_set(range(10), int)
+    res = neurolang[s]
+
+    assert s.type is AbstractSet[int]
+    assert res.type is AbstractSet[int]
+    assert res.value == frozenset((i,) for i in range(10))
+
+    v = frozenset(zip(('a', 'b', 'c'), range(3)))
+    s = neurolang.add_tuple_set(v, (str, int))
+    res = neurolang[s]
+
+    assert s.type is AbstractSet[Tuple[str, int]]
+    assert res.type is AbstractSet[Tuple[str, int]]
+    assert res.value == v
+
+
 def test_add_regions_and_query():
     neurolang = frontend.RegionFrontend()
 
@@ -433,4 +452,3 @@ def test_translate_expression_to_fronted_expression():
     assert imp_fe.expression == imp_exp
     assert imp_fe.consequent == tr.walk(imp_exp.consequent)
     assert imp_fe.antecedent == tr.walk(imp_exp.antecedent)
-
