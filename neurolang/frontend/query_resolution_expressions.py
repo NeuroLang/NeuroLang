@@ -1,11 +1,13 @@
 import operator as op
-from typing import AbstractSet, Tuple, Callable
 from functools import wraps
+from typing import AbstractSet, Callable, Tuple
 
+from .. import datalog as dl
+from .. import expressions as exp
 from .. import neurolang as nl
-from ..expressions import is_leq_informative, FunctionApplication
-from ..expression_walker import ReplaceExpressionsByValues
 from ..expression_pattern_matching import NeuroLangPatternMatchingNoMatch
+from ..expression_walker import (ExpressionWalker, ReplaceExpressionsByValues,
+                                 add_match)
 
 
 class Expression(object):
@@ -38,7 +40,7 @@ class Expression(object):
         else:
             functor = self.expression
 
-        new_expression = FunctionApplication(functor, new_args)
+        new_expression = exp.FunctionApplication(functor, new_args)
         return Operation(
                 self.query_builder, new_expression, self, args)
 
@@ -65,13 +67,20 @@ class Expression(object):
     def __repr__(self):
         if isinstance(self.expression, nl.Constant):
             return repr(self.expression.value)
+        elif isinstance(self.expression, dl.magic_sets.SymbolAdorned):
+            name = f'{self.expression.name}'
+            if self.expression.adornment:
+                name += f'^{self.expression.adornment}'
+            if self.expression.number:
+                name += f'_{self.expression.number}'
+            return name
         elif isinstance(self.expression, nl.Symbol):
             return f'{self.expression.name}'
         else:
             return object.__repr__(self)
 
 
-binary_opeations = (
+binary_operations = (
     op.add, op.sub, op.mul, op.ge, op.le, op.gt, op.lt, op.eq
 )
 
@@ -202,7 +211,7 @@ class Symbol(Expression):
         if isinstance(symbol, Symbol):
             return(f'{self.symbol_name}: {symbol.type}')
         elif isinstance(symbol, nl.Constant):
-            if is_leq_informative(symbol.type, AbstractSet):
+            if exp.is_leq_informative(symbol.type, AbstractSet):
                 value = list(self)
             else:
                 value = symbol.value
@@ -221,8 +230,8 @@ class Symbol(Expression):
         symbol = self.symbol
         if not (
             isinstance(symbol, nl.Constant) and (
-                is_leq_informative(symbol.type, AbstractSet) or
-                is_leq_informative(symbol.type, Tuple)
+                exp.is_leq_informative(symbol.type, AbstractSet) or
+                exp.is_leq_informative(symbol.type, Tuple)
             )
         ):
             raise TypeError(
@@ -265,8 +274,8 @@ class Symbol(Expression):
         symbol = self.symbol
         if (
             isinstance(symbol, nl.Constant) and (
-                is_leq_informative(symbol.type, AbstractSet) or
-                is_leq_informative(symbol.type, Tuple)
+                exp.is_leq_informative(symbol.type, AbstractSet) or
+                exp.is_leq_informative(symbol.type, Tuple)
             )
         ):
             return len(symbol.value)
@@ -344,26 +353,61 @@ class All(Expression):
 
 
 class Implication(Expression):
-    def __init__(self, query_builder, expression, antecedent, consequent):
+    def __init__(self, query_builder, expression, consequent, antecedent):
         self.expression = expression
         self.query_builder = query_builder
         self.antecedent = antecedent
         self.consequent = consequent
 
     def __repr__(self):
-        return u'{a} \u2190 {c}'.format(
+        return u'{c} \u2190 {a}'.format(
             a=repr(self.antecedent),
             c=repr(self.consequent)
         )
 
 
 class Fact(Expression):
-    def __init__(self, query_builder, expression, antecedent):
+    def __init__(self, query_builder, expression, consequent):
         self.expression = expression
         self.query_builder = query_builder
-        self.antecedent = antecedent
+        self.consequent = consequent
 
     def __repr__(self):
-        return u'{a}'.format(
-            a=repr(self.antecedent),
+        return u'{c}'.format(
+            c=repr(self.consequent),
+        )
+
+
+class TranslateExpressionToFrontEndExpression(ExpressionWalker):
+    def __init__(self, query_builder):
+        self.query_builder = query_builder
+
+    @add_match(exp.Symbol)
+    def symbol(self, expression):
+        return Expression(self.query_builder, expression)
+
+    @add_match(exp.Constant)
+    def constant(self, expression):
+        return expression.value
+
+    @add_match(exp.FunctionApplication)
+    def function_application(self, expression):
+        functor = self.walk(expression.functor)
+        args = tuple(self.walk(arg) for arg in expression.args)
+        return functor(*args)
+
+    @add_match(dl.Implication(..., True))
+    def fact(self, expression):
+        return Fact(
+            self.query_builder,
+            expression, self.walk(expression.consequent)
+        )
+
+    @add_match(dl.Implication)
+    def implication(self, expression):
+        return Implication(
+            self.query_builder,
+            expression,
+            self.walk(expression.consequent),
+            self.walk(expression.antecedent)
         )

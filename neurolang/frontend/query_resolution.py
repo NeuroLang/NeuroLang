@@ -4,15 +4,16 @@ from uuid import uuid1
 import numpy as np
 
 from .. import datalog
-from ..datalog import aggregation
 from .. import expressions as exp
+from ..datalog import aggregation
 from ..region_solver import Region
 from ..regions import (ExplicitVBR, ImplicitVBR, SphericalVolume,
                        take_principal_regions)
 from ..type_system import Unknown, is_leq_informative
 from .neurosynth_utils import NeuroSynthHandler
-from .query_resolution_expressions import (All, Exists, Expression, Fact,
-                                           Implication, Query, Symbol)
+from .query_resolution_expressions import (
+    All, Exists, Expression, Query, Symbol,
+    TranslateExpressionToFrontEndExpression)
 
 __all__ = ['QueryBuilderFirstOrder', 'QueryBuilderDatalog']
 
@@ -28,6 +29,8 @@ class QueryBuilderBase(object):
 
         for k, v in self.solver.included_functions.items():
             self.symbol_table[exp.Symbol[v.type](k)] = v
+
+        self._symbols_proxy = QuerySymbolsProxy(self)
 
     def get_symbol(self, symbol_name):
         if isinstance(symbol_name, Expression):
@@ -54,7 +57,11 @@ class QueryBuilderBase(object):
 
     @property
     def symbols(self):
-        return QuerySymbolsProxy(self)
+        return self._symbols_proxy
+
+    @property
+    def environment(self):
+        return self._symbols_proxy
 
     def new_symbol(self, type_=Unknown, name=None):
         if isinstance(type_, (tuple, list)):
@@ -76,8 +83,7 @@ class QueryBuilderBase(object):
         ]
 
     def add_symbol(self, value, name=None):
-        if name is None:
-            name = str(uuid1())
+        name = self._obtain_symbol_name(name, value)
 
         if isinstance(value, Expression):
             value = value.expression
@@ -90,6 +96,24 @@ class QueryBuilderBase(object):
         self.symbol_table[symbol] = value
 
         return Symbol(self, name)
+
+    def _obtain_symbol_name(self, name, value):
+        if name is not None:
+            return name
+
+        if not hasattr(value, '__qualname__'):
+            return str(uuid1())
+
+        if '.' in value.__qualname__:
+            ix = value.__qualname__.rindex('.')
+            name = value.__qualname__[ix + 1:]
+        else:
+            name = value.__qualname__
+
+        return name
+
+    def del_symbol(self, name):
+        del self.symbol_table[name]
 
     def add_tuple_set(self, iterable, type_=Unknown, name=None):
         if not isinstance(type_, tuple) or len(type_) == 1:
@@ -307,7 +331,16 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             solver, logic_programming=True
         )
         self.chase_class = chase_class
-        self.current_program = []
+        self.frontend_translator = \
+            TranslateExpressionToFrontEndExpression(self)
+
+    @property
+    def current_program(self):
+        cp = []
+        for rules in self.solver.intensional_database().values():
+            for rule in rules.expressions:
+                cp.append(self.frontend_translator.walk(rule))
+        return cp
 
     def assign(self, consequent, antecedent):
         if (
@@ -315,12 +348,9 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             antecedent.expression.value is True
         ):
             expression = datalog.Fact(consequent.expression)
-            self.current_program.append(
-                Fact(self, expression, consequent)
-            )
         else:
-            self._assign_intensional_rule(consequent, antecedent)
-        self.solver.walk(self.current_program[-1].expression)
+            expression = self._assign_intensional_rule(consequent, antecedent)
+        self.solver.walk(expression)
 
     def _assign_intensional_rule(self, consequent, antecedent):
         new_args = tuple()
@@ -345,9 +375,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             consequent_expression,
             antecedent.expression
         )
-        self.current_program.append(
-            Implication(self, expression, consequent, antecedent)
-        )
+        return expression
 
     def query(self, head, predicate):
         self.solver.symbol_table = self.symbol_table.create_scope()
@@ -358,7 +386,6 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         solution = self.chase_class(self.solver).build_chase_solution()
         solution_set = solution.get(functor.name, exp.Constant(set()))
         out_symbol = exp.Symbol[solution_set.type](functor_orig.name)
-        self.current_program = self.current_program[:-1]
         self.solver.symbol_table = self.symbol_table.enclosing_scope
         self.add_tuple_set(
             solution_set.value, name=functor_orig.name
@@ -367,13 +394,14 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
     def reset_program(self):
         self.symbol_table.clear()
-        self.current_program = []
 
     def add_tuple_set(self, iterable, type_=Unknown, name=None):
         if name is None:
             name = str(uuid1())
 
-        symbol = exp.Symbol[type_](name)
+        if isinstance(type_, tuple):
+            type_ = Tuple[type_]
+        symbol = exp.Symbol[AbstractSet[type_]](name)
         self.solver.add_extensional_predicate_from_tuples(
             symbol, iterable, type_=type_
         )
@@ -383,13 +411,36 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
 class QuerySymbolsProxy(object):
     def __init__(self, query_builder):
+        self._dynamic_mode = False
         self._query_builder = query_builder
 
-    def __getattr__(self, attr):
+    def __getattr__(self, name):
+        if name in self.__getattribute__('_query_builder'):
+            return self._query_builder.get_symbol(name)
+
         try:
-            return self._query_builder.get_symbol(attr)
-        except ValueError:
-            raise AttributeError()
+            return super().__getattribute__(name)
+        except AttributeError:
+            if self._dynamic_mode:
+                return self._query_builder.new_symbol(
+                    Unknown, name=name
+                )
+            else:
+                raise
+
+    def __setattr__(self, name, value):
+        if name == '_dynamic_mode':
+            return super().__setattr__(name, value)
+        elif self._dynamic_mode:
+            return self._query_builder.add_symbol(value, name=name)
+        else:
+            return super().__setattr__(name, value)
+
+    def __delattr__(self, name):
+        if self._dynamic_mode and name:
+            self._query_builder.del_symbol(name)
+        else:
+            super().__delattr__(name)
 
     def __getitem__(self, attr):
         return self._query_builder.get_symbol(attr)
@@ -418,3 +469,12 @@ class QuerySymbolsProxy(object):
         ]
 
         return f'QuerySymbolsProxy with symbols {init}'
+
+    def __enter__(self):
+        self._old_dynamic_mode = False
+        self._dynamic_mode = True
+        return self
+
+    def __exit__(self, type_, value, traceback):
+        self._dynamic_mode = self._old_dynamic_mode
+        del self._old_dynamic_mode
