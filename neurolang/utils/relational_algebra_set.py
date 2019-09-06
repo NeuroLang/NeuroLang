@@ -1,5 +1,6 @@
 from itertools import product
 from collections.abc import MutableSet, Set
+from typing import Iterable
 
 import pandas as pd
 
@@ -183,7 +184,9 @@ class RelationalAlgebraFrozenSet(Set):
     def groupby(self, columns):
         if self._container is None:
             raise StopIteration
-        for g_id, group in self._container.groupby(columns):
+        if not isinstance(columns, Iterable):
+            columns = [columns]
+        for g_id, group in self._container.groupby(by=list(columns)):
             group_set = type(self)()
             group_set._container = group
             yield g_id, group_set
