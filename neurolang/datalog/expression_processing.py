@@ -109,6 +109,14 @@ def is_conjunctive_expression_with_nested_predicates(expression):
 
 
 class ExtractDatalogPredicates(PatternWalker):
+    @add_match(Symbol)
+    def symbol(self, expression):
+        return OrderedSet()
+
+    @add_match(Constant)
+    def constant(self, expression):
+        return OrderedSet()
+
     @add_match(FunctionApplication(Constant(and_), ...))
     def conjunction(self, expression):
         res = OrderedSet()
@@ -181,6 +189,21 @@ def stratify(expression_block, datalog_instance):
     seen |= set(k for k in datalog_instance.builtins())
     to_process = expression_block.expressions
     stratifiable = True
+
+    new_to_process = []
+    stratum = []
+    true_ = Constant(True)
+    for r in to_process:
+        if r.antecedent == true_:
+            stratum.append(r)
+            seen.add(r.consequent.functor)
+        else:
+            new_to_process.append(r)
+
+    if len(stratum) > 0:
+        strata.append(stratum)
+    to_process = new_to_process
+
     while len(to_process) > 0:
         stratum = []
         new_to_process = []
@@ -193,7 +216,8 @@ def stratify(expression_block, datalog_instance):
                 new_to_process.append(r)
         seen |= new_seen
         to_process = new_to_process
-        strata.append(stratum)
+        if len(stratum) > 0:
+            strata.append(stratum)
         if len(new_seen) == 0:
             strata.append(to_process)
             stratifiable = False
