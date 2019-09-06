@@ -206,4 +206,3 @@ def test_reachable():
     reached = reachable_code(code.expressions[-2], datalog)
 
     assert set(reached.expressions) == set(code.expressions[:-1])
-
