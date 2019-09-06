@@ -2,14 +2,14 @@ from typing import AbstractSet
 
 import pytest
 
-from .. import expression_walker, solver_datalog_extensional_db
-from ..datalog import (Fact, Implication, extract_datalog_free_variables,
-                       is_conjunctive_expression,
-                       is_conjunctive_expression_with_nested_predicates)
-from ..expressions import (Constant, ExistentialPredicate, ExpressionBlock,
-                           FunctionApplication, Lambda, NeuroLangException,
-                           Query, Symbol, is_leq_informative)
-from ..solver_datalog_naive import NULL, SolverNonRecursiveDatalogNaive
+from ... import expression_walker, solver_datalog_extensional_db
+from ...expressions import (Constant, ExistentialPredicate, ExpressionBlock,
+                            FunctionApplication, Lambda, NeuroLangException,
+                            Query, Symbol, is_leq_informative)
+from ...solver_datalog_naive import NULL, SolverNonRecursiveDatalogNaive
+from .. import (Fact, Implication, extract_datalog_free_variables,
+                is_conjunctive_expression,
+                is_conjunctive_expression_with_nested_predicates)
 
 S_ = Symbol
 C_ = Constant

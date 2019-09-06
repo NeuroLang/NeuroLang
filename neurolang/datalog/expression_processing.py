@@ -4,6 +4,7 @@ Datalog programs.
 """
 
 from operator import and_, invert, or_, xor
+from typing import Iterable
 
 from ..expression_walker import PatternWalker, add_match, expression_iterator
 from ..expressions import (Constant, ExpressionBlock, FunctionApplication,
@@ -202,7 +203,7 @@ def stratify(expression_block, datalog_instance):
 
 
 def reachable_code(query, datalog):
-    if not hasattr(query, '__iter__'):
+    if not isinstance(query, Iterable):
         query = [query]
 
     reachable_code = []
