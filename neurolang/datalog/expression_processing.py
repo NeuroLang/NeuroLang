@@ -190,6 +190,29 @@ def stratify(expression_block, datalog_instance):
     to_process = expression_block.expressions
     stratifiable = True
 
+    stratum, new_to_process = stratify_obtain_facts_stratum(to_process, seen)
+
+    if len(stratum) > 0:
+        strata.append(stratum)
+    to_process = new_to_process
+
+    while len(to_process) > 0:
+        new_seen, new_to_process, stratum = stratify_obtain_new_stratum(
+            to_process, seen
+        )
+        to_process = new_to_process
+        if len(new_seen) > 0:
+            strata.append(stratum)
+            seen |= new_seen
+        else:
+            strata.append(to_process)
+            stratifiable = False
+            break
+
+    return strata, stratifiable
+
+
+def stratify_obtain_facts_stratum(to_process, seen):
     new_to_process = []
     stratum = []
     true_ = Constant(True)
@@ -199,31 +222,20 @@ def stratify(expression_block, datalog_instance):
             seen.add(r.consequent.functor)
         else:
             new_to_process.append(r)
+    return stratum, new_to_process
 
-    if len(stratum) > 0:
-        strata.append(stratum)
-    to_process = new_to_process
 
-    while len(to_process) > 0:
-        stratum = []
-        new_to_process = []
-        new_seen = set()
-        for r in to_process:
-            if all_body_preds_in_set(r, seen):
-                stratum.append(r)
-                new_seen.add(r.consequent.functor)
-            else:
-                new_to_process.append(r)
-        seen |= new_seen
-        to_process = new_to_process
-        if len(stratum) > 0:
-            strata.append(stratum)
-        if len(new_seen) == 0:
-            strata.append(to_process)
-            stratifiable = False
-            break
-
-    return strata, stratifiable
+def stratify_obtain_new_stratum(to_process, seen):
+    stratum = []
+    new_to_process = []
+    new_seen = set()
+    for r in to_process:
+        if all_body_preds_in_set(r, seen):
+            stratum.append(r)
+            new_seen.add(r.consequent.functor)
+        else:
+            new_to_process.append(r)
+    return new_seen, new_to_process, stratum
 
 
 def reachable_code(query, datalog):
