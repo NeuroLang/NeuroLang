@@ -6,7 +6,7 @@ Magic Sets [1] rewriting implementation for Datalog.
 
 from ..expressions import Constant, ExpressionBlock, Symbol
 from . import Implication, extract_datalog_predicates
-from .expression_processing import reachable_code
+from . import expression_processing
 
 
 class SymbolAdorned(Symbol):
@@ -183,13 +183,11 @@ def magic_predicate(predicate, i=None):
 
 def reachable_adorned_code(query, datalog):
     adorned_code = adorn_code(query, datalog)
-    reachable_code = []
     adorned_datalog = type(datalog)()
     adorned_datalog.walk(adorned_code)
-    adorned_idb = adorned_datalog.intensional_database()
     # assume that the query rule is the first
     adorned_query = adorned_code.expressions[0]
-    return reachable_code(adorned_query, adorned_datalog)
+    return expression_processing.reachable_code(adorned_query, adorned_datalog)
 
 
 def adorn_code(query, datalog):
