@@ -308,8 +308,9 @@ class ChaseSemiNaive(ChaseGeneral):
         continue_chase = len(instance_update) > 0
         while continue_chase:
             instance = self.merge_instances(instance, instance_update)
+            continue_chase = False
             for rule in self.rules:
-                continue_chase = self.per_rule_update(
+                continue_chase, instance_update = self.per_rule_update(
                     rule, instance, instance_update
                 )
 
@@ -327,7 +328,7 @@ class ChaseSemiNaive(ChaseGeneral):
             )
         else:
             continue_chase = False
-        return continue_chase
+        return continue_chase, instance_update
 
     def check_constraints(self, instance_update):
         warn('Should implement the check for linear program here')
