@@ -2,8 +2,8 @@ from collections import namedtuple
 from itertools import chain, tee
 from operator import eq
 from typing import AbstractSet
+from warnings import warn
 
-from ..utils import OrderedSet
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..relational_algebra import (Column, Product, Projection,
                                   RelationalAlgebraOptimiser,
@@ -11,14 +11,17 @@ from ..relational_algebra import (Column, Product, Projection,
 from ..unification import (apply_substitution, apply_substitution_arguments,
                            compose_substitutions,
                            most_general_unifier_arguments)
-from .expression_processing import (
-                                    extract_datalog_free_variables,
+from ..utils import OrderedSet
+from .expression_processing import (extract_datalog_free_variables,
                                     extract_datalog_predicates)
 
 ChaseNode = namedtuple('ChaseNode', 'instance children')
 
 
 class ChaseGeneral():
+    """Chase implementation using the naive resolution algorithm.
+
+    """
     def __init__(self, datalog_program, rules=None):
         self.datalog_program = datalog_program
         self._set_rules(rules)
@@ -216,13 +219,16 @@ class ChaseGeneral():
         if restriction_instance is None:
             restriction_instance = dict()
 
-        new_tuples = self.datalog_program.new_set(
-            Constant(
+        tuples = [
+            tuple(
+                a.value for a in
                 apply_substitution_arguments(
                     rule.consequent.args, substitution
                 )
-            ) for substitution in substitutions
-        )
+            )
+            for substitution in substitutions
+        ]
+        new_tuples = self.datalog_program.new_set(tuples)
 
         return self.compute_instance_update(
             rule, new_tuples, instance, restriction_instance
@@ -289,6 +295,35 @@ class ChaseGeneral():
             return new_node
         else:
             return None
+
+
+class ChaseSemiNaive(ChaseGeneral):
+    """Chase implementation using the semi-naive algorithm.
+    This algorithm will not work if there are non-linear rules.
+       """
+    def build_chase_solution(self):
+        instance = dict()
+        instance_update = self.datalog_program.extensional_database()
+        self.check_constraints(instance_update)
+        continue_chase = len(instance_update) > 0
+        while continue_chase:
+            instance = self.merge_instances(instance, instance_update)
+            continue_chase = False
+            for rule in self.rules:
+                new_instance_update = self.chase_step(
+                    instance, rule, restriction_instance=instance_update
+                )
+                if len(new_instance_update) > 0:
+                    continue_chase = True
+                    instance_update = self.merge_instances(
+                        instance_update,
+                        new_instance_update
+                    )
+
+        return instance
+
+    def check_constraints(self, instance_update):
+        warn('Should implement the check for linear program here')
 
 
 class ChaseRelationalAlgebraMixin:
@@ -420,5 +455,5 @@ class ChaseMGUMixin:
         return new_substitutions
 
 
-class Chase(ChaseGeneral, ChaseRelationalAlgebraMixin):
+class Chase(ChaseSemiNaive, ChaseRelationalAlgebraMixin):
     pass

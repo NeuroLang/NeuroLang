@@ -134,3 +134,97 @@ def extract_datalog_predicates(expression):
     """
     edp = ExtractDatalogPredicates()
     return edp.walk(expression)
+
+
+def all_body_preds_in_set(implication, predicate_set):
+    """Checks wether all predicates in the antecedent
+    are in the functor_set or are the consequent functor.
+
+    Arguments:
+        implication {Implication} -- rule to check
+        predicate_set {set or functors} -- functors to check inclusion
+        of the consequent
+
+    Returns:
+        bool -- true is all predicates in the antecedent are
+        in the prediacte_set
+    """
+    preds = (
+        e.functor for e in
+        extract_datalog_predicates(implication.antecedent)
+    )
+    predicate_set = predicate_set | {implication.consequent.functor}
+    return all(
+        not isinstance(e, Symbol) or e in predicate_set
+        for e in preds
+    )
+
+
+def stratify(expression_block, datalog_instance):
+    """Given an expression block containing `Implication` instances
+     and a datalog instance, return the stratification of the expressions
+     in the block as a list of lists..
+
+    Arguments:
+        expression_block {ExpressionBlock} -- list of `Implications`
+        to be stratifie
+        datalog_instance {DatalogProgram} -- datalog instance.
+
+    Returns:
+        list of lists of `Implications`, boolean -- strata and wether
+        it was stratisfiable. If it was not all non-stratified predicates
+        will be in the last strata.
+    """
+    strata = []
+    seen = set(k for k in datalog_instance.extensional_database().keys())
+    seen |= set(k for k in datalog_instance.builtins())
+    to_process = expression_block.expressions
+    stratifiable = True
+    while len(to_process) > 0:
+        stratum = []
+        new_to_process = []
+        new_seen = set()
+        for r in to_process:
+            if all_body_preds_in_set(r, seen):
+                stratum.append(r)
+                new_seen.add(r.consequent.functor)
+            else:
+                new_to_process.append(r)
+        seen |= new_seen
+        to_process = new_to_process
+        strata.append(stratum)
+        if len(new_seen) == 0:
+            strata.append(to_process)
+            stratifiable = False
+            break
+
+    return strata, stratifiable
+
+
+def reachable_code(query, datalog):
+    if not hasattr(query, '__iter__'):
+        query = [query]
+
+    reachable_code = []
+    idb = datalog.intensional_database()
+    to_reach = [
+        q.consequent.functor
+        for q in query
+    ]
+    reached = set()
+    seen_rules = set()
+    while to_reach:
+        p = to_reach.pop()
+        reached.add(p)
+        rules = idb[p]
+        for rule in rules.expressions:
+            if rule in seen_rules:
+                continue
+            seen_rules.add(rule)
+            reachable_code.append(rule)
+            for predicate in extract_datalog_predicates(rule.antecedent):
+                functor = predicate.functor
+                if functor not in reached and functor in idb:
+                    to_reach.append(functor)
+
+    return ExpressionBlock(reachable_code)

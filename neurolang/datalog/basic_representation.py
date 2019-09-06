@@ -9,8 +9,7 @@ sets.
 from itertools import tee
 from typing import AbstractSet, Any, Callable, Tuple
 
-from ..expression_walker import (PatternWalker, ReplaceExpressionsByValues,
-                                 add_match)
+from ..expression_walker import (PatternWalker, add_match)
 from ..expressions import (Constant, Expression, ExpressionBlock,
                            FunctionApplication, NeuroLangException, Symbol,
                            is_leq_informative)
@@ -33,13 +32,18 @@ class WrappedExpressionIterable:
     def __init__(self, iterable=None):
         self.__row_type = None
         if iterable is not None:
-            it1, it2 = tee(iterable)
-            try:
-                if isinstance(next(it1), Constant[Tuple]):
-                    rebv = ReplaceExpressionsByValues({})
-                    iterable = list(rebv.walk(e) for e in it2)
-            except StopIteration:
-                pass
+            if isinstance(iterable, type(self)):
+                iterable = super().__iter__()
+            else:
+                it1, it2 = tee(iterable)
+                try:
+                    if isinstance(next(it1), Constant[Tuple]):
+                        iterable = list(
+                            tuple(a.value for a in e.value)
+                            for e in it2
+                        )
+                except StopIteration:
+                    pass
 
         super().__init__(iterable)
 
