@@ -135,20 +135,7 @@ def create_magic_rules_create_rules(new_antecedent, predicates, idb, i):
 def create_modified_rules(adorned_code, edb):
     modified_rules = []
     for i, rule in enumerate(adorned_code.expressions):
-        new_antecedent = []
-        for predicate in extract_datalog_predicates(rule.antecedent):
-            functor = predicate.functor
-            if functor.name in edb:
-                new_antecedent.append(
-                    Symbol(functor.name)(*predicate.args)
-                )
-            else:
-                m_p = magic_predicate(predicate, i)
-                update = [m_p, predicate]
-                if functor == rule.consequent.functor:
-                    new_antecedent = update + new_antecedent
-                else:
-                    new_antecedent += update
+        new_antecedent = obtain_new_antecedent(rule, edb, i)
 
         if len(new_antecedent) > 0:
             new_antecedent_ = new_antecedent[0]
@@ -160,6 +147,24 @@ def create_modified_rules(adorned_code, edb):
             ))
 
     return modified_rules
+
+
+def obtain_new_antecedent(rule, edb, rule_number):
+    new_antecedent = []
+    for predicate in extract_datalog_predicates(rule.antecedent):
+        functor = predicate.functor
+        if functor.name in edb:
+            new_antecedent.append(
+                Symbol(functor.name)(*predicate.args)
+            )
+        else:
+            m_p = magic_predicate(predicate, rule_number)
+            update = [m_p, predicate]
+            if functor == rule.consequent.functor:
+                new_antecedent = update + new_antecedent
+            else:
+                new_antecedent += update
+    return new_antecedent
 
 
 def magic_predicate(predicate, i=None):

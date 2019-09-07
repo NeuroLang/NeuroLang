@@ -60,21 +60,26 @@ def expression_iterator(expression, include_level=False, dfs=True):
             children = [(name, value, current_level)
                         for name, value in children]
 
-        if (
-            dfs and not (
-                isinstance(expression, Constant) and
-                is_leq_informative(expression.type, typing.AbstractSet)
-            )
-        ):
-            try:
-                children = reversed(children)
-            except TypeError:
-                children = list(children)
-                children.reverse()
+        children = fix_children_order(dfs, expression, children)
 
         extend(children)
 
         yield current_element
+
+
+def fix_children_order(dfs, expression, children):
+    if (
+        dfs and not (
+            isinstance(expression, Constant) and
+            is_leq_informative(expression.type, typing.AbstractSet)
+        )
+    ):
+        try:
+            children = reversed(children)
+        except TypeError:
+            children = list(children)
+            children.reverse()
+    return children
 
 
 def expression_iterator_constant(current_element):
