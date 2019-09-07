@@ -1,7 +1,7 @@
 from ... import expression_walker, expressions
 from .. import Implication, Fact, DatalogProgram
 from .. import magic_sets
-from ..chase import ChaseNaive, ChaseRelationalAlgebraMixin
+from ..chase import Chase
 
 
 C_ = expressions.Constant
@@ -15,10 +15,6 @@ class Datalog(
     DatalogProgram,
     expression_walker.ExpressionBasicEvaluator
 ):
-    pass
-
-
-class Chase(ChaseNaive, ChaseRelationalAlgebraMixin):
     pass
 
 

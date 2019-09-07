@@ -2,7 +2,6 @@ from collections import namedtuple
 from itertools import chain, tee
 from operator import eq
 from typing import AbstractSet
-from warnings import warn
 
 from ..exceptions import NeuroLangException
 from ..expressions import Constant, FunctionApplication, Symbol
@@ -41,7 +40,6 @@ class ChaseGeneral():
                 self.rules += expression_block.expressions
         else:
             self.rules += rules.expressions
-
 
     def check_constraints(self, instance_update):
         pass
@@ -319,11 +317,14 @@ class ChaseSemiNaive(ChaseGeneral):
         continue_chase = len(instance_update) > 0
         while continue_chase:
             instance = self.merge_instances(instance, instance_update)
+            instance_update = dict()
             continue_chase = False
             for rule in self.rules:
-                continue_chase, instance_update = self.per_rule_update(
+                instance_update = self.per_rule_update(
                     rule, instance, instance_update
                 )
+                if len(instance_update) > 0:
+                    continue_chase = True
 
         return instance
 
@@ -332,14 +333,11 @@ class ChaseSemiNaive(ChaseGeneral):
             instance, rule, restriction_instance=instance_update
         )
         if len(new_instance_update) > 0:
-            continue_chase = True
             instance_update = self.merge_instances(
                 instance_update,
                 new_instance_update
             )
-        else:
-            continue_chase = False
-        return continue_chase, instance_update
+        return instance_update
 
     def check_constraints(self, instance_update):
         for rule in self.rules:

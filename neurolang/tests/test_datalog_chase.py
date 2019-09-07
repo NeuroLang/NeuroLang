@@ -257,10 +257,9 @@ def test_non_recursive_predicate_chase():
     z = S_('z')
 
     datalog_program = Eb_((
-        F_(Q(C_(1),
-                C_(2))), F_(Q(C_(2),
-                                 C_(3))), Imp_(T(x, y),
-                                               Q(x, z) & Q(z, y))
+        F_(Q(C_(1), C_(2))),
+        F_(Q(C_(2), C_(3))),
+        Imp_(T(x, y), Q(x, z) & Q(z, y))
     ))
 
     dl = Datalog()
@@ -422,8 +421,8 @@ def test_recursive_predicate_chase_solution():
     }
 
     assert solution_instance == final_instance
-   
-   
+
+
 def test_another_recursive_chase():
     x = S_('X')
     y = S_('Y')
@@ -458,4 +457,3 @@ def test_another_recursive_chase():
 
     solution = Chase(dl).build_chase_solution()
     assert solution['q'].value == {C_((e,)) for e in (b, c, d)}
-
