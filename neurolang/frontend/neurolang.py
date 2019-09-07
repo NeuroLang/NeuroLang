@@ -36,18 +36,6 @@ __all__ = [
 ]
 
 
-# import numpy as np
-# from .due import due, Doi
-
-# __all__ = []
-
-
-# due.cite(Doi("10.1167/13.9.30"),
-#         description="Template project for small scientific Python projects",
-#         tags=["reference-implementation"],
-#         path='neurolang')
-
-
 grammar_EBNF = r'''
     @@whitespace :: /[\s\t\n\r\\ ]/
 

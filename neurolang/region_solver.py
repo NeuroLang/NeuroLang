@@ -32,13 +32,13 @@ class RegionSolver(PatternWalker[Region]):
         )
 
         def build_function(relation, refine_overlapping=False):
-            def f(self, x: Region, y: Region) -> bool:
+            def fun(self, x: Region, y: Region) -> bool:
                 return bool(cardinal_relation(
                     x, y, relation,
                     refine_overlapping=refine_overlapping,
                     stop_at=max_tree_depth_level
                 ))
-            return f
+            return fun
 
         def anatomical_direction_function(relation, refine_overlapping=False):
 
