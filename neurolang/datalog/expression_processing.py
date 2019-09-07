@@ -230,7 +230,7 @@ def stratify(expression_block, datalog_instance):
 
     datalog_instance : DatalogProgram
         Datalog instance containing the EDB and IDB databases
-        
+
 
     Returns
     -------
