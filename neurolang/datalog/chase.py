@@ -82,7 +82,7 @@ class ChaseGeneral():
         for predicate, _ in builtin_predicates_:
             args_to_project |= self.extract_variable_arguments(predicate)
         new_args_to_project = OrderedSet()
-        for i, a in enumerate(args_to_project):
+        for a in args_to_project:
             new_args_to_project.add(a)
         args_to_project = new_args_to_project
         return args_to_project

@@ -87,7 +87,7 @@ binary_operations = (
 
 def op_bind(op):
     @wraps(op)
-    def f(self, *args):
+    def fun(self, *args):
         new_args = tuple((
             arg.expression if isinstance(arg, Expression)
             else nl.Constant(arg)
@@ -103,12 +103,12 @@ def op_bind(op):
             (self,) + args, infix=len(args) > 0
         )
 
-    return f
+    return fun
 
 
 def rop_bind(op):
     @wraps(op)
-    def f(self, value):
+    def fun(self, value):
         raise NotImplementedError()
         original_value = value
         if isinstance(value, Expression):
@@ -121,7 +121,7 @@ def rop_bind(op):
             op, (self, original_value), infix=True
         )
 
-    return f
+    return fun
 
 
 force_linking = [op.eq, op.ne, op.gt, op.lt, op.ge, op.le]
