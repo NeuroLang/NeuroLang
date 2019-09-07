@@ -9,12 +9,11 @@ sets.
 from itertools import tee
 from typing import AbstractSet, Any, Callable, Tuple
 
-from ..expression_walker import (PatternWalker, ReplaceExpressionsByValues,
-                                 add_match)
+from ..expression_walker import (PatternWalker, add_match)
 from ..expressions import (Constant, Expression, ExpressionBlock,
                            FunctionApplication, NeuroLangException, Symbol,
                            is_leq_informative)
-from ..type_system import Unknown
+from ..type_system import Unknown, infer_type
 from ..utils import RelationalAlgebraSet
 from .expression_processing import (
     extract_datalog_free_variables, is_conjunctive_expression,
@@ -33,13 +32,18 @@ class WrappedExpressionIterable:
     def __init__(self, iterable=None):
         self.__row_type = None
         if iterable is not None:
-            it1, it2 = tee(iterable)
-            try:
-                if isinstance(next(it1), Constant[Tuple]):
-                    rebv = ReplaceExpressionsByValues({})
-                    iterable = list(rebv.walk(e) for e in it2)
-            except StopIteration:
-                pass
+            if isinstance(iterable, type(self)):
+                iterable = super().__iter__()
+            else:
+                it1, it2 = tee(iterable)
+                try:
+                    if isinstance(next(it1), Constant[Tuple]):
+                        iterable = list(
+                            tuple(a.value for a in e.value)
+                            for e in it2
+                        )
+                except StopIteration:
+                    pass
 
         super().__init__(iterable)
 
@@ -72,7 +76,7 @@ class WrappedExpressionIterable:
             return None
 
         if self.__row_type is None:
-            self.__row_type = Constant(next(super().__iter__())).type
+            self.__row_type = infer_type(next(super().__iter__()))
 
         return self.__row_type
 
@@ -267,12 +271,7 @@ class DatalogProgram(PatternWalker):
         self, symbol, iterable, type_=Unknown
     ):
         if type_ is Unknown:
-            iterable, iterable_ = tee(iter(iterable))
-            first = next(iterable_)
-            if isinstance(first, Expression):
-                type_ = first.type
-            else:
-                type_ = Constant(first).type
+            type_ = self.infer_iterable_type(iterable)
 
         constant = Constant[AbstractSet[type_]](
             self.new_set(list(iterable)),
@@ -281,3 +280,17 @@ class DatalogProgram(PatternWalker):
         )
         symbol = symbol.cast(constant.type)
         self.symbol_table[symbol] = constant
+
+    @staticmethod
+    def infer_iterable_type(iterable):
+        type_ = Unknown
+        try:
+            iterable_ = iter(iterable)
+            first = next(iterable_)
+            if isinstance(first, Expression):
+                type_ = first.type
+            else:
+                type_ = infer_type(first)
+        except StopIteration:
+            pass
+        return type_

@@ -32,8 +32,8 @@ class Datalog(
 def test_aggregation_parsing():
     dl = Datalog()
 
-    P = S_('P')
-    Q = S_('Q')
+    P = S_('P')  # noqa: N806
+    Q = S_('Q')  # noqa: N806
     x = S_('x')
     y = S_('y')
 
@@ -60,9 +60,9 @@ def test_aggregation_parsing():
 
 def test_aggregation_chase_no_grouping():
 
-    P = S_('P')
-    Q = S_('Q')
-    R = S_('R')
+    P = S_('P')  # noqa: N806
+    Q = S_('Q')  # noqa: N806
+    R = S_('R')  # noqa: N806
     x = S_('x')
     y = S_('y')
 
@@ -114,9 +114,9 @@ def test_aggregation_chase_no_grouping():
 def test_aggregation_chase_single_grouping():
     dl = Datalog()
 
-    P = S_('P')
-    Q = S_('Q')
-    R = S_('R')
+    P = S_('P')  # noqa: N806
+    Q = S_('Q')  # noqa: N806
+    R = S_('R')  # noqa: N806
     x = S_('x')
     y = S_('y')
 
