@@ -13,7 +13,7 @@ from ..expression_walker import (PatternWalker, add_match)
 from ..expressions import (Constant, Expression, ExpressionBlock,
                            FunctionApplication, NeuroLangException, Symbol,
                            is_leq_informative)
-from ..type_system import Unknown
+from ..type_system import Unknown, infer_type
 from ..utils import RelationalAlgebraSet
 from .expression_processing import (
     extract_datalog_free_variables, is_conjunctive_expression,
@@ -76,7 +76,7 @@ class WrappedExpressionIterable:
             return None
 
         if self.__row_type is None:
-            self.__row_type = Constant(next(super().__iter__())).type
+            self.__row_type = infer_type(next(super().__iter__()))
 
         return self.__row_type
 
@@ -271,15 +271,7 @@ class DatalogProgram(PatternWalker):
         self, symbol, iterable, type_=Unknown
     ):
         if type_ is Unknown:
-            try:
-                iterable, iterable_ = tee(iter(iterable))
-                first = next(iterable_)
-                if isinstance(first, Expression):
-                    type_ = first.type
-                else:
-                    type_ = Constant(first).type
-            except StopIteration:
-                pass
+            type_ = self.infer_iterable_type(iterable)
 
         constant = Constant[AbstractSet[type_]](
             self.new_set(list(iterable)),
@@ -288,3 +280,17 @@ class DatalogProgram(PatternWalker):
         )
         symbol = symbol.cast(constant.type)
         self.symbol_table[symbol] = constant
+
+    @staticmethod
+    def infer_iterable_type(iterable):
+        type_ = Unknown
+        try:
+            iterable_ = iter(iterable)
+            first = next(iterable_)
+            if isinstance(first, Expression):
+                type_ = first.type
+            else:
+                type_ = infer_type(first)
+        except StopIteration:
+            pass
+        return type_
