@@ -323,8 +323,7 @@ class ChaseSemiNaive(ChaseGeneral):
                 instance_update = self.per_rule_update(
                     rule, instance, instance_update
                 )
-                if len(instance_update) > 0:
-                    continue_chase = True
+                continue_chase |= len(instance_update) > 0
 
         return instance
 
