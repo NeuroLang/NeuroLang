@@ -271,12 +271,15 @@ class DatalogProgram(PatternWalker):
         self, symbol, iterable, type_=Unknown
     ):
         if type_ is Unknown:
-            iterable, iterable_ = tee(iter(iterable))
-            first = next(iterable_)
-            if isinstance(first, Expression):
-                type_ = first.type
-            else:
-                type_ = Constant(first).type
+            try:
+                iterable, iterable_ = tee(iter(iterable))
+                first = next(iterable_)
+                if isinstance(first, Expression):
+                    type_ = first.type
+                else:
+                    type_ = Constant(first).type
+            except StopIteration:
+                pass
 
         constant = Constant[AbstractSet[type_]](
             self.new_set(list(iterable)),

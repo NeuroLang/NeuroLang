@@ -66,7 +66,18 @@ class ExtractDatalogFreeVariablesWalker(PatternWalker):
 
 
 def extract_datalog_free_variables(expression):
-    '''extract variables from expression knowing that it's in Datalog format'''
+    """Extract variables from expression assuming it's in Datalog format.
+
+    Parameters
+    ----------
+    expression : Expression
+
+
+    Returns
+    -------
+        OrderedSet
+            set of all free variables in the expression.
+    """
     efvw = ExtractDatalogFreeVariablesWalker()
     return efvw.walk(expression)
 
@@ -137,26 +148,64 @@ class ExtractDatalogPredicates(PatternWalker):
 
 
 def extract_datalog_predicates(expression):
-    """
-    extract predicates from expression
+    """Extract predicates from expression
     knowing that it's in Datalog format
+
+    Parameters
+    ----------
+    expression : Expression
+        expression to extract predicates from
+
+
+    Returns
+    -------
+    OrderedSet
+        set of all predicates in the expression in lexicographical
+        order.
+
     """
     edp = ExtractDatalogPredicates()
     return edp.walk(expression)
+
+
+def is_linear_rule(rule):
+    """Check if a rule is linear
+
+    Parameters
+    ----------
+    rule : Implication
+        rule to analyse
+
+    Returns
+    -------
+    bool
+        True if the rule is linear
+
+    """
+    predicates = extract_datalog_predicates(rule.antecedent)
+    return sum(
+        int(predicate.functor == rule.consequent.functor)
+        for predicate in predicates
+    ) < 2
 
 
 def all_body_preds_in_set(implication, predicate_set):
     """Checks wether all predicates in the antecedent
     are in the functor_set or are the consequent functor.
 
-    Arguments:
-        implication {Implication} -- rule to check
-        predicate_set {set or functors} -- functors to check inclusion
-        of the consequent
+    Parameters
+    ----------
+    implication :
+        Implication
+    predicate_set :
+        set or functors of the consequent
 
-    Returns:
-        bool -- true is all predicates in the antecedent are
+    Returns
+    -------
+    bool
+        True is all predicates in the antecedent are
         in the prediacte_set
+
     """
     preds = (
         e.functor for e in
@@ -174,15 +223,22 @@ def stratify(expression_block, datalog_instance):
      and a datalog instance, return the stratification of the expressions
      in the block as a list of lists..
 
-    Arguments:
-        expression_block {ExpressionBlock} -- list of `Implications`
-        to be stratifie
-        datalog_instance {DatalogProgram} -- datalog instance.
+    Parameters
+    ----------
+    expression_block : ExpressionBlock
+        code block to be stratified.
 
-    Returns:
-        list of lists of `Implications`, boolean -- strata and wether
-        it was stratisfiable. If it was not all non-stratified predicates
-        will be in the last strata.
+    datalog_instance : DatalogProgram
+        Datalog instance containing the EDB and IDB databases
+        
+
+    Returns
+    -------
+        list of lists of `Implications`, boolean
+            Strata and wether it was stratisfiable.
+            If it was not all non-stratified predicates
+            will be in the last strata.
+
     """
     strata = []
     seen = set(k for k in datalog_instance.extensional_database().keys())
@@ -239,6 +295,20 @@ def stratify_obtain_new_stratum(to_process, seen):
 
 
 def reachable_code(query, datalog):
+    """Produces the code reachable by a query
+
+    Parameters
+    ----------
+    query : Implication
+        Rule to figure out the reachable program from
+    datalog : DatalogProgram
+        datalog instance containing the EDB and IDB.
+
+    Returns
+    -------
+    ExpressionBlock
+        Code needed to solve the query.
+    """
     if not isinstance(query, Iterable):
         query = [query]
 

@@ -10,7 +10,7 @@ from ..datalog.chase import Chase, ChaseNode
 C_ = expressions.Constant
 S_ = expressions.Symbol
 Imp_ = sdb.Implication
-Fact_ = sdb.Fact
+F_ = sdb.Fact
 Eb_ = expressions.ExpressionBlock
 
 
@@ -68,8 +68,8 @@ def test_python_builtin_equaltiy_chase_step():
     z = S_('z')
 
     datalog_program = Eb_((
-        Fact_(Q(C_(1), C_(2))),
-        Fact_(Q(C_(2), C_(3))),
+        F_(Q(C_(1), C_(2))),
+        F_(Q(C_(2), C_(3))),
         Imp_(S(y),
              Q(x, z) & eq(z + C_(1), y)),
         Imp_(S(y),
@@ -104,7 +104,7 @@ def test_python_builtin_chase_step():
     z = S_('z')
 
     datalog_program = Eb_((
-        Fact_(Q(C_(1), C_(2))), Fact_(Q(C_(2), C_(3))), Fact_(Q(C_(8), C_(6))),
+        F_(Q(C_(1), C_(2))), F_(Q(C_(2), C_(3))), F_(Q(C_(8), C_(6))),
         Imp_(T(x, y),
              Q(x, z) & Q(z, y)), Imp_(S(x, y),
                                       Q(x, y) & gt(x, y))
@@ -141,8 +141,8 @@ def test_python_nested_builtin_chase_step():
     y = S_('y')
 
     datalog_program = Eb_((
-        Fact_(Q(C_(8), C_(15))),
-        Fact_(Q(C_(8), C_(9))),
+        F_(Q(C_(8), C_(15))),
+        F_(Q(C_(8), C_(9))),
         Imp_(S(x, y),
              Q(x, y) & gt(x, y - C_(2))),
     ))
@@ -170,7 +170,7 @@ def test_non_recursive_predicate_chase_step():
     z = S_('z')
 
     datalog_program = Eb_((
-        Fact_(Q(C_(1), C_(2))), Fact_(Q(C_(2), C_(3))), Fact_(Q(C_(8), C_(6))),
+        F_(Q(C_(1), C_(2))), F_(Q(C_(2), C_(3))), F_(Q(C_(8), C_(6))),
         Imp_(T(x, y),
              Q(x, z) & Q(z, y)), Imp_(S(x, y),
                                       Q(x, y) & gt(x, y))
@@ -209,8 +209,8 @@ def test_python_multiple_builtins():
     z = S_('z')
 
     datalog_program = Eb_((
-        Fact_(Q(C_(1), C_(2))),
-        Fact_(Q(C_(2), C_(3))),
+        F_(Q(C_(1), C_(2))),
+        F_(Q(C_(2), C_(3))),
         Imp_(S(w),
              Q(x, z) & eq(z + C_(1), y) & eq(y, w)),
     ))
@@ -229,8 +229,8 @@ def test_python_multiple_builtins():
     assert instance_update == res
 
     datalog_program = Eb_((
-        Fact_(Q(C_(1), C_(2))),
-        Fact_(Q(C_(2), C_(3))),
+        F_(Q(C_(1), C_(2))),
+        F_(Q(C_(2), C_(3))),
         Imp_(S(w),
              Q(x, z) & eq(y, w) & eq(z + C_(1), y)),
     ))
@@ -257,8 +257,8 @@ def test_non_recursive_predicate_chase():
     z = S_('z')
 
     datalog_program = Eb_((
-        Fact_(Q(C_(1),
-                C_(2))), Fact_(Q(C_(2),
+        F_(Q(C_(1),
+                C_(2))), F_(Q(C_(2),
                                  C_(3))), Imp_(T(x, y),
                                                Q(x, z) & Q(z, y))
     ))
@@ -288,8 +288,8 @@ def test_recursive_predicate_chase_tree():
     z = S_('z')
 
     datalog_program = Eb_((
-        Fact_(Q(C_(1), C_(2))),
-        Fact_(Q(C_(2), C_(3))),
+        F_(Q(C_(1), C_(2))),
+        F_(Q(C_(2), C_(3))),
         Imp_(T(x, y), Q(x, y)),
         Imp_(T(x, y),
              Q(x, z) & T(z, y))
@@ -335,7 +335,7 @@ def test_nonrecursive_predicate_chase_solution(N=10):
     z = S_('z')
 
     datalog_program = Eb_(
-        tuple(Fact_(Q(C_(i), C_(i + 1)))
+        tuple(F_(Q(C_(i), C_(i + 1)))
               for i in range(N)) + (Imp_(T(x, y),
                                          Q(x, z) & Q(z, y)), )
     )
@@ -364,7 +364,7 @@ def test_nonrecursive_predicate_chase_solution_constant(N=10):
 
         datalog_program = Eb_(
             tuple(
-                Fact_(Q(C_(i), C_(i + 1)))
+                F_(Q(C_(i), C_(i + 1)))
                 for i in range(N)
             ) +
             (Imp_(T(y), Q(C_(1), z) & Q(z, y)),)
@@ -398,8 +398,8 @@ def test_recursive_predicate_chase_solution():
     z = S_('z')
 
     datalog_program = Eb_((
-        Fact_(Q(C_(1), C_(2))),
-        Fact_(Q(C_(2), C_(3))),
+        F_(Q(C_(1), C_(2))),
+        F_(Q(C_(2), C_(3))),
         Imp_(T(x, y), Q(x, y)),
         Imp_(T(x, y),
              Q(x, z) & T(z, y))
@@ -422,3 +422,40 @@ def test_recursive_predicate_chase_solution():
     }
 
     assert solution_instance == final_instance
+   
+   
+def test_another_recursive_chase():
+    x = S_('X')
+    y = S_('Y')
+    z = S_('Z')
+    anc = S_('anc')
+    par = S_('par')
+    q = S_('q')
+    a = C_('a')
+    b = C_('b')
+    c = C_('c')
+    d = C_('d')
+
+    edb = Eb_([
+        F_(par(a, b)),
+        F_(par(b, c)),
+        F_(par(c, d)),
+    ])
+
+    code = Eb_([
+        Imp_(q(x), anc(a, x)),
+        Imp_(anc(x, y), par(x, y)),
+        Imp_(anc(x, y), anc(x, z) & par(z, y)),
+    ])
+
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+
+    dl = Datalog()
+    dl.walk(code)
+    dl.walk(edb)
+
+    solution = Chase(dl).build_chase_solution()
+    assert solution['q'].value == {C_((e,)) for e in (b, c, d)}
+

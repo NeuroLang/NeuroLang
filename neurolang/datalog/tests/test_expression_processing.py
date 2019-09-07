@@ -8,7 +8,7 @@ from ..expression_processing import (
     extract_datalog_free_variables, is_conjunctive_expression,
     extract_datalog_predicates,
     is_conjunctive_expression_with_nested_predicates,
-    stratify, reachable_code
+    stratify, reachable_code, is_linear_rule
     )
 
 S_ = Symbol
@@ -128,6 +128,20 @@ def test_extract_datalog_predicates():
 
     expression = B_([Q(x), Q(y) & R(y)])
     assert extract_datalog_predicates(expression) == {Q(x), Q(y), R(y)}
+
+
+def test_is_linear_rule():
+    Q = S_('Q')  # noqa: N806
+    R = S_('R')  # noqa: N806
+    x = S_('x')
+    y = S_('y')
+
+    assert is_linear_rule(T_(Q(C_(1))))
+    assert is_linear_rule(T_(Q(C_(x))))
+    assert is_linear_rule(Imp_(Q(x), R(x, y)))
+    assert is_linear_rule(Imp_(Q(x), Q(x)))
+    assert is_linear_rule(Imp_(Q(x), R(x, y) & Q(x)))
+    assert not is_linear_rule(Imp_(Q(x), R(x, y) & Q(x) & Q(y)))
 
 
 class Datalog(
