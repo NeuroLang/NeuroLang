@@ -2,14 +2,13 @@ from typing import AbstractSet
 
 import pytest
 
-from .. import expression_walker, solver_datalog_extensional_db
-from ..datalog import (Fact, Implication, extract_datalog_free_variables,
-                       is_conjunctive_expression,
-                       is_conjunctive_expression_with_nested_predicates)
-from ..expressions import (Constant, ExistentialPredicate, ExpressionBlock,
-                           FunctionApplication, Lambda, NeuroLangException,
-                           Query, Symbol, is_leq_informative)
-from ..solver_datalog_naive import NULL, SolverNonRecursiveDatalogNaive
+from ... import expression_walker, solver_datalog_extensional_db
+from ...expressions import (Constant, ExistentialPredicate, ExpressionBlock,
+                            FunctionApplication, Lambda, NeuroLangException,
+                            Query, Symbol, is_leq_informative)
+from ...solver_datalog_naive import NULL, SolverNonRecursiveDatalogNaive
+from .. import Fact, Implication
+
 
 S_ = Symbol
 C_ = Constant
@@ -32,7 +31,7 @@ class Datalog(
 
 def test_null_constant_resolves_to_undefined():
     dl = Datalog()
-    P = S_('P')
+    P = S_('P')  # noqa: N806
     dl.walk(T_(P(C_('a'))))
 
     dl.walk(T_(P(C_('b'))))
@@ -45,7 +44,7 @@ def test_null_constant_resolves_to_undefined():
 def test_no_facts():
     dl = Datalog()
     x = S_('x')
-    Q = S_('Q')
+    Q = S_('Q')  # noqa: N806
 
     res = dl.walk(Query(x, Q(x)))
 
@@ -87,9 +86,9 @@ def test_atoms_variables():
     eq = S_('equals')
     x = S_('x')
     y = S_('y')
-    Q = S_('Q')
-    R = S_('R')
-    T = S_('T')
+    Q = S_('Q')  # noqa: N806
+    R = S_('R')  # noqa: N806
+    T = S_('T')  # noqa: N806
 
     f1 = Imp_(Q(x,), eq(x, x))
 
@@ -151,9 +150,9 @@ def test_atoms_variables():
 def test_facts_intensional():
     dl = Datalog()
 
-    Q = S_('Q')
-    R = S_('R')
-    T = S_('T')
+    Q = S_('Q')  # noqa: N806
+    R = S_('R')  # noqa: N806
+    T = S_('T')  # noqa: N806
     x = S_('x')
     y = S_('y')
     z = S_('z')
@@ -198,7 +197,7 @@ def test_query_single_element():
     a, b = C_('a'), C_('b')
 
     # predicates
-    Q = S_('Q')
+    Q = S_('Q')  # noqa: N806
 
     extensional = ExpressionBlock((
         T_(Q(a)),
@@ -219,10 +218,10 @@ def test_query_single_element():
 def test_query_tuple():
     dl = Datalog()
 
-    Q = S_('Q')
-    R = S_('R')
-    S = S_('S')
-    T = S_('T')
+    Q = S_('Q')  # noqa: N806
+    R = S_('R')  # noqa: N806
+    S = S_('S')  # noqa: N806
+    T = S_('T')  # noqa: N806
     x = S_('x')
     y = S_('y')
     z = S_('z')
@@ -264,10 +263,10 @@ def test_extensional_database():
 
     dl = Datalog()
 
-    Q = S_('Q')
-    R0 = S_('R0')
-    R = S_('R')
-    T = S_('T')
+    Q = S_('Q')  # noqa: N806
+    R0 = S_('R0')  # noqa: N806
+    R = S_('R')  # noqa: N806
+    T = S_('T')  # noqa: N806
     x = S_('x')
     y = S_('y')
     z = S_('z')
@@ -325,8 +324,8 @@ def test_extensional_database():
     raises=RecursionError
 )
 def test_intensional_recursive():
-    Q = S_('Q')
-    R = S_('R')
+    Q = S_('Q')  # noqa: N806
+    R = S_('R')  # noqa: N806
     x = S_('x')
     y = S_('y')
     z = S_('z')
@@ -356,47 +355,12 @@ def test_intensional_recursive():
     }
 
 
-def test_conjunctive_expression():
-    Q = S_('Q')
-    R = S_('R')
-    x = S_('x')
-    y = S_('y')
-
-    assert is_conjunctive_expression(
-        Q()
-    )
-
-    assert is_conjunctive_expression(
-        Q(x)
-    )
-
-    assert is_conjunctive_expression(
-        Q(x) & R(y, C_(1))
-    )
-
-    assert not is_conjunctive_expression(
-        R(x) | R(y)
-    )
-
-    assert not is_conjunctive_expression(
-        R(x) & R(y) | R(x)
-    )
-
-    assert not is_conjunctive_expression(
-        ~R(x)
-    )
-
-    assert not is_conjunctive_expression(
-        R(Q(x))
-    )
-
-
 def test_not_conjunctive():
 
     dl = Datalog()
 
-    Q = S_('Q')
-    R = S_('R')
+    Q = S_('Q')  # noqa: N806
+    R = S_('R')  # noqa: N806
     x = S_('x')
     y = S_('y')
 
@@ -413,61 +377,6 @@ def test_not_conjunctive():
         dl.walk(Imp_(Q(x, y), R(Q(x))))
 
 
-def test_conjunctive_expression_with_nested():
-    Q = S_('Q')
-    R = S_('R')
-    x = S_('x')
-    y = S_('y')
-
-    assert is_conjunctive_expression_with_nested_predicates(
-        Q()
-    )
-
-    assert is_conjunctive_expression_with_nested_predicates(
-        Q(x)
-    )
-
-    assert is_conjunctive_expression_with_nested_predicates(
-        Q(x) & R(y, C_(1))
-    )
-
-    assert is_conjunctive_expression_with_nested_predicates(
-        Q(x) & R(Q(y), C_(1))
-    )
-
-    assert not is_conjunctive_expression_with_nested_predicates(
-        R(x) | R(y)
-    )
-
-    assert not is_conjunctive_expression_with_nested_predicates(
-        R(x) & R(y) | R(x)
-    )
-
-    assert not is_conjunctive_expression_with_nested_predicates(
-        ~R(x)
-    )
-
-
-def test_extract_free_variables():
-    Q = S_('Q')
-    R = S_('R')
-    x = S_('x')
-    y = S_('y')
-
-    emptyset = set()
-    assert extract_datalog_free_variables(Q()) == emptyset
-    assert extract_datalog_free_variables(x) == {x}
-    assert extract_datalog_free_variables(Q(x, y)) == {x, y}
-    assert extract_datalog_free_variables(Q(x, C_(1))) == {x}
-    assert extract_datalog_free_variables(Q(x) & R(y)) == {x, y}
-    assert extract_datalog_free_variables(EP_(x, Q(x, y))) == {y}
-    assert extract_datalog_free_variables(Imp_(R(x), Q(x, y))) == {y}
-    assert extract_datalog_free_variables(Imp_(R(x), Q(y) & Q(x))) == {y}
-    assert extract_datalog_free_variables(Q(R(y))) == {y}
-    assert extract_datalog_free_variables(Q(x) | R(y)) == {x, y}
-    assert extract_datalog_free_variables(~(R(y))) == {y}
-
-
 def test_equality_operation():
     dl = Datalog()
 
@@ -479,7 +388,7 @@ def test_existential_predicate():
     solver = Datalog()
     a, b = C_('a'), C_('b')
     x = S_('x')
-    Q = S_('Q')
+    Q = S_('Q')  # noqa: N806
     extensional = ExpressionBlock((
         Fact(Q(a)),
         Fact(Q(b)),

@@ -1,17 +1,18 @@
-from .. import datalog, expression_walker, expressions
-from ..datalog import magic_sets
-from ..datalog.chase import Chase
+from ... import expression_walker, expressions
+from .. import Implication, Fact, DatalogProgram
+from .. import magic_sets
+from ..chase import Chase
 
 
 C_ = expressions.Constant
 S_ = expressions.Symbol
-Imp_ = datalog.Implication
-F_ = datalog.Fact
+Imp_ = Implication
+F_ = Fact
 Eb_ = expressions.ExpressionBlock
 
 
 class Datalog(
-    datalog.DatalogProgram,
+    DatalogProgram,
     expression_walker.ExpressionBasicEvaluator
 ):
     pass

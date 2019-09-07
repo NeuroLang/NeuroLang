@@ -3,7 +3,7 @@ from itertools import chain, tee
 from operator import eq
 from typing import AbstractSet
 
-from ..utils import OrderedSet
+from ..exceptions import NeuroLangException
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..relational_algebra import (Column, Product, Projection,
                                   RelationalAlgebraOptimiser,
@@ -11,14 +11,21 @@ from ..relational_algebra import (Column, Product, Projection,
 from ..unification import (apply_substitution, apply_substitution_arguments,
                            compose_substitutions,
                            most_general_unifier_arguments)
-from .expression_processing import (
-                                    extract_datalog_free_variables,
-                                    extract_datalog_predicates)
+from ..utils import OrderedSet
+from .expression_processing import (extract_datalog_free_variables,
+                                    extract_datalog_predicates, is_linear_rule)
 
 ChaseNode = namedtuple('ChaseNode', 'instance children')
 
 
+class NeuroLangNonLinearProgramException(NeuroLangException):
+    pass
+
+
 class ChaseGeneral():
+    """Chase implementation using the naive resolution algorithm.
+
+    """
     def __init__(self, datalog_program, rules=None):
         self.datalog_program = datalog_program
         self._set_rules(rules)
@@ -33,22 +40,6 @@ class ChaseGeneral():
                 self.rules += expression_block.expressions
         else:
             self.rules += rules.expressions
-
-    def build_chase_solution(self):
-        instance = dict()
-        instance_update = self.datalog_program.extensional_database()
-        self.check_constraints(instance_update)
-        while len(instance_update) > 0:
-            instance = self.merge_instances(instance, instance_update)
-            instance_update = self.merge_instances(
-                *(
-                    self.chase_step(
-                        instance, rule, restriction_instance=instance_update
-                    ) for rule in self.rules
-                )
-            )
-
-        return instance
 
     def check_constraints(self, instance_update):
         pass
@@ -216,13 +207,16 @@ class ChaseGeneral():
         if restriction_instance is None:
             restriction_instance = dict()
 
-        new_tuples = self.datalog_program.new_set(
-            Constant(
+        tuples = [
+            tuple(
+                a.value for a in
                 apply_substitution_arguments(
                     rule.consequent.args, substitution
                 )
-            ) for substitution in substitutions
-        )
+            )
+            for substitution in substitutions
+        ]
+        new_tuples = self.datalog_program.new_set(tuples)
 
         return self.compute_instance_update(
             rule, new_tuples, instance, restriction_instance
@@ -289,6 +283,68 @@ class ChaseGeneral():
             return new_node
         else:
             return None
+
+
+class ChaseNaive(ChaseGeneral):
+    """Chase implementation using the naive algorithm.
+    """
+
+    def build_chase_solution(self):
+        instance = dict()
+        instance_update = self.datalog_program.extensional_database()
+        self.check_constraints(instance_update)
+        while len(instance_update) > 0:
+            instance = self.merge_instances(instance, instance_update)
+            instance_update = self.merge_instances(
+                *(
+                    self.chase_step(
+                        instance, rule, restriction_instance=instance_update
+                    ) for rule in self.rules
+                )
+            )
+
+        return instance
+
+
+class ChaseSemiNaive(ChaseGeneral):
+    """Chase implementation using the semi-naive algorithm.
+    This algorithm will not work if there are non-linear rules.
+       """
+    def build_chase_solution(self):
+        instance = dict()
+        instance_update = self.datalog_program.extensional_database()
+        self.check_constraints(instance_update)
+        continue_chase = len(instance_update) > 0
+        while continue_chase:
+            instance = self.merge_instances(instance, instance_update)
+            instance_update = dict()
+            continue_chase = False
+            for rule in self.rules:
+                instance_update = self.per_rule_update(
+                    rule, instance, instance_update
+                )
+                continue_chase |= len(instance_update) > 0
+
+        return instance
+
+    def per_rule_update(self, rule, instance, instance_update):
+        new_instance_update = self.chase_step(
+            instance, rule, restriction_instance=instance_update
+        )
+        if len(new_instance_update) > 0:
+            instance_update = self.merge_instances(
+                instance_update,
+                new_instance_update
+            )
+        return instance_update
+
+    def check_constraints(self, instance_update):
+        for rule in self.rules:
+            if not is_linear_rule(rule):
+                raise NeuroLangNonLinearProgramException(
+                    f"Rule {rule} is non-linear. "
+                    "Use a different resolution algorithm"
+                )
 
 
 class ChaseRelationalAlgebraMixin:
@@ -420,5 +476,5 @@ class ChaseMGUMixin:
         return new_substitutions
 
 
-class Chase(ChaseGeneral, ChaseRelationalAlgebraMixin):
+class Chase(ChaseSemiNaive, ChaseRelationalAlgebraMixin):
     pass

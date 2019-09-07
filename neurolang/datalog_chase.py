@@ -2,7 +2,7 @@ from warnings import warn
 
 from .datalog.chase import (
     ChaseNode,
-    ChaseGeneral,
+    ChaseNaive,
     Chase,
     ChaseMGUMixin,
     ChaseRelationalAlgebraMixin
@@ -17,6 +17,6 @@ __all__ = [
 ]
 
 DatalogChase = Chase
-DatalogChaseGeneral = ChaseGeneral
+DatalogChaseGeneral = ChaseNaive
 DatalogChaseMGUMixin = ChaseMGUMixin
 DatalogChaseRelationalAlgebraMixin = ChaseRelationalAlgebraMixin

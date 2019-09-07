@@ -1,5 +1,6 @@
 from itertools import product
 from collections.abc import MutableSet, Set
+from typing import Iterable
 
 import pandas as pd
 
@@ -63,7 +64,7 @@ class RelationalAlgebraFrozenSet(Set):
             return len(self._container.columns)
 
     def projection(self, *columns):
-        if len(self) == 0:
+        if self._container is None:
             return type(self)()
         new_container = self._container[list(columns)]
         output = type(self)()
@@ -74,7 +75,7 @@ class RelationalAlgebraFrozenSet(Set):
         return output
 
     def selection(self, select_criteria):
-        if len(self) == 0:
+        if self._container is None:
             return type(self)()
         it = iter(select_criteria.items())
         col, value = next(it)
@@ -89,7 +90,7 @@ class RelationalAlgebraFrozenSet(Set):
         return output
 
     def selection_columns(self, select_criteria):
-        if len(self) == 0:
+        if self._container is None:
             return type(self)()
         it = iter(select_criteria.items())
         col1, col2 = next(it)
@@ -104,7 +105,7 @@ class RelationalAlgebraFrozenSet(Set):
         return output
 
     def equijoin(self, other, join_indices, return_mappings=False):
-        if len(self) == 0 or len(other) == 0:
+        if self._container is None or len(other) == 0:
             return type(self)()
         other_columns = range(
             self.arity,
@@ -126,7 +127,7 @@ class RelationalAlgebraFrozenSet(Set):
         return output
 
     def cross_product(self, other):
-        if len(self) == 0:
+        if self._container is None:
             return type(self)()
         new_container = pd.DataFrame([
             tuple(t1) + tuple(t2)
@@ -168,6 +169,8 @@ class RelationalAlgebraFrozenSet(Set):
             return super().__or__(other)
 
     def __and__(self, other):
+        if self._container is None:
+            return self.copy()
         if isinstance(other, RelationalAlgebraSet):
             index_intersection = self._container.index & other._container.index
             new_container = self._container.loc[index_intersection]
@@ -179,12 +182,18 @@ class RelationalAlgebraFrozenSet(Set):
             return super().__and__(other)
 
     def groupby(self, columns):
-        for g_id, group in self._container.groupby(columns):
+        if self._container is None:
+            raise StopIteration
+        if not isinstance(columns, Iterable):
+            columns = [columns]
+        for g_id, group in self._container.groupby(by=list(columns)):
             group_set = type(self)()
             group_set._container = group
             yield g_id, group_set
 
     def itervalues(self):
+        if self._container is None:
+            raise StopIteration
         return iter(self._container.values.squeeze())
 
 
@@ -198,13 +207,16 @@ class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
             self._container.loc[e_hash] = value
 
     def discard(self, value):
-        try:
-            value = self._normalise_element(value)
-            self._container.drop(index=hash(value), inplace=True)
-        except KeyError:
-            pass
+        if self._container is not None:
+            try:
+                value = self._normalise_element(value)
+                self._container.drop(index=hash(value), inplace=True)
+            except KeyError:
+                pass
 
     def __isub__(self, other):
+        if self._container is None:
+            return self
         if isinstance(other, RelationalAlgebraSet):
             diff_ix = ~self._container.index.isin(other._container.index)
             self._container = self._container.loc[diff_ix]
