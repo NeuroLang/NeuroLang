@@ -1,17 +1,13 @@
-from collections import deque
-from itertools import product
 import logging
 import typing
+from collections import deque
+from itertools import product
 
-from .expressions import TypedSymbolTable
-from .expressions import (
-    ExpressionBlock, FunctionApplication, Statement, Query, Projection,
-    Constant, Symbol, ExistentialPredicate, UniversalPredicate, Expression,
-    Lambda, Unknown, is_leq_informative, NeuroLangTypeException, unify_types,
-    NeuroLangException
-)
-
-from .expression_pattern_matching import add_match, PatternMatcher
+from .expression_pattern_matching import PatternMatcher, add_match
+from .expressions import (Constant, Expression, FunctionApplication, Lambda,
+                          NeuroLangException, NeuroLangTypeException,
+                          Projection, Statement, Symbol, TypedSymbolTable,
+                          Unknown, is_leq_informative, unify_types)
 
 
 def expression_iterator(expression, include_level=False, dfs=True):
@@ -103,7 +99,18 @@ class PatternWalker(PatternMatcher):
         return self.match(expression)
 
 
+class IdentityWalker(PatternMatcher):
+    """Walks through express
+    """
+    
+    @add_match(...)
+    def _(self, expression):
+        return expression
+
+
 class ExpressionWalker(PatternWalker):
+    """Walks through an expression and each of its arguments
+    """
     @add_match(Expression)
     def process_expression(self, expression):
         args = expression.unapply()
