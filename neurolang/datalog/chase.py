@@ -166,22 +166,12 @@ class ChaseGeneral():
         if restriction_instance is None:
             restriction_instance = dict()
 
-        head_functor = rule.consequent.functor
         rule_predicates = extract_datalog_predicates(rule.antecedent)
         restricted_predicates = []
         nonrestricted_predicates = []
         builtin_predicates = []
-        recursive_calls = 0
         for predicate in rule_predicates:
             functor = predicate.functor
-
-            if functor == head_functor:
-                recursive_calls += 1
-                if recursive_calls > 1:
-                    raise ValueError(
-                        'Non-linear rule {rule}, solver non supported'
-                    )
-
             if functor in restriction_instance:
                 restricted_predicates.append(
                     (predicate, restriction_instance[functor].value)
