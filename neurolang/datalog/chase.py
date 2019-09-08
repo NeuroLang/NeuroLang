@@ -375,7 +375,7 @@ class ChaseRelationalAlgebraMixin:
         column = 0
         new_ra_expressions = tuple()
         rule_predicates_iterator = list(rule_predicates_iterator)
-        for _, pred_ra in enumerate(rule_predicates_iterator):
+        for pred_ra in rule_predicates_iterator:
             ra_expression_arity = pred_ra[1].arity
             new_ra_expression = self.translate_predicate(
                 pred_ra, column, args_to_project
