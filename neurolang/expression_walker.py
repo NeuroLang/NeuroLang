@@ -104,105 +104,34 @@ class PatternWalker(PatternMatcher):
 
 
 class ExpressionWalker(PatternWalker):
-    @add_match(ExpressionBlock)
-    def expression_block(self, block):
-        return ExpressionBlock[block.type](
-            tuple(self.walk(expression) for expression in block.expressions)
-        )
-
-    @add_match(Statement)
-    def statement(self, statement):
-        return Statement[statement.type](
-            statement.lhs, self.walk(statement.rhs)
-        )
-
-    @add_match(FunctionApplication)
-    def function(self, function_application):
-        functor = self.walk(function_application.functor)
-        args = tuple(self.walk(arg) for arg in function_application.args)
-        kwargs = {k: self.walk(v) for k, v in function_application.kwargs}
-
-        if (
-            functor is not function_application.functor or any(
-                arg is not new_arg
-                for arg, new_arg in zip(function_application.args, args)
-            ) or any(
-                kwargs[k] is not function_application.kwargs[k]
-                for k in function_application.kwargs
-            )
-        ):
-            result = functor(*args, **kwargs)
-            return self.walk(result)
-        else:
-            return function_application
-
-    @add_match(Query)
-    def query(self, query):
-        body = self.walk(query.body)
-
-        if body is not query.body:
-            return self.walk(Query[query.type](query.head, body))
-        else:
-            return query
-
-    @add_match(ExistentialPredicate)
-    def existential_predicate(self, existential_predicate):
-        body = self.walk(existential_predicate.body)
-
-        if body is not existential_predicate.body:
-            return self.walk(
-                ExistentialPredicate[existential_predicate.type](
-                    existential_predicate.head, body
+    @add_match(Expression)
+    def process_expression(self, expression):
+        args = expression.unapply()
+        new_args = tuple()
+        changed = False
+        for arg in args:
+            if isinstance(arg, Expression):
+                new_arg = self.walk(arg)
+                changed |= new_arg is not arg
+            elif isinstance(arg, (tuple, list)):
+                new_arg = list()
+                for sub_arg in arg:
+                    new_arg.append(self.walk(sub_arg))
+                    changed |= new_arg[-1] is not sub_arg
+                new_arg = type(arg)(new_arg)
+            elif arg is Ellipsis:
+                raise NeuroLangException(
+                    '... is not a valid Expression argument'
                 )
-            )
+            else:
+                new_arg = arg
+            new_args += (new_arg,)
+
+        if changed:
+            new_expression = expression.apply(*new_args)
+            return self.walk(new_expression)
         else:
-            return existential_predicate
-
-    @add_match(UniversalPredicate)
-    def universal_predicate(self, universal_predicate):
-        body = self.walk(universal_predicate.body)
-
-        if body is not universal_predicate.body:
-            return self.walk(
-                UniversalPredicate[universal_predicate.type](
-                    universal_predicate.head, body
-                )
-            )
-        else:
-            return universal_predicate
-
-    @add_match(Projection)
-    def projection(self, projection):
-        collection = self.walk(projection.collection)
-        item = self.walk(projection.item)
-
-        if (collection is projection.collection and item is projection.item):
-            return projection
-        else:
-            result = Projection(collection, item)
-            return self.walk(result)
-
-    @add_match(Lambda)
-    def lambda_expression(self, lambda_expression):
-        args = self.walk(lambda_expression.args)
-        function_expression = self.walk(lambda_expression.function_expression)
-
-        if (
-            all(a is a_ for a, a_ in zip(args, lambda_expression.args)) and
-            function_expression is lambda_expression.function_expression
-        ):
-            return lambda_expression
-        else:
-            res = Lambda[lambda_expression.type](args, function_expression)
-            return self.walk(res)
-
-    @add_match(Constant)
-    def constant(self, constant):
-        return constant
-
-    @add_match(Symbol)
-    def symbol(self, symbol):
-        return symbol
+            return expression
 
 
 class ReplaceSymbolWalker(ExpressionWalker):
