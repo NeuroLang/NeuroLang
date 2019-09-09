@@ -3,23 +3,38 @@ Utilities to process intermediate representations of
 Datalog programs.
 """
 
-from operator import and_, invert, or_, xor
 from typing import Iterable
 
-from ..expression_walker import PatternWalker, add_match, expression_iterator
+from ..expression_walker import ExpressionWalker, PatternWalker, add_match
 from ..expressions import (Constant, ExpressionBlock, FunctionApplication,
                            NeuroLangException, Quantifier, Symbol)
 from ..utils import OrderedSet
-from .expressions import Implication
+from .expressions import (Conjunction, Disjunction, Implication, Negation,
+                          TranslateToLogic)
+
+
+class TranslateToDatalogSemantics(TranslateToLogic, ExpressionWalker):
+    pass
 
 
 class ExtractDatalogFreeVariablesWalker(PatternWalker):
-    @add_match(FunctionApplication(Constant(and_), ...))
+    @add_match(Conjunction)
     def conjunction(self, expression):
         fvs = OrderedSet()
-        for arg in expression.args:
-            fvs |= self.walk(arg)
+        for literal in expression.literals:
+            fvs |= self.walk(literal)
         return fvs
+
+    @add_match(Disjunction)
+    def disjunction(self, expression):
+        fvs = OrderedSet()
+        for literal in expression.literals:
+            fvs |= self.walk(literal)
+        return fvs
+
+    @add_match(Negation)
+    def negation(self, expression):
+        return self.walk(expression.literal)
 
     @add_match(FunctionApplication)
     def extract_variables_fa(self, expression):
@@ -48,19 +63,11 @@ class ExtractDatalogFreeVariablesWalker(PatternWalker):
             self.walk(expression.consequent)
         )
 
-    @add_match(ExpressionBlock)
-    def extract_variables_eb(self, expression):
-        res = set()
-        for exp in expression.expressions:
-            res |= self.walk(exp)
-
-        return res
-
     @add_match(Symbol)
     def extract_variables_symbol(self, expression):
         return OrderedSet((expression,))
 
-    @add_match(...)
+    @add_match(Constant)
     def _(self, expression):
         return OrderedSet()
 
@@ -78,44 +85,53 @@ def extract_datalog_free_variables(expression):
         OrderedSet
             set of all free variables in the expression.
     """
+    tr = TranslateToDatalogSemantics()
     efvw = ExtractDatalogFreeVariablesWalker()
-    return efvw.walk(expression)
+    return efvw.walk(tr.walk(expression))
 
 
 def is_conjunctive_expression(expression):
+    tr = TranslateToDatalogSemantics()
+    expression = tr.walk(expression)
+    if isinstance(expression, Conjunction):
+        expressions = expression.literals
+    else:
+        expressions = [expression]
+
     return all(
-        not isinstance(exp, FunctionApplication) or
+        expression == Constant(True) or
+        expression == Constant(False) or
         (
-            isinstance(exp, FunctionApplication) and
-            (
-                (
-                    isinstance(exp.functor, Constant) and
-                    exp.functor.value is and_
-                ) or all(
-                    not isinstance(arg, FunctionApplication)
-                    for arg in exp.args
-                )
+            isinstance(expression, FunctionApplication) and
+            not any(
+                isinstance(arg, FunctionApplication)
+                for arg in expression.args
             )
         )
-        for _, exp in expression_iterator(expression)
+        for expression in expressions
     )
 
 
 def is_conjunctive_expression_with_nested_predicates(expression):
+    tr = TranslateToDatalogSemantics()
+    expression = tr.walk(expression)
     stack = [expression]
     while stack:
         exp = stack.pop()
-        if isinstance(exp, FunctionApplication):
-            if isinstance(exp.functor, Constant):
-                if exp.functor.value is and_:
-                    stack += exp.args
-                    continue
-                elif any(exp.functor.value is op for op in (or_, invert, xor)):
-                    return False
+        if exp == Constant(True) or exp == Constant(False):
+            pass
+        elif isinstance(exp, FunctionApplication):
             stack += [
                 arg for arg in exp.args
                 if isinstance(arg, FunctionApplication)
             ]
+        elif isinstance(exp, Conjunction):
+            stack += exp.literals
+        elif isinstance(exp, Quantifier):
+            stack.append(exp.body)
+        else:
+            return False
+
     return True
 
 
@@ -128,22 +144,26 @@ class ExtractDatalogPredicates(PatternWalker):
     def constant(self, expression):
         return OrderedSet()
 
-    @add_match(FunctionApplication(Constant(and_), ...))
-    def conjunction(self, expression):
-        res = OrderedSet()
-        for arg in expression.args:
-            res |= self.walk(arg)
-        return res
-
     @add_match(FunctionApplication)
     def extract_predicates_fa(self, expression):
         return OrderedSet([expression])
 
-    @add_match(ExpressionBlock)
-    def expression_block(self, expression):
+    @add_match(Negation)
+    def negation(self, expression):
+        return OrderedSet([expression])
+
+    @add_match(Conjunction)
+    def conjunction(self, expression):
         res = OrderedSet()
-        for exp in expression.expressions:
-            res |= self.walk(exp)
+        for literal in expression.literals:
+            res |= self.walk(literal)
+        return res
+
+    @add_match(Disjunction)
+    def disjunction(self, expression):
+        res = OrderedSet()
+        for literal in expression.literals:
+            res |= self.walk(literal)
         return res
 
 
@@ -164,8 +184,9 @@ def extract_datalog_predicates(expression):
         order.
 
     """
+    tr = TranslateToDatalogSemantics()
     edp = ExtractDatalogPredicates()
-    return edp.walk(expression)
+    return edp.walk(tr.walk(expression))
 
 
 def is_linear_rule(rule):
@@ -324,7 +345,7 @@ def reachable_code(query, datalog):
         p = to_reach.pop()
         reached.add(p)
         rules = idb[p]
-        for rule in rules.expressions:
+        for rule in rules.literals:
             if rule in seen_rules:
                 continue
             seen_rules.add(rule)
@@ -334,4 +355,4 @@ def reachable_code(query, datalog):
                 if functor not in reached and functor in idb:
                     to_reach.append(functor)
 
-    return ExpressionBlock(reachable_code)
+    return Disjunction(reachable_code)

@@ -2,6 +2,7 @@ from ... import expression_walker, expressions
 from .. import Implication, Fact, DatalogProgram
 from .. import magic_sets
 from ..chase import Chase
+from ..expressions import TranslateToLogic
 
 
 C_ = expressions.Constant
@@ -9,6 +10,13 @@ S_ = expressions.Symbol
 Imp_ = Implication
 F_ = Fact
 Eb_ = expressions.ExpressionBlock
+
+
+class TranslateToDatalog(
+    TranslateToLogic,
+    expression_walker.IdentityWalker
+):
+    pass
 
 
 class Datalog(
@@ -42,14 +50,15 @@ def test_resolution_works():
         Imp_(anc(x, y), anc(x, z) & par(z, y)),
     ])
 
+    tr = TranslateToDatalog()
     dl = Datalog()
-    dl.walk(code)
-    dl.walk(edb)
+    dl.walk(tr.walk(code))
+    dl.walk(tr.walk(edb))
     goal, mr = magic_sets.magic_rewrite(q(x), dl)
 
     dl = Datalog()
-    dl.walk(mr)
-    dl.walk(edb)
+    dl.walk(tr.walk(mr))
+    dl.walk(tr.walk(edb))
 
     solution = Chase(dl).build_chase_solution()
     assert solution[goal].value == {C_((e,)) for e in (b, c, d)}

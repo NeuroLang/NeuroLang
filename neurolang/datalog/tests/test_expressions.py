@@ -1,16 +1,10 @@
-from ...expression_walker import PatternWalker, add_match
-from ...expressions import ExpressionBlock, Symbol
-from ..expressions import (Conjunction, Disjunction, Implication, Negation,
-                           TranslateToLogic)
+from ...expression_walker import IdentityWalker
+from ...expressions import Constant, ExpressionBlock, Symbol
+from ..expressions import (Conjunction, Disjunction, Fact, Implication,
+                           Negation, TranslateToLogic)
 
 
-class WalkAll(PatternWalker):
-    @add_match(...)
-    def _(self, expression):
-        return expression
-
-
-class Translator(TranslateToLogic, WalkAll):
+class Translator(TranslateToLogic, IdentityWalker):
     pass
 
 
@@ -79,8 +73,20 @@ def test_translation_disjunctions():
     conj2 = Implication(Q(x), R(x))
     eb = ExpressionBlock((conj1, conj2))
     res = ttl.walk(eb)
-    assert isinstance(res, Conjunction)
+    assert isinstance(res, Disjunction)
     assert all(
         literal == ttl.walk(expression)
         for literal, expression in zip(res.literals, eb.expressions)
     )
+
+
+def test_translation_to_facts():
+    Q = Symbol('Q')
+    x = Symbol('x')
+
+    ttl = Translator()
+
+    imp = Implication(Q(x), Constant(True))
+    res = ttl.walk(imp)
+    assert isinstance(res, Fact)
+    assert res.consequent == imp.consequent

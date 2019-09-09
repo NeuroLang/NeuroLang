@@ -4,11 +4,13 @@ from .expression_processing import (
     extract_datalog_free_variables, extract_datalog_predicates,
     is_conjunctive_expression,
     is_conjunctive_expression_with_nested_predicates)
-from .expressions import (NULL, UNDEFINED, Fact, Implication, NullConstant,
-                          Undefined)
+from .expressions import (NULL, UNDEFINED, Conjunction, Disjunction, Fact,
+                          Implication, Negation, NullConstant, Undefined)
 
 __all__ = [
     "Implication", "Fact",
+    "Conjunction", "Disjunction",
+    "Negation",
     "Undefined", "NullConstant",
     "UNDEFINED", "NULL",
     "WrappedRelationalAlgebraSet",

@@ -11,7 +11,11 @@ from ..expressions import (Constant, Definition, ExpressionBlock,
                            FunctionApplication)
 
 
-class Implication(Definition):
+class LogicOperator(Definition):
+    pass
+
+
+class Implication(LogicOperator):
     """Expression of the form `P(x) \u2190 Q(x)`"""
 
     def __init__(self, consequent, antecedent):
@@ -39,7 +43,7 @@ class Fact(Implication):
         )
 
 
-class Conjunction(Definition):
+class Conjunction(LogicOperator):
     def __init__(self, literals):
         self.literals = tuple(literals)
 
@@ -48,12 +52,12 @@ class Conjunction(Definition):
             self._symbols |= literal._symbols
 
     def __repr__(self):
-        return '(' + ' \u2227 '.join(
+        return '\u22C0(' + ', '.join(
             repr(e) for e in self.literals
         ) + ')'
 
 
-class Disjunction(Definition):
+class Disjunction(LogicOperator):
     def __init__(self, literals):
         self.literals = tuple(literals)
 
@@ -69,16 +73,16 @@ class Disjunction(Definition):
             chars += len(repr_literals[-1])
 
         if chars < 30:
-            join_text = ' \u2228 '
+            join_text = ', '
         else:
-            join_text = ' \u2228\n'
+            join_text = ',\n'
 
-        return '(' + join_text.join(
+        return '\u22C1(' + join_text.join(
             repr(e) for e in self.literals
         ) + ')'
 
 
-class Negation(Definition):
+class Negation(LogicOperator):
     def __init__(self, literal):
         self.literal = literal
         self._symbols |= literal._symbols
@@ -104,37 +108,27 @@ NULL = NullConstant[Any](None)
 class TranslateToLogic(PatternWalker):
     @add_match(FunctionApplication(Constant(and_), ...))
     def build_conjunction(self, conjunction):
-        left = self.walk(conjunction.args[0])
-        right = self.walk(conjunction.args[1])
+        args = tuple()
+        for arg in conjunction.args:
+            new_arg = self.walk(arg)
+            if isinstance(new_arg, Conjunction):
+                args += new_arg.literals
+            else:
+                args += (new_arg,)
 
-        if isinstance(left, Conjunction):
-            conj = left.literals
-        else:
-            conj = (left,)
-
-        if isinstance(right, Conjunction):
-            conj += right.literals
-        else:
-            conj += (right,)
-
-        return self.walk(Conjunction(conj))
+        return self.walk(Conjunction(args))
 
     @add_match(FunctionApplication(Constant(or_), ...))
     def build_disjunction(self, disjunction):
-        left = self.walk(disjunction.args[0])
-        right = self.walk(disjunction.args[1])
+        args = tuple()
+        for arg in disjunction.args:
+            new_arg = self.walk(arg)
+            if isinstance(new_arg, Disjunction):
+                args += new_arg.literals
+            else:
+                args += (new_arg,)
 
-        if isinstance(left, Disjunction):
-            disj = left.literals
-        else:
-            disj = (left,)
-
-        if isinstance(right, Disjunction):
-            disj += right.literals
-        else:
-            disj += (right,)
-
-        return self.walk(Disjunction(disj))
+        return self.walk(Disjunction(args))
 
     @add_match(FunctionApplication(Constant(invert), ...))
     def build_negation(self, inversion):
@@ -143,12 +137,27 @@ class TranslateToLogic(PatternWalker):
 
     @add_match(ExpressionBlock)
     def build_conjunction_from_expression_block(self, expression_block):
-        return Conjunction(
-            self.walk(expression)
-            for expression in expression_block.expressions
-        )
+        literals = tuple()
+        for expression in expression_block.expressions:
+            new_exp = self.walk(expression)
+            literals += (new_exp,)
+        return self.walk(Disjunction(literals))
 
-    @add_match(Implication)
+    @add_match(
+        Implication(..., Constant(True)),
+        lambda x: not isinstance(x, Fact)
+    )
+    def translate_true_implication(self, implication):
+        return self.walk(Fact(implication.consequent))
+
+    @add_match(
+        Implication(..., FunctionApplication(Constant, ...)),
+        lambda implication: (
+            implication.antecedent.functor.value is and_ or
+            implication.antecedent.functor.value is or_ or
+            implication.antecedent.functor.value is invert
+        )
+    )
     def translate_implication(self, implication):
         new_consequent = self.walk(implication.consequent)
         new_antecedent = self.walk(implication.antecedent)

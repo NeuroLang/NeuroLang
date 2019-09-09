@@ -102,7 +102,7 @@ class PatternWalker(PatternMatcher):
 class IdentityWalker(PatternMatcher):
     """Walks through express
     """
-    
+
     @add_match(...)
     def _(self, expression):
         return expression

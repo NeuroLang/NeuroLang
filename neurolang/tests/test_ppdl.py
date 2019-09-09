@@ -224,9 +224,9 @@ def test_pcs_example():
             HasRPC(x, DeltaTerm(bernoulli, (p, ))),
             Subject(x) & pHasRPC(p)
         ),
-        Implication(pGender(DeltaTerm(Uniform, (C_(0), C_(1)))), C_('True')),
-        Implication(pHasLPC(DeltaTerm(Uniform, (C_(0), C_(1)))), C_('True')),
-        Implication(pHasRPC(DeltaTerm(Uniform, (C_(0), C_(1)))), C_('True')),
+        Implication(pGender(DeltaTerm(Uniform, (C_(0), C_(1)))), C_(True)),
+        Implication(pHasLPC(DeltaTerm(Uniform, (C_(0), C_(1)))), C_(True)),
+        Implication(pHasRPC(DeltaTerm(Uniform, (C_(0), C_(1)))), C_(True)),
     ))
     translator = TranslateGDatalogToEDatalogTestSolver()
     translated = translator.walk(program)

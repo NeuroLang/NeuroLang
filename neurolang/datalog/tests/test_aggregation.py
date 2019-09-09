@@ -9,16 +9,20 @@ from .. import DatalogProgram, Fact, Implication
 from ..aggregation import (AggregationApplication, Chase,
                            DatalogWithAggregationMixin)
 from ...type_system import Unknown
+from ..expressions import TranslateToLogic, Disjunction
+
 
 S_ = Symbol
 C_ = Constant
 Imp_ = Implication
 Fa_ = AggregationApplication
 Eb_ = ExpressionBlock
+Disj_ = Disjunction
 F_ = Fact
 
 
 class Datalog(
+    TranslateToLogic,
     DatalogWithAggregationMixin, DatalogProgram,
     ExpressionBasicEvaluator
 ):
@@ -43,7 +47,7 @@ def test_aggregation_parsing():
         for j in range(3)
     ]
 
-    code = Eb_(edb + [
+    code = Disj_(edb + [
         Imp_(Q(x, Fa_(S_('sum'), (y,))), P(x, y)),
     ])
 
@@ -53,7 +57,7 @@ def test_aggregation_parsing():
     assert P in dl.extensional_database()
 
     with pytest.raises(NeuroLangException):
-        dl.walk(Eb_([
+        dl.walk(Disj_([
             Imp_(Q(x, Fa_(C_(sum), (y,)), Fa_(C_(sum), (y,))), P(x, y)),
         ]))
 
@@ -93,7 +97,7 @@ def test_aggregation_chase_no_grouping():
         for i in range(3)
     ]
 
-    code = Eb_(edb + [
+    code = Disj_(edb + [
         Imp_(Q(Fa_(S_('sum2'), (x, y))), P(x, y)),
     ])
 

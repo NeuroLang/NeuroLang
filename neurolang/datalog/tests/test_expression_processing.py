@@ -3,7 +3,7 @@ from operator import eq
 from ...expressions import (Constant, ExistentialPredicate, ExpressionBlock,
                             Symbol)
 from ...expression_walker import ExpressionBasicEvaluator
-from .. import Fact, Implication, DatalogProgram
+from .. import Fact, Implication, DatalogProgram, Disjunction
 from ..expression_processing import (
     extract_datalog_free_variables, is_conjunctive_expression,
     extract_datalog_predicates,
@@ -14,6 +14,7 @@ from ..expression_processing import (
 S_ = Symbol
 C_ = Constant
 Imp_ = Implication
+Disj_ = Disjunction
 B_ = ExpressionBlock
 EP_ = ExistentialPredicate
 T_ = Fact
@@ -207,7 +208,7 @@ def test_reachable():
     x = S_('x')
     y = S_('y')
 
-    code = B_([
+    code = Disj_([
         Imp_(R(x, y), Q(x, y)),
         Imp_(R(x, y), Q(y, x)),
         Imp_(S(x), R(x, y) & S(y)),
@@ -217,6 +218,6 @@ def test_reachable():
     datalog = Datalog()
     datalog.walk(code)
 
-    reached = reachable_code(code.expressions[-2], datalog)
+    reached = reachable_code(code.literals[-2], datalog)
 
-    assert set(reached.expressions) == set(code.expressions[:-1])
+    assert set(reached.literals) == set(code.literals[:-1])

@@ -9,7 +9,7 @@ sets.
 from itertools import tee
 from typing import AbstractSet, Any, Callable, Tuple
 
-from ..expression_walker import (PatternWalker, add_match)
+from ..expression_walker import PatternWalker, add_match
 from ..expressions import (Constant, Expression, ExpressionBlock,
                            FunctionApplication, NeuroLangException, Symbol,
                            is_leq_informative)
@@ -18,8 +18,8 @@ from ..utils import RelationalAlgebraSet
 from .expression_processing import (
     extract_datalog_free_variables, is_conjunctive_expression,
     is_conjunctive_expression_with_nested_predicates)
-from .expressions import (NULL, UNDEFINED, Fact, Implication, NullConstant,
-                          Undefined)
+from .expressions import (NULL, UNDEFINED, Conjunction, Disjunction, Fact,
+                          Implication, NullConstant, Undefined)
 
 __all__ = [
     "Implication", "Fact", "Undefined", "NullConstant",
@@ -134,7 +134,7 @@ class DatalogProgram(PatternWalker):
         self._initialize_fact_set_if_needed(fact)
         fact_set = self.symbol_table[fact.functor]
 
-        if isinstance(fact_set, ExpressionBlock):
+        if isinstance(fact_set, Disjunction):
             raise NeuroLangException(
                 f'{fact.functor} has been previously '
                 'define as intensional predicate.'
@@ -162,13 +162,6 @@ class DatalogProgram(PatternWalker):
 
     @add_match(Implication(
         FunctionApplication[bool](Symbol, ...),
-        Constant[bool](True)
-    ))
-    def statement_extensional(self, expression):
-        return self.walk(Fact(expression.consequent))
-
-    @add_match(Implication(
-        FunctionApplication[bool](Symbol, ...),
         Expression
     ))
     def statement_intensional(self, expression):
@@ -178,13 +171,13 @@ class DatalogProgram(PatternWalker):
         self._validate_implication_syntax(consequent, antecedent)
 
         if consequent.functor in self.symbol_table:
-            eb = self._new_intensional_internal_representation(consequent)
+            disj = self._new_intensional_internal_representation(consequent)
         else:
-            eb = tuple()
+            disj = tuple()
 
-        eb = eb + (expression,)
+        disj += (expression,)
 
-        self.symbol_table[consequent.functor] = ExpressionBlock(eb)
+        self.symbol_table[consequent.functor] = Disjunction(disj)
 
         return expression
 
@@ -198,19 +191,19 @@ class DatalogProgram(PatternWalker):
                 f'{consequent.functor.name} has been previously '
                 'defined as Fact or extensional database.'
             )
-        eb = self.symbol_table[consequent.functor].expressions
+        disj = self.symbol_table[consequent.functor].literals
 
         if (
-            not isinstance(eb[0].consequent, FunctionApplication) or
-            len(extract_datalog_free_variables(eb[0].consequent.args)) !=
+            not isinstance(disj[0].consequent, FunctionApplication) or
+            len(extract_datalog_free_variables(disj[0].consequent.args)) !=
             len(consequent.args)
         ):
             raise NeuroLangException(
-                f"{eb[0].consequent} is already in the IDB "
+                f"{disj[0].consequent} is already in the IDB "
                 f"with different signature."
             )
 
-        return eb
+        return disj
 
     def _validate_implication_syntax(self, consequent, antecedent):
         if consequent.functor in self.protected_keywords:
@@ -253,7 +246,7 @@ class DatalogProgram(PatternWalker):
             k: v for k, v in self.symbol_table.items()
             if (
                 k not in self.protected_keywords and
-                isinstance(v, ExpressionBlock)
+                isinstance(v, Disjunction)
             )
         }
 

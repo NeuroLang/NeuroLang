@@ -631,7 +631,7 @@ class ExistentialPredicate(Quantifier):
                 'A symbol should be provided for the '
                 'existential quantifier expression'
             )
-        if not isinstance(body, (FunctionApplication, Quantifier)):
+        if not isinstance(body, Definition):
             raise NeuroLangException(
                 'A function application over '
                 'predicates should be associated to the quantifier'
@@ -662,7 +662,7 @@ class UniversalPredicate(Quantifier):
                 'A symbol should be provided for the '
                 'universal quantifier expression'
             )
-        if not isinstance(body, (FunctionApplication, Quantifier)):
+        if not isinstance(body, Definition):
             raise NeuroLangException(
                 'A function application over '
                 'predicates should be associated to the quantifier'
