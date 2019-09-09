@@ -1,20 +1,22 @@
 import operator as op
 from typing import Callable
 
-from .. import expression_walker as ew
-from .. import expressions
-from .. import solver_datalog_naive as sdb
-from ..datalog.chase import Chase, ChaseNode
+from ... import expression_walker as ew
+from ... import expressions
+from ..chase import Chase, ChaseNode
+from ..expressions import Disjunction, Fact, Implication
+from ..basic_representation import DatalogProgram
 
 
 C_ = expressions.Constant
 S_ = expressions.Symbol
-Imp_ = sdb.Implication
-F_ = sdb.Fact
+Imp_ = Implication
+F_ = Fact
 Eb_ = expressions.ExpressionBlock
+Disj_ = Disjunction
 
 
-class Datalog(sdb.DatalogBasic, ew.ExpressionBasicEvaluator):
+class Datalog(DatalogProgram, ew.ExpressionBasicEvaluator):
     def function_gt(self, x: int, y: int) -> bool:
         return x > y
 
@@ -256,7 +258,7 @@ def test_non_recursive_predicate_chase():
     y = S_('y')
     z = S_('z')
 
-    datalog_program = Eb_((
+    datalog_program = Disj_((
         F_(Q(C_(1), C_(2))),
         F_(Q(C_(2), C_(3))),
         Imp_(T(x, y), Q(x, z) & Q(z, y))
@@ -275,7 +277,7 @@ def test_non_recursive_predicate_chase():
 
     assert res.instance == dl.extensional_database()
     assert res.children == {
-        datalog_program.expressions[-1]: ChaseNode(instance_1, dict())
+        datalog_program.literals[-1]: ChaseNode(instance_1, dict())
     }
 
 
