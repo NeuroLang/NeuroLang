@@ -100,9 +100,9 @@ class PatternWalker(PatternMatcher):
 
 
 class IdentityWalker(PatternMatcher):
-    """Walks through express
+    """Walks through expresssions without doing
+    a thing.
     """
-    
     @add_match(...)
     def _(self, expression):
         return expression
