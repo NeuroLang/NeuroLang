@@ -296,22 +296,7 @@ class ExpressionBasicEvaluator(SymbolTableEvaluator):
     )
     def evaluate_function(self, function_application):
         functor = function_application.functor
-        functor_type = functor.type
-        if isinstance(functor, Constant):
-            functor_value = functor.value
-
-        if functor_type is not Unknown:
-            if not is_leq_informative(functor_type, typing.Callable):
-                raise NeuroLangTypeException(
-                    'Function {} is not of callable type'.format(functor)
-                )
-            result_type = functor_type.__args__[-1]
-        else:
-            if not callable(functor_value):
-                raise NeuroLangTypeException(
-                    'Function {} is not of callable type'.format(functor)
-                )
-            result_type = Unknown
+        result_type = self.evaluate_function_infer_type(functor)
 
         rebv = ReplaceExpressionsByValues(self.symbol_table)
         args = rebv.walk(function_application.args)
@@ -319,8 +304,24 @@ class ExpressionBasicEvaluator(SymbolTableEvaluator):
             k: rebv.walk(v)
             for k, v in function_application.kwargs.items()
         }
-        result = Constant[result_type](functor_value(*args, **kwargs))
+        result = Constant[result_type](functor.value(*args, **kwargs))
         return result
+
+    def evaluate_function_infer_type(self, functor):
+        functor_type = functor.type
+        if functor_type is not Unknown:
+            if not is_leq_informative(functor_type, typing.Callable):
+                raise NeuroLangTypeException(
+                    'Function {} is not of callable type'.format(functor)
+                )
+            result_type = functor_type.__args__[-1]
+        else:
+            if not callable(functor.value):
+                raise NeuroLangTypeException(
+                    'Function {} is not of callable type'.format(functor)
+                )
+            result_type = Unknown
+        return result_type
 
     @add_match(FunctionApplication(Lambda, ...))
     def eval_lambda(self, function_application):
