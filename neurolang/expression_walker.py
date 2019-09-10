@@ -121,11 +121,8 @@ class ExpressionWalker(PatternWalker):
                 new_arg = self.walk(arg)
                 changed |= new_arg is not arg
             elif isinstance(arg, (tuple, list)):
-                new_arg = list()
-                for sub_arg in arg:
-                    new_arg.append(self.walk(sub_arg))
-                    changed |= new_arg[-1] is not sub_arg
-                new_arg = type(arg)(new_arg)
+                new_arg, change = self.process_iterable_argument(arg)
+                changed |= change
             elif arg is Ellipsis:
                 raise NeuroLangException(
                     '... is not a valid Expression argument'
@@ -139,6 +136,15 @@ class ExpressionWalker(PatternWalker):
             return self.walk(new_expression)
         else:
             return expression
+
+    def process_iterable_argument(self, arg):
+        changed = False
+        new_arg = list()
+        for sub_arg in arg:
+            new_arg.append(self.walk(sub_arg))
+            changed |= new_arg[-1] is not sub_arg
+        new_arg = type(arg)(new_arg)
+        return new_arg, changed
 
 
 class ReplaceSymbolWalker(ExpressionWalker):
