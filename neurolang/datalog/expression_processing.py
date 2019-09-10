@@ -27,10 +27,7 @@ class ExtractDatalogFreeVariablesWalker(PatternWalker):
 
     @add_match(Disjunction)
     def disjunction(self, expression):
-        fvs = OrderedSet()
-        for literal in expression.literals:
-            fvs |= self.walk(literal)
-        return fvs
+        return self.conjunction(expression)
 
     @add_match(Negation)
     def negation(self, expression):
@@ -161,10 +158,7 @@ class ExtractDatalogPredicates(PatternWalker):
 
     @add_match(Disjunction)
     def disjunction(self, expression):
-        res = OrderedSet()
-        for literal in expression.literals:
-            res |= self.walk(literal)
-        return res
+        return self.conjunction(expression)
 
 
 def extract_datalog_predicates(expression):
