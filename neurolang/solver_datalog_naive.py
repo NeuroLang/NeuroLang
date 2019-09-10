@@ -7,10 +7,10 @@ from operator import and_
 from typing import AbstractSet, Any, Callable, Tuple
 from warnings import warn
 
-from .datalog import NULL, UNDEFINED, Conjunction
+from .datalog import NULL, UNDEFINED
 from .datalog import DatalogProgram as DatalogBasic
-from .datalog import (Disjunction, Fact, Implication, Negation, NullConstant,
-                      Undefined, WrappedRelationalAlgebraSet,
+from .datalog import (Disjunction, Fact, Implication, NullConstant, Undefined,
+                      WrappedRelationalAlgebraSet,
                       extract_datalog_free_variables,
                       extract_datalog_predicates, is_conjunctive_expression,
                       is_conjunctive_expression_with_nested_predicates)
@@ -165,47 +165,6 @@ class SolverNonRecursiveDatalogNaive(
             return Constant[bool](False)
 
         return Constant[bool](True)
-
-    @add_match(Conjunction)
-    def evaluate_conjunction(self, expression):
-        unsolved_literals = tuple()
-        for literal in expression.literals:
-            solved_literal = self.walk(literal)
-            if isinstance(solved_literal, Constant):
-                value = bool(solved_literal.value)
-                if not value:
-                    return Constant[bool](False)
-            else:
-                unsolved_literals += (solved_literal,)
-
-        if len(unsolved_literals) > 0:
-            return Constant[bool](True)
-        else:
-            return Conjunction(unsolved_literals)
-
-    @add_match(Disjunction)
-    def evaluate_disjunction(self, expression):
-        unsolved_literals = tuple()
-        for literal in expression.literals:
-            solved_literal = self.walk(literal)
-            if isinstance(solved_literal, Constant):
-                value = bool(solved_literal.value)
-                if value:
-                    return Constant[bool](True)
-            else:
-                unsolved_literals += (solved_literal,)
-
-        if len(unsolved_literals) == 0:
-            return Constant[bool](False)
-        else:
-            return Disjunction(unsolved_literals)
-
-    @add_match(Negation)
-    def evaluate_negation(self, expression):
-        solved_literal = self.walk(expression.literal)
-        if isinstance(solved_literal, Constant):
-            return Constant[bool](not solved_literal.value)
-        return expression
 
     @add_match(ExistentialPredicate)
     def existential_predicate_nrndl(self, expression):
