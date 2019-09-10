@@ -7,6 +7,7 @@ from .expression_pattern_matching import PatternMatcher, add_match
 from .expressions import (Constant, Expression, FunctionApplication, Lambda,
                           NeuroLangException, NeuroLangTypeException,
                           Projection, Statement, Symbol, TypedSymbolTable,
+                          TypedSymbolTableMixin,
                           Unknown, is_leq_informative, unify_types)
 
 
@@ -223,14 +224,7 @@ class ReplaceExpressionsByValues(ExpressionWalker):
         return constant.value
 
 
-class SymbolTableEvaluator(ExpressionWalker):
-    def __init__(self, symbol_table=None):
-        if symbol_table is None:
-            symbol_table = TypedSymbolTable()
-        self.symbol_table = symbol_table
-        self.simplify_mode = False
-        self.add_functions_to_symbol_table()
-
+class TypedSymbolTableEvaluator(TypedSymbolTableMixin, ExpressionWalker):
     @add_match(Symbol)
     def symbol_from_table(self, symbol):
         try:
@@ -240,25 +234,6 @@ class SymbolTableEvaluator(ExpressionWalker):
                 return symbol
             else:
                 raise ValueError(f'{symbol} not in symbol table')
-
-    @property
-    def included_functions(self):
-        function_constants = dict()
-        for attribute in dir(self):
-            if attribute.startswith('function_'):
-                c = Constant(getattr(self, attribute))
-                function_constants[attribute[len('function_'):]] = c
-        return function_constants
-
-    def add_functions_to_symbol_table(self):
-        keyword_symbol_table = TypedSymbolTable()
-        for k, v in self.included_functions.items():
-            keyword_symbol_table[Symbol[v.type](k)] = v
-        keyword_symbol_table.set_readonly(True)
-        top_scope = self.symbol_table
-        while top_scope.enclosing_scope is not None:
-            top_scope = top_scope.enclosing_scope
-        top_scope.enclosing_scope = keyword_symbol_table
 
     @add_match(Statement)
     def statement(self, statement):
@@ -272,17 +247,8 @@ class SymbolTableEvaluator(ExpressionWalker):
         else:
             return self.walk(Statement[statement.type](statement.lhs, rhs))
 
-    def push_scope(self):
-        self.symbol_table = self.symbol_table.create_scope()
 
-    def pop_scope(self):
-        es = self.symbol_table.enclosing_scope
-        if es is None:
-            raise NeuroLangException('No enclosing scope')
-        self.symbol_table = self.symbol_table.enclosing_scope
-
-
-class ExpressionBasicEvaluator(SymbolTableEvaluator):
+class ExpressionBasicEvaluator(ExpressionWalker):
     @add_match(Projection(Constant(...), Constant(...)))
     def evaluate_projection(self, projection):
         return (projection.collection.value[int(projection.item.value)])
