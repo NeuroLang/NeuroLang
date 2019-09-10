@@ -22,7 +22,7 @@ class DatalogTranslator(TranslateToLogic, ew.IdentityWalker):
 DT = DatalogTranslator()
 
 
-class Datalog(DatalogProgram, ew.ExpressionBasicEvaluator):
+class Datalog(TranslateToLogic, DatalogProgram, ew.ExpressionBasicEvaluator):
     def function_gt(self, x: int, y: int) -> bool:
         return x > y
 
@@ -71,21 +71,21 @@ def test_python_builtin_equaltiy_chase_step():
     y = S_('y')
     z = S_('z')
 
-    datalog_program = Eb_((
+    datalog_program = DT.walk(Eb_((
         F_(Q(C_(1), C_(2))),
         F_(Q(C_(2), C_(3))),
         Imp_(S(y),
              Q(x, z) & eq(z + C_(1), y)),
         Imp_(S(y),
              Q(x, z) & eq(y, z + C_(1))),
-    ))
+    )))
 
     dl = Datalog()
     dl.walk(datalog_program)
 
     instance_0 = dl.extensional_database()
 
-    rule = datalog_program.expressions[-2]
+    rule = DT.walk(datalog_program.literals[-2])
     dc = Chase(dl)
     instance_update = dc.chase_step(instance_0, rule)
     res = {
@@ -93,7 +93,7 @@ def test_python_builtin_equaltiy_chase_step():
     }
     assert instance_update == res
 
-    rule = datalog_program.expressions[-1]
+    rule = datalog_program.literals[-1]
     instance_update = dc.chase_step(instance_0, rule)
     assert instance_update == res
 
@@ -107,26 +107,26 @@ def test_python_builtin_chase_step():
     y = S_('y')
     z = S_('z')
 
-    datalog_program = Eb_((
+    datalog_program = DT.walk(Eb_((
         F_(Q(C_(1), C_(2))), F_(Q(C_(2), C_(3))), F_(Q(C_(8), C_(6))),
         Imp_(T(x, y),
              Q(x, z) & Q(z, y)), Imp_(S(x, y),
                                       Q(x, y) & gt(x, y))
-    ))
+    )))
 
     dl = Datalog()
     dl.walk(datalog_program)
 
     instance_0 = dl.extensional_database()
 
-    rule = datalog_program.expressions[-1]
+    rule = datalog_program.literals[-1]
     dc = Chase(dl)
     instance_update = dc.chase_step(instance_0, rule)
     assert instance_update == {
         S: C_({C_((C_(8), C_(6)))}),
     }
 
-    rule = datalog_program.expressions[-2]
+    rule = datalog_program.literals[-2]
     instance_update = dc.chase_step(instance_0, rule)
     assert instance_update == {
         T: C_({C_((C_(1), C_(3)))}),
@@ -144,19 +144,19 @@ def test_python_nested_builtin_chase_step():
     x = S_('x')
     y = S_('y')
 
-    datalog_program = Eb_((
+    datalog_program = DT.walk(Eb_((
         F_(Q(C_(8), C_(15))),
         F_(Q(C_(8), C_(9))),
         Imp_(S(x, y),
              Q(x, y) & gt(x, y - C_(2))),
-    ))
+    )))
 
     dl = Datalog()
     dl.walk(datalog_program)
 
     instance_0 = dl.extensional_database()
 
-    rule = datalog_program.expressions[-1]
+    rule = datalog_program.literals[-1]
     dc = Chase(dl)
     instance_update = dc.chase_step(instance_0, rule)
     assert instance_update == {
@@ -173,26 +173,26 @@ def test_non_recursive_predicate_chase_step():
     y = S_('y')
     z = S_('z')
 
-    datalog_program = Eb_((
+    datalog_program = DT.walk(Eb_((
         F_(Q(C_(1), C_(2))), F_(Q(C_(2), C_(3))), F_(Q(C_(8), C_(6))),
         Imp_(T(x, y),
              Q(x, z) & Q(z, y)), Imp_(S(x, y),
                                       Q(x, y) & gt(x, y))
-    ))
+    )))
 
     dl = Datalog()
     dl.walk(datalog_program)
 
     instance_0 = dl.extensional_database()
 
-    rule = datalog_program.expressions[-1]
+    rule = datalog_program.literals[-1]
     dc = Chase(dl)
     instance_update = dc.chase_step(instance_0, rule)
     assert instance_update == {
         S: C_({C_((C_(8), C_(6)))}),
     }
 
-    rule = datalog_program.expressions[-2]
+    rule = datalog_program.literals[-2]
     instance_update = dc.chase_step(instance_0, rule)
     assert instance_update == {
         T: C_({C_((C_(1), C_(3)))}),
@@ -212,19 +212,19 @@ def test_python_multiple_builtins():
     y = S_('y')
     z = S_('z')
 
-    datalog_program = Eb_((
+    datalog_program = DT.walk(Eb_((
         F_(Q(C_(1), C_(2))),
         F_(Q(C_(2), C_(3))),
         Imp_(S(w),
              Q(x, z) & eq(z + C_(1), y) & eq(y, w)),
-    ))
+    )))
 
     dl = Datalog()
     dl.walk(datalog_program)
 
     instance_0 = dl.extensional_database()
 
-    rule = datalog_program.expressions[-1]
+    rule = datalog_program.literals[-1]
     dc = Chase(dl)
     instance_update = dc.chase_step(instance_0, rule)
     res = {
@@ -232,19 +232,19 @@ def test_python_multiple_builtins():
     }
     assert instance_update == res
 
-    datalog_program = Eb_((
+    datalog_program = DT.walk(Eb_((
         F_(Q(C_(1), C_(2))),
         F_(Q(C_(2), C_(3))),
         Imp_(S(w),
              Q(x, z) & eq(y, w) & eq(z + C_(1), y)),
-    ))
+    )))
 
     dl = Datalog()
     dl.walk(datalog_program)
 
     instance_0 = dl.extensional_database()
 
-    rule = datalog_program.expressions[-1]
+    rule = datalog_program.literals[-1]
     dc = Chase(dl)
     instance_update = dc.chase_step(instance_0, rule)
     res = {
@@ -260,11 +260,11 @@ def test_non_recursive_predicate_chase():
     y = S_('y')
     z = S_('z')
 
-    datalog_program = Disj_((
+    datalog_program = DT.walk(Eb_((
         F_(Q(C_(1), C_(2))), F_(Q(C_(2),
                                   C_(3))), Imp_(T(x, y),
                                                 Q(x, z) & Q(z, y))
-    ))
+    )))
 
     dl = Datalog()
     dl.walk(datalog_program)
@@ -290,11 +290,11 @@ def test_recursive_predicate_chase_tree():
     y = S_('y')
     z = S_('z')
 
-    datalog_program = Eb_((
+    datalog_program = DT.walk(Eb_((
         F_(Q(C_(1), C_(2))), F_(Q(C_(2), C_(3))), Imp_(T(x, y), Q(x, y)),
         Imp_(T(x, y),
              Q(x, z) & T(z, y))
-    ))
+    )))
 
     dl = Datalog()
     dl.walk(datalog_program)
@@ -309,10 +309,10 @@ def test_recursive_predicate_chase_tree():
 
     assert res.instance == dl.extensional_database()
     assert len(res.children) == 1
-    first_child = res.children[datalog_program.expressions[-2]]
+    first_child = res.children[datalog_program.literals[-2]]
     assert first_child.instance == instance_1
     assert len(first_child.children) == 1
-    second_child = first_child.children[datalog_program.expressions[-1]]
+    second_child = first_child.children[datalog_program.literals[-1]]
 
     instance_2 = {
         Q: C_({
@@ -335,11 +335,11 @@ def test_nonrecursive_predicate_chase_solution(N=10):
     y = S_('y')
     z = S_('z')
 
-    datalog_program = Eb_(
+    datalog_program = DT.walk(Eb_(
         tuple(F_(Q(C_(i), C_(i + 1)))
               for i in range(N)) + (Imp_(T(x, y),
                                          Q(x, z) & Q(z, y)), )
-    )
+    ))
 
     dl = Datalog()
     dl.walk(datalog_program)

@@ -90,12 +90,10 @@ def extract_datalog_free_variables(expression):
 
 
 def is_conjunctive_expression(expression):
-    tr = TranslateToDatalogSemantics()
-    expression = tr.walk(expression)
     if isinstance(expression, Conjunction):
-        expressions = expression.literals
+        literals = expression.literals
     else:
-        expressions = [expression]
+        literals = [expression]
 
     return all(
         expression == Constant(True) or
@@ -107,7 +105,7 @@ def is_conjunctive_expression(expression):
                 for arg in expression.args
             )
         )
-        for expression in expressions
+        for expression in literals
     )
 
 
@@ -169,9 +167,8 @@ def extract_datalog_predicates(expression):
         order.
 
     """
-    tr = TranslateToDatalogSemantics()
     edp = ExtractDatalogPredicates()
-    return edp.walk(tr.walk(expression))
+    return edp.walk(expression)
 
 
 def is_linear_rule(rule):
@@ -224,15 +221,15 @@ def all_body_preds_in_set(implication, predicate_set):
     )
 
 
-def stratify(expression_block, datalog_instance):
+def stratify(disjunction, datalog_instance):
     """Given an expression block containing `Implication` instances
-     and a datalog instance, return the stratification of the expressions
+     and a datalog instance, return the stratification of the literals
      in the block as a list of lists..
 
     Parameters
     ----------
-    expression_block : ExpressionBlock
-        code block to be stratified.
+    disjunction : Disjunction
+        disjunction of implications to be stratified.
 
     datalog_instance : DatalogProgram
         Datalog instance containing the EDB and IDB databases
@@ -249,7 +246,7 @@ def stratify(expression_block, datalog_instance):
     strata = []
     seen = set(k for k in datalog_instance.extensional_database().keys())
     seen |= set(k for k in datalog_instance.builtins())
-    to_process = expression_block.expressions
+    to_process = disjunction.literals
     stratifiable = True
 
     stratum, new_to_process = stratify_obtain_facts_stratum(to_process, seen)
