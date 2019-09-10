@@ -10,16 +10,16 @@ from itertools import tee
 from typing import AbstractSet, Any, Callable, Tuple
 
 from ..expression_walker import PatternWalker, add_match
-from ..expressions import (Constant, Expression, ExpressionBlock,
-                           FunctionApplication, NeuroLangException, Symbol,
-                           is_leq_informative, TypedSymbolTableMixin)
+from ..expressions import (Constant, Expression, FunctionApplication,
+                           NeuroLangException, Symbol, TypedSymbolTableMixin,
+                           is_leq_informative)
 from ..type_system import Unknown, infer_type
 from ..utils import RelationalAlgebraSet
 from .expression_processing import (
     extract_datalog_free_variables, is_conjunctive_expression,
     is_conjunctive_expression_with_nested_predicates)
-from .expressions import (NULL, UNDEFINED, Conjunction, Disjunction, Fact,
-                          Implication, NullConstant, Undefined)
+from .expressions import (NULL, UNDEFINED, Disjunction, Fact, Implication,
+                          NullConstant, Undefined)
 
 __all__ = [
     "Implication", "Fact", "Undefined", "NullConstant",
@@ -103,11 +103,10 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
     is a set of tuples `a` representing `S(*a)` as facts
 
     * If `S` is part of the intensional database then its value is an
-    `ExpressionBlock` such that each expression is a case of the symbol
-    each expression is a `Lambda` instance where the `function_expression` is
-    the query and the `args` are the needed projection. For instance
+    `Disjunction` of `Implications`. For instance
     `Q(x) :- R(x, x)` and `Q(x) :- T(x)` is represented as a symbol `Q`
-     with value `ExpressionBlock((Lambda(R(x, x), (x,)), Lambda(T(x), (x,))))`
+     with value
+     `Disjunction((Implication(Q(x), R(x, x)), Implication(Q(x), T(x))))`
     '''
 
     protected_keywords = set()

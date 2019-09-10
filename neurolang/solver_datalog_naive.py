@@ -16,9 +16,8 @@ from .datalog import (Disjunction, Fact, Implication, Negation, NullConstant,
                       is_conjunctive_expression_with_nested_predicates)
 from .expression_walker import TypedSymbolTableEvaluator, add_match
 from .expressions import (Constant, ExistentialPredicate, Expression,
-                          ExpressionBlock, FunctionApplication, Lambda,
-                          NeuroLangException, Query, Symbol,
-                          is_leq_informative)
+                          FunctionApplication, Lambda, NeuroLangException,
+                          Query, Symbol, is_leq_informative)
 from .type_system import Unknown
 
 warn("This module is being deprecated please use the datalog module")
