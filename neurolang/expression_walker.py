@@ -6,7 +6,7 @@ from itertools import product
 from .expression_pattern_matching import PatternMatcher, add_match
 from .expressions import (Constant, Expression, FunctionApplication, Lambda,
                           NeuroLangException, NeuroLangTypeException,
-                          Projection, Statement, Symbol, TypedSymbolTable,
+                          Projection, Statement, Symbol, TypedSymbolTableMixin,
                           Unknown, is_leq_informative, unify_types)
 
 
@@ -100,9 +100,9 @@ class PatternWalker(PatternMatcher):
 
 
 class IdentityWalker(PatternMatcher):
-    """Walks through express
+    """Walks through expresssions without doing
+    a thing.
     """
-
     @add_match(...)
     def _(self, expression):
         return expression
@@ -121,11 +121,8 @@ class ExpressionWalker(PatternWalker):
                 new_arg = self.walk(arg)
                 changed |= new_arg is not arg
             elif isinstance(arg, (tuple, list)):
-                new_arg = list()
-                for sub_arg in arg:
-                    new_arg.append(self.walk(sub_arg))
-                    changed |= new_arg[-1] is not sub_arg
-                new_arg = type(arg)(new_arg)
+                new_arg, change = self.process_iterable_argument(arg)
+                changed |= change
             elif arg is Ellipsis:
                 raise NeuroLangException(
                     '... is not a valid Expression argument'
@@ -139,6 +136,15 @@ class ExpressionWalker(PatternWalker):
             return self.walk(new_expression)
         else:
             return expression
+
+    def process_iterable_argument(self, arg):
+        changed = False
+        new_arg = list()
+        for sub_arg in arg:
+            new_arg.append(self.walk(sub_arg))
+            changed |= new_arg[-1] is not sub_arg
+        new_arg = type(arg)(new_arg)
+        return new_arg, changed
 
 
 class ReplaceSymbolWalker(ExpressionWalker):
@@ -217,14 +223,7 @@ class ReplaceExpressionsByValues(ExpressionWalker):
         return constant.value
 
 
-class SymbolTableEvaluator(ExpressionWalker):
-    def __init__(self, symbol_table=None):
-        if symbol_table is None:
-            symbol_table = TypedSymbolTable()
-        self.symbol_table = symbol_table
-        self.simplify_mode = False
-        self.add_functions_to_symbol_table()
-
+class TypedSymbolTableEvaluator(TypedSymbolTableMixin, ExpressionWalker):
     @add_match(Symbol)
     def symbol_from_table(self, symbol):
         try:
@@ -234,25 +233,6 @@ class SymbolTableEvaluator(ExpressionWalker):
                 return symbol
             else:
                 raise ValueError(f'{symbol} not in symbol table')
-
-    @property
-    def included_functions(self):
-        function_constants = dict()
-        for attribute in dir(self):
-            if attribute.startswith('function_'):
-                c = Constant(getattr(self, attribute))
-                function_constants[attribute[len('function_'):]] = c
-        return function_constants
-
-    def add_functions_to_symbol_table(self):
-        keyword_symbol_table = TypedSymbolTable()
-        for k, v in self.included_functions.items():
-            keyword_symbol_table[Symbol[v.type](k)] = v
-        keyword_symbol_table.set_readonly(True)
-        top_scope = self.symbol_table
-        while top_scope.enclosing_scope is not None:
-            top_scope = top_scope.enclosing_scope
-        top_scope.enclosing_scope = keyword_symbol_table
 
     @add_match(Statement)
     def statement(self, statement):
@@ -266,17 +246,8 @@ class SymbolTableEvaluator(ExpressionWalker):
         else:
             return self.walk(Statement[statement.type](statement.lhs, rhs))
 
-    def push_scope(self):
-        self.symbol_table = self.symbol_table.create_scope()
 
-    def pop_scope(self):
-        es = self.symbol_table.enclosing_scope
-        if es is None:
-            raise NeuroLangException('No enclosing scope')
-        self.symbol_table = self.symbol_table.enclosing_scope
-
-
-class ExpressionBasicEvaluator(SymbolTableEvaluator):
+class ExpressionBasicEvaluator(ExpressionWalker):
     @add_match(Projection(Constant(...), Constant(...)))
     def evaluate_projection(self, projection):
         return (projection.collection.value[int(projection.item.value)])
@@ -290,22 +261,7 @@ class ExpressionBasicEvaluator(SymbolTableEvaluator):
     )
     def evaluate_function(self, function_application):
         functor = function_application.functor
-        functor_type = functor.type
-        if isinstance(functor, Constant):
-            functor_value = functor.value
-
-        if functor_type is not Unknown:
-            if not is_leq_informative(functor_type, typing.Callable):
-                raise NeuroLangTypeException(
-                    'Function {} is not of callable type'.format(functor)
-                )
-            result_type = functor_type.__args__[-1]
-        else:
-            if not callable(functor_value):
-                raise NeuroLangTypeException(
-                    'Function {} is not of callable type'.format(functor)
-                )
-            result_type = Unknown
+        result_type = self.evaluate_function_infer_type(functor)
 
         rebv = ReplaceExpressionsByValues(self.symbol_table)
         args = rebv.walk(function_application.args)
@@ -313,8 +269,24 @@ class ExpressionBasicEvaluator(SymbolTableEvaluator):
             k: rebv.walk(v)
             for k, v in function_application.kwargs.items()
         }
-        result = Constant[result_type](functor_value(*args, **kwargs))
+        result = Constant[result_type](functor.value(*args, **kwargs))
         return result
+
+    def evaluate_function_infer_type(self, functor):
+        functor_type = functor.type
+        if functor_type is not Unknown:
+            if not is_leq_informative(functor_type, typing.Callable):
+                raise NeuroLangTypeException(
+                    f'Function {functor} is not of callable type'
+                )
+            result_type = functor_type.__args__[-1]
+        elif not callable(functor.value):
+            raise NeuroLangTypeException(
+                f'Function {functor} is not of callable type'
+            )
+        else:
+            result_type = Unknown
+        return result_type
 
     @add_match(FunctionApplication(Lambda, ...))
     def eval_lambda(self, function_application):

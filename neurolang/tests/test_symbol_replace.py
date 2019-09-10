@@ -1,11 +1,19 @@
-from typing import Callable
 import operator as op
+from typing import Callable
 
 from .. import expressions
-from ..expression_walker import ReplaceSymbolWalker, ExpressionBasicEvaluator
+from ..expression_walker import (ExpressionBasicEvaluator, ReplaceSymbolWalker,
+                                 TypedSymbolTableEvaluator)
 
 C_ = expressions.Constant
 S_ = expressions.Symbol
+
+
+class Evaluator(
+    TypedSymbolTableEvaluator,
+    ExpressionBasicEvaluator
+):
+    pass
 
 
 def test_replace_in_walker():
@@ -28,7 +36,7 @@ def test_replace_variable_in_expression():
     rsw = ReplaceSymbolWalker({symbol_to_replace: value})
     add_replacement = rsw.walk(add_op)
 
-    ebe = ExpressionBasicEvaluator()
+    ebe = Evaluator()
     add_result = ebe.walk(add_replacement)
     assert add_result == 5
 
@@ -45,6 +53,6 @@ def test_replace_variables_in_expression():
     rsw = ReplaceSymbolWalker(symbols_to_replace)
     add_replacement = rsw.walk(add_op)
 
-    ebe = ExpressionBasicEvaluator()
+    ebe = Evaluator()
     add_result = ebe.walk(add_replacement)
     assert add_result == 5

@@ -14,7 +14,7 @@ from .datalog import (Fact, Implication, NullConstant, Undefined,
                       extract_datalog_free_variables,
                       extract_datalog_predicates, is_conjunctive_expression,
                       is_conjunctive_expression_with_nested_predicates)
-from .expression_walker import add_match
+from .expression_walker import add_match, TypedSymbolTableEvaluator
 from .expressions import (Constant, ExistentialPredicate, Expression,
                           ExpressionBlock, FunctionApplication, Lambda,
                           NeuroLangException, Query, Symbol,
@@ -38,7 +38,10 @@ __all__ = [
 ]
 
 
-class SolverNonRecursiveDatalogNaive(DatalogBasic):
+class SolverNonRecursiveDatalogNaive(
+    TypedSymbolTableEvaluator,
+    DatalogBasic
+):
     '''
     Naive resolution system of Datalog.
     '''
