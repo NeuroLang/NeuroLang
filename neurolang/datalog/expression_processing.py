@@ -6,7 +6,7 @@ Datalog programs.
 from typing import Iterable
 
 from ..expression_walker import ExpressionWalker, PatternWalker, add_match
-from ..expressions import (Constant, ExpressionBlock, FunctionApplication,
+from ..expressions import (Constant, FunctionApplication,
                            NeuroLangException, Quantifier, Symbol)
 from ..utils import OrderedSet
 from .expressions import (Conjunction, Disjunction, Implication, Negation,
@@ -17,7 +17,7 @@ class TranslateToDatalogSemantics(TranslateToLogic, ExpressionWalker):
     pass
 
 
-class ExtractDatalogFreeVariablesWalker(PatternWalker):
+class WalkDatalogProgramAggregatingSets(PatternWalker):
     @add_match(Conjunction)
     def conjunction(self, expression):
         fvs = OrderedSet()
@@ -33,6 +33,8 @@ class ExtractDatalogFreeVariablesWalker(PatternWalker):
     def negation(self, expression):
         return self.walk(expression.literal)
 
+
+class ExtractDatalogFreeVariablesWalker(WalkDatalogProgramAggregatingSets):
     @add_match(FunctionApplication)
     def extract_variables_fa(self, expression):
         args = expression.args
@@ -132,7 +134,7 @@ def is_conjunctive_expression_with_nested_predicates(expression):
     return True
 
 
-class ExtractDatalogPredicates(PatternWalker):
+class ExtractDatalogPredicates(WalkDatalogProgramAggregatingSets):
     @add_match(Symbol)
     def symbol(self, expression):
         return OrderedSet()
@@ -148,17 +150,6 @@ class ExtractDatalogPredicates(PatternWalker):
     @add_match(Negation)
     def negation(self, expression):
         return OrderedSet([expression])
-
-    @add_match(Conjunction)
-    def conjunction(self, expression):
-        res = OrderedSet()
-        for literal in expression.literals:
-            res |= self.walk(literal)
-        return res
-
-    @add_match(Disjunction)
-    def disjunction(self, expression):
-        return self.conjunction(expression)
 
 
 def extract_datalog_predicates(expression):
