@@ -277,14 +277,14 @@ class ExpressionBasicEvaluator(ExpressionWalker):
         if functor_type is not Unknown:
             if not is_leq_informative(functor_type, typing.Callable):
                 raise NeuroLangTypeException(
-                    'Function {} is not of callable type'.format(functor)
+                    f'Function {functor} is not of callable type'
                 )
             result_type = functor_type.__args__[-1]
+        elif not callable(functor.value):
+            raise NeuroLangTypeException(
+                f'Function {functor} is not of callable type'
+            )
         else:
-            if not callable(functor.value):
-                raise NeuroLangTypeException(
-                    'Function {} is not of callable type'.format(functor)
-                )
             result_type = Unknown
         return result_type
 
