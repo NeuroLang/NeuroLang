@@ -13,7 +13,7 @@ F_ = nl.FunctionApplication
 
 def test_symbol_table_as_parameter():
     symbol_table = expressions.TypedSymbolTable()
-    solver = expression_walker.SymbolTableEvaluator(symbol_table)
+    solver = expression_walker.TypedSymbolTableEvaluator(symbol_table)
     s = S_('S1')
     c = C_[str]('S')
     symbol_table[s] = c
@@ -23,7 +23,7 @@ def test_symbol_table_as_parameter():
 def test_evaluating_embedded_functions():
     class Walker(
         expression_walker.ExpressionBasicEvaluator,
-        expression_walker.SymbolTableEvaluator
+        expression_walker.TypedSymbolTableEvaluator
     ):
         def function_add_set(self, a: AbstractSet[int]) -> int:
             return sum(a)
@@ -66,7 +66,7 @@ def test_pattern_walker_wrong_args():
 
 def test_symbol_table_scopes():
     symbol_table = expressions.TypedSymbolTable()
-    solver = expression_walker.SymbolTableEvaluator(symbol_table)
+    solver = expression_walker.TypedSymbolTableEvaluator(symbol_table)
     s = S_('S1')
     c = C_[str]('S')
     symbol_table[s] = c

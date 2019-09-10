@@ -1,23 +1,17 @@
-from collections import OrderedDict
 import itertools
-from operator import (
-    invert, and_, or_,
-    add, sub, mul, truediv, pos, neg
-)
 import typing
+from collections import OrderedDict
+from operator import add, and_, invert, mul, neg, or_, pos, sub, truediv
 from warnings import warn
 
 from .exceptions import NeuroLangException
-from .expressions import (
-    Expression, NonConstant, ExistentialPredicate, UniversalPredicate,
-    Symbol, Constant,
-    FunctionApplication, Query, Definition, is_leq_informative,
-    Unknown
-)
-from .expression_walker import (
-    add_match, ExpressionBasicEvaluator, ReplaceSymbolWalker,
-    PatternWalker
-)
+from .expression_walker import (ExpressionBasicEvaluator, PatternWalker,
+                                ReplaceSymbolWalker, TypedSymbolTableEvaluator,
+                                add_match)
+from .expressions import (Constant, Definition, ExistentialPredicate,
+                          Expression, FunctionApplication, NonConstant, Query,
+                          Symbol, UniversalPredicate, Unknown,
+                          is_leq_informative)
 
 T = typing.TypeVar('T')
 
@@ -26,7 +20,7 @@ class NeuroLangPredicateException(NeuroLangException):
     pass
 
 
-class GenericSolver(ExpressionBasicEvaluator):
+class GenericSolver(ExpressionBasicEvaluator, TypedSymbolTableEvaluator):
     @property
     def plural_type_name(self):
         return self.type_name + 's'

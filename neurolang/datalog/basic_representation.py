@@ -12,7 +12,7 @@ from typing import AbstractSet, Any, Callable, Tuple
 from ..expression_walker import (PatternWalker, add_match)
 from ..expressions import (Constant, Expression, ExpressionBlock,
                            FunctionApplication, NeuroLangException, Symbol,
-                           is_leq_informative)
+                           is_leq_informative, TypedSymbolTableMixin)
 from ..type_system import Unknown, infer_type
 from ..utils import RelationalAlgebraSet
 from .expression_processing import (
@@ -93,7 +93,7 @@ class WrappedRelationalAlgebraSet(
         )
 
 
-class DatalogProgram(PatternWalker):
+class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
     '''
     Implementation of Datalog grammar in terms of
     Intermediate Representations. No query resolution implemented.
@@ -114,6 +114,14 @@ class DatalogProgram(PatternWalker):
 
     def function_equals(self, a: Any, b: Any) -> bool:
         return a == b
+
+    @add_match(Symbol)
+    def symbol(self, expression):
+        resolved_symbol = self.symbol_table.get(expression, expression)
+        if resolved_symbol in self.extensional_database():
+            return expression
+        else:
+            return resolved_symbol
 
     @add_match(Fact(FunctionApplication[bool](Symbol, ...)))
     def fact(self, expression):
