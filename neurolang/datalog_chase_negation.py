@@ -118,6 +118,11 @@ class DatalogChaseNegationGeneral(DatalogChaseGeneral):
                         predicate.literal,
                         self.builtins[functor]
                     ))
+                elif isinstance(functor, Constant):
+                    negative_builtin_predicates.append((
+                        predicate.literal,
+                        functor
+                    ))
                 else:
                     negative_predicates.append((
                         predicate.literal,

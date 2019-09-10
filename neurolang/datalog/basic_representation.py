@@ -117,11 +117,13 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
 
     @add_match(Symbol)
     def symbol(self, expression):
-        resolved_symbol = self.symbol_table.get(expression, expression)
-        if resolved_symbol in self.extensional_database():
+        if (
+            expression in self.extensional_database() or
+            expression in self.intensional_database()
+        ):
             return expression
         else:
-            return resolved_symbol
+            return self.symbol_table.get(expression, expression)
 
     @add_match(Fact(FunctionApplication[bool](Symbol, ...)))
     def fact(self, expression):
@@ -183,7 +185,8 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
         else:
             disj = tuple()
 
-        disj += (expression,)
+        if expression not in disj:
+            disj += (expression,)
 
         self.symbol_table[consequent.functor] = Disjunction(disj)
 

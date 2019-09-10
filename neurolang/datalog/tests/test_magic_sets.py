@@ -12,14 +12,8 @@ F_ = Fact
 Eb_ = expressions.ExpressionBlock
 
 
-class TranslateToDatalog(
-    TranslateToLogic,
-    expression_walker.IdentityWalker
-):
-    pass
-
-
 class Datalog(
+    TranslateToLogic,
     DatalogProgram,
     expression_walker.ExpressionBasicEvaluator
 ):
@@ -50,15 +44,14 @@ def test_resolution_works():
         Imp_(anc(x, y), anc(x, z) & par(z, y)),
     ])
 
-    tr = TranslateToDatalog()
     dl = Datalog()
-    dl.walk(tr.walk(code))
-    dl.walk(tr.walk(edb))
+    dl.walk(code)
+    dl.walk(edb)
     goal, mr = magic_sets.magic_rewrite(q(x), dl)
 
     dl = Datalog()
-    dl.walk(tr.walk(mr))
-    dl.walk(tr.walk(edb))
+    dl.walk(mr)
+    dl.walk(edb)
 
     solution = Chase(dl).build_chase_solution()
     assert solution[goal].value == {C_((e,)) for e in (b, c, d)}
