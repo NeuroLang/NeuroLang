@@ -1,7 +1,7 @@
 from operator import and_, invert
 from typing import AbstractSet, Callable, Tuple
 
-from .datalog.expressions import Disjunction
+from .datalog.expressions import Disjunction, Negation
 from .expression_walker import add_match, expression_iterator
 from .expressions import (Constant, FunctionApplication, NeuroLangException,
                           NonConstant, Symbol, is_leq_informative)
@@ -16,7 +16,7 @@ class NegativeFact(Implication):
     initialization parameter is inverted.'''
 
     def __init__(self, antecedent):
-        super().__init__(Constant(False), invert(antecedent))
+        super().__init__(Constant(False), Negation(antecedent))
 
     @property
     def fact(self):
@@ -103,7 +103,7 @@ class DatalogBasicNegation(DatalogBasic):
 
     @add_match(NegativeFact)
     def negative_fact(self, expression):
-        fact = expression.fact.args[0]
+        fact = expression.fact.literal
         if fact.functor.name in self.protected_keywords:
             raise NeuroLangException(
                 f'symbol {self.constant_set_name} is protected'
