@@ -9,10 +9,13 @@ class RelationalAlgebraFrozenSet(Set):
     def __init__(self, iterable=None):
         self._container = None
         if iterable is not None:
-            self._container = pd.DataFrame(
-                list(iterable),
-            )
-            self._container = self._renew_index(self._container)
+            if isinstance(iterable, RelationalAlgebraFrozenSet):
+                self._container = iterable._container
+            else:
+                self._container = pd.DataFrame(
+                    list(iterable),
+                )
+                self._container = self._renew_index(self._container)
 
     def __contains__(self, element):
         element = self._normalise_element(element)
@@ -162,7 +165,7 @@ class RelationalAlgebraFrozenSet(Set):
             new_container = self._container.append(
                 other.loc[~other.index.isin(self._container.index)]
             )
-            output = output = type(self)()
+            output = type(self)()
             output._container = new_container
             return output
         else:
@@ -174,7 +177,7 @@ class RelationalAlgebraFrozenSet(Set):
         if isinstance(other, RelationalAlgebraSet):
             index_intersection = self._container.index & other._container.index
             new_container = self._container.loc[index_intersection]
-            output = output = type(self)()
+            output = type(self)()
             output._container = new_container
             return output
 

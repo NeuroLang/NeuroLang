@@ -1,4 +1,4 @@
-from . import chase
+from . import chase, magic_sets
 from .basic_representation import DatalogProgram, WrappedRelationalAlgebraSet
 from .expression_processing import (
     extract_datalog_free_variables, extract_datalog_predicates,
@@ -19,5 +19,5 @@ __all__ = [
     "is_conjunctive_expression",
     "is_conjunctive_expression_with_nested_predicates",
     "extract_datalog_free_variables",
-    "chase"
+    "chase", "magic_sets"
 ]

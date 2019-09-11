@@ -294,6 +294,36 @@ def test_load_spherical_volume_datalog():
     )
 
 
+def test_neurolang_dl_query():
+    neurolang = frontend.NeurolangDL()
+    r = neurolang.new_symbol(name='r')
+    x = neurolang.new_symbol(name='x')
+    y = neurolang.new_symbol(name='y')
+    z = neurolang.new_symbol(name='z')
+
+    dataset = {(i, i * 2) for i in range(10)}
+    q = neurolang.add_tuple_set(dataset, name='q')
+    sol = neurolang.query((x, y), q(x, y))
+    assert sol == dataset
+
+    sol = neurolang.query(tuple(), q(x, x))
+    assert sol
+    assert neurolang.query(q(x, x))
+
+    sol = neurolang.query(tuple(), q(100, x))
+    assert not sol
+    assert not neurolang.query(q(100, x))
+
+    sol = neurolang.query((x,), q(x, y) & q(y, z))
+    res = set((x,) for x in range(5))
+    assert sol == res
+
+    r[x, y] = q(x, y)
+    r[x, z] = r[x, y] & q(y, z)
+    sol = neurolang.query((y,), r(1, y))
+    assert sol == set((x,) for x in (2, 4, 8, 16))
+
+
 def test_neurolang_dl_aggregation():
     neurolang = frontend.NeurolangDL()
     q = neurolang.new_symbol(name='q')

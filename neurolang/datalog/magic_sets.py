@@ -5,8 +5,8 @@ Magic Sets [1] rewriting implementation for Datalog.
 '''
 
 from ..expressions import Constant, Symbol
-from . import Implication, expression_processing, extract_datalog_predicates
-from .expressions import Disjunction
+from .expression_processing import extract_datalog_predicates, reachable_code
+from .expressions import Disjunction, Implication
 
 
 class SymbolAdorned(Symbol):
@@ -192,7 +192,7 @@ def reachable_adorned_code(query, datalog):
     adorned_datalog.walk(adorned_code)
     # assume that the query rule is the first
     adorned_query = adorned_code.literals[0]
-    return expression_processing.reachable_code(adorned_query, adorned_datalog)
+    return reachable_code(adorned_query, adorned_datalog)
 
 
 def adorn_code(query, datalog):

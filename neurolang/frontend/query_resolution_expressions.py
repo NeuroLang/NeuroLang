@@ -153,6 +153,12 @@ for operator in [
 
 
 class Operation(Expression):
+    operator_repr = {
+        op.and_: '\u2227',
+        op.or_: '\u2228',
+        op.invert: '\u00ac',
+    }
+
     def __init__(
         self, query_builder, expression,
         operator, arguments, infix=False
@@ -168,6 +174,8 @@ class Operation(Expression):
             op_repr = self.operator.symbol_name
         elif isinstance(self.operator, Operation):
             op_repr = '({})'.format(repr(self.operator))
+        elif self.operator in self.operator_repr:
+            op_repr = self.operator_repr[self.operator]
         elif hasattr(self.operator, '__qualname__'):
             op_repr = self.operator.__qualname__
         else:
@@ -411,3 +419,14 @@ class TranslateExpressionToFrontEndExpression(ExpressionWalker):
             self.walk(expression.consequent),
             self.walk(expression.antecedent)
         )
+
+    @add_match(dl.Conjunction)
+    def conjunction(self, expression):
+        literals = list(expression.literals[::-1])
+        current_expression = self.walk(literals.pop())
+        while len(literals) > 0:
+            current_expression = (
+                current_expression &
+                self.walk(literals.pop())
+            )
+        return current_expression
