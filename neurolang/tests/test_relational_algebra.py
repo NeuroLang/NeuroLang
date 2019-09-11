@@ -163,7 +163,7 @@ def test_push_selection_equijoins():
         (C_(Column(0)),)
     )
 
-    assert raop.walk(s2) == s2_res 
+    assert raop.walk(s2) == s2_res
 
     s2 = Selection(
         EquiJoin(

@@ -8,6 +8,7 @@ from .. import neurolang as nl
 from ..expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 from ..expression_walker import (ExpressionWalker, ReplaceExpressionsByValues,
                                  add_match)
+from ..utils import RelationalAlgebraFrozenSet
 
 
 class Expression(object):
@@ -312,10 +313,16 @@ class Symbol(Expression):
     @property
     def value(self):
         constant = self.query_builder.solver.symbol_table[self.symbol_name]
-        try:
-            return self._rsbv.walk(constant)
-        except NeuroLangPatternMatchingNoMatch:
-            raise ValueError("Expression doesn't have a python value")
+        if (
+            isinstance(constant, exp.Constant) and
+            isinstance(constant.value, RelationalAlgebraFrozenSet)
+        ):
+            return RelationalAlgebraFrozenSet(constant.value)
+        else:
+            try:
+                return self._rsbv.walk(constant)
+            except NeuroLangPatternMatchingNoMatch:
+                raise ValueError("Expression doesn't have a python value")
 
 
 class Query(Expression):
