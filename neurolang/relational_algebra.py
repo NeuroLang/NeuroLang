@@ -57,7 +57,7 @@ class EquiJoin(Definition):
 
 class Product(Definition):
     def __init__(self, relations):
-        self.relations = relations
+        self.relations = tuple(relations)
 
     def __repr__(self):
         return '[' + f'\N{n-ary times operator}'.join(
