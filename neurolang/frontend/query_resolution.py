@@ -6,6 +6,7 @@ import numpy as np
 from .. import datalog
 from .. import expressions as exp
 from ..datalog import aggregation
+from ..datalog.expression_processing import TranslateToDatalogSemantics
 from ..region_solver import Region
 from ..regions import (ExplicitVBR, ImplicitVBR, SphericalVolume,
                        take_principal_regions)
@@ -333,6 +334,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         self.chase_class = chase_class
         self.frontend_translator = \
             TranslateExpressionToFrontEndExpression(self)
+        self.translate_expression_to_datalog = TranslateToDatalogSemantics()
 
     @property
     def current_program(self):
@@ -355,9 +357,11 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
     def _assign_intensional_rule(self, consequent, antecedent):
         new_args = tuple()
         changed = False
-        consequent_expression = consequent.expression
+        consequent_expression = self.translate_expression_to_datalog.walk(
+            consequent.expression
+        )
 
-        for arg in consequent.expression.args:
+        for arg in consequent_expression.args:
             if isinstance(arg, exp.FunctionApplication):
                 arg = aggregation.AggregationApplication(
                     arg.functor, arg.args
@@ -373,7 +377,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
         expression = datalog.Implication(
             consequent_expression,
-            antecedent.expression
+            self.translate_expression_to_datalog.walk(antecedent.expression)
         )
         return expression
 

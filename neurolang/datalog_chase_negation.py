@@ -1,7 +1,7 @@
 from itertools import chain, tee
-from operator import invert
 
-from . import solver_datalog_naive as sdb
+from .datalog import Negation
+from .datalog.expression_processing import extract_datalog_predicates
 from .datalog_chase import (DatalogChaseGeneral, DatalogChaseMGUMixin,
                             DatalogChaseRelationalAlgebraMixin)
 from .exceptions import NeuroLangException
@@ -103,47 +103,50 @@ class DatalogChaseNegationGeneral(DatalogChaseGeneral):
         if restriction_instance is None:
             restriction_instance = set()
 
-        head_functor = rule.consequent.functor
-        rule_predicates = sdb.extract_datalog_predicates(rule.antecedent)
+        rule_predicates = extract_datalog_predicates(rule.antecedent)
         restricted_predicates = []
         nonrestricted_predicates = []
         negative_predicates = []
         negative_builtin_predicates = []
         builtin_predicates = []
-        recursive_calls = 0
         for predicate in rule_predicates:
-            functor = predicate.functor
 
-            recursive_calls = self.check_non_linear(
-                head_functor, functor, recursive_calls
-            )
-
-            if functor in restriction_instance:
-                restricted_predicates.append(
-                    (predicate, restriction_instance[functor].value)
-                )
-            elif functor in instance:
-                nonrestricted_predicates.append(
-                    (predicate, instance[functor].value)
-                )
-            elif functor in self.builtins:
-                builtin_predicates.append((predicate, self.builtins[functor]))
-            elif (
-                functor == invert and
-                predicate.args[0].functor in self.builtins
-            ):
-                negative_builtin_predicates.append((
-                    predicate.args[0], self.builtins[predicate.args[0].functor]
-                ))
-            elif functor == invert:
-                negative_predicates.append((
-                    predicate.args[0],
-                    instance[predicate.args[0].functor].value
-                ))
-            elif isinstance(functor, Constant):
-                builtin_predicates.append((predicate, functor))
+            if isinstance(predicate, Negation):
+                functor = predicate.literal.functor
+                if functor in self.builtins:
+                    negative_builtin_predicates.append((
+                        predicate.literal,
+                        self.builtins[functor]
+                    ))
+                elif isinstance(functor, Constant):
+                    negative_builtin_predicates.append((
+                        predicate.literal,
+                        functor
+                    ))
+                else:
+                    negative_predicates.append((
+                        predicate.literal,
+                        instance[functor].value
+                    ))
             else:
-                return ([], [], [], [], [])
+                functor = predicate.functor
+
+                if functor in restriction_instance:
+                    restricted_predicates.append(
+                        (predicate, restriction_instance[functor].value)
+                    )
+                elif functor in instance:
+                    nonrestricted_predicates.append(
+                        (predicate, instance[functor].value)
+                    )
+                elif functor in self.builtins:
+                    builtin_predicates.append(
+                        (predicate, self.builtins[functor])
+                    )
+                elif isinstance(functor, Constant):
+                    builtin_predicates.append((predicate, functor))
+                else:
+                    return ([], [], [], [], [])
 
         return (
             restricted_predicates,

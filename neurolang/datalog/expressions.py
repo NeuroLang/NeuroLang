@@ -3,14 +3,19 @@ Expressions for the intermediate representation of a
 Datalog program.
 """
 
+from operator import and_, invert, or_
 from typing import Any
 
-from ..expressions import (
-    Definition, Constant
-)
+from ..expression_walker import PatternWalker, add_match
+from ..expressions import (Constant, Definition, ExpressionBlock,
+                           FunctionApplication)
 
 
-class Implication(Definition):
+class LogicOperator(Definition):
+    pass
+
+
+class Implication(LogicOperator):
     """Expression of the form `P(x) \u2190 Q(x)`"""
 
     def __init__(self, consequent, antecedent):
@@ -38,6 +43,54 @@ class Fact(Implication):
         )
 
 
+class Conjunction(LogicOperator):
+    def __init__(self, literals):
+        self.literals = tuple(literals)
+
+        self._symbols = set()
+        for literal in self.literals:
+            self._symbols |= literal._symbols
+
+    def __repr__(self):
+        return '\u22C0(' + ', '.join(
+            repr(e) for e in self.literals
+        ) + ')'
+
+
+class Disjunction(LogicOperator):
+    def __init__(self, literals):
+        self.literals = tuple(literals)
+
+        self._symbols = set()
+        for literal in self.literals:
+            self._symbols |= literal._symbols
+
+    def __repr__(self):
+        repr_literals = []
+        chars = 0
+        for literal in self.literals:
+            repr_literals.append(repr(literal))
+            chars += len(repr_literals[-1])
+
+        if chars < 30:
+            join_text = ', '
+        else:
+            join_text = ',\n'
+
+        return '\u22C1(' + join_text.join(
+            repr(e) for e in self.literals
+        ) + ')'
+
+
+class Negation(LogicOperator):
+    def __init__(self, literal):
+        self.literal = literal
+        self._symbols |= literal._symbols
+
+    def __repr__(self):
+        return f'\u00AC{self.literal}'
+
+
 class Undefined(Constant):
     def __repr__(self):
         return 'UNDEFINED'
@@ -50,3 +103,71 @@ class NullConstant(Constant):
 
 UNDEFINED = Undefined(None)
 NULL = NullConstant[Any](None)
+
+
+class TranslateToLogic(PatternWalker):
+    @add_match(FunctionApplication(Constant(and_), ...))
+    def build_conjunction(self, conjunction):
+        args = tuple()
+        for arg in conjunction.args:
+            new_arg = self.walk(arg)
+            if isinstance(new_arg, Conjunction):
+                args += new_arg.literals
+            else:
+                args += (new_arg,)
+
+        return self.walk(Conjunction(args))
+
+    @add_match(FunctionApplication(Constant(or_), ...))
+    def build_disjunction(self, disjunction):
+        args = tuple()
+        for arg in disjunction.args:
+            new_arg = self.walk(arg)
+            if isinstance(new_arg, Disjunction):
+                args += new_arg.literals
+            else:
+                args += (new_arg,)
+
+        return self.walk(Disjunction(args))
+
+    @add_match(FunctionApplication(Constant(invert), ...))
+    def build_negation(self, inversion):
+        arg = self.walk(inversion.args[0])
+        return self.walk(Negation(arg))
+
+    @add_match(ExpressionBlock)
+    def build_conjunction_from_expression_block(self, expression_block):
+        literals = tuple()
+        for expression in expression_block.expressions:
+            new_exp = self.walk(expression)
+            literals += (new_exp,)
+        return self.walk(Disjunction(literals))
+
+    @add_match(
+        Implication(..., Constant(True)),
+        lambda x: not isinstance(x, Fact)
+    )
+    def translate_true_implication(self, implication):
+        return self.walk(Fact(implication.consequent))
+
+    @add_match(
+        Implication(..., FunctionApplication(Constant, ...)),
+        lambda implication: (
+            implication.antecedent.functor.value is and_ or
+            implication.antecedent.functor.value is or_ or
+            implication.antecedent.functor.value is invert
+        )
+    )
+    def translate_implication(self, implication):
+        new_consequent = self.walk(implication.consequent)
+        new_antecedent = self.walk(implication.antecedent)
+
+        if (
+            new_consequent is not implication.consequent or
+            new_antecedent is not implication.antecedent
+        ):
+            implication = self.walk(
+                Implication(new_consequent, new_antecedent)
+            )
+
+        return implication

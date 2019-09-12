@@ -7,7 +7,7 @@ from ...expressions import (Constant, ExistentialPredicate, ExpressionBlock,
                             FunctionApplication, Lambda, NeuroLangException,
                             Query, Symbol, is_leq_informative)
 from ...solver_datalog_naive import NULL, SolverNonRecursiveDatalogNaive
-from .. import Fact, Implication
+from .. import Fact, Implication, Disjunction
 
 
 S_ = Symbol
@@ -15,7 +15,6 @@ C_ = Constant
 Imp_ = Implication
 F_ = FunctionApplication
 L_ = Lambda
-B_ = ExpressionBlock
 EP_ = ExistentialPredicate
 Q_ = Query
 T_ = Fact
@@ -95,8 +94,8 @@ def test_atoms_variables():
     dl.walk(f1)
 
     assert 'Q' in dl.symbol_table
-    assert isinstance(dl.symbol_table['Q'], ExpressionBlock)
-    fact = dl.symbol_table['Q'].expressions[-1]
+    assert isinstance(dl.symbol_table['Q'], Disjunction)
+    fact = dl.symbol_table['Q'].literals[-1]
     assert isinstance(fact, Implication)
     assert isinstance(fact.consequent, FunctionApplication)
     assert fact.consequent.functor is Q
@@ -108,8 +107,8 @@ def test_atoms_variables():
     dl.walk(f2)
 
     assert 'T' in dl.symbol_table
-    assert isinstance(dl.symbol_table['T'], ExpressionBlock)
-    fact = dl.symbol_table['T'].expressions[-1]
+    assert isinstance(dl.symbol_table['T'], Disjunction)
+    fact = dl.symbol_table['T'].literals[-1]
     assert isinstance(fact, Implication)
     assert isinstance(fact.consequent, FunctionApplication)
     assert fact.consequent.functor is T
@@ -120,8 +119,8 @@ def test_atoms_variables():
     dl.walk(f3)
 
     assert 'R' in dl.symbol_table
-    assert isinstance(dl.symbol_table['R'], ExpressionBlock)
-    fact = dl.symbol_table['R'].expressions[-1]
+    assert isinstance(dl.symbol_table['R'], Disjunction)
+    fact = dl.symbol_table['R'].literals[-1]
     assert isinstance(fact, Implication)
     assert isinstance(fact.consequent, FunctionApplication)
     assert fact.consequent.functor is R

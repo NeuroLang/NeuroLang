@@ -2,6 +2,7 @@ from ... import expression_walker, expressions
 from .. import Implication, Fact, DatalogProgram
 from .. import magic_sets
 from ..chase import Chase
+from ..expressions import TranslateToLogic
 
 
 C_ = expressions.Constant
@@ -12,6 +13,7 @@ Eb_ = expressions.ExpressionBlock
 
 
 class Datalog(
+    TranslateToLogic,
     DatalogProgram,
     expression_walker.ExpressionBasicEvaluator
 ):

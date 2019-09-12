@@ -35,11 +35,11 @@ class ChaseGeneral():
     def _set_rules(self, rules):
         self.rules = []
         if rules is None:
-            for expression_block in \
+            for disjunction in \
                     self.datalog_program.intensional_database().values():
-                self.rules += expression_block.expressions
+                self.rules += disjunction.literals
         else:
-            self.rules += rules.expressions
+            self.rules += rules.literals
 
     def check_constraints(self, instance_update):
         pass
@@ -166,22 +166,12 @@ class ChaseGeneral():
         if restriction_instance is None:
             restriction_instance = dict()
 
-        head_functor = rule.consequent.functor
         rule_predicates = extract_datalog_predicates(rule.antecedent)
         restricted_predicates = []
         nonrestricted_predicates = []
         builtin_predicates = []
-        recursive_calls = 0
         for predicate in rule_predicates:
             functor = predicate.functor
-
-            if functor == head_functor:
-                recursive_calls += 1
-                if recursive_calls > 1:
-                    raise ValueError(
-                        'Non-linear rule {rule}, solver non supported'
-                    )
-
             if functor in restriction_instance:
                 restricted_predicates.append(
                     (predicate, restriction_instance[functor].value)
@@ -260,9 +250,9 @@ class ChaseGeneral():
             self.datalog_program.extensional_database(), dict()
         )
         rules = []
-        for expression_block in self.datalog_program.intensional_database(
+        for disjunction in self.datalog_program.intensional_database(
         ).values():
-            for rule in expression_block.expressions:
+            for rule in disjunction.literals:
                 rules.append(rule)
 
         nodes_to_process = [root]
@@ -375,7 +365,7 @@ class ChaseRelationalAlgebraMixin:
         column = 0
         new_ra_expressions = tuple()
         rule_predicates_iterator = list(rule_predicates_iterator)
-        for _, pred_ra in enumerate(rule_predicates_iterator):
+        for pred_ra in rule_predicates_iterator:
             ra_expression_arity = pred_ra[1].arity
             new_ra_expression = self.translate_predicate(
                 pred_ra, column, args_to_project

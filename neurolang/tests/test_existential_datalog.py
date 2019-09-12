@@ -66,9 +66,9 @@ def test_existential_statement_added_to_symbol_table():
     Q = S_('Q')
     solver.walk(Implication(EP_(y, P(x, y)), Q(x)))
     assert 'P' in solver.symbol_table
-    assert len(solver.symbol_table['P'].expressions) == 1
+    assert len(solver.symbol_table['P'].literals) == 1
     assert isinstance(
-        solver.symbol_table['P'].expressions[0].consequent,
+        solver.symbol_table['P'].literals[0].consequent,
         expressions.ExistentialPredicate
     )
     solver = SolverWithoutExistentialResolution()

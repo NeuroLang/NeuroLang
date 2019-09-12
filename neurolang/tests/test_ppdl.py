@@ -92,7 +92,7 @@ def test_generative_datalog():
     gdatalog.walk(program)
     edb = gdatalog.extensional_database()
     idb = gdatalog.intensional_database()
-    assert tau_1 in idb['P'].expressions
+    assert tau_1 in idb['P'].literals
 
     with pytest.raises(NeuroLangException):
         tau_2 = Implication(
@@ -105,7 +105,7 @@ def test_generative_datalog():
         gdatalog.walk(ExpressionBlock((tau_2, Fact(Q(C_(2))))))
         edb = gdatalog.extensional_database()
         idb = gdatalog.intensional_database()
-        assert tau_2 in idb['P'].expressions
+        assert tau_2 in idb['P'].literals
         assert Fact(Q(C_(2))) in edb['Q']
 
 
@@ -224,9 +224,9 @@ def test_pcs_example():
             HasRPC(x, DeltaTerm(bernoulli, (p, ))),
             Subject(x) & pHasRPC(p)
         ),
-        Implication(pGender(DeltaTerm(Uniform, (C_(0), C_(1)))), C_('True')),
-        Implication(pHasLPC(DeltaTerm(Uniform, (C_(0), C_(1)))), C_('True')),
-        Implication(pHasRPC(DeltaTerm(Uniform, (C_(0), C_(1)))), C_('True')),
+        Implication(pGender(DeltaTerm(Uniform, (C_(0), C_(1)))), C_(True)),
+        Implication(pHasLPC(DeltaTerm(Uniform, (C_(0), C_(1)))), C_(True)),
+        Implication(pHasRPC(DeltaTerm(Uniform, (C_(0), C_(1)))), C_(True)),
     ))
     translator = TranslateGDatalogToEDatalogTestSolver()
     translated = translator.walk(program)

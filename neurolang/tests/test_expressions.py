@@ -1,15 +1,14 @@
+import inspect
+import operator as op
+from typing import AbstractSet, Callable
+
 import pytest
 
 from .. import expressions
-from ..expressions import (
-    Expression, Unknown, expressions_behave_as_objects
-)
+from ..expression_walker import (ExpressionBasicEvaluator,
+                                 TypedSymbolTableEvaluator)
+from ..expressions import Expression, Unknown, expressions_behave_as_objects
 
-from ..expression_walker import ExpressionBasicEvaluator
-
-import operator as op
-import inspect
-from typing import AbstractSet, Callable
 
 C_ = expressions.Constant
 S_ = expressions.Symbol
@@ -19,8 +18,12 @@ E_ = expressions.ExistentialPredicate
 U_ = expressions.UniversalPredicate
 
 
+class Evaluator(ExpressionBasicEvaluator, TypedSymbolTableEvaluator):
+    pass
+
+
 def evaluate(expression, **kwargs):
-    ebe = ExpressionBasicEvaluator()
+    ebe = Evaluator()
     for k, v in kwargs.items():
         if not isinstance(v, Expression):
             v = C_(v)
