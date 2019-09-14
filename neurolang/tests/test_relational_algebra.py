@@ -1,11 +1,11 @@
-from ..relational_algebra import (
-    C_, Column, eq_,
-    Selection, Projection, EquiJoin, Product,
-    RelationalAlgebraSolver,
-    RelationalAlgebraOptimiser
-)
-from ..solver_datalog_naive import WrappedRelationalAlgebraSet
+from typing import AbstractSet, Tuple
 
+from ..datalog.basic_representation import WrappedRelationalAlgebraSet
+from ..relational_algebra import (C_, Column, Difference, EquiJoin,
+                                  NaturalJoin, Product, Projection,
+                                  RelationalAlgebraOptimiser,
+                                  RelationalAlgebraSolver, Selection, eq_)
+from ..utils import NamedRelationalAlgebraFrozenSet
 
 R1 = WrappedRelationalAlgebraSet([
     (i, i * 2)
@@ -47,6 +47,18 @@ def test_equijoin():
     sol = RelationalAlgebraSolver().walk(s).value
 
     assert sol == R1.equijoin(R2, [(0, 0)])
+
+
+def test_naturaljoin():
+    r1_named = NamedRelationalAlgebraFrozenSet(('x', 'y'), R1)
+    r2_named = NamedRelationalAlgebraFrozenSet(('x', 'z'), R2)
+    s = NaturalJoin(
+        C_[AbstractSet[Tuple[int, int]]](r1_named),
+        C_[AbstractSet[Tuple[int, int]]](r2_named)
+    )
+    sol = RelationalAlgebraSolver().walk(s).value
+
+    assert sol == r1_named.naturaljoin(r2_named)
 
 
 def test_product():
@@ -222,6 +234,8 @@ def test_push_and_infer_equijoins():
     inner = Product((C_(R1), C_(R2)))
     formula5 = eq_(C_(Column(2)), C_(1))
     s = Selection(inner, formula5)
-    assert raop.walk(s) == Product(
+    res = raop.walk(s)
+    theoretical_res = Product(
         (C_(R1), Selection(C_(R2), formula4))
     )
+    assert res == theoretical_res

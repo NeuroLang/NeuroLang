@@ -17,7 +17,11 @@ S_ = Symbol
 FA_ = FunctionApplication
 
 
-class Selection(Definition):
+class RelationalAlgebraOperation(Definition):
+    pass
+
+
+class Selection(RelationalAlgebraOperation):
     def __init__(self, relation, formula):
         self.relation = relation
         self.formula = formula
@@ -26,7 +30,7 @@ class Selection(Definition):
         return f'\N{GREEK SMALL LETTER SIGMA}_{self.formula}({self.relation})'
 
 
-class Projection(Definition):
+class Projection(RelationalAlgebraOperation):
     def __init__(self, relation, attributes):
         self.relation = relation
         self.attributes = attributes
@@ -38,7 +42,7 @@ class Projection(Definition):
         )
 
 
-class EquiJoin(Definition):
+class EquiJoin(RelationalAlgebraOperation):
     def __init__(
         self, relation_left, columns_left, relation_right, columns_right
     ):
@@ -50,12 +54,27 @@ class EquiJoin(Definition):
     def __repr__(self):
         return (
             f'[{self.relation_left}'
-            f'\N{JOIN}_{self.columns_left}'
+            f'\N{JOIN}\N{SUBSCRIPT EQUALS SIGN}_{self.columns_left}'
             f'={self.columns_right}{self.relation_right}]'
         )
 
 
-class Product(Definition):
+class NaturalJoin(RelationalAlgebraOperation):
+    def __init__(
+        self, relation_left, relation_right
+    ):
+        self.relation_left = relation_left
+        self.relation_right = relation_right
+
+    def __repr__(self):
+        return (
+            f'[{self.relation_left}'
+            f'\N{JOIN}_{self.columns_left}'
+            f'{self.relation_right}]'
+        )
+
+
+class Product(RelationalAlgebraOperation):
     def __init__(self, relations):
         self.relations = tuple(relations)
 
@@ -65,67 +84,22 @@ class Product(Definition):
         ) + ']'
 
 
-class RelationalAlgebraWalker(ew.PatternWalker):
-    """
-    Mixing that walks through relational algebra expressions.
+class Difference(RelationalAlgebraOperation):
+    def __init__(
+        self, relation_left, relation_right
+    ):
+        self.relation_left = relation_left
+        self.relation_right = relation_right
 
-    Columns referred in projections, selections, and joins are
-    expected to be instances of :obj:`Column`.
-    """
-
-    @ew.add_match(Selection)
-    def selection_on_relation(self, selection):
-        relation = self.walk(selection.relation)
-        if relation is selection.relation:
-            return selection
-        else:
-            return self.walk(Selection(relation, selection.formula))
-
-    @ew.add_match(Projection)
-    def ra_projection(self, projection):
-        return Projection(
-            self.walk(projection.relation),
-            projection.attributes
+    def __repr__(self):
+        return (
+            f'[{self.relation_left}'
+            f'-'
+            f'{self.relation_right}]'
         )
 
-    @ew.add_match(Product)
-    def product(self, product):
-        if len(product.relations) == 1:
-            return product.relations[0]
-        else:
-            new_relations = []
-            changed = False
-            for relation in product.relations:
-                new_relation = self.walk(relation)
-                changed |= new_relation is not relation
-                new_relations.append(new_relation)
-            if changed:
-                res = self.walk(Product(new_relations))
-            else:
-                res = product
-            return res
 
-    @ew.add_match(EquiJoin)
-    def equijoin(self, equijoin):
-        left = self.walk(equijoin.relation_left)
-        right = self.walk(equijoin.relation_right)
-        if (
-            left is equijoin.relation_left and
-            right is equijoin.relation_right
-        ):
-            return equijoin
-        else:
-            return self.walk(EquiJoin(
-                left, equijoin.columns_left,
-                right, equijoin.columns_right
-            ))
-
-    @ew.add_match(Constant)
-    def constant(self, constant):
-        return constant
-
-
-class RelationalAlgebraSolver(RelationalAlgebraWalker):
+class RelationalAlgebraSolver(ew.ExpressionWalker):
     """
     Mixing that walks through relational algebra expressions and
     executes the operations.
@@ -176,8 +150,31 @@ class RelationalAlgebraSolver(RelationalAlgebraWalker):
 
         return C_[AbstractSet](res)
 
+    @ew.add_match(NaturalJoin)
+    def ra_naturaljoin(self, naturaljoin):
+        left = self.walk(naturaljoin.relation_left).value
+        right = self.walk(naturaljoin.relation_right).value
+        res = left.naturaljoin(right)
+        return C_[AbstractSet](res)
 
-class RelationalAlgebraRewriteSelections(ew.PatternWalker):
+    @ew.add_match(Difference)
+    def ra_difference(self, difference):
+        left = self.walk(difference.relation_left).value
+        right = self.walk(difference.relation_right).value
+        res = left - right
+        return C_[AbstractSet](res)
+
+
+class RelationalAlgebraSimplification(ew.ExpressionWalker):
+    @ew.add_match(
+        Product,
+        lambda x: len(x.relations) == 1
+    )
+    def single_product(self, product):
+        return self.walk(product.relations[0])
+
+
+class RelationalAlgebraRewriteSelections(ew.ExpressionWalker):
     """
     Mixing that optimises through relational algebra expressions.
 
@@ -417,7 +414,8 @@ class RelationalAlgebraRewriteSelections(ew.PatternWalker):
 
 class RelationalAlgebraOptimiser(
     RelationalAlgebraRewriteSelections,
-    RelationalAlgebraWalker,
+    RelationalAlgebraSimplification,
+    ew.ExpressionWalker
 ):
     """
     Mixing that optimises through relational algebra expressions by
