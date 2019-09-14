@@ -69,7 +69,7 @@ class NaturalJoin(RelationalAlgebraOperation):
     def __repr__(self):
         return (
             f'[{self.relation_left}'
-            f'\N{JOIN}_{self.columns_left}'
+            f'\N{JOIN}'
             f'{self.relation_right}]'
         )
 
