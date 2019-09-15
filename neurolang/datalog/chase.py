@@ -1,7 +1,7 @@
 from collections import namedtuple
 from itertools import chain, tee
 from operator import eq
-from typing import AbstractSet
+from typing import AbstractSet, Tuple
 
 from ..exceptions import NeuroLangException
 from ..expressions import Constant, FunctionApplication, Symbol
@@ -14,6 +14,9 @@ from ..unification import (apply_substitution, apply_substitution_arguments,
 from ..utils import OrderedSet
 from .expression_processing import (extract_datalog_free_variables,
                                     extract_datalog_predicates, is_linear_rule)
+from .expressions import Conjunction
+from .translate_to_named_ra import TranslateToNamedRA
+from .basic_representation import WrappedExpressionIterable
 
 ChaseNode = namedtuple('ChaseNode', 'instance children')
 
@@ -429,6 +432,40 @@ class ChaseRelationalAlgebraMixin:
         return substitutions
 
 
+class ChaseNamedRelationalAlgebraMixin:
+    def obtain_substitutions(self, args_to_project, rule_predicates_iterator):
+        symbol_table = {}
+        predicates = tuple()
+        for predicate, set_ in rule_predicates_iterator:
+            type_ = AbstractSet[set_.row_type]
+            set_ = Constant[type_](set_, verify_type=False)
+            symbol_table[predicate.functor] = set_
+            predicates += (predicate,)
+
+        if len(predicates) == 0:
+            return [{}]
+
+        traslator_to_named_ra = TranslateToNamedRA(symbol_table)
+        ra_code = traslator_to_named_ra.walk(
+            Conjunction(predicates)
+        )
+        result = RelationalAlgebraSolver().walk(ra_code)
+
+        substitutions = self.compute_substitutions(result)
+
+        return substitutions
+
+    def compute_substitutions(self, result):
+        substitutions = []
+        for tuple_ in result.value:
+            subs = {
+                k: Constant(v)
+                for k, v in tuple_._asdict().items()
+            }
+            substitutions.append(subs)
+        return substitutions
+
+
 class ChaseMGUMixin:
     @staticmethod
     def obtain_substitutions(args_to_project, rule_predicates_iterator):
@@ -466,5 +503,5 @@ class ChaseMGUMixin:
         return new_substitutions
 
 
-class Chase(ChaseSemiNaive, ChaseRelationalAlgebraMixin):
+class Chase(ChaseSemiNaive, ChaseNamedRelationalAlgebraMixin):
     pass

@@ -27,16 +27,19 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
     def translate_fa(self, expression):
         functor = expression.functor
         if isinstance(functor, Symbol):
-            functor = self.symbol_table[functor]
-
-        if not (
-            isinstance(functor, Constant[AbstractSet]) and
-            isinstance(functor.value, RelationalAlgebraFrozenSet)
-        ):
-            raise NeuroLangException(
-                "Sets must be instances of in the instance and be "
-                "an instance of RelationalAlgebraFrozenSet"
-            )
+            if functor in self.symbol_table:
+                functor = self.symbol_table[functor]
+                if not (
+                    isinstance(functor, Constant[AbstractSet]) and
+                    isinstance(functor.value, RelationalAlgebraFrozenSet)
+                ):
+                    raise NeuroLangException(
+                        "Sets must be instances of in the instance and be "
+                        "an instance of RelationalAlgebraFrozenSet"
+                    )
+            else:
+                inner_type = tuple(arg.type for arg in expression.args)
+                functor = Constant[AbstractSet[Tuple[inner_type]]](set())
 
         named_args = []
         projections = []
@@ -52,10 +55,11 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
                 new_type += (set_type[i],)
 
         in_set = functor.value
-        if len(selections) > 0:
-            in_set = in_set.selection(selections)
-        if len(projections) > 0:
-            in_set = in_set.projection(*projections)
+        if len(in_set) > 0:
+            if len(selections) > 0:
+                in_set = in_set.selection(selections)
+            if len(projections) > 0:
+                in_set = in_set.projection(*projections)
 
         out_set = Constant[AbstractSet[Tuple[new_type]]](
             NamedRelationalAlgebraFrozenSet(

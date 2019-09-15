@@ -393,7 +393,9 @@ def test_recursive_predicate_chase_solution():
     z = S_('z')
 
     datalog_program = Eb_((
-        F_(Q(C_(1), C_(2))), F_(Q(C_(2), C_(3))), Imp_(T(x, y), Q(x, y)),
+        F_(Q(C_(1), C_(2))),
+        F_(Q(C_(2), C_(3))),
+        Imp_(T(x, y), Q(x, y)),
         Imp_(T(x, y),
              Q(x, z) & T(z, y))
     ))
