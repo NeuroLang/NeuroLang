@@ -17,6 +17,7 @@ from warnings import warn
 from ..exceptions import NeuroLangException
 from ..expression_walker import PatternWalker, add_match
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
+from ..unification import apply_substitution_arguments
 from ..utils import OrderedSet
 from . import (Disjunction, Implication, chase, extract_datalog_free_variables,
                is_conjunctive_expression_with_nested_predicates)
@@ -135,7 +136,7 @@ class Chase(chase.Chase):
         args = extract_datalog_free_variables(rule.consequent)
         new_tuples = self.datalog_program.new_set(
             Constant[Tuple](
-                chase.apply_substitution_arguments(args, substitution)
+                apply_substitution_arguments(args, substitution)
             )
             for substitution in substitutions
         )
@@ -146,7 +147,7 @@ class Chase(chase.Chase):
 
         new_tuples = self.datalog_program.new_set(
             Constant[Tuple](
-                chase.apply_substitution_arguments(fvs, substitution)
+                apply_substitution_arguments(fvs, substitution)
             )
             for substitution in substitutions
         )
