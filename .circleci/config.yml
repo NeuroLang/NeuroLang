@@ -5,10 +5,9 @@
 version: 2.1
 
 commands:
-  install_test:
-    description: "Installs the necessary packages & runs the tests."
+  install:
+    description: "Installs the necessary packages"
     steps:
-      - checkout
       # Download and cache dependencies
       - restore_cache:
           keys:
@@ -46,6 +45,9 @@ commands:
             - cc-test-reporter
           key: v1-dependencies-{{ checksum "requirements.txt" }}
 
+  test:
+    description: "Run the tests"
+    steps:
       - run:
           name: run tests
           command: |
@@ -89,7 +91,9 @@ jobs:
 
     working_directory: ~/repo
     steps:
-      - install_test
+      - checkout
+      - install
+      - test
 
   py37:
     docker:
@@ -108,7 +112,9 @@ jobs:
     working_directory: ~/repo
 
     steps:
-      - install_test
+      - checkout
+      - install
+      - test
 
 workflows:
   version: 2
