@@ -21,9 +21,9 @@ class ExistentialDatalog(DatalogBasic):
             if (
                 k not in self.protected_keywords and
                 isinstance(v, Disjunction) and all(
-                    isinstance(literal, Implication) and
-                    isinstance(literal.consequent, ExistentialPredicate)
-                    for literal in v.literals
+                    isinstance(formula, Implication) and
+                    isinstance(formula.consequent, ExistentialPredicate)
+                    for formula in v.formulas
                 )
             )
         }
@@ -35,9 +35,9 @@ class ExistentialDatalog(DatalogBasic):
             if (
                 k not in self.protected_keywords and
                 isinstance(v, Disjunction) and not any(
-                    isinstance(literal, Implication) and
-                    isinstance(literal.consequent, ExistentialPredicate)
-                    for literal in v.literals
+                    isinstance(formula, Implication) and
+                    isinstance(formula.consequent, ExistentialPredicate)
+                    for formula in v.formulas
                 )
             )
         }
@@ -67,7 +67,7 @@ class ExistentialDatalog(DatalogBasic):
                 raise NeuroLangException(
                     'A rule cannot be both in IDB and E-IDB'
                 )
-            disjunctions = self.symbol_table[consequent_name].literals
+            disjunctions = self.symbol_table[consequent_name].formulas
         else:
             disjunctions = tuple()
         disjunctions += (expression, )

@@ -76,7 +76,7 @@ def test_atoms_variables():
 
     assert 'Q' in dl.symbol_table
     assert isinstance(dl.symbol_table['Q'], Disjunction)
-    fact = dl.symbol_table['Q'].literals[-1]
+    fact = dl.symbol_table['Q'].formulas[-1]
     assert isinstance(fact, Implication)
     assert isinstance(fact.consequent, FunctionApplication)
     assert fact.consequent.functor is Q
@@ -89,7 +89,7 @@ def test_atoms_variables():
 
     assert 'T' in dl.symbol_table
     assert isinstance(dl.symbol_table['T'], Disjunction)
-    fact = dl.symbol_table['T'].literals[-1]
+    fact = dl.symbol_table['T'].formulas[-1]
     assert isinstance(fact, Implication)
     assert isinstance(fact.consequent, FunctionApplication)
     assert fact.consequent.functor is T
@@ -101,7 +101,7 @@ def test_atoms_variables():
 
     assert 'R' in dl.symbol_table
     assert isinstance(dl.symbol_table['R'], Disjunction)
-    fact = dl.symbol_table['R'].literals[-1]
+    fact = dl.symbol_table['R'].formulas[-1]
     assert isinstance(fact, Implication)
     assert isinstance(fact.consequent, FunctionApplication)
     assert fact.consequent.functor is R
@@ -176,8 +176,8 @@ def test_intensional_extensional_database():
 
     idb = dl.intensional_database()
     assert len(idb) == 2
-    assert len(idb['R'].literals) == 2
-    assert len(idb['T'].literals) == 1
+    assert len(idb['R'].formulas) == 2
+    assert len(idb['T'].formulas) == 1
 
 
 def test_not_conjunctive():

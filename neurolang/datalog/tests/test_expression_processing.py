@@ -178,9 +178,9 @@ def test_stratification():
 
     assert stratifyiable
     assert strata == [
-        list(code.literals[:1]),
-        list(code.literals[1: 3]),
-        list(code.literals[3:])
+        list(code.formulas[:1]),
+        list(code.formulas[1: 3]),
+        list(code.formulas[3:])
     ]
 
     code = DT.walk(B_([
@@ -198,9 +198,9 @@ def test_stratification():
 
     assert not stratifyiable
     assert strata == [
-        list(code.literals[:1]),
-        list(code.literals[1: 3]),
-        list(code.literals[3:])
+        list(code.formulas[:1]),
+        list(code.formulas[1: 3]),
+        list(code.formulas[3:])
     ]
 
 
@@ -222,6 +222,6 @@ def test_reachable():
     datalog = Datalog()
     datalog.walk(code)
 
-    reached = reachable_code(code.literals[-2], datalog)
+    reached = reachable_code(code.formulas[-2], datalog)
 
-    assert set(reached.literals) == set(code.literals[:-1])
+    assert set(reached.formulas) == set(code.formulas[:-1])

@@ -8,6 +8,7 @@ from .. import neurolang as nl
 from ..expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 from ..expression_walker import (ExpressionWalker, ReplaceExpressionsByValues,
                                  add_match)
+from ..utils import RelationalAlgebraFrozenSet
 
 
 class Expression(object):
@@ -153,6 +154,12 @@ for operator in [
 
 
 class Operation(Expression):
+    operator_repr = {
+        op.and_: '\u2227',
+        op.or_: '\u2228',
+        op.invert: '\u00ac',
+    }
+
     def __init__(
         self, query_builder, expression,
         operator, arguments, infix=False
@@ -168,6 +175,8 @@ class Operation(Expression):
             op_repr = self.operator.symbol_name
         elif isinstance(self.operator, Operation):
             op_repr = '({})'.format(repr(self.operator))
+        elif self.operator in self.operator_repr:
+            op_repr = self.operator_repr[self.operator]
         elif hasattr(self.operator, '__qualname__'):
             op_repr = self.operator.__qualname__
         else:
@@ -304,10 +313,16 @@ class Symbol(Expression):
     @property
     def value(self):
         constant = self.query_builder.solver.symbol_table[self.symbol_name]
-        try:
-            return self._rsbv.walk(constant)
-        except NeuroLangPatternMatchingNoMatch:
-            raise ValueError("Expression doesn't have a python value")
+        if (
+            isinstance(constant, exp.Constant) and
+            isinstance(constant.value, RelationalAlgebraFrozenSet)
+        ):
+            return RelationalAlgebraFrozenSet(constant.value)
+        else:
+            try:
+                return self._rsbv.walk(constant)
+            except NeuroLangPatternMatchingNoMatch:
+                raise ValueError("Expression doesn't have a python value")
 
 
 class Query(Expression):
@@ -411,3 +426,14 @@ class TranslateExpressionToFrontEndExpression(ExpressionWalker):
             self.walk(expression.consequent),
             self.walk(expression.antecedent)
         )
+
+    @add_match(dl.Conjunction)
+    def conjunction(self, expression):
+        formulas = list(expression.formulas[::-1])
+        current_expression = self.walk(formulas.pop())
+        while len(formulas) > 0:
+            current_expression = (
+                current_expression &
+                self.walk(formulas.pop())
+            )
+        return current_expression
