@@ -5,7 +5,7 @@
 version: 2.1
 
 jobs:
-  test-3.6:
+  py36:
     docker:
       # specify the version you desire here
       # use `-browsers` prefix for selenium tests, e.g. `3.6.1-browsers`
@@ -86,7 +86,7 @@ jobs:
           path: test-reports
           destination: test-reports
 
-  test-3.7:
+  py37:
     docker:
       # specify the version you desire here
       # use `-browsers` prefix for selenium tests, e.g. `3.6.1-browsers`
@@ -172,5 +172,5 @@ workflows:
   version: 2
   test:
     jobs:
-      - test-3.6
-      - test-3.7
+      - py36
+      - py37
