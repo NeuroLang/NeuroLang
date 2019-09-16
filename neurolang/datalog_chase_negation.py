@@ -112,20 +112,20 @@ class DatalogChaseNegationGeneral(DatalogChaseGeneral):
         for predicate in rule_predicates:
 
             if isinstance(predicate, Negation):
-                functor = predicate.literal.functor
+                functor = predicate.formula.functor
                 if functor in self.builtins:
                     negative_builtin_predicates.append((
-                        predicate.literal,
+                        predicate.formula,
                         self.builtins[functor]
                     ))
                 elif isinstance(functor, Constant):
                     negative_builtin_predicates.append((
-                        predicate.literal,
+                        predicate.formula,
                         functor
                     ))
                 else:
                     negative_predicates.append((
-                        predicate.literal,
+                        predicate.formula,
                         instance[functor].value
                     ))
             else:

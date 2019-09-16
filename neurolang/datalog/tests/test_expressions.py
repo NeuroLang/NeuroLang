@@ -19,7 +19,7 @@ def test_translation_negation():
     res = ttl.walk(exp)
 
     assert isinstance(res, Negation)
-    assert res.literal == exp.args[0]
+    assert res.formula == exp.args[0]
 
 
 def test_translation_conjunctions():
@@ -33,17 +33,17 @@ def test_translation_conjunctions():
     conj1 = Q(x) & R(x)
     res = ttl.walk(conj1)
     assert isinstance(res, Conjunction)
-    assert res.literals == conj1.args
+    assert res.formulas == conj1.args
 
     conj2 = conj1 & S(x)
     res = ttl.walk(conj2)
     assert isinstance(res, Conjunction)
-    assert res.literals == conj1.args + (conj2.args[-1],)
+    assert res.formulas == conj1.args + (conj2.args[-1],)
 
     conj3 = S(x) & conj1
     res = ttl.walk(conj3)
     assert isinstance(res, Conjunction)
-    assert res.literals == (conj3.args[0],) + conj1.args
+    assert res.formulas == (conj3.args[0],) + conj1.args
 
 
 def test_translation_disjunctions():
@@ -57,17 +57,17 @@ def test_translation_disjunctions():
     disj1 = Q(x) | R(x)
     res = ttl.walk(disj1)
     assert isinstance(res, Disjunction)
-    assert res.literals == disj1.args
+    assert res.formulas == disj1.args
 
     disj2 = disj1 | S(x)
     res = ttl.walk(disj2)
     assert isinstance(res, Disjunction)
-    assert res.literals == disj1.args + (disj2.args[-1],)
+    assert res.formulas == disj1.args + (disj2.args[-1],)
 
     disj3 = S(x) | disj1
     res = ttl.walk(disj3)
     assert isinstance(res, Disjunction)
-    assert res.literals == (disj3.args[0],) + disj1.args
+    assert res.formulas == (disj3.args[0],) + disj1.args
 
     conj1 = Implication(Q(x), Q(x) & R(x))
     conj2 = Implication(Q(x), R(x))
@@ -75,8 +75,8 @@ def test_translation_disjunctions():
     res = ttl.walk(eb)
     assert isinstance(res, Disjunction)
     assert all(
-        literal == ttl.walk(expression)
-        for literal, expression in zip(res.literals, eb.expressions)
+        formula == ttl.walk(expression)
+        for formula, expression in zip(res.formulas, eb.expressions)
     )
 
 

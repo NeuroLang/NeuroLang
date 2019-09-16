@@ -3,7 +3,6 @@ from uuid import uuid1
 
 import numpy as np
 
-from .. import datalog
 from .. import expressions as exp
 from ..datalog import aggregation
 from ..datalog.expression_processing import TranslateToDatalogSemantics
@@ -12,11 +11,10 @@ from ..regions import (ExplicitVBR, ImplicitVBR, SphericalVolume,
                        take_principal_regions)
 from ..type_system import Unknown, is_leq_informative
 from .neurosynth_utils import NeuroSynthHandler
-from .query_resolution_expressions import (
-    All, Exists, Expression, Query, Symbol,
-    TranslateExpressionToFrontEndExpression)
+from .query_resolution_expressions import (All, Exists, Expression, Query,
+                                           Symbol)
 
-__all__ = ['QueryBuilderFirstOrder', 'QueryBuilderDatalog']
+__all__ = ['QueryBuilderFirstOrder']
 
 
 class QueryBuilderBase(object):

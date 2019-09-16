@@ -156,8 +156,8 @@ class SolverNonRecursiveDatalogNaive(
         )
     )
     def evaluate_datalog_disjunction(self, expression):
-        for literal in expression.functor.literals:
-            fa = FunctionApplication[bool](literal, expression.args)
+        for formula in expression.functor.formulas:
+            fa = FunctionApplication[bool](formula, expression.args)
             res = self.walk(fa)
             if isinstance(res, Constant) and res.value is True:
                 break

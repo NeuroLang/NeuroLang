@@ -44,33 +44,33 @@ class Fact(Implication):
 
 
 class Conjunction(LogicOperator):
-    def __init__(self, literals):
-        self.literals = tuple(literals)
+    def __init__(self, formulas):
+        self.formulas = tuple(formulas)
 
         self._symbols = set()
-        for literal in self.literals:
-            self._symbols |= literal._symbols
+        for formula in self.formulas:
+            self._symbols |= formula._symbols
 
     def __repr__(self):
         return '\u22C0(' + ', '.join(
-            repr(e) for e in self.literals
+            repr(e) for e in self.formulas
         ) + ')'
 
 
 class Disjunction(LogicOperator):
-    def __init__(self, literals):
-        self.literals = tuple(literals)
+    def __init__(self, formulas):
+        self.formulas = tuple(formulas)
 
         self._symbols = set()
-        for literal in self.literals:
-            self._symbols |= literal._symbols
+        for formula in self.formulas:
+            self._symbols |= formula._symbols
 
     def __repr__(self):
-        repr_literals = []
+        repr_formulas = []
         chars = 0
-        for literal in self.literals:
-            repr_literals.append(repr(literal))
-            chars += len(repr_literals[-1])
+        for formula in self.formulas:
+            repr_formulas.append(repr(formula))
+            chars += len(repr_formulas[-1])
 
         if chars < 30:
             join_text = ', '
@@ -78,17 +78,17 @@ class Disjunction(LogicOperator):
             join_text = ',\n'
 
         return '\u22C1(' + join_text.join(
-            repr(e) for e in self.literals
+            repr(e) for e in self.formulas
         ) + ')'
 
 
 class Negation(LogicOperator):
-    def __init__(self, literal):
-        self.literal = literal
-        self._symbols |= literal._symbols
+    def __init__(self, formula):
+        self.formula = formula
+        self._symbols |= formula._symbols
 
     def __repr__(self):
-        return f'\u00AC{self.literal}'
+        return f'\u00AC{self.formula}'
 
 
 class Undefined(Constant):
@@ -112,7 +112,7 @@ class TranslateToLogic(PatternWalker):
         for arg in conjunction.args:
             new_arg = self.walk(arg)
             if isinstance(new_arg, Conjunction):
-                args += new_arg.literals
+                args += new_arg.formulas
             else:
                 args += (new_arg,)
 
@@ -124,7 +124,7 @@ class TranslateToLogic(PatternWalker):
         for arg in disjunction.args:
             new_arg = self.walk(arg)
             if isinstance(new_arg, Disjunction):
-                args += new_arg.literals
+                args += new_arg.formulas
             else:
                 args += (new_arg,)
 
@@ -137,11 +137,11 @@ class TranslateToLogic(PatternWalker):
 
     @add_match(ExpressionBlock)
     def build_conjunction_from_expression_block(self, expression_block):
-        literals = tuple()
+        formulas = tuple()
         for expression in expression_block.expressions:
             new_exp = self.walk(expression)
-            literals += (new_exp,)
-        return self.walk(Disjunction(literals))
+            formulas += (new_exp,)
+        return self.walk(Disjunction(formulas))
 
     @add_match(
         Implication(..., Constant(True)),

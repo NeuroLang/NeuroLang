@@ -30,7 +30,7 @@ def get_conjunction_atoms(expression):
         return [expression]
 
 
-def get_antecedent_literals(rule):
+def get_antecedent_formulas(rule):
     if not isinstance(rule, Implication):
         raise NeuroLangException('Implication expected')
 
@@ -38,8 +38,8 @@ def get_antecedent_literals(rule):
 
 
 def get_antecedent_predicate_names(rule):
-    antecedent_literals = get_antecedent_literals(rule)
-    return [literal.functor.name for literal in antecedent_literals]
+    antecedent_formulas = get_antecedent_formulas(rule)
+    return [formula.functor.name for formula in antecedent_formulas]
 
 
 def is_gdatalog_rule(exp):
@@ -123,7 +123,7 @@ class GenerativeDatalog(DatalogBasic):
             raise NeuroLangException('Rule antecedent has to be a conjunction')
 
         if predicate in self.symbol_table:
-            disj = self.symbol_table[predicate].literals
+            disj = self.symbol_table[predicate].formulas
         else:
             disj = tuple()
 
@@ -135,7 +135,7 @@ class GenerativeDatalog(DatalogBasic):
 def get_antecedent_constant_indexes(rule):
     '''Get indexes of constants occurring in antecedent predicates.'''
     constant_indexes = dict()
-    for antecedent in get_antecedent_literals(rule):
+    for antecedent in get_antecedent_formulas(rule):
         predicate = antecedent.functor.name
         indexes = {
             i
@@ -151,7 +151,7 @@ def get_predicate_probabilistic_rules(gdatalog, predicate):
     if predicate not in gdatalog.symbol_table:
         return set()
     return set(
-        rule for rule in gdatalog.symbol_table[predicate].literals
+        rule for rule in gdatalog.symbol_table[predicate].formulas
         if is_gdatalog_rule(rule)
     )
 
@@ -180,7 +180,7 @@ def can_lead_to_object_uncertainty(gdatalog):
             key not in gdatalog.protected_keywords and
             isinstance(value, Disjunction)
         ):
-            for rule in value.literals:
+            for rule in value.formulas:
                 for antecedent_predicate, constant_indexes in (
                     get_antecedent_constant_indexes(rule).items()
                 ):
