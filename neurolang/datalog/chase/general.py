@@ -92,14 +92,14 @@ class ChaseGeneral():
         new_substitutions = []
         predicates = [p for p, _ in builtin_predicates]
         for substitution in substitutions:
-            new_substitution = self.evaluate_builtins_predicates(
+            new_substitution = self._evaluate_builtins_predicates(
                 predicates, substitution
             )
             if new_substitution is not None:
                 new_substitutions.append(new_substitution)
         return new_substitutions
 
-    def evaluate_builtins_predicates(
+    def _evaluate_builtins_predicates(
         self, predicates_to_evaluate, substitution
     ):
         predicates_to_evaluate = predicates_to_evaluate.copy()
@@ -202,6 +202,7 @@ class ChaseGeneral():
                 )
             )
             for substitution in substitutions
+            if len(substitution) > 0
         ]
         new_tuples = self.datalog_program.new_set(tuples)
 
@@ -272,7 +273,109 @@ class ChaseGeneral():
             return None
 
 
-class ChaseNaive(ChaseGeneral):
+class ChaseStepModular:
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.evaluators = {
+            'edb_predicates': self.evaluate_edb_predicates,
+            'builtin_predicates': self.evaluate_builtin_predicates
+        }
+
+    def chase_step(self, instance, rule, restriction_instance=None):
+        if restriction_instance is None:
+            restriction_instance = dict()
+
+        evaluation_steps = self.obtain_evaluation_steps(
+            rule, instance, restriction_instance=restriction_instance
+        )
+
+        status = {
+            'rule': rule,
+            'instance': instance,
+            'restriction_instance': restriction_instance,
+        }
+        for substep_evaluator_key, substep_to_evaluate in evaluation_steps:
+            substep_evaluator = self.evaluators[substep_evaluator_key]
+            substep_evaluator(substep_to_evaluate, status)
+
+        substitutions = status['substitutions']
+
+        return self.compute_result_set(
+            rule, substitutions, instance, restriction_instance
+        )
+
+    def obtain_evaluation_steps(
+        self, rule, instance, restriction_instance=None
+    ):
+        if restriction_instance is None:
+            restriction_instance = dict()
+
+        rule_predicates = extract_datalog_predicates(rule.antecedent)
+        restricted_predicates = []
+        nonrestricted_predicates = []
+        builtin_predicates = []
+        for predicate in rule_predicates:
+            functor = predicate.functor
+            if functor in restriction_instance:
+                restricted_predicates.append(predicate)
+            elif functor in instance:
+                nonrestricted_predicates.append(predicate)
+            elif functor in self.builtins:
+                builtin_predicates.append((predicate, self.builtins[functor]))
+            elif isinstance(functor, Constant):
+                builtin_predicates.append((predicate, functor))
+            else:
+                nonrestricted_predicates = []
+                restricted_predicates = []
+                builtin_predicates = []
+                break
+
+        evaluation_steps = [
+            (
+                'edb_predicates',
+                chain(nonrestricted_predicates, restricted_predicates)
+            ),
+            ('builtin_predicates', builtin_predicates)
+        ]
+
+        return evaluation_steps
+
+
+class ChaseGeneralToModularAdapter:
+    def evaluate_edb_predicates(self, predicates, status):
+        args_to_project = OrderedSet()
+        pred_set_list = []
+        instance = status['instance']
+        for predicate in predicates:
+            if predicate.functor in instance:
+                pset = status['instance'][predicate.functor].value
+            else:
+                pred_set_list = []
+                break
+            pred_set_list.append(
+                (predicate, pset)
+            )
+            args_to_project |= (
+                arg
+                for arg in predicate.args
+                if isinstance(arg, Symbol)
+            )
+
+        substitutions = self.obtain_substitutions(
+            args_to_project, pred_set_list
+        )
+
+        status['substitutions'] = substitutions
+
+    def evaluate_builtin_predicates(self, predicates, status):
+        substitutions = self.evaluate_builtins(
+            predicates, status['substitutions']
+        )
+
+        status['substitutions'] = substitutions
+
+
+class ChaseNaive:
     """Chase implementation using the naive algorithm.
     """
 
@@ -293,7 +396,7 @@ class ChaseNaive(ChaseGeneral):
         return instance
 
 
-class ChaseSemiNaive(ChaseGeneral):
+class ChaseSemiNaive:
     """Chase implementation using the semi-naive algorithm.
     This algorithm will not work if there are non-linear rules.
        """

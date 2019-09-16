@@ -17,6 +17,9 @@ __all__ = [
 ]
 
 DatalogChase = Chase
-DatalogChaseGeneral = ChaseNaive
 DatalogChaseMGUMixin = ChaseMGUMixin
 DatalogChaseRelationalAlgebraMixin = ChaseRelationalAlgebraMixin
+
+
+class DatalogChaseGeneral(Chase, ChaseNaive):
+    pass
