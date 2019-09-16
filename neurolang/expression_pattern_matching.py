@@ -39,7 +39,7 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
         overwriteable_properties = (
             '__module__', '__patterns__', '__doc__',
             'type', 'plural_type_name', '__no_explicit_type__',
-            '__generic_class__',
+            '__generic_class__', '__parameterized__', '__entry_point__'
         )
 
         cls.__check_bases__(name, bases, classdict, overwriteable_properties)
@@ -67,12 +67,8 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
                 base_v = getattr(base, k, None)
                 if (
                     base_v is not None and
-                    callable(v) and
+                    k is not base_v and
                     k not in overwriteable_properties and
-                    not (
-                        k == '__init__' and
-                        v is base_v
-                    ) and
                     (
                         hasattr(v, 'pattern') and
                         (
