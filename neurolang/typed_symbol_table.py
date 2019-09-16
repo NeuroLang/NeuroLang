@@ -8,7 +8,7 @@ from .exceptions import NeuroLangException
 __all__ = ['TypedSymbolTable']
 
 
-class TypedSymbolTable(collections.MutableMapping):
+class TypedSymbolTable(collections.abc.MutableMapping):
     def __init__(self, enclosing_scope=None, readonly=False):
         self._symbols = collections.OrderedDict()
 
