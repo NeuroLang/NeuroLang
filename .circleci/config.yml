@@ -4,32 +4,17 @@
 #
 version: 2.1
 
-jobs:
-  py36:
-    docker:
-      # specify the version you desire here
-      # use `-browsers` prefix for selenium tests, e.g. `3.6.1-browsers`
-      - image: circleci/python:3.6.4
-    environment:
-      CODACY_PROJECT_TOKEN: 819af61c85004229a83cb34b8089930c
-      CC_TEST_REPORTER_ID: 8b40c7b919b1734ebd87f91c3033557f84b8c737db91057bdf75d16251440c59
-
-      # Specify service dependencies here if necessary
-      # CircleCI maintains a library of pre-built images
-      # documented at https://circleci.com/docs/2.0/circleci-images/
-      # - image: circleci/postgres:9.4
-
-    working_directory: ~/repo
-
+commands:
+  install+test:
+    description: "Installs the necessary packages & runs the tests."
     steps:
       - checkout
-
       # Download and cache dependencies
       - restore_cache:
           keys:
-          - v1-dependencies-{{ checksum "requirements.txt" }}
-          # fallback to using the latest cache if no exact match is found
-          - v1-dependencies-
+            - v1-dependencies-{{ checksum "requirements.txt" }}
+            # fallback to using the latest cache if no exact match is found
+            - v1-dependencies-
 
       - run:
           name: install dependencies
@@ -85,6 +70,26 @@ jobs:
       - store_artifacts:
           path: test-reports
           destination: test-reports
+
+
+jobs:
+  py36:
+    docker:
+      # specify the version you desire here
+      # use `-browsers` prefix for selenium tests, e.g. `3.6.1-browsers`
+      - image: circleci/python:3.6.4
+    environment:
+      CODACY_PROJECT_TOKEN: 819af61c85004229a83cb34b8089930c
+      CC_TEST_REPORTER_ID: 8b40c7b919b1734ebd87f91c3033557f84b8c737db91057bdf75d16251440c59
+
+      # Specify service dependencies here if necessary
+      # CircleCI maintains a library of pre-built images
+      # documented at https://circleci.com/docs/2.0/circleci-images/
+      # - image: circleci/postgres:9.4
+
+    working_directory: ~/repo
+
+
 
   py37:
     docker:
@@ -103,69 +108,7 @@ jobs:
     working_directory: ~/repo
 
     steps:
-      - checkout
-
-      # Download and cache dependencies
-      - restore_cache:
-          keys:
-          - v1-dependencies-{{ checksum "requirements.txt" }}
-          # fallback to using the latest cache if no exact match is found
-          - v1-dependencies-
-
-      - run:
-          name: install dependencies
-          command: |
-            python3 -m venv venv
-            . venv/bin/activate
-            pip install -r requirements.txt
-            pip install pytest
-            pip install pytest-cov
-            pip install codacy-coverage
-
-      - run:
-          name: install sonar
-          command: |
-            curl -O https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-3.3.0.1492-linux.zip
-            unzip -o sonar-scanner-cli-3.3.0.1492-linux.zip
-
-      - run:
-          name: Setup Code Climate test-reporter
-          command: |
-            # download test reporter as a static binary
-            curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
-            chmod +x ./cc-test-reporter
-
-      - save_cache:
-          paths:
-            - ./venv
-            - sonar-scanner-3.3.0.1492-linux
-            - cc-test-reporter
-          key: v1-dependencies-{{ checksum "requirements.txt" }}
-
-      - run:
-          name: run tests
-          command: |
-            . venv/bin/activate
-            export CODACY_PROJECT_TOKEN=819af61c85004229a83cb34b8089930c
-            export CC_TEST_REPORTER_ID=8b40c7b919b1734ebd87f91c3033557f84b8c737db91057bdf75d16251440c59
-            ./cc-test-reporter before-build
-            make test
-            ./cc-test-reporter after-build --coverage-input-type coverage.py --exit-code $?
-            python-codacy-coverage -r coverage.xml
-
-      - run:
-          name: run sonar
-          command: |
-            if [ -z ${CIRCLE_PR_NUMBER} ]; then
-              sh sonar-scanner-3.3.0.1492-linux/bin/sonar-scanner -Dsonar.projectKey=parietal:neurolang:master:v0.01 -Dsonar.login=${SONAR_LOGIN}
-              sh sonar-scanner-3.3.0.1492-linux/bin/sonar-scanner -Dsonar.projectKey=parietal:neurolang:master:v0.01 -Dsonar.github.oauth=${GITHUB_NC_OATH} -Dsonar.login=${SONAR_LOGIN} -Dsonar.analysis.mode=issues
-            else
-              sh sonar-scanner-3.3.0.1492-linux/bin/sonar-scanner -Dsonar.projectKey=parietal:neurolang:PR${CIRCLE_PR_NUMBER}:v0.01 -Dsonar.login=${SONAR_LOGIN}
-              sh sonar-scanner-3.3.0.1492-linux/bin/sonar-scanner -Dsonar.projectKey=parietal:neurolang:PR${CIRCLE_PR_NUMBER}:v0.01 -Dsonar.github.pullRequest=${CIRCLE_PR_NUMBER} -Dsonar.github.oauth=${GITHUB_NC_OATH} -Dsonar.login=${SONAR_LOGIN} -Dsonar.analysis.mode=issues
-            fi
-      - store_artifacts:
-          path: test-reports
-          destination: test-reports
+      - install+test
 
 
 workflows:
