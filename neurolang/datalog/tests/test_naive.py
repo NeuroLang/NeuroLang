@@ -95,7 +95,7 @@ def test_atoms_variables():
 
     assert 'Q' in dl.symbol_table
     assert isinstance(dl.symbol_table['Q'], Disjunction)
-    fact = dl.symbol_table['Q'].literals[-1]
+    fact = dl.symbol_table['Q'].formulas[-1]
     assert isinstance(fact, Implication)
     assert isinstance(fact.consequent, FunctionApplication)
     assert fact.consequent.functor is Q
@@ -108,7 +108,7 @@ def test_atoms_variables():
 
     assert 'T' in dl.symbol_table
     assert isinstance(dl.symbol_table['T'], Disjunction)
-    fact = dl.symbol_table['T'].literals[-1]
+    fact = dl.symbol_table['T'].formulas[-1]
     assert isinstance(fact, Implication)
     assert isinstance(fact.consequent, FunctionApplication)
     assert fact.consequent.functor is T
@@ -120,7 +120,7 @@ def test_atoms_variables():
 
     assert 'R' in dl.symbol_table
     assert isinstance(dl.symbol_table['R'], Disjunction)
-    fact = dl.symbol_table['R'].literals[-1]
+    fact = dl.symbol_table['R'].formulas[-1]
     assert isinstance(fact, Implication)
     assert isinstance(fact.consequent, FunctionApplication)
     assert fact.consequent.functor is R

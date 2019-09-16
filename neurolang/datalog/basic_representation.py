@@ -201,7 +201,7 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
                 f'{consequent.functor.name} has been previously '
                 'defined as Fact or extensional database.'
             )
-        disj = self.symbol_table[consequent.functor].literals
+        disj = self.symbol_table[consequent.functor].formulas
 
         if (
             not isinstance(disj[0].consequent, FunctionApplication) or

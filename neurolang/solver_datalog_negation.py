@@ -56,7 +56,7 @@ class DatalogBasicNegation(DatalogBasic):
         if consequent.functor.name in self.symbol_table:
             value = self.symbol_table[consequent.functor.name]
             self._is_previously_defined(value)
-            disj = self.symbol_table[consequent.functor.name].literals
+            disj = self.symbol_table[consequent.functor.name].formulas
             self._is_in_idb(expression, disj)
 
         else:
@@ -103,7 +103,7 @@ class DatalogBasicNegation(DatalogBasic):
 
     @add_match(NegativeFact)
     def negative_fact(self, expression):
-        fact = expression.fact.literal
+        fact = expression.fact.formula
         if fact.functor.name in self.protected_keywords:
             raise NeuroLangException(
                 f'symbol {self.constant_set_name} is protected'
