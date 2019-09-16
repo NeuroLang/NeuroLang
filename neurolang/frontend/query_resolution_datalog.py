@@ -30,7 +30,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
     def current_program(self):
         cp = []
         for rules in self.solver.intensional_database().values():
-            for rule in rules.literals:
+            for rule in rules.formulas:
                 cp.append(self.frontend_translator.walk(rule))
         return cp
 
