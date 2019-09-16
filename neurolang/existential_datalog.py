@@ -1,14 +1,10 @@
-from .expressions import (
-    NeuroLangException, ExistentialPredicate, Symbol, Constant,
-    ExpressionBlock, FunctionApplication, Lambda
-)
-from .solver_datalog_naive import (
-    SolverNonRecursiveDatalogNaive,
-    DatalogBasic,
-    Implication,
-)
-
+from .datalog.expressions import Disjunction
 from .expression_pattern_matching import add_match
+from .expressions import (Constant, ExistentialPredicate,
+                          FunctionApplication, Lambda, NeuroLangException,
+                          Symbol)
+from .solver_datalog_naive import (DatalogBasic, Implication,
+                                   SolverNonRecursiveDatalogNaive)
 
 __all__ = [
     'Implication',
@@ -24,10 +20,10 @@ class ExistentialDatalog(DatalogBasic):
             for k, v in self.symbol_table.items()
             if (
                 k not in self.protected_keywords and
-                isinstance(v, ExpressionBlock) and all(
-                    isinstance(expression, Implication) and
-                    isinstance(expression.consequent, ExistentialPredicate)
-                    for expression in v.expressions
+                isinstance(v, Disjunction) and all(
+                    isinstance(formula, Implication) and
+                    isinstance(formula.consequent, ExistentialPredicate)
+                    for formula in v.formulas
                 )
             )
         }
@@ -38,10 +34,10 @@ class ExistentialDatalog(DatalogBasic):
             for k, v in self.symbol_table.items()
             if (
                 k not in self.protected_keywords and
-                isinstance(v, ExpressionBlock) and not any(
-                    isinstance(expression, Implication) and
-                    isinstance(expression.consequent, ExistentialPredicate)
-                    for expression in v.expressions
+                isinstance(v, Disjunction) and not any(
+                    isinstance(formula, Implication) and
+                    isinstance(formula.consequent, ExistentialPredicate)
+                    for formula in v.formulas
                 )
             )
         }
@@ -71,11 +67,11 @@ class ExistentialDatalog(DatalogBasic):
                 raise NeuroLangException(
                     'A rule cannot be both in IDB and E-IDB'
                 )
-            expressions = self.symbol_table[consequent_name].expressions
+            disjunctions = self.symbol_table[consequent_name].formulas
         else:
-            expressions = tuple()
-        expressions += (expression, )
-        self.symbol_table[consequent_name] = ExpressionBlock(expressions)
+            disjunctions = tuple()
+        disjunctions += (expression, )
+        self.symbol_table[consequent_name] = Disjunction(disjunctions)
         return expression
 
 

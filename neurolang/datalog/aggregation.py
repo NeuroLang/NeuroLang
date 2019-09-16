@@ -16,15 +16,10 @@ from warnings import warn
 
 from ..exceptions import NeuroLangException
 from ..expression_walker import PatternWalker, add_match
-from ..expressions import (
-    Constant, Expression, ExpressionBlock, FunctionApplication, Symbol
-)
+from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..utils import OrderedSet
-from . import (
-    Implication, extract_datalog_free_variables,
-    is_conjunctive_expression_with_nested_predicates
-)
-from . import chase
+from . import (Disjunction, Implication, chase, extract_datalog_free_variables,
+               is_conjunctive_expression_with_nested_predicates)
 
 
 class AggregationApplication(FunctionApplication):
@@ -55,7 +50,7 @@ class DatalogWithAggregationMixin(PatternWalker):
 
         eb = eb + (expression, )
 
-        self.symbol_table[consequent.functor] = ExpressionBlock(eb)
+        self.symbol_table[consequent.functor] = Disjunction(eb)
 
         return expression
 

@@ -1,15 +1,14 @@
 import operator
-from uuid import uuid1
 from typing import Iterable
+from uuid import uuid1
 
-from ..expressions import NeuroLangException
-from ..expressions import (
-    Expression, ExpressionBlock, FunctionApplication, Symbol, Constant,
-    ExistentialPredicate
-)
-from ..expression_walker import ExpressionBasicEvaluator
-from ..expression_pattern_matching import add_match
+from ..datalog.expressions import Disjunction
 from ..existential_datalog import Implication
+from ..expression_pattern_matching import add_match
+from ..expression_walker import ExpressionBasicEvaluator
+from ..expressions import (Constant, ExistentialPredicate, Expression,
+                           ExpressionBlock, FunctionApplication,
+                           NeuroLangException, Symbol)
 from ..solver_datalog_naive import DatalogBasic, is_conjunctive_expression
 
 
@@ -31,7 +30,7 @@ def get_conjunction_atoms(expression):
         return [expression]
 
 
-def get_antecedent_literals(rule):
+def get_antecedent_formulas(rule):
     if not isinstance(rule, Implication):
         raise NeuroLangException('Implication expected')
 
@@ -39,8 +38,8 @@ def get_antecedent_literals(rule):
 
 
 def get_antecedent_predicate_names(rule):
-    antecedent_literals = get_antecedent_literals(rule)
-    return [literal.functor.name for literal in antecedent_literals]
+    antecedent_formulas = get_antecedent_formulas(rule)
+    return [formula.functor.name for formula in antecedent_formulas]
 
 
 def is_gdatalog_rule(exp):
@@ -124,13 +123,11 @@ class GenerativeDatalog(DatalogBasic):
             raise NeuroLangException('Rule antecedent has to be a conjunction')
 
         if predicate in self.symbol_table:
-            eb = self.symbol_table[predicate]
+            disj = self.symbol_table[predicate].formulas
         else:
-            eb = ExpressionBlock(tuple())
+            disj = tuple()
 
-        self.symbol_table[predicate] = concatenate_to_expression_block(
-            eb, [rule]
-        )
+        self.symbol_table[predicate] = Disjunction(disj + (rule,))
 
         return rule
 
@@ -138,7 +135,7 @@ class GenerativeDatalog(DatalogBasic):
 def get_antecedent_constant_indexes(rule):
     '''Get indexes of constants occurring in antecedent predicates.'''
     constant_indexes = dict()
-    for antecedent in get_antecedent_literals(rule):
+    for antecedent in get_antecedent_formulas(rule):
         predicate = antecedent.functor.name
         indexes = {
             i
@@ -154,7 +151,7 @@ def get_predicate_probabilistic_rules(gdatalog, predicate):
     if predicate not in gdatalog.symbol_table:
         return set()
     return set(
-        rule for rule in gdatalog.symbol_table[predicate].expressions
+        rule for rule in gdatalog.symbol_table[predicate].formulas
         if is_gdatalog_rule(rule)
     )
 
@@ -181,9 +178,9 @@ def can_lead_to_object_uncertainty(gdatalog):
     for key, value in gdatalog.symbol_table.items():
         if (
             key not in gdatalog.protected_keywords and
-            isinstance(value, ExpressionBlock)
+            isinstance(value, Disjunction)
         ):
-            for rule in value.expressions:
+            for rule in value.formulas:
                 for antecedent_predicate, constant_indexes in (
                     get_antecedent_constant_indexes(rule).items()
                 ):

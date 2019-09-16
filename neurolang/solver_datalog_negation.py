@@ -1,17 +1,13 @@
-from typing import AbstractSet, Tuple, Callable
 from operator import and_, invert
+from typing import AbstractSet, Callable, Tuple
 
-from .type_system import Unknown
+from .datalog.expressions import Disjunction, Negation
 from .expression_walker import add_match, expression_iterator
-from .solver_datalog_naive import (
-    DatalogBasic,
-    Implication,
-    extract_datalog_free_variables,
-)
-from .expressions import (
-    Symbol, NonConstant, FunctionApplication, NeuroLangException,
-    is_leq_informative, ExpressionBlock, Constant
-)
+from .expressions import (Constant, FunctionApplication, NeuroLangException,
+                          NonConstant, Symbol, is_leq_informative)
+from .solver_datalog_naive import (DatalogBasic, Implication,
+                                   extract_datalog_free_variables)
+from .type_system import Unknown
 
 
 class NegativeFact(Implication):
@@ -20,7 +16,7 @@ class NegativeFact(Implication):
     initialization parameter is inverted.'''
 
     def __init__(self, antecedent):
-        super().__init__(Constant(False), invert(antecedent))
+        super().__init__(Constant(False), Negation(antecedent))
 
     @property
     def fact(self):
@@ -60,15 +56,16 @@ class DatalogBasicNegation(DatalogBasic):
         if consequent.functor.name in self.symbol_table:
             value = self.symbol_table[consequent.functor.name]
             self._is_previously_defined(value)
-            eb = self.symbol_table[consequent.functor.name].expressions
-            self._is_in_idb(expression, eb)
+            disj = self.symbol_table[consequent.functor.name].formulas
+            self._is_in_idb(expression, disj)
 
         else:
-            eb = tuple()
+            disj = tuple()
 
-        eb = eb + (expression, )
+        if expression not in disj:
+            disj += (expression, )
 
-        self.symbol_table[consequent.functor.name] = ExpressionBlock(eb)
+        self.symbol_table[consequent.functor.name] = Disjunction(disj)
 
         return expression
 
@@ -106,7 +103,7 @@ class DatalogBasicNegation(DatalogBasic):
 
     @add_match(NegativeFact)
     def negative_fact(self, expression):
-        fact = expression.fact.args[0]
+        fact = expression.fact.formula
         if fact.functor.name in self.protected_keywords:
             raise NeuroLangException(
                 f'symbol {self.constant_set_name} is protected'
@@ -121,7 +118,7 @@ class DatalogBasicNegation(DatalogBasic):
 
         fact_set = self.negated_symbols[fact.functor.name]
 
-        if isinstance(fact_set, ExpressionBlock):
+        if isinstance(fact_set, Disjunction):
             raise NeuroLangException(
                 f'{fact.functor.name} has been previously '
                 'define as intensional predicate.'
