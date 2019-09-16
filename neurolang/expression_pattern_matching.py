@@ -61,28 +61,27 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
     @staticmethod
     def __check_bases__(name, bases, classdict, overwriteable_properties):
         for base in bases:
-            repeated_methods = set(dir(base)).intersection(classdict)
-            repeated_methods.difference_update(overwriteable_properties)
-            if (
-                '__init__' in repeated_methods and
-                getattr(base, '__init__') is object.__init__
-            ):
-                repeated_methods.remove('__init__')
-            non_method_attributes = set(
-                attr for attr in repeated_methods
-                if not callable(attr)
-            )
-            repeated_methods -= non_method_attributes
+            repeated_methods = []
 
-            perfect_overwrites = set(
-                method for method in repeated_methods
+            for k, v in classdict.items():
+                base_v = getattr(base, k, None)
                 if (
-                    classdict[method].pattern == getattr(base, method).pattern
-                    and classdict[method].guard == getattr(base, method).guard
-                )
-            )
-
-            repeated_methods -= perfect_overwrites
+                    base_v is not None and
+                    callable(v) and
+                    k not in overwriteable_properties and
+                    not (
+                        k == '__init__' and
+                        v is base_v
+                    ) and
+                    (
+                        hasattr(v, 'pattern') and
+                        (
+                            v.guard != base_v.guard or
+                            v.pattern != base_v.pattern
+                        )
+                    )
+                ):
+                    repeated_methods.append(k)
 
             if len(repeated_methods) > 1:
                 warn_message = (
