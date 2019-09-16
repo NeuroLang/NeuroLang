@@ -5,8 +5,8 @@ Magic Sets [1] rewriting implementation for Datalog.
 '''
 
 from ..expressions import Constant, Symbol
-from . import Implication, expression_processing, extract_datalog_predicates
-from .expressions import Disjunction
+from . import expression_processing, extract_datalog_predicates
+from .expressions import Disjunction, Implication
 
 
 class SymbolAdorned(Symbol):
