@@ -9,16 +9,15 @@ from warnings import warn
 
 from .datalog import NULL, UNDEFINED
 from .datalog import DatalogProgram as DatalogBasic
-from .datalog import (Fact, Implication, NullConstant, Undefined,
+from .datalog import (Disjunction, Fact, Implication, NullConstant, Undefined,
                       WrappedRelationalAlgebraSet,
                       extract_datalog_free_variables,
                       extract_datalog_predicates, is_conjunctive_expression,
                       is_conjunctive_expression_with_nested_predicates)
-from .expression_walker import add_match, TypedSymbolTableEvaluator
+from .expression_walker import TypedSymbolTableEvaluator, add_match
 from .expressions import (Constant, ExistentialPredicate, Expression,
-                          ExpressionBlock, FunctionApplication, Lambda,
-                          NeuroLangException, Query, Symbol,
-                          is_leq_informative)
+                          FunctionApplication, Lambda, NeuroLangException,
+                          Query, Symbol, is_leq_informative)
 from .type_system import Unknown
 
 warn("This module is being deprecated please use the datalog module")
@@ -151,14 +150,14 @@ class SolverNonRecursiveDatalogNaive(
         )
 
     @add_match(
-        FunctionApplication(ExpressionBlock, ...),
+        FunctionApplication(Disjunction, ...),
         lambda e: all(
             isinstance(a, Constant) for a in e.args
         )
     )
-    def evaluate_datalog_conjunction(self, expression):
-        for exp in expression.functor.expressions:
-            fa = FunctionApplication[bool](exp, expression.args)
+    def evaluate_datalog_disjunction(self, expression):
+        for formula in expression.functor.formulas:
+            fa = FunctionApplication[bool](formula, expression.args)
             res = self.walk(fa)
             if isinstance(res, Constant) and res.value is True:
                 break

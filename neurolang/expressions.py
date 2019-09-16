@@ -393,7 +393,7 @@ class Constant(Expression):
         self.verify_type = verify_type
 
         if callable(self.value):
-            self.__init_callable_literal__(value, auto_infer_type)
+            self.__init_callable_formula__(value, auto_infer_type)
         elif auto_infer_type and self.type is Unknown:
             self.__auto_infer_type__()
         if not self.__verify_type__(self.value, self.type):
@@ -405,7 +405,7 @@ class Constant(Expression):
         if auto_infer_type and self.type is not Unknown:
             self.change_type(self.type)
 
-    def __init_callable_literal__(self, value, auto_infer_type):
+    def __init_callable_formula__(self, value, auto_infer_type):
         self.__wrapped__ = value
         for attr in WRAPPER_ASSIGNMENTS:
             if hasattr(value, attr):
@@ -631,7 +631,7 @@ class ExistentialPredicate(Quantifier):
                 'A symbol should be provided for the '
                 'existential quantifier expression'
             )
-        if not isinstance(body, (FunctionApplication, Quantifier)):
+        if not isinstance(body, Definition):
             raise NeuroLangException(
                 'A function application over '
                 'predicates should be associated to the quantifier'
@@ -662,7 +662,7 @@ class UniversalPredicate(Quantifier):
                 'A symbol should be provided for the '
                 'universal quantifier expression'
             )
-        if not isinstance(body, (FunctionApplication, Quantifier)):
+        if not isinstance(body, Definition):
             raise NeuroLangException(
                 'A function application over '
                 'predicates should be associated to the quantifier'

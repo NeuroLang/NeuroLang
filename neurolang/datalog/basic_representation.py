@@ -9,17 +9,17 @@ sets.
 from itertools import tee
 from typing import AbstractSet, Any, Callable, Tuple
 
-from ..expression_walker import (PatternWalker, add_match)
-from ..expressions import (Constant, Expression, ExpressionBlock,
-                           FunctionApplication, NeuroLangException, Symbol,
-                           is_leq_informative, TypedSymbolTableMixin)
+from ..expression_walker import PatternWalker, add_match
+from ..expressions import (Constant, Expression, FunctionApplication,
+                           NeuroLangException, Symbol, TypedSymbolTableMixin,
+                           is_leq_informative)
 from ..type_system import Unknown, infer_type
 from ..utils import RelationalAlgebraSet
 from .expression_processing import (
     extract_datalog_free_variables, is_conjunctive_expression,
     is_conjunctive_expression_with_nested_predicates)
-from .expressions import (NULL, UNDEFINED, Fact, Implication, NullConstant,
-                          Undefined)
+from .expressions import (NULL, UNDEFINED, Disjunction, Fact, Implication,
+                          NullConstant, Undefined)
 
 __all__ = [
     "Implication", "Fact", "Undefined", "NullConstant",
@@ -103,11 +103,10 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
     is a set of tuples `a` representing `S(*a)` as facts
 
     * If `S` is part of the intensional database then its value is an
-    `ExpressionBlock` such that each expression is a case of the symbol
-    each expression is a `Lambda` instance where the `function_expression` is
-    the query and the `args` are the needed projection. For instance
+    `Disjunction` of `Implications`. For instance
     `Q(x) :- R(x, x)` and `Q(x) :- T(x)` is represented as a symbol `Q`
-     with value `ExpressionBlock((Lambda(R(x, x), (x,)), Lambda(T(x), (x,))))`
+     with value
+     `Disjunction((Implication(Q(x), R(x, x)), Implication(Q(x), T(x))))`
     '''
 
     protected_keywords = set()
@@ -117,11 +116,13 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
 
     @add_match(Symbol)
     def symbol(self, expression):
-        resolved_symbol = self.symbol_table.get(expression, expression)
-        if resolved_symbol in self.extensional_database():
+        new_expression = self.symbol_table.get(expression, expression)
+        if new_expression is expression:
+            return expression
+        elif isinstance(new_expression, (Disjunction, Constant[AbstractSet])):
             return expression
         else:
-            return resolved_symbol
+            return new_expression
 
     @add_match(Fact(FunctionApplication[bool](Symbol, ...)))
     def fact(self, expression):
@@ -142,7 +143,7 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
         self._initialize_fact_set_if_needed(fact)
         fact_set = self.symbol_table[fact.functor]
 
-        if isinstance(fact_set, ExpressionBlock):
+        if isinstance(fact_set, Disjunction):
             raise NeuroLangException(
                 f'{fact.functor} has been previously '
                 'define as intensional predicate.'
@@ -170,13 +171,6 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
 
     @add_match(Implication(
         FunctionApplication[bool](Symbol, ...),
-        Constant[bool](True)
-    ))
-    def statement_extensional(self, expression):
-        return self.walk(Fact(expression.consequent))
-
-    @add_match(Implication(
-        FunctionApplication[bool](Symbol, ...),
         Expression
     ))
     def statement_intensional(self, expression):
@@ -186,13 +180,14 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
         self._validate_implication_syntax(consequent, antecedent)
 
         if consequent.functor in self.symbol_table:
-            eb = self._new_intensional_internal_representation(consequent)
+            disj = self._new_intensional_internal_representation(consequent)
         else:
-            eb = tuple()
+            disj = tuple()
 
-        eb = eb + (expression,)
+        if expression not in disj:
+            disj += (expression,)
 
-        self.symbol_table[consequent.functor] = ExpressionBlock(eb)
+        self.symbol_table[consequent.functor] = Disjunction(disj)
 
         return expression
 
@@ -206,19 +201,19 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
                 f'{consequent.functor.name} has been previously '
                 'defined as Fact or extensional database.'
             )
-        eb = self.symbol_table[consequent.functor].expressions
+        disj = self.symbol_table[consequent.functor].formulas
 
         if (
-            not isinstance(eb[0].consequent, FunctionApplication) or
-            len(extract_datalog_free_variables(eb[0].consequent.args)) !=
+            not isinstance(disj[0].consequent, FunctionApplication) or
+            len(extract_datalog_free_variables(disj[0].consequent.args)) !=
             len(consequent.args)
         ):
             raise NeuroLangException(
-                f"{eb[0].consequent} is already in the IDB "
+                f"{disj[0].consequent} is already in the IDB "
                 f"with different signature."
             )
 
-        return eb
+        return disj
 
     def _validate_implication_syntax(self, consequent, antecedent):
         if consequent.functor in self.protected_keywords:
@@ -261,7 +256,7 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
             k: v for k, v in self.symbol_table.items()
             if (
                 k not in self.protected_keywords and
-                isinstance(v, ExpressionBlock)
+                isinstance(v, Disjunction)
             )
         }
 

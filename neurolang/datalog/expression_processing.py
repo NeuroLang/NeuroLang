@@ -3,24 +3,38 @@ Utilities to process intermediate representations of
 Datalog programs.
 """
 
-from operator import and_, invert, or_, xor
 from typing import Iterable
 
-from ..expression_walker import PatternWalker, add_match, expression_iterator
-from ..expressions import (Constant, ExpressionBlock, FunctionApplication,
+from ..expression_walker import ExpressionWalker, PatternWalker, add_match
+from ..expressions import (Constant, FunctionApplication,
                            NeuroLangException, Quantifier, Symbol)
 from ..utils import OrderedSet
-from .expressions import Implication
+from .expressions import (Conjunction, Disjunction, Implication, Negation,
+                          TranslateToLogic)
 
 
-class ExtractDatalogFreeVariablesWalker(PatternWalker):
-    @add_match(FunctionApplication(Constant(and_), ...))
+class TranslateToDatalogSemantics(TranslateToLogic, ExpressionWalker):
+    pass
+
+
+class WalkDatalogProgramAggregatingSets(PatternWalker):
+    @add_match(Conjunction)
     def conjunction(self, expression):
         fvs = OrderedSet()
-        for arg in expression.args:
-            fvs |= self.walk(arg)
+        for formula in expression.formulas:
+            fvs |= self.walk(formula)
         return fvs
 
+    @add_match(Disjunction)
+    def disjunction(self, expression):
+        return self.conjunction(expression)
+
+    @add_match(Negation)
+    def negation(self, expression):
+        return self.walk(expression.formula)
+
+
+class ExtractDatalogFreeVariablesWalker(WalkDatalogProgramAggregatingSets):
     @add_match(FunctionApplication)
     def extract_variables_fa(self, expression):
         args = expression.args
@@ -48,19 +62,11 @@ class ExtractDatalogFreeVariablesWalker(PatternWalker):
             self.walk(expression.consequent)
         )
 
-    @add_match(ExpressionBlock)
-    def extract_variables_eb(self, expression):
-        res = set()
-        for exp in expression.expressions:
-            res |= self.walk(exp)
-
-        return res
-
     @add_match(Symbol)
     def extract_variables_symbol(self, expression):
         return OrderedSet((expression,))
 
-    @add_match(...)
+    @add_match(Constant)
     def _(self, expression):
         return OrderedSet()
 
@@ -78,48 +84,55 @@ def extract_datalog_free_variables(expression):
         OrderedSet
             set of all free variables in the expression.
     """
+    tr = TranslateToDatalogSemantics()
     efvw = ExtractDatalogFreeVariablesWalker()
-    return efvw.walk(expression)
+    return efvw.walk(tr.walk(expression))
 
 
 def is_conjunctive_expression(expression):
+    if isinstance(expression, Conjunction):
+        formulas = expression.formulas
+    else:
+        formulas = [expression]
+
     return all(
-        not isinstance(exp, FunctionApplication) or
+        expression == Constant(True) or
+        expression == Constant(False) or
         (
-            isinstance(exp, FunctionApplication) and
-            (
-                (
-                    isinstance(exp.functor, Constant) and
-                    exp.functor.value is and_
-                ) or all(
-                    not isinstance(arg, FunctionApplication)
-                    for arg in exp.args
-                )
+            isinstance(expression, FunctionApplication) and
+            not any(
+                isinstance(arg, FunctionApplication)
+                for arg in expression.args
             )
         )
-        for _, exp in expression_iterator(expression)
+        for expression in formulas
     )
 
 
 def is_conjunctive_expression_with_nested_predicates(expression):
+    tr = TranslateToDatalogSemantics()
+    expression = tr.walk(expression)
     stack = [expression]
     while stack:
         exp = stack.pop()
-        if isinstance(exp, FunctionApplication):
-            if isinstance(exp.functor, Constant):
-                if exp.functor.value is and_:
-                    stack += exp.args
-                    continue
-                elif any(exp.functor.value is op for op in (or_, invert, xor)):
-                    return False
+        if exp == Constant(True) or exp == Constant(False):
+            pass
+        elif isinstance(exp, FunctionApplication):
             stack += [
                 arg for arg in exp.args
                 if isinstance(arg, FunctionApplication)
             ]
+        elif isinstance(exp, Conjunction):
+            stack += exp.formulas
+        elif isinstance(exp, Quantifier):
+            stack.append(exp.body)
+        else:
+            return False
+
     return True
 
 
-class ExtractDatalogPredicates(PatternWalker):
+class ExtractDatalogPredicates(WalkDatalogProgramAggregatingSets):
     @add_match(Symbol)
     def symbol(self, expression):
         return OrderedSet()
@@ -128,23 +141,13 @@ class ExtractDatalogPredicates(PatternWalker):
     def constant(self, expression):
         return OrderedSet()
 
-    @add_match(FunctionApplication(Constant(and_), ...))
-    def conjunction(self, expression):
-        res = OrderedSet()
-        for arg in expression.args:
-            res |= self.walk(arg)
-        return res
-
     @add_match(FunctionApplication)
     def extract_predicates_fa(self, expression):
         return OrderedSet([expression])
 
-    @add_match(ExpressionBlock)
-    def expression_block(self, expression):
-        res = OrderedSet()
-        for exp in expression.expressions:
-            res |= self.walk(exp)
-        return res
+    @add_match(Negation)
+    def negation(self, expression):
+        return OrderedSet([expression])
 
 
 def extract_datalog_predicates(expression):
@@ -218,15 +221,15 @@ def all_body_preds_in_set(implication, predicate_set):
     )
 
 
-def stratify(expression_block, datalog_instance):
+def stratify(disjunction, datalog_instance):
     """Given an expression block containing `Implication` instances
-     and a datalog instance, return the stratification of the expressions
+     and a datalog instance, return the stratification of the formulas
      in the block as a list of lists..
 
     Parameters
     ----------
-    expression_block : ExpressionBlock
-        code block to be stratified.
+    disjunction : Disjunction
+        disjunction of implications to be stratified.
 
     datalog_instance : DatalogProgram
         Datalog instance containing the EDB and IDB databases
@@ -243,7 +246,7 @@ def stratify(expression_block, datalog_instance):
     strata = []
     seen = set(k for k in datalog_instance.extensional_database().keys())
     seen |= set(k for k in datalog_instance.builtins())
-    to_process = expression_block.expressions
+    to_process = disjunction.formulas
     stratifiable = True
 
     stratum, new_to_process = stratify_obtain_facts_stratum(to_process, seen)
@@ -324,7 +327,7 @@ def reachable_code(query, datalog):
         p = to_reach.pop()
         reached.add(p)
         rules = idb[p]
-        for rule in rules.expressions:
+        for rule in rules.formulas:
             if rule in seen_rules:
                 continue
             seen_rules.add(rule)
@@ -334,4 +337,4 @@ def reachable_code(query, datalog):
                 if functor not in reached and functor in idb:
                     to_reach.append(functor)
 
-    return ExpressionBlock(reachable_code)
+    return Disjunction(reachable_code)
