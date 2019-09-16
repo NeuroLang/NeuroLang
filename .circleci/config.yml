@@ -5,7 +5,7 @@
 version: 2.1
 
 commands:
-  install+test:
+  install_test:
     description: "Installs the necessary packages & runs the tests."
     steps:
       - checkout
@@ -89,7 +89,7 @@ jobs:
 
     working_directory: ~/repo
     steps:
-      - install+test
+      - install_test
 
 
   py37:
@@ -109,7 +109,7 @@ jobs:
     working_directory: ~/repo
 
     steps:
-      - install+test
+      - install_test
 
 
 workflows:
