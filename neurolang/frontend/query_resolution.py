@@ -4,8 +4,6 @@ from uuid import uuid1
 import numpy as np
 
 from .. import expressions as exp
-from ..datalog import aggregation
-from ..datalog.expression_processing import TranslateToDatalogSemantics
 from ..region_solver import Region
 from ..regions import (ExplicitVBR, ImplicitVBR, SphericalVolume,
                        take_principal_regions)
