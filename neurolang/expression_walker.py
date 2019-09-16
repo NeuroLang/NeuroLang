@@ -113,11 +113,9 @@ class EntryPointPatternWalker(PatternWalker):
         return new_cls
 
     def walk(self, expression):
+        _entry_point_walked = getattr(self, '_entry_point_walked', False)
         try:
-            if (
-                hasattr(self, '_entry_point_walked') and
-                self._entry_point_walked
-            ):
+            if _entry_point_walked:
                 result = super().walk(expression)
                 return result
             elif (
