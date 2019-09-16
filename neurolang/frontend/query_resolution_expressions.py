@@ -429,11 +429,11 @@ class TranslateExpressionToFrontEndExpression(ExpressionWalker):
 
     @add_match(dl.Conjunction)
     def conjunction(self, expression):
-        literals = list(expression.literals[::-1])
-        current_expression = self.walk(literals.pop())
-        while len(literals) > 0:
+        formulas = list(expression.formulas[::-1])
+        current_expression = self.walk(formulas.pop())
+        while len(formulas) > 0:
             current_expression = (
                 current_expression &
-                self.walk(literals.pop())
+                self.walk(formulas.pop())
             )
         return current_expression

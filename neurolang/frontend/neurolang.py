@@ -70,7 +70,7 @@ grammar_EBNF = r'''
     value = value:function_application
           | value:projection
           | value:dotted_identifier
-          | value:literal
+          | value:formula
           | "(" value:sum ")";
 
     function_application = identifier:dotted_identifier
@@ -80,7 +80,7 @@ grammar_EBNF = r'''
 
     projection = identifier:dotted_identifier"["item:integer"]";
 
-    literal = string | number | tuple;
+    formula = string | number | tuple;
 
     tuple = '(' element+:sum ({',' element:sum}+ | ',') ')';
 

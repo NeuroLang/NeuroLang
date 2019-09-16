@@ -34,9 +34,9 @@ class ChaseGeneral():
         if rules is None:
             for disjunction in \
                     self.datalog_program.intensional_database().values():
-                self.rules += disjunction.literals
+                self.rules += disjunction.formulas
         else:
-            self.rules += rules.literals
+            self.rules += rules.formulas
 
     def check_constraints(self, instance_update):
         pass
@@ -250,7 +250,7 @@ class ChaseGeneral():
         rules = []
         for disjunction in self.datalog_program.intensional_database(
         ).values():
-            for rule in disjunction.literals:
+            for rule in disjunction.formulas:
                 rules.append(rule)
 
         nodes_to_process = [root]
