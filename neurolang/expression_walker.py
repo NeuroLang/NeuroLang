@@ -3,11 +3,22 @@ import typing
 from collections import deque
 from itertools import product
 
-from .expression_pattern_matching import PatternMatcher, add_match
+from .expression_pattern_matching import (PatternMatcher, add_match,
+                                          add_entry_point_match)
 from .expressions import (Constant, Expression, FunctionApplication, Lambda,
                           NeuroLangException, NeuroLangTypeException,
                           Projection, Statement, Symbol, TypedSymbolTableMixin,
                           Unknown, is_leq_informative, unify_types)
+
+
+__all__ = [
+    'expression_iterator', 'PatternWalker',
+    'EntryPointPatternWalker', 'IdentityWalker',
+    'ExpressionWalker', 'ReplaceSymbolWalker',
+    'ReplaceSymbolsByConstants', 'ReplaceExpressionsByValues',
+    'TypedSymbolTableEvaluator', 'ExpressionBasicEvaluator',
+    'add_match', 'add_entry_point_match'
+]
 
 
 def expression_iterator(expression, include_level=False, dfs=True):
@@ -97,6 +108,54 @@ class PatternWalker(PatternMatcher):
             result = tuple(result)
             return result
         return self.match(expression)
+
+
+class EntryPointPatternWalker(PatternWalker):
+    """Pattern walker with an entrypoint. All walks must start from the
+    entry point pattern. This is useful to enforce agreement with a global
+    grammatical and syntactical construction.
+    """
+    def __new__(cls, *args, **kwargs):
+        new_cls = super().__new__(cls, *args, **kwargs)
+        if new_cls.__entry_point__ is None:
+            raise NeuroLangException("Entry point not declared")
+
+        return new_cls
+
+    def walk(self, expression):
+        _entry_point_walked = getattr(self, '_entry_point_walked', False)
+        try:
+            if _entry_point_walked:
+                result = super().walk(expression)
+                return result
+            elif (
+                self.pattern_match(self.__entry_point__.pattern, expression)
+                and (
+                    self.__entry_point__.guard is None or
+                    self.__entry_point__.guard(expression)
+                )
+            ):
+                pattern, guard, action = self.__entry_point__
+                name = '\033[1m\033[91m' + action.__qualname__ + '\033[0m'
+                logging.info('\tENTRY POINT MATCH %(name)s', {'name': name})
+                logging.info('\t\tpattern: %(pattern)s', {'pattern': pattern})
+                logging.info('\t\tguard: %(guard)s', {'guard': guard})
+                self._entry_point_walked = True
+                result_expression = action(self, expression)
+                logging.info(
+                    '\t\tresult: %(result_expression)s',
+                    {'result_expression': result_expression}
+                )
+                self._entry_point_walked = False
+                return result_expression
+            else:
+                raise NeuroLangException(
+                    'The first pattern to be walked must be the entry point'
+                )
+        except Exception:
+            raise
+        finally:
+            self._entry_point_walked = False
 
 
 class IdentityWalker(PatternMatcher):

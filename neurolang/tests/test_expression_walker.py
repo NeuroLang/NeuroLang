@@ -79,3 +79,57 @@ def test_symbol_table_scopes():
     with raises(expressions.NeuroLangException):
         solver.pop_scope()
         solver.pop_scope()
+
+
+def test_entry_point_walker():
+    class PM(expression_walker.EntryPointPatternWalker):
+        @expression_walker.add_entry_point_match(F_(S_('start'), ...))
+        def entry_point(self, expression):
+            return expression.functor(*(
+                self.walk(arg) for arg in expression.args
+            ))
+
+        @expression_walker.add_match(F_)
+        def __(self, expression):
+            return expression
+
+    pm = PM()
+
+    exp_correct = S_('start')(S_('a')())
+    exp_wrong = S_('end')(S_('a')())
+
+    res = pm.walk(exp_correct)
+    assert res == exp_correct
+
+    with raises(expressions.NeuroLangException):
+        pm.walk(exp_wrong)
+
+    class PM2(PM):
+        @expression_walker.add_entry_point_match(
+            F_,
+            lambda x: x.functor == S_('pre_start')
+        )
+        def entry_point(self, expression):
+            return expression.functor(*(
+                self.walk(arg) for arg in expression.args
+            ))
+
+    pm2 = PM2()
+
+    exp_pre_correct = S_('pre_start')(S_('a')())
+    res = pm2.walk(exp_pre_correct)
+
+    assert res == exp_pre_correct
+
+    with raises(expressions.NeuroLangException):
+        pm2.walk(exp_correct)
+
+    with raises(
+        expressions.NeuroLangException, match="Entry point not declared"
+    ):
+        class PM3(expression_walker.EntryPointPatternWalker):
+            @expression_walker.add_match(F_)
+            def __(self, expression):
+                return expression
+
+        PM3()
