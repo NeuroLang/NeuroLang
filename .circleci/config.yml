@@ -135,5 +135,6 @@ workflows:
   version: 2
   test:
     jobs:
+      - py35
       - py36
       - py37
