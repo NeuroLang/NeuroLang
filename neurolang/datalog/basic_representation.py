@@ -116,13 +116,13 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
 
     @add_match(Symbol)
     def symbol(self, expression):
-        if (
-            expression in self.extensional_database() or
-            expression in self.intensional_database()
-        ):
+        new_expression = self.symbol_table.get(expression, expression)
+        if new_expression is expression:
+            return expression
+        elif isinstance(new_expression, (Disjunction, Constant[AbstractSet])):
             return expression
         else:
-            return self.symbol_table.get(expression, expression)
+            return new_expression
 
     @add_match(Fact(FunctionApplication[bool](Symbol, ...)))
     def fact(self, expression):
@@ -201,7 +201,7 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
                 f'{consequent.functor.name} has been previously '
                 'defined as Fact or extensional database.'
             )
-        disj = self.symbol_table[consequent.functor].literals
+        disj = self.symbol_table[consequent.functor].formulas
 
         if (
             not isinstance(disj[0].consequent, FunctionApplication) or

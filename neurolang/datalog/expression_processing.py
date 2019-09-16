@@ -21,8 +21,8 @@ class WalkDatalogProgramAggregatingSets(PatternWalker):
     @add_match(Conjunction)
     def conjunction(self, expression):
         fvs = OrderedSet()
-        for literal in expression.literals:
-            fvs |= self.walk(literal)
+        for formula in expression.formulas:
+            fvs |= self.walk(formula)
         return fvs
 
     @add_match(Disjunction)
@@ -31,7 +31,7 @@ class WalkDatalogProgramAggregatingSets(PatternWalker):
 
     @add_match(Negation)
     def negation(self, expression):
-        return self.walk(expression.literal)
+        return self.walk(expression.formula)
 
 
 class ExtractDatalogFreeVariablesWalker(WalkDatalogProgramAggregatingSets):
@@ -91,9 +91,9 @@ def extract_datalog_free_variables(expression):
 
 def is_conjunctive_expression(expression):
     if isinstance(expression, Conjunction):
-        literals = expression.literals
+        formulas = expression.formulas
     else:
-        literals = [expression]
+        formulas = [expression]
 
     return all(
         expression == Constant(True) or
@@ -105,7 +105,7 @@ def is_conjunctive_expression(expression):
                 for arg in expression.args
             )
         )
-        for expression in literals
+        for expression in formulas
     )
 
 
@@ -123,7 +123,7 @@ def is_conjunctive_expression_with_nested_predicates(expression):
                 if isinstance(arg, FunctionApplication)
             ]
         elif isinstance(exp, Conjunction):
-            stack += exp.literals
+            stack += exp.formulas
         elif isinstance(exp, Quantifier):
             stack.append(exp.body)
         else:
@@ -223,7 +223,7 @@ def all_body_preds_in_set(implication, predicate_set):
 
 def stratify(disjunction, datalog_instance):
     """Given an expression block containing `Implication` instances
-     and a datalog instance, return the stratification of the literals
+     and a datalog instance, return the stratification of the formulas
      in the block as a list of lists..
 
     Parameters
@@ -246,7 +246,7 @@ def stratify(disjunction, datalog_instance):
     strata = []
     seen = set(k for k in datalog_instance.extensional_database().keys())
     seen |= set(k for k in datalog_instance.builtins())
-    to_process = disjunction.literals
+    to_process = disjunction.formulas
     stratifiable = True
 
     stratum, new_to_process = stratify_obtain_facts_stratum(to_process, seen)
@@ -327,7 +327,7 @@ def reachable_code(query, datalog):
         p = to_reach.pop()
         reached.add(p)
         rules = idb[p]
-        for rule in rules.literals:
+        for rule in rules.formulas:
             if rule in seen_rules:
                 continue
             seen_rules.add(rule)

@@ -92,7 +92,7 @@ def test_generative_datalog():
     gdatalog.walk(program)
     edb = gdatalog.extensional_database()
     idb = gdatalog.intensional_database()
-    assert tau_1 in idb['P'].literals
+    assert tau_1 in idb['P'].formulas
 
     with pytest.raises(NeuroLangException):
         tau_2 = Implication(
@@ -105,7 +105,7 @@ def test_generative_datalog():
         gdatalog.walk(ExpressionBlock((tau_2, Fact(Q(C_(2))))))
         edb = gdatalog.extensional_database()
         idb = gdatalog.intensional_database()
-        assert tau_2 in idb['P'].literals
+        assert tau_2 in idb['P'].formulas
         assert Fact(Q(C_(2))) in edb['Q']
 
 
