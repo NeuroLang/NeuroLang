@@ -80,9 +80,6 @@ jobs:
       # specify the version you desire here
       # use `-browsers` prefix for selenium tests, e.g. `3.6.1-browsers`
       - image: circleci/python:3.6.4
-    environment:
-      CODACY_PROJECT_TOKEN: 819af61c85004229a83cb34b8089930c
-      CC_TEST_REPORTER_ID: 8b40c7b919b1734ebd87f91c3033557f84b8c737db91057bdf75d16251440c59
 
       # Specify service dependencies here if necessary
       # CircleCI maintains a library of pre-built images
@@ -100,9 +97,6 @@ jobs:
       # specify the version you desire here
       # use `-browsers` prefix for selenium tests, e.g. `3.6.1-browsers`
       - image: circleci/python:3.7
-    environment:
-      CODACY_PROJECT_TOKEN: 819af61c85004229a83cb34b8089930c
-      CC_TEST_REPORTER_ID: 8b40c7b919b1734ebd87f91c3033557f84b8c737db91057bdf75d16251440c59
 
       # Specify service dependencies here if necessary
       # CircleCI maintains a library of pre-built images
