@@ -118,34 +118,32 @@ class EntryPointPatternWalker(PatternWalker):
                 hasattr(self, '_entry_point_walked') and
                 self._entry_point_walked
             ):
-                return super().walk(expression)
-            else:
+                result = super().walk(expression)
+                return result
+            elif (
+                self.pattern_match(self.__entry_point__.pattern, expression)
+                and (
+                    self.__entry_point__.guard is None or
+                    self.__entry_point__.guard(expression)
+                )
+            ):
                 pattern, guard, action = self.__entry_point__
-                if (
-                    self.pattern_match(pattern, expression)
-                    and (guard is None or guard(expression))
-                ):
-                    name = '\033[1m\033[91m' + action.__qualname__ + '\033[0m'
-                    logging.info(
-                        '\tENTRY POINT MATCH %(name)s', {'name': name}
-                    )
-                    logging.info(
-                        '\t\tpattern: %(pattern)s', {'pattern': pattern}
-                    )
-                    logging.info('\t\tguard: %(guard)s', {'guard': guard})
-                    self._entry_point_walked = True
-                    result_expression = action(self, expression)
-                    logging.info(
-                        '\t\tresult: %(result_expression)s',
-                        {'result_expression': result_expression}
-                    )
-                    self._entry_point_walked = False
-                    return result_expression
-                else:
-                    raise NeuroLangException(
-                        'The first pattern to be walked '
-                        'must be the entry point'
-                    )
+                name = '\033[1m\033[91m' + action.__qualname__ + '\033[0m'
+                logging.info('\tENTRY POINT MATCH %(name)s', {'name': name})
+                logging.info('\t\tpattern: %(pattern)s', {'pattern': pattern})
+                logging.info('\t\tguard: %(guard)s', {'guard': guard})
+                self._entry_point_walked = True
+                result_expression = action(self, expression)
+                logging.info(
+                    '\t\tresult: %(result_expression)s',
+                    {'result_expression': result_expression}
+                )
+                self._entry_point_walked = False
+                return result_expression
+            else:
+                raise NeuroLangException(
+                    'The first pattern to be walked must be the entry point'
+                )
         except Exception:
             raise
         finally:
