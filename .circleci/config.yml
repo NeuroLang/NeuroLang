@@ -169,7 +169,7 @@ jobs:
 
 
 workflows:
-  version: 2.1
+  version: 2
   test:
     jobs:
       - test-3.6
