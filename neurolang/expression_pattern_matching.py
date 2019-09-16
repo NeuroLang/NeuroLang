@@ -68,6 +68,22 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
                 getattr(base, '__init__') is object.__init__
             ):
                 repeated_methods.remove('__init__')
+            non_method_attributes = set(
+                attr for attr in repeated_methods
+                if not callable(attr)
+            )
+            repeated_methods -= non_method_attributes
+
+            perfect_overwrites = set(
+                method for method in repeated_methods
+                if (
+                    classdict[method].pattern == getattr(base, method).pattern
+                    and classdict[method].guard == getattr(base, method).guard
+                )
+            )
+
+            repeated_methods -= perfect_overwrites
+
             if len(repeated_methods) > 1:
                 warn_message = (
                     f"Warning in class {name} "
