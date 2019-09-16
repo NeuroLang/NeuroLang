@@ -11,6 +11,16 @@ from .expressions import (Constant, Expression, FunctionApplication, Lambda,
                           Unknown, is_leq_informative, unify_types)
 
 
+__all__ = [
+    'expression_iterator', 'PatternWalker',
+    'EntryPointPatternWalker', 'IdentityWalker',
+    'ExpressionWalker', 'ReplaceSymbolWalker',
+    'ReplaceSymbolsByConstants', 'ReplaceExpressionsByValues',
+    'TypedSymbolTableEvaluator', 'ExpressionBasicEvaluator',
+    'add_match', 'add_entry_point_match'
+]
+
+
 def expression_iterator(expression, include_level=False, dfs=True):
     """
     Iterate traversing expression tree.
