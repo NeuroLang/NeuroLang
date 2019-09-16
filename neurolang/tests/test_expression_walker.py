@@ -125,7 +125,7 @@ def test_entry_point_walker():
         pm2.walk(exp_correct)
 
     with raises(
-        expressions.NeuroLangException, message="Entry point not declared"
+        expressions.NeuroLangException, match="Entry point not declared"
     ):
         class PM3(expression_walker.EntryPointPatternWalker):
             @expression_walker.add_match(F_)
