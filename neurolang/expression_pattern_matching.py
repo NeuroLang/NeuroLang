@@ -1,6 +1,6 @@
 """Module implementing expression pattern matching."""
 
-from collections import OrderedDict
+from collections import OrderedDict, namedtuple
 import copy
 from itertools import chain
 import inspect
@@ -22,6 +22,8 @@ __all__ = ['add_match', 'PatternMatcher']
 
 
 UndeterminedType = TypeVar('UndeterminedType')
+
+Pattern = namedtuple('Pattern', ['pattern', 'guard', 'action'])
 
 
 class NeuroLangPatternMatchingNoMatch(expressions.NeuroLangException):
@@ -107,6 +109,7 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
             needs_replacement = False
 
         patterns = []
+        __entry_point__ = None
         for v in classdict.values():
             if callable(v) and hasattr(v, 'pattern') and hasattr(v, 'guard'):
                 pattern = getattr(v, 'pattern')
@@ -115,9 +118,14 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
                         pattern, src_type, dst_type
                     )
                 patterns.append(
-                    (pattern, getattr(v, 'guard'), v)
+                    Pattern(pattern, getattr(v, 'guard'), v)
                 )
+                if hasattr(v, 'entry_point') and v.entry_point:
+                    __entry_point__ = patterns[-1]
+
         classdict['__patterns__'] = patterns
+        classdict['__entry_point__'] = __entry_point__
+
         return src_type, dst_type, needs_replacement
 
     @staticmethod
@@ -210,6 +218,25 @@ def add_match(pattern, guard=None):
         f.guard = guard
         return f
     return bind_match
+
+
+def add_entry_point_match(pattern, guard=None):
+    """Decorate by adding patterns to a :class:`PatternMatcher` class.
+
+    Should be used as
+    `@add_match(PATTERN, GUARD)` to turn the decorated method, receiving
+    an instance of :class:`Expression` into a matching case. See
+    :py:meth:`PatternMatcher.pattern_match` for more details on patterns.
+
+    Additionally, this decorator sets the entry point which should be the
+    first match for specific walkers.
+    """
+    def bind_entry_point_match(f):
+        f.pattern = pattern
+        f.guard = guard
+        f.entry_point = True
+        return f
+    return bind_entry_point_match
 
 
 class PatternMatcher(metaclass=PatternMatchingMetaClass):
