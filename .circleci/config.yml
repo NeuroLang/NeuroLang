@@ -140,4 +140,6 @@ workflows:
     jobs:
       - py36
       - py37
+  build-docs:
+    jobs:
       - docs
