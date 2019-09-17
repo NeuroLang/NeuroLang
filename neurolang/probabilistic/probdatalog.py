@@ -1,14 +1,34 @@
 import itertools
 
-from ..expressions import ExpressionBlock
-from .ppdl import concatenate_to_expression_block, get_antecedent_literals
+from ..expressions import ExpressionBlock, Expression
+from .ppdl import concatenate_to_expression_block, get_antecedent_formulas
 from ..datalog.expressions import Fact
+from ..exceptions import NeuroLangException
 from ..datalog.chase import Chase
+from ..datalog import DatalogProgram
+from ..expression_pattern_matching import add_match
+from ..expression_walker import PatternWalker
+from ..probabilistic.ppdl import is_gdatalog_rule
 
 
-class ProbabilisticFact(Fact):
-    def __init__(self, consequent, probability):
+class ProbFact(Fact):
+    '''
+    A fact that occurs with a certain probability.
+
+    A probabilistic fact is of the form p :: P(x) where P(x) is an atom and p
+    is a probability.
+
+    Notes
+    -----
+    - If x is a variable, its possible values are determined a typing unary
+      predicate within the rules of the program.
+    - If p is a variable, then it's a learnable parameter whose most probable
+      value will be inferred from data.
+    '''
+    def __init__(self, probability, consequent):
         super().__init__(consequent)
+        if not isinstance(probability, Expression):
+            raise NeuroLangException('The probability must be an expression')
         self.probability = probability
 
     def __repr__(self):
@@ -17,8 +37,49 @@ class ProbabilisticFact(Fact):
         )
 
 
+class ProbDatalogProgram(DatalogProgram):
+    '''
+    Datalog extended with probabilistic facts semantics from ProbLog.
+
+    It adds a probabilistic database which is a set of probabilistic facts.
+
+    Probabilistic facts are stored in the symbol table of the program such that
+    the key in the symbol table is the symbol of the predicate of the
+    probabilsitic fact and the value is the probabilistic fact itself.
+    '''
+    @add_match(ProbFact)
+    def probabilistic_fact(self, probfact):
+        predicate = probfact.consequent.functor
+        if predicate in self.symbol_table:
+            raise NeuroLangException(f'Predicate {predicate} already defined')
+        self.symbol_table[predicate] = probfact
+        return probfact
+
+    def probabilistic_database(self):
+        '''Returns probabilistic facts of the symbol table.'''
+        return {
+            k: v
+            for k, v in self.symbol_table.items()
+            if isinstance(v, ProbFact)
+        }
+
+class PPDLToProbDatalogTranslator(PatternWalker):
+    '''
+    Translate a PPDL program to a ProbDatalog program.
+
+    A PPDL probabilsitic rule whose delta term's distribution is finite can be
+    represented as a probabilistic choice. A probabilistic choice can be
+    represented within the probabilistic facts formalism (as noted by Vennekens
+    et al., 2004). Thus, the rule can also be represented with probabilistic
+    facts and standard Datalog rulees.
+    '''
+    @add_match(Implication, is_gdatalog_rule)
+    def rule(self, rule):
+        pass
+
+
 def get_antecedent_predicates(rule):
-    antecedent_literals = get_antecedent_literals(rule)
+    antecedent_literals = get_antecedent_formulas(rule)
     return [literal.functor for literal in antecedent_literals]
 
 
