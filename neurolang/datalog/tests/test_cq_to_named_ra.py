@@ -1,15 +1,13 @@
 from operator import eq
+from typing import AbstractSet, Tuple
 
 from ...expressions import Constant, FunctionApplication, Symbol
 from ...relational_algebra import (Column, Difference, NameColumns,
                                    NaturalJoin, Projection, Selection)
-from ...utils import RelationalAlgebraFrozenSet
+from ...utils import NamedRelationalAlgebraFrozenSet
 from ..expressions import Conjunction, Negation
 from ..translate_to_named_ra import TranslateToNamedRA
 
-R1 = RelationalAlgebraFrozenSet([(i, i * 2) for i in range(10)])
-
-R2 = RelationalAlgebraFrozenSet([(i * 2, i * 3) for i in range(10)])
 
 C_ = Constant
 S_ = Symbol
@@ -39,6 +37,40 @@ def test_translate_set():
         ),
         (y,)
     )
+
+
+def test_equality_costant_symbol():
+    x = S_('x')
+    a = C_('a')
+
+    expected_result = \
+        C_[AbstractSet[Tuple[str]]](
+            NamedRelationalAlgebraFrozenSet(('x',), {'a'})
+        )
+
+    fa = C_(eq)(x, a)
+    tr = TranslateToNamedRA()
+    res = tr.walk(fa)
+    assert res == expected_result
+
+    fa = C_(eq)(a, x)
+    tr = TranslateToNamedRA()
+    res = tr.walk(fa)
+    assert res == expected_result
+
+    y = S_('y')
+    fb = S_('R1')(x, y)
+
+    exp = Conjunction((fb, fa))
+
+    fb_trans = NameColumns(
+        Projection(S_('R1'), (C_(Column(0)), C_(Column(1)))),
+        (x, y)
+    )
+
+    res = tr.walk(exp)
+    assert res == NaturalJoin(fb_trans, expected_result)
+
 
 def test_joins():
     x = S_('x')

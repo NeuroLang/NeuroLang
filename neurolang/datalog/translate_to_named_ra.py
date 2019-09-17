@@ -1,13 +1,13 @@
 from operator import eq
+from typing import AbstractSet, Tuple
 
 from ..exceptions import NeuroLangException
 from ..expression_walker import ExpressionBasicEvaluator, add_match
-from ..expressions import Constant, FunctionApplication
-from ..relational_algebra import (Column, Difference, NaturalJoin, Projection,
-                                  Selection, NameColumns)
+from ..expressions import Constant, FunctionApplication, Symbol
+from ..relational_algebra import (Column, Difference, NameColumns, NaturalJoin,
+                                  Projection, Selection)
 from ..utils import NamedRelationalAlgebraFrozenSet
 from .expressions import Conjunction, Negation
-
 
 EQ = Constant(eq)
 
@@ -18,6 +18,17 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
     .. [1] S. Abiteboul, R. Hull, V. Vianu, Foundations of databases
        (Addison Wesley, 1995), Addison-Wesley.
     """
+    @add_match(FunctionApplication(EQ, (Constant, Symbol)))
+    def translate_eq_c_s(self, expression):
+        return self.walk(EQ(*expression.args[::-1]))
+
+    @add_match(FunctionApplication(EQ, (Symbol, Constant)))
+    def translate_eq_s_c(self, expression):
+        symbol, constant = expression.args
+        return Constant[AbstractSet[Tuple[constant.type]]](
+            NamedRelationalAlgebraFrozenSet((symbol.name,), (constant.value,))
+        )
+
     @add_match(FunctionApplication)
     def translate_fa(self, expression):
         functor = expression.functor
