@@ -140,3 +140,4 @@ workflows:
     jobs:
       - py36
       - py37
+      - docs
