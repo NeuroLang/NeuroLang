@@ -97,6 +97,21 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         else:
             raise ValueError("query takes 1 or 2 arguments")
 
+        solution_set, functor_orig = self.execute_query(head, predicate)
+
+        if not isinstance(head, tuple):
+            out_symbol = exp.Symbol[solution_set.type](functor_orig.name)
+            self.add_tuple_set(
+                solution_set.value, name=functor_orig.name
+            )
+            return Symbol(self, out_symbol.name)
+        elif len(head) == 0:
+            return len(solution_set.value) > 0
+        else:
+            return RelationalAlgebraFrozenSet(solution_set.value)
+
+    def execute_query(self, head, predicate):
+        functor_orig = None
         self.solver.symbol_table = self.symbol_table.create_scope()
         if isinstance(head, Operation):
             functor_orig = head.expression.functor
@@ -115,18 +130,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
         solution_set = solution.get(functor.name, exp.Constant(set()))
         self.solver.symbol_table = self.symbol_table.enclosing_scope
-
-        if not isinstance(head, tuple):
-            out_symbol = exp.Symbol[solution_set.type](functor_orig.name)
-            self.add_tuple_set(
-                solution_set.value, name=functor_orig.name
-            )
-            return Symbol(self, out_symbol.name)
-        else:
-            if len(head) == 0:
-                return len(solution_set.value) > 0
-            else:
-                return RelationalAlgebraFrozenSet(solution_set.value)
+        return solution_set, functor_orig
 
     def reset_program(self):
         self.symbol_table.clear()

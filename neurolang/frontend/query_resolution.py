@@ -4,8 +4,6 @@ from uuid import uuid1
 import numpy as np
 
 from .. import expressions as exp
-from ..datalog import aggregation
-from ..datalog.expression_processing import TranslateToDatalogSemantics
 from ..region_solver import Region
 from ..regions import (ExplicitVBR, ImplicitVBR, SphericalVolume,
                        take_principal_regions)
@@ -322,93 +320,6 @@ class QueryBuilderFirstOrder(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             ),
             symbol, predicate
         )
-
-
-class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
-    def __init__(self, solver, chase_class=aggregation.Chase):
-        super().__init__(
-            solver, logic_programming=True
-        )
-        self.chase_class = chase_class
-        self.frontend_translator = \
-            TranslateExpressionToFrontEndExpression(self)
-        self.translate_expression_to_datalog = TranslateToDatalogSemantics()
-
-    @property
-    def current_program(self):
-        cp = []
-        for rules in self.solver.intensional_database().values():
-            for rule in rules.expressions:
-                cp.append(self.frontend_translator.walk(rule))
-        return cp
-
-    def assign(self, consequent, antecedent):
-        if (
-            isinstance(antecedent.expression, exp.Constant) and
-            antecedent.expression.value is True
-        ):
-            expression = datalog.Fact(consequent.expression)
-        else:
-            expression = self._assign_intensional_rule(consequent, antecedent)
-        self.solver.walk(expression)
-
-    def _assign_intensional_rule(self, consequent, antecedent):
-        new_args = tuple()
-        changed = False
-        consequent_expression = self.translate_expression_to_datalog.walk(
-            consequent.expression
-        )
-
-        for arg in consequent_expression.args:
-            if isinstance(arg, exp.FunctionApplication):
-                arg = aggregation.AggregationApplication(
-                    arg.functor, arg.args
-                )
-                changed = True
-            new_args += (arg,)
-
-        if changed:
-            consequent_expression = exp.FunctionApplication(
-                consequent.expression.functor,
-                new_args
-            )
-
-        expression = datalog.Implication(
-            consequent_expression,
-            self.translate_expression_to_datalog.walk(antecedent.expression)
-        )
-        return expression
-
-    def query(self, head, predicate):
-        self.solver.symbol_table = self.symbol_table.create_scope()
-        functor_orig = head.expression.functor
-        new_head = self.new_symbol()(*head.arguments)
-        functor = new_head.expression.functor
-        self.assign(new_head, predicate)
-        solution = self.chase_class(self.solver).build_chase_solution()
-        solution_set = solution.get(functor.name, exp.Constant(set()))
-        out_symbol = exp.Symbol[solution_set.type](functor_orig.name)
-        self.solver.symbol_table = self.symbol_table.enclosing_scope
-        self.add_tuple_set(
-            solution_set.value, name=functor_orig.name
-        )
-        return Symbol(self, out_symbol.name)
-
-    def reset_program(self):
-        self.symbol_table.clear()
-
-    def add_tuple_set(self, iterable, type_=Unknown, name=None):
-        if name is None:
-            name = str(uuid1())
-
-        if isinstance(type_, tuple):
-            type_ = Tuple[type_]
-        symbol = exp.Symbol[AbstractSet[type_]](name)
-        self.solver.add_extensional_predicate_from_tuples(
-            symbol, iterable, type_=type_
-        )
-
-        return Symbol(self, name)
 
 
 class QuerySymbolsProxy(object):
