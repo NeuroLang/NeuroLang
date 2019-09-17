@@ -45,10 +45,13 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         projections = []
         new_type = tuple()
         selections = dict()
+        selection_columns = dict()
         set_type = functor.type.__args__[0].__args__
         for i, arg in enumerate(expression.args):
             if isinstance(arg, Constant):
                 selections[i] = arg.value
+            elif arg in named_args:
+                selection_columns[i] = named_args.index(arg)
             else:
                 projections.append(i)
                 named_args.append(arg.name)
@@ -58,8 +61,9 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         if len(in_set) > 0:
             if len(selections) > 0:
                 in_set = in_set.selection(selections)
-            if len(projections) > 0:
-                in_set = in_set.projection(*projections)
+            if len(selection_columns) > 0:
+                in_set = in_set.selection_columns(selection_columns)
+            in_set = in_set.projection(*projections)
 
         out_set = Constant[AbstractSet[Tuple[new_type]]](
             NamedRelationalAlgebraFrozenSet(

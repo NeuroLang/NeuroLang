@@ -201,7 +201,7 @@ class RelationalAlgebraFrozenSet(Set):
 
 
 class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
-    def __init__(self, columns, iterable=None):
+    def __init__(self, columns=None, iterable=None):
         self._columns = tuple(columns)
         self._columns_sort = tuple(pd.Index(columns).argsort())
         if iterable is None:
@@ -261,6 +261,21 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         new_container = self._container[ix]
 
         output = type(self)(self.columns)
+        output._container = new_container
+        return output
+
+    def selection_columns(self, select_criteria):
+        if self._container is None:
+            return type(self)()
+        it = iter(select_criteria.items())
+        col1, col2 = next(it)
+        ix = self._container[col1] == self._container[col2]
+        for col1, col2 in it:
+            ix &= self._container[col1] == self._container[col2]
+
+        new_container = self._container[ix]
+
+        output = type(self)()
         output._container = new_container
         return output
 

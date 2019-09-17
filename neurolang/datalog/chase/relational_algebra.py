@@ -5,6 +5,7 @@ from ...expressions import Constant, Symbol
 from ...relational_algebra import (Column, Product, Projection,
                                    RelationalAlgebraOptimiser,
                                    RelationalAlgebraSolver, Selection, eq_)
+from ...utils import NamedRelationalAlgebraFrozenSet
 from ..expressions import Conjunction
 from ..translate_to_named_ra import TranslateToNamedRA
 
@@ -138,16 +139,40 @@ class ChaseNamedRelationalAlgebraMixin:
         )
         result = RelationalAlgebraSolver().walk(ra_code)
 
-        substitutions = self.compute_substitutions(result)
+        result_value = result.value
+        substitutions = NamedRAFSTupleIterAdapter(
+            sorted(result_value.columns),
+            result_value
+        )
 
         return substitutions
 
-    def compute_substitutions(self, result):
-        substitutions = []
-        for tuple_ in result.value:
-            subs = {
-                k: Constant(v)
-                for k, v in tuple_._asdict().items()
+
+class NamedRAFSTupleIterAdapter(NamedRelationalAlgebraFrozenSet):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if len(self) > 0 and self.arity > 0:
+            element = next(super().__iter__())
+            self._row_types = {
+                c: Constant(getattr(element, c)).type
+                for c in self.columns
             }
-            substitutions.append(subs)
-        return substitutions
+        else:
+            self._row_types = dict()
+
+    @property
+    def row_types(self):
+        return self._row_types
+
+    def __iter__(self):
+        if self.arity > 0:
+            row_types = self.row_types
+            for row in super().__iter__():
+                yield {
+                    f: Constant[row_types[f]](v)
+                    for f, v in zip(row._fields, row)
+                }
+        else:
+            for _ in range(len(self)):
+                yield dict()

@@ -27,6 +27,81 @@ class Datalog(TranslateToLogic, DatalogProgram, ew.ExpressionBasicEvaluator):
         return x > y
 
 
+def test_no_free_variable_case():
+    Q = S_('Q')
+    T = S_('T')
+    a = C_('a')
+    b = C_('b')
+    datalog_program = Eb_((
+        F_(Q(a)),
+        Imp_(T(b), Q(a)),
+    ))
+
+    dl = Datalog()
+    dl.walk(datalog_program)
+
+    instance_0 = dl.extensional_database()
+    rule = datalog_program.expressions[-1]
+    dc = Chase(dl)
+    instance_update = dc.chase_step(instance_0, rule)
+    res = {
+        T: C_({C_(('b', ))}),
+    }
+
+    assert res == instance_update
+
+
+def test_no_head_argument_case():
+    Q = S_('Q')
+    T = S_('T')
+    x = S_('x')
+    a = C_('a')
+    datalog_program = Eb_((
+        F_(Q(a)),
+        Imp_(T(), Q(x)),
+    ))
+
+    dl = Datalog()
+    dl.walk(datalog_program)
+
+    instance_0 = dl.extensional_database()
+    rule = datalog_program.expressions[-1]
+    dc = Chase(dl)
+    instance_update = dc.chase_step(instance_0, rule)
+    res = {
+        T: C_({C_(tuple())}),
+    }
+
+    assert res == instance_update
+
+
+def test_symmetric_elements():
+    Q = S_('Q')
+    T = S_('T')
+    x = S_('x')
+    a = C_('a')
+    b = C_('b')
+    c = C_('c')
+    datalog_program = Eb_((
+        F_(Q(a, a)),
+        F_(Q(b, c)),
+        Imp_(T(x), Q(x, x)),
+    ))
+
+    dl = Datalog()
+    dl.walk(datalog_program)
+
+    instance_0 = dl.extensional_database()
+    rule = datalog_program.expressions[-1]
+    dc = Chase(dl)
+    instance_update = dc.chase_step(instance_0, rule)
+    res = {
+        T: C_({C_((a,))}),
+    }
+
+    assert res == instance_update
+
+
 def test_builtin_equality_only():
     Q = S_('Q')
     x = S_('x')
@@ -109,9 +184,8 @@ def test_python_builtin_chase_step():
 
     datalog_program = DT.walk(Eb_((
         F_(Q(C_(1), C_(2))), F_(Q(C_(2), C_(3))), F_(Q(C_(8), C_(6))),
-        Imp_(T(x, y),
-             Q(x, z) & Q(z, y)), Imp_(S(x, y),
-                                      Q(x, y) & gt(x, y))
+        Imp_(T(x, y), Q(x, z) & Q(z, y)),
+        Imp_(S(x, y), Q(x, y) & gt(x, y))
     )))
 
     dl = Datalog()
