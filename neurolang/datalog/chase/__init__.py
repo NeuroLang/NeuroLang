@@ -1,5 +1,4 @@
-from .general import (ChaseGeneral, ChaseGeneralToModularAdapter, ChaseNaive,
-                      ChaseNode, ChaseSemiNaive, ChaseStepModular,
+from .general import (ChaseGeneral, ChaseNaive, ChaseNode, ChaseSemiNaive,
                       NeuroLangNonLinearProgramException)
 from .mgu import ChaseMGUMixin
 from .relational_algebra import (ChaseNamedRelationalAlgebraMixin,
@@ -12,11 +11,7 @@ __all__ = [
 ]
 
 
-# class Chase(ChaseGeneral, ChaseSemiNaive, ChaseRelationalAlgebraMixin):
-#    pass
-
 class Chase(
-    # ChaseStepModular, ChaseGeneralToModularAdapter,
     ChaseSemiNaive, ChaseRelationalAlgebraMixin,
     ChaseGeneral,
 ):
