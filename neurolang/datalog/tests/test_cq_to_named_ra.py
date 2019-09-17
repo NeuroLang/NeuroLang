@@ -1,10 +1,9 @@
-from typing import AbstractSet, Tuple
+from operator import eq
 
 from ...expressions import Constant, FunctionApplication, Symbol
-from ...relational_algebra import Difference, NaturalJoin
-from ...utils import (
-    NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
-)
+from ...relational_algebra import (Column, Difference, NameColumns,
+                                   NaturalJoin, Projection, Selection)
+from ...utils import RelationalAlgebraFrozenSet
 from ..expressions import Conjunction, Negation
 from ..translate_to_named_ra import TranslateToNamedRA
 
@@ -16,33 +15,30 @@ C_ = Constant
 S_ = Symbol
 F_ = FunctionApplication
 
-Symbol_Table = {
-    'R1': C_[AbstractSet[Tuple[int, int]]](R1),
-    'R2': C_[AbstractSet[Tuple[int, int]]](R2),
-}
-
 
 def test_translate_set():
     x = S_('x')
     y = S_('y')
     fa = S_('R1')(x, y)
 
-    tr = TranslateToNamedRA(Symbol_Table)
+    tr = TranslateToNamedRA()
     res = tr.walk(fa)
-    assert isinstance(res, Constant[AbstractSet[Tuple[int, int]]])
-    assert isinstance(res.value, NamedRelationalAlgebraFrozenSet)
-    assert res.value.columns == ('x', 'y')
-    assert res.value.to_unnamed() == R1
+    assert res == NameColumns(
+        Projection(S_('R1'), (C_(Column(0)), C_(Column(1)))),
+        (x, y)
+    )
 
     fa = S_('R1')(C_(1), y)
 
-    tr = TranslateToNamedRA(Symbol_Table)
+    tr = TranslateToNamedRA()
     res = tr.walk(fa)
-    assert isinstance(res, Constant[AbstractSet[Tuple[int]]])
-    assert isinstance(res.value, NamedRelationalAlgebraFrozenSet)
-    assert res.value.columns == ('y', )
-    assert res.value.to_unnamed() == R1.selection({0: 1}).projection(1)
-
+    assert res == NameColumns(
+        Projection(
+            Selection(S_('R1'), C_(eq)(C_(Column(0)), C_(1))),
+            (C_(Column(1)),)
+        ),
+        (y,)
+    )
 
 def test_joins():
     x = S_('x')
@@ -52,69 +48,44 @@ def test_joins():
     fb = S_('R1')(y, z)
     exp = Conjunction((fa, fb))
 
-    tr = TranslateToNamedRA(Symbol_Table)
+    fa_trans = NameColumns(
+        Projection(S_('R1'), (C_(Column(0)), C_(Column(1)))),
+        (x, y)
+    )
+
+    fb_trans = NameColumns(
+        Projection(S_('R1'), (C_(Column(0)), C_(Column(1)))),
+        (y, z)
+    )
+
+    tr = TranslateToNamedRA()
     res = tr.walk(exp)
-    assert isinstance(res, NaturalJoin)
-    assert isinstance(
-        res.relation_left, Constant[AbstractSet[Tuple[int, int]]]
-    )
-    assert isinstance(
-        res.relation_right, Constant[AbstractSet[Tuple[int, int]]]
-    )
-    assert isinstance(res.relation_left.value, NamedRelationalAlgebraFrozenSet)
-    assert res.relation_left.value.columns == ('x', 'y')
-    assert res.relation_left.value.to_unnamed() == R1
-    assert isinstance(
-        res.relation_right.value, NamedRelationalAlgebraFrozenSet
-    )
-    assert res.relation_right.value.columns == ('y', 'z')
-    assert res.relation_right.value.to_unnamed() == R1
+    assert res == NaturalJoin(fa_trans, fb_trans)
 
     fb = S_('R2')(x, y)
+    fb_trans = NameColumns(
+        Projection(S_('R2'), (C_(Column(0)), C_(Column(1)))),
+        (x, y)
+    )
     exp = Conjunction((fa, Negation(fb)))
 
-    tr = TranslateToNamedRA(Symbol_Table)
+    tr = TranslateToNamedRA()
     res = tr.walk(exp)
-    assert isinstance(res, Difference)
-    assert isinstance(
-        res.relation_left, Constant[AbstractSet[Tuple[int, int]]]
-    )
-    assert isinstance(
-        res.relation_right, Constant[AbstractSet[Tuple[int, int]]]
-    )
-    assert isinstance(res.relation_left.value, NamedRelationalAlgebraFrozenSet)
-    assert res.relation_left.value.columns == ('x', 'y')
-    assert res.relation_left.value.to_unnamed() == R1
-    assert isinstance(
-        res.relation_right.value, NamedRelationalAlgebraFrozenSet
-    )
-    assert res.relation_right.value.columns == ('x', 'y')
-    assert res.relation_right.value.to_unnamed() == R2
+    assert res == Difference(fa_trans, fb_trans)
 
     fa = S_('R1')(x, y)
     fb = S_('R2')(y, C_(0))
+    fb_trans = NameColumns(
+        Projection(
+            Selection(S_('R2'), C_(eq)(C_(Column(1)), C_(0))),
+            (C_(Column(0)),)
+        ),
+        (y,)
+    )
+
     exp = Conjunction((fa, Negation(fb)))
 
-    tr = TranslateToNamedRA(Symbol_Table)
+    tr = TranslateToNamedRA()
     res = tr.walk(exp)
 
-    assert isinstance(res, Difference)
-    assert isinstance(
-        res.relation_left, Constant[AbstractSet[Tuple[int, int]]]
-    )
-
-    rel_right = res.relation_right
-    assert isinstance(rel_right, NaturalJoin)
-    assert rel_right.relation_left == res.relation_left
-
-    assert isinstance(
-        rel_right.relation_right, Constant[AbstractSet[Tuple[int]]]
-    )
-    assert isinstance(
-        rel_right.relation_right.value, NamedRelationalAlgebraFrozenSet
-    )
-    assert rel_right.relation_right.value.columns == ('y',)
-    assert (
-        rel_right.relation_right.value.to_unnamed() ==
-        R2.selection({1: 0}).projection(0)
-    )
+    assert res == Difference(fa_trans, NaturalJoin(fa_trans, fb_trans))

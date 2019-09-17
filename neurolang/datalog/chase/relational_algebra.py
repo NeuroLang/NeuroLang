@@ -1,4 +1,5 @@
-
+from collections import defaultdict
+from functools import lru_cache
 from typing import AbstractSet
 
 from ...expressions import Constant, Symbol
@@ -122,7 +123,9 @@ class ChaseNamedRelationalAlgebraMixin:
 
     """
     def obtain_substitutions(self, args_to_project, rule_predicates_iterator):
-        symbol_table = {}
+        symbol_table = defaultdict(
+            default_factory=lambda: NamedRAFSTupleIterAdapter([], set())
+        )
         predicates = tuple()
         for predicate, set_ in rule_predicates_iterator:
             type_ = AbstractSet[set_.row_type]
@@ -133,11 +136,11 @@ class ChaseNamedRelationalAlgebraMixin:
         if len(predicates) == 0:
             return [{}]
 
-        traslator_to_named_ra = TranslateToNamedRA(symbol_table)
-        ra_code = traslator_to_named_ra.walk(
+        ra_code = self.translate_conjunction_to_named_ra(
             Conjunction(predicates)
         )
-        result = RelationalAlgebraSolver().walk(ra_code)
+
+        result = RelationalAlgebraSolver(symbol_table).walk(ra_code)
 
         result_value = result.value
         substitutions = NamedRAFSTupleIterAdapter(
@@ -146,6 +149,11 @@ class ChaseNamedRelationalAlgebraMixin:
         )
 
         return substitutions
+
+    @lru_cache(1024)
+    def translate_conjunction_to_named_ra(self, conjunction):
+        traslator_to_named_ra = TranslateToNamedRA()
+        return traslator_to_named_ra.walk(conjunction)
 
 
 class NamedRAFSTupleIterAdapter(NamedRelationalAlgebraFrozenSet):

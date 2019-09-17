@@ -1,9 +1,10 @@
 from operator import eq
 from typing import AbstractSet
 
-from .expressions import Constant, Symbol, FunctionApplication, Definition
 from . import expression_walker as ew
-from .utils import RelationalAlgebraSet
+from .exceptions import NeuroLangException
+from .expressions import Constant, Definition, FunctionApplication, Symbol
+from .utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet
 
 eq_ = Constant(eq)
 
@@ -99,6 +100,18 @@ class Difference(RelationalAlgebraOperation):
         )
 
 
+class NameColumns(RelationalAlgebraOperation):
+    def __init__(self, relation, column_names):
+        self.relation = relation
+        self.column_names = column_names
+
+    def __repr__(self):
+        return (
+            f'\N{GREEK SMALL LETTER DELTA}'
+            f'_{self.column_names}({self.relation})'
+        )
+
+
 class RelationalAlgebraSolver(ew.ExpressionWalker):
     """
     Mixing that walks through relational algebra expressions and
@@ -107,6 +120,9 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
     Relations are expected to be represented
     as objects with the same interface as :obj:`RelationalAlgebraSet`.
     """
+
+    def __init__(self, symbol_table=None):
+        self.symbol_table = symbol_table
 
     @ew.add_match(Selection(..., FA_(eq_, (C_[Column], C_[Column]))))
     def selection_between_columns(self, selection):
@@ -163,6 +179,34 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         right = self.walk(difference.relation_right).value
         res = left - right
         return C_[AbstractSet](res)
+
+    @ew.add_match(NameColumns)
+    def ra_name_columns(self, name_columns):
+        relation = self.walk(name_columns.relation)
+        relation_set = relation.value
+        column_names = []
+        for col in name_columns.column_names:
+            if isinstance(col, Symbol):
+                column_names.append(col.name)
+            elif isinstance(col, Constant):
+                column_names.append(col.value)
+            else:
+                raise NeuroLangException(
+                    "Column name must be a Constant or Symbol"
+                )
+        new_set = NamedRelationalAlgebraFrozenSet(column_names, relation_set)
+        return Constant[relation.type](new_set)
+
+    @ew.add_match(Constant)
+    def ra_constant(self, constant):
+        return constant
+
+    @ew.add_match(Symbol)
+    def ra_symbol(self, symbol):
+        constant = self.symbol_table.get(symbol, None)
+        if constant is None:
+            raise NeuroLangException(f'Symbol {symbol} not in table')
+        return constant
 
 
 class RelationalAlgebraSimplification(ew.ExpressionWalker):
