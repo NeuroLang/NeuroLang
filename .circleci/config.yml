@@ -22,6 +22,7 @@ commands:
             . venv/bin/activate
             pip install -r requirements.txt --progress-bar off
             pip install -r requirements-dev.txt --progress-bar off
+            pip install --upgrade pip
 
       - run:
           name: install sonar
@@ -126,7 +127,7 @@ jobs:
       - install
       - run: |
           cd doc
-          make html-strict
+          make html
 
 
 workflows:
