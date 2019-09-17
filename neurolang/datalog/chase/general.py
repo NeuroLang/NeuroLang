@@ -92,14 +92,14 @@ class ChaseGeneral():
         new_substitutions = []
         predicates = [p for p, _ in builtin_predicates]
         for substitution in substitutions:
-            new_substitution = self._evaluate_builtins_predicates(
+            new_substitution = self.evaluate_builtins_predicates(
                 predicates, substitution
             )
             if new_substitution is not None:
                 new_substitutions.append(new_substitution)
         return new_substitutions
 
-    def _evaluate_builtins_predicates(
+    def evaluate_builtins_predicates(
         self, predicates_to_evaluate, substitution
     ):
         predicates_to_evaluate = predicates_to_evaluate.copy()
@@ -202,7 +202,7 @@ class ChaseGeneral():
                 )
             )
             for substitution in substitutions
-            if len(substitution) > 0
+            if len(substitutions) > 0
         ]
         new_tuples = self.datalog_program.new_set(tuples)
 

@@ -12,7 +12,6 @@ __all__ = [
 
 
 class Chase(
-    ChaseSemiNaive, ChaseRelationalAlgebraPlusCeriMixin,
-    ChaseGeneral,
+    ChaseSemiNaive, ChaseGeneral, ChaseRelationalAlgebraPlusCeriMixin,
 ):
     pass

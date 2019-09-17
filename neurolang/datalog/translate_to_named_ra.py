@@ -71,40 +71,40 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
 
     @add_match(Negation)
     def translate_negation(self, expression):
-        if isinstance(expression.literal, Negation):
-            return self.walk(expression.literal.literal)
+        if isinstance(expression.formula, Negation):
+            return self.walk(expression.formula.formula)
         else:
-            return Negation(self.walk(expression.literal))
+            return Negation(self.walk(expression.formula))
 
     @add_match(Conjunction)
     def translate_conj(self, expression):
-        pos_literals = []
-        neg_literals = []
+        pos_formulas = []
+        neg_formulas = []
         named_columns = set()
-        for literal in expression.literals:
-            literal = self.walk(literal)
-            if isinstance(literal, Negation):
-                neg_literals.append(literal.literal)
+        for formula in expression.formulas:
+            formula = self.walk(formula)
+            if isinstance(formula, Negation):
+                neg_formulas.append(formula.formula)
             else:
-                pos_literals.append(literal)
-                named_columns.update(literal.value.columns)
+                pos_formulas.append(formula)
+                named_columns.update(formula.value.columns)
 
-        if len(pos_literals) > 0:
-            pos_literals = sorted(pos_literals, key=lambda x: len(x.value))
-            output = pos_literals[0]
-            for pos_literal in pos_literals[1:]:
-                output = NaturalJoin(output, pos_literal)
+        if len(pos_formulas) > 0:
+            pos_formulas = sorted(pos_formulas, key=lambda x: len(x.value))
+            output = pos_formulas[0]
+            for pos_formula in pos_formulas[1:]:
+                output = NaturalJoin(output, pos_formula)
         else:
             return NamedRelationalAlgebraFrozenSet([])
 
-        for neg_literal in neg_literals:
-            neg_cols = set(neg_literal.value.columns)
+        for neg_formula in neg_formulas:
+            neg_cols = set(neg_formula.value.columns)
             if named_columns > neg_cols:
-                neg_literal = NaturalJoin(output, neg_literal)
+                neg_formula = NaturalJoin(output, neg_formula)
             elif named_columns != neg_cols:
                 raise NeuroLangException(
-                    f'Negative predicate {neg_literal} is not safe range'
+                    f'Negative predicate {neg_formula} is not safe range'
                 )
-            output = Difference(output, neg_literal)
+            output = Difference(output, neg_formula)
 
         return output
