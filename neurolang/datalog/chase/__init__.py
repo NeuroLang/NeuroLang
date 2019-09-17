@@ -2,17 +2,17 @@ from .general import (ChaseGeneral, ChaseNaive, ChaseNode, ChaseSemiNaive,
                       NeuroLangNonLinearProgramException)
 from .mgu import ChaseMGUMixin
 from .relational_algebra import (ChaseNamedRelationalAlgebraMixin,
-                                 ChaseRelationalAlgebraMixin)
+                                 ChaseRelationalAlgebraPlusCeriMixin)
 
 __all__ = [
     "ChaseGeneral", "ChaseNode", "ChaseNaive", "ChaseSemiNaive",
     "NeuroLangNonLinearProgramException", "ChaseMGUMixin",
-    "ChaseRelationalAlgebraMixin", "ChaseNamedRelationalAlgebraMixin"
+    "ChaseRelationalAlgebraPlusCeriMixin", "ChaseNamedRelationalAlgebraMixin"
 ]
 
 
 class Chase(
-    ChaseSemiNaive, ChaseRelationalAlgebraMixin,
+    ChaseSemiNaive, ChaseRelationalAlgebraPlusCeriMixin,
     ChaseGeneral,
 ):
     pass

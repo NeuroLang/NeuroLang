@@ -9,7 +9,17 @@ from ..expressions import Conjunction
 from ..translate_to_named_ra import TranslateToNamedRA
 
 
-class ChaseRelationalAlgebraMixin:
+class ChaseRelationalAlgebraPlusCeriMixin:
+    """
+    Conjunctive query solving using Ceri et al [1]_ algorithm for unnamed
+    positive relational algebra.
+
+    .. [1] S. Ceri, G. Gottlob, L. Lavazza, in Proceedings of the 12th
+       International Conference on Very Large Data Bases
+       (Morgan Kaufmann Publishers Inc.,
+       San Francisco, CA, USA, 1986;
+       http://dl.acm.org/citation.cfm?id=645913.671468), VLDB ’86, pp. 395–402.
+    """
     def obtain_substitutions(self, args_to_project, rule_predicates_iterator):
         ra_code, projected_var_names = self.translate_to_ra_plus(
             args_to_project,
@@ -102,6 +112,14 @@ class ChaseRelationalAlgebraMixin:
 
 
 class ChaseNamedRelationalAlgebraMixin:
+    """
+    Conjunctive query solving using the algorithm 5.4.8 from Abiteboul et al
+    [1]_ algorithm for named relational algebra.
+
+    ..[1] S. Abiteboul, R. Hull, V. Vianu, Foundations of databases
+      (Addison Wesley, 1995), Addison-Wesley.
+
+    """
     def obtain_substitutions(self, args_to_project, rule_predicates_iterator):
         symbol_table = {}
         predicates = tuple()
