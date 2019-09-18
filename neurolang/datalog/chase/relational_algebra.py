@@ -1,15 +1,18 @@
 from collections import defaultdict
 from functools import lru_cache
-from typing import AbstractSet
+from itertools import chain
+from typing import AbstractSet, Sequence
 
-from ...expressions import Constant, Symbol, Definition
+from ...expressions import Constant, Definition, Symbol
 from ...relational_algebra import (Column, Product, Projection,
                                    RelationalAlgebraOptimiser,
                                    RelationalAlgebraSolver, Selection, eq_)
+from ...type_system import is_leq_informative
 from ...utils import NamedRelationalAlgebraFrozenSet
+from ..expression_processing import (extract_datalog_free_variables,
+                                     extract_datalog_predicates)
 from ..expressions import Conjunction
 from ..translate_to_named_ra import TranslateToNamedRA
-from ..expression_processing import extract_datalog_predicates
 
 
 class ChaseRelationalAlgebraPlusCeriMixin:
@@ -167,30 +170,45 @@ class ChaseNamedRelationalAlgebraMixin:
         restricted_predicates = []
         nonrestricted_predicates = []
         builtin_predicates = []
+        cq_free_vars = set()
         for predicate in rule_predicates:
             functor = predicate.functor
             if functor in restriction_instance:
                 restricted_predicates.append(
                     (predicate, restriction_instance[functor].value)
                 )
+                cq_free_vars |= extract_datalog_free_variables(predicate)
             elif functor in instance:
                 nonrestricted_predicates.append(
                     (predicate, instance[functor].value)
                 )
+                cq_free_vars |= extract_datalog_free_variables(predicate)
             elif functor in self.builtins:
-                builtin_predicates.append((predicate, self.builtins[functor]))
+                builtin_predicates.append(
+                    (predicate, self.builtins[functor])
+                )
             elif isinstance(functor, Constant):
-                if (
-                    functor.value == eq_ and
-                    not any(
-                        isinstance(arg, Definition) for arg in predicate.args
-                    )
-                ):
-                    nonrestricted_predicates.append((predicate, None))
-                else:
-                    builtin_predicates.append((predicate, functor))
+                builtin_predicates.append((predicate, functor))
             else:
                 return ([], [], [])
+
+        new_builtin_predicates = []
+        builtin_vectorized_predicates = []
+        for pred, functor in builtin_predicates:
+            if (
+                functor == eq_ and
+                not any(isinstance(arg, Definition) for arg in pred.args) and
+                any(
+                    isinstance(arg, Constant) or arg in cq_free_vars
+                    for arg in pred.args
+                )
+            ):
+                nonrestricted_predicates.append((pred, None))
+            elif is_leq_informative(Sequence[bool], functor.type):
+                builtin_vectorized_predicates.append((pred, functor))
+            else:
+                new_builtin_predicates.append((pred, functor))
+        builtin_predicates = new_builtin_predicates
 
         return (
             restricted_predicates, nonrestricted_predicates, builtin_predicates
