@@ -2,13 +2,14 @@ from collections import defaultdict
 from functools import lru_cache
 from typing import AbstractSet
 
-from ...expressions import Constant, Symbol
+from ...expressions import Constant, Symbol, Definition
 from ...relational_algebra import (Column, Product, Projection,
                                    RelationalAlgebraOptimiser,
                                    RelationalAlgebraSolver, Selection, eq_)
 from ...utils import NamedRelationalAlgebraFrozenSet
 from ..expressions import Conjunction
 from ..translate_to_named_ra import TranslateToNamedRA
+from ..expression_processing import extract_datalog_predicates
 
 
 class ChaseRelationalAlgebraPlusCeriMixin:
@@ -128,9 +129,10 @@ class ChaseNamedRelationalAlgebraMixin:
         )
         predicates = tuple()
         for predicate, set_ in rule_predicates_iterator:
-            type_ = AbstractSet[set_.row_type]
-            set_ = Constant[type_](set_, verify_type=False)
-            symbol_table[predicate.functor] = set_
+            if set_ is not None:
+                type_ = AbstractSet[set_.row_type]
+                set_ = Constant[type_](set_, verify_type=False)
+                symbol_table[predicate.functor] = set_
             predicates += (predicate,)
 
         if len(predicates) == 0:
@@ -154,6 +156,45 @@ class ChaseNamedRelationalAlgebraMixin:
     def translate_conjunction_to_named_ra(self, conjunction):
         traslator_to_named_ra = TranslateToNamedRA()
         return traslator_to_named_ra.walk(conjunction)
+
+    def extract_rule_predicates(
+        self, rule, instance, restriction_instance=None
+    ):
+        if restriction_instance is None:
+            restriction_instance = dict()
+
+        rule_predicates = extract_datalog_predicates(rule.antecedent)
+        restricted_predicates = []
+        nonrestricted_predicates = []
+        builtin_predicates = []
+        for predicate in rule_predicates:
+            functor = predicate.functor
+            if functor in restriction_instance:
+                restricted_predicates.append(
+                    (predicate, restriction_instance[functor].value)
+                )
+            elif functor in instance:
+                nonrestricted_predicates.append(
+                    (predicate, instance[functor].value)
+                )
+            elif functor in self.builtins:
+                builtin_predicates.append((predicate, self.builtins[functor]))
+            elif isinstance(functor, Constant):
+                if (
+                    functor.value == eq_ and
+                    not any(
+                        isinstance(arg, Definition) for arg in predicate.args
+                    )
+                ):
+                    nonrestricted_predicates.append((predicate, None))
+                else:
+                    builtin_predicates.append((predicate, functor))
+            else:
+                return ([], [], [])
+
+        return (
+            restricted_predicates, nonrestricted_predicates, builtin_predicates
+        )
 
 
 class NamedRAFSTupleIterAdapter(NamedRelationalAlgebraFrozenSet):
