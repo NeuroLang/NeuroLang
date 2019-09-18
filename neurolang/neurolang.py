@@ -8,10 +8,10 @@ from .solver import *
 from .exceptions import NeuroLangException
 from .expressions import (
     Symbol, Constant, Expression, FunctionApplication, Statement, Query,
-    Projection, ExistentialPredicate, Lambda,
-    TypedSymbolTable, unify_types, Unknown,
+    Projection, ExistentialPredicate, Lambda, unify_types, Unknown,
     NeuroLangTypeException, is_leq_informative,
 )
+from .typed_symbol_table import TypedSymbolTable
 from .expression_walker import (
     add_match,
     ExpressionBasicEvaluator,

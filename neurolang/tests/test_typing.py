@@ -3,6 +3,7 @@ import pytest
 import typing
 
 from .. import expressions
+from ..typed_symbol_table import TypedSymbolTable
 
 C_ = expressions.Constant
 S_ = expressions.Symbol
@@ -78,7 +79,7 @@ def test_TypedSymbol():
 
 
 def test_TypedSymbolTable():
-    st = expressions.TypedSymbolTable()
+    st = TypedSymbolTable()
     s1 = C_[int](3)
     s2 = C_[int](4)
     s3 = C_[float](5.)

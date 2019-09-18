@@ -1,8 +1,9 @@
 from pytest import raises
 
 from .. import expression_walker
-from .. import expressions
 from .. import neurolang as nl
+from ..exceptions import NeuroLangException
+from ..typed_symbol_table import TypedSymbolTable
 
 from typing import Callable, AbstractSet, Tuple
 
@@ -12,7 +13,7 @@ F_ = nl.FunctionApplication
 
 
 def test_symbol_table_as_parameter():
-    symbol_table = expressions.TypedSymbolTable()
+    symbol_table = TypedSymbolTable()
     solver = expression_walker.TypedSymbolTableEvaluator(symbol_table)
     s = S_('S1')
     c = C_[str]('S')
@@ -65,7 +66,7 @@ def test_pattern_walker_wrong_args():
 
 
 def test_symbol_table_scopes():
-    symbol_table = expressions.TypedSymbolTable()
+    symbol_table = TypedSymbolTable()
     solver = expression_walker.TypedSymbolTableEvaluator(symbol_table)
     s = S_('S1')
     c = C_[str]('S')
@@ -76,7 +77,7 @@ def test_symbol_table_scopes():
     assert solver.symbol_table[s] == c
     solver.pop_scope()
     assert solver.symbol_table[s] is c
-    with raises(expressions.NeuroLangException):
+    with raises(NeuroLangException):
         solver.pop_scope()
         solver.pop_scope()
 
@@ -101,7 +102,7 @@ def test_entry_point_walker():
     res = pm.walk(exp_correct)
     assert res == exp_correct
 
-    with raises(expressions.NeuroLangException):
+    with raises(NeuroLangException):
         pm.walk(exp_wrong)
 
     class PM2(PM):
@@ -121,12 +122,10 @@ def test_entry_point_walker():
 
     assert res == exp_pre_correct
 
-    with raises(expressions.NeuroLangException):
+    with raises(NeuroLangException):
         pm2.walk(exp_correct)
 
-    with raises(
-        expressions.NeuroLangException, match="Entry point not declared"
-    ):
+    with raises(NeuroLangException, match="Entry point not declared"):
         class PM3(expression_walker.EntryPointPatternWalker):
             @expression_walker.add_match(F_)
             def __(self, expression):

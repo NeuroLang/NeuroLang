@@ -5,10 +5,12 @@ from itertools import product
 
 from .expression_pattern_matching import (PatternMatcher, add_match,
                                           add_entry_point_match)
-from .expressions import (Constant, Expression, FunctionApplication, Lambda,
-                          NeuroLangException, NeuroLangTypeException,
-                          Projection, Statement, Symbol, TypedSymbolTableMixin,
-                          Unknown, is_leq_informative, unify_types)
+from .expressions import (
+    Constant, Expression, FunctionApplication, Lambda, NeuroLangException,
+    NeuroLangTypeException, Projection, Statement, Symbol, Unknown,
+    is_leq_informative, unify_types
+)
+from .typed_symbol_table import TypedSymbolTableMixin
 
 
 __all__ = [

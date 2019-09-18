@@ -10,9 +10,11 @@ from itertools import tee
 from typing import AbstractSet, Any, Callable, Tuple
 
 from ..expression_walker import PatternWalker, add_match
-from ..expressions import (Constant, Expression, FunctionApplication,
-                           NeuroLangException, Symbol, TypedSymbolTableMixin,
-                           is_leq_informative)
+from ..expressions import (
+    Constant, Expression, FunctionApplication,
+    NeuroLangException, Symbol, is_leq_informative
+)
+from ..typed_symbol_table import TypedSymbolTableMixin
 from ..type_system import Unknown, infer_type
 from ..utils import RelationalAlgebraSet
 from .expression_processing import (
