@@ -2,7 +2,7 @@ from operator import eq
 from typing import AbstractSet, Tuple
 
 from ...expressions import Constant, FunctionApplication, Symbol
-from ...relational_algebra import (Column, Difference, NameColumns,
+from ...relational_algebra import (ColumnInt, Difference, NameColumns,
                                    NaturalJoin, Projection, Selection)
 from ...utils import NamedRelationalAlgebraFrozenSet
 from ..expressions import Conjunction, Negation
@@ -22,7 +22,7 @@ def test_translate_set():
     tr = TranslateToNamedRA()
     res = tr.walk(fa)
     assert res == NameColumns(
-        Projection(S_('R1'), (C_(Column(0)), C_(Column(1)))),
+        Projection(S_('R1'), (C_(ColumnInt(0)), C_(ColumnInt(1)))),
         (x, y)
     )
 
@@ -32,14 +32,14 @@ def test_translate_set():
     res = tr.walk(fa)
     assert res == NameColumns(
         Projection(
-            Selection(S_('R1'), C_(eq)(C_(Column(0)), C_(1))),
-            (C_(Column(1)),)
+            Selection(S_('R1'), C_(eq)(C_(ColumnInt(0)), C_(1))),
+            (C_(ColumnInt(1)),)
         ),
         (y,)
     )
 
 
-def test_equality_costant_symbol():
+def test_equality_constant_symbol():
     x = S_('x')
     a = C_('a')
 
@@ -64,7 +64,7 @@ def test_equality_costant_symbol():
     exp = Conjunction((fb, fa))
 
     fb_trans = NameColumns(
-        Projection(S_('R1'), (C_(Column(0)), C_(Column(1)))),
+        Projection(S_('R1'), (C_(ColumnInt(0)), C_(ColumnInt(1)))),
         (x, y)
     )
 
@@ -81,12 +81,12 @@ def test_joins():
     exp = Conjunction((fa, fb))
 
     fa_trans = NameColumns(
-        Projection(S_('R1'), (C_(Column(0)), C_(Column(1)))),
+        Projection(S_('R1'), (C_(ColumnInt(0)), C_(ColumnInt(1)))),
         (x, y)
     )
 
     fb_trans = NameColumns(
-        Projection(S_('R1'), (C_(Column(0)), C_(Column(1)))),
+        Projection(S_('R1'), (C_(ColumnInt(0)), C_(ColumnInt(1)))),
         (y, z)
     )
 
@@ -96,7 +96,7 @@ def test_joins():
 
     fb = S_('R2')(x, y)
     fb_trans = NameColumns(
-        Projection(S_('R2'), (C_(Column(0)), C_(Column(1)))),
+        Projection(S_('R2'), (C_(ColumnInt(0)), C_(ColumnInt(1)))),
         (x, y)
     )
     exp = Conjunction((fa, Negation(fb)))
@@ -109,8 +109,8 @@ def test_joins():
     fb = S_('R2')(y, C_(0))
     fb_trans = NameColumns(
         Projection(
-            Selection(S_('R2'), C_(eq)(C_(Column(1)), C_(0))),
-            (C_(Column(0)),)
+            Selection(S_('R2'), C_(eq)(C_(ColumnInt(1)), C_(0))),
+            (C_(ColumnInt(0)),)
         ),
         (y,)
     )

@@ -4,8 +4,8 @@ from typing import AbstractSet, Tuple
 from ..exceptions import NeuroLangException
 from ..expression_walker import ExpressionBasicEvaluator, add_match
 from ..expressions import Constant, FunctionApplication, Symbol
-from ..relational_algebra import (Column, Difference, NameColumns, NaturalJoin,
-                                  Projection, Selection)
+from ..relational_algebra import (ColumnInt, Difference, NameColumns, NaturalJoin,
+                                  Projection, Selection, RenameColumn)
 from ..utils import NamedRelationalAlgebraFrozenSet
 from .expressions import Conjunction, Negation
 
@@ -42,19 +42,19 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             elif arg in named_args:
                 selection_columns[i] = named_args.index(arg)
             else:
-                projections += (Constant[Column](i, verify_type=False),)
+                projections += (Constant[ColumnInt](i, verify_type=False),)
                 named_args += (arg,)
 
         in_set = functor
         for k, v in selections.items():
             criterium = EQ(
-                Constant[Column](k, verify_type=False), v
+                Constant[ColumnInt](k, verify_type=False), v
             )
             in_set = Selection(in_set, criterium)
         for k, v in selection_columns.items():
             criterium = EQ(
-                Constant[Column](k, verify_type=False),
-                Constant[Column](v, verify_type=False)
+                Constant[ColumnInt](k, verify_type=False),
+                Constant[ColumnInt](v, verify_type=False)
             )
             in_set = Selection(in_set, criterium)
 
@@ -72,7 +72,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
 
     @add_match(Conjunction)
     def translate_conj(self, expression):
-        pos_formulas, neg_formulas, named_columns = \
+        pos_formulas, neg_formulas, eq_formulas, named_columns = \
             self.classify_formulas_obtain_names(expression)
 
         if len(pos_formulas) > 0:
@@ -82,6 +82,41 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         else:
             return NamedRelationalAlgebraFrozenSet([])
 
+        output = TranslateToNamedRA.process_negative_formulas(
+            neg_formulas, named_columns, output
+        )
+
+        output = TranslateToNamedRA.process_equality_formulas(
+            eq_formulas, named_columns, output
+        )
+
+        return output
+
+    def classify_formulas_obtain_names(self, expression):
+        pos_formulas = []
+        neg_formulas = []
+        eq_formulas = []
+        named_columns = set()
+        for formula in expression.formulas:
+            formula = self.walk(formula)
+            if isinstance(formula, Negation):
+                neg_formulas.append(formula.formula)
+            elif (
+                isinstance(formula, FunctionApplication) and
+                formula.functor == EQ
+            ):
+                if formula.args[0] != formula.args[1]:
+                    eq_formulas.append(formula)
+            else:
+                pos_formulas.append(formula)
+                if isinstance(formula, Constant):
+                    named_columns.update(formula.value.columns)
+                elif isinstance(formula, NameColumns):
+                    named_columns.update(formula.column_names)
+        return pos_formulas, neg_formulas, eq_formulas, named_columns
+
+    @staticmethod
+    def process_negative_formulas(neg_formulas, named_columns, output):
         for neg_formula in neg_formulas:
             if isinstance(neg_formula, NameColumns):
                 neg_cols = set(neg_formula.column_names)
@@ -98,21 +133,20 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
                     f'Negative predicate {neg_formula} is not safe range'
                 )
             output = Difference(output, neg_formula)
-
         return output
 
-    def classify_formulas_obtain_names(self, expression):
-        pos_formulas = []
-        neg_formulas = []
-        named_columns = set()
-        for formula in expression.formulas:
-            formula = self.walk(formula)
-            if isinstance(formula, Negation):
-                neg_formulas.append(formula.formula)
-            else:
-                pos_formulas.append(formula)
-                if isinstance(formula, Constant):
-                    named_columns.update(formula.value.columns)
-                elif isinstance(formula, NameColumns):
-                    named_columns.update(formula.column_names)
-        return pos_formulas, neg_formulas, named_columns
+    @staticmethod
+    def process_equality_formulas(eq_formulas, named_columns, output):
+        for formula in eq_formulas:
+            left, right = formula.args
+            if left in named_columns and right in named_columns:
+                output = Selection(output, formula)
+            elif left in named_columns:
+                output = NaturalJoin(
+                    output, RenameColumn(output, left, right)
+                )
+            elif right in named_columns:
+                output = NaturalJoin(
+                    output, RenameColumn(output, right, left)
+                )
+        return output

@@ -9,7 +9,15 @@ from .utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet
 eq_ = Constant(eq)
 
 
-class Column(int):
+class Column:
+    pass
+
+
+class ColumnInt(int, Column):
+    pass
+
+
+class ColumnStr(str, Column):
     pass
 
 
@@ -109,6 +117,20 @@ class NameColumns(RelationalAlgebraOperation):
         return (
             f'\N{GREEK SMALL LETTER DELTA}'
             f'_{self.column_names}({self.relation})'
+        )
+
+
+class RenameColumn(RelationalAlgebraOperation):
+    def __init__(self, relation, src, dst):
+        self.relation = relation
+        self.src = src
+        self.dst = dst
+
+    def __repr__(self):
+        return (
+            f'\N{GREEK SMALL LETTER DELTA}'
+            f'_({self.src}\N{RIGHTWARDS ARROW}{self.dst})'
+            f'({self.relation})'
         )
 
 
@@ -228,7 +250,7 @@ class RelationalAlgebraRewriteSelections(ew.ExpressionWalker):
     """
     @ew.add_match(
         Selection(..., FA_(eq_, (..., C_[Column]))),
-        lambda s: s.formula.args[0].type is not Column
+        lambda s: not issubclass(s.formula.args[0].type, Column)
     )
     def swap_formula_args(self, selection):
         new_selection = Selection(
@@ -263,7 +285,7 @@ class RelationalAlgebraRewriteSelections(ew.ExpressionWalker):
         return self.walk(new_selection)
 
     @ew.add_match(
-        Selection(Product, FA_(eq_, (C_[Column], ...))),
+        Selection(Product, FA_(eq_, (C_[ColumnInt], ...))),
         lambda s: (
             s.formula.args[0].value >=
             RelationalAlgebraRewriteSelections.
@@ -280,20 +302,20 @@ class RelationalAlgebraRewriteSelections(ew.ExpressionWalker):
         relations = relations[i:]
 
         arg_right = selection.formula.args[1]
-        if arg_right.type is Column:
-            arg_right = C_[Column](Column(-accum_arity + arg_right.value))
+        if issubclass(arg_right.type, Column):
+            arg_right = C_[ColumnInt](ColumnInt(-accum_arity + arg_right.value))
 
         res = Product(
             left_relations +
             (Selection(
                 Product(relations),
-                eq_(C_[Column](Column(column)), arg_right)
+                eq_(C_[ColumnInt](ColumnInt(column)), arg_right)
             ),)
         )
         return self.walk(res)
 
     @ew.add_match(
-        Selection(Product, FA_(eq_, (C_[Column], ...))),
+        Selection(Product, FA_(eq_, (C_[ColumnInt], ...))),
         lambda s: (
             s.formula.args[1].value <
             (
@@ -322,12 +344,12 @@ class RelationalAlgebraRewriteSelections(ew.ExpressionWalker):
         res = Product(
             (Selection(
                 inner_relations,
-                eq_(arg_left, C_[Column](Column(column)))
+                eq_(arg_left, C_[ColumnInt](ColumnInt(column)))
             ),) + outer_relations
         )
         return self.walk(res)
 
-    @ew.add_match(Selection(EquiJoin, FA_(eq_, (C_[Column], C_[Column]))))
+    @ew.add_match(Selection(EquiJoin, FA_(eq_, (C_[ColumnInt], C_[ColumnInt]))))
     def selection_on_equijoin_columns(self, selection):
         column_left = selection.formula.args[0].value
         column_right = selection.formula.args[1].value
@@ -341,8 +363,8 @@ class RelationalAlgebraRewriteSelections(ew.ExpressionWalker):
             column_min -= left_arity
             column_max -= left_arity
             new_formula = eq_(
-                C_[Column](Column(column_min)),
-                C_[Column](Column(column_max))
+                C_[ColumnInt](ColumnInt(column_min)),
+                C_[ColumnInt](ColumnInt(column_max))
             )
             relation_right = Selection(relation_right, new_formula)
         else:
@@ -356,7 +378,7 @@ class RelationalAlgebraRewriteSelections(ew.ExpressionWalker):
             )
         )
 
-    @ew.add_match(Selection(EquiJoin, FA_(eq_, (C_[Column], ...))))
+    @ew.add_match(Selection(EquiJoin, FA_(eq_, (C_[ColumnInt], ...))))
     def selection_on_equijoin(self, selection):
         column = selection.formula.args[0].value
         relation_left = selection.relation.relation_left
@@ -368,7 +390,7 @@ class RelationalAlgebraRewriteSelections(ew.ExpressionWalker):
             relation_right = Selection(
                 relation_right,
                 eq_(
-                    C_(Column(
+                    C_(ColumnInt(
                         int(selection.formula.args[0].value) -
                         left_arity
                     )),
@@ -384,7 +406,7 @@ class RelationalAlgebraRewriteSelections(ew.ExpressionWalker):
         )
 
     @ew.add_match(
-        Selection(Product, FA_(eq_, (C_[Column], C_[Column])))
+        Selection(Product, FA_(eq_, (C_[ColumnInt], C_[ColumnInt])))
     )
     def selection_between_columns_product(self, selection):
         relations = selection.relation.relations
@@ -396,7 +418,7 @@ class RelationalAlgebraRewriteSelections(ew.ExpressionWalker):
             column_right = int(selection.formula.args[1].value)
             left_arity = self.get_arity(relations[0])
             column_right -= left_arity
-            column_right = (C_[Column](Column(column_right)),)
+            column_right = (C_[ColumnInt](ColumnInt(column_right)),)
 
             relations_right = relations[1:]
             if len(relations_right) == 1:
@@ -411,7 +433,7 @@ class RelationalAlgebraRewriteSelections(ew.ExpressionWalker):
 
         return self.walk(res)
 
-    @ew.add_match(Selection(Product, FA_(eq_, (C_[Column], ...))))
+    @ew.add_match(Selection(Product, FA_(eq_, (C_[ColumnInt], ...))))
     def selection_by_constant_on_product(self, selection):
         return self.walk(Product(
             (Selection(selection.relation.relations[0], selection.formula),) +
