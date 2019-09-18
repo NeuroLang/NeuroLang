@@ -303,7 +303,9 @@ class RelationalAlgebraRewriteSelections(ew.ExpressionWalker):
 
         arg_right = selection.formula.args[1]
         if issubclass(arg_right.type, Column):
-            arg_right = C_[ColumnInt](ColumnInt(-accum_arity + arg_right.value))
+            arg_right = C_[ColumnInt](
+                ColumnInt(-accum_arity + arg_right.value)
+            )
 
         res = Product(
             left_relations +
@@ -349,7 +351,10 @@ class RelationalAlgebraRewriteSelections(ew.ExpressionWalker):
         )
         return self.walk(res)
 
-    @ew.add_match(Selection(EquiJoin, FA_(eq_, (C_[ColumnInt], C_[ColumnInt]))))
+    @ew.add_match(Selection(
+        EquiJoin,
+        FA_(eq_, (C_[ColumnInt], C_[ColumnInt])))
+    )
     def selection_on_equijoin_columns(self, selection):
         column_left = selection.formula.args[0].value
         column_right = selection.formula.args[1].value

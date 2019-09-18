@@ -4,8 +4,9 @@ from typing import AbstractSet, Tuple
 from ..exceptions import NeuroLangException
 from ..expression_walker import ExpressionBasicEvaluator, add_match
 from ..expressions import Constant, FunctionApplication, Symbol
-from ..relational_algebra import (ColumnInt, Difference, NameColumns, NaturalJoin,
-                                  Projection, Selection, RenameColumn)
+from ..relational_algebra import (ColumnInt, ColumnStr, Difference,
+                                  NameColumns, NaturalJoin, Projection,
+                                  RenameColumn, Selection)
 from ..utils import NamedRelationalAlgebraFrozenSet
 from .expressions import Conjunction, Negation
 
@@ -28,6 +29,20 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         return Constant[AbstractSet[Tuple[constant.type]]](
             NamedRelationalAlgebraFrozenSet((symbol.name,), (constant.value,))
         )
+
+    @add_match(FunctionApplication(EQ, ...))
+    def translate_eq(self, expression):
+        new_args = tuple()
+        changed = False
+        for arg in expression.args:
+            new_arg = self.walk(arg)
+            changed |= new_arg is not arg
+            new_args += (new_arg,)
+
+        if changed:
+            return EQ(*new_args)
+        else:
+            return expression
 
     @add_match(FunctionApplication)
     def translate_fa(self, expression):
@@ -139,14 +154,31 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
     def process_equality_formulas(eq_formulas, named_columns, output):
         for formula in eq_formulas:
             left, right = formula.args
+            criteria = EQ(
+                Constant[ColumnStr](
+                    ColumnStr(left.name), verify_type=False
+                ),
+                Constant[ColumnStr](
+                    ColumnStr(right.name), verify_type=False
+                )
+            )
             if left in named_columns and right in named_columns:
-                output = Selection(output, formula)
+                output = Selection(output, criteria)
             elif left in named_columns:
-                output = NaturalJoin(
-                    output, RenameColumn(output, left, right)
+                output = Selection(NaturalJoin(
+                        output, RenameColumn(output, left, right)
+                    ),
+                    criteria
                 )
             elif right in named_columns:
-                output = NaturalJoin(
-                    output, RenameColumn(output, right, left)
+                output = Selection(NaturalJoin(
+                        output, RenameColumn(output, right, left)
+                    ),
+                    criteria
+                )
+            else:
+                raise NeuroLangException(
+                    f'At least one of the symbols {left} {right} must be '
+                    'in the free variables of the antecedent'
                 )
         return output

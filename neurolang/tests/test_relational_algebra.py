@@ -2,7 +2,7 @@ from typing import AbstractSet, Tuple
 
 from ..expressions import Constant
 from ..datalog.basic_representation import WrappedRelationalAlgebraSet
-from ..relational_algebra import (ColumnInt, Difference, EquiJoin,
+from ..relational_algebra import (ColumnInt, EquiJoin,
                                   NaturalJoin, Product, Projection,
                                   RelationalAlgebraOptimiser,
                                   RelationalAlgebraSolver, Selection, eq_)
