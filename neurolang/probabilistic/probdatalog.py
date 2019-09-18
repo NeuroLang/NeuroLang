@@ -1,10 +1,8 @@
 import uuid
 import itertools
 
-from ..expressions import (
-    ExpressionBlock, Expression, Constant, Symbol, FunctionApplication
-)
-from ..datalog.expressions import Fact, Implication, Disjunction
+from ..expressions import Expression, Constant, Symbol, FunctionApplication
+from ..datalog.expressions import Fact, Implication, Disjunction, Conjunction
 from ..exceptions import NeuroLangException
 from ..datalog.chase import Chase
 from ..datalog import DatalogProgram
@@ -96,13 +94,13 @@ class ProbDatalogProgram(DatalogProgram):
         }
 
 
-class PPDLToProbDatalogTranslator(PatternWalker):
+class GDatalogToProbDatalogTranslator(PatternWalker):
     '''
-    Translate a PPDL program to a ProbDatalog program.
+    Translate a GDatalog program to a ProbDatalog program.
 
-    A PPDL probabilsitic rule whose delta term's distribution is finite can be
-    represented as a probabilistic choice. If the distribution is a bernoulli
-    distribution, it can be represented as probabilistic fact.
+    A GDatalog probabilsitic rule whose delta term's distribution is finite can
+    be represented as a probabilistic choice. If the distribution is a
+    bernoulli distribution, it can be represented as probabilistic fact.
     '''
     @add_match(Implication, is_gdatalog_rule)
     def rule(self, rule):
@@ -127,27 +125,57 @@ class PPDLToProbDatalogTranslator(PatternWalker):
 
         '''
         datom = rule.consequent
-        dterm = get_dterm(rule)
-        predicate = datom.functor.name
+        dterm = get_dterm(datom)
+        predicate = datom.functor
         if not dterm.functor.name == 'bernoulli':
             raise NeuroLangException(
                 'Other distributions than bernoulli are not supported'
             )
         probability = dterm.args[0]
         probfact_predicate = Symbol(
-            'ProbFact_{}_{}'.format(predicate, uuid.uuid1())
+            'ProbFact_{}_{}'.format(predicate.name, uuid.uuid1())
         )
         terms = tuple(
             arg for arg in datom.args if not isinstance(arg, DeltaTerm)
         )
         probfact_atom = probfact_predicate(*terms)
         new_rule = Implication(
-            predicate(*terms), rule.antecedent & probfact_atom
+            predicate(*terms),
+            conjunct_expressions(rule.antecedent, probfact_atom)
         )
-        return ExpressionBlock((
-            ProbFact(probability, probfact_atom),
-            new_rule,
+        return Disjunction((
+            self.walk(ProbFact(probability,
+                               probfact_atom)), self.walk(new_rule)
         ))
+
+    @add_match(Disjunction)
+    def disjunction(self, disjunction):
+        formulas = []
+        for formula in disjunction.formulas:
+            result = self.walk(formula)
+            if isinstance(result, Disjunction):
+                formulas += list(result.formulas)
+            else:
+                formulas.append(result)
+        return Disjunction(formulas)
+
+
+def conjunct_formulas(f1, f2):
+    '''Conjunct two logical expressions.'''
+    if isinstance(f1, Conjunction) and isinstance(f2, Conjunction):
+        return Conjunction(list(f1.formulas) + list(f2.formulas))
+    elif isinstance(f1, Conjunction):
+        return Conjunction(list(f1.formulas) + [f2])
+    elif isinstance(f2, Conjunction):
+        return Conjunction([f1] + list(f2.formulas))
+    else:
+        return Conjunction([f1, f2])
+
+
+class GDatalogToProbDatalog(
+    GDatalogToProbDatalogTranslator, ProbDatalogProgram
+):
+    pass
 
 
 def get_antecedent_predicates(rule):

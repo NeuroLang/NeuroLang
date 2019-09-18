@@ -1,12 +1,13 @@
 import pytest
 
-from ..expressions import Symbol, Constant, ExpressionBlock
+from ..expressions import Symbol, Constant
 from ..exceptions import NeuroLangException
 from ..datalog.expressions import Fact, Implication, Disjunction
 from ..expression_walker import ExpressionBasicEvaluator
 from ..probabilistic.probdatalog import (
-    ProbDatalogProgram, ProbFact, ProbChoice
+    ProbDatalogProgram, ProbFact, ProbChoice, GDatalogToProbDatalog
 )
+from ..probabilistic.ppdl import DeltaTerm
 
 S_ = Symbol
 C_ = Constant
@@ -17,6 +18,7 @@ Z = Symbol('Z')
 x = Symbol('x')
 a = Constant('a')
 b = Constant('b')
+bernoulli = Symbol('bernoulli')
 
 
 class ProbDatalog(ProbDatalogProgram, ExpressionBasicEvaluator):
@@ -51,7 +53,7 @@ def test_probchoice_sum_probs_gt_1():
 def test_probdatalog_program():
     pd = ProbDatalog()
 
-    block = ExpressionBlock((
+    block = Disjunction((
         ProbFact(Constant[float](0.5), P(x)),
         Implication(Q(x),
                     P(x) & Z(x)),
@@ -71,3 +73,20 @@ def test_probdatalog_program():
     assert pd.probabilistic_database() == {
         P: ProbFact(Constant[float](0.5), P(x)),
     }
+
+
+def test_gdatalog_translation():
+    program = Disjunction((
+        Implication(Q(x, DeltaTerm(bernoulli, (C_(0.2), ))), P(x)),
+        Fact(P(a)),
+        Fact(P(b)),
+    ))
+    translator = GDatalogToProbDatalog()
+    translated = translator.walk(program)
+    matching_exps = [
+        exp for exp in translated.formulas if isinstance(exp, ProbFact)
+    ]
+    assert len(matching_exps) == 1
+    probfact = matching_exps[0]
+    assert x in probfact.consequent.args
+    assert probfact.probability == C_(0.2)
