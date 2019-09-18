@@ -20,7 +20,7 @@ F_ = FunctionApplication
 def test_translate_set():
     x = S_('x')
     y = S_('y')
-    R1 = S_[AbstractSet]('R1')
+    R1 = S_('R1')
     fa = R1(x, y)
 
     tr = TranslateToNamedRA()
@@ -46,7 +46,7 @@ def test_translate_set():
 def test_equality_constant_symbol():
     x = S_('x')
     a = C_('a')
-    R1 = S_[AbstractSet]('R1')
+    R1 = S_('R1')
 
     expected_result = \
         C_[AbstractSet[Tuple[str]]](
@@ -82,7 +82,7 @@ def test_equality_symbols():
     y = S_('y')
     z = S_('z')
     w = S_('w')
-    R1 = S_[AbstractSet]('R1')
+    R1 = S_('R1')
 
     y = S_('y')
     fb = R1(x, y)
@@ -131,7 +131,7 @@ def test_joins():
     x = S_('x')
     y = S_('y')
     z = S_('z')
-    R1 = S_[AbstractSet]('R1')
+    R1 = S_('R1')
     fa = R1(x, y)
     fb = R1(y, z)
     exp = Conjunction((fa, fb))
@@ -150,7 +150,7 @@ def test_joins():
     res = tr.walk(exp)
     assert res == NaturalJoin(fa_trans, fb_trans)
 
-    R2 = S_[AbstractSet]('R2')
+    R2 = S_('R2')
     fb = R2(x, y)
     fb_trans = NameColumns(
         Projection(R2, (C_(ColumnInt(0)), C_(ColumnInt(1)))),

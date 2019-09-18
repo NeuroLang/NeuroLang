@@ -1,6 +1,5 @@
 from collections import defaultdict
 from functools import lru_cache
-from itertools import chain
 from typing import AbstractSet, Sequence
 
 from ...expressions import Constant, Definition, Symbol
