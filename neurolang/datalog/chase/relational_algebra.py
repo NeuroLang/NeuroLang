@@ -1,6 +1,7 @@
 from collections import defaultdict
 from functools import lru_cache
-from typing import AbstractSet, Sequence
+from itertools import chain, tee
+from typing import AbstractSet, Sequence, Callable
 
 from ...expressions import Constant, Definition, Symbol
 from ...relational_algebra import (Column, Product, Projection,
@@ -125,6 +126,39 @@ class ChaseNamedRelationalAlgebraMixin:
       (Addison Wesley, 1995), Addison-Wesley.
 
     """
+    def chase_step(self, instance, rule, restriction_instance=None):
+        if restriction_instance is None:
+            restriction_instance = dict()
+
+        rule_predicates = self.extract_rule_predicates(
+            rule, instance, restriction_instance=restriction_instance
+        )
+
+        if all(len(predicate_list) == 0 for predicate_list in rule_predicates):
+            return dict()
+
+        restricted_predicates, nonrestricted_predicates, builtin_predicates =\
+            rule_predicates
+
+        builtin_predicates, builtin_predicates_ = tee(builtin_predicates)
+        args_to_project = self.get_args_to_project(rule, builtin_predicates_)
+
+        rule_predicates_iterator = chain(
+            restricted_predicates, nonrestricted_predicates
+        )
+
+        substitutions = self.obtain_substitutions(
+            args_to_project, rule_predicates_iterator
+        )
+
+        substitutions = self.evaluate_builtins(
+            builtin_predicates, substitutions
+        )
+
+        return self.compute_result_set(
+            rule, substitutions, instance, restriction_instance
+        )
+
     def obtain_substitutions(self, args_to_project, rule_predicates_iterator):
         symbol_table = defaultdict(
             default_factory=lambda: NamedRAFSTupleIterAdapter([], set())
@@ -166,6 +200,42 @@ class ChaseNamedRelationalAlgebraMixin:
             restriction_instance = dict()
 
         rule_predicates = extract_datalog_predicates(rule.antecedent)
+        (
+            builtin_predicates, nonrestricted_predicates,
+            restricted_predicates, cq_free_vars
+        ) = self.split_predicates(
+            rule_predicates, restriction_instance, instance
+        )
+
+        new_builtin_predicates = []
+        builtin_vectorized_predicates = []
+        for pred, functor in builtin_predicates:
+            if (
+                functor == eq_ and
+                not any(isinstance(arg, Definition) for arg in pred.args) and
+                any(
+                    isinstance(arg, Constant) or arg in cq_free_vars
+                    for arg in pred.args
+                )
+            ):
+                nonrestricted_predicates.append((pred, None))
+            elif (
+                isinstance(functor.type, Callable) and
+                is_leq_informative(Sequence[bool], functor.type.__args__[-1])
+            ):
+                builtin_vectorized_predicates.append((pred, functor))
+            else:
+                new_builtin_predicates.append((pred, functor))
+        builtin_predicates = new_builtin_predicates
+
+        return (
+            restricted_predicates, nonrestricted_predicates, builtin_predicates
+        )
+
+    def split_predicates(
+        self, rule_predicates,
+        restriction_instance, instance
+    ):
         restricted_predicates = []
         nonrestricted_predicates = []
         builtin_predicates = []
@@ -189,28 +259,13 @@ class ChaseNamedRelationalAlgebraMixin:
             elif isinstance(functor, Constant):
                 builtin_predicates.append((predicate, functor))
             else:
-                return ([], [], [])
-
-        new_builtin_predicates = []
-        builtin_vectorized_predicates = []
-        for pred, functor in builtin_predicates:
-            if (
-                functor == eq_ and
-                not any(isinstance(arg, Definition) for arg in pred.args) and
-                any(
-                    isinstance(arg, Constant) or arg in cq_free_vars
-                    for arg in pred.args
-                )
-            ):
-                nonrestricted_predicates.append((pred, None))
-            elif is_leq_informative(Sequence[bool], functor.type):
-                builtin_vectorized_predicates.append((pred, functor))
-            else:
-                new_builtin_predicates.append((pred, functor))
-        builtin_predicates = new_builtin_predicates
-
+                restricted_predicates = []
+                nonrestricted_predicates = []
+                builtin_predicates = []
+                break
         return (
-            restricted_predicates, nonrestricted_predicates, builtin_predicates
+            builtin_predicates, nonrestricted_predicates,
+            restricted_predicates, cq_free_vars
         )
 
 
