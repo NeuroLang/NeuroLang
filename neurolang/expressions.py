@@ -430,7 +430,10 @@ class Constant(Expression):
                     a = Constant(a)
                 self._symbols |= a._symbols
                 new_content.append(a)
-            self.value = type(self.value)(new_content)
+            try:
+                self.value = type(self.value)(new_content)
+            except TypeError:
+                self.value = type(self.value)(*new_content)
 
     def __verify_type__(self, value, type_):
         return (

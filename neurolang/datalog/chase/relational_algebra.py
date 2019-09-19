@@ -1,0 +1,299 @@
+from collections import defaultdict
+from functools import lru_cache
+from itertools import chain, tee
+from typing import AbstractSet, Sequence, Callable
+
+from ...expressions import Constant, Definition, Symbol
+from ...relational_algebra import (Column, Product, Projection,
+                                   RelationalAlgebraOptimiser,
+                                   RelationalAlgebraSolver, Selection, eq_)
+from ...type_system import is_leq_informative
+from ...utils import NamedRelationalAlgebraFrozenSet
+from ..expression_processing import (extract_datalog_free_variables,
+                                     extract_datalog_predicates)
+from ..expressions import Conjunction
+from ..translate_to_named_ra import TranslateToNamedRA
+
+
+class ChaseRelationalAlgebraPlusCeriMixin:
+    """
+    Conjunctive query solving using Ceri et al [1]_ algorithm for unnamed
+    positive relational algebra.
+
+    .. [1] S. Ceri, G. Gottlob, L. Lavazza, in Proceedings of the 12th
+       International Conference on Very Large Data Bases
+       (Morgan Kaufmann Publishers Inc.,
+       San Francisco, CA, USA, 1986;
+       http://dl.acm.org/citation.cfm?id=645913.671468), VLDB ’86, pp. 395–402.
+    """
+    def obtain_substitutions(self, args_to_project, rule_predicates_iterator):
+        ra_code, projected_var_names = self.translate_to_ra_plus(
+            args_to_project,
+            rule_predicates_iterator
+        )
+        ra_code_opt = RelationalAlgebraOptimiser().walk(ra_code)
+        if not isinstance(ra_code_opt, Constant) or len(ra_code_opt.value) > 0:
+            result = RelationalAlgebraSolver().walk(ra_code_opt)
+        else:
+            return [{}]
+
+        substitutions = self.compute_substitutions(result, projected_var_names)
+
+        return substitutions
+
+    def translate_to_ra_plus(
+        self,
+        args_to_project,
+        rule_predicates_iterator
+    ):
+        self.seen_vars = dict()
+        self.selections = []
+        self.projections = tuple()
+        self.projected_var_names = dict()
+        column = 0
+        new_ra_expressions = tuple()
+        rule_predicates_iterator = list(rule_predicates_iterator)
+        for pred_ra in rule_predicates_iterator:
+            ra_expression_arity = pred_ra[1].arity
+            new_ra_expression = self.translate_predicate(
+                pred_ra, column, args_to_project
+            )
+            new_ra_expressions += (new_ra_expression,)
+            column += ra_expression_arity
+        if len(new_ra_expressions) > 0:
+            if len(new_ra_expressions) == 1:
+                relation = new_ra_expressions[0]
+            else:
+                relation = Product(new_ra_expressions)
+            for s1, s2 in self.selections:
+                relation = Selection(relation, eq_(s1, s2))
+            relation = Projection(relation, self.projections)
+        else:
+            relation = Constant[AbstractSet](self.datalog_program.new_set())
+        projected_var_names = self.projected_var_names
+        del self.seen_vars
+        del self.selections
+        del self.projections
+        del self.projected_var_names
+        return relation, projected_var_names
+
+    def translate_predicate(self, pred_ra, column, args_to_project):
+        predicate, ra_expression = pred_ra
+        local_selections = []
+        for i, arg in enumerate(predicate.args):
+            c = Constant[Column](Column(column + i))
+            local_column = Constant[Column](Column(i))
+            self.translate_predicate_process_argument(
+                arg, local_selections, local_column, c, args_to_project
+            )
+        new_ra_expression = Constant[AbstractSet](ra_expression)
+        for s1, s2 in local_selections:
+            new_ra_expression = Selection(new_ra_expression, eq_(s1, s2))
+        return new_ra_expression
+
+    def translate_predicate_process_argument(
+        self, arg, local_selections, local_column,
+        global_column, args_to_project
+    ):
+        if isinstance(arg, Constant):
+            local_selections.append((local_column, arg))
+        elif isinstance(arg, Symbol):
+            if arg in self.seen_vars:
+                self.selections.append((self.seen_vars[arg], global_column))
+            else:
+                if arg in args_to_project:
+                    self.projected_var_names[arg] = len(self.projections)
+                    self.projections += (global_column,)
+                self.seen_vars[arg] = global_column
+
+    def compute_substitutions(self, result, projected_var_names):
+        substitutions = []
+        for tuple_ in result.value:
+            subs = {
+                var: tuple_.value[col]
+                for var, col in projected_var_names.items()
+            }
+            substitutions.append(subs)
+        return substitutions
+
+
+class ChaseNamedRelationalAlgebraMixin:
+    """
+    Conjunctive query solving using the algorithm 5.4.8 from Abiteboul et al
+    [1]_ algorithm for named relational algebra.
+
+    ..[1] S. Abiteboul, R. Hull, V. Vianu, Foundations of databases
+      (Addison Wesley, 1995), Addison-Wesley.
+
+    """
+    def chase_step(self, instance, rule, restriction_instance=None):
+        if restriction_instance is None:
+            restriction_instance = dict()
+
+        rule_predicates = self.extract_rule_predicates(
+            rule, instance, restriction_instance=restriction_instance
+        )
+
+        if all(len(predicate_list) == 0 for predicate_list in rule_predicates):
+            return dict()
+
+        restricted_predicates, nonrestricted_predicates, builtin_predicates =\
+            rule_predicates
+
+        builtin_predicates, builtin_predicates_ = tee(builtin_predicates)
+        args_to_project = self.get_args_to_project(rule, builtin_predicates_)
+
+        rule_predicates_iterator = chain(
+            restricted_predicates, nonrestricted_predicates
+        )
+
+        substitutions = self.obtain_substitutions(
+            args_to_project, rule_predicates_iterator
+        )
+
+        substitutions = self.evaluate_builtins(
+            builtin_predicates, substitutions
+        )
+
+        return self.compute_result_set(
+            rule, substitutions, instance, restriction_instance
+        )
+
+    def obtain_substitutions(self, args_to_project, rule_predicates_iterator):
+        symbol_table = defaultdict(
+            default_factory=lambda: NamedRAFSTupleIterAdapter([], set())
+        )
+        predicates = tuple()
+        for predicate, set_ in rule_predicates_iterator:
+            if set_ is not None:
+                type_ = AbstractSet[set_.row_type]
+                set_ = Constant[type_](set_, verify_type=False)
+                symbol_table[predicate.functor] = set_
+            predicates += (predicate,)
+
+        if len(predicates) == 0:
+            return [{}]
+
+        ra_code = self.translate_conjunction_to_named_ra(
+            Conjunction(predicates)
+        )
+
+        result = RelationalAlgebraSolver(symbol_table).walk(ra_code)
+
+        result_value = result.value
+        substitutions = NamedRAFSTupleIterAdapter(
+            sorted(result_value.columns),
+            result_value
+        )
+
+        return substitutions
+
+    @lru_cache(1024)
+    def translate_conjunction_to_named_ra(self, conjunction):
+        traslator_to_named_ra = TranslateToNamedRA()
+        return traslator_to_named_ra.walk(conjunction)
+
+    def extract_rule_predicates(
+        self, rule, instance, restriction_instance=None
+    ):
+        if restriction_instance is None:
+            restriction_instance = dict()
+
+        rule_predicates = extract_datalog_predicates(rule.antecedent)
+        (
+            builtin_predicates, nonrestricted_predicates,
+            restricted_predicates, cq_free_vars
+        ) = self.split_predicates(
+            rule_predicates, restriction_instance, instance
+        )
+
+        new_builtin_predicates = []
+        builtin_vectorized_predicates = []
+        for pred, functor in builtin_predicates:
+            if (
+                functor == eq_ and
+                not any(isinstance(arg, Definition) for arg in pred.args) and
+                any(
+                    isinstance(arg, Constant) or arg in cq_free_vars
+                    for arg in pred.args
+                )
+            ):
+                nonrestricted_predicates.append((pred, None))
+            elif (
+                isinstance(functor.type, Callable) and
+                is_leq_informative(Sequence[bool], functor.type.__args__[-1])
+            ):
+                builtin_vectorized_predicates.append((pred, functor))
+            else:
+                new_builtin_predicates.append((pred, functor))
+        builtin_predicates = new_builtin_predicates
+
+        return (
+            restricted_predicates, nonrestricted_predicates, builtin_predicates
+        )
+
+    def split_predicates(
+        self, rule_predicates,
+        restriction_instance, instance
+    ):
+        restricted_predicates = []
+        nonrestricted_predicates = []
+        builtin_predicates = []
+        cq_free_vars = set()
+        for predicate in rule_predicates:
+            functor = predicate.functor
+            if functor in restriction_instance:
+                restricted_predicates.append(
+                    (predicate, restriction_instance[functor].value)
+                )
+                cq_free_vars |= extract_datalog_free_variables(predicate)
+            elif functor in instance:
+                nonrestricted_predicates.append(
+                    (predicate, instance[functor].value)
+                )
+                cq_free_vars |= extract_datalog_free_variables(predicate)
+            elif functor in self.builtins:
+                builtin_predicates.append(
+                    (predicate, self.builtins[functor])
+                )
+            elif isinstance(functor, Constant):
+                builtin_predicates.append((predicate, functor))
+            else:
+                restricted_predicates = []
+                nonrestricted_predicates = []
+                builtin_predicates = []
+                break
+        return (
+            builtin_predicates, nonrestricted_predicates,
+            restricted_predicates, cq_free_vars
+        )
+
+
+class NamedRAFSTupleIterAdapter(NamedRelationalAlgebraFrozenSet):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if len(self) > 0 and self.arity > 0:
+            element = next(super().__iter__())
+            self._row_types = {
+                c: Constant(getattr(element, c)).type
+                for c in self.columns
+            }
+        else:
+            self._row_types = dict()
+
+    @property
+    def row_types(self):
+        return self._row_types
+
+    def __iter__(self):
+        if self.arity > 0:
+            row_types = self.row_types
+            for row in super().__iter__():
+                yield {
+                    f: Constant[row_types[f]](v)
+                    for f, v in zip(row._fields, row)
+                }
+        else:
+            for _ in range(len(self)):
+                yield dict()
