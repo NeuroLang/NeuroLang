@@ -1,13 +1,13 @@
 import pytest
 
-from ..expressions import Symbol, Constant
-from ..exceptions import NeuroLangException
-from ..datalog.expressions import Fact, Implication, Disjunction
-from ..expression_walker import ExpressionBasicEvaluator
-from ..probabilistic.probdatalog import (
+from ...expressions import Symbol, Constant
+from ...exceptions import NeuroLangException
+from ...datalog.expressions import Fact, Implication, Disjunction
+from ...expression_walker import ExpressionBasicEvaluator
+from ..probdatalog import (
     ProbDatalogProgram, ProbFact, ProbChoice, GDatalogToProbDatalog
 )
-from ..probabilistic.ppdl import DeltaTerm
+from ..ppdl import DeltaTerm
 
 S_ = Symbol
 C_ = Constant

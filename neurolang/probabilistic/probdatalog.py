@@ -141,7 +141,7 @@ class GDatalogToProbDatalogTranslator(PatternWalker):
         probfact_atom = probfact_predicate(*terms)
         new_rule = Implication(
             predicate(*terms),
-            conjunct_expressions(rule.antecedent, probfact_atom)
+            conjunct_formulas(rule.antecedent, probfact_atom)
         )
         return Disjunction((
             self.walk(ProbFact(probability,
