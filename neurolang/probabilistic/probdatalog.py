@@ -13,7 +13,7 @@ from ..expression_walker import PatternWalker
 from ..probabilistic.ppdl import is_gdatalog_rule
 from .ppdl import (
     concatenate_to_expression_block, get_antecedent_formulas, get_dterm,
-    get_dterm_index, DeltaTerm
+    DeltaTerm
 )
 
 
@@ -200,9 +200,7 @@ def get_probfacts_possible_ground_substitutions_in_interpretation(
     given interpretation.
 
     It is assumed that the interpretation contains an explicit definition of
-    the different types in the form of fully-observable unary predicates (see
-    section 3.1 of "Learning the Parameters of Probabilistic Logic Programs"
-    by Gutmann et al.).
+    the different types in the form of fully-observable unary predicates [1]_.
 
     For example, let `p :: P(x)` be a probabilistic fact and let `Q(x) :- T(x),
     P(x)` be a rule in the background knowledge of the program. `T` is the
@@ -210,20 +208,9 @@ def get_probfacts_possible_ground_substitutions_in_interpretation(
     first argument of the literal P(x) whose predicate is the same as the one
     of the probabilistic fact. The interpretation (a set of ground facts) must
     contain the `k` ground facts `T(a_1), ..., T(a_k)`.
+
+    .. [1] Gutmann et al., "Learning the Parameters of Probabilistic Logic
+       Programs", section 3.1.
+
     '''
     pass
-
-
-def generate_possible_outcomes(probabilistic_program):
-    pfacts, base_program = split_program_probabilistic_deterministic(
-        probabilistic_program
-    )
-    for facts in itertools.product(
-        *[(({pfact.fact}, pfact.probability), (set(), 1.0 - pfact.probability))
-          for pfact in pfacts]
-    ):
-        probability = None
-        facts = set.union(*facts)
-        program = concatenate_to_expression_block(base_program, facts)
-        chase = Chase()
-        solution = chase.build_chase_solution(program)

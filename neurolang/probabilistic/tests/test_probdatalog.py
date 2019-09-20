@@ -46,7 +46,7 @@ def test_probchoice_sum_probs_gt_1():
     ]
     with pytest.raises(
         NeuroLangException, match=r'.*cannot be greater than 1.*'
-    ) as exception:
+    ):
         probchoice = ProbChoice(probfacts)
 
 
@@ -76,8 +76,13 @@ def test_probdatalog_program():
 
 
 def test_gdatalog_translation():
+    probabilistic_rule = Implication(
+        Q(x, DeltaTerm(bernoulli, (C_(0.2), ))), P(x)
+    )
+    deterministic_rule = Implication(Z(x), P(x))
     program = ExpressionBlock((
-        Implication(Q(x, DeltaTerm(bernoulli, (C_(0.2), ))), P(x)),
+        probabilistic_rule,
+        deterministic_rule,
         Fact(P(a)),
         Fact(P(b)),
     ))
@@ -90,3 +95,12 @@ def test_gdatalog_translation():
     probfact = matching_exps[0]
     assert x in probfact.consequent.args
     assert probfact.probability == C_(0.2)
+    program = ProbDatalog()
+    program.walk(translated)
+    assert deterministic_rule in program.intensional_database()[Z].formulas
+    with pytest.raises(NeuroLangException, match=r'.*bernoulli.*'):
+        bad_rule = Implication(
+            Q(x, DeltaTerm(S_('bad_distrib'), tuple())), P(x)
+        )
+        translator = GDatalogToProbDatalog()
+        translator.walk(bad_rule)

@@ -1,10 +1,9 @@
 import pytest
 
-from ... import solver_datalog_extensional_db
-from ... import expression_walker
+from ...solver_datalog_extensional_db import ExtensionalDatabaseSolver
 from ...expression_walker import ExpressionBasicEvaluator
 from ...exceptions import NeuroLangException
-from ...expressions import ExpressionBlock, Constant, Symbol, Query
+from ...expressions import ExpressionBlock, Constant, Symbol
 from ...existential_datalog import (
     Implication, SolverNonRecursiveExistentialDatalog
 )
@@ -41,8 +40,8 @@ class GenerativeDatalogTest(GenerativeDatalog, ExpressionBasicEvaluator):
 
 
 class GenerativeDatalogTestSolver(
-    solver_datalog_extensional_db.ExtensionalDatabaseSolver,
-    SolverNonRecursiveExistentialDatalog, ExpressionBasicEvaluator
+    ExtensionalDatabaseSolver, SolverNonRecursiveExistentialDatalog,
+    ExpressionBasicEvaluator
 ):
     pass
 
@@ -124,8 +123,8 @@ def test_check_gdatalog_object_uncertainty():
     assert can_lead_to_object_uncertainty(gdatalog)
 
     program = ExpressionBlock((
-        P(a), P(b), Implication(Q(x, DeltaTerm(bernoulli, (C_(0.5), ))), P(x)),
-        Implication(R(x), Q(x, y))
+        P(a), P(b), Implication(Q(x, DeltaTerm(bernoulli, (C_(0.5), ))),
+                                P(x)), Implication(R(x), Q(x, y))
     ))
     gdatalog = GenerativeDatalogTest()
     gdatalog.walk(program)
@@ -173,8 +172,8 @@ def test_burglar():
     Alarm = S_('Alarm')
     x, h, b, c, r = S_('x'), S_('h'), S_('b'), S_('c'), S_('r')
     program = ExpressionBlock((
-        Implication(Unit(h, c), House(h, c)),
-        Implication(Unit(b, c), Business(b, c)),
+        Implication(Unit(h, c),
+                    House(h, c)), Implication(Unit(b, c), Business(b, c)),
         Implication(
             Earthquake(c, DeltaTerm(bernoulli, (C_(0.01), ))), City(c, r)
         ),
