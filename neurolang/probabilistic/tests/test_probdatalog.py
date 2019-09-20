@@ -1,6 +1,6 @@
 import pytest
 
-from ...expressions import Symbol, Constant
+from ...expressions import Symbol, Constant, ExpressionBlock
 from ...exceptions import NeuroLangException
 from ...datalog.expressions import Fact, Implication, Disjunction
 from ...expression_walker import ExpressionBasicEvaluator
@@ -53,7 +53,7 @@ def test_probchoice_sum_probs_gt_1():
 def test_probdatalog_program():
     pd = ProbDatalog()
 
-    block = Disjunction((
+    block = ExpressionBlock((
         ProbFact(Constant[float](0.5), P(x)),
         Implication(Q(x),
                     P(x) & Z(x)),
@@ -76,7 +76,7 @@ def test_probdatalog_program():
 
 
 def test_gdatalog_translation():
-    program = Disjunction((
+    program = ExpressionBlock((
         Implication(Q(x, DeltaTerm(bernoulli, (C_(0.2), ))), P(x)),
         Fact(P(a)),
         Fact(P(b)),
@@ -84,7 +84,7 @@ def test_gdatalog_translation():
     translator = GDatalogToProbDatalog()
     translated = translator.walk(program)
     matching_exps = [
-        exp for exp in translated.formulas if isinstance(exp, ProbFact)
+        exp for exp in translated.expressions if isinstance(exp, ProbFact)
     ]
     assert len(matching_exps) == 1
     probfact = matching_exps[0]

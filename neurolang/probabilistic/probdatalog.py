@@ -1,7 +1,9 @@
 import uuid
 import itertools
 
-from ..expressions import Expression, Constant, Symbol, FunctionApplication
+from ..expressions import (
+    Expression, Constant, Symbol, FunctionApplication, ExpressionBlock
+)
 from ..datalog.expressions import Fact, Implication, Disjunction, Conjunction
 from ..exceptions import NeuroLangException
 from ..datalog.chase import Chase
@@ -143,25 +145,25 @@ class GDatalogToProbDatalogTranslator(PatternWalker):
             predicate(*terms),
             conjunct_formulas(rule.antecedent, probfact_atom)
         )
-        return Disjunction((
+        return ExpressionBlock((
             self.walk(ProbFact(probability,
                                probfact_atom)), self.walk(new_rule)
         ))
 
-    @add_match(Disjunction)
-    def disjunction(self, disjunction):
-        formulas = []
-        for formula in disjunction.formulas:
-            result = self.walk(formula)
-            if isinstance(result, Disjunction):
-                formulas += list(result.formulas)
+    @add_match(ExpressionBlock)
+    def expression_block(self, block):
+        expressions = []
+        for expression in block.expressions:
+            result = self.walk(expression)
+            if isinstance(result, ExpressionBlock):
+                expressions += list(result.expressions)
             else:
-                formulas.append(result)
-        return Disjunction(formulas)
+                expressions.append(result)
+        return ExpressionBlock(expressions)
 
 
 def conjunct_formulas(f1, f2):
-    '''Conjunct two logical expressions.'''
+    '''Conjunct two logical formulas.'''
     if isinstance(f1, Conjunction) and isinstance(f2, Conjunction):
         return Conjunction(list(f1.formulas) + list(f2.formulas))
     elif isinstance(f1, Conjunction):
@@ -192,11 +194,11 @@ def substitute_dterm(atom, substitute):
 
 def split_probfacts_and_background_knowledge(program):
     '''
-    Given a Datalog program with probabilistic facts, seperate
-    probabilistic facts from the background knowledege.
+    Seperate probabilistic facts and background knowledege of a ProbDatalog
+    program.
 
-    The background knowledge contains all rules and ground
-    non-probabilistic facts.
+    The background knowledge contains the rules of the program (intensional
+    database) and the ground facts of the program (extensional database).
     '''
     probabilistic_facts = ExpressionBlock(tuple())
     background_knowledge = ExpressionBlock(tuple())
