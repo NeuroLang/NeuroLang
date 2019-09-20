@@ -185,33 +185,11 @@ def get_antecedent_predicates(rule):
     return [literal.functor for literal in antecedent_literals]
 
 
-def substitute_dterm(atom, substitute):
+def substitute_dterm(datom, substitute):
     new_args = tuple(
-        substitute if isinstance(arg, DeltaTerm) else arg for arg in atom.args
+        substitute if isinstance(arg, DeltaTerm) else arg for arg in datom.args
     )
-    return FunctionApplication[atom.type](atom.functor, new_args)
-
-
-def split_probfacts_and_background_knowledge(program):
-    '''
-    Seperate probabilistic facts and background knowledege of a ProbDatalog
-    program.
-
-    The background knowledge contains the rules of the program (intensional
-    database) and the ground facts of the program (extensional database).
-    '''
-    probabilistic_facts = ExpressionBlock(tuple())
-    background_knowledge = ExpressionBlock(tuple())
-    for expression in program:
-        if isinstance(expression, ProbabilisticFact):
-            probabilistic_facts = concatenate_to_expression_block(
-                probabilistic_facts, expression
-            )
-        else:
-            background_knowledge = concatenate_to_expression_block(
-                background_knowledge, expression
-            )
-    return probabilistic_facts, background_knowledge
+    return FunctionApplication[datom.type](datom.functor, new_args)
 
 
 def get_probfacts_possible_ground_substitutions_in_interpretation(
