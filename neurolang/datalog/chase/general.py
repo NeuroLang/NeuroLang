@@ -28,6 +28,12 @@ class ChaseGeneral():
         self._set_rules(rules)
 
         self.builtins = datalog_program.builtins()
+        self.idb_edb_symbols = set(
+            chain(
+                self.datalog_program.extensional_database(),
+                self.datalog_program.intensional_database()
+            )
+        )
 
     def _set_rules(self, rules):
         self.rules = []
