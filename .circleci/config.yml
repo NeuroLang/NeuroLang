@@ -59,7 +59,7 @@ commands:
             ./cc-test-reporter after-build --coverage-input-type coverage.py --exit-code $?
             python-codacy-coverage -r coverage.xml
 
-      - run:
+      #- run:
          #name: run sonar
           # command: |
             #if [ -z ${CIRCLE_PR_NUMBER} ]; then
