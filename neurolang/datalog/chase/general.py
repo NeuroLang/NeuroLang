@@ -72,6 +72,10 @@ class ChaseGeneral():
             args_to_project, rule_predicates_iterator
         )
 
+        substitutions = self.eliminate_already_computed(
+            rule.consequent, instance, substitutions
+        )
+
         substitutions = self.evaluate_builtins(
             builtin_predicates, substitutions
         )
@@ -277,6 +281,9 @@ class ChaseGeneral():
             return new_node
         else:
             return None
+
+    def eliminate_already_computed(self, consequent, instance, substitutions):
+        return substitutions
 
 
 class ChaseNaive:
