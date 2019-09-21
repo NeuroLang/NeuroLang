@@ -28,6 +28,12 @@ class ChaseGeneral():
         self._set_rules(rules)
 
         self.builtins = datalog_program.builtins()
+        self.idb_edb_symbols = set(
+            chain(
+                self.datalog_program.extensional_database(),
+                self.datalog_program.intensional_database()
+            )
+        )
 
     def _set_rules(self, rules):
         self.rules = []
@@ -64,6 +70,10 @@ class ChaseGeneral():
 
         substitutions = self.obtain_substitutions(
             args_to_project, rule_predicates_iterator
+        )
+
+        substitutions = self.eliminate_already_computed(
+            rule.consequent, instance, substitutions
         )
 
         substitutions = self.evaluate_builtins(
@@ -271,6 +281,9 @@ class ChaseGeneral():
             return new_node
         else:
             return None
+
+    def eliminate_already_computed(self, consequent, instance, substitutions):
+        return substitutions
 
 
 class ChaseNaive:

@@ -208,13 +208,19 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
             iterable = []
 
         if isinstance(iterable, RelationalAlgebraFrozenSet):
-            self._container = iterable._container.copy(deep=False)
-            if len(self._columns) != iterable.arity:
-                raise ValueError(
-                    'columns should have the same '
-                    'length as columns of {iterable}'
+            if iterable._container is None:
+                self._container = pd.DataFrame(
+                    list(iterable),
+                    columns=self._columns
                 )
-            self._container.columns = self._columns
+            else:
+                self._container = iterable._container.copy(deep=False)
+                if len(self._columns) != iterable.arity:
+                    raise ValueError(
+                        'columns should have the same '
+                        'length as columns of {iterable}'
+                    )
+                self._container.columns = self._columns
             self._container.sort_index(axis=1, inplace=True)
         else:
             self._container = pd.DataFrame(

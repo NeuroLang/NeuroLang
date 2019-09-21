@@ -28,8 +28,12 @@ class AggregationApplication(FunctionApplication):
 
 
 def is_aggregation_rule(rule):
+    return is_aggregation_predicate(rule.consequent)
+
+
+def is_aggregation_predicate(predicate):
     return any(
-        isinstance(arg, AggregationApplication) for arg in rule.consequent.args
+        isinstance(arg, AggregationApplication) for arg in predicate.args
     )
 
 
@@ -205,3 +209,11 @@ class Chase(chase.Chase):
         fa_ = agg_application.functor(*agg_substitution)
         substitution = {agg_fresh_var: self.datalog_program.walk(fa_)}
         return substitution
+
+    def eliminate_already_computed(self, consequent, instance, substitutions):
+        if is_aggregation_predicate(consequent):
+            return substitutions
+
+        return super().eliminate_already_computed(
+            consequent, instance, substitutions
+        )

@@ -225,8 +225,9 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
 
     @ew.add_match(Symbol)
     def ra_symbol(self, symbol):
-        constant = self.symbol_table.get(symbol, None)
-        if constant is None:
+        try:
+            constant = self.symbol_table[symbol]
+        except KeyError:
             raise NeuroLangException(f'Symbol {symbol} not in table')
         return constant
 
