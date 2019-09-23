@@ -20,7 +20,7 @@ class RelationalAlgebraFrozenSet(Set):
     def __contains__(self, element):
         element = self._normalise_element(element)
         return (
-            self._container is not None and
+            len(self) > 0 and
             hash(element) in self._container.index
         )
 
@@ -35,7 +35,7 @@ class RelationalAlgebraFrozenSet(Set):
         return element
 
     def __iter__(self):
-        if self._container is not None:
+        if len(self) > 0:
             return (tuple(v) for v in self._container.values)
         else:
             return iter({})
@@ -61,13 +61,13 @@ class RelationalAlgebraFrozenSet(Set):
 
     @property
     def arity(self):
-        if self._container is None:
+        if len(self) == 0:
             return 0
         else:
             return len(self._container.columns)
 
     def projection(self, *columns):
-        if self._container is None:
+        if len(self) == 0:
             return type(self)()
         new_container = self._container[list(columns)]
         output = type(self)()
@@ -78,7 +78,7 @@ class RelationalAlgebraFrozenSet(Set):
         return output
 
     def selection(self, select_criteria):
-        if self._container is None:
+        if len(self) == 0:
             return type(self)()
         it = iter(select_criteria.items())
         col, value = next(it)
@@ -93,7 +93,7 @@ class RelationalAlgebraFrozenSet(Set):
         return output
 
     def selection_columns(self, select_criteria):
-        if self._container is None:
+        if len(self) == 0:
             return type(self)()
         it = iter(select_criteria.items())
         col1, col2 = next(it)
@@ -108,7 +108,7 @@ class RelationalAlgebraFrozenSet(Set):
         return output
 
     def equijoin(self, other, join_indices, return_mappings=False):
-        if self._container is None or len(other) == 0:
+        if len(self) == 0 or len(other) == 0:
             return type(self)()
         other_columns = range(
             self.arity,
@@ -130,7 +130,7 @@ class RelationalAlgebraFrozenSet(Set):
         return output
 
     def cross_product(self, other):
-        if self._container is None:
+        if len(self) == 0:
             return type(self)()
         new_container = pd.DataFrame([
             tuple(t1) + tuple(t2)
@@ -145,12 +145,12 @@ class RelationalAlgebraFrozenSet(Set):
 
     def copy(self):
         output = type(self)()
-        if self._container is not None:
+        if len(self) > 0:
             output._container = self._container.copy()
         return output
 
     def __repr__(self):
-        if self._container is None:
+        if len(self) == 0:
             return '{}'
         return repr(
             self._container.reset_index()
@@ -172,7 +172,7 @@ class RelationalAlgebraFrozenSet(Set):
             return super().__or__(other)
 
     def __and__(self, other):
-        if self._container is None:
+        if len(self) == 0:
             return self.copy()
         if isinstance(other, RelationalAlgebraSet):
             index_intersection = self._container.index & other._container.index
@@ -185,17 +185,16 @@ class RelationalAlgebraFrozenSet(Set):
             return super().__and__(other)
 
     def groupby(self, columns):
-        if self._container is None:
-            raise StopIteration
-        if not isinstance(columns, Iterable):
-            columns = [columns]
-        for g_id, group in self._container.groupby(by=list(columns)):
-            group_set = type(self)()
-            group_set._container = group
-            yield g_id, group_set
+        if len(self) > 0:
+            if not isinstance(columns, Iterable):
+                columns = [columns]
+            for g_id, group in self._container.groupby(by=list(columns)):
+                group_set = type(self)()
+                group_set._container = group
+                yield g_id, group_set
 
     def itervalues(self):
-        if self._container is None:
+        if len(self) == 0:
             raise StopIteration
         return iter(self._container.values.squeeze())
 
@@ -245,7 +244,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         return super().__contains__(element)
 
     def projection(self, *columns):
-        if self._container is None:
+        if len(self) == 0:
             return type(self)(columns)
         new_container = self._container[list(columns)]
         output = type(self)(columns)
@@ -256,7 +255,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         return output
 
     def selection(self, select_criteria):
-        if self._container is None:
+        if len(self) == 0:
             return type(self)(self.columns)
         it = iter(select_criteria.items())
         col, value = next(it)
@@ -271,7 +270,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         return output
 
     def selection_columns(self, select_criteria):
-        if self._container is None:
+        if len(self) == 0:
             return type(self)()
         it = iter(select_criteria.items())
         col1, col2 = next(it)
@@ -317,7 +316,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
                 'is not valid'
             )
         new_columns = self.columns + other.columns
-        if self._container is None:
+        if len(self) == 0:
             return type(self)(new_columns)
         new_container = pd.DataFrame(
             [
@@ -352,7 +351,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         return super()._renew_index(container, drop_duplicates=True)
 
     def groupby(self, columns):
-        if self._container is None:
+        if len(self) == 0:
             raise StopIteration
         if not isinstance(columns, Iterable):
             columns = [columns]
@@ -408,13 +407,13 @@ class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
     def add(self, value):
         value = self._normalise_element(value)
         e_hash = hash(value)
-        if self._container is None:
+        if len(self) == 0:
             self._container = pd.DataFrame([value], index=[e_hash])
         else:
             self._container.loc[e_hash] = value
 
     def discard(self, value):
-        if self._container is not None:
+        if len(self) > 0:
             try:
                 value = self._normalise_element(value)
                 self._container.drop(index=hash(value), inplace=True)
@@ -422,7 +421,7 @@ class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
                 pass
 
     def __isub__(self, other):
-        if self._container is None:
+        if len(self) == 0:
             return self
         if isinstance(other, RelationalAlgebraSet):
             diff_ix = ~self._container.index.isin(other._container.index)
