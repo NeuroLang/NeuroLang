@@ -4,6 +4,7 @@ import itertools
 from ..expressions import (
     Expression, Constant, Symbol, FunctionApplication, ExpressionBlock
 )
+from ..unification import apply_substitution
 from ..datalog.expressions import Fact, Implication, Disjunction, Conjunction
 from ..exceptions import NeuroLangException
 from ..datalog.chase import Chase
@@ -93,6 +94,35 @@ class ProbDatalogProgram(DatalogProgram):
             k: v
             for k, v in self.symbol_table.items()
             if isinstance(v, ProbFact)
+        }
+
+    @property
+    def probabilistic_rules(self):
+        '''
+        Rules in the program with at least one atom in their antecedent whose
+        predicate is defined via a probabilistic fact.
+        '''
+        probabilistic_predicates = set(self.probabilistic_database().keys())
+        return {
+            k: v
+            for k, v in self.intensional_database().items()
+            if (
+                isinstance(v.antecedent, Conjunction) and any(
+                    formula.functor in probabilistic_predicates
+                    for formula in v.antecedent.formulas
+                )
+            ) or v.antecedent.functor in probabilistic_predicates
+        }
+
+    @property
+    def parametric_probfacts(self):
+        '''
+        Probabilistic facts in the program whose probabilities are parameters.
+        '''
+        return {
+            k: v
+            for k, v in self.symbol_table.items()
+            if isinstance(v, ProbFact) and isinstance(v.probability, Symbol)
         }
 
 
@@ -192,25 +222,81 @@ def substitute_dterm(datom, substitute):
     return FunctionApplication[datom.type](datom.functor, new_args)
 
 
-def get_probfacts_possible_ground_substitutions_in_interpretation(
-    probfacts, background_knowledge, interpretation
-):
+def get_antecedent_atom_matching_predicate(predicate, rule):
+    if isinstance(rule.antecedent, FunctionApplication):
+        if rule.antecedent.functor == predicate:
+            return rule.antecedent
+        else:
+            raise NeuroLangException(f'No atom with predicate {predicate}')
+    elif isinstance(rule.antecedent, Conjunction):
+        for formula in rule.antecedent.formulas:
+            if formula.functor == predicate:
+                return formula
+        else:
+            raise NeuroLangException(f'No atom with predicate {predicate}')
+
+
+def get_possible_ground_substitutions(probfact, rule, interpretation):
     '''
-    Generate all possible substitutions that ground probabilistic facts in a
-    given interpretation.
+    Get all possible substitutions that ground a given probabilistic fact in a
+    given interpretation based on a rule where the predicate of the
+    probabilistic fact occurs.
+    '''
+    predicate = probfact.consequent.functor
+    probfact_antecedent_atom = get_antecedent_atom_matching_predicate(
+        predicate, rule
+    )
+    variables = set(
+        arg for arg in probfact_antecedent_atom.args
+        if isinstance(arg, Symbol)
+    )
+    typing_atoms = set(
+        formula for formula in get_antecedent_formulas(rule)
+        if len(formula.args) == 1 and formula.args[0] in variables
+    )
+    substitutions_per_variable = {
+        atom.args[0]: set(
+            fact for fact in interpretation
+            if fact.consequent.functor == atom.functor
+        )
+        for atom in typing_atoms
+    }
+    return set(
+        dict(zip(substitutions_per_variable.keys(), values))
+        for values in itertools.product(*substitutions_per_variable.values)
+    )
 
-    It is assumed that the interpretation contains an explicit definition of
-    the different types in the form of fully-observable unary predicates [1]_.
 
-    For example, let `p :: P(x)` be a probabilistic fact and let `Q(x) :- T(x),
-    P(x)` be a rule in the background knowledge of the program. `T` is the
-    unary predicate that defines the type of the variable x which is also the
-    first argument of the literal P(x) whose predicate is the same as the one
-    of the probabilistic fact. The interpretation (a set of ground facts) must
-    contain the `k` ground facts `T(a_1), ..., T(a_k)`.
+def full_observability_parameter_estimation(program, interpretations):
+    '''
+    Estimate parametric probabilities of the probabilistic facts in a given
+    ProbDatalog program using the given fully-observable interpretations.
+
+    This computation relies on a the domain of each variable occurring in the
+    probabilistic facts to be defined by each interpretation using unary
+    predicates, as explained in [1]_.
 
     .. [1] Gutmann et al., "Learning the Parameters of Probabilistic Logic
        Programs", section 3.1.
 
     '''
-    pass
+    estimations = dict()
+    probabilistic_rules = program.probabilistic_rules
+    parametric_probfacts = program.parametric_probfacts
+    for parameter, probfact in parametric_probfacts.keys():
+        rule = probabilistic_rules[probfact.consequent.functor].formulas[0]
+        count = 0.
+        normaliser = 0.
+        for interpretation in interpretations:
+            substitutions = get_possible_ground_substitutions(
+                probfact, rule, interpretation
+            )
+            normaliser += len(substitutions)
+            for substitution in substitutions:
+                ground_fact = apply_substitution(
+                    probfact.consequent, substitution
+                )
+                if ground_fact in interpretation:
+                    count += 1
+        estimations[probfact.consequent.functor] = count / normaliser
+    return estimations

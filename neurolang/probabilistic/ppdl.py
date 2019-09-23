@@ -33,7 +33,6 @@ def get_conjunction_atoms(expression):
 def get_antecedent_formulas(rule):
     if not isinstance(rule, Implication):
         raise NeuroLangException('Implication expected')
-
     return get_conjunction_atoms(rule.antecedent)
 
 
