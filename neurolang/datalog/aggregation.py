@@ -206,9 +206,12 @@ class Chase(chase.Chase):
                 verify_type=False
             ) for v in fvs_aggregation
         )
-        fa_ = agg_application.functor(*agg_substitution)
-        substitution = {agg_fresh_var: self.datalog_program.walk(fa_)}
-        return substitution
+        if any(len(rs.value) == 0 for rs in agg_substitution):
+            return {}
+        else:
+            fa_ = agg_application.functor(*agg_substitution)
+            substitution = {agg_fresh_var: self.datalog_program.walk(fa_)}
+            return substitution
 
     def eliminate_already_computed(self, consequent, instance, substitutions):
         if is_aggregation_predicate(consequent):
