@@ -2,10 +2,12 @@ import pytest
 
 from ...expressions import Symbol, Constant, ExpressionBlock
 from ...exceptions import NeuroLangException
-from ...datalog.expressions import Fact, Implication, Disjunction
+from ...datalog.expressions import Fact, Implication, Disjunction, Conjunction
 from ...expression_walker import ExpressionBasicEvaluator
+from ...datalog.instance import SetInstance
 from ..probdatalog import (
-    ProbDatalogProgram, ProbFact, ProbChoice, GDatalogToProbDatalog
+    ProbDatalogProgram, ProbFact, ProbChoice, GDatalogToProbDatalog,
+    get_possible_ground_substitutions
 )
 from ..ppdl import DeltaTerm
 
@@ -15,7 +17,10 @@ C_ = Constant
 P = Symbol('P')
 Q = Symbol('Q')
 Z = Symbol('Z')
+Y = Symbol('Y')
 x = Symbol('x')
+y = Symbol('y')
+z = Symbol('z')
 a = Constant('a')
 b = Constant('b')
 bernoulli = Symbol('bernoulli')
@@ -104,3 +109,36 @@ def test_gdatalog_translation():
         )
         translator = GDatalogToProbDatalog()
         translator.walk(bad_rule)
+
+
+def test_get_possible_ground_substitutions():
+    probfact = ProbFact(C_(0.2), Z(x))
+    rule = Implication(Q(x), Conjunction([Z(x), P(x)]))
+    interpretation = SetInstance([
+        Fact(fa) for fa in [P(a), P(b), Z(a),
+                            Z(b), Q(a), Q(b)]
+    ])
+    substitutions = get_possible_ground_substitutions(
+        probfact, rule, interpretation
+    )
+    assert substitutions == frozenset({
+        frozenset({(x, a)}), frozenset({(x, b)})
+    })
+
+    probfact = ProbFact(C_(0.5), Z(x, y))
+    rule = Implication(Q(x), Conjunction([Z(x, y), P(x), Y(y)]))
+    interpretation = SetInstance([
+        Fact(fa) for fa in
+        [P(a), P(b), Y(a),
+         Y(b), Z(a, b), Q(a),
+         Z(b, a), Q(b)]
+    ])
+    substitutions = get_possible_ground_substitutions(
+        probfact, rule, interpretation
+    )
+    assert substitutions == frozenset({
+        frozenset({(x, a), (y, a)}),
+        frozenset({(x, a), (y, b)}),
+        frozenset({(x, b), (y, a)}),
+        frozenset({(x, b), (y, b)}),
+    })

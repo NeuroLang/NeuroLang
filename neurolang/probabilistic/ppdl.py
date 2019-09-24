@@ -2,18 +2,19 @@ import operator
 from typing import Iterable
 from uuid import uuid1
 
-from ..datalog.expressions import Disjunction
+from ..datalog.expressions import Disjunction, Conjunction
 from ..existential_datalog import Implication
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionBasicEvaluator
-from ..expressions import (Constant, ExistentialPredicate, Expression,
-                           ExpressionBlock, FunctionApplication,
-                           NeuroLangException, Symbol)
+from ..expressions import (
+    Constant, ExistentialPredicate, Expression, ExpressionBlock,
+    FunctionApplication, NeuroLangException, Symbol
+)
 from ..solver_datalog_naive import DatalogBasic, is_conjunctive_expression
 
 
 def is_conjunction(expression):
-    return (
+    return isinstance(expression, Conjunction) or (
         isinstance(expression, FunctionApplication) and
         isinstance(expression.functor, Constant) and
         expression.functor.value == operator.and_
@@ -22,6 +23,8 @@ def is_conjunction(expression):
 
 def get_conjunction_atoms(expression):
     if is_conjunction(expression):
+        if isinstance(expression, Conjunction):
+            return expression.formulas
         return (
             get_conjunction_atoms(expression.args[0]) +
             get_conjunction_atoms(expression.args[1])
@@ -108,8 +111,10 @@ class DeltaTerm(FunctionApplication):
 
 
 class GenerativeDatalog(DatalogBasic):
-    @add_match(Implication(FunctionApplication, ...), lambda exp:
-               any(isinstance(arg, DeltaTerm) for arg in exp.consequent.args))
+    @add_match(
+        Implication(FunctionApplication, ...), lambda exp:
+        any(isinstance(arg, DeltaTerm) for arg in exp.consequent.args)
+    )
     def gdatalog_rule(self, rule):
         if not is_gdatalog_rule(rule):
             raise NeuroLangException(f'Invalid gdatalog rule: {rule}')
@@ -126,7 +131,7 @@ class GenerativeDatalog(DatalogBasic):
         else:
             disj = tuple()
 
-        self.symbol_table[predicate] = Disjunction(disj + (rule,))
+        self.symbol_table[predicate] = Disjunction(disj + (rule, ))
 
         return rule
 
@@ -214,8 +219,8 @@ class TranslateGDatalogToEDatalog(ExpressionBasicEvaluator):
         y = Symbol[dterm.type]('y_' + str(uuid1()))
         result_args = (
             dterm.args + (Constant(datom.functor.name), ) +
-            tuple(arg for arg in datom.args
-                  if not isinstance(arg, DeltaTerm)) + (y, )
+            tuple(arg for arg in datom.args if not isinstance(arg, DeltaTerm)
+                  ) + (y, )
         )
         result_atom = FunctionApplication(
             DeltaSymbol(dterm.functor.name, len(datom.args)), result_args

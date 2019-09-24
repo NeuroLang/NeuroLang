@@ -255,16 +255,16 @@ def get_possible_ground_substitutions(probfact, rule, interpretation):
         if len(formula.args) == 1 and formula.args[0] in variables
     )
     substitutions_per_variable = {
-        atom.args[0]: set(
-            fact for fact in interpretation
+        atom.args[0]: frozenset(
+            fact.consequent.args[0] for fact in interpretation
             if fact.consequent.functor == atom.functor
         )
         for atom in typing_atoms
     }
-    return set(
-        dict(zip(substitutions_per_variable.keys(), values))
-        for values in itertools.product(*substitutions_per_variable.values)
-    )
+    return frozenset({
+        frozenset(zip(substitutions_per_variable.keys(), values))
+        for values in itertools.product(*substitutions_per_variable.values())
+    })
 
 
 def full_observability_parameter_estimation(program, interpretations):
