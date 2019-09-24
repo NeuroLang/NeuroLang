@@ -1,5 +1,6 @@
 import uuid
 import itertools
+from collections import defaultdict
 
 from ..expressions import (
     Expression, Constant, Symbol, FunctionApplication, ExpressionBlock
@@ -103,16 +104,19 @@ class ProbDatalogProgram(DatalogProgram):
         predicate is defined via a probabilistic fact.
         '''
         probabilistic_predicates = set(self.probabilistic_database().keys())
-        return {
-            k: v
-            for k, v in self.intensional_database().items()
-            if (
-                isinstance(v.antecedent, Conjunction) and any(
-                    formula.functor in probabilistic_predicates
-                    for formula in v.antecedent.formulas
-                )
-            ) or v.antecedent.functor in probabilistic_predicates
-        }
+        prob_rules = defaultdict(set)
+        for predicate, rule_disjunction in self.intensional_database().items():
+            for rule in rule_disjunction.formulas:
+                if (
+                    isinstance(rule.antecedent, FunctionApplication) and
+                    rule.antecedent.functor in probabilistic_predicates
+                ):
+                    prob_rules[rule.antecedent.functor].add(rule)
+                elif isinstance(rule.antecedent, Conjunction):
+                    for atom in rule.antecedent.formulas:
+                        if atom.functor in probabilistic_predicates:
+                            prob_rules[atom.functor].add(rule)
+        return prob_rules
 
     @property
     def parametric_probfacts(self):
@@ -120,7 +124,7 @@ class ProbDatalogProgram(DatalogProgram):
         Probabilistic facts in the program whose probabilities are parameters.
         '''
         return {
-            k: v
+            v.probability: v
             for k, v in self.symbol_table.items()
             if isinstance(v, ProbFact) and isinstance(v.probability, Symbol)
         }
@@ -256,7 +260,8 @@ def get_possible_ground_substitutions(probfact, rule, interpretation):
     )
     substitutions_per_variable = {
         atom.args[0]: frozenset(
-            fact.consequent.args[0] for fact in interpretation
+            fact.consequent.args[0]
+            for fact in interpretation
             if fact.consequent.functor == atom.functor
         )
         for atom in typing_atoms
@@ -283,8 +288,8 @@ def full_observability_parameter_estimation(program, interpretations):
     estimations = dict()
     probabilistic_rules = program.probabilistic_rules
     parametric_probfacts = program.parametric_probfacts
-    for parameter, probfact in parametric_probfacts.keys():
-        rule = probabilistic_rules[probfact.consequent.functor].formulas[0]
+    for parameter, probfact in parametric_probfacts.items():
+        rule = next(iter(probabilistic_rules[probfact.consequent.functor]))
         count = 0.
         normaliser = 0.
         for interpretation in interpretations:
@@ -293,10 +298,12 @@ def full_observability_parameter_estimation(program, interpretations):
             )
             normaliser += len(substitutions)
             for substitution in substitutions:
-                ground_fact = apply_substitution(
-                    probfact.consequent, substitution
+                ground_fact = Fact(
+                    apply_substitution(
+                        probfact.consequent, dict(substitution)
+                    )
                 )
                 if ground_fact in interpretation:
                     count += 1
-        estimations[probfact.consequent.functor] = count / normaliser
+        estimations[parameter] = count / normaliser
     return estimations

@@ -1,4 +1,5 @@
 import pytest
+import numpy as np
 
 from ...expressions import Symbol, Constant, ExpressionBlock
 from ...exceptions import NeuroLangException
@@ -7,7 +8,7 @@ from ...expression_walker import ExpressionBasicEvaluator
 from ...datalog.instance import SetInstance
 from ..probdatalog import (
     ProbDatalogProgram, ProbFact, ProbChoice, GDatalogToProbDatalog,
-    get_possible_ground_substitutions
+    get_possible_ground_substitutions, full_observability_parameter_estimation
 )
 from ..ppdl import DeltaTerm
 
@@ -18,6 +19,7 @@ P = Symbol('P')
 Q = Symbol('Q')
 Z = Symbol('Z')
 Y = Symbol('Y')
+p = Symbol('p')
 x = Symbol('x')
 y = Symbol('y')
 z = Symbol('z')
@@ -142,3 +144,25 @@ def test_get_possible_ground_substitutions():
         frozenset({(x, b), (y, a)}),
         frozenset({(x, b), (y, b)}),
     })
+
+
+def test_full_observability_parameter_estimation():
+    block = ExpressionBlock((
+        ProbFact(p, Z(x)),
+        Implication(Q(x), Conjunction([Z(x), P(x)])),
+        Fact(P(a)),
+        Fact(P(b)),
+    ))
+    program = ProbDatalog()
+    program.walk(block)
+    assert program.parametric_probfacts == {p: ProbFact(p, Z(x))}
+    interpretations = frozenset([
+        frozenset({Fact(fa) for fa in [P(a), P(b), Z(a), Q(a)]}),
+        frozenset({Fact(fa) for fa in [P(a), P(b), Z(b), Q(b)]}),
+    ])
+    estimations = full_observability_parameter_estimation(
+        program,
+        interpretations,
+    )
+    assert p in estimations
+    assert np.isclose(estimations[p], 0.5)
