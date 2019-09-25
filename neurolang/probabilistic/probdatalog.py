@@ -1,6 +1,7 @@
 import uuid
 import itertools
 from collections import defaultdict
+import logging
 
 from ..expressions import (
     Expression, Constant, Symbol, FunctionApplication, ExpressionBlock
@@ -97,7 +98,6 @@ class ProbDatalogProgram(DatalogProgram):
             if isinstance(v, ProbFact)
         }
 
-    @property
     def probabilistic_rules(self):
         '''
         Rules in the program with at least one atom in their antecedent whose
@@ -118,7 +118,6 @@ class ProbDatalogProgram(DatalogProgram):
                             prob_rules[atom.functor].add(rule)
         return prob_rules
 
-    @property
     def parametric_probfacts(self):
         '''
         Probabilistic facts in the program whose probabilities are parameters.
@@ -257,6 +256,7 @@ def get_possible_ground_substitutions(probfact, rule, interpretation):
     typing_atoms = set(
         formula for formula in get_antecedent_formulas(rule)
         if len(formula.args) == 1 and formula.args[0] in variables
+        and formula.functor != predicate
     )
     substitutions_per_variable = {
         atom.args[0]: frozenset(
@@ -286,16 +286,19 @@ def full_observability_parameter_estimation(program, interpretations):
 
     '''
     estimations = dict()
-    probabilistic_rules = program.probabilistic_rules
-    parametric_probfacts = program.parametric_probfacts
+    probabilistic_rules = program.probabilistic_rules()
+    parametric_probfacts = program.parametric_probfacts()
     for parameter, probfact in parametric_probfacts.items():
         rule = next(iter(probabilistic_rules[probfact.consequent.functor]))
+        print(rule)
         count = 0.
         normaliser = 0.
         for interpretation in interpretations:
+            logging.debug('interpretation %s' % repr(interpretation))
             substitutions = get_possible_ground_substitutions(
                 probfact, rule, interpretation
             )
+            logging.debug('substitutions %s' % repr(substitutions))
             normaliser += len(substitutions)
             for substitution in substitutions:
                 ground_fact = Fact(
@@ -303,6 +306,7 @@ def full_observability_parameter_estimation(program, interpretations):
                         probfact.consequent, dict(substitution)
                     )
                 )
+                logging.debug('check ground fact %s' % repr(ground_fact))
                 if ground_fact in interpretation:
                     count += 1
         estimations[parameter] = count / normaliser

@@ -12,14 +12,16 @@ from ..probdatalog import (
 )
 from ..ppdl import DeltaTerm
 
-S_ = Symbol
 C_ = Constant
 
 P = Symbol('P')
 Q = Symbol('Q')
+R = Symbol('R')
 Z = Symbol('Z')
 Y = Symbol('Y')
 p = Symbol('p')
+p_1 = Symbol('p_1')
+p_2 = Symbol('p_2')
 x = Symbol('x')
 y = Symbol('y')
 z = Symbol('z')
@@ -43,7 +45,7 @@ def test_probchoice():
         ProbFact(Constant[float](0.3), P(a)),
         ProbFact(Constant[float](0.7), P(b)),
     ]
-    probchoice = ProbChoice(probfacts)
+    ProbChoice(probfacts)
 
 
 def test_probchoice_sum_probs_gt_1():
@@ -54,7 +56,7 @@ def test_probchoice_sum_probs_gt_1():
     with pytest.raises(
         NeuroLangException, match=r'.*cannot be greater than 1.*'
     ):
-        probchoice = ProbChoice(probfacts)
+        ProbChoice(probfacts)
 
 
 def test_probdatalog_program():
@@ -107,7 +109,7 @@ def test_gdatalog_translation():
     assert deterministic_rule in program.intensional_database()[Z].formulas
     with pytest.raises(NeuroLangException, match=r'.*bernoulli.*'):
         bad_rule = Implication(
-            Q(x, DeltaTerm(S_('bad_distrib'), tuple())), P(x)
+            Q(x, DeltaTerm(Symbol('bad_distrib'), tuple())), P(x)
         )
         translator = GDatalogToProbDatalog()
         translator.walk(bad_rule)
@@ -155,10 +157,12 @@ def test_full_observability_parameter_estimation():
     ))
     program = ProbDatalog()
     program.walk(block)
-    assert program.parametric_probfacts == {p: ProbFact(p, Z(x))}
+    assert program.parametric_probfacts() == {p: ProbFact(p, Z(x))}
     interpretations = frozenset([
-        frozenset({Fact(fa) for fa in [P(a), P(b), Z(a), Q(a)]}),
-        frozenset({Fact(fa) for fa in [P(a), P(b), Z(b), Q(b)]}),
+        frozenset({Fact(fa)
+                   for fa in [P(a), P(b), Z(a), Q(a)]}),
+        frozenset({Fact(fa)
+                   for fa in [P(a), P(b), Z(b), Q(b)]}),
     ])
     estimations = full_observability_parameter_estimation(
         program,
@@ -166,3 +170,50 @@ def test_full_observability_parameter_estimation():
     )
     assert p in estimations
     assert np.isclose(estimations[p], 0.5)
+
+    probfact_1 = ProbFact(p_1, Z(x))
+    probfact_2 = ProbFact(p_2, Y(y))
+    rule = Implication(Q(x), Conjunction([Z(x), Y(y), P(x), R(y)]))
+    block = ExpressionBlock((
+        probfact_1,
+        probfact_2,
+        rule,
+        Fact(P(a)),
+        Fact(P(b)),
+    ))
+    program = ProbDatalog()
+    program.walk(block)
+    assert program.parametric_probfacts() == {p_1: probfact_1, p_2: probfact_2}
+    assert program.probabilistic_rules() == {Z: {rule}, Y: {rule}}
+    interpretations = frozenset([
+        SetInstance({
+            P: frozenset({(a, ), (b, )}),
+            R: frozenset({(a, )}),
+            Z: frozenset({(a, )}),
+            Y: frozenset({(a, )}),
+            Q: frozenset({(a, )})
+        }),
+        SetInstance({
+            P: frozenset({(a, ), (b, )}),
+            R: frozenset({(a, )}),
+            Y: frozenset({(a, )})
+        }),
+        SetInstance({
+            P: frozenset({(a, ), (b, )}),
+            R: frozenset({(a, )}),
+            Z: frozenset({(b, )}),
+            Y: frozenset({(a, )})
+        }),
+        SetInstance({
+            P: frozenset({(a, ), (b, )}),
+            R: frozenset({(a, )})
+        })
+    ])
+    estimations = full_observability_parameter_estimation(
+        program,
+        interpretations,
+    )
+    assert p_1 in estimations
+    assert p_2 in estimations
+    assert np.isclose(estimations[p_1], 0.25)
+    assert np.isclose(estimations[p_2], 0.75)
