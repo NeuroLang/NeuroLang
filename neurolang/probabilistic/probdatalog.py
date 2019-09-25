@@ -244,6 +244,20 @@ def get_possible_ground_substitutions(probfact, rule, interpretation):
     Get all possible substitutions that ground a given probabilistic fact in a
     given interpretation based on a rule where the predicate of the
     probabilistic fact occurs.
+
+    This works under the following assumptions:
+    (1) for each probabilistic fact p :: P(x_1, ..., x_n), there exists at
+        least one rule in the program such that an atom P(y_1, ..., y_n) occurs
+        in its antecedent conjunction;
+    (2) the antecedent conjunction of that rule also contains an atom Y_i(y_i)
+        for each variable y_i in (y_1, ..., y_n), where Y_i is a unary
+        extensional predicate that defines the domain (or the type) of the
+        variable y_i
+    (3) and if several of those rules are part of the program, the same typing
+        is applied in each one of them, such that it does not matter which rule
+        is used for inferring the possible ground substitutions for the
+        probabilistic fact.
+
     '''
     predicate = probfact.consequent.functor
     probfact_antecedent_atom = get_antecedent_atom_matching_predicate(
