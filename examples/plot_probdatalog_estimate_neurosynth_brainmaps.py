@@ -24,7 +24,7 @@ from neurolang.expressions import Symbol, Constant, ExpressionBlock
 from neurolang.expression_walker import ExpressionBasicEvaluator
 from neurolang.datalog.expressions import Implication, Fact
 from neurolang.datalog.instance import SetInstance
-from neurolang.probabilistic.probdatalog import ProbDatalogProgram
+from neurolang.probabilistic.probdatalog import ProbDatalogProgram, ProbFact
 
 ns.dataset.download(path='.', unpack=True)
 dataset = Dataset('database.txt')
@@ -84,4 +84,16 @@ DoesActivate = Symbol('DoesActivate')
 Voxel = Symbol('Voxel')
 Term = Symbol('Term')
 
-block = ExpressionBlock(())
+probfacts = set.union(*[
+    {
+        ProbFact(
+            Symbol(f'p_{term}_{voxel_id}'),
+            Activation(Constant[int](voxel_id), Constant[str](term))
+        )
+        for voxel_id in range(n_voxels)
+    }
+    for term in terms_with_decent_study_count
+])
+
+block = ExpressionBlock((
+))
