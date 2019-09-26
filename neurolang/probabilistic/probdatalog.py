@@ -9,7 +9,6 @@ from ..expressions import (
 from ..unification import apply_substitution
 from ..datalog.expressions import Fact, Implication, Disjunction, Conjunction
 from ..exceptions import NeuroLangException
-from ..datalog.chase import Chase
 from ..datalog import DatalogProgram
 from ..expression_pattern_matching import add_match
 from ..expression_walker import PatternWalker
@@ -105,7 +104,7 @@ class ProbDatalogProgram(DatalogProgram):
         '''
         probabilistic_predicates = set(self.probabilistic_database().keys())
         prob_rules = defaultdict(set)
-        for predicate, rule_disjunction in self.intensional_database().items():
+        for rule_disjunction in self.intensional_database().values():
             for rule in rule_disjunction.formulas:
                 if (
                     isinstance(rule.antecedent, FunctionApplication) and
