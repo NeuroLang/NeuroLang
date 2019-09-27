@@ -284,8 +284,6 @@ class PatternMatcher(metaclass=PatternMatchingMetaClass):
         )
         for pattern, guard, action in self.patterns:
             name = '\033[1m\033[91m' + action.__qualname__ + '\033[0m'
-            import pdb
-            pdb.set_trace()
             pattern_match = self.pattern_match(pattern, expression)
             guard_match = pattern_match and (
                 guard is None or guard(expression)
