@@ -13,7 +13,7 @@ term in the Neurosynth [1]_ database.
 
 import os
 from collections import defaultdict
-import random
+import typing
 
 import neurosynth as ns
 from neurosynth import Dataset
@@ -29,12 +29,15 @@ from neurolang.probabilistic.probdatalog import (
     ProbDatalogProgram, ProbFact, full_observability_parameter_estimation
 )
 
-random.seed(42)
-
 if not os.path.isfile('database.txt'):
     ns.dataset.download(path='.', unpack=True)
-dataset = Dataset('database.txt')
-dataset.add_features('features.txt')
+if not os.path.isfile('dataset.pkl'):
+    dataset = Dataset('database.txt')
+    dataset.add_features('features.txt')
+    dataset.save('dataset.pkl')
+else:
+    dataset = Dataset.load('dataset.pkl')
+
 image_data = dataset.get_image_data()
 
 study_ids = set(dataset.feature_table.data.index)
@@ -47,9 +50,25 @@ terms_with_decent_study_count = set(
 )
 n_terms = len(terms_with_decent_study_count)
 
-selected_voxel_ids = set(random.choices(range(n_voxels), k=2))
-selected_terms = set(random.choices(list(terms_with_decent_study_count), k=1))
-selected_study_ids = set(random.choices(list(study_ids), k=2))
+selected_voxel_ids = set(range(5))
+selected_terms = {'reward', 'pain'}
+selected_study_ids = set(
+    dataset.feature_table.get_ids(
+        features=list(selected_terms), threshold=0.5
+    )
+)
+
+Activation = Symbol('Activation')
+DoesActivate = Symbol('DoesActivate')
+Voxel = Symbol('Voxel')
+Term = Symbol('Term')
+v = Symbol('v')
+t = Symbol('t')
+
+term_tuples = frozenset({(Term(Constant[str](term)), )
+                         for term in selected_terms})
+voxel_tuples = frozenset({(Voxel(Constant[int](voxel_id)), )
+                          for voxel_id in selected_voxel_ids})
 
 
 def study_id_to_idx(study_id):
@@ -72,28 +91,44 @@ def get_study_reported_voxel_ids(study_id):
 def build_interpretation(study_id):
     terms = get_study_terms(study_id)
     voxel_ids = get_study_reported_voxel_ids(study_id)
+    voxel_term_tuples = set.union(
+        *([set()] + [{(Constant[int](voxel_id), Constant[str](term))
+                      for voxel_id in voxel_ids}
+                     for term in terms])
+    )
     return SetInstance({
-        Activation:
-        frozenset(
-            set.union(
-                *([set()] + [{(Constant[int](voxel_id), Constant[str](term))
-                              for voxel_id in voxel_ids}
-                             for term in terms])
-            )
-        )
+        Activation: frozenset(voxel_term_tuples),
+        DoesActivate: frozenset(voxel_term_tuples),
+        Term: frozenset(term_tuples),
+        Voxel: frozenset(voxel_tuples),
     })
+
+
+def build_virtual_interpretations():
+    voxel_term_tuples = set.union(
+        *([set()] + [{(Constant[int](voxel_id), Constant[str](term))
+                      for voxel_id in selected_voxel_ids}
+                     for term in selected_terms])
+    )
+    return [
+        SetInstance({
+            Activation: frozenset(voxel_term_tuples),
+            DoesActivate: frozenset(voxel_term_tuples),
+            Term: frozenset(term_tuples),
+            Voxel: frozenset(voxel_tuples),
+        }),
+        SetInstance({
+            Activation: frozenset(),
+            DoesActivate: frozenset(),
+            Term: frozenset(term_tuples),
+            Voxel: frozenset(voxel_tuples),
+        }),
+    ]
 
 
 class ProbDatalog(ProbDatalogProgram, ExpressionBasicEvaluator):
     pass
 
-
-Activation = Symbol('Activation')
-DoesActivate = Symbol('DoesActivate')
-Voxel = Symbol('Voxel')
-Term = Symbol('Term')
-v = Symbol('v')
-t = Symbol('t')
 
 program = ProbDatalog()
 for term in selected_terms:
@@ -107,6 +142,7 @@ program.walk(
                                          Activation(v, t)])
     )
 )
+
 for term in selected_terms:
     for voxel_id in selected_voxel_ids:
         parameter = Symbol(f'p_{term}_{voxel_id}')
@@ -116,6 +152,6 @@ for term in selected_terms:
 
 interpretations = [
     build_interpretation(study_id) for study_id in selected_study_ids
-]
+] + build_virtual_interpretations()
 
 estimations = full_observability_parameter_estimation(program, interpretations)

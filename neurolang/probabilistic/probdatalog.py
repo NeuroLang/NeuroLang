@@ -303,6 +303,8 @@ def full_observability_parameter_estimation(program, interpretations):
 
     '''
     estimations = dict()
+    import pdb
+    pdb.set_trace()
     probabilistic_rules = program.probabilistic_rules()
     parametric_probfacts = program.parametric_probfacts()
     for parameter, probfact in parametric_probfacts.items():
