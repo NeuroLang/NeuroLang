@@ -16,6 +16,7 @@ from collections import defaultdict
 import typing
 
 import neurosynth as ns
+from neurosynth.base import imageutils
 from neurosynth import Dataset
 from nilearn import plotting
 import numpy as np
@@ -38,11 +39,7 @@ if not os.path.isfile('dataset.pkl'):
 else:
     dataset = Dataset.load('dataset.pkl')
 
-image_data = dataset.get_image_data()
-
 study_ids = set(dataset.feature_table.data.index)
-n_voxels = image_data.shape[0]
-n_studies = image_data.shape[1]
 terms_with_decent_study_count = set(
     dataset.feature_table.get_features_by_ids(
         dataset.feature_table.data.index, threshold=0.01
@@ -50,12 +47,18 @@ terms_with_decent_study_count = set(
 )
 n_terms = len(terms_with_decent_study_count)
 
-selected_voxel_ids = set(range(5))
 selected_terms = {'reward', 'pain'}
 selected_study_ids = set(
-    dataset.feature_table.get_ids(
+    list(dataset.feature_table.get_ids(
         features=list(selected_terms), threshold=0.5
-    )
+    ))[:20]
+)
+
+image_data = dataset.get_image_data()
+selected_image_data = dataset.get_image_data(ids=list(selected_study_ids))
+
+selected_voxel_ids = set(
+    list(selected_image_data.mean(axis=1).argsort()[-50:][::-1])[:5]
 )
 
 Activation = Symbol('Activation')
