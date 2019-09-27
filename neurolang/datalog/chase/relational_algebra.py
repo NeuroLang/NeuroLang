@@ -1,9 +1,10 @@
 from collections import defaultdict
 from functools import lru_cache
+from logging import debug
 from typing import AbstractSet, Callable, Sequence
 
 from ...expressions import Constant, Definition, Symbol
-from ...relational_algebra import (Column, Product, Projection,
+from ...relational_algebra import (ColumnInt, Product, Projection,
                                    RelationalAlgebraOptimiser,
                                    RelationalAlgebraSolver, Selection, eq_)
 from ...type_system import is_leq_informative
@@ -81,8 +82,8 @@ class ChaseRelationalAlgebraPlusCeriMixin:
         predicate, ra_expression = pred_ra
         local_selections = []
         for i, arg in enumerate(predicate.args):
-            c = Constant[Column](Column(column + i))
-            local_column = Constant[Column](Column(i))
+            c = Constant[ColumnInt](ColumnInt(column + i))
+            local_column = Constant[ColumnInt](ColumnInt(i))
             self.translate_predicate_process_argument(
                 arg, local_selections, local_column, c, args_to_project
             )
@@ -158,6 +159,7 @@ class ChaseNamedRelationalAlgebraMixin:
         )
 
     def eliminate_already_computed(self, consequent, instance, substitutions):
+        return substitutions
         if len(consequent.args) > substitutions.arity:
             return substitutions
 
@@ -169,7 +171,7 @@ class ChaseNamedRelationalAlgebraMixin:
             args,
             instance[consequent.functor].value
         )
-        if set(substitutions.columns).issuperset(already_computed.columns):
+        if set(substitutions.columns) > set(already_computed.columns):
             already_computed = substitutions.naturaljoin(already_computed)
         substitutions = substitutions - already_computed
         return NamedRAFSTupleIterAdapter(
