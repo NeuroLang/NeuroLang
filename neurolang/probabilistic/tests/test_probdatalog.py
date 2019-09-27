@@ -80,7 +80,7 @@ def test_probdatalog_program():
                                     P(x) & Z(x))]),
     }
     assert pd.probabilistic_database() == {
-        P: ProbFact(Constant[float](0.5), P(x)),
+        P: ExpressionBlock((ProbFact(Constant[float](0.5), P(x)), )),
     }
 
 
