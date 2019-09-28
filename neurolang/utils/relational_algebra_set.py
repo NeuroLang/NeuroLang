@@ -1,6 +1,7 @@
 from itertools import product
 from collections.abc import MutableSet, Set
 from typing import Iterable
+from uuid import uuid1
 
 import pandas as pd
 
@@ -135,13 +136,13 @@ class RelationalAlgebraFrozenSet(Set):
     def cross_product(self, other):
         if len(self) == 0:
             return self._empty_set_same_structure()
-        new_container = pd.DataFrame([
-            tuple(t1) + tuple(t2)
-            for t1, t2 in product(
-                self._container.values,
-                other._container.values
-            )
-        ])
+        left = self._container.copy(deep=False)
+        right = other._container.copy(deep=False)
+        tmpcol = str(uuid1())
+        left[tmpcol] = 1
+        right[tmpcol] = 1
+        new_container = pd.merge(left, right, on=tmpcol)
+        del new_container[tmpcol]
         result = self._empty_set_same_structure()
         result._container = self._renew_index(new_container)
         return result
@@ -297,18 +298,16 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         new_columns = self.columns + other.columns
         if len(self) == 0:
             return type(self)(new_columns)
-        new_container = pd.DataFrame(
-            [
-                tuple(t1) + tuple(t2)
-                for t1, t2 in product(
-                    self._container.values,
-                    other._container.values
-                )
-            ],
-            columns=(
-                tuple(self._container.columns) +
-                tuple(other._container.columns)
-            )
+        left = self._container.copy(deep=False)
+        right = other._container.copy(deep=False)
+        tmpcol = str(uuid1())
+        left[tmpcol] = 1
+        right[tmpcol] = 1
+        new_container = pd.merge(left, right, on=tmpcol)
+        del new_container[tmpcol]
+        new_container.columns = (
+            tuple(self._container.columns) +
+            tuple(other._container.columns)
         )
         result = type(self)(new_columns)
         result._container = self._renew_index(new_container)
