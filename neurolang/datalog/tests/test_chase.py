@@ -19,7 +19,6 @@ F_ = Fact
 Eb_ = expressions.ExpressionBlock
 Disj_ = Disjunction
 
-DT = DatalogTranslator()
 
 class DatalogTranslator(TranslateToLogic, ew.IdentityWalker):
     pass
