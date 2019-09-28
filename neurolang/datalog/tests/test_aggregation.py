@@ -151,3 +151,31 @@ def test_aggregation_chase_single_grouping():
     res = dl.extensional_database()['R']
 
     assert solution[Q] == res
+
+
+def test_aggregation_emptyset():
+    dl = Datalog()
+
+    P = S_('P')  # noqa: N806
+    Q = S_('Q')  # noqa: N806
+    R = S_('R')  # noqa: N806
+    x = S_('x')
+    y = S_('y')
+
+    edb = [
+        F_(P(C_(i), C_(i * j)))
+        for i in range(3)
+        for j in range(3)
+    ] + [F_(R(C_(10)))]
+
+    code = Eb_(edb + [
+        Imp_(Q(x, Fa_(S_('sum'), (y,))), R(x) & P(x, y)),
+    ])
+
+    dl.walk(code)
+
+    chase = Chase(dl)
+
+    solution = chase.build_chase_solution()
+
+    assert Q not in solution or solution[Q] == set()
