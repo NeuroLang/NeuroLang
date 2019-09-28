@@ -98,13 +98,20 @@ class ChaseRelationalAlgebraPlusCeriMixin:
         if isinstance(arg, Constant):
             local_selections.append((local_column, arg))
         elif isinstance(arg, Symbol):
-            if arg in self.seen_vars:
-                self.selections.append((self.seen_vars[arg], global_column))
-            else:
-                if arg in args_to_project:
-                    self.projected_var_names[arg] = len(self.projections)
-                    self.projections += (global_column,)
-                self.seen_vars[arg] = global_column
+            self.translate_predicate_process_argument_symbol(
+                arg, global_column, args_to_project
+            )
+
+    def translate_predicate_process_argument_symbol(
+        self, arg, global_column, args_to_project
+    ):
+        if arg in self.seen_vars:
+            self.selections.append((self.seen_vars[arg], global_column))
+        else:
+            if arg in args_to_project:
+                self.projected_var_names[arg] = len(self.projections)
+                self.projections += (global_column,)
+            self.seen_vars[arg] = global_column
 
     def compute_substitutions(self, result, projected_var_names):
         substitutions = []
