@@ -144,7 +144,6 @@ class Chase(chase.Chase):
                 instance,
                 restriction_instance=restriction_instance
             )
-        print(rule)
         if restriction_instance is None:
             restriction_instance = dict()
 
@@ -167,7 +166,6 @@ class Chase(chase.Chase):
             for substitution in substitutions
             if fvs <= set(substitution)
         ]
-        print(len(new_tuples))
         new_tuples = self.datalog_program.new_set(new_tuples)
         return self.compute_instance_update(
             rule, new_tuples, instance, restriction_instance
@@ -229,6 +227,7 @@ class Chase(chase.Chase):
     def eliminate_already_computed(self, consequent, instance, substitutions):
         if is_aggregation_predicate(consequent):
             return substitutions
+
         return super().eliminate_already_computed(
             consequent, instance, substitutions
         )

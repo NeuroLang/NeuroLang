@@ -7,8 +7,7 @@ from .relational_algebra import (ChaseNamedRelationalAlgebraMixin,
 __all__ = [
     "ChaseGeneral", "ChaseNode", "ChaseNaive", "ChaseSemiNaive",
     "NeuroLangNonLinearProgramException", "ChaseMGUMixin",
-    "ChaseRelationalAlgebraPlusCeriMixin", "ChaseNamedRelationalAlgebraMixin",
-    "Chase"
+    "ChaseRelationalAlgebraPlusCeriMixin", "ChaseNamedRelationalAlgebraMixin"
 ]
 
 
