@@ -3,7 +3,7 @@ from functools import lru_cache
 from typing import AbstractSet, Callable, Sequence
 
 from ...expressions import Constant, Definition, Symbol
-from ...relational_algebra import (Column, Product, Projection,
+from ...relational_algebra import (ColumnInt, Product, Projection,
                                    RelationalAlgebraOptimiser,
                                    RelationalAlgebraSolver, Selection, eq_)
 from ...type_system import is_leq_informative
@@ -81,8 +81,8 @@ class ChaseRelationalAlgebraPlusCeriMixin:
         predicate, ra_expression = pred_ra
         local_selections = []
         for i, arg in enumerate(predicate.args):
-            c = Constant[Column](Column(column + i))
-            local_column = Constant[Column](Column(i))
+            c = Constant[ColumnInt](ColumnInt(column + i))
+            local_column = Constant[ColumnInt](ColumnInt(i))
             self.translate_predicate_process_argument(
                 arg, local_selections, local_column, c, args_to_project
             )
