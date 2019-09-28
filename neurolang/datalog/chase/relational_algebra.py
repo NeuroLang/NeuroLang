@@ -3,7 +3,7 @@ from functools import lru_cache
 from typing import AbstractSet, Callable, Sequence
 
 from ...expressions import Constant, Definition, Symbol
-from ...relational_algebra import (Column, Product, Projection,
+from ...relational_algebra import (ColumnInt, Product, Projection,
                                    RelationalAlgebraOptimiser,
                                    RelationalAlgebraSolver, Selection, eq_)
 from ...type_system import is_leq_informative
@@ -81,8 +81,8 @@ class ChaseRelationalAlgebraPlusCeriMixin:
         predicate, ra_expression = pred_ra
         local_selections = []
         for i, arg in enumerate(predicate.args):
-            c = Constant[Column](Column(column + i))
-            local_column = Constant[Column](Column(i))
+            c = Constant[ColumnInt](ColumnInt(column + i))
+            local_column = Constant[ColumnInt](ColumnInt(i))
             self.translate_predicate_process_argument(
                 arg, local_selections, local_column, c, args_to_project
             )
@@ -98,13 +98,20 @@ class ChaseRelationalAlgebraPlusCeriMixin:
         if isinstance(arg, Constant):
             local_selections.append((local_column, arg))
         elif isinstance(arg, Symbol):
-            if arg in self.seen_vars:
-                self.selections.append((self.seen_vars[arg], global_column))
-            else:
-                if arg in args_to_project:
-                    self.projected_var_names[arg] = len(self.projections)
-                    self.projections += (global_column,)
-                self.seen_vars[arg] = global_column
+            self.translate_predicate_process_argument_symbol(
+                arg, global_column, args_to_project
+            )
+
+    def translate_predicate_process_argument_symbol(
+        self, arg, global_column, args_to_project
+    ):
+        if arg in self.seen_vars:
+            self.selections.append((self.seen_vars[arg], global_column))
+        else:
+            if arg in args_to_project:
+                self.projected_var_names[arg] = len(self.projections)
+                self.projections += (global_column,)
+            self.seen_vars[arg] = global_column
 
     def compute_substitutions(self, result, projected_var_names):
         substitutions = []
@@ -259,12 +266,8 @@ class ChaseNamedRelationalAlgebraMixin:
         builtin_vectorized_predicates = []
         for pred, functor in builtin_predicates:
             if (
-                functor == eq_ and
-                not any(isinstance(arg, Definition) for arg in pred.args) and
-                any(
-                    isinstance(arg, Constant) or arg in cq_free_vars
-                    for arg in pred.args
-                )
+                ChaseNamedRelationalAlgebraMixin.
+                is_eq_expressible_as_ra(functor, pred, cq_free_vars)
             ):
                 edb_idb_predicates.append(pred)
             elif (
@@ -276,6 +279,17 @@ class ChaseNamedRelationalAlgebraMixin:
                 new_builtin_predicates.append((pred, functor))
         builtin_predicates = new_builtin_predicates
         return builtin_predicates
+
+    @staticmethod
+    def is_eq_expressible_as_ra(functor, pred, cq_free_vars):
+        return (
+            functor == eq_ and
+            not any(isinstance(arg, Definition) for arg in pred.args) and
+            any(
+                isinstance(arg, Constant) or arg in cq_free_vars
+                for arg in pred.args
+            )
+        )
 
 
 class NamedRAFSTupleIterAdapter(NamedRelationalAlgebraFrozenSet):
