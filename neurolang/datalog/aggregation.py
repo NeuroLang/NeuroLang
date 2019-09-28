@@ -165,7 +165,7 @@ class Chase(chase.Chase):
             )
             for substitution in substitutions
             if fvs <= set(substitution)
-        )
+        ]
         new_tuples = self.datalog_program.new_set(new_tuples)
         return self.compute_instance_update(
             rule, new_tuples, instance, restriction_instance
