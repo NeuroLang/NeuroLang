@@ -141,14 +141,17 @@ class ChaseNamedRelationalAlgebraMixin:
         rule_predicates_iterator, builtin_predicates = rule_predicates
 
         substitutions = self.obtain_substitutions(
-            rule_predicates_iterator, instance
+            rule_predicates_iterator, instance, restriction_instance
         )
 
         if consequent.functor in instance:
             substitutions = self.eliminate_already_computed(
                 consequent, instance, substitutions
             )
-
+        if consequent.functor in restriction_instance:
+            substitutions = self.eliminate_already_computed(
+                consequent, restriction_instance, substitutions
+            )
         substitutions = self.evaluate_builtins(
             builtin_predicates, substitutions
         )
@@ -172,16 +175,21 @@ class ChaseNamedRelationalAlgebraMixin:
         if set(substitutions.columns).issuperset(already_computed.columns):
             already_computed = substitutions.naturaljoin(already_computed)
         substitutions = substitutions - already_computed
-        return NamedRAFSTupleIterAdapter(
-            sorted(substitutions.columns),
-            substitutions
-        )
+        if not isinstance(substitutions, NamedRAFSTupleIterAdapter):
+            substitutions = (
+                sorted(substitutions.columns),
+                substitutions
+            )
+        return substitutions
 
-    def obtain_substitutions(self, rule_predicates_iterator, instance):
+    def obtain_substitutions(
+        self, rule_predicates_iterator, instance, restriction_instance
+    ):
         symbol_table = defaultdict(
             lambda: Constant[AbstractSet](WrappedRelationalAlgebraSet())
         )
         symbol_table.update(instance)
+        symbol_table.update(restriction_instance)
         predicates = tuple(rule_predicates_iterator)
 
         if len(predicates) == 0:
@@ -214,7 +222,7 @@ class ChaseNamedRelationalAlgebraMixin:
 
         rule_predicates = extract_datalog_predicates(rule.antecedent)
         builtin_predicates, edb_idb_predicates, cq_free_vars = \
-            self.split_predicates(rule_predicates, instance)
+            self.split_predicates(rule_predicates)
 
         builtin_predicates = self.process_builtins(
             builtin_predicates, edb_idb_predicates, cq_free_vars
@@ -222,9 +230,7 @@ class ChaseNamedRelationalAlgebraMixin:
 
         return edb_idb_predicates, builtin_predicates
 
-    def split_predicates(
-        self, rule_predicates, instance
-    ):
+    def split_predicates(self, rule_predicates):
         edb_idb_predicates = []
         builtin_predicates = []
         cq_free_vars = set()
@@ -275,18 +281,21 @@ class ChaseNamedRelationalAlgebraMixin:
 class NamedRAFSTupleIterAdapter(NamedRelationalAlgebraFrozenSet):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._row_types = dict()
+        self.row_types
 
-        if len(self) > 0 and self.arity > 0:
+    @property
+    def row_types(self):
+        if (
+            len(self._row_types) == 0 and
+            self.arity > 0 and len(self) > 0
+        ):
             element = next(super().__iter__())
             self._row_types = {
                 c: Constant(getattr(element, c)).type
                 for c in self.columns
             }
-        else:
-            self._row_types = dict()
 
-    @property
-    def row_types(self):
         return self._row_types
 
     def __iter__(self):

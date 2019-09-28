@@ -33,6 +33,9 @@ class ChaseGeneral():
                 self.datalog_program.extensional_database(),
                 self.datalog_program.intensional_database()
             )
+        ) | set(
+            rule.consequent.functor
+            for rule in self.rules
         )
 
     def _set_rules(self, rules):

@@ -133,7 +133,6 @@ class Chase(chase.Chase):
                 instance,
                 restriction_instance=restriction_instance
             )
-
         if restriction_instance is None:
             restriction_instance = dict()
 
@@ -154,8 +153,9 @@ class Chase(chase.Chase):
                 apply_substitution_arguments(fvs, substitution)
             )
             for substitution in substitutions
-        )
-
+            if fvs <= set(substitution)
+        ]
+        new_tuples = self.datalog_program.new_set(new_tuples)
         return self.compute_instance_update(
             rule, new_tuples, instance, restriction_instance
         )
