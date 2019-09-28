@@ -24,7 +24,18 @@ from . import (Disjunction, Implication, chase, extract_datalog_free_variables,
 
 
 class AggregationApplication(FunctionApplication):
-    pass
+    def __repr__(self):
+        r = u'\u03BB{{<{}>: {}}}'.format(self.functor, self.__type_repr__)
+        if self.args is ...:
+            r += '(...)'
+        elif self.args is not None:
+            r += (
+                '(' +
+                ', '.join(repr(arg) for arg in self.args)
+                + ')'
+                )
+
+        return r
 
 
 def is_aggregation_rule(rule):
@@ -148,13 +159,13 @@ class Chase(chase.Chase):
             rule, new_tuples, args
         )
 
-        new_tuples = self.datalog_program.new_set(
+        new_tuples = [
             Constant[Tuple](
                 apply_substitution_arguments(fvs, substitution)
             )
             for substitution in substitutions
             if fvs <= set(substitution)
-        )
+        ]
         new_tuples = self.datalog_program.new_set(new_tuples)
         return self.compute_instance_update(
             rule, new_tuples, instance, restriction_instance
