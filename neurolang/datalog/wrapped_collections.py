@@ -13,30 +13,33 @@ class WrappedExpressionIterable:
             if isinstance(iterable, type(self)):
                 iterable = iterable.unwrapped_iter()
             else:
-                it1, it2 = tee(iterable)
-                try:
-                    if isinstance(next(it1), Constant[Tuple]):
-                        iterable = list(
-                            tuple(a.value for a in e.value)
-                            for e in it2
-                        )
-                except StopIteration:
-                    pass
+                iterable = self._obtain_value_iterable(iterable)
 
         super().__init__(iterable)
 
+    def _obtain_value_iterable(self, iterable):
+        it1, it2 = tee(iterable)
+        iterator_of_constants = False
+        for val in it1:
+            iterator_of_constants = isinstance(val, Constant[Tuple])
+            break
+        if iterator_of_constants:
+            iterable = (
+                tuple(a.value for a in e.value)
+                for e in it2
+            )
+        return iterable
+
     def __iter__(self):
         type_ = self.row_type
-        return (
-            Constant[type_](
+        for t in super().__iter__():
+            yield Constant[type_](
                 tuple(
                     Constant[e_t](e, verify_type=False)
                     for e_t, e in zip(type_.__args__, t)
                 ),
                 verify_type=False
             )
-            for t in super().__iter__()
-        )
 
     def unwrapped_iter(self):
         return super().__iter__()

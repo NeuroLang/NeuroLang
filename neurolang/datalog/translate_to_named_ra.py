@@ -60,6 +60,18 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
                 projections += (Constant[ColumnInt](i, verify_type=False),)
                 named_args += (arg,)
 
+        in_set = self.generate_ra_expression(
+            functor,
+            selections, selection_columns,
+            projections, named_args
+        )
+
+        return in_set
+
+    def generate_ra_expression(
+        self, functor, selections, selection_columns,
+        projections, named_args
+    ):
         in_set = functor
         for k, v in selections.items():
             criterium = EQ(
@@ -75,7 +87,6 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
 
         in_set = Projection(in_set, projections)
         in_set = NameColumns(in_set, named_args)
-
         return in_set
 
     @add_match(Negation)
@@ -133,14 +144,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
     @staticmethod
     def process_negative_formulas(neg_formulas, named_columns, output):
         for neg_formula in neg_formulas:
-            if isinstance(neg_formula, NameColumns):
-                neg_cols = set(neg_formula.column_names)
-            elif isinstance(neg_formula, Constant):
-                neg_cols = set(neg_formula.value.columns)
-            else:
-                raise NeuroLangException(
-                    f"Negative formula {neg_formula} is  not a named relation"
-                )
+            neg_cols = TranslateToNamedRA.obtain_negative_columns(neg_formula)
             if named_columns > neg_cols:
                 neg_formula = NaturalJoin(output, neg_formula)
             elif named_columns != neg_cols:
@@ -149,6 +153,18 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
                 )
             output = Difference(output, neg_formula)
         return output
+
+    @staticmethod
+    def obtain_negative_columns(neg_formula):
+        if isinstance(neg_formula, NameColumns):
+            neg_cols = set(neg_formula.column_names)
+        elif isinstance(neg_formula, Constant):
+            neg_cols = set(neg_formula.value.columns)
+        else:
+            raise NeuroLangException(
+                f"Negative formula {neg_formula} is  not a named relation"
+            )
+        return neg_cols
 
     @staticmethod
     def process_equality_formulas(eq_formulas, named_columns, output):
