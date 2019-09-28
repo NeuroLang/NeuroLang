@@ -11,7 +11,7 @@ class WrappedExpressionIterable:
         self.__row_type = None
         if iterable is not None:
             if isinstance(iterable, type(self)):
-                iterable = super().__iter__()
+                iterable = iterable.unwrapped_iter()
             else:
                 it1, it2 = tee(iterable)
                 try:
@@ -37,6 +37,9 @@ class WrappedExpressionIterable:
             )
             for t in super().__iter__()
         )
+
+    def unwrapped_iter(self):
+        return super().__iter__()
 
     def add(self, element):
         if isinstance(element, Constant[Tuple]):
