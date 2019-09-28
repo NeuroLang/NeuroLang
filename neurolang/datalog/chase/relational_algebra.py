@@ -266,12 +266,8 @@ class ChaseNamedRelationalAlgebraMixin:
         builtin_vectorized_predicates = []
         for pred, functor in builtin_predicates:
             if (
-                functor == eq_ and
-                not any(isinstance(arg, Definition) for arg in pred.args) and
-                any(
-                    isinstance(arg, Constant) or arg in cq_free_vars
-                    for arg in pred.args
-                )
+                ChaseNamedRelationalAlgebraMixin.
+                is_eq_expressible_as_ra(functor, pred, cq_free_vars)
             ):
                 edb_idb_predicates.append(pred)
             elif (
@@ -283,6 +279,17 @@ class ChaseNamedRelationalAlgebraMixin:
                 new_builtin_predicates.append((pred, functor))
         builtin_predicates = new_builtin_predicates
         return builtin_predicates
+
+    @staticmethod
+    def is_eq_expressible_as_ra(functor, pred, cq_free_vars):
+        return (
+            functor == eq_ and
+            not any(isinstance(arg, Definition) for arg in pred.args) and
+            any(
+                isinstance(arg, Constant) or arg in cq_free_vars
+                for arg in pred.args
+            )
+        )
 
 
 class NamedRAFSTupleIterAdapter(NamedRelationalAlgebraFrozenSet):
