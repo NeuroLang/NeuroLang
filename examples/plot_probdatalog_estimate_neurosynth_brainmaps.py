@@ -49,9 +49,11 @@ n_terms = len(terms_with_decent_study_count)
 
 selected_terms = {'reward', 'pain'}
 selected_study_ids = set(
-    list(dataset.feature_table.get_ids(
-        features=list(selected_terms), threshold=0.5
-    ))[:20]
+    list(
+        dataset.feature_table.get_ids(
+            features=list(selected_terms), threshold=0.5
+        )
+    )[:20]
 )
 
 image_data = dataset.get_image_data()
@@ -158,3 +160,24 @@ interpretations = [
 ] + build_virtual_interpretations()
 
 estimations = full_observability_parameter_estimation(program, interpretations)
+
+# compare estimations with neurosynth's meta analysis
+per_term_study_ids = {
+    term: list(dataset.feature_table.get_ids(features=[term], threshold=0.5))
+    for term in selected_terms
+}
+all_study_ids = list(
+    set.union(*[set(ids) for ids in per_term_study_ids.values()])
+)
+results = dict()
+for term in selected_terms:
+    ma = ns.meta.MetaAnalysis(dataset, per_term_study_ids[term], all_study_ids)
+    results[term] = ma.images['pAgF']
+
+for term in selected_terms:
+    for voxel_id in selected_voxel_ids:
+        symbol = Symbol(f'p_{term}_{voxel_id}')
+        actual = results[term][voxel_id]
+        print(
+            'actual = {}, estimated = {}'.format(actual, estimations[symbol])
+        )
