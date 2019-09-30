@@ -65,6 +65,8 @@ selected_voxel_ids = set(
 
 Activation = Symbol('Activation')
 DoesActivate = Symbol('DoesActivate')
+TermInStudy = Symbol('TermInStudy')
+DoesAppearInStudy = Symbol('DoesAppearInStudy')
 Voxel = Symbol('Voxel')
 Term = Symbol('Term')
 v = Symbol('v')
@@ -102,10 +104,18 @@ def build_interpretation(study_id):
                      for term in terms])
     )
     return SetInstance({
-        Activation: frozenset(voxel_term_tuples),
-        DoesActivate: frozenset(voxel_term_tuples),
-        Term: frozenset(term_tuples),
-        Voxel: frozenset(voxel_tuples),
+        Activation:
+        frozenset(voxel_term_tuples),
+        DoesActivate:
+        frozenset(voxel_term_tuples),
+        TermInStudy:
+        frozenset([(Constant[str](term), ) for term in terms]),
+        DoesAppearInStudy:
+        frozenset([(Constant[str](term), ) for term in terms]),
+        Term:
+        frozenset(term_tuples),
+        Voxel:
+        frozenset(voxel_tuples),
     })
 
 
@@ -117,14 +127,26 @@ def build_virtual_interpretations():
     )
     return [
         SetInstance({
-            Activation: frozenset(voxel_term_tuples),
-            DoesActivate: frozenset(voxel_term_tuples),
-            Term: frozenset(term_tuples),
-            Voxel: frozenset(voxel_tuples),
+            Activation:
+            frozenset(voxel_term_tuples),
+            DoesActivate:
+            frozenset(voxel_term_tuples),
+            TermInStudy:
+            frozenset([(Constant[str](term), ) for term in selected_terms]),
+            DoesAppearInStudy:
+            frozenset([(Constant[str](term), ) for term in selected_terms]),
+            Term:
+            frozenset(term_tuples),
+            Voxel:
+            frozenset(voxel_tuples),
         }),
         SetInstance({
             Activation: frozenset(),
             DoesActivate: frozenset(),
+            TermInStudy: frozenset(),
+            DoesAppearInStudy: frozenset(),
+            TermInStudy: frozenset(),
+            DoesAppearInStudy: frozenset(),
             Term: frozenset(term_tuples),
             Voxel: frozenset(voxel_tuples),
         }),
@@ -147,8 +169,15 @@ program.walk(
                                          Activation(v, t)])
     )
 )
+program.walk(
+    Implication(DoesAppearInStudy(t), Conjunction([Term(t),
+                                                   TermInStudy(t)]))
+)
 
 for term in selected_terms:
+    program.walk(
+        ProbFact(Symbol(f'p_{term}'), TermInStudy(Constant[str](term)))
+    )
     for voxel_id in selected_voxel_ids:
         parameter = Symbol(f'p_{term}_{voxel_id}')
         atom = Activation(Constant[int](voxel_id), Constant[str](term))
@@ -178,6 +207,8 @@ for term in selected_terms:
     for voxel_id in selected_voxel_ids:
         symbol = Symbol(f'p_{term}_{voxel_id}')
         actual = results[term][voxel_id]
+        estimated = estimations[symbol] / estimations[Symbol(f'p_{term}')]
+        print(symbol.name)
         print(
-            'actual = {}, estimated = {}'.format(actual, estimations[symbol])
+            'actual = {}, estimated = {}'.format(actual, estimated)
         )
