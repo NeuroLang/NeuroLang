@@ -149,24 +149,30 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
     @ew.add_match(Selection(..., FA_(eq_, (C_[Column], C_[Column]))))
     def selection_between_columns(self, selection):
         col1, col2 = selection.formula.args
-        return C_[AbstractSet](
-            self.walk(selection.relation
-                      ).value.selection_columns({col1.value: col2.value})
+        selected_relation = self.walk(selection.relation)\
+            .value.selection_columns({col1.value: col2.value})
+
+        return C_[AbstractSet[selected_relation.row_type]](
+            selected_relation, verify_type=False
         )
 
     @ew.add_match(Selection(..., FA_(eq_, (C_[Column], ...))))
     def selection_by_constant(self, selection):
         col, val = selection.formula.args
-        return C_[AbstractSet](
-            self.walk(selection.relation
-                      ).value.selection({col.value: val.value})
+        selected_relation = self.walk(selection.relation)\
+            .value.selection({col.value: val.value})
+        return C_[AbstractSet[selected_relation.row_type]](
+            selected_relation, verify_type=False
         )
 
     @ew.add_match(Projection)
     def ra_projection(self, projection):
         relation = self.walk(projection.relation)
         cols = tuple(v.value for v in projection.attributes)
-        return C_[AbstractSet](relation.value.projection(*cols))
+        projected_relation = relation.value.projection(*cols)
+        return C_[AbstractSet[projected_relation.row_type]](
+            projected_relation, verify_type=False
+        )
 
     @ew.add_match(Product)
     def ra_product(self, product):
@@ -176,7 +182,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         res = self.walk(product.relations[0]).value
         for relation in product.relations[1:]:
             res = res.cross_product(self.walk(relation).value)
-        return C_[AbstractSet](res)
+        return C_[AbstractSet[res.row_type]](res, verify_type=False)
 
     @ew.add_match(EquiJoin)
     def ra_equijoin(self, equijoin):
@@ -186,7 +192,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         columns_right = (c.value for c in equijoin.columns_right)
         res = left.equijoin(right, list(zip(columns_left, columns_right)))
 
-        return C_[AbstractSet](res)
+        return C_[AbstractSet[res.row_type]](res, verify_type=False)
 
     @ew.add_match(NaturalJoin)
     def ra_naturaljoin(self, naturaljoin):
@@ -200,7 +206,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         left = self.walk(difference.relation_left).value
         right = self.walk(difference.relation_right).value
         res = left - right
-        return C_[AbstractSet](res)
+        return C_[AbstractSet[res.row_type]](res, verify_type=False)
 
     @ew.add_match(NameColumns)
     def ra_name_columns(self, name_columns):
@@ -217,7 +223,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
                     "Column name must be a Constant or Symbol"
                 )
         new_set = NamedRelationalAlgebraFrozenSet(column_names, relation_set)
-        return Constant[relation.type](new_set)
+        return Constant[relation.type](new_set, verify_type=False)
 
     @ew.add_match(Constant)
     def ra_constant(self, constant):
