@@ -115,6 +115,16 @@ def test_gdatalog_translation():
         translator.walk(bad_rule)
 
 
+def test_get_possible_ground_substitutions_constant_probfact():
+    probfact = ProbFact(C_(0.2), Z(a))
+    rule = Implication(Q(x), Conjunction([Z(x), P(x)]))
+    interpretation = SetInstance([Fact(fa) for fa in [P(a), Z(a), P(b), Q(a)]])
+    substitutions = get_possible_ground_substitutions(
+        probfact, rule, interpretation
+    )
+    assert substitutions == frozenset({frozenset()})
+
+
 def test_get_possible_ground_substitutions():
     probfact = ProbFact(C_(0.2), Z(x))
     rule = Implication(Q(x), Conjunction([Z(x), P(x)]))

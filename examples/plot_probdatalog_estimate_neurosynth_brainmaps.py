@@ -30,37 +30,50 @@ from neurolang.probabilistic.probdatalog import (
     ProbDatalogProgram, ProbFact, full_observability_parameter_estimation
 )
 
-if not os.path.isfile('database.txt'):
-    ns.dataset.download(path='.', unpack=True)
-if not os.path.isfile('dataset.pkl'):
-    dataset = Dataset('database.txt')
-    dataset.add_features('features.txt')
-    dataset.save('dataset.pkl')
-else:
-    dataset = Dataset.load('dataset.pkl')
 
-study_ids = set(dataset.feature_table.data.index)
-terms_with_decent_study_count = set(
-    dataset.feature_table.get_features_by_ids(
-        dataset.feature_table.data.index, threshold=0.01
-    )
+def get_dataset():
+    if not os.path.isfile('database.txt'):
+        ns.dataset.download(path='.', unpack=True)
+    if not os.path.isfile('dataset.pkl'):
+        dataset = Dataset('database.txt')
+        dataset.add_features('features.txt')
+        dataset.save('dataset.pkl')
+    else:
+        dataset = Dataset.load('dataset.pkl')
+    return dataset
+
+
+dataset = get_dataset()
+
+selected_terms = {'memory', 'visual'}
+per_term_study_ids = {
+    t: set(dataset.feature_table.get_ids(features=[t], threshold=0.2))
+    for t in selected_terms
+}
+selected_study_ids = list(set.union(*per_term_study_ids.values()))
+terms_per_study_id = {
+    study_id:
+    {term
+     for term in selected_terms
+     if study_id in per_term_study_ids[term]}
+    for study_id in selected_study_ids
+}
+
+image_data = dataset.get_image_data(ids=selected_study_ids)
+
+selected_voxel_ids = set.union(
+    *[
+        set(
+            image_data[:,
+                       np.in1d(
+                           selected_study_ids, list(per_term_study_ids[term])
+                       )].mean(axis=1).argsort()[-5:][::-1]
+        ) for term in selected_terms
+    ]
 )
-n_terms = len(terms_with_decent_study_count)
-
-selected_terms = {'reward', 'pain'}
-selected_study_ids = set(
-    list(
-        dataset.feature_table.get_ids(
-            features=list(selected_terms), threshold=0.5
-        )
-    )[:20]
-)
-
-image_data = dataset.get_image_data()
-selected_image_data = dataset.get_image_data(ids=list(selected_study_ids))
 
 selected_voxel_ids = set(
-    list(selected_image_data.mean(axis=1).argsort()[-50:][::-1])[:5]
+    list(image_data.mean(axis=1).argsort()[-50:][::-1])[:5]
 )
 
 Activation = Symbol('Activation')
@@ -72,19 +85,13 @@ Term = Symbol('Term')
 v = Symbol('v')
 t = Symbol('t')
 
-term_tuples = frozenset({(Term(Constant[str](term)), )
-                         for term in selected_terms})
-voxel_tuples = frozenset({(Voxel(Constant[int](voxel_id)), )
+term_tuples = frozenset({(Constant[str](term), ) for term in selected_terms})
+voxel_tuples = frozenset({(Constant[int](voxel_id), )
                           for voxel_id in selected_voxel_ids})
 
 
 def study_id_to_idx(study_id):
-    return np.argwhere(dataset.feature_table.data.index == study_id)[0][0]
-
-
-def get_study_terms(study_id):
-    mask = dataset.feature_table.data.ix[study_id] > 0.01
-    return set(dataset.feature_table.data.columns[mask]) & selected_terms
+    return np.where(np.in1d(selected_study_ids, study_id))[0][0]
 
 
 def get_study_reported_voxel_ids(study_id):
@@ -96,7 +103,7 @@ def get_study_reported_voxel_ids(study_id):
 
 
 def build_interpretation(study_id):
-    terms = get_study_terms(study_id)
+    terms = terms_per_study_id[study_id]
     voxel_ids = get_study_reported_voxel_ids(study_id)
     voxel_term_tuples = set.union(
         *([set()] + [{(Constant[int](voxel_id), Constant[str](term))
@@ -191,16 +198,14 @@ interpretations = [
 estimations = full_observability_parameter_estimation(program, interpretations)
 
 # compare estimations with neurosynth's meta analysis
-per_term_study_ids = {
-    term: list(dataset.feature_table.get_ids(features=[term], threshold=0.5))
-    for term in selected_terms
-}
-all_study_ids = list(
-    set.union(*[set(ids) for ids in per_term_study_ids.values()])
-)
 results = dict()
 for term in selected_terms:
-    ma = ns.meta.MetaAnalysis(dataset, per_term_study_ids[term], all_study_ids)
+    import pdb
+    pdb.set_trace()
+    ma = ns.meta.MetaAnalysis(
+        dataset, list(per_term_study_ids[term]),
+        list(set(selected_study_ids) - set(per_term_study_ids[term]))
+    )
     results[term] = ma.images['pAgF']
 
 for term in selected_terms:
@@ -209,6 +214,4 @@ for term in selected_terms:
         actual = results[term][voxel_id]
         estimated = estimations[symbol] / estimations[Symbol(f'p_{term}')]
         print(symbol.name)
-        print(
-            'actual = {}, estimated = {}'.format(actual, estimated)
-        )
+        print('actual = {}, estimated = {}'.format(actual, estimated))

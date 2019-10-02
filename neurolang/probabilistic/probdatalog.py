@@ -242,6 +242,10 @@ def get_antecedent_atom_matching_predicate(predicate, rule):
             raise NeuroLangException(f'No atom with predicate {predicate}')
 
 
+def get_function_application_variable_indices(fa):
+    return {i for i, arg in enumerate(fa.args) if isinstance(arg, Symbol)}
+
+
 def get_possible_ground_substitutions(probfact, rule, interpretation):
     '''
     Get all possible substitutions that ground a given probabilistic fact in a
@@ -266,9 +270,19 @@ def get_possible_ground_substitutions(probfact, rule, interpretation):
     probfact_antecedent_atom = get_antecedent_atom_matching_predicate(
         predicate, rule
     )
-    variables = set(
-        arg for arg in probfact_antecedent_atom.args
-        if isinstance(arg, Symbol)
+    probfact_variable_positions = get_function_application_variable_indices(
+        probfact.consequent
+    )
+    probfact_antecedent_variable_positions = \
+        get_function_application_variable_indices(
+            probfact_antecedent_atom
+        )
+    matching_variable_positions = (
+        probfact_variable_positions & probfact_antecedent_variable_positions
+    )
+    variables = tuple(
+        arg for i, arg in enumerate(probfact_antecedent_atom.args)
+        if i in matching_variable_positions
     )
     typing_atoms = set(
         formula for formula in get_antecedent_formulas(rule)
@@ -310,11 +324,9 @@ def full_observability_parameter_estimation(program, interpretations):
         count = 0.
         normaliser = 0.
         for interpretation in interpretations:
-            logging.debug('interpretation %s' % repr(interpretation))
             substitutions = get_possible_ground_substitutions(
                 probfact, rule, interpretation
             )
-            logging.debug('substitutions %s' % repr(substitutions))
             normaliser += len(substitutions)
             for substitution in substitutions:
                 ground_fact = Fact(
@@ -322,10 +334,7 @@ def full_observability_parameter_estimation(program, interpretations):
                         probfact.consequent, dict(substitution)
                     )
                 )
-                logging.debug('check ground fact %s' % repr(ground_fact))
                 if ground_fact in interpretation:
                     count += 1
-        print(f'estimation of param {parameter}, count = {count}, '
-              f'normaliser = {normaliser}')
         estimations[parameter] = count / normaliser
     return estimations
