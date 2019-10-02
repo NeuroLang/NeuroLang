@@ -177,7 +177,7 @@ class ChaseNamedRelationalAlgebraMixin:
         new_args = tuple()
         for arg in rule.consequent.args:
             if isinstance(arg, Constant):
-                fresh = Symbol[arg.type](str(uuid1()))
+                fresh = Symbol[arg.type](str(uuid1()).replace('-', '_'))
                 new_equalities.append(eq_(fresh, arg))
                 arg = fresh
             new_args += (arg,)
