@@ -48,12 +48,11 @@ class RelationalAlgebraFrozenSet(Set):
     @staticmethod
     def _renew_index(container, drop_duplicates=True):
         if len(container) > 0 and len(container.columns) > 0:
-            container.set_index(
-                (
-                    hash(t) for t in
-                    container.itertuples(index=False, name=None)),
-                inplace=True
+            new_indices = pd.Index(
+                hash(t) for t in
+                container.itertuples(index=False, name=None)
             )
+            container.set_index(new_indices, inplace=True)
 
             if drop_duplicates:
                 duplicated = container.index.duplicated()
