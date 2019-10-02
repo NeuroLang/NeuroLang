@@ -337,4 +337,4 @@ def reachable_code(query, datalog):
                 if functor not in reached and functor in idb:
                     to_reach.append(functor)
 
-    return Disjunction(reachable_code)
+    return Disjunction(reachable_code[::-1])
