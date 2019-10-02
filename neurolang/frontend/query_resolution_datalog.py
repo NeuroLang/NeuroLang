@@ -1,0 +1,149 @@
+
+from typing import AbstractSet, Tuple
+from uuid import uuid1
+
+from .. import datalog
+from .. import expressions as exp
+from ..datalog import aggregation
+from ..datalog.expression_processing import (TranslateToDatalogSemantics,
+                                             reachable_code)
+from ..type_system import Unknown
+from ..utils import RelationalAlgebraFrozenSet
+from .query_resolution import NeuroSynthMixin, QueryBuilderBase, RegionMixin
+from .query_resolution_expressions import (
+    Operation, Symbol, TranslateExpressionToFrontEndExpression)
+
+__all__ = ['QueryBuilderDatalog']
+
+
+class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
+    def __init__(self, solver, chase_class=aggregation.Chase):
+        super().__init__(
+            solver, logic_programming=True
+        )
+        self.chase_class = chase_class
+        self.frontend_translator = \
+            TranslateExpressionToFrontEndExpression(self)
+        self.translate_expression_to_datalog = TranslateToDatalogSemantics()
+
+    @property
+    def current_program(self):
+        cp = []
+        for rules in self.solver.intensional_database().values():
+            for rule in rules.formulas:
+                cp.append(self.frontend_translator.walk(rule))
+        return cp
+
+    def assign(self, consequent, antecedent):
+        if (
+            isinstance(antecedent.expression, exp.Constant) and
+            antecedent.expression.value is True
+        ):
+            expression = datalog.Fact(consequent.expression)
+        else:
+            expression = self._assign_intensional_rule(consequent, antecedent)
+        self.solver.walk(expression)
+        return expression
+
+    def _assign_intensional_rule(self, consequent, antecedent):
+        new_args = tuple()
+        changed = False
+        consequent_expression = self.translate_expression_to_datalog.walk(
+            consequent.expression
+        )
+
+        for arg in consequent_expression.args:
+            if isinstance(arg, exp.FunctionApplication):
+                arg = aggregation.AggregationApplication(
+                    arg.functor, arg.args
+                )
+                changed = True
+            new_args += (arg,)
+
+        if changed:
+            consequent_expression = exp.FunctionApplication(
+                consequent.expression.functor,
+                new_args
+            )
+
+        expression = datalog.Implication(
+            consequent_expression,
+            self.translate_expression_to_datalog.walk(antecedent.expression)
+        )
+        return expression
+
+    def query(self, *args):
+        """Performs an inferential query on the database.
+        There are three modalities
+        1. If there is only one argument, the query returns `True` or `False`
+        depending on wether the query could be inferred.
+        2. If there are two arguments and the first is a tuple of `Symbol`, it
+        returns the set of results meeting the query in the second argument.
+        3. If the first argument is a predicate (e.g. `Q(x)`) it performs the
+        query adds it to the engine memory and returns the
+        corresponding symbol.
+
+        Returns
+        -------
+        bool, frozenset, Symbol
+            read the descrpition.
+        """
+
+        if len(args) == 1:
+            predicate = args[0]
+            head = tuple()
+        elif len(args) == 2:
+            head, predicate = args
+        else:
+            raise ValueError("query takes 1 or 2 arguments")
+
+        solution_set, functor_orig = self.execute_query(head, predicate)
+
+        if not isinstance(head, tuple):
+            out_symbol = exp.Symbol[solution_set.type](functor_orig.name)
+            self.add_tuple_set(
+                solution_set.value, name=functor_orig.name
+            )
+            return Symbol(self, out_symbol.name)
+        elif len(head) == 0:
+            return len(solution_set.value) > 0
+        else:
+            return RelationalAlgebraFrozenSet(solution_set.value)
+
+    def execute_query(self, head, predicate):
+        functor_orig = None
+        self.solver.symbol_table = self.symbol_table.create_scope()
+        if isinstance(head, Operation):
+            functor_orig = head.expression.functor
+            new_head = self.new_symbol()(*head.arguments)
+            functor = new_head.expression.functor
+        elif isinstance(head, tuple):
+            new_head = self.new_symbol()(*head)
+            functor = new_head.expression.functor
+        query_expression = self.assign(new_head, predicate)
+
+        reachable_rules = reachable_code(query_expression, self.solver)
+        solution = (
+            self.chase_class(self.solver, rules=reachable_rules)
+            .build_chase_solution()
+        )
+
+        solution_set = solution.get(functor.name, exp.Constant(set()))
+        self.solver.symbol_table = self.symbol_table.enclosing_scope
+        return solution_set, functor_orig
+
+    def reset_program(self):
+        self.symbol_table.clear()
+
+    def add_tuple_set(self, iterable, type_=Unknown, name=None):
+        if name is None:
+            name = str(uuid1())
+
+        if isinstance(type_, tuple):
+            type_ = Tuple[type_]
+        symbol = exp.Symbol[AbstractSet[type_]](name)
+        self.solver.add_extensional_predicate_from_tuples(
+            symbol, iterable, type_=type_
+        )
+
+        return Symbol(self, name)

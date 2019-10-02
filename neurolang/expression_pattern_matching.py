@@ -1,6 +1,6 @@
 """Module implementing expression pattern matching."""
 
-from collections import OrderedDict
+from collections import OrderedDict, namedtuple
 import copy
 from itertools import chain
 import inspect
@@ -23,6 +23,8 @@ __all__ = ['add_match', 'PatternMatcher']
 
 UndeterminedType = TypeVar('UndeterminedType')
 
+Pattern = namedtuple('Pattern', ['pattern', 'guard', 'action'])
+
 
 class NeuroLangPatternMatchingNoMatch(expressions.NeuroLangException):
     pass
@@ -37,7 +39,7 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
         overwriteable_properties = (
             '__module__', '__patterns__', '__doc__',
             'type', 'plural_type_name', '__no_explicit_type__',
-            '__generic_class__',
+            '__generic_class__', '__parameterized__', '__entry_point__'
         )
 
         cls.__check_bases__(name, bases, classdict, overwriteable_properties)
@@ -59,13 +61,24 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
     @staticmethod
     def __check_bases__(name, bases, classdict, overwriteable_properties):
         for base in bases:
-            repeated_methods = set(dir(base)).intersection(classdict)
-            repeated_methods.difference_update(overwriteable_properties)
-            if (
-                '__init__' in repeated_methods and
-                getattr(base, '__init__') is object.__init__
-            ):
-                repeated_methods.remove('__init__')
+            repeated_methods = []
+
+            for k, v in classdict.items():
+                base_v = getattr(base, k, None)
+                if (
+                    base_v is not None and
+                    k is not base_v and
+                    k not in overwriteable_properties and
+                    (
+                        hasattr(v, 'pattern') and
+                        (
+                            v.guard != base_v.guard or
+                            v.pattern != base_v.pattern
+                        )
+                    )
+                ):
+                    repeated_methods.append(k)
+
             if len(repeated_methods) > 1:
                 warn_message = (
                     f"Warning in class {name} "
@@ -107,6 +120,7 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
             needs_replacement = False
 
         patterns = []
+        __entry_point__ = None
         for v in classdict.values():
             if callable(v) and hasattr(v, 'pattern') and hasattr(v, 'guard'):
                 pattern = getattr(v, 'pattern')
@@ -115,9 +129,14 @@ class PatternMatchingMetaClass(expressions.ParametricTypeClassMeta):
                         pattern, src_type, dst_type
                     )
                 patterns.append(
-                    (pattern, getattr(v, 'guard'), v)
+                    Pattern(pattern, getattr(v, 'guard'), v)
                 )
+                if hasattr(v, 'entry_point') and v.entry_point:
+                    __entry_point__ = patterns[-1]
+
         classdict['__patterns__'] = patterns
+        classdict['__entry_point__'] = __entry_point__
+
         return src_type, dst_type, needs_replacement
 
     @staticmethod
@@ -210,6 +229,25 @@ def add_match(pattern, guard=None):
         f.guard = guard
         return f
     return bind_match
+
+
+def add_entry_point_match(pattern, guard=None):
+    """Decorate by adding patterns to a :class:`PatternMatcher` class.
+
+    Should be used as
+    `@add_match(PATTERN, GUARD)` to turn the decorated method, receiving
+    an instance of :class:`Expression` into a matching case. See
+    :py:meth:`PatternMatcher.pattern_match` for more details on patterns.
+
+    Additionally, this decorator sets the entry point which should be the
+    first match for specific walkers.
+    """
+    def bind_entry_point_match(f):
+        f.pattern = pattern
+        f.guard = guard
+        f.entry_point = True
+        return f
+    return bind_entry_point_match
 
 
 class PatternMatcher(metaclass=PatternMatchingMetaClass):

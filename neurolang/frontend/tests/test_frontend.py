@@ -1,24 +1,87 @@
-import pytest
-import numpy as np
-from neurolang import frontend
-from typing import AbstractSet, Tuple
-from ..query_resolution_expressions import Symbol
-from ...regions import Region, ExplicitVBR, SphericalVolume
+from typing import AbstractSet, Callable, Tuple
 from unittest.mock import patch
 
+import numpy as np
+import pytest
 
-def test_new_symbol():
-    neurolang = frontend.RegionFrontend()
+from neurolang import frontend
+from neurolang.frontend import query_resolution
+
+from ... import expressions as exp
+from ...datalog import DatalogProgram, Fact, Implication
+from ...expression_walker import ExpressionBasicEvaluator
+from ...regions import ExplicitVBR, Region, SphericalVolume
+from ...type_system import Unknown
+from .. import query_resolution_expressions as qre
+from ..query_resolution_expressions import Symbol
+
+
+def test_symbol_management():
+    class Solver(
+        DatalogProgram,
+        ExpressionBasicEvaluator
+    ):
+        pass
+
+    neurolang = query_resolution.QueryBuilderBase(Solver())
 
     sym = neurolang.new_symbol(int)
     assert sym.expression.type is int
 
-    sym_ = neurolang.new_symbol((float, int))
+    sym_ = neurolang.new_symbol(type_=(float, int))
     assert sym_.expression.type is Tuple[float, int]
     assert sym.expression.name != sym_.expression.name
 
-    sym = neurolang.new_symbol(int, name='a')
-    assert sym.expression.name == 'a'
+    a = neurolang.new_symbol(int, name='a')
+    assert a.expression.name == 'a'
+
+    b = neurolang.add_symbol(1, name='b')
+    assert 'b' in neurolang.symbols
+    assert b.value == 1
+    assert b.type is int
+    assert neurolang.symbols.b == b
+
+    with pytest.raises(AttributeError):
+        assert neurolang.symbols.c
+
+    @neurolang.add_symbol
+    def id(x: int)->int:
+        return x
+
+    assert 'id' in neurolang.symbols
+    assert id == neurolang.symbols.id
+    assert id == neurolang.symbols['id']
+    assert id.type == Callable[[int], int]
+
+
+def test_symbol_environment():
+    class Solver(
+        DatalogProgram,
+        ExpressionBasicEvaluator
+    ):
+        pass
+
+    neurolang = query_resolution.QueryBuilderBase(Solver())
+
+    b = neurolang.add_symbol(1, name='b')
+    neurolang.symbols._dynamic_mode = True
+    assert 'c' not in neurolang.symbols
+    c = neurolang.symbols.c
+    assert c.type is Unknown
+    assert c.expression.name == 'c'
+    del neurolang.symbols.b
+    assert b not in neurolang.symbols
+    neurolang.symbols._dynamic_mode = False
+
+    with neurolang.environment as e:
+        assert 'c' not in e
+        c = e.c
+        assert c.type is Unknown
+        assert c.expression.name == 'c'
+
+        e.d = 5
+        assert e.d.value == 5
+        assert e.d.type is int
 
 
 def test_add_set():
@@ -41,6 +104,25 @@ def test_add_set():
 
     exp = neurolang.symbols.isin(next(iter(s)), s)
     assert exp.do().value is True
+
+
+def test_add_set_neurolangdl():
+    neurolang = frontend.NeurolangDL()
+
+    s = neurolang.add_tuple_set(range(10), int)
+    res = neurolang[s]
+
+    assert s.type is AbstractSet[int]
+    assert res.type is AbstractSet[int]
+    assert res.value == frozenset((i,) for i in range(10))
+
+    v = frozenset(zip(('a', 'b', 'c'), range(3)))
+    s = neurolang.add_tuple_set(v, (str, int))
+    res = neurolang[s]
+
+    assert s.type is AbstractSet[Tuple[str, int]]
+    assert res.type is AbstractSet[Tuple[str, int]]
+    assert res.value == v
 
 
 def test_add_regions_and_query():
@@ -212,6 +294,65 @@ def test_load_spherical_volume_datalog():
     )
 
 
+def test_neurolang_dl_query():
+    neurolang = frontend.NeurolangDL()
+    r = neurolang.new_symbol(name='r')
+    x = neurolang.new_symbol(name='x')
+    y = neurolang.new_symbol(name='y')
+    z = neurolang.new_symbol(name='z')
+
+    dataset = {(i, i * 2) for i in range(10)}
+    q = neurolang.add_tuple_set(dataset, name='q')
+    sol = neurolang.query((x, y), q(x, y))
+    assert sol == dataset
+
+    sol = neurolang.query(tuple(), q(x, x))
+    assert sol
+    assert neurolang.query(q(x, x))
+
+    sol = neurolang.query(tuple(), q(100, x))
+    assert not sol
+    assert not neurolang.query(q(100, x))
+
+    sol = neurolang.query((x,), q(x, y) & q(y, z))
+    res = set((x,) for x in range(5))
+    assert sol == res
+
+    r[x, y] = q(x, y)
+    r[x, z] = r[x, y] & q(y, z)
+    sol = neurolang.query((y,), r(1, y))
+    assert sol == set((x,) for x in (2, 4, 8, 16))
+
+
+def test_neurolang_dl_aggregation():
+    neurolang = frontend.NeurolangDL()
+    q = neurolang.new_symbol(name='q')
+    p = neurolang.new_symbol(name='p')
+    r = neurolang.new_symbol(name='r')
+    x = neurolang.new_symbol(name='x')
+    y = neurolang.new_symbol(name='y')
+
+    @neurolang.add_symbol
+    def sum_(x):
+        return sum(x)
+
+    for i in range(10):
+        q[i % 2, i] = True
+
+    p[x, sum_(y)] = q[x, y]
+
+    sol = neurolang.query(r(x, y), p(x, y))
+
+    res_q = {
+        (0, 2 + 4 + 8),
+        (1, 1 + 5 + 9)
+    }
+
+    assert len(sol) == 2
+    assert sol[r] == res_q
+    assert sol[p] == res_q
+
+
 def test_multiple_symbols_query():
     neurolang = frontend.RegionFrontend()
     r1 = ExplicitVBR(np.array([[0, 0, 5], [1, 1, 10]]), np.eye(4))
@@ -309,3 +450,35 @@ def test_neurosynth_region(mock_ns_regions):
 
     assert res.type is AbstractSet[Tuple[ExplicitVBR]]
     assert res.value == frozenset((t,) for t in mock_ns_regions.return_value)
+
+
+def test_translate_expression_to_fronted_expression():
+    qr = frontend.NeurolangDL()
+    tr = qre.TranslateExpressionToFrontEndExpression(qr)
+
+    assert tr.walk(exp.Constant(1)) == 1
+
+    symbol_exp = exp.Symbol('a')
+    symbol_fe = tr.walk(symbol_exp)
+    assert symbol_fe.expression == symbol_exp
+    assert symbol_fe.query_builder == tr.query_builder
+
+    fa_exp = symbol_exp(exp.Constant(1))
+    fa_fe = symbol_fe(1)
+    fa_fe_tr = tr.walk(fa_exp)
+    assert fa_fe_tr.expression == fa_exp
+    assert fa_fe_tr == fa_fe
+
+    fact_exp = Fact(fa_exp)
+    fact_fe = tr.walk(fact_exp)
+    assert fact_fe.expression == fact_exp
+    assert fact_fe.consequent == fa_fe
+
+    imp_exp = Implication(
+        symbol_exp(exp.Symbol('x')),
+        exp.Symbol('b')(exp.Symbol('x'))
+    )
+    imp_fe = tr.walk(imp_exp)
+    assert imp_fe.expression == imp_exp
+    assert imp_fe.consequent == tr.walk(imp_exp.consequent)
+    assert imp_fe.antecedent == tr.walk(imp_exp.antecedent)

@@ -4,12 +4,9 @@ Magic Sets [1] rewriting implementation for Datalog.
 [1] F. Bancilhon, D. Maier, Y. Sagiv, J. D. Ullman, in ACM PODS ’86, pp. 1–15.
 '''
 
-
-from .solver_datalog_naive import (
-    Implication, Symbol,
-    ExpressionBlock, Constant,
-    extract_datalog_predicates,
-)
+from ..expressions import Constant, Symbol
+from . import expression_processing, extract_datalog_predicates
+from .expressions import Disjunction, Implication
 
 
 class SymbolAdorned(Symbol):
@@ -49,7 +46,7 @@ class SymbolAdorned(Symbol):
 def magic_rewrite(query, datalog):
     adorned_code = reachable_adorned_code(query, datalog)
     # assume that the query rule is the first
-    adorned_query = adorned_code.expressions[0]
+    adorned_query = adorned_code.formulas[0]
     goal = adorned_query.consequent.functor
 
     idb = datalog.intensional_database()
@@ -58,7 +55,7 @@ def magic_rewrite(query, datalog):
     modified_rules = create_modified_rules(adorned_code, edb)
     complementary_rules = create_complementary_rules(adorned_code, idb)
 
-    return goal, ExpressionBlock(
+    return goal, Disjunction(
         magic_rules +
         modified_rules +
         complementary_rules
@@ -67,7 +64,7 @@ def magic_rewrite(query, datalog):
 
 def create_complementary_rules(adorned_code, idb):
     complementary_rules = []
-    for i, rule in enumerate(adorned_code.expressions):
+    for i, rule in enumerate(adorned_code.formulas):
         for predicate in extract_datalog_predicates(rule.antecedent):
             if predicate.functor.name in idb:
                 magic_consequent = magic_predicate(predicate)
@@ -81,7 +78,7 @@ def create_complementary_rules(adorned_code, idb):
 
 def create_magic_rules(adorned_code, idb, edb):
     magic_rules = []
-    for i, rule in enumerate(adorned_code.expressions):
+    for i, rule in enumerate(adorned_code.formulas):
         consequent = rule.consequent
         new_consequent = magic_predicate(consequent)
         if len(new_consequent.args) == 0:
@@ -137,21 +134,8 @@ def create_magic_rules_create_rules(new_antecedent, predicates, idb, i):
 
 def create_modified_rules(adorned_code, edb):
     modified_rules = []
-    for i, rule in enumerate(adorned_code.expressions):
-        new_antecedent = []
-        for predicate in extract_datalog_predicates(rule.antecedent):
-            functor = predicate.functor
-            if functor.name in edb:
-                new_antecedent.append(
-                    Symbol(functor.name)(*predicate.args)
-                )
-            else:
-                m_p = magic_predicate(predicate, i)
-                update = [m_p, predicate]
-                if functor == rule.consequent.functor:
-                    new_antecedent = update + new_antecedent
-                else:
-                    new_antecedent += update
+    for i, rule in enumerate(adorned_code.formulas):
+        new_antecedent = obtain_new_antecedent(rule, edb, i)
 
         if len(new_antecedent) > 0:
             new_antecedent_ = new_antecedent[0]
@@ -163,6 +147,24 @@ def create_modified_rules(adorned_code, edb):
             ))
 
     return modified_rules
+
+
+def obtain_new_antecedent(rule, edb, rule_number):
+    new_antecedent = []
+    for predicate in extract_datalog_predicates(rule.antecedent):
+        functor = predicate.functor
+        if functor.name in edb:
+            new_antecedent.append(
+                Symbol(functor.name)(*predicate.args)
+            )
+        else:
+            m_p = magic_predicate(predicate, rule_number)
+            update = [m_p, predicate]
+            if functor == rule.consequent.functor:
+                new_antecedent = update + new_antecedent
+            else:
+                new_antecedent += update
+    return new_antecedent
 
 
 def magic_predicate(predicate, i=None):
@@ -186,26 +188,11 @@ def magic_predicate(predicate, i=None):
 
 def reachable_adorned_code(query, datalog):
     adorned_code = adorn_code(query, datalog)
-    reachable_code = []
     adorned_datalog = type(datalog)()
     adorned_datalog.walk(adorned_code)
-    adorned_idb = adorned_datalog.intensional_database()
     # assume that the query rule is the first
-    adorned_query = adorned_code.expressions[0]
-    to_reach = [adorned_query.consequent.functor]
-    reached = set()
-    while to_reach:
-        p = to_reach.pop()
-        reached.add(p)
-        rules = adorned_idb[p]
-        for rule in rules.expressions:
-            reachable_code.append(rule)
-            for predicate in extract_datalog_predicates(rule.antecedent):
-                functor = predicate.functor
-                if functor not in reached and functor in adorned_idb:
-                    to_reach.append(functor)
-
-    return ExpressionBlock(reachable_code)
+    adorned_query = adorned_code.formulas[0]
+    return expression_processing.reachable_code(adorned_query, adorned_datalog)
 
 
 def adorn_code(query, datalog):
@@ -218,7 +205,7 @@ def adorn_code(query, datalog):
 
     Returns
     -------
-    ExpressionBlock
+    Disjunction
 
         adorned code where the query rule is the first expression
         in the block.
@@ -251,7 +238,7 @@ def adorn_code(query, datalog):
         if rules is None:
             continue
 
-        for rule in rules.expressions:
+        for rule in rules.formulas:
             adorned_antecedent, to_adorn = adorn_antecedent(
                 rule, adornment,
                 edb, rewritten_rules
@@ -263,7 +250,7 @@ def adorn_code(query, datalog):
             )
             rewritten_rules.add(consequent.functor)
 
-    return ExpressionBlock(rewritten_program)
+    return Disjunction(rewritten_program)
 
 
 def adorn_antecedent(

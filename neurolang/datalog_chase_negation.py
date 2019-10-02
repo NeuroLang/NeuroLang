@@ -1,24 +1,17 @@
 from itertools import chain, tee
-from operator import invert
 
-from .expressions import Constant
+from .datalog import Negation
+from .datalog.expression_processing import extract_datalog_predicates
+from .datalog.chase import (ChaseGeneral, ChaseSemiNaive, ChaseMGUMixin,
+                            ChaseRelationalAlgebraPlusCeriMixin)
 from .exceptions import NeuroLangException
-from . import solver_datalog_naive as sdb
-from .unification import (
-    apply_substitution_arguments, compose_substitutions,
-    most_general_unifier_arguments
-)
-from .datalog_chase import (
-    DatalogChaseGeneral,
-    DatalogChaseRelationalAlgebraMixin,
-    DatalogChaseMGUMixin,
-)
-from .relational_algebra import (
-    RelationalAlgebraOptimiser
-)
+from .expressions import Constant
+from .unification import (apply_substitution_arguments, compose_substitutions,
+                          most_general_unifier_arguments)
+from .utils import OrderedSet
 
 
-class DatalogChaseNegationGeneral(DatalogChaseGeneral):
+class DatalogChaseNegationGeneral(ChaseGeneral, ChaseSemiNaive):
     def chase_step(self, instance, rule, restriction_instance=None):
         if restriction_instance is None:
             restriction_instance = set()
@@ -63,11 +56,10 @@ class DatalogChaseNegationGeneral(DatalogChaseGeneral):
     def get_args_to_project(self, rule, builtin_predicates_):
         args_to_project = self.extract_variable_arguments(rule.consequent)
         for predicate, _ in builtin_predicates_:
-            args_to_project += self.extract_variable_arguments(predicate)
-        new_args_to_project = tuple()
-        for i, a in enumerate(args_to_project):
-            if a not in args_to_project[:i]:
-                new_args_to_project += (a,)
+            args_to_project |= self.extract_variable_arguments(predicate)
+        new_args_to_project = OrderedSet()
+        for a in args_to_project:
+            new_args_to_project.add(a)
         args_to_project = new_args_to_project
         return args_to_project
 
@@ -111,47 +103,50 @@ class DatalogChaseNegationGeneral(DatalogChaseGeneral):
         if restriction_instance is None:
             restriction_instance = set()
 
-        head_functor = rule.consequent.functor
-        rule_predicates = sdb.extract_datalog_predicates(rule.antecedent)
+        rule_predicates = extract_datalog_predicates(rule.antecedent)
         restricted_predicates = []
         nonrestricted_predicates = []
         negative_predicates = []
         negative_builtin_predicates = []
         builtin_predicates = []
-        recursive_calls = 0
         for predicate in rule_predicates:
-            functor = predicate.functor
 
-            recursive_calls = self.check_non_linear(
-                head_functor, functor, recursive_calls
-            )
-
-            if functor in restriction_instance:
-                restricted_predicates.append(
-                    (predicate, restriction_instance[functor].value)
-                )
-            elif functor in instance:
-                nonrestricted_predicates.append(
-                    (predicate, instance[functor].value)
-                )
-            elif functor in self.builtins:
-                builtin_predicates.append((predicate, self.builtins[functor]))
-            elif (
-                functor == invert and
-                predicate.args[0].functor in self.builtins
-            ):
-                negative_builtin_predicates.append((
-                    predicate.args[0], self.builtins[predicate.args[0].functor]
-                ))
-            elif functor == invert:
-                negative_predicates.append((
-                    predicate.args[0],
-                    instance[predicate.args[0].functor].value
-                ))
-            elif isinstance(functor, Constant):
-                builtin_predicates.append((predicate, functor))
+            if isinstance(predicate, Negation):
+                functor = predicate.formula.functor
+                if functor in self.builtins:
+                    negative_builtin_predicates.append((
+                        predicate.formula,
+                        self.builtins[functor]
+                    ))
+                elif isinstance(functor, Constant):
+                    negative_builtin_predicates.append((
+                        predicate.formula,
+                        functor
+                    ))
+                else:
+                    negative_predicates.append((
+                        predicate.formula,
+                        instance[functor].value
+                    ))
             else:
-                return ([], [], [], [], [])
+                functor = predicate.functor
+
+                if functor in restriction_instance:
+                    restricted_predicates.append(
+                        (predicate, restriction_instance[functor].value)
+                    )
+                elif functor in instance:
+                    nonrestricted_predicates.append(
+                        (predicate, instance[functor].value)
+                    )
+                elif functor in self.builtins:
+                    builtin_predicates.append(
+                        (predicate, self.builtins[functor])
+                    )
+                elif isinstance(functor, Constant):
+                    builtin_predicates.append((predicate, functor))
+                else:
+                    return ([], [], [], [], [])
 
         return (
             restricted_predicates,
@@ -182,7 +177,7 @@ class DatalogChaseNegationGeneral(DatalogChaseGeneral):
 
 
 class DatalogChaseNegationRelationalAlgebraMixin(
-    DatalogChaseRelationalAlgebraMixin
+    ChaseRelationalAlgebraPlusCeriMixin
 ):
     def obtain_negative_substitutions(
         self, args_to_project, rule_predicates_iterator, substitutions
@@ -190,7 +185,7 @@ class DatalogChaseNegationRelationalAlgebraMixin(
         raise NotImplementedError()
 
 
-class DatalogChaseNegationMGUMixin(DatalogChaseMGUMixin):
+class DatalogChaseNegationMGUMixin(ChaseMGUMixin):
     @staticmethod
     def obtain_negative_substitutions(
         args_to_project, negative_predicates, substitutions

@@ -2,13 +2,13 @@ import pytest
 
 from .. import expressions, exceptions
 from .. import solver_datalog_negation as sdn
-from .. import solver_datalog_extensional_db
 from .. import expression_walker as ew
 from ..datalog_chase_negation import DatalogChaseNegation
-from ..solver_datalog_naive import (
+from ..datalog import (
     Implication,
     Fact,
 )
+from ..datalog.expressions import TranslateToLogic
 
 C_ = expressions.Constant
 S_ = expressions.Symbol
@@ -20,8 +20,8 @@ Eb_ = expressions.ExpressionBlock
 
 
 class Datalog(
+    TranslateToLogic,
     sdn.DatalogBasicNegation,
-    solver_datalog_extensional_db.ExtensionalDatabaseSolver,
     ew.ExpressionBasicEvaluator
 ):
     def function_gt(self, x: int, y: int) -> bool:

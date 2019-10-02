@@ -36,18 +36,6 @@ __all__ = [
 ]
 
 
-# import numpy as np
-# from .due import due, Doi
-
-# __all__ = []
-
-
-# due.cite(Doi("10.1167/13.9.30"),
-#         description="Template project for small scientific Python projects",
-#         tags=["reference-implementation"],
-#         path='neurolang')
-
-
 grammar_EBNF = r'''
     @@whitespace :: /[\s\t\n\r\\ ]/
 
@@ -82,7 +70,7 @@ grammar_EBNF = r'''
     value = value:function_application
           | value:projection
           | value:dotted_identifier
-          | value:literal
+          | value:formula
           | "(" value:sum ")";
 
     function_application = identifier:dotted_identifier
@@ -92,7 +80,7 @@ grammar_EBNF = r'''
 
     projection = identifier:dotted_identifier"["item:integer"]";
 
-    literal = string | number | tuple;
+    formula = string | number | tuple;
 
     tuple = '(' element+:sum ({',' element:sum}+ | ',') ')';
 

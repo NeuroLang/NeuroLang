@@ -22,7 +22,7 @@ from .typed_symbol_table import TypedSymbolTable
 __all__ = [
     'Symbol', 'FunctionApplication', 'Statement',
     'Projection', 'ExistentialPredicate', 'UniversalPredicate',
-    'Unknown', 'get_type_args', 'TypedSymbolTable'
+    'Unknown', 'get_type_args', 'TypedSymbolTable', 'TypedSymbolTableMixin'
 ]
 
 
@@ -393,7 +393,7 @@ class Constant(Expression):
         self.verify_type = verify_type
 
         if callable(self.value):
-            self.__init_callable_literal__(value, auto_infer_type)
+            self.__init_callable_formula__(value, auto_infer_type)
         elif auto_infer_type and self.type is Unknown:
             self.__auto_infer_type__()
         if not self.__verify_type__(self.value, self.type):
@@ -405,7 +405,7 @@ class Constant(Expression):
         if auto_infer_type and self.type is not Unknown:
             self.change_type(self.type)
 
-    def __init_callable_literal__(self, value, auto_infer_type):
+    def __init_callable_formula__(self, value, auto_infer_type):
         self.__wrapped__ = value
         for attr in WRAPPER_ASSIGNMENTS:
             if hasattr(value, attr):
@@ -430,7 +430,10 @@ class Constant(Expression):
                     a = Constant(a)
                 self._symbols |= a._symbols
                 new_content.append(a)
-            self.value = type(self.value)(new_content)
+            try:
+                self.value = type(self.value)(new_content)
+            except TypeError:
+                self.value = type(self.value)(*new_content)
 
     def __verify_type__(self, value, type_):
         return (
@@ -631,7 +634,7 @@ class ExistentialPredicate(Quantifier):
                 'A symbol should be provided for the '
                 'existential quantifier expression'
             )
-        if not isinstance(body, (FunctionApplication, Quantifier)):
+        if not isinstance(body, Definition):
             raise NeuroLangException(
                 'A function application over '
                 'predicates should be associated to the quantifier'
@@ -662,7 +665,7 @@ class UniversalPredicate(Quantifier):
                 'A symbol should be provided for the '
                 'universal quantifier expression'
             )
-        if not isinstance(body, (FunctionApplication, Quantifier)):
+        if not isinstance(body, Definition):
             raise NeuroLangException(
                 'A function application over '
                 'predicates should be associated to the quantifier'
@@ -793,3 +796,42 @@ for operator in [
 
     for c in (Constant, Symbol, FunctionApplication, Statement, Query):
         setattr(c, name, rop_bind(operator))
+
+
+class TypedSymbolTableMixin:
+    """Add capabilities to deal with a symbol table.
+    """
+    def __init__(self, symbol_table=None):
+        if symbol_table is None:
+            symbol_table = TypedSymbolTable()
+        self.symbol_table = symbol_table
+        self.simplify_mode = False
+        self.add_functions_to_symbol_table()
+
+    @property
+    def included_functions(self):
+        function_constants = dict()
+        for attribute in dir(self):
+            if attribute.startswith('function_'):
+                c = Constant(getattr(self, attribute))
+                function_constants[attribute[len('function_'):]] = c
+        return function_constants
+
+    def add_functions_to_symbol_table(self):
+        keyword_symbol_table = TypedSymbolTable()
+        for k, v in self.included_functions.items():
+            keyword_symbol_table[Symbol[v.type](k)] = v
+        keyword_symbol_table.set_readonly(True)
+        top_scope = self.symbol_table
+        while top_scope.enclosing_scope is not None:
+            top_scope = top_scope.enclosing_scope
+        top_scope.enclosing_scope = keyword_symbol_table
+
+    def push_scope(self):
+        self.symbol_table = self.symbol_table.create_scope()
+
+    def pop_scope(self):
+        es = self.symbol_table.enclosing_scope
+        if es is None:
+            raise NeuroLangException('No enclosing scope')
+        self.symbol_table = self.symbol_table.enclosing_scope

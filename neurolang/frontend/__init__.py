@@ -1,21 +1,24 @@
-from .query_resolution import QueryBuilderFirstOrder, QueryBuilderDatalog
-from ..expression_walker import (
-    add_match, Symbol, FunctionApplication, Constant
-)
-from ..solver import FirstOrderLogicSolver
-from ..solver_datalog_extensional_db import ExtensionalDatabaseSolver
-from ..region_solver import RegionSolver
-from ..regions import ExplicitVBR
-from ..utils.data_manipulation import parse_region_label_map
-from .. import neurolang as nl
-from ..solver_datalog_naive import DatalogBasic
-from ..expression_walker import ExpressionBasicEvaluator
+from typing import AbstractSet, Any, Callable
 
-from typing import Any, AbstractSet, Callable
 import numpy as np
 
+from .. import neurolang as nl
+from ..datalog import DatalogProgram
+from ..datalog.aggregation import Chase, DatalogWithAggregationMixin
+from ..expression_walker import (Constant, ExpressionBasicEvaluator,
+                                 FunctionApplication, Symbol, add_match)
+from ..region_solver import RegionSolver
+from ..regions import ExplicitVBR
+from ..solver import FirstOrderLogicSolver
+from ..solver_datalog_extensional_db import ExtensionalDatabaseSolver
+from ..utils.data_manipulation import parse_region_label_map
+from .query_resolution import QueryBuilderFirstOrder
+from .query_resolution_datalog import QueryBuilderDatalog
 
-__all__ = ['RegionFrontend', 'QueryBuilderDatalog', 'QueryBuilderFirstOrder']
+__all__ = [
+    'NeurolangDL', 'RegionFrontend',
+    'QueryBuilderDatalog', 'QueryBuilderFirstOrder'
+]
 
 
 def function_isin(element: Any, set_: AbstractSet) -> bool:
@@ -73,12 +76,13 @@ class NeurolangDL(QueryBuilderDatalog):
     def __init__(self, solver=None):
         if solver is None:
             solver = RegionFrontendDatalogSolver()
-        super().__init__(solver)
+        super().__init__(solver, chase_class=Chase)
 
 
 class RegionFrontendDatalogSolver(
         RegionSolver,
-        DatalogBasic,
+        DatalogWithAggregationMixin,
+        DatalogProgram,
         ExpressionBasicEvaluator
 ):
     pass
