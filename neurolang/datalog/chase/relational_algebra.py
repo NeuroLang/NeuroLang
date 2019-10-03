@@ -184,15 +184,24 @@ class ChaseNamedRelationalAlgebraMixin:
                 arg = fresh
             new_args += (arg,)
         if len(new_equalities) > 0:
-            consequent = rule.consequent.functor(*new_args)
-            if isinstance(rule.antecedent, Conjunction):
-                antecedent_formulas = rule.antecedent.formulas
-            else:
-                antecedent_formulas = (rule.antecedent,)
-            antecedent = Conjunction(
-                antecedent_formulas + tuple(new_equalities)
+            rule = self.rewrite_rule_consequent_constants_to_equalities(
+                rule, new_args, new_equalities
             )
-            rule = Implication(consequent, antecedent)
+        return rule
+
+    @staticmethod
+    def rewrite_rule_consequent_constants_to_equalities(
+        rule, new_args, new_equalities
+    ):
+        consequent = rule.consequent.functor(*new_args)
+        if isinstance(rule.antecedent, Conjunction):
+            antecedent_formulas = rule.antecedent.formulas
+        else:
+            antecedent_formulas = (rule.antecedent,)
+        antecedent = Conjunction(
+            antecedent_formulas + tuple(new_equalities)
+        )
+        rule = Implication(consequent, antecedent)
         return rule
 
     def eliminate_already_computed(self, consequent, instance, substitutions):
