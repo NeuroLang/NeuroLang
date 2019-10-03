@@ -47,13 +47,14 @@ class RelationalAlgebraFrozenSet(Set):
 
     @staticmethod
     def _renew_index(container, drop_duplicates=True):
-        if len(container) > 0 and len(container.columns) > 0:
-            RelationalAlgebraFrozenSet.refresh_index(container)
+        if len(container) == 0 or len(container.columns) == 0:
+            return container
 
-            if drop_duplicates:
-                duplicated = container.index.duplicated()
-                if duplicated.any():
-                    container = container.loc[~duplicated].dropna()
+        RelationalAlgebraFrozenSet.refresh_index(container)
+        if drop_duplicates:
+            duplicated = container.index.duplicated()
+            if duplicated.any():
+                container = container.loc[~duplicated].dropna()
 
         return container
 
