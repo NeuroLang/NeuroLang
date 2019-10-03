@@ -194,7 +194,7 @@ for term in selected_terms:
 
 interpretations = [
     build_interpretation(study_id) for study_id in selected_study_ids
-] + build_virtual_interpretations()
+] #+ build_virtual_interpretations()
 
 estimations = full_observability_parameter_estimation(program, interpretations)
 
