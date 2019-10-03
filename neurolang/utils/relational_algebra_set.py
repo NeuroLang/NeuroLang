@@ -47,17 +47,24 @@ class RelationalAlgebraFrozenSet(Set):
 
     @staticmethod
     def _renew_index(container, drop_duplicates=True):
-        container.set_index(
-            container.apply(lambda x: hash(tuple(x)), axis=1),
-            inplace=True
-        )
+        if len(container) == 0 or len(container.columns) == 0:
+            return container
 
+        RelationalAlgebraFrozenSet.refresh_index(container)
         if drop_duplicates:
             duplicated = container.index.duplicated()
             if duplicated.any():
                 container = container.loc[~duplicated].dropna()
 
         return container
+
+    @staticmethod
+    def refresh_index(container):
+        new_indices = pd.Index(
+            hash(t) for t in
+            container.itertuples(index=False, name=None)
+        )
+        container.set_index(new_indices, inplace=True)
 
     @property
     def arity(self):
@@ -343,6 +350,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
 
     def to_unnamed(self):
         container = self._container[list(self.columns)]
+        container.columns = range(len(container.columns))
         output = RelationalAlgebraFrozenSet()
         output._container = container
         return output

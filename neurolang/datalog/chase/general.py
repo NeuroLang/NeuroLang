@@ -104,6 +104,8 @@ class ChaseGeneral():
     def evaluate_builtins(self, builtin_predicates, substitutions):
         new_substitutions = []
         predicates = [p for p, _ in builtin_predicates]
+        if len(predicates) == 0:
+            return substitutions
         for substitution in substitutions:
             new_substitution = self.evaluate_builtins_predicates(
                 predicates, substitution
