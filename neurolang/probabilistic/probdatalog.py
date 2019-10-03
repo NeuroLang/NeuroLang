@@ -334,5 +334,4 @@ def full_observability_parameter_estimation(program, interpretations):
                 if ground_fact in interpretation:
                     count += 1
         estimations[parameter] = count / normaliser
-        print(parameter, count, normaliser)
     return estimations

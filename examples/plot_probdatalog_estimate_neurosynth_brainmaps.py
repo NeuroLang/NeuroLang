@@ -14,6 +14,7 @@ term in the Neurosynth [1]_ database.
 import os
 from collections import defaultdict
 import typing
+import itertools
 
 import neurosynth as ns
 from neurosynth.base import imageutils
@@ -23,7 +24,9 @@ import numpy as np
 
 import neurolang as nl
 from neurolang.expressions import Symbol, Constant, ExpressionBlock
-from neurolang.expression_walker import ExpressionBasicEvaluator
+from neurolang.expression_walker import (
+    ExpressionBasicEvaluator, ReplaceSymbolsByConstants
+)
 from neurolang.datalog.expressions import Implication, Fact, Conjunction
 from neurolang.datalog.instance import SetInstance
 from neurolang.probabilistic.probdatalog import (
@@ -165,48 +168,48 @@ class ProbDatalog(ProbDatalogProgram, ExpressionBasicEvaluator):
     pass
 
 
-program = ProbDatalog()
-for term in selected_terms:
-    program.walk(Fact(Term(Constant[str](term))))
-for voxel_id in selected_voxel_ids:
-    program.walk(Fact(Voxel(Constant[int](voxel_id))))
-program.walk(
+term_facts = [Fact(Term(Constant(term))) for term in selected_terms]
+voxel_facts = [Fact(Voxel(Constant(vid))) for vid in selected_voxel_ids]
+extensional_database = term_facts + voxel_facts
+intensional_database = [
     Implication(
         DoesActivate(v, t), Conjunction([Voxel(v),
                                          Term(t),
                                          Activation(v, t)])
-    )
-)
-program.walk(
+    ),
     Implication(DoesAppearInStudy(t), Conjunction([Term(t),
-                                                   TermInStudy(t)]))
+                                                   TermInStudy(t)])),
+]
+voxel_term_probfacts = [
+    ProbFact(
+        Symbol(f'p_{voxel_id}_{term}'),
+        Activation(Constant(voxel_id), Constant(term))
+    ) for voxel_id, term in
+    itertools.product(selected_voxel_ids, selected_terms)
+]
+term_probfacts = [
+    ProbFact(Symbol(f'p_{term}'), TermInStudy(Constant(term)))
+    for term in selected_terms
+]
+probabilistic_database = voxel_term_probfacts + term_probfacts
+
+program_code = ExpressionBlock(
+    extensional_database + intensional_database + probabilistic_database
 )
 
-for term in selected_terms:
-    program.walk(
-        ProbFact(Symbol(f'p_{term}'), TermInStudy(Constant[str](term)))
-    )
-    for voxel_id in selected_voxel_ids:
-        parameter = Symbol(f'p_{term}_{voxel_id}')
-        atom = Activation(Constant[int](voxel_id), Constant[str](term))
-        probfact = ProbFact(parameter, atom)
-        program.walk(probfact)
+program = ProbDatalog()
+program.walk(program_code)
 
 interpretations = [
     build_interpretation(study_id) for study_id in selected_study_ids
-] #+ build_virtual_interpretations()
+]
 
 estimations = full_observability_parameter_estimation(program, interpretations)
 
-
-def count_voxel_term_in_interpretations(voxel_id, term):
-    tupl = (Constant[int](voxel_id), Constant[str](term))
-    count = sum(
-        tupl in interpretation.elements[Activation]
-        for interpretation in interpretations
-    )
-    return count
-
+grounded = ReplaceSymbolsByConstants({
+    parameter: Constant(estimation)
+    for parameter, estimation in estimations.items()
+}).walk(program_code)
 
 # compare estimations with neurosynth's meta analysis
 results = dict()
