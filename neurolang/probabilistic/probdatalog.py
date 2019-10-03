@@ -242,7 +242,7 @@ def get_antecedent_atom_matching_predicate(predicate, rule):
             raise NeuroLangException(f'No atom with predicate {predicate}')
 
 
-def get_function_application_variable_indices(fa):
+def get_fa_var_idxs(fa):
     return {i for i, arg in enumerate(fa.args) if isinstance(arg, Symbol)}
 
 
@@ -270,13 +270,10 @@ def get_possible_ground_substitutions(probfact, rule, interpretation):
     probfact_antecedent_atom = get_antecedent_atom_matching_predicate(
         predicate, rule
     )
-    probfact_variable_positions = get_function_application_variable_indices(
-        probfact.consequent
+    probfact_variable_positions = get_fa_var_idxs(probfact.consequent)
+    probfact_antecedent_variable_positions = get_fa_var_idxs(
+        probfact_antecedent_atom
     )
-    probfact_antecedent_variable_positions = \
-        get_function_application_variable_indices(
-            probfact_antecedent_atom
-        )
     matching_variable_positions = (
         probfact_variable_positions & probfact_antecedent_variable_positions
     )
@@ -337,4 +334,5 @@ def full_observability_parameter_estimation(program, interpretations):
                 if ground_fact in interpretation:
                     count += 1
         estimations[parameter] = count / normaliser
+        print(parameter, count, normaliser)
     return estimations

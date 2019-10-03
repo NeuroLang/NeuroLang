@@ -46,11 +46,26 @@ def get_dataset():
 dataset = get_dataset()
 
 selected_terms = {'memory', 'visual'}
+selected_voxel_ids = {
+    40558, 44484, 112166, 116221, 116314, 124573, 184775, 184872, 188711
+}
 per_term_study_ids = {
     t: set(dataset.feature_table.get_ids(features=[t], threshold=0.2))
     for t in selected_terms
 }
 selected_study_ids = list(set.union(*per_term_study_ids.values()))
+selected_study_indices = np.argwhere(
+    np.isin(np.array(dataset.image_table.ids), np.array(selected_study_ids))
+).flatten()
+per_term_study_indices = {
+    term: np.argwhere(
+        np.isin(
+            np.array(selected_study_ids),
+            np.array(list(per_term_study_ids[term]))
+        )
+    ).flatten()
+    for term in selected_terms
+}
 terms_per_study_id = {
     study_id:
     {term
@@ -59,22 +74,7 @@ terms_per_study_id = {
     for study_id in selected_study_ids
 }
 
-image_data = dataset.get_image_data(ids=selected_study_ids)
-
-selected_voxel_ids = set.union(
-    *[
-        set(
-            image_data[:,
-                       np.in1d(
-                           selected_study_ids, list(per_term_study_ids[term])
-                       )].mean(axis=1).argsort()[-5:][::-1]
-        ) for term in selected_terms
-    ]
-)
-
-selected_voxel_ids = set(
-    list(image_data.mean(axis=1).argsort()[-50:][::-1])[:5]
-)
+image_data = dataset.image_table.data
 
 Activation = Symbol('Activation')
 DoesActivate = Symbol('DoesActivate')
@@ -91,7 +91,8 @@ voxel_tuples = frozenset({(Constant[int](voxel_id), )
 
 
 def study_id_to_idx(study_id):
-    return np.where(np.in1d(selected_study_ids, study_id))[0][0]
+    return np.argwhere(np.array(dataset.image_table.ids) == study_id
+                       ).flatten()[0]
 
 
 def get_study_reported_voxel_ids(study_id):
@@ -197,15 +198,27 @@ interpretations = [
 
 estimations = full_observability_parameter_estimation(program, interpretations)
 
+
+def count_voxel_term_in_interpretations(voxel_id, term):
+    tupl = (Constant[int](voxel_id), Constant[str](term))
+    count = sum(
+        tupl in interpretation.elements[Activation]
+        for interpretation in interpretations
+    )
+    return count
+
+
 # compare estimations with neurosynth's meta analysis
 results = dict()
 for term in selected_terms:
-    import pdb
-    pdb.set_trace()
+    if term == 'memory':
+        import pdb
+        pdb.set_trace()
     ma = ns.meta.MetaAnalysis(
         dataset, list(per_term_study_ids[term]),
         list(set(selected_study_ids) - set(per_term_study_ids[term]))
     )
+    assert set(ma.selected_ids) == set(per_term_study_ids[term])
     results[term] = ma.images['pAgF']
 
 for term in selected_terms:
