@@ -1,7 +1,6 @@
 import uuid
 import itertools
 from collections import defaultdict
-import logging
 
 from ..expressions import (
     Expression, Constant, Symbol, FunctionApplication, ExpressionBlock
@@ -71,6 +70,22 @@ class ProbChoice(Implication):
         super().__init__(consequent, Constant[bool](True))
 
 
+def extract_antecedent_probabilistic_predicates(rule, probfact_predicates):
+    result = set()
+    if isinstance(rule.antecedent, FunctionApplication):
+        if rule.antecedent.functor in probfact_predicates:
+            result.add(rule.antecedent.functor)
+    elif isinstance(rule.antecedent, Conjunction):
+        result |= {
+            a.functor
+            for a in rule.antecedent.formulas
+            if a.functor in probfact_predicates
+        }
+    else:
+        raise NeuroLangException('Expected fa or conjunction as antecedent')
+    return result
+
+
 class ProbDatalogProgram(DatalogProgram):
     '''
     Datalog extended with probabilistic facts semantics from ProbLog.
@@ -109,15 +124,10 @@ class ProbDatalogProgram(DatalogProgram):
         prob_rules = defaultdict(set)
         for rule_disjunction in self.intensional_database().values():
             for rule in rule_disjunction.formulas:
-                if (
-                    isinstance(rule.antecedent, FunctionApplication) and
-                    rule.antecedent.functor in probabilistic_predicates
+                for predicate in extract_antecedent_probabilistic_predicates(
+                    rule, probabilistic_predicates
                 ):
-                    prob_rules[rule.antecedent.functor].add(rule)
-                elif isinstance(rule.antecedent, Conjunction):
-                    for atom in rule.antecedent.formulas:
-                        if atom.functor in probabilistic_predicates:
-                            prob_rules[atom.functor].add(rule)
+                    prob_rules[predicate].add(rule)
         return prob_rules
 
     def parametric_probfacts(self):
@@ -125,10 +135,12 @@ class ProbDatalogProgram(DatalogProgram):
         Probabilistic facts in the program whose probabilities are parameters.
         '''
         result = dict()
-        for predicate, block in self.probabilistic_database().items():
-            for probfact in block.expressions:
-                if isinstance(probfact.probability, Symbol):
-                    result[probfact.probability] = probfact
+        for block in self.probabilistic_database().values():
+            result.update({
+                probfact.probability: probfact
+                for probfact in block.expressions
+                if isinstance(probfact.probability, Symbol)
+            })
         return result
 
 
@@ -233,13 +245,21 @@ def get_antecedent_atom_matching_predicate(predicate, rule):
         if rule.antecedent.functor == predicate:
             return rule.antecedent
         else:
-            raise NeuroLangException(f'No atom with predicate {predicate}')
-    elif isinstance(rule.antecedent, Conjunction):
-        for formula in rule.antecedent.formulas:
-            if formula.functor == predicate:
-                return formula
-        else:
-            raise NeuroLangException(f'No atom with predicate {predicate}')
+            raise NeuroLangException(
+                'No atom in antecedent with predicate {predicate}'
+            )
+    else:
+        matching = set(
+            formula for formula in rule.antecedent.formulas
+            if formula.functor == predicate
+        )
+        if not matching:
+            raise NeuroLangException(
+                'No atom in antecedent with predicate {predicate}'
+            )
+        elif len(matching) > 1:
+            raise NeuroLangException('Several atoms matching predicate')
+        return next(iter(matching))
 
 
 def get_fa_var_idxs(fa):
@@ -255,7 +275,7 @@ def get_possible_ground_substitutions(probfact, rule, interpretation):
     This works under the following assumptions:
     (1) for each probabilistic fact p :: P(x_1, ..., x_n), there exists at
         least one rule in the program such that an atom P(y_1, ..., y_n) occurs
-        in its antecedent conjunction;
+        in its antecedent;
     (2) the antecedent conjunction of that rule also contains an atom Y_i(y_i)
         for each variable y_i in (y_1, ..., y_n), where Y_i is a unary
         extensional predicate that defines the domain (or the type) of the

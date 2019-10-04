@@ -62,7 +62,7 @@ def test_probchoice_sum_probs_gt_1():
 def test_probdatalog_program():
     pd = ProbDatalog()
 
-    block = ExpressionBlock((
+    code = ExpressionBlock((
         ProbFact(Constant[float](0.5), P(x)),
         Implication(Q(x),
                     P(x) & Z(x)),
@@ -70,7 +70,7 @@ def test_probdatalog_program():
         Fact(Z(b)),
     ))
 
-    pd.walk(block)
+    pd.walk(code)
 
     assert pd.extensional_database() == {
         Z: C_(frozenset({C_((a, )), C_((b, ))})),
@@ -172,14 +172,14 @@ def test_get_possible_ground_substitutions():
 
 
 def test_full_observability_parameter_estimation():
-    block = ExpressionBlock((
+    code = ExpressionBlock((
         ProbFact(p, Z(x)),
         Implication(Q(x), Conjunction([Z(x), P(x)])),
         Fact(P(a)),
         Fact(P(b)),
     ))
     program = ProbDatalog()
-    program.walk(block)
+    program.walk(code)
     assert program.parametric_probfacts() == {p: ProbFact(p, Z(x))}
     interpretations = frozenset([
         frozenset({Fact(fa)
@@ -197,7 +197,7 @@ def test_full_observability_parameter_estimation():
     probfact_1 = ProbFact(p_1, Z(x))
     probfact_2 = ProbFact(p_2, Y(y))
     rule = Implication(Q(x), Conjunction([Z(x), Y(y), P(x), R(y)]))
-    block = ExpressionBlock((
+    code = ExpressionBlock((
         probfact_1,
         probfact_2,
         rule,
@@ -205,7 +205,7 @@ def test_full_observability_parameter_estimation():
         Fact(P(b)),
     ))
     program = ProbDatalog()
-    program.walk(block)
+    program.walk(code)
     assert program.parametric_probfacts() == {p_1: probfact_1, p_2: probfact_2}
     assert program.probabilistic_rules() == {Z: {rule}, Y: {rule}}
     interpretations = frozenset([
@@ -240,3 +240,38 @@ def test_full_observability_parameter_estimation():
     assert p_2 in estimations
     assert np.isclose(estimations[p_1], 0.25)
     assert np.isclose(estimations[p_2], 0.75)
+
+
+def test_program_const_probfact_in_antecedent():
+    code = ExpressionBlock([
+        Implication(Q(a), Z(a)),
+        ProbFact(p, Z(a)),
+    ])
+    program = ProbDatalog()
+    program.walk(code)
+    interpretations = [
+        SetInstance({
+            Z: frozenset({(a, )}),
+            Q: frozenset({(a, )}),
+        }),
+        SetInstance({
+            Z: frozenset(),
+            Q: frozenset(),
+        }),
+    ]
+    estimations = full_observability_parameter_estimation(
+        program, interpretations
+    )
+    assert np.isclose(estimations[p], 0.5)
+
+
+def test_program_with_twice_occurring_probfact_in_antecedent():
+    code = ExpressionBlock([
+        Implication(Q(x, y), Conjunction([Z(x), Z(y), P(x),
+                                          P(y)])),
+        ProbFact(p, Z(x)),
+        Fact(P(a)),
+        Fact(P(b)),
+    ])
+    program = ProbDatalog()
+    program.walk(code)
