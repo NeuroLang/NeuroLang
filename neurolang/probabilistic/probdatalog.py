@@ -12,6 +12,7 @@ from ..datalog import DatalogProgram
 from ..expression_pattern_matching import add_match
 from ..expression_walker import PatternWalker
 from ..probabilistic.ppdl import is_gdatalog_rule
+from ..datalog.expression_processing import extract_datalog_predicates
 from .ppdl import (
     concatenate_to_expression_block, get_antecedent_formulas, get_dterm,
     DeltaTerm
@@ -70,20 +71,11 @@ class ProbChoice(Implication):
         super().__init__(consequent, Constant[bool](True))
 
 
-def extract_antecedent_probabilistic_predicates(rule, probfact_predicates):
-    result = set()
-    if isinstance(rule.antecedent, FunctionApplication):
-        if rule.antecedent.functor in probfact_predicates:
-            result.add(rule.antecedent.functor)
-    elif isinstance(rule.antecedent, Conjunction):
-        result |= {
-            a.functor
-            for a in rule.antecedent.formulas
-            if a.functor in probfact_predicates
-        }
-    else:
-        raise NeuroLangException('Expected fa or conjunction as antecedent')
-    return result
+def get_probabilistic_predicates(rule, probfact_predicates):
+    antecedent_predicates = set(
+        p.functor for p in extract_datalog_predicates(rule.antecedent)
+    )
+    return set(probfact_predicates) & antecedent_predicates
 
 
 class ProbDatalogProgram(DatalogProgram):
@@ -124,7 +116,7 @@ class ProbDatalogProgram(DatalogProgram):
         prob_rules = defaultdict(set)
         for rule_disjunction in self.intensional_database().values():
             for rule in rule_disjunction.formulas:
-                for predicate in extract_antecedent_probabilistic_predicates(
+                for predicate in get_probabilistic_predicates(
                     rule, probabilistic_predicates
                 ):
                     prob_rules[predicate].add(rule)
