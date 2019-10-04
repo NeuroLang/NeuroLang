@@ -2,10 +2,18 @@ from owlready2 import get_ontology
 from nilearn import datasets
 
 import nibabel as nib
+import os.path
 
+from urllib.request import urlretrieve
 
 class FMAOntology():
-    def __init__(self, path):
+    def __init__(self, path=None):
+        if path is None:
+            if not os.path.exists('fma.owl'):
+                print("Downloading FMA Ontology")
+                urlretrieve("http://data.bioontology.org/ontologies/FMA/submissions/29/download?apikey=8b5b7825-538d-40e0-9e9e-5ab9274a9aeb", "fma.owl")
+
+            path = 'fma.owl'
         self._ontology = get_ontology(path)
         self.loaded = False
 
