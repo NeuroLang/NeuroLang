@@ -2,8 +2,8 @@ from itertools import chain, tee
 
 from .datalog import Negation
 from .datalog.expression_processing import extract_datalog_predicates
-from .datalog_chase import (DatalogChaseGeneral, DatalogChaseMGUMixin,
-                            DatalogChaseRelationalAlgebraMixin)
+from .datalog.chase import (ChaseGeneral, ChaseSemiNaive, ChaseMGUMixin,
+                            ChaseRelationalAlgebraPlusCeriMixin)
 from .exceptions import NeuroLangException
 from .expressions import Constant
 from .unification import (apply_substitution_arguments, compose_substitutions,
@@ -11,7 +11,7 @@ from .unification import (apply_substitution_arguments, compose_substitutions,
 from .utils import OrderedSet
 
 
-class DatalogChaseNegationGeneral(DatalogChaseGeneral):
+class DatalogChaseNegationGeneral(ChaseGeneral, ChaseSemiNaive):
     def chase_step(self, instance, rule, restriction_instance=None):
         if restriction_instance is None:
             restriction_instance = set()
@@ -177,7 +177,7 @@ class DatalogChaseNegationGeneral(DatalogChaseGeneral):
 
 
 class DatalogChaseNegationRelationalAlgebraMixin(
-    DatalogChaseRelationalAlgebraMixin
+    ChaseRelationalAlgebraPlusCeriMixin
 ):
     def obtain_negative_substitutions(
         self, args_to_project, rule_predicates_iterator, substitutions
@@ -185,7 +185,7 @@ class DatalogChaseNegationRelationalAlgebraMixin(
         raise NotImplementedError()
 
 
-class DatalogChaseNegationMGUMixin(DatalogChaseMGUMixin):
+class DatalogChaseNegationMGUMixin(ChaseMGUMixin):
     @staticmethod
     def obtain_negative_substitutions(
         args_to_project, negative_predicates, substitutions
