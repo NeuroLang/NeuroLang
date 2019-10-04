@@ -80,7 +80,7 @@ def test_probdatalog_program():
                                     P(x) & Z(x))]),
     }
     assert pd.probabilistic_database() == {
-        P: ProbFact(Constant[float](0.5), P(x)),
+        P: ExpressionBlock((ProbFact(Constant[float](0.5), P(x)), )),
     }
 
 
@@ -113,6 +113,29 @@ def test_gdatalog_translation():
         )
         translator = GDatalogToProbDatalog()
         translator.walk(bad_rule)
+
+
+def test_get_possible_ground_substitutions_constant_probfact():
+    probfact = ProbFact(C_(0.2), Z(a))
+    rule = Implication(Q(x), Conjunction([Z(x), P(x)]))
+    interpretation = SetInstance([Fact(fa) for fa in [P(a), Z(a), P(b), Q(a)]])
+    substitutions = get_possible_ground_substitutions(
+        probfact, rule, interpretation
+    )
+    assert substitutions == frozenset({frozenset()})
+
+    probfact = ProbFact(C_(0.2), Z(x, a))
+    rule = Implication(Q(x), Conjunction([Z(x, y), P(x), R(y)]))
+    interpretation = SetInstance({
+        R: frozenset({(a, ), (b, )}),
+        P: frozenset({(a, )}),
+        Z: frozenset({(a, a)}),
+        Q: frozenset({(a, )}),
+    })
+    substitutions = get_possible_ground_substitutions(
+        probfact, rule, interpretation
+    )
+    assert substitutions == frozenset({frozenset({(x, a)})})
 
 
 def test_get_possible_ground_substitutions():
