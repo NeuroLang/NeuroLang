@@ -1,7 +1,6 @@
 from collections import defaultdict
 from functools import lru_cache
 from typing import AbstractSet, Callable, Sequence
-from uuid import uuid1
 
 from ...expressions import Constant, Definition, Symbol
 from ...relational_algebra import (ColumnInt, Product, Projection,
@@ -177,9 +176,7 @@ class ChaseNamedRelationalAlgebraMixin:
         new_args = tuple()
         for arg in rule.consequent.args:
             if isinstance(arg, Constant):
-                fresh = Symbol[arg.type](
-                    'fresh_' + str(uuid1()).replace('-', '_')
-                )
+                fresh = Symbol[arg.type].fresh()
                 new_equalities.append(eq_(fresh, arg))
                 arg = fresh
             new_args += (arg,)
