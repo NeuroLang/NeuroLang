@@ -26,7 +26,10 @@ class RelationalAlgebraFrozenSet(Set):
 
     @staticmethod
     def _hash(element):
-        return pd.util.hash_pandas_object(pd.DataFrame([element]))[0]
+        return pd.util.hash_pandas_object(
+            pd.DataFrame([element]),
+            index=False
+        )[0]
 
     @staticmethod
     def _normalise_element(element):
@@ -64,13 +67,10 @@ class RelationalAlgebraFrozenSet(Set):
 
     @staticmethod
     def refresh_index(container):
-        new_indices_new = pd.util.hash_pandas_object(container, index=False)
-        #new_indices = pd.Index(
-        #    hash(t) for t in
-        #    container.itertuples(index=False, name=None)
-        #)
-        new_indices = pd.Index(new_indices_new.values)
-        container.set_index(new_indices, inplace=True)
+        if container.shape[0] > 0 and container.shape[1] > 0:
+            new_indices = pd.util.hash_pandas_object(container, index=False)
+            new_indices = pd.UInt64Index(new_indices.values)
+            container.set_index(new_indices, inplace=True)
 
     @property
     def arity(self):
@@ -172,6 +172,14 @@ class RelationalAlgebraFrozenSet(Set):
             self._container.reset_index()
             .drop('index', axis=1)
         )
+
+    def __eq__(self, other):
+        if isinstance(other, RelationalAlgebraFrozenSet):
+            return len(
+                self._container.index.difference(other._container.index)
+            ) == 0
+        else:
+            return super().__eq__(other)
 
     def __or__(self, other):
         if self is other:
@@ -357,6 +365,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
     def to_unnamed(self):
         container = self._container[list(self.columns)]
         container.columns = range(len(container.columns))
+        self.refresh_index(container)
         output = RelationalAlgebraFrozenSet()
         output._container = container
         return output
@@ -399,7 +408,10 @@ class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
         value = self._normalise_element(value)
         e_hash = self._hash(value)
         if len(self) == 0:
-            self._container = pd.DataFrame([value], index=[e_hash])
+            self._container = pd.DataFrame(
+                [value],
+                index=pd.UInt64Index([e_hash])
+            )
         else:
             self._container.loc[e_hash] = value
 
