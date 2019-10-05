@@ -85,6 +85,8 @@ class RelationalAlgebraFrozenSet(Set):
     def projection(self, *columns):
         if len(self) == 0:
             return self._empty_set_same_structure()
+        if columns == tuple(range(self.arity)):
+            return self
         new_container = self._container[list(columns)]
         output = self._empty_set_same_structure()
         output._container = self._renew_index(
@@ -142,7 +144,9 @@ class RelationalAlgebraFrozenSet(Set):
             sort=False,
         )
         output = self._empty_set_same_structure()
-        output._container = self._renew_index(new_container)
+        output._container = self._renew_index(
+            new_container, drop_duplicates=False
+        )
         return output
 
     def cross_product(self, other):
@@ -304,7 +308,9 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         new_container = self._container.merge(other._container)
 
         output = type(self)(new_columns)
-        output._container = output._renew_index(new_container)
+        output._container = output._renew_index(
+            new_container, drop_duplicates=False
+        )
         return output
 
     def cross_product(self, other):
@@ -330,7 +336,10 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
             tuple(other._container.columns)
         )
         result = type(self)(new_columns)
-        result._container = self._renew_index(new_container)
+        result._container = self._renew_index(
+            new_container,
+            drop_duplicates=False
+        )
         return result
 
     def __eq__(self, other):
@@ -346,7 +355,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
 
     def _renew_index(self, container, drop_duplicates=True):
         container.sort_index(axis=1, inplace=True)
-        return super()._renew_index(container, drop_duplicates=True)
+        return super()._renew_index(container, drop_duplicates=drop_duplicates)
 
     def groupby(self, columns):
         if len(self) == 0:
