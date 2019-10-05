@@ -21,11 +21,11 @@ class RelationalAlgebraFrozenSet(Set):
         element = self._normalise_element(element)
         return (
             len(self) > 0 and
-            self._hash(element) in self._container.index
+            self._hash_element(element) in self._container.index
         )
 
     @staticmethod
-    def _hash(element):
+    def _hash_element(element):
         return pd.util.hash_pandas_object(
             pd.DataFrame([element]),
             index=False
@@ -415,7 +415,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
 class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
     def add(self, value):
         value = self._normalise_element(value)
-        e_hash = self._hash(value)
+        e_hash = self._hash_element(value)
         if len(self) == 0:
             self._container = pd.DataFrame(
                 [value],
@@ -428,7 +428,7 @@ class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
         if len(self) > 0:
             try:
                 value = self._normalise_element(value)
-                self._container.drop(index=self._hash(value), inplace=True)
+                self._container.drop(index=self._hash_element(value), inplace=True)
             except KeyError:
                 pass
 

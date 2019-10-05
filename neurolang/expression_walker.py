@@ -371,6 +371,8 @@ class ExpressionBasicEvaluator(ExpressionWalker):
             return lambda_.function_expression
 
 
-def constant_to_values(constant, symbol_table={}):
+def constant_to_values(constant, symbol_table=None):
+    if symbol_table is None:
+        symbol_table = {}
     rsbc = ReplaceExpressionsByValues(symbol_table)
     return rsbc.walk(constant)
