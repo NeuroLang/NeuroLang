@@ -21,8 +21,15 @@ class RelationalAlgebraFrozenSet(Set):
         element = self._normalise_element(element)
         return (
             len(self) > 0 and
-            hash(element) in self._container.index
+            self._hash_element(element) in self._container.index
         )
+
+    @staticmethod
+    def _hash_element(element):
+        return pd.util.hash_pandas_object(
+            pd.DataFrame([element]),
+            index=False
+        )[0]
 
     @staticmethod
     def _normalise_element(element):
@@ -60,11 +67,10 @@ class RelationalAlgebraFrozenSet(Set):
 
     @staticmethod
     def refresh_index(container):
-        new_indices = pd.Index(
-            hash(t) for t in
-            container.itertuples(index=False, name=None)
-        )
-        container.set_index(new_indices, inplace=True)
+        if container.shape[0] > 0 and container.shape[1] > 0:
+            new_indices = pd.util.hash_pandas_object(container, index=False)
+            new_indices = pd.UInt64Index(new_indices.values)
+            container.set_index(new_indices, inplace=True)
 
     @property
     def arity(self):
@@ -79,6 +85,8 @@ class RelationalAlgebraFrozenSet(Set):
     def projection(self, *columns):
         if len(self) == 0:
             return self._empty_set_same_structure()
+        if columns == tuple(range(self.arity)):
+            return self
         new_container = self._container[list(columns)]
         output = self._empty_set_same_structure()
         output._container = self._renew_index(
@@ -136,7 +144,9 @@ class RelationalAlgebraFrozenSet(Set):
             sort=False,
         )
         output = self._empty_set_same_structure()
-        output._container = self._renew_index(new_container)
+        output._container = self._renew_index(
+            new_container, drop_duplicates=False
+        )
         return output
 
     def cross_product(self, other):
@@ -166,6 +176,14 @@ class RelationalAlgebraFrozenSet(Set):
             self._container.reset_index()
             .drop('index', axis=1)
         )
+
+    def __eq__(self, other):
+        if isinstance(other, RelationalAlgebraFrozenSet):
+            return len(
+                self._container.index.difference(other._container.index)
+            ) == 0
+        else:
+            return super().__eq__(other)
 
     def __or__(self, other):
         if self is other:
@@ -290,7 +308,9 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         new_container = self._container.merge(other._container)
 
         output = type(self)(new_columns)
-        output._container = output._renew_index(new_container)
+        output._container = output._renew_index(
+            new_container, drop_duplicates=False
+        )
         return output
 
     def cross_product(self, other):
@@ -316,7 +336,10 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
             tuple(other._container.columns)
         )
         result = type(self)(new_columns)
-        result._container = self._renew_index(new_container)
+        result._container = self._renew_index(
+            new_container,
+            drop_duplicates=False
+        )
         return result
 
     def __eq__(self, other):
@@ -332,7 +355,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
 
     def _renew_index(self, container, drop_duplicates=True):
         container.sort_index(axis=1, inplace=True)
-        return super()._renew_index(container, drop_duplicates=True)
+        return super()._renew_index(container, drop_duplicates=drop_duplicates)
 
     def groupby(self, columns):
         if len(self) == 0:
@@ -351,6 +374,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
     def to_unnamed(self):
         container = self._container[list(self.columns)]
         container.columns = range(len(container.columns))
+        self.refresh_index(container)
         output = RelationalAlgebraFrozenSet()
         output._container = container
         return output
@@ -391,9 +415,12 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
 class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
     def add(self, value):
         value = self._normalise_element(value)
-        e_hash = hash(value)
+        e_hash = self._hash_element(value)
         if len(self) == 0:
-            self._container = pd.DataFrame([value], index=[e_hash])
+            self._container = pd.DataFrame(
+                [value],
+                index=pd.UInt64Index([e_hash])
+            )
         else:
             self._container.loc[e_hash] = value
 
@@ -401,7 +428,10 @@ class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
         if len(self) > 0:
             try:
                 value = self._normalise_element(value)
-                self._container.drop(index=hash(value), inplace=True)
+                self._container.drop(
+                    index=self._hash_element(value),
+                    inplace=True
+                )
             except KeyError:
                 pass
 
