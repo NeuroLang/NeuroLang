@@ -428,7 +428,10 @@ class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
         if len(self) > 0:
             try:
                 value = self._normalise_element(value)
-                self._container.drop(index=self._hash_element(value), inplace=True)
+                self._container.drop(
+                    index=self._hash_element(value),
+                    inplace=True
+                )
             except KeyError:
                 pass
 
