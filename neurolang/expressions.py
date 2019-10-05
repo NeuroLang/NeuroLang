@@ -382,11 +382,13 @@ class Symbol(NonConstant):
 
     @staticmethod
     def _fresh_generator():
+        lock = threading.RLock()
         i = 0
         while True:
-            fresh = f'fresh_{i:08}'
+            with lock:
+                fresh = f'fresh_{i:08}'
+                i += 1
             yield Symbol(fresh)
-            i += 1
 
     @classmethod
     def fresh(cls):
