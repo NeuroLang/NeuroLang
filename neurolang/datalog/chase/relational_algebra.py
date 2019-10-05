@@ -7,10 +7,11 @@ from ...relational_algebra import (ColumnInt, Product, Projection,
                                    RelationalAlgebraOptimiser,
                                    RelationalAlgebraSolver, Selection, eq_)
 from ...type_system import is_leq_informative
+from ...unification import apply_substitution_arguments
 from ...utils import NamedRelationalAlgebraFrozenSet
 from ..expression_processing import (extract_datalog_free_variables,
                                      extract_datalog_predicates)
-from ..expressions import Conjunction
+from ..expressions import Conjunction, Implication
 from ..translate_to_named_ra import TranslateToNamedRA
 from ..wrapped_collections import WrappedRelationalAlgebraSet
 
@@ -137,10 +138,12 @@ class ChaseNamedRelationalAlgebraMixin:
         if restriction_instance is None:
             restriction_instance = dict()
 
+        rule = self.rewrite_constants_in_consequent(rule)
+
+        consequent = rule.consequent
         rule_predicates = self.extract_rule_predicates(
             rule, instance, restriction_instance=restriction_instance
         )
-        consequent = rule.consequent
 
         if all(len(predicate_list) == 0 for predicate_list in rule_predicates):
             return dict()
@@ -166,6 +169,37 @@ class ChaseNamedRelationalAlgebraMixin:
         return self.compute_result_set(
             rule, substitutions, instance, restriction_instance
         )
+
+    @lru_cache(1024)
+    def rewrite_constants_in_consequent(self, rule):
+        new_equalities = []
+        new_args = tuple()
+        for arg in rule.consequent.args:
+            if isinstance(arg, Constant):
+                fresh = Symbol[arg.type].fresh()
+                new_equalities.append(eq_(fresh, arg))
+                arg = fresh
+            new_args += (arg,)
+        if len(new_equalities) > 0:
+            rule = self.rewrite_rule_consequent_constants_to_equalities(
+                rule, new_args, new_equalities
+            )
+        return rule
+
+    @staticmethod
+    def rewrite_rule_consequent_constants_to_equalities(
+        rule, new_args, new_equalities
+    ):
+        consequent = rule.consequent.functor(*new_args)
+        if isinstance(rule.antecedent, Conjunction):
+            antecedent_formulas = rule.antecedent.formulas
+        else:
+            antecedent_formulas = (rule.antecedent,)
+        antecedent = Conjunction(
+            antecedent_formulas + tuple(new_equalities)
+        )
+        rule = Implication(consequent, antecedent)
+        return rule
 
     def eliminate_already_computed(self, consequent, instance, substitutions):
         if len(consequent.args) > substitutions.arity:
@@ -291,6 +325,34 @@ class ChaseNamedRelationalAlgebraMixin:
             )
         )
 
+    def compute_result_set(
+        self, rule, substitutions, instance, restriction_instance=None
+    ):
+        if restriction_instance is None:
+            restriction_instance = dict()
+
+        if isinstance(substitutions, NamedRelationalAlgebraFrozenSet):
+            new_tuples = substitutions.projection(
+                *(arg.name for arg in rule.consequent.args)
+            )
+            new_tuples = WrappedRelationalAlgebraSet(new_tuples.to_unnamed())
+        else:
+            tuples = [
+                tuple(
+                    a.value for a in
+                    apply_substitution_arguments(
+                        rule.consequent.args, substitution
+                    )
+                )
+                for substitution in substitutions
+                if len(substitutions) > 0
+            ]
+            new_tuples = self.datalog_program.new_set(tuples)
+
+        return self.compute_instance_update(
+            rule, new_tuples, instance, restriction_instance
+        )
+
 
 class NamedRAFSTupleIterAdapter(NamedRelationalAlgebraFrozenSet):
     def __init__(self, *args, **kwargs):
@@ -317,7 +379,9 @@ class NamedRAFSTupleIterAdapter(NamedRelationalAlgebraFrozenSet):
             row_types = self.row_types
             for row in super().__iter__():
                 yield {
-                    f: Constant[row_types[f]](v)
+                    f: Constant[row_types[f]](
+                        v, verify_type=False
+                    )
                     for f, v in zip(row._fields, row)
                 }
         else:

@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from typing import AbstractSet, Callable, Tuple
 from uuid import uuid1
 
@@ -15,7 +16,7 @@ from .query_resolution_expressions import (All, Exists, Expression, Query,
 __all__ = ['QueryBuilderFirstOrder']
 
 
-class QueryBuilderBase(object):
+class QueryBuilderBase:
     def __init__(self, solver, logic_programming=False):
         self.solver = solver
         self.set_type = AbstractSet[self.solver.type]
@@ -57,8 +58,22 @@ class QueryBuilderBase(object):
         return self._symbols_proxy
 
     @property
+    @contextmanager
     def environment(self):
-        return self._symbols_proxy
+        old_dynamic_mode = self._symbols_proxy._dynamic_mode
+        self._symbols_proxy._dynamic_mode = True
+        yield self._symbols_proxy
+        self._symbols_proxy._dynamic_mode = old_dynamic_mode
+
+    @property
+    @contextmanager
+    def scope(self):
+        old_dynamic_mode = self._symbols_proxy._dynamic_mode
+        self._symbols_proxy._dynamic_mode = True
+        self.solver.push_scope()
+        yield self._symbols_proxy
+        self.solver.pop_scope()
+        self._symbols_proxy._dynamic_mode = old_dynamic_mode
 
     def new_symbol(self, type_=Unknown, name=None):
         if isinstance(type_, (tuple, list)):
@@ -147,7 +162,7 @@ class QueryBuilderBase(object):
 
     @staticmethod
     def _create_symbol_and_get_constant(element, element_type):
-        symbol = exp.Symbol[element_type](str(uuid1()))
+        symbol = exp.Symbol[element_type].fresh()
         if isinstance(element, exp.Constant):
             constant = element.cast(element_type)
         elif is_leq_informative(element_type, Tuple):
@@ -159,7 +174,7 @@ class QueryBuilderBase(object):
         return symbol, constant
 
 
-class RegionMixin(object):
+class RegionMixin:
     @property
     def region_names(self):
         return [
@@ -246,7 +261,7 @@ class RegionMixin(object):
                 )
 
 
-class NeuroSynthMixin(object):
+class NeuroSynthMixin:
     def load_neurosynth_term_regions(
         self, term: str, n_components=None, name=None
     ):
@@ -322,7 +337,7 @@ class QueryBuilderFirstOrder(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         )
 
 
-class QuerySymbolsProxy(object):
+class QuerySymbolsProxy:
     def __init__(self, query_builder):
         self._dynamic_mode = False
         self._query_builder = query_builder
@@ -382,12 +397,3 @@ class QuerySymbolsProxy(object):
         ]
 
         return f'QuerySymbolsProxy with symbols {init}'
-
-    def __enter__(self):
-        self._old_dynamic_mode = False
-        self._dynamic_mode = True
-        return self
-
-    def __exit__(self, type_, value, traceback):
-        self._dynamic_mode = self._old_dynamic_mode
-        del self._old_dynamic_mode
