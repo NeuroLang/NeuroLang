@@ -11,7 +11,6 @@ in the set ``Q``.
 """
 
 from typing import AbstractSet, Tuple
-from uuid import uuid1
 from warnings import warn
 
 from ..exceptions import NeuroLangException
@@ -110,7 +109,7 @@ class DatalogWithAggregationMixin(PatternWalker):
 
 def extract_aggregation_atom_free_variables(atom):
     free_variables = OrderedSet()
-    aggregation_fresh_variable = Symbol(str(uuid1()))
+    aggregation_fresh_variable = Symbol.fresh()
     for arg in atom.args:
         free_variables_arg = extract_datalog_free_variables(arg)
         if isinstance(arg, AggregationApplication):

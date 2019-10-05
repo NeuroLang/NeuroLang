@@ -1,6 +1,5 @@
 import operator
 from typing import Iterable
-from uuid import uuid1
 
 from ..datalog.expressions import Disjunction
 from ..existential_datalog import Implication
@@ -212,7 +211,7 @@ class TranslateGDatalogToEDatalog(ExpressionBasicEvaluator):
     def convert_gdatalog_rule_to_edatalog_rules(self, expression):
         datom = expression.consequent
         dterm = get_dterm(datom)
-        y = Symbol[dterm.type]('y_' + str(uuid1()))
+        y = Symbol[dterm.type].fresh()
         result_args = (
             dterm.args + (Constant(datom.functor.name), ) +
             tuple(arg for arg in datom.args

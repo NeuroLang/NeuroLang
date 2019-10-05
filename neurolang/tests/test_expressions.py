@@ -22,6 +22,16 @@ class Evaluator(ExpressionBasicEvaluator, TypedSymbolTableEvaluator):
     pass
 
 
+def test_fresh_symbol():
+    s1 = S_.fresh()
+    s2 = S_.fresh()
+    s3 = S_[int].fresh()
+
+    assert isinstance(s1, S_) and s1.type is Unknown
+    assert s1 != s2
+    assert s1 != s2 and s2 != s3 and s3.type is int
+
+
 def evaluate(expression, **kwargs):
     ebe = Evaluator()
     for k, v in kwargs.items():

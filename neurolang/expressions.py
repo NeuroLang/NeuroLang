@@ -380,6 +380,25 @@ class Symbol(NonConstant):
     def __repr__(self):
         return 'S{{{}: {}}}'.format(self.name, self.__type_repr__)
 
+    @staticmethod
+    def _fresh_generator():
+        lock = threading.RLock()
+        i = 0
+        while True:
+            with lock:
+                fresh = f'fresh_{i:08}'
+                i += 1
+            yield Symbol(fresh)
+
+    @classmethod
+    def fresh(cls):
+        if not hasattr(cls, '_fresh_generator_'):
+            cls._fresh_generator_ = cls._fresh_generator()
+        new_symbol = next(cls._fresh_generator_)
+        if cls.type is not typing.Any:
+            new_symbol = new_symbol.cast(cls.type)
+        return new_symbol
+
 
 class Constant(Expression):
     def __init__(
