@@ -67,10 +67,11 @@ class RelationalAlgebraFrozenSet(Set):
 
     @staticmethod
     def refresh_index(container):
-        if container.shape[0] > 0 and container.shape[1] > 0:
-            new_indices = pd.util.hash_pandas_object(container, index=False)
-            new_indices = pd.UInt64Index(new_indices.values)
-            container.set_index(new_indices, inplace=True)
+        new_indices = pd.Index(
+            hash(t) for t in
+            container.itertuples(index=False, name=None)
+        )
+        container.set_index(new_indices, inplace=True)
 
     @property
     def arity(self):
