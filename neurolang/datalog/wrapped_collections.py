@@ -2,7 +2,6 @@ from itertools import tee
 from typing import Tuple
 
 from ..expressions import Constant
-from ..expression_walker import constant_to_values
 from ..type_system import infer_type
 from ..utils import RelationalAlgebraSet
 
@@ -70,6 +69,9 @@ class WrappedRelationalAlgebraSet(
     WrappedExpressionIterable, RelationalAlgebraSet
 ):
     def __contains__(self, element):
-        if isinstance(element, Constant):
-            element = constant_to_values(element)
-        return super().__contains__(element)
+        if not isinstance(element, Constant):
+            element = self._normalise_element(element)
+        return (
+            self._container is not None and
+            hash(element) in self._container.index
+        )
