@@ -245,6 +245,29 @@ def get_fa_var_idxs(fa):
     return {i for i, arg in enumerate(fa.args) if isinstance(arg, Symbol)}
 
 
+def get_typing_atoms(probfact, rule):
+    probfact_predicate_symbol = probfact.consequent.functor
+    probfact_antecedent_atom = get_antecedent_atom_matching_predicate(
+        probfact_predicate_symbol, rule
+    )
+    probfact_variable_positions = get_fa_var_idxs(probfact.consequent)
+    probfact_antecedent_variable_positions = get_fa_var_idxs(
+        probfact_antecedent_atom
+    )
+    matching_variable_positions = (
+        probfact_variable_positions & probfact_antecedent_variable_positions
+    )
+    variables = tuple(
+        arg for i, arg in enumerate(probfact_antecedent_atom.args)
+        if i in matching_variable_positions
+    )
+    return set(
+        formula for formula in extract_datalog_predicates(rule.antecedent)
+        if len(formula.args) == 1 and formula.args[0] in variables and
+        formula.functor != probfact_predicate_symbol
+    )
+
+
 def get_possible_ground_substitutions(probfact, rule, interpretation):
     '''
     Get all possible substitutions that ground a given probabilistic fact in a
@@ -265,33 +288,13 @@ def get_possible_ground_substitutions(probfact, rule, interpretation):
         probabilistic fact.
 
     '''
-    predicate = probfact.consequent.functor
-    probfact_antecedent_atom = get_antecedent_atom_matching_predicate(
-        predicate, rule
-    )
-    probfact_variable_positions = get_fa_var_idxs(probfact.consequent)
-    probfact_antecedent_variable_positions = get_fa_var_idxs(
-        probfact_antecedent_atom
-    )
-    matching_variable_positions = (
-        probfact_variable_positions & probfact_antecedent_variable_positions
-    )
-    variables = tuple(
-        arg for i, arg in enumerate(probfact_antecedent_atom.args)
-        if i in matching_variable_positions
-    )
-    typing_atoms = set(
-        formula for formula in extract_datalog_predicates(rule.antecedent)
-        if len(formula.args) == 1 and formula.args[0] in variables and
-        formula.functor != predicate
-    )
     substitutions_per_variable = {
         atom.args[0]: frozenset(
             fact.consequent.args[0]
             for fact in interpretation
             if fact.consequent.functor == atom.functor
         )
-        for atom in typing_atoms
+        for atom in get_typing_atoms(probfact, rule)
     }
     return frozenset({
         frozenset(zip(substitutions_per_variable.keys(), values))
