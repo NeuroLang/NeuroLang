@@ -10,7 +10,7 @@ from ..datalog.expressions import Fact, Implication, Disjunction, Conjunction
 from ..exceptions import NeuroLangException
 from ..datalog import DatalogProgram
 from ..expression_pattern_matching import add_match
-from ..expression_walker import PatternWalker
+from ..expression_walker import PatternWalker, ExpressionWalker
 from ..probabilistic.ppdl import is_gdatalog_rule
 from ..datalog.expression_processing import extract_datalog_predicates
 from .ppdl import (
@@ -71,7 +71,10 @@ class ProbChoice(Implication):
         super().__init__(consequent, Constant[bool](True))
 
 
-def get_probabilistic_predicates(rule, probfact_predicates):
+def get_probfact_predicate_symbols(rule, probfact_predicates):
+    '''
+    Extract
+    '''
     antecedent_predicates = set(
         p.functor for p in extract_datalog_predicates(rule.antecedent)
     )
@@ -116,7 +119,7 @@ class ProbDatalogProgram(DatalogProgram):
         prob_rules = defaultdict(set)
         for rule_disjunction in self.intensional_database().values():
             for rule in rule_disjunction.formulas:
-                for predicate in get_probabilistic_predicates(
+                for predicate in get_probfact_predicate_symbols(
                     rule, probabilistic_predicates
                 ):
                     prob_rules[predicate].add(rule)
@@ -185,10 +188,9 @@ class GDatalogToProbDatalogTranslator(PatternWalker):
             predicate(*terms),
             conjunct_formulas(rule.antecedent, probfact_atom)
         )
-        return ExpressionBlock((
-            self.walk(ProbFact(probability,
-                               probfact_atom)), self.walk(new_rule)
-        ))
+        return self.walk(
+            ExpressionBlock([ProbFact(probability, probfact_atom), new_rule])
+        )
 
     @add_match(ExpressionBlock)
     def expression_block(self, block):
@@ -215,21 +217,9 @@ def conjunct_formulas(f1, f2):
 
 
 class GDatalogToProbDatalog(
-    GDatalogToProbDatalogTranslator, ProbDatalogProgram
+    GDatalogToProbDatalogTranslator, ProbDatalogProgram, ExpressionWalker
 ):
     pass
-
-
-def get_antecedent_predicates(rule):
-    antecedent_literals = get_antecedent_formulas(rule)
-    return [literal.functor for literal in antecedent_literals]
-
-
-def substitute_dterm(datom, substitute):
-    new_args = tuple(
-        substitute if isinstance(arg, DeltaTerm) else arg for arg in datom.args
-    )
-    return FunctionApplication[datom.type](datom.functor, new_args)
 
 
 def get_antecedent_atom_matching_predicate(predicate, rule):
@@ -312,6 +302,24 @@ def get_possible_ground_substitutions(probfact, rule, interpretation):
     })
 
 
+def _probfact_parameter_estimation(probfact, rule, interpretations):
+    n_ground_instances = 0.
+    n_possible_substitutions = 0.
+    for interpretation in interpretations:
+        for substitution in get_possible_ground_substitutions(
+            probfact, rule, interpretation
+        ):
+            n_possible_substitutions += 1
+            ground_fact = Fact(
+                apply_substitution(
+                    probfact.consequent, dict(substitution)
+                )
+            )
+            if ground_fact in interpretation:
+                n_ground_instances += 1
+    return n_ground_instances / n_possible_substitutions
+
+
 def full_observability_parameter_estimation(program, interpretations):
     '''
     Estimate parametric probabilities of the probabilistic facts in a given
@@ -330,20 +338,7 @@ def full_observability_parameter_estimation(program, interpretations):
     parametric_probfacts = program.parametric_probfacts()
     for parameter, probfact in parametric_probfacts.items():
         rule = next(iter(probabilistic_rules[probfact.consequent.functor]))
-        count = 0.
-        normaliser = 0.
-        for interpretation in interpretations:
-            substitutions = get_possible_ground_substitutions(
-                probfact, rule, interpretation
-            )
-            normaliser += len(substitutions)
-            for substitution in substitutions:
-                ground_fact = Fact(
-                    apply_substitution(
-                        probfact.consequent, dict(substitution)
-                    )
-                )
-                if ground_fact in interpretation:
-                    count += 1
-        estimations[parameter] = count / normaliser
+        estimations[parameter] = _probfact_parameter_estimation(
+            probfact, rule, interpretations
+        )
     return estimations
