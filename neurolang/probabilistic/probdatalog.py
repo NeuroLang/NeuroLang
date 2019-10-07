@@ -303,19 +303,16 @@ def get_possible_ground_substitutions(probfact, rule, interpretation):
 
 
 def _probfact_parameter_estimation(probfact, rule, interpretations):
-    n_ground_instances = 0.
-    n_possible_substitutions = 0.
+    n_ground_instances = 0
+    n_possible_substitutions = 0
     for interpretation in interpretations:
         for substitution in get_possible_ground_substitutions(
             probfact, rule, interpretation
         ):
             n_possible_substitutions += 1
-            ground_fact = Fact(
-                apply_substitution(
-                    probfact.consequent, dict(substitution)
-                )
-            )
-            if ground_fact in interpretation:
+            if Fact(
+                apply_substitution(probfact.consequent, dict(substitution))
+            ) in interpretation:
                 n_ground_instances += 1
     return n_ground_instances / n_possible_substitutions
 
