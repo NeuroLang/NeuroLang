@@ -6,6 +6,7 @@ from ..datalog.expressions import Disjunction, Conjunction
 from ..existential_datalog import Implication
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionBasicEvaluator
+from ..datalog.expression_processing import extract_datalog_predicates
 from ..expressions import (
     Constant, ExistentialPredicate, Expression, ExpressionBlock,
     FunctionApplication, NeuroLangException, Symbol
@@ -25,23 +26,13 @@ def get_conjunction_atoms(expression):
     if is_conjunction(expression):
         if isinstance(expression, Conjunction):
             return expression.formulas
-        return (
-            get_conjunction_atoms(expression.args[0]) +
-            get_conjunction_atoms(expression.args[1])
-        )
+        else:
+            return (
+                get_conjunction_atoms(expression.args[0]) +
+                get_conjunction_atoms(expression.args[1])
+            )
     else:
         return [expression]
-
-
-def get_antecedent_formulas(rule):
-    if not isinstance(rule, Implication):
-        raise NeuroLangException('Implication expected')
-    return get_conjunction_atoms(rule.antecedent)
-
-
-def get_antecedent_predicate_names(rule):
-    antecedent_formulas = get_antecedent_formulas(rule)
-    return [formula.functor.name for formula in antecedent_formulas]
 
 
 def is_gdatalog_rule(exp):
@@ -139,11 +130,11 @@ class GenerativeDatalog(DatalogBasic):
 def get_antecedent_constant_indexes(rule):
     '''Get indexes of constants occurring in antecedent predicates.'''
     constant_indexes = dict()
-    for antecedent in get_antecedent_formulas(rule):
-        predicate = antecedent.functor.name
+    for antecedent_atom in extract_datalog_predicates(rule.antecedent):
+        predicate = antecedent_atom.functor.name
         indexes = {
             i
-            for i, arg in enumerate(antecedent.args)
+            for i, arg in enumerate(antecedent_atom.args)
             if isinstance(arg, Constant)
         }
         if len(indexes) > 0:

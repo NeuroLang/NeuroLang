@@ -13,10 +13,7 @@ from ..expression_pattern_matching import add_match
 from ..expression_walker import PatternWalker, ExpressionWalker
 from ..probabilistic.ppdl import is_gdatalog_rule
 from ..datalog.expression_processing import extract_datalog_predicates
-from .ppdl import (
-    concatenate_to_expression_block, get_antecedent_formulas, get_dterm,
-    DeltaTerm
-)
+from .ppdl import concatenate_to_expression_block, get_dterm, DeltaTerm
 
 
 class ProbFact(Fact):
@@ -284,7 +281,7 @@ def get_possible_ground_substitutions(probfact, rule, interpretation):
         if i in matching_variable_positions
     )
     typing_atoms = set(
-        formula for formula in get_antecedent_formulas(rule)
+        formula for formula in extract_datalog_predicates(rule.antecedent)
         if len(formula.args) == 1 and formula.args[0] in variables and
         formula.functor != predicate
     )
