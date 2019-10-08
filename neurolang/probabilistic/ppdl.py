@@ -22,19 +22,6 @@ def is_conjunction(expression):
     )
 
 
-def get_conjunction_atoms(expression):
-    if is_conjunction(expression):
-        if isinstance(expression, Conjunction):
-            return expression.formulas
-        else:
-            return (
-                get_conjunction_atoms(expression.args[0]) +
-                get_conjunction_atoms(expression.args[1])
-            )
-    else:
-        return [expression]
-
-
 def is_gdatalog_rule(exp):
     return (
         isinstance(exp, Implication) and
