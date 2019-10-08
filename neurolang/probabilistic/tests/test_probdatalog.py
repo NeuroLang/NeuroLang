@@ -8,7 +8,8 @@ from ...expression_walker import ExpressionBasicEvaluator
 from ...datalog.instance import SetInstance
 from ..probdatalog import (
     ProbDatalogProgram, ProbFact, ProbChoice, GDatalogToProbDatalog,
-    get_possible_ground_substitutions, full_observability_parameter_estimation
+    get_possible_ground_substitutions, full_observability_parameter_estimation,
+    infer_pfact_typing_predicate_symbols
 )
 from ..ppdl import DeltaTerm
 
@@ -79,7 +80,7 @@ def test_probdatalog_program():
         Q: Disjunction([Implication(Q(x),
                                     P(x) & Z(x))]),
     }
-    assert pd.probabilistic_database() == {
+    assert pd.probabilistic_facts() == {
         P: ExpressionBlock((ProbFact(Constant[float](0.5), P(x)), )),
     }
 
@@ -117,15 +118,15 @@ def test_gdatalog_translation():
 
 def test_get_possible_ground_substitutions_constant_probfact():
     probfact = ProbFact(C_(0.2), Z(a))
-    rule = Implication(Q(x), Conjunction([Z(x), P(x)]))
+    typing = dict()
     interpretation = SetInstance([Fact(fa) for fa in [P(a), Z(a), P(b), Q(a)]])
     substitutions = get_possible_ground_substitutions(
-        probfact, rule, interpretation
+        probfact, typing, interpretation
     )
     assert substitutions == frozenset({frozenset()})
 
     probfact = ProbFact(C_(0.2), Z(x, a))
-    rule = Implication(Q(x), Conjunction([Z(x, y), P(x), R(y)]))
+    typing = {Z: {0: {P}}}
     interpretation = SetInstance({
         R: frozenset({(a, ), (b, )}),
         P: frozenset({(a, )}),
@@ -133,35 +134,35 @@ def test_get_possible_ground_substitutions_constant_probfact():
         Q: frozenset({(a, )}),
     })
     substitutions = get_possible_ground_substitutions(
-        probfact, rule, interpretation
+        probfact, typing[Z], interpretation
     )
     assert substitutions == frozenset({frozenset({(x, a)})})
 
 
 def test_get_possible_ground_substitutions():
     probfact = ProbFact(C_(0.2), Z(x))
-    rule = Implication(Q(x), Conjunction([Z(x), P(x)]))
     interpretation = SetInstance([
         Fact(fa) for fa in [P(a), P(b), Z(a),
                             Z(b), Q(a), Q(b)]
     ])
+    typing = {Z: {0: {P}}}
     substitutions = get_possible_ground_substitutions(
-        probfact, rule, interpretation
+        probfact, typing[Z], interpretation
     )
     assert substitutions == frozenset({
         frozenset({(x, a)}), frozenset({(x, b)})
     })
 
     probfact = ProbFact(C_(0.5), Z(x, y))
-    rule = Implication(Q(x), Conjunction([Z(x, y), P(x), Y(y)]))
     interpretation = SetInstance([
         Fact(fa) for fa in
         [P(a), P(b), Y(a),
          Y(b), Z(a, b), Q(a),
          Z(b, a), Q(b)]
     ])
+    typing = {Z: {0: {P}, 1: {Y}}}
     substitutions = get_possible_ground_substitutions(
-        probfact, rule, interpretation
+        probfact, typing[Z], interpretation
     )
     assert substitutions == frozenset({
         frozenset({(x, a), (y, a)}),
@@ -182,10 +183,16 @@ def test_full_observability_parameter_estimation():
     program.walk(code)
     assert program.parametric_probfacts() == {p: ProbFact(p, Z(x))}
     interpretations = frozenset([
-        frozenset({Fact(fa)
-                   for fa in [P(a), P(b), Z(a), Q(a)]}),
-        frozenset({Fact(fa)
-                   for fa in [P(a), P(b), Z(b), Q(b)]}),
+        SetInstance({
+            P: frozenset({(a, ), (b, )}),
+            Z: frozenset({(a, )}),
+            Q: frozenset({(a, )}),
+        }),
+        SetInstance({
+            P: frozenset({(a, ), (b, )}),
+            Z: frozenset({(b, )}),
+            Q: frozenset({(b, )}),
+        }),
     ])
     estimations = full_observability_parameter_estimation(
         program,
@@ -275,3 +282,17 @@ def test_program_with_twice_occurring_probfact_in_antecedent():
     ])
     program = ProbDatalog()
     program.walk(code)
+
+
+def test_infer_pfact_typing_predicate_symbols():
+    Pfact = Symbol('Pfact')
+    rule = Implication(Q(x), Conjunction([P(x), Z(x), Pfact(x)]))
+    assert infer_pfact_typing_predicate_symbols(Pfact, rule) == {0: {P, Z}}
+
+    nopfact_rule = Implication(Q(x), P(x))
+    with pytest.raises(NeuroLangException, match=r'Expected rule with atom'):
+        infer_pfact_typing_predicate_symbols(Pfact, nopfact_rule)
+
+    rule = Implication(Q(x, y), Conjunction([P(x), Q(y), Pfact(x), Pfact(y)]))
+    with pytest.raises(NeuroLangException, match=r'Inconsistent'):
+        infer_pfact_typing_predicate_symbols(Pfact, rule)

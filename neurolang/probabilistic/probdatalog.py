@@ -1,6 +1,7 @@
 import uuid
 import itertools
 from collections import defaultdict
+from typing import Mapping, Set
 
 from ..expressions import (
     Expression, Constant, Symbol, FunctionApplication, ExpressionBlock
@@ -10,7 +11,10 @@ from ..datalog.expressions import Fact, Implication, Disjunction, Conjunction
 from ..exceptions import NeuroLangException
 from ..datalog import DatalogProgram
 from ..expression_pattern_matching import add_match
-from ..expression_walker import PatternWalker, ExpressionWalker
+from ..expression_walker import (
+    PatternWalker, ExpressionWalker, EntryPointPatternWalker,
+    add_entry_point_match
+)
 from ..probabilistic.ppdl import is_gdatalog_rule
 from ..datalog.expression_processing import extract_datalog_predicates
 from .ppdl import concatenate_to_expression_block, get_dterm, DeltaTerm
@@ -68,7 +72,7 @@ class ProbChoice(Implication):
         super().__init__(consequent, Constant[bool](True))
 
 
-def get_probfact_predicate_symbols(rule, probfact_predicates):
+def get_pfact_pred_symbols(rule, probfact_predicates):
     '''
     Extract
     '''
@@ -76,6 +80,16 @@ def get_probfact_predicate_symbols(rule, probfact_predicates):
         p.functor for p in extract_datalog_predicates(rule.antecedent)
     )
     return set(probfact_predicates) & antecedent_predicates
+
+
+def _put_probfacts_in_front(code_block):
+    return ExpressionBlock(
+        [exp for exp in code_block.expressions if isinstance(exp, ProbFact)] +
+        [
+            exp for exp in code_block.expressions
+            if not isinstance(exp, ProbFact)
+        ]
+    )
 
 
 class ProbDatalogProgram(DatalogProgram):
@@ -88,6 +102,15 @@ class ProbDatalogProgram(DatalogProgram):
     the key in the symbol table is the symbol of the predicate of the
     probabilsitic fact and the value is the probabilistic fact itself.
     '''
+
+    typing_symbol = \
+        Symbol[Mapping[Symbol, Mapping[int, Set[Symbol]]]]('__pfacts_typing__')
+
+    @add_entry_point_match(ExpressionBlock)
+    def program_code(self, code):
+        # TODO: this relies on the class inheriting from ExpressionWalker
+        super().process_expression(_put_probfacts_in_front(code))
+
     @add_match(ProbFact)
     def probabilistic_fact(self, probfact):
         predicate = probfact.consequent.functor
@@ -98,8 +121,44 @@ class ProbDatalogProgram(DatalogProgram):
         )
         return probfact
 
-    def probabilistic_database(self):
-        '''Returns probabilistic facts of the symbol table.'''
+    @add_match(
+        Implication(FunctionApplication[bool](Symbol, ...), Expression),
+        lambda exp: exp.antecedent != Constant[bool](True)
+    )
+    def statement_intensional(self, rule):
+        '''
+        Ensure that the typing of the probabilistic facts in the given rule
+        stays consistent with the typing from previously seen rules.
+        '''
+        pfact_pred_symbols = set(self.probabilistic_facts().keys())
+        rule_pfact_pred_symbols = get_pfact_pred_symbols(
+            rule, pfact_pred_symbols
+        )
+        for pred_symb in rule_pfact_pred_symbols:
+            typing = infer_pfact_typing_predicate_symbols(pred_symb, rule)
+            if self.typing_symbol not in self.symbol_table:
+                self.symbol_table[self.typing_symbol] = \
+                    Constant[Mapping](dict())
+            if pred_symb not in self.symbol_table[self.typing_symbol].value:
+                self.symbol_table[self.typing_symbol].value[pred_symb] = \
+                    typing
+            else:
+                _check_typing_consistency(
+                    self.symbol_table[self.typing_symbol].value[pred_symb],
+                    typing
+                )
+                self.symbol_table[self.typing_symbol].value[pred_symb] = \
+                    Constant[Mapping](
+                        _combine_typings(
+                            self.symbol_table[
+                                self.typing_symbol].value[pred_symb],
+                            typing
+                        )
+                    )
+        return super().statement_intensional(rule)
+
+    def probabilistic_facts(self):
+        '''Return probabilistic facts of the symbol table.'''
         return {
             k: v
             for k, v in self.symbol_table.items()
@@ -112,11 +171,11 @@ class ProbDatalogProgram(DatalogProgram):
         Rules in the program with at least one atom in their antecedent whose
         predicate is defined via a probabilistic fact.
         '''
-        probabilistic_predicates = set(self.probabilistic_database().keys())
+        probabilistic_predicates = set(self.probabilistic_facts().keys())
         prob_rules = defaultdict(set)
         for rule_disjunction in self.intensional_database().values():
             for rule in rule_disjunction.formulas:
-                for predicate in get_probfact_predicate_symbols(
+                for predicate in get_pfact_pred_symbols(
                     rule, probabilistic_predicates
                 ):
                     prob_rules[predicate].add(rule)
@@ -127,7 +186,7 @@ class ProbDatalogProgram(DatalogProgram):
         Probabilistic facts in the program whose probabilities are parameters.
         '''
         result = dict()
-        for block in self.probabilistic_database().values():
+        for block in self.probabilistic_facts().values():
             result.update({
                 probfact.probability: probfact
                 for probfact in block.expressions
@@ -219,56 +278,99 @@ class GDatalogToProbDatalog(
     pass
 
 
-def get_antecedent_atom_matching_predicate(predicate, rule):
-    if isinstance(rule.antecedent, FunctionApplication):
-        if rule.antecedent.functor == predicate:
-            return rule.antecedent
-        else:
-            raise NeuroLangException(
-                'No atom in antecedent with predicate {predicate}'
-            )
-    else:
-        matching = set(
-            formula for formula in rule.antecedent.formulas
-            if formula.functor == predicate
+def _check_typing_consistency(typing, local_typing):
+    if any(
+        not typing[i] & local_typing[i] for i in local_typing if i in typing
+    ):
+        raise NeuroLangException(
+            'Inconsistent typing of probabilistic fact variables'
         )
-        if not matching:
-            raise NeuroLangException(
-                'No atom in antecedent with predicate {predicate}'
-            )
-        elif len(matching) > 1:
-            raise NeuroLangException('Several atoms matching predicate')
-        return next(iter(matching))
 
 
-def get_fa_var_idxs(fa):
-    return {i for i, arg in enumerate(fa.args) if isinstance(arg, Symbol)}
+def _combine_typings(typing_a, typing_b):
+    '''
+    Combine two typings of a probabilistic fact's terms.
+
+    Parameters
+    ----------
+    typing_a : Dict[int, Set[Symbol]]
+        First typing.
+    typing_b : Dict[int, Set[Symbol]]
+        Second typing.
+
+    Returns
+    -------
+    Dict[int, Set[Symbol]]
+        Resulting combined typing.
+
+    '''
+    new_typing = dict()
+    for idx, pred_symbols in typing_a.items():
+        new_typing[idx] = pred_symbols
+    for idx, pred_symbols in typing_b.items():
+        if idx in new_typing:
+            new_typing[idx] &= pred_symbols
+        else:
+            new_typing[idx] = pred_symbols
+    return new_typing
 
 
-def get_typing_atoms(probfact, rule):
-    probfact_predicate_symbol = probfact.consequent.functor
-    probfact_antecedent_atom = get_antecedent_atom_matching_predicate(
-        probfact_predicate_symbol, rule
-    )
-    probfact_variable_positions = get_fa_var_idxs(probfact.consequent)
-    probfact_antecedent_variable_positions = get_fa_var_idxs(
-        probfact_antecedent_atom
-    )
-    matching_variable_positions = (
-        probfact_variable_positions & probfact_antecedent_variable_positions
-    )
-    variables = tuple(
-        arg for i, arg in enumerate(probfact_antecedent_atom.args)
-        if i in matching_variable_positions
-    )
-    return set(
-        formula for formula in extract_datalog_predicates(rule.antecedent)
-        if len(formula.args) == 1 and formula.args[0] in variables and
-        formula.functor != probfact_predicate_symbol
-    )
+def infer_pfact_typing_predicate_symbols(pfact_pred_symbol, rule):
+    '''
+    Infer a probabilistic fact's typing from a rule whose antecedent contains
+    the probabilistic fact's predicate symbol.
+
+    There can be several typing predicate symbol candidates in the rule. For
+    example, let `Q(x) :- A(x), Pfact(x), B(x)` be a rule where `Pfact` is the
+    probabilistic fact's predicate symbol. Both `A` and `B` can be the typing
+    predicate symbols for the variable `x` occurring in `Pfact(x)`. The output
+    will thus be `{0: {A, B}}`, `0` being the index of `x` in `Pfact(x)`.
+
+    Parameters
+    ----------
+    pfact_pred_symbol : Symbol
+        Predicate symbol of the probabilistic fact.
+    rule : Implication
+        Rule that contains an atom with the probabilistic fact's predicate
+        symbol in its antecedent.
+
+    Returns
+    -------
+    typing : Mapping[int, Set[Symbol]]
+        Mapping from term indices in the probabilistic fact's literal to the
+        typing predicate symbol candidates found in the rule.
+
+    '''
+    antecedent_atoms = extract_datalog_predicates(rule.antecedent)
+    rule_pfact_atoms = [
+        atom for atom in antecedent_atoms if atom.functor == pfact_pred_symbol
+    ]
+    if not rule_pfact_atoms:
+        raise NeuroLangException(
+            'Expected rule with atom whose predicate symbol is the '
+            'probabilistic fact\'s predicate symbol'
+        )
+    typing = dict()
+    for rule_pfact_atom in rule_pfact_atoms:
+        idx_to_var = {
+            i: arg
+            for i, arg in enumerate(rule_pfact_atom.args)
+            if isinstance(arg, Symbol)
+        }
+        local_typing = {
+            i: {
+                atom.functor
+                for atom in antecedent_atoms
+                if atom.args == (var, ) and atom.functor != pfact_pred_symbol
+            }
+            for i, var in idx_to_var.items()
+        }
+        _check_typing_consistency(typing, local_typing)
+        typing = _combine_typings(typing, local_typing)
+    return typing
 
 
-def get_possible_ground_substitutions(probfact, rule, interpretation):
+def get_possible_ground_substitutions(probfact, typing, interpretation):
     '''
     Get all possible substitutions that ground a given probabilistic fact in a
     given interpretation based on a rule where the predicate of the
@@ -288,26 +390,28 @@ def get_possible_ground_substitutions(probfact, rule, interpretation):
         probabilistic fact.
 
     '''
-    substitutions_per_variable = {
-        atom.args[0]: frozenset(
-            fact.consequent.args[0]
-            for fact in interpretation
-            if fact.consequent.functor == atom.functor
+    pfact_pred_symbol = probfact.consequent.functor
+    pfact_args = probfact.consequent.args
+    facts_per_variable = {
+        pfact_args[var_idx]: set(
+            tupl[0]
+            for tupl in interpretation.elements[next(iter(typing_pred_symbs))]
         )
-        for atom in get_typing_atoms(probfact, rule)
+        for var_idx, typing_pred_symbs in typing.items()
+        if isinstance(pfact_args[var_idx], Symbol)
     }
     return frozenset({
-        frozenset(zip(substitutions_per_variable.keys(), values))
-        for values in itertools.product(*substitutions_per_variable.values())
+        frozenset(zip(facts_per_variable.keys(), values))
+        for values in itertools.product(*facts_per_variable.values())
     })
 
 
-def _probfact_parameter_estimation(probfact, rule, interpretations):
+def _probfact_parameter_estimation(probfact, typing, interpretations):
     n_ground_instances = 0
     n_possible_substitutions = 0
     for interpretation in interpretations:
         for substitution in get_possible_ground_substitutions(
-            probfact, rule, interpretation
+            probfact, typing, interpretation
         ):
             n_possible_substitutions += 1
             if Fact(
@@ -317,7 +421,7 @@ def _probfact_parameter_estimation(probfact, rule, interpretations):
     return n_ground_instances / n_possible_substitutions
 
 
-def full_observability_parameter_estimation(program, interpretations):
+def full_observability_parameter_estimation(prog, interpretations):
     '''
     Estimate parametric probabilities of the probabilistic facts in a given
     ProbDatalog program using the given fully-observable interpretations.
@@ -331,11 +435,11 @@ def full_observability_parameter_estimation(program, interpretations):
 
     '''
     estimations = dict()
-    probabilistic_rules = program.probabilistic_rules()
-    parametric_probfacts = program.parametric_probfacts()
+    parametric_probfacts = prog.parametric_probfacts()
     for parameter, probfact in parametric_probfacts.items():
-        rule = next(iter(probabilistic_rules[probfact.consequent.functor]))
+        pfact_pred_symbol = probfact.consequent.functor
+        typing = prog.symbol_table[prog.typing_symbol].value[pfact_pred_symbol]
         estimations[parameter] = _probfact_parameter_estimation(
-            probfact, rule, interpretations
+            probfact, typing, interpretations
         )
     return estimations
