@@ -406,18 +406,26 @@ def get_possible_ground_substitutions(probfact, typing, interpretation):
     })
 
 
-def _probfact_parameter_estimation(probfact, typing, interpretations):
+def _count_ground_instances_in_interpretation(
+    pfact, substitutions, interpretation
+):
+    return sum(
+        Fact(apply_substitution(pfact.consequent, dict(substitution))) in
+        interpretation for substitution in substitutions
+    )
+
+
+def _probfact_parameter_estimation(pfact, typing, interpretations):
     n_ground_instances = 0
     n_possible_substitutions = 0
     for interpretation in interpretations:
-        for substitution in get_possible_ground_substitutions(
-            probfact, typing, interpretation
-        ):
-            n_possible_substitutions += 1
-            if Fact(
-                apply_substitution(probfact.consequent, dict(substitution))
-            ) in interpretation:
-                n_ground_instances += 1
+        substitutions = get_possible_ground_substitutions(
+            pfact, typing, interpretation
+        )
+        n_possible_substitutions += len(substitutions)
+        n_ground_instances += _count_ground_instances_in_interpretation(
+            pfact, substitutions, interpretation
+        )
     return n_ground_instances / n_possible_substitutions
 
 
