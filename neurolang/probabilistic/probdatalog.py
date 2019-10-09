@@ -11,10 +11,7 @@ from ..datalog.expressions import Fact, Implication, Disjunction, Conjunction
 from ..exceptions import NeuroLangException
 from ..datalog import DatalogProgram
 from ..expression_pattern_matching import add_match
-from ..expression_walker import (
-    PatternWalker, ExpressionWalker, EntryPointPatternWalker,
-    add_entry_point_match
-)
+from ..expression_walker import PatternWalker, ExpressionWalker
 from ..probabilistic.ppdl import is_gdatalog_rule
 from ..datalog.expression_processing import extract_datalog_predicates
 from .ppdl import concatenate_to_expression_block, get_dterm, DeltaTerm
@@ -109,7 +106,7 @@ class ProbDatalogProgram(DatalogProgram):
     typing_symbol = \
         Symbol[Mapping[Symbol, Mapping[int, Set[Symbol]]]]('__pfacts_typing__')
 
-    @add_entry_point_match(ExpressionBlock)
+    @add_match(ExpressionBlock)
     def program_code(self, code):
         # TODO: this relies on the class inheriting from ExpressionWalker
         super().process_expression(_put_probfacts_in_front(code))
@@ -149,19 +146,21 @@ class ProbDatalogProgram(DatalogProgram):
         Implication(FunctionApplication[bool](Symbol, ...), Expression),
         lambda exp: exp.antecedent != Constant[bool](True)
     )
-    def statement_intensional(self, rule):
+    def statement_intensional(self, expression):
         '''
         Ensure that the typing of the probabilistic facts in the given rule
         stays consistent with the typing from previously seen rules.
         '''
         pfact_pred_symbols = self.probabilistic_facts()
         rule_pfact_pred_symbols = get_pfact_pred_symbols(
-            rule, pfact_pred_symbols
+            expression, pfact_pred_symbols
         )
         for pred_symb in rule_pfact_pred_symbols:
-            typing = infer_pfact_typing_predicate_symbols(pred_symb, rule)
+            typing = infer_pfact_typing_predicate_symbols(
+                pred_symb, expression
+            )
             self._update_pfact_typing(pred_symb, typing)
-        return super().statement_intensional(rule)
+        return super().statement_intensional(expression)
 
     def probabilistic_facts(self):
         '''Return probabilistic facts of the symbol table.'''
@@ -397,7 +396,6 @@ def get_possible_ground_substitutions(probfact, typing, interpretation):
         probabilistic fact.
 
     '''
-    pfact_pred_symbol = probfact.consequent.functor
     pfact_args = probfact.consequent.args
     facts_per_variable = {
         pfact_args[var_idx]: set(

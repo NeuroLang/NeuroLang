@@ -2,7 +2,7 @@ import operator
 from typing import Iterable
 from uuid import uuid1
 
-from ..datalog.expressions import Disjunction, Conjunction
+from ..datalog.expressions import Disjunction
 from ..existential_datalog import Implication
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionBasicEvaluator
