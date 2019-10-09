@@ -71,25 +71,28 @@ class ProbChoice(Implication):
         consequent = Disjunction(probfacts)
         super().__init__(consequent, Constant[bool](True))
 
+    @property
+    def probfacts(self):
+        return self.consequent.formulas
 
-def get_pfact_pred_symbols(rule, probfact_predicates):
-    '''
-    Extract
-    '''
-    antecedent_predicates = set(
-        p.functor for p in extract_datalog_predicates(rule.antecedent)
+
+def get_pfact_pred_symbols(rule, pfact_pred_symbs):
+    return set(
+        p.functor
+        for p in extract_datalog_predicates(rule.antecedent)
+        if p.functor in pfact_pred_symbs
     )
-    return set(probfact_predicates) & antecedent_predicates
 
 
 def _put_probfacts_in_front(code_block):
-    return ExpressionBlock(
-        [exp for exp in code_block.expressions if isinstance(exp, ProbFact)] +
-        [
-            exp for exp in code_block.expressions
-            if not isinstance(exp, ProbFact)
-        ]
-    )
+    probfacts = []
+    non_probfacts = []
+    for expression in code_block.expressions:
+        if isinstance(expression, ProbFact):
+            probfacts.append(expression)
+        else:
+            non_probfacts.append(expression)
+    return ExpressionBlock(probfacts + non_probfacts)
 
 
 class ProbDatalogProgram(DatalogProgram):
@@ -151,7 +154,7 @@ class ProbDatalogProgram(DatalogProgram):
         Ensure that the typing of the probabilistic facts in the given rule
         stays consistent with the typing from previously seen rules.
         '''
-        pfact_pred_symbols = set(self.probabilistic_facts().keys())
+        pfact_pred_symbols = self.probabilistic_facts()
         rule_pfact_pred_symbols = get_pfact_pred_symbols(
             rule, pfact_pred_symbols
         )
@@ -237,13 +240,13 @@ class GDatalogToProbDatalogTranslator(PatternWalker):
                 'Other distributions than bernoulli are not supported'
             )
         probability = dterm.args[0]
-        probfact_predicate = Symbol(
+        pfact_pred_symb = Symbol(
             'ProbFact_{}_{}'.format(predicate.name, uuid.uuid1())
         )
         terms = tuple(
             arg for arg in datom.args if not isinstance(arg, DeltaTerm)
         )
-        probfact_atom = probfact_predicate(*terms)
+        probfact_atom = pfact_pred_symb(*terms)
         new_rule = Implication(
             predicate(*terms),
             conjunct_formulas(rule.antecedent, probfact_atom)
@@ -405,7 +408,7 @@ def get_possible_ground_substitutions(probfact, typing, interpretation):
         if isinstance(pfact_args[var_idx], Symbol)
     }
     return frozenset({
-        frozenset(zip(facts_per_variable.keys(), values))
+        frozenset(zip(facts_per_variable, values))
         for values in itertools.product(*facts_per_variable.values())
     })
 

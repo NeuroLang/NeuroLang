@@ -14,14 +14,6 @@ from ..expressions import (
 from ..solver_datalog_naive import DatalogBasic, is_conjunctive_expression
 
 
-def is_conjunction(expression):
-    return isinstance(expression, Conjunction) or (
-        isinstance(expression, FunctionApplication) and
-        isinstance(expression.functor, Constant) and
-        expression.functor.value == operator.and_
-    )
-
-
 def is_gdatalog_rule(exp):
     return (
         isinstance(exp, Implication) and
