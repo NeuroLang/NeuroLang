@@ -121,6 +121,27 @@ class ProbDatalogProgram(DatalogProgram):
         )
         return probfact
 
+    def _update_pfact_typing(self, symbol, typing):
+        '''
+        Update typing information for a probabilistic fact's terms.
+
+        Parameters
+        ----------
+        symbol : Symbol
+            Probabilistic fact's predicate symbol.
+        typing : Mapping[int, Set[Symbol]]
+            New typing information that will be integrated.
+
+        '''
+        if self.typing_symbol not in self.symbol_table:
+            self.symbol_table[self.typing_symbol] = Constant(dict())
+        if symbol not in self.symbol_table[self.typing_symbol].value:
+            self.symbol_table[self.typing_symbol].value[symbol] = dict()
+        prev_typing = self.symbol_table[self.typing_symbol].value[symbol]
+        _check_typing_consistency(prev_typing, typing)
+        new_typing = _combine_typings(prev_typing, typing)
+        self.symbol_table[self.typing_symbol].value[symbol] = new_typing
+
     @add_match(
         Implication(FunctionApplication[bool](Symbol, ...), Expression),
         lambda exp: exp.antecedent != Constant[bool](True)
@@ -136,25 +157,7 @@ class ProbDatalogProgram(DatalogProgram):
         )
         for pred_symb in rule_pfact_pred_symbols:
             typing = infer_pfact_typing_predicate_symbols(pred_symb, rule)
-            if self.typing_symbol not in self.symbol_table:
-                self.symbol_table[self.typing_symbol] = \
-                    Constant[Mapping](dict())
-            if pred_symb not in self.symbol_table[self.typing_symbol].value:
-                self.symbol_table[self.typing_symbol].value[pred_symb] = \
-                    typing
-            else:
-                _check_typing_consistency(
-                    self.symbol_table[self.typing_symbol].value[pred_symb],
-                    typing
-                )
-                self.symbol_table[self.typing_symbol].value[pred_symb] = \
-                    Constant[Mapping](
-                        _combine_typings(
-                            self.symbol_table[
-                                self.typing_symbol].value[pred_symb],
-                            typing
-                        )
-                    )
+            self._update_pfact_typing(pred_symb, typing)
         return super().statement_intensional(rule)
 
     def probabilistic_facts(self):
