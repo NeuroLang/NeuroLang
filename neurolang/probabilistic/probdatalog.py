@@ -113,6 +113,7 @@ class ProbDatalogProgram(DatalogProgram):
 
     @add_match(ProbFact)
     def probabilistic_fact(self, probfact):
+        self.protected_keywords.add(self.typing_symbol.name)
         predicate = probfact.consequent.functor
         if predicate not in self.symbol_table:
             self.symbol_table[predicate] = ExpressionBlock(tuple())
