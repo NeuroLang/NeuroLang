@@ -174,14 +174,15 @@ class ProbDatalogProgram(DatalogProgram):
         Rules in the program with at least one atom in their antecedent whose
         predicate is defined via a probabilistic fact.
         '''
-        probabilistic_predicates = set(self.probabilistic_facts().keys())
+        pfact_pred_symbs = set(self.probabilistic_facts().keys())
         prob_rules = defaultdict(set)
         for rule_disjunction in self.intensional_database().values():
             for rule in rule_disjunction.formulas:
-                for predicate in get_pfact_pred_symbols(
-                    rule, probabilistic_predicates
-                ):
-                    prob_rules[predicate].add(rule)
+                prob_rules.update({
+                    symbol: prob_rules[symbol] | {rule}
+                    for symbol in
+                    get_pfact_pred_symbols(rule, pfact_pred_symbs)
+                })
         return prob_rules
 
     def parametric_probfacts(self):
