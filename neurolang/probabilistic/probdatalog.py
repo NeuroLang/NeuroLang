@@ -457,3 +457,13 @@ def full_observability_parameter_estimation(prog, interpretations):
             probfact, typing, interpretations
         )
     return estimations
+
+
+class ProbfactAsFactWalker(ExpressionWalker):
+    @add_match(ProbFact)
+    def probfact(self, pfact):
+        if any(not isinstance(arg, Constant) for arg in pfact.consequent.args):
+            raise NeuroLangException(
+                'Variables in probabilistic facts are currently unsupported'
+            )
+        return Fact(pfact.consequent)

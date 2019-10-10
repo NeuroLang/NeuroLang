@@ -9,7 +9,7 @@ from ...datalog.instance import SetInstance
 from ..probdatalog import (
     ProbDatalogProgram, ProbFact, ProbChoice, GDatalogToProbDatalog,
     get_possible_ground_substitutions, full_observability_parameter_estimation,
-    infer_pfact_typing_predicate_symbols
+    infer_pfact_typing_predicate_symbols, ProbfactAsFactWalker
 )
 from ..ppdl import DeltaTerm
 
@@ -296,3 +296,16 @@ def test_infer_pfact_typing_predicate_symbols():
     rule = Implication(Q(x, y), Conjunction([P(x), Q(y), Pfact(x), Pfact(y)]))
     with pytest.raises(NeuroLangException, match=r'Inconsistent'):
         infer_pfact_typing_predicate_symbols(Pfact, rule)
+
+
+def test_probfact_as_fact():
+    code = ExpressionBlock([
+        ProbFact(p, Z(a)),
+        Implication(Q(x), Conjunction([P(x), Z(x)])),
+        Fact(P(a)),
+        Fact(P(b)),
+    ])
+    walker = ProbfactAsFactWalker()
+    new_code = walker.walk(code)
+    assert Fact(Z(a)) in new_code.expressions
+    assert Fact(P(a)) in new_code.expressions
