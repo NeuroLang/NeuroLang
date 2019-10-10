@@ -1,93 +1,94 @@
-from owlready2 import get_ontology
+import rdflib
+import pandas as pd
+import nibabel as nib
+
 from nilearn import datasets
 
-import nibabel as nib
-import os.path
+class OntologyHandler():
+    def __init__(self, paths, namespaces):
+        self.namespaces_dic = None
+        self. owl_dic = None
+        if isinstance(paths, list):
+            self.df = self._parse_ontology(paths, namespaces)
+        else:
+            self.df = self._parse_ontology([paths], [namespaces])
 
-from urllib.request import urlretrieve
+    def _parse_ontology(self, paths, namespaces):
+        df = pd.DataFrame()
+        temp = []
+        for path in paths:
+            g = rdflib.Graph()
+            g.load(path)
+            gdf = pd.DataFrame(iter(1))
+            gdf = gdf.astype(str)
+            gdf.columns = ['Entity', 'Property', 'Value']
+            temp.append(gdf)
 
-class FMAOntology():
-    def __init__(self, path=None):
-        if path is None:
-            if not os.path.exists('fma.owl'):
-                print("Downloading FMA Ontology")
-                urlretrieve("http://data.bioontology.org/ontologies/FMA/submissions/29/download?apikey=8b5b7825-538d-40e0-9e9e-5ab9274a9aeb", "fma.owl")
+        df = df.append(temp)
 
-            path = 'fma.owl'
-        self._ontology = get_ontology(path)
-        self.loaded = False
+        namespaces_properties = df[~df.Property.str.contains('#')].Property.unique()
+        namespaces_properties = list(filter(lambda x: (x in n for n in namespaces), namespaces_properties))
+        namespaces_prop = list(map(lambda x: x[0]+':'+x[1], list(map(lambda y: y.split('/')[-2:], namespaces_properties))))
+        self.namespaces_dic = dict(zip(namespaces_properties, namespaces_prop))
 
-    def load_ontology(self):
-        if not self.loaded:
-            self._ontology.load()
-            self.loaded = True
+        owl_properties = df[df.Property.str.contains('#')].Property.unique()
+        owl_rdf = list(map(lambda a: list(map(lambda s: s.replace('-', '_'), a.split('/')[-1].split('#'))), owl_properties))
+        owl_rdf = list(map(lambda x: x[0]+':'+x[1], owl_rdf))
+        self.owl_dic = dict(zip(owl_properties, owl_rdf))
 
-    def get_nodes(self, main_label):
-        if self.loaded:
-            return self.process_nodes(main_label)
+        return df
 
-    def get_subclasses(self, main_label):
-        if self.loaded:
-            return self.process_subclasses(main_label, apply=self.parse_isSub)
+    def replace_property(self, prop):
+        if prop in self.owl_dic:
+            new_prop = self.owl_dic[prop]
+        elif prop in self.namespaces_dic:
+            new_prop = self.namespaces_dic[prop]
+        else:
+            new_prop = prop
+        return new_prop
 
-    def get_synonyms(self, main_label):
-        if self.loaded:
-            return self.process_synonyms(main_label, apply=self.parse_isSyn)
 
-    def process_nodes(self, main_label):
-        labels = []
-        for main in self._ontology.search(label=main_label):
-            subs = list(main.subclasses())
-            while subs:
-                subc = subs.pop(0)
-                labels.append(subc.label[0])
-                subs = subs + list(subc.subclasses())
-        labels = list(dict.fromkeys(labels))
-        return labels
 
-    def process_subclasses(self, main_label, apply=None):
-        subclasses = dict()
-        for main in self._ontology.search(label=main_label):
-            subs = [main]
-            while subs:
-                subc = subs.pop(0)
-                temp = list(subc.subclasses())
-                if len(temp) > 0:
-                    subclasses[subc.label[0]] = [e.label[0] for e in temp]
-                    subs = subs + temp
-        if apply is not None:
-            subclasses = apply(subclasses)
-        return subclasses
+    def load_ontology(self, neurolangDL, destriuex_relations=False):
+        neurolangDL.add_tuple_set(( (e1,) for e1, e2, e3 in self.df.values), name='dom')
+        neurolangDL.add_tuple_set(( (self.replace_property(e2),) for e1, e2, e3 in self.df.values), name='dom')
+        neurolangDL.add_tuple_set(( (e3,) for e1, e2, e3 in self.df.values), name='dom')
+        neurolangDL.add_tuple_set(( (e1, self.replace_property(e2), e3,) for e1, e2, e3 in self.df.values), name='triple')
 
-    def parse_isSub(self, subc):
-        subclass = []
-        for k, v in subc.items():
-            for elem in v:
-                subclass.append((k, elem))
-        return subclass
+        all_props = list(self.owl_dic.keys()) + list(self.namespaces_dic.keys())
+        for prop in all_props:
+            name = self.replace_property(prop)
+            temp = self.df.loc[self.df.Property == prop]
+            symbol_name = name.replace(':', '_')
+            neurolangDL.add_tuple_set(( (x, z,) for x, y, z in temp.values), name=symbol_name)
 
-    def process_synonyms(self, main_label, apply=None):
-        synonyms = dict()
-        for main in self._ontology.search(label=main_label):
-            subs = [main]
-            while subs:
-                subc = subs.pop(0)
-                temp = list(subc.subclasses())
-                syn = subc.synonym
-                if len(syn) > 0:
-                    synonyms[subc.label[0]] = syn
-                subs = subs + temp
-        if apply is not None:
-            synonyms = apply(synonyms)
-        return synonyms
+        if destriuex_relations:
+            relations_list = self.get_destrieux_relations()
+            neurolangDL.add_tuple_set(( (e1,e2,) for e1, e2 in relations_list), name='relations')
 
-    def parse_isSyn(self, syn):
-        syns = []
-        for k, v in syn.items():
-            for elem in v:
-                syns.append((k, elem))
-                syns.append((elem, k))
-        return syns
+            destrieux_dataset = datasets.fetch_atlas_destrieux_2009()
+            destrieux_map = nib.load(destrieux_dataset['maps'])
+
+            destrieux = []
+            for label_number, name in destrieux_dataset['labels']:
+                if label_number == 0:
+                    continue
+                name = name.decode()
+                region = neurolangDL.create_region(
+                    destrieux_map, label=label_number
+                )
+                if region is None:
+                    continue
+                name = name.replace('-', '_').replace(' ', '_').lower()
+                destrieux.append((name, region))
+
+            neurolangDL.add_tuple_set(((
+                name,
+                region,
+            ) for name, region in destrieux),name='destrieux_regions')
+
+        return neurolangDL
+
 
     def get_destrieux_relations(self):
         return [
@@ -311,79 +312,3 @@ class FMAOntology():
             ('r_s_temporal_sup', 'Right superior temporal sulcus'),
             ('r_s_temporal_transverse', 'Right transverse temporal sulcus'),
         ]
-
-    def init_ontology(
-        self,
-        neurolangDL,
-        root_node='Segment of brain',
-        destriuex_relations=False
-    ):
-
-        nodes = self.get_nodes(root_node)
-        subc = self.get_subclasses(root_node)
-        syn = self.get_synonyms(root_node)
-
-        neurolangDL.add_tuple_set(((str(e), ) for e in nodes), name='nodes')
-
-        neurolangDL.add_tuple_set(((
-            str(e1),
-            str(e2),
-        ) for e1, e2 in subc),
-                                  name='subclasses')
-
-        neurolangDL.add_tuple_set(((
-            str(e1),
-            str(e2),
-        ) for e1, e2 in syn),
-                                  name='synonyms')
-
-        x = neurolangDL.new_symbol(name='x')
-        y = neurolangDL.new_symbol(name='y')
-        z = neurolangDL.new_symbol(name='z')
-        val = neurolangDL.new_symbol(name='val')
-        isSub = neurolangDL.new_symbol(name='isSub')
-        isSyn = neurolangDL.new_symbol(name='isSyn')
-
-        if destriuex_relations:
-            destrieux_dataset = datasets.fetch_atlas_destrieux_2009()
-            destrieux_map = nib.load(destrieux_dataset['maps'])
-
-            d = []
-            for label_number, name in destrieux_dataset['labels']:
-                if label_number == 0:
-                    continue
-                name = name.decode()
-                region = neurolangDL.create_region(
-                    destrieux_map, label=label_number
-                )
-                if region is None:
-                    continue
-                name = name.replace('-', '_').replace(' ', '_')
-                d.append((name.lower(), region))
-
-            neurolangDL.add_tuple_set(((
-                e1,
-                e2,
-            ) for e1, e2 in d),
-                                      name='destrieux_regions')
-
-            destrieux = self.get_destrieux_relations()
-            relation = neurolangDL.new_symbol(name='relation')
-
-            neurolangDL.add_tuple_set(((
-                e1,
-                e2,
-            ) for e1, e2 in destrieux),
-                                      name='relations')
-
-            neurolangDL.query(
-                relation(x, y), neurolangDL.symbols.relations(x, y)
-            )
-
-        neurolangDL.query(val(x), neurolangDL.symbols.nodes(x))
-        neurolangDL.query(isSyn(x, y), neurolangDL.symbols.synonyms(x, y))
-        neurolangDL.query(isSub(x, y), neurolangDL.symbols.subclasses(x, y))
-
-        neurolangDL.query(isSub(x, z), isSub(x, y) & isSub(y, z))
-
-        return neurolangDL
