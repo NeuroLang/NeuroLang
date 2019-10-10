@@ -4,10 +4,11 @@ import nibabel as nib
 
 from nilearn import datasets
 
+
 class OntologyHandler():
     def __init__(self, paths, namespaces):
         self.namespaces_dic = None
-        self. owl_dic = None
+        self.owl_dic = None
         if isinstance(paths, list):
             self.df = self._parse_ontology(paths, namespaces)
         else:
@@ -26,14 +27,33 @@ class OntologyHandler():
 
         df = df.append(temp)
 
-        namespaces_properties = df[~df.Property.str.contains('#')].Property.unique()
-        namespaces_properties = list(filter(lambda x: (x in n for n in namespaces), namespaces_properties))
-        namespaces_prop = list(map(lambda x: x[0]+':'+x[1], list(map(lambda y: y.split('/')[-2:], namespaces_properties))))
+        namespaces_properties = df[~df.Property.str.
+                                   contains('#')].Property.unique()
+        namespaces_properties = list(
+            filter(
+                lambda x: (x in n for n in namespaces), namespaces_properties
+            )
+        )
+        namespaces_prop = list(
+            map(
+                lambda x: x[0] + ':' + x[1],
+                list(map(lambda y: y.split('/')[-2:], namespaces_properties))
+            )
+        )
         self.namespaces_dic = dict(zip(namespaces_properties, namespaces_prop))
 
         owl_properties = df[df.Property.str.contains('#')].Property.unique()
-        owl_rdf = list(map(lambda a: list(map(lambda s: s.replace('-', '_'), a.split('/')[-1].split('#'))), owl_properties))
-        owl_rdf = list(map(lambda x: x[0]+':'+x[1], owl_rdf))
+        owl_rdf = list(
+            map(
+                lambda a: list(
+                    map(
+                        lambda s: s.replace('-', '_'),
+                        a.split('/')[-1].split('#')
+                    )
+                ), owl_properties
+            )
+        )
+        owl_rdf = list(map(lambda x: x[0] + ':' + x[1], owl_rdf))
         self.owl_dic = dict(zip(owl_properties, owl_rdf))
 
         return df
@@ -47,24 +67,40 @@ class OntologyHandler():
             new_prop = prop
         return new_prop
 
-
-
     def load_ontology(self, neurolangDL, destriuex_relations=False):
-        neurolangDL.add_tuple_set(( (e1,) for e1, e2, e3 in self.df.values), name='dom')
-        neurolangDL.add_tuple_set(( (self.replace_property(e2),) for e1, e2, e3 in self.df.values), name='dom')
-        neurolangDL.add_tuple_set(( (e3,) for e1, e2, e3 in self.df.values), name='dom')
-        neurolangDL.add_tuple_set(( (e1, self.replace_property(e2), e3,) for e1, e2, e3 in self.df.values), name='triple')
+        neurolangDL.add_tuple_set(((e1, ) for e1, e2, e3 in self.df.values),
+                                  name='dom')
+        neurolangDL.add_tuple_set(((self.replace_property(e2), )
+                                   for e1, e2, e3 in self.df.values),
+                                  name='dom')
+        neurolangDL.add_tuple_set(((e3, ) for e1, e2, e3 in self.df.values),
+                                  name='dom')
+        neurolangDL.add_tuple_set(((
+            e1,
+            self.replace_property(e2),
+            e3,
+        ) for e1, e2, e3 in self.df.values),
+                                  name='triple')
 
-        all_props = list(self.owl_dic.keys()) + list(self.namespaces_dic.keys())
+        all_props = list(self.owl_dic.keys()
+                         ) + list(self.namespaces_dic.keys())
         for prop in all_props:
             name = self.replace_property(prop)
             temp = self.df.loc[self.df.Property == prop]
             symbol_name = name.replace(':', '_')
-            neurolangDL.add_tuple_set(( (x, z,) for x, y, z in temp.values), name=symbol_name)
+            neurolangDL.add_tuple_set(((
+                x,
+                z,
+            ) for x, y, z in temp.values),
+                                      name=symbol_name)
 
         if destriuex_relations:
             relations_list = self.get_destrieux_relations()
-            neurolangDL.add_tuple_set(( (e1,e2,) for e1, e2 in relations_list), name='relations')
+            neurolangDL.add_tuple_set(((
+                e1,
+                e2,
+            ) for e1, e2 in relations_list),
+                                      name='relations')
 
             destrieux_dataset = datasets.fetch_atlas_destrieux_2009()
             destrieux_map = nib.load(destrieux_dataset['maps'])
@@ -85,10 +121,10 @@ class OntologyHandler():
             neurolangDL.add_tuple_set(((
                 name,
                 region,
-            ) for name, region in destrieux),name='destrieux_regions')
+            ) for name, region in destrieux),
+                                      name='destrieux_regions')
 
         return neurolangDL
-
 
     def get_destrieux_relations(self):
         return [
