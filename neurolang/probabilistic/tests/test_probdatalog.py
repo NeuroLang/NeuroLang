@@ -203,7 +203,7 @@ def test_full_observability_parameter_estimation():
 
     probfact_1 = ProbFact(p_1, Z(x))
     probfact_2 = ProbFact(p_2, Y(y))
-    rule = Implication(Q(x), Conjunction([Z(x), Y(y), P(x), R(y)]))
+    rule = Implication(Q(x, y), Conjunction([Z(x), Y(y), P(x), R(y)]))
     code = ExpressionBlock((
         probfact_1,
         probfact_2,
@@ -221,7 +221,7 @@ def test_full_observability_parameter_estimation():
             R: frozenset({(a, )}),
             Z: frozenset({(a, )}),
             Y: frozenset({(a, )}),
-            Q: frozenset({(a, )})
+            Q: frozenset({(a, a)})
         }),
         SetInstance({
             P: frozenset({(a, ), (b, )}),
@@ -309,3 +309,12 @@ def test_probfact_as_fact():
     new_code = walker.walk(code)
     assert Fact(Z(a)) in new_code.expressions
     assert Fact(P(a)) in new_code.expressions
+
+
+def test_program_with_existential_raises_exception():
+    code = ExpressionBlock([
+        Implication(Q(x), P(x, y)),
+    ])
+    program = ProbDatalog()
+    with pytest.raises(NeuroLangException, match=r'Existentially'):
+        program.walk(code)

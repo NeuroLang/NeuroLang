@@ -13,7 +13,10 @@ from ..datalog import DatalogProgram
 from ..expression_pattern_matching import add_match
 from ..expression_walker import PatternWalker, ExpressionWalker
 from ..probabilistic.ppdl import is_gdatalog_rule
-from ..datalog.expression_processing import extract_datalog_predicates
+from ..datalog.expression_processing import (
+    extract_datalog_predicates,
+    implication_has_existential_variable_in_antecedent
+)
 from .ppdl import concatenate_to_expression_block, get_dterm, DeltaTerm
 
 
@@ -151,7 +154,24 @@ class ProbDatalogProgram(DatalogProgram):
         '''
         Ensure that the typing of the probabilistic facts in the given rule
         stays consistent with the typing from previously seen rules.
+
+        Raises
+        ------
+        NeuroLangException
+            If the implication's antecedent has an existentially quantified
+            variable. See [1]_ for the definition of the syntax of CP-Logic
+            (the syntax of Prob(Data)Log can be viewed as a subset of the
+            syntax of CP-Logic).
+
+        .. [1] Vennekens, "Algebraic and logical study of constructive
+        processes in knowledge representation", section 5.2.1 Syntax.
+
         '''
+        if implication_has_existential_variable_in_antecedent(expression):
+            raise NeuroLangException(
+                'Existentially quantified variables are '
+                'forbidden in Prob(Data)log'
+            )
         pfact_pred_symbols = self.probabilistic_facts()
         rule_pfact_pred_symbols = get_pfact_pred_symbols(
             expression, pfact_pred_symbols
