@@ -20,7 +20,7 @@ class OntologyHandler():
         for path in paths:
             g = rdflib.Graph()
             g.load(path)
-            gdf = pd.DataFrame(iter(1))
+            gdf = pd.DataFrame(iter(g))
             gdf = gdf.astype(str)
             gdf.columns = ['Entity', 'Property', 'Value']
             temp.append(gdf)
