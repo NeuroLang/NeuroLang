@@ -7,14 +7,25 @@ from ..expressions import (
     Expression, Constant, Symbol, FunctionApplication, ExpressionBlock
 )
 from ..unification import apply_substitution
-from ..datalog.expressions import Fact, Implication, Disjunction, Conjunction
+from ..datalog.expressions import (
+    Fact, Implication, Disjunction, Conjunction, TranslateToLogic
+)
 from ..exceptions import NeuroLangException
 from ..datalog import DatalogProgram
 from ..expression_pattern_matching import add_match
-from ..expression_walker import PatternWalker, ExpressionWalker
+from ..expression_walker import (
+    PatternWalker, ExpressionWalker, ExpressionBasicEvaluator
+)
 from ..probabilistic.ppdl import is_gdatalog_rule
-from ..datalog.expression_processing import extract_datalog_predicates
+from ..datalog.instance import SetInstance
+from ..datalog.expression_processing import (
+    extract_datalog_predicates,
+    implication_has_existential_variable_in_antecedent
+)
 from .ppdl import concatenate_to_expression_block, get_dterm, DeltaTerm
+from ..datalog.chase import (
+    ChaseNamedRelationalAlgebraMixin, ChaseGeneral, ChaseNaive
+)
 
 
 class ProbFact(Fact):
@@ -151,7 +162,24 @@ class ProbDatalogProgram(DatalogProgram):
         '''
         Ensure that the typing of the probabilistic facts in the given rule
         stays consistent with the typing from previously seen rules.
+
+        Raises
+        ------
+        NeuroLangException
+            If the implication's antecedent has an existentially quantified
+            variable. See [1]_ for the definition of the syntax of CP-Logic
+            (the syntax of Prob(Data)Log can be viewed as a subset of the
+            syntax of CP-Logic).
+
+        .. [1] Vennekens, "Algebraic and logical study of constructive
+        processes in knowledge representation", section 5.2.1 Syntax.
+
         '''
+        if implication_has_existential_variable_in_antecedent(expression):
+            raise NeuroLangException(
+                'Existentially quantified variables are '
+                'forbidden in Prob(Data)log'
+            )
         pfact_pred_symbols = self.probabilistic_facts()
         rule_pfact_pred_symbols = get_pfact_pred_symbols(
             expression, pfact_pred_symbols
@@ -457,3 +485,110 @@ def full_observability_parameter_estimation(prog, interpretations):
             probfact, typing, interpretations
         )
     return estimations
+
+
+class ProbfactAsFactWalker(ExpressionWalker):
+    @add_match(ProbFact)
+    def probfact(self, pfact):
+        if any(not isinstance(arg, Constant) for arg in pfact.consequent.args):
+            raise NeuroLangException(
+                'Variables in probabilistic facts are currently unsupported'
+            )
+        return Fact(pfact.consequent)
+
+
+class Datalog(TranslateToLogic, DatalogProgram, ExpressionBasicEvaluator):
+    pass
+
+
+class Chase(ChaseNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
+    pass
+
+
+def conjunct_if_needed(formulas):
+    '''Only conjunct the given formulas if there is more than one.'''
+    if len(formulas) == 1:
+        return formulas[0]
+    else:
+        return Conjunction(formulas)
+
+
+def get_rule_groundings(rule, instance):
+    '''
+    Find all groundings of a rule based on an instance.
+
+    TODO: speed up with tabular substitutions
+    '''
+    head_pred_symb = rule.consequent.functor
+    if head_pred_symb not in instance.elements:
+        return set()
+    grounded_rules = set()
+    for tupl in instance.elements[head_pred_symb]:
+        substitution = {
+            arg: tupl[i]
+            for i, arg in enumerate(rule.consequent.args)
+            if isinstance(arg, Symbol)
+        }
+        substituted_antecedent_atoms = [
+            apply_substitution(atom, substitution)
+            for atom in extract_datalog_predicates(rule.antecedent)
+        ]
+        if any(
+            Fact(atom) not in instance for atom in substituted_antecedent_atoms
+        ):
+            continue
+        grounded_rules.add(
+            Implication(
+                apply_substitution(rule.consequent, substitution),
+                conjunct_if_needed(substituted_antecedent_atoms)
+            )
+        )
+    return grounded_rules
+
+
+def dict_to_instance(dict_instance):
+    '''Convert a `Dict[Symbol, Constant[Set[Tuple]]]` to a `SetInstance`.'''
+    return SetInstance({
+        pred_symb:
+        frozenset({const_tuple.value
+                   for const_tuple in const_set.value})
+        for pred_symb, const_set in dict_instance.items()
+    })
+
+
+def ground_probdatalog_program(probdatalog_code):
+    '''
+    Ground a Prob(Data)Log program by considering all its probabilistic facts
+    to be true.
+
+    This is a 3 steps process:
+        1. convert all ProbFact in the program to Fact without
+        probabilities, thereby obtaining a deterministic Datalog program,
+        2. solving that program to obtain a Datalog instance containing all
+        extensional and intensional facts,
+        3. using this instance to find all possible groundings of rules in the
+        intensional database.
+
+    '''
+    datalog_code = ProbfactAsFactWalker().walk(probdatalog_code)
+    dl = Datalog()
+    dl.walk(datalog_code)
+    chase = Chase(dl)
+    solution_instance = dict_to_instance(chase.build_chase_solution())
+    grounded_rules = set.union(
+        *[set()] + [
+            set.union(
+                *[
+                    get_rule_groundings(rule, solution_instance)
+                    for rule in disjunction.formulas
+                ]
+            )
+            for disjunction in dl.intensional_database().values()
+        ]
+    )
+    new_expressions = []
+    for exp in probdatalog_code.expressions:
+        if isinstance(exp, (Fact, ProbFact)):
+            new_expressions.append(exp)
+    new_expressions += grounded_rules
+    return ExpressionBlock(new_expressions)
