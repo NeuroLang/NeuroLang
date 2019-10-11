@@ -36,7 +36,7 @@ class OntologyHandler():
         )
         namespaces_prop = list(
             map(
-                lambda x: x[0] + ':' + x[1],
+                lambda x: (x[0]+':'+x[1]).lstrip('0123456789.-_ :'),
                 list(map(lambda y: y.split('/')[-2:], namespaces_properties))
             )
         )
@@ -47,7 +47,7 @@ class OntologyHandler():
             map(
                 lambda a: list(
                     map(
-                        lambda s: s.replace('-', '_'),
+                        lambda s: s.replace('-', '_').lstrip('0123456789.-_ '),
                         a.split('/')[-1].split('#')
                     )
                 ), owl_properties
