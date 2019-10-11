@@ -367,3 +367,16 @@ def test_ground_probdatalog_program():
     )
     assert Implication(Y(a), R(a)) in grounded.expressions
     assert Implication(Y(c), R(c)) in grounded.expressions
+
+    code = ExpressionBlock([
+    ])
+    grounded = ground_probdatalog_program(code)
+    assert not grounded.expressions
+
+    # TODO: the following code breaks because of issue #194
+    #       uncomment when issue is fixed
+    # code = ExpressionBlock([
+        # Fact(P(a)),
+    # ])
+    # grounded = ground_probdatalog_program(code)
+    # assert Fact(P(a)) in grounded.expressions

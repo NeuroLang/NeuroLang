@@ -576,7 +576,7 @@ def ground_probdatalog_program(probdatalog_code):
     chase = Chase(dl)
     solution_instance = dict_to_instance(chase.build_chase_solution())
     grounded_rules = set.union(
-        *[
+        *[set()] + [
             set.union(
                 *[
                     get_rule_groundings(rule, solution_instance)
