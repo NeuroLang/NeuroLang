@@ -9,7 +9,8 @@ from ...datalog.instance import SetInstance
 from ..probdatalog import (
     ProbDatalogProgram, ProbFact, ProbChoice, GDatalogToProbDatalog,
     get_possible_ground_substitutions, full_observability_parameter_estimation,
-    infer_pfact_typing_predicate_symbols, ProbfactAsFactWalker
+    infer_pfact_typing_predicate_symbols, ProbfactAsFactWalker,
+    get_rule_groundings, ground_probdatalog_program
 )
 from ..ppdl import DeltaTerm
 
@@ -28,6 +29,7 @@ y = Symbol('y')
 z = Symbol('z')
 a = Constant('a')
 b = Constant('b')
+c = Constant('c')
 bernoulli = Symbol('bernoulli')
 
 
@@ -318,3 +320,50 @@ def test_program_with_existential_raises_exception():
     program = ProbDatalog()
     with pytest.raises(NeuroLangException, match=r'Existentially'):
         program.walk(code)
+
+
+def test_ground_probdatalog_program():
+    rule = Implication(Q(x), Conjunction([P(x), Z(x)]))
+    code = ExpressionBlock([
+        ProbFact(C_(0.3), Z(a)),
+        ProbFact(C_(0.3), Z(b)),
+        Fact(P(a)),
+        Fact(P(b)),
+        rule
+    ])
+    assert get_rule_groundings(rule, SetInstance({
+        P: frozenset({(a, ), (b, )}),
+        Z: frozenset({(a, ), (b, )}),
+        Q: frozenset({(a, ), (b, )}),
+    })) == {
+        Implication(Q(a), Conjunction([P(a), Z(a)])),
+        Implication(Q(b), Conjunction([P(b), Z(b)])),
+    }
+    grounded = ground_probdatalog_program(code)
+    assert Implication(Q(a), Conjunction([P(a), Z(a)])) in grounded.expressions
+
+    code = ExpressionBlock([
+        ProbFact(C_(0.5), R(a)),
+        ProbFact(C_(0.5), R(c)),
+        Fact(P(a)),
+        Fact(P(b)),
+        Fact(Q(a)),
+        Fact(Q(b)),
+        Implication(Z(x, y), Conjunction([P(x), Q(y)])),
+        Implication(Y(x), R(x)),
+    ])
+    grounded = ground_probdatalog_program(code)
+    assert (
+        Implication(Z(a, b), Conjunction([P(a), Q(b)])) in grounded.expressions
+    )
+    assert (
+        Implication(Z(b, a), Conjunction([P(b), Q(a)])) in grounded.expressions
+    )
+    assert (
+        Implication(Z(a, a), Conjunction([P(a), Q(a)])) in grounded.expressions
+    )
+    assert (
+        Implication(Z(b, b), Conjunction([P(b), Q(b)])) in grounded.expressions
+    )
+    assert Implication(Y(a), R(a)) in grounded.expressions
+    assert Implication(Y(c), R(c)) in grounded.expressions
