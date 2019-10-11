@@ -129,6 +129,13 @@ class OntologyHandler():
                 y1, x1
             ) & neurolangDL.symbols.rdf_schema_subClassOf(x1, y2)
 
+        neurolangDL.symbols.owl_disjointWith[
+            y1, y2] = neurolangDL.symbols.owl_disjointWith(
+                x1, x2
+            ) & neurolangDL.symbols.rdf_schema_subClassOf(
+                y1, x1
+            ) & neurolangDL.symbols.rdf_schema_subClassOf(y2, x2)
+
         if destriuex_relations:
             relations_list = self.get_destrieux_relations()
             neurolangDL.add_tuple_set(((
