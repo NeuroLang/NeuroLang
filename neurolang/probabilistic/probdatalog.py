@@ -506,6 +506,7 @@ class Chase(ChaseNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
 
 
 def conjunct_if_needed(formulas):
+    '''Only conjunct the given formulas if there is more than one.'''
     if len(formulas) == 1:
         return formulas[0]
     else:
@@ -513,6 +514,11 @@ def conjunct_if_needed(formulas):
 
 
 def get_rule_groundings(rule, instance):
+    '''
+    Find all groundings of a rule based on an instance.
+
+    TODO: speed up with tabular substitutions
+    '''
     head_pred_symb = rule.consequent.functor
     if head_pred_symb not in instance.elements:
         return set()
@@ -541,6 +547,7 @@ def get_rule_groundings(rule, instance):
 
 
 def dict_to_instance(dict_instance):
+    '''Convert a `Dict[Symbol, Constant[Set[Tuple]]]` to a `SetInstance`.'''
     return SetInstance({
         pred_symb:
         frozenset({const_tuple.value
@@ -550,6 +557,19 @@ def dict_to_instance(dict_instance):
 
 
 def ground_probdatalog_program(probdatalog_code):
+    '''
+    Ground a Prob(Data)Log program by considering all its probabilistic facts
+    to be true.
+
+    This is a 3 steps process:
+        1. convert all ProbFact in the program to Fact without
+        probabilities, thereby obtaining a deterministic Datalog program,
+        2. solving that program to obtain a Datalog instance containing all
+        extensional and intensional facts,
+        3. using this instance to find all possible groundings of rules in the
+        intensional database.
+
+    '''
     datalog_code = ProbfactAsFactWalker().walk(probdatalog_code)
     dl = Datalog()
     dl.walk(datalog_code)
