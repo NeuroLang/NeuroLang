@@ -36,7 +36,7 @@ class OntologyHandler():
         )
         namespaces_prop = list(
             map(
-                lambda x: (x[0]+':'+x[1]).lstrip('0123456789.-_ :'),
+                lambda x: (x[0] + ':' + x[1]).lstrip('0123456789.-_ :'),
                 list(map(lambda y: y.split('/')[-2:], namespaces_properties))
             )
         )
@@ -93,6 +93,41 @@ class OntologyHandler():
                 z,
             ) for x, y, z in temp.values),
                                       name=symbol_name)
+
+        x1 = neurolangDL.new_symbol(name='x1')
+        y1 = neurolangDL.new_symbol(name='y1')
+        x2 = neurolangDL.new_symbol(name='x2')
+        y2 = neurolangDL.new_symbol(name='y2')
+
+        neurolangDL.symbols.rdf_schema_subPropertyOf[
+            y1, y2] = neurolangDL.symbols.rdf_schema_subPropertyOf(
+                x1, x2
+            ) & neurolangDL.symbols.owl_inverseOf(
+                y1, x1
+            ) & neurolangDL.symbols.owl_inverseOf(y2, x2)
+        neurolangDL.symbols.rdf_schema_subPropertyOf[
+            x1, x1] = neurolangDL.symbols.rdf_syntax_ns_type(
+                x1, 'http://www.w3.org/2002/07/owl#ObjectProperty'
+            )
+        neurolangDL.symbols.rdf_schema_subPropertyOf[
+            y1, y2] = neurolangDL.symbols.rdf_schema_subPropertyOf(
+                y1, x1
+            ) & neurolangDL.symbols.rdf_schema_subPropertyOf(x1, y2)
+
+        neurolangDL.symbols.rdf_schema_subClassOf[
+            y1, y2] = neurolangDL.symbols.rdf_schema_subClassOf(
+                x1, x2
+            ) & neurolangDL.symbols.rdf_syntax_ns_rest(
+                y1, x1
+            ) & neurolangDL.symbols.rdf_syntax_ns_rest(y2, x2)
+        neurolangDL.symbols.rdf_schema_subClassOf[
+            x1, x1] = neurolangDL.symbols.rdf_syntax_ns_type(
+                x1, 'http://www.w3.org/2002/07/owl#Class'
+            )
+        neurolangDL.symbols.rdf_schema_subClassOf[
+            y1, y2] = neurolangDL.symbols.rdf_schema_subClassOf(
+                y1, x1
+            ) & neurolangDL.symbols.rdf_schema_subClassOf(x1, y2)
 
         if destriuex_relations:
             relations_list = self.get_destrieux_relations()
