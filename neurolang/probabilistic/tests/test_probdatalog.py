@@ -10,7 +10,7 @@ from ..probdatalog import (
     ProbDatalogProgram, ProbFact, ProbChoice, GDatalogToProbDatalog,
     get_possible_ground_substitutions, full_observability_parameter_estimation,
     infer_pfact_typing_predicate_symbols, ProbfactAsFactWalker,
-    get_rule_groundings, ground_probdatalog_program
+    get_rule_groundings, ground_probdatalog_program, conjunct_formulas
 )
 from ..ppdl import DeltaTerm
 
@@ -42,13 +42,17 @@ def test_probfact():
     assert probfact.probability == Constant[float](0.2)
     assert probfact.consequent == P(x)
 
+    with pytest.raises(NeuroLangException, match=r'must be an expression'):
+        ProbFact(0.3, P(x))
+
 
 def test_probchoice():
-    probfacts = [
-        ProbFact(Constant[float](0.3), P(a)),
-        ProbFact(Constant[float](0.7), P(b)),
-    ]
-    ProbChoice(probfacts)
+    pfact_a = ProbFact(Constant[float](0.3), P(a))
+    pfact_b = ProbFact(Constant[float](0.7), P(b))
+    probfacts = [pfact_a, pfact_b]
+    pchoice = ProbChoice(probfacts)
+    assert pfact_a in pchoice.probfacts
+    assert pfact_b in pchoice.probfacts
 
 
 def test_probchoice_sum_probs_gt_1():
@@ -312,6 +316,10 @@ def test_probfact_as_fact():
     assert Fact(Z(a)) in new_code.expressions
     assert Fact(P(a)) in new_code.expressions
 
+    code = ExpressionBlock([ProbFact(p, P(x))])
+    with pytest.raises(NeuroLangException, match=r'unsupported'):
+        walker.walk(code)
+
 
 def test_program_with_existential_raises_exception():
     code = ExpressionBlock([
@@ -328,14 +336,17 @@ def test_ground_probdatalog_program():
         ProbFact(C_(0.3), Z(a)),
         ProbFact(C_(0.3), Z(b)),
         Fact(P(a)),
-        Fact(P(b)),
-        rule
+        Fact(P(b)), rule
     ])
-    assert get_rule_groundings(rule, SetInstance({
-        P: frozenset({(a, ), (b, )}),
-        Z: frozenset({(a, ), (b, )}),
-        Q: frozenset({(a, ), (b, )}),
-    })) == {
+    assert get_rule_groundings(rule, SetInstance({})) == set()
+    assert get_rule_groundings(
+        rule,
+        SetInstance({
+            P: frozenset({(a, ), (b, )}),
+            Z: frozenset({(a, ), (b, )}),
+            Q: frozenset({(a, ), (b, )}),
+        })
+    ) == {
         Implication(Q(a), Conjunction([P(a), Z(a)])),
         Implication(Q(b), Conjunction([P(b), Z(b)])),
     }
@@ -368,15 +379,25 @@ def test_ground_probdatalog_program():
     assert Implication(Y(a), R(a)) in grounded.expressions
     assert Implication(Y(c), R(c)) in grounded.expressions
 
-    code = ExpressionBlock([
-    ])
+    code = ExpressionBlock([])
     grounded = ground_probdatalog_program(code)
     assert not grounded.expressions
 
     # TODO: the following code breaks because of issue #194
     #       uncomment when issue is fixed
     # code = ExpressionBlock([
-        # Fact(P(a)),
+    # Fact(P(a)),
     # ])
     # grounded = ground_probdatalog_program(code)
     # assert Fact(P(a)) in grounded.expressions
+
+
+def test_conjunct_formulas():
+    assert conjunct_formulas(P(x), Q(x)) == Conjunction([P(x), Q(x)])
+    a = P(x)
+    b = Conjunction([Q(x), Z(x)])
+    c = Conjunction([P(x), Q(x), Z(x)])
+    d = Conjunction([Q(x), Z(x), P(x)])
+    assert conjunct_formulas(P(x), b) == c
+    assert conjunct_formulas(b, P(x)) == d
+    assert conjunct_formulas(c, d) == Conjunction(c.formulas + d.formulas)

@@ -1,6 +1,6 @@
 import numpy as np
 
-from ..probabilistic.distributions import TableDistribution
+from ..distributions import TableDistribution
 
 dog_cat_table = {
     'cat': 0.2,
