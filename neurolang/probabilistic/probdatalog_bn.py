@@ -1,63 +1,88 @@
 from collections import defaultdict
 
 from ..expression_pattern_matching import add_match
-from ..expression_walker import ExpressionWalker
-from ..expressions import Expression, Symbol
+from ..expression_walker import (
+    ExpressionWalker, EntryPointPatternWalker, add_entry_point_match,
+    ExpressionBasicEvaluator
+)
+from ..expressions import (
+    Expression, Symbol, ExpressionBlock, FunctionApplication, Constant
+)
+from ..datalog.expressions import Implication
+from ..datalog.expression_processing import extract_datalog_predicates
 from ..exceptions import NeuroLangException
 from .probdatalog import ProbFact
+from .distributions import TableDistribution
 
 
 class BayesianNetwork(Expression):
-    def __init__(self):
-        self.rv_to_cpt = dict()
-        self.edges = defaultdict(set)
+    def __init__(self, edges, rv_to_cpd_functor):
+        self.rv_to_cpd_functor = rv_to_cpd_functor
+        self.edges = edges
 
     @property
     def random_variables(self):
-        return self.rv_to_cpt.keys()
+        return self.rv_to_cpd_functor.keys()
 
 
-def _add_parent_to_deterministic_or_cpt(cpt, parent_rv, parent_rv_values):
-    pass
-
-
-def repr_ground_atom(ground_atom):
+def _repr_ground_atom(ground_atom):
     return '{}{}'.format(
-        pfact.consequent.functor.name,
-        '({})'.format(', '.join([arg.value for arg in pfact.consequent.args]))
+        ground_atom.functor.name,
+        '({})'.format(', '.join([arg.value for arg in ground_atom.args]))
     )
 
 
-class TranslatorGroundedProbDatalogToBN(ExpressionWalker):
+def deterministic_or_cpd_functor(parent_values):
+    if any(parent_values.values()):
+        return TableDistribution({0: 0.0, 1: 1.0})
+    else:
+        return TableDistribution({0: 1.0, 1: 0.0})
+
+
+def pfact_cpd_functor(pfact):
+    def cpd_functor(parent_values):
+        if parent_values:
+            raise NeuroLangException(
+                'No parent expected for probabilistic fact choice variable'
+            )
+        return TableDistribution({
+            0: 1 - pfact.probability.value,
+            1: pfact.probability.value,
+        })
+
+    return cpd_functor
+
+
+class TranslatorGroundedProbDatalogToBN(ExpressionBasicEvaluator):
     '''
     Translate a grounded Prob(Data)Log program to a bayesian network (BN).
     '''
     def _add_choice_variable(self, rv_name, cpt):
-        if not hasattr(self, '_bayesian_network'):
-            self._bayesian_network = BayesianNetwork()
-        if rv_name in self._bayesian_network.random_variables:
+        if rv_name in self._rv_to_cpd_functor:
             raise NeuroLangException(
                 f'Choice variable {rv_name} already in bayesian network'
             )
-        self._bayesian_network.rv_to_cpt[rv_name] = cpt
+        self._rv_to_cpd_functor[rv_name] = cpt
 
-    def _add_atom_variable(self, rv_name, cpt):
-        if not hasattr(self, '_bayesian_network'):
-            self._bayesian_network = BayesianNetwork()
-        if rv_name in self._bayesian_network.random_variables:
-            self._bayesian_network.rv_to_cpt[rv_name] = (
-                _add_parent_to_deterministic_or_cpt(
-                    self._bayesian_network.rv_to_cpt[rv_name], rv_name, cpt
-                )
-            )
-        else:
-            self._bayesian_network.rv_to_cpt[rv_name] = cpt
+    def _add_atom_variable(self, atom, parents):
+        rv_name = Symbol(_repr_ground_atom(atom))
+        if rv_name not in self._rv_to_cpd_functor:
+            self._rv_to_cpd_functor[rv_name] = deterministic_or_cpd_functor
+        self._edges[rv_name] |= parents
+        return rv_name
 
     def _get_choice_var_count(self):
         if not hasattr(self, '_choice_variable_count'):
             self._choice_var_count = 0
         self._choice_var_count += 1
         return self._choice_var_count
+
+    @add_entry_point_match(ExpressionBlock)
+    def program_code(self, program_code):
+        self._rv_to_cpd_functor = dict()
+        self._edges = dict()
+        super().process_expression(program_code)
+        return BayesianNetwork(self._edges, self._rv_to_cpd_functor)
 
     @add_match(ProbFact)
     def probfact(self, pfact):
@@ -72,12 +97,16 @@ class TranslatorGroundedProbDatalogToBN(ExpressionWalker):
         0.2 <- true.`.
 
         '''
-        choice_rv_name = Symbol('c_{}'.format(self._get_choice_var_count()))
-        choice_rv_cpt = {
-            0: 1.0 - pfact.probability.value,
-            1: pfact.probability.value,
-        }
-        self._add_choice_variable(choice_rv_name, choice_rv_cpt)
-        atom_rv_name = Symbol(repr_ground_atom(pfact.consequent))
-        atom_rv_cpt = {}
-        self._add_atom_variable(atom_rv_name, atom_rv_cpt)
+        choice_var_name = Symbol('c_{}'.format(self._get_choice_var_count()))
+        self._add_choice_variable(choice_var_name, pfact_cpd_functor(pfact))
+        self._add_atom_variable(pfact.consequent, {choice_var_name})
+
+    @add_match(
+        Implication(FunctionApplication[bool](Symbol, ...), Expression),
+        lambda exp: exp.antecedent != Constant[bool](True)
+    )
+    def statement_intensional(self, expression):
+        parents = set()
+        for atom in extract_datalog_predicates(expression.antecedent):
+            parents.add(self._add_atom_variable(atom, set()))
+        self._add_atom_variable(expression.consequent, parents)
