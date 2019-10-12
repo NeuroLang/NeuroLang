@@ -26,14 +26,15 @@ def test_map_instance_contains_facts():
     elements = {Q: ({(C_(2), ), (C_(3), )})}
     instance = FrozenMapInstance(elements)
     assert Q in instance
+    assert instance[Q].value == elements[Q]
     assert hash(instance) is not None
 
 
 def test_construct_instance_from_factset():
     factset = {
-        F_(Q(C_(1))),
-        F_(Q(C_(2))),
-        F_(Q(C_(3))),
+        Q(C_(1)),
+        Q(C_(2)),
+        Q(C_(3)),
     }
     instance = SetInstance(factset)
     assert instance.elements == {

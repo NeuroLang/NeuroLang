@@ -12,6 +12,7 @@ from ..expression_processing import (extract_datalog_free_variables,
                                      extract_datalog_predicates,
                                      is_linear_rule)
 from ..instance import MapInstance
+from ...type_system import infer_type
 
 
 ChaseNode = namedtuple('ChaseNode', 'instance children')
@@ -305,7 +306,21 @@ class ChaseNaive:
                 new_update |= upd
             instance_update = new_update
 
-        return instance
+        constant_instance = dict()
+        for k, v in instance.items():
+            if len(v) > 0:
+                el = next(iter(v))
+                if not isinstance(el, Constant):
+                    el_type = infer_type(el)
+                else:
+                    el_type = el.type
+                set_type = AbstractSet[el_type]
+            else:
+                set_type = AbstractSet
+            value_set = Constant[set_type](v, verify_type=False)
+            k = k.cast(set_type)
+            constant_instance[k] = value_set
+        return constant_instance
 
 
 class ChaseSemiNaive:

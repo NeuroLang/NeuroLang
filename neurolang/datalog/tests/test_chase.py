@@ -35,10 +35,14 @@ class Datalog(TranslateToLogic, DatalogProgram, ew.ExpressionBasicEvaluator):
 @fixture(params=[
     (step_class, cq_class)
     for step_class, cq_class in product(
-        (ChaseNaive, ChaseSemiNaive),
         (
-            ChaseMGUMixin, ChaseNamedRelationalAlgebraMixin,
-            ChaseRelationalAlgebraPlusCeriMixin, ChaseMGUMixin
+            ChaseNaive,
+            #ChaseSemiNaive
+        ),
+        (
+            ChaseMGUMixin,
+            #ChaseNamedRelationalAlgebraMixin,
+            #ChaseRelationalAlgebraPlusCeriMixin,
         )
     )
 ])

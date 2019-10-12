@@ -1,18 +1,20 @@
-from collections.abc import Set, Mapping, MutableSet, MutableMapping
+from collections.abc import Set, Mapping, MutableSet, MutableMapping, Iterable
 
 from ..expression_walker import ReplaceExpressionsByValues
+from ..expressions import Constant
 from ..exceptions import NeuroLangException
+from .wrapped_collections import WrappedRelationalAlgebraSet
 
 
-def factset_as_dict(factset, set_type=frozenset):
+def predicate_iterable_as_dict(predicate_set, set_type=frozenset):
     result = dict()
-    for fact in factset:
-        predicate = fact.consequent.functor
-        if predicate not in result:
-            result[predicate] = []
-        result[predicate].append(tuple(fact.consequent.args))
-    for predicate in result:
-        result[predicate] = set_type(result[predicate])
+    for predicate in predicate_set:
+        symbol = predicate.functor
+        if symbol not in result:
+            result[symbol] = []
+        result[symbol].append(tuple(predicate.args))
+    for symbol in result:
+        result[symbol] = set_type(result[symbol])
     return result
 
 
@@ -27,8 +29,10 @@ class FrozenInstance:
                 k: self._set_type(v)
                 for k, v in elements.items()
             }
-        else:
-            elements = factset_as_dict(elements, set_type=self._set_type)
+        elif isinstance(elements, Iterable):
+            elements = predicate_iterable_as_dict(
+                elements, set_type=self._set_type
+            )
         self.elements = elements
         self.cached_hash = None
 
@@ -72,7 +76,7 @@ class FrozenInstance:
 
 class FrozenMapInstance(FrozenInstance, Mapping):
     def __getitem__(self, predicate):
-        return self.elements[predicate]
+        return Constant(self.elements[predicate])
 
     def __iter__(self):
         return iter(self.elements)
@@ -112,6 +116,9 @@ class FrozenSetInstance(FrozenInstance, Set):
 class Instance(FrozenInstance):
     _set_type = set
 
+    def __init__(self, elements=None):
+        super().__init__(elements=elements)
+
     def __hash__(self):
         raise TypeError('Instance objects are mutable and cannot be hashed')
 
@@ -147,7 +154,7 @@ class Instance(FrozenInstance):
 
 class MapInstance(Instance, FrozenMapInstance, MutableMapping):
     def __setitem__(self, predicate, value):
-        self.elements[predicate] = self._set_type(value)
+        self.elements[predicate] = self._set_type(value.value)
 
     def __delitem__(self, predicate):
         del self.elements[predicate]
