@@ -1,7 +1,6 @@
 from collections import namedtuple
 from itertools import chain, tee
 from operator import eq
-from typing import AbstractSet
 
 from ...exceptions import NeuroLangException
 from ...expressions import Constant, FunctionApplication, Symbol
@@ -12,7 +11,6 @@ from ..expression_processing import (extract_datalog_free_variables,
                                      extract_datalog_predicates,
                                      is_linear_rule)
 from ..instance import MapInstance
-from ...type_system import infer_type
 
 
 ChaseNode = namedtuple('ChaseNode', 'instance children')
@@ -189,11 +187,11 @@ class ChaseGeneral():
             functor = predicate.functor
             if functor in restriction_instance:
                 restricted_predicates.append(
-                    (predicate, restriction_instance[functor])
+                    (predicate, restriction_instance[functor].value)
                 )
             elif functor in instance:
                 nonrestricted_predicates.append(
-                    (predicate, instance[functor])
+                    (predicate, instance[functor].value)
                 )
             elif functor in self.builtins:
                 builtin_predicates.append((predicate, self.builtins[functor]))
@@ -253,7 +251,8 @@ class ChaseGeneral():
 
     def build_chase_tree(self, chase_set=chase_step):
         root = ChaseNode(
-            self.datalog_program.extensional_database(), dict()
+            MapInstance(self.datalog_program.extensional_database()),
+            dict()
         )
         rules = []
         for disjunction in self.datalog_program.intensional_database(
@@ -273,7 +272,7 @@ class ChaseGeneral():
     def build_nodes_from_rules(self, node, rule):
         instance_update = self.chase_step(node.instance, rule)
         if len(instance_update) > 0:
-            new_instance = self.merge_instances(node.instance, instance_update)
+            new_instance = node.instance | instance_update
             new_node = ChaseNode(new_instance, dict())
             node.children[rule] = new_node
             return new_node
@@ -290,11 +289,9 @@ class ChaseNaive:
 
     def build_chase_solution(self):
         instance = MapInstance()
-        edb = {
-            k: v.value
-            for k, v in self.datalog_program.extensional_database().items()
-        }
-        instance_update = MapInstance(edb)
+        instance_update = MapInstance(
+            self.datalog_program.extensional_database()
+        )
         self.check_constraints(instance_update)
         while len(instance_update) > 0:
             instance |= instance_update
@@ -308,18 +305,9 @@ class ChaseNaive:
 
         constant_instance = dict()
         for k, v in instance.items():
-            if len(v) > 0:
-                el = next(iter(v))
-                if not isinstance(el, Constant):
-                    el_type = infer_type(el)
-                else:
-                    el_type = el.type
-                set_type = AbstractSet[el_type]
-            else:
-                set_type = AbstractSet
-            value_set = Constant[set_type](v, verify_type=False)
+            set_type = v.type
             k = k.cast(set_type)
-            constant_instance[k] = value_set
+            constant_instance[k] = v
         return constant_instance
 
 

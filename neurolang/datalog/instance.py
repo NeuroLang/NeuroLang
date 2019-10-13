@@ -1,4 +1,5 @@
 from collections.abc import Set, Mapping, MutableSet, MutableMapping, Iterable
+from typing import AbstractSet, Tuple
 
 from ..expression_walker import ReplaceExpressionsByValues
 from ..expressions import Constant
@@ -25,10 +26,12 @@ class FrozenInstance:
         if elements is None:
             elements = dict()
         if isinstance(elements, Mapping):
-            elements = {
-                k: self._set_type(v)
-                for k, v in elements.items()
-            }
+            in_elements = elements
+            elements = dict()
+            for k, v in in_elements.items():
+                if isinstance(v, Constant[AbstractSet[Tuple]]):
+                    v = v.value
+                elements[k] = self._set_type(v)
         elif isinstance(elements, Iterable):
             elements = predicate_iterable_as_dict(
                 elements, set_type=self._set_type
@@ -83,6 +86,14 @@ class FrozenMapInstance(FrozenInstance, Mapping):
 
     def __len__(self):
         return len(self.elements)
+
+    def items(self):
+        for k, v in self.elements.items():
+            yield k, Constant(v)
+
+    def values(self):
+        for v in self.values():
+            yield Constant(v)
 
     def as_set(self):
         out = FrozenSetInstance()
