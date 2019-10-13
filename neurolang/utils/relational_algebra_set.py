@@ -172,9 +172,16 @@ class RelationalAlgebraFrozenSet(Set):
             return self.copy()
         elif isinstance(other, RelationalAlgebraSet):
             other = other._container
-            new_container = self._container.append(
-                other.loc[~other.index.isin(self._container.index)]
-            )
+            if self._container is None and other is None:
+                new_container = None
+            elif self._container is None:
+                new_container = other.copy()
+            elif other is None:
+                new_container = self._container.copy()
+            else:
+                new_container = self._container.append(
+                    other.loc[~other.index.isin(self._container.index)]
+                )
             output = self._empty_set_same_structure()
             output._container = new_container
             return output
@@ -193,6 +200,19 @@ class RelationalAlgebraFrozenSet(Set):
 
         else:
             return super().__and__(other)
+
+    def __eq__(self, other):
+        if isinstance(other, type(self)):
+            scontainer = self._container
+            ocontainer = other._container
+            return (
+                (len(scontainer) == 0 and len(ocontainer) == 0) or
+                (len(scontainer.columns) == 0 and len(ocontainer.columns) == 0)
+                or len(scontainer.index.difference(ocontainer.index))
+                == 0
+            )
+        else:
+            super().__eq__(other)
 
     def groupby(self, columns):
         if len(self) > 0:

@@ -5,6 +5,8 @@ from ..expression_walker import ReplaceExpressionsByValues
 from ..expressions import Constant
 from ..exceptions import NeuroLangException
 from .wrapped_collections import WrappedRelationalAlgebraSet
+from ..utils import RelationalAlgebraFrozenSet, RelationalAlgebraSet
+from ..type_system import infer_type
 
 
 def predicate_iterable_as_dict(predicate_set, set_type=frozenset):
@@ -21,6 +23,7 @@ def predicate_iterable_as_dict(predicate_set, set_type=frozenset):
 
 class FrozenInstance:
     _set_type = frozenset
+    _rebv = ReplaceExpressionsByValues({})
 
     def __init__(self, elements=None):
         if elements is None:
@@ -30,8 +33,9 @@ class FrozenInstance:
             elements = dict()
             for k, v in in_elements.items():
                 if isinstance(v, Constant[AbstractSet[Tuple]]):
-                    v = v.value
-                elements[k] = self._set_type(v)
+                    v = self._rebv.walk(v)
+                if len(v) > 0:
+                    elements[k] = self._set_type(v)
         elif isinstance(elements, Iterable):
             elements = predicate_iterable_as_dict(
                 elements, set_type=self._set_type
@@ -78,8 +82,22 @@ class FrozenInstance:
 
 
 class FrozenMapInstance(FrozenInstance, Mapping):
+    def _set_to_constant(self, set_):
+        if len(set_) > 0:
+            first = next(iter(set_))
+            first_type = infer_type(first)
+            return Constant[AbstractSet[first_type]](
+                WrappedRelationalAlgebraSet(set_),
+                verify_type=False
+            )
+        else:
+            return Constant[AbstractSet](
+                WrappedRelationalAlgebraSet(),
+                verify_type=False
+            )
+
     def __getitem__(self, predicate):
-        return Constant(self.elements[predicate])
+        return self._set_to_constant(self.elements[predicate])
 
     def __iter__(self):
         return iter(self.elements)
@@ -89,16 +107,22 @@ class FrozenMapInstance(FrozenInstance, Mapping):
 
     def items(self):
         for k, v in self.elements.items():
-            yield k, Constant(v)
+            yield k, self._set_to_constant(v)
 
     def values(self):
         for v in self.values():
-            yield Constant(v)
+            yield self._set_to_constant(v)
 
     def as_set(self):
         out = FrozenSetInstance()
         out.elements = self.elements
         return out
+
+    def __eq__(self, other):
+        if isinstance(other, Instance):
+            return self.elements == other.elements
+        else:
+            return super().__eq__(other)
 
 
 class FrozenSetInstance(FrozenInstance, Set):
@@ -123,9 +147,15 @@ class FrozenSetInstance(FrozenInstance, Set):
         out.elements = self.elements
         return out
 
+    def __eq__(self, other):
+        if isinstance(other, Instance):
+            return self.elements == other.elements
+        else:
+            return super().__eq__(other)
+
 
 class Instance(FrozenInstance):
-    _set_type = set
+    _set_type = RelationalAlgebraSet
 
     def __init__(self, elements=None):
         super().__init__(elements=elements)

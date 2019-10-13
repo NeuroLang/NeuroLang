@@ -37,9 +37,8 @@ def test_construct_instance_from_factset():
         Q(C_(3)),
     }
     instance = SetInstance(factset)
-    assert instance.elements == {
-        Q: frozenset({(C_(1), ), (C_(2), ), (C_(3), )})
-    }
+    assert len(instance) == 3
+    assert all(f in instance for f in factset)
 
 
 def test_convert_instance_to_set():

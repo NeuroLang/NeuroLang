@@ -56,8 +56,8 @@ class Datalog(TranslateToLogic, DatalogProgram, ew.ExpressionBasicEvaluator):
         ),
         (
             ChaseMGUMixin,
-            #ChaseNamedRelationalAlgebraMixin,
-            #ChaseRelationalAlgebraPlusCeriMixin,
+            ChaseNamedRelationalAlgebraMixin,
+            ChaseRelationalAlgebraPlusCeriMixin,
         )
     )
 ])
@@ -258,9 +258,10 @@ def test_non_recursive_predicate_chase_step(chase_class):
     rule = datalog_program.formulas[-1]
     dc = chase_class(dl)
     instance_update = dc.chase_step(instance_0, rule)
-    assert instance_update == MapInstance({
+    res = MapInstance({
         S: C_({C_((C_(8), C_(6)))}),
     })
+    assert instance_update == res
 
     rule = datalog_program.formulas[-2]
     instance_update = dc.chase_step(instance_0, rule)
@@ -333,7 +334,7 @@ def test_non_recursive_predicate_chase_tree(chase_class):
     instance_1 = instance_update.copy()
     instance_1.update(dl.extensional_database())
 
-    assert res.instance == dl.extensional_database()
+    assert res.instance == MapInstance(dl.extensional_database())
     assert res.children == {
         datalog_program.formulas[-1]: ChaseNode(instance_1, dict())
     }
@@ -357,14 +358,14 @@ def test_recursive_predicate_chase_tree(chase_class):
     instance_1 = instance_update.copy()
     instance_1.update(dl.extensional_database())
 
-    assert res.instance == dl.extensional_database()
+    assert res.instance == MapInstance(dl.extensional_database())
     assert len(res.children) == 1
     first_child = res.children[datalog_program.formulas[-2]]
     assert first_child.instance == instance_1
     assert len(first_child.children) == 1
     second_child = first_child.children[datalog_program.formulas[-1]]
 
-    instance_2 = {
+    instance_2 = MapInstance({
         Q: C_({
             C_((C_(1), C_(2))),
             C_((C_(2), C_(3))),
@@ -372,7 +373,7 @@ def test_recursive_predicate_chase_tree(chase_class):
         T: C_({C_((C_(1), C_(2))),
                C_((C_(2), C_(3))),
                C_((C_(1), C_(3)))})
-    }
+    })
 
     assert len(second_child.children) == 0
     assert second_child.instance == instance_2

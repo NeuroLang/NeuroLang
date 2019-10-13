@@ -303,12 +303,7 @@ class ChaseNaive:
                 new_update |= upd
             instance_update = new_update
 
-        constant_instance = dict()
-        for k, v in instance.items():
-            set_type = v.type
-            k = k.cast(set_type)
-            constant_instance[k] = v
-        return constant_instance
+        return instance
 
 
 class ChaseSemiNaive:
