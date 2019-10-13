@@ -214,7 +214,7 @@ def test_python_builtin_chase_step(chase_class):
         T: C_({C_((C_(1), C_(3)))}),
     })
 
-    instance_1 = dc.merge_instances(instance_0, instance_update)
+    instance_1 = instance_0 | instance_update
     instance_update = dc.chase_step(instance_1, rule)
     assert len(instance_update) == 0
 
@@ -269,7 +269,7 @@ def test_non_recursive_predicate_chase_step(chase_class):
         T: C_({C_((C_(1), C_(3)))}),
     })
 
-    instance_1 = dc.merge_instances(instance_0, instance_update)
+    instance_1 = instance_0 | instance_update
     instance_update = dc.chase_step(instance_1, rule)
     assert len(instance_update) == 0
 

@@ -221,11 +221,9 @@ class ChaseGeneral():
             if len(substitutions) > 0
         ]
         new_tuples = self.datalog_program.new_set(tuples)
-        instance_update = MapInstance({rule.consequent.functor: new_tuples})
-        instance_update -= instance
-        instance_update -= restriction_instance
-
-        return instance_update
+        return self.compute_instance_update(
+            rule, new_tuples, instance, restriction_instance
+        )
 
     def compute_instance_update(
         self, rule, new_tuples, instance, restriction_instance
@@ -234,20 +232,6 @@ class ChaseGeneral():
         instance_update -= instance
         instance_update -= restriction_instance
         return instance_update
-
-    def merge_instances(self, *args):
-        new_instance = args[0].copy()
-
-        for next_instance in args:
-            for k, v in next_instance.items():
-                if k not in new_instance:
-                    new_instance[k] = v
-                else:
-                    new_set = new_instance[k]
-                    new_set = Constant[new_set.type](v.value | new_set.value)
-                    new_instance[k] = new_set
-
-        return new_instance
 
     def build_chase_tree(self, chase_set=chase_step):
         root = ChaseNode(
