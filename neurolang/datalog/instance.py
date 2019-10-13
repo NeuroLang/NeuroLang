@@ -258,10 +258,10 @@ class SetInstance(Instance, FrozenSetInstance, MutableSet):
             self.set_types[predicate.functor] = Tuple[
                 tuple(arg.type for arg in predicate.args)
             ]
-        self.elements[predicate.functor].add(self._rebv(predicate.args))
+        self.elements[predicate.functor].add(self._rebv.walk(predicate.args))
 
     def discard(self, predicate):
-        value = self._rebv(predicate.args)
+        value = self._rebv.walk(predicate.args)
         self.elements[predicate.functor].discard(value)
         if len(self.elements[predicate.functor]) == 0:
             del self.elements[predicate.functor]
