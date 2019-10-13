@@ -1,8 +1,7 @@
-from ..datalog import Fact
-from ..datalog.instance import (
-    FrozenMapInstance, FrozenSetInstance, MapInstance, SetInstance
-)
-from ..expressions import Constant, Symbol
+from ...expressions import Constant, Symbol
+from .. import Fact
+from ..instance import (FrozenMapInstance, FrozenSetInstance, MapInstance,
+                        SetInstance)
 
 S_ = Symbol
 C_ = Constant
