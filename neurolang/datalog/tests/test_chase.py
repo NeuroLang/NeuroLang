@@ -52,7 +52,7 @@ class Datalog(TranslateToLogic, DatalogProgram, ew.ExpressionBasicEvaluator):
     for step_class, cq_class in product(
         (
             ChaseNaive,
-            #ChaseSemiNaive
+            ChaseSemiNaive
         ),
         (
             ChaseMGUMixin,
@@ -391,12 +391,12 @@ def test_nonrecursive_predicate_chase_solution(chase_class, N=10):
     dc = chase_class(dl)
     solution_instance = dc.build_chase_solution()
 
-    final_instance = {
+    final_instance = MapInstance({
         Q: C_({C_((C_(i), C_(i + 1)))
                for i in range(N)}),
         T: C_({C_((C_(i), C_(i + 2)))
                for i in range(N - 1)})
-    }
+    })
 
     assert solution_instance == final_instance
 
@@ -414,12 +414,12 @@ def test_nonrecursive_predicate_chase_solution_constant(chase_class, N=10):
     dc = chase_class(dl)
     solution_instance = dc.build_chase_solution()
 
-    final_instance = {
+    final_instance = MapInstance({
         Q: C_({C_((C_(i), C_(i + 1)))
                for i in range(N)}),
         T: C_({C_((C_(i + 2), ))
                for i in (1, )})
-    }
+    })
 
     assert solution_instance == final_instance
 
@@ -487,4 +487,3 @@ def test_another_recursive_chase(chase_class):
 
     solution = chase_class(dl).build_chase_solution()
     assert solution['q'].value == {C_((e, )) for e in (b, c, d)}
-    

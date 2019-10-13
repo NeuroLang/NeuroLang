@@ -316,13 +316,15 @@ class ChaseSemiNaive:
     This algorithm will not work if there are non-linear rules.
        """
     def build_chase_solution(self):
-        instance = dict()
-        instance_update = self.datalog_program.extensional_database()
+        instance = MapInstance()
+        instance_update = MapInstance(
+            self.datalog_program.extensional_database()
+        )
         self.check_constraints(instance_update)
         continue_chase = len(instance_update) > 0
         while continue_chase:
-            instance = self.merge_instances(instance, instance_update)
-            instance_update = dict()
+            instance |= instance_update
+            instance_update = MapInstance()
             continue_chase = False
             for rule in self.rules:
                 instance_update = self.per_rule_update(
@@ -337,10 +339,7 @@ class ChaseSemiNaive:
             instance, rule, restriction_instance=instance_update
         )
         if len(new_instance_update) > 0:
-            instance_update = self.merge_instances(
-                instance_update,
-                new_instance_update
-            )
+            instance_update |= new_instance_update
         return instance_update
 
     def check_constraints(self, instance_update):
