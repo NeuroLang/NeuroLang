@@ -444,7 +444,7 @@ def _count_ground_instances_in_interpretation(
     pfact, substitutions, interpretation
 ):
     return sum(
-        Fact(apply_substitution(pfact.consequent, dict(substitution))) in
+        apply_substitution(pfact.consequent, dict(substitution)) in
         interpretation for substitution in substitutions
     )
 
@@ -534,7 +534,7 @@ def get_rule_groundings(rule, instance):
             for atom in extract_datalog_predicates(rule.antecedent)
         ]
         if any(
-            Fact(atom) not in instance for atom in substituted_antecedent_atoms
+            atom not in instance for atom in substituted_antecedent_atoms
         ):
             continue
         grounded_rules.add(

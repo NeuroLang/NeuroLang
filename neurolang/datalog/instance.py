@@ -3,22 +3,9 @@ from typing import AbstractSet, Tuple
 
 from ..expression_walker import ReplaceExpressionsByValues
 from ..expressions import Constant
-from ..exceptions import NeuroLangException
 from .wrapped_collections import WrappedRelationalAlgebraSet
 from ..utils import RelationalAlgebraFrozenSet, RelationalAlgebraSet
-from ..type_system import infer_type
-
-
-def predicate_iterable_as_dict(predicate_set, set_type=frozenset):
-    result = dict()
-    for predicate in predicate_set:
-        symbol = predicate.functor
-        if symbol not in result:
-            result[symbol] = []
-        result[symbol].append(tuple(predicate.args))
-    for symbol in result:
-        result[symbol] = set_type(result[symbol])
-    return result
+from ..type_system import infer_type, Unknown
 
 
 class FrozenInstance:
@@ -26,22 +13,55 @@ class FrozenInstance:
     _rebv = ReplaceExpressionsByValues({})
 
     def __init__(self, elements=None):
+        self.set_types = dict()
+        self.cached_hash = None
         if elements is None:
             elements = dict()
-        if isinstance(elements, Mapping):
-            in_elements = elements
-            elements = dict()
-            for k, v in in_elements.items():
-                if isinstance(v, Constant[AbstractSet[Tuple]]):
-                    v = self._rebv.walk(v)
-                if len(v) > 0:
-                    elements[k] = self._set_type(v)
+        elif isinstance(elements, FrozenInstance):
+            self.set_types = elements.set_types.copy()
+            self.cached_hash = elements.cached_hash
+            elements = elements.elements.copy()
+        elif isinstance(elements, Mapping):
+            elements = self._elements_from_mapping(elements)
         elif isinstance(elements, Iterable):
-            elements = predicate_iterable_as_dict(
-                elements, set_type=self._set_type
-            )
+            elements = self._elements_from_iterable(elements)
         self.elements = elements
-        self.cached_hash = None
+
+    def _elements_from_mapping(self, elements):
+        in_elements = elements
+        elements = dict()
+        for k, v in in_elements.items():
+            set_type = Unknown
+            if isinstance(v, Constant[AbstractSet[Tuple]]):
+                set_type = v.type.__args__[0]
+                v = self._rebv.walk(v)
+            else:
+                for element in v:
+                    if isinstance(element, Constant):
+                        set_type = element.type
+                    else:
+                        set_type = infer_type(element)
+                    break
+            if len(v) > 0:
+                elements[k] = self._set_type(v)
+                self.set_types[k] = set_type
+        return elements
+
+    def _elements_from_iterable(self, iterable):
+        result = dict()
+        for predicate in iterable:
+            symbol = predicate.functor
+            if symbol not in result:
+                result[symbol] = []
+                self.set_types[symbol] = Tuple[
+                    tuple(arg.type for arg in predicate.args)
+                ]
+            result[symbol].append(self._rebv.walk(predicate.args))
+
+        for symbol in result:
+            result[symbol] = self._set_type(result[symbol])
+
+        return result
 
     def __hash__(self):
         if self.cached_hash is None:
@@ -78,15 +98,17 @@ class FrozenInstance:
         new_copy = type(self)()
         new_copy.elements = self.elements.copy()
         new_copy.hash = self.cached_hash
+        new_copy.set_types = self.set_types.copy()
         return new_copy
 
 
 class FrozenMapInstance(FrozenInstance, Mapping):
-    def _set_to_constant(self, set_):
+    def _set_to_constant(self, set_, type_=Unknown):
         if len(set_) > 0:
-            first = next(iter(set_))
-            first_type = infer_type(first)
-            return Constant[AbstractSet[first_type]](
+            if type_ is Unknown:
+                first = next(iter(set_))
+                type_ = infer_type(first)
+            return Constant[AbstractSet[type_]](
                 WrappedRelationalAlgebraSet(set_),
                 verify_type=False
             )
@@ -96,8 +118,11 @@ class FrozenMapInstance(FrozenInstance, Mapping):
                 verify_type=False
             )
 
-    def __getitem__(self, predicate):
-        return self._set_to_constant(self.elements[predicate])
+    def __getitem__(self, predicate_symbol):
+        return self._set_to_constant(
+            self.elements[predicate_symbol],
+            type_=self.set_types[predicate_symbol]
+        )
 
     def __iter__(self):
         return iter(self.elements)
@@ -107,7 +132,9 @@ class FrozenMapInstance(FrozenInstance, Mapping):
 
     def items(self):
         for k, v in self.elements.items():
-            yield k, self._set_to_constant(v)
+            yield k, self._set_to_constant(
+                v, type_=self.set_types[k]
+            )
 
     def values(self):
         for v in self.values():
@@ -116,6 +143,7 @@ class FrozenMapInstance(FrozenInstance, Mapping):
     def as_set(self):
         out = FrozenSetInstance()
         out.elements = self.elements
+        out.set_types = self.set_types
         return out
 
     def __eq__(self, other):
@@ -148,6 +176,7 @@ class FrozenSetInstance(FrozenInstance, Set):
     def as_map(self):
         out = FrozenMapInstance()
         out.elements = self.elements
+        out.set_types = self.set_types
         return out
 
     def __eq__(self, other):
@@ -174,6 +203,7 @@ class Instance(FrozenInstance):
             self.elements[predicate] |= other.elements[predicate]
         for predicate in (other.elements.keys() - self.elements.keys()):
             self.elements[predicate] = other.elements[predicate]
+            self.set_types[predicate] = other.set_types[predicate]
         return self
 
     def __isub__(self, other):
@@ -181,52 +211,64 @@ class Instance(FrozenInstance):
             self.elements[predicate] -= other.elements[predicate]
             if len(self.elements[predicate]) == 0:
                 del self.elements[predicate]
+                del self.set_types[predicate]
         return self
 
     def __iand__(self, other):
         subs = self.elements.keys() - other.elements.keys()
         for predicate in subs:
             del self.elements[predicate]
+            del self.set_types[predicate]
         for predicate in self.elements:
             self.elements[predicate] &= other.elements[predicate]
             if len(self.elements[predicate]) == 0:
                 del self.elements[predicate]
+                del self.set_types[predicate]
         return self
 
     def copy(self):
         new_copy = type(self)()
         new_copy.elements = self.elements.copy()
+        new_copy.set_types = self.set_types.copy()
         return new_copy
 
 
 class MapInstance(Instance, FrozenMapInstance, MutableMapping):
-    def __setitem__(self, predicate, value):
-        self.elements[predicate] = self._set_type(value.value)
+    def __setitem__(self, predicate_symbol, value):
+        self.elements[predicate_symbol] = self._set_type(value.value)
+        self.set_types[predicate_symbol] = value.type.__args__[0]
 
-    def __delitem__(self, predicate):
-        del self.elements[predicate]
+    def __delitem__(self, predicate_symbol):
+        del self.elements[predicate_symbol]
+        del self.set_types[predicate_symbol]
 
     def as_set(self):
         out = SetInstance()
         out.elements = self.elements
+        out.set_types = self.set_types
         return out
 
 
 class SetInstance(Instance, FrozenSetInstance, MutableSet):
     _rebv = ReplaceExpressionsByValues(dict())
 
-    def add(self, fact):
-        if fact.functor not in self.elements:
-            self.elements[fact.functor] = self._set_type
-        self.elements[fact.functor].add(self._rebv(fact.args))
+    def add(self, predicate):
+        if predicate.functor not in self.elements:
+            self.elements[predicate.functor] = self._set_type()
+            self.set_types[predicate.functor] = Tuple[
+                tuple(arg.type for arg in predicate.args)
+            ]
+        self.elements[predicate.functor].add(self._rebv(predicate.args))
 
-    def discard(self, fact):
-        value = self._rebv(fact.args)
-        self.elements[fact.functor].discard(value)
-        if len(self.elements[fact.functor]) == 0:
-            del self.elements[fact.functor]
+    def discard(self, predicate):
+        value = self._rebv(predicate.args)
+        self.elements[predicate.functor].discard(value)
+        if len(self.elements[predicate.functor]) == 0:
+            del self.elements[predicate.functor]
+            del self.set_types[predicate.functor]
 
     def as_map(self):
         out = MapInstance()
         out.elements = self.elements
+        out.set_types = self.set_types
         return out

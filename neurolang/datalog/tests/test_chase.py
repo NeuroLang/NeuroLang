@@ -178,7 +178,7 @@ def test_python_builtin_equaltiy_chase_step(chase_class):
 
     rule = DT.walk(datalog_program.formulas[-2])
     dc = chase_class(dl)
-    instance_update = MapInstance(dc.chase_step(instance_0, rule))
+    instance_update = dc.chase_step(instance_0, rule)
     res = MapInstance({
         S: C_({C_((3, )), C_((4, ))}),
     })
@@ -440,7 +440,7 @@ def test_recursive_predicate_chase_solution(chase_class):
     dc = chase_class(dl)
     solution_instance = dc.build_chase_solution()
 
-    final_instance = {
+    final_instance = MapInstance({
         Q: C_({
             C_((C_(1), C_(2))),
             C_((C_(2), C_(3))),
@@ -448,7 +448,7 @@ def test_recursive_predicate_chase_solution(chase_class):
         T: C_({C_((C_(1), C_(2))),
                C_((C_(2), C_(3))),
                C_((C_(1), C_(3)))})
-    }
+    })
 
     assert solution_instance == final_instance
 

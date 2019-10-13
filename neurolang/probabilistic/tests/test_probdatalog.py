@@ -1,18 +1,19 @@
-import pytest
 import numpy as np
+import pytest
 
-from ...expressions import Symbol, Constant, ExpressionBlock
+from ...datalog.expressions import Conjunction, Disjunction, Fact, Implication
+from ...datalog.instance import FrozenSetInstance, SetInstance
 from ...exceptions import NeuroLangException
-from ...datalog.expressions import Fact, Implication, Disjunction, Conjunction
 from ...expression_walker import ExpressionBasicEvaluator
-from ...datalog.instance import SetInstance
-from ..probdatalog import (
-    ProbDatalogProgram, ProbFact, ProbChoice, GDatalogToProbDatalog,
-    get_possible_ground_substitutions, full_observability_parameter_estimation,
-    infer_pfact_typing_predicate_symbols, ProbfactAsFactWalker,
-    get_rule_groundings, ground_probdatalog_program, conjunct_formulas
-)
+from ...expressions import Constant, ExpressionBlock, Symbol
 from ..ppdl import DeltaTerm
+from ..probdatalog import (GDatalogToProbDatalog, ProbChoice,
+                           ProbDatalogProgram, ProbFact, ProbfactAsFactWalker,
+                           conjunct_formulas,
+                           full_observability_parameter_estimation,
+                           get_possible_ground_substitutions,
+                           get_rule_groundings, ground_probdatalog_program,
+                           infer_pfact_typing_predicate_symbols)
 
 C_ = Constant
 
@@ -125,7 +126,7 @@ def test_gdatalog_translation():
 def test_get_possible_ground_substitutions_constant_probfact():
     probfact = ProbFact(C_(0.2), Z(a))
     typing = dict()
-    interpretation = SetInstance([Fact(fa) for fa in [P(a), Z(a), P(b), Q(a)]])
+    interpretation = SetInstance([P(a), Z(a), P(b), Q(a)])
     substitutions = get_possible_ground_substitutions(
         probfact, typing, interpretation
     )
@@ -148,8 +149,8 @@ def test_get_possible_ground_substitutions_constant_probfact():
 def test_get_possible_ground_substitutions():
     probfact = ProbFact(C_(0.2), Z(x))
     interpretation = SetInstance([
-        Fact(fa) for fa in [P(a), P(b), Z(a),
-                            Z(b), Q(a), Q(b)]
+        P(a), P(b), Z(a),
+        Z(b), Q(a), Q(b)
     ])
     typing = {Z: {0: {P}}}
     substitutions = get_possible_ground_substitutions(
@@ -161,10 +162,9 @@ def test_get_possible_ground_substitutions():
 
     probfact = ProbFact(C_(0.5), Z(x, y))
     interpretation = SetInstance([
-        Fact(fa) for fa in
-        [P(a), P(b), Y(a),
-         Y(b), Z(a, b), Q(a),
-         Z(b, a), Q(b)]
+        P(a), P(b), Y(a),
+        Y(b), Z(a, b), Q(a),
+        Z(b, a), Q(b)
     ])
     typing = {Z: {0: {P}, 1: {Y}}}
     substitutions = get_possible_ground_substitutions(
@@ -189,12 +189,12 @@ def test_full_observability_parameter_estimation():
     program.walk(code)
     assert program.parametric_probfacts() == {p: ProbFact(p, Z(x))}
     interpretations = frozenset([
-        SetInstance({
+        FrozenSetInstance({
             P: frozenset({(a, ), (b, )}),
             Z: frozenset({(a, )}),
             Q: frozenset({(a, )}),
         }),
-        SetInstance({
+        FrozenSetInstance({
             P: frozenset({(a, ), (b, )}),
             Z: frozenset({(b, )}),
             Q: frozenset({(b, )}),
@@ -222,25 +222,25 @@ def test_full_observability_parameter_estimation():
     assert program.parametric_probfacts() == {p_1: probfact_1, p_2: probfact_2}
     assert program.probabilistic_rules() == {Z: {rule}, Y: {rule}}
     interpretations = frozenset([
-        SetInstance({
+        FrozenSetInstance({
             P: frozenset({(a, ), (b, )}),
             R: frozenset({(a, )}),
             Z: frozenset({(a, )}),
             Y: frozenset({(a, )}),
             Q: frozenset({(a, a)})
         }),
-        SetInstance({
+        FrozenSetInstance({
             P: frozenset({(a, ), (b, )}),
             R: frozenset({(a, )}),
             Y: frozenset({(a, )})
         }),
-        SetInstance({
+        FrozenSetInstance({
             P: frozenset({(a, ), (b, )}),
             R: frozenset({(a, )}),
             Z: frozenset({(b, )}),
             Y: frozenset({(a, )})
         }),
-        SetInstance({
+        FrozenSetInstance({
             P: frozenset({(a, ), (b, )}),
             R: frozenset({(a, )})
         })
