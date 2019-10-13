@@ -78,7 +78,7 @@ class WrappedRelationalAlgebraSet(
 
     def __eq__(self, other):
         if isinstance(other, WrappedRelationalAlgebraSet):
-            super().__eq__(other)
+            return super().__eq__(other)
         else:
             return all(
                 e in self for e in other

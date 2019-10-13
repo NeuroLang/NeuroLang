@@ -124,6 +124,9 @@ class FrozenMapInstance(FrozenInstance, Mapping):
         else:
             return super().__eq__(other)
 
+    def __hash__(self):
+        return super().__hash__()
+
 
 class FrozenSetInstance(FrozenInstance, Set):
     def __contains__(self, predicate):
@@ -152,6 +155,9 @@ class FrozenSetInstance(FrozenInstance, Set):
             return self.elements == other.elements
         else:
             return super().__eq__(other)
+
+    def __hash__(self):
+        return super().__hash__()
 
 
 class Instance(FrozenInstance):

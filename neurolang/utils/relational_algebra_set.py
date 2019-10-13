@@ -35,10 +35,12 @@ class RelationalAlgebraFrozenSet(Set):
         return element
 
     def __iter__(self):
-        if len(self) > 0:
-            return (tuple(v) for v in self._container.values)
+        if len(self) == 0:
+            values = {}
         else:
-            return iter({})
+            values = self._container.values
+        for v in values:
+            yield tuple(v)
 
     def __len__(self):
         if self._container is None:
@@ -208,11 +210,13 @@ class RelationalAlgebraFrozenSet(Set):
             return (
                 (len(scontainer) == 0 and len(ocontainer) == 0) or
                 (len(scontainer.columns) == 0 and len(ocontainer.columns) == 0)
-                or len(scontainer.index.difference(ocontainer.index))
-                == 0
+                or (
+                    len(scontainer.index.difference(ocontainer.index))
+                    == 0
+                )
             )
         else:
-            super().__eq__(other)
+            return super().__eq__(other)
 
     def groupby(self, columns):
         if len(self) > 0:
@@ -369,10 +373,13 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         return container.itertuples(index=False, name='tuple')
 
     def to_unnamed(self):
-        container = self._container[list(self.columns)]
+        container = self._container[list(self.columns)].copy()
         container.columns = range(len(container.columns))
         output = RelationalAlgebraFrozenSet()
         output._container = container
+        RelationalAlgebraFrozenSet._renew_index(
+            container, drop_duplicates=False
+        )
         return output
 
     def __sub__(self, other):
