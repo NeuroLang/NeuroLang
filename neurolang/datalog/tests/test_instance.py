@@ -11,22 +11,38 @@ Q = Symbol('Q')
 P = Symbol('P')
 
 
-def test_set_instance_contains_facts():
+def test_frozenset_instance_contains_facts():
     elements = {Q: ({(C_(2), ), (C_(3), )})}
     instance = FrozenSetInstance(elements)
     assert Q(C_(2)) in instance
     assert Q(C_(3)) in instance
     assert Q(C_(4)) not in instance
     assert hash(instance) is not None
-    assert set(iter(instance)) == {Q(C_(2)), Q(C_(3))}
+    assert len(set(instance) & {Q(C_(2)), Q(C_(3))}) == 2
 
 
-def test_map_instance_contains_facts():
+def test_set_instance_contains_facts():
+    elements = {Q: ({(C_(2), ), (C_(3), )})}
+    instance = SetInstance(elements)
+    assert Q(C_(2)) in instance
+    assert Q(C_(3)) in instance
+    assert Q(C_(4)) not in instance
+    assert len(set(instance) & {Q(C_(2)), Q(C_(3))}) == 2
+
+
+def test_frozen_map_instance_contains_facts():
     elements = {Q: ({(C_(2), ), (C_(3), )})}
     instance = FrozenMapInstance(elements)
     assert Q in instance
     assert instance[Q].value == elements[Q]
     assert hash(instance) is not None
+
+
+def test_map_instance_contains_facts():
+    elements = {Q: ({(C_(2), ), (C_(3), )})}
+    instance = MapInstance(elements)
+    assert Q in instance
+    assert instance[Q].value == elements[Q]
 
 
 def test_construct_instance_from_factset():

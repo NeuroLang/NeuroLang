@@ -232,6 +232,11 @@ class RelationalAlgebraFrozenSet(Set):
             raise StopIteration
         return iter(self._container.values.squeeze())
 
+    def __hash__(self):
+        v = self._container.values
+        v.flags.writeable = False
+        return hash(v.data.tobytes())
+
 
 class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
     def __init__(self, columns=None, iterable=None):

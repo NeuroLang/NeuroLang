@@ -2,14 +2,14 @@ from collections.abc import Set, Mapping, MutableSet, MutableMapping, Iterable
 from typing import AbstractSet, Tuple
 
 from ..expression_walker import ReplaceExpressionsByValues
-from ..expressions import Constant
+from ..expressions import Constant, FunctionApplication
 from .wrapped_collections import WrappedRelationalAlgebraSet
 from ..utils import RelationalAlgebraFrozenSet, RelationalAlgebraSet
 from ..type_system import infer_type, Unknown
 
 
 class FrozenInstance:
-    _set_type = frozenset
+    _set_type = RelationalAlgebraFrozenSet
     _rebv = ReplaceExpressionsByValues({})
 
     def __init__(self, elements=None):
@@ -36,16 +36,30 @@ class FrozenInstance:
                 set_type = v.type.__args__[0]
                 v = self._rebv.walk(v)
             else:
-                for element in v:
-                    if isinstance(element, Constant):
-                        set_type = element.type
-                    else:
-                        set_type = infer_type(element)
-                    break
+                is_expression, set_type = self._infer_type(v, set_type)
+                if is_expression:
+                    v = set(self._rebv.walk(e) for e in v)
             if len(v) > 0:
                 elements[k] = self._set_type(v)
                 self.set_types[k] = set_type
         return elements
+
+    def _infer_type(self, v, set_type):
+        is_expression = False
+        for element in v:
+            if isinstance(element, Constant):
+                set_type = element.type
+                is_expression = True
+            elif (
+                isinstance(element, tuple) and
+                isinstance(element[0], Constant)
+            ):
+                set_type = Tuple[tuple(arg.type for arg in element)]
+                is_expression = True
+            else:
+                set_type = infer_type(element)
+            break
+        return is_expression, set_type
 
     def _elements_from_iterable(self, iterable):
         result = dict()
@@ -164,6 +178,9 @@ class FrozenMapInstance(FrozenInstance, Mapping):
     def as_set(self):
         return self._create_view(FrozenSetInstance)
 
+    def as_map(self):
+        return self
+
     def __hash__(self):
         return super().__hash__()
 
@@ -182,8 +199,19 @@ class FrozenSetInstance(FrozenInstance, Set):
 
     def __iter__(self):
         for predicate, tuples in self.elements.items():
+            types_ = self.set_types[predicate].__args__
             for t in tuples:
-                yield predicate(*t)
+                arg = tuple(
+                    Constant[type_](v, verify_type=False)
+                    for type_, v in zip(types_, t)
+                )
+                    
+                yield FunctionApplication(
+                    predicate, arg
+                )
+
+    def as_set(self):
+        return self
 
     def as_map(self):
         return self._create_view(FrozenMapInstance)
@@ -257,6 +285,9 @@ class MapInstance(Instance, FrozenMapInstance, MutableMapping):
     def as_set(self):
         return self._create_view(SetInstance)
 
+    def as_map(self):
+        return self
+
 
 class SetInstance(Instance, FrozenSetInstance, MutableSet):
     def add(self, predicate):
@@ -272,6 +303,9 @@ class SetInstance(Instance, FrozenSetInstance, MutableSet):
         self.elements[predicate.functor].discard(value)
         if len(self.elements[predicate.functor]) == 0:
             self._remove_predicate_symbol(predicate.functor)
+
+    def as_set(self):
+        return self
 
     def as_map(self):
         return self._create_view(MapInstance)
