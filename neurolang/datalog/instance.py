@@ -31,18 +31,22 @@ class FrozenInstance:
         in_elements = elements
         elements = dict()
         for k, v in in_elements.items():
-            set_type = Unknown
-            if isinstance(v, Constant[AbstractSet[Tuple]]):
-                set_type = v.type.__args__[0]
-                v = self._rebv.walk(v)
-            else:
-                is_expression, set_type = self._infer_type(v, set_type)
-                if is_expression:
-                    v = set(self._rebv.walk(e) for e in v)
+            v, set_type = self._get_set_and_type(v)
             if len(v) > 0:
                 elements[k] = self._set_type(v)
                 self.set_types[k] = set_type
         return elements
+
+    def _get_set_and_type(self, v):
+        set_type = Unknown
+        if isinstance(v, Constant[AbstractSet[Tuple]]):
+            set_type = v.type.__args__[0]
+            v = self._rebv.walk(v)
+        else:
+            is_expression, set_type = self._infer_type(v, set_type)
+            if is_expression:
+                v = set(self._rebv.walk(e) for e in v)
+        return v, set_type
 
     def _infer_type(self, v, set_type):
         is_expression = False
@@ -83,39 +87,38 @@ class FrozenInstance:
         return self.cached_hash
 
     def __or__(self, other):
-        if isinstance(other, Instance):
-            new_elements = dict()
-            for predicate in (self.elements.keys() | other.elements.keys()):
-                new_elements[predicate] = self._set_type(
-                    self.elements.get(predicate, self._set_type()) |
-                    other.elements.get(predicate, self._set_type())
-                )
-
-            return type(self)(new_elements)
-        else:
+        if not isinstance(other, Instance):
             return super().__or__(other)
+        new_elements = dict()
+        for predicate in (self.elements.keys() | other.elements.keys()):
+            new_elements[predicate] = self._set_type(
+                self.elements.get(predicate, self._set_type()) |
+                other.elements.get(predicate, self._set_type())
+            )
+
+        return type(self)(new_elements)
 
     def __sub__(self, other):
-        if isinstance(other, Instance):
-            new_elements = dict()
-            for predicate, tuple_set in self.elements.items():
-                new_set = tuple_set - other.elements.get(predicate, set())
-                if len(new_set) > 0:
-                    new_elements[predicate] = new_set
-            return type(self)(new_elements)
-        else:
+        if not isinstance(other, Instance):
             return super().__sub__(other)
 
+        new_elements = dict()
+        for predicate, tuple_set in self.elements.items():
+            new_set = tuple_set - other.elements.get(predicate, set())
+            if len(new_set) > 0:
+                new_elements[predicate] = new_set
+        return type(self)(new_elements)
+
     def __and__(self, other):
-        if isinstance(other, Instance):
-            new_elements = dict()
-            for predicate in (self.elements.keys() & other.elements.keys()):
-                new_set = self.elements[predicate] & other.elements[predicate]
-                if len(new_set) > 0:
-                    new_elements[predicate] = new_set
-            return type(self)(new_elements)
-        else:
+        if not isinstance(other, Instance):
             return super().__and__(other)
+
+        new_elements = dict()
+        for predicate in (self.elements.keys() & other.elements.keys()):
+            new_set = self.elements[predicate] & other.elements[predicate]
+            if len(new_set) > 0:
+                new_elements[predicate] = new_set
+        return type(self)(new_elements)
 
     def copy(self):
         new_copy = type(self)()
@@ -205,7 +208,7 @@ class FrozenSetInstance(FrozenInstance, Set):
                     Constant[type_](v, verify_type=False)
                     for type_, v in zip(types_, t)
                 )
-                    
+
                 yield FunctionApplication(
                     predicate, arg
                 )
@@ -230,42 +233,40 @@ class Instance(FrozenInstance):
         raise TypeError('Instance objects are mutable and cannot be hashed')
 
     def __ior__(self, other):
-        if isinstance(other, Instance):
-            for predicate in (self.elements.keys() & other.elements.keys()):
-                self.elements[predicate] |= other.elements[predicate]
-            for predicate in (other.elements.keys() - self.elements.keys()):
-                self.elements[predicate] = other.elements[predicate]
-                self.set_types[predicate] = other.set_types[predicate]
-            return self
-        else:
+        if not isinstance(other, Instance):
             return super().__ior__(other)
+
+        for predicate in (self.elements.keys() & other.elements.keys()):
+            self.elements[predicate] |= other.elements[predicate]
+        for predicate in (other.elements.keys() - self.elements.keys()):
+            self.elements[predicate] = other.elements[predicate]
+            self.set_types[predicate] = other.set_types[predicate]
+        return self
 
     def _remove_predicate_symbol(self, predicate_symbol):
         del self.elements[predicate_symbol]
         del self.set_types[predicate_symbol]
 
     def __isub__(self, other):
-        if isinstance(other, Instance):
-            for predicate in (self.elements.keys() & other.elements.keys()):
-                self.elements[predicate] -= other.elements[predicate]
-                if len(self.elements[predicate]) == 0:
-                    self._remove_predicate_symbol(predicate)
-            return self
-        else:
+        if not isinstance(other, Instance):
             return super().__isub__(other)
+        for predicate in (self.elements.keys() & other.elements.keys()):
+            self.elements[predicate] -= other.elements[predicate]
+            if len(self.elements[predicate]) == 0:
+                self._remove_predicate_symbol(predicate)
+        return self
 
     def __iand__(self, other):
         if isinstance(other, Instance):
-            subs = self.elements.keys() - other.elements.keys()
-            for predicate in subs:
-                self._remove_predicate_symbol(predicate)
-            for predicate in self.elements:
-                self.elements[predicate] &= other.elements[predicate]
-                if len(self.elements[predicate]) == 0:
-                    self._remove_predicate_symbol(predicate)
-            return self
-        else:
             return super().__iand__(other)
+        subs = self.elements.keys() - other.elements.keys()
+        for predicate in subs:
+            self._remove_predicate_symbol(predicate)
+        for predicate in self.elements:
+            self.elements[predicate] &= other.elements[predicate]
+            if len(self.elements[predicate]) == 0:
+                self._remove_predicate_symbol(predicate)
+        return self
 
     def copy(self):
         new_copy = type(self)()

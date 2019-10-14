@@ -205,15 +205,12 @@ class RelationalAlgebraFrozenSet(Set):
 
     def __eq__(self, other):
         if isinstance(other, type(self)):
-            scontainer = self._container
-            ocontainer = other._container
+            scont = self._container
+            ocont = other._container
             return (
-                (len(scontainer) == 0 and len(ocontainer) == 0) or
-                (len(scontainer.columns) == 0 and len(ocontainer.columns) == 0)
-                or (
-                    len(scontainer.index.difference(ocontainer.index))
-                    == 0
-                )
+                (len(scont) == 0 and len(ocont) == 0) or
+                (len(scont.columns) == 0 and len(ocont.columns) == 0) or
+                len(scont.index.difference(ocont.index)) == 0
             )
         else:
             return super().__eq__(other)
