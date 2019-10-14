@@ -1,5 +1,5 @@
 import pytest
-from typing import AbstractSet, Mapping
+from typing import Mapping
 
 from ...exceptions import NeuroLangException
 from ...expressions import Symbol, Constant, ExpressionBlock
