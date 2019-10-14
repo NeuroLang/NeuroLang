@@ -1,7 +1,7 @@
 from collections import defaultdict
 
 from ..expression_pattern_matching import add_match
-from ..expression_walker import ExpressionWalker, ExpressionBasicEvaluator
+from ..expression_walker import ExpressionBasicEvaluator
 from ..expressions import (
     Expression, Symbol, ExpressionBlock, FunctionApplication, Constant
 )
