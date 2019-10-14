@@ -1,10 +1,7 @@
 from collections import defaultdict
 
 from ..expression_pattern_matching import add_match
-from ..expression_walker import (
-    ExpressionWalker, EntryPointPatternWalker, add_entry_point_match,
-    ExpressionBasicEvaluator
-)
+from ..expression_walker import ExpressionWalker, ExpressionBasicEvaluator
 from ..expressions import (
     Expression, Symbol, ExpressionBlock, FunctionApplication, Constant
 )
@@ -72,16 +69,17 @@ class TranslatorGroundedProbDatalogToBN(ExpressionBasicEvaluator):
         return rv_name
 
     def _get_choice_var_count(self):
-        if not hasattr(self, '_choice_variable_count'):
+        if not hasattr(self, '_choice_var_count'):
             self._choice_var_count = 0
         self._choice_var_count += 1
         return self._choice_var_count
 
-    @add_entry_point_match(ExpressionBlock)
+    @add_match(ExpressionBlock)
     def program_code(self, program_code):
+        self._edges = defaultdict(set)
         self._rv_to_cpd_functor = dict()
-        self._edges = dict()
-        super().process_expression(program_code)
+        for expression in program_code.expressions:
+            self.walk(expression)
         return BayesianNetwork(self._edges, self._rv_to_cpd_functor)
 
     @add_match(ProbFact)

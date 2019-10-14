@@ -62,3 +62,15 @@ class TableDistribution(DiscreteDistribution):
                 f'{value}: {prob}' for value, prob in self.table.items()
             ])
         )
+
+    def __eq__(self, other):
+        if not isinstance(other, TableDistribution):
+            raise NeuroLangException(
+                'Can only compare with other TableDistribution'
+            )
+        return (
+            set(other.table.keys()) == set(self.table.keys()) and all(
+                np.isclose(other.table[k], self.table[k])
+                for k in self.table.keys()
+            )
+        )
