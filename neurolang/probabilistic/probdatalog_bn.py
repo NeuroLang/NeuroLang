@@ -4,7 +4,8 @@ from typing import Mapping, AbstractSet, Callable
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionBasicEvaluator
 from ..expressions import (
-    Expression, Symbol, ExpressionBlock, FunctionApplication, Constant
+    Expression, Definition, Symbol, ExpressionBlock, FunctionApplication,
+    Constant
 )
 from ..datalog.expressions import Implication
 from ..datalog.expression_processing import extract_datalog_predicates
@@ -16,7 +17,7 @@ CPDFactory = Callable[[Constant[Mapping[Symbol, Constant]]],
                       Callable[[Constant], float]]
 
 
-class BayesianNetwork(Expression):
+class BayesianNetwork(Definition):
     def __init__(self, edges, rv_to_cpd_factory):
         self.rv_to_cpd_factory = rv_to_cpd_factory
         self.edges = edges
