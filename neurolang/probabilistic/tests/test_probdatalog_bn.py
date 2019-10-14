@@ -5,7 +5,7 @@ from ...expressions import Symbol, Constant, ExpressionBlock
 from ...datalog.expressions import Implication
 from ..probdatalog import ProbFact
 from ..probdatalog_bn import (
-    TranslatorGroundedProbDatalogToBN, pfact_cpd_functor
+    TranslatorGroundedProbDatalogToBN, pfact_cpd_factory
 )
 from ..distributions import TableDistribution
 
@@ -42,25 +42,25 @@ def test_probdatalog_bn_translation():
         'bought(spaghetti)': {'shop(john)'},
         'bought(fish)': {'shop(mary)'},
     }
-    assert bn.rv_to_cpd_functor['shop(john)']({
+    assert bn.rv_to_cpd_factory['shop(john)']({
         'c_1': 1
     }) == TableDistribution({
         0: 0.0,
         1: 1.0,
     })
-    assert bn.rv_to_cpd_functor['shop(john)']({
+    assert bn.rv_to_cpd_factory['shop(john)']({
         'c_1': 0
     }) == TableDistribution({
         0: 1.0,
         1: 0.0,
     })
-    assert bn.rv_to_cpd_functor['shop(mary)']({
+    assert bn.rv_to_cpd_factory['shop(mary)']({
         'c_2': 1
     }) == TableDistribution({
         0: 0.0,
         1: 1.0,
     })
-    assert bn.rv_to_cpd_functor['c_1']({}) == TableDistribution({
+    assert bn.rv_to_cpd_factory['c_1']({}) == TableDistribution({
         0: 0.8,
         1: 0.2
     })
@@ -86,4 +86,4 @@ def test_bn_translation_unique_rv_names():
 
 def test_forbid_parents_for_choice_vars():
     with pytest.raises(NeuroLangException):
-        pfact_cpd_functor(ProbFact(Constant(0.2), shop(john)))({'x': 4})
+        pfact_cpd_factory(ProbFact(Constant(0.2), shop(john)))({'x': 4})

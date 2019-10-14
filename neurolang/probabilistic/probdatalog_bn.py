@@ -13,13 +13,13 @@ from .distributions import TableDistribution
 
 
 class BayesianNetwork(Expression):
-    def __init__(self, edges, rv_to_cpd_functor):
-        self.rv_to_cpd_functor = rv_to_cpd_functor
+    def __init__(self, edges, rv_to_cpd_factory):
+        self.rv_to_cpd_factory = rv_to_cpd_factory
         self.edges = edges
 
     @property
     def random_variables(self):
-        return self.rv_to_cpd_functor.keys()
+        return self.rv_to_cpd_factory.keys()
 
 
 def _repr_ground_atom(ground_atom):
@@ -29,15 +29,15 @@ def _repr_ground_atom(ground_atom):
     )
 
 
-def deterministic_or_cpd_functor(parent_values):
+def deterministic_or_cpd_factory(parent_values):
     if any(parent_values.values()):
         return TableDistribution({0: 0.0, 1: 1.0})
     else:
         return TableDistribution({0: 1.0, 1: 0.0})
 
 
-def pfact_cpd_functor(pfact):
-    def cpd_functor(parent_values):
+def pfact_cpd_factory(pfact):
+    def cpd_factory(parent_values):
         if parent_values:
             raise NeuroLangException(
                 'No parent expected for probabilistic fact choice variable'
@@ -47,7 +47,7 @@ def pfact_cpd_functor(pfact):
             1: pfact.probability.value,
         })
 
-    return cpd_functor
+    return cpd_factory
 
 
 class TranslatorGroundedProbDatalogToBN(ExpressionBasicEvaluator):
@@ -55,16 +55,16 @@ class TranslatorGroundedProbDatalogToBN(ExpressionBasicEvaluator):
     Translate a grounded Prob(Data)Log program to a bayesian network (BN).
     '''
     def _add_choice_variable(self, rv_name, cpt):
-        if rv_name in self._rv_to_cpd_functor:
+        if rv_name in self._rv_to_cpd_factory:
             raise NeuroLangException(
                 f'Choice variable {rv_name} already in bayesian network'
             )
-        self._rv_to_cpd_functor[rv_name] = cpt
+        self._rv_to_cpd_factory[rv_name] = cpt
 
     def _add_atom_variable(self, atom, parents):
         rv_name = Symbol(_repr_ground_atom(atom))
-        if rv_name not in self._rv_to_cpd_functor:
-            self._rv_to_cpd_functor[rv_name] = deterministic_or_cpd_functor
+        if rv_name not in self._rv_to_cpd_factory:
+            self._rv_to_cpd_factory[rv_name] = deterministic_or_cpd_factory
         self._edges[rv_name] |= parents
         return rv_name
 
@@ -77,10 +77,10 @@ class TranslatorGroundedProbDatalogToBN(ExpressionBasicEvaluator):
     @add_match(ExpressionBlock)
     def program_code(self, program_code):
         self._edges = defaultdict(set)
-        self._rv_to_cpd_functor = dict()
+        self._rv_to_cpd_factory = dict()
         for expression in program_code.expressions:
             self.walk(expression)
-        return BayesianNetwork(self._edges, self._rv_to_cpd_functor)
+        return BayesianNetwork(self._edges, self._rv_to_cpd_factory)
 
     @add_match(ProbFact)
     def probfact(self, pfact):
@@ -96,7 +96,7 @@ class TranslatorGroundedProbDatalogToBN(ExpressionBasicEvaluator):
 
         '''
         choice_var_name = Symbol('c_{}'.format(self._get_choice_var_count()))
-        self._add_choice_variable(choice_var_name, pfact_cpd_functor(pfact))
+        self._add_choice_variable(choice_var_name, pfact_cpd_factory(pfact))
         self._add_atom_variable(pfact.consequent, {choice_var_name})
 
     @add_match(
