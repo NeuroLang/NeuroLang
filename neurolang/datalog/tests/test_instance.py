@@ -45,6 +45,23 @@ def test_map_instance_contains_facts():
     assert instance[Q].value == elements[Q]
 
 
+def test_copy():
+    elements = {Q: ({(C_(2), ), (C_(3), )})}
+    instance = SetInstance(elements)
+    instance2 = instance.copy()
+
+    assert instance == instance2
+
+
+def test_build_instance_from_instance():
+    elements = {Q: ({(C_(2), ), (C_(3), )})}
+    instance = SetInstance(elements)
+    instance2 = SetInstance(instance)
+
+    assert instance == instance2
+    assert instance.elements is not instance2.elements
+
+
 def test_construct_instance_from_factset():
     factset = {
         Q(C_(1)),
@@ -54,6 +71,17 @@ def test_construct_instance_from_factset():
     instance = SetInstance(factset)
     assert len(instance) == 3
     assert all(f in instance for f in factset)
+
+
+def test_map_instance_iterators():
+    elements = {
+        Q: frozenset({(C_(2), ), (C_(3), )}),
+    }
+    map_instance = FrozenMapInstance(elements)
+
+    values = list(map_instance.values())
+    assert len(values) == 1
+    assert len(values[0].value - elements[Q]) == 0
 
 
 def test_convert_instance_to_set():
@@ -118,7 +146,26 @@ def test_instance_intersection():
     assert len(instance) == 2
 
 
-def test_instance_union_update():
+def test_mutable_set_instance():
+    elements1 = {
+        Q: frozenset({(C_(2), ), (C_(3), )}),
+    }
+    instance = SetInstance(elements1)
+    instance.discard(Q(C_(2)))
+
+    assert len(instance) == 1
+    assert Q(C_(3)) in instance
+
+    instance.add(Q(C_(2)))
+    instance.add(P(C_(3)))
+
+    assert len(instance) == 3
+    assert Q(C_(2)) in instance
+    assert Q(C_(3)) in instance
+    assert P(C_(3)) in instance
+
+
+def test_instance_union_intersection_diff_update():
     elements1 = {
         Q: frozenset({(C_(2), ), (C_(3), )}),
     }
@@ -128,10 +175,21 @@ def test_instance_union_update():
     }
     instance = SetInstance(elements1)
     instance |= SetInstance(elements2)
+    assert len(instance) == 4
     assert Q(C_(2)) in instance
     assert Q(C_(3)) in instance
     assert Q(C_(4)) in instance
     assert P(C_(3)) in instance
+
+    instance = SetInstance(elements1)
+    instance &= SetInstance(elements2)
+    assert len(instance) == 1
+    assert Q(C_(3)) in instance
+
+    instance = SetInstance(elements1)
+    instance -= SetInstance(elements2)
+    assert len(instance) == 1
+    assert Q(C_(2)) in instance
 
 
 def test_instance_difference_update():

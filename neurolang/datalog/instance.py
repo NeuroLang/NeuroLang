@@ -175,8 +175,8 @@ class FrozenMapInstance(FrozenInstance, Mapping):
             )
 
     def values(self):
-        for v in self.values():
-            yield self._set_to_constant(v)
+        for k, v in self.elements.items():
+            yield self._set_to_constant(v, type_=self.set_types[k])
 
     def as_set(self):
         return self._create_view(FrozenSetInstance)
@@ -291,19 +291,20 @@ class MapInstance(Instance, FrozenMapInstance, MutableMapping):
 
 
 class SetInstance(Instance, FrozenSetInstance, MutableSet):
-    def add(self, predicate):
-        if predicate.functor not in self.elements:
-            self.elements[predicate.functor] = self._set_type()
-            self.set_types[predicate.functor] = Tuple[
-                tuple(arg.type for arg in predicate.args)
+    def add(self, value):
+        if value.functor not in self.elements:
+            self.elements[value.functor] = self._set_type()
+            self.set_types[value.functor] = Tuple[
+                tuple(arg.type for arg in value.args)
             ]
-        self.elements[predicate.functor].add(self._rebv.walk(predicate.args))
+        self.elements[value.functor].add(self._rebv.walk(value.args))
 
-    def discard(self, predicate):
-        value = self._rebv.walk(predicate.args)
-        self.elements[predicate.functor].discard(value)
-        if len(self.elements[predicate.functor]) == 0:
-            self._remove_predicate_symbol(predicate.functor)
+    def discard(self, value):
+        functor = value.functor
+        value = self._rebv.walk(value.args)
+        self.elements[functor].discard(value)
+        if len(self.elements[functor]) == 0:
+            self._remove_predicate_symbol(functor)
 
     def as_set(self):
         return self
