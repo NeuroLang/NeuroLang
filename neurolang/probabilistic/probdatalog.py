@@ -428,8 +428,10 @@ def get_possible_ground_substitutions(probfact, typing, interpretation):
     pfact_args = probfact.consequent.args
     facts_per_variable = {
         pfact_args[var_idx]: set(
-            tupl[0]
-            for tupl in interpretation.elements[next(iter(typing_pred_symbs))]
+            tupl.value[0]
+            for tupl in interpretation.as_map()[
+                next(iter(typing_pred_symbs))
+            ].value
         )
         for var_idx, typing_pred_symbs in typing.items()
         if isinstance(pfact_args[var_idx], Symbol)
@@ -444,7 +446,7 @@ def _count_ground_instances_in_interpretation(
     pfact, substitutions, interpretation
 ):
     return sum(
-        Fact(apply_substitution(pfact.consequent, dict(substitution))) in
+        apply_substitution(pfact.consequent, dict(substitution)) in
         interpretation for substitution in substitutions
     )
 
@@ -520,12 +522,12 @@ def get_rule_groundings(rule, instance):
     TODO: speed up with tabular substitutions
     '''
     head_pred_symb = rule.consequent.functor
-    if head_pred_symb not in instance.elements:
+    if head_pred_symb not in instance.as_map():
         return set()
     grounded_rules = set()
-    for tupl in instance.elements[head_pred_symb]:
+    for tupl in instance.as_map()[head_pred_symb].value:
         substitution = {
-            arg: tupl[i]
+            arg: tupl.value[i]
             for i, arg in enumerate(rule.consequent.args)
             if isinstance(arg, Symbol)
         }
@@ -534,7 +536,7 @@ def get_rule_groundings(rule, instance):
             for atom in extract_datalog_predicates(rule.antecedent)
         ]
         if any(
-            Fact(atom) not in instance for atom in substituted_antecedent_atoms
+            atom not in instance for atom in substituted_antecedent_atoms
         ):
             continue
         grounded_rules.add(

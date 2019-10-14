@@ -35,10 +35,12 @@ class RelationalAlgebraFrozenSet(Set):
         return element
 
     def __iter__(self):
-        if len(self) > 0:
-            return (tuple(v) for v in self._container.values)
+        if len(self) == 0:
+            values = {}
         else:
-            return iter({})
+            values = self._container.values
+        for v in values:
+            yield tuple(v)
 
     def __len__(self):
         if self._container is None:
@@ -172,9 +174,16 @@ class RelationalAlgebraFrozenSet(Set):
             return self.copy()
         elif isinstance(other, RelationalAlgebraSet):
             other = other._container
-            new_container = self._container.append(
-                other.loc[~other.index.isin(self._container.index)]
-            )
+            if self._container is None and other is None:
+                new_container = None
+            elif self._container is None:
+                new_container = other.copy()
+            elif other is None:
+                new_container = self._container.copy()
+            else:
+                new_container = self._container.append(
+                    other.loc[~other.index.isin(self._container.index)]
+                )
             output = self._empty_set_same_structure()
             output._container = new_container
             return output
@@ -194,6 +203,18 @@ class RelationalAlgebraFrozenSet(Set):
         else:
             return super().__and__(other)
 
+    def __eq__(self, other):
+        if isinstance(other, type(self)):
+            scont = self._container
+            ocont = other._container
+            return (
+                (len(scont) == 0 and len(ocont) == 0) or
+                (len(scont.columns) == 0 and len(ocont.columns) == 0) or
+                len(scont.index.difference(ocont.index)) == 0
+            )
+        else:
+            return super().__eq__(other)
+
     def groupby(self, columns):
         if len(self) > 0:
             if not isinstance(columns, Iterable):
@@ -207,6 +228,11 @@ class RelationalAlgebraFrozenSet(Set):
         if len(self) == 0:
             raise StopIteration
         return iter(self._container.values.squeeze())
+
+    def __hash__(self):
+        v = self._container.values
+        v.flags.writeable = False
+        return hash(v.data.tobytes())
 
 
 class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
@@ -349,10 +375,13 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         return container.itertuples(index=False, name='tuple')
 
     def to_unnamed(self):
-        container = self._container[list(self.columns)]
+        container = self._container[list(self.columns)].copy()
         container.columns = range(len(container.columns))
         output = RelationalAlgebraFrozenSet()
         output._container = container
+        RelationalAlgebraFrozenSet._renew_index(
+            container, drop_duplicates=False
+        )
         return output
 
     def __sub__(self, other):
