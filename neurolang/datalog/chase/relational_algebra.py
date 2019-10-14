@@ -12,6 +12,7 @@ from ...utils import NamedRelationalAlgebraFrozenSet
 from ..expression_processing import (extract_datalog_free_variables,
                                      extract_datalog_predicates)
 from ..expressions import Conjunction, Implication
+from ..instance import MapInstance
 from ..translate_to_named_ra import TranslateToNamedRA
 from ..wrapped_collections import WrappedRelationalAlgebraSet
 
@@ -136,7 +137,7 @@ class ChaseNamedRelationalAlgebraMixin:
     """
     def chase_step(self, instance, rule, restriction_instance=None):
         if restriction_instance is None:
-            restriction_instance = dict()
+            restriction_instance = MapInstance()
 
         rule = self.rewrite_constants_in_consequent(rule)
 
@@ -146,7 +147,7 @@ class ChaseNamedRelationalAlgebraMixin:
         )
 
         if all(len(predicate_list) == 0 for predicate_list in rule_predicates):
-            return dict()
+            return MapInstance()
 
         rule_predicates_iterator, builtin_predicates = rule_predicates
 
@@ -259,7 +260,7 @@ class ChaseNamedRelationalAlgebraMixin:
         self, rule, instance, restriction_instance=None
     ):
         if restriction_instance is None:
-            restriction_instance = dict()
+            restriction_instance = MapInstance()
 
         rule_predicates = extract_datalog_predicates(rule.antecedent)
         builtin_predicates, edb_idb_predicates, cq_free_vars = \
@@ -329,7 +330,7 @@ class ChaseNamedRelationalAlgebraMixin:
         self, rule, substitutions, instance, restriction_instance=None
     ):
         if restriction_instance is None:
-            restriction_instance = dict()
+            restriction_instance = MapInstance
 
         if isinstance(substitutions, NamedRelationalAlgebraFrozenSet):
             new_tuples = substitutions.projection(
