@@ -54,30 +54,30 @@ def test_probdatalog_bn_translation():
         Constant({Symbol('c_1'): Constant(1)}, auto_infer_type=False)
     ) == TableDistribution(
         Constant[Mapping]({
-            Constant[int](0): 0.0,
-            Constant[int](1): 1.0,
+            Constant[int](0): Constant[float](0.0),
+            Constant[int](1): Constant[float](1.0),
         })
     )
     assert bn.rv_to_cpd_factory.value[Symbol('shop(john)')](
         Constant({Symbol('c_1'): Constant(0)}, auto_infer_type=False)
     ) == TableDistribution(
         Constant[Mapping]({
-            Constant[int](0): 1.0,
-            Constant[int](1): 0.0,
+            Constant[int](0): Constant[float](1.0),
+            Constant[int](1): Constant[float](0.0),
         })
     )
     assert bn.rv_to_cpd_factory.value[Symbol('shop(mary)')](
         Constant({Symbol('c_2'): Constant(1)}, auto_infer_type=False)
     ) == TableDistribution(
         Constant[Mapping]({
-            Constant[int](0): 0.0,
-            Constant[int](1): 1.0,
+            Constant[int](0): Constant[float](0.0),
+            Constant[int](1): Constant[float](1.0),
         })
     )
     expected_dist = TableDistribution(
         Constant[Mapping]({
-            Constant[int](0): 0.8,
-            Constant[int](1): 0.2
+            Constant[int](0): Constant[float](0.8),
+            Constant[int](1): Constant[float](0.2)
         })
     )
     factory = bn.rv_to_cpd_factory.value[Symbol('c_1')]
@@ -91,8 +91,8 @@ def test_bn_translation_unique_rv_symbols():
         Symbol('c'),
         TableDistribution(
             Constant[Mapping]({
-                Constant[int](0): 0,
-                Constant[int](1): 1
+                Constant[int](0): Constant[float](0.0),
+                Constant[int](1): Constant[float](1.0)
             })
         )
     )
@@ -101,8 +101,8 @@ def test_bn_translation_unique_rv_symbols():
             Symbol('c'),
             TableDistribution(
                 Constant[Mapping]({
-                    Constant[int](0): 0,
-                    Constant[int](1): 1
+                    Constant[int](0): Constant[float](0.0),
+                    Constant[int](1): Constant[float](1.0)
                 })
             )
         )

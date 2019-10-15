@@ -4,17 +4,22 @@ from typing import Mapping, AbstractSet, Callable
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionBasicEvaluator
 from ..expressions import (
-    Expression, Definition, Symbol, ExpressionBlock, FunctionApplication,
-    Constant
+    Expression,
+    Definition,
+    Symbol,
+    ExpressionBlock,
+    FunctionApplication,
+    Constant,
 )
 from ..datalog.expressions import Implication
 from ..datalog.expression_processing import extract_datalog_predicates
 from ..exceptions import NeuroLangException
 from .probdatalog import ProbFact
-from .distributions import TableDistribution
+from .expressions import TableDistribution
 
-CPDFactory = Callable[[Constant[Mapping[Symbol, Constant]]],
-                      Callable[[Constant], float]]
+CPDFactory = Callable[
+    [Constant[Mapping[Symbol, Constant]]], Callable[[Constant], float]
+]
 
 
 class BayesianNetwork(Definition):
@@ -30,26 +35,30 @@ class BayesianNetwork(Definition):
 
 
 def _repr_ground_atom(ground_atom):
-    return '{}{}'.format(
+    return "{}{}".format(
         ground_atom.functor.name,
-        '({})'.format(', '.join([arg.value for arg in ground_atom.args]))
+        "({})".format(", ".join([arg.value for arg in ground_atom.args])),
     )
 
 
 def deterministic_or_cpd_factory(parent_values):
     if any(cst.value for cst in parent_values.value.values()):
         return TableDistribution(
-            Constant[Mapping]({
-                Constant[int](0): 0.0,
-                Constant[int](1): 1.0
-            })
+            Constant[Mapping](
+                {
+                    Constant[int](0): Constant[float](0.0),
+                    Constant[int](1): Constant[float](1.0),
+                }
+            )
         )
     else:
         return TableDistribution(
-            Constant[Mapping]({
-                Constant[int](0): 1.0,
-                Constant[int](1): 0.0
-            })
+            Constant[Mapping](
+                {
+                    Constant[int](0): Constant[float](1.0),
+                    Constant[int](1): Constant[float](0.0),
+                }
+            )
         )
 
 
@@ -57,26 +66,29 @@ def pfact_cpd_factory(pfact):
     def cpd_factory(parent_values):
         if parent_values.value:
             raise NeuroLangException(
-                'No parent expected for probabilistic fact choice variable'
+                "No parent expected for probabilistic fact choice variable"
             )
         return TableDistribution(
-            Constant[Mapping]({
-                Constant[int](0): 1 - pfact.probability.value,
-                Constant[int](1): pfact.probability.value,
-            })
+            Constant[Mapping](
+                {
+                    Constant[int](0): Constant(1) - pfact.probability,
+                    Constant[int](1): pfact.probability,
+                }
+            )
         )
 
     return cpd_factory
 
 
 class TranslatorGroundedProbDatalogToBN(ExpressionBasicEvaluator):
-    '''
+    """
     Translate a grounded Prob(Data)Log program to a bayesian network (BN).
-    '''
+    """
+
     def _add_choice_variable(self, rv_symbol, cpd_factory):
         if rv_symbol in self._rv_to_cpd_factory:
             raise NeuroLangException(
-                f'Choice variable {rv_symbol} already in bayesian network'
+                f"Choice variable {rv_symbol} already in bayesian network"
             )
         self._rv_to_cpd_factory[rv_symbol] = cpd_factory
 
@@ -88,7 +100,7 @@ class TranslatorGroundedProbDatalogToBN(ExpressionBasicEvaluator):
         return rv_symbol
 
     def _get_choice_var_count(self):
-        if not hasattr(self, '_choice_var_count'):
+        if not hasattr(self, "_choice_var_count"):
             self._choice_var_count = 0
         self._choice_var_count += 1
         return self._choice_var_count
@@ -99,19 +111,23 @@ class TranslatorGroundedProbDatalogToBN(ExpressionBasicEvaluator):
         self._rv_to_cpd_factory = dict()
         for expression in program_code.expressions:
             self.walk(expression)
-        edges = Constant[Mapping]({
-            rv_symbol: Constant[AbstractSet](frozenset(parents))
-            for rv_symbol, parents in self._edges.items()
-        })
-        rv_to_cpd_factory = Constant[Mapping]({
-            rv_symbol: cpd_factory
-            for rv_symbol, cpd_factory in self._rv_to_cpd_factory.items()
-        })
+        edges = Constant[Mapping](
+            {
+                rv_symbol: Constant[AbstractSet](frozenset(parents))
+                for rv_symbol, parents in self._edges.items()
+            }
+        )
+        rv_to_cpd_factory = Constant[Mapping](
+            {
+                rv_symbol: cpd_factory
+                for rv_symbol, cpd_factory in self._rv_to_cpd_factory.items()
+            }
+        )
         return BayesianNetwork(edges, rv_to_cpd_factory)
 
     @add_match(ProbFact)
     def probfact(self, pfact):
-        '''
+        """
         Translate a probabilistic fact to (1) a choice variable and (2) a
         random variable for its atom (if it is not already present in the
         bayesian network).
@@ -121,14 +137,14 @@ class TranslatorGroundedProbDatalogToBN(ExpressionBasicEvaluator):
         :: person('john').` can be seen as the CP-Logic rule `person('john') :
         0.2 <- true.`.
 
-        '''
-        choice_var_name = Symbol('c_{}'.format(self._get_choice_var_count()))
+        """
+        choice_var_name = Symbol("c_{}".format(self._get_choice_var_count()))
         self._add_choice_variable(choice_var_name, pfact_cpd_factory(pfact))
         self._add_atom_variable(pfact.consequent, {choice_var_name})
 
     @add_match(
         Implication(FunctionApplication[bool](Symbol, ...), Expression),
-        lambda exp: exp.antecedent != Constant[bool](True)
+        lambda exp: exp.antecedent != Constant[bool](True),
     )
     def statement_intensional(self, expression):
         parents = set()
