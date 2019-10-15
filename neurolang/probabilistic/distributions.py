@@ -1,5 +1,3 @@
-from typing import Mapping
-
 import numpy as np
 
 from ..exceptions import NeuroLangException
