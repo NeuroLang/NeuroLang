@@ -439,20 +439,36 @@ class Constant(Expression):
     def __auto_infer_type__(self):
         self.type = infer_type(self.value)
         self._symbols = set()
-        if (
+        if is_leq_informative(self.type, typing.Mapping):
+            self._auto_build_mapping_()
+        elif (
             not is_leq_informative(self.type, typing.Text) and
             is_leq_informative(self.type, typing.Iterable)
         ):
-            new_content = []
-            for a in self.value:
-                if not isinstance(a, Expression):
-                    a = Constant(a)
-                self._symbols |= a._symbols
-                new_content.append(a)
-            try:
-                self.value = type(self.value)(new_content)
-            except TypeError:
-                self.value = type(self.value)(*new_content)
+            self._auto_build_iterable_()
+
+    def _auto_build_iterable_(self):
+        new_content = []
+        for a in self.value:
+            if not isinstance(a, Expression):
+                a = Constant(a)
+            self._symbols |= a._symbols
+            new_content.append(a)
+        try:
+            self.value = type(self.value)(new_content)
+        except TypeError:
+            self.value = type(self.value)(*new_content)
+
+    def _auto_build_mapping_(self):
+        new_content = dict()
+        for k, v in self.value.items():
+            if not isinstance(k, Expression):
+                k = Constant(k)
+            if not isinstance(v, Expression):
+                v = Constant(v)
+            self._symbols |= k._symbols | v._symbols
+            new_content[k] = v
+        self.value = type(self.value)(new_content)
 
     def __verify_type__(self, value, type_):
         return (
