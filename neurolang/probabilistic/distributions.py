@@ -3,8 +3,6 @@ from typing import Mapping
 import numpy as np
 
 from ..exceptions import NeuroLangException
-from ..expressions import Constant, Expression
-from ..expression_walker import ExpressionBasicEvaluator
 
 
 class InvalidProbabilityDistribution(NeuroLangException):
@@ -39,10 +37,6 @@ class TableDistribution(DiscreteDistribution):
         return frozenset(self.table)
 
     def expectation(self, fun):
-        if not self.is_constant():
-            raise NeuroLangException(
-                "Expectation cannot be computed on non-constant distrib"
-            )
         return sum(fun(val) * prob for val, prob in self.table.items())
 
     def conditioned_on(self, condition):

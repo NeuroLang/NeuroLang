@@ -71,7 +71,7 @@ def pfact_cpd_factory(pfact):
         return TableDistribution(
             Constant[Mapping](
                 {
-                    Constant[int](0): Constant(1) - pfact.probability,
+                    Constant[int](0): Constant[float](1.0) - pfact.probability,
                     Constant[int](1): pfact.probability,
                 }
             )

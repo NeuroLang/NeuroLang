@@ -8,7 +8,7 @@ from ..probdatalog import ProbFact
 from ..probdatalog_bn import (
     TranslatorGroundedProbDatalogToBN, pfact_cpd_factory
 )
-from ..distributions import TableDistribution
+from ..expressions import TableDistribution
 
 shop = Symbol('shop')
 bought = Symbol('bought')
@@ -76,7 +76,7 @@ def test_probdatalog_bn_translation():
     )
     expected_dist = TableDistribution(
         Constant[Mapping]({
-            Constant[int](0): Constant[float](0.8),
+            Constant[int](0): Constant[float](1) - Constant[float](0.2),
             Constant[int](1): Constant[float](0.2)
         })
     )
