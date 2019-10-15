@@ -1,13 +1,16 @@
+from typing import Mapping
+
 import numpy as np
 
 from ..exceptions import NeuroLangException
+from ..expressions import Definition, Constant
 
 
 class InvalidProbabilityDistribution(NeuroLangException):
     pass
 
 
-class Distribution:
+class Distribution(Definition):
     def probability(self, value):
         raise NeuroLangException('Not implemented for abstract class')
 
@@ -25,21 +28,25 @@ class DiscreteDistribution(Distribution):
 
 class TableDistribution(DiscreteDistribution):
     def __init__(self, table):
-        if not np.isclose(sum(v for v in table.values()), 1.0):
+        if not isinstance(table, Constant[Mapping]):
+            raise NeuroLangException('Table must be a Constant[Mapping]')
+        if not np.isclose(sum(v for v in table.value.values()), 1.0):
             raise InvalidProbabilityDistribution(
                 'Table probabilities do not sum to 1'
             )
         self.table = table
 
     def probability(self, value):
-        return self.table.get(value, 0.0)
+        return self.table.value.get(value, 0.0)
 
     @property
     def support(self):
-        return frozenset(self.table.keys())
+        return frozenset(self.table.value.keys())
 
     def expectation(self, fun):
-        return sum(fun(value) * prob for value, prob in self.table.items())
+        return sum(
+            fun(value) * prob for value, prob in self.table.value.items()
+        )
 
     def conditioned_on(self, condition):
         '''
@@ -48,18 +55,18 @@ class TableDistribution(DiscreteDistribution):
         '''
         new_table = {
             value: prob
-            for value, prob in self.table.items()
+            for value, prob in self.table.value.items()
             if condition(value)
         }
         sum_prob = sum(prob for prob in new_table.values())
         for value, prob in new_table.items():
             new_table[value] = prob / sum_prob
-        return TableDistribution(new_table)
+        return TableDistribution(Constant[Mapping](new_table))
 
     def __repr__(self):
         return 'TableDistribution[\n{}\n]'.format(
             '\n'.join([
-                f'{value}: {prob}' for value, prob in self.table.items()
+                f'{value}: {prob}' for value, prob in self.table.value.items()
             ])
         )
 
@@ -69,8 +76,9 @@ class TableDistribution(DiscreteDistribution):
                 'Can only compare with other TableDistribution'
             )
         return (
-            set(other.table.keys()) == set(self.table.keys()) and all(
-                np.isclose(other.table[k], self.table[k])
-                for k in self.table.keys()
+            set(other.table.value.keys()) == set(self.table.value.keys()) and
+            all(
+                np.isclose(other.table.value[k], self.table.value[k])
+                for k in self.table.value.keys()
             )
         )

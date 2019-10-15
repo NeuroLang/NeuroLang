@@ -52,49 +52,65 @@ def test_probdatalog_bn_translation():
     assert bn.edges == expected_edges
     assert bn.rv_to_cpd_factory.value[Symbol('shop(john)')](
         Constant({Symbol('c_1'): Constant(1)}, auto_infer_type=False)
-    ) == Constant(TableDistribution({
-        0: 0.0,
-        1: 1.0,
-    }))
-    assert bn.rv_to_cpd_factory.value[Symbol('shop(john)')](
-        Constant({Symbol('c_1'): Constant(0)}, auto_infer_type=False)
-    ) == Constant(TableDistribution({
-        0: 1.0,
-        1: 0.0,
-    }))
-    assert bn.rv_to_cpd_factory.value[Symbol('shop(mary)')](
-        Constant({Symbol('c_2'): Constant(1)}, auto_infer_type=False)
-    ) == Constant(TableDistribution({
-        0: 0.0,
-        1: 1.0,
-    }))
-    assert bn.rv_to_cpd_factory.value[Symbol('c_1')](Constant({})) == Constant(
-        TableDistribution({
-            0: 0.8,
-            1: 0.2
+    ) == TableDistribution(
+        Constant[Mapping]({
+            Constant[int](0): 0.0,
+            Constant[int](1): 1.0,
         })
     )
+    assert bn.rv_to_cpd_factory.value[Symbol('shop(john)')](
+        Constant({Symbol('c_1'): Constant(0)}, auto_infer_type=False)
+    ) == TableDistribution(
+        Constant[Mapping]({
+            Constant[int](0): 1.0,
+            Constant[int](1): 0.0,
+        })
+    )
+    assert bn.rv_to_cpd_factory.value[Symbol('shop(mary)')](
+        Constant({Symbol('c_2'): Constant(1)}, auto_infer_type=False)
+    ) == TableDistribution(
+        Constant[Mapping]({
+            Constant[int](0): 0.0,
+            Constant[int](1): 1.0,
+        })
+    )
+    expected_dist = TableDistribution(
+        Constant[Mapping]({
+            Constant[int](0): 0.8,
+            Constant[int](1): 0.2
+        })
+    )
+    factory = bn.rv_to_cpd_factory.value[Symbol('c_1')]
+    assert factory(Constant({})) == expected_dist
 
 
 def test_bn_translation_unique_rv_symbols():
     translator = TranslatorGroundedProbDatalogToBN()
     translator.walk(ExpressionBlock([]))
     translator._add_choice_variable(
-        Symbol('c'), TableDistribution({
-            0: 0,
-            1: 1
-        })
+        Symbol('c'),
+        TableDistribution(
+            Constant[Mapping]({
+                Constant[int](0): 0,
+                Constant[int](1): 1
+            })
+        )
     )
     with pytest.raises(NeuroLangException):
         translator._add_choice_variable(
-            Symbol('c'), TableDistribution({
-                0: 0,
-                1: 1
-            })
+            Symbol('c'),
+            TableDistribution(
+                Constant[Mapping]({
+                    Constant[int](0): 0,
+                    Constant[int](1): 1
+                })
+            )
         )
 
 
 def test_forbid_parents_for_choice_vars():
     with pytest.raises(NeuroLangException):
         factory = pfact_cpd_factory(ProbFact(Constant(0.2), shop(john)))
-        factory(Constant({'x': 4}, auto_infer_type=False))
+        factory(
+            Constant({Symbol('x'): Constant[int](4)}, auto_infer_type=False)
+        )

@@ -38,9 +38,19 @@ def _repr_ground_atom(ground_atom):
 
 def deterministic_or_cpd_factory(parent_values):
     if any(cst.value for cst in parent_values.value.values()):
-        return Constant(TableDistribution({0: 0.0, 1: 1.0}))
+        return TableDistribution(
+            Constant[Mapping]({
+                Constant[int](0): 0.0,
+                Constant[int](1): 1.0
+            })
+        )
     else:
-        return Constant(TableDistribution({0: 1.0, 1: 0.0}))
+        return TableDistribution(
+            Constant[Mapping]({
+                Constant[int](0): 1.0,
+                Constant[int](1): 0.0
+            })
+        )
 
 
 def pfact_cpd_factory(pfact):
@@ -49,10 +59,10 @@ def pfact_cpd_factory(pfact):
             raise NeuroLangException(
                 'No parent expected for probabilistic fact choice variable'
             )
-        return Constant(
-            TableDistribution({
-                0: 1 - pfact.probability.value,
-                1: pfact.probability.value,
+        return TableDistribution(
+            Constant[Mapping]({
+                Constant[int](0): 1 - pfact.probability.value,
+                Constant[int](1): pfact.probability.value,
             })
         )
 
