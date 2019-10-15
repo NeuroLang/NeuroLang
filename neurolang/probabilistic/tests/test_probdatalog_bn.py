@@ -44,15 +44,13 @@ def test_probdatalog_bn_translation():
         )
     )
     assert bn.random_variables == expected_rv_symbols
-    # TODO re-enable type inference when #197 is fixed
     expected_edges = Constant[Mapping](
         {
             Symbol("shop(john)"): frozenset({Symbol("c_1")}),
             Symbol("shop(mary)"): frozenset({Symbol("c_2")}),
             Symbol("bought(spaghetti)"): frozenset({Symbol("shop(john)")}),
             Symbol("bought(fish)"): frozenset({Symbol("shop(mary)")}),
-        },
-        auto_infer_type=False,
+        }
     )
     assert bn.edges == expected_edges
     assert bn.rv_to_cpd_factory.value[Symbol("shop(john)")](
