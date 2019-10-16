@@ -89,18 +89,11 @@ def _put_probfacts_in_front(code_block):
 
 
 def _check_equantified_probfact_validity(expression):
-    qvar = expression.head
-    probfact = expression.body
-    if qvar in probfact.body._symbols:
+    qvar = expression.consequent.head
+    if qvar in expression.consequent.body.body._symbols:
         raise NeuroLangException(
             "Existentially quantified variable can only be used as the "
             "probability of the probability fact"
-        )
-    if probfact.probability != qvar:
-        raise NeuroLangException(
-            "If a variable is existentially quantified in a probabilistic "
-            "fact, this variable must be used as the probability of this "
-            "probabilistic fact"
         )
 
 

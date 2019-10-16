@@ -126,10 +126,7 @@ class TranslatorGroundedProbDatalogToBN(ExpressionBasicEvaluator):
         )
         return BayesianNetwork(edges, rv_to_cpd_factory)
 
-    @add_match(
-        Implication,
-        lambda exp: is_probfact(exp) or is_eprobfact(exp),
-    )
+    @add_match(Implication, lambda exp: is_probfact(exp) or is_eprobfact(exp))
     def probfact(self, pfact):
         """
         Translate a probabilistic fact to (1) a choice variable and (2) a

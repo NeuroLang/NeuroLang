@@ -5,7 +5,12 @@ from ...datalog.expressions import Conjunction, Disjunction, Fact, Implication
 from ...datalog.instance import FrozenSetInstance, SetInstance
 from ...exceptions import NeuroLangException
 from ...expression_walker import ExpressionBasicEvaluator
-from ...expressions import Constant, ExpressionBlock, Symbol
+from ...expressions import (
+    Constant,
+    ExpressionBlock,
+    Symbol,
+    ExistentialPredicate,
+)
 from ..ppdl import DeltaTerm
 from ..expressions import ProbQuantifier
 from ..probdatalog import (
@@ -414,4 +419,27 @@ def test_conjunct_formulas():
 
 
 def test_program_with_eprobfact():
-    pass
+    code = ExpressionBlock(
+        [
+            Implication(
+                ExistentialPredicate(
+                    p, ProbQuantifier(Symbol[float](p), P(x))
+                ),
+                Constant[bool](True),
+            )
+        ]
+    )
+    program = ProbDatalog()
+    program.walk(code)
+
+    code = ExpressionBlock(
+        [
+            Implication(
+                ExistentialPredicate(z, ProbQuantifier(Constant(0.2), P(z))),
+                Constant[bool](True),
+            )
+        ]
+    )
+    program = ProbDatalog()
+    with pytest.raises(NeuroLangException, match=r"can only be used"):
+        program.walk(code)
