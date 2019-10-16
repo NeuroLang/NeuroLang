@@ -15,7 +15,7 @@ from ..datalog.expressions import Implication
 from ..datalog.expression_processing import extract_datalog_predicates
 from ..exceptions import NeuroLangException
 from .expressions import TableDistribution, ProbQuantifier
-from .probdatalog import is_probfact, is_equantified_probfact
+from .probdatalog import is_probfact, is_eprobfact
 
 CPDFactory = Callable[
     [Constant[Mapping[Symbol, Constant]]], Callable[[Constant], float]
@@ -128,7 +128,7 @@ class TranslatorGroundedProbDatalogToBN(ExpressionBasicEvaluator):
 
     @add_match(
         Implication,
-        lambda exp: is_probfact(exp) or is_equantified_probfact(exp),
+        lambda exp: is_probfact(exp) or is_eprobfact(exp),
     )
     def probfact(self, pfact):
         """

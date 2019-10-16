@@ -19,7 +19,7 @@ from ..probdatalog import (
     ground_probdatalog_program,
     _infer_pfact_typing_pred_symbs,
     is_probfact,
-    is_equantified_probfact,
+    is_eprobfact,
 )
 
 C_ = Constant
@@ -411,3 +411,7 @@ def test_conjunct_formulas():
     assert conjunct_formulas(P(x), b) == c
     assert conjunct_formulas(b, P(x)) == d
     assert conjunct_formulas(c, d) == Conjunction(c.formulas + d.formulas)
+
+
+def test_program_with_eprobfact():
+    pass

@@ -50,7 +50,7 @@ def is_probfact(expression):
     )
 
 
-def is_equantified_probfact(expression):
+def is_eprobfact(expression):
     return (
         isinstance(expression, Implication)
         and isinstance(expression.consequent, ExistentialPredicate)
@@ -63,7 +63,7 @@ def is_equantified_probfact(expression):
 def _extract_probfact_probability(expression):
     if is_probfact(expression):
         return expression.consequent.probability
-    elif is_equantified_probfact(expression):
+    elif is_eprobfact(expression):
         return expression.consequent.body.probability
     else:
         raise NeuroLangException("Invalid probabilistic fact")
@@ -81,7 +81,7 @@ def _put_probfacts_in_front(code_block):
     probfacts = []
     non_probfacts = []
     for expression in code_block.expressions:
-        if is_probfact(expression) or is_equantified_probfact(expression):
+        if is_probfact(expression) or is_eprobfact(expression):
             probfacts.append(expression)
         else:
             non_probfacts.append(expression)
@@ -105,7 +105,7 @@ def _check_equantified_probfact_validity(expression):
 
 
 def _extract_probfact_or_eprobfact_pred_symb(expression):
-    if is_equantified_probfact(expression):
+    if is_eprobfact(expression):
         return expression.consequent.body.body.functor
     else:
         return expression.consequent.body.functor
@@ -131,12 +131,9 @@ class ProbDatalogProgram(DatalogProgram):
         # TODO: this relies on the class inheriting from ExpressionWalker
         super().process_expression(_put_probfacts_in_front(code))
 
-    @add_match(
-        Implication,
-        lambda exp: is_probfact(exp) or is_equantified_probfact(exp),
-    )
+    @add_match(Implication, lambda exp: is_probfact(exp) or is_eprobfact(exp))
     def probfact_or_equantified_probfact(self, expression):
-        if is_equantified_probfact(expression):
+        if is_eprobfact(expression):
             _check_equantified_probfact_validity(expression)
         self.protected_keywords.add(self.typing_symbol.name)
         pred_symb = _extract_probfact_or_eprobfact_pred_symb(expression)
@@ -209,8 +206,7 @@ class ProbDatalogProgram(DatalogProgram):
             for k, v in self.symbol_table.items()
             if isinstance(v, ExpressionBlock)
             and any(
-                is_probfact(exp) or is_equantified_probfact(exp)
-                for exp in v.expressions
+                is_probfact(exp) or is_eprobfact(exp) for exp in v.expressions
             )
         }
 
@@ -521,10 +517,7 @@ def full_observability_parameter_estimation(prog, interpretations):
 
 
 class ProbfactAsFactWalker(ExpressionWalker):
-    @add_match(
-        Implication,
-        lambda exp: is_probfact(exp) or is_equantified_probfact(exp),
-    )
+    @add_match(Implication, lambda exp: is_probfact(exp) or is_eprobfact(exp))
     def probfact(self, pfact):
         if any(
             not isinstance(arg, Constant) for arg in pfact.consequent.body.args
