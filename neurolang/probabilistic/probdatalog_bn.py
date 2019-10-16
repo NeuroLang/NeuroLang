@@ -14,8 +14,8 @@ from ..expressions import (
 from ..datalog.expressions import Implication
 from ..datalog.expression_processing import extract_datalog_predicates
 from ..exceptions import NeuroLangException
-from .probdatalog import ProbFact
-from .expressions import TableDistribution
+from .expressions import TableDistribution, ProbQuantifier
+from .probdatalog import is_probfact, is_equantified_probfact
 
 CPDFactory = Callable[
     [Constant[Mapping[Symbol, Constant]]], Callable[[Constant], float]
@@ -71,8 +71,9 @@ def pfact_cpd_factory(pfact):
         return TableDistribution(
             Constant[Mapping](
                 {
-                    Constant[int](0): Constant[float](1.0) - pfact.probability,
-                    Constant[int](1): pfact.probability,
+                    Constant[int](0): Constant[float](1.0)
+                    - pfact.consequent.probability,
+                    Constant[int](1): pfact.consequent.probability,
                 }
             )
         )
@@ -125,7 +126,10 @@ class TranslatorGroundedProbDatalogToBN(ExpressionBasicEvaluator):
         )
         return BayesianNetwork(edges, rv_to_cpd_factory)
 
-    @add_match(ProbFact)
+    @add_match(
+        Implication,
+        lambda exp: is_probfact(exp) or is_equantified_probfact(exp),
+    )
     def probfact(self, pfact):
         """
         Translate a probabilistic fact to (1) a choice variable and (2) a
@@ -140,7 +144,7 @@ class TranslatorGroundedProbDatalogToBN(ExpressionBasicEvaluator):
         """
         choice_var_name = Symbol("c_{}".format(self._get_choice_var_count()))
         self._add_choice_variable(choice_var_name, pfact_cpd_factory(pfact))
-        self._add_atom_variable(pfact.consequent, {choice_var_name})
+        self._add_atom_variable(pfact.consequent.body, {choice_var_name})
 
     @add_match(
         Implication(FunctionApplication[bool](Symbol, ...), Expression),
