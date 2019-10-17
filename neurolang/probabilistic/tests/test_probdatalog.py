@@ -343,8 +343,15 @@ def test_probfact_as_fact():
     code = ExpressionBlock(
         [Implication(ProbabilisticPredicate(p, P(x)), Constant[bool](True))]
     )
-    with pytest.raises(NeuroLangException, match=r"unsupported"):
+    with pytest.raises(NeuroLangException):
         walker.walk(code)
+
+    existential_pfact = Implication(
+        ExistentialPredicate(p, ProbabilisticPredicate(p, Z(a))),
+        Constant[bool](True),
+    )
+    walker = ProbfactAsFactWalker()
+    assert walker.walk(existential_pfact) == Fact(Z(a))
 
 
 def test_program_with_existential_raises_exception():

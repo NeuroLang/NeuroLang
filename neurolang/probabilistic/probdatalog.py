@@ -30,6 +30,7 @@ from .ppdl import is_gdatalog_rule
 from ..datalog.instance import SetInstance
 from ..datalog.expression_processing import (
     extract_datalog_predicates,
+    is_ground_predicate,
     implication_has_existential_variable_in_antecedent,
 )
 from .ppdl import concatenate_to_expression_block, get_dterm, DeltaTerm
@@ -501,19 +502,21 @@ def full_observability_parameter_estimation(prog, interpretations):
 
 
 class ProbfactAsFactWalker(ExpressionWalker):
-    @add_match(
-        Implication,
-        lambda exp: is_probabilistic_fact(exp)
-        or is_existential_probabilistic_fact(exp),
-    )
-    def probfact(self, pfact):
-        if any(
-            not isinstance(arg, Constant) for arg in pfact.consequent.body.args
-        ):
+    @add_match(Implication, lambda exp: is_probabilistic_fact(exp))
+    def probabilistic_fact(self, pfact):
+        if not is_ground_predicate(pfact.consequent.body):
             raise NeuroLangException(
-                "Variables in probabilistic facts are currently unsupported"
+                "Only constant probabilistic facts are supported"
             )
         return Fact(pfact.consequent.body)
+
+    @add_match(Implication, lambda exp: is_existential_probabilistic_fact(exp))
+    def existential_probabilistic_fact(self, existential_pfact):
+        if not is_ground_predicate(existential_pfact.consequent.body.body):
+            raise NeuroLangException(
+                "Only constant probabilistic facts are supported"
+            )
+        return Fact(existential_pfact.consequent.body.body)
 
 
 class Datalog(TranslateToLogic, DatalogProgram, ExpressionBasicEvaluator):

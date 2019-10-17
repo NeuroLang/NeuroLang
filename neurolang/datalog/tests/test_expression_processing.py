@@ -10,7 +10,8 @@ from ..expression_processing import (
     extract_datalog_predicates,
     is_conjunctive_expression_with_nested_predicates,
     stratify, reachable_code, is_linear_rule,
-    implication_has_existential_variable_in_antecedent
+    implication_has_existential_variable_in_antecedent,
+    is_ground_predicate
 )
 
 S_ = Symbol
@@ -239,3 +240,11 @@ def test_implication_has_existential_variable_in_antecedent():
     assert not implication_has_existential_variable_in_antecedent(
         Implication(Q(x), R(x)),
     )
+
+
+def test_is_ground_predicate():
+    P = S_('P')
+    x = S_('x')
+    a = C_('a')
+    assert not is_ground_predicate(P(x))
+    assert is_ground_predicate(P(a))
