@@ -261,23 +261,6 @@ class GDatalogToProbDatalogTranslator(PatternWalker):
         Translate a GDatalog rule whose delta term is bernoulli distributed to
         an expression block containing a probabilistic fact and a
         (deterministic) rule.
-
-        Example
-        -------
-        Let tau be the following walked GDatalog rule (with syntactic sugar)
-
-            Q(x_1, ..., x_{i-1}, B[[0.3]], x_{i+1}, ..., x_n) :- P(x).
-
-        where x is the tuple (x_1, ..., x_{i-1}, x_{i+1}, ..., x_n) and where
-        P(x) is a conjunction of atoms over x.
-
-        The following block is returned
-
-            0.3 :: ProbFact_Q_<uid_1>(x).
-            Q(x) :- P(x), ProbFact_Q_<uid_1>(x).
-
-        TODO: update doc
-
         """
         datom = rule.consequent
         dterm = get_dterm(datom)
@@ -629,3 +612,7 @@ def ground_probdatalog_program(probdatalog_code):
             new_expressions.append(exp)
     new_expressions += grounded_rules
     return ExpressionBlock(new_expressions)
+
+
+def relational_algebra_ground_probdatalog_program(probdatalog_program):
+    pass
