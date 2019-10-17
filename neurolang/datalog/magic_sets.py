@@ -6,7 +6,7 @@ Magic Sets [1] rewriting implementation for Datalog.
 
 from ..expressions import Constant, Symbol
 from . import expression_processing, extract_datalog_predicates
-from .expressions import Disjunction, Implication
+from .expressions import Disjunction, Implication, Conjunction
 
 
 class AdornedExpression(Symbol):
@@ -78,7 +78,13 @@ def create_complementary_rules(adorned_code, idb):
     complementary_rules = []
     for i, rule in enumerate(adorned_code.formulas):
         for predicate in extract_datalog_predicates(rule.antecedent):
-            if predicate.functor.name in idb:
+            if (
+                not (
+                    isinstance(predicate.functor, AdornedExpression) and
+                    isinstance(predicate.functor.expression, Constant)
+                ) and
+                predicate.functor.name in idb
+            ):
                 magic_consequent = magic_predicate(predicate)
                 magic_antecedent = magic_predicate(predicate, i)
                 complementary_rules.append(Implication(
@@ -103,7 +109,7 @@ def create_magic_rules(adorned_code, idb, edb):
         )
         new_antecedent = new_consequent
         for predicate in edb_antecedent:
-            new_antecedent = new_antecedent & predicate
+            new_antecedent = Conjunction((new_antecedent, predicate))
 
         magic_rules += create_magic_rules_create_rules(
             new_antecedent, predicates, idb, i
@@ -155,9 +161,10 @@ def create_modified_rules(adorned_code, edb):
         new_antecedent = obtain_new_antecedent(rule, edb, i)
 
         if len(new_antecedent) > 0:
-            new_antecedent_ = new_antecedent[0]
-            for predicate in new_antecedent[1:]:
-                new_antecedent_ = new_antecedent_ & predicate
+            if len(new_antecedent) == 1:
+                new_antecedent_ = new_antecedent[0]
+            else:
+                new_antecedent_ = Conjunction(tuple(new_antecedent))
 
             modified_rules.append(Implication(
                 rule.consequent, new_antecedent_
@@ -170,7 +177,12 @@ def obtain_new_antecedent(rule, edb, rule_number):
     new_antecedent = []
     for predicate in extract_datalog_predicates(rule.antecedent):
         functor = predicate.functor
-        if functor.name in edb:
+        if (
+            isinstance(functor, AdornedExpression) and
+            isinstance(functor.expression, Constant)
+        ):
+            new_antecedent.append(functor.expression(*predicate.args))
+        elif functor.name in edb:
             new_antecedent.append(
                 Symbol(functor.name)(*predicate.args)
             )
