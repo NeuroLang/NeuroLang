@@ -57,8 +57,8 @@ class AdornedExpression(Symbol):
 
 def magic_rewrite(query, datalog):
     adorned_code = reachable_adorned_code(query, datalog)
-    # assume that the query rule is the first
-    adorned_query = adorned_code.formulas[0]
+    # assume that the query rule is the last
+    adorned_query = adorned_code.formulas[-1]
     goal = adorned_query.consequent.functor
 
     idb = datalog.intensional_database()
