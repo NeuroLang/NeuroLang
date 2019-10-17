@@ -12,7 +12,7 @@ from ...expressions import (
     ExistentialPredicate,
 )
 from ..ppdl import DeltaTerm
-from ..expressions import ProbQuantifier
+from ..expressions import ProbabilisticAnnotation
 from ..probdatalog import (
     GDatalogToProbDatalog,
     ProbDatalogProgram,
@@ -23,8 +23,7 @@ from ..probdatalog import (
     get_rule_groundings,
     ground_probdatalog_program,
     _infer_pfact_typing_pred_symbs,
-    is_probfact,
-    is_eprobfact,
+    is_probabilistic_fact,
 )
 
 C_ = Constant
@@ -52,13 +51,16 @@ class ProbDatalog(ProbDatalogProgram, ExpressionBasicEvaluator):
 
 def test_probfact():
     probfact = Implication(
-        ProbQuantifier(Constant[float](0.2), P(x)), Constant[bool](True)
+        ProbabilisticAnnotation(Constant[float](0.2), P(x)),
+        Constant[bool](True),
     )
     assert probfact.consequent.probability == Constant[float](0.2)
     assert probfact.consequent.body == P(x)
 
-    with pytest.raises(NeuroLangException, match=r"must be an expression"):
-        Implication(ProbQuantifier(0.3, P(x)), Constant[bool](True))
+    with pytest.raises(
+        NeuroLangException, match=r"must be a symbol or constant"
+    ):
+        Implication(ProbabilisticAnnotation(0.3, P(x)), Constant[bool](True))
 
 
 def test_probdatalog_program():
@@ -67,7 +69,7 @@ def test_probdatalog_program():
     code = ExpressionBlock(
         (
             Implication(
-                ProbQuantifier(Constant[float](0.5), P(x)),
+                ProbabilisticAnnotation(Constant[float](0.5), P(x)),
                 Constant[bool](True),
             ),
             Implication(Q(x), P(x) & Z(x)),
@@ -88,7 +90,7 @@ def test_probdatalog_program():
         P: ExpressionBlock(
             [
                 Implication(
-                    ProbQuantifier(Constant[float](0.5), P(x)),
+                    ProbabilisticAnnotation(Constant[float](0.5), P(x)),
                     Constant[bool](True),
                 )
             ]
@@ -106,7 +108,9 @@ def test_gdatalog_translation():
     )
     translator = GDatalogToProbDatalog()
     translated = translator.walk(program)
-    matching_exps = [exp for exp in translated.expressions if is_probfact(exp)]
+    matching_exps = [
+        exp for exp in translated.expressions if is_probabilistic_fact(exp)
+    ]
     assert len(matching_exps) == 1
     probfact = matching_exps[0]
     assert x in probfact.consequent.body.args
@@ -123,7 +127,9 @@ def test_gdatalog_translation():
 
 
 def test_get_possible_ground_substitutions_constant_probfact():
-    probfact = Implication(ProbQuantifier(C_(0.2), Z(a)), Constant[bool](True))
+    probfact = Implication(
+        ProbabilisticAnnotation(C_(0.2), Z(a)), Constant[bool](True)
+    )
     typing = dict()
     interpretation = SetInstance([P(a), Z(a), P(b), Q(a)])
     substitutions = get_possible_ground_substitutions(
@@ -132,7 +138,7 @@ def test_get_possible_ground_substitutions_constant_probfact():
     assert substitutions == frozenset({frozenset()})
 
     probfact = Implication(
-        ProbQuantifier(C_(0.2), Z(x, a)), Constant[bool](True)
+        ProbabilisticAnnotation(C_(0.2), Z(x, a)), Constant[bool](True)
     )
     typing = {Z: {0: {P}}}
     interpretation = SetInstance(
@@ -150,7 +156,9 @@ def test_get_possible_ground_substitutions_constant_probfact():
 
 
 def test_get_possible_ground_substitutions():
-    probfact = Implication(ProbQuantifier(C_(0.2), Z(x)), Constant[bool](True))
+    probfact = Implication(
+        ProbabilisticAnnotation(C_(0.2), Z(x)), Constant[bool](True)
+    )
     interpretation = SetInstance([P(a), P(b), Z(a), Z(b), Q(a), Q(b)])
     typing = {Z: {0: {P}}}
     substitutions = get_possible_ground_substitutions(
@@ -161,7 +169,7 @@ def test_get_possible_ground_substitutions():
     )
 
     probfact = Implication(
-        ProbQuantifier(C_(0.5), Z(x, y)), Constant[bool](True)
+        ProbabilisticAnnotation(C_(0.5), Z(x, y)), Constant[bool](True)
     )
     interpretation = SetInstance(
         [P(a), P(b), Y(a), Y(b), Z(a, b), Q(a), Z(b, a), Q(b)]
@@ -183,7 +191,9 @@ def test_get_possible_ground_substitutions():
 def test_full_observability_parameter_estimation():
     code = ExpressionBlock(
         (
-            Implication(ProbQuantifier(p, Z(x)), Constant[bool](True)),
+            Implication(
+                ProbabilisticAnnotation(p, Z(x)), Constant[bool](True)
+            ),
             Implication(Q(x), Conjunction([Z(x), P(x)])),
             Fact(P(a)),
             Fact(P(b)),
@@ -192,7 +202,7 @@ def test_full_observability_parameter_estimation():
     program = ProbDatalog()
     program.walk(code)
     assert program.parametric_probfacts() == {
-        p: Implication(ProbQuantifier(p, Z(x)), Constant[bool](True))
+        p: Implication(ProbabilisticAnnotation(p, Z(x)), Constant[bool](True))
     }
     interpretations = frozenset(
         [
@@ -218,8 +228,12 @@ def test_full_observability_parameter_estimation():
     assert p in estimations
     assert np.isclose(estimations[p], 0.5)
 
-    probfact_1 = Implication(ProbQuantifier(p_1, Z(x)), Constant[bool](True))
-    probfact_2 = Implication(ProbQuantifier(p_2, Y(y)), Constant[bool](True))
+    probfact_1 = Implication(
+        ProbabilisticAnnotation(p_1, Z(x)), Constant[bool](True)
+    )
+    probfact_2 = Implication(
+        ProbabilisticAnnotation(p_2, Y(y)), Constant[bool](True)
+    )
     rule = Implication(Q(x, y), Conjunction([Z(x), Y(y), P(x), R(y)]))
     code = ExpressionBlock(
         (probfact_1, probfact_2, rule, Fact(P(a)), Fact(P(b)))
@@ -272,7 +286,9 @@ def test_program_const_probfact_in_antecedent():
     code = ExpressionBlock(
         [
             Implication(Q(a), Z(a)),
-            Implication(ProbQuantifier(p, Z(a)), Constant[bool](True)),
+            Implication(
+                ProbabilisticAnnotation(p, Z(a)), Constant[bool](True)
+            ),
         ]
     )
     program = ProbDatalog()
@@ -291,7 +307,9 @@ def test_program_with_twice_occurring_probfact_in_antecedent():
     code = ExpressionBlock(
         [
             Implication(Q(x, y), Conjunction([Z(x), Z(y), P(x), P(y)])),
-            Implication(ProbQuantifier(p, Z(x)), Constant[bool](True)),
+            Implication(
+                ProbabilisticAnnotation(p, Z(x)), Constant[bool](True)
+            ),
             Fact(P(a)),
             Fact(P(b)),
         ]
@@ -317,7 +335,9 @@ def test_infer_pfact_typing_pred_symbs():
 def test_probfact_as_fact():
     code = ExpressionBlock(
         [
-            Implication(ProbQuantifier(p, Z(a)), Constant[bool](True)),
+            Implication(
+                ProbabilisticAnnotation(p, Z(a)), Constant[bool](True)
+            ),
             Implication(Q(x), Conjunction([P(x), Z(x)])),
             Fact(P(a)),
             Fact(P(b)),
@@ -329,7 +349,7 @@ def test_probfact_as_fact():
     assert Fact(P(a)) in new_code.expressions
 
     code = ExpressionBlock(
-        [Implication(ProbQuantifier(p, P(x)), Constant[bool](True))]
+        [Implication(ProbabilisticAnnotation(p, P(x)), Constant[bool](True))]
     )
     with pytest.raises(NeuroLangException, match=r"unsupported"):
         walker.walk(code)
@@ -346,8 +366,12 @@ def test_ground_probdatalog_program():
     rule = Implication(Q(x), Conjunction([P(x), Z(x)]))
     code = ExpressionBlock(
         [
-            Implication(ProbQuantifier(C_(0.3), Z(a)), Constant[bool](True)),
-            Implication(ProbQuantifier(C_(0.3), Z(b)), Constant[bool](True)),
+            Implication(
+                ProbabilisticAnnotation(C_(0.3), Z(a)), Constant[bool](True)
+            ),
+            Implication(
+                ProbabilisticAnnotation(C_(0.3), Z(b)), Constant[bool](True)
+            ),
             Fact(P(a)),
             Fact(P(b)),
             rule,
@@ -372,8 +396,12 @@ def test_ground_probdatalog_program():
 
     code = ExpressionBlock(
         [
-            Implication(ProbQuantifier(C_(0.5), R(a)), Constant[bool](True)),
-            Implication(ProbQuantifier(C_(0.5), R(c)), Constant[bool](True)),
+            Implication(
+                ProbabilisticAnnotation(C_(0.5), R(a)), Constant[bool](True)
+            ),
+            Implication(
+                ProbabilisticAnnotation(C_(0.5), R(c)), Constant[bool](True)
+            ),
             Fact(P(a)),
             Fact(P(b)),
             Fact(Q(a)),
@@ -423,7 +451,7 @@ def test_program_with_eprobfact():
         [
             Implication(
                 ExistentialPredicate(
-                    p, ProbQuantifier(Symbol[float](p), P(x))
+                    p, ProbabilisticAnnotation(Symbol[float](p), P(x))
                 ),
                 Constant[bool](True),
             )
@@ -435,7 +463,9 @@ def test_program_with_eprobfact():
     code = ExpressionBlock(
         [
             Implication(
-                ExistentialPredicate(z, ProbQuantifier(Constant(0.2), P(z))),
+                ExistentialPredicate(
+                    z, ProbabilisticAnnotation(Constant(0.2), P(z))
+                ),
                 Constant[bool](True),
             )
         ]

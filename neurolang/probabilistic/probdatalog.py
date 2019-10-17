@@ -38,32 +38,32 @@ from ..datalog.chase import (
     ChaseGeneral,
     ChaseNaive,
 )
-from .expressions import ProbQuantifier
+from .expressions import ProbabilisticAnnotation
 
 
-def is_probfact(expression):
+def is_probabilistic_fact(expression):
     return (
         isinstance(expression, Implication)
-        and isinstance(expression.consequent, ProbQuantifier)
+        and isinstance(expression.consequent, ProbabilisticAnnotation)
         and isinstance(expression.consequent.body, FunctionApplication)
         and expression.antecedent == Constant[bool](True)
     )
 
 
-def is_eprobfact(expression):
+def is_existential_probabilistic_fact(expression):
     return (
         isinstance(expression, Implication)
         and isinstance(expression.consequent, ExistentialPredicate)
-        and isinstance(expression.consequent.body, ProbQuantifier)
+        and isinstance(expression.consequent.body, ProbabilisticAnnotation)
         and isinstance(expression.consequent.body.body, FunctionApplication)
         and expression.antecedent == Constant[bool](True)
     )
 
 
 def _extract_probfact_probability(expression):
-    if is_probfact(expression):
+    if is_probabilistic_fact(expression):
         return expression.consequent.probability
-    elif is_eprobfact(expression):
+    elif is_existential_probabilistic_fact(expression):
         return expression.consequent.body.probability
     else:
         raise NeuroLangException("Invalid probabilistic fact")
@@ -81,7 +81,9 @@ def _put_probfacts_in_front(code_block):
     probfacts = []
     non_probfacts = []
     for expression in code_block.expressions:
-        if is_probfact(expression) or is_eprobfact(expression):
+        if is_probabilistic_fact(
+            expression
+        ) or is_existential_probabilistic_fact(expression):
             probfacts.append(expression)
         else:
             non_probfacts.append(expression)
@@ -98,7 +100,7 @@ def _check_equantified_probfact_validity(expression):
 
 
 def _extract_probfact_or_eprobfact_pred_symb(expression):
-    if is_eprobfact(expression):
+    if is_existential_probabilistic_fact(expression):
         return expression.consequent.body.body.functor
     else:
         return expression.consequent.body.functor
@@ -124,9 +126,13 @@ class ProbDatalogProgram(DatalogProgram):
         # TODO: this relies on the class inheriting from ExpressionWalker
         super().process_expression(_put_probfacts_in_front(code))
 
-    @add_match(Implication, lambda exp: is_probfact(exp) or is_eprobfact(exp))
+    @add_match(
+        Implication,
+        lambda exp: is_probabilistic_fact(exp)
+        or is_existential_probabilistic_fact(exp),
+    )
     def probfact_or_equantified_probfact(self, expression):
-        if is_eprobfact(expression):
+        if is_existential_probabilistic_fact(expression):
             _check_equantified_probfact_validity(expression)
         self.protected_keywords.add(self.typing_symbol.name)
         pred_symb = _extract_probfact_or_eprobfact_pred_symb(expression)
@@ -199,7 +205,9 @@ class ProbDatalogProgram(DatalogProgram):
             for k, v in self.symbol_table.items()
             if isinstance(v, ExpressionBlock)
             and any(
-                is_probfact(exp) or is_eprobfact(exp) for exp in v.expressions
+                is_probabilistic_fact(exp)
+                or is_existential_probabilistic_fact(exp)
+                for exp in v.expressions
             )
         }
 
@@ -292,7 +300,7 @@ class GDatalogToProbDatalogTranslator(PatternWalker):
             ExpressionBlock(
                 [
                     Implication(
-                        ProbQuantifier(probability, probfact_atom),
+                        ProbabilisticAnnotation(probability, probfact_atom),
                         Constant[bool](True),
                     ),
                     new_rule,
@@ -510,7 +518,11 @@ def full_observability_parameter_estimation(prog, interpretations):
 
 
 class ProbfactAsFactWalker(ExpressionWalker):
-    @add_match(Implication, lambda exp: is_probfact(exp) or is_eprobfact(exp))
+    @add_match(
+        Implication,
+        lambda exp: is_probabilistic_fact(exp)
+        or is_existential_probabilistic_fact(exp),
+    )
     def probfact(self, pfact):
         if any(
             not isinstance(arg, Constant) for arg in pfact.consequent.body.args
@@ -613,7 +625,7 @@ def ground_probdatalog_program(probdatalog_code):
     )
     new_expressions = []
     for exp in probdatalog_code.expressions:
-        if isinstance(exp, Fact) or is_probfact(exp):
+        if isinstance(exp, Fact) or is_probabilistic_fact(exp):
             new_expressions.append(exp)
     new_expressions += grounded_rules
     return ExpressionBlock(new_expressions)

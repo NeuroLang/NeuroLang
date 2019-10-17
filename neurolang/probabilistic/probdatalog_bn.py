@@ -14,8 +14,11 @@ from ..expressions import (
 from ..datalog.expressions import Implication
 from ..datalog.expression_processing import extract_datalog_predicates
 from ..exceptions import NeuroLangException
-from .expressions import TableDistribution, ProbQuantifier
-from .probdatalog import is_probfact, is_eprobfact
+from .expressions import TableDistribution
+from .probdatalog import (
+    is_probabilistic_fact,
+    is_existential_probabilistic_fact,
+)
 
 CPDFactory = Callable[
     [Constant[Mapping[Symbol, Constant]]], Callable[[Constant], float]
@@ -126,7 +129,11 @@ class TranslatorGroundedProbDatalogToBN(ExpressionBasicEvaluator):
         )
         return BayesianNetwork(edges, rv_to_cpd_factory)
 
-    @add_match(Implication, lambda exp: is_probfact(exp) or is_eprobfact(exp))
+    @add_match(
+        Implication,
+        lambda exp: is_probabilistic_fact(exp)
+        or is_existential_probabilistic_fact(exp),
+    )
     def probfact(self, pfact):
         """
         Translate a probabilistic fact to (1) a choice variable and (2) a

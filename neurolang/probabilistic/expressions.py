@@ -1,19 +1,21 @@
 from typing import Mapping
 
 from ..exceptions import NeuroLangException
-from ..expressions import Definition, Constant, Quantifier, Expression
+from ..expressions import Definition, Constant, Quantifier, Symbol
 
 
-class ProbQuantifier(Quantifier):
+class ProbabilisticAnnotation(Quantifier):
     def __init__(self, probability, body):
-        if not isinstance(probability, Expression):
-            raise NeuroLangException("Probability must be an expression")
+        if not isinstance(probability, (Constant, Symbol)):
+            raise NeuroLangException(
+                "Probability must be a symbol or constant"
+            )
         self.probability = probability
         self.body = body
         self._symbols = body._symbols | self.probability._symbols
 
     def __repr__(self):
-        return "ProbQuantifier{{{} :: {} : {}}}".format(
+        return "ProbabilisticAnnotation{{{} :: {} : {}}}".format(
             self.probability, self.body, self.type
         )
 
