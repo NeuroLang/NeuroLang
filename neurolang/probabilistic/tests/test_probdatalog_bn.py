@@ -4,7 +4,7 @@ from typing import Mapping
 from ...exceptions import NeuroLangException
 from ...expressions import Symbol, Constant, ExpressionBlock
 from ...datalog.expressions import Implication
-from ..expressions import ProbabilisticAnnotation
+from ..expressions import ProbabilisticPredicate
 from ..probdatalog_bn import (
     TranslatorGroundedProbDatalogToBN,
     pfact_cpd_factory,
@@ -21,11 +21,11 @@ fish = Constant[str]("fish")
 shopping_program_code = ExpressionBlock(
     [
         Implication(
-            ProbabilisticAnnotation(Constant[float](0.2), shop(john)),
+            ProbabilisticPredicate(Constant[float](0.2), shop(john)),
             Constant[bool](True),
         ),
         Implication(
-            ProbabilisticAnnotation(Constant[float](0.6), shop(mary)),
+            ProbabilisticPredicate(Constant[float](0.6), shop(mary)),
             Constant[bool](True),
         ),
         Implication(bought(spaghetti), shop(john)),
@@ -131,8 +131,7 @@ def test_bn_translation_unique_rv_symbols():
 
 def test_forbid_parents_for_choice_vars():
     pfact = Implication(
-        ProbabilisticAnnotation(Constant(0.2), shop(john)),
-        Constant[bool](True),
+        ProbabilisticPredicate(Constant(0.2), shop(john)), Constant[bool](True)
     )
     factory = pfact_cpd_factory(pfact)
     with pytest.raises(NeuroLangException):

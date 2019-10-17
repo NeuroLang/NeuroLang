@@ -38,13 +38,13 @@ from ..datalog.chase import (
     ChaseGeneral,
     ChaseNaive,
 )
-from .expressions import ProbabilisticAnnotation
+from .expressions import ProbabilisticPredicate
 
 
 def is_probabilistic_fact(expression):
     return (
         isinstance(expression, Implication)
-        and isinstance(expression.consequent, ProbabilisticAnnotation)
+        and isinstance(expression.consequent, ProbabilisticPredicate)
         and isinstance(expression.consequent.body, FunctionApplication)
         and expression.antecedent == Constant[bool](True)
     )
@@ -54,7 +54,7 @@ def is_existential_probabilistic_fact(expression):
     return (
         isinstance(expression, Implication)
         and isinstance(expression.consequent, ExistentialPredicate)
-        and isinstance(expression.consequent.body, ProbabilisticAnnotation)
+        and isinstance(expression.consequent.body, ProbabilisticPredicate)
         and isinstance(expression.consequent.body.body, FunctionApplication)
         and expression.antecedent == Constant[bool](True)
     )
@@ -300,7 +300,7 @@ class GDatalogToProbDatalogTranslator(PatternWalker):
             ExpressionBlock(
                 [
                     Implication(
-                        ProbabilisticAnnotation(probability, probfact_atom),
+                        ProbabilisticPredicate(probability, probfact_atom),
                         Constant[bool](True),
                     ),
                     new_rule,
