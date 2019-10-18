@@ -236,7 +236,7 @@ class RelationalAlgebraFrozenSet(Set):
 
 
 class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
-    def __init__(self, columns=None, iterable=None):
+    def __init__(self, columns, iterable=None):
         self._columns = tuple(columns)
         self._columns_sort = tuple(pd.Index(columns).argsort())
         if iterable is None:
