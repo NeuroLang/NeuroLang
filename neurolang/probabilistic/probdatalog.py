@@ -33,6 +33,8 @@ from ..datalog.expression_processing import (
     extract_datalog_predicates,
     is_ground_predicate,
     implication_has_existential_variable_in_antecedent,
+    conjunct_if_needed,
+    conjunct_formulas,
 )
 from .ppdl import concatenate_to_expression_block, get_dterm, DeltaTerm
 from ..datalog.chase import (
@@ -342,18 +344,6 @@ class GDatalogToProbDatalogTranslator(PatternWalker):
         return ExpressionBlock(expressions)
 
 
-def conjunct_formulas(f1, f2):
-    """Conjunct two logical formulas."""
-    if isinstance(f1, Conjunction) and isinstance(f2, Conjunction):
-        return Conjunction(list(f1.formulas) + list(f2.formulas))
-    elif isinstance(f1, Conjunction):
-        return Conjunction(list(f1.formulas) + [f2])
-    elif isinstance(f2, Conjunction):
-        return Conjunction([f1] + list(f2.formulas))
-    else:
-        return Conjunction([f1, f2])
-
-
 class GDatalogToProbDatalog(
     GDatalogToProbDatalogTranslator, ProbDatalogProgram
 ):
@@ -545,7 +535,7 @@ class RuleGrounding(Definition):
         self.algebra_set = algebra_set
 
 
-class ProbFactGrounding(ExpressionWalker):
+class RemoveProbabilitiesWalker(ExpressionWalker):
     def __init__(self, symbol_table):
         self.symbol_table = symbol_table
         self.typing_symbol = ProbDatalogProgram.typing_symbol
@@ -566,28 +556,38 @@ class ProbFactGrounding(ExpressionWalker):
     def ground_existential_probabilistic_fact(self, existential_pfact):
         return Fact(existential_pfact.consequent.body.body)
 
-    def _get_pfact_grounding(self, pfact, pfact_pred):
+    def _construct_pfact_intensional_rule(self, pfact, pfact_pred):
+        """
+        Construct an intensional rule from a probabilistic fact that can later
+        be used to obtain the possible groundings of the probabilistic fact.
+
+        Let `p :: P(x_1, ..., x_n)` be a probabilistic fact and let `T_1, ...,
+        T_n` be the relations (predicate symbols) that type the variables `x_1,
+        ..., x_n` (respectively). This method will return the intensional rule
+        `P(x_1, ..., x_n) :- T_1(x_1), ..., T_n(x_n)`.
+
+        """
         pfact_pred_symb = pfact_pred.functor
         typing = self.symbol_table[self.typing_symbol].value[pfact_pred_symb]
-        columns = tuple(
-            arg for arg in pfact_pred.args if isinstance(arg, Symbol)
+        antecedent = conjunct_if_needed(
+            [
+                typing.value[Constant[int](var_idx)](var_symb)
+                for var_idx, var_symb in enumerate(pfact_pred.args)
+                if isinstance(var_symb, Symbol)
+            ]
         )
-        resulting_set = RelationalAlgebraFrozenSet()
-        for _, typing_pred_symbs in sorted(typing.items()):
-            typing_pred_symb = next(iter(typing_pred_symbs))
-            resulting_set = resulting_set.cross_product(
-                self.symbol_table[typing_pred_symb]
-            )
-        return RuleGrounding(pfact, NameColumns(resulting_set, columns))
+        return Implication(pfact_pred, antecedent)
 
     @add_match(Implication, is_probabilistic_fact)
     def notground_probabilist_fact(self, pfact):
-        return self._get_pfact_grounding(pfact, pfact.consequent.body)
+        return self._construct_pfact_intensional_rule(
+            pfact, pfact.consequent.body
+        )
 
     @add_match(Implication, is_existential_probabilistic_fact)
     def notground_existential_probabilist_fact(self, existential_pfact):
-        return self._get_pfact_grounding(
-            existential_pfact, existential_pfact.consequent.body
+        return self._construct_pfact_intensional_rule(
+            existential_pfact, existential_pfact.consequent.body.body
         )
 
 
@@ -597,104 +597,3 @@ class Datalog(TranslateToLogic, DatalogProgram, ExpressionBasicEvaluator):
 
 class Chase(ChaseNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
     pass
-
-
-def conjunct_if_needed(formulas):
-    """Only conjunct the given formulas if there is more than one."""
-    if len(formulas) == 1:
-        return formulas[0]
-    else:
-        return Conjunction(formulas)
-
-
-def get_rule_groundings(rule, instance):
-    """
-    Find all groundings of a rule based on an instance.
-
-    TODO: speed up with tabular substitutions
-    """
-    head_pred_symb = rule.consequent.functor
-    if head_pred_symb not in instance.as_map():
-        return set()
-    grounded_rules = set()
-    for tupl in instance.as_map()[head_pred_symb].value:
-        substitution = {
-            arg: tupl.value[i]
-            for i, arg in enumerate(rule.consequent.args)
-            if isinstance(arg, Symbol)
-        }
-        substituted_antecedent_atoms = [
-            apply_substitution(atom, substitution)
-            for atom in extract_datalog_predicates(rule.antecedent)
-        ]
-        if any(atom not in instance for atom in substituted_antecedent_atoms):
-            continue
-        grounded_rules.add(
-            Implication(
-                apply_substitution(rule.consequent, substitution),
-                conjunct_if_needed(substituted_antecedent_atoms),
-            )
-        )
-    return grounded_rules
-
-
-def dict_to_instance(dict_instance):
-    """Convert a `Dict[Symbol, Constant[Set[Tuple]]]` to a `SetInstance`."""
-    return SetInstance(
-        {
-            pred_symb: frozenset(
-                {const_tuple.value for const_tuple in const_set.value}
-            )
-            for pred_symb, const_set in dict_instance.items()
-        }
-    )
-
-
-def ground_probdatalog_program(probdatalog_code):
-    """
-    Ground a Prob(Data)Log program by considering all its probabilistic facts
-    to be true.
-
-    This is a 3 steps process:
-    1. convert all probabilistic facts in the program to facts without
-    probabilities, thereby obtaining a deterministic Datalog program
-    (existential quantifiers for symbolic probabilities are also removed in the
-    process: it would not make sense to keep them because the quantified
-    variable disappears when we remove the symbolic probabilities);
-    2. solving that program to obtain a Datalog instance containing all
-    extensional and intensional facts ;
-    3. using this instance to find all possible groundings of rules in the
-    intensional database.
-
-    """
-    probdatalog_program = ProbDatalogProgram()
-    probdatalog_program.walk(probdatalog_code)
-    grounder = ProbFactGrounding(probdatalog_program.symbol_table)
-    grounded_code = grounder.walk(probdatalog_code)
-    dl = Datalog()
-    dl.walk(grounded_code)
-    chase = Chase(dl)
-    solution_instance = dict_to_instance(chase.build_chase_solution())
-    grounded_rules = set.union(
-        *[set()]
-        + [
-            set.union(
-                *[
-                    get_rule_groundings(rule, solution_instance)
-                    for rule in disjunction.formulas
-                ]
-            )
-            for disjunction in dl.intensional_database().values()
-        ]
-    )
-    new_expressions = []
-    for exp in probdatalog_code.expressions:
-        if isinstance(exp, Fact) or is_probabilistic_fact(exp):
-            new_expressions.append(exp)
-    new_expressions += grounded_rules
-    return ExpressionBlock(new_expressions)
-
-
-def relational_algebra_ground_probdatalog_program(probdatalog_code):
-    program = ProbDatalogProgram()
-    program.walk(probdatalog_code)

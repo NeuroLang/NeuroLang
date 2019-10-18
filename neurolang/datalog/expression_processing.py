@@ -355,3 +355,23 @@ def reachable_code(query, datalog):
                     to_reach.append(functor)
 
     return Disjunction(reachable_code[::-1])
+
+
+def conjunct_if_needed(formulas):
+    """Only conjunct the given formulas if there is more than one."""
+    if len(formulas) == 1:
+        return formulas[0]
+    else:
+        return Conjunction(formulas)
+
+
+def conjunct_formulas(f1, f2):
+    """Conjunct two logical formulas."""
+    if isinstance(f1, Conjunction) and isinstance(f2, Conjunction):
+        return Conjunction(list(f1.formulas) + list(f2.formulas))
+    elif isinstance(f1, Conjunction):
+        return Conjunction(list(f1.formulas) + [f2])
+    elif isinstance(f2, Conjunction):
+        return Conjunction([f1] + list(f2.formulas))
+    else:
+        return Conjunction([f1, f2])
