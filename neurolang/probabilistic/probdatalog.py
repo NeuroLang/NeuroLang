@@ -556,6 +556,18 @@ class RemoveProbabilitiesWalker(ExpressionWalker):
     def ground_existential_probabilistic_fact(self, existential_pfact):
         return Fact(existential_pfact.consequent.body.body)
 
+    @add_match(Implication, is_probabilistic_fact)
+    def notground_probabilist_fact(self, pfact):
+        return self._construct_pfact_intensional_rule(
+            pfact, pfact.consequent.body
+        )
+
+    @add_match(Implication, is_existential_probabilistic_fact)
+    def notground_existential_probabilist_fact(self, existential_pfact):
+        return self._construct_pfact_intensional_rule(
+            existential_pfact, existential_pfact.consequent.body.body
+        )
+
     def _construct_pfact_intensional_rule(self, pfact, pfact_pred):
         """
         Construct an intensional rule from a probabilistic fact that can later
@@ -578,17 +590,10 @@ class RemoveProbabilitiesWalker(ExpressionWalker):
         )
         return Implication(pfact_pred, antecedent)
 
-    @add_match(Implication, is_probabilistic_fact)
-    def notground_probabilist_fact(self, pfact):
-        return self._construct_pfact_intensional_rule(
-            pfact, pfact.consequent.body
-        )
 
-    @add_match(Implication, is_existential_probabilistic_fact)
-    def notground_existential_probabilist_fact(self, existential_pfact):
-        return self._construct_pfact_intensional_rule(
-            existential_pfact, existential_pfact.consequent.body.body
-        )
+class GroundProbDatalogProgram(ExpressionWalker):
+    def __init__(self, symbol_table):
+        self.symbol_table = symbol_table
 
 
 class Datalog(TranslateToLogic, DatalogProgram, ExpressionBasicEvaluator):
