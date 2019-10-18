@@ -45,6 +45,7 @@ from ..utils.relational_algebra_set import (
     RelationalAlgebraFrozenSet,
     NamedRelationalAlgebraFrozenSet,
 )
+from ..relational_algebra import NameColumns
 
 
 def is_probabilistic_fact(expression):
@@ -565,25 +566,28 @@ class ProbFactGrounding(ExpressionWalker):
     def ground_existential_probabilistic_fact(self, existential_pfact):
         return Fact(existential_pfact.consequent.body.body)
 
-    @add_match(Implication, is_probabilistic_fact)
-    def notground_probabilist_fact(self, pfact):
-        pfact_pred = pfact.consequent.body
+    def _get_pfact_grounding(self, pfact, pfact_pred):
         pfact_pred_symb = pfact_pred.functor
         typing = self.symbol_table[self.typing_symbol].value[pfact_pred_symb]
         columns = tuple(
             arg for arg in pfact_pred.args if isinstance(arg, Symbol)
         )
-        iterable = RelationalAlgebraFrozenSet()
+        resulting_set = RelationalAlgebraFrozenSet()
         for _, typing_pred_symbs in sorted(typing.items()):
             typing_pred_symb = next(iter(typing_pred_symbs))
-            iterable = iterable.cross_product(
+            resulting_set = resulting_set.cross_product(
                 self.symbol_table[typing_pred_symb]
             )
-        return RuleGrounding(
-            pfact,
-            NamedRelationalAlgebraFrozenSet(
-                columns=columns, iterable=iterable
-            ),
+        return RuleGrounding(pfact, NameColumns(resulting_set, columns))
+
+    @add_match(Implication, is_probabilistic_fact)
+    def notground_probabilist_fact(self, pfact):
+        return self._get_pfact_grounding(pfact, pfact.consequent.body)
+
+    @add_match(Implication, is_existential_probabilistic_fact)
+    def notground_existential_probabilist_fact(self, existential_pfact):
+        return self._get_pfact_grounding(
+            existential_pfact, existential_pfact.consequent.body
         )
 
 
