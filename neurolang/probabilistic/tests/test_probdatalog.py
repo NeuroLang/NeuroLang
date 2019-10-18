@@ -188,3 +188,20 @@ def test_remove_probabilities():
     ) == Implication(
         P(x), Q(x)
     )
+    assert RemoveProbabilitiesWalker(
+        {ProbDatalogProgram.typing_symbol: Constant({P: {0: Q, 1: Z}})}
+    ).walk(
+        ExpressionBlock(
+            [
+                Implication(
+                    ProbabilisticPredicate(p, P(x, y)), Constant[bool](True)
+                ),
+                Implication(R(x, y), Conjunction([P(x, y), Q(x), Z(y)])),
+            ]
+        )
+    ) == ExpressionBlock(
+        [
+            Implication(P(x, y), Conjunction([Q(x), Z(y)])),
+            Implication(R(x, y), Conjunction([P(x, y), Q(x), Z(y)])),
+        ]
+    )
