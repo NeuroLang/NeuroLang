@@ -256,6 +256,23 @@ def test_named_iter():
     assert res == a
 
 
+def test_rename_column():
+    a = [
+        (i, i * j)
+        for i in (1, 2)
+        for j in (2, 3, 4)
+    ]
+
+    cols = ('y', 'x')
+
+    ras_a = NamedRelationalAlgebraFrozenSet(cols, a)
+    ras_b = ras_a.rename_column('y', 'z')
+    assert all(
+        el_a.x == el_b.x and el_a.y == el_b.z
+        for el_a, el_b in zip(ras_a, ras_b)
+    )
+
+
 def test_named_to_unnamed():
     a = [
         (i, i * j)
