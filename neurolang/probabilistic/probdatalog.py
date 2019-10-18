@@ -136,32 +136,6 @@ class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
 
     typing_symbol = Symbol("__pfacts_typing__")
 
-    def _check_all_probfacts_variables_have_been_typed(self):
-        """
-        Check that the type of all the variables occurring in all the
-        probabilistic facts was correctly inferred from the rules of the
-        program.
-
-        Several candidate typing predicate symbols can be found during the
-        static analysis of the rules of the program. If at the end of the
-        static analysis several candidates remain, the type inference failed
-        and an exception is raised.
-
-        """
-        for pfact_pred_symb, pfact_block in self.probabilistic_facts().items():
-            typing = self.symbol_table[self.typing_symbol].value[
-                pfact_pred_symb
-            ]
-            if any(
-                not (var_idx in typing and len(typing[var_idx]) == 1)
-                for var_idx in _get_pfact_var_idxs(pfact_block.expressions[0])
-            ):
-                raise NeuroLangException(
-                    f"Types of variables of probabilistic facts with "
-                    f"predicate symbol {pfact_pred_symb} could not be "
-                    f"inferred from the program"
-                )
-
     @add_match(ExpressionBlock)
     def program_code(self, code):
         super().process_expression(_put_probfacts_in_front(code))
@@ -183,27 +157,6 @@ class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
             self.symbol_table[pred_symb], [expression]
         )
         return expression
-
-    def _update_pfact_typing(self, symbol, typing):
-        """
-        Update typing information for a probabilistic fact's terms.
-
-        Parameters
-        ----------
-        symbol : Symbol
-            Probabilistic fact's predicate symbol.
-        typing : Mapping[int, Set[Symbol]]
-            New typing information that will be integrated.
-
-        """
-        if self.typing_symbol not in self.symbol_table:
-            self.symbol_table[self.typing_symbol] = Constant(dict())
-        if symbol not in self.symbol_table[self.typing_symbol].value:
-            self.symbol_table[self.typing_symbol].value[symbol] = dict()
-        prev_typing = self.symbol_table[self.typing_symbol].value[symbol]
-        _check_typing_consistency(prev_typing, typing)
-        new_typing = _combine_typings(prev_typing, typing)
-        self.symbol_table[self.typing_symbol].value[symbol] = new_typing
 
     @add_match(
         Implication(FunctionApplication[bool](Symbol, ...), Expression),
@@ -238,6 +191,53 @@ class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
             typing = _infer_pfact_typing_pred_symbs(pred_symb, expression)
             self._update_pfact_typing(pred_symb, typing)
         return super().statement_intensional(expression)
+
+    def _update_pfact_typing(self, symbol, typing):
+        """
+        Update typing information for a probabilistic fact's terms.
+
+        Parameters
+        ----------
+        symbol : Symbol
+            Probabilistic fact's predicate symbol.
+        typing : Mapping[int, Set[Symbol]]
+            New typing information that will be integrated.
+
+        """
+        if self.typing_symbol not in self.symbol_table:
+            self.symbol_table[self.typing_symbol] = Constant(dict())
+        if symbol not in self.symbol_table[self.typing_symbol].value:
+            self.symbol_table[self.typing_symbol].value[symbol] = dict()
+        prev_typing = self.symbol_table[self.typing_symbol].value[symbol]
+        _check_typing_consistency(prev_typing, typing)
+        new_typing = _combine_typings(prev_typing, typing)
+        self.symbol_table[self.typing_symbol].value[symbol] = new_typing
+
+    def _check_all_probfacts_variables_have_been_typed(self):
+        """
+        Check that the type of all the variables occurring in all the
+        probabilistic facts was correctly inferred from the rules of the
+        program.
+
+        Several candidate typing predicate symbols can be found during the
+        static analysis of the rules of the program. If at the end of the
+        static analysis several candidates remain, the type inference failed
+        and an exception is raised.
+
+        """
+        for pfact_pred_symb, pfact_block in self.probabilistic_facts().items():
+            typing = self.symbol_table[self.typing_symbol].value[
+                pfact_pred_symb
+            ]
+            if any(
+                not (var_idx in typing and len(typing[var_idx]) == 1)
+                for var_idx in _get_pfact_var_idxs(pfact_block.expressions[0])
+            ):
+                raise NeuroLangException(
+                    f"Types of variables of probabilistic facts with "
+                    f"predicate symbol {pfact_pred_symb} could not be "
+                    f"inferred from the program"
+                )
 
     def probabilistic_facts(self):
         """Return probabilistic facts of the symbol table."""
