@@ -144,7 +144,7 @@ def test_program_with_eprobfact():
     )
     program = ProbDatalogProgram()
     program.walk(code)
-    program.symbol_table[program.typing_symbol].value[P] == {0: {Q}}
+    assert program.symbol_table[program.typing_symbol].value[P] == {0: {Q}}
 
     code = ExpressionBlock(
         [
