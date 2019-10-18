@@ -1,6 +1,6 @@
 from typing import Mapping
 
-from ..expressions import Definition, Constant
+from ..expressions import Definition, Constant, Symbol
 
 
 class Distribution(Definition):
@@ -15,7 +15,9 @@ class DiscreteDistribution(Distribution):
 class TableDistribution(DiscreteDistribution):
     def __init__(self, table):
         self.table = table
-        super().__init__(Constant[Mapping]({}))
+        super().__init__(
+            Constant[Mapping]({Symbol[Constant[Mapping]]("table"): self.table})
+        )
 
     def __repr__(self):
         return "TableDistribution[\n{}\n]".format(
