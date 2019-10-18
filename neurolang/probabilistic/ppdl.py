@@ -1,45 +1,16 @@
 import operator
 from typing import Iterable
-from uuid import uuid1
 
 from ..datalog.expressions import Disjunction
 from ..existential_datalog import Implication
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionBasicEvaluator
-from ..expressions import (Constant, ExistentialPredicate, Expression,
-                           ExpressionBlock, FunctionApplication,
-                           NeuroLangException, Symbol)
+from ..datalog.expression_processing import extract_datalog_predicates
+from ..expressions import (
+    Constant, ExistentialPredicate, Expression, ExpressionBlock,
+    FunctionApplication, NeuroLangException, Symbol
+)
 from ..solver_datalog_naive import DatalogBasic, is_conjunctive_expression
-
-
-def is_conjunction(expression):
-    return (
-        isinstance(expression, FunctionApplication) and
-        isinstance(expression.functor, Constant) and
-        expression.functor.value == operator.and_
-    )
-
-
-def get_conjunction_atoms(expression):
-    if is_conjunction(expression):
-        return (
-            get_conjunction_atoms(expression.args[0]) +
-            get_conjunction_atoms(expression.args[1])
-        )
-    else:
-        return [expression]
-
-
-def get_antecedent_formulas(rule):
-    if not isinstance(rule, Implication):
-        raise NeuroLangException('Implication expected')
-
-    return get_conjunction_atoms(rule.antecedent)
-
-
-def get_antecedent_predicate_names(rule):
-    antecedent_formulas = get_antecedent_formulas(rule)
-    return [formula.functor.name for formula in antecedent_formulas]
 
 
 def is_gdatalog_rule(exp):
@@ -109,8 +80,10 @@ class DeltaTerm(FunctionApplication):
 
 
 class GenerativeDatalog(DatalogBasic):
-    @add_match(Implication(FunctionApplication, ...), lambda exp:
-               any(isinstance(arg, DeltaTerm) for arg in exp.consequent.args))
+    @add_match(
+        Implication(FunctionApplication, ...), lambda exp:
+        any(isinstance(arg, DeltaTerm) for arg in exp.consequent.args)
+    )
     def gdatalog_rule(self, rule):
         if not is_gdatalog_rule(rule):
             raise NeuroLangException(f'Invalid gdatalog rule: {rule}')
@@ -127,7 +100,7 @@ class GenerativeDatalog(DatalogBasic):
         else:
             disj = tuple()
 
-        self.symbol_table[predicate] = Disjunction(disj + (rule,))
+        self.symbol_table[predicate] = Disjunction(disj + (rule, ))
 
         return rule
 
@@ -135,11 +108,11 @@ class GenerativeDatalog(DatalogBasic):
 def get_antecedent_constant_indexes(rule):
     '''Get indexes of constants occurring in antecedent predicates.'''
     constant_indexes = dict()
-    for antecedent in get_antecedent_formulas(rule):
-        predicate = antecedent.functor.name
+    for antecedent_atom in extract_datalog_predicates(rule.antecedent):
+        predicate = antecedent_atom.functor.name
         indexes = {
             i
-            for i, arg in enumerate(antecedent.args)
+            for i, arg in enumerate(antecedent_atom.args)
             if isinstance(arg, Constant)
         }
         if len(indexes) > 0:
@@ -212,11 +185,11 @@ class TranslateGDatalogToEDatalog(ExpressionBasicEvaluator):
     def convert_gdatalog_rule_to_edatalog_rules(self, expression):
         datom = expression.consequent
         dterm = get_dterm(datom)
-        y = Symbol[dterm.type]('y_' + str(uuid1()))
+        y = Symbol[dterm.type].fresh()
         result_args = (
             dterm.args + (Constant(datom.functor.name), ) +
-            tuple(arg for arg in datom.args
-                  if not isinstance(arg, DeltaTerm)) + (y, )
+            tuple(arg for arg in datom.args if not isinstance(arg, DeltaTerm)
+                  ) + (y, )
         )
         result_atom = FunctionApplication(
             DeltaSymbol(dterm.functor.name, len(datom.args)), result_args

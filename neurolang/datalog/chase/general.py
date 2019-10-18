@@ -1,7 +1,6 @@
 from collections import namedtuple
 from itertools import chain, tee
 from operator import eq
-from typing import AbstractSet
 
 from ...exceptions import NeuroLangException
 from ...expressions import Constant, FunctionApplication, Symbol
@@ -11,6 +10,8 @@ from ...utils import OrderedSet
 from ..expression_processing import (extract_datalog_free_variables,
                                      extract_datalog_predicates,
                                      is_linear_rule)
+from ..instance import MapInstance
+
 
 ChaseNode = namedtuple('ChaseNode', 'instance children')
 
@@ -52,14 +53,14 @@ class ChaseGeneral():
 
     def chase_step(self, instance, rule, restriction_instance=None):
         if restriction_instance is None:
-            restriction_instance = dict()
+            restriction_instance = MapInstance()
 
         rule_predicates = self.extract_rule_predicates(
             rule, instance, restriction_instance=restriction_instance
         )
 
         if all(len(predicate_list) == 0 for predicate_list in rule_predicates):
-            return dict()
+            return MapInstance()
 
         restricted_predicates, nonrestricted_predicates, builtin_predicates =\
             rule_predicates
@@ -104,6 +105,8 @@ class ChaseGeneral():
     def evaluate_builtins(self, builtin_predicates, substitutions):
         new_substitutions = []
         predicates = [p for p, _ in builtin_predicates]
+        if len(predicates) == 0:
+            return substitutions
         for substitution in substitutions:
             new_substitution = self.evaluate_builtins_predicates(
                 predicates, substitution
@@ -205,7 +208,7 @@ class ChaseGeneral():
         self, rule, substitutions, instance, restriction_instance=None
     ):
         if restriction_instance is None:
-            restriction_instance = dict()
+            restriction_instance = MapInstance()
 
         tuples = [
             tuple(
@@ -218,7 +221,6 @@ class ChaseGeneral():
             if len(substitutions) > 0
         ]
         new_tuples = self.datalog_program.new_set(tuples)
-
         return self.compute_instance_update(
             rule, new_tuples, instance, restriction_instance
         )
@@ -226,39 +228,15 @@ class ChaseGeneral():
     def compute_instance_update(
         self, rule, new_tuples, instance, restriction_instance
     ):
-        if rule.consequent.functor in instance:
-            new_tuples -= instance[rule.consequent.functor].value
-        elif rule.consequent.functor in restriction_instance:
-            new_tuples -= restriction_instance[rule.consequent.functor].value
-
-        if len(new_tuples) == 0:
-            instance_update = dict()
-        else:
-            set_type = next(iter(new_tuples)).type
-            new_instance = {
-                rule.consequent.functor:
-                Constant[AbstractSet[set_type]](new_tuples)
-            }
-            instance_update = new_instance
+        instance_update = MapInstance({rule.consequent.functor: new_tuples})
+        instance_update -= instance
+        instance_update -= restriction_instance
         return instance_update
-
-    def merge_instances(self, *args):
-        new_instance = args[0].copy()
-
-        for next_instance in args:
-            for k, v in next_instance.items():
-                if k not in new_instance:
-                    new_instance[k] = v
-                else:
-                    new_set = new_instance[k]
-                    new_set = Constant[new_set.type](v.value | new_set.value)
-                    new_instance[k] = new_set
-
-        return new_instance
 
     def build_chase_tree(self, chase_set=chase_step):
         root = ChaseNode(
-            self.datalog_program.extensional_database(), dict()
+            MapInstance(self.datalog_program.extensional_database()),
+            dict()
         )
         rules = []
         for disjunction in self.datalog_program.intensional_database(
@@ -278,7 +256,7 @@ class ChaseGeneral():
     def build_nodes_from_rules(self, node, rule):
         instance_update = self.chase_step(node.instance, rule)
         if len(instance_update) > 0:
-            new_instance = self.merge_instances(node.instance, instance_update)
+            new_instance = node.instance | instance_update
             new_node = ChaseNode(new_instance, dict())
             node.children[rule] = new_node
             return new_node
@@ -294,18 +272,20 @@ class ChaseNaive:
     """
 
     def build_chase_solution(self):
-        instance = dict()
-        instance_update = self.datalog_program.extensional_database()
+        instance = MapInstance()
+        instance_update = MapInstance(
+            self.datalog_program.extensional_database()
+        )
         self.check_constraints(instance_update)
         while len(instance_update) > 0:
-            instance = self.merge_instances(instance, instance_update)
-            instance_update = self.merge_instances(
-                *(
-                    self.chase_step(
-                        instance, rule, restriction_instance=instance_update
-                    ) for rule in self.rules
+            instance |= instance_update
+            new_update = MapInstance()
+            for rule in self.rules:
+                upd = self.chase_step(
+                    instance, rule, restriction_instance=instance_update
                 )
-            )
+                new_update |= upd
+            instance_update = new_update
 
         return instance
 
@@ -315,13 +295,15 @@ class ChaseSemiNaive:
     This algorithm will not work if there are non-linear rules.
        """
     def build_chase_solution(self):
-        instance = dict()
-        instance_update = self.datalog_program.extensional_database()
+        instance = MapInstance()
+        instance_update = MapInstance(
+            self.datalog_program.extensional_database()
+        )
         self.check_constraints(instance_update)
         continue_chase = len(instance_update) > 0
         while continue_chase:
-            instance = self.merge_instances(instance, instance_update)
-            instance_update = dict()
+            instance |= instance_update
+            instance_update = MapInstance()
             continue_chase = False
             for rule in self.rules:
                 instance_update = self.per_rule_update(
@@ -336,10 +318,7 @@ class ChaseSemiNaive:
             instance, rule, restriction_instance=instance_update
         )
         if len(new_instance_update) > 0:
-            instance_update = self.merge_instances(
-                instance_update,
-                new_instance_update
-            )
+            instance_update |= new_instance_update
         return instance_update
 
     def check_constraints(self, instance_update):

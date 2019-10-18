@@ -322,7 +322,8 @@ class ExpressionBasicEvaluator(ExpressionWalker):
         functor = function_application.functor
         result_type = self.evaluate_function_infer_type(functor)
 
-        rebv = ReplaceExpressionsByValues(self.symbol_table)
+        symbol_table = getattr(self, 'symbol_table', dict())
+        rebv = ReplaceExpressionsByValues(symbol_table)
         args = rebv.walk(function_application.args)
         kwargs = {
             k: rebv.walk(v)

@@ -380,6 +380,25 @@ class Symbol(NonConstant):
     def __repr__(self):
         return 'S{{{}: {}}}'.format(self.name, self.__type_repr__)
 
+    @staticmethod
+    def _fresh_generator():
+        lock = threading.RLock()
+        i = 0
+        while True:
+            with lock:
+                fresh = f'fresh_{i:08}'
+                i += 1
+            yield Symbol(fresh)
+
+    @classmethod
+    def fresh(cls):
+        if not hasattr(cls, '_fresh_generator_'):
+            cls._fresh_generator_ = cls._fresh_generator()
+        new_symbol = next(cls._fresh_generator_)
+        if cls.type is not typing.Any:
+            new_symbol = new_symbol.cast(cls.type)
+        return new_symbol
+
 
 class Constant(Expression):
     def __init__(
@@ -420,20 +439,36 @@ class Constant(Expression):
     def __auto_infer_type__(self):
         self.type = infer_type(self.value)
         self._symbols = set()
-        if (
+        if is_leq_informative(self.type, typing.Mapping):
+            self._auto_build_mapping_()
+        elif (
             not is_leq_informative(self.type, typing.Text) and
             is_leq_informative(self.type, typing.Iterable)
         ):
-            new_content = []
-            for a in self.value:
-                if not isinstance(a, Expression):
-                    a = Constant(a)
-                self._symbols |= a._symbols
-                new_content.append(a)
-            try:
-                self.value = type(self.value)(new_content)
-            except TypeError:
-                self.value = type(self.value)(*new_content)
+            self._auto_build_iterable_()
+
+    def _auto_build_iterable_(self):
+        new_content = []
+        for a in self.value:
+            if not isinstance(a, Expression):
+                a = Constant(a)
+            self._symbols |= a._symbols
+            new_content.append(a)
+        try:
+            self.value = type(self.value)(new_content)
+        except TypeError:
+            self.value = type(self.value)(*new_content)
+
+    def _auto_build_mapping_(self):
+        new_content = dict()
+        for k, v in self.value.items():
+            if not isinstance(k, Expression):
+                k = Constant(k)
+            if not isinstance(v, Expression):
+                v = Constant(v)
+            self._symbols |= k._symbols | v._symbols
+            new_content[k] = v
+        self.value = type(self.value)(new_content)
 
     def __verify_type__(self, value, type_):
         return (

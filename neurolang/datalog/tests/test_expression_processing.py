@@ -9,8 +9,9 @@ from ..expression_processing import (
     extract_datalog_free_variables, is_conjunctive_expression,
     extract_datalog_predicates,
     is_conjunctive_expression_with_nested_predicates,
-    stratify, reachable_code, is_linear_rule
-    )
+    stratify, reachable_code, is_linear_rule,
+    implication_has_existential_variable_in_antecedent
+)
 
 S_ = Symbol
 C_ = Constant
@@ -225,3 +226,16 @@ def test_reachable():
     reached = reachable_code(code.formulas[-2], datalog)
 
     assert set(reached.formulas) == set(code.formulas[:-1])
+
+
+def test_implication_has_existential_variable_in_antecedent():
+    Q = S_('Q')
+    R = S_('R')
+    x = S_('x')
+    y = S_('y')
+    assert implication_has_existential_variable_in_antecedent(
+        Implication(Q(x), R(x, y)),
+    )
+    assert not implication_has_existential_variable_in_antecedent(
+        Implication(Q(x), R(x)),
+    )

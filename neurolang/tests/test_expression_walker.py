@@ -20,6 +20,16 @@ def test_symbol_table_as_parameter():
     assert solver.symbol_table[s] is c
 
 
+def test_expression_evaluator():
+    ebe = expression_walker.ExpressionBasicEvaluator()
+    a = C_(1)
+    b = C_(2)
+
+    c = ebe.walk(a + b)
+    assert isinstance(c, C_[int])
+    assert c.value == 3
+
+
 def test_evaluating_embedded_functions():
     class Walker(
         expression_walker.ExpressionBasicEvaluator,

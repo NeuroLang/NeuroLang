@@ -75,3 +75,11 @@ class WrappedRelationalAlgebraSet(
             self._container is not None and
             hash(element) in self._container.index
         )
+
+    def __eq__(self, other):
+        if isinstance(other, WrappedRelationalAlgebraSet):
+            return super().__eq__(other)
+        else:
+            return all(
+                e in self for e in other
+            )

@@ -6,11 +6,13 @@ Datalog programs.
 from typing import Iterable
 
 from ..expression_walker import ExpressionWalker, PatternWalker, add_match
-from ..expressions import (Constant, FunctionApplication,
-                           NeuroLangException, Quantifier, Symbol)
+from ..expressions import (
+    Constant, FunctionApplication, NeuroLangException, Quantifier, Symbol
+)
 from ..utils import OrderedSet
-from .expressions import (Conjunction, Disjunction, Implication, Negation,
-                          TranslateToLogic)
+from .expressions import (
+    Conjunction, Disjunction, Implication, Negation, TranslateToLogic
+)
 
 
 class TranslateToDatalogSemantics(TranslateToLogic, ExpressionWalker):
@@ -64,7 +66,7 @@ class ExtractDatalogFreeVariablesWalker(WalkDatalogProgramAggregatingSets):
 
     @add_match(Symbol)
     def extract_variables_symbol(self, expression):
-        return OrderedSet((expression,))
+        return OrderedSet((expression, ))
 
     @add_match(Constant)
     def _(self, expression):
@@ -89,6 +91,16 @@ def extract_datalog_free_variables(expression):
     return efvw.walk(tr.walk(expression))
 
 
+def implication_has_existential_variable_in_antecedent(implication):
+    '''
+    Whether an implication has at least one existential variable in its
+    antecedent.
+    '''
+    c_free_vars = set(extract_datalog_free_variables(implication.consequent))
+    a_free_vars = set(extract_datalog_free_variables(implication.antecedent))
+    return a_free_vars > c_free_vars
+
+
 def is_conjunctive_expression(expression):
     if isinstance(expression, Conjunction):
         formulas = expression.formulas
@@ -96,16 +108,11 @@ def is_conjunctive_expression(expression):
         formulas = [expression]
 
     return all(
-        expression == Constant(True) or
-        expression == Constant(False) or
-        (
-            isinstance(expression, FunctionApplication) and
-            not any(
-                isinstance(arg, FunctionApplication)
-                for arg in expression.args
+        expression == Constant(True) or expression == Constant(False) or (
+            isinstance(expression, FunctionApplication) and not any(
+                isinstance(arg, FunctionApplication) for arg in expression.args
             )
-        )
-        for expression in formulas
+        ) for expression in formulas
     )
 
 
@@ -211,14 +218,10 @@ def all_body_preds_in_set(implication, predicate_set):
 
     """
     preds = (
-        e.functor for e in
-        extract_datalog_predicates(implication.antecedent)
+        e.functor for e in extract_datalog_predicates(implication.antecedent)
     )
     predicate_set = predicate_set | {implication.consequent.functor}
-    return all(
-        not isinstance(e, Symbol) or e in predicate_set
-        for e in preds
-    )
+    return all(not isinstance(e, Symbol) or e in predicate_set for e in preds)
 
 
 def stratify(disjunction, datalog_instance):
@@ -317,10 +320,7 @@ def reachable_code(query, datalog):
 
     reachable_code = []
     idb = datalog.intensional_database()
-    to_reach = [
-        q.consequent.functor
-        for q in query
-    ]
+    to_reach = [q.consequent.functor for q in query]
     reached = set()
     seen_rules = set()
     while to_reach:
@@ -337,4 +337,4 @@ def reachable_code(query, datalog):
                 if functor not in reached and functor in idb:
                     to_reach.append(functor)
 
-    return Disjunction(reachable_code)
+    return Disjunction(reachable_code[::-1])
