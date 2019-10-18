@@ -3,6 +3,7 @@ from collections import defaultdict
 from typing import Mapping, Set
 
 from ..expressions import (
+    Definition,
     Expression,
     Constant,
     Symbol,
@@ -27,7 +28,7 @@ from ..expression_walker import (
     ExpressionBasicEvaluator,
 )
 from .ppdl import is_gdatalog_rule
-from ..datalog.instance import SetInstance
+from ..datalog.instance import SetInstance, FrozenMapInstance
 from ..datalog.expression_processing import (
     extract_datalog_predicates,
     is_ground_predicate,
@@ -40,6 +41,10 @@ from ..datalog.chase import (
     ChaseNaive,
 )
 from .expressions import ProbabilisticPredicate
+from ..utils.relational_algebra_set import (
+    RelationalAlgebraFrozenSet,
+    NamedRelationalAlgebraFrozenSet,
+)
 
 
 def is_probabilistic_fact(expression):
@@ -91,7 +96,7 @@ def _put_probfacts_in_front(code_block):
     return ExpressionBlock(probfacts + non_probfacts)
 
 
-def _check_equantified_probfact_validity(expression):
+def _check_existential_probfact_validity(expression):
     qvar = expression.consequent.head
     if qvar in expression.consequent.body.body._symbols:
         raise NeuroLangException(
@@ -107,7 +112,15 @@ def _extract_probfact_or_eprobfact_pred_symb(expression):
         return expression.consequent.body.functor
 
 
-class ProbDatalogProgram(DatalogProgram):
+def _get_pfact_var_idxs(pfact):
+    if is_probabilistic_fact(pfact):
+        atom = pfact.consequent.body
+    else:
+        atom = pfact.consequent.body.body
+    return {i for i, arg in enumerate(atom.args) if isinstance(arg, Symbol)}
+
+
+class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
     """
     Datalog extended with probabilistic facts semantics from ProbLog.
 
@@ -118,23 +131,47 @@ class ProbDatalogProgram(DatalogProgram):
     probabilsitic fact and the value is the probabilistic fact itself.
     """
 
-    typing_symbol = Symbol[Mapping[Symbol, Mapping[int, Set[Symbol]]]](
-        "__pfacts_typing__"
-    )
+    typing_symbol = Symbol("__pfacts_typing__")
+
+    def _check_all_probfacts_variables_have_been_typed(self):
+        """
+        Check that the type of all the variables occurring in all the
+        probabilistic facts was correctly inferred from the rules of the
+        program.
+
+        Several candidate typing predicate symbols can be found during the
+        static analysis of the rules of the program. If at the end of the
+        static analysis several candidates remain, the type inference failed
+        and an exception is raised.
+
+        """
+        for pfact_pred_symb, pfact_block in self.probabilistic_facts().items():
+            typing = self.symbol_table[self.typing_symbol].value[
+                pfact_pred_symb
+            ]
+            if any(
+                not (var_idx in typing and len(typing[var_idx]) == 1)
+                for var_idx in _get_pfact_var_idxs(pfact_block.expressions[0])
+            ):
+                raise NeuroLangException(
+                    f"Types of variables of probabilistic facts with "
+                    f"predicate symbol {pfact_pred_symb} could not be "
+                    f"inferred from the program"
+                )
 
     @add_match(ExpressionBlock)
     def program_code(self, code):
-        # TODO: this relies on the class inheriting from ExpressionWalker
         super().process_expression(_put_probfacts_in_front(code))
+        self._check_all_probfacts_variables_have_been_typed()
 
     @add_match(
         Implication,
         lambda exp: is_probabilistic_fact(exp)
         or is_existential_probabilistic_fact(exp),
     )
-    def probfact_or_equantified_probfact(self, expression):
+    def probfact_or_existential_probfact(self, expression):
         if is_existential_probabilistic_fact(expression):
-            _check_equantified_probfact_validity(expression)
+            _check_existential_probfact_validity(expression)
         self.protected_keywords.add(self.typing_symbol.name)
         pred_symb = _extract_probfact_or_eprobfact_pred_symb(expression)
         if pred_symb not in self.symbol_table:
@@ -317,7 +354,7 @@ def conjunct_formulas(f1, f2):
 
 
 class GDatalogToProbDatalog(
-    GDatalogToProbDatalogTranslator, ProbDatalogProgram, ExpressionWalker
+    GDatalogToProbDatalogTranslator, ProbDatalogProgram
 ):
     pass
 
@@ -501,22 +538,53 @@ def full_observability_parameter_estimation(prog, interpretations):
     return estimations
 
 
-class ProbfactAsFactWalker(ExpressionWalker):
-    @add_match(Implication, lambda exp: is_probabilistic_fact(exp))
-    def probabilistic_fact(self, pfact):
-        if not is_ground_predicate(pfact.consequent.body):
-            raise NeuroLangException(
-                "Only constant probabilistic facts are supported"
-            )
+class RuleGrounding(Definition):
+    def __init__(self, rule, algebra_set):
+        self.rule = rule
+        self.algebra_set = algebra_set
+
+
+class ProbFactGrounding(ExpressionWalker):
+    def __init__(self, symbol_table):
+        self.symbol_table = symbol_table
+        self.typing_symbol = ProbDatalogProgram.typing_symbol
+
+    @add_match(
+        Implication,
+        lambda exp: is_probabilistic_fact(exp)
+        and is_ground_predicate(exp.consequent.body),
+    )
+    def ground_probabilistic_fact(self, pfact):
         return Fact(pfact.consequent.body)
 
-    @add_match(Implication, lambda exp: is_existential_probabilistic_fact(exp))
-    def existential_probabilistic_fact(self, existential_pfact):
-        if not is_ground_predicate(existential_pfact.consequent.body.body):
-            raise NeuroLangException(
-                "Only constant probabilistic facts are supported"
-            )
+    @add_match(
+        Implication,
+        lambda exp: is_existential_probabilistic_fact(exp)
+        and is_ground_predicate(exp.consequent.body.body),
+    )
+    def ground_existential_probabilistic_fact(self, existential_pfact):
         return Fact(existential_pfact.consequent.body.body)
+
+    @add_match(Implication, is_probabilistic_fact)
+    def notground_probabilist_fact(self, pfact):
+        pfact_pred = pfact.consequent.body
+        pfact_pred_symb = pfact_pred.functor
+        typing = self.symbol_table[self.typing_symbol].value[pfact_pred_symb]
+        columns = tuple(
+            arg for arg in pfact_pred.args if isinstance(arg, Symbol)
+        )
+        iterable = RelationalAlgebraFrozenSet()
+        for _, typing_pred_symbs in sorted(typing.items()):
+            typing_pred_symb = next(iter(typing_pred_symbs))
+            iterable = iterable.cross_product(
+                self.symbol_table[typing_pred_symb]
+            )
+        return RuleGrounding(
+            pfact,
+            NamedRelationalAlgebraFrozenSet(
+                columns=columns, iterable=iterable
+            ),
+        )
 
 
 class Datalog(TranslateToLogic, DatalogProgram, ExpressionBasicEvaluator):
@@ -584,17 +652,23 @@ def ground_probdatalog_program(probdatalog_code):
     to be true.
 
     This is a 3 steps process:
-        1. convert all ProbFact in the program to Fact without
-        probabilities, thereby obtaining a deterministic Datalog program,
-        2. solving that program to obtain a Datalog instance containing all
-        extensional and intensional facts,
-        3. using this instance to find all possible groundings of rules in the
-        intensional database.
+    1. convert all probabilistic facts in the program to facts without
+    probabilities, thereby obtaining a deterministic Datalog program
+    (existential quantifiers for symbolic probabilities are also removed in the
+    process: it would not make sense to keep them because the quantified
+    variable disappears when we remove the symbolic probabilities);
+    2. solving that program to obtain a Datalog instance containing all
+    extensional and intensional facts ;
+    3. using this instance to find all possible groundings of rules in the
+    intensional database.
 
     """
-    datalog_code = ProbfactAsFactWalker().walk(probdatalog_code)
+    probdatalog_program = ProbDatalogProgram()
+    probdatalog_program.walk(probdatalog_code)
+    grounder = ProbFactGrounding(probdatalog_program.symbol_table)
+    grounded_code = grounder.walk(probdatalog_code)
     dl = Datalog()
-    dl.walk(datalog_code)
+    dl.walk(grounded_code)
     chase = Chase(dl)
     solution_instance = dict_to_instance(chase.build_chase_solution())
     grounded_rules = set.union(
@@ -617,5 +691,6 @@ def ground_probdatalog_program(probdatalog_code):
     return ExpressionBlock(new_expressions)
 
 
-def relational_algebra_ground_probdatalog_program(probdatalog_program):
-    pass
+def relational_algebra_ground_probdatalog_program(probdatalog_code):
+    program = ProbDatalogProgram()
+    program.walk(probdatalog_code)

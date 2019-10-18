@@ -16,7 +16,7 @@ from ..expressions import ProbabilisticPredicate
 from ..probdatalog import (
     GDatalogToProbDatalog,
     ProbDatalogProgram,
-    ProbfactAsFactWalker,
+    ProbFactGrounding,
     conjunct_formulas,
     full_observability_parameter_estimation,
     get_possible_ground_substitutions,
@@ -45,10 +45,6 @@ c = Constant("c")
 bernoulli = Symbol("bernoulli")
 
 
-class ProbDatalog(ProbDatalogProgram, ExpressionBasicEvaluator):
-    pass
-
-
 def test_probfact():
     probfact = Implication(
         ProbabilisticPredicate(Constant[float](0.2), P(x)),
@@ -64,18 +60,18 @@ def test_probfact():
 
 
 def test_probdatalog_program():
-    pd = ProbDatalog()
+    pd = ProbDatalogProgram()
 
     code = ExpressionBlock(
-        (
+        [
             Implication(
                 ProbabilisticPredicate(Constant[float](0.5), P(x)),
                 Constant[bool](True),
             ),
-            Implication(Q(x), P(x) & Z(x)),
+            Implication(Q(x), Conjunction([P(x), Z(x)])),
             Fact(Z(a)),
             Fact(Z(b)),
-        )
+        ]
     )
 
     pd.walk(code)
@@ -84,7 +80,7 @@ def test_probdatalog_program():
         Z: C_(frozenset({C_((a,)), C_((b,))}))
     }
     assert pd.intensional_database() == {
-        Q: Disjunction([Implication(Q(x), P(x) & Z(x))])
+        Q: Disjunction([Implication(Q(x), Conjunction([P(x), Z(x)]))])
     }
     assert pd.probabilistic_facts() == {
         P: ExpressionBlock(
@@ -115,7 +111,7 @@ def test_gdatalog_translation():
     probfact = matching_exps[0]
     assert x in probfact.consequent.body.args
     assert probfact.consequent.probability == C_(0.2)
-    program = ProbDatalog()
+    program = ProbDatalogProgram()
     program.walk(translated)
     assert deterministic_rule in program.intensional_database()[Z].formulas
     with pytest.raises(NeuroLangException, match=r".*bernoulli.*"):
@@ -197,7 +193,7 @@ def test_full_observability_parameter_estimation():
             Fact(P(b)),
         )
     )
-    program = ProbDatalog()
+    program = ProbDatalogProgram()
     program.walk(code)
     assert program.parametric_probfacts() == {
         p: Implication(ProbabilisticPredicate(p, Z(x)), Constant[bool](True))
@@ -236,7 +232,7 @@ def test_full_observability_parameter_estimation():
     code = ExpressionBlock(
         (probfact_1, probfact_2, rule, Fact(P(a)), Fact(P(b)))
     )
-    program = ProbDatalog()
+    program = ProbDatalogProgram()
     program.walk(code)
     assert program.parametric_probfacts() == {p_1: probfact_1, p_2: probfact_2}
     assert program.probabilistic_rules() == {Z: {rule}, Y: {rule}}
@@ -287,7 +283,7 @@ def test_program_const_probfact_in_antecedent():
             Implication(ProbabilisticPredicate(p, Z(a)), Constant[bool](True)),
         ]
     )
-    program = ProbDatalog()
+    program = ProbDatalogProgram()
     program.walk(code)
     interpretations = [
         SetInstance({Z: frozenset({(a,)}), Q: frozenset({(a,)})}),
@@ -308,7 +304,7 @@ def test_program_with_twice_occurring_probfact_in_antecedent():
             Fact(P(b)),
         ]
     )
-    program = ProbDatalog()
+    program = ProbDatalogProgram()
     program.walk(code)
 
 
@@ -326,37 +322,54 @@ def test_infer_pfact_typing_pred_symbs():
         _infer_pfact_typing_pred_symbs(Pfact, rule)
 
 
-def test_probfact_as_fact():
+def test_probfact_grounding_ground_probfacts():
     code = ExpressionBlock(
         [
             Implication(ProbabilisticPredicate(p, Z(a)), Constant[bool](True)),
+            Implication(
+                ExistentialPredicate(p, ProbabilisticPredicate(p, Z(b))),
+                Constant[bool](True),
+            ),
             Implication(Q(x), Conjunction([P(x), Z(x)])),
             Fact(P(a)),
             Fact(P(b)),
         ]
     )
-    walker = ProbfactAsFactWalker()
-    new_code = walker.walk(code)
+    program = ProbDatalogProgram()
+    program.walk(code)
+    grounder = ProbFactGrounding(program.symbol_table)
+    new_code = grounder.walk(code)
     assert Fact(Z(a)) in new_code.expressions
     assert Fact(P(a)) in new_code.expressions
+    assert Fact(Z(b)) in new_code.expressions
 
+
+def test_probfact_grounding_notground_probfacts():
     code = ExpressionBlock(
-        [Implication(ProbabilisticPredicate(p, P(x)), Constant[bool](True))]
+        [
+            Implication(ProbabilisticPredicate(p, P(x)), Constant[bool](True)),
+            Implication(Z(x), Conjunction([P(x), Q(x)])),
+            Fact(Q(a)),
+            Fact(Q(b)),
+        ]
     )
-    with pytest.raises(NeuroLangException):
-        walker.walk(code)
+    program = ProbDatalogProgram()
+    program.walk(code)
+    grounder = ProbFactGrounding(program.symbol_table)
 
     existential_pfact = Implication(
         ExistentialPredicate(p, ProbabilisticPredicate(p, Z(a))),
         Constant[bool](True),
     )
-    walker = ProbfactAsFactWalker()
-    assert walker.walk(existential_pfact) == Fact(Z(a))
+    program = ProbDatalogProgram()
+    program.walk(code)
+    grounder = ProbFactGrounding(program.symbol_table)
+    assert grounder.walk(existential_pfact) == Fact(Z(a))
 
 
 def test_program_with_existential_raises_exception():
     code = ExpressionBlock([Implication(Q(x), P(x, y))])
-    program = ProbDatalog()
+    program = ProbDatalogProgram()
     with pytest.raises(NeuroLangException, match=r"Existentially"):
         program.walk(code)
 
@@ -434,6 +447,29 @@ def test_ground_probdatalog_program():
     assert Fact(P(a)) in grounded.expressions
 
 
+def test_ground_probdatalog_with_existential():
+    code = ExpressionBlock(
+        [
+            Implication(
+                ExistentialPredicate(p, ProbabilisticPredicate(p, P(x))),
+                Constant[bool](True),
+            ),
+            Implication(Z(x), Conjunction([P(x), Q(x)])),
+            Q(a),
+            Q(b),
+        ]
+    )
+    grounded = ground_probdatalog_program(code)
+    for cst in [a, b]:
+        assert (
+            Implication(
+                ExistentialPredicate(p, ProbabilisticPredicate(p, P(cst))),
+                Constant[bool](True),
+            )
+            in grounded.expressions
+        )
+
+
 def test_conjunct_formulas():
     assert conjunct_formulas(P(x), Q(x)) == Conjunction([P(x), Q(x)])
     a = P(x)
@@ -456,7 +492,7 @@ def test_program_with_eprobfact():
             )
         ]
     )
-    program = ProbDatalog()
+    program = ProbDatalogProgram()
     program.walk(code)
 
     code = ExpressionBlock(
@@ -469,6 +505,6 @@ def test_program_with_eprobfact():
             )
         ]
     )
-    program = ProbDatalog()
+    program = ProbDatalogProgram()
     with pytest.raises(NeuroLangException, match=r"can only be used"):
         program.walk(code)
