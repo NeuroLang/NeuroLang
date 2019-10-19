@@ -107,9 +107,14 @@ def create_magic_rules(adorned_code, idb, edb):
         edb_antecedent = create_magic_rules_create_edb_antecedent(
             predicates, edb
         )
-        new_antecedent = new_consequent
+        new_antecedent = (new_consequent,)
         for predicate in edb_antecedent:
-            new_antecedent = Conjunction((new_antecedent, predicate))
+            new_antecedent += (predicate,)
+
+        if len(new_antecedent) == 1:
+            new_antecedent = new_antecedent[0]
+        else:
+            new_antecedent = Conjunction(new_antecedent)
 
         magic_rules += create_magic_rules_create_rules(
             new_antecedent, predicates, idb, i
@@ -333,9 +338,14 @@ def adorn_antecedent(
             to_adorn.append(adorned_predicate)
 
         if adorned_antecedent is None:
-            adorned_antecedent = adorned_predicate
+            adorned_antecedent = (adorned_predicate,)
         else:
-            adorned_antecedent = adorned_antecedent & adorned_predicate
+            adorned_antecedent += (adorned_predicate,)
+
+    if len(adorned_antecedent) == 1:
+        adorned_antecedent = adorned_antecedent[0]
+    else:
+        adorned_antecedent = Conjunction(adorned_antecedent)
     return adorned_antecedent, to_adorn
 
 
