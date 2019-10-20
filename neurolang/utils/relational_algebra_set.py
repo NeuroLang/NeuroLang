@@ -255,7 +255,7 @@ class RelationalAlgebraFrozenSet(Set):
 
 
 class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
-    def __init__(self, columns=None, iterable=None):
+    def __init__(self, columns, iterable=None):
         self._columns = tuple(columns)
         self._columns_sort = tuple(pd.Index(columns).argsort())
         if iterable is None:
@@ -368,6 +368,26 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
             drop_duplicates=False
         )
         return result
+
+    def rename_column(self, src, dst):
+        if dst in self._columns:
+            raise ValueError(f'{dst} can not be in the columns')
+        if src not in self._columns:
+            raise ValueError(f'{src} not in columns')
+        src_idx = self._columns.index(src)
+        new_columns = (
+            self._columns[:src_idx] +
+            (dst,) +
+            self._columns[src_idx + 1:]
+        )
+        new_container = self._container.rename(columns={src: dst})
+        new_container.sort_index(axis=1, inplace=True)
+
+        new_set = type(self)(new_columns)
+        new_set._container = new_container
+        new_set._columns_sort = tuple(pd.Index(new_columns).argsort())
+
+        return new_set
 
     def __eq__(self, other):
         scontainer = self._container
