@@ -31,6 +31,7 @@ DT = DatalogTranslator()
 Q = S_('Q')
 T = S_('T')
 S = S_('S')
+v = S_('v')
 w = S_('w')
 x = S_('x')
 y = S_('y')
@@ -47,7 +48,7 @@ class Datalog(TranslateToLogic, DatalogProgram, ew.ExpressionBasicEvaluator):
         return x > y
 
 
-@fixture(params=[
+chase_configurations = [
     (step_class, cq_class)
     for step_class, cq_class in product(
         (
@@ -60,7 +61,16 @@ class Datalog(TranslateToLogic, DatalogProgram, ew.ExpressionBasicEvaluator):
             ChaseRelationalAlgebraPlusCeriMixin,
         )
     )
-])
+]
+
+
+@fixture(
+    params=chase_configurations,
+    ids=[
+        f'{strategy}-{step}'
+        for strategy, step in chase_configurations
+    ]
+)
 def chase_class(request):
     class C(request.param[0], request.param[1], ChaseGeneral):
         pass
@@ -488,3 +498,82 @@ def test_another_recursive_chase(chase_class):
 
     solution = chase_class(dl).build_chase_solution()
     assert solution['q'].value == {C_((e, )) for e in (b, c, d)}
+
+
+@fixture(params=(1000,))
+def datalog_with_table(request):
+    from numpy import random
+
+    rstate = random.RandomState(0)
+    n = request.param
+    t = rstate.randint(
+        0, max(n // 100, 2), size=(3, n)
+    )
+
+    dl = Datalog()
+    dl.add_extensional_predicate_from_tuples(
+        T,
+        (tuple(row) for row in t)
+    )
+
+    return dl
+
+
+def test_benchmark_selection(
+    benchmark, chase_class, datalog_with_table
+):
+    dl = datalog_with_table
+
+    @benchmark
+    def _():
+        dl.push_scope()
+        dl.walk(Eb_([
+            Imp_(Q(x, y), T(C_(100), x, y))
+        ]))
+        dl.push_scope()
+
+
+
+def test_benchmark_join(
+    benchmark, chase_class, datalog_with_table
+):
+    dl = datalog_with_table
+
+    @benchmark
+    def _():
+        dl.push_scope()
+        dl.walk(Eb_([
+            Imp_(Q(x, y), T(x, z) & T(z, y))
+        ]))
+        dl.push_scope()
+
+
+
+def test_benchmark_project(
+    benchmark, chase_class, datalog_with_table
+):
+    dl = datalog_with_table
+
+    @benchmark
+    def _():
+        dl.push_scope()
+        dl.walk(Eb_([
+            Imp_(Q(x), T(x, y, z))
+        ]))
+        dl.push_scope()
+
+
+
+def test_benchmark_recursion(
+    benchmark, chase_class, datalog_with_table
+):
+    dl = datalog_with_table
+
+    @benchmark
+    def _():
+        dl.push_scope()
+        dl.walk(Eb_([
+            Imp_(Q(x, z), T(x, y, z)),
+            Imp_(Q(x, z), T(x, y, w) & Q(w, v, z))
+        ]))
+        dl.push_scope()
