@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from typing import Mapping, AbstractSet, Tuple
+from typing import Mapping, AbstractSet
 
 from ...datalog.expressions import Conjunction, Disjunction, Fact, Implication
 from ...exceptions import NeuroLangException
@@ -20,8 +20,8 @@ from ..probdatalog import (
     ProbDatalogProgram,
     Grounding,
     conjunct_formulas,
-    full_observability_parameter_estimation,
     _combine_typings,
+    _check_typing_consistency,
     _infer_pfact_typing_pred_symbs,
     is_probabilistic_fact,
     RemoveProbabilitiesWalker,
@@ -78,6 +78,12 @@ def test_probdatalog_program():
 
     pd.walk(code)
 
+    assert pd.probabilistic_rules() == {
+        P: ExpressionBlock([Implication(Q(x), Conjunction([P(x), Z(x)]))])
+    }
+
+    assert not pd.parametric_probfacts()
+
     assert pd.extensional_database() == {
         Z: C_(frozenset({C_((a,)), C_((b,))}))
     }
@@ -94,6 +100,14 @@ def test_probdatalog_program():
             ]
         )
     }
+
+    pfact = Implication(ProbabilisticPredicate(p, P(x)), Constant[bool](True))
+    code = ExpressionBlock(
+        [pfact, Implication(Q(x), Conjunction([P(x), Z(x)]))]
+    )
+    program = ProbDatalogProgram()
+    program.walk(code)
+    assert program.parametric_probfacts() == {p: pfact}
 
 
 def test_gdatalog_translation():
@@ -261,12 +275,59 @@ def test_combine_typings():
     assert combined == typing_b
 
 
+def test_check_typing_consistency():
+    typing_a = Constant[Mapping](
+        {Constant[int](0): Constant[AbstractSet]({P, Q})}
+    )
+    typing_b = Constant[Mapping](
+        {Constant[int](0): Constant[AbstractSet]({Z})}
+    )
+    with pytest.raises(NeuroLangException):
+        _check_typing_consistency(typing_a, typing_b)
+
+
 def test_infer_pfact_typing_pred_symbs():
     rule = Implication(Z(x), Conjunction([P(x), Q(x)]))
     typing = _infer_pfact_typing_pred_symbs(P, rule)
     assert typing == Constant[Mapping](
         {Constant[int](0): Constant[AbstractSet]({Q})}
     )
+    with pytest.raises(NeuroLangException):
+        rule = Implication(Z(x), Q(x))
+        _infer_pfact_typing_pred_symbs(P, rule)
+
+
+def test_probdatalog_pfact_type_inference():
+    code = ExpressionBlock(
+        [
+            Implication(ProbabilisticPredicate(p, P(x)), Constant[bool](True)),
+            Implication(Q(x), Conjunction([P(x), Z(x), R(x)])),
+            Implication(Q(x), Conjunction([P(x), Y(x), R(x)])),
+        ]
+    )
+    program = ProbDatalogProgram()
+    program.walk(code)
+    assert program.symbol_table[program.typing_symbol] == Constant[Mapping](
+        {P: Constant[Mapping]({Constant[int](0): Constant[AbstractSet]({R})})}
+    )
+
+
+def test_probdatalog_pfact_cant_infer_type():
+    pfact = Implication(ProbabilisticPredicate(p, P(x)), Constant[bool](True))
+    rule = Implication(Q(x), Conjunction([P(x), Z(x), R(x)]))
+    program = ProbDatalogProgram()
+    program.walk(pfact)
+    program.walk(rule)
+    assert program.symbol_table[program.typing_symbol] == Constant[Mapping](
+        {
+            P: Constant[Mapping](
+                {Constant[int](0): Constant[AbstractSet]({R, Z})}
+            )
+        }
+    )
+    program = ProbDatalogProgram()
+    with pytest.raises(NeuroLangException):
+        program.walk(ExpressionBlock([pfact, rule]))
 
 
 def test_probdatalog_grounding():
@@ -284,6 +345,22 @@ def test_probdatalog_grounding():
     assert expected in grounded.expressions
     expected = Grounding(
         rule,
+        NameColumns(
+            Constant[AbstractSet](RelationalAlgebraFrozenSet({(a,), (b,)})),
+            (x,),
+        ),
+    )
+    assert expected in grounded.expressions
+
+    pfact = Implication(
+        ExistentialPredicate(p, ProbabilisticPredicate(p, P(x))),
+        Constant[bool](True),
+    )
+    rule = Implication(Z(x), Conjunction([P(x), Q(x)]))
+    code = ExpressionBlock([pfact, rule, Fact(Q(a)), Fact(Q(b))])
+    grounded = ground_probdatalog_program(code)
+    expected = Grounding(
+        pfact,
         NameColumns(
             Constant[AbstractSet](RelationalAlgebraFrozenSet({(a,), (b,)})),
             (x,),

@@ -1,7 +1,6 @@
 import itertools
 from collections import defaultdict
 from typing import Mapping, AbstractSet
-import copy
 
 from ..expressions import (
     Definition,
@@ -64,15 +63,6 @@ def is_existential_probabilistic_fact(expression):
         and isinstance(expression.consequent.body.body, FunctionApplication)
         and expression.antecedent == Constant[bool](True)
     )
-
-
-def _extract_probfact_probability(expression):
-    if is_probabilistic_fact(expression):
-        return expression.consequent.probability
-    elif is_existential_probabilistic_fact(expression):
-        return expression.consequent.body.probability
-    else:
-        raise NeuroLangException("Invalid probabilistic fact")
 
 
 def get_rule_pfact_pred_symbs(rule, pfact_pred_symbs):
@@ -176,11 +166,6 @@ class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
         processes in knowledge representation", section 5.2.1 Syntax.
 
         """
-        if implication_has_existential_variable_in_antecedent(expression):
-            raise NeuroLangException(
-                "Existentially quantified variables are "
-                "forbidden in Prob(Data)log"
-            )
         pfact_pred_symbs = set(self.probabilistic_facts())
         for pred_symb in get_rule_pfact_pred_symbs(
             expression, pfact_pred_symbs
@@ -285,7 +270,10 @@ class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
                         )
                     }
                 )
-        return prob_rules
+        return {
+            pred_symb: ExpressionBlock(list(rules))
+            for pred_symb, rules in prob_rules.items()
+        }
 
     def parametric_probfacts(self):
         """
@@ -471,99 +459,6 @@ def _infer_pfact_typing_pred_symbs(pfact_pred_symb, rule):
         _check_typing_consistency(typing, local_typing)
         typing = _combine_typings(typing, local_typing)
     return typing
-
-
-def get_possible_ground_substitutions(probfact, typing, interpretation):
-    """
-    Get all possible substitutions that ground a given probabilistic fact in a
-    given interpretation based on a rule where the predicate of the
-    probabilistic fact occurs.
-
-    This works under the following assumptions:
-    (1) for each probabilistic fact p :: P(x_1, ..., x_n), there exists at
-        least one rule in the program such that an atom P(y_1, ..., y_n) occurs
-        in its antecedent;
-    (2) the antecedent conjunction of that rule also contains an atom Y_i(y_i)
-        for each variable y_i in (y_1, ..., y_n), where Y_i is a unary
-        extensional predicate that defines the domain (or the type) of the
-        variable y_i
-    (3) and if several of those rules are part of the program, the same typing
-        is applied in each one of them, such that it does not matter which rule
-        is used for inferring the possible ground substitutions for the
-        probabilistic fact.
-
-    """
-    pfact_args = probfact.consequent.body.args
-    facts_per_variable = {
-        pfact_args[var_idx]: set(
-            tupl.value[0]
-            for tupl in interpretation.as_map()[
-                next(iter(typing_pred_symbs))
-            ].value
-        )
-        for var_idx, typing_pred_symbs in typing.items()
-        if isinstance(pfact_args[var_idx], Symbol)
-    }
-    return frozenset(
-        {
-            frozenset(zip(facts_per_variable, values))
-            for values in itertools.product(*facts_per_variable.values())
-        }
-    )
-
-
-def _count_ground_instances_in_interpretation(
-    pfact, substitutions, interpretation
-):
-    return sum(
-        apply_substitution(pfact.consequent.body, dict(substitution))
-        in interpretation
-        for substitution in substitutions
-    )
-
-
-def _probfact_parameter_estimation(pfact, typing, interpretations):
-    n_ground_instances = 0
-    n_possible_substitutions = 0
-    for interpretation in interpretations:
-        substitutions = get_possible_ground_substitutions(
-            pfact, typing, interpretation
-        )
-        n_possible_substitutions += len(substitutions)
-        n_ground_instances += _count_ground_instances_in_interpretation(
-            pfact, substitutions, interpretation
-        )
-    return n_ground_instances / n_possible_substitutions
-
-
-def full_observability_parameter_estimation(prog, interpretations):
-    """
-    Estimate parametric probabilities of the probabilistic facts in a given
-    ProbDatalog program using the given fully-observable interpretations.
-
-    This computation relies on a the domain of each variable occurring in the
-    probabilistic facts to be defined by each interpretation using unary
-    predicates, as explained in [1]_.
-
-    .. [1] Gutmann et al., "Learning the Parameters of Probabilistic Logic
-       Programs", section 3.1.
-
-    """
-    estimations = dict()
-    parametric_probfacts = prog.parametric_probfacts()
-    for parameter, probfact in parametric_probfacts.items():
-        pfact_pred_symb = _extract_probfact_or_eprobfact_pred_symb(probfact)
-        typing = prog.symbol_table[prog.typing_symbol].value[pfact_pred_symb]
-        estimations[parameter] = _probfact_parameter_estimation(
-            probfact, typing, interpretations
-        )
-    return estimations
-
-
-class RuleGrounding(Definition):
-    def __init__(self, rule, algebra_set):
-        self.rule = rule
-        self.algebra_set = algebra_set
 
 
 class RemoveProbabilitiesWalker(ExpressionWalker):
