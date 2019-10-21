@@ -139,6 +139,10 @@ class OntologyHandler():
                 y1, x1
             ) & neurolangDL.symbols.rdf_schema_subPropertyOf(x1, y2)'''
 
+        rdf_schema_subClassOf = neurolangDL.new_symbol(name='rdf_schema_subClassOf')
+        rdf_schema_subClassOf[y1, y2] = neurolangDL.symbols.rdf_schema_subClassOf2(y1, y2)
+        rdf_schema_subClassOf[y1, y2] = neurolangDL.symbols.rdf_schema_subClassOf2(y1, x1) & neurolangDL.symbols.rdf_schema_subClassOf2(x1, y2)
+
         #neurolangDL.symbols.rdf_schema_subClassOf[
         #    y1, y2] = neurolangDL.symbols.rdf_schema_subClassOf(
         #        x1, x2
@@ -150,10 +154,6 @@ class OntologyHandler():
         #    x1, x1] = neurolangDL.symbols.rdf_syntax_ns_type(
         #        x1, 'http://www.w3.org/2002/07/owl#Class'
         #    )
-
-        rdf_schema_subClassOf = neurolangDL.new_symbol(name='rdf_schema_subClassOf')
-        rdf_schema_subClassOf[y1, y2] = neurolangDL.symbols.rdf_schema_subClassOf2(y1, y2)
-        rdf_schema_subClassOf[y1, y2] = neurolangDL.symbols.rdf_schema_subClassOf2(y1, x1) & neurolangDL.symbols.rdf_schema_subClassOf2(x1, y2)
 
         '''neurolangDL.symbols.owl_disjointWith[
             y1, y2] = neurolangDL.symbols.owl_disjointWith(
