@@ -134,14 +134,14 @@ jobs:
             git checkout HEAD~1
              pytest neurolang neurolang --benchmark-only --benchmark-autosave \
              --benchmark-group-by=func --benchmark-sort=mean \
-             --benchmark-calibration-precision=50 --benchmark-warmup=on 
+             --benchmark-calibration-precision=50
 
             git checkout -
 
             pytest neurolang neurolang --benchmark-only --benchmark-autosave --benchmark-compare \
-             --benchmark-compare-fail=mean:5% \
-             --benchmark-group-by=func --benchmark-sort=mean --benchmark-calibration-precision=50 \
-             --benchmark-warmup=on
+             --benchmark-compare-fail=mean:10% \
+             --benchmark-group-by=func --benchmark-sort=mean \
+             --benchmark-calibration-precision=50
 
 workflows:
   version: 2
