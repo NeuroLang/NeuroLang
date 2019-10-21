@@ -3,7 +3,6 @@ import pytest
 from typing import Mapping, AbstractSet, Tuple
 
 from ...datalog.expressions import Conjunction, Disjunction, Fact, Implication
-from ...datalog.instance import FrozenSetInstance, SetInstance
 from ...exceptions import NeuroLangException
 from ...expression_walker import ExpressionBasicEvaluator
 from ...expressions import (
@@ -263,9 +262,7 @@ def test_combine_typings():
 
 
 def test_infer_pfact_typing_pred_symbs():
-    pfact = Implication(ProbabilisticPredicate(p, P(x)), Constant[bool](True))
     rule = Implication(Z(x), Conjunction([P(x), Q(x)]))
-    code = ExpressionBlock([pfact, rule])
     typing = _infer_pfact_typing_pred_symbs(P, rule)
     assert typing == Constant[Mapping](
         {Constant[int](0): Constant[AbstractSet]({Q})}

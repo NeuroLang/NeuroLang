@@ -44,10 +44,6 @@ from ..datalog.chase import (
     ChaseNaive,
 )
 from .expressions import ProbabilisticPredicate
-from ..utils.relational_algebra_set import (
-    RelationalAlgebraFrozenSet,
-    NamedRelationalAlgebraFrozenSet,
-)
 from ..relational_algebra import NameColumns
 
 
