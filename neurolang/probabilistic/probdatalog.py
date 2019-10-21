@@ -28,7 +28,7 @@ from ..expression_walker import (
     ExpressionBasicEvaluator,
 )
 from .ppdl import is_gdatalog_rule
-from ..datalog.instance import SetInstance, FrozenMapInstance
+from ..datalog.instance import SetInstance
 from ..datalog.expression_processing import (
     extract_datalog_predicates,
     is_ground_predicate,
@@ -568,7 +568,7 @@ class ProbDatalogGrounder(ExpressionWalker):
         )
 
 
-def ground_probdatalog_program(probdatalog_code):
+def ground_probdatalog_program(pd_code):
     """
     Ground a Prob(Data)Log program.
 
@@ -586,11 +586,9 @@ def ground_probdatalog_program(probdatalog_code):
         program. We then have a grounded Prob(Data)Log program.
 
     """
-    probdatalog_program = ProbDatalogProgram()
-    probdatalog_program.walk(probdatalog_code)
-    datalog_code = RemoveProbabilitiesWalker(
-        probdatalog_program.symbol_table
-    ).walk(probdatalog_code)
+    pd_program = ProbDatalogProgram()
+    pd_program.walk(pd_code)
+    dl_code = RemoveProbabilitiesWalker(pd_program.symbol_table).walk(pd_code)
 
     class Datalog(TranslateToLogic, DatalogProgram, ExpressionBasicEvaluator):
         pass
@@ -598,10 +596,10 @@ def ground_probdatalog_program(probdatalog_code):
     class Chase(ChaseNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
         pass
 
-    datalog_program = Datalog()
-    datalog_program.walk(datalog_code)
-    chase = Chase(datalog_program)
-    datalog_instance = chase.build_chase_solution()
-    grounder = ProbDatalogGrounder(symbol_table=datalog_instance)
-    grounding = grounder.walk(probdatalog_code)
+    dl_program = Datalog()
+    dl_program.walk(dl_code)
+    chase = Chase(dl_program)
+    dl_instance = chase.build_chase_solution()
+    grounder = ProbDatalogGrounder(symbol_table=dl_instance)
+    grounding = grounder.walk(pd_code)
     return grounding
