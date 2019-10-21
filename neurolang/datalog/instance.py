@@ -41,10 +41,13 @@ class FrozenInstance:
         set_type = Unknown
         if isinstance(v, Constant[AbstractSet[Tuple]]):
             set_type = v.type.__args__[0]
-            v = self._rebv.walk(v)
+            if isinstance(v.value, self._set_type):
+                v = v.value
+            else:
+                v = self._rebv.walk(v)
         else:
             is_expression, set_type = self._infer_type(v, set_type)
-            if is_expression:
+            if is_expression and not isinstance(v, self._set_type):
                 v = set(self._rebv.walk(e) for e in v)
         return v, set_type
 
