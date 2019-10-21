@@ -525,7 +525,7 @@ class Grounding(Definition):
         self.name_columns = name_columns
 
 
-class ProbDatalogGrounder(ExpressionWalker):
+class ProbDatalogGrounder(PatternWalker):
     def __init__(self, symbol_table):
         self.symbol_table = symbol_table
 
