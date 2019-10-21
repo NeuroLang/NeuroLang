@@ -285,3 +285,11 @@ def test_probdatalog_grounding():
         ),
     )
     assert expected in grounded.expressions
+    expected = Grounding(
+        rule,
+        NameColumns(
+            Constant[AbstractSet](RelationalAlgebraFrozenSet({(a,), (b,)})),
+            (x,),
+        ),
+    )
+    assert expected in grounded.expressions
