@@ -591,14 +591,79 @@ class RemoveProbabilitiesWalker(ExpressionWalker):
         return Implication(pfact_pred, antecedent)
 
 
-class GroundProbDatalogProgram(ExpressionWalker):
+class Grounding(Definition):
+    def __init__(self, rule, name_columns):
+        self.rule = rule
+        self.name_columns = name_columns
+
+
+class ProbDatalogGrounder(ExpressionWalker):
     def __init__(self, symbol_table):
         self.symbol_table = symbol_table
 
+    def _get_pfact_grounding(self, pfact, pfact_pred):
+        return Grounding(
+            pfact,
+            NameColumns(
+                self.symbol_table[pfact_pred.functor],
+                [
+                    arg if isinstance(arg, Symbol) else Symbol.fresh()
+                    for arg in pfact_pred.args
+                    if isinstance(arg, Symbol)
+                ],
+            ),
+        )
 
-class Datalog(TranslateToLogic, DatalogProgram, ExpressionBasicEvaluator):
-    pass
+    @add_match(Implication, is_probabilistic_fact)
+    def probabilistic_fact(self, pfact):
+        return self._get_pfact_grounding(pfact, pfact.consequent.body)
+
+    @add_match(Implication, is_existential_probabilistic_fact)
+    def existential_probabilistic_fact(self, existential_pfact):
+        return self._get_pfact_grounding(
+            existential_pfact, existential_pfact.consequent.body.body
+        )
+
+    @add_match(
+        Implication(FunctionApplication[bool](Symbol, ...), Expression),
+        lambda exp: exp.antecedent != Constant[bool](True),
+    )
+    def statement_intensional(self, rule):
+        return rule
 
 
-class Chase(ChaseNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
-    pass
+def ground_probdatalog_program(probdatalog_code):
+    """
+    Ground a Prob(Data)Log program.
+
+    This is a 3 steps process:
+    (1) Create a Datalog program based on the Prob(Data)Log program, such that
+        each probabilistic fact `p :: P(x_1, ..., x_n)` is converted into a
+        rule `P(x_1, ..., x_n) :- T_1(x_1), ..., T_n(x_n)` where `T_i` is the
+        typing predicate symbol (relation) for the variable `x_i`. Note that if
+        `x_i` is a constant there is no variable to type and thus no
+        `T_i(x_i)` in the antecedent of the newly created rule.
+    (2) Solve the Datalog program obtained from (1), thereby obtaining all
+        inferrable intensional ground facts.
+    (3) Use the intensional ground facts obtained from (2) and the initial
+        Prob(Data)Log program to obtain the grounding of all the rules in the
+        program. We then have a grounded Prob(Data)Log program.
+
+    """
+    probdatalog_program = ProbDatalogProgram()
+    probdatalog_program.walk(probdatalog_code)
+    datalog_code = RemoveProbabilitiesWalker(
+        probdatalog_program.symbol_table
+    ).walk(probdatalog_code)
+
+    class Datalog(TranslateToLogic, DatalogProgram, ExpressionBasicEvaluator):
+        pass
+
+    class Chase(ChaseNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
+        pass
+
+    datalog_program = Datalog().walk(datalog_code)
+    chase = Chase(datalog_program)
+    datalog_instance = chase.build_chase_solution()
+    grounder = ProbDatalogGrounder(symbol_table=datalog_instance)
+    grounding = grounder.walk(probdatalog_code)
