@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+from typing import Mapping, AbstractSet
 
 from ...datalog.expressions import Conjunction, Disjunction, Fact, Implication
 from ...datalog.instance import FrozenSetInstance, SetInstance
@@ -11,16 +12,21 @@ from ...expressions import (
     Symbol,
     ExistentialPredicate,
 )
+from ...relational_algebra import NameColumns
+from ...utils.relational_algebra_set import RelationalAlgebraFrozenSet
 from ..ppdl import DeltaTerm
 from ..expressions import ProbabilisticPredicate
 from ..probdatalog import (
     GDatalogToProbDatalog,
     ProbDatalogProgram,
+    Grounding,
     conjunct_formulas,
     full_observability_parameter_estimation,
+    _combine_typings,
     _infer_pfact_typing_pred_symbs,
     is_probabilistic_fact,
     RemoveProbabilitiesWalker,
+    ground_probdatalog_program,
 )
 
 C_ = Constant
@@ -144,7 +150,9 @@ def test_program_with_eprobfact():
     )
     program = ProbDatalogProgram()
     program.walk(code)
-    assert program.symbol_table[program.typing_symbol].value[P] == {0: {Q}}
+    assert program.symbol_table[program.typing_symbol].value[P] == Constant[
+        Mapping
+    ]({Constant[int](0): Constant[AbstractSet]({Q})})
 
     code = ExpressionBlock(
         [
@@ -172,14 +180,30 @@ def test_remove_probabilities():
         )
     ) == Fact(P(a))
     assert RemoveProbabilitiesWalker(
-        {ProbDatalogProgram.typing_symbol: Constant({P: {0: Q}})}
+        {
+            ProbDatalogProgram.typing_symbol: Constant(
+                {
+                    P: Constant[Mapping](
+                        {Constant[int](0): Constant[AbstractSet]({Q})}
+                    )
+                }
+            )
+        }
     ).walk(
         Implication(ProbabilisticPredicate(p, P(x)), Constant[bool](True))
     ) == Implication(
         P(x), Q(x)
     )
     assert RemoveProbabilitiesWalker(
-        {ProbDatalogProgram.typing_symbol: Constant({P: {0: Q}})}
+        {
+            ProbDatalogProgram.typing_symbol: Constant(
+                {
+                    P: Constant[Mapping](
+                        {Constant[int](0): Constant[AbstractSet]({Q})}
+                    )
+                }
+            )
+        }
     ).walk(
         Implication(
             ExistentialPredicate(p, ProbabilisticPredicate(p, P(x))),
@@ -189,7 +213,18 @@ def test_remove_probabilities():
         P(x), Q(x)
     )
     assert RemoveProbabilitiesWalker(
-        {ProbDatalogProgram.typing_symbol: Constant({P: {0: Q, 1: Z}})}
+        {
+            ProbDatalogProgram.typing_symbol: Constant(
+                {
+                    P: Constant[Mapping](
+                        {
+                            Constant[int](0): Constant[AbstractSet]({Q}),
+                            Constant[int](1): Constant[AbstractSet]({Z}),
+                        }
+                    )
+                }
+            )
+        }
     ).walk(
         ExpressionBlock(
             [
@@ -205,3 +240,49 @@ def test_remove_probabilities():
             Implication(R(x, y), Conjunction([P(x, y), Q(x), Z(y)])),
         ]
     )
+
+
+def test_combine_typings():
+    typing_a = Constant[Mapping](
+        {Constant[int](0): Constant[AbstractSet]({P, Q})}
+    )
+    typing_b = Constant[Mapping](
+        {Constant[int](0): Constant[AbstractSet]({Z, Q})}
+    )
+    combined = _combine_typings(typing_a, typing_b)
+    assert combined == Constant[Mapping](
+        {Constant[int](0): Constant[AbstractSet]({Q})}
+    )
+
+    typing_a = Constant[Mapping](dict())
+    typing_b = Constant[Mapping](
+        {Constant[int](0): Constant[AbstractSet]({Q})}
+    )
+    combined = _combine_typings(typing_a, typing_b)
+    assert combined == typing_b
+
+
+def test_infer_pfact_typing_pred_symbs():
+    pfact = Implication(ProbabilisticPredicate(p, P(x)), Constant[bool](True))
+    rule = Implication(Z(x), Conjunction([P(x), Q(x)]))
+    code = ExpressionBlock([pfact, rule])
+    typing = _infer_pfact_typing_pred_symbs(P, rule)
+    assert typing == Constant[Mapping](
+        {Constant[int](0): Constant[AbstractSet]({Q})}
+    )
+
+
+# def test_probdatalog_grounding():
+    # pfact = Implication(ProbabilisticPredicate(p, P(x)), Constant[bool](True))
+    # rule = Implication(Z(x), Conjunction([P(x), Q(x)]))
+    # code = ExpressionBlock([pfact, rule, Fact(Q(a)), Fact(Q(b))])
+    # grounded = ground_probdatalog_program(code)
+    # assert (
+        # Grounding(
+            # pfact,
+            # NameColumns(
+                # Constant(RelationalAlgebraFrozenSet({(a,), (b,)})), (x,)
+            # ),
+        # )
+        # in grounded
+    # )

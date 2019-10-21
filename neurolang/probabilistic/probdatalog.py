@@ -1,6 +1,7 @@
 import itertools
 from collections import defaultdict
-from typing import Mapping, Set
+from typing import Mapping, AbstractSet
+import copy
 
 from ..expressions import (
     Definition,
@@ -192,7 +193,7 @@ class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
             self._update_pfact_typing(pred_symb, typing)
         return super().statement_intensional(expression)
 
-    def _update_pfact_typing(self, symbol, typing):
+    def _update_pfact_typing(self, pfact_pred_symb, typing):
         """
         Update typing information for a probabilistic fact's terms.
 
@@ -200,18 +201,34 @@ class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
         ----------
         symbol : Symbol
             Probabilistic fact's predicate symbol.
-        typing : Mapping[int, Set[Symbol]]
+        typing : Mapping[int, AbstractSet[Symbol]]
             New typing information that will be integrated.
 
         """
         if self.typing_symbol not in self.symbol_table:
-            self.symbol_table[self.typing_symbol] = Constant(dict())
-        if symbol not in self.symbol_table[self.typing_symbol].value:
-            self.symbol_table[self.typing_symbol].value[symbol] = dict()
-        prev_typing = self.symbol_table[self.typing_symbol].value[symbol]
+            self.symbol_table[self.typing_symbol] = Constant[Mapping](dict())
+        if pfact_pred_symb not in self.symbol_table[self.typing_symbol].value:
+            prev_typing = Constant[Mapping](dict())
+        else:
+            prev_typing = self.symbol_table[self.typing_symbol].value[
+                pfact_pred_symb
+            ]
         _check_typing_consistency(prev_typing, typing)
-        new_typing = _combine_typings(prev_typing, typing)
-        self.symbol_table[self.typing_symbol].value[symbol] = new_typing
+        new_pfact_typing = _combine_typings(prev_typing, typing)
+        new_typing = Constant[Mapping](
+            {
+                pred_symb: (
+                    self.symbol_table[self.typing_symbol].value[pred_symb]
+                    if pred_symb != pfact_pred_symb
+                    else new_pfact_typing
+                )
+                for pred_symb in (
+                    set(self.symbol_table[self.typing_symbol].value)
+                    | {pfact_pred_symb}
+                )
+            }
+        )
+        self.symbol_table[self.typing_symbol] = new_typing
 
     def _check_all_probfacts_variables_have_been_typed(self):
         """
@@ -230,7 +247,10 @@ class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
                 pfact_pred_symb
             ]
             if any(
-                not (var_idx in typing and len(typing[var_idx]) == 1)
+                not (
+                    var_idx in typing.value
+                    and len(typing.value[var_idx].value) == 1
+                )
                 for var_idx in _get_pfact_var_idxs(pfact_block.expressions[0])
             ):
                 raise NeuroLangException(
@@ -352,7 +372,9 @@ class GDatalogToProbDatalog(
 
 def _check_typing_consistency(typing, local_typing):
     if any(
-        not typing[i] & local_typing[i] for i in local_typing if i in typing
+        not typing.value[i].value & local_typing.value[i].value
+        for i in local_typing.value
+        if i in typing.value
     ):
         raise NeuroLangException(
             "Inconsistent typing of probabilistic fact variables"
@@ -365,26 +387,34 @@ def _combine_typings(typing_a, typing_b):
 
     Parameters
     ----------
-    typing_a : Dict[int, Set[Symbol]]
+    typing_a : Dict[int, AbstractSet[Symbol]]
         First typing.
-    typing_b : Dict[int, Set[Symbol]]
+    typing_b : Dict[int, AbstractSet[Symbol]]
         Second typing.
 
     Returns
     -------
-    Dict[int, Set[Symbol]]
+    Dict[int, AbstractSet[Symbol]]
         Resulting combined typing.
 
     """
-    new_typing = dict()
-    for idx, pred_symbols in typing_a.items():
-        new_typing[idx] = pred_symbols
-    for idx, pred_symbols in typing_b.items():
-        if idx in new_typing:
-            new_typing[idx] &= pred_symbols
-        else:
-            new_typing[idx] = pred_symbols
-    return new_typing
+    return Constant[Mapping](
+        {
+            idx: Constant[AbstractSet](
+                (
+                    typing_a.value[idx].value
+                    if idx in typing_a.value
+                    else typing_b.value[idx].value
+                )
+                & (
+                    typing_b.value[idx].value
+                    if idx in typing_b.value
+                    else typing_a.value[idx].value
+                )
+            )
+            for idx in set(typing_a.value) | set(typing_b.value)
+        }
+    )
 
 
 def _infer_pfact_typing_pred_symbs(pfact_pred_symb, rule):
@@ -408,7 +438,7 @@ def _infer_pfact_typing_pred_symbs(pfact_pred_symb, rule):
 
     Returns
     -------
-    typing : Mapping[int, Set[Symbol]]
+    typing : Mapping[int, AbstractSet[Symbol]]
         Mapping from term indices in the probabilistic fact's literal to the
         typing predicate symbol candidates found in the rule.
 
@@ -422,21 +452,26 @@ def _infer_pfact_typing_pred_symbs(pfact_pred_symb, rule):
             "Expected rule with atom whose predicate symbol is the "
             "probabilistic fact's predicate symbol"
         )
-    typing = dict()
+    typing = Constant[Mapping](dict())
     for rule_pfact_atom in rule_pfact_atoms:
         idx_to_var = {
             i: arg
             for i, arg in enumerate(rule_pfact_atom.args)
             if isinstance(arg, Symbol)
         }
-        local_typing = {
-            i: {
-                atom.functor
-                for atom in antecedent_atoms
-                if atom.args == (var,) and atom.functor != pfact_pred_symb
+        local_typing = Constant[Mapping](
+            {
+                Constant[int](i): Constant[AbstractSet](
+                    {
+                        atom.functor
+                        for atom in antecedent_atoms
+                        if atom.args == (var,)
+                        and atom.functor != pfact_pred_symb
+                    }
+                )
+                for i, var in idx_to_var.items()
             }
-            for i, var in idx_to_var.items()
-        }
+        )
         _check_typing_consistency(typing, local_typing)
         typing = _combine_typings(typing, local_typing)
     return typing
@@ -583,7 +618,9 @@ class RemoveProbabilitiesWalker(ExpressionWalker):
         typing = self.symbol_table[self.typing_symbol].value[pfact_pred_symb]
         antecedent = conjunct_if_needed(
             [
-                typing.value[Constant[int](var_idx)](var_symb)
+                next(iter(typing.value[Constant[int](var_idx)].value))(
+                    var_symb
+                )
                 for var_idx, var_symb in enumerate(pfact_pred.args)
                 if isinstance(var_symb, Symbol)
             ]
@@ -662,8 +699,10 @@ def ground_probdatalog_program(probdatalog_code):
     class Chase(ChaseNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
         pass
 
-    datalog_program = Datalog().walk(datalog_code)
+    datalog_program = Datalog()
+    datalog_program.walk(datalog_code)
     chase = Chase(datalog_program)
     datalog_instance = chase.build_chase_solution()
     grounder = ProbDatalogGrounder(symbol_table=datalog_instance)
     grounding = grounder.walk(probdatalog_code)
+    return grounding
