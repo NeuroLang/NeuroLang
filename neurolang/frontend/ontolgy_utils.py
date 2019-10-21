@@ -36,7 +36,7 @@ class OntologyHandler():
         )
         namespaces_prop = list(
             map(
-                lambda x: (x[0] + ':' + x[1]).lstrip('0123456789.-_ :'),
+                lambda x: (x[0] + ':' + x[1]).lstrip('0123456789.-_ :').rstrip('0123456789.-_ :'),
                 list(map(lambda y: y.split('/')[-2:], namespaces_properties))
             )
         )
@@ -47,7 +47,7 @@ class OntologyHandler():
             map(
                 lambda a: list(
                     map(
-                        lambda s: s.replace('-', '_').lstrip('0123456789.-_ '),
+                        lambda s: s.replace('-', '_').lstrip('0123456789.-_ :').rstrip('0123456789.-_ :'),
                         a.split('/')[-1].split('#')
                     )
                 ), owl_properties
@@ -90,6 +90,9 @@ class OntologyHandler():
             e3,
         ) for e1, e2, e3 in self.df.values),
                                   name='triple')
+
+        pointers = self.df.loc[~self.df.Entity.str.contains('http')].Entity.unique()
+        neurolangDL.add_tuple_set(((e,) for e in pointers), name='pointer')
 
         x1 = neurolangDL.new_symbol(name='x1')
         y1 = neurolangDL.new_symbol(name='y1')
@@ -158,6 +161,25 @@ class OntologyHandler():
             ) & neurolangDL.symbols.rdf_schema_subClassOf(
                 y1, x1
             ) & neurolangDL.symbols.rdf_schema_subClassOf(y2, x2)'''
+
+        res = neurolangDL.query(
+            (x1, y1, y2),
+            neurolangDL.symbols.rdf_schema_subClassOf(x1, x2) &
+            neurolangDL.symbols.pointer(x2) &
+            neurolangDL.symbols.triple(x2, 'http://www.w3.org/2002/07/owl#onProperty', y1) &
+            neurolangDL.symbols.triple(x2, 'http://www.w3.org/2002/07/owl#someValuesFrom', y2)
+        )
+
+        temp = pd.DataFrame(res, columns={'Entity', 'Property', 'ValueFrom'})
+        #Using regex should be a better opcion
+        temp['Property'] = temp['Property'].map(lambda x: x.split('/')[-2].lstrip('0123456789.-_ :').rstrip('0123456789.-_ :') + '_' + x.split('/')[-1])
+        unique_property = temp.Property.unique()
+        for prop in unique_property:
+            props = temp.loc[temp.Property == prop]
+            neurolangDL.add_tuple_set(((
+                x1,
+                x3,
+            ) for x1, x2, x3 in props.values), name=prop)
 
         if destriuex_relations:
             relations_list = self.get_destrieux_relations()
