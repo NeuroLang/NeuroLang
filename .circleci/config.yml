@@ -133,7 +133,8 @@ jobs:
             . venv/bin/activate
             git checkout HEAD~1
              pytest neurolang neurolang --benchmark-only --benchmark-autosave \
-             --benchmark-calibration-precision=50 --benchmark-warmup=on 2>&1 > /dev/null
+             --benchmark-group-by=func --benchmark-sort=mean \
+             --benchmark-calibration-precision=50 --benchmark-warmup=on 
 
             git checkout -
 
