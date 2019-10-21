@@ -638,26 +638,21 @@ class ProbDatalogGrounder(ExpressionWalker):
     def __init__(self, symbol_table):
         self.symbol_table = symbol_table
 
-    def _get_pfact_grounding(self, pfact, pfact_pred):
-        return Grounding(
-            pfact,
-            NameColumns(
-                self.symbol_table[pfact_pred.functor],
-                [
-                    arg if isinstance(arg, Symbol) else Symbol.fresh()
-                    for arg in pfact_pred.args
-                    if isinstance(arg, Symbol)
-                ],
-            ),
-        )
+    @add_match(ExpressionBlock)
+    def expression_block(self, block):
+        return ExpressionBlock([self.walk(exp) for exp in block.expressions])
+
+    @add_match(Implication(FunctionApplication, Constant[bool](True)))
+    def fact(self, fact):
+        return self._construct_grounding(fact, fact.consequent)
 
     @add_match(Implication, is_probabilistic_fact)
     def probabilistic_fact(self, pfact):
-        return self._get_pfact_grounding(pfact, pfact.consequent.body)
+        return self._construct_grounding(pfact, pfact.consequent.body)
 
     @add_match(Implication, is_existential_probabilistic_fact)
     def existential_probabilistic_fact(self, existential_pfact):
-        return self._get_pfact_grounding(
+        return self._construct_grounding(
             existential_pfact, existential_pfact.consequent.body.body
         )
 
@@ -666,7 +661,20 @@ class ProbDatalogGrounder(ExpressionWalker):
         lambda exp: exp.antecedent != Constant[bool](True),
     )
     def statement_intensional(self, rule):
-        return rule
+        return self._construct_grounding(rule, rule.consequent)
+
+    def _construct_grounding(self, rule, predicate):
+        return Grounding(
+            rule,
+            NameColumns(
+                self.symbol_table[predicate.functor],
+                [
+                    arg if isinstance(arg, Symbol) else Symbol.fresh()
+                    for arg in predicate.args
+                    if isinstance(arg, Symbol)
+                ],
+            ),
+        )
 
 
 def ground_probdatalog_program(probdatalog_code):

@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from typing import Mapping, AbstractSet
+from typing import Mapping, AbstractSet, Tuple
 
 from ...datalog.expressions import Conjunction, Disjunction, Fact, Implication
 from ...datalog.instance import FrozenSetInstance, SetInstance
@@ -272,17 +272,16 @@ def test_infer_pfact_typing_pred_symbs():
     )
 
 
-# def test_probdatalog_grounding():
-    # pfact = Implication(ProbabilisticPredicate(p, P(x)), Constant[bool](True))
-    # rule = Implication(Z(x), Conjunction([P(x), Q(x)]))
-    # code = ExpressionBlock([pfact, rule, Fact(Q(a)), Fact(Q(b))])
-    # grounded = ground_probdatalog_program(code)
-    # assert (
-        # Grounding(
-            # pfact,
-            # NameColumns(
-                # Constant(RelationalAlgebraFrozenSet({(a,), (b,)})), (x,)
-            # ),
-        # )
-        # in grounded
-    # )
+def test_probdatalog_grounding():
+    pfact = Implication(ProbabilisticPredicate(p, P(x)), Constant[bool](True))
+    rule = Implication(Z(x), Conjunction([P(x), Q(x)]))
+    code = ExpressionBlock([pfact, rule, Fact(Q(a)), Fact(Q(b))])
+    grounded = ground_probdatalog_program(code)
+    expected = Grounding(
+        pfact,
+        NameColumns(
+            Constant[AbstractSet](RelationalAlgebraFrozenSet({(a,), (b,)})),
+            (x,),
+        ),
+    )
+    assert expected in grounded.expressions
