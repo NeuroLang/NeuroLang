@@ -14,7 +14,12 @@ flake8:
 
 test:
 	$(PYTEST) --cov=neurolang --cov-config=.coveragerc --cov-report=xml --cov-report=term-missing \
-	  -vv neurolang neurolang --junitxml=utest.xml
+	  -vv neurolang neurolang --junitxml=utest.xml --benchmark-skip
+
+benchmark:
+	$(PYTEST) neurolang neurolang --benchmark-only --benchmark-group-by=func \
+	  --benchmark-sort=mean
+	  
 
 ctags:
 	# make tags for symbol based navigation in emacs and vim
