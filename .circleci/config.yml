@@ -110,6 +110,32 @@ jobs:
       - checkout
       - install
       - test
+  
+  benchmark:
+    docker:
+      # specify the version you desire here
+      # use `-browsers` prefix for selenium tests, e.g. `3.6.1-browsers`
+      - image: circleci/python:3.7
+
+      # Specify service dependencies here if necessary
+      # CircleCI maintains a library of pre-built images
+      # documented at https://circleci.com/docs/2.0/circleci-images/
+      # - image: circleci/postgres:9.4
+
+    working_directory: ~/repo
+
+    steps:
+      - checkout
+      - install
+      - run:
+          name: run tests
+          command: |
+            . venv/bin/activate
+            git checkout HEAD~1
+            pytest neurolang neurolang --benchmark-only --benchmark-autosave 2>&1 > /dev/null
+            git checkout -
+            pytest neurolang neurolang --benchmark-only --benchmark-autosave --benchmark-compare --benchmark-compare-fail=mean:5% \
+              --benchmark-group-by=func --benchmark-sort=mean
 
 workflows:
   version: 2
@@ -117,3 +143,4 @@ workflows:
     jobs:
       - py36
       - py37
+      - benchmark
