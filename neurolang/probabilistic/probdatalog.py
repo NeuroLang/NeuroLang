@@ -529,19 +529,16 @@ class Grounding(Definition):
 class ProbDatalogGrounder(PatternWalker):
     def __init__(self, symbol_table):
         self.symbol_table = symbol_table
+        self.walked_extensional_pred_symbs = set()
 
     @add_match(ExpressionBlock)
     def expression_block(self, block):
         groundings = []
-        walked_extensional_pred_symbs = set()
         for exp in block.expressions:
             if isinstance(exp, Fact):
-                if exp.consequent.functor not in walked_extensional_pred_symbs:
-                    new_pred = _contruct_fact_variable_predicate(exp)
-                    groundings.append(
-                        self._construct_grounding(new_pred, new_pred)
-                    )
-                    walked_extensional_pred_symbs.add(exp.consequent.functor)
+                grounding = self._construct_fact_grounding(exp)
+                if grounding is not None:
+                    groundings.append(grounding)
             else:
                 groundings.append(self.walk(exp))
         return ExpressionBlock(groundings)
@@ -562,6 +559,12 @@ class ProbDatalogGrounder(PatternWalker):
     )
     def statement_intensional(self, rule):
         return self._construct_grounding(rule, rule.consequent)
+
+    def _construct_fact_grounding(self, fact):
+        if fact.consequent.functor not in self.walked_extensional_pred_symbs:
+            self.walked_extensional_pred_symbs.add(fact.consequent.functor)
+            new_pred = _contruct_fact_variable_predicate(fact)
+            return self._construct_grounding(new_pred, new_pred)
 
     def _construct_grounding(self, expression, predicate):
         return Grounding(
