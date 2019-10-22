@@ -1,10 +1,8 @@
-import numpy as np
 import pytest
 from typing import Mapping, AbstractSet
 
 from ...datalog.expressions import Conjunction, Disjunction, Fact, Implication
 from ...exceptions import NeuroLangException
-from ...expression_walker import ExpressionBasicEvaluator
 from ...expressions import (
     Constant,
     ExpressionBlock,

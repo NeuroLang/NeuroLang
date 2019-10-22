@@ -1,4 +1,3 @@
-import itertools
 from collections import defaultdict
 from typing import Mapping, AbstractSet
 
@@ -11,7 +10,6 @@ from ..expressions import (
     ExpressionBlock,
     ExistentialPredicate,
 )
-from ..unification import apply_substitution
 from ..datalog.expressions import (
     Fact,
     Implication,
@@ -28,11 +26,9 @@ from ..expression_walker import (
     ExpressionBasicEvaluator,
 )
 from .ppdl import is_gdatalog_rule
-from ..datalog.instance import SetInstance
 from ..datalog.expression_processing import (
     extract_datalog_predicates,
     is_ground_predicate,
-    implication_has_existential_variable_in_antecedent,
     conjunct_if_needed,
     conjunct_formulas,
 )
