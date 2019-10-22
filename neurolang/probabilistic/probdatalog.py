@@ -519,6 +519,11 @@ class RemoveProbabilitiesWalker(ExpressionWalker):
         return Implication(pfact_pred, antecedent)
 
 
+def _contruct_fact_variable_predicate(fact):
+    new_args = (Symbol[arg.type].fresh() for arg in fact.consequent.args)
+    return fact.consequent.functor(*new_args)
+
+
 class Grounding(Definition):
     def __init__(self, expression, name_columns):
         self.expression = expression
@@ -535,16 +540,12 @@ class ProbDatalogGrounder(PatternWalker):
         walked_extensional_pred_symbs = set()
         for exp in block.expressions:
             if isinstance(exp, Fact):
-                pred_symb = exp.consequent.functor
-                if pred_symb not in walked_extensional_pred_symbs:
-                    new_args = (
-                        Symbol[arg.type].fresh() for arg in exp.consequent.args
-                    )
-                    new_pred = pred_symb(*new_args)
+                if exp.consequent.functor not in walked_extensional_pred_symbs:
+                    new_pred = _contruct_fact_variable_predicate(exp)
                     groundings.append(
                         self._construct_grounding(new_pred, new_pred)
                     )
-                    walked_extensional_pred_symbs.add(pred_symb)
+                    walked_extensional_pred_symbs.add(exp.consequent.functor)
             else:
                 groundings.append(self.walk(exp))
         return ExpressionBlock(groundings)
