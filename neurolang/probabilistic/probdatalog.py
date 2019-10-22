@@ -535,18 +535,20 @@ class ProbDatalogGrounder(PatternWalker):
     @add_match(ExpressionBlock)
     def expression_block(self, block):
         return ExpressionBlock(
-            itertools.chain(
-                *[
-                    [self.walk(exp)]
-                    if not isinstance(exp, Fact)
-                    else (
-                        []
-                        if exp.consequent.functor
-                        in self.walked_extensional_pred_symbs
-                        else [self._construct_fact_grounding(exp)]
-                    )
-                    for exp in block.expressions
-                ]
+            list(
+                itertools.chain(
+                    *[
+                        [self.walk(exp)]
+                        if not isinstance(exp, Fact)
+                        else (
+                            []
+                            if exp.consequent.functor
+                            in self.walked_extensional_pred_symbs
+                            else [self._construct_fact_grounding(exp)]
+                        )
+                        for exp in block.expressions
+                    ]
+                )
             )
         )
 
