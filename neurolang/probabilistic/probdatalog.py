@@ -600,7 +600,7 @@ def ground_probdatalog_program(pd_code):
     """
     pd_program = ProbDatalogProgram()
     pd_program.walk(pd_code)
-    for predicate, disjunction in pd_program.intensional_database().items():
+    for disjunction in pd_program.intensional_database().values():
         if len(disjunction.formulas) > 1:
             raise NeuroLangException(
                 "Programs with several rules with the same head predicate "
