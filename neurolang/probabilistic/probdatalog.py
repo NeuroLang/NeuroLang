@@ -1,5 +1,6 @@
 from collections import defaultdict
 from typing import Mapping, AbstractSet
+import itertools
 
 from ..expressions import (
     Definition,
@@ -533,15 +534,21 @@ class ProbDatalogGrounder(PatternWalker):
 
     @add_match(ExpressionBlock)
     def expression_block(self, block):
-        groundings = []
-        for exp in block.expressions:
-            if isinstance(exp, Fact):
-                grounding = self._construct_fact_grounding(exp)
-                if grounding is not None:
-                    groundings.append(grounding)
-            else:
-                groundings.append(self.walk(exp))
-        return ExpressionBlock(groundings)
+        return ExpressionBlock(
+            itertools.chain(
+                *[
+                    [self.walk(exp)]
+                    if not isinstance(exp, Fact)
+                    else (
+                        []
+                        if exp.consequent.functor
+                        in self.walked_extensional_pred_symbs
+                        else [self._construct_fact_grounding(exp)]
+                    )
+                    for exp in block.expressions
+                ]
+            )
+        )
 
     @add_match(Implication, is_probabilistic_fact)
     def probabilistic_fact(self, pfact):
