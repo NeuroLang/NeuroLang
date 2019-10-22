@@ -600,6 +600,12 @@ def ground_probdatalog_program(pd_code):
     """
     pd_program = ProbDatalogProgram()
     pd_program.walk(pd_code)
+    for predicate, disjunction in pd_program.intensional_database().items():
+        if len(disjunction.formulas) > 1:
+            raise NeuroLangException(
+                "Programs with several rules with the same head predicate "
+                "symbol are not currently supported"
+            )
     dl_code = RemoveProbabilitiesWalker(pd_program.symbol_table).walk(pd_code)
 
     class Datalog(TranslateToLogic, DatalogProgram, ExpressionBasicEvaluator):

@@ -380,3 +380,9 @@ def test_probdatalog_grounding():
             assert grounding.name_columns.relation == Constant[AbstractSet](
                 RelationalAlgebraFrozenSet({(a,), (b,)})
             )
+
+
+def test_unsupported_grounding_program_with_disjunction():
+    code = ExpressionBlock([Implication(Q(x), P(x)), Implication(Q(x), R(x))])
+    with pytest.raises(NeuroLangException, match=r"supported"):
+        ground_probdatalog_program(code)
