@@ -14,7 +14,6 @@ class OntologyHandler():
         else:
             self.df = self._parse_ontology([paths], [namespaces])
 
-
     def _parse_ontology(self, paths, namespaces):
         df = pd.DataFrame()
         temp = []
@@ -28,7 +27,8 @@ class OntologyHandler():
 
         df = df.append(temp)
 
-        namespaces_properties = df[~df.Property.str.contains('#')].Property.unique()
+        namespaces_properties = df[~df.Property.str.
+                                   contains('#')].Property.unique()
         namespaces_properties = list(
             filter(
                 lambda x: (x in n for n in namespaces), namespaces_properties
@@ -36,7 +36,8 @@ class OntologyHandler():
         )
         namespaces_prop = list(
             map(
-                lambda x: (x[0] + ':' + x[1]).lstrip('0123456789.-_ :').rstrip('0123456789.-_ :'),
+                lambda x: (x[0] + ':' + x[1]).lstrip('0123456789.-_ :').
+                rstrip('0123456789.-_ :'),
                 list(map(lambda y: y.split('/')[-2:], namespaces_properties))
             )
         )
@@ -47,7 +48,8 @@ class OntologyHandler():
             map(
                 lambda a: list(
                     map(
-                        lambda s: s.replace('-', '_').lstrip('0123456789.-_ :').rstrip('0123456789.-_ :'),
+                        lambda s: s.replace('-', '_').
+                        lstrip('0123456789.-_ :').rstrip('0123456789.-_ :'),
                         a.split('/')[-1].split('#')
                     )
                 ), owl_properties
@@ -66,16 +68,12 @@ class OntologyHandler():
         else:
             new_prop = prop
 
-        if new_prop in ['rdf_schema:subClassOf']:
+        if new_prop in ['rdf_schema:subClassOf', 'rdf_schema:subPropertyOf']:
             new_prop = new_prop + '2'
 
         return new_prop
 
     def load_ontology(self, neurolangDL, destriuex_relations=False):
-
-        #@neurolangDL.add_symbol
-        #def is_iri(value: str) -> bool:
-        #    return value.startswith('http')
 
         neurolangDL.add_tuple_set(((e1, ) for e1, e2, e3 in self.df.values),
                                   name='dom')
@@ -91,27 +89,19 @@ class OntologyHandler():
         ) for e1, e2, e3 in self.df.values),
                                   name='triple')
 
-        pointers = self.df.loc[~self.df.Entity.str.contains('http')].Entity.unique()
-        neurolangDL.add_tuple_set(((e,) for e in pointers), name='pointer')
+        pointers = self.df.loc[~self.df.Entity.str.
+                               contains('http')].Entity.unique()
+        neurolangDL.add_tuple_set(((e, ) for e in pointers), name='pointer')
 
         x1 = neurolangDL.new_symbol(name='x1')
         y1 = neurolangDL.new_symbol(name='y1')
         x2 = neurolangDL.new_symbol(name='x2')
         y2 = neurolangDL.new_symbol(name='y2')
 
-        #rdf_schema_subClassOf = neurolangDL.new_symbol(name='rdf_schema_subClassOf')
-        #rdf_schema_subClassOf[x1, y1] = (
-        #    neurolangDL.symbols.triple(x1, 'rdf_schema:subClassOf', y1) &
-        #    neurolangDL.symbols.is_iri(y1)
-        #)
-
         all_props = list(self.owl_dic.keys()
                          ) + list(self.namespaces_dic.keys())
+
         for prop in all_props:
-
-            #if prop == 'http://www.w3.org/2000/01/rdf-schema#subClassOf':
-            #    continue
-
             name = self.replace_property(prop)
             temp = self.df.loc[self.df.Property == prop]
             symbol_name = name.replace(':', '_')
@@ -121,66 +111,82 @@ class OntologyHandler():
             ) for x, y, z in temp.values),
                                       name=symbol_name)
 
+        rdf_schema_subPropertyOf = neurolangDL.new_symbol(
+            name='rdf_schema_subPropertyOf'
+        )
+        if 'rdf_schema_subPropertyOf2' in neurolangDL.symbols:
+            rdf_schema_subPropertyOf[
+                y1, y2] = neurolangDL.symbols.rdf_schema_subPropertyOf2(
+                    y1, y2
+                )
+            rdf_schema_subPropertyOf[
+                y1, y2] = neurolangDL.symbols.rdf_schema_subPropertyOf2(
+                    y1, x1
+                ) & neurolangDL.symbols.rdf_schema_subPropertyOf2(x1, y2)
 
-        '''neurolangDL.symbols.rdf_schema_subPropertyOf[
-            y1, y2] = neurolangDL.symbols.rdf_schema_subPropertyOf(
+        if 'owl_inverseOf' in neurolangDL.symbols:
+            rdf_schema_subPropertyOf[y1, y2] = rdf_schema_subPropertyOf(
                 x1, x2
             ) & neurolangDL.symbols.owl_inverseOf(
                 y1, x1
             ) & neurolangDL.symbols.owl_inverseOf(y2, x2)
 
-        neurolangDL.symbols.rdf_schema_subPropertyOf[
-            x1, x1] = neurolangDL.symbols.rdf_syntax_ns_type(
-                x1, 'http://www.w3.org/2002/07/owl#ObjectProperty'
-            )
+        #if 'rdf_syntax_ns_type' in neurolangDL.symbols:
+        #    rdf_schema_subPropertyOf[x1, x1] = neurolangDL.symbols.rdf_syntax_ns_type(x1, 'http://www.w3.org/2002/07/owl#ObjectProperty')
 
-        neurolangDL.symbols.rdf_schema_subPropertyOf[
-            y1, y2] = neurolangDL.symbols.rdf_schema_subPropertyOf(
-                y1, x1
-            ) & neurolangDL.symbols.rdf_schema_subPropertyOf(x1, y2)'''
+        rdf_schema_subClassOf = neurolangDL.new_symbol(
+            name='rdf_schema_subClassOf'
+        )
+        if 'rdf_schema_subClassOf2' in neurolangDL.symbols:
+            rdf_schema_subClassOf[
+                y1, y2] = neurolangDL.symbols.rdf_schema_subClassOf2(y1, y2)
+            rdf_schema_subClassOf[
+                y1, y2] = neurolangDL.symbols.rdf_schema_subClassOf2(
+                    y1, x1
+                ) & neurolangDL.symbols.rdf_schema_subClassOf2(x1, y2)
 
-        rdf_schema_subClassOf = neurolangDL.new_symbol(name='rdf_schema_subClassOf')
-        rdf_schema_subClassOf[y1, y2] = neurolangDL.symbols.rdf_schema_subClassOf2(y1, y2)
-        rdf_schema_subClassOf[y1, y2] = neurolangDL.symbols.rdf_schema_subClassOf2(y1, x1) & neurolangDL.symbols.rdf_schema_subClassOf2(x1, y2)
-
-        #neurolangDL.symbols.rdf_schema_subClassOf[
-        #    y1, y2] = neurolangDL.symbols.rdf_schema_subClassOf(
-        #        x1, x2
-        #    ) & neurolangDL.symbols.rdf_syntax_ns_rest(
-        #        y1, x1
-        #    ) & neurolangDL.symbols.rdf_syntax_ns_rest(y2, x2)
-
-        #neurolangDL.symbols.rdf_schema_subClassOf[
-        #    x1, x1] = neurolangDL.symbols.rdf_syntax_ns_type(
-        #        x1, 'http://www.w3.org/2002/07/owl#Class'
-        #    )
-
-        '''neurolangDL.symbols.owl_disjointWith[
-            y1, y2] = neurolangDL.symbols.owl_disjointWith(
+        if 'rdf_syntax_ns_rest' in neurolangDL.symbols:
+            rdf_schema_subClassOf[y1, y2] = rdf_schema_subClassOf(
                 x1, x2
-            ) & neurolangDL.symbols.rdf_schema_subClassOf(
+            ) & neurolangDL.symbols.rdf_syntax_ns_rest(
                 y1, x1
-            ) & neurolangDL.symbols.rdf_schema_subClassOf(y2, x2)'''
+            ) & neurolangDL.symbols.rdf_syntax_ns_rest(y2, x2)
+
+        #if 'rdf_syntax_ns_type' in neurolangDL.symbols:
+        #    rdf_schema_subClassOf[x1, x1] = neurolangDL.symbols.rdf_syntax_ns_type(x1, 'http://www.w3.org/2002/07/owl#Class')
+
+        if 'owl_disjointWith' in neurolangDL.symbols:
+            neurolangDL.symbols.owl_disjointWith[
+                y1, y2] = neurolangDL.symbols.owl_disjointWith(
+                    x1, x2
+                ) & rdf_schema_subClassOf(y1,
+                                          x1) & rdf_schema_subClassOf(y2, x2)
 
         res = neurolangDL.query(
             (x1, y1, y2),
             neurolangDL.symbols.rdf_schema_subClassOf(x1, x2) &
-            neurolangDL.symbols.pointer(x2) &
-            neurolangDL.symbols.triple(x2, 'http://www.w3.org/2002/07/owl#onProperty', y1) &
-            neurolangDL.symbols.triple(x2, 'http://www.w3.org/2002/07/owl#someValuesFrom', y2)
+            neurolangDL.symbols.pointer(x2) & neurolangDL.symbols.
+            triple(x2, 'http://www.w3.org/2002/07/owl#onProperty', y1) &
+            neurolangDL.symbols.
+            triple(x2, 'http://www.w3.org/2002/07/owl#someValuesFrom', y2)
         )
 
         temp = pd.DataFrame(res, columns={'Entity', 'Property', 'ValueFrom'})
         #Using regex should be a better opcion
-        temp['Property'] = temp['Property'].map(lambda x: x.split('/')[-2].lstrip('0123456789.-_ :').rstrip('0123456789.-_ :') + '_' + x.split('/')[-1])
+        temp['Property'] = temp['Property'].map(
+            lambda x: x.split('/')[-2].lstrip('0123456789.-_ :').
+            rstrip('0123456789.-_ :') + '_' + x.split('/')[-1]
+        )
         unique_property = temp.Property.unique()
         for prop in unique_property:
             props = temp.loc[temp.Property == prop]
             neurolangDL.add_tuple_set(((
                 x1,
                 x3,
-            ) for x1, x2, x3 in props.values), name=prop)
+            ) for x1, x2, x3 in props.values),
+                                      name=prop)
 
+        #Maybe we should put this outside the class
         if destriuex_relations:
             relations_list = self.get_destrieux_relations()
             neurolangDL.add_tuple_set(((
@@ -258,7 +264,7 @@ class OntologyHandler():
             ('l_g_ins_lg_and_s_cent_ins', 'Left central insular sulcus'),
             ('l_g_ins_lg_and_s_cent_ins', 'Left long insular gyrus'),
             ('l_g_insular_short', 'Short insular gyrus'),
-            ('l_g_occipital_middleLeft', 'lateral occipital gyru'),
+            ('l_g_occipital_middleLeft', ' 	Left lateral occipital gyrus'),
             ('l_g_occipital_sup', 'Left superior occipital gyrus'),
             ('l_g_oc_temp_lat_fusifor', 'Left fusiform gyrus'),
             ('l_g_oc_temp_med_lingual', 'Left lingual gyrus'),
