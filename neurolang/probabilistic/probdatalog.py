@@ -520,8 +520,8 @@ class RemoveProbabilitiesWalker(ExpressionWalker):
 
 
 class Grounding(Definition):
-    def __init__(self, rule, name_columns):
-        self.rule = rule
+    def __init__(self, expression, name_columns):
+        self.expression = expression
         self.name_columns = name_columns
 
 
@@ -531,11 +531,21 @@ class ProbDatalogGrounder(PatternWalker):
 
     @add_match(ExpressionBlock)
     def expression_block(self, block):
-        return ExpressionBlock([self.walk(exp) for exp in block.expressions])
-
-    @add_match(Implication(FunctionApplication, Constant[bool](True)))
-    def fact(self, fact):
-        return self._construct_grounding(fact, fact.consequent)
+        groundings = []
+        walked_extensional_pred_symbs = set()
+        for exp in block.expressions:
+            if isinstance(exp, Fact):
+                pred_symb = exp.consequent.functor
+                if pred_symb not in walked_extensional_pred_symbs:
+                    new_args = (Symbol.fresh() for _ in exp.consequent.args)
+                    new_pred = pred_symb(*new_args)
+                    groundings.append(
+                        self._construct_grounding(new_pred, new_pred)
+                    )
+                    walked_extensional_pred_symbs.add(pred_symb)
+            else:
+                groundings.append(self.walk(exp))
+        return ExpressionBlock(groundings)
 
     @add_match(Implication, is_probabilistic_fact)
     def probabilistic_fact(self, pfact):
@@ -554,9 +564,9 @@ class ProbDatalogGrounder(PatternWalker):
     def statement_intensional(self, rule):
         return self._construct_grounding(rule, rule.consequent)
 
-    def _construct_grounding(self, rule, predicate):
+    def _construct_grounding(self, expression, predicate):
         return Grounding(
-            rule,
+            expression,
             NameColumns(
                 self.symbol_table[predicate.functor],
                 [

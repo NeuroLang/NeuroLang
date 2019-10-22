@@ -367,3 +367,18 @@ def test_probdatalog_grounding():
         ),
     )
     assert expected in grounded.expressions
+
+    code = ExpressionBlock(
+        [Fact(P(a, b)), Fact(P(b, b)), Fact(Q(a)), Fact(Q(b))]
+    )
+    grounded = ground_probdatalog_program(code)
+    assert len(grounded.expressions) == 2
+    for grounding in grounded.expressions:
+        if grounding.expression.functor == P:
+            assert grounding.name_columns.relation == Constant[AbstractSet](
+                RelationalAlgebraFrozenSet({(a, b), (b, b)})
+            )
+        elif grounding.expression.functor == Q:
+            assert grounding.name_columns.relation == Constant[AbstractSet](
+                RelationalAlgebraFrozenSet({(a,), (b,)})
+            )
