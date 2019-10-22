@@ -537,7 +537,9 @@ class ProbDatalogGrounder(PatternWalker):
             if isinstance(exp, Fact):
                 pred_symb = exp.consequent.functor
                 if pred_symb not in walked_extensional_pred_symbs:
-                    new_args = (Symbol.fresh() for _ in exp.consequent.args)
+                    new_args = (
+                        Symbol[arg.type].fresh() for arg in exp.consequent.args
+                    )
                     new_pred = pred_symb(*new_args)
                     groundings.append(
                         self._construct_grounding(new_pred, new_pred)

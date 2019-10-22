@@ -213,7 +213,7 @@ def is_ground_predicate(predicate):
     bool
         Whether all the predicate's terms are all constant.
     """
-    return not any(not isinstance(arg, Constant) for arg in predicate.args)
+    return all(isinstance(arg, Constant) for arg in predicate.args)
 
 
 def all_body_preds_in_set(implication, predicate_set):
