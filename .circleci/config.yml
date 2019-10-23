@@ -24,6 +24,7 @@ commands:
             pip install pytest
             pip install pytest-cov
             pip install codacy-coverage
+            pip install asv
 
             # - run:
             #name: install sonar
@@ -48,6 +49,9 @@ commands:
   test:
     description: "Run the tests"
     steps:
+      - attach_workspace:
+          # Must be absolute path or relative path from working_directory
+          at: .asv
       - run:
           name: run tests
           command: |
@@ -60,6 +64,9 @@ commands:
             cp utest.xml test_reports/junit.xml
             ./cc-test-reporter after-build --coverage-input-type coverage.py --exit-code $?
             python-codacy-coverage -r coverage.xml
+            asv machine --yes
+            asv run -v python=same
+            asv publish
 
       - store_test_results:
           path: test_reports
@@ -67,6 +74,11 @@ commands:
       - store_artifacts:
           path: test_reports
           destination: test_reports
+
+      - store_artifacts:
+          path: .asv/html
+          destination: benchmarks
+
 
       #- run:
          #name: run sonar
