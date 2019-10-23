@@ -22,7 +22,6 @@ commands:
             . venv/bin/activate
             pip install -r requirements.txt
             pip install pytest
-            pip install pytest-benchmark
             pip install pytest-cov
             pip install codacy-coverage
 
@@ -110,17 +109,10 @@ jobs:
       - checkout
       - install
       - test
-  
+ 
   benchmark:
     docker:
-      # specify the version you desire here
-      # use `-browsers` prefix for selenium tests, e.g. `3.6.1-browsers`
       - image: circleci/python:3.7
-
-      # Specify service dependencies here if necessary
-      # CircleCI maintains a library of pre-built images
-      # documented at https://circleci.com/docs/2.0/circleci-images/
-      # - image: circleci/postgres:9.4
 
     working_directory: ~/repo
 
@@ -128,20 +120,15 @@ jobs:
       - checkout
       - install
       - run:
-          name: run tests
+          name: Install extra packages & build documentation
           command: |
             . venv/bin/activate
-            git checkout HEAD~1
-             pytest neurolang neurolang --benchmark-only --benchmark-autosave \
-             --benchmark-group-by=func --benchmark-sort=mean \
-             --benchmark-calibration-precision=50
-
-            git checkout -
-
-            pytest neurolang neurolang --benchmark-only --benchmark-autosave --benchmark-compare \
-             --benchmark-compare-fail=mean:10% \
-             --benchmark-group-by=func --benchmark-sort=mean \
-             --benchmark-calibration-precision=50
+            pip install asv
+            asv run -v
+            asv publish
+          no_output_timeout: 1h
+      - store_artifacts:
+          path: .asv/html
 
 workflows:
   version: 2
