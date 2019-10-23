@@ -1,6 +1,6 @@
 import inspect
 import operator as op
-from typing import AbstractSet, Callable
+from typing import AbstractSet, Callable, Mapping, Sequence, Tuple
 
 import pytest
 
@@ -8,7 +8,6 @@ from .. import expressions
 from ..expression_walker import (ExpressionBasicEvaluator,
                                  TypedSymbolTableEvaluator)
 from ..expressions import Expression, Unknown, expressions_behave_as_objects
-
 
 C_ = expressions.Constant
 S_ = expressions.Symbol
@@ -20,6 +19,41 @@ U_ = expressions.UniversalPredicate
 
 class Evaluator(ExpressionBasicEvaluator, TypedSymbolTableEvaluator):
     pass
+
+
+def test_build_constants():
+    a = C_('ab')
+    assert a.type is str and a.value == 'ab'
+
+    b = C_(['a'])
+    assert b.type is Sequence[str]
+    assert b.value[0].type is str and b.value[0].value == 'a'
+
+    b = C_(('a', 1))
+    assert b.type is Tuple[str, int]
+    assert b.value[0].type is str and b.value[0].value == 'a'
+    assert b.value[1].type is int and b.value[1].value == 1
+
+    b = C_({'a'})
+    assert b.type is AbstractSet[str]
+    v = b.value.pop()
+    assert v.type is str and v.value == 'a'
+
+    b = C_({'a': 1})
+    assert b.type is Mapping[str, int]
+    assert len(b.value) == 1
+    assert C_('a') in b.value
+    assert C_(1) in b.value.values()
+
+
+def test_fresh_symbol():
+    s1 = S_.fresh()
+    s2 = S_.fresh()
+    s3 = S_[int].fresh()
+
+    assert isinstance(s1, S_) and s1.type is Unknown
+    assert s1 != s2
+    assert s1 != s2 and s2 != s3 and s3.type is int
 
 
 def evaluate(expression, **kwargs):

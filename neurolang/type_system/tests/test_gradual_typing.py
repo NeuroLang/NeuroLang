@@ -142,7 +142,7 @@ def test_replace_subtype():
 
 def test_infer_type():
 
-    def a(x: int, y:str) -> bool:
+    def a(x: int, y: str) -> bool:
         return False
 
     assert infer_type(1) is int
@@ -159,4 +159,3 @@ def test_infer_type():
 
     assert infer_type(dict()) is Mapping[Unknown, Unknown]
     assert infer_type(dict(a=2)) is Mapping[str, int]
-

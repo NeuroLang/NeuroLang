@@ -83,6 +83,22 @@ def test_symbol_environment():
         assert e.d.value == 5
         assert e.d.type is int
 
+    assert neurolang.symbols.d.value == 5
+    assert neurolang.symbols.d.type is int
+
+    with neurolang.scope as e:
+        assert 'f' not in e
+        f = e.f
+        assert f.type is Unknown
+        assert f.expression.name == 'f'
+
+        e.g = 5
+        assert e.g.value == 5
+        assert e.g.type is int
+
+    assert 'f' not in neurolang.symbols
+    assert 'g' not in neurolang.symbols
+
 
 def test_add_set():
     neurolang = frontend.RegionFrontend()
@@ -322,6 +338,20 @@ def test_neurolang_dl_query():
     r[x, z] = r[x, y] & q(y, z)
     sol = neurolang.query((y,), r(1, y))
     assert sol == set((x,) for x in (2, 4, 8, 16))
+
+
+def test_neurolang_dl_solve_all():
+    neurolang = frontend.NeurolangDL()
+    r = neurolang.new_symbol(name='r')
+    x = neurolang.new_symbol(name='x')
+
+    dataset = {(i, i * 2) for i in range(10)}
+    q = neurolang.add_tuple_set(dataset, name='q')
+    r[x] = q(x, x)
+    sol = neurolang.solve_all()
+    assert sol['q'] == dataset
+    assert sol['r'] == set((i,) for i, j in dataset if i == j)
+    assert len(sol) == 2
 
 
 def test_neurolang_dl_aggregation():

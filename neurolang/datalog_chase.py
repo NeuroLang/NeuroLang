@@ -5,7 +5,7 @@ from .datalog.chase import (
     ChaseNaive,
     Chase,
     ChaseMGUMixin,
-    ChaseRelationalAlgebraMixin
+    ChaseRelationalAlgebraPlusCeriMixin
 )
 
 warn("This module is going to be deprecated. Switch to datalog.chase")
@@ -17,6 +17,9 @@ __all__ = [
 ]
 
 DatalogChase = Chase
-DatalogChaseGeneral = ChaseNaive
 DatalogChaseMGUMixin = ChaseMGUMixin
-DatalogChaseRelationalAlgebraMixin = ChaseRelationalAlgebraMixin
+DatalogChaseRelationalAlgebraMixin = ChaseRelationalAlgebraPlusCeriMixin
+
+
+class DatalogChaseGeneral(Chase, ChaseNaive):
+    pass

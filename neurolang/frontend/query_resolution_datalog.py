@@ -132,6 +132,21 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         self.solver.symbol_table = self.symbol_table.enclosing_scope
         return solution_set, functor_orig
 
+    def solve_all(self):
+        '''
+        Returns a dictionary of "predicate_name": "Content"
+        for all elements in the solution of the datalog program.
+        '''
+        solution_ir = (
+            self.chase_class(self.solver)
+            .build_chase_solution()
+        )
+
+        solution = {
+            k.name: v.value for k, v in solution_ir.items()
+        }
+        return solution
+
     def reset_program(self):
         self.symbol_table.clear()
 

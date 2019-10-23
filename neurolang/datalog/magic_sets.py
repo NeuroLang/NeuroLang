@@ -6,27 +6,39 @@ Magic Sets [1] rewriting implementation for Datalog.
 
 from ..expressions import Constant, Symbol
 from . import expression_processing, extract_datalog_predicates
-from .expressions import Disjunction, Implication
+from .expressions import Disjunction, Implication, Conjunction
 
 
-class SymbolAdorned(Symbol):
-    """Symbol with adornments"""
-
-    def __init__(self, name, adornment, number):
+class AdornedExpression(Symbol):
+    def __init__(self, expression, adornment, number):
+        self.expression = expression
         self.adornment = adornment
         self.number = number
-        super().__init__(name)
+        self._symbols = expression._symbols
+        self.type = self.expression.type
+
+    @property
+    def name(self):
+        if isinstance(self.expression, Symbol):
+            return self.expression.name
+        else:
+            raise NotImplementedError()
 
     def __eq__(self, other):
         return (
-            isinstance(other, SymbolAdorned) and
-            hash(self) == hash(other)
+            hash(self) == hash(other) and
+            isinstance(other, AdornedExpression)
         )
 
     def __hash__(self):
-        return hash((self.name, self.adornment, self.number))
+        return hash((self.expression, self.adornment, self.number))
 
     def __repr__(self):
+        if isinstance(self.expression, Symbol):
+            rep = self.expression.name
+        elif isinstance(self.expression, Constant):
+            rep = self.expression.value
+
         if len(self.adornment) > 0:
             superindex = f'^{self.adornment}'
         else:
@@ -38,15 +50,15 @@ class SymbolAdorned(Symbol):
             subindex = ''
 
         return (
-            f'S{{{self.name}{superindex}{subindex}: '
+            f'S{{{rep}{superindex}{subindex}: '
             f'{self.__type_repr__}}}'
         )
 
 
 def magic_rewrite(query, datalog):
     adorned_code = reachable_adorned_code(query, datalog)
-    # assume that the query rule is the first
-    adorned_query = adorned_code.formulas[0]
+    # assume that the query rule is the last
+    adorned_query = adorned_code.formulas[-1]
     goal = adorned_query.consequent.functor
 
     idb = datalog.intensional_database()
@@ -66,7 +78,13 @@ def create_complementary_rules(adorned_code, idb):
     complementary_rules = []
     for i, rule in enumerate(adorned_code.formulas):
         for predicate in extract_datalog_predicates(rule.antecedent):
-            if predicate.functor.name in idb:
+            if (
+                not (
+                    isinstance(predicate.functor, AdornedExpression) and
+                    isinstance(predicate.functor.expression, Constant)
+                ) and
+                predicate.functor.name in idb
+            ):
                 magic_consequent = magic_predicate(predicate)
                 magic_antecedent = magic_predicate(predicate, i)
                 complementary_rules.append(Implication(
@@ -89,9 +107,14 @@ def create_magic_rules(adorned_code, idb, edb):
         edb_antecedent = create_magic_rules_create_edb_antecedent(
             predicates, edb
         )
-        new_antecedent = new_consequent
+        new_antecedent = (new_consequent,)
         for predicate in edb_antecedent:
-            new_antecedent = new_antecedent & predicate
+            new_antecedent += (predicate,)
+
+        if len(new_antecedent) == 1:
+            new_antecedent = new_antecedent[0]
+        else:
+            new_antecedent = Conjunction(new_antecedent)
 
         magic_rules += create_magic_rules_create_rules(
             new_antecedent, predicates, idb, i
@@ -104,8 +127,11 @@ def create_magic_rules_create_edb_antecedent(predicates, edb):
     for predicate in predicates:
         functor = predicate.functor
         if (
-            functor.name in edb and
-            isinstance(functor, SymbolAdorned) and
+            (
+                isinstance(functor.expression, Constant) or
+                functor.name in edb
+            ) and
+            isinstance(functor, AdornedExpression) and
             'b' in functor.adornment
         ):
             predicate = Symbol(predicate.functor.name)(*predicate.args)
@@ -117,10 +143,12 @@ def create_magic_rules_create_rules(new_antecedent, predicates, idb, i):
     magic_rules = []
     for predicate in predicates:
         functor = predicate.functor
-        is_adorned = isinstance(functor, SymbolAdorned)
+        is_adorned = isinstance(functor, AdornedExpression)
         if (
+            is_adorned and
+            not isinstance(functor.expression, Constant) and
             functor.name in idb and
-            is_adorned and 'b' in functor.adornment
+            'b' in functor.adornment
         ):
             new_predicate = magic_predicate(predicate, i)
             magic_rules.append(
@@ -138,9 +166,10 @@ def create_modified_rules(adorned_code, edb):
         new_antecedent = obtain_new_antecedent(rule, edb, i)
 
         if len(new_antecedent) > 0:
-            new_antecedent_ = new_antecedent[0]
-            for predicate in new_antecedent[1:]:
-                new_antecedent_ = new_antecedent_ & predicate
+            if len(new_antecedent) == 1:
+                new_antecedent_ = new_antecedent[0]
+            else:
+                new_antecedent_ = Conjunction(tuple(new_antecedent))
 
             modified_rules.append(Implication(
                 rule.consequent, new_antecedent_
@@ -153,7 +182,12 @@ def obtain_new_antecedent(rule, edb, rule_number):
     new_antecedent = []
     for predicate in extract_datalog_predicates(rule.antecedent):
         functor = predicate.functor
-        if functor.name in edb:
+        if (
+            isinstance(functor, AdornedExpression) and
+            isinstance(functor.expression, Constant)
+        ):
+            new_antecedent.append(functor.expression(*predicate.args))
+        elif functor.name in edb:
             new_antecedent.append(
                 Symbol(functor.name)(*predicate.args)
             )
@@ -180,8 +214,8 @@ def magic_predicate(predicate, i=None):
         zip(predicate.args, adornment)
         if ad == 'b'
     ]
-    new_functor = SymbolAdorned(
-        new_name, adornment, predicate.functor.number
+    new_functor = AdornedExpression(
+        Symbol(new_name), adornment, predicate.functor.number
     )
     return new_functor(*new_args)
 
@@ -218,7 +252,7 @@ def adorn_code(query, datalog):
         else:
             adornment += 'b'
 
-    query = SymbolAdorned(query.functor.name, adornment, 0)(*query.args)
+    query = AdornedExpression(query.functor, adornment, 0)(*query.args)
     adorn_stack = [query]
 
     edb = datalog.extensional_database()
@@ -229,12 +263,14 @@ def adorn_code(query, datalog):
     while adorn_stack:
         consequent = adorn_stack.pop()
 
-        if isinstance(consequent.functor, SymbolAdorned):
+        if isinstance(consequent.functor, AdornedExpression):
             adornment = consequent.functor.adornment
+            name = consequent.functor.expression.name
         else:
             adornment = ''
+            name = consequent.functor.name
 
-        rules = idb.get(consequent.functor.name, None)
+        rules = idb.get(name, None)
         if rules is None:
             continue
 
@@ -271,7 +307,10 @@ def adorn_antecedent(
 
     for predicate in predicates:
         if (
-            predicate.functor.name in edb and
+            (
+                isinstance(predicate.functor, Constant) or
+                predicate.functor.name in edb
+            ) and
             len(bound_variables.intersection(predicate.args)) > 0
         ):
             bound_variables.update(
@@ -282,13 +321,16 @@ def adorn_antecedent(
     for predicate in predicates:
         predicate_number = checked_predicates.get(predicate, 0)
         checked_predicates[predicate] = predicate_number + 1
-        in_edb = predicate.functor.name in edb
+        in_edb = (
+            isinstance(predicate.functor, Constant) or
+            predicate.functor.name in edb
+        )
 
         adorned_predicate = adorn_predicate(
             predicate, bound_variables, predicate_number, in_edb
         )
 
-        is_adorned = isinstance(adorned_predicate.functor, SymbolAdorned)
+        is_adorned = isinstance(adorned_predicate.functor, AdornedExpression)
         if (
             not in_edb and is_adorned and
             adorned_predicate.functor not in rewritten_rules
@@ -296,9 +338,14 @@ def adorn_antecedent(
             to_adorn.append(adorned_predicate)
 
         if adorned_antecedent is None:
-            adorned_antecedent = adorned_predicate
+            adorned_antecedent = (adorned_predicate,)
         else:
-            adorned_antecedent = adorned_antecedent & adorned_predicate
+            adorned_antecedent += (adorned_predicate,)
+
+    if len(adorned_antecedent) == 1:
+        adorned_antecedent = adorned_antecedent[0]
+    else:
+        adorned_antecedent = Conjunction(adorned_antecedent)
     return adorned_antecedent, to_adorn
 
 
@@ -325,5 +372,5 @@ def adorn_predicate(
     if not has_b:
         adornment = ''
 
-    p = SymbolAdorned(predicate.functor.name, adornment, predicate_number)
+    p = AdornedExpression(predicate.functor, adornment, predicate_number)
     return p(*predicate.args)

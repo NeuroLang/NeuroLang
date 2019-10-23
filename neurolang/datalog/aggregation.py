@@ -11,24 +11,39 @@ in the set ``Q``.
 """
 
 from typing import AbstractSet, Tuple
-from uuid import uuid1
 from warnings import warn
 
 from ..exceptions import NeuroLangException
 from ..expression_walker import PatternWalker, add_match
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
+from ..unification import apply_substitution_arguments
 from ..utils import OrderedSet
 from . import (Disjunction, Implication, chase, extract_datalog_free_variables,
                is_conjunctive_expression_with_nested_predicates)
 
 
 class AggregationApplication(FunctionApplication):
-    pass
+    def __repr__(self):
+        r = u'\u03BB{{<{}>: {}}}'.format(self.functor, self.__type_repr__)
+        if self.args is ...:
+            r += '(...)'
+        elif self.args is not None:
+            r += (
+                '(' +
+                ', '.join(repr(arg) for arg in self.args)
+                + ')'
+                )
+
+        return r
 
 
 def is_aggregation_rule(rule):
+    return is_aggregation_predicate(rule.consequent)
+
+
+def is_aggregation_predicate(predicate):
     return any(
-        isinstance(arg, AggregationApplication) for arg in rule.consequent.args
+        isinstance(arg, AggregationApplication) for arg in predicate.args
     )
 
 
@@ -94,7 +109,7 @@ class DatalogWithAggregationMixin(PatternWalker):
 
 def extract_aggregation_atom_free_variables(atom):
     free_variables = OrderedSet()
-    aggregation_fresh_variable = Symbol(str(uuid1()))
+    aggregation_fresh_variable = Symbol.fresh()
     for arg in atom.args:
         free_variables_arg = extract_datalog_free_variables(arg)
         if isinstance(arg, AggregationApplication):
@@ -128,14 +143,13 @@ class Chase(chase.Chase):
                 instance,
                 restriction_instance=restriction_instance
             )
-
         if restriction_instance is None:
             restriction_instance = dict()
 
         args = extract_datalog_free_variables(rule.consequent)
         new_tuples = self.datalog_program.new_set(
             Constant[Tuple](
-                chase.apply_substitution_arguments(args, substitution)
+                apply_substitution_arguments(args, substitution)
             )
             for substitution in substitutions
         )
@@ -144,13 +158,14 @@ class Chase(chase.Chase):
             rule, new_tuples, args
         )
 
-        new_tuples = self.datalog_program.new_set(
+        new_tuples = [
             Constant[Tuple](
-                chase.apply_substitution_arguments(fvs, substitution)
+                apply_substitution_arguments(fvs, substitution)
             )
             for substitution in substitutions
-        )
-
+            if fvs <= set(substitution)
+        ]
+        new_tuples = self.datalog_program.new_set(new_tuples)
         return self.compute_instance_update(
             rule, new_tuples, instance, restriction_instance
         )
@@ -201,6 +216,17 @@ class Chase(chase.Chase):
                 verify_type=False
             ) for v in fvs_aggregation
         )
-        fa_ = agg_application.functor(*agg_substitution)
-        substitution = {agg_fresh_var: self.datalog_program.walk(fa_)}
-        return substitution
+        if any(len(rs.value) == 0 for rs in agg_substitution):
+            return {}
+        else:
+            fa_ = agg_application.functor(*agg_substitution)
+            substitution = {agg_fresh_var: self.datalog_program.walk(fa_)}
+            return substitution
+
+    def eliminate_already_computed(self, consequent, instance, substitutions):
+        if is_aggregation_predicate(consequent):
+            return substitutions
+
+        return super().eliminate_already_computed(
+            consequent, instance, substitutions
+        )
