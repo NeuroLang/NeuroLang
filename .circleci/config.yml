@@ -49,9 +49,13 @@ commands:
   test:
     description: "Run the tests"
     steps:
-      - attach_workspace:
-          # Must be absolute path or relative path from working_directory
-          at: .asv
+      - persist_to_workspace:
+          root: .asv
+          paths: 
+            - env/*
+            - results/*
+            - html/*
+
       - run:
           name: run tests
           command: |
@@ -64,10 +68,6 @@ commands:
             cp utest.xml test_reports/junit.xml
             ./cc-test-reporter after-build --coverage-input-type coverage.py --exit-code $?
             python-codacy-coverage -r coverage.xml
-            pip install -e .
-            asv machine --yes
-            asv run -v --python=same
-            asv publish
 
       - store_test_results:
           path: test_reports
@@ -75,6 +75,15 @@ commands:
       - store_artifacts:
           path: test_reports
           destination: test_reports
+
+      - run:
+          name: run benchmarks
+          command: |
+            . venv/bin/activate
+            pip install -e .
+            asv machine --yes
+            asv run -v --python=same
+            asv publish
 
       - store_artifacts:
           path: .asv/html
