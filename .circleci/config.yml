@@ -127,11 +127,12 @@ jobs:
             pip install virtualenv
             pip install asv
             asv machine --yes
-            asv run -v
+            asv run -v $(git rev-parse HEAD)...$(git rev-parse HEAD~5)
             asv publish
           no_output_timeout: 1h
       - store_artifacts:
           path: .asv/html
+          destination: benchmarks
 
 workflows:
   version: 2
