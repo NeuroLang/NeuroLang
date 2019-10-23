@@ -126,6 +126,7 @@ jobs:
       - checkout
       - install
       - run: |
+          . venv/bin/activate
           cd doc
           make html
 
