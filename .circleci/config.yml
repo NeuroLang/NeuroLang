@@ -77,10 +77,10 @@ commands:
       -run:
         name: install other necessary packages & build docs
         command: |
-        . venv/bin/activate
-        pip install -r requirements-doc.txt --progress-bar off
-        cd doc
-        make html
+          . venv/bin/activate
+          pip install -r requirements-doc.txt --progress-bar off
+          cd doc
+          make html
         no_output_timeout: 1h
 
 jobs:
