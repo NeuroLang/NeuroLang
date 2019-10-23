@@ -127,3 +127,49 @@ scratch
 .scannerwork
 .vscode
 *orig
+utest.xml
+*prof
+.asv/html/asv_ui.js
+.asv/html/asv.css
+.asv/html/asv.js
+.asv/html/error.html
+.asv/html/graphdisplay.js
+.asv/html/index.html
+.asv/html/index.json
+.asv/html/info.json
+.asv/html/regressions.css
+.asv/html/regressions.js
+.asv/html/regressions.json
+.asv/html/regressions.xml
+.asv/html/summarygrid.js
+.asv/html/summarylist.css
+.asv/html/summarylist.js
+.asv/html/swallow.ico
+.asv/html/swallow.png
+.asv/html/graphs/arch-x86_64/branch-master/cpu-Intel(R) Core(TM) i7-7920HQ CPU @ 3.10GHz/machine-lucha.saclay.inria.fr/matplotlib/nibabel/num_cpu-8/numpy/os-Darwin 18.6.0/pandas-0.23.4/pip+neurosynth-0.3.7/pip+tatsu/pip+typing_inspect/python-3.7/ram-17179869184/rdflib/scipy/chase.TimeChase.time_join.json
+.asv/html/graphs/arch-x86_64/branch-master/cpu-Intel(R) Core(TM) i7-7920HQ CPU @ 3.10GHz/machine-lucha.saclay.inria.fr/matplotlib/nibabel/num_cpu-8/numpy/os-Darwin 18.6.0/pandas-0.23.4/pip+neurosynth-0.3.7/pip+tatsu/pip+typing_inspect/python-3.7/ram-17179869184/rdflib/scipy/chase.TimeChase.time_project.json
+.asv/html/graphs/arch-x86_64/branch-master/cpu-Intel(R) Core(TM) i7-7920HQ CPU @ 3.10GHz/machine-lucha.saclay.inria.fr/matplotlib/nibabel/num_cpu-8/numpy/os-Darwin 18.6.0/pandas-0.23.4/pip+neurosynth-0.3.7/pip+tatsu/pip+typing_inspect/python-3.7/ram-17179869184/rdflib/scipy/chase.TimeChase.time_recursion.json
+.asv/html/graphs/arch-x86_64/branch-master/cpu-Intel(R) Core(TM) i7-7920HQ CPU @ 3.10GHz/machine-lucha.saclay.inria.fr/matplotlib/nibabel/num_cpu-8/numpy/os-Darwin 18.6.0/pandas-0.23.4/pip+neurosynth-0.3.7/pip+tatsu/pip+typing_inspect/python-3.7/ram-17179869184/rdflib/scipy/chase.TimeChase.time_selection.json
+.asv/html/graphs/arch-x86_64/branch-master/cpu-Intel(R) Core(TM) i7-7920HQ CPU @ 3.10GHz/machine-lucha.saclay.inria.fr/matplotlib/nibabel/num_cpu-8/numpy/os-Darwin 18.6.0/pandas-0.23.4/pip+neurosynth-0.3.7/pip+tatsu/pip+typing_inspect/python-3.7/ram-17179869184/rdflib/scipy/summary.json
+.asv/html/graphs/summary/chase.TimeChase.time_join.json
+.asv/html/graphs/summary/chase.TimeChase.time_project.json
+.asv/html/graphs/summary/chase.TimeChase.time_recursion.json
+.asv/html/graphs/summary/chase.TimeChase.time_selection.json
+.asv/html/vendor/bootstrap-3.1.0.min.css
+.asv/html/vendor/bootstrap-3.1.0.min.js
+.asv/html/vendor/jquery-3.3.1.min.js
+.asv/html/vendor/jquery.flot-0.8.3.categories.min.js
+.asv/html/vendor/jquery.flot-0.8.3.min.js
+.asv/html/vendor/jquery.flot-0.8.3.selection.min.js
+.asv/html/vendor/jquery.flot-0.8.3.time.min.js
+.asv/html/vendor/jquery.flot.axislabels.js
+.asv/html/vendor/jquery.flot.orderBars.js
+.asv/html/vendor/md5.js
+.asv/html/vendor/stupidtable.js
+.asv/results/benchmarks.json
+.asv/results/lucha.saclay.inria.fr/3bc437fa-virtualenv-py3.7-matplotlib-nibabel-numpy-pandas0.23.4-pip+neurosynth0.3.7-pip+tatsu-pip+typing_inspect-rdflib-scipy.json
+.asv/results/lucha.saclay.inria.fr/6a2b5011-virtualenv-py3.7-matplotlib-nibabel-numpy-pandas0.23.4-pip+neurosynth0.3.7-pip+tatsu-pip+typing_inspect-rdflib-scipy.json
+.asv/results/lucha.saclay.inria.fr/6230176c-virtualenv-py3.7-matplotlib-nibabel-numpy-pandas0.23.4-pip+neurosynth0.3.7-pip+tatsu-pip+typing_inspect-rdflib-scipy.json
+.asv/results/lucha.saclay.inria.fr/ae9debd1-virtualenv-py3.7-matplotlib-nibabel-numpy-pandas0.23.4-pip+neurosynth0.3.7-pip+tatsu-pip+typing_inspect-rdflib-scipy.json
+.asv/results/lucha.saclay.inria.fr/b3fc984e-virtualenv-py3.7-matplotlib-nibabel-numpy-pandas0.23.4-pip+neurosynth0.3.7-pip+tatsu-pip+typing_inspect-rdflib-scipy.json
+.asv/results/lucha.saclay.inria.fr/machine.json
