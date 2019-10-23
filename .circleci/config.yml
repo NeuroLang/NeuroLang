@@ -71,7 +71,17 @@ commands:
       - store_artifacts:
           path: test-reports
           destination: test-reports
-
+  install-build-docs:
+    description: "Build the docs using Sphinx & Sphinx-Gallery"
+    steps:
+      -run:
+        name: install other necessary packages & build docs
+        command: |
+        . venv/bin/activate
+        pip install -r requirements-doc.txt --progress-bar off
+        cd doc
+        make html
+        no_output_timeout: 1h
 
 jobs:
   py36:
@@ -125,11 +135,10 @@ jobs:
     steps:
       - checkout
       - install
-      - run: |
-          . venv/bin/activate
-          pip install -r requirements-doc.txt
-          cd doc
-          make html
+      - install-build-docs
+      - store-artifacts:
+          path: doc/_build/html
+
 
 
 workflows:
