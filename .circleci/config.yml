@@ -56,8 +56,17 @@ commands:
             export CC_TEST_REPORTER_ID=8b40c7b919b1734ebd87f91c3033557f84b8c737db91057bdf75d16251440c59
             ./cc-test-reporter before-build
             make test
+            mkdir test_reports
+            cp utest.xml test_reports/junit.xml
             ./cc-test-reporter after-build --coverage-input-type coverage.py --exit-code $?
             python-codacy-coverage -r coverage.xml
+
+      - store_test_reports:
+          path: test_reports
+
+      - store_artifacts:
+          path: test_reports
+          destination: test_reports
 
       #- run:
          #name: run sonar
@@ -69,10 +78,6 @@ commands:
             #  sh sonar-scanner-3.3.0.1492-linux/bin/sonar-scanner -Dsonar.projectKey=parietal:neurolang:PR${CIRCLE_PR_NUMBER}:v0.01 -Dsonar.login=${SONAR_LOGIN}
             #  sh sonar-scanner-3.3.0.1492-linux/bin/sonar-scanner -Dsonar.projectKey=parietal:neurolang:PR${CIRCLE_PR_NUMBER}:v0.01 -Dsonar.github.pullRequest=${CIRCLE_PR_NUMBER} -Dsonar.github.oauth=${GITHUB_NC_OATH} -Dsonar.login=${SONAR_LOGIN} -Dsonar.analysis.mode=issues
             #fi
-      - store_artifacts:
-          path: test-reports
-          destination: test-reports
-
 
 jobs:
   py36:
