@@ -118,15 +118,14 @@ jobs:
 
     steps:
       - checkout
-      - install
       - run:
-          name: Install extra packages & build documentation
+          name: Install ASV & run benchmark
           command: |
             . venv/bin/activate
             pip install --upgrade pip
             pip install asv
             asv machine --yes
-            asv run -v --python=python
+            asv run -v
             asv publish
           no_output_timeout: 1h
       - store_artifacts:
