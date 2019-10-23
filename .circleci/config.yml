@@ -5,7 +5,7 @@
 version: 2.1
 
 commands:
-  install:
+  install_common:
     description: "Installs the necessary packages"
     steps:
       # Download and cache dependencies
@@ -71,7 +71,7 @@ commands:
       - store_artifacts:
           path: test-reports
           destination: test-reports
-  install-build-docs:
+  install_build_docs:
     description: "Build the docs using Sphinx & Sphinx-Gallery"
     steps:
       -run:
@@ -134,8 +134,8 @@ jobs:
 
     steps:
       - checkout
-      - install
-      - install-build-docs
+      - install_common
+      - install_build_docs
       - store-artifacts:
           path: doc/_build/html
 
