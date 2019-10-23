@@ -138,6 +138,6 @@ workflows:
   version: 2
   test:
     jobs:
-      # - py36
-      # - py37
+      - py36
+      - py37
       - benchmark
