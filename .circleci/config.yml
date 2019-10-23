@@ -118,6 +118,7 @@ jobs:
 
     steps:
       - checkout
+      - install
       - run:
           name: Install ASV & run benchmark
           command: |
@@ -135,6 +136,6 @@ workflows:
   version: 2
   test:
     jobs:
-      - py36
-      - py37
+      # - py36
+      # - py37
       - benchmark
