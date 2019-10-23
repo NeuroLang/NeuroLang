@@ -61,7 +61,7 @@ commands:
             ./cc-test-reporter after-build --coverage-input-type coverage.py --exit-code $?
             python-codacy-coverage -r coverage.xml
 
-      - store_test_reports:
+      - store_test_results:
           path: test_reports
 
       - store_artifacts:
