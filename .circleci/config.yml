@@ -49,13 +49,6 @@ commands:
   test:
     description: "Run the tests"
     steps:
-      - persist_to_workspace:
-          root: .asv
-          paths: 
-            - env/*
-            - results/*
-            - html/*
-
       - run:
           name: run tests
           command: |
@@ -88,6 +81,14 @@ commands:
       - store_artifacts:
           path: .asv/html
           destination: benchmarks
+          
+      - persist_to_workspace:
+          root: .asv
+          paths: 
+            - env/*
+            - results/*
+            - html/*
+
 
 
       #- run:
