@@ -24,7 +24,7 @@ commands:
             pip install -r requirements.txt --progress-bar off
             pip install -r requirements-dev.txt --progress-bar off
             if
-              [ ${CIRCLE_JOB} == "docs"]
+              [ ${CIRCLE_JOB} == "docs" ]
             then
               pip install -r requirements-doc.txt --progress-bar off
             fi
