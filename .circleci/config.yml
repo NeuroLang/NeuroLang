@@ -133,7 +133,7 @@ jobs:
             cd doc
             make html
           no_output_timeout: 1h
-      - store-artifacts:
+      - store_artifacts:
           path: doc/_build/html
 
 
