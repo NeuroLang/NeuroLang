@@ -65,7 +65,7 @@ commands:
             ./cc-test-reporter after-build --coverage-input-type coverage.py --exit-code $?
             python-codacy-coverage -r coverage.xml
             asv machine --yes
-            asv run -v python=same
+            asv run -v --python=same
             asv publish
 
       - store_test_results:
