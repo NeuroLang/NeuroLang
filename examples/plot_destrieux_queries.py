@@ -38,7 +38,7 @@ for label_number, name in destrieux_dataset['labels']:
 
     # Fine tune the symbol name
     name = 'L_' + name[2:].replace('-', '_')
-    nl.add_region(region, result_symbol_name=name.lower())
+    nl.add_region(region, name=name.lower())
 
 ##################################################
 # Plot one of the symbols
