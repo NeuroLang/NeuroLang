@@ -127,6 +127,7 @@ jobs:
       - install
       - run: |
           . venv/bin/activate
+          pip install -r requirements-doc.txt
           cd doc
           make html
 
