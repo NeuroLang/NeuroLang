@@ -123,8 +123,10 @@ jobs:
           name: Install extra packages & build documentation
           command: |
             . venv/bin/activate
+            pip install --upgrade pip
             pip install asv
-            asv run -v
+            asv machine --yes
+            asv run -v 5
             asv publish
           no_output_timeout: 1h
       - store_artifacts:
