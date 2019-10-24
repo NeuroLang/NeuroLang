@@ -79,7 +79,7 @@ commands:
             pip install virtualenv
             pip install -e .
             asv machine --yes
-            asv run -v --python=same
+            asv run -v --python=same --append-samples
             asv publish
 
       - store_artifacts:
