@@ -14,8 +14,11 @@ class NeuroSynthHandler(object):
 
     def ns_region_set_from_term(
         self, terms, frequency_threshold=0.05, q=0.01,
-        prior=0.5, image_type='association-test_z_FDR_0.01'
+        prior=0.5, image_type=None
     ):
+
+        if image_type is None:
+            image_type=f'association-test_z_FDR_{q:.5f}'
 
         if self._dataset is None:
             dataset = self.ns_load_dataset()
