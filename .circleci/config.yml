@@ -69,10 +69,14 @@ commands:
           path: test_reports
           destination: test_reports
 
+      - attach_workspace:
+          at: .asv
+
       - run:
           name: run benchmarks
           command: |
             . venv/bin/activate
+            pip install virtualenv
             pip install -e .
             asv machine --yes
             asv run -v --python=same
@@ -81,7 +85,7 @@ commands:
       - store_artifacts:
           path: .asv/html
           destination: benchmarks
-          
+
       - persist_to_workspace:
           root: .asv
           paths: 
