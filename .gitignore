@@ -127,3 +127,5 @@ scratch
 .scannerwork
 .vscode
 *orig
+utest.xml
+*prof
