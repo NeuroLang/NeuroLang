@@ -237,7 +237,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
                     "Column name must be a Constant or Symbol"
                 )
         new_set = NamedRelationalAlgebraFrozenSet(column_names, relation_set)
-        return Constant[relation.type](new_set, verify_type=False)
+        return self._build_relation_constant(new_set)
 
     @ew.add_match(RenameColumn)
     def ra_rename_column(self, rename_column):
@@ -248,7 +248,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
 
         if len(new_set) > 0:
             new_set = new_set.rename_column(src, dst)
-        return Constant[relation.type](new_set, verify_type=False)
+        return self._build_relation_constant(new_set)
 
     @ew.add_match(Constant)
     def ra_constant(self, constant):
