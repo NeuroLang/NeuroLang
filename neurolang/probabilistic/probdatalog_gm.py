@@ -1,4 +1,4 @@
-from typing import Mapping, AbstractSet, Tuple
+from typing import Mapping, AbstractSet
 from collections import defaultdict
 
 import numpy as np
@@ -122,7 +122,7 @@ def and_cpd_factory(parent_values, parent_groundings, grounding):
             prev_value_symb = value_symb
         else:
             result = NaturalJoin(result, set_with_value)
-            value_set = Constant[AbstractSet[Tuple[int,]]](
+            value_set = Constant[AbstractSet](
                 NamedRelationalAlgebraFrozenSet(
                     columns=value_symb,
                     iterable=np.prod(
