@@ -153,7 +153,10 @@ def and_cpd_factory(parent_values, parent_groundings, grounding):
     result = NaturalJoin(result, indexed_relation)
     index = array_from_ra_relation_column(result, index_symb.name)
     values = array_from_ra_relation_column(result, value_symb.name)
-    return values[index]
+    probs = values[index]
+    return VectorisedTableDistribution(
+        Constant[np.ndarray[float]](np.vstack([1.0 - probs, probs]))
+    )
 
 
 class TranslateGroundedProbDatalogToGraphicalModel(PatternWalker):
