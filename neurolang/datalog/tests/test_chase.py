@@ -31,6 +31,7 @@ DT = DatalogTranslator()
 Q = S_('Q')
 T = S_('T')
 S = S_('S')
+v = S_('v')
 w = S_('w')
 x = S_('x')
 y = S_('y')
@@ -47,7 +48,7 @@ class Datalog(TranslateToLogic, DatalogProgram, ew.ExpressionBasicEvaluator):
         return x > y
 
 
-@fixture(params=[
+chase_configurations = [
     (step_class, cq_class)
     for step_class, cq_class in product(
         (
@@ -60,7 +61,16 @@ class Datalog(TranslateToLogic, DatalogProgram, ew.ExpressionBasicEvaluator):
             ChaseRelationalAlgebraPlusCeriMixin,
         )
     )
-])
+]
+
+
+@fixture(
+    params=chase_configurations,
+    ids=[
+        f'{strategy}-{step}'
+        for strategy, step in chase_configurations
+    ]
+)
 def chase_class(request):
     class C(request.param[0], request.param[1], ChaseGeneral):
         pass
