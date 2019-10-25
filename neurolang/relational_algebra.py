@@ -155,7 +155,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         return self._build_relation_constant(selected_relation)
 
     def _build_relation_constant(self, relation):
-        if len(relation) > 0:
+        if len(relation) > 0 and relation.arity > 0:
             if hasattr(relation, 'row_type'):
                 row_type = relation.row_type
             else:
