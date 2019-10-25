@@ -45,3 +45,6 @@ class TableDistribution(DiscreteDistribution):
                 ]
             )
         )
+
+class VectorisedTableDistribution(TableDistribution):
+    pass
