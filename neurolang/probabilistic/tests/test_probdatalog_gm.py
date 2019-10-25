@@ -1,7 +1,6 @@
-from typing import AbstractSet, Mapping
+from typing import Mapping
 
 from ..probdatalog_gm import (
-    GraphicalModel,
     TranslateGroundedProbDatalogToGraphicalModel,
     always_true_cpd_factory,
 )
@@ -20,7 +19,6 @@ d = Constant[str]("d")
 
 
 def test_extensional_grounding():
-    domain = RelationalAlgebraFrozenSet({(a, b), (c, d)})
     grounding = Grounding(
         P(x, y),
         NameColumns(RelationalAlgebraFrozenSet({(a, b), (c, d)}), (x, y)),

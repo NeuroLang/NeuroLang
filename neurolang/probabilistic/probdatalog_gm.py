@@ -20,13 +20,11 @@ from ..relational_algebra import (
     NaturalJoin,
     EquiJoin,
     Projection,
-    Selection,
     RenameColumn,
 )
 from ..utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from .expressions import VectorisedTableDistribution
 from .probdatalog import Grounding, is_probabilistic_fact
-from .probdatalog_bn import BayesianNetwork
 
 
 class GraphicalModel(Definition):
@@ -51,8 +49,6 @@ def always_true_cpd_factory(parent_values, parent_groundings, grounding):
             )
         )
     )
-
-    return always_true_cpd_factory
 
 
 def make_probfact_cpd_factory(probability):
@@ -92,7 +88,7 @@ def array_from_ra_relation_column(relation, column_name):
 
 def add_index_to_relation(relation):
     index_symb = Symbol.fresh()
-    index_relation = Constant[AbstractSet[Tuple[int,]]](
+    index_relation = Constant[AbstractSet](
         NamedRelationalAlgebraFrozenSet(
             columns=[index_symb], iterable=list(range(len(relation.value)))
         )
@@ -101,7 +97,6 @@ def add_index_to_relation(relation):
 
 
 def and_cpd_factory(parent_values, parent_groundings, grounding):
-    ra_solver = RelationalAlgebraSolver
     result = None
     prev_value_symb = None
     for predicate in extract_datalog_predicates(
@@ -111,12 +106,12 @@ def and_cpd_factory(parent_values, parent_groundings, grounding):
         parent_rv_values = parent_values[parent_rv]
         parent_grounding = parent_groundings[parent_rv]
         renamed_set = rename_columns_based_on_args(
-            grounding.relation, predicate.args
+            parent_grounding.relation, predicate.args
         )
         value_symb = Symbol.fresh()
         set_with_value = NaturalJoin(
             renamed_set,
-            Constant[AbstractSet[Tuple[int,]]](
+            Constant[AbstractSet](
                 NamedRelationalAlgebraFrozenSet(
                     columns=(value_symb.name,), iterable=parent_rv_values
                 )
@@ -150,7 +145,8 @@ def and_cpd_factory(parent_values, parent_groundings, grounding):
             )
         prev_value_symb = value_symb
     index_symb, indexed_relation = add_index_to_relation(grounding.relation)
-    result = NaturalJoin(result, indexed_relation)
+    ra_solver = RelationalAlgebraSolver()
+    result = ra_solver.walk(NaturalJoin(result, indexed_relation))
     index = array_from_ra_relation_column(result, index_symb.name)
     values = array_from_ra_relation_column(result, value_symb.name)
     probs = values[index]
