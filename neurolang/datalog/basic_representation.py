@@ -19,6 +19,7 @@ from .expression_processing import (
 from .expressions import (NULL, UNDEFINED, Disjunction, Fact, Implication,
                           NullConstant, Undefined)
 from .wrapped_collections import WrappedRelationalAlgebraSet
+from itertools import tee
 
 
 __all__ = [
@@ -223,7 +224,7 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
     def infer_iterable_type(iterable):
         type_ = Unknown
         try:
-            iterable_ = iter(iterable)
+            iterable_, _ = tee(iterable)
             first = next(iterable_)
             if isinstance(first, Expression):
                 type_ = first.type
