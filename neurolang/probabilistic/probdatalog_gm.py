@@ -14,6 +14,14 @@ from ..expressions import (
     ExpressionBlock,
 )
 from ..datalog.expression_processing import extract_datalog_predicates
+from ..relational_algebra import (
+    RelationalAlgebraSolver,
+    NaturalJoin,
+    EquiJoin,
+    Selection,
+    RenameColumn,
+)
+from ..utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from .expressions import VectorisedTableDistribution
 from .probdatalog import Grounding, is_probabilistic_fact
 from .probdatalog_bn import BayesianNetwork
@@ -61,9 +69,38 @@ def make_probfact_cpd_factory(probability):
     return probfact_cpd_factory
 
 
+def rename_columns_based_on_args(relation, args):
+    result = named_ra_set
+    for i, arg in enumerate(args):
+        result = RenameColumn(relation, relation.columns[i], arg)
+    return result
+
+
 def and_cpd_factory(parent_values, parent_groundings, grounding):
-    true_probs = np.prod(np.vstack(parent_values), axis=0)
-    probs = np.vstack([true_probs, 1.0 - true_probs])
+    ra_solver = RelationalAlgebraSolver
+    result = None
+    prev_value_symb = None
+    for predicate in extract_datalog_predicates(
+        grounding.expression.antecedent
+    ):
+        parent_rv = predicate.functor
+        parent_rv_values = parent_values[parent_rv]
+        parent_grounding = parent_groundings[parent_rv]
+        renamed_set = rename_columns_based_on_args(
+            grounding.relation, predicate.args
+        )
+        value_symb = Symbol.fresh()
+        set_with_value = NaturalJoin(
+            renamed_set,
+            NamedRelationalAlgebraFrozenSet(
+                columns=(value_symb,), iterable=parent_rv_values
+            ),
+        )
+        if result is None:
+            result = set_with_value
+            prev_value_symb = value_symb
+        else:
+            result = NaturalJoin(result, set_with_value)
 
 
 class TranslateGroundedProbDatalogToGraphicalModel(PatternWalker):
@@ -92,9 +129,7 @@ class TranslateGroundedProbDatalogToGraphicalModel(PatternWalker):
     )
     def extensional_grounding(self, grounding):
         self._add_random_variable(
-            grounding.expression.functor,
-            always_true_cpd_factory,
-            grounding,
+            grounding.expression.functor, always_true_cpd_factory, grounding
         )
 
     @add_match(Grounding, lambda exp: is_probabilistic_fact(exp.expression))
@@ -108,9 +143,7 @@ class TranslateGroundedProbDatalogToGraphicalModel(PatternWalker):
     @add_match(Grounding)
     def rule_grounding(self, grounding):
         self._add_random_variable(
-            grounding.expression.consequent.functor,
-            and_cpd_factory,
-            grounding,
+            grounding.expression.consequent.functor, and_cpd_factory, grounding
         )
         self.edges[grounding.expression.consequent.functor] |= {
             pred.functor
