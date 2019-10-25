@@ -2,7 +2,7 @@ from typing import AbstractSet, Tuple
 
 from ..expressions import Constant
 from ..datalog.basic_representation import WrappedRelationalAlgebraSet
-from ..relational_algebra import (ColumnInt, EquiJoin,
+from ..relational_algebra import (ColumnInt, ColumnStr, EquiJoin,
                                   NaturalJoin, Product, Projection,
                                   RelationalAlgebraOptimiser,
                                   RelationalAlgebraSolver, Selection, eq_)
@@ -245,3 +245,21 @@ def test_push_and_infer_equijoins():
         (C_(R1), Selection(C_(R2), formula4))
     )
     assert res == theoretical_res
+
+
+def test_named_ra_projection():
+    s = NamedRelationalAlgebraFrozenSet(
+    columns=("x", "y"), iterable=[("c", "g"), ("b", "h"), ("a", "a")]
+    )
+
+    op = Projection(
+        Constant[AbstractSet[Tuple[str, str]]](s), (Constant(ColumnStr("x")),)
+    )
+
+    solver = RelationalAlgebraSolver()
+    result = solver.walk(op)
+    assert result == Constant[AbstractSet[Tuple[str, ]]](
+        NamedRelationalAlgebraFrozenSet(
+            columns=("x",), iterable=[("c",), ("b",), ("a",)]
+        )
+    )

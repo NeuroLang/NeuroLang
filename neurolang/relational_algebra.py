@@ -184,8 +184,8 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         relation = self.walk(projection.relation)
         cols = tuple(v.value for v in projection.attributes)
         projected_relation = relation.value.projection(*cols)
-        return C_[AbstractSet[projected_relation.row_type]](
-            projected_relation, verify_type=False
+        return self._build_relation_constant(
+            projected_relation
         )
 
     @ew.add_match(Product)
