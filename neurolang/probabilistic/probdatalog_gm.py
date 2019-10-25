@@ -1,4 +1,4 @@
-from typing import Mapping
+from typing import Mapping, AbstractSet, Tuple
 from collections import defaultdict
 
 import numpy as np
@@ -16,8 +16,10 @@ from ..expressions import (
 from ..datalog.expression_processing import extract_datalog_predicates
 from ..relational_algebra import (
     RelationalAlgebraSolver,
+    ColumnStr,
     NaturalJoin,
     EquiJoin,
+    Projection,
     Selection,
     RenameColumn,
 )
@@ -76,6 +78,28 @@ def rename_columns_based_on_args(relation, args):
     return result
 
 
+def array_from_ra_relation_column(relation, column_name):
+    ra_solver = RelationalAlgebraSolver()
+    return np.array(
+        [
+            value[0].value
+            for value in ra_solver.walk(
+                Projection(relation, (Constant(ColumnStr(column_name)),))
+            )
+        ]
+    )
+
+
+def add_index_to_relation(relation):
+    index_symb = Symbol.fresh()
+    index_relation = Constant[AbstractSet[Tuple[int,]]](
+        NamedRelationalAlgebraFrozenSet(
+            columns=[index_symb], iterable=list(range(len(relation.value)))
+        )
+    )
+    return index_symb, NaturalJoin(relation, index_relation)
+
+
 def and_cpd_factory(parent_values, parent_groundings, grounding):
     ra_solver = RelationalAlgebraSolver
     result = None
@@ -92,8 +116,10 @@ def and_cpd_factory(parent_values, parent_groundings, grounding):
         value_symb = Symbol.fresh()
         set_with_value = NaturalJoin(
             renamed_set,
-            NamedRelationalAlgebraFrozenSet(
-                columns=(value_symb,), iterable=parent_rv_values
+            Constant[AbstractSet[Tuple[int,]]](
+                NamedRelationalAlgebraFrozenSet(
+                    columns=(value_symb.name,), iterable=parent_rv_values
+                )
             ),
         )
         if result is None:
@@ -101,6 +127,33 @@ def and_cpd_factory(parent_values, parent_groundings, grounding):
             prev_value_symb = value_symb
         else:
             result = NaturalJoin(result, set_with_value)
+            value_set = Constant[AbstractSet[Tuple[int,]]](
+                NamedRelationalAlgebraFrozenSet(
+                    columns=value_symb,
+                    iterable=np.prod(
+                        array_from_ra_relation_column(
+                            result, prev_value_symb.name
+                        ),
+                        array_from_ra_relation_column(result, value_symb.name),
+                    ),
+                )
+            )
+            result = NaturalJoin(
+                Projection(
+                    result,
+                    tuple(
+                        set(result.columns)
+                        - {prev_value_symb.name, value_symb.name}
+                    ),
+                ),
+                value_set,
+            )
+        prev_value_symb = value_symb
+    index_symb, indexed_relation = add_index_to_relation(grounding.relation)
+    result = NaturalJoin(result, indexed_relation)
+    index = array_from_ra_relation_column(result, index_symb.name)
+    values = array_from_ra_relation_column(result, value_symb.name)
+    return values[index]
 
 
 class TranslateGroundedProbDatalogToGraphicalModel(PatternWalker):
