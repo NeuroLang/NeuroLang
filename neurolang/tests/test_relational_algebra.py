@@ -249,7 +249,7 @@ def test_push_and_infer_equijoins():
 
 def test_named_ra_projection():
     s = NamedRelationalAlgebraFrozenSet(
-    columns=("x", "y"), iterable=[("c", "g"), ("b", "h"), ("a", "a")]
+        columns=("x", "y"), iterable=[("c", "g"), ("b", "h"), ("a", "a")]
     )
 
     op = Projection(
