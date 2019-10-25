@@ -30,6 +30,9 @@ class OntologyHandler():
 
         self.df = self.df.append(temp)
 
+    def _get_graph(self):
+        return self.df
+
     def _process_properties(self, namespaces):
         namespaces_properties = self.df[~self.df.Property.str.
                                    contains('#')].Property.unique()
@@ -115,7 +118,7 @@ class OntologyHandler():
             ) for name, region in destrieux),
                                       name='destrieux_regions')
 
-        return neurolangDL
+        return self.neurolangDL
 
     def _load_properties(self):
         all_props = list(self.owl_dic.keys()
