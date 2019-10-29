@@ -1,13 +1,11 @@
 from typing import Mapping
 
-from ..probdatalog_gm import (
-    TranslateGroundedProbDatalogToGraphicalModel,
-    always_true_cpd_factory,
-)
+from ..probdatalog_gm import TranslateGroundedProbDatalogToGraphicalModel
 from ..probdatalog import Grounding
 from ...relational_algebra import NameColumns
 from ...utils.relational_algebra_set import RelationalAlgebraFrozenSet
 from ...expressions import Symbol, Constant, ExpressionBlock
+from ..expressions import VectorisedTableDistribution
 
 P = Symbol("P")
 x = Symbol("x")
@@ -26,9 +24,31 @@ def test_extensional_grounding():
     translator = TranslateGroundedProbDatalogToGraphicalModel()
     translator.walk(grounding)
     assert not translator.edges
-    assert translator.cpd_factories == {P: always_true_cpd_factory}
+    assert translator.cpds == {
+        P: VectorisedTableDistribution(
+            Constant[Mapping](
+                {
+                    Constant[int](0): Constant[float](0.0),
+                    Constant[int](1): Constant[float](1.0),
+                }
+            ),
+            grounding,
+        )
+    }
     translator = TranslateGroundedProbDatalogToGraphicalModel()
     gm = translator.walk(ExpressionBlock([grounding]))
     assert not gm.edges.value
-    assert gm.cpd_factories == Constant[Mapping]({P: always_true_cpd_factory})
+    assert gm.cpds == Constant[Mapping](
+        {
+            P: VectorisedTableDistribution(
+                Constant[Mapping](
+                    {
+                        Constant[int](0): Constant[float](0.0),
+                        Constant[int](1): Constant[float](1.0),
+                    }
+                ),
+                grounding,
+            )
+        }
+    )
     assert gm.groundings == Constant[Mapping]({P: grounding})

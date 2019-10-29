@@ -48,4 +48,26 @@ class TableDistribution(DiscreteDistribution):
 
 
 class VectorisedTableDistribution(TableDistribution):
+    def __init__(self, table, grounding):
+        self.grounding = grounding
+        super().__init__(table)
+
+
+class RandomVariablePointer(Definition):
+    def __init__(self, name):
+        self.name = name
+
+
+class VectorOperation(Definition):
     pass
+
+
+class ReindexVector(VectorOperation):
+    def __init__(self, vector, index):
+        self.vector = vector
+        self.index = index
+
+
+class MultiplyVectors(VectorOperation):
+    def __init__(self, vectors):
+        self.vectors = vectors
