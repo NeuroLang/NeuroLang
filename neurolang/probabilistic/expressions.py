@@ -32,9 +32,9 @@ class DiscreteDistribution(Distribution):
 
 
 class TableDistribution(DiscreteDistribution):
-    def __init__(self, table):
+    def __init__(self, table, parameters=Constant[Mapping]({})):
         self.table = table
-        super().__init__(Constant[Mapping]({}))
+        super().__init__(parameters)
 
     def __repr__(self):
         return "TableDistribution[\n{}\n]".format(
@@ -48,12 +48,22 @@ class TableDistribution(DiscreteDistribution):
 
 
 class VectorisedTableDistribution(TableDistribution):
-    def __init__(self, table, grounding):
+    def __init__(self, table, grounding, parameters=Constant[Mapping]({})):
         self.grounding = grounding
-        super().__init__(table)
+        super().__init__(table, parameters)
 
 
-class RandomVariablePointer(Definition):
+class VectorPointer(Definition):
+    def __init__(self, name):
+        self.name = name
+
+
+class RandomVariableVectorPointer(VectorPointer):
+    def __init__(self, name):
+        self.name = name
+
+
+class ParameterVectorPointer(VectorPointer):
     def __init__(self, name):
         self.name = name
 

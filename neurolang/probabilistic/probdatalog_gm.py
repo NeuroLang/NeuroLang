@@ -31,9 +31,14 @@ from .expressions import (
     ReindexVector,
     MultiplyVectors,
     SubtractVectors,
-    RandomVariablePointer,
+    RandomVariableVectorPointer,
+    ParameterVectorPointer,
 )
-from .probdatalog import Grounding, is_probabilistic_fact
+from .probdatalog import (
+    Grounding,
+    is_probabilistic_fact,
+    is_existential_probabilistic_fact,
+)
 
 
 class GraphicalModel(Definition):
@@ -68,6 +73,25 @@ def get_bernoulli_vectorised_table_distribution(p, grounding):
             }
         ),
         grounding,
+    )
+
+
+def get_parameterised_bernoulli_vectorised_table_distribution(
+    parameters, grounding
+):
+    params_vect_symb = Symbol.fresh()
+    return VectorisedTableDistribution(
+        table=Constant[Mapping](
+            {
+                Constant[bool](False): SubtractVectors(
+                    Constant[float](1.0),
+                    ParameterVectorPointer(params_vect_symb),
+                ),
+                Constant[bool](True): ParameterVectorPointer(params_vect_symb),
+            }
+        ),
+        grounding=grounding,
+        parameters=Constant[Mapping]({params_vect_symb: parameters}),
     )
 
 
@@ -183,7 +207,7 @@ def get_intensional_vectorised_table_distribution(
     truth_probs = ReindexVector(
         MultiplyVectors(
             ReindexVector(
-                RandomVariablePointer(antecedent.functor),
+                RandomVariableVectorPointer(antecedent.functor),
                 Projection(indexed_set, parent_rv_index_column),
             )
             for parent_rv_index_column, antecedent in zip(
@@ -244,6 +268,23 @@ class TranslateGroundedProbDatalogToGraphicalModel(PatternWalker):
             rv_symb,
             get_bernoulli_vectorised_table_distribution(
                 grounding.expression.consequent.probability, grounding
+            ),
+        )
+
+    @add_match(
+        Grounding,
+        lambda exp: is_existential_probabilistic_fact(exp.expression),
+    )
+    def existential_probfact_grounding(self, grounding):
+        rv_symb = grounding.expression.consequent.body.body.functor
+        self._add_grounding(rv_symb, grounding)
+        parameters = [
+            Symbol.fresh() for _ in range(len(grounding.algebra_set.value))
+        ]
+        self._add_random_variable(
+            rv_symb,
+            get_parameterised_bernoulli_vectorised_table_distribution(
+                parameters, grounding
             ),
         )
 
