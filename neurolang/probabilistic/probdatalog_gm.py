@@ -215,7 +215,7 @@ class TranslateGroundedProbDatalogToGraphicalModel(PatternWalker):
         self._add_random_variable(
             grounding.expression.consequent.body.functor,
             get_bernoulli_vectorised_table_distribution(
-                grounding.expression.consequent.head
+                grounding.expression.consequent.probability, grounding
             ),
             grounding,
         )
