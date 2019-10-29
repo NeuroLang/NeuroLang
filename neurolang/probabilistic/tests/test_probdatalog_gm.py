@@ -2,7 +2,6 @@ from typing import Mapping, AbstractSet
 
 from ..probdatalog_gm import TranslateGroundedProbDatalogToGraphicalModel
 from ..probdatalog import Grounding
-from ...relational_algebra import NameColumns
 from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from ...expressions import (
     Symbol,

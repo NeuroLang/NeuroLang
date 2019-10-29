@@ -1,6 +1,4 @@
 from typing import Mapping, AbstractSet
-from collections import defaultdict
-
 import numpy as np
 import pandas as pd
 
@@ -17,7 +15,6 @@ from ..expressions import (
 from ..datalog.expression_processing import extract_datalog_predicates
 from ..relational_algebra import (
     RelationalAlgebraSolver,
-    ColumnStr,
     NaturalJoin,
     Projection,
     RenameColumn,
@@ -172,10 +169,11 @@ def rename_columns(algebra_set, new_columns):
     if any(not isinstance(column, str) for column in new_columns):
         raise NeuroLangException("All column names should be strings")
     result = algebra_set
-    for i in range(len(new_columns)):
-        if result.value.columns[i] != new_columns[i]:
+    old_columns = result.value.columns
+    for old_column, new_column in zip(old_columns, new_columns):
+        if new_column != old_column:
             result = RenameColumn(
-                result, Symbol(result.value.columns[i]), Symbol(new_columns[i])
+                result, Symbol(old_column), Symbol(new_column)
             )
     solver = RelationalAlgebraSolver()
     return solver.walk(result)
@@ -199,7 +197,6 @@ def get_intensional_vectorised_table_distribution(
         )
         for predicate in antecedents
     ]
-    all_predicates = [consequent] + antecedents
     algebra_sets = [consequent_algebra_set] + antecedent_algebra_sets
     indexed_set, index_columns = index_and_natural_join(algebra_sets)
     rv_index_column = index_columns[0]
@@ -304,24 +301,28 @@ class TranslateGroundedProbDatalogToGraphicalModel(PatternWalker):
                 rule_grounding, parent_groundings
             ),
         )
-        if rv_symb not in self.edges:
-            self.edges[rv_symb] = set()
-        self.edges[rv_symb] |= {
+        parent_rv_symbs = {
             pred.functor
             for pred in extract_datalog_predicates(
                 rule_grounding.expression.antecedent
             )
         }
+        self._add_edges(rv_symb, parent_rv_symbs)
 
-    def _add_grounding(self, pred_symb, grounding):
-        self.groundings[pred_symb] = grounding
+    def _add_edges(self, rv_symb, parent_rv_symbs):
+        if rv_symb not in self.edges:
+            self.edges[rv_symb] = set()
+        self.edges[rv_symb] |= parent_rv_symbs
 
-    def _add_random_variable(self, pred_symb, cpd_factory):
-        self._check_random_variable_not_already_defined(pred_symb)
-        self.cpds[pred_symb] = cpd_factory
+    def _add_grounding(self, rv_symb, grounding):
+        self.groundings[rv_symb] = grounding
 
-    def _check_random_variable_not_already_defined(self, pred_symb):
-        if pred_symb in self.cpds:
+    def _add_random_variable(self, rv_symb, cpd_factory):
+        self._check_random_variable_not_already_defined(rv_symb)
+        self.cpds[rv_symb] = cpd_factory
+
+    def _check_random_variable_not_already_defined(self, rv_symb):
+        if rv_symb in self.cpds:
             raise NeuroLangException(
-                f"Already processed predicate symbol {pred_symb}"
+                f"Already processed predicate symbol {rv_symb}"
             )
