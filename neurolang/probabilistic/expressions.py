@@ -71,3 +71,9 @@ class ReindexVector(VectorOperation):
 class MultiplyVectors(VectorOperation):
     def __init__(self, vectors):
         self.vectors = vectors
+
+
+class SubtractVectors(VectorOperation):
+    def __init__(self, first, second):
+        self.first = first
+        self.second = second

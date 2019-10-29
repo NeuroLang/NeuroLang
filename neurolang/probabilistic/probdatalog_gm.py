@@ -30,6 +30,7 @@ from .expressions import (
     VectorisedTableDistribution,
     ReindexVector,
     MultiplyVectors,
+    SubtractVectors,
     RandomVariablePointer,
 )
 from .probdatalog import Grounding, is_probabilistic_fact
@@ -176,7 +177,7 @@ def get_intensional_vectorised_table_distribution(
     indexed_set, index_columns = index_and_natural_join(algebra_sets)
     rv_index_column = index_columns[0]
     parent_rv_index_columns = index_columns[1:]
-    return ReindexVector(
+    truth_probs = ReindexVector(
         MultiplyVectors(
             ReindexVector(
                 RandomVariablePointer(antecedent.functor),
@@ -188,7 +189,17 @@ def get_intensional_vectorised_table_distribution(
         ),
         Projection(indexed_set, rv_index_column),
     )
-    return VectorisedTableDistribution(Constant[Mapping](), rule_grounding)
+    return VectorisedTableDistribution(
+        Constant[Mapping](
+            {
+                Constant[int](0): SubtractVectors(
+                    Constant[int](1), truth_probs
+                ),
+                Constant[int](1): truth_probs,
+            }
+        ),
+        rule_grounding,
+    )
 
 
 class TranslateGroundedProbDatalogToGraphicalModel(PatternWalker):
