@@ -1,5 +1,7 @@
-import pytest
 from typing import Mapping, AbstractSet
+
+import numpy as np
+import pytest
 
 from ...datalog.expressions import Conjunction, Disjunction, Fact, Implication
 from ...exceptions import NeuroLangException
@@ -9,8 +11,7 @@ from ...expressions import (
     Symbol,
     ExistentialPredicate,
 )
-from ...relational_algebra import NameColumns
-from ...utils.relational_algebra_set import RelationalAlgebraFrozenSet
+from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from ..ppdl import DeltaTerm
 from ..expressions import ProbabilisticPredicate
 from ..probdatalog import (
@@ -335,17 +336,15 @@ def test_probdatalog_grounding():
     grounded = ground_probdatalog_program(code)
     expected = Grounding(
         pfact,
-        NameColumns(
-            Constant[AbstractSet](RelationalAlgebraFrozenSet({(a,), (b,)})),
-            (x,),
+        Constant[AbstractSet](
+            NamedRelationalAlgebraFrozenSet(iterable=["a", "b"], columns=["x"])
         ),
     )
     assert expected in grounded.expressions
     expected = Grounding(
         rule,
-        NameColumns(
-            Constant[AbstractSet](RelationalAlgebraFrozenSet({(a,), (b,)})),
-            (x,),
+        Constant[AbstractSet](
+            NamedRelationalAlgebraFrozenSet(iterable=["a", "b"], columns=["x"])
         ),
     )
     assert expected in grounded.expressions
@@ -359,9 +358,8 @@ def test_probdatalog_grounding():
     grounded = ground_probdatalog_program(code)
     expected = Grounding(
         pfact,
-        NameColumns(
-            Constant[AbstractSet](RelationalAlgebraFrozenSet({(a,), (b,)})),
-            (x,),
+        Constant[AbstractSet](
+            NamedRelationalAlgebraFrozenSet(iterable=["a", "b"], columns=["x"])
         ),
     )
     assert expected in grounded.expressions
@@ -373,12 +371,19 @@ def test_probdatalog_grounding():
     assert len(grounded.expressions) == 2
     for grounding in grounded.expressions:
         if grounding.expression.functor == P:
-            assert grounding.name_columns.relation == Constant[AbstractSet](
-                RelationalAlgebraFrozenSet({(a, b), (b, b)})
+            assert np.all(
+                np.vstack(list(grounding.algebra_set.value.itervalues()))
+                == np.vstack(
+                    [
+                        np.array(["a", "b"], dtype=str),
+                        np.array(["b", "b"], dtype=str),
+                    ]
+                )
             )
         elif grounding.expression.functor == Q:
-            assert grounding.name_columns.relation == Constant[AbstractSet](
-                RelationalAlgebraFrozenSet({(a,), (b,)})
+            assert np.all(
+                np.array(list(grounding.algebra_set.value.itervalues()))
+                == np.array(["a", "b"], dtype=str)
             )
 
 

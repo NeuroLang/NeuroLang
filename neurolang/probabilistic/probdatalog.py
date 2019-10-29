@@ -40,7 +40,7 @@ from ..datalog.chase import (
     ChaseNaive,
 )
 from .expressions import ProbabilisticPredicate
-from ..relational_algebra import NameColumns
+from ..utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 
 
 def is_probabilistic_fact(expression):
@@ -522,9 +522,9 @@ def _contruct_fact_variable_predicate(fact):
 
 
 class Grounding(Definition):
-    def __init__(self, expression, name_columns):
+    def __init__(self, expression, algebra_set):
         self.expression = expression
-        self.name_columns = name_columns
+        self.algebra_set = algebra_set
 
 
 class ProbDatalogGrounder(PatternWalker):
@@ -578,13 +578,17 @@ class ProbDatalogGrounder(PatternWalker):
     def _construct_grounding(self, expression, predicate):
         return Grounding(
             expression,
-            NameColumns(
-                self.symbol_table[predicate.functor],
-                [
-                    arg if isinstance(arg, Symbol) else Symbol.fresh()
-                    for arg in predicate.args
-                    if isinstance(arg, Symbol)
-                ],
+            Constant[AbstractSet](
+                NamedRelationalAlgebraFrozenSet(
+                    iterable=self.symbol_table[predicate.functor].value,
+                    columns=[
+                        arg.name
+                        if isinstance(arg, Symbol)
+                        else Symbol.fresh().name
+                        for arg in predicate.args
+                        if isinstance(arg, Symbol)
+                    ],
+                )
             ),
         )
 

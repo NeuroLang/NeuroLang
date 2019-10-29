@@ -22,7 +22,10 @@ from ..relational_algebra import (
     Projection,
     RenameColumn,
 )
-from ..utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
+from ..utils.relational_algebra_set import (
+    NamedRelationalAlgebraFrozenSet,
+    RelationalAlgebraFrozenSet,
+)
 from .expressions import (
     VectorisedTableDistribution,
     ReindexVector,
@@ -113,6 +116,7 @@ def index_and_natural_join(algebra_sets):
     containers of the algebra sets.
 
     """
+    solver = RelationalAlgebraSolver()
     index_columns = []
     result_set = None
     for algebra_set in algebra_sets:
@@ -122,7 +126,9 @@ def index_and_natural_join(algebra_sets):
         if result_set is None:
             result_set = indexed_algebra_set
         else:
-            result_set = NaturalJoin(result_set, indexed_algebra_set)
+            result_set = solver.walk(
+                NaturalJoin(result_set, indexed_algebra_set)
+            )
     return result_set, index_columns
 
 
@@ -133,29 +139,35 @@ def rename_columns(algebra_set, new_columns):
     This will create nested RenameColumn RA operations.
 
     """
-    if len(algebra_set.value.columns) != new_columns:
+    if len(algebra_set.value.columns) != len(new_columns):
         raise NeuroLangException("New names for all columns should be passed.")
-    if any(
-        not isinstance(column, str) for column in algebra_set.value.columns
-    ):
+    if any(not isinstance(column, str) for column in new_columns):
         raise NeuroLangException("All column names should be strings")
     result = algebra_set
     for i in range(len(new_columns)):
-        result = RenameColumn(result, result.columns[i], new_columns[i])
-    return result
+        if result.value.columns[i] != new_columns[i]:
+            result = RenameColumn(
+                result, Symbol(result.value.columns[i]), Symbol(new_columns[i])
+            )
+    solver = RelationalAlgebraSolver()
+    return solver.walk(result)
 
 
 def get_intensional_vectorised_table_distribution(
     rule_grounding, parent_groundings
 ):
+    solver = RelationalAlgebraSolver()
     consequent = rule_grounding.expression.consequent
-    antecedents = extract_datalog_predicates(
-        rule_grounding.expression.antecedent
+    antecedents = list(
+        extract_datalog_predicates(rule_grounding.expression.antecedent)
     )
     consequent_algebra_set = rule_grounding.algebra_set
     antecedent_algebra_sets = [
-        rename_columns(
-            parent_groundings[predicate.functor].algebra_set, predicate.args
+        solver.walk(
+            rename_columns(
+                parent_groundings[predicate.functor].algebra_set,
+                list(arg.name for arg in predicate.args),
+            )
         )
         for predicate in antecedents
     ]
@@ -183,7 +195,7 @@ class TranslateGroundedProbDatalogToGraphicalModel(PatternWalker):
     def __init__(self):
         self.edges = dict()
         self.cpds = dict()
-        self.groundings = defaultdict(set)
+        self.groundings = dict()
 
     @add_match(
         ExpressionBlock,
@@ -204,49 +216,54 @@ class TranslateGroundedProbDatalogToGraphicalModel(PatternWalker):
         Grounding, lambda exp: isinstance(exp.expression, FunctionApplication)
     )
     def extensional_grounding(self, grounding):
+        rv_symb = grounding.expression.functor
+        self._add_grounding(rv_symb, grounding)
         self._add_random_variable(
-            grounding.expression.functor,
-            get_extensional_vectorised_table_distribution(grounding),
-            grounding,
+            rv_symb, get_extensional_vectorised_table_distribution(grounding)
         )
 
     @add_match(Grounding, lambda exp: is_probabilistic_fact(exp.expression))
     def probfact_grounding(self, grounding):
+        rv_symb = grounding.expression.consequent.body.functor
+        self._add_grounding(rv_symb, grounding)
         self._add_random_variable(
-            grounding.expression.consequent.body.functor,
+            rv_symb,
             get_bernoulli_vectorised_table_distribution(
                 grounding.expression.consequent.probability, grounding
             ),
-            grounding,
         )
 
     @add_match(Grounding)
     def rule_grounding(self, rule_grounding):
-        antecedent_predicates = extract_datalog_predicates(
-            rule_grounding.expression.consequent
-        )
-        parent_groundings = [
-            self.groundings[predicate.functor]
-            for predicate in antecedent_predicates
-        ]
+        rv_symb = rule_grounding.expression.consequent.functor
+        self._add_grounding(rv_symb, rule_grounding)
+        parent_groundings = {
+            predicate.functor: self.groundings[predicate.functor]
+            for predicate in extract_datalog_predicates(
+                rule_grounding.expression.antecedent
+            )
+        }
         self._add_random_variable(
-            rule_grounding.expression.consequent.functor,
+            rv_symb,
             get_intensional_vectorised_table_distribution(
                 rule_grounding, parent_groundings
             ),
-            rule_grounding,
         )
-        self.edges[rule_grounding.expression.consequent.functor] |= {
+        if rv_symb not in self.edges:
+            self.edges[rv_symb] = set()
+        self.edges[rv_symb] |= {
             pred.functor
             for pred in extract_datalog_predicates(
-                rule_grounding.expression.consequent
+                rule_grounding.expression.antecedent
             )
         }
 
-    def _add_random_variable(self, pred_symb, cpd_factory, grounding):
+    def _add_grounding(self, pred_symb, grounding):
+        self.groundings[pred_symb] = grounding
+
+    def _add_random_variable(self, pred_symb, cpd_factory):
         self._check_random_variable_not_already_defined(pred_symb)
         self.cpds[pred_symb] = cpd_factory
-        self.groundings[pred_symb] = grounding
 
     def _check_random_variable_not_already_defined(self, pred_symb):
         if pred_symb in self.cpds:
