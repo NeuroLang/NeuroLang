@@ -35,8 +35,8 @@ def test_extensional_grounding():
         P: VectorisedTableDistribution(
             Constant[Mapping](
                 {
-                    Constant[int](0): Constant[float](0.0),
-                    Constant[int](1): Constant[float](1.0),
+                    Constant[bool](False): Constant[float](0.0),
+                    Constant[bool](True): Constant[float](1.0),
                 }
             ),
             grounding,
@@ -50,8 +50,8 @@ def test_extensional_grounding():
             P: VectorisedTableDistribution(
                 Constant[Mapping](
                     {
-                        Constant[int](0): Constant[float](0.0),
-                        Constant[int](1): Constant[float](1.0),
+                        Constant[bool](False): Constant[float](0.0),
+                        Constant[bool](True): Constant[float](1.0),
                     }
                 ),
                 grounding,
@@ -81,9 +81,9 @@ def test_probabilistic_grounding():
             P: VectorisedTableDistribution(
                 Constant[Mapping](
                     {
-                        Constant[int](0): Constant[float](1.0)
+                        Constant[bool](False): Constant[float](1.0)
                         - Constant[float](0.3),
-                        Constant[int](1): Constant[float](0.3),
+                        Constant[bool](True): Constant[float](0.3),
                     }
                 ),
                 grounding,

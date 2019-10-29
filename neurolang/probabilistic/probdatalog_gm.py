@@ -51,8 +51,8 @@ def get_extensional_vectorised_table_distribution(grounding):
     return VectorisedTableDistribution(
         Constant[Mapping](
             {
-                Constant[int](0): Constant[float](0),
-                Constant[int](1): Constant[float](1),
+                Constant[bool](False): Constant[float](0),
+                Constant[bool](True): Constant[float](1),
             }
         ),
         grounding,
@@ -62,7 +62,10 @@ def get_extensional_vectorised_table_distribution(grounding):
 def get_bernoulli_vectorised_table_distribution(p, grounding):
     return VectorisedTableDistribution(
         Constant[Mapping](
-            {Constant[int](0): Constant[float](1.0) - p, Constant[int](1): p}
+            {
+                Constant[bool](False): Constant[float](1.0) - p,
+                Constant[bool](True): p,
+            }
         ),
         grounding,
     )
@@ -192,10 +195,10 @@ def get_intensional_vectorised_table_distribution(
     return VectorisedTableDistribution(
         Constant[Mapping](
             {
-                Constant[int](0): SubtractVectors(
-                    Constant[int](1), truth_probs
+                Constant[bool](False): SubtractVectors(
+                    Constant[float](1), truth_probs
                 ),
-                Constant[int](1): truth_probs,
+                Constant[bool](True): truth_probs,
             }
         ),
         rule_grounding,
