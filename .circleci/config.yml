@@ -18,7 +18,7 @@ commands:
       - run:
           name: install dependencies
           command: |
-            pip install --user --upgrade pip
+            pip install --user --upgrade pip --progress-bar off
             python3 -m venv venv
             . venv/bin/activate
             pip install -r requirements.txt --progress-bar off
@@ -31,7 +31,8 @@ commands:
             if
               [ ${CIRCLE_JOB} == "benchmark" ]
             then
-              pip install asv virtualenv --progress-bar off
+              pip install asv  --progress-bar off
+              pip install virtualenv --progress-bar off
             fi
 
 
