@@ -18,9 +18,9 @@ commands:
       - run:
           name: install dependencies
           command: |
+            pip install --user --upgrade pip
             python3 -m venv venv
             . venv/bin/activate
-            pip install --upgrade pip
             pip install -r requirements.txt --progress-bar off
             pip install -r requirements-dev.txt --progress-bar off
             if
