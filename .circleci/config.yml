@@ -28,6 +28,12 @@ commands:
             then
               pip install -r requirements-doc.txt --progress-bar off
             fi
+            if
+              [ ${CIRCLE_JOB} == "benchmark" ]
+            then
+              pip install asv --progress-bar off
+            fi
+
 
       - run:
           name: Setup Code Climate test-reporter
@@ -91,14 +97,11 @@ jobs:
 
     steps:
       - checkout
+      - install
       - run:
           name: Install ASV & run benchmark
           command: |
-            python3 -m venv venv
             . venv/bin/activate
-            pip install --upgrade pip
-            pip install virtualenv
-            pip install asv
             asv machine --yes
             asv run -v $(git rev-parse HEAD)...$(git rev-parse HEAD~5)
             asv publish
@@ -137,4 +140,5 @@ workflows:
     jobs:
       - docs
   benchmark:
+    jobs:
       - benchmark
