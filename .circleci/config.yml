@@ -31,7 +31,7 @@ commands:
             if
               [ ${CIRCLE_JOB} == "benchmark" ]
             then
-              pip install asv --progress-bar off
+              pip install asv virtualenv --progress-bar off
             fi
 
 
