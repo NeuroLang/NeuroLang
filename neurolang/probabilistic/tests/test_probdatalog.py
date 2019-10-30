@@ -13,11 +13,10 @@ from ...expressions import (
 )
 from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from ..ppdl import DeltaTerm
-from ..expressions import ProbabilisticPredicate
+from ..expressions import ProbabilisticPredicate, Grounding
 from ..probdatalog import (
     GDatalogToProbDatalog,
     ProbDatalogProgram,
-    Grounding,
     conjunct_formulas,
     _combine_typings,
     _check_typing_consistency,

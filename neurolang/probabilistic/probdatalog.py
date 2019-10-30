@@ -39,7 +39,7 @@ from ..datalog.chase import (
     ChaseGeneral,
     ChaseNaive,
 )
-from .expressions import ProbabilisticPredicate
+from .expressions import ProbabilisticPredicate, Grounding
 from ..utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 
 
@@ -519,12 +519,6 @@ class RemoveProbabilitiesWalker(ExpressionWalker):
 def _contruct_fact_variable_predicate(fact):
     new_args = (Symbol[arg.type].fresh() for arg in fact.consequent.args)
     return fact.consequent.functor(*new_args)
-
-
-class Grounding(Definition):
-    def __init__(self, expression, algebra_set):
-        self.expression = expression
-        self.algebra_set = algebra_set
 
 
 class ProbDatalogGrounder(PatternWalker):

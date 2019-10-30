@@ -1,4 +1,6 @@
+import itertools
 from typing import Mapping, AbstractSet
+
 import numpy as np
 import pandas as pd
 
@@ -27,9 +29,11 @@ from .expressions import (
     VectorisedTableDistribution,
     ReindexVector,
     MultiplyVectors,
+    SumVectors,
     SubtractVectors,
     RandomVariableVectorPointer,
     ParameterVectorPointer,
+    IndexedGrounding,
 )
 from .probdatalog import (
     Grounding,
@@ -158,12 +162,7 @@ def index_and_natural_join(algebra_sets):
 
 
 def rename_columns(algebra_set, new_columns):
-    """
-    Rename all the columns of the given algebra set.
-
-    This will create nested RenameColumn RA operations.
-
-    """
+    """Rename all the columns of the given algebra set."""
     if len(algebra_set.value.columns) != len(new_columns):
         raise NeuroLangException("New names for all columns should be passed.")
     if any(not isinstance(column, str) for column in new_columns):
@@ -201,20 +200,23 @@ def get_intensional_vectorised_table_distribution(
     indexed_set, index_columns = index_and_natural_join(algebra_sets)
     rv_index_column = index_columns[0]
     parent_rv_index_columns = index_columns[1:]
+    truth_probs = None
+    for parent_rv_index_column, antecedent in zip(
+        parent_rv_index_columns, antecedents
+    ):
+        vect = ReindexVector(
+            RandomVariableVectorPointer(antecedent.functor),
+            Projection(indexed_set, parent_rv_index_column),
+        )
+        if truth_probs is None:
+            truth_probs = vect
+        else:
+            truth_probs = MultiplyVectors(truth_probs, vect)
     truth_probs = ReindexVector(
-        MultiplyVectors(
-            ReindexVector(
-                RandomVariableVectorPointer(antecedent.functor),
-                Projection(indexed_set, parent_rv_index_column),
-            )
-            for parent_rv_index_column, antecedent in zip(
-                parent_rv_index_columns, antecedents
-            )
-        ),
-        Projection(indexed_set, rv_index_column),
+        truth_probs, Projection(indexed_set, rv_index_column)
     )
     return VectorisedTableDistribution(
-        Constant[Mapping](
+        table=Constant[Mapping](
             {
                 Constant[bool](False): SubtractVectors(
                     Constant[float](1), truth_probs
@@ -222,7 +224,18 @@ def get_intensional_vectorised_table_distribution(
                 Constant[bool](True): truth_probs,
             }
         ),
-        rule_grounding,
+        grounding=IndexedGrounding(
+            expression=rule_grounding.expression,
+            algebra_set=rule_grounding.algebra_set,
+            index_columns=Constant[Mapping](
+                {
+                    parent_rv_symb: Constant[str](parent_rv_index_column)
+                    for parent_rv_symb, parent_rv_index_column in zip(
+                        parent_groundings, parent_rv_index_columns
+                    )
+                }
+            ),
+        ),
     )
 
 
@@ -326,3 +339,190 @@ class TranslateGroundedProbDatalogToGraphicalModel(PatternWalker):
             raise NeuroLangException(
                 f"Already processed predicate symbol {rv_symb}"
             )
+
+
+def _get_predicate_from_grounded_expression(expression):
+    if is_probabilistic_fact(expression):
+        return expression.consequent.body
+    elif is_existential_probabilistic_fact(expression):
+        return expression.consequent.body.body
+    elif isinstance(expression, FunctionApplication):
+        return expression
+    else:
+        return expression.consequent
+
+
+class SuccQuery(Definition):
+    def __init__(self, predicate):
+        self.predicate = predicate
+
+
+class SuccQueryGraphicalModelSolver(PatternWalker):
+    def __init__(self, graphical_model):
+        self.graphical_model = graphical_model
+
+    @add_match(SuccQuery)
+    def succ_query(self, query):
+        actual_predicate = _get_predicate_from_grounded_expression(
+            self.graphical_model[query.predicate.functor]
+        )
+        rv_symb = actual_predicate.functor
+        parent_rv_symbs = sorted(list(self.graphical_model.edges[rv_symb]))
+        if len(parent_rv_symbs):
+            rule = self.graphical_model.groundings.value[rv_symb].expression
+            parent_marginal_distribs = {
+                pred.functor: self.walk(SuccQuery(pred))
+                for pred in extract_datalog_predicates(rule.antecedent)
+            }
+            result = self.compute_marginal_distribution(
+                self.graphical_model.cpds.value[rv_symb],
+                parent_marginal_distribs,
+            )
+        else:
+            result = self.compute_cpd(self.graphical_model.cpds[rv_symb], {})
+        return RelationalAlgebraSolver().walk(
+            NaturalJoin(
+                result,
+                _build_query_algebra_set(
+                    query.predicate, self.graphical_model.groundings[rv_symb]
+                ),
+            )
+        )
+
+    def compute_marginal_distribution(self, rv_symb, parent_marginal_distribs):
+        result = None
+        parent_symbs = sorted(parent_marginal_distribs)
+        for parent_values in itertools.product(
+            *[
+                (Constant[bool](False), Constant[bool](True))
+                for _ in parent_symbs
+            ]
+        ):
+            new_term = self.compute_cpd(
+                rv_symb, dict(zip(parent_symbs, parent_values))
+            )
+            for parent_symb, parent_value in zip(parent_symbs, parent_values):
+                new_term = MultiplyVectors(
+                    new_term,
+                    Projection(
+                        parent_marginal_distribs[parent_symb], parent_value
+                    ),
+                )
+            if result is None:
+                result = new_term
+            else:
+                result = SumVectors(result, new_term)
+        return result
+
+    def compute_cpd(self, rv_symb, parent_values):
+        computer = CPDCalculator(parent_values)
+        return computer.walk(self.graphical_model.cpds[rv_symb])
+
+
+class CPDCalculator(RelationalAlgebraSolver):
+    def __init__(self, parent_values):
+        self.parent_values = parent_values
+
+    @add_match(VectorisedTableDistribution)
+    def vectorised_table_distribution(self, distrib):
+        columns, probs = zip(
+            *[
+                (rv_value.value, self.walk(rv_prob))
+                for rv_value, rv_prob in sorted(
+                    distrib.value.items(), key=lambda x: x[0].value
+                )
+            ]
+        )
+        return Constant[AbstractSet](
+            AlgebraSet(
+                iterable=pd.DataFrame(np.hstack(probs), columns=columns),
+                columns=columns,
+            )
+        )
+
+    @add_match(RandomVariableVectorPointer)
+    def rv_vect_pointer(self, pointer):
+        if pointer not in self.parent_values:
+            raise NeuroLangException(
+                "Pointer to unknown parent random variable"
+            )
+        return self.parent_values[pointer.name]
+
+    @add_match(ReindexVector)
+    def reindex_vector(self, reindex_op):
+        _check_is_vector(reindex_op.vector)
+        old_values = vect_algebra_set_to_nparray(reindex_op.vector)
+        idx = vect_algebra_set_to_nparray(reindex_op.index)
+        columns = reindex_op.vector.value.columns
+        return nparray_to_vect_algebra_set(old_values[idx], columns)
+
+    @add_match(SumVectors)
+    def sum_vectors(self, sum_op):
+        return apply_arithmetic_vect_binary_op(sum_op, np.sum)
+
+    @add_match(MultiplyVectors)
+    def multiply_vectors(self, multiply_op):
+        return apply_arithmetic_vect_binary_op(multiply_op, np.prod)
+
+    @add_match(SubtractVectors)
+    def subtract_vectors(self, subtract_op):
+        return apply_arithmetic_vect_binary_op(subtract_op, np.subtract)
+
+
+def apply_arithmetic_vect_binary_op(op, np_fun):
+    return nparray_to_vect_algebra_set(
+        np_fun(
+            np.vstack(
+                [
+                    vect_algebra_set_to_nparray(op.first),
+                    vect_algebra_set_to_nparray(op.second),
+                ]
+            ),
+            axis=0,
+        ),
+        columns=op.first.value.columns,
+    )
+
+
+def vect_algebra_set_to_nparray(vect_algebra_set):
+    _check_is_vector(vect_algebra_set)
+    return np.array(vect_algebra_set.value.itervalues())
+
+
+def nparray_to_vect_algebra_set(numpy_array, columns):
+    return Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            iterable=pd.DataFrame(numpy_array, columns=columns),
+            columns=columns,
+        )
+    )
+
+
+def _check_is_vector(algebra_set):
+    if len(algebra_set.value.columns) != 1:
+        raise NeuroLangException(
+            "Not a vector algebra set. Expected only one column"
+        )
+
+
+def compute_marginal_probability(rv_cpd, parent_marginal_distribs):
+    result = None
+    for parent_values, rv_cpd_distrib in rv_cpd_distribs.items():
+        if result is None:
+            result = _multiply_computed_distribs(
+                [rv_cpd_distrib]
+                + [parent_marginal_distrib.value[parent_value]]
+            )
+
+
+def _build_query_algebra_set(query_predicate, grounding_columns):
+    consts, cols = zip(
+        *[
+            (arg, col)
+            for arg, col in zip(query_predicate.args, grounding_columns)
+            if isinstance(arg, Constant)
+        ]
+    )
+    return Constant[AbstractSet](
+        AlgebraSet(iterable={tuple(consts)}, columns=cols)
+    )

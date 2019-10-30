@@ -22,6 +22,12 @@ class ProbabilisticPredicate(Definition):
         )
 
 
+class Grounding(Definition):
+    def __init__(self, expression, algebra_set):
+        self.expression = expression
+        self.algebra_set = algebra_set
+
+
 class Distribution(Definition):
     def __init__(self, parameters):
         self.parameters = parameters
@@ -53,37 +59,51 @@ class VectorisedTableDistribution(TableDistribution):
         super().__init__(table, parameters)
 
 
-class VectorPointer(Definition):
-    def __init__(self, name):
-        self.name = name
-
-
-class RandomVariableVectorPointer(VectorPointer):
-    def __init__(self, name):
-        self.name = name
-
-
-class ParameterVectorPointer(VectorPointer):
-    def __init__(self, name):
-        self.name = name
-
-
-class VectorOperation(Definition):
+class VectorisedTableDistributionOperation(Definition):
     pass
 
 
-class ReindexVector(VectorOperation):
-    def __init__(self, vector, index):
-        self.vector = vector
-        self.index = index
+class VectorPointer(Symbol):
+    pass
 
 
-class MultiplyVectors(VectorOperation):
-    def __init__(self, vectors):
-        self.vectors = vectors
+class RandomVariableVectorPointer(VectorPointer):
+    pass
 
 
-class SubtractVectors(VectorOperation):
+class ParameterVectorPointer(VectorPointer):
+    pass
+
+
+class VectorBinaryOperation(Definition):
     def __init__(self, first, second):
         self.first = first
         self.second = second
+
+
+class ReindexVector(VectorBinaryOperation):
+    @property
+    def vector(self):
+        return self.first
+
+    @property
+    def index(self):
+        return self.second
+
+
+class SumVectors(VectorBinaryOperation):
+    pass
+
+
+class SubtractVectors(VectorBinaryOperation):
+    pass
+
+
+class MultiplyVectors(VectorBinaryOperation):
+    pass
+
+
+class IndexedGrounding(Grounding):
+    def __init__(self, expression, algebra_set, index_columns):
+        self.index_columns = index_columns
+        super().__init__(expression, algebra_set)
