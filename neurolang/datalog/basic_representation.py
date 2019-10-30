@@ -6,6 +6,7 @@ the extensional, intensional, and builtin
 sets.
 """
 
+from itertools import tee
 from typing import AbstractSet, Any, Callable, Tuple
 
 from ..expression_walker import PatternWalker, add_match
@@ -19,7 +20,6 @@ from .expression_processing import (
 from .expressions import (NULL, UNDEFINED, Disjunction, Fact, Implication,
                           NullConstant, Undefined)
 from .wrapped_collections import WrappedRelationalAlgebraSet
-from itertools import tee
 
 
 __all__ = [
