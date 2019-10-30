@@ -155,7 +155,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         return self._build_relation_constant(selected_relation)
 
     def _build_relation_constant(self, relation):
-        if len(relation) > 0:
+        if len(relation) > 0 and relation.arity > 0:
             if hasattr(relation, 'row_type'):
                 row_type = relation.row_type
             else:
@@ -184,8 +184,8 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         relation = self.walk(projection.relation)
         cols = tuple(v.value for v in projection.attributes)
         projected_relation = relation.value.projection(*cols)
-        return C_[AbstractSet[projected_relation.row_type]](
-            projected_relation, verify_type=False
+        return self._build_relation_constant(
+            projected_relation
         )
 
     @ew.add_match(Product)
@@ -237,7 +237,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
                     "Column name must be a Constant or Symbol"
                 )
         new_set = NamedRelationalAlgebraFrozenSet(column_names, relation_set)
-        return Constant[relation.type](new_set, verify_type=False)
+        return self._build_relation_constant(new_set)
 
     @ew.add_match(RenameColumn)
     def ra_rename_column(self, rename_column):
@@ -248,7 +248,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
 
         if len(new_set) > 0:
             new_set = new_set.rename_column(src, dst)
-        return Constant[relation.type](new_set, verify_type=False)
+        return self._build_relation_constant(new_set)
 
     @ew.add_match(Constant)
     def ra_constant(self, constant):

@@ -1,3 +1,4 @@
+# In addition to requirements.txt & requirements-dev.txt; packages required to build documentation.
 sphinx
 sphinx-gallery
 numpydoc

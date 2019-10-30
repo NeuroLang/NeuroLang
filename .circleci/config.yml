@@ -83,6 +83,30 @@ jobs:
       - install
       - test
 
+  benchmark:
+    docker:
+      - image: circleci/python:3.7
+
+    working_directory: ~/repo
+
+    steps:
+      - checkout
+      - run:
+          name: Install ASV & run benchmark
+          command: |
+            python3 -m venv venv
+            . venv/bin/activate
+            pip install --upgrade pip
+            pip install virtualenv
+            pip install asv
+            asv machine --yes
+            asv run -v $(git rev-parse HEAD)...$(git rev-parse HEAD~5)
+            asv publish
+          no_output_timeout: 1h
+      - store_artifacts:
+          path: .asv/html
+          destination: benchmarks
+
   docs:
     docker:
       - image: circleci/python:3.7
@@ -112,3 +136,5 @@ workflows:
   build-docs:
     jobs:
       - docs
+  benchmark:
+      - benchmark

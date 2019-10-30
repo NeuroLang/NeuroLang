@@ -1,5 +1,6 @@
-pytest
-pytest-cov
-codacy-coverage
+# In addition to requirements.txt; packages required to develop for the application.
 nilearn==0.5.0
-
+codacy-coverage
+pytest
+pytest-benchmark
+pytest-cov
