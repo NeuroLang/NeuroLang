@@ -301,22 +301,25 @@ class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
     @add_match(ConcatenateColumn)
     def concatenate_column(self, concat_op):
         new_column_name = _get_column_name_from_expression(concat_op.column)
+        new_columns = list(concat_op.relation.value.columns) + [
+            new_column_name
+        ]
         return Constant[AbstractSet](
             AlgebraSet(
-                iterable=pd.concat(
-                    [
-                        concat_op.relation.value._container,
-                        pd.DataFrame(
-                            {
-                                new_column_name: np.array(
-                                    concat_op.column_values.value
+                iterable=pd.DataFrame(
+                    np.hstack(
+                        [
+                            concat_op.relation.value._container.values,
+                            np.transpose(
+                                np.atleast_2d(
+                                    np.array(concat_op.column_values.value)
                                 )
-                            }
-                        ),
-                    ]
+                            ),
+                        ]
+                    ),
+                    columns=new_columns,
                 ),
-                columns=list(concat_op.relation.value.columns)
-                + [new_column_name],
+                columns=new_columns,
             )
         )
 

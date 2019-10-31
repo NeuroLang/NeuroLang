@@ -26,6 +26,7 @@ from ..expressions import (
     VectorisedTableDistribution,
     ProbabilisticPredicate,
     RandomVariableValuePointer,
+    ConcatenateColumn,
 )
 
 P = Symbol("P")
@@ -205,3 +206,20 @@ def test_rv_value_pointer():
     walked = solver.walk(RandomVariableValuePointer(P))
     assert isinstance(walked, Constant[AbstractSet])
     assert isinstance(walked.value, AlgebraSet)
+
+
+def test_concatenate_column():
+    solver = ExtendedRelationalAlgebraSolver({})
+    relation = Constant[AbstractSet](
+        AlgebraSet(iterable=range(100), columns=["x"])
+    )
+    column_name = y
+    column_values = Constant[np.ndarray](np.arange(100) * 2)
+    expected = Constant[AbstractSet](
+        AlgebraSet(
+            iterable=zip(relation.value.itervalues(), column_values.value),
+            columns=["x", "y"],
+        )
+    )
+    op = ConcatenateColumn(relation, column_name, column_values)
+    assert solver.walk(op) == expected
