@@ -39,8 +39,11 @@ class TimeRegionComparisons:
                 continue
             rset.append((
                 name.decode('utf8'),
-                fe.ExplicitVBR(voxels, aff, image_dim=img.shape, prebuild_tree=True))
-            )
+                fe.ExplicitVBR(
+                    voxels, aff,
+                    image_dim=img.shape, prebuild_tree=True
+                )
+            ))
         nl.add_tuple_set(rset, name='destrieux')
 
         img = nib.load(yeo_atlas['thick_17'])
@@ -56,7 +59,11 @@ class TimeRegionComparisons:
                 continue
             rset.append((
                 name,
-                fe.ExplicitVBR(voxels, aff, image_dim=data.shape, prebuild_tree=True)
+                fe.ExplicitVBR(
+                    voxels, aff,
+                    image_dim=data.shape,
+                    prebuild_tree=True
+                )
             ))
         nl.add_tuple_set(rset, name='yeo')
         self.nl = nl
