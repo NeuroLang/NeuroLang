@@ -38,6 +38,7 @@ from .expressions import (
     RandomVariableValuePointer,
     NegateProbability,
     AddRepeatedValueColumn,
+    MultipleNaturalJoin,
 )
 from .probdatalog import (
     Grounding,
@@ -92,21 +93,17 @@ def get_var_columns(function_application):
 
 
 def and_vect_table_distribution(rule_grounding):
-    var_columns = get_var_columns(rule_grounding.expression.consequent)
-    result = None
-    for antecedent_pred in extract_datalog_predicates(
-        rule_grounding.expression.antecedent
-    ):
-        antecedent_var_columns = get_var_columns(antecedent_pred)
-        antecedent_set = NameColumns(
-            get_var_columns(antecedent_pred),
-            RandomVariableValuePointer(antecedent_pred.functor),
+    return MultiplyColumns(
+        MultipleNaturalJoin(
+            NameColumns(
+                get_var_columns(antecedent_pred),
+                RandomVariableValuePointer(antecedent_pred.functor),
+            )
+            for antecedent_pred in extract_datalog_predicates(
+                rule_grounding.expression.antecedent
+            )
         )
-        if result is None:
-            result = antecedent_set
-        else:
-            result = NaturalJoin(result, antecedent_set)
-    return MultiplyColumns(result, _make_numerical_col_symb())
+    )
 
 
 class TranslateGroundedProbDatalogToGraphicalModel(PatternWalker):
@@ -299,7 +296,7 @@ class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
             raise NeuroLangException(
                 f"Unknown value for random variable {pointer}"
             )
-        return self.rv_values[pointer]
+        return Constant[AbstractSet](self.rv_values[pointer])
 
     @add_match(ConcatenateColumn)
     def concatenate_column(self, concat_op):
@@ -318,7 +315,8 @@ class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
                         ),
                     ]
                 ),
-                columns=concat_op.relation.value.columns + [new_column_name],
+                columns=list(concat_op.relation.value.columns)
+                + [new_column_name],
             )
         )
 
@@ -342,6 +340,32 @@ class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
     def multiply_columns(self, multiply_op):
         return _apply_arithmetic_column_op(multiply_op, np.prod)
 
+    @add_match(AddRepeatedValueColumn)
+    def add_repeated_value_column(self, add_op):
+        return self.walk(
+            ConcatenateColumn(
+                relation=add_op.relation,
+                column=_make_numerical_col_symb(),
+                column_values=Constant[np.ndarray](
+                    np.repeat(
+                        add_op.repeated_value, len(add_op.relation.value)
+                    )
+                ),
+            )
+        )
+
+    @add_match(VectorisedTableDistribution)
+    def vectorised_table_distribution(self, distrib):
+        truth_prob = distrib.table.value[Constant[bool](True)]
+        if isinstance(truth_prob, Constant):
+            return self.walk(
+                AddRepeatedValueColumn(distrib.grounding.relation, truth_prob)
+            )
+        else:
+            return self.walk(
+                NaturalJoin(self.grounding.relation, self.walk(truth_prob))
+            )
+
 
 def _build_query_algebra_set(query_predicate, grounding_columns):
     consts, cols = zip(
@@ -360,35 +384,30 @@ def _make_numerical_col_symb():
     return Symbol("__numerical__" + Symbol.fresh().name)
 
 
-def _is_numerical_column(col):
-    return isinstance(col, Symbol) and col.name.startswith("__numerical__")
+def _get_relation_numerical_columns(relation):
+    return (col for col in relation.columns if col.startswith("__numerical__"))
 
 
 def _apply_arithmetic_column_op(op, numpy_op):
-    concerned_columns = [
-        column
-        for column in op.relation.columns
-        if _is_numerical_column(column)
+    numerical_columns = _get_relation_numerical_columns(op.relation)
+    non_numerical_columns = [
+        col for col in op.relation.columns if col not in numerical_columns
     ]
-    dest_column_name = _get_column_name_from_expression(op.destination_column)
-    new_columns = [
-        col
-        for col in op.relation.value.columns
-        if col not in concerned_columns
-    ] + [dest_column_name]
+    new_column = _make_numerical_col_symb().name
+    resulting_columns = [non_numerical_columns] + [new_column]
     iterable = pd.concat(
         [
-            op.relation.value._container,
+            op.relation.value._container[non_numerical_columns],
             pd.DataFrame(
                 {
-                    dest_column_name: numpy_op(
-                        op.relation.value._container[concerned_columns], axis=1
+                    new_column: numpy_op(
+                        op.relation.value._container[numerical_columns], axis=1
                     )
                 }
             ),
         ]
-    )[new_columns]
-    return Constant[AbstractSet](AlgebraSet(new_columns, iterable))
+    )
+    return Constant[AbstractSet](AlgebraSet(resulting_columns, iterable))
 
 
 def _get_column_name_from_expression(column_exp):

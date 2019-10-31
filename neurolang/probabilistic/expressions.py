@@ -24,9 +24,9 @@ class ProbabilisticPredicate(Definition):
 
 
 class Grounding(Definition):
-    def __init__(self, expression, algebra_set):
+    def __init__(self, expression, relation):
         self.expression = expression
-        self.algebra_set = algebra_set
+        self.relation = relation
 
 
 class GraphicalModel(Definition):
@@ -91,9 +91,8 @@ class AddRepeatedValueColumn(RelationalAlgebraOperation):
 
 
 class ArithmeticOperationOnColumns(RelationalAlgebraOperation):
-    def __init__(self, relation, destination_column):
+    def __init__(self, relation):
         self.relation = relation
-        self.destination_column = destination_column
 
 
 class SumColumns(ArithmeticOperationOnColumns):

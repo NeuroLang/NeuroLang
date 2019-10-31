@@ -1,6 +1,18 @@
 from typing import Mapping, AbstractSet
 
-from ..probdatalog_gm import TranslateGroundedProbDatalogToGraphicalModel
+import pytest
+import pandas as pd
+import numpy as np
+
+from ...exceptions import NeuroLangException
+from ..probdatalog_gm import (
+    TranslateGroundedProbDatalogToGraphicalModel,
+    AlgebraSet,
+    bernoulli_vect_table_distrib,
+    extensional_vect_table_distrib,
+    ExtendedRelationalAlgebraSolver,
+    _make_numerical_col_symb,
+)
 from ..probdatalog import Grounding
 from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from ...expressions import (
@@ -10,7 +22,11 @@ from ...expressions import (
     ExistentialPredicate,
 )
 from ...datalog.expressions import Implication, Conjunction
-from ..expressions import VectorisedTableDistribution, ProbabilisticPredicate
+from ..expressions import (
+    VectorisedTableDistribution,
+    ProbabilisticPredicate,
+    RandomVariableValuePointer,
+)
 
 P = Symbol("P")
 Q = Symbol("Q")
@@ -124,3 +140,68 @@ def test_intensional_grounding():
     )
     gm = TranslateGroundedProbDatalogToGraphicalModel().walk(groundings)
     assert gm.edges == Constant[Mapping]({Q: {P, T}})
+
+
+def test_construct_abstract_set_from_pandas_dataframe():
+    df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [5, 6, 7, 8]})
+    abstract_set = AlgebraSet(iterable=df, columns=df.columns)
+    assert np.all(
+        np.array(list(abstract_set.itervalues()))
+        == np.array(
+            [
+                np.array([1, 5]),
+                np.array([2, 6]),
+                np.array([3, 7]),
+                np.array([4, 8]),
+            ]
+        )
+    )
+
+
+def test_bernoulli_vect_table_distrib():
+    grounding = Grounding(
+        P(x),
+        Constant[AbstractSet](AlgebraSet(iterable=[1, 2, 3], columns=["x"])),
+    )
+    distrib = bernoulli_vect_table_distrib(Constant[float](1.0), grounding)
+    assert distrib.table.value[Constant[bool](True)] == Constant[float](1.0)
+    assert distrib.table.value[Constant[bool](False)] == Constant[float](0.0)
+    distrib = bernoulli_vect_table_distrib(Constant[float](0.2), grounding)
+    assert distrib.table.value[Constant[bool](True)] == Constant[float](0.2)
+    assert distrib.table.value[Constant[bool](False)] == Constant[float](0.8)
+
+    with pytest.raises(NeuroLangException):
+        bernoulli_vect_table_distrib(p, grounding)
+
+    solver = ExtendedRelationalAlgebraSolver({})
+    walked_distrib = solver.walk(
+        bernoulli_vect_table_distrib(Constant[float](0.7), grounding)
+    )
+    assert isinstance(walked_distrib, Constant[AbstractSet])
+    # np.testing.assert_almost_equal(
+    # np.array(walked_distrib.value.itervalues()),
+    # np.array([[1, 0.7], [2, 0.7], [3, 0.7]]),
+    # )
+
+
+def test_extensional_vect_table_distrib():
+    grounding = Grounding(
+        P(x),
+        Constant[AbstractSet](AlgebraSet(iterable=[1, 2, 3], columns=["x"])),
+    )
+    distrib = extensional_vect_table_distrib(grounding)
+    assert distrib.table.value[Constant[bool](True)] == Constant[float](1.0)
+    assert distrib.table.value[Constant[bool](False)] == Constant[float](0.0)
+
+
+def test_rv_value_pointer():
+    parent_values = {
+        P: AlgebraSet(
+            iterable=[("a", 1), ("b", 1), ("c", 0)],
+            columns=["x", _make_numerical_col_symb().name],
+        )
+    }
+    solver = ExtendedRelationalAlgebraSolver(parent_values)
+    walked = solver.walk(RandomVariableValuePointer(P))
+    assert isinstance(walked, Constant[AbstractSet])
+    assert isinstance(walked.value, AlgebraSet)
