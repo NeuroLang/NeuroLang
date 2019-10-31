@@ -8,7 +8,7 @@ from neurolang import frontend as fe
 class TimeRegionComparisons:
     params = [
         [
-            'overlapping', 'anterior_of', 'posterior_of',
+            'anterior_of', 'posterior_of', 'overlapping',
             'superior_of', 'inferior_of', 'left_of', 'right_of'
         ]
     ]
@@ -18,6 +18,10 @@ class TimeRegionComparisons:
     timeout = 60 * 10
 
     def setup(self, direction):
+        if not hasattr(self, 'nl'):
+            self.setup_()
+
+    def setup_(self):
         nl = fe.NeurolangDL()
 
         destrieux_atlas = datasets.fetch_atlas_destrieux_2009()
@@ -55,13 +59,12 @@ class TimeRegionComparisons:
                 fe.ExplicitVBR(voxels, aff, image_dim=data.shape, prebuild_tree=True)
             ))
         nl.add_tuple_set(rset, name='yeo')
-
         self.nl = nl
 
     def time_spatial_relation(self, direction):
         with self.nl.scope as e:
             self.nl.query(
-                (e.d, e.y),
-                e.destrieux(e.d, e.dr) & e.yeo(e.y, e.dy) &
+                (e.d,),
+                e.destrieux(e.d, e.dr) & e.yeo('1', e.dy) &
                 e[direction](e.dr, e.dy)
             )
