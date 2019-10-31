@@ -43,7 +43,7 @@ class OntologyHandler():
         )
         namespaces_prop = list(
             map(
-                lambda x: self._to_variable_name(x[0] + '_' + x[1]),
+                lambda x: x[0] + '_' + x[1],
                 list(map(lambda y: y.split('/')[-2:], namespaces_properties))
             )
         )
@@ -54,7 +54,7 @@ class OntologyHandler():
             map(
                 lambda a: list(
                     map(
-                        lambda s: self._to_variable_name(s.replace('-', '_')),
+                        lambda s: s.replace('-', '_'),
                         a.split('/')[-1].split('#')
                     )
                 ), owl_properties
@@ -79,8 +79,8 @@ class OntologyHandler():
 
         return new_prop
 
-    def _to_variable_name(self, prop_name):
-            return prop_name.lstrip('0123456789.-_ :').rstrip('0123456789.-_ :')
+    #def _to_variable_name(self, prop_name):
+    #        return prop_name.lstrip('0123456789.-_ :').rstrip('0123456789.-_ :')
 
     def load_ontology(self, neurolangDL, destriuex_relations=False):
         self.neurolangDL = neurolangDL
@@ -90,7 +90,7 @@ class OntologyHandler():
         # Maybe we should put this outside the class
         if destriuex_relations:
             relations_list = self.get_destrieux_relations()
-            neurolangDL.add_tuple_set(((
+            self.neurolangDL.add_tuple_set(((
                 e1,
                 e2,
             ) for e1, e2 in relations_list),
@@ -104,7 +104,7 @@ class OntologyHandler():
                 if label_number == 0:
                     continue
                 name = name.decode()
-                region = neurolangDL.create_region(
+                region = self.neurolangDL.create_region(
                     destrieux_map, label=label_number
                 )
                 if region is None:
@@ -112,7 +112,7 @@ class OntologyHandler():
                 name = name.replace('-', '_').replace(' ', '_').lower()
                 destrieux.append((name, region))
 
-            neurolangDL.add_tuple_set(((
+            self.neurolangDL.add_tuple_set(((
                 name,
                 region,
             ) for name, region in destrieux),
@@ -168,10 +168,8 @@ class OntologyHandler():
                                          e.rdf_schema_subClassOf(e.x, e.w))
         temp = pd.DataFrame(res, columns={'Entity', 'Property', 'ValueFrom'})
 
-        # Using regex should be a better option
         temp['Property'] = temp['Property'].map(
-            lambda x: x.split('/')[-2].lstrip('0123456789.-_ :').
-            rstrip('0123456789.-_ :') + '_' + x.split('/')[-1]
+            lambda x: x.split('/')[-2] + '_' + x.split('/')[-1]
         )
         unique_property = temp.Property.unique()
         for prop in unique_property:
