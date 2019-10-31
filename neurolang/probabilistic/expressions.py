@@ -2,6 +2,7 @@ from typing import Mapping
 
 from ..exceptions import NeuroLangException
 from ..expressions import Definition, Constant, Symbol, FunctionApplication
+from ..relational_algebra import RelationalAlgebraOperation
 
 
 class ProbabilisticPredicate(Definition):
@@ -26,6 +27,17 @@ class Grounding(Definition):
     def __init__(self, expression, algebra_set):
         self.expression = expression
         self.algebra_set = algebra_set
+
+
+class GraphicalModel(Definition):
+    def __init__(self, edges, cpds, groundings):
+        self.edges = edges
+        self.cpds = cpds
+        self.groundings = groundings
+
+    @property
+    def random_variables(self):
+        return set(self.cpds.value)
 
 
 class Distribution(Definition):
@@ -59,51 +71,48 @@ class VectorisedTableDistribution(TableDistribution):
         super().__init__(table, parameters)
 
 
-class VectorisedTableDistributionOperation(Definition):
+class ConcatenateColumn(RelationalAlgebraOperation):
+    def __init__(self, relation, column, column_values):
+        self.relation = relation
+        self.column = column
+        self.column_values = column_values
+
+
+class AddIndexColumn(RelationalAlgebraOperation):
+    def __init__(self, relation, index_column):
+        self.relation = relation
+        self.index_column = index_column
+
+
+class AddRepeatedValueColumn(RelationalAlgebraOperation):
+    def __init__(self, relation, repeated_value):
+        self.relation = relation
+        self.repeated_value = repeated_value
+
+
+class ArithmeticOperationOnColumns(RelationalAlgebraOperation):
+    def __init__(self, relation, destination_column):
+        self.relation = relation
+        self.destination_column = destination_column
+
+
+class SumColumns(ArithmeticOperationOnColumns):
     pass
 
 
-class VectorPointer(Symbol):
+class MultiplyColumns(ArithmeticOperationOnColumns):
     pass
 
 
-class RandomVariableVectorPointer(VectorPointer):
+class RandomVariableValuePointer(Symbol):
     pass
 
 
-class ParameterVectorPointer(VectorPointer):
-    pass
+class NegateProbability(RelationalAlgebraOperation):
+    def __init__(self, relation):
+        self.relation = relation
 
 
-class VectorBinaryOperation(Definition):
-    def __init__(self, first, second):
-        self.first = first
-        self.second = second
-
-
-class ReindexVector(VectorBinaryOperation):
-    @property
-    def vector(self):
-        return self.first
-
-    @property
-    def index(self):
-        return self.second
-
-
-class SumVectors(VectorBinaryOperation):
-    pass
-
-
-class SubtractVectors(VectorBinaryOperation):
-    pass
-
-
-class MultiplyVectors(VectorBinaryOperation):
-    pass
-
-
-class IndexedGrounding(Grounding):
-    def __init__(self, expression, algebra_set, index_columns):
-        self.index_columns = index_columns
-        super().__init__(expression, algebra_set)
+class MultipleNaturalJoin(RelationalAlgebraOperation):
+    def __init__(self, relations):
+        self.relations = relations

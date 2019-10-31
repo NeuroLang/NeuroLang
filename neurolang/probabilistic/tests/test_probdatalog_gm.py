@@ -10,12 +10,7 @@ from ...expressions import (
     ExistentialPredicate,
 )
 from ...datalog.expressions import Implication, Conjunction
-from ..expressions import (
-    VectorisedTableDistribution,
-    ProbabilisticPredicate,
-    ParameterVectorPointer,
-    SubtractVectors,
-)
+from ..expressions import VectorisedTableDistribution, ProbabilisticPredicate
 
 P = Symbol("P")
 Q = Symbol("Q")
@@ -91,8 +86,7 @@ def test_probabilistic_grounding():
             P: VectorisedTableDistribution(
                 Constant[Mapping](
                     {
-                        Constant[bool](False): Constant[float](1.0)
-                        - Constant[float](0.3),
+                        Constant[bool](False): Constant[float](0.7),
                         Constant[bool](True): Constant[float](0.3),
                     }
                 ),
@@ -130,34 +124,3 @@ def test_intensional_grounding():
     )
     gm = TranslateGroundedProbDatalogToGraphicalModel().walk(groundings)
     assert gm.edges == Constant[Mapping]({Q: {P, T}})
-
-
-def test_existential_probfact_grounding():
-    x_algebra_set = Constant[AbstractSet](
-        NamedRelationalAlgebraFrozenSet(iterable=[1, 2, 3, 4], columns=["x"])
-    )
-    existential_probfact = Implication(
-        ExistentialPredicate(p, ProbabilisticPredicate(p, P(x))),
-        Constant[bool](True),
-    )
-    eprobfact_grounding = Grounding(existential_probfact, x_algebra_set)
-    extensional_grounding = Grounding(T(x), x_algebra_set)
-    intensional_grounding = Grounding(
-        Implication(Q(x), Conjunction([P(x), T(x)])), x_algebra_set
-    )
-    gm = TranslateGroundedProbDatalogToGraphicalModel().walk(
-        ExpressionBlock(
-            [extensional_grounding, eprobfact_grounding, intensional_grounding]
-        )
-    )
-    assert P in gm.cpds.value
-    assert len(gm.cpds.value[P].parameters.value) == 1
-    params_vect_symb = next(iter(gm.cpds.value[P].parameters.value))
-    assert gm.cpds.value[P].table.value[Constant[bool](True)] == (
-        ParameterVectorPointer(params_vect_symb)
-    )
-    assert gm.cpds.value[P].table.value[
-        Constant[bool](False)
-    ] == SubtractVectors(
-        Constant[float](1.0), ParameterVectorPointer(params_vect_symb)
-    )

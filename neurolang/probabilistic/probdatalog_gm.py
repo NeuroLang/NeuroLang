@@ -1,5 +1,5 @@
 import itertools
-from typing import Mapping, AbstractSet
+from typing import Mapping, AbstractSet, Tuple
 
 import numpy as np
 import pandas as pd
@@ -20,80 +20,30 @@ from ..relational_algebra import (
     NaturalJoin,
     Projection,
     RenameColumn,
+    RelationalAlgebraOperation,
+    NameColumns,
 )
 from ..utils.relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraFrozenSet,
 )
 from .expressions import (
+    GraphicalModel,
     VectorisedTableDistribution,
-    ReindexVector,
-    MultiplyVectors,
-    SumVectors,
-    SubtractVectors,
-    RandomVariableVectorPointer,
-    ParameterVectorPointer,
-    IndexedGrounding,
+    ConcatenateColumn,
+    AddIndexColumn,
+    ArithmeticOperationOnColumns,
+    SumColumns,
+    MultiplyColumns,
+    RandomVariableValuePointer,
+    NegateProbability,
+    AddRepeatedValueColumn,
 )
 from .probdatalog import (
     Grounding,
     is_probabilistic_fact,
     is_existential_probabilistic_fact,
 )
-
-
-class GraphicalModel(Definition):
-    def __init__(self, edges, cpds, groundings):
-        self.edges = edges
-        self.cpds = cpds
-        self.groundings = groundings
-
-    @property
-    def random_variables(self):
-        return set(self.cpds.value)
-
-
-def get_extensional_vectorised_table_distribution(grounding):
-    return VectorisedTableDistribution(
-        Constant[Mapping](
-            {
-                Constant[bool](False): Constant[float](0),
-                Constant[bool](True): Constant[float](1),
-            }
-        ),
-        grounding,
-    )
-
-
-def get_bernoulli_vectorised_table_distribution(p, grounding):
-    return VectorisedTableDistribution(
-        Constant[Mapping](
-            {
-                Constant[bool](False): Constant[float](1.0) - p,
-                Constant[bool](True): p,
-            }
-        ),
-        grounding,
-    )
-
-
-def get_parameterised_bernoulli_vectorised_table_distribution(
-    parameters, grounding
-):
-    params_vect_symb = Symbol.fresh()
-    return VectorisedTableDistribution(
-        table=Constant[Mapping](
-            {
-                Constant[bool](False): SubtractVectors(
-                    Constant[float](1.0),
-                    ParameterVectorPointer(params_vect_symb),
-                ),
-                Constant[bool](True): ParameterVectorPointer(params_vect_symb),
-            }
-        ),
-        grounding=grounding,
-        parameters=Constant[Mapping]({params_vect_symb: parameters}),
-    )
 
 
 class AlgebraSet(NamedRelationalAlgebraFrozenSet):
@@ -115,128 +65,48 @@ class AlgebraSet(NamedRelationalAlgebraFrozenSet):
             self._container = self._renew_index(self._container)
 
 
-def add_index_column(algebra_set, index_column):
-    """Add an integer-location based index to the given algebra set."""
-    new_columns = [index_column] + list(algebra_set.value.columns)
-    return Constant[AbstractSet](
-        AlgebraSet(
-            columns=new_columns,
-            iterable=pd.DataFrame(
-                np.hstack(
-                    [
-                        np.transpose(
-                            np.atleast_2d(np.arange(len(algebra_set.value)))
-                        ),
-                        algebra_set.value._container.values,
-                    ]
-                ),
-                columns=new_columns,
-            ),
+def bernoulli_vect_table_distrib(p, grounding):
+    if not isinstance(p, Constant[float]):
+        raise NeuroLangException(
+            "Bernoulli's parameter must be Constant[float]"
         )
-    )
-
-
-def index_and_natural_join(algebra_sets):
-    """
-    Add index columns to all the given algebra sets and apply a natural join on
-    all of them.
-
-    This is useful for keeping track of the tuple locations in the ordered
-    containers of the algebra sets.
-
-    """
-    solver = RelationalAlgebraSolver()
-    index_columns = []
-    result_set = None
-    for algebra_set in algebra_sets:
-        index_column = Symbol.fresh().name
-        index_columns.append(index_column)
-        indexed_algebra_set = add_index_column(algebra_set, index_column)
-        if result_set is None:
-            result_set = indexed_algebra_set
-        else:
-            result_set = solver.walk(
-                NaturalJoin(result_set, indexed_algebra_set)
-            )
-    return result_set, index_columns
-
-
-def rename_columns(algebra_set, new_columns):
-    """Rename all the columns of the given algebra set."""
-    if len(algebra_set.value.columns) != len(new_columns):
-        raise NeuroLangException("New names for all columns should be passed.")
-    if any(not isinstance(column, str) for column in new_columns):
-        raise NeuroLangException("All column names should be strings")
-    result = algebra_set
-    old_columns = result.value.columns
-    for old_column, new_column in zip(old_columns, new_columns):
-        if new_column != old_column:
-            result = RenameColumn(
-                result, Symbol(old_column), Symbol(new_column)
-            )
-    solver = RelationalAlgebraSolver()
-    return solver.walk(result)
-
-
-def get_intensional_vectorised_table_distribution(
-    rule_grounding, parent_groundings
-):
-    solver = RelationalAlgebraSolver()
-    consequent = rule_grounding.expression.consequent
-    antecedents = list(
-        extract_datalog_predicates(rule_grounding.expression.antecedent)
-    )
-    consequent_algebra_set = rule_grounding.algebra_set
-    antecedent_algebra_sets = [
-        solver.walk(
-            rename_columns(
-                parent_groundings[predicate.functor].algebra_set,
-                list(arg.name for arg in predicate.args),
-            )
-        )
-        for predicate in antecedents
-    ]
-    algebra_sets = [consequent_algebra_set] + antecedent_algebra_sets
-    indexed_set, index_columns = index_and_natural_join(algebra_sets)
-    rv_index_column = index_columns[0]
-    parent_rv_index_columns = index_columns[1:]
-    truth_probs = None
-    for parent_rv_index_column, antecedent in zip(
-        parent_rv_index_columns, antecedents
-    ):
-        vect = ReindexVector(
-            RandomVariableVectorPointer(antecedent.functor),
-            Projection(indexed_set, parent_rv_index_column),
-        )
-        if truth_probs is None:
-            truth_probs = vect
-        else:
-            truth_probs = MultiplyVectors(truth_probs, vect)
-    truth_probs = ReindexVector(
-        truth_probs, Projection(indexed_set, rv_index_column)
-    )
     return VectorisedTableDistribution(
-        table=Constant[Mapping](
+        Constant[Mapping](
             {
-                Constant[bool](False): SubtractVectors(
-                    Constant[float](1), truth_probs
-                ),
-                Constant[bool](True): truth_probs,
+                Constant[bool](False): Constant[float](1.0 - p.value),
+                Constant[bool](True): p,
             }
         ),
-        grounding=IndexedGrounding(
-            expression=rule_grounding.expression,
-            algebra_set=rule_grounding.algebra_set,
-            index_columns=Constant[Mapping](
-                {
-                    parent_rv_symb: Constant[str](parent_rv_index_column)
-                    for parent_rv_symb, parent_rv_index_column in zip(
-                        parent_groundings, parent_rv_index_columns
-                    )
-                }
-            ),
-        ),
+        grounding,
     )
+
+
+def extensional_vect_table_distrib(grounding):
+    return bernoulli_vect_table_distrib(Constant[float](1.0), grounding)
+
+
+def get_var_columns(function_application):
+    return Constant[Tuple](
+        tuple(arg.name for arg in function_application.args)
+    )
+
+
+def and_vect_table_distribution(rule_grounding):
+    var_columns = get_var_columns(rule_grounding.expression.consequent)
+    result = None
+    for antecedent_pred in extract_datalog_predicates(
+        rule_grounding.expression.antecedent
+    ):
+        antecedent_var_columns = get_var_columns(antecedent_pred)
+        antecedent_set = NameColumns(
+            get_var_columns(antecedent_pred),
+            RandomVariableValuePointer(antecedent_pred.functor),
+        )
+        if result is None:
+            result = antecedent_set
+        else:
+            result = NaturalJoin(result, antecedent_set)
+    return MultiplyColumns(result, _make_numerical_col_symb())
 
 
 class TranslateGroundedProbDatalogToGraphicalModel(PatternWalker):
@@ -267,7 +137,7 @@ class TranslateGroundedProbDatalogToGraphicalModel(PatternWalker):
         rv_symb = grounding.expression.functor
         self._add_grounding(rv_symb, grounding)
         self._add_random_variable(
-            rv_symb, get_extensional_vectorised_table_distribution(grounding)
+            rv_symb, extensional_vect_table_distrib(grounding)
         )
 
     @add_match(Grounding, lambda exp: is_probabilistic_fact(exp.expression))
@@ -276,25 +146,8 @@ class TranslateGroundedProbDatalogToGraphicalModel(PatternWalker):
         self._add_grounding(rv_symb, grounding)
         self._add_random_variable(
             rv_symb,
-            get_bernoulli_vectorised_table_distribution(
+            bernoulli_vect_table_distrib(
                 grounding.expression.consequent.probability, grounding
-            ),
-        )
-
-    @add_match(
-        Grounding,
-        lambda exp: is_existential_probabilistic_fact(exp.expression),
-    )
-    def existential_probfact_grounding(self, grounding):
-        rv_symb = grounding.expression.consequent.body.body.functor
-        self._add_grounding(rv_symb, grounding)
-        parameters = [
-            Symbol.fresh() for _ in range(len(grounding.algebra_set.value))
-        ]
-        self._add_random_variable(
-            rv_symb,
-            get_parameterised_bernoulli_vectorised_table_distribution(
-                parameters, grounding
             ),
         )
 
@@ -309,10 +162,7 @@ class TranslateGroundedProbDatalogToGraphicalModel(PatternWalker):
             )
         }
         self._add_random_variable(
-            rv_symb,
-            get_intensional_vectorised_table_distribution(
-                rule_grounding, parent_groundings
-            ),
+            rv_symb, and_vect_table_distribution(rule_grounding)
         )
         parent_rv_symbs = {
             pred.functor
@@ -389,130 +239,108 @@ class SuccQueryGraphicalModelSolver(PatternWalker):
             )
         )
 
-    def compute_marginal_distribution(self, rv_symb, parent_marginal_distribs):
-        result = None
-        parent_symbs = sorted(parent_marginal_distribs)
-        for parent_values in itertools.product(
-            *[
-                (Constant[bool](False), Constant[bool](True))
-                for _ in parent_symbs
-            ]
-        ):
-            new_term = self.compute_cpd(
-                rv_symb, dict(zip(parent_symbs, parent_values))
+
+def _iter_parents(parent_marginal_probabilities, parent_groundings):
+    parent_symbs = sorted(list(parent_marginal_probabilities))
+    for parent_bool_values in itertools.product(
+        *[(True, False) for _ in parent_symbs]
+    ):
+        parent_values = {
+            parent_symb: AddRepeatedValueColumn(
+                parent_groundings[parent_symb],
+                Constant[bool](parent_bool_value),
             )
-            for parent_symb, parent_value in zip(parent_symbs, parent_values):
-                new_term = MultiplyVectors(
-                    new_term,
-                    Projection(
-                        parent_marginal_distribs[parent_symb], parent_value
+            for parent_symb, parent_bool_value in zip(
+                parent_symbs, parent_bool_values
+            )
+        }
+        parent_margin_probs = {
+            parent_symb: parent_marginal_probabilities[parent_symb]
+            if parent_bool_value
+            else NegateProbability(parent_marginal_probabilities[parent_symb])
+            for parent_symb, parent_bool_value in zip(
+                parent_symbs, parent_bool_values
+            )
+        }
+        yield parent_values, parent_margin_probs
+
+
+def compute_marginal_probability(
+    cpd, parent_marginal_probabilities, parent_groundings
+):
+    if not len(parent_marginal_probabilities):
+        return ExtendedRelationalAlgebraSolver({}).walk(cpd)
+    else:
+        terms = []
+        for parent_values, parent_marg_probs in _iter_parents(
+            parent_marginal_probabilities, parent_groundings
+        ):
+            solver = ExtendedRelationalAlgebraSolver(parent_values)
+            terms.append(
+                MultiplyColumns(
+                    MultipleNaturalJoin(
+                        [solver.walk(cpd)] + list(parent_marg_probs.values())
                     ),
+                    _make_numerical_col_symb(),
                 )
-            if result is None:
-                result = new_term
-            else:
-                result = SumVectors(result, new_term)
-        return result
-
-    def compute_cpd(self, rv_symb, parent_values):
-        computer = CPDCalculator(parent_values)
-        return computer.walk(self.graphical_model.cpds[rv_symb])
-
-
-class CPDCalculator(RelationalAlgebraSolver):
-    def __init__(self, parent_values):
-        self.parent_values = parent_values
-
-    @add_match(VectorisedTableDistribution)
-    def vectorised_table_distribution(self, distrib):
-        columns, probs = zip(
-            *[
-                (rv_value.value, self.walk(rv_prob))
-                for rv_value, rv_prob in sorted(
-                    distrib.value.items(), key=lambda x: x[0].value
-                )
-            ]
+            )
+        return ExtendedRelationalAlgebraSolver({}).walk(
+            SumColumns(MultipleNaturalJoin(terms), _make_numerical_col_symb)
         )
+
+
+class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
+    def __init__(self, rv_values):
+        self.rv_values = rv_values
+
+    @add_match(RandomVariableValuePointer)
+    def rv_value_pointer(self, pointer):
+        if pointer not in self.rv_values:
+            raise NeuroLangException(
+                f"Unknown value for random variable {pointer}"
+            )
+        return self.rv_values[pointer]
+
+    @add_match(ConcatenateColumn)
+    def concatenate_column(self, concat_op):
+        new_column_name = _get_column_name_from_expression(concat_op.column)
         return Constant[AbstractSet](
             AlgebraSet(
-                iterable=pd.DataFrame(np.hstack(probs), columns=columns),
-                columns=columns,
+                iterable=pd.concat(
+                    [
+                        concat_op.relation.value._container,
+                        pd.DataFrame(
+                            {
+                                new_column_name: np.array(
+                                    concat_op.column_values.value
+                                )
+                            }
+                        ),
+                    ]
+                ),
+                columns=concat_op.relation.value.columns + [new_column_name],
             )
         )
 
-    @add_match(RandomVariableVectorPointer)
-    def rv_vect_pointer(self, pointer):
-        if pointer not in self.parent_values:
-            raise NeuroLangException(
-                "Pointer to unknown parent random variable"
+    @add_match(AddIndexColumn)
+    def add_index_column(self, add_index_op):
+        return self.walk(
+            ConcatenateColumn(
+                relation=add_index_op.relation,
+                column=add_index_op.index_column,
+                column_values=Constant[np.ndarray](
+                    np.arange(len(add_index_op.relation.value))
+                ),
             )
-        return self.parent_values[pointer.name]
-
-    @add_match(ReindexVector)
-    def reindex_vector(self, reindex_op):
-        _check_is_vector(reindex_op.vector)
-        old_values = vect_algebra_set_to_nparray(reindex_op.vector)
-        idx = vect_algebra_set_to_nparray(reindex_op.index)
-        columns = reindex_op.vector.value.columns
-        return nparray_to_vect_algebra_set(old_values[idx], columns)
-
-    @add_match(SumVectors)
-    def sum_vectors(self, sum_op):
-        return apply_arithmetic_vect_binary_op(sum_op, np.sum)
-
-    @add_match(MultiplyVectors)
-    def multiply_vectors(self, multiply_op):
-        return apply_arithmetic_vect_binary_op(multiply_op, np.prod)
-
-    @add_match(SubtractVectors)
-    def subtract_vectors(self, subtract_op):
-        return apply_arithmetic_vect_binary_op(subtract_op, np.subtract)
-
-
-def apply_arithmetic_vect_binary_op(op, np_fun):
-    return nparray_to_vect_algebra_set(
-        np_fun(
-            np.vstack(
-                [
-                    vect_algebra_set_to_nparray(op.first),
-                    vect_algebra_set_to_nparray(op.second),
-                ]
-            ),
-            axis=0,
-        ),
-        columns=op.first.value.columns,
-    )
-
-
-def vect_algebra_set_to_nparray(vect_algebra_set):
-    _check_is_vector(vect_algebra_set)
-    return np.array(vect_algebra_set.value.itervalues())
-
-
-def nparray_to_vect_algebra_set(numpy_array, columns):
-    return Constant[AbstractSet](
-        NamedRelationalAlgebraFrozenSet(
-            iterable=pd.DataFrame(numpy_array, columns=columns),
-            columns=columns,
-        )
-    )
-
-
-def _check_is_vector(algebra_set):
-    if len(algebra_set.value.columns) != 1:
-        raise NeuroLangException(
-            "Not a vector algebra set. Expected only one column"
         )
 
+    @add_match(SumColumns)
+    def sum_columns(self, sum_op):
+        return _apply_arithmetic_column_op(sum_op, np.sum)
 
-def compute_marginal_probability(rv_cpd, parent_marginal_distribs):
-    result = None
-    for parent_values, rv_cpd_distrib in rv_cpd_distribs.items():
-        if result is None:
-            result = _multiply_computed_distribs(
-                [rv_cpd_distrib]
-                + [parent_marginal_distrib.value[parent_value]]
-            )
+    @add_match(MultiplyColumns)
+    def multiply_columns(self, multiply_op):
+        return _apply_arithmetic_column_op(multiply_op, np.prod)
 
 
 def _build_query_algebra_set(query_predicate, grounding_columns):
@@ -526,3 +354,51 @@ def _build_query_algebra_set(query_predicate, grounding_columns):
     return Constant[AbstractSet](
         AlgebraSet(iterable={tuple(consts)}, columns=cols)
     )
+
+
+def _make_numerical_col_symb():
+    return Symbol("__numerical__" + Symbol.fresh().name)
+
+
+def _is_numerical_column(col):
+    return isinstance(col, Symbol) and col.name.startswith("__numerical__")
+
+
+def _apply_arithmetic_column_op(op, numpy_op):
+    concerned_columns = [
+        column
+        for column in op.relation.columns
+        if _is_numerical_column(column)
+    ]
+    dest_column_name = _get_column_name_from_expression(op.destination_column)
+    new_columns = [
+        col
+        for col in op.relation.value.columns
+        if col not in concerned_columns
+    ] + [dest_column_name]
+    iterable = pd.concat(
+        [
+            op.relation.value._container,
+            pd.DataFrame(
+                {
+                    dest_column_name: numpy_op(
+                        op.relation.value._container[concerned_columns], axis=1
+                    )
+                }
+            ),
+        ]
+    )[new_columns]
+    return Constant[AbstractSet](AlgebraSet(new_columns, iterable))
+
+
+def _get_column_name_from_expression(column_exp):
+    if isinstance(column_exp, Constant[str]):
+        return column_exp.value
+    elif isinstance(column_exp, Symbol):
+        return column_exp.name
+    else:
+        raise NeuroLangException(
+            "Cannot obtain column name from expression of type {}".format(
+                type(column_exp)
+            )
+        )
