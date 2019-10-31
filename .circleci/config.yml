@@ -58,6 +58,8 @@ commands:
             make test
             ./cc-test-reporter after-build --coverage-input-type coverage.py --exit-code $?
             python-codacy-coverage -r coverage.xml
+            mkdir test_reports
+            cp utest.xml test_reports
 
       #- run:
          #name: run sonar
@@ -70,10 +72,10 @@ commands:
             #  sh sonar-scanner-3.3.0.1492-linux/bin/sonar-scanner -Dsonar.projectKey=parietal:neurolang:PR${CIRCLE_PR_NUMBER}:v0.01 -Dsonar.github.pullRequest=${CIRCLE_PR_NUMBER} -Dsonar.github.oauth=${GITHUB_NC_OATH} -Dsonar.login=${SONAR_LOGIN} -Dsonar.analysis.mode=issues
             #fi
       - store_artifacts:
-          path: test-reports
-          destination: test-reports
+          path: test_reports
+          destination: test_reports
       - store_test_results:
-          path: test-reports
+          path: test_reports
 
 
 jobs:
