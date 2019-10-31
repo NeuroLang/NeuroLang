@@ -58,6 +58,8 @@ commands:
             make test
             ./cc-test-reporter after-build --coverage-input-type coverage.py --exit-code $?
             python-codacy-coverage -r coverage.xml
+            mkdir test_reports
+            cp utest.xml test_reports
 
       #- run:
          #name: run sonar
@@ -70,8 +72,10 @@ commands:
             #  sh sonar-scanner-3.3.0.1492-linux/bin/sonar-scanner -Dsonar.projectKey=parietal:neurolang:PR${CIRCLE_PR_NUMBER}:v0.01 -Dsonar.github.pullRequest=${CIRCLE_PR_NUMBER} -Dsonar.github.oauth=${GITHUB_NC_OATH} -Dsonar.login=${SONAR_LOGIN} -Dsonar.analysis.mode=issues
             #fi
       - store_artifacts:
-          path: test-reports
-          destination: test-reports
+          path: test_reports
+          destination: test_reports
+      - store_test_results:
+          path: test_reports
 
 
 jobs:
@@ -127,7 +131,13 @@ jobs:
             pip install virtualenv
             pip install asv
             asv machine --yes
-            asv run -v $(git rev-parse HEAD)...$(git rev-parse HEAD~5)
+            if 
+              [ "${CIRCLE_BRANCH}" = "master" ]
+            then
+              asv run -s -v $(git rev-parse HEAD)...$(git rev-parse HEAD~5)
+            else
+              asv continuous -s -v master $(git rev-parse HEAD)
+            fi
             asv publish
           no_output_timeout: 1h
       - store_artifacts:
