@@ -11,7 +11,7 @@ from ...unification import apply_substitution_arguments
 from ...utils import NamedRelationalAlgebraFrozenSet
 from ..expression_processing import (extract_datalog_free_variables,
                                      extract_datalog_predicates)
-from ..expressions import Conjunction, Implication
+from ..expressions import Conjunction, Implication, Negation
 from ..instance import MapInstance
 from ..translate_to_named_ra import TranslateToNamedRA
 from ..wrapped_collections import WrappedRelationalAlgebraSet
@@ -277,7 +277,10 @@ class ChaseNamedRelationalAlgebraMixin:
         builtin_predicates = []
         cq_free_vars = set()
         for predicate in rule_predicates:
-            functor = predicate.functor
+            if isinstance(predicate, Negation):
+                functor = predicate.formula
+            else:
+                functor = predicate.functor
             if functor in self.idb_edb_symbols:
                 edb_idb_predicates.append(predicate)
                 cq_free_vars |= extract_datalog_free_variables(predicate)

@@ -8,6 +8,7 @@ from ..datalog import (
     Implication,
     Fact,
 )
+from ..datalog.chase import Chase
 from ..datalog.expressions import TranslateToLogic
 
 C_ = expressions.Constant
@@ -61,7 +62,8 @@ def test_stratified_and_chase():
     dl = Datalog()
     dl.walk(program)
 
-    dc = DatalogChaseNegation(dl)
+    #dc = DatalogChaseNegation(dl)
+    dc = Chase(dl)
     solution_instance = dc.build_chase_solution()
 
     final_instance = {
