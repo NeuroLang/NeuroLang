@@ -7,7 +7,10 @@ from neurolang import frontend as fe
 
 class TimeRegionComparisons:
     params = [
-        ['overlapping', 'anterior_of', 'posterior_of', 'superior_of', 'inferior_of', 'left_of', 'right_of']
+        [
+            'overlapping', 'anterior_of', 'posterior_of',
+            'superior_of', 'inferior_of', 'left_of', 'right_of'
+        ]
     ]
 
     param_names = ['direction']
@@ -30,7 +33,10 @@ class TimeRegionComparisons:
             voxels = np.transpose((data == label).nonzero())
             if len(voxels) == 0:
                 continue
-            rset.append((name.decode('utf8'), fe.ExplicitVBR(voxels, aff, image_dim=img.shape)))
+            rset.append((
+                name.decode('utf8'),
+                fe.ExplicitVBR(voxels, aff, image_dim=img.shape, prebuild_tree=True))
+            )
         nl.add_tuple_set(rset, name='destrieux')
 
         img = nib.load(yeo_atlas['thick_17'])
@@ -44,7 +50,10 @@ class TimeRegionComparisons:
             voxels = np.transpose((data == label).nonzero())
             if len(voxels) == 0:
                 continue
-            rset.append((name, fe.ExplicitVBR(voxels, aff, image_dim=data.shape)))
+            rset.append((
+                name,
+                fe.ExplicitVBR(voxels, aff, image_dim=data.shape, prebuild_tree=True)
+            ))
         nl.add_tuple_set(rset, name='yeo')
 
         self.nl = nl
