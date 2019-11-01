@@ -382,7 +382,7 @@ def test_probdatalog_grounding():
         elif grounding.expression.functor == Q:
             assert np.all(
                 np.array(list(grounding.relation.value.itervalues()))
-                == np.array(["a", "b"], dtype=str)
+                == np.array([["a"], ["b"]], dtype=str)
             )
 
 

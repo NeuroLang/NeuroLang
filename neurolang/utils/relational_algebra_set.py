@@ -225,9 +225,9 @@ class RelationalAlgebraFrozenSet(Set):
                 yield g_id, group_set
 
     def itervalues(self):
-        if len(self) == 0:
-            raise StopIteration
-        return iter(self._container.values.squeeze())
+        if not len(self):
+            return iter([])
+        return iter(self._container.values)
 
     def __hash__(self):
         v = self._container.values

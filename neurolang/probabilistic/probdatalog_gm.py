@@ -61,9 +61,12 @@ class AlgebraSet(NamedRelationalAlgebraFrozenSet):
             self._container = self._renew_index(self._container)
         else:
             self._container = pd.DataFrame(
-                list(iterable), columns=self._columns
+                np.array(list(iterable)), columns=self._columns
             )
             self._container = self._renew_index(self._container)
+
+    def to_numpy(self):
+        return np.array(list(self.itervalues()))
 
 
 def bernoulli_vect_table_distrib(p, grounding):
@@ -86,7 +89,9 @@ def extensional_vect_table_distrib(grounding):
     return bernoulli_vect_table_distrib(Constant[float](1.0), grounding)
 
 
-def get_var_columns(function_application):
+def _args_to_column_names(function_application):
+    if any(not isinstance(arg, Symbol) for arg in function_application.args):
+        raise NeuroLangException("All arguments must be symbols")
     return Constant[Tuple](
         tuple(arg.name for arg in function_application.args)
     )
@@ -96,7 +101,7 @@ def and_vect_table_distribution(rule_grounding):
     return MultiplyColumns(
         MultipleNaturalJoin(
             NameColumns(
-                get_var_columns(antecedent_pred),
+                _args_to_column_names(antecedent_pred),
                 RandomVariableValuePointer(antecedent_pred.functor),
             )
             for antecedent_pred in extract_datalog_predicates(
@@ -276,13 +281,17 @@ def compute_marginal_probability(
             terms.append(
                 MultiplyColumns(
                     MultipleNaturalJoin(
-                        [solver.walk(cpd)] + list(parent_marg_probs.values())
-                    ),
-                    _make_numerical_col_symb(),
+                        Constant[Tuple](
+                            tuple(
+                                [solver.walk(cpd)]
+                                + list(parent_marg_probs.values())
+                            )
+                        )
+                    )
                 )
             )
         return ExtendedRelationalAlgebraSolver({}).walk(
-            SumColumns(MultipleNaturalJoin(terms), _make_numerical_col_symb)
+            SumColumns(MultipleNaturalJoin(Constant[Tuple](tuple(terms))))
         )
 
 
@@ -337,11 +346,13 @@ class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
 
     @add_match(SumColumns)
     def sum_columns(self, sum_op):
-        return _apply_arithmetic_column_op(sum_op, np.sum)
+        return _apply_arithmetic_column_op(self.walk(sum_op.relation), np.sum)
 
     @add_match(MultiplyColumns)
     def multiply_columns(self, multiply_op):
-        return _apply_arithmetic_column_op(multiply_op, np.prod)
+        return _apply_arithmetic_column_op(
+            self.walk(multiply_op.relation), np.prod
+        )
 
     @add_match(AddRepeatedValueColumn)
     def add_repeated_value_column(self, add_op):
@@ -388,28 +399,30 @@ def _make_numerical_col_symb():
 
 
 def _get_relation_numerical_columns(relation):
-    return (col for col in relation.columns if col.startswith("__numerical__"))
+    return [
+        col
+        for col in relation.value.columns
+        if col.startswith("__numerical__")
+    ]
 
 
-def _apply_arithmetic_column_op(op, numpy_op):
-    numerical_columns = _get_relation_numerical_columns(op.relation)
+def _apply_arithmetic_column_op(relation, numpy_op):
+    numerical_columns = _get_relation_numerical_columns(relation)
     non_numerical_columns = [
-        col for col in op.relation.columns if col not in numerical_columns
+        col for col in relation.value.columns if col not in numerical_columns
     ]
     new_column = _make_numerical_col_symb().name
-    resulting_columns = [non_numerical_columns] + [new_column]
-    iterable = pd.concat(
-        [
-            op.relation.value._container[non_numerical_columns],
-            pd.DataFrame(
-                {
-                    new_column: numpy_op(
-                        op.relation.value._container[numerical_columns], axis=1
-                    )
-                }
-            ),
-        ]
+    resulting_columns = non_numerical_columns + [new_column]
+    new_column_values = numpy_op(
+        relation.value._container[numerical_columns], axis=1
     )
+    if len(non_numerical_columns):
+        iterable = relation.value._container[non_numerical_columns].copy()
+        iterable[new_column] = numpy_op(
+            relation.value._container[numerical_columns], axis=1
+        )
+    else:
+        iterable = pd.DataFrame({new_column: new_column_values})
     return Constant[AbstractSet](AlgebraSet(resulting_columns, iterable))
 
 
