@@ -66,7 +66,7 @@ class AlgebraSet(NamedRelationalAlgebraFrozenSet):
             self._container = self._renew_index(self._container)
 
     def to_numpy(self):
-        return np.array(list(self.itervalues()))
+        return self._container.values
 
 
 def bernoulli_vect_table_distrib(p, grounding):
