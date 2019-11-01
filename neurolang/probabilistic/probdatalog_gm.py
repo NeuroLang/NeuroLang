@@ -1,5 +1,5 @@
 import itertools
-from typing import Mapping, AbstractSet, Tuple
+from typing import Mapping, AbstractSet
 
 import numpy as np
 import pandas as pd
@@ -18,9 +18,7 @@ from ..datalog.expression_processing import extract_datalog_predicates
 from ..relational_algebra import (
     RelationalAlgebraSolver,
     NaturalJoin,
-    Projection,
     RenameColumn,
-    RelationalAlgebraOperation,
 )
 from ..utils.relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet,
@@ -31,7 +29,6 @@ from .expressions import (
     VectorisedTableDistribution,
     ConcatenateColumn,
     AddIndexColumn,
-    ArithmeticOperationOnColumns,
     SumColumns,
     MultiplyColumns,
     RandomVariableValuePointer,

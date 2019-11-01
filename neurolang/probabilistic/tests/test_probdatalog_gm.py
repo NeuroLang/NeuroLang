@@ -1,4 +1,4 @@
-from typing import Mapping, AbstractSet, Tuple
+from typing import Mapping, AbstractSet
 
 import pytest
 import pandas as pd
@@ -22,7 +22,6 @@ from ...expressions import (
     Symbol,
     Constant,
     ExpressionBlock,
-    ExistentialPredicate,
 )
 from ...datalog.expressions import Implication, Conjunction
 from ..expressions import (
@@ -33,7 +32,6 @@ from ..expressions import (
     AddIndexColumn,
     SumColumns,
     MultiplyColumns,
-    MultipleNaturalJoin,
     AddRepeatedValueColumn,
 )
 
