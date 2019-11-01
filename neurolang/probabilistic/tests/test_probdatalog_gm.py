@@ -223,3 +223,16 @@ def test_concatenate_column():
     )
     op = ConcatenateColumn(relation, column_name, column_values)
     assert solver.walk(op) == expected
+
+
+def _as_tuple_set(obj):
+    if isinstance(obj, np.ndarray) and len(obj.shape) == 2:
+        return set(tuple(obj[i]) for i in range(obj.shape[0]))
+    elif isinstance(obj, AlgebraSet):
+        return set(tuple(val) for val in obj.itervalues())
+    elif isinstance(obj, Constant[AbstractSet]):
+        return _as_tuple_set(obj.value)
+
+
+def _assert_tuple_sets_equality(first, second):
+    return _as_tuple_set(first) == _as_tuple_set(second)

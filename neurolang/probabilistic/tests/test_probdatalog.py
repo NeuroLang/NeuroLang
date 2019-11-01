@@ -371,7 +371,7 @@ def test_probdatalog_grounding():
     for grounding in grounded.expressions:
         if grounding.expression.functor == P:
             assert np.all(
-                np.vstack(list(grounding.algebra_set.value.itervalues()))
+                np.vstack(list(grounding.relation.value.itervalues()))
                 == np.vstack(
                     [
                         np.array(["a", "b"], dtype=str),
@@ -381,7 +381,7 @@ def test_probdatalog_grounding():
             )
         elif grounding.expression.functor == Q:
             assert np.all(
-                np.array(list(grounding.algebra_set.value.itervalues()))
+                np.array(list(grounding.relation.value.itervalues()))
                 == np.array(["a", "b"], dtype=str)
             )
 
