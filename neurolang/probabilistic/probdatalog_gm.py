@@ -21,7 +21,6 @@ from ..relational_algebra import (
     Projection,
     RenameColumn,
     RelationalAlgebraOperation,
-    NameColumns,
 )
 from ..utils.relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet,
@@ -39,6 +38,7 @@ from .expressions import (
     NegateProbability,
     AddRepeatedValueColumn,
     MultipleNaturalJoin,
+    RenameColumns,
 )
 from .probdatalog import (
     Grounding,
@@ -61,7 +61,7 @@ class AlgebraSet(NamedRelationalAlgebraFrozenSet):
             self._container = self._renew_index(self._container)
         else:
             self._container = pd.DataFrame(
-                np.array(list(iterable)), columns=self._columns
+                list(iterable), columns=self._columns
             )
             self._container = self._renew_index(self._container)
 
@@ -89,23 +89,23 @@ def extensional_vect_table_distrib(grounding):
     return bernoulli_vect_table_distrib(Constant[float](1.0), grounding)
 
 
-def _args_to_column_names(function_application):
-    if any(not isinstance(arg, Symbol) for arg in function_application.args):
-        raise NeuroLangException("All arguments must be symbols")
-    return Constant[Tuple](
-        tuple(arg.name for arg in function_application.args)
-    )
-
-
-def and_vect_table_distribution(rule_grounding):
+def and_vect_table_distribution(rule_grounding, parent_groundings):
     return MultiplyColumns(
         MultipleNaturalJoin(
-            NameColumns(
-                _args_to_column_names(antecedent_pred),
-                RandomVariableValuePointer(antecedent_pred.functor),
-            )
-            for antecedent_pred in extract_datalog_predicates(
-                rule_grounding.expression.antecedent
+            tuple(
+                RenameColumns(
+                    RandomVariableValuePointer(antecedent_pred.functor.name),
+                    tuple(
+                        Symbol(col)
+                        for col in parent_groundings[
+                            antecedent_pred.functor
+                        ].relation.value.columns
+                    ),
+                    antecedent_pred.args,
+                )
+                for antecedent_pred in extract_datalog_predicates(
+                    rule_grounding.expression.antecedent
+                )
             )
         )
     )
@@ -164,7 +164,8 @@ class TranslateGroundedProbDatalogToGraphicalModel(PatternWalker):
             )
         }
         self._add_random_variable(
-            rv_symb, and_vect_table_distribution(rule_grounding)
+            rv_symb,
+            and_vect_table_distribution(rule_grounding, parent_groundings),
         )
         parent_rv_symbs = {
             pred.functor
@@ -220,7 +221,7 @@ class SuccQueryGraphicalModelSolver(PatternWalker):
         )
         rv_symb = actual_predicate.functor
         parent_rv_symbs = sorted(list(self.graphical_model.edges[rv_symb]))
-        if len(parent_rv_symbs):
+        if parent_rv_symbs:
             rule = self.graphical_model.groundings.value[rv_symb].expression
             parent_marginal_distribs = {
                 pred.functor: self.walk(SuccQuery(pred))
@@ -249,8 +250,8 @@ def _iter_parents(parent_marginal_probabilities, parent_groundings):
     ):
         parent_values = {
             parent_symb: AddRepeatedValueColumn(
-                parent_groundings[parent_symb],
-                Constant[bool](parent_bool_value),
+                parent_groundings[parent_symb].relation,
+                Constant[int](int(parent_bool_value)),
             )
             for parent_symb, parent_bool_value in zip(
                 parent_symbs, parent_bool_values
@@ -281,17 +282,15 @@ def compute_marginal_probability(
             terms.append(
                 MultiplyColumns(
                     MultipleNaturalJoin(
-                        Constant[Tuple](
-                            tuple(
-                                [solver.walk(cpd)]
-                                + list(parent_marg_probs.values())
-                            )
+                        tuple(
+                            [solver.walk(cpd)]
+                            + list(parent_marg_probs.values())
                         )
                     )
                 )
             )
         return ExtendedRelationalAlgebraSolver({}).walk(
-            SumColumns(MultipleNaturalJoin(Constant[Tuple](tuple(terms))))
+            SumColumns(MultipleNaturalJoin(tuple(terms)))
         )
 
 
@@ -299,13 +298,17 @@ class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
     def __init__(self, rv_values):
         self.rv_values = rv_values
 
+    @add_match(Constant[AbstractSet])
+    def relation(self, relation):
+        return relation
+
     @add_match(RandomVariableValuePointer)
     def rv_value_pointer(self, pointer):
         if pointer not in self.rv_values:
             raise NeuroLangException(
                 f"Unknown value for random variable {pointer}"
             )
-        return Constant[AbstractSet](self.rv_values[pointer])
+        return self.walk(self.rv_values[pointer])
 
     @add_match(ConcatenateColumn)
     def concatenate_column(self, concat_op):
@@ -313,23 +316,10 @@ class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
         new_columns = list(concat_op.relation.value.columns) + [
             new_column_name
         ]
+        new_iterable = concat_op.relation.value._container.copy()
+        new_iterable[new_column_name] = concat_op.column_values.value
         return Constant[AbstractSet](
-            AlgebraSet(
-                iterable=pd.DataFrame(
-                    np.hstack(
-                        [
-                            concat_op.relation.value._container.values,
-                            np.transpose(
-                                np.atleast_2d(
-                                    np.array(concat_op.column_values.value)
-                                )
-                            ),
-                        ]
-                    ),
-                    columns=new_columns,
-                ),
-                columns=new_columns,
-            )
+            AlgebraSet(iterable=new_iterable, columns=new_columns)
         )
 
     @add_match(AddIndexColumn)
@@ -343,6 +333,16 @@ class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
                 ),
             )
         )
+
+    @add_match(RenameColumns)
+    def rename_columns(self, op):
+        result = None
+        for old_col, new_col in zip(op.old_names, op.new_names):
+            if result is None:
+                result = RenameColumn(op.relation, old_col, new_col)
+            else:
+                result = RenameColumn(result, old_col, new_col)
+        return self.walk(result)
 
     @add_match(SumColumns)
     def sum_columns(self, sum_op):
@@ -362,10 +362,34 @@ class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
                 column=_make_numerical_col_symb(),
                 column_values=Constant[np.ndarray](
                     np.repeat(
-                        add_op.repeated_value, len(add_op.relation.value)
+                        add_op.repeated_value.value, len(add_op.relation.value)
                     )
                 ),
             )
+        )
+
+    @add_match(MultipleNaturalJoin)
+    def multiple_natural_join(self, op):
+        result = None
+        for relation in op.relations:
+            if result is None:
+                result = relation
+            else:
+                result = NaturalJoin(result, relation)
+        return self.walk(result)
+
+    @add_match(NegateProbability)
+    def negate_probability(self, neg_op):
+        numerical_columns = _get_relation_numerical_columns(neg_op.relation)
+        if len(numerical_columns) != 1:
+            raise NeuroLangException("Expected only one numerical column")
+        new_container = neg_op.relation.value._container.copy()
+        new_container[_make_numerical_col_symb().name] = (
+            1.0 - new_container[numerical_columns[0]].values
+        )
+        new_container.drop(columns=numerical_columns)
+        return Constant[AbstractSet](
+            AlgebraSet(iterable=new_container, columns=new_container.columns)
         )
 
     @add_match(VectorisedTableDistribution)
@@ -377,7 +401,7 @@ class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
             )
         else:
             return self.walk(
-                NaturalJoin(self.grounding.relation, self.walk(truth_prob))
+                NaturalJoin(distrib.grounding.relation, self.walk(truth_prob))
             )
 
 
@@ -416,7 +440,7 @@ def _apply_arithmetic_column_op(relation, numpy_op):
     new_column_values = numpy_op(
         relation.value._container[numerical_columns], axis=1
     )
-    if len(non_numerical_columns):
+    if non_numerical_columns:
         iterable = relation.value._container[non_numerical_columns].copy()
         iterable[new_column] = numpy_op(
             relation.value._container[numerical_columns], axis=1

@@ -12,7 +12,8 @@ from ..probdatalog_gm import (
     extensional_vect_table_distrib,
     ExtendedRelationalAlgebraSolver,
     _make_numerical_col_symb,
-    _args_to_column_names,
+    compute_marginal_probability,
+    and_vect_table_distribution,
 )
 from ..probdatalog import Grounding
 from ...relational_algebra import NaturalJoin
@@ -33,6 +34,7 @@ from ..expressions import (
     SumColumns,
     MultiplyColumns,
     MultipleNaturalJoin,
+    AddRepeatedValueColumn,
 )
 
 P = Symbol("P")
@@ -200,9 +202,11 @@ def test_extensional_vect_table_distrib():
 
 def test_rv_value_pointer():
     parent_values = {
-        P: AlgebraSet(
-            iterable=[("a", 1), ("b", 1), ("c", 0)],
-            columns=["x", _make_numerical_col_symb().name],
+        P: Constant[AbstractSet](
+            AlgebraSet(
+                iterable=[("a", 1), ("b", 1), ("c", 0)],
+                columns=["x", _make_numerical_col_symb().name],
+            )
         )
     }
     solver = ExtendedRelationalAlgebraSolver(parent_values)
@@ -279,12 +283,80 @@ def test_sum_columns():
     assert _eq_tuple_sets(result, expected)
 
 
-def test_args_to_column_names():
-    assert _args_to_column_names(P(x, y, z)) == Constant[Tuple](
-        tuple(["x", "y", "z"])
+def test_multiply_columns():
+    solver = ExtendedRelationalAlgebraSolver({})
+    r1 = Constant[AbstractSet](
+        AlgebraSet(
+            iterable=np.arange(100) * 4,
+            columns=[_make_numerical_col_symb().name],
+        )
     )
-    with pytest.raises(NeuroLangException):
-        _args_to_column_names(P(x, a, y))
+    expected = Constant[AbstractSet](
+        AlgebraSet(
+            iterable=np.arange(100) * 40 * np.arange(100),
+            columns=[_make_numerical_col_symb().name],
+        )
+    )
+    result = solver.walk(
+        MultiplyColumns(
+            ConcatenateColumn(
+                r1,
+                _make_numerical_col_symb(),
+                Constant[np.ndarray](np.arange(100) * 10),
+            )
+        )
+    )
+    assert _eq_tuple_sets(result, expected)
+
+
+def test_add_repeated_value_column():
+    solver = ExtendedRelationalAlgebraSolver({})
+    relation = Constant[AbstractSet](
+        AlgebraSet(iterable=["a", "b", "c"], columns=["x"])
+    )
+    expected = Constant[AbstractSet](
+        AlgebraSet(
+            iterable=[("a", 0), ("b", 0), ("c", 0)],
+            columns=["x", _make_numerical_col_symb().name],
+        )
+    )
+    result = solver.walk(AddRepeatedValueColumn(relation, Constant[int](0)))
+    assert _eq_tuple_sets(result, expected)
+
+
+def test_compute_marginal_probability_single_parent():
+    parent_symb = P
+    parent_marginal_distrib = Constant[AbstractSet](
+        AlgebraSet(
+            iterable=[("a", 0.2), ("b", 0.8), ("c", 1.0)],
+            columns=["x", _make_numerical_col_symb().name],
+        )
+    )
+    grounding = Grounding(
+        Implication(Q(x), P(x)),
+        Constant[AbstractSet](AlgebraSet(iterable=["c", "a"], columns=["x"])),
+    )
+    cpd = and_vect_table_distribution(
+        rule_grounding=grounding,
+        parent_groundings={
+            parent_symb: Grounding(
+                P(y),
+                Constant[AbstractSet](
+                    AlgebraSet(iterable=["a", "b", "c"], columns=["y"])
+                ),
+            )
+        },
+    )
+    marginal = compute_marginal_probability(
+        cpd, {parent_symb: parent_marginal_distrib}, {parent_symb: grounding}
+    )
+    assert _eq_tuple_sets(
+        marginal,
+        AlgebraSet(
+            iterable=[("c", 1.0), ("a", 0.2)],
+            columns=["x", _make_numerical_col_symb().name],
+        ),
+    )
 
 
 def _as_tuple_set(obj):

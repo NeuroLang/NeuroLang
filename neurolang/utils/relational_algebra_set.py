@@ -225,9 +225,10 @@ class RelationalAlgebraFrozenSet(Set):
                 yield g_id, group_set
 
     def itervalues(self):
-        if not len(self):
+        if len(self) == 0:
             return iter([])
-        return iter(self._container.values)
+        else:
+            return iter(self._container.values)
 
     def __hash__(self):
         v = self._container.values
@@ -347,7 +348,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
 
     def rename_column(self, src, dst):
         if dst in self._columns:
-            raise ValueError(f'{dst} can not be in the columns')
+            return self
         if src not in self._columns:
             raise ValueError(f'{src} not in columns')
         src_idx = self._columns.index(src)
