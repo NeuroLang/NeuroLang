@@ -55,12 +55,13 @@ class AlgebraSet(NamedRelationalAlgebraFrozenSet):
             self._initialize_from_instance_same_class(iterable)
         elif isinstance(iterable, pd.DataFrame):
             self._container = pd.DataFrame(iterable, columns=self.columns)
-            self._container = self._renew_index(self._container)
         else:
             self._container = pd.DataFrame(
                 list(iterable), columns=self._columns
             )
-            self._container = self._renew_index(self._container)
+
+        if list(self._container.columns) != list(self._columns):
+            raise NeuroLangException("heonuahoeu")
 
     def to_numpy(self):
         return self._container.values
@@ -217,7 +218,10 @@ class SuccQueryGraphicalModelSolver(PatternWalker):
             self.graphical_model[query.predicate.functor]
         )
         rv_symb = actual_predicate.functor
-        parent_rv_symbs = sorted(list(self.graphical_model.edges[rv_symb]))
+        parent_rv_symbs = sorted(
+            list(self.graphical_model.edges[rv_symb]),
+            key=lambda symb: symb.name,
+        )
         if parent_rv_symbs:
             rule = self.graphical_model.groundings.value[rv_symb].expression
             parent_marginal_distribs = {
@@ -241,7 +245,9 @@ class SuccQueryGraphicalModelSolver(PatternWalker):
 
 
 def _iter_parents(parent_marginal_probabilities, parent_groundings):
-    parent_symbs = sorted(list(parent_marginal_probabilities))
+    parent_symbs = sorted(
+        list(parent_marginal_probabilities), key=lambda symb: symb.name
+    )
     for parent_bool_values in itertools.product(
         *[(True, False) for _ in parent_symbs]
     ):
@@ -309,15 +315,14 @@ class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
 
     @add_match(ConcatenateColumn)
     def concatenate_column(self, concat_op):
+        relation = self.walk(concat_op.relation)
         new_column_name = _get_column_name_from_expression(concat_op.column)
-        new_columns = list(concat_op.relation.value.columns) + [
-            new_column_name
-        ]
-        new_iterable = concat_op.relation.value._container.copy()
-        new_iterable[new_column_name] = concat_op.column_values.value
-        return Constant[AbstractSet](
-            AlgebraSet(iterable=new_iterable, columns=new_columns)
-        )
+        new_columns = list(relation.value.columns) + [new_column_name]
+        iterable = relation.value._container.copy()
+        iterable[new_column_name] = concat_op.column_values.value
+        iterable = iterable[new_columns]
+        relation = Constant[AbstractSet](AlgebraSet(new_columns, iterable))
+        return relation
 
     @add_match(AddIndexColumn)
     def add_index_column(self, add_index_op):
@@ -333,12 +338,9 @@ class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
 
     @add_match(RenameColumns)
     def rename_columns(self, op):
-        result = None
+        result = op.relation
         for old_col, new_col in zip(op.old_names, op.new_names):
-            if result is None:
-                result = RenameColumn(op.relation, old_col, new_col)
-            else:
-                result = RenameColumn(result, old_col, new_col)
+            result = RenameColumn(result, old_col, new_col)
         return self.walk(result)
 
     @add_match(SumColumns)
@@ -353,41 +355,37 @@ class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
 
     @add_match(AddRepeatedValueColumn)
     def add_repeated_value_column(self, add_op):
+        col_vals = Constant[np.ndarray](
+            np.repeat(add_op.repeated_value.value, len(add_op.relation.value))
+        )
         return self.walk(
             ConcatenateColumn(
                 relation=add_op.relation,
                 column=_make_numerical_col_symb(),
-                column_values=Constant[np.ndarray](
-                    np.repeat(
-                        add_op.repeated_value.value, len(add_op.relation.value)
-                    )
-                ),
+                column_values=col_vals,
             )
         )
 
     @add_match(MultipleNaturalJoin)
     def multiple_natural_join(self, op):
-        result = None
-        for relation in op.relations:
-            if result is None:
-                result = relation
-            else:
-                result = NaturalJoin(result, relation)
+        relations_it = iter(op.relations)
+        result = next(relations_it)
+        for relation in relations_it:
+            result = NaturalJoin(result, relation)
         return self.walk(result)
 
     @add_match(NegateProbability)
     def negate_probability(self, neg_op):
-        numerical_columns = _get_relation_numerical_columns(neg_op.relation)
-        if len(numerical_columns) != 1:
+        non_num_cols, num_cols = _split_numerical_cols(neg_op.relation)
+        if len(num_cols) != 1:
             raise NeuroLangException("Expected only one numerical column")
-        new_container = neg_op.relation.value._container.copy()
-        new_container[_make_numerical_col_symb().name] = (
-            1.0 - new_container[numerical_columns[0]].values
-        )
-        new_container.drop(columns=numerical_columns)
-        return Constant[AbstractSet](
-            AlgebraSet(iterable=new_container, columns=new_container.columns)
-        )
+        new_prob_col = _make_numerical_col_symb().name
+        new_cols = list(non_num_cols) + [new_prob_col]
+        iterable = neg_op.relation.value._container.copy()
+        iterable[new_prob_col] = 1.0 - iterable[num_cols[0]].values
+        iterable.drop(columns=num_cols)
+        iterable = iterable[new_cols]
+        return Constant[AbstractSet](AlgebraSet(new_cols, iterable))
 
     @add_match(VectorisedTableDistribution)
     def vectorised_table_distribution(self, distrib):
@@ -419,32 +417,29 @@ def _make_numerical_col_symb():
     return Symbol("__numerical__" + Symbol.fresh().name)
 
 
-def _get_relation_numerical_columns(relation):
-    return [
-        col
-        for col in relation.value.columns
-        if col.startswith("__numerical__")
-    ]
+def _split_numerical_cols(relation):
+    non_num = []
+    num = []
+    for col in relation.value.columns:
+        if col.startswith("__numerical__"):
+            num.append(col)
+        else:
+            non_num.append(col)
+    return non_num, num
 
 
 def _apply_arithmetic_column_op(relation, numpy_op):
-    numerical_columns = _get_relation_numerical_columns(relation)
-    non_numerical_columns = [
-        col for col in relation.value.columns if col not in numerical_columns
-    ]
-    new_column = _make_numerical_col_symb().name
-    resulting_columns = non_numerical_columns + [new_column]
-    new_column_values = numpy_op(
-        relation.value._container[numerical_columns], axis=1
-    )
-    if non_numerical_columns:
-        iterable = relation.value._container[non_numerical_columns].copy()
-        iterable[new_column] = numpy_op(
-            relation.value._container[numerical_columns], axis=1
-        )
+    non_num_cols, num_cols = _split_numerical_cols(relation)
+    new_col = _make_numerical_col_symb().name
+    new_cols = list(non_num_cols) + [new_col]
+    new_col_vals = numpy_op(relation.value._container[num_cols], axis=1)
+    if non_num_cols:
+        iterable = relation.value._container[non_num_cols].copy()
+        iterable[new_col] = new_col_vals
     else:
-        iterable = pd.DataFrame({new_column: new_column_values})
-    return Constant[AbstractSet](AlgebraSet(resulting_columns, iterable))
+        iterable = pd.DataFrame({new_col: new_col_vals})
+    iterable = iterable[new_cols]
+    return Constant[AbstractSet](AlgebraSet(new_cols, iterable))
 
 
 def _get_column_name_from_expression(column_exp):

@@ -12,17 +12,14 @@ from ..probdatalog_gm import (
     extensional_vect_table_distrib,
     ExtendedRelationalAlgebraSolver,
     _make_numerical_col_symb,
+    _split_numerical_cols,
     compute_marginal_probability,
     and_vect_table_distribution,
 )
 from ..probdatalog import Grounding
-from ...relational_algebra import NaturalJoin
+from ...relational_algebra import NaturalJoin, RelationalAlgebraSolver
 from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
-from ...expressions import (
-    Symbol,
-    Constant,
-    ExpressionBlock,
-)
+from ...expressions import Symbol, Constant, ExpressionBlock
 from ...datalog.expressions import Implication, Conjunction
 from ..expressions import (
     VectorisedTableDistribution,
@@ -37,6 +34,7 @@ from ..expressions import (
 
 P = Symbol("P")
 Q = Symbol("Q")
+Z = Symbol("Z")
 T = Symbol("T")
 x = Symbol("x")
 y = Symbol("y")
@@ -234,7 +232,7 @@ def test_concatenate_column():
     result = solver.walk(
         ConcatenateColumn(relation, column_name, column_values)
     )
-    assert _eq_tuple_sets(result, expected)
+    _assert_relations_almost_equal(result, expected)
 
 
 def test_add_index_column():
@@ -251,7 +249,7 @@ def test_add_index_column():
         )
     )
     result = solver.walk(AddIndexColumn(relation, Constant[str]("whatever")))
-    assert _eq_tuple_sets(result, expected)
+    _assert_relations_almost_equal(result, expected)
     assert set(result.value.columns) == set(expected.value.columns)
 
 
@@ -278,7 +276,7 @@ def test_sum_columns():
             )
         )
     )
-    assert _eq_tuple_sets(result, expected)
+    _assert_relations_almost_equal(result, expected)
 
 
 def test_multiply_columns():
@@ -304,7 +302,7 @@ def test_multiply_columns():
             )
         )
     )
-    assert _eq_tuple_sets(result, expected)
+    _assert_relations_almost_equal(result, expected)
 
 
 def test_add_repeated_value_column():
@@ -319,7 +317,7 @@ def test_add_repeated_value_column():
         )
     )
     result = solver.walk(AddRepeatedValueColumn(relation, Constant[int](0)))
-    assert _eq_tuple_sets(result, expected)
+    _assert_relations_almost_equal(result, expected)
 
 
 def test_compute_marginal_probability_single_parent():
@@ -348,23 +346,80 @@ def test_compute_marginal_probability_single_parent():
     marginal = compute_marginal_probability(
         cpd, {parent_symb: parent_marginal_distrib}, {parent_symb: grounding}
     )
-    assert _eq_tuple_sets(
+    _assert_relations_almost_equal(
         marginal,
-        AlgebraSet(
-            iterable=[("c", 1.0), ("a", 0.2)],
-            columns=["x", _make_numerical_col_symb().name],
+        Constant[AbstractSet](
+            AlgebraSet(
+                iterable=[("c", 1.0), ("a", 0.2)],
+                columns=["x", _make_numerical_col_symb().name],
+            )
         ),
     )
 
 
-def _as_tuple_set(obj):
-    if isinstance(obj, np.ndarray) and len(obj.shape) == 2:
-        return set(tuple(obj[i]) for i in range(obj.shape[0]))
-    elif isinstance(obj, AlgebraSet):
-        return set(tuple(val) for val in obj.itervalues())
-    elif isinstance(obj, Constant[AbstractSet]):
-        return _as_tuple_set(obj.value)
+def test_compute_marginal_probability_two_parents():
+    parent_marginal_distribs = {
+        P: Constant[AbstractSet](
+            AlgebraSet(
+                iterable=[("a", 0.2), ("b", 0.8), ("c", 1.0)],
+                columns=["x", _make_numerical_col_symb().name],
+            )
+        ),
+        Q: Constant[AbstractSet](
+            AlgebraSet(
+                iterable=[("b", 0.2), ("c", 0.0), ("d", 0.99)],
+                columns=["x", _make_numerical_col_symb().name],
+            )
+        ),
+    }
+    parent_groundings = {
+        P: Grounding(
+            P(y),
+            Constant[AbstractSet](
+                AlgebraSet(iterable=["a", "b", "c"], columns=["y"])
+            ),
+        ),
+        Q: Grounding(
+            Q(z),
+            Constant[AbstractSet](
+                AlgebraSet(iterable=["b", "c", "d"], columns=["z"])
+            ),
+        ),
+    }
+    grounding = Grounding(
+        Implication(Z(x), Conjunction([P(x), Q(x)])),
+        Constant[AbstractSet](AlgebraSet(iterable=["c", "b"], columns=["x"])),
+    )
+    cpd = and_vect_table_distribution(
+        rule_grounding=grounding, parent_groundings=parent_groundings
+    )
+    marginal = compute_marginal_probability(
+        cpd, parent_marginal_distribs, parent_groundings
+    )
+    _assert_relations_almost_equal(
+        marginal,
+        Constant[AbstractSet](
+            AlgebraSet(
+                iterable=[("c", 0.0), ("b", 0.16)],
+                columns=["x", _make_numerical_col_symb().name],
+            )
+        ),
+    )
 
 
-def _eq_tuple_sets(first, second):
-    return _as_tuple_set(first) == _as_tuple_set(second)
+def _assert_relations_almost_equal(r1, r2):
+    assert len(r1.value) == len(r2.value)
+    if r1.value.arity == 1 and r2.value.arity == 1:
+        np.testing.assert_array_almost_equal(
+            r1.value._container[r1.value.columns[0]].values,
+            r2.value._container[r2.value.columns[0]].values,
+        )
+    else:
+        joined = RelationalAlgebraSolver().walk(NaturalJoin(r1, r2))
+        _, num_cols = _split_numerical_cols(joined)
+        if len(num_cols) == 2:
+            arr1 = joined.value._container[num_cols[0]].values
+            arr2 = joined.value._container[num_cols[1]].values
+            np.testing.assert_array_almost_equal(arr1, arr2)
+        elif len(num_cols) == 0:
+            assert len(joined.value) == len(r1.value)
