@@ -3,7 +3,6 @@ from typing import Mapping, AbstractSet
 import itertools
 
 from ..expressions import (
-    Definition,
     Expression,
     Constant,
     Symbol,
