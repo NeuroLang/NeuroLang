@@ -55,13 +55,12 @@ class AlgebraSet(NamedRelationalAlgebraFrozenSet):
             self._initialize_from_instance_same_class(iterable)
         elif isinstance(iterable, pd.DataFrame):
             self._container = pd.DataFrame(iterable, columns=self.columns)
+            self._container = self._renew_index(self._container)
         else:
             self._container = pd.DataFrame(
                 list(iterable), columns=self._columns
             )
-
-        if list(self._container.columns) != list(self._columns):
-            raise NeuroLangException("heonuahoeu")
+            self._container = self._renew_index(self._container)
 
     def to_numpy(self):
         return self._container.values
