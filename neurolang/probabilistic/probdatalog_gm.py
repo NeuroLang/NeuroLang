@@ -87,26 +87,24 @@ def extensional_vect_table_distrib(grounding):
     return bernoulli_vect_table_distrib(Constant[float](1.0), grounding)
 
 
-def and_vect_table_distribution(rule_grounding, parent_groundings):
-    return MultiplyColumns(
-        MultipleNaturalJoin(
-            tuple(
-                RenameColumns(
-                    RandomVariableValuePointer(antecedent_pred.functor.name),
-                    tuple(
-                        Symbol(col)
-                        for col in parent_groundings[
-                            antecedent_pred.functor
-                        ].relation.value.columns
-                    ),
-                    antecedent_pred.args,
-                )
-                for antecedent_pred in extract_datalog_predicates(
-                    rule_grounding.expression.antecedent
-                )
-            )
-        )
+def get_parent_value_pointer(pred, grounding):
+    rv_name = pred.functor.name
+    old_columns = [Symbol(c) for c in grounding.relation.value.columns]
+    new_columns = pred.args
+    return RenameColumns(
+        RandomVariableValuePointer(rv_name), old_columns, new_columns
     )
+
+
+def and_vect_table_distribution(rule_grounding, parent_groundings):
+    antecedent_preds = extract_datalog_predicates(
+        rule_grounding.expression.antecedent
+    )
+    to_join = tuple(
+        get_parent_value_pointer(pred, parent_groundings[pred.functor])
+        for pred in antecedent_preds
+    )
+    return MultiplyColumns(MultipleNaturalJoin(to_join))
 
 
 class TranslateGroundedProbDatalogToGraphicalModel(PatternWalker):
