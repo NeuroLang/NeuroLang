@@ -19,6 +19,7 @@ commands:
           name: install dependencies
           command: |
             pip install --user --upgrade pip
+            sudo rm -rf /usr/bin/pip
             # python3 -m venv venv
             # . venv/bin/activate
             pip install --user -r requirements.txt --progress-bar off
