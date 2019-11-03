@@ -3,7 +3,7 @@ from operator import eq
 from ...expressions import (Constant, ExistentialPredicate, ExpressionBlock,
                             Symbol)
 from ...expression_walker import ExpressionBasicEvaluator
-from .. import Fact, Implication, DatalogProgram, Disjunction
+from .. import Fact, Implication, DatalogProgram, Disjunction, Negation
 from ..expression_processing import (
     TranslateToDatalogSemantics,
     extract_datalog_free_variables, is_conjunctive_expression,
@@ -136,7 +136,9 @@ def test_extract_datalog_predicates():
     assert extract_datalog_predicates(expression) == {Q(x), Q(y), R(y)}
 
     expression = DT.walk(B_([Q(x), Q(y) & ~R(y)]))
-    assert extract_datalog_predicates(expression) == {Q(x), Q(y), R(y)}
+    assert extract_datalog_predicates(expression) == {
+        Q(x), Q(y), Negation(R(y))
+    }
 
 
 def test_is_linear_rule():
@@ -150,7 +152,9 @@ def test_is_linear_rule():
     assert is_linear_rule(Imp_(Q(x), R(x, y)))
     assert is_linear_rule(Imp_(Q(x), Q(x)))
     assert is_linear_rule(DT.walk(Imp_(Q(x), R(x, y) & Q(x))))
+    assert is_linear_rule(DT.walk(Imp_(Q(x), R(x, y) & ~Q(x))))
     assert not is_linear_rule(DT.walk(Imp_(Q(x), R(x, y) & Q(x) & Q(y))))
+    assert not is_linear_rule(DT.walk(Imp_(Q(x), R(x, y) & Q(x) & ~Q(y))))
 
 
 class Datalog(
