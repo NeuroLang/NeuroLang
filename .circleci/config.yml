@@ -18,21 +18,21 @@ commands:
       - run:
           name: install dependencies
           command: |
-            pip3 install --user --upgrade pip
-            python3 -m venv venv
-            . venv/bin/activate
-            pip3 install -r requirements.txt --progress-bar off
-            pip3 install -r requirements-dev.txt --progress-bar off
+            pip install --user --upgrade pip
+#            python3 -m venv venv
+#            . venv/bin/activate
+            pip install --user -r requirements.txt --progress-bar off
+            pip install --user -r requirements-dev.txt --progress-bar off
             if
               [ ${CIRCLE_JOB} == "docs" ]
             then
-              pip3 install -r requirements-doc.txt --progress-bar off
+              pip install --user -r requirements-doc.txt --progress-bar off
             fi
             if
               [ ${CIRCLE_JOB} == "benchmark" ]
             then
-              pip3 install asv  --progress-bar off
-              pip3 install virtualenv --progress-bar off
+              pip install --user asv  --progress-bar off
+              pip install --user virtualenv --progress-bar off
             fi
 
 
@@ -55,7 +55,7 @@ commands:
       - run:
           name: run tests
           command: |
-            . venv/bin/activate
+#            . venv/bin/activate
             export CODACY_PROJECT_TOKEN=819af61c85004229a83cb34b8089930c
             export CC_TEST_REPORTER_ID=8b40c7b919b1734ebd87f91c3033557f84b8c737db91057bdf75d16251440c59
             ./cc-test-reporter before-build
@@ -102,7 +102,7 @@ jobs:
       - run:
           name: Install ASV & run benchmark
           command: |
-            . venv/bin/activate
+#            . venv/bin/activate
             asv machine --yes
             asv run -v $(git rev-parse HEAD)...$(git rev-parse HEAD~5)
             asv publish
@@ -123,7 +123,7 @@ jobs:
       - run:
           name: Install extra packages & build documentation
           command: |
-            . venv/bin/activate
+#            . venv/bin/activate
             cd doc
             make html
 #          no_output_timeout: 1h
