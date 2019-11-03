@@ -154,7 +154,7 @@ class ExtractDatalogPredicates(WalkDatalogProgramAggregatingSets):
 
     @add_match(Negation)
     def negation(self, expression):
-        return OrderedSet([expression])
+        return self.walk(expression.formula)
 
 
 def extract_datalog_predicates(expression):

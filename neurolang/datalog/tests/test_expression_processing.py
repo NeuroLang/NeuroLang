@@ -135,6 +135,9 @@ def test_extract_datalog_predicates():
     expression = DT.walk(B_([Q(x), Q(y) & R(y)]))
     assert extract_datalog_predicates(expression) == {Q(x), Q(y), R(y)}
 
+    expression = DT.walk(B_([Q(x), Q(y) & ~R(y)]))
+    assert extract_datalog_predicates(expression) == {Q(x), Q(y), R(y)}
+
 
 def test_is_linear_rule():
     Q = S_('Q')  # noqa: N806
