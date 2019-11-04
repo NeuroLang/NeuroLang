@@ -39,6 +39,8 @@ Q = Symbol("Q")
 R = Symbol("R")
 Z = Symbol("Z")
 T = Symbol("T")
+H = Symbol("H")
+Y = Symbol("Y")
 x = Symbol("x")
 y = Symbol("y")
 z = Symbol("z")
@@ -497,6 +499,47 @@ def test_succ_query_multiple_parents():
                     ("b", "b", 0.1),
                     ("a", "c", 0.1),
                     ("b", "c", 0.1),
+                ],
+                columns=["x", "y", _make_numerical_col_symb().name],
+            )
+        ),
+    )
+
+
+def test_succ_query_multi_level():
+    code = ExpressionBlock(
+        [
+            Fact(T(a)),
+            Fact(T(b)),
+            Fact(R(b)),
+            Fact(R(c)),
+            Implication(
+                ProbabilisticPredicate(Constant[float](0.5), P(x)),
+                Constant[bool](True),
+            ),
+            Implication(
+                ProbabilisticPredicate(Constant[float](0.2), Z(x)),
+                Constant[bool](True),
+            ),
+            Implication(
+                ProbabilisticPredicate(Constant[float](0.7), Y(x)),
+                Constant[bool](True),
+            ),
+            Implication(Q(x, y), Conjunction([P(x), Z(y), T(x), R(y)])),
+            Implication(H(x, y), Conjunction([Q(x, y), T(y), Y(y)])),
+        ]
+    )
+    grounded = ground_probdatalog_program(code)
+    gm = TranslateGroundedProbDatalogToGraphicalModel().walk(grounded)
+    solver = SuccQueryGraphicalModelSolver(gm)
+    result = solver.walk(SuccQuery(H(x, y)))
+    _assert_relations_almost_equal(
+        result,
+        Constant[AbstractSet](
+            AlgebraSet(
+                iterable=[
+                    ("a", "b", 0.07),
+                    ("b", "b", 0.07),
                 ],
                 columns=["x", "y", _make_numerical_col_symb().name],
             )
