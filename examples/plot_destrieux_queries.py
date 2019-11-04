@@ -38,7 +38,7 @@ for label_number, name in destrieux_dataset['labels']:
 
     # Fine tune the symbol name
     name = 'L_' + name[2:].replace('-', '_')
-    nl.add_region(region, result_symbol_name=name.lower())
+    nl.add_region(region, name=name.lower())
 
 ##################################################
 # Plot one of the symbols
@@ -115,7 +115,7 @@ temporal_lobe_query = nl.query(
     nl.symbols.anatomical_anterior_of(x, nl.symbols.l_s_calcarine) &
     nl.symbols.anatomical_posterior_of(x, nl.symbols.l_lat_fis_ant_vertical)
 )
-temporal_lobe = q.do(result_symbol_name='temporal_lobe')
+temporal_lobe = q.do(name='temporal_lobe')
 print(temporal_lobe)
 
 ##################################################

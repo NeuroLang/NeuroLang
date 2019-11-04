@@ -9,28 +9,24 @@ executing some simple queries.
 '''
 
 import nilearn
-from nilearn import plotting
-from matplotlib import pyplot as plt
-import nibabel as nib
 import numpy as np
+from matplotlib import pyplot as plt
+from nilearn import plotting
 
-
-from neurolang import regions
-from neurolang import region_solver
-
-from neurolang import expressions
-from neurolang import solver_datalog_naive as sdb
+import nibabel as nib
+from neurolang.datalog.chase import Chase
 from neurolang import expression_walker as ew
-from neurolang import datalog_chase as dc
-
+from neurolang import expressions, region_solver, regions
+from neurolang.datalog import DatalogProgram
+from neurolang.datalog.expressions import Fact, Implication, TranslateToLogic
 
 ###############################################################################
 # Set up IR shortcuts
 
 C_ = expressions.Constant
 S_ = expressions.Symbol
-Imp_ = sdb.Implication
-Fact_ = sdb.Fact
+Imp_ = Implication
+Fact_ = Fact
 Eb_ = expressions.ExpressionBlock
 
 
@@ -49,19 +45,23 @@ region_dict = {}
 for label, name in atlas_destrieux['labels']:
     if label == 0:
         continue
+
+    voxels = np.transpose((image_data == label).nonzero())
+    if voxels.shape[0] == 0:
+        continue
+
     r = regions.ExplicitVBR(
-            np.transpose((image_data == label).nonzero()),
+            voxels,
             image.affine, image_dim=image.shape
     )
-    if r.voxels.shape[0] > 0:
-        region_dict[name.decode('utf8')] = r
+    region_dict[name.decode('utf8')] = r
 
 plotting.plot_roi(region_dict['L S_temporal_sup'].spatial_image())
 
 
 ##################################################
 # Make the fact list
-destrieux = sdb.Symbol('Destrieux')
+destrieux = S_('Destrieux')
 destrieux_facts = [
     Fact_(destrieux(
         C_(name),
@@ -78,7 +78,8 @@ destrieux_facts = [
 
 class Datalog(
     region_solver.RegionSolver,
-    dc.sdb.DatalogBasic,
+    TranslateToLogic,
+    DatalogProgram,
     ew.ExpressionBasicEvaluator
 ):
     def function_lh(self, x: str) -> bool:
@@ -123,7 +124,7 @@ datalog_program = Eb_(
 
 dl = Datalog()
 dl.walk(datalog_program)
-solution = dc.build_chase_solution(dl)
+solution = Chase(dl).build_chase_solution()
 
 
 ###############################################################################

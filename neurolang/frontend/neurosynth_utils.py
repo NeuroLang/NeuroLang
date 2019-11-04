@@ -18,7 +18,7 @@ class NeuroSynthHandler(object):
     ):
 
         if image_type is None:
-            image_type = f'association-test_z_FDR_{q:.5f}'
+            image_type = f'association-test_z_FDR_{q}'
 
         if self._dataset is None:
             dataset = self.ns_load_dataset()
