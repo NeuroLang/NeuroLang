@@ -1,5 +1,12 @@
-pytest
-pytest-cov
 codacy-coverage
 nilearn==0.5.0
-
+numpy
+scipy
+nibabel
+pandas>=0.23.4
+tatsu
+neurosynth==0.3.7
+matplotlib
+typing_inspect
+pytest
+pytest-cov

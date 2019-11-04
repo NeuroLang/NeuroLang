@@ -55,10 +55,14 @@ commands:
             make test
             ./cc-test-reporter after-build --coverage-input-type coverage.py --exit-code $?
             python-codacy-coverage -r coverage.xml
+            mkdir test_reports
+            cp utest.xml test_reports
 
       - store_artifacts:
-          path: test-reports
-          destination: test-reports
+          path: test_reports
+          destination: test_reports
+      - store_test_results:
+          path: test_reports
 
 
 jobs:
@@ -82,6 +86,36 @@ jobs:
       - checkout
       - install
       - test
+ 
+  benchmark:
+    docker:
+      - image: circleci/python:3.7
+
+    working_directory: ~/repo
+
+    steps:
+      - checkout
+      - run:
+          name: Install ASV & run benchmark
+          command: |
+            python3 -m venv venv
+            . venv/bin/activate
+            pip install --upgrade pip
+            pip install virtualenv
+            pip install asv
+            asv machine --yes
+            if 
+              [ "${CIRCLE_BRANCH}" = "master" ]
+            then
+              asv run -s -v $(git rev-parse HEAD)...$(git rev-parse HEAD~5)
+            else
+              asv continuous -s -v master $(git rev-parse HEAD)
+            fi
+            asv publish
+          no_output_timeout: 1h
+      - store_artifacts:
+          path: .asv/html
+          destination: benchmarks
 
   docs:
     docker:
