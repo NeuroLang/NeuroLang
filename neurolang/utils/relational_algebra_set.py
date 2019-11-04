@@ -454,6 +454,19 @@ class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
             except KeyError:
                 pass
 
+    def __ior__(self, other):
+        if len(self) == 0:
+            self._container = other._container.copy()
+            return self
+        if isinstance(other, RelationalAlgebraSet):
+            diff_ix = ~other._container.index.isin(self._container.index)
+            self._container = self._container.append(
+                other._container.loc[diff_ix]
+            )
+            return self
+        else:
+            return super().__ior__(other)
+
     def __isub__(self, other):
         if len(self) == 0:
             return self
