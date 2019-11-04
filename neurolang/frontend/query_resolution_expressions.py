@@ -69,7 +69,7 @@ class Expression(object):
         if isinstance(self.expression, nl.Constant):
             return repr(self.expression.value)
         elif isinstance(self.expression, dl.magic_sets.AdornedExpression):
-            name = f'{self.expression.name}'
+            name = f'{self.expression.expression.name}'
             if self.expression.adornment:
                 name += f'^{self.expression.adornment}'
             if self.expression.number:
