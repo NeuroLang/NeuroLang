@@ -15,6 +15,10 @@ class LogicOperator(Definition):
     pass
 
 
+class UnaryLogicOperator(LogicOperator):
+    pass
+
+
 class Implication(LogicOperator):
     """Expression of the form `P(x) \u2190 Q(x)`"""
 
@@ -82,7 +86,7 @@ class Disjunction(LogicOperator):
         ) + ')'
 
 
-class Negation(LogicOperator):
+class Negation(UnaryLogicOperator):
     def __init__(self, formula):
         self.formula = formula
         self._symbols |= formula._symbols

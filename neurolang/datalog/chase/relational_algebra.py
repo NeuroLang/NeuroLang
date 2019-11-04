@@ -278,7 +278,7 @@ class ChaseNamedRelationalAlgebraMixin:
         cq_free_vars = set()
         for predicate in rule_predicates:
             if isinstance(predicate, Negation):
-                functor = predicate.formula
+                functor = predicate.formula.functor
             else:
                 functor = predicate.functor
             if functor in self.idb_edb_symbols:

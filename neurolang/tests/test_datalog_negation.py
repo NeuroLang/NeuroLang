@@ -1,5 +1,7 @@
 import pytest
 
+from operator import eq
+
 from .. import expressions, exceptions
 from .. import solver_datalog_negation as sdn
 from .. import expression_walker as ew
@@ -38,7 +40,8 @@ def test_stratified_and_chase():
     V = S_('V')
     NT = S_('NT')
     ET = S_('ET')
-    equals = S_('equals')
+    #equals = S_('equals')
+    equals = C_(eq)
 
     program = Eb_((
         Fact(V(C_(1))),
