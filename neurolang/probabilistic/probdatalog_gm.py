@@ -82,13 +82,32 @@ def bernoulli_vect_table_distrib(p, grounding):
     )
 
 
+def multi_bernoulli_vect_table_distrib(params, grounding):
+    if not isinstance(params, Constant[AbstractSet]):
+        raise NeuroLangException(
+            "Bernoulli's parameter must be Constant[AbstractSet]"
+        )
+    truth_probs = ConcatenateColumn(
+        grounding.relation, _make_numerical_col_symb(), params
+    )
+    return VectorisedTableDistribution(
+        Constant[Mapping](
+            {
+                Constant[bool](True): truth_probs,
+                Constant[bool](False): 1 - truth_probs,
+            }
+        ),
+        grounding,
+    )
+
+
 def extensional_vect_table_distrib(grounding):
     return bernoulli_vect_table_distrib(Constant[float](1.0), grounding)
 
 
-def get_parent_value_pointer(pred, grounding):
+def get_rv_value_pointer(pred, grounding):
     rv_name = pred.functor.name
-    old_columns = [Symbol(c) for c in grounding.relation.value.columns]
+    old_columns = tuple(Symbol(c) for c in grounding.relation.value.columns)
     new_columns = pred.args
     return RenameColumns(
         RandomVariableValuePointer(rv_name), old_columns, new_columns
@@ -100,7 +119,7 @@ def and_vect_table_distribution(rule_grounding, parent_groundings):
         rule_grounding.expression.antecedent
     )
     to_join = tuple(
-        get_parent_value_pointer(pred, parent_groundings[pred.functor])
+        get_rv_value_pointer(pred, parent_groundings[pred.functor])
         for pred in antecedent_preds
     )
     return MultiplyColumns(MultipleNaturalJoin(to_join))
@@ -189,17 +208,6 @@ class TranslateGroundedProbDatalogToGraphicalModel(PatternWalker):
             )
 
 
-def _get_predicate_from_grounded_expression(expression):
-    if is_probabilistic_fact(expression):
-        return expression.consequent.body
-    elif is_existential_probabilistic_fact(expression):
-        return expression.consequent.body.body
-    elif isinstance(expression, FunctionApplication):
-        return expression
-    else:
-        return expression.consequent
-
-
 class SuccQuery(Definition):
     def __init__(self, predicate):
         self.predicate = predicate
@@ -211,61 +219,49 @@ class SuccQueryGraphicalModelSolver(PatternWalker):
 
     @add_match(SuccQuery)
     def succ_query(self, query):
-        actual_predicate = _get_predicate_from_grounded_expression(
-            self.graphical_model[query.predicate.functor]
+        predicate = _get_predicate_from_grounded_expression(
+            self.graphical_model.groundings.value[
+                query.predicate.functor
+            ].expression
         )
-        rv_symb = actual_predicate.functor
-        parent_rv_symbs = sorted(
-            list(self.graphical_model.edges[rv_symb]),
-            key=lambda symb: symb.name,
-        )
-        if parent_rv_symbs:
+        rv_symb = predicate.functor
+        if rv_symb not in self.graphical_model.edges.value:
+            marginal = compute_marginal_probability(
+                self.graphical_model.cpds.value[rv_symb], {}, {}
+            )
+        else:
+            parent_symbs = self.graphical_model.edges.value[rv_symb]
             rule = self.graphical_model.groundings.value[rv_symb].expression
             parent_marginal_distribs = {
                 pred.functor: self.walk(SuccQuery(pred))
                 for pred in extract_datalog_predicates(rule.antecedent)
             }
-            result = self.compute_marginal_distribution(
+            parent_groundings = {
+                parent_symb: self.graphical_model.groundings.value[parent_symb]
+                for parent_symb in parent_symbs
+            }
+            marginal = compute_marginal_probability(
                 self.graphical_model.cpds.value[rv_symb],
                 parent_marginal_distribs,
+                parent_groundings,
             )
-        else:
-            result = self.compute_cpd(self.graphical_model.cpds[rv_symb], {})
-        return RelationalAlgebraSolver().walk(
-            NaturalJoin(
-                result,
-                _build_query_algebra_set(
-                    query.predicate, self.graphical_model.groundings[rv_symb]
-                ),
-            )
-        )
+        result = marginal
+        for qpred_arg, marginal_arg in zip(
+            query.predicate.args, predicate.args
+        ):
+            if isinstance(qpred_arg, Constant):
+                result = Selection(
+                    result, eq_(ColumnStr(marginal_arg), qpred_arg)
+                )
+            elif qpred_arg != marginal_arg:
+                result = RenameColumn(result, marginal_arg, qpred_arg)
+
+        return ExtendedRelationalAlgebraSolver({}).walk(result)
 
 
-def _iter_parents(parent_marginal_probabilities, parent_groundings):
-    parent_symbs = sorted(
-        list(parent_marginal_probabilities), key=lambda symb: symb.name
-    )
-    for parent_bool_values in itertools.product(
-        *[(True, False) for _ in parent_symbs]
-    ):
-        parent_values = {
-            parent_symb: AddRepeatedValueColumn(
-                parent_groundings[parent_symb].relation,
-                Constant[int](int(parent_bool_value)),
-            )
-            for parent_symb, parent_bool_value in zip(
-                parent_symbs, parent_bool_values
-            )
-        }
-        parent_margin_probs = {
-            parent_symb: parent_marginal_probabilities[parent_symb]
-            if parent_bool_value
-            else NegateProbability(parent_marginal_probabilities[parent_symb])
-            for parent_symb, parent_bool_value in zip(
-                parent_symbs, parent_bool_values
-            )
-        }
-        yield parent_values, parent_margin_probs
+def get_rename_op(relation, pred, grounding):
+    old_columns = tuple(arg for arg in pred.args)
+    return RenameColumns(relation, old_columns, new_columns)
 
 
 def compute_marginal_probability(
@@ -397,19 +393,6 @@ class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
             )
 
 
-def _build_query_algebra_set(query_predicate, grounding_columns):
-    consts, cols = zip(
-        *[
-            (arg, col)
-            for arg, col in zip(query_predicate.args, grounding_columns)
-            if isinstance(arg, Constant)
-        ]
-    )
-    return Constant[AbstractSet](
-        AlgebraSet(iterable={tuple(consts)}, columns=cols)
-    )
-
-
 def _make_numerical_col_symb():
     return Symbol("__numerical__" + Symbol.fresh().name)
 
@@ -450,3 +433,41 @@ def _get_column_name_from_expression(column_exp):
                 type(column_exp)
             )
         )
+
+
+def _get_predicate_from_grounded_expression(expression):
+    if is_probabilistic_fact(expression):
+        return expression.consequent.body
+    elif is_existential_probabilistic_fact(expression):
+        return expression.consequent.body.body
+    elif isinstance(expression, FunctionApplication):
+        return expression
+    else:
+        return expression.consequent
+
+
+def _iter_parents(parent_marginal_probabilities, parent_groundings):
+    parent_symbs = sorted(
+        list(parent_marginal_probabilities), key=lambda symb: symb.name
+    )
+    for parent_bool_values in itertools.product(
+        *[(True, False) for _ in parent_symbs]
+    ):
+        parent_values = {
+            parent_symb: AddRepeatedValueColumn(
+                parent_groundings[parent_symb].relation,
+                Constant[int](int(parent_bool_value)),
+            )
+            for parent_symb, parent_bool_value in zip(
+                parent_symbs, parent_bool_values
+            )
+        }
+        parent_margin_probs = {
+            parent_symb: parent_marginal_probabilities[parent_symb]
+            if parent_bool_value
+            else NegateProbability(parent_marginal_probabilities[parent_symb])
+            for parent_symb, parent_bool_value in zip(
+                parent_symbs, parent_bool_values
+            )
+        }
+        yield parent_values, parent_margin_probs

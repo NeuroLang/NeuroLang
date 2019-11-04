@@ -15,12 +15,14 @@ from ..probdatalog_gm import (
     _split_numerical_cols,
     compute_marginal_probability,
     and_vect_table_distribution,
+    SuccQuery,
+    SuccQueryGraphicalModelSolver,
 )
-from ..probdatalog import Grounding
+from ..probdatalog import Grounding, ground_probdatalog_program
 from ...relational_algebra import NaturalJoin, RelationalAlgebraSolver
 from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from ...expressions import Symbol, Constant, ExpressionBlock
-from ...datalog.expressions import Implication, Conjunction
+from ...datalog.expressions import Implication, Conjunction, Fact
 from ..expressions import (
     VectorisedTableDistribution,
     ProbabilisticPredicate,
@@ -401,6 +403,34 @@ def test_compute_marginal_probability_two_parents():
         Constant[AbstractSet](
             AlgebraSet(
                 iterable=[("c", 0.0), ("b", 0.16)],
+                columns=["x", _make_numerical_col_symb().name],
+            )
+        ),
+    )
+
+
+def test_succ_query():
+    code = ExpressionBlock(
+        [
+            Fact(T(a)),
+            Fact(T(b)),
+            Implication(
+                ProbabilisticPredicate(Constant[float](0.3), P(x)),
+                Constant[bool](True),
+            ),
+            Implication(Q(x), Conjunction([P(x), T(x)])),
+        ]
+    )
+    grounded = ground_probdatalog_program(code)
+    gm = TranslateGroundedProbDatalogToGraphicalModel().walk(grounded)
+    query = SuccQuery(Q(x))
+    solver = SuccQueryGraphicalModelSolver(gm)
+    result = solver.walk(query)
+    _assert_relations_almost_equal(
+        result,
+        Constant[AbstractSet](
+            AlgebraSet(
+                iterable=[('a', 0.3), ('b', 0.3)],
                 columns=["x", _make_numerical_col_symb().name],
             )
         ),
