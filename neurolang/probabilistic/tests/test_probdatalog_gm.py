@@ -412,7 +412,7 @@ def test_compute_marginal_probability_two_parents():
     )
 
 
-def test_succ_query():
+def test_succ_query_simple():
     code = ExpressionBlock(
         [
             Fact(T(a)),
@@ -422,6 +422,35 @@ def test_succ_query():
                 Constant[bool](True),
             ),
             Implication(Q(x), Conjunction([P(x), T(x)])),
+        ]
+    )
+    grounded = ground_probdatalog_program(code)
+    gm = TranslateGroundedProbDatalogToGraphicalModel().walk(grounded)
+    query = SuccQuery(Q(x))
+    solver = SuccQueryGraphicalModelSolver(gm)
+    result = solver.walk(query)
+    _assert_relations_almost_equal(
+        result,
+        Constant[AbstractSet](
+            AlgebraSet(
+                iterable=[("a", 0.3), ("b", 0.3)],
+                columns=["x", _make_numerical_col_symb().name],
+            )
+        ),
+    )
+
+
+def test_succ_query_simple_const_in_antecedent():
+    code = ExpressionBlock(
+        [
+            Fact(T(a)),
+            Fact(T(b)),
+            Fact(R(a)),
+            Implication(
+                ProbabilisticPredicate(Constant[float](0.3), P(x)),
+                Constant[bool](True),
+            ),
+            Implication(Q(x), Conjunction([P(x), T(x), R(a)])),
         ]
     )
     grounded = ground_probdatalog_program(code)
@@ -542,6 +571,30 @@ def test_succ_query_multi_level():
             )
         ),
     )
+
+
+def test_succ_query_hundreds_of_facts():
+    facts_t = [Fact(T(Constant[int](i))) for i in range(1000)]
+    facts_r = [Fact(R(Constant[int](i))) for i in range(300)]
+    code = ExpressionBlock(
+        facts_t
+        + facts_r
+        + [
+            Implication(
+                ProbabilisticPredicate(Constant[float](0.5), P(x)),
+                Constant[bool](True),
+            ),
+            Implication(
+                ProbabilisticPredicate(Constant[float](0.2), Z(x)),
+                Constant[bool](True),
+            ),
+            Implication(Q(x, y), Conjunction([P(x), Z(y), T(x), R(y)])),
+        ]
+    )
+    grounded = ground_probdatalog_program(code)
+    gm = TranslateGroundedProbDatalogToGraphicalModel().walk(grounded)
+    solver = SuccQueryGraphicalModelSolver(gm)
+    result = solver.walk(SuccQuery(Q(x)))
 
 
 def _assert_relations_almost_equal(r1, r2):

@@ -110,11 +110,15 @@ def extensional_vect_table_distrib(grounding):
 
 def get_rv_value_pointer(pred, grounding):
     rv_name = pred.functor.name
-    old_columns = tuple(Symbol(c) for c in grounding.relation.value.columns)
-    new_columns = pred.args
-    return RenameColumns(
-        RandomVariableValuePointer(rv_name), old_columns, new_columns
-    )
+    result = RandomVariableValuePointer(rv_name)
+    for col, arg in zip(grounding.relation.value.columns, pred.args):
+        if isinstance(arg, Constant):
+            result = Selection(
+                result, eq_(Constant[ColumnStr](ColumnStr(col)), arg)
+            )
+        else:
+            result = RenameColumn(result, Symbol(col), arg)
+    return result
 
 
 def and_vect_table_distribution(rule_grounding, parent_groundings):
