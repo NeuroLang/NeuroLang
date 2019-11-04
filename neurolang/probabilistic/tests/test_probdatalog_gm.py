@@ -430,7 +430,35 @@ def test_succ_query():
         result,
         Constant[AbstractSet](
             AlgebraSet(
-                iterable=[('a', 0.3), ('b', 0.3)],
+                iterable=[("a", 0.3), ("b", 0.3)],
+                columns=["x", _make_numerical_col_symb().name],
+            )
+        ),
+    )
+
+
+def test_succ_query_with_constant():
+    code = ExpressionBlock(
+        [
+            Fact(T(a)),
+            Fact(T(b)),
+            Implication(
+                ProbabilisticPredicate(Constant[float](0.3), P(x)),
+                Constant[bool](True),
+            ),
+            Implication(Q(x), Conjunction([P(x), T(x)])),
+        ]
+    )
+    grounded = ground_probdatalog_program(code)
+    gm = TranslateGroundedProbDatalogToGraphicalModel().walk(grounded)
+    query = SuccQuery(Q(a))
+    solver = SuccQueryGraphicalModelSolver(gm)
+    result = solver.walk(query)
+    _assert_relations_almost_equal(
+        result,
+        Constant[AbstractSet](
+            AlgebraSet(
+                iterable=[("a", 0.3)],
                 columns=["x", _make_numerical_col_symb().name],
             )
         ),

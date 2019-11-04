@@ -19,6 +19,9 @@ from ..relational_algebra import (
     RelationalAlgebraSolver,
     NaturalJoin,
     RenameColumn,
+    Selection,
+    ColumnStr,
+    eq_,
 )
 from ..utils.relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet,
@@ -251,17 +254,20 @@ class SuccQueryGraphicalModelSolver(PatternWalker):
         ):
             if isinstance(qpred_arg, Constant):
                 result = Selection(
-                    result, eq_(ColumnStr(marginal_arg), qpred_arg)
+                    result,
+                    eq_(
+                        Constant[ColumnStr](
+                            ColumnStr(
+                                _get_column_name_from_expression(marginal_arg)
+                            )
+                        ),
+                        qpred_arg,
+                    ),
                 )
             elif qpred_arg != marginal_arg:
                 result = RenameColumn(result, marginal_arg, qpred_arg)
 
         return ExtendedRelationalAlgebraSolver({}).walk(result)
-
-
-def get_rename_op(relation, pred, grounding):
-    old_columns = tuple(arg for arg in pred.args)
-    return RenameColumns(relation, old_columns, new_columns)
 
 
 def compute_marginal_probability(
