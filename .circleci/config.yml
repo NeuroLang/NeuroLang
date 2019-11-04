@@ -143,6 +143,7 @@ workflows:
     jobs:
       - py36
       - py37
+      - benchmark
   build-docs:
     jobs:
       - docs
