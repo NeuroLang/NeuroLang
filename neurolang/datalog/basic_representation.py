@@ -6,6 +6,7 @@ the extensional, intensional, and builtin
 sets.
 """
 
+from itertools import tee
 from typing import AbstractSet, Any, Callable, Tuple
 
 from ..expression_walker import PatternWalker, add_match
@@ -209,7 +210,7 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
         self, symbol, iterable, type_=Unknown
     ):
         if type_ is Unknown:
-            type_ = self.infer_iterable_type(iterable)
+            type_, iterable = self.infer_iterable_type(iterable)
 
         constant = Constant[AbstractSet[type_]](
             self.new_set(list(iterable)),
@@ -223,7 +224,7 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
     def infer_iterable_type(iterable):
         type_ = Unknown
         try:
-            iterable_ = iter(iterable)
+            iterable_, iterable = tee(iterable)
             first = next(iterable_)
             if isinstance(first, Expression):
                 type_ = first.type
@@ -231,4 +232,4 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
                 type_ = infer_type(first)
         except StopIteration:
             pass
-        return type_
+        return type_, iterable

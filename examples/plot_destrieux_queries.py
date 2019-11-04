@@ -115,7 +115,7 @@ temporal_lobe_query = nl.query(
     nl.symbols.anatomical_anterior_of(x, nl.symbols.l_s_calcarine) &
     nl.symbols.anatomical_posterior_of(x, nl.symbols.l_lat_fis_ant_vertical)
 )
-temporal_lobe = q.do(result_symbol_name='temporal_lobe')
+temporal_lobe = q.do(name='temporal_lobe')
 print(temporal_lobe)
 
 ##################################################

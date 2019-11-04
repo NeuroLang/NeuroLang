@@ -51,6 +51,7 @@ help:
 clean:
 	rm -rf $(BUILDDIR)/*
 	rm -rf reference/*
+	rm -rf auto_examples/*
 
 html:
 	$(SPHINXBUILD) -b html -v $(ALLSPHINXOPTS) $(BUILDDIR)/html
