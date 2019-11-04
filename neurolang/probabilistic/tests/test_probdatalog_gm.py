@@ -36,6 +36,7 @@ from ..expressions import (
 
 P = Symbol("P")
 Q = Symbol("Q")
+R = Symbol("R")
 Z = Symbol("Z")
 T = Symbol("T")
 x = Symbol("x")
@@ -460,6 +461,44 @@ def test_succ_query_with_constant():
             AlgebraSet(
                 iterable=[("a", 0.3)],
                 columns=["x", _make_numerical_col_symb().name],
+            )
+        ),
+    )
+
+
+def test_succ_query_multiple_parents():
+    code = ExpressionBlock(
+        [
+            Fact(T(a)),
+            Fact(T(b)),
+            Fact(R(b)),
+            Fact(R(c)),
+            Implication(
+                ProbabilisticPredicate(Constant[float](0.5), P(x)),
+                Constant[bool](True),
+            ),
+            Implication(
+                ProbabilisticPredicate(Constant[float](0.2), Z(x)),
+                Constant[bool](True),
+            ),
+            Implication(Q(x, y), Conjunction([P(x), Z(y), T(x), R(y)])),
+        ]
+    )
+    grounded = ground_probdatalog_program(code)
+    gm = TranslateGroundedProbDatalogToGraphicalModel().walk(grounded)
+    solver = SuccQueryGraphicalModelSolver(gm)
+    result = solver.walk(SuccQuery(Q(x, y)))
+    _assert_relations_almost_equal(
+        result,
+        Constant[AbstractSet](
+            AlgebraSet(
+                iterable=[
+                    ("a", "b", 0.1),
+                    ("b", "b", 0.1),
+                    ("a", "c", 0.1),
+                    ("b", "c", 0.1),
+                ],
+                columns=["x", "y", _make_numerical_col_symb().name],
             )
         ),
     )
