@@ -537,10 +537,7 @@ def test_succ_query_multi_level():
         result,
         Constant[AbstractSet](
             AlgebraSet(
-                iterable=[
-                    ("a", "b", 0.07),
-                    ("b", "b", 0.07),
-                ],
+                iterable=[("a", "b", 0.07), ("b", "b", 0.07)],
                 columns=["x", "y", _make_numerical_col_symb().name],
             )
         ),
