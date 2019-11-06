@@ -129,3 +129,6 @@ scratch
 *orig
 utest.xml
 *prof
+.asv
+utest.xml
+*prof
