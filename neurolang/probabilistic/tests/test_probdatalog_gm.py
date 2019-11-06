@@ -16,7 +16,7 @@ from ..probdatalog_gm import (
     compute_marginal_probability,
     and_vect_table_distribution,
     SuccQuery,
-    SuccQueryGraphicalModelSolver,
+    QueryGraphicalModelSolver,
 )
 from ..probdatalog import Grounding, ground_probdatalog_program
 from ...relational_algebra import NaturalJoin, RelationalAlgebraSolver
@@ -427,7 +427,7 @@ def test_succ_query_simple():
     grounded = ground_probdatalog_program(code)
     gm = TranslateGroundedProbDatalogToGraphicalModel().walk(grounded)
     query = SuccQuery(Q(x))
-    solver = SuccQueryGraphicalModelSolver(gm)
+    solver = QueryGraphicalModelSolver(gm)
     result = solver.walk(query)
     _assert_relations_almost_equal(
         result,
@@ -456,7 +456,7 @@ def test_succ_query_simple_const_in_antecedent():
     grounded = ground_probdatalog_program(code)
     gm = TranslateGroundedProbDatalogToGraphicalModel().walk(grounded)
     query = SuccQuery(Q(x))
-    solver = SuccQueryGraphicalModelSolver(gm)
+    solver = QueryGraphicalModelSolver(gm)
     result = solver.walk(query)
     _assert_relations_almost_equal(
         result,
@@ -484,7 +484,7 @@ def test_succ_query_with_constant():
     grounded = ground_probdatalog_program(code)
     gm = TranslateGroundedProbDatalogToGraphicalModel().walk(grounded)
     query = SuccQuery(Q(a))
-    solver = SuccQueryGraphicalModelSolver(gm)
+    solver = QueryGraphicalModelSolver(gm)
     result = solver.walk(query)
     _assert_relations_almost_equal(
         result,
@@ -517,7 +517,7 @@ def test_succ_query_multiple_parents():
     )
     grounded = ground_probdatalog_program(code)
     gm = TranslateGroundedProbDatalogToGraphicalModel().walk(grounded)
-    solver = SuccQueryGraphicalModelSolver(gm)
+    solver = QueryGraphicalModelSolver(gm)
     result = solver.walk(SuccQuery(Q(x, y)))
     _assert_relations_almost_equal(
         result,
@@ -560,7 +560,7 @@ def test_succ_query_multi_level():
     )
     grounded = ground_probdatalog_program(code)
     gm = TranslateGroundedProbDatalogToGraphicalModel().walk(grounded)
-    solver = SuccQueryGraphicalModelSolver(gm)
+    solver = QueryGraphicalModelSolver(gm)
     result = solver.walk(SuccQuery(H(x, y)))
     _assert_relations_almost_equal(
         result,
@@ -593,7 +593,7 @@ def test_succ_query_hundreds_of_facts():
     )
     grounded = ground_probdatalog_program(code)
     gm = TranslateGroundedProbDatalogToGraphicalModel().walk(grounded)
-    solver = SuccQueryGraphicalModelSolver(gm)
+    solver = QueryGraphicalModelSolver(gm)
     result = solver.walk(SuccQuery(Q(x)))
 
 

@@ -38,7 +38,12 @@ from ..datalog.chase import (
     ChaseGeneral,
     ChaseNaive,
 )
-from .expressions import ProbabilisticPredicate, Grounding
+from .expressions import (
+    ProbabilisticPredicate,
+    Grounding,
+    PfactGrounding,
+    make_numerical_col_symb,
+)
 from ..utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 
 
@@ -190,7 +195,7 @@ class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
             prev_typing = self.symbol_table[self.typing_symbol].value[
                 pfact_pred_symb
             ]
-        _check_typing_consistency(prev_typing, typing)
+        # _check_typing_consistency(prev_typing, typing)
         new_pfact_typing = _combine_typings(prev_typing, typing)
         new_typing = Constant[Mapping](
             {
@@ -515,9 +520,30 @@ class RemoveProbabilitiesWalker(ExpressionWalker):
         return Implication(pfact_pred, antecedent)
 
 
-def _contruct_fact_variable_predicate(fact):
+def _construct_fact_variable_predicate(fact):
     new_args = (Symbol[arg.type].fresh() for arg in fact.consequent.args)
     return fact.consequent.functor(*new_args)
+
+
+def _construct_pfact_variable_predicate(pfact):
+    new_args = (Symbol[arg.type].fresh() for arg in pfact.consequent.body.args)
+    return ProbabilisticPredicate(
+        Symbol[float].fresh(), pfact.consequent.body.functor(*new_args)
+    )
+
+
+def _split_and_grounded_pfacts(block):
+    grouped_ground_pfacts = defaultdict(list)
+    other_expressions = list()
+    for exp in block.expressions:
+        if is_probabilistic_fact(exp) and is_ground_predicate(
+            exp.consequent.body
+        ):
+            pred_symb = exp.consequent.body.functor
+            grouped_ground_pfacts[pred_symb].append(exp)
+        else:
+            other_expressions.append(exp)
+    return grouped_ground_pfacts, other_expressions
 
 
 class ProbDatalogGrounder(PatternWalker):
@@ -527,8 +553,15 @@ class ProbDatalogGrounder(PatternWalker):
 
     @add_match(ExpressionBlock)
     def expression_block(self, block):
+        grouped_ground_pfacts, other_expressions = _split_and_grounded_pfacts(
+            block
+        )
         return ExpressionBlock(
             list(
+                self._construct_ground_pfacts_grounding(group)
+                for group in grouped_ground_pfacts.values()
+            )
+            + list(
                 itertools.chain(
                     *[
                         [self.walk(exp)]
@@ -539,7 +572,7 @@ class ProbDatalogGrounder(PatternWalker):
                             in self.walked_extensional_pred_symbs
                             else [self._construct_fact_grounding(exp)]
                         )
-                        for exp in block.expressions
+                        for exp in other_expressions
                     ]
                 )
             )
@@ -562,10 +595,36 @@ class ProbDatalogGrounder(PatternWalker):
     def statement_intensional(self, rule):
         return self._construct_grounding(rule, rule.consequent)
 
+    def _construct_ground_pfacts_grounding(self, pfacts):
+        new_pred = _construct_pfact_variable_predicate(next(iter(pfacts)))
+        iterable = set(
+            tuple(arg.value for arg in pfact.consequent.body.args)
+            for pfact in pfacts
+        )
+        params_iterable = set(
+            tuple(arg.value for arg in pfact.consequent.body.args)
+            + (pfact.consequent.probability.value,)
+            for pfact in pfacts
+        )
+        relation = Constant[AbstractSet](
+            NamedRelationalAlgebraFrozenSet(
+                tuple(c.name for c in new_pred.body.args), iterable
+            )
+        )
+        params_relation = Constant[AbstractSet](
+            NamedRelationalAlgebraFrozenSet(
+                tuple(c.name for c in new_pred.body.args)
+                + (make_numerical_col_symb().name,),
+                params_iterable,
+            )
+        )
+        new_pfact = Implication(new_pred, Constant[bool](True))
+        return PfactGrounding(new_pfact, relation, params_relation)
+
     def _construct_fact_grounding(self, fact):
         if fact.consequent.functor not in self.walked_extensional_pred_symbs:
             self.walked_extensional_pred_symbs.add(fact.consequent.functor)
-            new_pred = _contruct_fact_variable_predicate(fact)
+            new_pred = _construct_fact_variable_predicate(fact)
             return self._construct_grounding(new_pred, new_pred)
 
     def _construct_grounding(self, expression, predicate):
@@ -579,7 +638,6 @@ class ProbDatalogGrounder(PatternWalker):
                         if isinstance(arg, Symbol)
                         else Symbol.fresh().name
                         for arg in predicate.args
-                        if isinstance(arg, Symbol)
                     ],
                 )
             ),

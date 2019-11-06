@@ -15,6 +15,7 @@ from ..expressions import (
     ExpressionBlock,
 )
 from ..datalog.expression_processing import extract_datalog_predicates
+from ..datalog.expressions import Conjunction, Implication
 from ..relational_algebra import (
     RelationalAlgebraSolver,
     NaturalJoin,
@@ -34,17 +35,57 @@ from .expressions import (
     AddIndexColumn,
     SumColumns,
     MultiplyColumns,
+    DivideColumns,
     RandomVariableValuePointer,
     NegateProbability,
     AddRepeatedValueColumn,
     MultipleNaturalJoin,
     RenameColumns,
+    Grounding,
+    PfactGrounding,
+    make_numerical_col_symb,
 )
 from .probdatalog import (
-    Grounding,
+    ground_probdatalog_program,
     is_probabilistic_fact,
     is_existential_probabilistic_fact,
 )
+
+
+def succ_query(program_code, query_pred):
+    grounded = ground_probdatalog_program(program_code)
+    gm = TranslateGroundedProbDatalogToGraphicalModel().walk(grounded)
+    solver = QueryGraphicalModelSolver(gm)
+    return solver.walk(SuccQuery(query_pred))
+
+
+def marg_query(code, query_pred, evidence_pred):
+    joint_rule = _build_joint_rule([query_pred, evidence_pred])
+    extended_code = ExpressionBlock(list(code.expressions) + [joint_rule])
+    grounded = ground_probdatalog_program(extended_code)
+    gm = TranslateGroundedProbDatalogToGraphicalModel().walk(grounded)
+    solver = QueryGraphicalModelSolver(gm)
+    evidence_prob = solver.walk(SuccQuery(evidence_pred))
+    joint_prob = solver.walk(SuccQuery(joint_rule.consequent))
+    evidence_prob_column = Symbol(_split_numerical_cols(evidence_prob)[1][0])
+    joint_prob_column = Symbol(_split_numerical_cols(joint_prob)[1][0])
+    import pdb; pdb.set_trace()
+    return ExtendedRelationalAlgebraSolver({}).walk(
+        DivideColumns(
+            NaturalJoin(evidence_prob, joint_prob),
+            joint_prob_column,
+            evidence_prob_column,
+        )
+    )
+
+
+def _build_joint_rule(joint_predicates):
+    variables = set()
+    for pred in joint_predicates:
+        variables |= set(arg for arg in pred.args if isinstance(arg, Symbol))
+    consequent = Symbol.fresh()(*sorted(variables, key=lambda arg: arg.name))
+    antecedent = Conjunction(joint_predicates)
+    return Implication(consequent, antecedent)
 
 
 class AlgebraSet(NamedRelationalAlgebraFrozenSet):
@@ -85,19 +126,17 @@ def bernoulli_vect_table_distrib(p, grounding):
     )
 
 
-def multi_bernoulli_vect_table_distrib(params, grounding):
-    if not isinstance(params, Constant[AbstractSet]):
+def multi_bernoulli_vect_table_distrib(grounding):
+    if not isinstance(grounding.params_relation, Constant[AbstractSet]):
         raise NeuroLangException(
             "Bernoulli's parameter must be Constant[AbstractSet]"
         )
-    truth_probs = ConcatenateColumn(
-        grounding.relation, _make_numerical_col_symb(), params
-    )
     return VectorisedTableDistribution(
         Constant[Mapping](
             {
-                Constant[bool](True): truth_probs,
-                Constant[bool](False): 1 - truth_probs,
+                Constant[bool](True): grounding.params_relation,
+                Constant[bool](False): Constant[float](1.0)
+                - grounding.params_relation,
             }
         ),
         grounding,
@@ -163,6 +202,14 @@ class TranslateGroundedProbDatalogToGraphicalModel(PatternWalker):
             rv_symb, extensional_vect_table_distrib(grounding)
         )
 
+    @add_match(PfactGrounding)
+    def ground_probfact_grounding(self, grounding):
+        rv_symb = grounding.expression.consequent.body.functor
+        self._add_grounding(rv_symb, grounding)
+        self._add_random_variable(
+            rv_symb, multi_bernoulli_vect_table_distrib(grounding)
+        )
+
     @add_match(Grounding, lambda exp: is_probabilistic_fact(exp.expression))
     def probfact_grounding(self, grounding):
         rv_symb = grounding.expression.consequent.body.functor
@@ -220,7 +267,13 @@ class SuccQuery(Definition):
         self.predicate = predicate
 
 
-class SuccQueryGraphicalModelSolver(PatternWalker):
+class MargQuery(Definition):
+    def __init__(self, predicate, evidence):
+        self.predicate = predicate
+        self.evidence = evidence
+
+
+class QueryGraphicalModelSolver(PatternWalker):
     def __init__(self, graphical_model):
         self.graphical_model = graphical_model
 
@@ -273,6 +326,10 @@ class SuccQueryGraphicalModelSolver(PatternWalker):
 
         return ExtendedRelationalAlgebraSolver({}).walk(result)
 
+    @add_match(MargQuery)
+    def marg_query(self, query):
+        evidence_prob = self.walk(SuccQuery(query.evidence))
+
 
 def compute_marginal_probability(
     cpd, parent_marginal_probabilities, parent_groundings
@@ -288,10 +345,7 @@ def compute_marginal_probability(
             terms.append(
                 MultiplyColumns(
                     MultipleNaturalJoin(
-                        tuple(
-                            [solver.walk(cpd)]
-                            + list(parent_marg_probs.values())
-                        )
+                        (solver.walk(cpd),) + tuple(parent_marg_probs.values())
                     )
                 )
             )
@@ -356,6 +410,14 @@ class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
             self.walk(multiply_op.relation), np.prod
         )
 
+    @add_match(DivideColumns)
+    def divide_columns(self, divide_op):
+        return _divide_columns(
+            self.walk(divide_op.relation),
+            divide_op.numerator_column,
+            divide_op.denominator_column,
+        )
+
     @add_match(AddRepeatedValueColumn)
     def add_repeated_value_column(self, add_op):
         col_vals = Constant[np.ndarray](
@@ -364,7 +426,7 @@ class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
         return self.walk(
             ConcatenateColumn(
                 relation=add_op.relation,
-                column=_make_numerical_col_symb(),
+                column=make_numerical_col_symb(),
                 column_values=col_vals,
             )
         )
@@ -382,7 +444,7 @@ class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
         non_num_cols, num_cols = _split_numerical_cols(neg_op.relation)
         if len(num_cols) != 1:
             raise NeuroLangException("Expected only one numerical column")
-        new_prob_col = _make_numerical_col_symb().name
+        new_prob_col = make_numerical_col_symb().name
         new_cols = list(non_num_cols) + [new_prob_col]
         iterable = neg_op.relation.value._container.copy()
         iterable[new_prob_col] = 1.0 - iterable[num_cols[0]].values
@@ -393,7 +455,7 @@ class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
     @add_match(VectorisedTableDistribution)
     def vectorised_table_distribution(self, distrib):
         truth_prob = distrib.table.value[Constant[bool](True)]
-        if isinstance(truth_prob, Constant):
+        if isinstance(truth_prob, Constant[float]):
             return self.walk(
                 AddRepeatedValueColumn(distrib.grounding.relation, truth_prob)
             )
@@ -401,10 +463,6 @@ class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
             return self.walk(
                 NaturalJoin(distrib.grounding.relation, self.walk(truth_prob))
             )
-
-
-def _make_numerical_col_symb():
-    return Symbol("__numerical__" + Symbol.fresh().name)
 
 
 def _split_numerical_cols(relation):
@@ -420,7 +478,7 @@ def _split_numerical_cols(relation):
 
 def _apply_arithmetic_column_op(relation, numpy_op):
     non_num_cols, num_cols = _split_numerical_cols(relation)
-    new_col = _make_numerical_col_symb().name
+    new_col = make_numerical_col_symb().name
     new_cols = list(non_num_cols) + [new_col]
     new_col_vals = numpy_op(relation.value._container[num_cols], axis=1)
     if non_num_cols:
@@ -428,6 +486,20 @@ def _apply_arithmetic_column_op(relation, numpy_op):
         iterable[new_col] = new_col_vals
     else:
         iterable = pd.DataFrame({new_col: new_col_vals})
+    iterable = iterable[new_cols]
+    return Constant[AbstractSet](AlgebraSet(new_cols, iterable))
+
+
+def _divide_columns(relation, numerator_col, denominator_col):
+    new_col = make_numerical_col_symb()
+    new_col_vals = (
+        relation.value._container[numerator_col.name].values
+        / relation.value._container[denominator_col.name].values
+    )
+    non_num_cols = _split_numerical_cols(relation)[0]
+    new_cols = non_num_cols + [new_col.name]
+    iterable = relation.value._container[non_num_cols].copy()
+    iterable[new_col.name] = new_col_vals
     iterable = iterable[new_cols]
     return Constant[AbstractSet](AlgebraSet(new_cols, iterable))
 
@@ -456,26 +528,25 @@ def _get_predicate_from_grounded_expression(expression):
         return expression.consequent
 
 
-def _iter_parents(parent_marginal_probabilities, parent_groundings):
-    parent_symbs = sorted(
-        list(parent_marginal_probabilities), key=lambda symb: symb.name
+def _get_valued_rv(rv_symb, rv_grounding, bool_value):
+    return AddRepeatedValueColumn(
+        rv_grounding.relation, Constant[int](int(bool_value))
     )
+
+
+def _iter_parents(parent_marg_probs, parent_groundings):
+    parent_symbs = sorted(parent_marg_probs, key=lambda symb: symb.name)
     for parent_bool_values in itertools.product(
         *[(True, False) for _ in parent_symbs]
     ):
         parent_values = {
-            parent_symb: AddRepeatedValueColumn(
-                parent_groundings[parent_symb].relation,
-                Constant[int](int(parent_bool_value)),
-            )
-            for parent_symb, parent_bool_value in zip(
-                parent_symbs, parent_bool_values
-            )
+            symb: _get_valued_rv(symb, parent_groundings[symb], bool_value)
+            for symb, bool_value in zip(parent_symbs, parent_bool_values)
         }
         parent_margin_probs = {
-            parent_symb: parent_marginal_probabilities[parent_symb]
+            parent_symb: parent_marg_probs[parent_symb]
             if parent_bool_value
-            else NegateProbability(parent_marginal_probabilities[parent_symb])
+            else NegateProbability(parent_marg_probs[parent_symb])
             for parent_symb, parent_bool_value in zip(
                 parent_symbs, parent_bool_values
             )

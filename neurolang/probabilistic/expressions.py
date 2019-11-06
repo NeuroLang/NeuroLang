@@ -29,6 +29,12 @@ class Grounding(Definition):
         self.relation = relation
 
 
+class PfactGrounding(Grounding):
+    def __init__(self, expression, relation, params_relation):
+        super().__init__(expression, relation)
+        self.params_relation = params_relation
+
+
 class GraphicalModel(Definition):
     def __init__(self, edges, cpds, groundings):
         self.edges = edges
@@ -110,6 +116,13 @@ class MultiplyColumns(ArithmeticOperationOnColumns):
     pass
 
 
+class DivideColumns(ArithmeticOperationOnColumns):
+    def __init__(self, relation, numerator_column, denominator_column):
+        super().__init__(relation)
+        self.numerator_column = numerator_column
+        self.denominator_column = denominator_column
+
+
 class RandomVariableValuePointer(Symbol):
     pass
 
@@ -122,3 +135,7 @@ class NegateProbability(RelationalAlgebraOperation):
 class MultipleNaturalJoin(RelationalAlgebraOperation):
     def __init__(self, relations):
         self.relations = relations
+
+
+def make_numerical_col_symb():
+    return Symbol("__numerical__" + Symbol.fresh().name)
