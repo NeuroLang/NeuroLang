@@ -30,6 +30,7 @@ class OntologyHandler():
 
         self.df = self.df.append(temp)
 
+    # @dev
     def _get_graph(self):
         return self.df
 
