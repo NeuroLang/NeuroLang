@@ -270,7 +270,8 @@ class NeuroSynthMixin:
 
         if not name:
             name = str(uuid1())
-        region_set = self.neurosynth_db.ns_region_set_from_term(term, q)
+
+        region_set = self.neurosynth_db.ns_region_set_from_term(term, q=q)
         if n_components:
             region_set = take_principal_regions(region_set, n_components)
 
