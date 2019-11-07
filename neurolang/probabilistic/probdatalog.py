@@ -521,14 +521,14 @@ class RemoveProbabilitiesWalker(ExpressionWalker):
 
 
 def _construct_fact_variable_predicate(fact):
-    new_args = (Symbol[arg.type].fresh() for arg in fact.consequent.args)
+    new_args = (Symbol.fresh() for arg in fact.consequent.args)
     return fact.consequent.functor(*new_args)
 
 
 def _construct_pfact_variable_predicate(pfact):
-    new_args = (Symbol[arg.type].fresh() for arg in pfact.consequent.body.args)
+    new_args = tuple(Symbol.fresh() for arg in pfact.consequent.body.args)
     return ProbabilisticPredicate(
-        Symbol[float].fresh(), pfact.consequent.body.functor(*new_args)
+        Symbol.fresh(), pfact.consequent.body.functor(*new_args)
     )
 
 

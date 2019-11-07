@@ -69,7 +69,6 @@ def marg_query(code, query_pred, evidence_pred):
     joint_prob = solver.walk(SuccQuery(joint_rule.consequent))
     evidence_prob_column = Symbol(_split_numerical_cols(evidence_prob)[1][0])
     joint_prob_column = Symbol(_split_numerical_cols(joint_prob)[1][0])
-    import pdb; pdb.set_trace()
     return ExtendedRelationalAlgebraSolver({}).walk(
         DivideColumns(
             NaturalJoin(evidence_prob, joint_prob),
