@@ -1,10 +1,10 @@
 from operator import and_, invert
 from typing import AbstractSet, Callable, Tuple
 
-from .datalog.expressions import Disjunction, Negation
+from .datalog.expressions import Conjunction, Disjunction, Negation
 from .expression_walker import add_match, expression_iterator
 from .expressions import (Constant, FunctionApplication, NeuroLangException,
-                          NonConstant, Symbol, is_leq_informative)
+                          NonConstant, Quantifier, Symbol, is_leq_informative)
 from .solver_datalog_naive import (DatalogBasic, Implication,
                                    extract_datalog_free_variables)
 from .type_system import Unknown
@@ -143,13 +143,23 @@ class DatalogBasicNegation(DatalogBasic):
 
 
 def is_conjunctive_negation(expression):
-    return all(
-        not isinstance(exp, FunctionApplication) or (
-            isinstance(exp, FunctionApplication) and
-            ((
-                isinstance(exp.functor, Constant) and
-                (exp.functor.value is and_ or exp.functor.value is invert)
-            ) or
-             all(not isinstance(arg, FunctionApplication) for arg in exp.args))
-        ) for _, exp in expression_iterator(expression)
-    )
+    stack = [expression]
+    while stack:
+        exp = stack.pop()
+        if exp == Constant(True) or exp == Constant(False):
+            pass
+        elif isinstance(exp, FunctionApplication):
+            stack += [
+                arg for arg in exp.args
+                if isinstance(arg, FunctionApplication)
+            ]
+        elif isinstance(exp, Conjunction):
+            stack += exp.formulas
+        elif isinstance(exp, Negation):
+            stack.append(exp.formula)
+        elif isinstance(exp, Quantifier):
+            stack.append(exp.body)
+        else:
+            return False
+
+    return True

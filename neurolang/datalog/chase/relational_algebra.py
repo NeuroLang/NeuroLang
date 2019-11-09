@@ -320,6 +320,8 @@ class ChaseNamedRelationalAlgebraMixin:
 
     @staticmethod
     def is_eq_expressible_as_ra(functor, pred, cq_free_vars):
+        if isinstance(pred, Negation):
+            pred = pred.formula
         return (
             functor == eq_ and
             not any(isinstance(arg, Definition) for arg in pred.args) and
