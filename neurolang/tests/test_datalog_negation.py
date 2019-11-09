@@ -1,6 +1,6 @@
 import pytest
 
-from operator import eq, ne
+from operator import eq, ne, gt
 
 from .. import expressions, exceptions
 from .. import solver_datalog_negation as sdn
@@ -127,7 +127,7 @@ def test_stratified_and_chase_neg_equality():
     V = S_('V')
     NT = S_('NT')
     equals = C_(eq)
-    nequals = C_(ne)
+    nequals = C_(gt)
 
     program = Eb_((
         Fact(V(C_(1))),
