@@ -1,12 +1,12 @@
 from typing import AbstractSet, Callable, Tuple
 
-from .datalog.expressions import Conjunction, Disjunction, Negation
-from .expression_walker import add_match, expression_iterator
-from .expressions import (Constant, FunctionApplication, NeuroLangException,
-                          NonConstant, Quantifier, Symbol, is_leq_informative)
-from .solver_datalog_naive import (DatalogBasic, Implication,
-                                   extract_datalog_free_variables)
-from .type_system import Unknown
+from ..expression_walker import add_match
+from ..expressions import (Constant, FunctionApplication, NeuroLangException,
+                           NonConstant, Quantifier, Symbol, is_leq_informative)
+from ..type_system import Unknown
+from .basic_representation import DatalogProgram
+from .expression_processing import extract_datalog_free_variables
+from .expressions import Conjunction, Disjunction, Implication, Negation
 
 
 class NegativeFact(Implication):
@@ -27,7 +27,7 @@ class NegativeFact(Implication):
         )
 
 
-class DatalogBasicNegation(DatalogBasic):
+class DatalogProgramNegation(DatalogProgram):
     '''Datalog solver that implements negation. Adds the possibility of
     inverted terms when checking that expressions are in conjunctive
     normal form.'''

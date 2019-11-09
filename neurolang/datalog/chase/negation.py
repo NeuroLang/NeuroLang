@@ -1,14 +1,15 @@
 from itertools import chain, tee
 
-from .datalog import Negation
-from .datalog.expression_processing import extract_datalog_predicates
-from .datalog.chase import (ChaseGeneral, ChaseSemiNaive, ChaseMGUMixin,
-                            ChaseRelationalAlgebraPlusCeriMixin)
-from .exceptions import NeuroLangException
-from .expressions import Constant
-from .unification import (apply_substitution_arguments, compose_substitutions,
-                          most_general_unifier_arguments)
-from .utils import OrderedSet
+from ...exceptions import NeuroLangException
+from ...expressions import Constant
+from ...unification import (apply_substitution_arguments,
+                            compose_substitutions,
+                            most_general_unifier_arguments)
+from ...utils import OrderedSet
+from .. import Negation
+from ..expression_processing import extract_datalog_predicates
+from . import (ChaseGeneral, ChaseMGUMixin,
+                    ChaseRelationalAlgebraPlusCeriMixin, ChaseSemiNaive)
 
 
 class NegativeFactConstraints:
@@ -24,7 +25,9 @@ class NegativeFactConstraints:
                 )
 
 
-class DatalogChaseNegationGeneral(ChaseGeneral, ChaseSemiNaive, NegativeFactConstraints):
+class DatalogChaseNegationGeneral(
+    ChaseGeneral, ChaseSemiNaive, NegativeFactConstraints
+):
     def chase_step(self, instance, rule, restriction_instance=None):
         if restriction_instance is None:
             restriction_instance = set()

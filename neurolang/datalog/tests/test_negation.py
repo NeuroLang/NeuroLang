@@ -2,15 +2,15 @@ from operator import eq
 
 import pytest
 
-from .. import exceptions
-from .. import expression_walker as ew
-from .. import expressions
-from .. import solver_datalog_negation as sdn
-from ..datalog import Fact, Implication
-from ..datalog.chase import Chase as Chase_
-from ..datalog.expressions import TranslateToLogic
-from ..datalog_chase_negation import (DatalogChaseNegation,
-                                      NegativeFactConstraints)
+from ... import exceptions
+from ... import expression_walker as ew
+from ... import expressions
+from .. import Fact, Implication
+from .. import negation as sdn
+from ..expressions import TranslateToLogic
+from ..chase import Chase as Chase_
+from ..chase.negation import NegativeFactConstraints
+
 
 C_ = expressions.Constant
 S_ = expressions.Symbol
@@ -23,7 +23,7 @@ Eb_ = expressions.ExpressionBlock
 
 class Datalog(
     TranslateToLogic,
-    sdn.DatalogBasicNegation,
+    sdn.DatalogProgramNegation,
     ew.ExpressionBasicEvaluator
 ):
     def function_gt(self, x: int, y: int) -> bool:
