@@ -1,4 +1,3 @@
-from operator import and_, invert
 from typing import AbstractSet, Callable, Tuple
 
 from .datalog.expressions import Conjunction, Disjunction, Negation
@@ -36,6 +35,13 @@ class DatalogBasicNegation(DatalogBasic):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.negated_symbols = {}
+
+    @add_match(Negation(Constant[bool]))
+    def negation_constant(self, expression):
+        if expression.formula.value:
+            return Constant[bool](False)
+        else:
+            return Constant[bool](True)
 
     @add_match(
         Implication(FunctionApplication[bool](Symbol, ...), NonConstant)

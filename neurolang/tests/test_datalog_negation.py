@@ -1,6 +1,6 @@
 import pytest
 
-from operator import eq, ne, gt
+from operator import eq
 
 from .. import expressions, exceptions
 from .. import solver_datalog_negation as sdn
@@ -118,16 +118,14 @@ def test_stratified_and_chase():
     assert solution_instance == final_instance
 
 
-def test_stratified_and_chase_neg_equality():
+def test_stratified_and_chase_builtin_equality():
     x = S_('x')
     y = S_('y')
-    z = S_('z')
     G = S_('G')
     T = S_('T')
     V = S_('V')
     NT = S_('NT')
     equals = C_(eq)
-    nequals = C_(gt)
 
     program = Eb_((
         Fact(V(C_(1))),
@@ -136,13 +134,9 @@ def test_stratified_and_chase_neg_equality():
         Fact(V(C_(4))),
         Fact(G(C_(1), C_(2))),
         Fact(G(C_(2), C_(3))),
-        Implication(T(x, y),
-                    V(x) & V(y) & G(x, y)),
-        Implication(T(x, y),
-                    G(x, z) & T(z, y)),
         Implication(
             NT(x, y),
-            V(x) & V(y) & ~(G(x, y)) & (nequals(x, y))
+            V(x) & V(y) & ~(G(x, y)) & ~(equals(x, y))
         ),
     ))
 
@@ -178,10 +172,6 @@ def test_stratified_and_chase_neg_equality():
             C_((C_(3), C_(4))),
             C_((C_(2), C_(4))),
         }),
-        T:
-        C_({C_((C_(1), C_(2))),
-            C_((C_(1), C_(3))),
-            C_((C_(2), C_(3)))})
     }
 
     assert solution_instance == final_instance
