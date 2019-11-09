@@ -16,7 +16,6 @@ from .type_system import (
 )
 from .type_system import get_args as get_type_args
 from .type_system import infer_type as _infer_type
-from .type_system import infer_type_builtins
 from .typed_symbol_table import TypedSymbolTable
 
 
