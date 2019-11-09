@@ -11,7 +11,20 @@ from .unification import (apply_substitution_arguments, compose_substitutions,
 from .utils import OrderedSet
 
 
-class DatalogChaseNegationGeneral(ChaseGeneral, ChaseSemiNaive):
+class NegativeFactConstraints:
+    def check_constraints(self, instance_update):
+        super().check_constraints(instance_update)
+        for symbol, args in self.datalog_program.negated_symbols.items():
+            instance_values = [x for x in instance_update[symbol].value]
+            if symbol in instance_update and next(
+                iter(args.value)
+            ) in instance_values:
+                raise NeuroLangException(
+                    f'There is a contradiction in your facts'
+                )
+
+
+class DatalogChaseNegationGeneral(ChaseGeneral, ChaseSemiNaive, NegativeFactConstraints):
     def chase_step(self, instance, rule, restriction_instance=None):
         if restriction_instance is None:
             restriction_instance = set()
@@ -164,16 +177,6 @@ class DatalogChaseNegationGeneral(ChaseGeneral, ChaseSemiNaive):
                     'Non-linear rule {rule}, solver non supported'
                 )
         return recursive_calls
-
-    def check_constraints(self, instance_update):
-        for symbol, args in self.datalog_program.negated_symbols.items():
-            instance_values = [x for x in instance_update[symbol].value]
-            if symbol in instance_update and next(
-                iter(args.value)
-            ) in instance_values:
-                raise NeuroLangException(
-                    f'There is a contradiction in your facts'
-                )
 
 
 class DatalogChaseNegationRelationalAlgebraMixin(

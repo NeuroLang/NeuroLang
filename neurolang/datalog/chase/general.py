@@ -322,6 +322,7 @@ class ChaseSemiNaive:
         return instance_update
 
     def check_constraints(self, instance_update):
+        super().check_constraints(instance_update)
         for rule in self.rules:
             if not is_linear_rule(rule):
                 raise NeuroLangNonLinearProgramException(

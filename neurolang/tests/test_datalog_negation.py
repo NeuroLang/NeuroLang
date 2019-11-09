@@ -1,17 +1,16 @@
-import pytest
-
 from operator import eq
 
-from .. import expressions, exceptions
-from .. import solver_datalog_negation as sdn
+import pytest
+
+from .. import exceptions
 from .. import expression_walker as ew
-from ..datalog_chase_negation import DatalogChaseNegation
-from ..datalog import (
-    Implication,
-    Fact,
-)
-from ..datalog.chase import Chase
+from .. import expressions
+from .. import solver_datalog_negation as sdn
+from ..datalog import Fact, Implication
+from ..datalog.chase import Chase as Chase_
 from ..datalog.expressions import TranslateToLogic
+from ..datalog_chase_negation import (DatalogChaseNegation,
+                                      NegativeFactConstraints)
 
 C_ = expressions.Constant
 S_ = expressions.Symbol
@@ -29,6 +28,10 @@ class Datalog(
 ):
     def function_gt(self, x: int, y: int) -> bool:
         return x > y
+
+
+class Chase(NegativeFactConstraints, Chase_):
+    pass
 
 
 def test_non_recursive_negation():
@@ -204,7 +207,7 @@ def test_negative_fact():
 
     dl = Datalog()
     dl.walk(program)
-    #dc = DatalogChaseNegation(dl)
+
     dc = Chase(dl)
     with pytest.raises(
         exceptions.NeuroLangException, match=r'There is a contradiction .*'
