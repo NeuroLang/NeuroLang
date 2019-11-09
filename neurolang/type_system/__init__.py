@@ -263,7 +263,10 @@ def infer_type(value, deep=False, recursive_callback=None):
 
     if isinstance(value, (types.FunctionType, types.MethodType)):
         result = typing_callable_from_annotated_function(value)
-    elif isinstance(value, types.BuiltinFunctionType):
+    elif (
+        isinstance(value, types.BuiltinFunctionType)
+        or callable(value)
+    ):
         result = infer_type_builtins(value)
     elif isinstance(value, Tuple):
         inner_types = tuple(

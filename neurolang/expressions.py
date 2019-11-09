@@ -430,14 +430,8 @@ class Constant(Expression):
             if hasattr(value, attr):
                 setattr(self, attr, getattr(value, attr))
 
-        if (
-            (auto_infer_type and self.type is Unknown) and
-            (
-                hasattr(value, '__annotations__') or
-                isinstance(value, types.BuiltinFunctionType)
-            )
-        ):
-                self.type = infer_type(value)
+        if (auto_infer_type and self.type is Unknown):
+            self.type = infer_type(value)
 
     def __auto_infer_type__(self):
         self.type = infer_type(self.value)
