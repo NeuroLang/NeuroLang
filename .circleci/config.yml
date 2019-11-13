@@ -137,7 +137,7 @@ jobs:
             # . venv/bin/activate
             cd doc
             make html
-#          no_output_timeout: 1h
+          no_output_timeout: 7h
       - store_artifacts:
           path: doc/_build/html
 
