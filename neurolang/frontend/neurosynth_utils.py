@@ -13,7 +13,7 @@ class NeuroSynthHandler(object):
         self._dataset = ns_dataset
 
     def ns_region_set_from_term(
-        self, terms, frequency_threshold=0.05, q=0.001,
+        self, terms, frequency_threshold=0.05, q=0.01,
         prior=0.5, image_type=None
     ):
 
