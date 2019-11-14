@@ -18,22 +18,22 @@ commands:
       - run:
           name: install dependencies
           command: |
-            # pip install --user --upgrade pip
+            # pip install --upgrade pip
             # sudo rm -rf /usr/bin/pip
             python3 -m venv venv
             . venv/bin/activate
-            pip install --user -r requirements.txt
-            pip install --user -r requirements-dev.txt
+            pip install -r requirements.txt
+            pip install -r requirements-dev.txt
             if
               [ ${CIRCLE_JOB} == "docs" ]
             then
-              pip install --user -r requirements-doc.txt
+              pip install -r requirements-doc.txt
             fi
             if
               [ ${CIRCLE_JOB} == "benchmark" ]
             then
-              pip install --user asv
-              pip install --user virtualenv
+              pip install asv
+              pip install virtualenv
             fi
 
       - run:
