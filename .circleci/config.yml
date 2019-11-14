@@ -75,7 +75,7 @@ commands:
 jobs:
   py36:
     docker:
-      - image: circleci/python:3.6.4
+      - image: circleci/python:3.6
 
     working_directory: ~/repo
     steps:
