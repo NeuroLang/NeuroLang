@@ -381,10 +381,13 @@ _BINARY_OPERATORS = (
         operator.matmul,
         operator.mul,
         operator.add,
+        operator.sub,
         operator.pow,
         operator.lshift,
         operator.rshift,
         operator.truediv,
+        operator.ior,
+        operator.iand,
 )
 
 
@@ -394,6 +397,10 @@ _UNARY_OPERATORS = (
     operator.invert,
 )
 
+
+_NARY_OPERATORS = (
+    sum,
+)
 
 _RELATIVE_OPERATORS = (
     operator.eq,
@@ -419,8 +426,14 @@ def infer_type_builtins(builtin):
         n_params = 2
     elif builtin in _UNARY_OPERATORS:
         n_params = 1
+    elif builtin in _NARY_OPERATORS:
+        n_params = None
     else:
-        raise ValueError(f"Builtin {builtin} not supported")
+        try:
+            signature = inspect.signature(builtin)
+            n_params = len(signature.parameters)
+        except ValueError:
+            raise ValueError(f"Builtin {builtin} not supported")
 
     if builtin in _BOOLEAN_OPERATORS:
         params_type = [bool] * n_params
@@ -428,6 +441,9 @@ def infer_type_builtins(builtin):
     elif builtin in _RELATIVE_OPERATORS:
         params_type = [Unknown] * n_params
         return_type = bool
+    elif builtin in _NARY_OPERATORS:
+        params_type = [Unknown]
+        return_type = Unknown
     else:
         params_type = [Unknown] * n_params
         return_type = Unknown
