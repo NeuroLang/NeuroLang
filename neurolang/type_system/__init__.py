@@ -341,11 +341,11 @@ def replace_type_variable(type_, type_hint, type_var=None):
 
 
 def replace_type_variable_fix_python36_37(type_hint, origin, new_args):
-        if NEW_TYPING and isinstance(type_hint, _GenericAlias):
-            new_type = type_hint.copy_with(new_args)
-        else:
-            new_type = origin[new_args]
-        return new_type
+    if NEW_TYPING and isinstance(type_hint, _GenericAlias):
+        new_type = type_hint.copy_with(new_args)
+    else:
+        new_type = origin[new_args]
+    return new_type
 
 
 def typing_callable_from_annotated_function(function):
@@ -367,14 +367,7 @@ def typing_callable_from_annotated_function(function):
     ]
 
 
-def infer_type_builtins(builtin):
-    try:
-        signature = inspect.signature(builtin)
-    except ValueError:
-        return Unknown
-
-    n_params = len(signature.parameters)
-    if builtin in (
+_BINARY_OPERATORS = (
         operator.eq,
         operator.ne,
         operator.gt,
@@ -384,21 +377,60 @@ def infer_type_builtins(builtin):
         operator.and_,
         operator.or_,
         operator.xor,
-        operator.neg
-    ):
+        operator.contains,
+        operator.matmul,
+        operator.mul,
+        operator.add,
+        operator.pow,
+        operator.lshift,
+        operator.rshift,
+        operator.truediv,
+)
+
+
+_UNARY_OPERATORS = (
+    operator.neg,
+    operator.pos,
+    operator.invert,
+)
+
+
+_RELATIVE_OPERATORS = (
+    operator.eq,
+    operator.ne,
+    operator.gt,
+    operator.ge,
+    operator.lt,
+    operator.le,
+    operator.contains,
+)
+
+
+_BOOLEAN_OPERATORS = (
+    operator.and_,
+    operator.or_,
+    operator.xor,
+    operator.invert
+)
+
+
+def infer_type_builtins(builtin):
+    if builtin in _BINARY_OPERATORS:
+        n_params = 2
+    elif builtin in _UNARY_OPERATORS:
+        n_params = 1
+    else:
+        raise ValueError(f"Builtin {builtin} not supported")
+
+    if builtin in _BOOLEAN_OPERATORS:
+        params_type = [bool] * n_params
+        return_type = bool
+    elif builtin in _RELATIVE_OPERATORS:
+        params_type = [Unknown] * n_params
         return_type = bool
     else:
-        return_type = Unknown
-
-    if builtin in (
-        operator.and_,
-        operator.or_,
-        operator.xor,
-        operator.neg
-    ):
-        params_type = [bool] * n_params
-    else:
         params_type = [Unknown] * n_params
+        return_type = Unknown
 
     return Callable[params_type, return_type]
 

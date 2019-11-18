@@ -159,7 +159,7 @@ def test_infer_type():
     assert infer_type(dict(a=2)) is Mapping[str, int]
 
     assert infer_type(op.and_) is Callable[[bool, bool], bool]
-    assert infer_type(op.neg) is Callable[[bool], bool]
-    assert infer_type(op.invert) is Callable[[Unknown], Unknown]
+    assert infer_type(op.neg) is Callable[[Unknown], Unknown]
+    assert infer_type(op.invert) is Callable[[bool], bool]
     assert infer_type(op.eq) is Callable[[Unknown, Unknown], bool]
     assert infer_type(op.add) is Callable[[Unknown, Unknown], Unknown]
