@@ -150,6 +150,7 @@ class DatalogChaseNegationGeneral(
                 if functor in restriction_instance:
                     restricted_predicates.append(
                         (predicate, restriction_instance[functor].value)
+                    )
                 elif functor in instance:
                     nonrestricted_predicates.append(
                         (predicate, instance[functor].value)
