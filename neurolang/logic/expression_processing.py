@@ -62,7 +62,9 @@ class LogicSolver(PatternWalker):
                 solved_consequent is not expression.consequent or
                 solved_antecedent is not expression.antecedent
             ):
-                expression = self.walk(solved_consequent, solved_consequent)
+                expression = self.walk(
+                    Implication(solved_consequent, solved_antecedent)
+                )
             return expression
 
 
