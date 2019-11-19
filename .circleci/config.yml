@@ -124,7 +124,7 @@ jobs:
             else
               asv continuous -s -v master $(git rev-parse HEAD)
             fi
-            asv publish
+            # asv publish
           no_output_timeout: 1h
       - store_artifacts:
           path: .asv/html
