@@ -17,7 +17,7 @@ from ..expression_walker import (ExpressionBasicEvaluator, ExpressionWalker,
 from ..expressions import (Constant, Expression, ExpressionBlock,
                            FunctionApplication, Symbol)
 from ..logic import Conjunction, ExistentialPredicate, Implication
-from ..unification import apply_substitution
+from ..logic.unification import apply_substitution
 from .expressions import ProbabilisticPredicate
 from .ppdl import (DeltaTerm, concatenate_to_expression_block, get_dterm,
                    is_gdatalog_rule)

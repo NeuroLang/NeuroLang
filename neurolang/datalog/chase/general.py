@@ -4,14 +4,14 @@ from operator import eq
 
 from ...exceptions import NeuroLangException
 from ...expressions import Constant, FunctionApplication, Symbol
-from ...unification import (apply_substitution, apply_substitution_arguments,
-                            compose_substitutions)
+from ...logic.unification import (apply_substitution,
+                                  apply_substitution_arguments,
+                                  compose_substitutions)
 from ...utils import OrderedSet
 from ..expression_processing import (extract_datalog_free_variables,
                                      extract_datalog_predicates,
                                      is_linear_rule)
 from ..instance import MapInstance
-
 
 ChaseNode = namedtuple('ChaseNode', 'instance children')
 

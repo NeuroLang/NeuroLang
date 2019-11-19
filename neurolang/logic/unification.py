@@ -1,5 +1,5 @@
-from . import expressions as exp
-from .datalog.expressions import UnaryLogicOperator
+from .. import expressions as exp
+from . import UnaryLogicOperator
 
 
 def most_general_unifier(expression1, expression2):

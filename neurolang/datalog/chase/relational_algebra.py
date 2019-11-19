@@ -1,14 +1,14 @@
+import operator
 from collections import defaultdict
 from functools import lru_cache
 from typing import AbstractSet, Callable, Sequence
-import operator
 
-from ...expressions import Constant, Definition, Symbol, FunctionApplication
+from ...expressions import Constant, Definition, FunctionApplication, Symbol
+from ...logic.unification import apply_substitution_arguments
 from ...relational_algebra import (ColumnInt, Product, Projection,
                                    RelationalAlgebraOptimiser,
                                    RelationalAlgebraSolver, Selection, eq_)
 from ...type_system import is_leq_informative
-from ...unification import apply_substitution_arguments
 from ...utils import NamedRelationalAlgebraFrozenSet
 from ..expression_processing import (extract_datalog_free_variables,
                                      extract_datalog_predicates)
@@ -16,7 +16,6 @@ from ..expressions import Conjunction, Implication, Negation
 from ..instance import MapInstance
 from ..translate_to_named_ra import TranslateToNamedRA
 from ..wrapped_collections import WrappedRelationalAlgebraSet
-
 
 invert = Constant(operator.invert)
 

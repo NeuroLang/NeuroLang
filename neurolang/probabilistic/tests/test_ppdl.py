@@ -6,8 +6,8 @@ from ...existential_datalog import (Implication,
                                     SolverNonRecursiveExistentialDatalog)
 from ...expression_walker import ExpressionBasicEvaluator
 from ...expressions import Constant, ExpressionBlock, Symbol
+from ...logic.unification import apply_substitution, most_general_unifier
 from ...solver_datalog_extensional_db import ExtensionalDatabaseSolver
-from ...unification import apply_substitution, most_general_unifier
 from ..ppdl import (DeltaTerm, GenerativeDatalog, TranslateGDatalogToEDatalog,
                     can_lead_to_object_uncertainty,
                     concatenate_to_expression_block, get_dterm)

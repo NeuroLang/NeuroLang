@@ -1,4 +1,3 @@
-from ..expression_walker import PatternWalker, add_match
 from ..expressions import Constant, Definition, Symbol
 from ..expressions import NeuroLangException
 
@@ -143,55 +142,3 @@ TRUE = Constant[bool](True)
 FALSE = Constant[bool](False)
 
 
-class LogicSolver(PatternWalker):
-    @add_match(Conjunction)
-    def evaluate_conjunction(self, expression):
-        unsolved_formulas = tuple()
-        for formula in expression.formulas:
-            solved_formula = self.walk(formula)
-            if isinstance(solved_formula, Constant):
-                value = bool(solved_formula.value)
-                if not value:
-                    return FALSE
-            else:
-                unsolved_formulas += (solved_formula,)
-
-        if len(unsolved_formulas) > 0:
-            return TRUE
-        else:
-            return Conjunction(unsolved_formulas)
-
-    @add_match(Disjunction)
-    def evaluate_disjunction(self, expression):
-        unsolved_formulas = tuple()
-        for formula in expression.formulas:
-            solved_formula = self.walk(formula)
-            if isinstance(solved_formula, Constant):
-                value = bool(solved_formula.value)
-                if value:
-                    return TRUE
-            else:
-                unsolved_formulas += (solved_formula,)
-
-        if len(unsolved_formulas) == 0:
-            return FALSE
-        else:
-            return Disjunction(unsolved_formulas)
-
-    @add_match(Negation)
-    def evaluate_negation(self, expression):
-        solved_formula = self.walk(expression.formula)
-        if isinstance(solved_formula, Constant):
-            return Constant[bool](not solved_formula.value)
-        return expression
-
-    @add_match(Implication)
-    def evaluate_implication(self, expression):
-        solved_antecedent = self.walk(expression.antecedent)
-        if isinstance(solved_antecedent, Constant):
-            if bool(solved_antecedent.value):
-                return self.walk(expression.consequent)
-            else:
-                return TRUE
-        else:
-            return expression
