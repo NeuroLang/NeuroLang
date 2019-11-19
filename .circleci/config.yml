@@ -101,7 +101,6 @@ jobs:
       - checkout
       - install
       - test
-      
 
   benchmark:
     docker:
