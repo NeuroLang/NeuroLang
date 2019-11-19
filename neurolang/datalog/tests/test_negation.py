@@ -125,7 +125,6 @@ def test_stratified_and_chase_builtin_equality():
     x = S_('x')
     y = S_('y')
     G = S_('G')
-    T = S_('T')
     V = S_('V')
     NT = S_('NT')
     equals = C_(eq)

@@ -9,7 +9,7 @@ from ...utils import OrderedSet
 from .. import Negation
 from ..expression_processing import extract_datalog_predicates
 from . import (ChaseGeneral, ChaseMGUMixin,
-                    ChaseRelationalAlgebraPlusCeriMixin, ChaseSemiNaive)
+               ChaseRelationalAlgebraPlusCeriMixin, ChaseSemiNaive)
 
 
 class NegativeFactConstraints:
@@ -150,7 +150,6 @@ class DatalogChaseNegationGeneral(
                 if functor in restriction_instance:
                     restricted_predicates.append(
                         (predicate, restriction_instance[functor].value)
-                    )
                 elif functor in instance:
                     nonrestricted_predicates.append(
                         (predicate, instance[functor].value)
