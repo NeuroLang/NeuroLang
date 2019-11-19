@@ -1,6 +1,6 @@
 from ...expression_walker import IdentityWalker
-from ...expressions import Constant, ExpressionBlock, Symbol
-from .. import Conjunction, Disjunction, Implication, Negation, Predicate
+from ...expressions import ExpressionBlock, Symbol
+from .. import Conjunction, Disjunction, Implication, Negation
 from ..expression_processing import TranslateToLogic
 
 
