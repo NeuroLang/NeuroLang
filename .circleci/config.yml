@@ -68,11 +68,10 @@ commands:
             ./cc-test-reporter before-build
             make test
             mkdir test_reports
-            cp utest.xml test_reports/junit.xml
             ./cc-test-reporter after-build --coverage-input-type coverage.py --exit-code $?
             python-codacy-coverage -r coverage.xml
-            mkdir test_reports
             cp utest.xml test_reports
+            cp utest.xml test_reports/junit.xml
 
       - store_artifacts:
           path: test_reports
