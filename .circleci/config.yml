@@ -46,6 +46,8 @@ commands:
       - run:
           name: Setup codacy reporter
           command: |
+            python -m venv venv
+            . venv/bin/activate
             pip install codacy-coverage
 
       - save_cache:
