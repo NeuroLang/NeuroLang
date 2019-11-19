@@ -1,5 +1,5 @@
-from ..expressions import Constant, Definition, Symbol
-from ..expressions import NeuroLangException
+from ..exceptions import NeuroLangException
+from ..expressions import Constant, Definition, FunctionApplication, Symbol
 
 
 class LogicOperator(Definition):
@@ -138,7 +138,9 @@ class UniversalPredicate(Quantifier):
         return r
 
 
+class Predicate(FunctionApplication, LogicOperator):
+    pass
+
+
 TRUE = Constant[bool](True)
 FALSE = Constant[bool](False)
-
-
