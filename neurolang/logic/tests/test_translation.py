@@ -15,11 +15,10 @@ def test_translation_negation():
     ttl = Translator()
 
     exp = ~Q(x)
-    exp_pred = Predicate(Q, (x,))
     res = ttl.walk(exp)
 
     assert isinstance(res, Negation)
-    assert res.formula == exp_pred
+    assert res.formula == Q(x)
 
 
 def test_translation_conjunctions():
@@ -28,9 +27,9 @@ def test_translation_conjunctions():
     S = Symbol('S')
     x = Symbol('x')
 
-    Qx = Predicate(Q, (x,))
-    Rx = Predicate(R, (x,))
-    Sx = Predicate(S, (x,))
+    Qx = Q(x)
+    Rx = R(x)
+    Sx = S(x)
 
     ttl = Translator()
 
@@ -56,9 +55,9 @@ def test_translation_disjunctions():
     S = Symbol('S')
     x = Symbol('x')
 
-    Qx = Predicate(Q, (x,))
-    Rx = Predicate(R, (x,))
-    Sx = Predicate(S, (x,))
+    Qx = Q(x)
+    Rx = R(x)
+    Sx = S(x)
 
     ttl = Translator()
 

@@ -3,8 +3,7 @@ from typing import Any
 
 from ..expression_walker import PatternWalker, add_match
 from ..expressions import Constant, ExpressionBlock, FunctionApplication
-from . import (FALSE, TRUE, Conjunction, Disjunction, Implication,
-               LogicOperator, Negation, Predicate)
+from . import FALSE, TRUE, Conjunction, Disjunction, Implication, Negation
 
 
 class LogicSolver(PatternWalker):
@@ -105,52 +104,24 @@ class TranslateToLogic(PatternWalker):
             formulas += (new_exp,)
         return self.walk(Disjunction(formulas))
 
-    #@add_match(
-    #    Implication(..., FunctionApplication(Constant, ...)),
-    #    lambda implication: (
-    #        implication.antecedent.functor.value is and_ or
-    #        implication.antecedent.functor.value is or_ or
-    #        implication.antecedent.functor.value is invert
-    #    )
-    #)
-    #def translate_implication(self, implication):
-    #    new_consequent = self.walk(implication.consequent)
-    #    new_antecedent = self.walk(implication.antecedent)
-    #
-    #    if (
-    #        new_consequent is not implication.consequent or
-    #        new_antecedent is not implication.antecedent
-    #    ):
-    #        implication = self.walk(
-    #            Implication(new_consequent, new_antecedent)
-    #        )
-    #
-    #    return implication
-
     @add_match(
-        Implication,
-        lambda exp: not(
-            isinstance(exp.antecedent, LogicOperator) and
-            isinstance(exp.consequent, LogicOperator)
+        Implication(..., FunctionApplication(Constant, ...)),
+        lambda implication: (
+            implication.antecedent.functor.value is and_ or
+            implication.antecedent.functor.value is or_ or
+            implication.antecedent.functor.value is invert
         )
     )
     def translate_implication(self, implication):
-        antecedent = self.walk(implication.antecedent)
-        consequent = self.walk(implication.consequent)
+        new_consequent = self.walk(implication.consequent)
+        new_antecedent = self.walk(implication.antecedent)
+    
         if (
-            antecedent is not implication.antecedent or
-            consequent is not implication.consequent
+            new_consequent is not implication.consequent or
+            new_antecedent is not implication.antecedent
         ):
-            implication = Implication(consequent, antecedent)
-
+            implication = self.walk(
+                Implication(new_consequent, new_antecedent)
+            )
+    
         return implication
-
-    @add_match(
-        FunctionApplication,
-        lambda exp: not isinstance(exp, Predicate)
-    )
-    def function_application_to_predicate(self, function_application):
-        return self.walk(Predicate(
-            function_application.functor,
-            function_application.args
-        ))
