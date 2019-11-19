@@ -15,9 +15,10 @@ from .datalog import (Disjunction, Fact, Implication, NullConstant, Undefined,
                       extract_datalog_predicates, is_conjunctive_expression,
                       is_conjunctive_expression_with_nested_predicates)
 from .expression_walker import TypedSymbolTableEvaluator, add_match
-from .expressions import (Constant, ExistentialPredicate, Expression,
-                          FunctionApplication, Lambda, NeuroLangException,
-                          Query, Symbol, is_leq_informative)
+from .expressions import (Constant, Expression, FunctionApplication, Lambda,
+                          NeuroLangException, Query, Symbol,
+                          is_leq_informative)
+from .logic import ExistentialPredicate
 from .type_system import Unknown
 
 warn("This module is being deprecated please use the datalog module")

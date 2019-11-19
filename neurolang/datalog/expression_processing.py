@@ -7,11 +7,12 @@ from typing import Iterable
 
 from ..expression_walker import ExpressionWalker, PatternWalker, add_match
 from ..expressions import (
-    Constant, FunctionApplication, NeuroLangException, Quantifier, Symbol
+    Constant, FunctionApplication, NeuroLangException, Symbol
 )
+from ..logic import Quantifier, Disjunction, Implication, Negation, Conjunction
 from ..utils import OrderedSet
 from .expressions import (
-    Conjunction, Disjunction, Implication, Negation, TranslateToLogic
+    TranslateToLogic
 )
 
 

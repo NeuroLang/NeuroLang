@@ -8,10 +8,10 @@ from .exceptions import NeuroLangException
 from .expression_walker import (ExpressionBasicEvaluator, PatternWalker,
                                 ReplaceSymbolWalker, TypedSymbolTableEvaluator,
                                 add_match)
-from .expressions import (Constant, Definition, ExistentialPredicate,
-                          Expression, FunctionApplication, NonConstant, Query,
-                          Symbol, UniversalPredicate, Unknown,
-                          is_leq_informative)
+from .expressions import (Constant, Definition, Expression,
+                          FunctionApplication, NonConstant, Query, Symbol,
+                          Unknown, is_leq_informative)
+from .logic import ExistentialPredicate, UniversalPredicate
 
 T = typing.TypeVar('T')
 

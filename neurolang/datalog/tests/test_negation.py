@@ -5,6 +5,7 @@ import pytest
 from ... import exceptions
 from ... import expression_walker as ew
 from ... import expressions
+from ... import logic
 from .. import Fact, Implication
 from .. import negation as sdn
 from ..expressions import TranslateToLogic
@@ -16,8 +17,8 @@ C_ = expressions.Constant
 S_ = expressions.Symbol
 F_ = expressions.FunctionApplication
 L_ = expressions.Lambda
-E_ = expressions.ExistentialPredicate
-U_ = expressions.UniversalPredicate
+E_ = logic.ExistentialPredicate
+U_ = logic.UniversalPredicate
 Eb_ = expressions.ExpressionBlock
 
 

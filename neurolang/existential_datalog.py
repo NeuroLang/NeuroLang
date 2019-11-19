@@ -1,10 +1,8 @@
-from .datalog.expressions import Disjunction
 from .expression_pattern_matching import add_match
-from .expressions import (Constant, ExistentialPredicate,
-                          FunctionApplication, Lambda, NeuroLangException,
-                          Symbol)
-from .solver_datalog_naive import (DatalogBasic, Implication,
-                                   SolverNonRecursiveDatalogNaive)
+from .expressions import (Constant, FunctionApplication, Lambda,
+                          NeuroLangException, Symbol)
+from .logic import Disjunction, ExistentialPredicate, Implication
+from .solver_datalog_naive import DatalogBasic, SolverNonRecursiveDatalogNaive
 
 __all__ = [
     'Implication',

@@ -2,6 +2,7 @@ import typing
 
 from .. import solver
 from .. import expressions
+from .. import logic
 from ..neurolang import TypedSymbolTable
 
 C_ = expressions.Constant
@@ -109,7 +110,7 @@ def test_existential_predicate():
 
     x = S_[int]('x')
 
-    expression = expressions.ExistentialPredicate(
+    expression = logic.ExistentialPredicate(
         x, ds.symbol_table['gt'](x, C_(2))
     )
     res = ds.walk(expression)
@@ -117,7 +118,7 @@ def test_existential_predicate():
     assert res.type is bool
     assert res.value
 
-    expression = expressions.ExistentialPredicate(
+    expression = logic.ExistentialPredicate(
         x, ds.symbol_table['gt'](x, C_(10))
     )
     res = ds.walk(expression)
@@ -140,7 +141,7 @@ def test_existential_predicate_trivial():
 
     x = S_[int]('x')
 
-    expression = expressions.ExistentialPredicate(
+    expression = logic.ExistentialPredicate(
         x,
         C_(True) | ds.symbol_table['gt'](x, C_(2))
     )
@@ -149,7 +150,7 @@ def test_existential_predicate_trivial():
     assert res.type is bool
     assert res.value
 
-    expression = expressions.ExistentialPredicate(
+    expression = logic.ExistentialPredicate(
         x,
         C_(False) & ds.symbol_table['gt'](x, C_(2))
     )
@@ -174,11 +175,11 @@ def test_existential_predicate_not_solved():
     x = S_[int]('x')
     y = S_[int]('y')
 
-    expression = expressions.ExistentialPredicate(
+    expression = logic.ExistentialPredicate(
         x, ds.symbol_table['gt'](x, C_(2)) & ds.symbol_table['gt'](y, C_(2))
     )
     res = ds.walk(expression)
-    assert isinstance(res, expressions.ExistentialPredicate)
+    assert isinstance(res, logic.ExistentialPredicate)
     assert res.head == expression.head
     assert res.body == res.body
 
@@ -197,7 +198,7 @@ def test_universal_predicate():
 
     x = S_[int]('x')
 
-    expression = expressions.UniversalPredicate(
+    expression = logic.UniversalPredicate(
         x, ds.symbol_table['le'](x, C_(2))
     )
     res = ds.walk(expression)
@@ -205,7 +206,7 @@ def test_universal_predicate():
     assert res.type is bool
     assert not res.value
 
-    expression = expressions.UniversalPredicate(
+    expression = logic.UniversalPredicate(
         x, ds.symbol_table['le'](x, C_(10))
     )
     res = ds.walk(expression)
@@ -228,7 +229,7 @@ def test_universal_predicate_trivial():
 
     x = S_[int]('x')
 
-    expression = expressions.UniversalPredicate(
+    expression = logic.UniversalPredicate(
         x,
         C_(False) & ds.symbol_table['le'](x, C_(2))
     )
@@ -237,7 +238,7 @@ def test_universal_predicate_trivial():
     assert res.type is bool
     assert not res.value
 
-    expression = expressions.UniversalPredicate(
+    expression = logic.UniversalPredicate(
         x,
         C_(True) | ds.symbol_table['le'](x, C_(2))
     )
@@ -262,10 +263,10 @@ def test_universal_predicate_not_solved():
     x = S_[int]('x')
     y = S_[int]('y')
 
-    expression = expressions.UniversalPredicate(
+    expression = logic.UniversalPredicate(
         x, ds.symbol_table['le'](x, C_(2)) & ds.symbol_table['le'](y, C_(2))
     )
     res = ds.walk(expression)
-    assert isinstance(res, expressions.UniversalPredicate)
+    assert isinstance(res, logic.UniversalPredicate)
     assert res.head == expression.head
     assert res.body == res.body

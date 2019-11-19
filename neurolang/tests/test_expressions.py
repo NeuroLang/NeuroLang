@@ -4,7 +4,7 @@ from typing import AbstractSet, Callable, Mapping, Sequence, Tuple
 
 import pytest
 
-from .. import expressions
+from .. import expressions, logic
 from ..expression_walker import (ExpressionBasicEvaluator,
                                  TypedSymbolTableEvaluator)
 from ..expressions import Expression, Unknown, expressions_behave_as_objects
@@ -13,8 +13,8 @@ C_ = expressions.Constant
 S_ = expressions.Symbol
 F_ = expressions.FunctionApplication
 L_ = expressions.Lambda
-E_ = expressions.ExistentialPredicate
-U_ = expressions.UniversalPredicate
+E_ = logic.ExistentialPredicate
+U_ = logic.UniversalPredicate
 
 
 class Evaluator(ExpressionBasicEvaluator, TypedSymbolTableEvaluator):

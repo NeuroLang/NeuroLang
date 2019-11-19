@@ -1,9 +1,13 @@
-from .expression_walker import PatternWalker, add_match
-from .expressions import Constant, Definition, Symbol
-from .expressions import NeuroLangException
+from ..expression_walker import PatternWalker, add_match
+from ..expressions import Constant, Definition, Symbol
+from ..expressions import NeuroLangException
 
 
 class LogicOperator(Definition):
+    pass
+
+
+class UnaryLogicOperator(LogicOperator):
     pass
 
 
@@ -46,7 +50,7 @@ class Disjunction(LogicOperator):
         ) + ')'
 
 
-class Negation(LogicOperator):
+class Negation(UnaryLogicOperator):
     def __init__(self, formula):
         self.formula = formula
         self._symbols |= formula._symbols
@@ -135,6 +139,10 @@ class UniversalPredicate(Quantifier):
         return r
 
 
+TRUE = Constant[bool](True)
+FALSE = Constant[bool](False)
+
+
 class LogicSolver(PatternWalker):
     @add_match(Conjunction)
     def evaluate_conjunction(self, expression):
@@ -144,12 +152,12 @@ class LogicSolver(PatternWalker):
             if isinstance(solved_formula, Constant):
                 value = bool(solved_formula.value)
                 if not value:
-                    return Constant[bool](False)
+                    return FALSE
             else:
                 unsolved_formulas += (solved_formula,)
 
         if len(unsolved_formulas) > 0:
-            return Constant[bool](True)
+            return TRUE
         else:
             return Conjunction(unsolved_formulas)
 
@@ -161,12 +169,12 @@ class LogicSolver(PatternWalker):
             if isinstance(solved_formula, Constant):
                 value = bool(solved_formula.value)
                 if value:
-                    return Constant[bool](True)
+                    return TRUE
             else:
                 unsolved_formulas += (solved_formula,)
 
         if len(unsolved_formulas) == 0:
-            return Constant[bool](False)
+            return FALSE
         else:
             return Disjunction(unsolved_formulas)
 
@@ -184,6 +192,6 @@ class LogicSolver(PatternWalker):
             if bool(solved_antecedent.value):
                 return self.walk(expression.consequent)
             else:
-                return Constant[bool](True)
+                return TRUE
         else:
             return expression

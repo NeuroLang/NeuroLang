@@ -1,20 +1,12 @@
 import operator
 from typing import Iterable
 
-from ..datalog.expressions import Disjunction
-from ..existential_datalog import Implication
+from ..datalog.expression_processing import extract_datalog_predicates
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionBasicEvaluator
-from ..datalog.expression_processing import extract_datalog_predicates
-from ..expressions import (
-    Constant,
-    ExistentialPredicate,
-    Expression,
-    ExpressionBlock,
-    FunctionApplication,
-    NeuroLangException,
-    Symbol,
-)
+from ..expressions import (Constant, Expression, ExpressionBlock,
+                           FunctionApplication, NeuroLangException, Symbol)
+from ..logic import Disjunction, ExistentialPredicate, Implication
 from ..solver_datalog_naive import DatalogBasic, is_conjunctive_expression
 
 

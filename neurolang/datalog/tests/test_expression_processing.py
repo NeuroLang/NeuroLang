@@ -1,17 +1,16 @@
 from operator import eq
 
-from ...expressions import (Constant, ExistentialPredicate, ExpressionBlock,
-                            Symbol)
 from ...expression_walker import ExpressionBasicEvaluator
-from .. import Fact, Implication, DatalogProgram, Disjunction, Negation
+from ...expressions import Constant, ExpressionBlock, Symbol
+from ...logic import Disjunction, ExistentialPredicate, Implication, Negation
+from .. import DatalogProgram, Fact
 from ..expression_processing import (
-    TranslateToDatalogSemantics,
-    extract_datalog_free_variables, is_conjunctive_expression,
+    TranslateToDatalogSemantics, extract_datalog_free_variables,
     extract_datalog_predicates,
-    is_conjunctive_expression_with_nested_predicates,
-    stratify, reachable_code, is_linear_rule,
-    implication_has_existential_variable_in_antecedent
-)
+    implication_has_existential_variable_in_antecedent,
+    is_conjunctive_expression,
+    is_conjunctive_expression_with_nested_predicates, is_linear_rule,
+    reachable_code, stratify)
 
 S_ = Symbol
 C_ = Constant

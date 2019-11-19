@@ -2,43 +2,25 @@ import itertools
 from collections import defaultdict
 from typing import Mapping, Set
 
-from ..expressions import (
-    Expression,
-    Constant,
-    Symbol,
-    FunctionApplication,
-    ExpressionBlock,
-    ExistentialPredicate,
-)
-from ..unification import apply_substitution
-from ..datalog.expressions import (
-    Fact,
-    Implication,
-    Disjunction,
-    Conjunction,
-    TranslateToLogic,
-)
-from ..exceptions import NeuroLangException
 from ..datalog import DatalogProgram
-from ..expression_pattern_matching import add_match
-from ..expression_walker import (
-    PatternWalker,
-    ExpressionWalker,
-    ExpressionBasicEvaluator,
-)
-from .ppdl import is_gdatalog_rule
-from ..datalog.instance import SetInstance
+from ..datalog.chase import (ChaseGeneral, ChaseNaive,
+                             ChaseNamedRelationalAlgebraMixin)
 from ..datalog.expression_processing import (
     extract_datalog_predicates,
-    implication_has_existential_variable_in_antecedent,
-)
-from .ppdl import concatenate_to_expression_block, get_dterm, DeltaTerm
-from ..datalog.chase import (
-    ChaseNamedRelationalAlgebraMixin,
-    ChaseGeneral,
-    ChaseNaive,
-)
+    implication_has_existential_variable_in_antecedent)
+from ..datalog.expressions import Fact, TranslateToLogic
+from ..datalog.instance import SetInstance
+from ..exceptions import NeuroLangException
+from ..expression_pattern_matching import add_match
+from ..expression_walker import (ExpressionBasicEvaluator, ExpressionWalker,
+                                 PatternWalker)
+from ..expressions import (Constant, Expression, ExpressionBlock,
+                           FunctionApplication, Symbol)
+from ..logic import Conjunction, ExistentialPredicate, Implication
+from ..unification import apply_substitution
 from .expressions import ProbabilisticPredicate
+from .ppdl import (DeltaTerm, concatenate_to_expression_block, get_dterm,
+                   is_gdatalog_rule)
 
 
 def is_probabilistic_fact(expression):

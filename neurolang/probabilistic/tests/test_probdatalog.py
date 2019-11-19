@@ -1,30 +1,22 @@
 import numpy as np
 import pytest
 
-from ...datalog.expressions import Conjunction, Disjunction, Fact, Implication
+from ...datalog.expressions import Fact
 from ...datalog.instance import FrozenSetInstance, SetInstance
 from ...exceptions import NeuroLangException
 from ...expression_walker import ExpressionBasicEvaluator
-from ...expressions import (
-    Constant,
-    ExpressionBlock,
-    Symbol,
-    ExistentialPredicate,
-)
-from ..ppdl import DeltaTerm
+from ...expressions import Constant, ExpressionBlock, Symbol
+from ...logic import (Conjunction, Disjunction, ExistentialPredicate,
+                      Implication)
 from ..expressions import ProbabilisticPredicate
-from ..probdatalog import (
-    GDatalogToProbDatalog,
-    ProbDatalogProgram,
-    ProbfactAsFactWalker,
-    conjunct_formulas,
-    full_observability_parameter_estimation,
-    get_possible_ground_substitutions,
-    get_rule_groundings,
-    ground_probdatalog_program,
-    _infer_pfact_typing_pred_symbs,
-    is_probabilistic_fact,
-)
+from ..ppdl import DeltaTerm
+from ..probdatalog import (GDatalogToProbDatalog, ProbDatalogProgram,
+                           ProbfactAsFactWalker,
+                           _infer_pfact_typing_pred_symbs, conjunct_formulas,
+                           full_observability_parameter_estimation,
+                           get_possible_ground_substitutions,
+                           get_rule_groundings, ground_probdatalog_program,
+                           is_probabilistic_fact)
 
 C_ = Constant
 

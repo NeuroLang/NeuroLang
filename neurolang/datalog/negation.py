@@ -2,11 +2,11 @@ from typing import AbstractSet, Callable, Tuple
 
 from ..expression_walker import add_match
 from ..expressions import (Constant, FunctionApplication, NeuroLangException,
-                           NonConstant, Quantifier, Symbol, is_leq_informative)
+                           NonConstant, Symbol, is_leq_informative)
 from ..type_system import Unknown
 from .basic_representation import DatalogProgram
 from .expression_processing import extract_datalog_free_variables
-from .expressions import Conjunction, Disjunction, Implication, Negation
+from ..logic import Conjunction, Disjunction, Implication, Negation, Quantifier
 
 
 class NegativeFact(Implication):

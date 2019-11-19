@@ -1,23 +1,16 @@
 import pytest
 
-from ...solver_datalog_extensional_db import ExtensionalDatabaseSolver
-from ...expression_walker import ExpressionBasicEvaluator
+from ...datalog import Fact
 from ...exceptions import NeuroLangException
-from ...expressions import ExpressionBlock, Constant, Symbol
-from ...existential_datalog import (
-    Implication,
-    SolverNonRecursiveExistentialDatalog,
-)
-from ...solver_datalog_naive import Fact
-from ...unification import most_general_unifier, apply_substitution
-from ..ppdl import (
-    concatenate_to_expression_block,
-    GenerativeDatalog,
-    TranslateGDatalogToEDatalog,
-    DeltaTerm,
-    get_dterm,
-    can_lead_to_object_uncertainty,
-)
+from ...existential_datalog import (Implication,
+                                    SolverNonRecursiveExistentialDatalog)
+from ...expression_walker import ExpressionBasicEvaluator
+from ...expressions import Constant, ExpressionBlock, Symbol
+from ...solver_datalog_extensional_db import ExtensionalDatabaseSolver
+from ...unification import apply_substitution, most_general_unifier
+from ..ppdl import (DeltaTerm, GenerativeDatalog, TranslateGDatalogToEDatalog,
+                    can_lead_to_object_uncertainty,
+                    concatenate_to_expression_block, get_dterm)
 
 C_ = Constant
 S_ = Symbol

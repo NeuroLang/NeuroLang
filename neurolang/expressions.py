@@ -22,8 +22,8 @@ from .typed_symbol_table import TypedSymbolTable
 
 __all__ = [
     'Symbol', 'FunctionApplication', 'Statement',
-    'Projection', 'ExistentialPredicate', 'UniversalPredicate',
-    'Unknown', 'get_type_args', 'TypedSymbolTable', 'TypedSymbolTableMixin'
+    'Projection', 'Unknown', 'get_type_args',
+    'TypedSymbolTable', 'TypedSymbolTableMixin'
 ]
 
 
@@ -658,72 +658,6 @@ class Projection(Definition):
             self.type = collection.type.__args__[1]
 
 
-class Quantifier(Definition):
-    pass
-
-
-class ExistentialPredicate(Quantifier):
-    def __init__(self, head, body):
-
-        if not isinstance(head, Symbol):
-            raise NeuroLangException(
-                'A symbol should be provided for the '
-                'existential quantifier expression'
-            )
-        if not isinstance(body, Definition):
-            raise NeuroLangException(
-                'A function application over '
-                'predicates should be associated to the quantifier'
-            )
-
-        if head not in body._symbols:
-            raise NeuroLangException(
-                'Symbol should be a free '
-                'variable on the predicate'
-            )
-        self.head = head
-        self.body = body
-        self._symbols = body._symbols - {head}
-
-    def __repr__(self):
-        r = (
-            u'\u2203{{{}: {} st {}}}'
-            .format(self.head, self.__type_repr__, self.body)
-        )
-        return r
-
-
-class UniversalPredicate(Quantifier):
-    def __init__(self, head, body):
-
-        if not isinstance(head, Symbol):
-            raise NeuroLangException(
-                'A symbol should be provided for the '
-                'universal quantifier expression'
-            )
-        if not isinstance(body, Definition):
-            raise NeuroLangException(
-                'A function application over '
-                'predicates should be associated to the quantifier'
-            )
-
-        if head not in body._symbols:
-            raise NeuroLangException(
-                'Symbol should be a free '
-                'variable on the predicate'
-            )
-        self.head = head
-        self.body = body
-        self._symbols = body._symbols - {head}
-
-    def __repr__(self):
-        r = (
-            u'\u2200{{{}: {} st {}}}'
-            .format(self.head, self.__type_repr__, self.body)
-        )
-        return r
-
-
 class Statement(Definition):
     def __init__(
         self, lhs, rhs,
@@ -814,7 +748,7 @@ for operator_name in dir(op):
     if name.endswith('___'):
         name = name[:-1]
 
-    for c in (Constant, Symbol, ExistentialPredicate, FunctionApplication,
+    for c in (Constant, Symbol, FunctionApplication,
               Statement, Query):
         if not hasattr(c, name):
             setattr(c, name, op_bind(operator))

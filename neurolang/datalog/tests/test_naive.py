@@ -3,12 +3,12 @@ from typing import AbstractSet
 import pytest
 
 from ... import expression_walker, solver_datalog_extensional_db
-from ...expressions import (Constant, ExistentialPredicate, ExpressionBlock,
-                            FunctionApplication, Lambda, NeuroLangException,
-                            Query, Symbol, is_leq_informative)
+from ...expressions import (Constant, ExpressionBlock, FunctionApplication,
+                            Lambda, NeuroLangException, Query, Symbol,
+                            is_leq_informative)
+from ...logic import Disjunction, ExistentialPredicate, Implication
 from ...solver_datalog_naive import NULL, SolverNonRecursiveDatalogNaive
-from .. import Fact, Implication, Disjunction
-
+from .. import Fact
 
 S_ = Symbol
 C_ = Constant

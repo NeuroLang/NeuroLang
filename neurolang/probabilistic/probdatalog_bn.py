@@ -11,7 +11,7 @@ from ..expressions import (
     FunctionApplication,
     Constant,
 )
-from ..datalog.expressions import Implication
+from ..logic import Implication
 from ..datalog.expression_processing import extract_datalog_predicates
 from ..exceptions import NeuroLangException
 from .expressions import TableDistribution
