@@ -433,7 +433,7 @@ def infer_type_builtins(builtin):
             signature = inspect.signature(builtin)
             n_params = len(signature.parameters)
         except ValueError:
-            raise ValueError(f"Builtin {builtin} not supported")
+            return Callable[..., Unknown]
 
     if builtin in _BOOLEAN_OPERATORS:
         params_type = [bool] * n_params
