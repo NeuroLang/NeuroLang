@@ -1,13 +1,12 @@
-from operator import and_, invert
 from typing import AbstractSet, Callable, Tuple
 
-from .datalog.expressions import Disjunction, Negation
-from .expression_walker import add_match, expression_iterator
-from .expressions import (Constant, FunctionApplication, NeuroLangException,
-                          NonConstant, Symbol, is_leq_informative)
-from .solver_datalog_naive import (DatalogBasic, Implication,
-                                   extract_datalog_free_variables)
-from .type_system import Unknown
+from ..expression_walker import add_match
+from ..expressions import (Constant, FunctionApplication, NeuroLangException,
+                           NonConstant, Quantifier, Symbol, is_leq_informative)
+from ..type_system import Unknown
+from .basic_representation import DatalogProgram
+from .expression_processing import extract_datalog_free_variables
+from .expressions import Conjunction, Disjunction, Implication, Negation
 
 
 class NegativeFact(Implication):
@@ -28,7 +27,7 @@ class NegativeFact(Implication):
         )
 
 
-class DatalogBasicNegation(DatalogBasic):
+class DatalogProgramNegation(DatalogProgram):
     '''Datalog solver that implements negation. Adds the possibility of
     inverted terms when checking that expressions are in conjunctive
     normal form.'''
@@ -36,6 +35,13 @@ class DatalogBasicNegation(DatalogBasic):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.negated_symbols = {}
+
+    @add_match(Negation(Constant[bool]))
+    def negation_constant(self, expression):
+        if expression.formula.value:
+            return Constant[bool](False)
+        else:
+            return Constant[bool](True)
 
     @add_match(
         Implication(FunctionApplication[bool](Symbol, ...), NonConstant)
@@ -143,13 +149,23 @@ class DatalogBasicNegation(DatalogBasic):
 
 
 def is_conjunctive_negation(expression):
-    return all(
-        not isinstance(exp, FunctionApplication) or (
-            isinstance(exp, FunctionApplication) and
-            ((
-                isinstance(exp.functor, Constant) and
-                (exp.functor.value is and_ or exp.functor.value is invert)
-            ) or
-             all(not isinstance(arg, FunctionApplication) for arg in exp.args))
-        ) for _, exp in expression_iterator(expression)
-    )
+    stack = [expression]
+    while stack:
+        exp = stack.pop()
+        if exp == Constant(True) or exp == Constant(False):
+            pass
+        elif isinstance(exp, FunctionApplication):
+            stack += [
+                arg for arg in exp.args
+                if isinstance(arg, FunctionApplication)
+            ]
+        elif isinstance(exp, Conjunction):
+            stack += exp.formulas
+        elif isinstance(exp, Negation):
+            stack.append(exp.formula)
+        elif isinstance(exp, Quantifier):
+            stack.append(exp.body)
+        else:
+            return False
+
+    return True

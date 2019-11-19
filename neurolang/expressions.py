@@ -16,6 +16,7 @@ from .type_system import (
 )
 from .type_system import get_args as get_type_args
 from .type_system import infer_type as _infer_type
+from .type_system import infer_type_builtins
 from .typed_symbol_table import TypedSymbolTable
 
 
@@ -430,11 +431,11 @@ class Constant(Expression):
             if hasattr(value, attr):
                 setattr(self, attr, getattr(value, attr))
 
-        if (
-            auto_infer_type and self.type is Unknown and
-            hasattr(value, '__annotations__')
-        ):
-            self.type = infer_type(value)
+        if auto_infer_type and self.type is Unknown:
+            if hasattr(value, '__annotations__'):
+                self.type = infer_type(value)
+            elif isinstance(value, types.BuiltinFunctionType):
+                self.type = infer_type_builtins(value)
 
     def __auto_infer_type__(self):
         self.type = infer_type(self.value)

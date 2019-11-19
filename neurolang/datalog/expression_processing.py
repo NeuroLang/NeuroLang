@@ -194,7 +194,11 @@ def is_linear_rule(rule):
     """
     predicates = extract_datalog_predicates(rule.antecedent)
     return sum(
-        int(predicate.functor == rule.consequent.functor)
+        int(
+            (predicate.formula.functor == rule.consequent.functor)
+            if isinstance(predicate, Negation)
+            else predicate.functor == rule.consequent.functor
+        )
         for predicate in predicates
     ) < 2
 

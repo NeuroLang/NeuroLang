@@ -1,8 +1,9 @@
 from collections import defaultdict
 from functools import lru_cache
 from typing import AbstractSet, Callable, Sequence
+import operator
 
-from ...expressions import Constant, Definition, Symbol
+from ...expressions import Constant, Definition, Symbol, FunctionApplication
 from ...relational_algebra import (ColumnInt, Product, Projection,
                                    RelationalAlgebraOptimiser,
                                    RelationalAlgebraSolver, Selection, eq_)
@@ -11,10 +12,13 @@ from ...unification import apply_substitution_arguments
 from ...utils import NamedRelationalAlgebraFrozenSet
 from ..expression_processing import (extract_datalog_free_variables,
                                      extract_datalog_predicates)
-from ..expressions import Conjunction, Implication
+from ..expressions import Conjunction, Implication, Negation
 from ..instance import MapInstance
 from ..translate_to_named_ra import TranslateToNamedRA
 from ..wrapped_collections import WrappedRelationalAlgebraSet
+
+
+invert = Constant(operator.invert)
 
 
 class ChaseRelationalAlgebraPlusCeriMixin:
@@ -277,7 +281,13 @@ class ChaseNamedRelationalAlgebraMixin:
         builtin_predicates = []
         cq_free_vars = set()
         for predicate in rule_predicates:
-            functor = predicate.functor
+            if isinstance(predicate, Negation):
+                functor = predicate.formula.functor
+                is_negation = True
+            else:
+                functor = predicate.functor
+                is_negation = False
+
             if functor in self.idb_edb_symbols:
                 edb_idb_predicates.append(predicate)
                 cq_free_vars |= extract_datalog_free_variables(predicate)
@@ -286,6 +296,10 @@ class ChaseNamedRelationalAlgebraMixin:
                     (predicate, self.builtins[functor])
                 )
             elif isinstance(functor, Constant):
+                if is_negation:
+                    predicate = FunctionApplication(
+                        invert, (predicate.formula,)
+                    )
                 builtin_predicates.append((predicate, functor))
             else:
                 edb_idb_predicates = []
@@ -317,11 +331,18 @@ class ChaseNamedRelationalAlgebraMixin:
 
     @staticmethod
     def is_eq_expressible_as_ra(functor, pred, cq_free_vars):
+        is_negation = False
+        if isinstance(pred, Negation):
+            pred = pred.formula
+            is_negation = True
+            return False
+
         return (
             functor == eq_ and
             not any(isinstance(arg, Definition) for arg in pred.args) and
             any(
-                isinstance(arg, Constant) or arg in cq_free_vars
+                isinstance(arg, Constant) or
+                (not is_negation and arg in cq_free_vars)
                 for arg in pred.args
             )
         )

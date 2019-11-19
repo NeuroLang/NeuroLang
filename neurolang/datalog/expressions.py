@@ -15,6 +15,10 @@ class LogicOperator(Definition):
     pass
 
 
+class UnaryLogicOperator(LogicOperator):
+    pass
+
+
 class Implication(LogicOperator):
     """Expression of the form `P(x) \u2190 Q(x)`"""
 
@@ -82,7 +86,7 @@ class Disjunction(LogicOperator):
         ) + ')'
 
 
-class Negation(LogicOperator):
+class Negation(UnaryLogicOperator):
     def __init__(self, formula):
         self.formula = formula
         self._symbols |= formula._symbols
@@ -106,7 +110,7 @@ NULL = NullConstant[Any](None)
 
 
 class TranslateToLogic(PatternWalker):
-    @add_match(FunctionApplication(Constant(and_), ...))
+    @add_match(FunctionApplication(Constant[Any](and_), ...))
     def build_conjunction(self, conjunction):
         args = tuple()
         for arg in conjunction.args:
@@ -118,7 +122,7 @@ class TranslateToLogic(PatternWalker):
 
         return self.walk(Conjunction(args))
 
-    @add_match(FunctionApplication(Constant(or_), ...))
+    @add_match(FunctionApplication(Constant[Any](or_), ...))
     def build_disjunction(self, disjunction):
         args = tuple()
         for arg in disjunction.args:
@@ -130,7 +134,7 @@ class TranslateToLogic(PatternWalker):
 
         return self.walk(Disjunction(args))
 
-    @add_match(FunctionApplication(Constant(invert), ...))
+    @add_match(FunctionApplication(Constant[Any](invert), ...))
     def build_negation(self, inversion):
         arg = self.walk(inversion.args[0])
         return self.walk(Negation(arg))
