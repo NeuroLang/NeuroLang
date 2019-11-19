@@ -13,8 +13,7 @@ class LogicSolver(PatternWalker):
         for formula in expression.formulas:
             solved_formula = self.walk(formula)
             if isinstance(solved_formula, Constant):
-                value = bool(solved_formula.value)
-                if not value:
+                if not bool(solved_formula.value):
                     return FALSE
             else:
                 unsolved_formulas += (solved_formula,)
@@ -30,8 +29,7 @@ class LogicSolver(PatternWalker):
         for formula in expression.formulas:
             solved_formula = self.walk(formula)
             if isinstance(solved_formula, Constant):
-                value = bool(solved_formula.value)
-                if value:
+                if bool(solved_formula.value):
                     return TRUE
             else:
                 unsolved_formulas += (solved_formula,)
