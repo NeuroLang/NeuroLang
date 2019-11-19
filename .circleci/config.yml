@@ -121,7 +121,7 @@ jobs:
             then
               asv run -v $(git rev-parse HEAD)...$(git rev-parse HEAD~5)
             else
-              asv continous -v master
+              asv continuous -v master
             fi
             asv publish
           no_output_timeout: 1h
