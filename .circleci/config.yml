@@ -119,7 +119,7 @@ jobs:
             if 
               [ "${CIRCLE_BRANCH}" = "master" ]
             then
-              asv run -s -v $(git rev-parse HEAD)...$(git rev-parse HEAD~5)
+              asv run -v $(git rev-parse HEAD)...$(git rev-parse HEAD~5)
             else
               asv continous -v master
             fi
