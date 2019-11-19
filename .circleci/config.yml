@@ -70,8 +70,8 @@ commands:
             mkdir test_reports
             ./cc-test-reporter after-build --coverage-input-type coverage.py --exit-code $?
             python-codacy-coverage -r coverage.xml
+            mkdir test_reports
             cp utest.xml test_reports
-            cp utest.xml test_reports/junit.xml
 
       - store_artifacts:
           path: test_reports
@@ -101,8 +101,14 @@ jobs:
       - checkout
       - install
       - test
+<<<<<<< HEAD
       
 
+||||||| merged common ancestors
+ 
+=======
+
+>>>>>>> master
   benchmark:
     docker:
       - image: circleci/python:3.7
@@ -117,6 +123,7 @@ jobs:
           command: |
             . venv/bin/activate
             asv machine --yes
+<<<<<<< HEAD
             if 
               [ "${CIRCLE_BRANCH}" = "master" ]
             then
@@ -125,6 +132,19 @@ jobs:
               asv continuous -s -v master $(git rev-parse HEAD)
             fi
             # asv publish
+||||||| merged common ancestors
+            asv run -v $(git rev-parse HEAD)...$(git rev-parse HEAD~5)
+            asv publish
+=======
+            if 
+              [ "${CIRCLE_BRANCH}" = "master" ]
+            then
+              asv run -s -v $(git rev-parse HEAD)...$(git rev-parse HEAD~5)
+            else
+              asv continuous -s -v master $(git rev-parse HEAD)
+            fi
+            asv publish
+>>>>>>> master
           no_output_timeout: 1h
       - store_artifacts:
           path: .asv/html
