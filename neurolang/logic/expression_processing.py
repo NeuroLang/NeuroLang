@@ -115,7 +115,6 @@ class TranslateToLogic(PatternWalker):
     def translate_implication(self, implication):
         new_consequent = self.walk(implication.consequent)
         new_antecedent = self.walk(implication.antecedent)
-    
         if (
             new_consequent is not implication.consequent or
             new_antecedent is not implication.antecedent
@@ -123,5 +122,5 @@ class TranslateToLogic(PatternWalker):
             implication = self.walk(
                 Implication(new_consequent, new_antecedent)
             )
-    
+
         return implication
