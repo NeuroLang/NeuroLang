@@ -143,10 +143,11 @@ class TranslateToLogic(PatternWalker):
                 is_logic_function_application(arg)
             ):
                 new_arg = self.walk(arg)
-                if new_arg is not arg:
-                    changed = True
             else:
                 new_arg = arg
+
+            if new_arg is not arg:
+                changed = True
 
             new_args += (new_arg,)
 
