@@ -16,7 +16,7 @@ __all__ = [
     "UNDEFINED", "NULL",
     "WrappedRelationalAlgebraSet",
     "DatalogProgram",
-    "extract_datalog_predicates",
+    "extract_logic_predicates",
     "is_conjunctive_expression",
     "is_conjunctive_expression_with_nested_predicates",
     "extract_logic_free_variables",
