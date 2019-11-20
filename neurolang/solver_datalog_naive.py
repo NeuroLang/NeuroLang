@@ -12,7 +12,7 @@ from .datalog import DatalogProgram as DatalogBasic
 from .datalog import (Union, Fact, Implication, NullConstant, Undefined,
                       WrappedRelationalAlgebraSet,
                       extract_logic_free_variables,
-                      extract_logic_predicates, is_conjunctive_expression,
+                      is_conjunctive_expression,
                       is_conjunctive_expression_with_nested_predicates)
 from .expression_walker import TypedSymbolTableEvaluator, add_match
 from .expressions import (Constant, Expression, FunctionApplication, Lambda,
@@ -33,7 +33,6 @@ __all__ = [
     "SolverNonRecursiveDatalogNaive",
     "is_conjunctive_expression",
     "extract_logic_free_variables",
-    "extract_datalog_predicates",
     "is_conjunctive_expression_with_nested_predicates"
 ]
 
