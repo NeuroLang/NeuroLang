@@ -21,8 +21,10 @@ class LogicSolver(PatternWalker):
             else:
                 unsolved_formulas += (solved_formula,)
 
-        if len(unsolved_formulas) > 0:
+        if len(unsolved_formulas) == 0:
             return TRUE
+        elif len(unsolved_formulas) == 1:
+            return unsolved_formulas[0]
         else:
             return Conjunction(unsolved_formulas)
 
@@ -39,6 +41,8 @@ class LogicSolver(PatternWalker):
 
         if len(unsolved_formulas) == 0:
             return FALSE
+        elif len(unsolved_formulas) == 1:
+            return unsolved_formulas[0]
         else:
             return Disjunction(unsolved_formulas)
 
@@ -47,26 +51,41 @@ class LogicSolver(PatternWalker):
         solved_formula = self.walk(expression.formula)
         if isinstance(solved_formula, Constant):
             return Constant[bool](not solved_formula.value)
-        return expression
+        if isinstance(solved_formula, Negation):
+            solved_formula = solved_formula.formula
+        else:
+            solved_formula = Negation(solved_formula)
+        return solved_formula
+
+    @add_match(Implication(..., TRUE))
+    def evaluate_implication_true_antecedent(self, expression):
+        return self.walk(expression.consequent)
+
+    @add_match(Implication(..., FALSE))
+    def evaluate_implication_false_antecedent(self, expression):
+        return TRUE
+
+    @add_match(Implication(TRUE, ...))
+    def evaluate_implication_true_consequent(self, expression):
+        return TRUE
+
+    @add_match(Implication(FALSE, ...))
+    def evaluate_implication_false_consequent(self, expression):
+        return self.walk(Negation(expression.antecedent))
 
     @add_match(Implication)
     def evaluate_implication(self, expression):
         solved_antecedent = self.walk(expression.antecedent)
-        if isinstance(solved_antecedent, Constant):
-            if bool(solved_antecedent.value):
-                return self.walk(expression.consequent)
-            else:
-                return TRUE
-        else:
-            solved_consequent = self.walk(expression.consequent)
-            if (
-                solved_consequent is not expression.consequent or
-                solved_antecedent is not expression.antecedent
-            ):
-                expression = self.walk(
-                    Implication(solved_consequent, solved_antecedent)
-                )
-            return expression
+        if solved_antecedent is not expression.antecedent:
+            return self.walk(
+                Implication(expression.consequent, solved_antecedent)
+            )
+
+        solved_consequent = self.walk(expression.consequent)
+        if (solved_consequent is not expression.consequent):
+            return self.walk(Implication(solved_consequent, solved_antecedent))
+
+        return expression
 
 
 class TranslateToLogic(PatternWalker):
