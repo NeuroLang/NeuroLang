@@ -9,15 +9,16 @@ from warnings import warn
 
 from .datalog import NULL, UNDEFINED
 from .datalog import DatalogProgram as DatalogBasic
-from .datalog import (Disjunction, Fact, Implication, NullConstant, Undefined,
+from .datalog import (Union, Fact, Implication, NullConstant, Undefined,
                       WrappedRelationalAlgebraSet,
-                      extract_datalog_free_variables,
-                      extract_datalog_predicates, is_conjunctive_expression,
+                      extract_logic_free_variables,
+                      is_conjunctive_expression,
                       is_conjunctive_expression_with_nested_predicates)
 from .expression_walker import TypedSymbolTableEvaluator, add_match
-from .expressions import (Constant, ExistentialPredicate, Expression,
-                          FunctionApplication, Lambda, NeuroLangException,
-                          Query, Symbol, is_leq_informative)
+from .expressions import (Constant, Expression, FunctionApplication, Lambda,
+                          NeuroLangException, Query, Symbol,
+                          is_leq_informative)
+from .logic import ExistentialPredicate
 from .type_system import Unknown
 
 warn("This module is being deprecated please use the datalog module")
@@ -31,8 +32,7 @@ __all__ = [
     "DatalogBasic",
     "SolverNonRecursiveDatalogNaive",
     "is_conjunctive_expression",
-    "extract_datalog_free_variables",
-    "extract_datalog_predicates",
+    "extract_logic_free_variables",
     "is_conjunctive_expression_with_nested_predicates"
 ]
 
@@ -68,17 +68,17 @@ class SolverNonRecursiveDatalogNaive(
     @add_match(
         Implication(FunctionApplication, ...),
         lambda e: len(
-            extract_datalog_free_variables(e.antecedent) -
-            extract_datalog_free_variables(e.consequent)
+            extract_logic_free_variables(e.antecedent) -
+            extract_logic_free_variables(e.consequent)
         ) > 0
     )
     def implication_add_existential(self, expression):
         consequent = expression.consequent
         antecedent = expression.antecedent
 
-        fv_consequent = extract_datalog_free_variables(consequent)
+        fv_consequent = extract_logic_free_variables(consequent)
         fv_antecedent = (
-            extract_datalog_free_variables(antecedent) -
+            extract_logic_free_variables(antecedent) -
             fv_consequent
         )
 
@@ -150,12 +150,12 @@ class SolverNonRecursiveDatalogNaive(
         )
 
     @add_match(
-        FunctionApplication(Disjunction, ...),
+        FunctionApplication(Union, ...),
         lambda e: all(
             isinstance(a, Constant) for a in e.args
         )
     )
-    def evaluate_datalog_disjunction(self, expression):
+    def evaluate_datalog_union(self, expression):
         for formula in expression.functor.formulas:
             fa = FunctionApplication[bool](formula, expression.args)
             res = self.walk(fa)
@@ -193,7 +193,7 @@ class SolverNonRecursiveDatalogNaive(
     @add_match(
         Query,
         lambda e: (
-            extract_datalog_free_variables(e.body) >
+            extract_logic_free_variables(e.body) >
             get_head_free_variables(e.head)
         )
     )
@@ -275,7 +275,7 @@ def query_introduce_existential_aux(body, head_variables):
                 )
             )
         else:
-            fa_free_variables = extract_datalog_free_variables(body)
+            fa_free_variables = extract_logic_free_variables(body)
             eq_variables = fa_free_variables - head_variables
             for eq_variable in eq_variables:
                 new_body = ExistentialPredicate(

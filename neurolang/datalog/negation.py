@@ -2,11 +2,11 @@ from typing import AbstractSet, Callable, Tuple
 
 from ..expression_walker import add_match
 from ..expressions import (Constant, FunctionApplication, NeuroLangException,
-                           NonConstant, Quantifier, Symbol, is_leq_informative)
+                           NonConstant, Symbol, is_leq_informative)
 from ..type_system import Unknown
 from .basic_representation import DatalogProgram
-from .expression_processing import extract_datalog_free_variables
-from .expressions import Conjunction, Disjunction, Implication, Negation
+from .expression_processing import extract_logic_free_variables
+from ..logic import Conjunction, Union, Implication, Negation, Quantifier
 
 
 class NegativeFact(Implication):
@@ -71,7 +71,7 @@ class DatalogProgramNegation(DatalogProgram):
         if expression not in disj:
             disj += (expression, )
 
-        self.symbol_table[consequent.functor.name] = Disjunction(disj)
+        self.symbol_table[consequent.functor.name] = Union(disj)
 
         return expression
 
@@ -99,7 +99,7 @@ class DatalogProgramNegation(DatalogProgram):
     def _is_in_idb(self, expression, eb):
         if (
             not isinstance(eb[0].consequent, FunctionApplication) or
-            len(extract_datalog_free_variables(eb[0].consequent.args)
+            len(extract_logic_free_variables(eb[0].consequent.args)
                 ) != len(expression.consequent.args)
         ):
             raise NeuroLangException(
@@ -124,7 +124,7 @@ class DatalogProgramNegation(DatalogProgram):
 
         fact_set = self.negated_symbols[fact.functor.name]
 
-        if isinstance(fact_set, Disjunction):
+        if isinstance(fact_set, Union):
             raise NeuroLangException(
                 f'{fact.functor.name} has been previously '
                 'define as intensional predicate.'

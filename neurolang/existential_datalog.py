@@ -1,10 +1,8 @@
-from .datalog.expressions import Disjunction
 from .expression_pattern_matching import add_match
-from .expressions import (Constant, ExistentialPredicate,
-                          FunctionApplication, Lambda, NeuroLangException,
-                          Symbol)
-from .solver_datalog_naive import (DatalogBasic, Implication,
-                                   SolverNonRecursiveDatalogNaive)
+from .expressions import (Constant, FunctionApplication, Lambda,
+                          NeuroLangException, Symbol)
+from .logic import ExistentialPredicate, Implication, Union
+from .solver_datalog_naive import DatalogBasic, SolverNonRecursiveDatalogNaive
 
 __all__ = [
     'Implication',
@@ -20,7 +18,7 @@ class ExistentialDatalog(DatalogBasic):
             for k, v in self.symbol_table.items()
             if (
                 k not in self.protected_keywords and
-                isinstance(v, Disjunction) and all(
+                isinstance(v, Union) and all(
                     isinstance(formula, Implication) and
                     isinstance(formula.consequent, ExistentialPredicate)
                     for formula in v.formulas
@@ -34,7 +32,7 @@ class ExistentialDatalog(DatalogBasic):
             for k, v in self.symbol_table.items()
             if (
                 k not in self.protected_keywords and
-                isinstance(v, Disjunction) and not any(
+                isinstance(v, Union) and not any(
                     isinstance(formula, Implication) and
                     isinstance(formula.consequent, ExistentialPredicate)
                     for formula in v.formulas
@@ -67,11 +65,11 @@ class ExistentialDatalog(DatalogBasic):
                 raise NeuroLangException(
                     'A rule cannot be both in IDB and E-IDB'
                 )
-            disjunctions = self.symbol_table[consequent_name].formulas
+            unions = self.symbol_table[consequent_name].formulas
         else:
-            disjunctions = tuple()
-        disjunctions += (expression, )
-        self.symbol_table[consequent_name] = Disjunction(disjunctions)
+            unions = tuple()
+        unions += (expression, )
+        self.symbol_table[consequent_name] = Union(unions)
         return expression
 
 

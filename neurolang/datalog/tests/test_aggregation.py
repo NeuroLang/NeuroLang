@@ -9,7 +9,7 @@ from .. import DatalogProgram, Fact, Implication
 from ..aggregation import (AggregationApplication, Chase,
                            DatalogWithAggregationMixin)
 from ...type_system import Unknown
-from ..expressions import TranslateToLogic, Disjunction
+from ..expressions import TranslateToLogic, Union
 
 
 S_ = Symbol
@@ -17,7 +17,7 @@ C_ = Constant
 Imp_ = Implication
 Fa_ = AggregationApplication
 Eb_ = ExpressionBlock
-Disj_ = Disjunction
+Disj_ = Union
 F_ = Fact
 
 

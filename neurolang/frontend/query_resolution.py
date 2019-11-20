@@ -5,6 +5,7 @@ from uuid import uuid1
 import numpy as np
 
 from .. import expressions as exp
+from .. import logic
 from ..region_solver import Region
 from ..regions import (ExplicitVBR, ImplicitVBR, SphericalVolume,
                        take_principal_regions)
@@ -319,7 +320,7 @@ class QueryBuilderFirstOrder(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
     def exists(self, symbol, predicate):
         return Exists(
             self,
-            exp.ExistentialPredicate[bool](
+            logic.ExistentialPredicate[bool](
                 symbol.expression,
                 predicate.expression
             ),
@@ -329,7 +330,7 @@ class QueryBuilderFirstOrder(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
     def all(self, symbol, predicate):
         return All(
             self,
-            exp.UniversalPredicate[bool](
+            logic.UniversalPredicate[bool](
                 symbol.expression,
                 predicate.expression
             ),
