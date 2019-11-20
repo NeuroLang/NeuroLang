@@ -6,7 +6,7 @@ from ..expression_walker import PatternWalker, add_match
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..utils import OrderedSet
 from . import (FALSE, TRUE, Conjunction, Disjunction, Implication, Negation,
-               Quantifier, Union)
+               Quantifier, Union, LogicOperator)
 
 
 class LogicSolver(PatternWalker):
@@ -88,6 +88,13 @@ class LogicSolver(PatternWalker):
         return expression
 
 
+def is_logic_function_application(function_application):
+    if not isinstance(function_application.functor, Constant):
+        return False
+    functor_value = function_application.functor.value
+    return functor_value in (and_, or_, invert)
+
+
 class TranslateToLogic(PatternWalker):
     @add_match(FunctionApplication(Constant[Any](and_), ...))
     def build_conjunction(self, conjunction):
@@ -119,25 +126,33 @@ class TranslateToLogic(PatternWalker):
         return self.walk(Negation(arg))
 
     @add_match(
-        Implication(..., FunctionApplication(Constant, ...)),
-        lambda implication: (
-            implication.antecedent.functor.value is and_ or
-            implication.antecedent.functor.value is or_ or
-            implication.antecedent.functor.value is invert
+        LogicOperator,
+        lambda expression: any(
+            isinstance(arg, FunctionApplication) and
+            is_logic_function_application(arg)
+            for arg in expression.unapply()
         )
     )
-    def translate_implication(self, implication):
-        new_consequent = self.walk(implication.consequent)
-        new_antecedent = self.walk(implication.antecedent)
-        if (
-            new_consequent is not implication.consequent or
-            new_antecedent is not implication.antecedent
-        ):
-            implication = self.walk(
-                Implication(new_consequent, new_antecedent)
-            )
+    def translate_logic_operator(self, expression):
+        args = expression.unapply()
+        new_args = tuple()
+        changed = False
+        for arg in args:
+            if (
+                isinstance(arg, FunctionApplication) and
+                is_logic_function_application(arg)
+            ):
+                new_arg = self.walk(arg)
+                if new_arg is not arg:
+                    changed = True
+            else:
+                new_arg = arg
 
-        return implication
+            new_args += (new_arg,)
+
+        if changed:
+            expression = self.walk(expression.apply(*new_args))
+        return expression
 
 
 class WalkLogicProgramAggregatingSets(PatternWalker):
