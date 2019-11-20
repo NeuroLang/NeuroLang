@@ -18,7 +18,7 @@ from ..expression_walker import PatternWalker, add_match
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..logic.unification import apply_substitution_arguments
 from ..utils import OrderedSet
-from . import (Disjunction, Implication, chase, extract_datalog_free_variables,
+from . import (Union, Implication, chase, extract_logic_free_variables,
                is_conjunctive_expression_with_nested_predicates)
 
 
@@ -65,7 +65,7 @@ class DatalogWithAggregationMixin(PatternWalker):
 
         eb = eb + (expression, )
 
-        self.symbol_table[consequent.functor] = Disjunction(eb)
+        self.symbol_table[consequent.functor] = Union(eb)
 
         return expression
 
@@ -111,7 +111,7 @@ def extract_aggregation_atom_free_variables(atom):
     free_variables = OrderedSet()
     aggregation_fresh_variable = Symbol.fresh()
     for arg in atom.args:
-        free_variables_arg = extract_datalog_free_variables(arg)
+        free_variables_arg = extract_logic_free_variables(arg)
         if isinstance(arg, AggregationApplication):
             free_variables_aggregation = free_variables_arg
             free_variables.add(aggregation_fresh_variable)
@@ -146,7 +146,7 @@ class Chase(chase.Chase):
         if restriction_instance is None:
             restriction_instance = dict()
 
-        args = extract_datalog_free_variables(rule.consequent)
+        args = extract_logic_free_variables(rule.consequent)
         new_tuples = self.datalog_program.new_set(
             Constant[Tuple](
                 apply_substitution_arguments(args, substitution)

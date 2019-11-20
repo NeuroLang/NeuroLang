@@ -7,7 +7,7 @@ from ...logic.unification import (apply_substitution_arguments,
                                   most_general_unifier_arguments)
 from ...utils import OrderedSet
 from .. import Negation
-from ..expression_processing import extract_datalog_predicates
+from ..expression_processing import extract_logic_predicates
 from . import (ChaseGeneral, ChaseMGUMixin,
                ChaseRelationalAlgebraPlusCeriMixin, ChaseSemiNaive)
 
@@ -119,7 +119,7 @@ class DatalogChaseNegationGeneral(
         if restriction_instance is None:
             restriction_instance = set()
 
-        rule_predicates = extract_datalog_predicates(rule.antecedent)
+        rule_predicates = extract_logic_predicates(rule.antecedent)
         restricted_predicates = []
         nonrestricted_predicates = []
         negative_predicates = []

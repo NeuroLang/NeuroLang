@@ -10,8 +10,8 @@ from ...relational_algebra import (ColumnInt, Product, Projection,
                                    RelationalAlgebraSolver, Selection, eq_)
 from ...type_system import is_leq_informative
 from ...utils import NamedRelationalAlgebraFrozenSet
-from ..expression_processing import (extract_datalog_free_variables,
-                                     extract_datalog_predicates)
+from ..expression_processing import (extract_logic_free_variables,
+                                     extract_logic_predicates)
 from ..expressions import Conjunction, Implication, Negation
 from ..instance import MapInstance
 from ..translate_to_named_ra import TranslateToNamedRA
@@ -265,7 +265,7 @@ class ChaseNamedRelationalAlgebraMixin:
         if restriction_instance is None:
             restriction_instance = MapInstance()
 
-        rule_predicates = extract_datalog_predicates(rule.antecedent)
+        rule_predicates = extract_logic_predicates(rule.antecedent)
         builtin_predicates, edb_idb_predicates, cq_free_vars = \
             self.split_predicates(rule_predicates)
 
@@ -289,7 +289,7 @@ class ChaseNamedRelationalAlgebraMixin:
 
             if functor in self.idb_edb_symbols:
                 edb_idb_predicates.append(predicate)
-                cq_free_vars |= extract_datalog_free_variables(predicate)
+                cq_free_vars |= extract_logic_free_variables(predicate)
             elif functor in self.builtins:
                 builtin_predicates.append(
                     (predicate, self.builtins[functor])

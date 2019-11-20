@@ -1,9 +1,12 @@
 from operator import and_, invert, or_
 from typing import Any
 
+from ..exceptions import NeuroLangException
 from ..expression_walker import PatternWalker, add_match
-from ..expressions import Constant, ExpressionBlock, FunctionApplication
-from . import FALSE, TRUE, Conjunction, Disjunction, Implication, Negation
+from ..expressions import Constant, FunctionApplication, Symbol
+from ..utils import OrderedSet
+from . import (FALSE, TRUE, Conjunction, Disjunction, Implication, Negation,
+               Quantifier, Union)
 
 
 class LogicSolver(PatternWalker):
@@ -95,15 +98,7 @@ class TranslateToLogic(PatternWalker):
     def build_negation(self, inversion):
         arg = self.walk(inversion.args[0])
         return self.walk(Negation(arg))
-
-    @add_match(ExpressionBlock)
-    def build_conjunction_from_expression_block(self, expression_block):
-        formulas = tuple()
-        for expression in expression_block.expressions:
-            new_exp = self.walk(expression)
-            formulas += (new_exp,)
-        return self.walk(Disjunction(formulas))
-
+        
     @add_match(
         Implication(..., FunctionApplication(Constant, ...)),
         lambda implication: (
@@ -124,3 +119,117 @@ class TranslateToLogic(PatternWalker):
             )
 
         return implication
+
+
+class WalkLogicProgramAggregatingSets(PatternWalker):
+    @add_match(Conjunction)
+    def conjunction(self, expression):
+        fvs = OrderedSet()
+        for formula in expression.formulas:
+            fvs |= self.walk(formula)
+        return fvs
+
+    @add_match(Union)
+    def union(self, expression):
+        return self.conjunction(expression)
+
+    @add_match(Disjunction)
+    def disjunction(self, expression):
+        return self.conjunction(expression)
+
+    @add_match(Negation)
+    def negation(self, expression):
+        return self.walk(expression.formula)
+
+
+class ExtractFreeVariablesWalker(WalkLogicProgramAggregatingSets):
+    @add_match(FunctionApplication)
+    def extract_variables_fa(self, expression):
+        args = expression.args
+
+        variables = OrderedSet()
+        for a in args:
+            if isinstance(a, Symbol):
+                variables.add(a)
+            elif isinstance(a, FunctionApplication):
+                variables |= self.walk(a)
+            elif isinstance(a, Constant):
+                pass
+            else:
+                raise NeuroLangException('Not a Datalog function application')
+        return variables
+
+    @add_match(Quantifier)
+    def extract_variables_q(self, expression):
+        return self.walk(expression.body) - expression.head._symbols
+
+    @add_match(Implication)
+    def extract_variables_s(self, expression):
+        return (
+            self.walk(expression.antecedent) -
+            self.walk(expression.consequent)
+        )
+
+    @add_match(Symbol)
+    def extract_variables_symbol(self, expression):
+        return OrderedSet((expression, ))
+
+    @add_match(Constant)
+    def _(self, expression):
+        return OrderedSet()
+
+
+def extract_logic_free_variables(expression):
+    """Extract variables from expression assuming it's in logic format.
+
+    Parameters
+    ----------
+    expression : Expression
+
+
+    Returns
+    -------
+        OrderedSet
+            set of all free variables in the expression.
+    """
+    efvw = ExtractFreeVariablesWalker()
+    return efvw.walk(expression)
+
+
+class ExtractLogicPredicates(WalkLogicProgramAggregatingSets):
+    @add_match(Symbol)
+    def symbol(self, expression):
+        return OrderedSet()
+
+    @add_match(Constant)
+    def constant(self, expression):
+        return OrderedSet()
+
+    @add_match(FunctionApplication)
+    def extract_predicates_fa(self, expression):
+        return OrderedSet([expression])
+
+    @add_match(Negation)
+    def negation(self, expression):
+        return OrderedSet([expression])
+
+
+def extract_logic_predicates(expression):
+    """Extract predicates from expression
+    knowing that it's in logic format
+
+    Parameters
+    ----------
+    expression : Expression
+        expression to extract predicates from
+
+
+    Returns
+    -------
+    OrderedSet
+        set of all predicates in the expression in lexicographical
+        order.
+
+    """
+    edp = ExtractLogicPredicates()
+    return edp.walk(expression)

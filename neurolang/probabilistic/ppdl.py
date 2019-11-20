@@ -1,12 +1,12 @@
 import operator
 from typing import Iterable
 
-from ..datalog.expression_processing import extract_datalog_predicates
+from ..datalog.expression_processing import extract_logic_predicates
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionBasicEvaluator
 from ..expressions import (Constant, Expression, ExpressionBlock,
                            FunctionApplication, NeuroLangException, Symbol)
-from ..logic import Disjunction, ExistentialPredicate, Implication
+from ..logic import Union, ExistentialPredicate, Implication
 from ..solver_datalog_naive import DatalogBasic, is_conjunctive_expression
 
 
@@ -99,7 +99,7 @@ class GenerativeDatalog(DatalogBasic):
         else:
             disj = tuple()
 
-        self.symbol_table[predicate] = Disjunction(disj + (rule,))
+        self.symbol_table[predicate] = Union(disj + (rule,))
 
         return rule
 
@@ -107,7 +107,7 @@ class GenerativeDatalog(DatalogBasic):
 def get_antecedent_constant_indexes(rule):
     """Get indexes of constants occurring in antecedent predicates."""
     constant_indexes = dict()
-    for antecedent_atom in extract_datalog_predicates(rule.antecedent):
+    for antecedent_atom in extract_logic_predicates(rule.antecedent):
         predicate = antecedent_atom.functor.name
         indexes = {
             i
@@ -150,7 +150,7 @@ def can_lead_to_object_uncertainty(gdatalog):
     """
     for key, value in gdatalog.symbol_table.items():
         if key not in gdatalog.protected_keywords and isinstance(
-            value, Disjunction
+            value, Union
         ):
             for rule in value.formulas:
                 for (

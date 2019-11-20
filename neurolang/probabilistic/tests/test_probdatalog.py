@@ -6,7 +6,7 @@ from ...datalog.instance import FrozenSetInstance, SetInstance
 from ...exceptions import NeuroLangException
 from ...expression_walker import ExpressionBasicEvaluator
 from ...expressions import Constant, ExpressionBlock, Symbol
-from ...logic import (Conjunction, Disjunction, ExistentialPredicate,
+from ...logic import (Conjunction, Union, ExistentialPredicate,
                       Implication)
 from ..expressions import ProbabilisticPredicate
 from ..ppdl import DeltaTerm
@@ -76,7 +76,7 @@ def test_probdatalog_program():
         Z: C_(frozenset({C_((a,)), C_((b,))}))
     }
     assert pd.intensional_database() == {
-        Q: Disjunction([Implication(Q(x), P(x) & Z(x))])
+        Q: Union([Implication(Q(x), P(x) & Z(x))])
     }
     assert pd.probabilistic_facts() == {
         P: ExpressionBlock(

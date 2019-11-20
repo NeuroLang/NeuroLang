@@ -6,7 +6,7 @@ from ..datalog import DatalogProgram
 from ..datalog.chase import (ChaseGeneral, ChaseNaive,
                              ChaseNamedRelationalAlgebraMixin)
 from ..datalog.expression_processing import (
-    extract_datalog_predicates,
+    extract_logic_predicates,
     implication_has_existential_variable_in_antecedent)
 from ..datalog.expressions import Fact, TranslateToLogic
 from ..datalog.instance import SetInstance
@@ -54,7 +54,7 @@ def _extract_probfact_probability(expression):
 def get_rule_pfact_pred_symbs(rule, pfact_pred_symbs):
     return set(
         p.functor
-        for p in extract_datalog_predicates(rule.antecedent)
+        for p in extract_logic_predicates(rule.antecedent)
         if p.functor in pfact_pred_symbs
     )
 
@@ -200,8 +200,8 @@ class ProbDatalogProgram(DatalogProgram):
         """
         pfact_pred_symbs = set(self.probabilistic_facts().keys())
         prob_rules = defaultdict(set)
-        for rule_disjunction in self.intensional_database().values():
-            for rule in rule_disjunction.formulas:
+        for rule_union in self.intensional_database().values():
+            for rule in rule_union.formulas:
                 prob_rules.update(
                     {
                         symbol: prob_rules[symbol] | {rule}
@@ -383,7 +383,7 @@ def _infer_pfact_typing_pred_symbs(pfact_pred_symb, rule):
         typing predicate symbol candidates found in the rule.
 
     """
-    antecedent_atoms = extract_datalog_predicates(rule.antecedent)
+    antecedent_atoms = extract_logic_predicates(rule.antecedent)
     rule_pfact_atoms = [
         atom for atom in antecedent_atoms if atom.functor == pfact_pred_symb
     ]
@@ -549,7 +549,7 @@ def get_rule_groundings(rule, instance):
         }
         substituted_antecedent_atoms = [
             apply_substitution(atom, substitution)
-            for atom in extract_datalog_predicates(rule.antecedent)
+            for atom in extract_logic_predicates(rule.antecedent)
         ]
         if any(atom not in instance for atom in substituted_antecedent_atoms):
             continue
@@ -599,10 +599,10 @@ def ground_probdatalog_program(probdatalog_code):
             set.union(
                 *[
                     get_rule_groundings(rule, solution_instance)
-                    for rule in disjunction.formulas
+                    for rule in union.formulas
                 ]
             )
-            for disjunction in dl.intensional_database().values()
+            for union in dl.intensional_database().values()
         ]
     )
     new_expressions = []

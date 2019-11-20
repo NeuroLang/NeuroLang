@@ -6,14 +6,13 @@ Datalog program.
 from typing import Any
 
 from ..expression_walker import add_match
-from ..expressions import Constant
-from ..logic import (Conjunction, Disjunction, Implication, Negation,
-                     UnaryLogicOperator)
+from ..expressions import Constant, ExpressionBlock
+from ..logic import (Conjunction, Implication, Negation, UnaryLogicOperator,
+                     Union)
 from ..logic import expression_processing as ep
 
-
 __all__ = [
-    "Fact", "TranslateToLogic", "Implication", "Conjunction", "Disjunction",
+    "Fact", "TranslateToLogic", "Implication", "Conjunction", "Union",
     "Negation", "NULL", "UNDEFINED", "UnaryLogicOperator"
 ]
 
@@ -53,3 +52,11 @@ class TranslateToLogic(ep.TranslateToLogic):
     )
     def translate_true_implication(self, implication):
         return self.walk(Fact(implication.consequent))
+
+    @add_match(ExpressionBlock)
+    def build_conjunction_from_expression_block(self, expression_block):
+        formulas = tuple()
+        for expression in expression_block.expressions:
+            new_exp = self.walk(expression)
+            formulas += (new_exp,)
+        return self.walk(Union(formulas))

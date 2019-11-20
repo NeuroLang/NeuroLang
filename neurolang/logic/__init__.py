@@ -49,6 +49,31 @@ class Disjunction(LogicOperator):
         ) + ')'
 
 
+class Union(LogicOperator):
+    def __init__(self, formulas):
+        self.formulas = tuple(formulas)
+
+        self._symbols = set()
+        for formula in self.formulas:
+            self._symbols |= formula._symbols
+
+    def __repr__(self):
+        repr_formulas = []
+        chars = 0
+        for formula in self.formulas:
+            repr_formulas.append(repr(formula))
+            chars += len(repr_formulas[-1])
+
+        if chars < 30:
+            join_text = ', '
+        else:
+            join_text = ',\n'
+
+        return '\u222A(' + join_text.join(
+            repr(e) for e in self.formulas
+        ) + ')'
+
+
 class Negation(UnaryLogicOperator):
     def __init__(self, formula):
         self.formula = formula

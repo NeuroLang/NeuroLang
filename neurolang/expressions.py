@@ -338,7 +338,7 @@ class Expression(metaclass=ExpressionMeta):
 
 class ExpressionBlock(Expression):
     def __init__(self, expressions):
-        self.expressions = expressions
+        self.expressions = tuple(expressions)
         self._symbols = set()
         for exp in expressions:
             self._symbols |= exp._symbols

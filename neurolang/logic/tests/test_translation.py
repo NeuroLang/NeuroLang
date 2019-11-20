@@ -1,6 +1,6 @@
 from ...expression_walker import IdentityWalker
-from ...expressions import ExpressionBlock, Symbol
-from .. import Conjunction, Disjunction, Implication, Negation
+from ...expressions import Symbol
+from .. import Conjunction, Disjunction, Negation
 from ..expression_processing import TranslateToLogic
 
 
@@ -75,15 +75,3 @@ def test_translation_disjunctions():
     res = ttl.walk(disj3)
     assert isinstance(res, Disjunction)
     assert res.formulas == (Sx, Qx, Rx)
-
-    conj1 = Implication(Q(x), Q(x) & R(x))
-    conj2 = Implication(Q(x), R(x))
-    eb = ExpressionBlock((conj1, conj2))
-    res = ttl.walk(eb)
-    assert isinstance(res, Disjunction)
-    assert res == Disjunction(
-        (
-            Implication(Qx, Conjunction((Qx, Rx))),
-            Implication(Qx, Rx)
-        )
-    )
