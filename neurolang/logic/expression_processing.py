@@ -98,7 +98,7 @@ class TranslateToLogic(PatternWalker):
     def build_negation(self, inversion):
         arg = self.walk(inversion.args[0])
         return self.walk(Negation(arg))
-        
+
     @add_match(
         Implication(..., FunctionApplication(Constant, ...)),
         lambda implication: (
