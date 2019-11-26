@@ -8,15 +8,10 @@ from ..expressions import (
     Symbol,
     FunctionApplication,
     ExpressionBlock,
-    ExistentialPredicate,
 )
-from ..datalog.expressions import (
-    Fact,
-    Implication,
-    Disjunction,
-    Conjunction,
-    TranslateToLogic,
-)
+from ..datalog.expressions import Fact, TranslateToLogic
+from ..logic import Union, Implication, Conjunction, ExistentialPredicate
+from ..logic.expression_processing import extract_logic_predicates
 from ..exceptions import NeuroLangException
 from ..datalog import DatalogProgram
 from ..expression_pattern_matching import add_match
@@ -27,7 +22,6 @@ from ..expression_walker import (
 )
 from .ppdl import is_gdatalog_rule
 from ..datalog.expression_processing import (
-    extract_datalog_predicates,
     is_ground_predicate,
     conjunct_if_needed,
     conjunct_formulas,

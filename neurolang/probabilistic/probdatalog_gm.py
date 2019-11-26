@@ -14,7 +14,7 @@ from ..expressions import (
     FunctionApplication,
     ExpressionBlock,
 )
-from ..datalog.expression_processing import extract_datalog_predicates
+from ..logic.expression_processing import extract_logic_predicates
 from ..datalog.expressions import Conjunction, Implication
 from ..relational_algebra import (
     RelationalAlgebraSolver,
@@ -160,7 +160,7 @@ def get_rv_value_pointer(pred, grounding):
 
 
 def and_vect_table_distribution(rule_grounding, parent_groundings):
-    antecedent_preds = extract_datalog_predicates(
+    antecedent_preds = extract_logic_predicates(
         rule_grounding.expression.antecedent
     )
     to_join = tuple(
@@ -226,7 +226,7 @@ class TranslateGroundedProbDatalogToGraphicalModel(PatternWalker):
         self._add_grounding(rv_symb, rule_grounding)
         parent_groundings = {
             predicate.functor: self.groundings[predicate.functor]
-            for predicate in extract_datalog_predicates(
+            for predicate in extract_logic_predicates(
                 rule_grounding.expression.antecedent
             )
         }
@@ -236,7 +236,7 @@ class TranslateGroundedProbDatalogToGraphicalModel(PatternWalker):
         )
         parent_rv_symbs = {
             pred.functor
-            for pred in extract_datalog_predicates(
+            for pred in extract_logic_predicates(
                 rule_grounding.expression.antecedent
             )
         }
@@ -293,7 +293,7 @@ class QueryGraphicalModelSolver(PatternWalker):
             rule = self.graphical_model.groundings.value[rv_symb].expression
             parent_marginal_distribs = {
                 pred.functor: self.walk(SuccQuery(pred))
-                for pred in extract_datalog_predicates(rule.antecedent)
+                for pred in extract_logic_predicates(rule.antecedent)
             }
             parent_groundings = {
                 parent_symb: self.graphical_model.groundings.value[parent_symb]

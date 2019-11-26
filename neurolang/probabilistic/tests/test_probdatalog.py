@@ -3,13 +3,13 @@ from typing import Mapping, AbstractSet
 import numpy as np
 import pytest
 
-from ...datalog.expressions import Conjunction, Disjunction, Fact, Implication
+from ...datalog.expressions import Fact
+from ...logic import Union, Conjunction, Implication, ExistentialPredicate
 from ...exceptions import NeuroLangException
 from ...expressions import (
     Constant,
     ExpressionBlock,
     Symbol,
-    ExistentialPredicate,
 )
 from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from ..ppdl import DeltaTerm
@@ -86,7 +86,7 @@ def test_probdatalog_program():
         Z: C_(frozenset({C_((a,)), C_((b,))}))
     }
     assert pd.intensional_database() == {
-        Q: Disjunction([Implication(Q(x), Conjunction([P(x), Z(x)]))])
+        Q: Union([Implication(Q(x), Conjunction([P(x), Z(x)]))])
     }
     assert pd.probabilistic_facts() == {
         P: ExpressionBlock(

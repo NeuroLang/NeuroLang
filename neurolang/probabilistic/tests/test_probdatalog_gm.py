@@ -11,7 +11,7 @@ from ..probdatalog_gm import (
     bernoulli_vect_table_distrib,
     extensional_vect_table_distrib,
     ExtendedRelationalAlgebraSolver,
-    _make_numerical_col_symb,
+    make_numerical_col_symb,
     _split_numerical_cols,
     compute_marginal_probability,
     and_vect_table_distribution,
@@ -206,7 +206,7 @@ def test_rv_value_pointer():
         P: Constant[AbstractSet](
             AlgebraSet(
                 iterable=[("a", 1), ("b", 1), ("c", 0)],
-                columns=["x", _make_numerical_col_symb().name],
+                columns=["x", make_numerical_col_symb().name],
             )
         )
     }
@@ -263,20 +263,20 @@ def test_sum_columns():
     r1 = Constant[AbstractSet](
         AlgebraSet(
             iterable=np.arange(100) * 4,
-            columns=[_make_numerical_col_symb().name],
+            columns=[make_numerical_col_symb().name],
         )
     )
     expected = Constant[AbstractSet](
         AlgebraSet(
             iterable=np.arange(100) * 14,
-            columns=[_make_numerical_col_symb().name],
+            columns=[make_numerical_col_symb().name],
         )
     )
     result = solver.walk(
         SumColumns(
             ConcatenateColumn(
                 r1,
-                _make_numerical_col_symb(),
+                make_numerical_col_symb(),
                 Constant[np.ndarray](np.arange(100) * 10),
             )
         )
@@ -289,20 +289,20 @@ def test_multiply_columns():
     r1 = Constant[AbstractSet](
         AlgebraSet(
             iterable=np.arange(100) * 4,
-            columns=[_make_numerical_col_symb().name],
+            columns=[make_numerical_col_symb().name],
         )
     )
     expected = Constant[AbstractSet](
         AlgebraSet(
             iterable=np.arange(100) * 40 * np.arange(100),
-            columns=[_make_numerical_col_symb().name],
+            columns=[make_numerical_col_symb().name],
         )
     )
     result = solver.walk(
         MultiplyColumns(
             ConcatenateColumn(
                 r1,
-                _make_numerical_col_symb(),
+                make_numerical_col_symb(),
                 Constant[np.ndarray](np.arange(100) * 10),
             )
         )
@@ -318,7 +318,7 @@ def test_add_repeated_value_column():
     expected = Constant[AbstractSet](
         AlgebraSet(
             iterable=[("a", 0), ("b", 0), ("c", 0)],
-            columns=["x", _make_numerical_col_symb().name],
+            columns=["x", make_numerical_col_symb().name],
         )
     )
     result = solver.walk(AddRepeatedValueColumn(relation, Constant[int](0)))
@@ -330,7 +330,7 @@ def test_compute_marginal_probability_single_parent():
     parent_marginal_distrib = Constant[AbstractSet](
         AlgebraSet(
             iterable=[("a", 0.2), ("b", 0.8), ("c", 1.0)],
-            columns=["x", _make_numerical_col_symb().name],
+            columns=["x", make_numerical_col_symb().name],
         )
     )
     grounding = Grounding(
@@ -356,7 +356,7 @@ def test_compute_marginal_probability_single_parent():
         Constant[AbstractSet](
             AlgebraSet(
                 iterable=[("c", 1.0), ("a", 0.2)],
-                columns=["x", _make_numerical_col_symb().name],
+                columns=["x", make_numerical_col_symb().name],
             )
         ),
     )
@@ -367,13 +367,13 @@ def test_compute_marginal_probability_two_parents():
         P: Constant[AbstractSet](
             AlgebraSet(
                 iterable=[("a", 0.2), ("b", 0.8), ("c", 1.0)],
-                columns=["x", _make_numerical_col_symb().name],
+                columns=["x", make_numerical_col_symb().name],
             )
         ),
         Q: Constant[AbstractSet](
             AlgebraSet(
                 iterable=[("b", 0.2), ("c", 0.0), ("d", 0.99)],
-                columns=["x", _make_numerical_col_symb().name],
+                columns=["x", make_numerical_col_symb().name],
             )
         ),
     }
@@ -406,7 +406,7 @@ def test_compute_marginal_probability_two_parents():
         Constant[AbstractSet](
             AlgebraSet(
                 iterable=[("c", 0.0), ("b", 0.16)],
-                columns=["x", _make_numerical_col_symb().name],
+                columns=["x", make_numerical_col_symb().name],
             )
         ),
     )
@@ -434,7 +434,7 @@ def test_succ_query_simple():
         Constant[AbstractSet](
             AlgebraSet(
                 iterable=[("a", 0.3), ("b", 0.3)],
-                columns=["x", _make_numerical_col_symb().name],
+                columns=["x", make_numerical_col_symb().name],
             )
         ),
     )
@@ -463,7 +463,7 @@ def test_succ_query_simple_const_in_antecedent():
         Constant[AbstractSet](
             AlgebraSet(
                 iterable=[("a", 0.3), ("b", 0.3)],
-                columns=["x", _make_numerical_col_symb().name],
+                columns=["x", make_numerical_col_symb().name],
             )
         ),
     )
@@ -491,7 +491,7 @@ def test_succ_query_with_constant():
         Constant[AbstractSet](
             AlgebraSet(
                 iterable=[("a", 0.3)],
-                columns=["x", _make_numerical_col_symb().name],
+                columns=["x", make_numerical_col_symb().name],
             )
         ),
     )
@@ -529,7 +529,7 @@ def test_succ_query_multiple_parents():
                     ("a", "c", 0.1),
                     ("b", "c", 0.1),
                 ],
-                columns=["x", "y", _make_numerical_col_symb().name],
+                columns=["x", "y", make_numerical_col_symb().name],
             )
         ),
     )
@@ -567,7 +567,7 @@ def test_succ_query_multi_level():
         Constant[AbstractSet](
             AlgebraSet(
                 iterable=[("a", "b", 0.07), ("b", "b", 0.07)],
-                columns=["x", "y", _make_numerical_col_symb().name],
+                columns=["x", "y", make_numerical_col_symb().name],
             )
         ),
     )
