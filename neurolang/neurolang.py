@@ -1,23 +1,18 @@
 from __future__ import absolute_import, division, print_function
-from .version import __version__
-from .expression_walker import *
+
+from .exceptions import NeuroLangException
 from .expression_pattern_matching import *
+from .expression_walker import *
+from .expression_walker import (ExpressionBasicEvaluator, PatternMatcher,
+                                add_match)
 from .expressions import *
+from .expressions import (Constant, Expression, FunctionApplication, Lambda,
+                          NeuroLangTypeException, Projection, Query, Statement,
+                          Symbol, TypedSymbolTable, Unknown,
+                          is_leq_informative, unify_types)
 from .neurolang_compiler import NeuroLangIntermediateRepresentationCompiler
 from .solver import *
-from .exceptions import NeuroLangException
-from .expressions import (
-    Symbol, Constant, Expression, FunctionApplication, Statement, Query,
-    Projection, ExistentialPredicate, Lambda,
-    TypedSymbolTable, unify_types, Unknown,
-    NeuroLangTypeException, is_leq_informative,
-)
-from .expression_walker import (
-    add_match,
-    ExpressionBasicEvaluator,
-    PatternMatcher
-)
-
+from .version import __version__
 
 __all__ = [
     '__version__',

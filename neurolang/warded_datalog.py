@@ -1,13 +1,8 @@
-from .expressions import (
-    Symbol, Constant, ExpressionBlock, FunctionApplication,
-    ExistentialPredicate
-)
-from .expression_walker import (
-    PatternWalker, add_match, expression_iterator
-)
-from .solver_datalog_naive import (Implication, Fact)
-
+from .datalog import Fact
 from .exceptions import NeuroLangException
+from .expression_walker import PatternWalker, add_match, expression_iterator
+from .expressions import Constant, ExpressionBlock, FunctionApplication, Symbol
+from .logic import ExistentialPredicate, Implication
 from .utils.orderedset import OrderedSet
 
 

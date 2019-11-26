@@ -1,16 +1,13 @@
 import pytest
 
-from .. import expressions
-from .. import solver_datalog_naive as sdb
-from .. import solver_datalog_extensional_db
 from .. import expression_walker as ew
-from ..solver_datalog_naive import (Implication, Fact)
+from .. import expressions
+from ..logic import Implication, ExistentialPredicate
 from ..existential_datalog import ExistentialDatalog
-from ..warded_datalog import (
-    WardedDatalogDangerousVariableExtraction,
-    WardedDatalogDangerousVariableCheck,
-    NeuroLangNonWardedException,
-)
+from ..datalog import Fact
+from ..warded_datalog import (NeuroLangNonWardedException,
+                              WardedDatalogDangerousVariableCheck,
+                              WardedDatalogDangerousVariableExtraction)
 
 
 class Datalog(ExistentialDatalog, ew.ExpressionBasicEvaluator):
@@ -21,7 +18,7 @@ class Datalog(ExistentialDatalog, ew.ExpressionBasicEvaluator):
 C_ = expressions.Constant
 S_ = expressions.Symbol
 Fa_ = expressions.FunctionApplication
-Ep_ = expressions.ExistentialPredicate
+Ep_ = ExistentialPredicate
 Eb_ = expressions.ExpressionBlock
 
 

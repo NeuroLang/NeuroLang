@@ -45,7 +45,7 @@ def test_symbol_management():
         assert neurolang.symbols.c
 
     @neurolang.add_symbol
-    def id(x: int)->int:
+    def id(x: int) -> int:
         return x
 
     assert 'id' in neurolang.symbols

@@ -1,29 +1,22 @@
 from __future__ import absolute_import, division, print_function
-import typing
+
 import inspect
-from collections import namedtuple, Iterable, Mapping
 import logging
+import typing
+from collections import Iterable, Mapping, namedtuple
 
 import tatsu
 
+from ..exceptions import NeuroLangException
+from ..expression_walker import (ExpressionBasicEvaluator, PatternMatcher,
+                                 add_match)
+from ..expressions import (Constant, Expression, ExpressionBlock,
+                           FunctionApplication, Lambda, NeuroLangTypeException,
+                           Projection, Query, Statement, Symbol, Unknown,
+                           infer_type, is_leq_informative, unify_types)
+from ..logic import ExistentialPredicate
 from .ast import ASTWalker
 from .ast_tatsu import TatsuASTConverter
-from ..exceptions import NeuroLangException
-from ..expressions import (
-    Symbol, Constant, Expression, FunctionApplication, Statement, Query,
-    Projection, ExistentialPredicate, ExpressionBlock, Lambda,
-    unify_types, Unknown,
-    NeuroLangTypeException, is_leq_informative,
-    infer_type
-)
-
-
-from ..expression_walker import (
-    add_match,
-    ExpressionBasicEvaluator,
-    PatternMatcher
-)
-
 
 __all__ = [
     'NeuroLangIntermediateRepresentation',

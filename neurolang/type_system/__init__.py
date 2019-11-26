@@ -5,26 +5,18 @@ Implementation of the type system based on Siek and Vachharajani,
 
 
 import inspect
-import types
-from typing import (
-    Callable, Tuple, Set, AbstractSet, Mapping, TypeVar,
-    Iterable, Sequence, Any, Generic, Text
-)
+import operator
 import sys
+import types
 from itertools import islice
-
-from typing_inspect import (
-    get_origin,
-    is_union_type, is_tuple_type, is_callable_type, is_generic_type,
-    is_typevar
-)
-
+from typing import (AbstractSet, Any, Callable, Generic, Iterable, Mapping,
+                    Sequence, Set, Text, Tuple, TypeVar)
 
 import numpy as np
-
+from typing_inspect import (get_origin, is_callable_type, is_generic_type,
+                            is_tuple_type, is_typevar, is_union_type)
 
 from ..exceptions import NeuroLangException
-
 
 NEW_TYPING = sys.version_info[:3] >= (3, 7, 0)
 
@@ -271,6 +263,8 @@ def infer_type(value, deep=False, recursive_callback=None):
 
     if isinstance(value, (types.FunctionType, types.MethodType)):
         result = typing_callable_from_annotated_function(value)
+    elif isinstance(value, types.BuiltinFunctionType):
+        result = infer_type_builtins(value)
     elif isinstance(value, Tuple):
         inner_types = tuple(
             recursive_callback(v)
@@ -347,11 +341,11 @@ def replace_type_variable(type_, type_hint, type_var=None):
 
 
 def replace_type_variable_fix_python36_37(type_hint, origin, new_args):
-        if NEW_TYPING and isinstance(type_hint, _GenericAlias):
-            new_type = type_hint.copy_with(new_args)
-        else:
-            new_type = origin[new_args]
-        return new_type
+    if NEW_TYPING and isinstance(type_hint, _GenericAlias):
+        new_type = type_hint.copy_with(new_args)
+    else:
+        new_type = origin[new_args]
+    return new_type
 
 
 def typing_callable_from_annotated_function(function):
@@ -371,6 +365,90 @@ def typing_callable_from_annotated_function(function):
         parameter_types,
         return_annotation
     ]
+
+
+_BINARY_OPERATORS = (
+        operator.eq,
+        operator.ne,
+        operator.gt,
+        operator.ge,
+        operator.lt,
+        operator.le,
+        operator.and_,
+        operator.or_,
+        operator.xor,
+        operator.contains,
+        operator.matmul,
+        operator.mul,
+        operator.add,
+        operator.sub,
+        operator.pow,
+        operator.lshift,
+        operator.rshift,
+        operator.truediv,
+        operator.ior,
+        operator.iand,
+)
+
+
+_UNARY_OPERATORS = (
+    operator.neg,
+    operator.pos,
+    operator.invert,
+)
+
+
+_NARY_OPERATORS = (
+    sum,
+)
+
+_RELATIVE_OPERATORS = (
+    operator.eq,
+    operator.ne,
+    operator.gt,
+    operator.ge,
+    operator.lt,
+    operator.le,
+    operator.contains,
+)
+
+
+_BOOLEAN_OPERATORS = (
+    operator.and_,
+    operator.or_,
+    operator.xor,
+    operator.invert
+)
+
+
+def infer_type_builtins(builtin):
+    if builtin in _BINARY_OPERATORS:
+        n_params = 2
+    elif builtin in _UNARY_OPERATORS:
+        n_params = 1
+    elif builtin in _NARY_OPERATORS:
+        n_params = None
+    else:
+        try:
+            signature = inspect.signature(builtin)
+            n_params = len(signature.parameters)
+        except ValueError:
+            return Callable[..., Unknown]
+
+    if builtin in _BOOLEAN_OPERATORS:
+        params_type = [bool] * n_params
+        return_type = bool
+    elif builtin in _RELATIVE_OPERATORS:
+        params_type = [Unknown] * n_params
+        return_type = bool
+    elif builtin in _NARY_OPERATORS:
+        params_type = [Unknown]
+        return_type = Unknown
+    else:
+        params_type = [Unknown] * n_params
+        return_type = Unknown
+
+    return Callable[params_type, return_type]
 
 
 def get_args(type_):

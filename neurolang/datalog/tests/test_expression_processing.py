@@ -1,9 +1,9 @@
 from operator import eq
 
-from ...expressions import (Constant, ExistentialPredicate, ExpressionBlock,
-                            Symbol)
 from ...expression_walker import ExpressionBasicEvaluator
-from .. import Fact, Implication, DatalogProgram, Disjunction
+from ...expressions import Constant, ExpressionBlock, Symbol
+from ...logic import ExistentialPredicate, Implication, Negation
+from .. import DatalogProgram, Fact
 from ..expression_processing import (
     TranslateToDatalogSemantics,
     extract_datalog_free_variables, is_conjunctive_expression,
@@ -17,7 +17,6 @@ from ..expression_processing import (
 S_ = Symbol
 C_ = Constant
 Imp_ = Implication
-Disj_ = Disjunction
 B_ = ExpressionBlock
 EP_ = ExistentialPredicate
 T_ = Fact
@@ -103,19 +102,19 @@ def test_extract_free_variables():
     y = S_('y')
 
     emptyset = set()
-    assert extract_datalog_free_variables(Q()) == emptyset
-    assert extract_datalog_free_variables(Q(C_(1))) == emptyset
-    assert extract_datalog_free_variables(x) == {x}
-    assert extract_datalog_free_variables(Q(x, y)) == {x, y}
-    assert extract_datalog_free_variables(Q(x, C_(1))) == {x}
-    assert extract_datalog_free_variables(Q(x) & R(y)) == {x, y}
-    assert extract_datalog_free_variables(EP_(x, Q(x, y))) == {y}
-    assert extract_datalog_free_variables(Imp_(R(x), Q(x, y))) == {y}
-    assert extract_datalog_free_variables(Imp_(R(x), Q(y) & Q(x))) == {y}
-    assert extract_datalog_free_variables(Q(R(y))) == {y}
-    assert extract_datalog_free_variables(Q(x) | R(y)) == {x, y}
-    assert extract_datalog_free_variables(~(R(y))) == {y}
-    assert extract_datalog_free_variables(B_([Q(x), R(y)])) == {x, y}
+    assert extract_logic_free_variables(Q()) == emptyset
+    assert extract_logic_free_variables(Q(C_(1))) == emptyset
+    assert extract_logic_free_variables(x) == {x}
+    assert extract_logic_free_variables(Q(x, y)) == {x, y}
+    assert extract_logic_free_variables(Q(x, C_(1))) == {x}
+    assert extract_logic_free_variables(Q(x) & R(y)) == {x, y}
+    assert extract_logic_free_variables(EP_(x, Q(x, y))) == {y}
+    assert extract_logic_free_variables(Imp_(R(x), Q(x, y))) == {y}
+    assert extract_logic_free_variables(Imp_(R(x), Q(y) & Q(x))) == {y}
+    assert extract_logic_free_variables(Q(R(y))) == {y}
+    assert extract_logic_free_variables(Q(x) | R(y)) == {x, y}
+    assert extract_logic_free_variables(~(R(y))) == {y}
+    assert extract_logic_free_variables(B_([Q(x), R(y)])) == {x, y}
 
 
 def test_extract_datalog_predicates():
@@ -124,17 +123,22 @@ def test_extract_datalog_predicates():
     x = S_('x')
     y = S_('y')
 
-    assert extract_datalog_predicates(C_(1)) == set()
-    assert extract_datalog_predicates(Q) == set()
+    assert extract_logic_predicates(C_(1)) == set()
+    assert extract_logic_predicates(Q) == set()
 
     expression = Q(x)
-    assert extract_datalog_predicates(expression) == {Q(x)}
+    assert extract_logic_predicates(expression) == {Q(x)}
 
     expression = DT.walk(Q(x) & R(y))
-    assert extract_datalog_predicates(expression) == {Q(x), R(y)}
+    assert extract_logic_predicates(expression) == {Q(x), R(y)}
 
     expression = DT.walk(B_([Q(x), Q(y) & R(y)]))
-    assert extract_datalog_predicates(expression) == {Q(x), Q(y), R(y)}
+    assert extract_logic_predicates(expression) == {Q(x), Q(y), R(y)}
+
+    expression = DT.walk(B_([Q(x), Q(y) & ~R(y)]))
+    assert extract_logic_predicates(expression) == {
+        Q(x), Q(y), Negation(R(y))
+    }
 
 
 def test_is_linear_rule():
@@ -148,7 +152,9 @@ def test_is_linear_rule():
     assert is_linear_rule(Imp_(Q(x), R(x, y)))
     assert is_linear_rule(Imp_(Q(x), Q(x)))
     assert is_linear_rule(DT.walk(Imp_(Q(x), R(x, y) & Q(x))))
+    assert is_linear_rule(DT.walk(Imp_(Q(x), R(x, y) & ~Q(x))))
     assert not is_linear_rule(DT.walk(Imp_(Q(x), R(x, y) & Q(x) & Q(y))))
+    assert not is_linear_rule(DT.walk(Imp_(Q(x), R(x, y) & Q(x) & ~Q(y))))
 
 
 class Datalog(

@@ -69,7 +69,7 @@ def is_existential_probabilistic_fact(expression):
 def get_rule_pfact_pred_symbs(rule, pfact_pred_symbs):
     return set(
         p.functor
-        for p in extract_datalog_predicates(rule.antecedent)
+        for p in extract_logic_predicates(rule.antecedent)
         if p.functor in pfact_pred_symbs
     )
 
@@ -261,8 +261,8 @@ class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
         """
         pfact_pred_symbs = set(self.probabilistic_facts().keys())
         prob_rules = defaultdict(set)
-        for rule_disjunction in self.intensional_database().values():
-            for rule in rule_disjunction.formulas:
+        for rule_union in self.intensional_database().values():
+            for rule in rule_union.formulas:
                 prob_rules.update(
                     {
                         symbol: prob_rules[symbol] | {rule}
@@ -428,7 +428,7 @@ def _infer_pfact_typing_pred_symbs(pfact_pred_symb, rule):
         typing predicate symbol candidates found in the rule.
 
     """
-    antecedent_atoms = extract_datalog_predicates(rule.antecedent)
+    antecedent_atoms = extract_logic_predicates(rule.antecedent)
     rule_pfact_atoms = [
         atom for atom in antecedent_atoms if atom.functor == pfact_pred_symb
     ]
