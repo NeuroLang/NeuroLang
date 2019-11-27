@@ -526,7 +526,7 @@ def _construct_pfact_variable_predicate(pfact):
     )
 
 
-def _split_and_grounded_pfacts(block):
+def _split_and_group_grounded_pfacts(block):
     grouped_ground_pfacts = defaultdict(list)
     other_expressions = list()
     for exp in block.expressions:
@@ -547,13 +547,11 @@ class ProbDatalogGrounder(PatternWalker):
 
     @add_match(ExpressionBlock)
     def expression_block(self, block):
-        grouped_ground_pfacts, other_expressions = _split_and_grounded_pfacts(
-            block
-        )
+        grouped_gpfacts, other_exps = _split_and_group_grounded_pfacts(block)
         return ExpressionBlock(
             list(
                 self._construct_ground_pfacts_grounding(group)
-                for group in grouped_ground_pfacts.values()
+                for group in grouped_gpfacts.values()
             )
             + list(
                 itertools.chain(
@@ -566,7 +564,7 @@ class ProbDatalogGrounder(PatternWalker):
                             in self.walked_extensional_pred_symbs
                             else [self._construct_fact_grounding(exp)]
                         )
-                        for exp in other_expressions
+                        for exp in other_exps
                     ]
                 )
             )

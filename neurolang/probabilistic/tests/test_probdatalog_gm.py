@@ -32,6 +32,9 @@ from ..expressions import (
     SumColumns,
     MultiplyColumns,
     AddRepeatedValueColumn,
+    SumAggregate,
+    CountAggregate,
+    MeanAggregate,
 )
 
 P = Symbol("P")
@@ -41,6 +44,7 @@ Z = Symbol("Z")
 T = Symbol("T")
 H = Symbol("H")
 Y = Symbol("Y")
+w = Symbol("w")
 x = Symbol("x")
 y = Symbol("y")
 z = Symbol("z")
@@ -595,6 +599,56 @@ def test_succ_query_hundreds_of_facts():
     gm = TranslateGroundedProbDatalogToGraphicalModel().walk(grounded)
     solver = QueryGraphicalModelSolver(gm)
     result = solver.walk(SuccQuery(Q(x)))
+
+
+def test_sum_aggregate():
+    relation = Constant[AbstractSet](
+        AlgebraSet(
+            iterable=[
+                ("a", "b", 2),
+                ("b", "a", 3),
+                ("c", "a", 1),
+                ("c", "a", 2),
+                ("b", "a", 2),
+            ],
+            columns=["x", "y", "z"],
+        )
+    )
+    expected = Constant[AbstractSet](
+        AlgebraSet(
+            iterable=[("a", "b", 2), ("b", "a", 5), ("c", "a", 3)],
+            columns=["x", "y", "w"],
+        )
+    )
+    sum_agg_op = SumAggregate(relation, [x, y], z, w)
+    solver = ExtendedRelationalAlgebraSolver({})
+    result = solver.walk(sum_agg_op)
+    _assert_relations_almost_equal(result, expected)
+
+
+def test_count_aggregate():
+    relation = Constant[AbstractSet](
+        AlgebraSet(
+            iterable=[
+                ("a", "b", 2),
+                ("b", "a", 3),
+                ("c", "a", 1),
+                ("c", "a", 2),
+                ("b", "a", 2),
+            ],
+            columns=["x", "y", "z"],
+        )
+    )
+    expected = Constant[AbstractSet](
+        AlgebraSet(
+            iterable=[("a", "b", 1), ("b", "a", 2), ("c", "a", 2)],
+            columns=["x", "y", "w"],
+        )
+    )
+    count_agg_op = CountAggregate(relation, [x, y], z, w)
+    solver = ExtendedRelationalAlgebraSolver({})
+    result = solver.walk(count_agg_op)
+    _assert_relations_almost_equal(result, expected)
 
 
 def _assert_relations_almost_equal(r1, r2):

@@ -44,6 +44,9 @@ from .expressions import (
     Grounding,
     PfactGrounding,
     make_numerical_col_symb,
+    SumAggregate,
+    CountAggregate,
+    MeanAggregate,
 )
 from .probdatalog import (
     ground_probdatalog_program,
@@ -463,6 +466,48 @@ class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
                 NaturalJoin(distrib.grounding.relation, self.walk(truth_prob))
             )
 
+    @add_match(SumAggregate)
+    def sum_aggregate(self, sum_agg_op):
+        return _aggregate_column(sum_agg_op, "sum")
+
+    @add_match(CountAggregate)
+    def count_aggregate(self, count_agg_op):
+        return _aggregate_column(count_agg_op, "count")
+
+    @add_match(MeanAggregate)
+    def mean_aggregate(self, mean_agg_op):
+        return _aggregate_column(mean_agg_op, "mean")
+
+
+def _aggregate_column(agg_op, agg_fun):
+    relation = agg_op.relation.value
+    group_columns = _cols_as_strings(agg_op.group_columns)
+    if agg_op.agg_column is None:
+        agg_columns = list(
+            set(relation._container.columns) - set(group_columns)
+        )
+    else:
+        agg_columns = [_get_column_name_from_expression(agg_op.agg_column)]
+    selected_columns = group_columns + agg_columns
+    new_container = (
+        relation._container[selected_columns]
+        .groupby(group_columns)
+        .agg({col: agg_fun for col in agg_columns})
+        .reset_index()
+    )
+    new_container.rename(
+        columns={
+            _get_column_name_from_expression(
+                agg_op.agg_column
+            ): _get_column_name_from_expression(agg_op.dst_column)
+        },
+        inplace=True,
+    )
+    new_relation = AlgebraSet(
+        iterable=new_container, columns=list(new_container.columns)
+    )
+    return Constant[AbstractSet](new_relation)
+
 
 def _split_numerical_cols(relation):
     non_num = []
@@ -473,6 +518,10 @@ def _split_numerical_cols(relation):
         else:
             non_num.append(col)
     return non_num, num
+
+
+def _cols_as_strings(columns):
+    return [_get_column_name_from_expression(col) for col in columns]
 
 
 def _apply_arithmetic_column_op(relation, numpy_op):
@@ -551,3 +600,28 @@ def _iter_parents(parent_marg_probs, parent_groundings):
             )
         }
         yield parent_values, parent_margin_probs
+
+
+def infer_pfact_params(pfact_grounding, interpretations_ra_set):
+    """
+    Compute the estimate of the parameters associated with a specific
+    probabilistic fact predicate symbol from the facts with that same predicate
+    symbol found in interpretations.
+
+    """
+    if "__interpretation_id__" not in interpretations_ra_set.value.columns:
+        raise NeuroLangException("Column __interpretation_id__ is missing")
+    joined = NaturalJoin(pfact_grounding.relation, interpretations_ra_set)
+    tuple_counts = CountAggregate(
+        relation=NaturalJoin(pfact_grounding.relation, interpretations_ra_set),
+        group_columns=pfact_grounding.expression.consequent.body.args
+        + (pfact_grounding.expression.consequent.probability,),
+        agg_column=Symbol("__interpretation_id__"),
+        dst_column=Symbol("__tuple_counts__"),
+    )
+    substitutions_counts = CountAggregate(
+        relation=pfact_grounding.relation,
+        group_columns=pfact_grounding.expression.consequent.probability,
+        agg_column=None,
+        dst_column=Symbol("__substitutions_counts__"),
+    )

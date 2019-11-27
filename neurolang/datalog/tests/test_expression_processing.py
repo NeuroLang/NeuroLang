@@ -6,12 +6,13 @@ from ...logic import ExistentialPredicate, Implication, Negation
 from .. import DatalogProgram, Fact
 from ..expression_processing import (
     TranslateToDatalogSemantics,
-    extract_datalog_free_variables, is_conjunctive_expression,
-    extract_datalog_predicates,
+    is_conjunctive_expression,
     is_conjunctive_expression_with_nested_predicates,
     stratify, reachable_code, is_linear_rule,
     implication_has_existential_variable_in_antecedent,
-    is_ground_predicate
+    is_ground_predicate,
+    extract_logic_free_variables,
+    extract_logic_predicates,
 )
 
 S_ = Symbol

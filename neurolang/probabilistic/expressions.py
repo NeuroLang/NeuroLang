@@ -139,3 +139,28 @@ class MultipleNaturalJoin(RelationalAlgebraOperation):
 
 def make_numerical_col_symb():
     return Symbol("__numerical__" + Symbol.fresh().name)
+
+
+class Aggregate(RelationalAlgebraOperation):
+    def __init__(self, relation, group_columns, agg_column, dst_column):
+        self.relation = relation
+        self.group_columns = tuple(group_columns)
+        self.agg_column = agg_column
+        self.dst_column = dst_column
+
+
+class SumAggregate(Aggregate):
+    pass
+
+
+class MeanAggregate(Aggregate):
+    pass
+
+
+class CountAggregate(Aggregate):
+    pass
+
+
+class RelationSize(RelationalAlgebraOperation):
+    def __init__(self, relation):
+        self.relation = relation
