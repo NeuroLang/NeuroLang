@@ -577,6 +577,7 @@ def test_succ_query_multi_level():
     )
 
 
+@pytest.mark.slow
 def test_succ_query_hundreds_of_facts():
     facts_t = [Fact(T(Constant[int](i))) for i in range(1000)]
     facts_r = [Fact(R(Constant[int](i))) for i in range(300)]

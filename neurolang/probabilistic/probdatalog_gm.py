@@ -47,6 +47,8 @@ from .expressions import (
     SumAggregate,
     CountAggregate,
     MeanAggregate,
+    ExtendedProjection,
+    ExtendedProjectionListMember,
 )
 from .probdatalog import (
     ground_probdatalog_program,
@@ -619,9 +621,36 @@ def infer_pfact_params(pfact_grounding, interpretations_ra_set):
         agg_column=Symbol("__interpretation_id__"),
         dst_column=Symbol("__tuple_counts__"),
     )
-    substitutions_counts = CountAggregate(
+    substitution_counts = CountAggregate(
         relation=pfact_grounding.relation,
         group_columns=pfact_grounding.expression.consequent.probability,
         agg_column=None,
-        dst_column=Symbol("__substitutions_counts__"),
+        dst_column=Symbol("__substitution_counts__"),
     )
+    n_interpretations = Constant(len)(
+        CountAggregate(
+            relation=interpretations_ra_set,
+            group_columns=Symbol("__interpretation_id__"),
+            agg_column=None,
+            dst_column=Symbol("__n_tuples_per_interpretation__"),
+        )
+    )
+    probabilities = ExtendedProjection(
+        NaturalJoin(tuple_counts, substitution_counts),
+        tuple(
+            [
+                ExtendedProjectionListMember(
+                    fun_exp=Symbol("__tuple_counts__")
+                    / (Symbol("__substitution_counts") * n_interpretations),
+                    dst_column=Symbol("__probability__"),
+                )
+            ]
+        ),
+    )
+    parameter_estimations = MeanAggregate(
+        relation=probabilities,
+        group_columns=pfact_grounding.expression.consequent.probability,
+        agg_column=Symbol("__probability__"),
+        dst_column=Symbol("__parameter_estimate__"),
+    )
+    return parameter_estimations
