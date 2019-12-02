@@ -20,7 +20,11 @@ from ..probdatalog_gm import (
     infer_pfact_params,
 )
 from ..probdatalog import Grounding, ground_probdatalog_program
-from ...relational_algebra import NaturalJoin, RelationalAlgebraSolver
+from ...relational_algebra import (
+    NaturalJoin,
+    RelationalAlgebraSolver,
+    ColumnStr,
+)
 from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from ...expressions import Symbol, Constant, ExpressionBlock
 from ...datalog.expressions import Implication, Conjunction, Fact
@@ -621,7 +625,13 @@ def test_sum_aggregate():
             columns=["x", "y", "w"],
         )
     )
-    sum_agg_op = Aggregation(Constant[str]("sum"), relation, [x, y], z, w)
+    sum_agg_op = Aggregation(
+        Constant[str]("sum"),
+        relation,
+        [Constant(ColumnStr("x")), Constant(ColumnStr("y"))],
+        Constant(ColumnStr("z")),
+        Constant(ColumnStr("w")),
+    )
     solver = ExtendedRelationalAlgebraSolver({})
     result = solver.walk(sum_agg_op)
     _assert_relations_almost_equal(result, expected)
@@ -646,7 +656,13 @@ def test_count_aggregate():
             columns=["x", "y", "w"],
         )
     )
-    count_agg_op = Aggregation(Constant[str]("count"), relation, [x, y], z, w)
+    count_agg_op = Aggregation(
+        Constant[str]("count"),
+        relation,
+        [Constant(ColumnStr("x")), Constant(ColumnStr("y"))],
+        Constant(ColumnStr("z")),
+        Constant(ColumnStr("w")),
+    )
     solver = ExtendedRelationalAlgebraSolver({})
     result = solver.walk(count_agg_op)
     _assert_relations_almost_equal(result, expected)
@@ -684,6 +700,8 @@ def test_exact_inference_pfact_params():
                 ("b", "b", 2),
                 ("b", "c", 2),
                 ("a", "b", 3),
+                ("a", "b", 3),
+                ("b", "b", 3),
             ],
             columns=("x", "y", "__interpretation_id__"),
         )

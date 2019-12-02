@@ -42,7 +42,6 @@ from .expressions import (
     NegateProbability,
     AddRepeatedValueColumn,
     MultipleNaturalJoin,
-    RenameColumns,
     Grounding,
     PfactGrounding,
     make_numerical_col_symb,
@@ -164,7 +163,9 @@ def get_rv_value_pointer(pred, grounding):
                 result, eq_(Constant[ColumnStr](ColumnStr(col)), arg)
             )
         else:
-            result = RenameColumn(result, Constant(ColumnStr(col)), arg)
+            result = RenameColumn(
+                result, Constant(ColumnStr(col)), Constant(ColumnStr(arg.name))
+            )
     return result
 
 
@@ -330,7 +331,11 @@ class QueryGraphicalModelSolver(PatternWalker):
                     ),
                 )
             elif qpred_arg != marginal_arg:
-                result = RenameColumn(result, marginal_arg, qpred_arg)
+                result = RenameColumn(
+                    result,
+                    Constant(ColumnStr(marginal_arg.name)),
+                    Constant(ColumnStr(qpred_arg.name)),
+                )
 
         return ExtendedRelationalAlgebraSolver({}).walk(result)
 
@@ -409,13 +414,6 @@ class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
                 ),
             )
         )
-
-    @add_match(RenameColumns)
-    def rename_columns(self, op):
-        result = op.relation
-        for old_col, new_col in zip(op.old_names, op.new_names):
-            result = RenameColumn(result, old_col, new_col)
-        return self.walk(result)
 
     @add_match(SumColumns)
     def sum_columns(self, sum_op):
@@ -743,4 +741,14 @@ def infer_pfact_params(pfact_grounding, interpretations_ra_set):
         dst_column=Constant(ColumnStr("__parameter_estimate__")),
     )
     solver = ExtendedRelationalAlgebraSolver({})
-    return solver.walk(parameter_estimations)
+    return solver.walk(
+        RenameColumn(
+            parameter_estimations,
+            Constant(
+                ColumnStr(
+                    pfact_grounding.expression.consequent.probability.name
+                )
+            ),
+            Constant(ColumnStr("__parameter_name__")),
+        )
+    )

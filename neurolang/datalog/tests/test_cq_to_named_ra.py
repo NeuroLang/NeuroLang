@@ -105,7 +105,8 @@ def test_equality_symbols():
     exp = Conjunction((fb, C_(eq)(x, z)))
 
     expected_result = Selection(
-        NaturalJoin(fb_trans, RenameColumn(fb_trans, x, z)),
+        NaturalJoin(fb_trans, RenameColumn(fb_trans, Constant(ColumnStr('x')),
+                                           Constant(ColumnStr('z')))),
         C_(eq)(C_(ColumnStr('x')), C_(ColumnStr('z')))
     )
 
@@ -115,7 +116,8 @@ def test_equality_symbols():
     exp = Conjunction((fb, C_(eq)(z, x)))
 
     expected_result = Selection(
-        NaturalJoin(fb_trans, RenameColumn(fb_trans, x, z)),
+        NaturalJoin(fb_trans, RenameColumn(fb_trans, Constant(ColumnStr('x')),
+                                           Constant(ColumnStr('y')))),
         C_(eq)(C_(ColumnStr('z')), C_(ColumnStr('x')))
     )
 

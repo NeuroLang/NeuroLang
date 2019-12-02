@@ -96,13 +96,6 @@ class AddRepeatedValueColumn(RelationalAlgebraOperation):
         self.repeated_value = repeated_value
 
 
-class RenameColumns(RelationalAlgebraOperation):
-    def __init__(self, relation, old_names, new_names):
-        self.relation = relation
-        self.old_names = old_names
-        self.new_names = new_names
-
-
 class ArithmeticOperationOnColumns(RelationalAlgebraOperation):
     def __init__(self, relation):
         self.relation = relation

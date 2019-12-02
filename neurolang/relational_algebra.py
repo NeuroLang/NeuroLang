@@ -242,8 +242,8 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
     @ew.add_match(RenameColumn)
     def ra_rename_column(self, rename_column):
         relation = self.walk(rename_column.relation)
-        src = rename_column.src.name
-        dst = rename_column.dst.name
+        src = rename_column.src.value
+        dst = rename_column.dst.value
         new_set = relation.value
 
         if len(new_set) > 0:
