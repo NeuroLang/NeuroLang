@@ -1,5 +1,6 @@
 import itertools
 from typing import Mapping, AbstractSet
+import operator
 
 import numpy as np
 import pandas as pd
@@ -19,6 +20,7 @@ from ..datalog.expressions import Conjunction, Implication
 from ..relational_algebra import (
     RelationalAlgebraSolver,
     NaturalJoin,
+    Projection,
     RenameColumn,
     Selection,
     ColumnStr,
@@ -44,9 +46,7 @@ from .expressions import (
     Grounding,
     PfactGrounding,
     make_numerical_col_symb,
-    SumAggregate,
-    CountAggregate,
-    MeanAggregate,
+    Aggregation,
     ExtendedProjection,
     ExtendedProjectionListMember,
 )
@@ -72,8 +72,12 @@ def marg_query(code, query_pred, evidence_pred):
     solver = QueryGraphicalModelSolver(gm)
     evidence_prob = solver.walk(SuccQuery(evidence_pred))
     joint_prob = solver.walk(SuccQuery(joint_rule.consequent))
-    evidence_prob_column = Symbol(_split_numerical_cols(evidence_prob)[1][0])
-    joint_prob_column = Symbol(_split_numerical_cols(joint_prob)[1][0])
+    evidence_prob_column = Constant(
+        ColumnStr(_split_numerical_cols(evidence_prob)[1][0])
+    )
+    joint_prob_column = Constant(
+        ColumnStr(_split_numerical_cols(joint_prob)[1][0])
+    )
     return ExtendedRelationalAlgebraSolver({}).walk(
         DivideColumns(
             NaturalJoin(evidence_prob, joint_prob),
@@ -160,7 +164,7 @@ def get_rv_value_pointer(pred, grounding):
                 result, eq_(Constant[ColumnStr](ColumnStr(col)), arg)
             )
         else:
-            result = RenameColumn(result, Symbol(col), arg)
+            result = RenameColumn(result, Constant(ColumnStr(col)), arg)
     return result
 
 
@@ -358,6 +362,15 @@ def compute_marginal_probability(
         )
 
 
+def is_arithmetic_operation(exp):
+    return (
+        isinstance(exp, FunctionApplication)
+        and isinstance(exp.functor, Constant)
+        and exp.functor.value
+        in {operator.add, operator.sub, operator.mul, operator.truediv}
+    )
+
+
 class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
     def __init__(self, rv_values):
         self.rv_values = rv_values
@@ -468,47 +481,94 @@ class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
                 NaturalJoin(distrib.grounding.relation, self.walk(truth_prob))
             )
 
-    @add_match(SumAggregate)
-    def sum_aggregate(self, sum_agg_op):
-        return _aggregate_column(sum_agg_op, "sum")
-
-    @add_match(CountAggregate)
-    def count_aggregate(self, count_agg_op):
-        return _aggregate_column(count_agg_op, "count")
-
-    @add_match(MeanAggregate)
-    def mean_aggregate(self, mean_agg_op):
-        return _aggregate_column(mean_agg_op, "mean")
-
-
-def _aggregate_column(agg_op, agg_fun):
-    relation = agg_op.relation.value
-    group_columns = _cols_as_strings(agg_op.group_columns)
-    if agg_op.agg_column is None:
-        agg_columns = list(
-            set(relation._container.columns) - set(group_columns)
+    @add_match(Aggregation)
+    def aggregation(self, agg_op):
+        relation = self.walk(agg_op.relation)
+        if agg_op.agg_column is not None:
+            relation = self.walk(
+                Projection(
+                    relation, agg_op.group_columns + (agg_op.agg_column,)
+                )
+            )
+        group_columns = _cols_as_strings(agg_op.group_columns)
+        new_container = relation.value._container.groupby(group_columns).agg(
+            agg_op.agg_fun.value
         )
-    else:
-        agg_columns = [_get_column_name_from_expression(agg_op.agg_column)]
-    selected_columns = group_columns + agg_columns
-    new_container = (
-        relation._container[selected_columns]
-        .groupby(group_columns)
-        .agg({col: agg_fun for col in agg_columns})
-        .reset_index()
-    )
-    new_container.rename(
-        columns={
-            _get_column_name_from_expression(
-                agg_op.agg_column
-            ): _get_column_name_from_expression(agg_op.dst_column)
-        },
-        inplace=True,
-    )
-    new_relation = AlgebraSet(
-        iterable=new_container, columns=list(new_container.columns)
-    )
-    return Constant[AbstractSet](new_relation)
+        new_container.rename(
+            columns={
+                new_container.columns[0]: _get_column_name_from_expression(
+                    agg_op.dst_column
+                )
+            },
+            inplace=True,
+        )
+        new_container.reset_index(inplace=True)
+        columns_to_drop = (
+            set(new_container.columns)
+            - set(group_columns)
+            - {agg_op.dst_column.value}
+        )
+        if columns_to_drop:
+            new_container.drop(columns=list(columns_to_drop), inplace=True)
+        new_relation = AlgebraSet(
+            iterable=new_container, columns=list(new_container.columns)
+        )
+        return Constant[AbstractSet](new_relation)
+
+    @add_match(ExtendedProjection)
+    def extended_projection(self, proj_op):
+        relation = self.walk(proj_op.relation)
+        str_arithmetic_walker = StringArithmeticWalker()
+        pandas_eval_expressions = []
+        for member in proj_op.projection_list:
+            pandas_eval_expressions.append(
+                "{} = {}".format(
+                    member.dst_column.value,
+                    str_arithmetic_walker.walk(self.walk(member.fun_exp)),
+                )
+            )
+        new_container = relation.value._container.eval(
+            "/n".join(pandas_eval_expressions)
+        )
+        return Constant[AbstractSet](
+            AlgebraSet(columns=new_container.columns, iterable=new_container)
+        )
+
+    @add_match(FunctionApplication, is_arithmetic_operation)
+    def arithmetic_operation(self, arithmetic_op):
+        return FunctionApplication[arithmetic_op.type](
+            arithmetic_op.functor,
+            tuple(self.walk(arg) for arg in arithmetic_op.args),
+        )
+
+
+class StringArithmeticWalker(PatternWalker):
+    @add_match(Constant[ColumnStr])
+    def column(self, column):
+        return column.value
+
+    @add_match(FunctionApplication(Constant(len), ...))
+    def len(self, fa):
+        if not isinstance(fa.args[0], Constant[AbstractSet]):
+            raise NeuroLangException("Expected constant RA relation")
+        return str(len(fa.args[0].value))
+
+    @add_match(FunctionApplication, is_arithmetic_operation)
+    def arithmetic_operation(self, fa):
+        return "({} {} {})".format(
+            self.walk(fa.args[0]),
+            arithmetic_operator_string(fa.functor.value),
+            self.walk(fa.args[1]),
+        )
+
+
+def arithmetic_operator_string(op):
+    return {
+        operator.add: "+",
+        operator.sub: "-",
+        operator.mul: "*",
+        operator.truediv: "/",
+    }[op]
 
 
 def _split_numerical_cols(relation):
@@ -555,7 +615,7 @@ def _divide_columns(relation, numerator_col, denominator_col):
 
 
 def _get_column_name_from_expression(column_exp):
-    if isinstance(column_exp, Constant[str]):
+    if isinstance(column_exp, Constant):
         return column_exp.value
     elif isinstance(column_exp, Symbol):
         return column_exp.name
@@ -613,26 +673,45 @@ def infer_pfact_params(pfact_grounding, interpretations_ra_set):
     """
     if "__interpretation_id__" not in interpretations_ra_set.value.columns:
         raise NeuroLangException("Column __interpretation_id__ is missing")
-    joined = NaturalJoin(pfact_grounding.relation, interpretations_ra_set)
-    tuple_counts = CountAggregate(
-        relation=NaturalJoin(pfact_grounding.relation, interpretations_ra_set),
-        group_columns=pfact_grounding.expression.consequent.body.args
-        + (pfact_grounding.expression.consequent.probability,),
-        agg_column=Symbol("__interpretation_id__"),
-        dst_column=Symbol("__tuple_counts__"),
+    tuple_counts = Aggregation(
+        agg_fun=Constant[str]("count"),
+        relation=NaturalJoin(
+            pfact_grounding.params_relation, interpretations_ra_set
+        ),
+        group_columns=tuple(
+            Constant(ColumnStr(arg.name))
+            for arg in pfact_grounding.expression.consequent.body.args
+        )
+        + (
+            Constant(
+                ColumnStr(
+                    pfact_grounding.expression.consequent.probability.name
+                )
+            ),
+        ),
+        agg_column=Constant(ColumnStr("__interpretation_id__")),
+        dst_column=Constant(ColumnStr("__tuple_counts__")),
     )
-    substitution_counts = CountAggregate(
-        relation=pfact_grounding.relation,
-        group_columns=pfact_grounding.expression.consequent.probability,
+    substitution_counts = Aggregation(
+        agg_fun=Constant[str]("count"),
+        relation=pfact_grounding.params_relation,
+        group_columns=(
+            Constant(
+                ColumnStr(
+                    pfact_grounding.expression.consequent.probability.name
+                )
+            ),
+        ),
         agg_column=None,
-        dst_column=Symbol("__substitution_counts__"),
+        dst_column=Constant(ColumnStr("__substitution_counts__")),
     )
     n_interpretations = Constant(len)(
-        CountAggregate(
+        Aggregation(
+            agg_fun=Constant[str]("count"),
             relation=interpretations_ra_set,
-            group_columns=Symbol("__interpretation_id__"),
+            group_columns=(Constant(ColumnStr("__interpretation_id__")),),
             agg_column=None,
-            dst_column=Symbol("__n_tuples_per_interpretation__"),
+            dst_column=Constant(ColumnStr("__n_tuples_per_interpretation__")),
         )
     )
     probabilities = ExtendedProjection(
@@ -640,17 +719,28 @@ def infer_pfact_params(pfact_grounding, interpretations_ra_set):
         tuple(
             [
                 ExtendedProjectionListMember(
-                    fun_exp=Symbol("__tuple_counts__")
-                    / (Symbol("__substitution_counts") * n_interpretations),
-                    dst_column=Symbol("__probability__"),
+                    fun_exp=Constant(ColumnStr("__tuple_counts__"))
+                    / (
+                        Constant(ColumnStr("__substitution_counts__"))
+                        * n_interpretations
+                    ),
+                    dst_column=Constant(ColumnStr("__probability__")),
                 )
             ]
         ),
     )
-    parameter_estimations = MeanAggregate(
+    parameter_estimations = Aggregation(
+        agg_fun=Constant[str]("mean"),
         relation=probabilities,
-        group_columns=pfact_grounding.expression.consequent.probability,
-        agg_column=Symbol("__probability__"),
-        dst_column=Symbol("__parameter_estimate__"),
+        group_columns=(
+            Constant(
+                ColumnStr(
+                    pfact_grounding.expression.consequent.probability.name
+                )
+            ),
+        ),
+        agg_column=Constant(ColumnStr("__probability__")),
+        dst_column=Constant(ColumnStr("__parameter_estimate__")),
     )
-    return parameter_estimations
+    solver = ExtendedRelationalAlgebraSolver({})
+    return solver.walk(parameter_estimations)

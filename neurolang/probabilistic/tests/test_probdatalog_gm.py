@@ -17,6 +17,7 @@ from ..probdatalog_gm import (
     and_vect_table_distribution,
     SuccQuery,
     QueryGraphicalModelSolver,
+    infer_pfact_params,
 )
 from ..probdatalog import Grounding, ground_probdatalog_program
 from ...relational_algebra import NaturalJoin, RelationalAlgebraSolver
@@ -32,9 +33,8 @@ from ..expressions import (
     SumColumns,
     MultiplyColumns,
     AddRepeatedValueColumn,
-    SumAggregate,
-    CountAggregate,
-    MeanAggregate,
+    Aggregation,
+    PfactGrounding,
 )
 
 P = Symbol("P")
@@ -621,7 +621,7 @@ def test_sum_aggregate():
             columns=["x", "y", "w"],
         )
     )
-    sum_agg_op = SumAggregate(relation, [x, y], z, w)
+    sum_agg_op = Aggregation(Constant[str]("sum"), relation, [x, y], z, w)
     solver = ExtendedRelationalAlgebraSolver({})
     result = solver.walk(sum_agg_op)
     _assert_relations_almost_equal(result, expected)
@@ -646,10 +646,49 @@ def test_count_aggregate():
             columns=["x", "y", "w"],
         )
     )
-    count_agg_op = CountAggregate(relation, [x, y], z, w)
+    count_agg_op = Aggregation(Constant[str]("count"), relation, [x, y], z, w)
     solver = ExtendedRelationalAlgebraSolver({})
     result = solver.walk(count_agg_op)
     _assert_relations_almost_equal(result, expected)
+
+
+def test_exact_inference_pfact_params():
+    param_symb = Symbol.fresh()
+    pfact = Implication(
+        ProbabilisticPredicate(param_symb, P(x, y)), Constant[bool](True)
+    )
+    relation = Constant[AbstractSet](
+        AlgebraSet(
+            iterable=[("a", "b"), ("a", "c"), ("b", "b"), ("b", "c")],
+            columns=("x", "y"),
+        )
+    )
+    params_relation = Constant[AbstractSet](
+        AlgebraSet(
+            iterable=[
+                ("a", "b", "p1"),
+                ("a", "c", "p2"),
+                ("b", "b", "p1"),
+                ("b", "c", "p2"),
+            ],
+            columns=("x", "y", param_symb.name),
+        )
+    )
+    pfact_grounding = PfactGrounding(pfact, relation, params_relation)
+    interpretations_ra_set = Constant[AbstractSet](
+        AlgebraSet(
+            iterable=[
+                ("a", "b", 1),
+                ("a", "c", 1),
+                ("a", "c", 2),
+                ("b", "b", 2),
+                ("b", "c", 2),
+                ("a", "b", 3),
+            ],
+            columns=("x", "y", "__interpretation_id__"),
+        )
+    )
+    estimations = infer_pfact_params(pfact_grounding, interpretations_ra_set)
 
 
 def _assert_relations_almost_equal(r1, r2):

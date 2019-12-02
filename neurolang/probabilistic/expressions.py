@@ -141,24 +141,15 @@ def make_numerical_col_symb():
     return Symbol("__numerical__" + Symbol.fresh().name)
 
 
-class Aggregate(RelationalAlgebraOperation):
-    def __init__(self, relation, group_columns, agg_column, dst_column):
+class Aggregation(RelationalAlgebraOperation):
+    def __init__(
+        self, agg_fun, relation, group_columns, agg_column, dst_column
+    ):
+        self.agg_fun = agg_fun
         self.relation = relation
         self.group_columns = tuple(group_columns)
         self.agg_column = agg_column
         self.dst_column = dst_column
-
-
-class SumAggregate(Aggregate):
-    pass
-
-
-class MeanAggregate(Aggregate):
-    pass
-
-
-class CountAggregate(Aggregate):
-    pass
 
 
 class ExtendedProjection(RelationalAlgebraOperation):
@@ -178,9 +169,9 @@ class ExtendedProjection(RelationalAlgebraOperation):
         self.projection_list = tuple(projection_list)
 
     def __repr__(self):
-        join_str = "," if len(self.functions) < 2 else ",\n"
+        join_str = "," if len(self.projection_list) < 2 else ",\n"
         return "π_[{}]({})".format(
-            join_str.join([repr(fun) for fun in self.functions]),
+            join_str.join([repr(member) for member in self.projection_list]),
             repr(self.relation),
         )
 
