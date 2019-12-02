@@ -9,6 +9,7 @@ from ..datalog.expression_processing import (TranslateToDatalogSemantics,
                                              reachable_code)
 from ..type_system import Unknown
 from ..utils import RelationalAlgebraFrozenSet
+from .datalog import parser as datalog_parser
 from .query_resolution import NeuroSynthMixin, QueryBuilderBase, RegionMixin
 from .query_resolution_expressions import (
     Operation, Symbol, TranslateExpressionToFrontEndExpression)
@@ -25,6 +26,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         self.frontend_translator = \
             TranslateExpressionToFrontEndExpression(self)
         self.translate_expression_to_datalog = TranslateToDatalogSemantics()
+        self.datalog_parser = datalog_parser
 
     @property
     def current_program(self):
@@ -71,6 +73,17 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             self.translate_expression_to_datalog.walk(antecedent.expression)
         )
         return expression
+
+    def execute_datalog_program(self, code):
+        """Execute a datalog program in classical syntax
+
+        Parameters
+        ----------
+        code : string
+            datalog program.
+        """
+        ir = self.datalog_parser(code)
+        self.solver.walk(ir)
 
     def query(self, *args):
         """Performs an inferential query on the database.
