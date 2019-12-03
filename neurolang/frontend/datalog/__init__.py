@@ -48,11 +48,9 @@ GRAMMAR = u"""
 
     function_application = int_ext_identifier'(' [ arguments ] ')';
 
-    arithmetic_operation = '+'%{ term }+
-                         | '-'%{ term }+ ;
+    arithmetic_operation = term [ ('+' | '-') term ] ;
 
-    term = '*'%{ factor }+
-         | '/'%{ factor }+ ;
+    term = factor [ ( '*' | '/' ) factor ] ;
 
     factor =  exponent [ ( '^' | '**' ) exponential ];
 
@@ -61,7 +59,7 @@ GRAMMAR = u"""
     exponent = literal
              | function_application
              | int_ext_identifier
-             | '(' argument ')' ;
+             | '(' @:argument ')' ;
 
     literal = number
             | text
@@ -160,6 +158,9 @@ class DatalogSemantics:
         return ExternalSymbol[ast.type](ast.name)
 
     def arithmetic_operation(self, ast):
+        if isinstance(ast, Expression):
+            return ast
+
         if len(ast) == 1:
             return ast[0]
 
@@ -181,7 +182,7 @@ class DatalogSemantics:
         else:
             op = Constant(truediv)
 
-        return op(*ast[0::2])
+        return op(ast[0], ast[2])
 
     def factor(self, ast):
         if isinstance(ast, Expression):
