@@ -1,0 +1,194 @@
+from operator import add, eq, mul, pow, sub, truediv
+
+from ....datalog import Conjunction, Fact, Implication, Negation, Union
+from ....expressions import Constant, Symbol
+from ..natural_syntax_datalog import ExternalSymbol, parser
+
+
+def test_facts():
+    res = parser('A(3)')
+    assert res == Union((Fact(Symbol('A')(Constant(3.))),))
+
+    res = parser('A("x")')
+    assert res == Union((Fact(Symbol('A')(Constant('x'))),))
+
+    res = parser("A('x', 3)")
+    assert res == Union((Fact(Symbol('A')(Constant('x'), Constant(3.))),))
+
+    res = parser(
+        'A("x", 3)\n'
+        'ans():-A(x, y)'
+    )
+    assert res == Union((
+        Fact(Symbol('A')(Constant('x'), Constant(3.))),
+        Implication(
+            Symbol('ans')(),
+            Conjunction((
+                Symbol('A')(Symbol('x'), Symbol('y')),
+            ))
+        )
+    ))
+
+    res = parser('"john" is cat')
+    assert res == Union((Fact(Symbol('cat')(Constant("john"))),))
+
+    res = parser('"john" is "perceval"\'s mascot')
+    assert res == Union((
+        Fact(Symbol('mascot')(Constant("john"), Constant("perceval"))),
+    ))
+
+    res = parser('"john" has 4 legs')
+    assert res == Union((
+        Fact(Symbol('legs')(Constant("john"), Constant(4.))),
+    ))
+
+    res = parser('"john" has 4 legs')
+    assert res == Union((
+        Fact(Symbol('legs')(Constant("john"), Constant(4.))),
+    ))
+
+    res = parser('"john" is below the "table"')
+    assert res == Union((
+        Fact(Symbol('below')(Constant("john"), Constant("table"))),
+    ))
+
+
+def test_rules():
+    A = Symbol('A')
+    B = Symbol('B')
+    C = Symbol('C')
+    f = Symbol('f')
+    x = Symbol('x')
+    y = Symbol('y')
+    z = Symbol('z')
+    res = parser('A(x):-B(x, y), C(3, z)')
+    assert res == Union((
+        Implication(A(x), Conjunction((B(x, y), C(Constant(3), z)))),
+    ))
+
+    res = parser('A(x):-~B(x)')
+    assert res == Union((
+        Implication(A(x), Conjunction((Negation(B(x)),))),
+    ))
+
+    res = parser('A(x):-B(x, y), C(3, z), z == 4')
+    assert res == Union((
+        Implication(
+            A(x),
+            Conjunction((
+                B(x, y), C(Constant(3), z), Constant(eq)(z, Constant(4.))
+            ))
+        ),
+    ))
+
+    res = parser('A(x):-B(x + 5 * 2, y), C(3, z), z == 4')
+    assert res == Union((
+        Implication(
+            A(x),
+            Conjunction((
+                B(
+                    Constant(add)(
+                        x,
+                        Constant(mul)(Constant(5.), Constant(2.))),
+                    y
+                ),
+                C(Constant(3), z), Constant(eq)(z, Constant(4.))
+            ))
+        ),
+    ))
+
+    res = parser('A(x):-B(x / 2, y), C(3, z), z == 4')
+    assert res == Union((
+        Implication(
+            A(x),
+            Conjunction((
+                B(
+                    Constant(truediv)(x, Constant(2.)),
+                    y
+                ),
+                C(Constant(3), z), Constant(eq)(z, Constant(4.))
+            ))
+        ),
+    ))
+
+    res = parser('A(x):-B(f(x), y), C(3, z), z == 4')
+    assert res == Union((
+        Implication(
+            A(x),
+            Conjunction((
+                B(f(x), y),
+                C(Constant(3), z), Constant(eq)(z, Constant(4.))
+            ))
+        ),
+    ))
+
+    res = parser('A(x):-B(x + (-5), "a")')
+    assert res == Union((
+        Implication(
+            A(x),
+            Conjunction((
+                B(
+                    Constant(add)(x, Constant(-5.)),
+                    Constant("a")
+                ),
+            ))
+        ),
+    ))
+
+    res = parser('A(x):-B(x - 5 * 2, @y ** -2)')
+    assert res == Union((
+        Implication(
+            A(x),
+            Conjunction((
+                B(
+                    Constant(sub)(
+                        x,
+                        Constant(mul)(Constant(5.), Constant(2.))
+                    ),
+                    Constant(pow)(ExternalSymbol('y'), Constant(-2.))
+                ),
+            ))
+        ),
+    ))
+
+
+def test_nl_rules():
+    cat = Symbol('cat')
+    bird = Symbol('bird')
+    feline = Symbol('feline')
+    legs = Symbol('legs')
+    small = Symbol('small')
+    goodluck_cat = Symbol('goodluck_cat')
+    black = Symbol('black')
+
+    f = Symbol('f')
+    x = Symbol('x')
+    y = Symbol('y')
+    z = Symbol('z')
+
+    res = parser('x is cat if x is feline, x has 4 legs, x is small')
+    assert res == Union((
+        Implication(
+            cat(x), Conjunction((feline(x), legs(x, Constant(4.)), small(x)))
+        ),
+    ))
+
+    res = parser('x is goodluck_cat if x is cat, not x is black')
+    assert res == Union((
+        Implication(
+            goodluck_cat(x), Conjunction((cat(x), Negation(black(x))))
+        ),
+    ))
+
+    res = parser('''
+        x has y legs if x is cat & y == 4
+        or x has y legs if x is bird and y == 2
+    ''')
+    assert res == Union((
+        Implication(
+            legs(x, y), Conjunction((cat(x), Constant(eq)(y, Constant(4.))))
+        ),
+        Implication(
+            legs(x, y), Conjunction((bird(x), Constant(eq)(y, Constant(2.))))
+        ),
+    ))
