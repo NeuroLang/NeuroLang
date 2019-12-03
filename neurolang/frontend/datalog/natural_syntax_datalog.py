@@ -2,10 +2,8 @@ from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
 
 import tatsu
 
-from ...datalog import Conjunction, Fact, Implication, Negation, Union
-from ...expressions import Constant, Expression, Symbol
+from ...expressions import Expression
 from . import DatalogSemantics as DatalogClassicSemantics
-from . import ExternalSymbol
 
 GRAMMAR = u"""
     @@grammar::Datalog
