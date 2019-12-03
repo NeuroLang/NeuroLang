@@ -28,24 +28,33 @@ GRAMMAR = u"""
     implication = ':-' | '\N{LEFTWARDS ARROW}' | 'if' ;
     right_implication = '-:' | '\N{RIGHTWARDS ARROW}' | 'implies' ;
     head_predicate = predicate:identifier'(' arguments:[ arguments ] ')'
-                   | arguments:argument 'is' arguments:argument"'s" predicate:identifier
-                   | arguments:argument 'is'  predicate:identifier preposition arguments:argument
-                   | arguments:argument 'has' arguments:argument predicate:identifier
+                   | arguments:argument 'is' arguments:argument"'s"\
+                        predicate:identifier
+                   | arguments:argument 'is'  predicate:identifier\
+                        preposition arguments:argument
+                   | arguments:argument 'has' arguments:argument\
+                        predicate:identifier
                    | arguments+:argument 'is' predicate:identifier ;
 
     predicate = predicate: int_ext_identifier'(' arguments:[ arguments ] ')'
-              | arguments:argument 'is' arguments:argument"'s" predicate:int_ext_identifier
-              | arguments:argument 'is'  predicate:int_ext_identifier preposition arguments:argument
-              | arguments:argument 'has' arguments:argument predicate:int_ext_identifier
+              | arguments:argument 'is' arguments:argument"'s"\
+                   predicate:int_ext_identifier
+              | arguments:argument 'is'  predicate:int_ext_identifier\
+                   preposition arguments:argument
+              | arguments:argument 'has' arguments:argument\
+                   predicate:int_ext_identifier
               | arguments+:argument 'is'  predicate:int_ext_identifier
               | negated_predicate
               | comparison
               | logical_constant ;
 
     constant_predicate = predicate:identifier'(' ','.{ arguments+:literal } ')'
-                       | arguments:literal 'is' arguments:literal"'s" predicate:identifier
-                       | arguments:literal 'is'  predicate:identifier preposition arguments:literal
-                       | arguments:literal 'has' arguments:literal predicate:identifier
+                       | arguments:literal 'is' arguments:literal"'s"\
+                            predicate:identifier
+                       | arguments:literal 'is'  predicate:identifier\
+                            preposition arguments:literal
+                       | arguments:literal 'has' arguments:literal\
+                            predicate:identifier
                        | arguments+:literal 'is' predicate:identifier ;
 
     preposition = 'to' | 'from' | 'of' | 'than' | 'the' ;
