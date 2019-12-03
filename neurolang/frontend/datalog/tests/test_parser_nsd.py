@@ -2,7 +2,8 @@ from operator import add, eq, mul, pow, sub, truediv
 
 from ....datalog import Conjunction, Fact, Implication, Negation, Union
 from ....expressions import Constant, Symbol
-from ..natural_syntax_datalog import ExternalSymbol, parser
+from .. import ExternalSymbol
+from ..natural_syntax_datalog import parser
 
 
 def test_facts():
