@@ -595,7 +595,11 @@ class ProbDatalogGrounder(PatternWalker):
         )
         params_iterable = set(
             tuple(arg.value for arg in pfact.consequent.body.args)
-            + (pfact.consequent.probability.value,)
+            + (
+                pfact.consequent.probability.value
+                if isinstance(pfact.consequent.probability, Constant)
+                else pfact.consequent.probability.name,
+            )
             for pfact in pfacts
         )
         relation = Constant[AbstractSet](
@@ -606,7 +610,7 @@ class ProbDatalogGrounder(PatternWalker):
         params_relation = Constant[AbstractSet](
             NamedRelationalAlgebraFrozenSet(
                 tuple(c.name for c in new_pred.body.args)
-                + (make_numerical_col_symb().name,),
+                + (new_pred.probability.name,),
                 params_iterable,
             )
         )

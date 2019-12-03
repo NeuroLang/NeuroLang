@@ -48,6 +48,8 @@ from .expressions import (
     Aggregation,
     ExtendedProjection,
     ExtendedProjectionListMember,
+    Unions,
+    Union,
 )
 from .probdatalog import (
     ground_probdatalog_program,
@@ -380,6 +382,22 @@ class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
     def __init__(self, rv_values):
         self.rv_values = rv_values
 
+    @add_match(Union)
+    def union(self, union_op):
+        return Constant[AbstractSet](
+            self.walk(union_op.first).value | self.walk(union_op.second).value
+        )
+
+    @add_match(Unions)
+    def unions(self, unions_op):
+        result = None
+        for relation in unions_op.relations:
+            if result is None:
+                result = self.walk(relation).value
+            else:
+                result = result | self.walk(relation).value
+        return Constant[AbstractSet](result)
+
     @add_match(Constant[AbstractSet])
     def relation(self, relation):
         return relation
@@ -541,9 +559,9 @@ class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
 
 
 class StringArithmeticWalker(PatternWalker):
-    @add_match(Constant[ColumnStr])
-    def column(self, column):
-        return column.value
+    @add_match(Constant)
+    def constant(self, cst):
+        return cst.value
 
     @add_match(FunctionApplication(Constant(len), ...))
     def len(self, fa):
@@ -662,15 +680,16 @@ def _iter_parents(parent_marg_probs, parent_groundings):
         yield parent_values, parent_margin_probs
 
 
-def infer_pfact_params(pfact_grounding, interpretations_ra_set):
+def infer_pfact_params(pfact_grounding, interpretations):
     """
     Compute the estimate of the parameters associated with a specific
     probabilistic fact predicate symbol from the facts with that same predicate
     symbol found in interpretations.
 
     """
-    if "__interpretation_id__" not in interpretations_ra_set.value.columns:
-        raise NeuroLangException("Column __interpretation_id__ is missing")
+    interpretations_ra_set = build_interpretations_ra_set(
+        pfact_grounding, interpretations
+    )
     tuple_counts = Aggregation(
         agg_fun=Constant[str]("count"),
         relation=NaturalJoin(
@@ -703,15 +722,6 @@ def infer_pfact_params(pfact_grounding, interpretations_ra_set):
         agg_column=None,
         dst_column=Constant(ColumnStr("__substitution_counts__")),
     )
-    n_interpretations = Constant(len)(
-        Aggregation(
-            agg_fun=Constant[str]("count"),
-            relation=interpretations_ra_set,
-            group_columns=(Constant(ColumnStr("__interpretation_id__")),),
-            agg_column=None,
-            dst_column=Constant(ColumnStr("__n_tuples_per_interpretation__")),
-        )
-    )
     probabilities = ExtendedProjection(
         NaturalJoin(tuple_counts, substitution_counts),
         tuple(
@@ -720,7 +730,7 @@ def infer_pfact_params(pfact_grounding, interpretations_ra_set):
                     fun_exp=Constant(ColumnStr("__tuple_counts__"))
                     / (
                         Constant(ColumnStr("__substitution_counts__"))
-                        * n_interpretations
+                        * Constant[float](float(len(interpretations)))
                     ),
                     dst_column=Constant(ColumnStr("__probability__")),
                 )
@@ -752,3 +762,46 @@ def infer_pfact_params(pfact_grounding, interpretations_ra_set):
             Constant(ColumnStr("__parameter_name__")),
         )
     )
+
+
+def build_interpretations_ra_set(grounding, interpretations):
+    pred = grounding.expression.consequent.body
+    pred_symb = pred.functor
+    columns = tuple(arg.name for arg in pred.args)
+    itps_at_least_one_tuple = [
+        itp.as_map()
+        for itp in interpretations
+        if pred_symb in itp.as_map().keys()
+    ]
+    itp_ra_sets = [
+        NaturalJoin(
+            Constant[AbstractSet](
+                AlgebraSet(columns, itp[pred_symb].value._container.values)
+            ),
+            Constant[AbstractSet](
+                AlgebraSet(["__interpretation_id__"], [itp_id])
+            ),
+        )
+        for itp_id, itp in enumerate(itps_at_least_one_tuple)
+    ]
+    return ExtendedRelationalAlgebraSolver({}).walk(
+        NaturalJoin(grounding.relation, Unions(itp_ra_sets))
+    )
+
+
+def full_observability_parameter_estimation(program_code, interpretations):
+    grounded = ground_probdatalog_program(program_code)
+    estimations = []
+    for grounding in grounded.expressions:
+        if is_probabilistic_fact(grounding.expression):
+            estimations.append(infer_pfact_params(grounding, interpretations))
+    result = ExtendedRelationalAlgebraSolver({}).walk(
+        Aggregation(
+            agg_fun=Constant[str]("mean"),
+            relation=Unions(estimations),
+            group_columns=[Constant(ColumnStr("__parameter_name__"))],
+            agg_column=Constant(ColumnStr("__parameter_estimate__")),
+            dst_column=Constant(ColumnStr("__parameter_estimate__")),
+        )
+    )
+    return result

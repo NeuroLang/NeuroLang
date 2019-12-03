@@ -420,7 +420,16 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         return output
 
     def __or__(self, other):
-        raise NotImplementedError()
+        if self.columns != other.columns:
+            raise ValueError(
+                "Difference defined only for sets with the same columns"
+            )
+        new_container = pd.merge(
+            left=self._container, right=other._container, how="outer"
+        )
+        output = type(self)(self.columns)
+        output._container = new_container
+        return output
 
     def __and__(self, other):
         raise NotImplementedError()

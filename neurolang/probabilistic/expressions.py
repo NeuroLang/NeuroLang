@@ -5,6 +5,17 @@ from ..expressions import Definition, Constant, Symbol, FunctionApplication
 from ..relational_algebra import RelationalAlgebraOperation
 
 
+class Unions(RelationalAlgebraOperation):
+    def __init__(self, relations):
+        self.relations = relations
+
+
+class Union(RelationalAlgebraOperation):
+    def __init__(self, first, second):
+        self.first = first
+        self.second = second
+
+
 class ProbabilisticPredicate(Definition):
     def __init__(self, probability, body):
         if not isinstance(probability, (Constant, Symbol)):
