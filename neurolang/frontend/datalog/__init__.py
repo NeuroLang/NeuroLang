@@ -52,7 +52,7 @@ GRAMMAR = u"""
 
     term = factor [ ( '*' | '/' ) factor ] ;
 
-    factor =  exponent [ ( '^' | '**' ) exponential ];
+    factor =  exponent [ '**' exponential ];
 
     exponential = exponent ;
 
