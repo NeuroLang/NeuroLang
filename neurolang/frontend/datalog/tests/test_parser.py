@@ -15,6 +15,20 @@ def test_facts():
     res = parser('A("x", 3)')
     assert res == Union((Fact(Symbol('A')(Constant('x'), Constant(3.))),))
 
+    res = parser(
+        'A("x", 3)\n'
+        'ans():-A(x, y)'
+    )
+    assert res == Union((
+        Fact(Symbol('A')(Constant('x'), Constant(3.))),
+        Implication(
+            Symbol('ans')(), 
+            Conjunction((
+                Symbol('A')(Symbol('x'), Symbol('y')),
+            ))
+        )
+    ))
+
 
 def test_rules():
     A = Symbol('A')
