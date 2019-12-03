@@ -161,10 +161,8 @@ def test_nl_rules():
     goodluck_cat = Symbol('goodluck_cat')
     black = Symbol('black')
 
-    f = Symbol('f')
     x = Symbol('x')
     y = Symbol('y')
-    z = Symbol('z')
 
     res = parser('x is cat if x is feline, x has 4 legs, x is small')
     assert res == Union((
