@@ -22,7 +22,7 @@ def test_facts():
     assert res == Union((
         Fact(Symbol('A')(Constant('x'), Constant(3.))),
         Implication(
-            Symbol('ans')(), 
+            Symbol('ans')(),
             Conjunction((
                 Symbol('A')(Symbol('x'), Symbol('y')),
             ))
