@@ -69,7 +69,9 @@ GRAMMAR = u"""
 
     comparison_operator = '==' | '<' | '<=' | '>=' | '>' | '!=' ;
 
-    text = '"' /[a-zA-Z0-9]*/ '"' ;
+    text = '"' /[a-zA-Z0-9]*/ '"'
+          | "'" /[a-zA-Z0-9]*/ "'" ;
+
     number = [ '+' | '-' ] /[0-9]+/ ;
     logical_constant = TRUE | FALSE ;
     TRUE = 'True' | '\u22A4' ;

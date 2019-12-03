@@ -12,7 +12,7 @@ def test_facts():
     res = parser('A("x")')
     assert res == Union((Fact(Symbol('A')(Constant('x'))),))
 
-    res = parser('A("x", 3)')
+    res = parser("A('x', 3)")
     assert res == Union((Fact(Symbol('A')(Constant('x'), Constant(3.))),))
 
     res = parser(
