@@ -2,8 +2,8 @@ from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
 
 import tatsu
 
-from neurolang.datalog import Conjunction, Fact, Implication, Negation, Union
-from neurolang.expressions import Constant, Expression, Symbol
+from ...datalog import Conjunction, Fact, Implication, Negation, Union
+from ...expressions import Constant, Expression, Symbol
 
 GRAMMAR = u"""
     @@grammar::Datalog
