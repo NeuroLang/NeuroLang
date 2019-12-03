@@ -92,7 +92,6 @@ OPERATOR = {
     '*': mul,
     '!=': ne,
     '**': pow,
-    '^': sub,
     '/': truediv
 }
 
