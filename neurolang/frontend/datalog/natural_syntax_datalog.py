@@ -34,7 +34,7 @@ GRAMMAR = u"""
                         preposition arguments:argument
                    | arguments:argument 'has' arguments:argument\
                         predicate:identifier
-                   | arguments+:argument 'is' predicate:identifier ;
+                   | arguments+:argument 'is' ['a'] predicate:identifier ;
 
     predicate = predicate: int_ext_identifier'(' arguments:[ arguments ] ')'
               | arguments:argument 'is' arguments:argument"'s"\
@@ -43,7 +43,7 @@ GRAMMAR = u"""
                    preposition arguments:argument
               | arguments:argument 'has' arguments:argument\
                    predicate:int_ext_identifier
-              | arguments+:argument 'is'  predicate:int_ext_identifier
+              | arguments+:argument 'is' ['a'] predicate:int_ext_identifier
               | negated_predicate
               | comparison
               | logical_constant ;
@@ -162,7 +162,7 @@ class DatalogSemantics:
 
     def head_predicate(self, ast):
         if not isinstance(ast, Expression):
-            if len(ast['arguments']) > 0:
+            if ast['arguments'] is not None and len(ast['arguments']) > 0:
                 ast = ast['predicate'](*ast['arguments'])
             else:
                 ast = ast['predicate']()
