@@ -81,10 +81,11 @@ GRAMMAR = u"""
 
 OPERATOR = {
     '+': add,
+    '-': sub,
     '==': eq,
     '>=': ge,
     '>': gt,
-    '<=': le, 
+    '<=': le,
     '<': lt,
     '*': mul,
     '!=': ne,
@@ -103,8 +104,14 @@ class ExternalSymbol(Symbol):
 
 
 class DatalogSemantics:
-    def __init__(self, locals={}, globals={}):
+    def __init__(self, locals=None, globals=None):
         super().__init__()
+
+        if locals is None:
+            locals = {}
+        if globals is None:
+            globals = {}
+
         self.locals = locals
         self.globals = globals
 
@@ -164,10 +171,7 @@ class DatalogSemantics:
         if len(ast) == 1:
             return ast[0]
 
-        if ast[1] == "+":
-            op = Constant(add)
-        else:
-            op = Constant(sub)
+        op = Constant(OPERATOR[ast[1]])
 
         return op(*ast[0::2])
 
@@ -177,10 +181,7 @@ class DatalogSemantics:
         elif len(ast) == 1:
             return ast[0]
 
-        if ast[1] == "*":
-            op = Constant(mul)
-        else:
-            op = Constant(truediv)
+        op = Constant(OPERATOR[ast[1]])
 
         return op(ast[0], ast[2])
 
@@ -208,7 +209,7 @@ class DatalogSemantics:
         return ast
 
 
-def parser(code, locals={}, globals={}):
+def parser(code, locals=None, globals=None):
     return tatsu.parse(
         COMPILED_GRAMMAR, code.strip(),
         semantics=DatalogSemantics(locals=locals, globals=globals)

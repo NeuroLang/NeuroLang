@@ -1,7 +1,7 @@
 from operator import add, eq, mul, pow, sub, truediv
 
 from ....datalog import Conjunction, Fact, Implication, Negation, Union
-from ....expressions import Constant, Expression, Symbol
+from ....expressions import Constant, Symbol
 from .. import ExternalSymbol, parser
 
 
@@ -50,7 +50,9 @@ def test_rules():
             A(x),
             Conjunction((
                 B(
-                    Constant(add)(x, Constant(mul)(Constant(5.), Constant(2.))),
+                    Constant(add)(
+                        x,
+                        Constant(mul)(Constant(5.), Constant(2.))),
                     y
                 ),
                 C(Constant(3), z), Constant(eq)(z, Constant(4.))
@@ -96,7 +98,7 @@ def test_rules():
         ),
     ))
 
-    res = parser('A(x):-B(x - 5 * 2, y ** -2)')
+    res = parser('A(x):-B(x - 5 * 2, @y ** -2)')
     assert res == Union((
         Implication(
             A(x),
@@ -106,7 +108,7 @@ def test_rules():
                         x,
                         Constant(mul)(Constant(5.), Constant(2.))
                     ),
-                    Constant(pow)(Symbol('y'), Constant(-2.))
+                    Constant(pow)(ExternalSymbol('y'), Constant(-2.))
                 ),
             ))
         ),
