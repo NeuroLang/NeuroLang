@@ -49,6 +49,13 @@ def test_rules():
         Implication(A(x), Conjunction((Negation(B(x)),))),
     ))
 
+    res = parser('A(x):-B(x, ...)')
+    fresh_arg = res.formulas[0].antecedent.formulas[0].args[1]
+    assert isinstance(fresh_arg, Symbol)
+    assert res == Union((
+        Implication(A(x), Conjunction((B(x, fresh_arg),))),
+    ))
+
     res = parser('A(x):-B(x, y), C(3, z), z == 4')
     assert res == Union((
         Implication(

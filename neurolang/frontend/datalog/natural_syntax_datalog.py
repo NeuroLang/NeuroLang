@@ -66,7 +66,8 @@ GRAMMAR = u"""
 
     arguments = ','.{ argument }+ ;
     argument = arithmetic_operation
-             | function_application ;
+             | function_application
+             | '...' ;
 
     int_ext_identifier = identifier | ext_identifier ;
     ext_identifier = '@'identifier;

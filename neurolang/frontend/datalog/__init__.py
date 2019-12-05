@@ -42,7 +42,8 @@ GRAMMAR = u"""
 
     arguments = ','.{ argument }+ ;
     argument = arithmetic_operation
-             | function_application ;
+             | function_application
+             | '...' ;
 
     int_ext_identifier = identifier | ext_identifier ;
     ext_identifier = '@'identifier;
@@ -66,7 +67,7 @@ GRAMMAR = u"""
             | text
             | ext_identifier ;
 
-    identifier = /[a-zA-Z][a-zA-Z0-9]*/ ;
+    identifier = /[a-zA-Z_][a-zA-Z0-9_]*/ ;
 
     comparison_operator = '==' | '<' | '<=' | '>=' | '>' | '!=' ;
 
@@ -209,6 +210,12 @@ class DatalogSemantics:
 
     def identifier(self, ast):
         return Symbol(ast)
+
+    def argument(self, ast):
+        if ast == '...':
+            return Symbol.fresh()
+        else:
+            return ast
 
     def text(self, ast):
         return Constant(ast[1])
