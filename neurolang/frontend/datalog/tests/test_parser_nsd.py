@@ -1,6 +1,7 @@
 from operator import add, eq, mul, pow, sub, truediv
 
 from ....datalog import Conjunction, Fact, Implication, Negation, Union
+from ....datalog.aggregation import AggregationApplication
 from ....expressions import Constant, Symbol
 from .. import ExternalSymbol
 from ..natural_syntax_datalog import parser
@@ -189,5 +190,35 @@ def test_nl_rules():
         ),
         Implication(
             legs(x, y), Conjunction((bird(x), Constant(eq)(y, Constant(2.))))
+        ),
+    ))
+
+
+def test_aggregation():
+    A = Symbol('A')
+    B = Symbol('B')
+    f = Symbol('f')
+    x = Symbol('x')
+    y = Symbol('y')
+    res = parser('A(x, f(y)):-B(x, y)')
+    assert res == Union((
+        Implication(
+            A(x, AggregationApplication(f, (y,))),
+            Conjunction((B(x, y),))
+        ),
+    ))
+
+
+def test_aggregation_nsd():
+    A = Symbol('A')
+    B = Symbol('B')
+    f = Symbol('f')
+    x = Symbol('x')
+    y = Symbol('y')
+    res = parser('x has f(y) A if B(x, y)')
+    assert res == Union((
+        Implication(
+            A(x, AggregationApplication(f, (y,))),
+            Conjunction((B(x, y),))
         ),
     ))

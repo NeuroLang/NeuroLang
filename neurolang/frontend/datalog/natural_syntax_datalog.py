@@ -2,7 +2,8 @@ from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
 
 import tatsu
 
-from ...expressions import Expression
+from ...datalog.aggregation import AggregationApplication
+from ...expressions import Expression, FunctionApplication
 from . import DatalogSemantics as DatalogClassicSemantics
 
 GRAMMAR = u"""
@@ -130,7 +131,15 @@ class DatalogSemantics(DatalogClassicSemantics):
     def head_predicate(self, ast):
         if not isinstance(ast, Expression):
             if ast['arguments'] is not None and len(ast['arguments']) > 0:
-                ast = ast['predicate'](*ast['arguments'])
+                arguments = []
+                for arg in ast['arguments']:
+                    if isinstance(arg, FunctionApplication):
+                        arg = AggregationApplication(
+                            arg.functor,
+                            arg.args
+                        )
+                    arguments.append(arg)
+                ast = ast['predicate'](*arguments)
             else:
                 ast = ast['predicate']()
         return ast
