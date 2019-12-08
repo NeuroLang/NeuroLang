@@ -15,9 +15,9 @@ from ..expressions import (Constant, Expression, FunctionApplication,
                            is_leq_informative)
 from ..type_system import Unknown, infer_type
 from .expression_processing import (
-    extract_datalog_free_variables, is_conjunctive_expression,
+    extract_logic_free_variables, is_conjunctive_expression,
     is_conjunctive_expression_with_nested_predicates)
-from .expressions import (NULL, UNDEFINED, Disjunction, Fact, Implication,
+from .expressions import (NULL, UNDEFINED, Union, Fact, Implication,
                           NullConstant, Undefined)
 from .wrapped_collections import WrappedRelationalAlgebraSet
 
@@ -39,10 +39,10 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
     is a set of tuples `a` representing `S(*a)` as facts
 
     * If `S` is part of the intensional database then its value is an
-    `Disjunction` of `Implications`. For instance
+    `Union` of `Implications`. For instance
     `Q(x) :- R(x, x)` and `Q(x) :- T(x)` is represented as a symbol `Q`
      with value
-     `Disjunction((Implication(Q(x), R(x, x)), Implication(Q(x), T(x))))`
+     `Union((Implication(Q(x), R(x, x)), Implication(Q(x), T(x))))`
     '''
 
     protected_keywords = set()
@@ -55,7 +55,7 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
         new_expression = self.symbol_table.get(expression, expression)
         if new_expression is expression:
             return expression
-        elif isinstance(new_expression, (Disjunction, Constant[AbstractSet])):
+        elif isinstance(new_expression, (Union, Constant[AbstractSet])):
             return expression
         else:
             return new_expression
@@ -79,7 +79,7 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
         self._initialize_fact_set_if_needed(fact)
         fact_set = self.symbol_table[fact.functor]
 
-        if isinstance(fact_set, Disjunction):
+        if isinstance(fact_set, Union):
             raise NeuroLangException(
                 f'{fact.functor} has been previously '
                 'define as intensional predicate.'
@@ -123,7 +123,7 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
         if expression not in disj:
             disj += (expression,)
 
-        self.symbol_table[consequent.functor] = Disjunction(disj)
+        self.symbol_table[consequent.functor] = Union(disj)
 
         return expression
 
@@ -141,7 +141,7 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
 
         if (
             not isinstance(disj[0].consequent, FunctionApplication) or
-            len(extract_datalog_free_variables(disj[0].consequent.args)) !=
+            len(extract_logic_free_variables(disj[0].consequent.args)) !=
             len(consequent.args)
         ):
             raise NeuroLangException(
@@ -192,7 +192,7 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
             k: v for k, v in self.symbol_table.items()
             if (
                 k not in self.protected_keywords and
-                isinstance(v, Disjunction)
+                isinstance(v, Union)
             )
         }
 

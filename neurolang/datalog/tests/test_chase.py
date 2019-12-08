@@ -10,7 +10,7 @@ from ..basic_representation import DatalogProgram
 from ..chase import (ChaseGeneral, ChaseMGUMixin, ChaseNaive,
                      ChaseNamedRelationalAlgebraMixin, ChaseNode,
                      ChaseRelationalAlgebraPlusCeriMixin, ChaseSemiNaive)
-from ..expressions import Disjunction, Fact, Implication, TranslateToLogic
+from ..expressions import Union, Fact, Implication, TranslateToLogic
 from ..instance import MapInstance
 
 C_ = expressions.Constant
@@ -18,7 +18,7 @@ S_ = expressions.Symbol
 Imp_ = Implication
 F_ = Fact
 Eb_ = expressions.ExpressionBlock
-Disj_ = Disjunction
+Disj_ = Union
 
 
 class DatalogTranslator(TranslateToLogic, ew.IdentityWalker):

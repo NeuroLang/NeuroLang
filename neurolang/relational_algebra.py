@@ -196,7 +196,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         res = self.walk(product.relations[0]).value
         for relation in product.relations[1:]:
             res = res.cross_product(self.walk(relation).value)
-        return C_[AbstractSet[res.row_type]](res, verify_type=False)
+        return self._build_relation_constant(res)
 
     @ew.add_match(EquiJoin)
     def ra_equijoin(self, equijoin):
@@ -206,21 +206,21 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         columns_right = (c.value for c in equijoin.columns_right)
         res = left.equijoin(right, list(zip(columns_left, columns_right)))
 
-        return C_[AbstractSet[res.row_type]](res, verify_type=False)
+        return self._build_relation_constant(res)
 
     @ew.add_match(NaturalJoin)
     def ra_naturaljoin(self, naturaljoin):
         left = self.walk(naturaljoin.relation_left).value
         right = self.walk(naturaljoin.relation_right).value
         res = left.naturaljoin(right)
-        return C_[AbstractSet](res)
+        return self._build_relation_constant(res)
 
     @ew.add_match(Difference)
     def ra_difference(self, difference):
         left = self.walk(difference.relation_left).value
         right = self.walk(difference.relation_right).value
         res = left - right
-        return C_[AbstractSet[res.row_type]](res, verify_type=False)
+        return self._build_relation_constant(res)
 
     @ew.add_match(NameColumns)
     def ra_name_columns(self, name_columns):

@@ -18,7 +18,6 @@ commands:
       - run:
           name: install dependencies
           command: |
-            # sudo rm -rf /usr/bin/pip
             python -m venv venv
             . venv/bin/activate
             pip install --upgrade pip
@@ -42,6 +41,13 @@ commands:
             # download test reporter as a static binary
             curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
             chmod +x ./cc-test-reporter
+
+      - run:
+          name: Setup codacy reporter
+          command: |
+            python -m venv venv
+            . venv/bin/activate
+            pip install codacy-coverage
 
       - save_cache:
           paths:
@@ -111,9 +117,9 @@ jobs:
             if 
               [ "${CIRCLE_BRANCH}" = "master" ]
             then
-              asv run -s -v $(git rev-parse HEAD)...$(git rev-parse HEAD~5)
+              asv run -v $(git rev-parse HEAD)...$(git rev-parse HEAD~5)
             else
-              asv continuous -s -v master $(git rev-parse HEAD)
+              asv continuous -v master
             fi
             asv publish
           no_output_timeout: 1h
@@ -147,6 +153,9 @@ workflows:
     jobs:
       - py36
       - py37
+      - benchmark:
+          requires:
+            - py37
       - benchmark:
           requires:
             - py37

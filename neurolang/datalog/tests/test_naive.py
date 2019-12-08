@@ -3,12 +3,12 @@ from typing import AbstractSet
 import pytest
 
 from ... import expression_walker, solver_datalog_extensional_db
-from ...expressions import (Constant, ExistentialPredicate, ExpressionBlock,
-                            FunctionApplication, Lambda, NeuroLangException,
-                            Query, Symbol, is_leq_informative)
+from ...expressions import (Constant, ExpressionBlock, FunctionApplication,
+                            Lambda, NeuroLangException, Query, Symbol,
+                            is_leq_informative)
+from ...logic import Union, ExistentialPredicate, Implication
 from ...solver_datalog_naive import NULL, SolverNonRecursiveDatalogNaive
-from .. import Fact, Implication, Disjunction
-
+from .. import Fact
 
 S_ = Symbol
 C_ = Constant
@@ -94,7 +94,7 @@ def test_atoms_variables():
     dl.walk(f1)
 
     assert 'Q' in dl.symbol_table
-    assert isinstance(dl.symbol_table['Q'], Disjunction)
+    assert isinstance(dl.symbol_table['Q'], Union)
     fact = dl.symbol_table['Q'].formulas[-1]
     assert isinstance(fact, Implication)
     assert isinstance(fact.consequent, FunctionApplication)
@@ -107,7 +107,7 @@ def test_atoms_variables():
     dl.walk(f2)
 
     assert 'T' in dl.symbol_table
-    assert isinstance(dl.symbol_table['T'], Disjunction)
+    assert isinstance(dl.symbol_table['T'], Union)
     fact = dl.symbol_table['T'].formulas[-1]
     assert isinstance(fact, Implication)
     assert isinstance(fact.consequent, FunctionApplication)
@@ -119,7 +119,7 @@ def test_atoms_variables():
     dl.walk(f3)
 
     assert 'R' in dl.symbol_table
-    assert isinstance(dl.symbol_table['R'], Disjunction)
+    assert isinstance(dl.symbol_table['R'], Union)
     fact = dl.symbol_table['R'].formulas[-1]
     assert isinstance(fact, Implication)
     assert isinstance(fact.consequent, FunctionApplication)

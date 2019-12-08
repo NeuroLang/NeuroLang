@@ -1,4 +1,4 @@
-from operator import eq
+from operator import eq, invert
 from typing import AbstractSet, Tuple
 
 from ..exceptions import NeuroLangException
@@ -93,8 +93,16 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
     def translate_negation(self, expression):
         if isinstance(expression.formula, Negation):
             return self.walk(expression.formula.formula)
+
+        formula = self.walk(expression.formula)
+        if (
+            isinstance(formula, FunctionApplication) and
+            isinstance(formula.functor, Constant)
+        ):
+            res = FunctionApplication(Constant(invert), (formula,))
         else:
-            return Negation(self.walk(expression.formula))
+            res = Negation(self.walk(expression.formula))
+        return res
 
     @add_match(Conjunction)
     def translate_conj(self, expression):

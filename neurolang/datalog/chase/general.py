@@ -4,14 +4,14 @@ from operator import eq
 
 from ...exceptions import NeuroLangException
 from ...expressions import Constant, FunctionApplication, Symbol
-from ...unification import (apply_substitution, apply_substitution_arguments,
-                            compose_substitutions)
+from ...logic.unification import (apply_substitution,
+                                  apply_substitution_arguments,
+                                  compose_substitutions)
 from ...utils import OrderedSet
-from ..expression_processing import (extract_datalog_free_variables,
-                                     extract_datalog_predicates,
+from ..expression_processing import (extract_logic_free_variables,
+                                     extract_logic_predicates,
                                      is_linear_rule)
 from ..instance import MapInstance
-
 
 ChaseNode = namedtuple('ChaseNode', 'instance children')
 
@@ -42,9 +42,9 @@ class ChaseGeneral():
     def _set_rules(self, rules):
         self.rules = []
         if rules is None:
-            for disjunction in \
+            for union in \
                     self.datalog_program.intensional_database().values():
-                self.rules += disjunction.formulas
+                self.rules += union.formulas
         else:
             self.rules += rules.formulas
 
@@ -100,7 +100,7 @@ class ChaseGeneral():
 
     @staticmethod
     def extract_variable_arguments(predicate):
-        return extract_datalog_free_variables(predicate)
+        return extract_logic_free_variables(predicate)
 
     def evaluate_builtins(self, builtin_predicates, substitutions):
         new_substitutions = []
@@ -179,7 +179,7 @@ class ChaseGeneral():
         if restriction_instance is None:
             restriction_instance = dict()
 
-        rule_predicates = extract_datalog_predicates(rule.antecedent)
+        rule_predicates = extract_logic_predicates(rule.antecedent)
         restricted_predicates = []
         nonrestricted_predicates = []
         builtin_predicates = []
@@ -239,9 +239,9 @@ class ChaseGeneral():
             dict()
         )
         rules = []
-        for disjunction in self.datalog_program.intensional_database(
+        for union in self.datalog_program.intensional_database(
         ).values():
-            for rule in disjunction.formulas:
+            for rule in union.formulas:
                 rules.append(rule)
 
         nodes_to_process = [root]
@@ -322,6 +322,7 @@ class ChaseSemiNaive:
         return instance_update
 
     def check_constraints(self, instance_update):
+        super().check_constraints(instance_update)
         for rule in self.rules:
             if not is_linear_rule(rule):
                 raise NeuroLangNonLinearProgramException(

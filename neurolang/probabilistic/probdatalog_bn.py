@@ -11,8 +11,8 @@ from ..expressions import (
     FunctionApplication,
     Constant,
 )
-from ..datalog.expressions import Implication
-from ..datalog.expression_processing import extract_datalog_predicates
+from ..logic import Implication
+from ..datalog.expression_processing import extract_logic_predicates
 from ..exceptions import NeuroLangException
 from .expressions import TableDistribution
 from .probdatalog import (
@@ -156,6 +156,6 @@ class TranslatorGroundedProbDatalogToBN(ExpressionBasicEvaluator):
     )
     def statement_intensional(self, expression):
         parents = set()
-        for atom in extract_datalog_predicates(expression.antecedent):
+        for atom in extract_logic_predicates(expression.antecedent):
             parents.add(self._add_atom_variable(atom, set()))
         self._add_atom_variable(expression.consequent, parents)

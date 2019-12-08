@@ -1,15 +1,13 @@
+import operator as op
+from typing import (AbstractSet, Any, Callable, Generic, Mapping, Set,
+                    SupportsInt, T, Tuple, Union)
+
 import pytest
 
-from typing import (
-    Union, Set, Callable, AbstractSet, Generic, Tuple, T, SupportsInt,
-    Any, Mapping
-)
-from .. import (
-    Unknown, is_leq_informative,
-    typing_callable_from_annotated_function, get_args, get_origin,
-    replace_type_variable, is_parameterized, is_parametrical,
-    infer_type, NeuroLangTypeException
-)
+from .. import (NeuroLangTypeException, Unknown, get_args, get_origin,
+                infer_type, is_leq_informative, is_parameterized,
+                is_parametrical, replace_type_variable,
+                typing_callable_from_annotated_function)
 
 
 def test_parametrical():
@@ -159,3 +157,9 @@ def test_infer_type():
 
     assert infer_type(dict()) is Mapping[Unknown, Unknown]
     assert infer_type(dict(a=2)) is Mapping[str, int]
+
+    assert infer_type(op.and_) is Callable[[bool, bool], bool]
+    assert infer_type(op.neg) is Callable[[Unknown], Unknown]
+    assert infer_type(op.invert) is Callable[[bool], bool]
+    assert infer_type(op.eq) is Callable[[Unknown, Unknown], bool]
+    assert infer_type(op.add) is Callable[[Unknown, Unknown], Unknown]

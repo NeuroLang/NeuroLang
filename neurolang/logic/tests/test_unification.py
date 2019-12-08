@@ -1,5 +1,5 @@
 from ..unification import most_general_unifier, merge_substitutions
-from .. import expressions
+from ... import expressions
 
 C_ = expressions.Constant
 S_ = expressions.Symbol

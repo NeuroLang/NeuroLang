@@ -5,90 +5,15 @@ Datalog programs.
 
 from typing import Iterable
 
-from ..expression_walker import ExpressionWalker, PatternWalker, add_match
-from ..expressions import (
-    Constant, FunctionApplication, NeuroLangException, Quantifier, Symbol
-)
-from ..utils import OrderedSet
-from .expressions import (
-    Conjunction, Disjunction, Implication, Negation, TranslateToLogic
-)
+from ..expression_walker import ExpressionWalker
+from ..expressions import Constant, FunctionApplication, Symbol
+from ..logic import Conjunction, Negation, Quantifier, Union
+from ..logic import expression_processing as elp
+from .expressions import TranslateToLogic
 
 
 class TranslateToDatalogSemantics(TranslateToLogic, ExpressionWalker):
     pass
-
-
-class WalkDatalogProgramAggregatingSets(PatternWalker):
-    @add_match(Conjunction)
-    def conjunction(self, expression):
-        fvs = OrderedSet()
-        for formula in expression.formulas:
-            fvs |= self.walk(formula)
-        return fvs
-
-    @add_match(Disjunction)
-    def disjunction(self, expression):
-        return self.conjunction(expression)
-
-    @add_match(Negation)
-    def negation(self, expression):
-        return self.walk(expression.formula)
-
-
-class ExtractDatalogFreeVariablesWalker(WalkDatalogProgramAggregatingSets):
-    @add_match(FunctionApplication)
-    def extract_variables_fa(self, expression):
-        args = expression.args
-
-        variables = OrderedSet()
-        for a in args:
-            if isinstance(a, Symbol):
-                variables.add(a)
-            elif isinstance(a, FunctionApplication):
-                variables |= self.walk(a)
-            elif isinstance(a, Constant):
-                pass
-            else:
-                raise NeuroLangException('Not a Datalog function application')
-        return variables
-
-    @add_match(Quantifier)
-    def extract_variables_q(self, expression):
-        return self.walk(expression.body) - expression.head._symbols
-
-    @add_match(Implication)
-    def extract_variables_s(self, expression):
-        return (
-            self.walk(expression.antecedent) -
-            self.walk(expression.consequent)
-        )
-
-    @add_match(Symbol)
-    def extract_variables_symbol(self, expression):
-        return OrderedSet((expression, ))
-
-    @add_match(Constant)
-    def _(self, expression):
-        return OrderedSet()
-
-
-def extract_datalog_free_variables(expression):
-    """Extract variables from expression assuming it's in Datalog format.
-
-    Parameters
-    ----------
-    expression : Expression
-
-
-    Returns
-    -------
-        OrderedSet
-            set of all free variables in the expression.
-    """
-    tr = TranslateToDatalogSemantics()
-    efvw = ExtractDatalogFreeVariablesWalker()
-    return efvw.walk(tr.walk(expression))
 
 
 def implication_has_existential_variable_in_antecedent(implication):
@@ -96,8 +21,8 @@ def implication_has_existential_variable_in_antecedent(implication):
     Whether an implication has at least one existential variable in its
     antecedent.
     '''
-    c_free_vars = set(extract_datalog_free_variables(implication.consequent))
-    a_free_vars = set(extract_datalog_free_variables(implication.antecedent))
+    c_free_vars = set(extract_logic_free_variables(implication.consequent))
+    a_free_vars = set(extract_logic_free_variables(implication.antecedent))
     return a_free_vars > c_free_vars
 
 
@@ -139,45 +64,6 @@ def is_conjunctive_expression_with_nested_predicates(expression):
     return True
 
 
-class ExtractDatalogPredicates(WalkDatalogProgramAggregatingSets):
-    @add_match(Symbol)
-    def symbol(self, expression):
-        return OrderedSet()
-
-    @add_match(Constant)
-    def constant(self, expression):
-        return OrderedSet()
-
-    @add_match(FunctionApplication)
-    def extract_predicates_fa(self, expression):
-        return OrderedSet([expression])
-
-    @add_match(Negation)
-    def negation(self, expression):
-        return OrderedSet([expression])
-
-
-def extract_datalog_predicates(expression):
-    """Extract predicates from expression
-    knowing that it's in Datalog format
-
-    Parameters
-    ----------
-    expression : Expression
-        expression to extract predicates from
-
-
-    Returns
-    -------
-    OrderedSet
-        set of all predicates in the expression in lexicographical
-        order.
-
-    """
-    edp = ExtractDatalogPredicates()
-    return edp.walk(expression)
-
-
 def is_linear_rule(rule):
     """Check if a rule is linear
 
@@ -192,9 +78,13 @@ def is_linear_rule(rule):
         True if the rule is linear
 
     """
-    predicates = extract_datalog_predicates(rule.antecedent)
+    predicates = extract_logic_predicates(rule.antecedent)
     return sum(
-        int(predicate.functor == rule.consequent.functor)
+        int(
+            (predicate.formula.functor == rule.consequent.functor)
+            if isinstance(predicate, Negation)
+            else predicate.functor == rule.consequent.functor
+        )
         for predicate in predicates
     ) < 2
 
@@ -218,21 +108,59 @@ def all_body_preds_in_set(implication, predicate_set):
 
     """
     preds = (
-        e.functor for e in extract_datalog_predicates(implication.antecedent)
+        e.functor for e in extract_logic_predicates(implication.antecedent)
     )
     predicate_set = predicate_set | {implication.consequent.functor}
     return all(not isinstance(e, Symbol) or e in predicate_set for e in preds)
 
 
-def stratify(disjunction, datalog_instance):
+def extract_logic_free_variables(expression):
+    """Extract variables from expression assuming it's in datalog format.
+
+    Parameters
+    ----------
+    expression : Expression
+
+
+    Returns
+    -------
+        OrderedSet
+            set of all free variables in the expression.
+    """
+    translator = TranslateToDatalogSemantics()
+    datalog_code = translator.walk(expression)
+    return elp.extract_logic_free_variables(datalog_code)
+
+
+def extract_logic_predicates(expression):
+    """Extract predicates from expression
+    knowing that it's in Datalog format
+
+    Parameters
+    ----------
+    expression : Expression
+        expression to extract predicates from
+
+
+    Returns
+    -------
+    OrderedSet
+        set of all predicates in the expression in lexicographical
+        order.
+
+    """
+    return elp.extract_logic_predicates(expression)
+
+
+def stratify(union, datalog_instance):
     """Given an expression block containing `Implication` instances
      and a datalog instance, return the stratification of the formulas
      in the block as a list of lists..
 
     Parameters
     ----------
-    disjunction : Disjunction
-        disjunction of implications to be stratified.
+    union : Union
+        union of implications to be stratified.
 
     datalog_instance : DatalogProgram
         Datalog instance containing the EDB and IDB databases
@@ -249,7 +177,7 @@ def stratify(disjunction, datalog_instance):
     strata = []
     seen = set(k for k in datalog_instance.extensional_database().keys())
     seen |= set(k for k in datalog_instance.builtins())
-    to_process = disjunction.formulas
+    to_process = union.formulas
     stratifiable = True
 
     stratum, new_to_process = stratify_obtain_facts_stratum(to_process, seen)
@@ -332,9 +260,9 @@ def reachable_code(query, datalog):
                 continue
             seen_rules.add(rule)
             reachable_code.append(rule)
-            for predicate in extract_datalog_predicates(rule.antecedent):
+            for predicate in extract_logic_predicates(rule.antecedent):
                 functor = predicate.functor
                 if functor not in reached and functor in idb:
                     to_reach.append(functor)
 
-    return Disjunction(reachable_code[::-1])
+    return Union(reachable_code[::-1])

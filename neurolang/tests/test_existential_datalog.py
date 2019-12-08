@@ -1,19 +1,17 @@
 import pytest
 
-from .. import solver_datalog_extensional_db
-from .. import expression_walker
-from .. import expressions
+from .. import (expression_walker, expressions, logic,
+                solver_datalog_extensional_db)
 from ..exceptions import NeuroLangException
+from ..existential_datalog import (ExistentialDatalog, Implication,
+                                   SolverNonRecursiveExistentialDatalog)
 from ..expressions import ExpressionBlock, Query
-from ..existential_datalog import (
-    ExistentialDatalog, SolverNonRecursiveExistentialDatalog, Implication
-)
-from ..solver_datalog_naive import Fact, UNDEFINED, NULL
+from ..solver_datalog_naive import NULL, UNDEFINED, Fact
 
 C_ = expressions.Constant
 S_ = expressions.Symbol
 F_ = expressions.FunctionApplication
-EP_ = expressions.ExistentialPredicate
+EP_ = logic.ExistentialPredicate
 
 
 class SolverWithoutExistentialResolution(
@@ -69,7 +67,7 @@ def test_existential_statement_added_to_symbol_table():
     assert len(solver.symbol_table['P'].formulas) == 1
     assert isinstance(
         solver.symbol_table['P'].formulas[0].consequent,
-        expressions.ExistentialPredicate
+        logic.ExistentialPredicate
     )
     solver = SolverWithoutExistentialResolution()
     solver.walk(Implication(EP_(x, EP_(y, P(x, y, z))), Q(z)))

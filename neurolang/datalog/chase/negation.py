@@ -1,17 +1,33 @@
 from itertools import chain, tee
 
-from .datalog import Negation
-from .datalog.expression_processing import extract_datalog_predicates
-from .datalog.chase import (ChaseGeneral, ChaseSemiNaive, ChaseMGUMixin,
-                            ChaseRelationalAlgebraPlusCeriMixin)
-from .exceptions import NeuroLangException
-from .expressions import Constant
-from .unification import (apply_substitution_arguments, compose_substitutions,
-                          most_general_unifier_arguments)
-from .utils import OrderedSet
+from ...exceptions import NeuroLangException
+from ...expressions import Constant
+from ...logic.unification import (apply_substitution_arguments,
+                                  compose_substitutions,
+                                  most_general_unifier_arguments)
+from ...utils import OrderedSet
+from .. import Negation
+from ..expression_processing import extract_logic_predicates
+from . import (ChaseGeneral, ChaseMGUMixin,
+               ChaseRelationalAlgebraPlusCeriMixin, ChaseSemiNaive)
 
 
-class DatalogChaseNegationGeneral(ChaseGeneral, ChaseSemiNaive):
+class NegativeFactConstraints:
+    def check_constraints(self, instance_update):
+        super().check_constraints(instance_update)
+        for symbol, args in self.datalog_program.negated_symbols.items():
+            instance_values = [x for x in instance_update[symbol].value]
+            if symbol in instance_update and next(
+                iter(args.value)
+            ) in instance_values:
+                raise NeuroLangException(
+                    f'There is a contradiction in your facts'
+                )
+
+
+class DatalogChaseNegationGeneral(
+    ChaseGeneral, ChaseSemiNaive, NegativeFactConstraints
+):
     def chase_step(self, instance, rule, restriction_instance=None):
         if restriction_instance is None:
             restriction_instance = set()
@@ -103,7 +119,7 @@ class DatalogChaseNegationGeneral(ChaseGeneral, ChaseSemiNaive):
         if restriction_instance is None:
             restriction_instance = set()
 
-        rule_predicates = extract_datalog_predicates(rule.antecedent)
+        rule_predicates = extract_logic_predicates(rule.antecedent)
         restricted_predicates = []
         nonrestricted_predicates = []
         negative_predicates = []
@@ -164,16 +180,6 @@ class DatalogChaseNegationGeneral(ChaseGeneral, ChaseSemiNaive):
                     'Non-linear rule {rule}, solver non supported'
                 )
         return recursive_calls
-
-    def check_constraints(self, instance_update):
-        for symbol, args in self.datalog_program.negated_symbols.items():
-            instance_values = [x for x in instance_update[symbol].value]
-            if symbol in instance_update and next(
-                iter(args.value)
-            ) in instance_values:
-                raise NeuroLangException(
-                    f'There is a contradiction in your facts'
-                )
 
 
 class DatalogChaseNegationRelationalAlgebraMixin(

@@ -5,8 +5,8 @@ Magic Sets [1] rewriting implementation for Datalog.
 '''
 
 from ..expressions import Constant, Symbol
-from . import expression_processing, extract_datalog_predicates
-from .expressions import Disjunction, Implication, Conjunction
+from . import expression_processing, extract_logic_predicates
+from .expressions import Union, Implication, Conjunction
 
 
 class AdornedExpression(Symbol):
@@ -67,7 +67,7 @@ def magic_rewrite(query, datalog):
     modified_rules = create_modified_rules(adorned_code, edb)
     complementary_rules = create_complementary_rules(adorned_code, idb)
 
-    return goal, Disjunction(
+    return goal, Union(
         magic_rules +
         modified_rules +
         complementary_rules
@@ -77,7 +77,7 @@ def magic_rewrite(query, datalog):
 def create_complementary_rules(adorned_code, idb):
     complementary_rules = []
     for i, rule in enumerate(adorned_code.formulas):
-        for predicate in extract_datalog_predicates(rule.antecedent):
+        for predicate in extract_logic_predicates(rule.antecedent):
             if (
                 not (
                     isinstance(predicate.functor, AdornedExpression) and
@@ -102,7 +102,7 @@ def create_magic_rules(adorned_code, idb, edb):
         if len(new_consequent.args) == 0:
             new_consequent = Constant(True)
         antecedent = rule.antecedent
-        predicates = extract_datalog_predicates(antecedent)
+        predicates = extract_logic_predicates(antecedent)
 
         edb_antecedent = create_magic_rules_create_edb_antecedent(
             predicates, edb
@@ -180,7 +180,7 @@ def create_modified_rules(adorned_code, edb):
 
 def obtain_new_antecedent(rule, edb, rule_number):
     new_antecedent = []
-    for predicate in extract_datalog_predicates(rule.antecedent):
+    for predicate in extract_logic_predicates(rule.antecedent):
         functor = predicate.functor
         if (
             isinstance(functor, AdornedExpression) and
@@ -239,7 +239,7 @@ def adorn_code(query, datalog):
 
     Returns
     -------
-    Disjunction
+    Union
 
         adorned code where the query rule is the first expression
         in the block.
@@ -286,7 +286,7 @@ def adorn_code(query, datalog):
             )
             rewritten_rules.add(consequent.functor)
 
-    return Disjunction(rewritten_program)
+    return Union(rewritten_program)
 
 
 def adorn_antecedent(
@@ -301,7 +301,7 @@ def adorn_antecedent(
         if isinstance(arg, Symbol) and ad == 'b'
     }
 
-    predicates = extract_datalog_predicates(antecedent)
+    predicates = extract_logic_predicates(antecedent)
     checked_predicates = {}
     adorned_antecedent = None
 
