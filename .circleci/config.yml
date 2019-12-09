@@ -156,6 +156,6 @@ workflows:
       - benchmark:
           requires:
             - py37
-      - docs:
-          requires:
-            - benchmark
+#      - docs:
+#          requires:
+#            - benchmark
