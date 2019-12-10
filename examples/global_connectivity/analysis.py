@@ -2,6 +2,7 @@ import numpy as np
 import nibabel
 import nilearn.plotting
 import nilearn.datasets
+import nilearn.surface
 
 sensory_motor_labels = {
     # primary visual (Brodmann area 17)
@@ -55,19 +56,21 @@ sensory_motor_pmap = combine_pmaps_exclude_overlapping(pmaps.values())
 
 fsaverage = nilearn.datasets.fetch_surf_fsaverage()
 
-nilearn.plotting.plot_stat_map(sensory_motor_pmap)
+nilearn.plotting.plot_stat_map(sensory_motor_pmap, display_mode="ortho")
 
 # nilearn.plotting.view_img_on_surf(sensory_motor_pmap).open_in_browser()
 
 nilearn.plotting.plot_surf_stat_map(
-    fsaverage["pial_left"],
-    stat_map=sensory_motor_pmap,
+    surf_mesh=fsaverage["pial_left"],
+    stat_map=nilearn.surface.vol_to_surf(
+        sensory_motor_pmap, fsaverage["pial_left"]
+    ),
     hemi="left",
     view="medial",
     colorbar=True,
     bg_map=fsaverage["sulc_left"],
     bg_on_data=True,
-    cmap="Spectral",
-    threshold=0.5,
-    title="Threshold and colormap",
+    cmap=nilearn.plotting.cm.cold_white_hot,
+    # threshold=0.5,
+    title="Sensory-motor cortices",
 )
