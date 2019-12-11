@@ -687,13 +687,12 @@ def infer_pfact_params(pfact_grounding, interpretations):
     symbol found in interpretations.
 
     """
-    interpretations_ra_set = build_interpretations_ra_set(
-        pfact_grounding, interpretations
-    )
+    pred_symb = pfact_grounding.expression.consequent.body.functor
+    interpretation_ra_set = Constant[AbstractSet](interpretations[pred_symb])
     tuple_counts = Aggregation(
         agg_fun=Constant[str]("count"),
         relation=NaturalJoin(
-            pfact_grounding.params_relation, interpretations_ra_set
+            pfact_grounding.params_relation, interpretation_ra_set
         ),
         group_columns=tuple(
             Constant(ColumnStr(arg.name))

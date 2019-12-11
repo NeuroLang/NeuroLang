@@ -21,6 +21,7 @@ from neurosynth.base import imageutils
 from neurosynth import Dataset
 from nilearn import plotting
 import numpy as np
+import pandas as pd
 
 import neurolang as nl
 from neurolang.expressions import Symbol, Constant, ExpressionBlock
@@ -34,6 +35,7 @@ from neurolang.probabilistic.expressions import ProbabilisticPredicate
 from neurolang.probabilistic.probdatalog import ProbDatalogProgram
 from neurolang.probabilistic.probdatalog_gm import (
     full_observability_parameter_estimation,
+    AlgebraSet,
 )
 
 
@@ -51,33 +53,46 @@ def get_dataset():
 
 dataset = get_dataset()
 
-selected_terms = {"cognitive control", "default mode network"}
-selected_voxel_ids = set(list(range(dataset.image_table.data.shape[0])))
-per_term_study_ids = {
-    t: set(dataset.feature_table.get_ids(features=[t], threshold=0.2))
-    for t in selected_terms
-}
-selected_study_ids = list(set.union(*per_term_study_ids.values()))
-selected_study_indices = np.argwhere(
-    np.isin(np.array(dataset.image_table.ids), np.array(selected_study_ids))
-).flatten()
-per_term_study_indices = {
-    term: np.argwhere(
-        np.isin(
-            np.array(selected_study_ids),
-            np.array(list(per_term_study_ids[term])),
-        )
-    ).flatten()
-    for term in selected_terms
-}
-terms_per_study_id = {
-    study_id: {
-        term for term in selected_terms if study_id in per_term_study_ids[term]
-    }
-    for study_id in selected_study_ids
-}
 
-image_data = dataset.image_table.data.todense()
+def study_ids_to_study_indices(study_ids):
+    return np.argwhere(
+        np.isin(np.array(dataset.image_table.ids), np.array(study_ids))
+    ).flatten()
+
+
+selected_terms = np.array(["cognitive control", "default mode"])
+selected_voxel_ids = np.arange(dataset.image_table.data.shape[0])[:1000]
+
+term_study_dfs = []
+for term in selected_terms:
+    study_indices = study_ids_to_study_indices(
+        dataset.feature_table.get_ids(features=[term], threshold=0.05)
+    )
+    term_study_dfs.append(
+        pd.DataFrame(
+            {
+                "term": np.repeat(term, study_indices.shape[0]),
+                "study_id": study_indices,
+            }
+        )
+    )
+term_study_df = pd.concat(term_study_dfs)
+
+activations_df = pd.DataFrame(
+    np.argwhere(
+        dataset.image_table.data[:, term_study_df.study_id.values] > 0
+    ),
+    columns=["voxel_id", "study_id"],
+)
+activations_df["study_id"] = term_study_df.study_id.values[
+    activations_df.study_id.values
+]
+activations_df = activations_df.loc[
+    activations_df.voxel_id.isin(selected_voxel_ids)
+]
+
+big_data_table = term_study_df.merge(activations_df, on="study_id")
+
 
 Activation = Symbol("Activation")
 DoesActivate = Symbol("DoesActivate")
@@ -88,101 +103,25 @@ Term = Symbol("Term")
 v = Symbol("v")
 t = Symbol("t")
 
-term_tuples = frozenset({(Constant[str](term),) for term in selected_terms})
-voxel_tuples = frozenset(
-    {(Constant[int](voxel_id),) for voxel_id in selected_voxel_ids}
-)
-
-
-def study_id_to_idx(study_id):
-    return np.argwhere(
-        np.array(dataset.image_table.ids) == study_id
-    ).flatten()[0]
-
-
-def get_study_reported_voxel_ids(study_id):
-    study_idx = study_id_to_idx(study_id)
-    return (
-        set(np.argwhere(image_data[:, study_idx] > 0).flatten().astype(int))
-        & selected_voxel_ids
-    )
-
-
-def build_interpretation(study_id):
-    terms = terms_per_study_id[study_id]
-    voxel_ids = get_study_reported_voxel_ids(study_id)
-    voxel_term_tuples = set.union(
-        *(
-            [set()]
-            + [
-                {
-                    (Constant[int](voxel_id), Constant[str](term))
-                    for voxel_id in voxel_ids
-                }
-                for term in terms
-            ]
-        )
-    )
-    return SetInstance(
-        {
-            Activation: frozenset(voxel_term_tuples),
-            DoesActivate: frozenset(voxel_term_tuples),
-            TermInStudy: frozenset([(Constant[str](term),) for term in terms]),
-            DoesAppearInStudy: frozenset(
-                [(Constant[str](term),) for term in terms]
-            ),
-            Term: frozenset(term_tuples),
-            Voxel: frozenset(voxel_tuples),
+interpretations = dict()
+interpretations[Activation] = AlgebraSet(
+    columns=["v", "t", "__interpretation_id__"],
+    iterable=big_data_table.rename(
+        columns={
+            "study_id": "__interpretation_id__",
+            "voxel_id": "v",
+            "term": "t",
         }
-    )
-
-
-def build_virtual_interpretations():
-    voxel_term_tuples = set.union(
-        *(
-            [set()]
-            + [
-                {
-                    (Constant[int](voxel_id), Constant[str](term))
-                    for voxel_id in selected_voxel_ids
-                }
-                for term in selected_terms
-            ]
-        )
-    )
-    return [
-        SetInstance(
-            {
-                Activation: frozenset(voxel_term_tuples),
-                DoesActivate: frozenset(voxel_term_tuples),
-                TermInStudy: frozenset(
-                    [(Constant[str](term),) for term in selected_terms]
-                ),
-                DoesAppearInStudy: frozenset(
-                    [(Constant[str](term),) for term in selected_terms]
-                ),
-                Term: frozenset(term_tuples),
-                Voxel: frozenset(voxel_tuples),
-            }
-        ),
-        SetInstance(
-            {
-                Activation: frozenset(),
-                DoesActivate: frozenset(),
-                TermInStudy: frozenset(),
-                DoesAppearInStudy: frozenset(),
-                TermInStudy: frozenset(),
-                DoesAppearInStudy: frozenset(),
-                Term: frozenset(term_tuples),
-                Voxel: frozenset(voxel_tuples),
-            }
-        ),
-    ]
-
-
-class ProbDatalog(ProbDatalogProgram, ExpressionBasicEvaluator):
-    pass
-
+    )[["v", "t", "__interpretation_id__"]],
+)
+interpretations[DoesActivate] = interpretations[Activation]
+interpretations[TermInStudy] = AlgebraSet(
+    columns=["t", "__interpretation_id__"],
+    iterable=big_data_table[["term", "study_id"]]
+    .drop_duplicates()
+    .rename(columns={"term": "t", "study_id": "__interpretation_id__"}),
+)
+interpretations[DoesAppearInStudy] = interpretations[TermInStudy]
 
 term_facts = [Fact(Term(Constant(term))) for term in selected_terms]
 voxel_facts = [Fact(Voxel(Constant(vid))) for vid in selected_voxel_ids]
@@ -217,10 +156,6 @@ probabilistic_database = voxel_term_probfacts + term_probfacts
 program_code = ExpressionBlock(
     extensional_database + intensional_database + probabilistic_database
 )
-
-interpretations = [
-    build_interpretation(study_id) for study_id in selected_study_ids
-]
 
 estimations = full_observability_parameter_estimation(
     program_code, interpretations
