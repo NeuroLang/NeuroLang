@@ -51,18 +51,8 @@ def get_dataset():
 
 dataset = get_dataset()
 
-selected_terms = {"memory", "visual"}
-selected_voxel_ids = {
-    40558,
-    44484,
-    112166,
-    116221,
-    116314,
-    124573,
-    184775,
-    184872,
-    188711,
-}
+selected_terms = {"cognitive control", "default mode network"}
+selected_voxel_ids = set(list(range(dataset.image_table.data.shape[0])))
 per_term_study_ids = {
     t: set(dataset.feature_table.get_ids(features=[t], threshold=0.2))
     for t in selected_terms
@@ -87,7 +77,7 @@ terms_per_study_id = {
     for study_id in selected_study_ids
 }
 
-image_data = dataset.image_table.data
+image_data = dataset.image_table.data.todense()
 
 Activation = Symbol("Activation")
 DoesActivate = Symbol("DoesActivate")
@@ -113,7 +103,7 @@ def study_id_to_idx(study_id):
 def get_study_reported_voxel_ids(study_id):
     study_idx = study_id_to_idx(study_id)
     return (
-        set(np.argwhere(image_data[:, study_idx] > 0).flatten())
+        set(np.argwhere(image_data[:, study_idx] > 0).flatten().astype(int))
         & selected_voxel_ids
     )
 
