@@ -117,7 +117,7 @@ def test_equality_symbols():
 
     expected_result = Selection(
         NaturalJoin(fb_trans, RenameColumn(fb_trans, Constant(ColumnStr('x')),
-                                           Constant(ColumnStr('y')))),
+                                           Constant(ColumnStr('z')))),
         C_(eq)(C_(ColumnStr('z')), C_(ColumnStr('x')))
     )
 

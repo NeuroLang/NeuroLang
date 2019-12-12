@@ -691,8 +691,8 @@ def test_exact_inference_pfact_params():
         )
     )
     pfact_grounding = PfactGrounding(pfact, relation, params_relation)
-    interpretations_ra_set = Constant[AbstractSet](
-        AlgebraSet(
+    interpretations = {
+        P: AlgebraSet(
             iterable=[
                 ("a", "b", 1),
                 ("a", "c", 1),
@@ -705,8 +705,8 @@ def test_exact_inference_pfact_params():
             ],
             columns=("x", "y", "__interpretation_id__"),
         )
-    )
-    estimations = infer_pfact_params(pfact_grounding, interpretations_ra_set)
+    }
+    estimations = infer_pfact_params(pfact_grounding, interpretations)
 
 
 def _assert_relations_almost_equal(r1, r2):
