@@ -43,7 +43,7 @@ GRAMMAR = u"""
               | arguments:argument 'is'  predicate:int_ext_identifier\
                    preposition arguments:argument
               | arguments:argument 'has' arguments:argument\
-                   predicate:int_ext_identifier
+                   [preposition] predicate:int_ext_identifier
               | arguments+:argument 'is' ['a'] predicate:int_ext_identifier
               | negated_predicate
               | comparison

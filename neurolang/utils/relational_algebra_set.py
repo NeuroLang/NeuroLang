@@ -237,6 +237,7 @@ class RelationalAlgebraFrozenSet(Set):
 
 class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
     def __init__(self, columns, iterable=None):
+        self._is_reindexed = False
         self._columns = tuple(columns)
         self._columns_sort = tuple(pd.Index(columns).argsort())
         if iterable is None:
@@ -249,7 +250,6 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
                 list(iterable),
                 columns=self._columns
             )
-            self._container = self._renew_index(self._container)
 
     def _initialize_from_instance_same_class(self, iterable):
         if iterable._container is None:
@@ -279,6 +279,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         return self._columns
 
     def __contains__(self, element):
+        self._container = self._renew_index(self._container)
         if isinstance(element, dict) and len(element) == self.arity:
             element = tuple(element[c] for c in self._container.columns)
         else:
@@ -316,7 +317,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         new_container = self._container.merge(other._container)
 
         output = type(self)(new_columns)
-        output._container = output._renew_index(new_container)
+        output._container = new_container
         return output
 
     def cross_product(self, other):
@@ -342,7 +343,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
             tuple(other._container.columns)
         )
         result = type(self)(new_columns)
-        result._container = self._renew_index(new_container)
+        result._container = new_container
         return result
 
     def rename_column(self, src, dst):
@@ -366,8 +367,12 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         return new_set
 
     def __eq__(self, other):
+        self._container = self._renew_index(self._container)
+        other._container = other._renew_index(other._container)
+
         scontainer = self._container
         ocontainer = other._container
+
         return (
             scontainer.columns.equals(ocontainer.columns) and
             (
@@ -377,6 +382,10 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         )
 
     def _renew_index(self, container, drop_duplicates=True):
+        if container is self._container and self._is_reindexed:
+            return self._container
+        else:
+            self._is_reindexed = True
         container.sort_index(axis=1, inplace=True)
         return super()._renew_index(container, drop_duplicates=True)
 
@@ -391,6 +400,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
             yield g_id, group_set
 
     def __iter__(self):
+        self._container = self._renew_index(self._container)
         container = self._container[list(self.columns)]
         return container.itertuples(index=False, name='tuple')
 
@@ -410,6 +420,8 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
                 'Difference defined only for '
                 'sets with the same columns'
             )
+        self._container = self._renew_index(self._container)
+        other._container = other._renew_index(other._container)
         new_container_ix = self._container.index.difference(
             other._container.index
         )
