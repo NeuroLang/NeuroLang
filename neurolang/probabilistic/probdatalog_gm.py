@@ -507,9 +507,10 @@ class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
                 )
             )
         group_columns = _cols_as_strings(agg_op.group_columns)
-        new_container = relation.value._container.groupby(group_columns).agg(
-            agg_op.agg_fun.value
-        )
+        new_container = getattr(
+            relation.value._container.groupby(group_columns),
+            agg_op.agg_fun.value,
+        )()
         new_container.rename(
             columns={
                 new_container.columns[0]: _get_column_name_from_expression(
@@ -680,7 +681,9 @@ def _iter_parents(parent_marg_probs, parent_groundings):
         yield parent_values, parent_margin_probs
 
 
-def infer_pfact_params(pfact_grounding, interpretations):
+def infer_pfact_params(
+    pfact_grounding, interpretations_dict, n_interpretations
+):
     """
     Compute the estimate of the parameters associated with a specific
     probabilistic fact predicate symbol from the facts with that same predicate
@@ -688,7 +691,18 @@ def infer_pfact_params(pfact_grounding, interpretations):
 
     """
     pred_symb = pfact_grounding.expression.consequent.body.functor
-    interpretation_ra_set = Constant[AbstractSet](interpretations[pred_symb])
+    pred_args = pfact_grounding.expression.consequent.body.args
+    interpretation_ra_set = Constant[AbstractSet](
+        interpretations_dict[pred_symb]
+    )
+    for arg, col in zip(
+        pred_args, [c for c in interpretation_ra_set.value.columns]
+    ):
+        interpretation_ra_set = RenameColumn(
+            interpretation_ra_set,
+            Constant[ColumnStr](ColumnStr(col)),
+            Constant[ColumnStr](ColumnStr(arg.name)),
+        )
     tuple_counts = Aggregation(
         agg_fun=Constant[str]("count"),
         relation=NaturalJoin(
@@ -729,7 +743,7 @@ def infer_pfact_params(pfact_grounding, interpretations):
                     fun_exp=Constant(ColumnStr("__tuple_counts__"))
                     / (
                         Constant(ColumnStr("__substitution_counts__"))
-                        * Constant[float](float(len(interpretations)))
+                        * Constant[float](float(n_interpretations))
                     ),
                     dst_column=Constant(ColumnStr("__probability__")),
                 )
@@ -788,12 +802,18 @@ def build_interpretations_ra_set(grounding, interpretations):
     )
 
 
-def full_observability_parameter_estimation(program_code, interpretations):
+def full_observability_parameter_estimation(
+    program_code, interpretations_dict, n_interpretations
+):
     grounded = ground_probdatalog_program(program_code)
     estimations = []
     for grounding in grounded.expressions:
         if is_probabilistic_fact(grounding.expression):
-            estimations.append(infer_pfact_params(grounding, interpretations))
+            estimations.append(
+                infer_pfact_params(
+                    grounding, interpretations_dict, n_interpretations
+                )
+            )
     result = ExtendedRelationalAlgebraSolver({}).walk(
         Aggregation(
             agg_fun=Constant[str]("mean"),

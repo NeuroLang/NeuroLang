@@ -61,7 +61,7 @@ def study_ids_to_study_indices(study_ids):
 
 
 selected_terms = np.array(["cognitive control", "default mode"])
-selected_voxel_ids = np.arange(dataset.image_table.data.shape[0])[:1000]
+selected_voxel_ids = np.arange(dataset.image_table.data.shape[0])
 
 term_study_dfs = []
 for term in selected_terms:
@@ -103,6 +103,7 @@ Term = Symbol("Term")
 v = Symbol("v")
 t = Symbol("t")
 
+n_interpretations = len(set(big_data_table.study_id))
 interpretations = dict()
 interpretations[Activation] = AlgebraSet(
     columns=["v", "t", "__interpretation_id__"],
@@ -158,7 +159,7 @@ program_code = ExpressionBlock(
 )
 
 estimations = full_observability_parameter_estimation(
-    program_code, interpretations
+    program_code, interpretations, n_interpretations
 )
 
 # grounded = ReplaceSymbolsByConstants(

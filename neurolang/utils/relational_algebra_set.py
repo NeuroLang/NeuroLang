@@ -475,6 +475,10 @@ class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
                 pass
 
     def __ior__(self, other):
+        if self._container is not None:
+            self._container = self._renew_index(self._container)
+        if other._container is not None:
+            other._container = other._renew_index(other._container)
         if len(self) == 0:
             self._container = other._container.copy()
             return self
@@ -488,6 +492,10 @@ class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
             return super().__ior__(other)
 
     def __isub__(self, other):
+        if self._container is not None:
+            self._container = self._renew_index(self._container)
+        if other._container is not None:
+            other._container = other._renew_index(other._container)
         if len(self) == 0:
             return self
         if isinstance(other, RelationalAlgebraSet):
