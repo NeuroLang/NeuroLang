@@ -39,6 +39,7 @@ from .expressions import (
     make_numerical_col_symb,
 )
 from ..utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
+from ..relational_algebra import ColumnStr, RelationalAlgebraSolver, Projection
 
 
 def is_probabilistic_fact(expression):
@@ -60,6 +61,14 @@ def is_existential_probabilistic_fact(expression):
     )
 
 
+class Datalog(TranslateToLogic, DatalogProgram, ExpressionBasicEvaluator):
+    pass
+
+
+class Chase(ChaseNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
+    pass
+
+
 def get_rule_pfact_pred_symbs(rule, pfact_pred_symbs):
     return set(
         p.functor
@@ -79,6 +88,17 @@ def _put_probfacts_in_front(code_block):
         else:
             non_probfacts.append(expression)
     return ExpressionBlock(probfacts + non_probfacts)
+
+
+def _group_probfacts_by_pred_symb(code_block):
+    probfacts = defaultdict(list)
+    non_probfacts = list()
+    for expression in code_block.expressions:
+        if is_probabilistic_fact(expression):
+            probfacts[expression.consequent.body.functor].append(expression)
+        else:
+            non_probfacts.append(expression)
+    return probfacts, non_probfacts
 
 
 def _check_existential_probfact_validity(expression):
@@ -105,6 +125,32 @@ def _get_pfact_var_idxs(pfact):
     return {i for i, arg in enumerate(atom.args) if isinstance(arg, Symbol)}
 
 
+def _const_or_symb_as_python_type(exp):
+    if isinstance(exp, Constant):
+        return exp.value
+    else:
+        return exp.name
+
+
+def _build_pfact_set(pred_symb, pfacts):
+    some_pfact = next(iter(pfacts))
+    cols = [ColumnStr(Symbol.fresh().name)] + [
+        ColumnStr(arg.name) if isinstance(arg, Symbol) else Symbol.fresh().name
+        for arg in some_pfact.consequent.body.args
+    ]
+    iterable = [
+        (_const_or_symb_as_python_type(pf.consequent.probability),)
+        + tuple(
+            _const_or_symb_as_python_type(arg)
+            for arg in pf.consequent.body.args
+        )
+        for pf in pfacts
+    ]
+    return Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(cols, iterable)
+    )
+
+
 class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
     """
     Datalog extended with probabilistic facts semantics from ProbLog.
@@ -116,12 +162,43 @@ class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
     probabilsitic fact and the value is the probabilistic fact itself.
     """
 
+    pfact_pred_symbs_symb = Symbol("__probabilistic_predicate_symbols__")
     typing_symbol = Symbol("__pfacts_typing__")
+
+    @property
+    def pfact_pred_symbs(self):
+        return self.symbol_table.get(
+            self.pfact_pred_symbs_symb, Constant[AbstractSet](set())
+        ).value
+
+    def get_pfact_typing(self, pfact_pred_symb):
+        return self.symbol_table.get(
+            self.typing_symbol, Constant[Mapping](dict())
+        ).value.get(pfact_pred_symb, Constant[Mapping](dict()))
 
     @add_match(ExpressionBlock)
     def program_code(self, code):
-        super().process_expression(_put_probfacts_in_front(code))
+        probfacts, other_expressions = _group_probfacts_by_pred_symb(code)
+        for pred_symb, pfacts in probfacts.items():
+            self._register_probfact_pred_symb(pred_symb)
+            if pred_symb in self.symbol_table:
+                raise NeuroLangException(
+                    "Probabilistic fact predicate symbol already seen"
+                )
+            if len(pfacts) > 1:
+                self.symbol_table[pred_symb] = _build_pfact_set(
+                    pred_symb, pfacts
+                )
+            else:
+                self.walk(list(pfacts)[0])
+        super().process_expression(ExpressionBlock(other_expressions))
         self._check_all_probfacts_variables_have_been_typed()
+
+    def _register_probfact_pred_symb(self, pred_symb):
+        self.protected_keywords.add(self.pfact_pred_symbs_symb.name)
+        self.symbol_table[self.pfact_pred_symbs_symb] = Constant[AbstractSet](
+            self.pfact_pred_symbs | {pred_symb}
+        )
 
     @add_match(
         Implication,
@@ -161,9 +238,8 @@ class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
         processes in knowledge representation", section 5.2.1 Syntax.
 
         """
-        pfact_pred_symbs = set(self.probabilistic_facts())
         for pred_symb in get_rule_pfact_pred_symbs(
-            expression, pfact_pred_symbs
+            expression, self.pfact_pred_symbs
         ):
             typing = _infer_pfact_typing_pred_symbs(pred_symb, expression)
             self._update_pfact_typing(pred_symb, typing)
@@ -183,13 +259,7 @@ class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
         """
         if self.typing_symbol not in self.symbol_table:
             self.symbol_table[self.typing_symbol] = Constant[Mapping](dict())
-        if pfact_pred_symb not in self.symbol_table[self.typing_symbol].value:
-            prev_typing = Constant[Mapping](dict())
-        else:
-            prev_typing = self.symbol_table[self.typing_symbol].value[
-                pfact_pred_symb
-            ]
-        # _check_typing_consistency(prev_typing, typing)
+        prev_typing = self.get_pfact_typing(pfact_pred_symb)
         new_pfact_typing = _combine_typings(prev_typing, typing)
         new_typing = Constant[Mapping](
             {
@@ -218,16 +288,16 @@ class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
         and an exception is raised.
 
         """
-        for pfact_pred_symb, pfact_block in self.probabilistic_facts().items():
-            typing = self.symbol_table[self.typing_symbol].value[
-                pfact_pred_symb
-            ]
+        for pfact_pred_symb, pfacts in self.probabilistic_facts().items():
+            if isinstance(pfacts, Constant[AbstractSet]):
+                continue
+            typing = self.get_pfact_typing(pfact_pred_symb)
             if any(
                 not (
                     var_idx in typing.value
                     and len(typing.value[var_idx].value) == 1
                 )
-                for var_idx in _get_pfact_var_idxs(pfact_block.expressions[0])
+                for var_idx in _get_pfact_var_idxs(pfacts.expressions[0])
             ):
                 raise NeuroLangException(
                     f"Types of variables of probabilistic facts with "
@@ -240,50 +310,11 @@ class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
         return {
             k: v
             for k, v in self.symbol_table.items()
-            if isinstance(v, ExpressionBlock)
-            and any(
-                is_probabilistic_fact(exp)
-                or is_existential_probabilistic_fact(exp)
-                for exp in v.expressions
-            )
+            if k in self.pfact_pred_symbs
         }
 
-    def probabilistic_rules(self):
-        """
-        Rules in the program with at least one atom in their antecedent whose
-        predicate is defined via a probabilistic fact.
-        """
-        pfact_pred_symbs = set(self.probabilistic_facts().keys())
-        prob_rules = defaultdict(set)
-        for rule_union in self.intensional_database().values():
-            for rule in rule_union.formulas:
-                prob_rules.update(
-                    {
-                        symbol: prob_rules[symbol] | {rule}
-                        for symbol in get_rule_pfact_pred_symbs(
-                            rule, pfact_pred_symbs
-                        )
-                    }
-                )
-        return {
-            pred_symb: ExpressionBlock(list(rules))
-            for pred_symb, rules in prob_rules.items()
-        }
-
-    def parametric_probfacts(self):
-        """
-        Probabilistic facts in the program whose probabilities are parameters.
-        """
-        result = dict()
-        for block in self.probabilistic_facts().values():
-            result.update(
-                {
-                    probfact.consequent.probability: probfact
-                    for probfact in block.expressions
-                    if isinstance(probfact.consequent.probability, Symbol)
-                }
-            )
-        return result
+    def extensional_database(self, exclude_predicates=None):
+        return super().extensional_database(self.pfact_pred_symbs)
 
 
 class GDatalogToProbDatalogTranslator(PatternWalker):
@@ -456,62 +487,53 @@ def _infer_pfact_typing_pred_symbs(pfact_pred_symb, rule):
     return typing
 
 
-class RemoveProbabilitiesWalker(ExpressionWalker):
-    def __init__(self, symbol_table):
-        self.symbol_table = symbol_table
-        self.typing_symbol = ProbDatalogProgram.typing_symbol
-
-    @add_match(
-        Implication,
-        lambda exp: is_probabilistic_fact(exp)
-        and is_ground_predicate(exp.consequent.body),
-    )
-    def ground_probabilistic_fact(self, pfact):
-        return Fact(pfact.consequent.body)
-
-    @add_match(
-        Implication,
-        lambda exp: is_existential_probabilistic_fact(exp)
-        and is_ground_predicate(exp.consequent.body.body),
-    )
-    def ground_existential_probabilistic_fact(self, existential_pfact):
-        return Fact(existential_pfact.consequent.body.body)
-
-    @add_match(Implication, is_probabilistic_fact)
-    def notground_probabilist_fact(self, pfact):
-        return self._construct_pfact_intensional_rule(
-            pfact, pfact.consequent.body
-        )
-
-    @add_match(Implication, is_existential_probabilistic_fact)
-    def notground_existential_probabilist_fact(self, existential_pfact):
-        return self._construct_pfact_intensional_rule(
-            existential_pfact, existential_pfact.consequent.body.body
-        )
-
-    def _construct_pfact_intensional_rule(self, pfact, pfact_pred):
-        """
-        Construct an intensional rule from a probabilistic fact that can later
-        be used to obtain the possible groundings of the probabilistic fact.
-
-        Let `p :: P(x_1, ..., x_n)` be a probabilistic fact and let `T_1, ...,
-        T_n` be the relations (predicate symbols) that type the variables `x_1,
-        ..., x_n` (respectively). This method will return the intensional rule
-        `P(x_1, ..., x_n) :- T_1(x_1), ..., T_n(x_n)`.
-
-        """
-        pfact_pred_symb = pfact_pred.functor
-        typing = self.symbol_table[self.typing_symbol].value[pfact_pred_symb]
-        antecedent = conjunct_if_needed(
-            [
-                next(iter(typing.value[Constant[int](var_idx)].value))(
-                    var_symb
+def probdatalog_to_datalog(pd_program):
+    new_symbol_table = dict()
+    for pred_symb in pd_program.symbol_table:
+        value = pd_program.symbol_table[pred_symb]
+        if pred_symb in pd_program.pfact_pred_symbs:
+            if isinstance(value, Constant[AbstractSet]):
+                new_symbol_table[pred_symb] = RelationalAlgebraSolver().walk(
+                    Projection(value, value.value.columns[1:])
                 )
-                for var_idx, var_symb in enumerate(pfact_pred.args)
-                if isinstance(var_symb, Symbol)
-            ]
-        )
-        return Implication(pfact_pred, antecedent)
+            elif isinstance(value, ExpressionBlock):
+                new_symbol_table[pred_symb] = ExpressionBlock(
+                    [
+                        _construct_pfact_intensional_rule(
+                            pfact,
+                            pfact.consequent.body,
+                            pd_program.get_pfact_typing(pred_symb),
+                        )
+                        for pfact in value.expressions
+                    ]
+                )
+            else:
+                raise NeuroLangException("Unhandled pfacts type")
+        else:
+            new_symbol_table[pred_symb] = value
+    return Datalog(new_symbol_table)
+
+
+def _construct_pfact_intensional_rule(pfact, pfact_pred, typing):
+    """
+    Construct an intensional rule from a probabilistic fact that can later
+    be used to obtain the possible groundings of the probabilistic fact.
+
+    Let `p :: P(x_1, ..., x_n)` be a probabilistic fact and let `T_1, ...,
+    T_n` be the relations (predicate symbols) that type the variables `x_1,
+    ..., x_n` (respectively). This method will return the intensional rule
+    `P(x_1, ..., x_n) :- T_1(x_1), ..., T_n(x_n)`.
+
+    """
+    pfact_pred_symb = pfact_pred.functor
+    antecedent = conjunct_if_needed(
+        [
+            next(iter(typing.value[Constant[int](var_idx)].value))(var_symb)
+            for var_idx, var_symb in enumerate(pfact_pred.args)
+            if isinstance(var_symb, Symbol)
+        ]
+    )
+    return Implication(pfact_pred, antecedent)
 
 
 def _construct_fact_variable_predicate(fact):
@@ -666,16 +688,7 @@ def ground_probdatalog_program(pd_code):
                 "Programs with several rules with the same head predicate "
                 "symbol are not currently supported"
             )
-    dl_code = RemoveProbabilitiesWalker(pd_program.symbol_table).walk(pd_code)
-
-    class Datalog(TranslateToLogic, DatalogProgram, ExpressionBasicEvaluator):
-        pass
-
-    class Chase(ChaseNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
-        pass
-
-    dl_program = Datalog()
-    dl_program.walk(dl_code)
+    dl_program = probdatalog_to_datalog(pd_program)
     chase = Chase(dl_program)
     dl_instance = chase.build_chase_solution()
     grounder = ProbDatalogGrounder(symbol_table=dl_instance)

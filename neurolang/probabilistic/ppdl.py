@@ -4,8 +4,14 @@ from typing import Iterable
 from ..datalog.expression_processing import extract_logic_predicates
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionBasicEvaluator
-from ..expressions import (Constant, Expression, ExpressionBlock,
-                           FunctionApplication, NeuroLangException, Symbol)
+from ..expressions import (
+    Constant,
+    Expression,
+    ExpressionBlock,
+    FunctionApplication,
+    NeuroLangException,
+    Symbol,
+)
 from ..logic import Union, ExistentialPredicate, Implication
 from ..solver_datalog_naive import DatalogBasic, is_conjunctive_expression
 
@@ -149,9 +155,7 @@ def can_lead_to_object_uncertainty(gdatalog):
         Whether the program can generate object uncertainty or not.
     """
     for key, value in gdatalog.symbol_table.items():
-        if key not in gdatalog.protected_keywords and isinstance(
-            value, Union
-        ):
+        if key not in gdatalog.protected_keywords and isinstance(value, Union):
             for rule in value.formulas:
                 for (
                     antecedent_predicate,

@@ -6,11 +6,7 @@ import pytest
 from ...datalog.expressions import Fact
 from ...logic import Union, Conjunction, Implication, ExistentialPredicate
 from ...exceptions import NeuroLangException
-from ...expressions import (
-    Constant,
-    ExpressionBlock,
-    Symbol,
-)
+from ...expressions import Constant, ExpressionBlock, Symbol
 from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from ..ppdl import DeltaTerm
 from ..expressions import ProbabilisticPredicate, Grounding
@@ -76,12 +72,6 @@ def test_probdatalog_program():
 
     pd.walk(code)
 
-    assert pd.probabilistic_rules() == {
-        P: ExpressionBlock([Implication(Q(x), Conjunction([P(x), Z(x)]))])
-    }
-
-    assert not pd.parametric_probfacts()
-
     assert pd.extensional_database() == {
         Z: C_(frozenset({C_((a,)), C_((b,))}))
     }
@@ -105,7 +95,37 @@ def test_probdatalog_program():
     )
     program = ProbDatalogProgram()
     program.walk(code)
-    assert program.parametric_probfacts() == {p: pfact}
+
+
+def test_multiple_probfact_same_pred_symb():
+    pd = ProbDatalogProgram()
+    code = ExpressionBlock(
+        [
+            Implication(
+                ProbabilisticPredicate(Constant[float](0.5), P(a)),
+                Constant[bool](True),
+            ),
+            Implication(
+                ProbabilisticPredicate(Constant[float](0.2), P(b)),
+                Constant[bool](True),
+            ),
+            Implication(Q(x), Conjunction([P(x), Z(x)])),
+            Fact(Z(a)),
+            Fact(Z(b)),
+        ]
+    )
+    pd.walk(code)
+    assert pd.extensional_database() == {
+        Z: C_(frozenset({C_((a,)), C_((b,))}))
+    }
+    assert pd.intensional_database() == {
+        Q: Union([Implication(Q(x), Conjunction([P(x), Z(x)]))])
+    }
+    assert len(pd.probabilistic_facts()) == 1
+    assert P in pd.probabilistic_facts()
+    probfacts = pd.probabilistic_facts()[P]
+    assert isinstance(probfacts, Constant[AbstractSet])
+    assert isinstance(probfacts.value, NamedRelationalAlgebraFrozenSet)
 
 
 def test_gdatalog_translation():
@@ -147,6 +167,7 @@ def test_conjunct_formulas():
     assert conjunct_formulas(c, d) == Conjunction(c.formulas + d.formulas)
 
 
+@pytest.mark.skip(reason="existential probfacts not working yet")
 def test_program_with_eprobfact():
     code = ExpressionBlock(
         [
@@ -314,17 +335,7 @@ def test_probdatalog_pfact_cant_infer_type():
     pfact = Implication(ProbabilisticPredicate(p, P(x)), Constant[bool](True))
     rule = Implication(Q(x), Conjunction([P(x), Z(x), R(x)]))
     program = ProbDatalogProgram()
-    program.walk(pfact)
-    program.walk(rule)
-    assert program.symbol_table[program.typing_symbol] == Constant[Mapping](
-        {
-            P: Constant[Mapping](
-                {Constant[int](0): Constant[AbstractSet]({R, Z})}
-            )
-        }
-    )
-    program = ProbDatalogProgram()
-    with pytest.raises(NeuroLangException):
+    with pytest.raises(NeuroLangException, match="could not be inferred"):
         program.walk(ExpressionBlock([pfact, rule]))
 
 

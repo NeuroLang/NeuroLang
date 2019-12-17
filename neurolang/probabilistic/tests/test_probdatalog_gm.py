@@ -706,7 +706,7 @@ def test_exact_inference_pfact_params():
             columns=("x", "y", "__interpretation_id__"),
         )
     }
-    estimations = infer_pfact_params(pfact_grounding, interpretations)
+    estimations = infer_pfact_params(pfact_grounding, interpretations, 3)
 
 
 def _assert_relations_almost_equal(r1, r2):
