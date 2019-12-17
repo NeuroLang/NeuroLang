@@ -18,6 +18,7 @@ from ..probdatalog_gm import (
     SuccQuery,
     QueryGraphicalModelSolver,
     infer_pfact_params,
+    succ_query,
 )
 from ..probdatalog import Grounding, ground_probdatalog_program
 from ...relational_algebra import (
@@ -38,7 +39,6 @@ from ..expressions import (
     MultiplyColumns,
     AddRepeatedValueColumn,
     Aggregation,
-    PfactGrounding,
 )
 
 P = Symbol("P")
@@ -61,7 +61,7 @@ d = Constant[str]("d")
 
 def test_extensional_grounding():
     grounding = Grounding(
-        P(x, y),
+        Implication(P(x, y), Constant[bool](True)),
         Constant[AbstractSet](
             NamedRelationalAlgebraFrozenSet(
                 columns=("x", "y"), iterable={(a, b), (c, d)}
@@ -134,7 +134,7 @@ def test_probabilistic_grounding():
 
 def test_intensional_grounding():
     extensional_grounding = Grounding(
-        T(x),
+        Implication(T(x), Constant[bool](True)),
         Constant[AbstractSet](
             NamedRelationalAlgebraFrozenSet(iterable=[1, 2, 3], columns=["x"])
         ),
@@ -432,11 +432,7 @@ def test_succ_query_simple():
             Implication(Q(x), Conjunction([P(x), T(x)])),
         ]
     )
-    grounded = ground_probdatalog_program(code)
-    gm = TranslateGroundedProbDatalogToGraphicalModel().walk(grounded)
-    query = SuccQuery(Q(x))
-    solver = QueryGraphicalModelSolver(gm)
-    result = solver.walk(query)
+    result = succ_query(code, Q(x))
     _assert_relations_almost_equal(
         result,
         Constant[AbstractSet](
@@ -461,11 +457,7 @@ def test_succ_query_simple_const_in_antecedent():
             Implication(Q(x), Conjunction([P(x), T(x), R(a)])),
         ]
     )
-    grounded = ground_probdatalog_program(code)
-    gm = TranslateGroundedProbDatalogToGraphicalModel().walk(grounded)
-    query = SuccQuery(Q(x))
-    solver = QueryGraphicalModelSolver(gm)
-    result = solver.walk(query)
+    result = succ_query(code, Q(x))
     _assert_relations_almost_equal(
         result,
         Constant[AbstractSet](
@@ -675,12 +667,6 @@ def test_exact_inference_pfact_params():
     )
     relation = Constant[AbstractSet](
         AlgebraSet(
-            iterable=[("a", "b"), ("a", "c"), ("b", "b"), ("b", "c")],
-            columns=("x", "y"),
-        )
-    )
-    params_relation = Constant[AbstractSet](
-        AlgebraSet(
             iterable=[
                 ("a", "b", "p1"),
                 ("a", "c", "p2"),
@@ -690,7 +676,7 @@ def test_exact_inference_pfact_params():
             columns=("x", "y", param_symb.name),
         )
     )
-    pfact_grounding = PfactGrounding(pfact, relation, params_relation)
+    pfact_grounding = Grounding(pfact, relation)
     interpretations = {
         P: AlgebraSet(
             iterable=[

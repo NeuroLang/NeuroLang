@@ -1,6 +1,7 @@
 import itertools
 from typing import Mapping, AbstractSet
 import operator
+from collections import defaultdict
 
 import numpy as np
 import pandas as pd
@@ -31,6 +32,7 @@ from ..utils.relational_algebra_set import (
     RelationalAlgebraFrozenSet,
 )
 from .expressions import (
+    ProbabilisticPredicate,
     GraphicalModel,
     VectorisedTableDistribution,
     ConcatenateColumn,
@@ -43,7 +45,6 @@ from .expressions import (
     AddRepeatedValueColumn,
     MultipleNaturalJoin,
     Grounding,
-    PfactGrounding,
     make_numerical_col_symb,
     Aggregation,
     ExtendedProjection,
@@ -97,6 +98,14 @@ def _build_joint_rule(joint_predicates):
     return Implication(consequent, antecedent)
 
 
+def _is_ground_pfact_grounding(grounding):
+    if not is_probabilistic_fact(grounding.expression):
+        return False
+    n_cols_in_relation = len(grounding.relation.value.columns)
+    n_args_in_exp = len(grounding.expression.consequent.body.args)
+    return n_cols_in_relation == (n_args_in_exp + 1)
+
+
 class AlgebraSet(NamedRelationalAlgebraFrozenSet):
     def __init__(self, columns, iterable=None):
         self._columns = tuple(columns)
@@ -136,16 +145,16 @@ def bernoulli_vect_table_distrib(p, grounding):
 
 
 def multi_bernoulli_vect_table_distrib(grounding):
-    if not isinstance(grounding.params_relation, Constant[AbstractSet]):
+    if not isinstance(grounding.relation, Constant[AbstractSet]):
         raise NeuroLangException(
             "Bernoulli's parameter must be Constant[AbstractSet]"
         )
     return VectorisedTableDistribution(
         Constant[Mapping](
             {
-                Constant[bool](True): grounding.params_relation,
+                Constant[bool](True): grounding.relation,
                 Constant[bool](False): Constant[float](1.0)
-                - grounding.params_relation,
+                - grounding.relation,
             }
         ),
         grounding,
@@ -182,6 +191,46 @@ def and_vect_table_distribution(rule_grounding, parent_groundings):
     return MultiplyColumns(MultipleNaturalJoin(to_join))
 
 
+def _get_grounding_pred_symb(grounding):
+    if isinstance(grounding.expression.consequent, ProbabilisticPredicate):
+        return grounding.expression.consequent.body.functor
+    return grounding.expression.consequent.functor
+
+
+def _get_grounding_dependencies(grounding):
+    predicates = extract_logic_predicates(grounding.expression.antecedent)
+    return set(pred.functor for pred in predicates)
+
+
+def _topological_sort_groundings_util(
+    pred_symb, dependencies, visited, result
+):
+    for dep_symb in dependencies[pred_symb]:
+        if dep_symb not in visited:
+            _topological_sort_groundings_util(
+                dep_symb, dependencies, visited, result
+            )
+    visited.add(pred_symb)
+    result.append(pred_symb)
+
+
+def _topological_sort_groundings(groundings):
+    dependencies = defaultdict(dict)
+    pred_symb_to_grounding = dict()
+    for grounding in groundings:
+        pred_symb = _get_grounding_pred_symb(grounding)
+        pred_symb_to_grounding[pred_symb] = grounding
+        dependencies[pred_symb] = _get_grounding_dependencies(grounding)
+    result = list()
+    visited = set()
+    for grounding in groundings:
+        pred_symb = _get_grounding_pred_symb(grounding)
+        _topological_sort_groundings_util(
+            pred_symb, dependencies, visited, result
+        )
+    return [pred_symb_to_grounding.get(pred_symb) for pred_symb in result]
+
+
 class TranslateGroundedProbDatalogToGraphicalModel(PatternWalker):
     def __init__(self):
         self.edges = dict()
@@ -195,7 +244,7 @@ class TranslateGroundedProbDatalogToGraphicalModel(PatternWalker):
         ),
     )
     def block_of_groundings(self, block):
-        for grounding in block.expressions:
+        for grounding in _topological_sort_groundings(block.expressions):
             self.walk(grounding)
         return GraphicalModel(
             Constant[Mapping](self.edges),
@@ -204,16 +253,20 @@ class TranslateGroundedProbDatalogToGraphicalModel(PatternWalker):
         )
 
     @add_match(
-        Grounding, lambda exp: isinstance(exp.expression, FunctionApplication)
+        Grounding,
+        lambda exp: isinstance(exp.expression, Implication)
+        and isinstance(exp.expression.consequent, FunctionApplication)
+        and isinstance(exp.expression.antecedent, Constant[bool])
+        and exp.expression.antecedent.value == True,
     )
     def extensional_grounding(self, grounding):
-        rv_symb = grounding.expression.functor
+        rv_symb = grounding.expression.consequent.functor
         self._add_grounding(rv_symb, grounding)
         self._add_random_variable(
             rv_symb, extensional_vect_table_distrib(grounding)
         )
 
-    @add_match(PfactGrounding)
+    @add_match(Grounding, _is_ground_pfact_grounding)
     def ground_probfact_grounding(self, grounding):
         rv_symb = grounding.expression.consequent.body.functor
         self._add_grounding(rv_symb, grounding)
@@ -705,9 +758,7 @@ def infer_pfact_params(
         )
     tuple_counts = Aggregation(
         agg_fun=Constant[str]("count"),
-        relation=NaturalJoin(
-            pfact_grounding.params_relation, interpretation_ra_set
-        ),
+        relation=NaturalJoin(pfact_grounding.relation, interpretation_ra_set),
         group_columns=tuple(
             Constant(ColumnStr(arg.name))
             for arg in pfact_grounding.expression.consequent.body.args
@@ -724,7 +775,7 @@ def infer_pfact_params(
     )
     substitution_counts = Aggregation(
         agg_fun=Constant[str]("count"),
-        relation=pfact_grounding.params_relation,
+        relation=pfact_grounding.relation,
         group_columns=(
             Constant(
                 ColumnStr(

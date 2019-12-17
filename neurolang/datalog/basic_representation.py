@@ -196,15 +196,11 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
             )
         }
 
-    def extensional_database(self, exclude_predicates=None):
+    def extensional_database(self):
         ret = self.symbol_table.symbols_by_type(AbstractSet)
         for keyword in self.protected_keywords:
             if keyword in ret:
                 del ret[keyword]
-        if exclude_predicates is not None:
-            for predicate in exclude_predicates:
-                if predicate in ret:
-                    del ret[predicate]
         return ret
 
     def builtins(self):

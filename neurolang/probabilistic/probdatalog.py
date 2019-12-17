@@ -35,11 +35,12 @@ from ..datalog.chase import (
 from .expressions import (
     ProbabilisticPredicate,
     Grounding,
-    PfactGrounding,
     make_numerical_col_symb,
 )
 from ..utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from ..relational_algebra import ColumnStr, RelationalAlgebraSolver, Projection
+from ..typed_symbol_table import TypedSymbolTable
+from ..logic import Union
 
 
 def is_probabilistic_fact(expression):
@@ -164,6 +165,14 @@ class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
 
     pfact_pred_symbs_symb = Symbol("__probabilistic_predicate_symbols__")
     typing_symbol = Symbol("__pfacts_typing__")
+
+    @property
+    def predicate_symbols(self):
+        return (
+            set(self.intensional_database())
+            | set(self.extensional_database())
+            | set(self.pfact_pred_symbs)
+        )
 
     @property
     def pfact_pred_symbs(self):
@@ -313,8 +322,13 @@ class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
             if k in self.pfact_pred_symbs
         }
 
-    def extensional_database(self, exclude_predicates=None):
-        return super().extensional_database(self.pfact_pred_symbs)
+    def extensional_database(self):
+        exclude = self.protected_keywords | self.pfact_pred_symbs
+        ret = self.symbol_table.symbols_by_type(AbstractSet)
+        for keyword in exclude:
+            if keyword in ret:
+                del ret[keyword]
+        return ret
 
 
 class GDatalogToProbDatalogTranslator(PatternWalker):
@@ -487,33 +501,6 @@ def _infer_pfact_typing_pred_symbs(pfact_pred_symb, rule):
     return typing
 
 
-def probdatalog_to_datalog(pd_program):
-    new_symbol_table = dict()
-    for pred_symb in pd_program.symbol_table:
-        value = pd_program.symbol_table[pred_symb]
-        if pred_symb in pd_program.pfact_pred_symbs:
-            if isinstance(value, Constant[AbstractSet]):
-                new_symbol_table[pred_symb] = RelationalAlgebraSolver().walk(
-                    Projection(value, value.value.columns[1:])
-                )
-            elif isinstance(value, ExpressionBlock):
-                new_symbol_table[pred_symb] = ExpressionBlock(
-                    [
-                        _construct_pfact_intensional_rule(
-                            pfact,
-                            pfact.consequent.body,
-                            pd_program.get_pfact_typing(pred_symb),
-                        )
-                        for pfact in value.expressions
-                    ]
-                )
-            else:
-                raise NeuroLangException("Unhandled pfacts type")
-        else:
-            new_symbol_table[pred_symb] = value
-    return Datalog(new_symbol_table)
-
-
 def _construct_pfact_intensional_rule(pfact, pfact_pred, typing):
     """
     Construct an intensional rule from a probabilistic fact that can later
@@ -536,150 +523,112 @@ def _construct_pfact_intensional_rule(pfact, pfact_pred, typing):
     return Implication(pfact_pred, antecedent)
 
 
-def _construct_fact_variable_predicate(fact):
-    new_args = (Symbol.fresh() for arg in fact.consequent.args)
-    return fact.consequent.functor(*new_args)
-
-
-def _construct_pfact_variable_predicate(pfact):
-    new_args = tuple(Symbol.fresh() for arg in pfact.consequent.body.args)
-    return ProbabilisticPredicate(
-        Symbol.fresh(), pfact.consequent.body.functor(*new_args)
-    )
-
-
-def _split_and_group_grounded_pfacts(block):
-    grouped_ground_pfacts = defaultdict(list)
-    other_expressions = list()
-    for exp in block.expressions:
-        if is_probabilistic_fact(exp) and is_ground_predicate(
-            exp.consequent.body
-        ):
-            pred_symb = exp.consequent.body.functor
-            grouped_ground_pfacts[pred_symb].append(exp)
-        else:
-            other_expressions.append(exp)
-    return grouped_ground_pfacts, other_expressions
-
-
-class ProbDatalogGrounder(PatternWalker):
-    def __init__(self, symbol_table):
-        self.symbol_table = symbol_table
-        self.walked_extensional_pred_symbs = set()
-
-    @add_match(ExpressionBlock)
-    def expression_block(self, block):
-        grouped_gpfacts, other_exps = _split_and_group_grounded_pfacts(block)
-        return ExpressionBlock(
-            list(
-                self._construct_ground_pfacts_grounding(group)
-                for group in grouped_gpfacts.values()
-            )
-            + list(
-                itertools.chain(
-                    *[
-                        [self.walk(exp)]
-                        if not isinstance(exp, Fact)
-                        else (
-                            []
-                            if exp.consequent.functor
-                            in self.walked_extensional_pred_symbs
-                            else [self._construct_fact_grounding(exp)]
+def probdatalog_to_datalog(pd_program):
+    new_symbol_table = TypedSymbolTable()
+    for pred_symb in pd_program.symbol_table:
+        value = pd_program.symbol_table[pred_symb]
+        if pred_symb in pd_program.pfact_pred_symbs:
+            if isinstance(value, Constant[AbstractSet]):
+                new_symbol_table[pred_symb] = RelationalAlgebraSolver().walk(
+                    Projection(value, value.value.columns[1:])
+                )
+            elif isinstance(value, ExpressionBlock):
+                new_symbol_table[pred_symb] = Union(
+                    [
+                        _construct_pfact_intensional_rule(
+                            pfact,
+                            pfact.consequent.body,
+                            pd_program.get_pfact_typing(pred_symb),
                         )
-                        for exp in other_exps
+                        for pfact in value.expressions
                     ]
                 )
+            else:
+                raise NeuroLangException("Unhandled pfacts type")
+        else:
+            new_symbol_table[pred_symb] = value
+    return Datalog(new_symbol_table)
+
+
+def build_extensional_grounding(pred_symb, tuple_set):
+    args = tuple(Symbol.fresh() for _ in range(tuple_set.value.arity))
+    cols = tuple(arg.name for arg in args)
+    return Grounding(
+        expression=Implication(pred_symb(*args), Constant[bool](True)),
+        relation=Constant[AbstractSet](
+            NamedRelationalAlgebraFrozenSet(
+                columns=cols, iterable=tuple_set.value
             )
-        )
-
-    @add_match(Implication, is_probabilistic_fact)
-    def probabilistic_fact(self, pfact):
-        return self._construct_grounding(pfact, pfact.consequent.body)
-
-    @add_match(Implication, is_existential_probabilistic_fact)
-    def existential_probabilistic_fact(self, existential_pfact):
-        return self._construct_grounding(
-            existential_pfact, existential_pfact.consequent.body.body
-        )
-
-    @add_match(
-        Implication(FunctionApplication[bool](Symbol, ...), Expression),
-        lambda exp: exp.antecedent != Constant[bool](True),
+        ),
     )
-    def statement_intensional(self, rule):
-        return self._construct_grounding(rule, rule.consequent)
 
-    def _construct_ground_pfacts_grounding(self, pfacts):
-        new_pred = _construct_pfact_variable_predicate(next(iter(pfacts)))
-        iterable = set(
-            tuple(arg.value for arg in pfact.consequent.body.args)
-            for pfact in pfacts
-        )
-        params_iterable = set(
-            tuple(arg.value for arg in pfact.consequent.body.args)
-            + (
-                pfact.consequent.probability.value
-                if isinstance(pfact.consequent.probability, Constant)
-                else pfact.consequent.probability.name,
-            )
-            for pfact in pfacts
-        )
-        relation = Constant[AbstractSet](
+
+def build_rule_grounding(pred_symb, st_item, tuple_set):
+    if isinstance(st_item, Union):
+        st_item = st_item.formulas[0]
+    elif isinstance(st_item, ExpressionBlock):
+        st_item = st_item.expressions[0]
+    if isinstance(st_item.consequent, ProbabilisticPredicate):
+        pred = st_item.consequent.body
+    else:
+        pred = st_item.consequent
+    cols = tuple(arg.name for arg in pred.args)
+    return Grounding(
+        expression=st_item,
+        relation=Constant[AbstractSet](
             NamedRelationalAlgebraFrozenSet(
-                tuple(c.name for c in new_pred.body.args), iterable
+                columns=cols, iterable=tuple_set.value
             )
-        )
-        params_relation = Constant[AbstractSet](
-            NamedRelationalAlgebraFrozenSet(
-                tuple(c.name for c in new_pred.body.args)
-                + (new_pred.probability.name,),
-                params_iterable,
-            )
-        )
-        new_pfact = Implication(new_pred, Constant[bool](True))
-        return PfactGrounding(new_pfact, relation, params_relation)
+        ),
+    )
 
-    def _construct_fact_grounding(self, fact):
-        if fact.consequent.functor not in self.walked_extensional_pred_symbs:
-            self.walked_extensional_pred_symbs.add(fact.consequent.functor)
-            new_pred = _construct_fact_variable_predicate(fact)
-            return self._construct_grounding(new_pred, new_pred)
 
-    def _construct_grounding(self, expression, predicate):
-        return Grounding(
-            expression,
-            Constant[AbstractSet](
-                NamedRelationalAlgebraFrozenSet(
-                    iterable=self.symbol_table[predicate.functor].value,
-                    columns=[
-                        arg.name
-                        if isinstance(arg, Symbol)
-                        else Symbol.fresh().name
-                        for arg in predicate.args
-                    ],
+def build_pfact_grounding_from_set(pred_symb, relation):
+    param_symb = Symbol(relation.value.columns[0])
+    args = tuple(Symbol(col) for col in relation.value.columns[1:])
+    expression = Implication(
+        ProbabilisticPredicate(
+            Symbol(relation.value.columns[0]), pred_symb(*args)
+        ),
+        Constant[bool](True),
+    )
+    return Grounding(expression=expression, relation=relation)
+
+
+def build_grounding(pd_program, dl_instance):
+    extensional_groundings = []
+    probfact_groundings = []
+    intensional_groundings = []
+    for pred_symb in pd_program.predicate_symbols:
+        st_item = pd_program.symbol_table[pred_symb]
+        if pred_symb in pd_program.pfact_pred_symbs:
+            if isinstance(st_item, Constant[AbstractSet]):
+                probfact_groundings.append(
+                    build_pfact_grounding_from_set(pred_symb, st_item)
                 )
-            ),
-        )
+            else:
+                probfact_groundings.append(
+                    build_rule_grounding(
+                        pred_symb, st_item, dl_instance[pred_symb]
+                    )
+                )
+        else:
+            if isinstance(st_item, Constant[AbstractSet]):
+                extensional_groundings.append(
+                    build_extensional_grounding(pred_symb, st_item)
+                )
+            else:
+                intensional_groundings.append(
+                    build_rule_grounding(
+                        pred_symb, st_item, dl_instance[pred_symb]
+                    )
+                )
+    return ExpressionBlock(
+        probfact_groundings + extensional_groundings + intensional_groundings
+    )
 
 
 def ground_probdatalog_program(pd_code):
-    """
-    Ground a Prob(Data)Log program.
-
-    This is a 3 steps process:
-    (1) Create a Datalog program based on the Prob(Data)Log program, such that
-        each probabilistic fact `p :: P(x_1, ..., x_n)` is converted into a
-        rule `P(x_1, ..., x_n) :- T_1(x_1), ..., T_n(x_n)` where `T_i` is the
-        typing predicate symbol (relation) for the variable `x_i`. Note that if
-        `x_i` is a constant there is no variable to type and thus no
-        `T_i(x_i)` in the antecedent of the newly created rule.
-    (2) Solve the Datalog program obtained from (1), thereby obtaining all
-        inferrable intensional ground facts.
-    (3) Use the intensional ground facts obtained from (2) and the initial
-        Prob(Data)Log program to obtain the grounding of all the rules in the
-        program. We then have a grounded Prob(Data)Log program.
-
-    """
     pd_program = ProbDatalogProgram()
     pd_program.walk(pd_code)
     for disjunction in pd_program.intensional_database().values():
@@ -691,6 +640,4 @@ def ground_probdatalog_program(pd_code):
     dl_program = probdatalog_to_datalog(pd_program)
     chase = Chase(dl_program)
     dl_instance = chase.build_chase_solution()
-    grounder = ProbDatalogGrounder(symbol_table=dl_instance)
-    grounding = grounder.walk(pd_code)
-    return grounding
+    return build_grounding(pd_program, dl_instance)

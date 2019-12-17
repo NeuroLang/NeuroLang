@@ -40,12 +40,6 @@ class Grounding(Definition):
         self.relation = relation
 
 
-class PfactGrounding(Grounding):
-    def __init__(self, expression, relation, params_relation):
-        super().__init__(expression, relation)
-        self.params_relation = params_relation
-
-
 class GraphicalModel(Definition):
     def __init__(self, edges, cpds, groundings):
         self.edges = edges

@@ -18,7 +18,6 @@ from ..probdatalog import (
     _check_typing_consistency,
     _infer_pfact_typing_pred_symbs,
     is_probabilistic_fact,
-    RemoveProbabilitiesWalker,
     ground_probdatalog_program,
 )
 
@@ -201,79 +200,6 @@ def test_program_with_eprobfact():
         program.walk(code)
 
 
-def test_remove_probabilities():
-    assert RemoveProbabilitiesWalker({}).walk(
-        Implication(ProbabilisticPredicate(p, P(a)), Constant[bool](True))
-    ) == Fact(P(a))
-    assert RemoveProbabilitiesWalker({}).walk(
-        Implication(
-            ExistentialPredicate(p, ProbabilisticPredicate(p, P(a))),
-            Constant[bool](True),
-        )
-    ) == Fact(P(a))
-    assert RemoveProbabilitiesWalker(
-        {
-            ProbDatalogProgram.typing_symbol: Constant(
-                {
-                    P: Constant[Mapping](
-                        {Constant[int](0): Constant[AbstractSet]({Q})}
-                    )
-                }
-            )
-        }
-    ).walk(
-        Implication(ProbabilisticPredicate(p, P(x)), Constant[bool](True))
-    ) == Implication(
-        P(x), Q(x)
-    )
-    assert RemoveProbabilitiesWalker(
-        {
-            ProbDatalogProgram.typing_symbol: Constant(
-                {
-                    P: Constant[Mapping](
-                        {Constant[int](0): Constant[AbstractSet]({Q})}
-                    )
-                }
-            )
-        }
-    ).walk(
-        Implication(
-            ExistentialPredicate(p, ProbabilisticPredicate(p, P(x))),
-            Constant[bool](True),
-        )
-    ) == Implication(
-        P(x), Q(x)
-    )
-    assert RemoveProbabilitiesWalker(
-        {
-            ProbDatalogProgram.typing_symbol: Constant(
-                {
-                    P: Constant[Mapping](
-                        {
-                            Constant[int](0): Constant[AbstractSet]({Q}),
-                            Constant[int](1): Constant[AbstractSet]({Z}),
-                        }
-                    )
-                }
-            )
-        }
-    ).walk(
-        ExpressionBlock(
-            [
-                Implication(
-                    ProbabilisticPredicate(p, P(x, y)), Constant[bool](True)
-                ),
-                Implication(R(x, y), Conjunction([P(x, y), Q(x), Z(y)])),
-            ]
-        )
-    ) == ExpressionBlock(
-        [
-            Implication(P(x, y), Conjunction([Q(x), Z(y)])),
-            Implication(R(x, y), Conjunction([P(x, y), Q(x), Z(y)])),
-        ]
-    )
-
-
 def test_combine_typings():
     typing_a = Constant[Mapping](
         {Constant[int](0): Constant[AbstractSet]({P, Q})}
@@ -359,28 +285,13 @@ def test_probdatalog_grounding():
     )
     assert expected in grounded.expressions
 
-    pfact = Implication(
-        ExistentialPredicate(p, ProbabilisticPredicate(p, P(x))),
-        Constant[bool](True),
-    )
-    rule = Implication(Z(x), Conjunction([P(x), Q(x)]))
-    code = ExpressionBlock([pfact, rule, Fact(Q(a)), Fact(Q(b))])
-    grounded = ground_probdatalog_program(code)
-    expected = Grounding(
-        pfact,
-        Constant[AbstractSet](
-            NamedRelationalAlgebraFrozenSet(iterable=["a", "b"], columns=["x"])
-        ),
-    )
-    assert expected in grounded.expressions
-
     code = ExpressionBlock(
         [Fact(P(a, b)), Fact(P(b, b)), Fact(Q(a)), Fact(Q(b))]
     )
     grounded = ground_probdatalog_program(code)
     assert len(grounded.expressions) == 2
     for grounding in grounded.expressions:
-        if grounding.expression.functor == P:
+        if grounding.expression.consequent.functor == P:
             assert np.all(
                 np.vstack(list(grounding.relation.value.itervalues()))
                 == np.vstack(
@@ -390,7 +301,7 @@ def test_probdatalog_grounding():
                     ]
                 )
             )
-        elif grounding.expression.functor == Q:
+        elif grounding.expression.consequent.functor == Q:
             assert np.all(
                 np.array(list(grounding.relation.value.itervalues()))
                 == np.array([["a"], ["b"]], dtype=str)
