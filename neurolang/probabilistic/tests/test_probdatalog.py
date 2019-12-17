@@ -124,7 +124,6 @@ def test_multiple_probfact_same_pred_symb():
     assert P in pd.probabilistic_facts()
     probfacts = pd.probabilistic_facts()[P]
     assert isinstance(probfacts, Constant[AbstractSet])
-    assert isinstance(probfacts.value, NamedRelationalAlgebraFrozenSet)
 
 
 def test_gdatalog_translation():

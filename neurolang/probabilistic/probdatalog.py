@@ -32,13 +32,19 @@ from ..datalog.chase import (
     ChaseGeneral,
     ChaseNaive,
 )
+from ..datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from .expressions import (
     ProbabilisticPredicate,
     Grounding,
     make_numerical_col_symb,
 )
 from ..utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
-from ..relational_algebra import ColumnStr, RelationalAlgebraSolver, Projection
+from ..relational_algebra import (
+    ColumnStr,
+    ColumnInt,
+    RelationalAlgebraSolver,
+    Projection,
+)
 from ..typed_symbol_table import TypedSymbolTable
 from ..logic import Union
 
@@ -147,9 +153,7 @@ def _build_pfact_set(pred_symb, pfacts):
         )
         for pf in pfacts
     ]
-    return Constant[AbstractSet](
-        NamedRelationalAlgebraFrozenSet(cols, iterable)
-    )
+    return Constant[AbstractSet](WrappedRelationalAlgebraSet(iterable))
 
 
 class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
@@ -529,10 +533,14 @@ def probdatalog_to_datalog(pd_program):
         value = pd_program.symbol_table[pred_symb]
         if pred_symb in pd_program.pfact_pred_symbs:
             if isinstance(value, Constant[AbstractSet]):
-                new_symbol_table[pred_symb] = RelationalAlgebraSolver().walk(
-                    Projection(value, value.value.columns[1:])
+                columns = tuple(
+                    Constant[ColumnInt](ColumnInt(i))
+                    for i in list(range(value.value.arity))[1:]
                 )
-            elif isinstance(value, ExpressionBlock):
+                new_symbol_table[pred_symb] = RelationalAlgebraSolver().walk(
+                    Projection(value, columns)
+                )
+            else:
                 new_symbol_table[pred_symb] = Union(
                     [
                         _construct_pfact_intensional_rule(
@@ -543,8 +551,6 @@ def probdatalog_to_datalog(pd_program):
                         for pfact in value.expressions
                     ]
                 )
-            else:
-                raise NeuroLangException("Unhandled pfacts type")
         else:
             new_symbol_table[pred_symb] = value
     return Datalog(new_symbol_table)
@@ -584,15 +590,21 @@ def build_rule_grounding(pred_symb, st_item, tuple_set):
 
 
 def build_pfact_grounding_from_set(pred_symb, relation):
-    param_symb = Symbol(relation.value.columns[0])
-    args = tuple(Symbol(col) for col in relation.value.columns[1:])
+    param_symb = Symbol.fresh()
+    args = tuple(Symbol.fresh() for _ in range(relation.value.arity - 1))
     expression = Implication(
-        ProbabilisticPredicate(
-            Symbol(relation.value.columns[0]), pred_symb(*args)
-        ),
+        ProbabilisticPredicate(param_symb, pred_symb(*args)),
         Constant[bool](True),
     )
-    return Grounding(expression=expression, relation=relation)
+    return Grounding(
+        expression=expression,
+        relation=Constant[AbstractSet](
+            NamedRelationalAlgebraFrozenSet(
+                columns=(param_symb.name,) + tuple(arg.name for arg in args),
+                iterable=relation.value,
+            )
+        ),
+    )
 
 
 def build_grounding(pd_program, dl_instance):

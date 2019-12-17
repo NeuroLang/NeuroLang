@@ -210,8 +210,9 @@ def _topological_sort_groundings_util(
             _topological_sort_groundings_util(
                 dep_symb, dependencies, visited, result
             )
+    if pred_symb not in visited:
+        result.append(pred_symb)
     visited.add(pred_symb)
-    result.append(pred_symb)
 
 
 def _topological_sort_groundings(groundings):

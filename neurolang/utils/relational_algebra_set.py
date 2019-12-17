@@ -87,6 +87,10 @@ class RelationalAlgebraFrozenSet(Set):
             new_container,
             drop_duplicates=True
         )
+        output._container.rename(
+            columns={c: i for i, c in enumerate(output._container.columns)},
+            inplace=True,
+        )
         return output
 
     def selection(self, select_criteria):
