@@ -94,10 +94,12 @@ activations_df = activations_df.loc[
 big_data_table = term_study_df.merge(activations_df, on="study_id")
 
 
-Activation = Symbol("Activation")
-DoesActivate = Symbol("DoesActivate")
+CoActivation = Symbol("CoActivation")
+DoesCoActivate = Symbol("DoesCoActivate")
 TermInStudy = Symbol("TermInStudy")
-DoesAppearInStudy = Symbol("DoesAppearInStudy")
+TermDoesAppearInStudy = Symbol("TermDoesAppearInStudy")
+VoxelReported = Symbol("VoxelReported")
+VoxelIsReported = Symbol("VoxelIsReported")
 Voxel = Symbol("Voxel")
 Term = Symbol("Term")
 v = Symbol("v")
@@ -105,7 +107,7 @@ t = Symbol("t")
 
 n_interpretations = len(set(big_data_table.study_id))
 interpretations = dict()
-interpretations[Activation] = AlgebraSet(
+interpretations[CoActivation] = AlgebraSet(
     columns=["v", "t", "__interpretation_id__"],
     iterable=big_data_table.rename(
         columns={
@@ -115,29 +117,40 @@ interpretations[Activation] = AlgebraSet(
         }
     )[["v", "t", "__interpretation_id__"]],
 )
-interpretations[DoesActivate] = interpretations[Activation]
+interpretations[DoesCoActivate] = interpretations[CoActivation]
 interpretations[TermInStudy] = AlgebraSet(
     columns=["t", "__interpretation_id__"],
     iterable=big_data_table[["term", "study_id"]]
     .drop_duplicates()
     .rename(columns={"term": "t", "study_id": "__interpretation_id__"}),
 )
-interpretations[DoesAppearInStudy] = interpretations[TermInStudy]
+interpretations[TermDoesAppearInStudy] = interpretations[TermInStudy]
+interpretations[VoxelReported] = AlgebraSet(
+    columns=["v", "__interpretation_id__"],
+    iterable=big_data_table[["voxel_id", "study_id"]]
+    .drop_duplicates()
+    .rename(columns={"voxel_id": "v", "study_id": "__interpretation_id__"}),
+)
+interpretations[VoxelIsReported] = interpretations[VoxelReported]
 
 term_facts = [Fact(Term(Constant(term))) for term in selected_terms]
 voxel_facts = [Fact(Voxel(Constant(vid))) for vid in selected_voxel_ids]
 extensional_database = term_facts + voxel_facts
 intensional_database = [
     Implication(
-        DoesActivate(v, t), Conjunction([Voxel(v), Term(t), Activation(v, t)])
+        DoesCoActivate(v, t),
+        Conjunction([Voxel(v), Term(t), CoActivation(v, t)]),
     ),
-    Implication(DoesAppearInStudy(t), Conjunction([Term(t), TermInStudy(t)])),
+    Implication(
+        TermDoesAppearInStudy(t), Conjunction([Term(t), TermInStudy(t)])
+    ),
+    Implication(VoxelIsReported(v), Conjunction([Voxel(v), VoxelReported(v)])),
 ]
 voxel_term_probfacts = [
     Implication(
         ProbabilisticPredicate(
             Symbol(f"p_{voxel_id}_{term}"),
-            Activation(Constant(voxel_id), Constant(term)),
+            CoActivation(Constant(voxel_id), Constant(term)),
         ),
         Constant[bool](True),
     )
@@ -152,7 +165,18 @@ term_probfacts = [
     )
     for term in selected_terms
 ]
-probabilistic_database = voxel_term_probfacts + term_probfacts
+voxel_probfacts = [
+    Implication(
+        ProbabilisticPredicate(
+            Symbol(f"p_{voxel_id}"), VoxelReported(Constant(voxel_id))
+        ),
+        Constant[bool](True),
+    )
+    for voxel_id in selected_voxel_ids
+]
+probabilistic_database = (
+    voxel_term_probfacts + term_probfacts + voxel_probfacts
+)
 
 program_code = ExpressionBlock(
     extensional_database + intensional_database + probabilistic_database
