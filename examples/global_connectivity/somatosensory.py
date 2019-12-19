@@ -1,6 +1,7 @@
 import os
 import typing
 
+import scipy
 import pandas as pd
 import numpy as np
 import nibabel
@@ -8,6 +9,8 @@ import nilearn.plotting
 import nilearn.datasets
 import nilearn.surface
 import neurosynth
+import neurosynth.analysis.stats
+
 import neurolang as nl
 import neurolang.regions
 import neurolang.datalog
@@ -110,7 +113,10 @@ def rois_to_atlas(rois):
 
 def plot_roi(roi):
     nilearn.plotting.plot_roi(
-        roi, display_mode="x", cut_coords=np.linspace(-50, 0, 5), cmap="Dark2",
+        roi,
+        display_mode="x",
+        cut_coords=np.linspace(-50, 0, 5),
+        cmap="Paired",
     )
 
 
@@ -225,7 +231,11 @@ def build_vid_to_region_tuple_set():
     unmasked = ns_masker.unmask(voxels)
     ijk = np.argwhere(unmasked > 0)
     regions = [
-        nl.regions.ExplicitVBR([coords], affine_matrix=ns_affine)
+        nl.regions.ExplicitVBR(
+            [coords],
+            affine_matrix=ns_affine,
+            image_dim=ns_base_img.get_data().shape,
+        )
         for coords in ijk
     ]
     return set(
@@ -242,7 +252,7 @@ dl.add_extensional_predicate_from_tuples(
     [
         (row.t, row.v)
         for _, row in ns_query_result[
-            ns_query_result.probability > 0.02
+            ns_query_result.probability > 0.03
         ].iterrows()
     ],
 )
@@ -250,3 +260,169 @@ dl.walk(program_code)
 
 chase = Chase(dl)
 solution = chase.build_chase_solution()
+
+
+def get_region(name):
+    return next(solution[name].value.unwrapped_iter())[0]
+
+
+regions = {
+    name: get_region(name)
+    for name in [
+        "dmn_region",
+        "cognitive_control_region",
+        "sensory_motor_region",
+    ]
+}
+
+
+def region_to_roi(region):
+    image_dim = ns_base_img.get_data().shape
+    new_data = np.zeros(shape=image_dim)
+    img = region.spatial_image()
+    if img.get_data().shape != image_dim:
+        img = region.to_explicit_vbr(ns_affine, image_dim).spatial_image()
+    new_data[img.get_data() > 0] = 1
+    return nibabel.Nifti1Image(new_data.astype(int), ns_affine)
+
+
+def regions_to_atlas(regions):
+    image_dim = ns_base_img.get_data().shape
+    new_data = np.zeros(shape=image_dim)
+    for i, region in enumerate(regions):
+        img = region.spatial_image()
+        if img.get_data().shape != image_dim:
+            img = region.to_explicit_vbr(ns_affine, image_dim).spatial_image()
+        new_data[img.get_data() > 0] = i
+    return nibabel.Nifti1Image(new_data.astype(int), ns_affine)
+
+
+dmn_ns_data = pd.read_hdf(
+    "examples/global_connectivity/neurosynth_association-test_z_FDR_0.01.h5",
+    "default mode",
+)
+cognitive_control_ns_data = pd.read_hdf(
+    "examples/global_connectivity/neurosynth_association-test_z_FDR_0.01.h5",
+    "cognitive control",
+)
+
+atlas = regions_to_atlas(regions.values())
+plot_roi(atlas)
+
+dmn_ns = nibabel.Nifti1Image(
+    ns_masker.unmask(dmn_ns_data.clip(0, np.inf)), ns_affine
+)
+cognitive_control_ns = nibabel.Nifti1Image(
+    ns_masker.unmask(cognitive_control_ns_data.clip(0, np.inf)), ns_affine
+)
+
+dmn_ns_roi = pmap_to_roi(dmn_ns)
+cognitive_control_ns_roi = pmap_to_roi(cognitive_control_ns)
+dmn_ns_region = roi_to_nl_region(dmn_ns_roi)
+cognitive_control_ns_region = roi_to_nl_region(cognitive_control_ns_roi)
+
+atlas = regions_to_atlas(
+    [
+        dmn_ns_region,
+        cognitive_control_ns_region,
+        get_region("sensory_motor_region"),
+    ]
+)
+plot_roi(atlas)
+
+for region in [
+    dmn_ns_region,
+    cognitive_control_ns_region,
+    get_region("sensory_motor_region"),
+]:
+    plot_roi(region_to_roi(region))
+
+
+def p_to_z(p, sign):
+    p = p / 2  # convert to two-tailed
+    # prevent underflow
+    p[p < 1e-240] = 1e-240
+    # Convert to z and assign tail
+    z = np.abs(scipy.stats.norm.ppf(p)) * sign
+    # Set very large z's to max precision
+    z[np.isinf(z)] = scipy.stats.norm.ppf(1e-240) * -1
+    return z
+
+
+itp_co_activation = pd.read_hdf(
+    "examples/global_connectivity/interpretations_co_activation.h5", "content"
+)
+
+itp_term_in_study = pd.read_hdf(
+    "examples/global_connectivity/interpretations_term_in_study.h5", "content"
+)
+
+
+def get_n_selected_active_voxels(term):
+    n_selected_active_voxels = np.zeros(228453)
+    d = (
+        itp_co_activation.loc[itp_co_activation.t == term]
+        .groupby("v")
+        .count()
+        .reset_index()
+    )
+    n_selected_active_voxels[d.v.values] = d.__interpretation_id__.values
+    return n_selected_active_voxels
+
+
+def get_n_unselected_active_voxels(term):
+    n_unselected_active_voxels = np.zeros(228453)
+    d = (
+        itp_co_activation.loc[itp_co_activation.t != term]
+        .groupby("v")
+        .count()
+        .reset_index()
+    )
+    n_selected_active_voxels[d.v.values] = d.__interpretation_id__.values
+    return n_selected_active_voxels
+
+
+def get_pAgF_from_nl_query_result(term):
+    pAgF = np.zeros(228453)
+    d = ns_query_result[ns_query_result.t == term]
+    pAgF[d.v.values] = d.probability.values
+    return pAgF
+
+
+def correct_pmap(term, q=0.05):
+    n_selected = itp_term_in_study.loc[itp_term_in_study.t == term].shape[0]
+    n_unselected = itp_term_in_study.loc[itp_term_in_study.t != term].shape[0]
+    n_selected_active_voxels = get_n_selected_active_voxels(term)
+    n_unselected_active_voxels = get_n_unselected_active_voxels(term)
+    # Two-way chi-square for specificity of activation
+    cells = np.squeeze(
+        np.array(
+            [
+                [n_selected_active_voxels, n_unselected_active_voxels],
+                [
+                    n_selected - n_selected_active_voxels,
+                    n_unselected - n_unselected_active_voxels,
+                ],
+            ]
+        ).T
+    )
+    p_vals = neurosynth.analysis.stats.two_way(cells)
+    p_vals[p_vals < 1e-240] = 1e-240
+    # pAgF = n_selected_active_voxels * 1.0 / n_selected
+    pAgF = get_pAgF_from_nl_query_result(term)
+    pAgU = n_unselected_active_voxels * 1.0 / n_unselected
+    z_sign = np.sign(pAgF - pAgU).ravel()
+    pFgA_z = p_to_z(p_vals, z_sign)
+    fdr_thresh = neurosynth.analysis.stats.fdr(p_vals, q)
+    pFgA_z_FDR = neurosynth.imageutils.threshold_img(
+        pFgA_z, fdr_thresh, p_vals, mask_out="above"
+    )
+    return pFgA_z_FDR
+
+
+corrected_dmn = correct_pmap("default mode")
+roi = corrected_dmn.clip(0, np.inf) / corrected_dmn.max()
+roi[roi > 0] = 1
+nilearn.plotting.plot_roi(
+    nibabel.Nifti1Image(ns_masker.unmask(roi), ns_affine)
+)

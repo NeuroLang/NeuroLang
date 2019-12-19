@@ -193,16 +193,32 @@ estimations = full_observability_parameter_estimation(
 # }
 # ).walk(program_code)
 
-# # compare estimations with neurosynth's meta analysis
-# results = dict()
-# for term in selected_terms:
-# ma = ns.meta.MetaAnalysis(
-# dataset,
-# list(per_term_study_ids[term]),
-# list(set(selected_study_ids) - set(per_term_study_ids[term])),
-# )
-# assert set(ma.selected_ids) == set(per_term_study_ids[term])
-# results[term] = ma.images["pAgF"]
+
+per_term_study_ids = {
+    t: set(dataset.feature_table.get_ids(features=[t], threshold=0.05))
+    for t in selected_terms
+}
+
+selected_study_ids = list(set.union(*per_term_study_ids.values()))
+
+
+# compare estimations with neurosynth's meta analysis
+results = dict()
+for term in selected_terms:
+    ma = ns.meta.MetaAnalysis(
+        dataset,
+        list(per_term_study_ids[term]),
+        # list(set(selected_study_ids) - set(per_term_study_ids[term])),
+    )
+    # assert set(ma.selected_ids) == set(per_term_study_ids[term])
+    results[term] = ma.images["association-test_z_FDR_0.01"]
+
+store_path = (
+    "examples/global_connectivity/neurosynth_association-test_z_FDR_0.01.h5"
+)
+with pd.HDFStore(store_path, 'w') as s:
+    for term in selected_terms:
+        s[term] = pd.DataFrame({'value': results[term]})
 
 # for term in selected_terms:
 # for voxel_id in selected_voxel_ids:

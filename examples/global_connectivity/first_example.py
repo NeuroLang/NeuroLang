@@ -24,6 +24,9 @@ from neurolang.probabilistic.probdatalog_gm import (
     full_observability_parameter_estimation,
     AlgebraSet,
     succ_query,
+    ExtendedRelationalAlgebraSolver,
+    DivideColumns,
+    NaturalJoin,
 )
 
 estimations = pd.read_hdf(
@@ -35,7 +38,7 @@ estimations = dict(
 )
 
 selected_terms = np.array(["cognitive control", "default mode"])
-selected_voxel_ids = np.arange(228452)
+selected_voxel_ids = np.arange(228453)
 
 CoActivation = Symbol("CoActivation")
 DoesCoActivate = Symbol("DoesCoActivate")
@@ -100,7 +103,7 @@ program_code = ExpressionBlock(
 )
 
 succ1 = succ_query(program_code, CoActivation(v, t))
-succ2 = succ_query(program_code, TermInStudy(t))
+succ2 = succ_query(program_code, VoxelReported(v))
 
 succ1_prob_col = next(c for c in succ1.value.columns if c.startswith("fresh"))
 succ2_prob_col = next(c for c in succ2.value.columns if c.startswith("fresh"))
@@ -108,11 +111,11 @@ succ2_prob_col = next(c for c in succ2.value.columns if c.startswith("fresh"))
 result = ExtendedRelationalAlgebraSolver({}).walk(
     DivideColumns(
         NaturalJoin(succ1, succ2),
-        Constant(succ_1_prob_col),
+        Constant(succ1_prob_col),
         Constant(succ2_prob_col),
     )
 )
 
-result.value._containter.to_hdf(
-    "examples/global_connectivity/neurosynth_forward_maps.h5"
+result.value._container.to_hdf(
+    "examples/global_connectivity/estimated_pFgA.h5", 'estimation'
 )
