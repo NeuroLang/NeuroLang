@@ -17,8 +17,10 @@ GRAMMAR = u"""
     expressions = ( newline ).{ expression };
 
 
-    probabilistic_expression = (number | int_ext_identifier ) '::' expression ;
-    expression = ['or'] @:rule | constraint | fact;
+    probabilistic_expression = (number | int_ext_identifier ) '::' expression
+                             | 'with' 'probability'\
+                               (number | int_ext_identifier ) expression ;
+    expression = ['or'] @:rule | constraint | fact ;
     fact = constant_predicate ;
     rule = head implication body ;
     constraint = body right_implication head ;

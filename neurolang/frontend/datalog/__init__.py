@@ -5,6 +5,8 @@ import tatsu
 from ...datalog import Conjunction, Fact, Implication, Negation, Union
 from ...datalog.aggregation import AggregationApplication
 from ...expressions import Constant, Expression, Symbol, FunctionApplication
+from ...probabilistic.expressions import ProbabilisticPredicate
+
 
 GRAMMAR = u"""
     @@grammar::Datalog
@@ -125,6 +127,16 @@ class DatalogSemantics:
         if isinstance(ast, Expression):
             ast = (ast,)
         return Union(ast)
+
+    def probabilistic_expression(self, ast):
+        probability = ast[0]
+        expression = ast[2]
+
+        if isinstance(Expression, Implication):
+            return Implication(
+                ProbabilisticPredicate(probability, expression.consequent),
+                expression.antecedent
+            )
 
     def fact(self, ast):
         return Fact(ast)
