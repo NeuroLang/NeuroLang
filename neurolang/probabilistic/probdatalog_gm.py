@@ -674,8 +674,8 @@ def _apply_arithmetic_column_op(relation, numpy_op):
 def _divide_columns(relation, numerator_col, denominator_col):
     new_col = make_numerical_col_symb()
     new_col_vals = (
-        relation.value._container[numerator_col.name].values
-        / relation.value._container[denominator_col.name].values
+        relation.value._container[numerator_col.value].values
+        / relation.value._container[denominator_col.value].values
     )
     non_num_cols = _split_numerical_cols(relation)[0]
     new_cols = non_num_cols + [new_col.name]
