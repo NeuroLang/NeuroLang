@@ -1,4 +1,5 @@
 import os
+import typing
 
 import pandas as pd
 import numpy as np
@@ -7,17 +8,48 @@ import nilearn.plotting
 import nilearn.datasets
 import nilearn.surface
 import neurosynth
+import neurolang as nl
+import neurolang.regions
+import neurolang.datalog
+import neurolang.datalog.chase
+
+
+class Datalog(
+    nl.logic.expression_processing.TranslateToLogic,
+    nl.datalog.aggregation.DatalogWithAggregationMixin,
+    nl.datalog.DatalogProgram,
+    nl.ExpressionBasicEvaluator,
+):
+    def function_region_union(
+        region_set: typing.AbstractSet[nl.regions.Region],
+    ) -> nl.regions.Region:
+        return nl.regions.region_union(region_set)
+
+
+class Chase(
+    nl.datalog.aggregation.Chase,
+    nl.datalog.chase.ChaseGeneral,
+):
+    pass
+
 
 primary_visual_labels = {"visual_V1"}
 primary_auditory_labels = {"PAC_TE10", "PAC_TE11", "PAC_TE12"}
 primary_motor_labels = {"PMC_4p", "PMC_4a"}
-primary_somatosensory_labels = {"PSC_1", "PSC_2", "PSC_3a", "PSC_3b"}
+somatosensory_labels = {"PSC_1", "PSC_2", "PSC_3a", "PSC_3b"}
 sensory_motor_labels = (
     primary_visual_labels
     | primary_auditory_labels
     | primary_motor_labels
-    | primary_somatosensory_labels
+    | somatosensory_labels
 )
+
+ns_base_img = nibabel.load(
+    os.path.join(
+        neurosynth.__path__[0], "resources/MNI152_T1_2mm_brain.nii.gz",
+    )
+)
+ns_affine = ns_base_img.affine
 
 
 def load_sensory_motor_pmaps(path):
@@ -82,19 +114,74 @@ primary_auditory_pmap = combine_pmaps_max(
 primary_motor_pmap = combine_pmaps_max(
     [pmaps[label] for label in primary_motor_labels]
 )
-primary_somatosensory_pmap = combine_pmaps_max(
-    [pmaps[label] for label in primary_somatosensory_labels]
+somatosensory_pmap = combine_pmaps_max(
+    [pmaps[label] for label in somatosensory_labels]
 )
 primary_visual_roi = pmap_to_roi(primary_visual_pmap)
 primary_auditory_roi = pmap_to_roi(primary_auditory_pmap)
 primary_motor_roi = pmap_to_roi(primary_motor_pmap)
-primary_somatosensory_roi = pmap_to_roi(primary_somatosensory_pmap)
+somatosensory_roi = pmap_to_roi(somatosensory_pmap)
+
+v = nl.Symbol("v")
+PrimaryVisual = nl.Symbol("PrimaryVisual")
+PrimaryAuditory = nl.Symbol("PrimaryAuditory")
+PrimaryMotor = nl.Symbol("PrimaryMotor")
+Somatosensory = nl.Symbol("Somatosensory")
+
+
+def roi_to_nl_region(roi):
+    r = nl.regions.ExplicitVBR(
+        voxels=np.argwhere(roi.get_data() > 0),
+        affine_matrix=roi.affine,
+        image_dim=roi.get_data().shape,
+    )
+    r = nl.regions.ExplicitVBR(
+        voxels=r.to_ijk(ns_affine),
+        affine_matrix=ns_affine,
+        image_dim=ns_base_img.get_data().shape,
+    )
+    return r
+
+
+region_rois = dict(
+    primary_visual=roi_to_nl_region(primary_visual_roi),
+    primary_auditory=roi_to_nl_region(primary_auditory_roi),
+    primary_motor=roi_to_nl_region(primary_motor_roi),
+    somatosensory=roi_to_nl_region(somatosensory_roi),
+)
+
+facts = [
+    nl.datalog.Fact(
+        nl.Symbol("region_roi")(
+            nl.Constant[str](region_name),
+            nl.Constant[nl.regions.ExplicitVBR](region),
+        )
+    )
+    for region_name, region in region_rois.items()
+]
+rules = [
+    nl.logic.Implication(
+        nl.Symbol("sensory_motor_roi")(nl.Symbol("r")),
+        nl.Symbol("region_union")(
+            nl.Constant[typing.AbstractSet](set(region_rois.values()))
+        ),
+    )
+]
+
+
+program_code = nl.expressions.ExpressionBlock(facts + rules)
+dl = Datalog()
+dl.walk(program_code)
+chase = Chase(dl)
+solution = chase.build_chase_solution()
+
+
 sensory_motor_pmap = combine_pmaps_max(
     [
         primary_visual_pmap,
         primary_auditory_pmap,
         primary_motor_pmap,
-        primary_somatosensory_pmap,
+        somatosensory_pmap,
     ]
 )
 sensory_motor_roi = pmap_to_roi(sensory_motor_pmap)
@@ -103,7 +190,7 @@ sensory_motor_atlas = rois_to_atlas(
         primary_visual_roi,
         primary_auditory_roi,
         primary_motor_roi,
-        primary_somatosensory_roi,
+        somatosensory_roi,
     ]
 )
 
@@ -115,6 +202,7 @@ def plot_roi(roi):
     nilearn.plotting.plot_roi(
         roi, display_mode="x", cut_coords=np.linspace(-50, 0, 5), cmap="Dark2",
     )
+
 
 plot_roi(sensory_motor_atlas)
 
@@ -153,7 +241,6 @@ cognitive_control_pmap = build_forward_map("cognitive control")
 dmn_roi = neurosynth_forward_map_to_roi(dmn_pmap)
 cognitive_control_roi = neurosynth_forward_map_to_roi(cognitive_control_pmap)
 
-
 template = nilearn.datasets.load_mni152_template()
 resampled_sensory_motor_roi = nilearn.image.resample_to_img(
     sensory_motor_roi, template
@@ -162,7 +249,6 @@ atlas = rois_to_atlas(
     [dmn_roi, cognitive_control_roi, resampled_sensory_motor_roi]
 )
 plot_roi(atlas)
-
 
 # nilearn.plotting.plot_surf_roi(
 # surf_mesh=fsaverage["infl_left"],
