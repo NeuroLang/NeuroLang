@@ -20,6 +20,7 @@ class Datalog(
     nl.datalog.DatalogProgram,
     nl.ExpressionBasicEvaluator,
 ):
+    @staticmethod
     def function_region_union(
         region_set: typing.AbstractSet[nl.regions.Region],
     ) -> nl.regions.Region:
@@ -27,8 +28,7 @@ class Datalog(
 
 
 class Chase(
-    nl.datalog.aggregation.Chase,
-    nl.datalog.chase.ChaseGeneral,
+    nl.datalog.aggregation.Chase, nl.datalog.chase.ChaseGeneral,
 ):
     pass
 
@@ -50,6 +50,7 @@ ns_base_img = nibabel.load(
     )
 )
 ns_affine = ns_base_img.affine
+fsaverage = nilearn.datasets.fetch_surf_fsaverage()
 
 
 def load_sensory_motor_pmaps(path):
@@ -102,6 +103,12 @@ def rois_to_atlas(rois):
     return nibabel.Nifti1Image(new_data, affine)
 
 
+def plot_roi(roi):
+    nilearn.plotting.plot_roi(
+        roi, display_mode="x", cut_coords=np.linspace(-50, 0, 5), cmap="Dark2",
+    )
+
+
 pmaps = load_sensory_motor_pmaps(
     "examples/global_connectivity/dset_mni+tlrc.BRIK"
 )
@@ -150,63 +157,9 @@ region_rois = dict(
     somatosensory=roi_to_nl_region(somatosensory_roi),
 )
 
-facts = [
-    nl.datalog.Fact(
-        nl.Symbol("region_roi")(
-            nl.Constant[str](region_name),
-            nl.Constant[nl.regions.ExplicitVBR](region),
-        )
-    )
-    for region_name, region in region_rois.items()
-]
-rules = [
-    nl.logic.Implication(
-        nl.Symbol("sensory_motor_roi")(nl.Symbol("r")),
-        nl.Symbol("region_union")(
-            nl.Constant[typing.AbstractSet](set(region_rois.values()))
-        ),
-    )
-]
 
 
-program_code = nl.expressions.ExpressionBlock(facts + rules)
-dl = Datalog()
-dl.walk(program_code)
-chase = Chase(dl)
-solution = chase.build_chase_solution()
-
-
-sensory_motor_pmap = combine_pmaps_max(
-    [
-        primary_visual_pmap,
-        primary_auditory_pmap,
-        primary_motor_pmap,
-        somatosensory_pmap,
-    ]
-)
-sensory_motor_roi = pmap_to_roi(sensory_motor_pmap)
-sensory_motor_atlas = rois_to_atlas(
-    [
-        primary_visual_roi,
-        primary_auditory_roi,
-        primary_motor_roi,
-        somatosensory_roi,
-    ]
-)
-
-
-fsaverage = nilearn.datasets.fetch_surf_fsaverage()
-
-
-def plot_roi(roi):
-    nilearn.plotting.plot_roi(
-        roi, display_mode="x", cut_coords=np.linspace(-50, 0, 5), cmap="Dark2",
-    )
-
-
-plot_roi(sensory_motor_atlas)
-
-forward_maps = pd.read_hdf(
+neurosynth_query_result = pd.read_hdf(
     "examples/global_connectivity/neurosynth_forward_maps.h5", "forward_maps"
 )
 
@@ -263,3 +216,35 @@ plot_roi(atlas)
 # cmap=nilearn.plotting.cm.cold_white_hot,
 # title="Sensory-motor cortices",
 # )
+
+neurosynth_dmn_region = nl.regions.ExplicitVBR(
+    np.argwhere(dmn_roi.get_data() > 0)
+)
+
+facts = [
+    nl.datalog.Fact(
+        nl.Symbol("sensory_motor_region")(
+            nl.Constant[nl.regions.ExplicitVBR](region),
+        )
+    )
+    for region_name, region in region_rois.items()
+]
+rules = [
+    nl.logic.Implication(
+        nl.Symbol("sensory_motor")(
+            nl.datalog.aggregation.AggregationApplication(
+                nl.Symbol("region_union"), (nl.Symbol("r"),)
+            )
+        ),
+        nl.Symbol("sensory_motor_region")(nl.Symbol("r")),
+    )
+]
+
+
+program_code = nl.expressions.ExpressionBlock(facts + rules)
+dl = Datalog()
+dl.walk(program_code)
+chase = Chase(dl)
+solution = chase.build_chase_solution()
+
+next(solution["sensory_motor"].value.unwrapped_iter())[0]
