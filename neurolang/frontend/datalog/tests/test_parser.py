@@ -2,26 +2,27 @@ from operator import add, eq, mul, pow, sub, truediv
 
 from ....datalog import Conjunction, Fact, Implication, Negation, Union
 from ....datalog.aggregation import AggregationApplication
+from ....probabilistic.expressions import ProbabilisticPredicate
 from ....expressions import Constant, Symbol
 from .. import ExternalSymbol, parser
 
 
 def test_facts():
     res = parser('A(3)')
-    assert res == Union((Fact(Symbol('A')(Constant(3.))),))
+    assert res == Union((Fact(Symbol('A')(Constant(3))),))
 
     res = parser('A("x")')
     assert res == Union((Fact(Symbol('A')(Constant('x'))),))
 
     res = parser("A('x', 3)")
-    assert res == Union((Fact(Symbol('A')(Constant('x'), Constant(3.))),))
+    assert res == Union((Fact(Symbol('A')(Constant('x'), Constant(3))),))
 
     res = parser(
         'A("x", 3)\n'
         'ans():-A(x, y)'
     )
     assert res == Union((
-        Fact(Symbol('A')(Constant('x'), Constant(3.))),
+        Fact(Symbol('A')(Constant('x'), Constant(3))),
         Implication(
             Symbol('ans')(),
             Conjunction((
@@ -61,7 +62,7 @@ def test_rules():
         Implication(
             A(x),
             Conjunction((
-                B(x, y), C(Constant(3), z), Constant(eq)(z, Constant(4.))
+                B(x, y), C(Constant(3), z), Constant(eq)(z, Constant(4))
             ))
         ),
     ))
@@ -74,10 +75,10 @@ def test_rules():
                 B(
                     Constant(add)(
                         x,
-                        Constant(mul)(Constant(5.), Constant(2.))),
+                        Constant(mul)(Constant(5), Constant(2))),
                     y
                 ),
-                C(Constant(3), z), Constant(eq)(z, Constant(4.))
+                C(Constant(3), z), Constant(eq)(z, Constant(4))
             ))
         ),
     ))
@@ -88,10 +89,10 @@ def test_rules():
             A(x),
             Conjunction((
                 B(
-                    Constant(truediv)(x, Constant(2.)),
+                    Constant(truediv)(x, Constant(2)),
                     y
                 ),
-                C(Constant(3), z), Constant(eq)(z, Constant(4.))
+                C(Constant(3), z), Constant(eq)(z, Constant(4))
             ))
         ),
     ))
@@ -102,7 +103,7 @@ def test_rules():
             A(x),
             Conjunction((
                 B(f(x), y),
-                C(Constant(3), z), Constant(eq)(z, Constant(4.))
+                C(Constant(3), z), Constant(eq)(z, Constant(4))
             ))
         ),
     ))
@@ -113,7 +114,7 @@ def test_rules():
             A(x),
             Conjunction((
                 B(
-                    Constant(add)(x, Constant(-5.)),
+                    Constant(add)(x, Constant(-5)),
                     Constant("a")
                 ),
             ))
@@ -128,9 +129,9 @@ def test_rules():
                 B(
                     Constant(sub)(
                         x,
-                        Constant(mul)(Constant(5.), Constant(2.))
+                        Constant(mul)(Constant(5), Constant(2))
                     ),
-                    Constant(pow)(ExternalSymbol('y'), Constant(-2.))
+                    Constant(pow)(ExternalSymbol('y'), Constant(-2))
                 ),
             ))
         ),
@@ -148,5 +149,31 @@ def test_aggregation():
         Implication(
             A(x, AggregationApplication(f, (y,))),
             Conjunction((B(x, y),))
+        ),
+    ))
+
+
+def test_probabilistic_fact():
+    A = Symbol('A')
+    B = Symbol('B')
+    p = Symbol('p')
+    x = Symbol('x')
+    y = Symbol('y')
+    res = parser('p::A(3)')
+    assert res == Union((
+        Implication(
+            ProbabilisticPredicate(p, A(Constant(3.))),
+            Constant(True)
+        ),
+    ))
+
+    res = parser('0.8::A("a", 3)')
+    assert res == Union((
+        Implication(
+            ProbabilisticPredicate(
+                Constant(0.8),
+                A(Constant("a"), Constant(3.))
+            ),
+            Constant(True)
         ),
     ))

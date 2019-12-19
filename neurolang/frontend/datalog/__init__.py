@@ -16,10 +16,10 @@ GRAMMAR = u"""
 
     start = expressions $ ;
 
-    expressions = ( newline ).{ expression };
+    expressions = ( newline ).{ probabilistic_expression | expression };
 
 
-    probabilistic_expression = (number | int_ext_identifier ) '::' expression ;
+    probabilistic_expression = (float | int_ext_identifier ) '::' expression ;
     expression = rule | constraint | fact;
     fact = constant_predicate ;
     rule = head implication body ;
@@ -76,7 +76,10 @@ GRAMMAR = u"""
     text = '"' /[a-zA-Z0-9]*/ '"'
           | "'" /[a-zA-Z0-9]*/ "'" ;
 
-    number = [ '+' | '-' ] /[0-9]+/ ;
+    number = integer | float ;
+    integer = [ '+' | '-' ] /[0-9]+/ ;
+    float = /[0-9]*/'.'/[0-9]+/
+          | /[0-9]+/'.'/[0-9]*/ ;
     logical_constant = TRUE | FALSE ;
     TRUE = 'True' | '\u22A4' ;
     FALSE = 'False' | '\u22A5' ;
@@ -132,11 +135,13 @@ class DatalogSemantics:
         probability = ast[0]
         expression = ast[2]
 
-        if isinstance(Expression, Implication):
+        if isinstance(expression, Implication):
             return Implication(
                 ProbabilisticPredicate(probability, expression.consequent),
                 expression.antecedent
             )
+        else:
+            raise ValueError("Invalid rule")
 
     def fact(self, ast):
         return Fact(ast)
@@ -232,7 +237,10 @@ class DatalogSemantics:
     def text(self, ast):
         return Constant(ast[1])
 
-    def number(self, ast):
+    def integer(self, ast):
+        return Constant(int("".join(ast)))
+
+    def float(self, ast):
         return Constant(float("".join(ast)))
 
     def _default(self, ast):

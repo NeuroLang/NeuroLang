@@ -182,7 +182,7 @@ def test_nl_rules():
 
     res = parser('''
         x has y legs if x is a cat & y == 4
-        or x has y legs if x is a bird and y == 2
+        or x has y leg if x is a bird and y == 2
     ''')
     assert res == Union((
         Implication(
