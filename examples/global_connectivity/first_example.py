@@ -23,7 +23,7 @@ from neurolang.probabilistic.probdatalog import ProbDatalogProgram
 from neurolang.probabilistic.probdatalog_gm import (
     full_observability_parameter_estimation,
     AlgebraSet,
-    succ_query
+    succ_query,
 )
 
 estimations = pd.read_hdf(
@@ -64,7 +64,7 @@ intensional_database = [
 voxel_term_probfacts = [
     Implication(
         ProbabilisticPredicate(
-            Constant[float](estimations.get(f"p_{voxel_id}_{term}", 0.)),
+            Constant[float](estimations.get(f"p_{voxel_id}_{term}", 0.0)),
             CoActivation(Constant(voxel_id), Constant(term)),
         ),
         Constant[bool](True),
@@ -74,7 +74,7 @@ voxel_term_probfacts = [
 term_probfacts = [
     Implication(
         ProbabilisticPredicate(
-            Constant[float](estimations.get(f"p_{term}", 0.)),
+            Constant[float](estimations.get(f"p_{term}", 0.0)),
             TermInStudy(Constant(term)),
         ),
         Constant[bool](True),
@@ -84,7 +84,7 @@ term_probfacts = [
 voxel_probfacts = [
     Implication(
         ProbabilisticPredicate(
-            Constant[float](estimations.get(f"p_{voxel_id}", 0.)),
+            Constant[float](estimations.get(f"p_{voxel_id}", 0.0)),
             VoxelReported(Constant(voxel_id)),
         ),
         Constant[bool](True),
@@ -99,6 +99,20 @@ program_code = ExpressionBlock(
     extensional_database + intensional_database + probabilistic_database
 )
 
-result = succ_query(program_code, CoActivation(v, t))
+succ1 = succ_query(program_code, CoActivation(v, t))
+succ2 = succ_query(program_code, TermInStudy(t))
 
-result2 = succ_query(program_code, TermInStudy(t))
+succ1_prob_col = next(c for c in succ1.value.columns if c.startswith("fresh"))
+succ2_prob_col = next(c for c in succ2.value.columns if c.startswith("fresh"))
+
+result = ExtendedRelationalAlgebraSolver({}).walk(
+    DivideColumns(
+        NaturalJoin(succ1, succ2),
+        Constant(succ_1_prob_col),
+        Constant(succ2_prob_col),
+    )
+)
+
+result.value._containter.to_hdf(
+    "examples/global_connectivity/neurosynth_forward_maps.h5"
+)

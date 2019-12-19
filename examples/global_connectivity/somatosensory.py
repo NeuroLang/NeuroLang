@@ -49,6 +49,11 @@ ns_base_img = nibabel.load(
         neurosynth.__path__[0], "resources/MNI152_T1_2mm_brain.nii.gz",
     )
 )
+ns_masker = neurosynth.mask.Masker(
+    os.path.join(
+        neurosynth.__path__[0], "resources/MNI152_T1_2mm_brain.nii.gz",
+    )
+)
 ns_affine = ns_base_img.affine
 fsaverage = nilearn.datasets.fetch_surf_fsaverage()
 
@@ -158,8 +163,7 @@ region_rois = dict(
 )
 
 
-
-neurosynth_query_result = pd.read_hdf(
+ns_query_result = pd.read_hdf(
     "examples/global_connectivity/neurosynth_forward_maps.h5", "forward_maps"
 )
 
@@ -169,17 +173,12 @@ def build_forward_map(term):
     voxel_ids = forward_maps[forward_maps.t == term].v.values.astype(np.int32)
     probabilities = forward_maps[forward_maps.t == term].probability.values
     fmap[voxel_ids] = probabilities
-    masker = neurosynth.mask.Masker(
-        os.path.join(
-            neurosynth.__path__[0], "resources/MNI152_T1_2mm_brain.nii.gz",
-        )
-    )
     base_image = nibabel.load(
         os.path.join(
             neurosynth.__path__[0], "resources/MNI152_T1_2mm_brain.nii.gz",
         )
     )
-    data = masker.unmask(fmap)
+    data = ns_masker.unmask(fmap)
     return nibabel.Nifti1Image(data, affine=base_image.affine)
 
 
@@ -217,10 +216,6 @@ plot_roi(atlas)
 # title="Sensory-motor cortices",
 # )
 
-neurosynth_dmn_region = nl.regions.ExplicitVBR(
-    np.argwhere(dmn_roi.get_data() > 0)
-)
-
 facts = [
     nl.datalog.Fact(
         nl.Symbol("sensory_motor_region")(
@@ -241,8 +236,39 @@ rules = [
 ]
 
 
+def build_single_voxel_regions():
+    voxels = np.zeros(shape=ns_masker.mask(ns_base_img.get_data()).shape)
+    voxels[voxel_id] = 1
+    unmasked = ns_masker.unmask(voxels)
+    voxels = np.argwhere(unmasked > 0)
+    return nl.regions.ExplicitVBR(
+        voxels, affine_matrix=ns_affine, image_dim=ns_base_img.get_data().shape
+    )
+
+
 program_code = nl.expressions.ExpressionBlock(facts + rules)
 dl = Datalog()
+dl.add_extensional_predicate_from_tuples(
+    nl.Symbol("dmn_region"),
+    [
+        (build_single_voxel_region(row.v), )
+        for _, row in ns_query_result[
+            (ns_query_result.probability > 0.02)
+            & (ns_query_result.t == "default mode")
+        ].iterrows()
+    ],
+)
+dl.add_extensional_predicate_from_tuples(
+    nl.Symbol("cognitive_control_region"),
+    [
+        (build_single_voxel_region(row.v), )
+        for _, row in ns_query_result[
+            (ns_query_result.probability > 0.02)
+            & (ns_query_result.t == "cognitive control")
+        ].iterrows()
+    ],
+)
+
 dl.walk(program_code)
 chase = Chase(dl)
 solution = chase.build_chase_solution()
