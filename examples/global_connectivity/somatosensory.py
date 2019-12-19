@@ -167,56 +167,6 @@ ns_query_result = pd.read_hdf(
     "examples/global_connectivity/neurosynth_forward_maps.h5", "forward_maps"
 )
 
-
-def build_forward_map(term):
-    fmap = np.zeros(228453)
-    voxel_ids = forward_maps[forward_maps.t == term].v.values.astype(np.int32)
-    probabilities = forward_maps[forward_maps.t == term].probability.values
-    fmap[voxel_ids] = probabilities
-    base_image = nibabel.load(
-        os.path.join(
-            neurosynth.__path__[0], "resources/MNI152_T1_2mm_brain.nii.gz",
-        )
-    )
-    data = ns_masker.unmask(fmap)
-    return nibabel.Nifti1Image(data, affine=base_image.affine)
-
-
-def neurosynth_forward_map_to_roi(pmap):
-    new_data = (pmap.get_data() > 0.03).astype(int)
-    new_data[new_data > 0] = np.random.randint(2, 7)
-    return nibabel.Nifti1Image(new_data, pmap.affine)
-
-
-dmn_pmap = build_forward_map("default mode")
-cognitive_control_pmap = build_forward_map("cognitive control")
-dmn_roi = neurosynth_forward_map_to_roi(dmn_pmap)
-cognitive_control_roi = neurosynth_forward_map_to_roi(cognitive_control_pmap)
-
-template = nilearn.datasets.load_mni152_template()
-resampled_sensory_motor_roi = nilearn.image.resample_to_img(
-    sensory_motor_roi, template
-)
-atlas = rois_to_atlas(
-    [dmn_roi, cognitive_control_roi, resampled_sensory_motor_roi]
-)
-plot_roi(atlas)
-
-# nilearn.plotting.plot_surf_roi(
-# surf_mesh=fsaverage["infl_left"],
-# roi_map=nilearn.surface.vol_to_surf(
-# sensory_motor_roi, fsaverage["pial_left"],
-# ),
-# hemi="left",
-# view="lateral",
-# colorbar=True,
-# bg_map=fsaverage["sulc_left"],
-# bg_on_data=True,
-# cmap=nilearn.plotting.cm.cold_white_hot,
-# title="Sensory-motor cortices",
-# )
-
-
 facts = [
     nl.datalog.Fact(
         nl.Symbol("sensory_motor_region")(
@@ -238,7 +188,7 @@ r1 = nl.logic.Implication(
 r2 = nl.logic.Implication(
     nl.Symbol("dmn_region")(
         nl.datalog.aggregation.AggregationApplication(
-            nl.Symbol("region_union"), (nl.Symbol("x"),)
+            nl.Symbol("region_union"), (nl.Symbol("y"),)
         )
     ),
     nl.logic.Conjunction(
@@ -254,7 +204,7 @@ r2 = nl.logic.Implication(
 r3 = nl.logic.Implication(
     nl.Symbol("cognitive_control_region")(
         nl.datalog.aggregation.AggregationApplication(
-            nl.Symbol("region_union"), (nl.Symbol("x"),)
+            nl.Symbol("region_union"), (nl.Symbol("y"),)
         )
     ),
     nl.logic.Conjunction(
@@ -300,5 +250,3 @@ dl.walk(program_code)
 
 chase = Chase(dl)
 solution = chase.build_chase_solution()
-
-next(solution["sensory_motor"].value.unwrapped_iter())[0]
