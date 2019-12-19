@@ -216,6 +216,7 @@ plot_roi(atlas)
 # title="Sensory-motor cortices",
 # )
 
+
 facts = [
     nl.datalog.Fact(
         nl.Symbol("sensory_motor_region")(
@@ -224,52 +225,79 @@ facts = [
     )
     for region_name, region in region_rois.items()
 ]
-rules = [
-    nl.logic.Implication(
-        nl.Symbol("sensory_motor")(
-            nl.datalog.aggregation.AggregationApplication(
-                nl.Symbol("region_union"), (nl.Symbol("r"),)
-            )
-        ),
-        nl.Symbol("sensory_motor_region")(nl.Symbol("r")),
-    )
-]
+
+r1 = nl.logic.Implication(
+    nl.Symbol("sensory_motor")(
+        nl.datalog.aggregation.AggregationApplication(
+            nl.Symbol("region_union"), (nl.Symbol("x"),)
+        )
+    ),
+    nl.Symbol("sensory_motor_region")(nl.Symbol("x")),
+)
+
+r2 = nl.logic.Implication(
+    nl.Symbol("dmn_region")(
+        nl.datalog.aggregation.AggregationApplication(
+            nl.Symbol("region_union"), (nl.Symbol("x"),)
+        )
+    ),
+    nl.logic.Conjunction(
+        [
+            nl.Symbol("voxel_id_region")(nl.Symbol("y"), nl.Symbol("x")),
+            nl.Symbol("neurosynth_term_voxel_id")(
+                nl.Constant("default mode"), nl.Symbol("y")
+            ),
+        ]
+    ),
+)
+
+r3 = nl.logic.Implication(
+    nl.Symbol("cognitive_control_region")(
+        nl.datalog.aggregation.AggregationApplication(
+            nl.Symbol("region_union"), (nl.Symbol("x"),)
+        )
+    ),
+    nl.logic.Conjunction(
+        [
+            nl.Symbol("voxel_id_region")(nl.Symbol("y"), nl.Symbol("x")),
+            nl.Symbol("neurosynth_term_voxel_id")(
+                nl.Constant("cognitive control"), nl.Symbol("y")
+            ),
+        ]
+    ),
+)
+
+program_code = nl.expressions.ExpressionBlock(facts + [r1, r2, r3])
 
 
-def build_single_voxel_regions():
-    voxels = np.zeros(shape=ns_masker.mask(ns_base_img.get_data()).shape)
-    voxels[voxel_id] = 1
+def build_vid_to_region_tuple_set():
+    voxels = np.ones(shape=ns_masker.mask(ns_base_img.get_data()).shape)
     unmasked = ns_masker.unmask(voxels)
-    voxels = np.argwhere(unmasked > 0)
-    return nl.regions.ExplicitVBR(
-        voxels, affine_matrix=ns_affine, image_dim=ns_base_img.get_data().shape
+    ijk = np.argwhere(unmasked > 0)
+    regions = [
+        nl.regions.ExplicitVBR([coords], affine_matrix=ns_affine)
+        for coords in ijk
+    ]
+    return set(
+        (vid, region) for vid, region in zip(range(voxels.shape[0]), regions)
     )
 
 
-program_code = nl.expressions.ExpressionBlock(facts + rules)
 dl = Datalog()
 dl.add_extensional_predicate_from_tuples(
-    nl.Symbol("dmn_region"),
-    [
-        (build_single_voxel_region(row.v), )
-        for _, row in ns_query_result[
-            (ns_query_result.probability > 0.02)
-            & (ns_query_result.t == "default mode")
-        ].iterrows()
-    ],
+    nl.Symbol("voxel_id_region"), build_vid_to_region_tuple_set()
 )
 dl.add_extensional_predicate_from_tuples(
-    nl.Symbol("cognitive_control_region"),
+    nl.Symbol("neurosynth_term_voxel_id"),
     [
-        (build_single_voxel_region(row.v), )
+        (row.t, row.v)
         for _, row in ns_query_result[
-            (ns_query_result.probability > 0.02)
-            & (ns_query_result.t == "cognitive control")
+            ns_query_result.probability > 0.02
         ].iterrows()
     ],
 )
-
 dl.walk(program_code)
+
 chase = Chase(dl)
 solution = chase.build_chase_solution()
 

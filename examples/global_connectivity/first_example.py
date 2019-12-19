@@ -24,10 +24,7 @@ from neurolang.probabilistic.probdatalog_gm import (
     full_observability_parameter_estimation,
     AlgebraSet,
     succ_query,
-    DivideColumns,
-    ExtendedRelationalAlgebraSolver,
 )
-from neurolang.relational_algebra import NaturalJoin
 
 estimations = pd.read_hdf(
     "examples/global_connectivity/estimations.h5", "estimations"
