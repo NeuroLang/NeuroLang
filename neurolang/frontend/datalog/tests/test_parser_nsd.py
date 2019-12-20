@@ -35,6 +35,9 @@ def test_facts():
     res = parser('"john" is cat')
     assert res == Union((Fact(Symbol('cat')(Constant("john"))),))
 
+    res = parser('"john" is `http://owl#fact`')
+    assert res == Union((Fact(Symbol('http://owl#fact')(Constant("john"))),))
+
     res = parser('"john" is "perceval"\'s mascot')
     assert res == Union((
         Fact(Symbol('mascot')(Constant("john"), Constant("perceval"))),
