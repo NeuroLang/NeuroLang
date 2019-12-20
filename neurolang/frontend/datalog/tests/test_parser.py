@@ -19,10 +19,12 @@ def test_facts():
 
     res = parser(
         'A("x", 3)\n'
+        '`http://uri#test-fact`("x")\n'
         'ans():-A(x, y)'
     )
     assert res == Union((
         Fact(Symbol('A')(Constant('x'), Constant(3))),
+        Fact(Symbol('http://uri#test-fact')(Constant('x'))),
         Implication(
             Symbol('ans')(),
             Conjunction((
