@@ -227,10 +227,7 @@ def test_aggregation_nsd():
 
 def test_probabilistic_fact():
     A = Symbol('A')
-    B = Symbol('B')
     p = Symbol('p')
-    x = Symbol('x')
-    y = Symbol('y')
     res = parser('p::A(3)')
     assert res == Union((
         Implication(
@@ -253,9 +250,7 @@ def test_probabilistic_fact():
 
 def test_probabilistic_fact_nsd():
     cat = Symbol('cat')
-    B = Symbol('B')
     p = Symbol('p')
-    x = Symbol('x')
     res = parser('with probability p "john" is cat')
     assert res == Union((
         Implication(
