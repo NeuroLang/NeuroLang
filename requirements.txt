@@ -1,3 +1,4 @@
+# Packages required for running the application.
 numpy
 scipy
 nibabel

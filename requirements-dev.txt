@@ -1,11 +1,8 @@
-numpy
-scipy
-nibabel
-pandas>=0.23.4
-tatsu
-neurosynth==0.3.7
-matplotlib
-typing_inspect
+# In addition to requirements.txt; packages required to develop for the application.
+
+# + requirements.txt
+nilearn==0.5.0
+codacy-coverage
 pytest
 pytest-benchmark
 pytest-cov
