@@ -166,12 +166,12 @@ def test_probabilistic_fact():
         ),
     ))
 
-    res = parser('0.8::A("a", 3)')
+    res = parser('0.8::A("a b", 3)')
     assert res == Union((
         Implication(
             ProbabilisticPredicate(
                 Constant(0.8),
-                A(Constant("a"), Constant(3.))
+                A(Constant("a b"), Constant(3.))
             ),
             Constant(True)
         ),

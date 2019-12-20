@@ -74,8 +74,8 @@ GRAMMAR = u"""
 
     comparison_operator = '==' | '<' | '<=' | '>=' | '>' | '!=' ;
 
-    text = '"' /[a-zA-Z0-9]*/ '"'
-          | "'" /[a-zA-Z0-9]*/ "'" ;
+    text = '"' /[a-zA-Z0-9 ]*/ '"'
+          | "'" /[a-zA-Z0-9 ]*/ "'" ;
 
     number = float | integer ;
     integer = [ '+' | '-' ] /[0-9]+/ ;
