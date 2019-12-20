@@ -2,9 +2,12 @@ from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
 
 import tatsu
 
+from ...probabilistic.expressions import ProbabilisticPredicate
+from ...datalog import Implication
 from ...datalog.aggregation import AggregationApplication
 from ...expressions import Expression, FunctionApplication
 from . import DatalogSemantics as DatalogClassicSemantics
+
 
 GRAMMAR = u"""
     @@grammar::Datalog
@@ -14,12 +17,16 @@ GRAMMAR = u"""
 
     start = expressions $ ;
 
-    expressions = ( newline ).{ expression };
+    expressions = ( newline ).{ probabilistic_expression | expression };
 
-
-    probabilistic_expression = (number | int_ext_identifier ) '::' expression
+    probabilistic_expression = probability:probability '::' \
+                               expression:expression
                              | 'with' 'probability'\
-                               (number | int_ext_identifier ) expression ;
+                               probability:probability [','] \
+                               expression:expression ;
+
+    probability = (float | int_ext_identifier );
+
     expression = ['or'] @:rule | constraint | fact ;
     fact = constant_predicate ;
     rule = head implication body ;
@@ -54,11 +61,12 @@ GRAMMAR = u"""
     constant_predicate = predicate:identifier'(' ','.{ arguments+:literal } ')'
                        | arguments:literal 'is' arguments:literal"'s"\
                             predicate:identifier
-                       | arguments:literal 'is'  predicate:identifier\
+                       | arguments:literal 'is' ['a'] predicate:identifier\
                             preposition arguments:literal
-                       | arguments:literal 'has' arguments:literal\
+                       | arguments:literal 'has' ['a'] arguments:literal\
                             predicate:identifier
-                       | arguments+:literal 'is' predicate:identifier ;
+                       | arguments+:literal ('is' | 'are') ['a']\
+                         predicate:identifier ;
 
     preposition = 'to' | 'from' | 'of' | 'than' | 'the' ;
 
@@ -100,7 +108,11 @@ GRAMMAR = u"""
     text = '"' /[a-zA-Z0-9]*/ '"'
           | "'" /[a-zA-Z0-9]*/ "'" ;
 
-    number = [ '+' | '-' ] /[0-9]+/ ;
+    number = float | integer ;
+    integer = [ '+' | '-' ] /[0-9]+/ ;
+    float = /[0-9]*/'.'/[0-9]+/
+          | /[0-9]+/'.'/[0-9]*/ ;
+
     logical_constant = TRUE | FALSE ;
     TRUE = 'True' | '\u22A4' ;
     FALSE = 'False' | '\u22A5' ;
@@ -151,6 +163,18 @@ class DatalogSemantics(DatalogClassicSemantics):
         if not isinstance(ast, Expression):
             ast = ast['predicate'](*ast['arguments'])
         return ast
+
+    def probabilistic_expression(self, ast):
+        probability = ast['probability']
+        expression = ast['expression']
+
+        if isinstance(expression, Implication):
+            return Implication(
+                ProbabilisticPredicate(probability, expression.consequent),
+                expression.antecedent
+            )
+        else:
+            raise ValueError("Invalid rule")
 
 
 def parser(code, locals=None, globals=None):

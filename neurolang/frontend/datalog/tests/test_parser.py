@@ -155,10 +155,7 @@ def test_aggregation():
 
 def test_probabilistic_fact():
     A = Symbol('A')
-    B = Symbol('B')
     p = Symbol('p')
-    x = Symbol('x')
-    y = Symbol('y')
     res = parser('p::A(3)')
     assert res == Union((
         Implication(

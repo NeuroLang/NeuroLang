@@ -5,6 +5,7 @@ from ....datalog.aggregation import AggregationApplication
 from ....expressions import Constant, Symbol
 from .. import ExternalSymbol
 from ..natural_syntax_datalog import parser
+from ....probabilistic.expressions import ProbabilisticPredicate
 
 
 def test_facts():
@@ -181,15 +182,15 @@ def test_nl_rules():
     ))
 
     res = parser('''
-        x has y legs if x is a cat & y == 4
-        or x has y leg if x is a bird and y == 2
+        x has y legs if x is a cat & y == 4.0
+        or x has y legs if x is a bird and y == 2
     ''')
     assert res == Union((
         Implication(
             legs(x, y), Conjunction((cat(x), Constant(eq)(y, Constant(4.))))
         ),
         Implication(
-            legs(x, y), Conjunction((bird(x), Constant(eq)(y, Constant(2.))))
+            legs(x, y), Conjunction((bird(x), Constant(eq)(y, Constant(2))))
         ),
     ))
 
@@ -220,5 +221,53 @@ def test_aggregation_nsd():
         Implication(
             A(x, AggregationApplication(f, (y,))),
             Conjunction((B(x, y),))
+        ),
+    ))
+
+
+def test_probabilistic_fact():
+    A = Symbol('A')
+    B = Symbol('B')
+    p = Symbol('p')
+    x = Symbol('x')
+    y = Symbol('y')
+    res = parser('p::A(3)')
+    assert res == Union((
+        Implication(
+            ProbabilisticPredicate(p, A(Constant(3.))),
+            Constant(True)
+        ),
+    ))
+
+    res = parser('0.8::A("a", 3)')
+    assert res == Union((
+        Implication(
+            ProbabilisticPredicate(
+                Constant(0.8),
+                A(Constant("a"), Constant(3.))
+            ),
+            Constant(True)
+        ),
+    ))
+
+
+def test_probabilistic_fact_nsd():
+    cat = Symbol('cat')
+    B = Symbol('B')
+    p = Symbol('p')
+    x = Symbol('x')
+    res = parser('with probability p "john" is cat')
+    assert res == Union((
+        Implication(
+            ProbabilisticPredicate(p, cat(Constant("john"))),
+            Constant(True)
+        ),
+    ))
+
+    res = parser("with probability p 'john' is 'george''s cat")
+    assert res == Union((
+        Implication(
+            ProbabilisticPredicate(p, cat(Constant("john"), Constant("george"))),
+            Constant(True)
         ),
     ))

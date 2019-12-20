@@ -76,10 +76,10 @@ GRAMMAR = u"""
     text = '"' /[a-zA-Z0-9]*/ '"'
           | "'" /[a-zA-Z0-9]*/ "'" ;
 
-    number = integer | float ;
+    number = float | integer ;
     integer = [ '+' | '-' ] /[0-9]+/ ;
-    float = /[0-9]*/'.'/[0-9]+/
-          | /[0-9]+/'.'/[0-9]*/ ;
+    float = [ '+' | '-' ] /[0-9]*/'.'/[0-9]+/
+          | [ '+' | '-' ] /[0-9]+/'.'/[0-9]*/ ;
     logical_constant = TRUE | FALSE ;
     TRUE = 'True' | '\u22A4' ;
     FALSE = 'False' | '\u22A5' ;
