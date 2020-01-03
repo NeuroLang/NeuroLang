@@ -267,15 +267,27 @@ class ReplaceExpressionsByValues(ExpressionWalker):
 
     @add_match(Constant[typing.AbstractSet])
     def constant_abstract_set(self, constant_abstract_set):
-        return frozenset(
-            self.walk(expression) for expression in constant_abstract_set.value
-        )
+        value = constant_abstract_set.value
+        if (
+            len(value) > 0 and
+            isinstance(next(iter(value)), (Expression, tuple))
+        ):
+            value = frozenset(
+                self.walk(expression) for expression in value
+            )
+        return value
 
     @add_match(Constant[typing.Tuple])
     def constant_tuple(self, constant_tuple):
-        return tuple(
-            self.walk(expression) for expression in constant_tuple.value
-        )
+        value = constant_tuple.value
+        if (
+            len(value) > 0 and
+            isinstance(value[0], (Expression, tuple))
+        ):
+            value = tuple(
+                self.walk(expression) for expression in constant_tuple.value
+            )
+        return value
 
     @add_match(Constant)
     def constant(self, constant):
