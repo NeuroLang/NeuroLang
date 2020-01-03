@@ -171,6 +171,24 @@ def test_builtin_equality_only(chase_class):
     assert instance_update == res
 
 
+def test_builtin_equality_only_sets(chase_class):
+    const = C_(frozenset({5, 6}))
+    datalog_program = Eb_((Imp_(Q(x), eq(x, const)),))
+
+    dl = Datalog()
+    dl.walk(datalog_program)
+
+    instance_0 = MapInstance(dl.extensional_database())
+
+    rule = datalog_program.expressions[0]
+    dc = chase_class(dl)
+    instance_update = dc.chase_step(instance_0, rule)
+    res = MapInstance({
+        Q: C_({(const.value,)}),
+    })
+    assert instance_update == res
+
+
 def test_python_builtin_equaltiy_chase_step(chase_class):
     datalog_program = DT.walk(Eb_((
         F_(Q(C_(1), C_(2))),
