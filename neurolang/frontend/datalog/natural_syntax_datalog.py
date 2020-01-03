@@ -106,8 +106,8 @@ GRAMMAR = u"""
 
     comparison_operator = '==' | '<' | '<=' | '>=' | '>' | '!=' ;
 
-    text = '"' /[a-zA-Z0-9 ]*/ '"'
-          | "'" /[a-zA-Z0-9 ]*/ "'" ;
+    text = '"' /[^"]*/ '"'
+          | "'" /[^']*/ "'" ;
 
     number = float | integer ;
     integer = [ '+' | '-' ] /[0-9]+/ ;
