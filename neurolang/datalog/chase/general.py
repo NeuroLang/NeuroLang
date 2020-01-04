@@ -1,6 +1,7 @@
 from collections import namedtuple
 from itertools import chain, tee
-from operator import eq
+from operator import contains, eq
+from typing import AbstractSet
 
 from ...exceptions import NeuroLangException
 from ...expressions import Constant, FunctionApplication, Symbol
@@ -9,8 +10,7 @@ from ...logic.unification import (apply_substitution,
                                   compose_substitutions)
 from ...utils import OrderedSet
 from ..expression_processing import (extract_logic_free_variables,
-                                     extract_logic_predicates,
-                                     is_linear_rule)
+                                     extract_logic_predicates, is_linear_rule)
 from ..instance import MapInstance
 
 ChaseNode = namedtuple('ChaseNode', 'instance children')
@@ -108,33 +108,42 @@ class ChaseGeneral():
         if len(predicates) == 0:
             return substitutions
         for substitution in substitutions:
-            new_substitution = self.evaluate_builtins_predicates(
+            updated_substitutions = self.evaluate_builtins_predicates(
                 predicates, substitution
             )
-            if new_substitution is not None:
-                new_substitutions.append(new_substitution)
+            new_substitutions += updated_substitutions
         return new_substitutions
 
     def evaluate_builtins_predicates(
         self, predicates_to_evaluate, substitution
     ):
+        substitutions = [substitution]
         predicates_to_evaluate = predicates_to_evaluate.copy()
         unresolved_predicates = []
         while predicates_to_evaluate:
             predicate = predicates_to_evaluate.pop(0)
 
-            subs = self.unify_builtin_substitution(predicate, substitution)
-            if subs is None:
+            new_substitutions = []
+            for sub in substitutions:
+                new_substitutions += self.unify_builtin_substitution(
+                    predicate, sub
+                )
+
+            if len(new_substitutions) == 0:
                 unresolved_predicates.append(predicate)
             else:
-                substitution = compose_substitutions(substitution, subs)
+                substitutions = [
+                    compose_substitutions(substitution, new_substitution)
+                    for substitution in substitutions
+                    for new_substitution in new_substitutions
+                ]
                 predicates_to_evaluate += unresolved_predicates
                 unresolved_predicates = []
 
         if len(unresolved_predicates) == 0:
-            return substitution
+            return substitutions
         else:
-            return None
+            return []
 
     def unify_builtin_substitution(self, predicate, substitution):
         substituted_predicate = apply_substitution(predicate, substitution)
@@ -143,13 +152,19 @@ class ChaseGeneral():
             isinstance(evaluated_predicate, Constant[bool]) and
             evaluated_predicate.value
         ):
-            return substitution
+            return [substitution]
         elif self.is_equality_between_constant_and_symbol(evaluated_predicate):
-            return self.unify_builtin_substitution_equality(
+            return [
+                self.unify_builtin_substitution_equality(
+                    evaluated_predicate
+                )
+            ]
+        elif self.is_containment_of_symbol_in_constant(evaluated_predicate):
+            return self.unify_builtin_substitution_containment(
                 evaluated_predicate
             )
         else:
-            return None
+            return []
 
     @staticmethod
     def is_equality_between_constant_and_symbol(predicate):
@@ -159,6 +174,16 @@ class ChaseGeneral():
             predicate.functor.value is eq and
             any(isinstance(arg, Constant) for arg in predicate.args) and
             any(isinstance(arg, Symbol) for arg in predicate.args)
+        )
+
+    @staticmethod
+    def is_containment_of_symbol_in_constant(predicate):
+        return (
+            isinstance(predicate, FunctionApplication) and
+            isinstance(predicate.functor, Constant) and
+            predicate.functor.value is contains and
+            isinstance(predicate.args[0], Constant[AbstractSet]) and
+            isinstance(predicate.args[1], Symbol)
         )
 
     @staticmethod
@@ -172,6 +197,30 @@ class ChaseGeneral():
                 evaluated_predicate.args[1]: evaluated_predicate.args[0]
             }
         return substitution
+
+    @staticmethod
+    def unify_builtin_substitution_containment(evaluated_predicate):
+        set_value = evaluated_predicate.args[0].value
+        symbol = evaluated_predicate.args[1]
+        if len(set_value) == 0:
+            return []
+        elif isinstance(next(iter(set_value)), Constant):
+            return [
+                {symbol: v}
+                for v in set_value
+            ]
+        else:
+            el_type = evaluated_predicate.args[0].type.__args__[0]
+            return [
+                {
+                    symbol:
+                    Constant[el_type](
+                        v,
+                        auto_infer_type=False, verify_type=False
+                    )
+                }
+                for v in set_value
+            ]
 
     def extract_rule_predicates(
         self, rule, instance, restriction_instance=None

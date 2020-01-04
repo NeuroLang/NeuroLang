@@ -41,6 +41,9 @@ b = C_('b')
 c = C_('c')
 eq = C_[Callable[[expressions.Unknown, expressions.Unknown], bool]](op.eq)
 gt = C_[Callable[[expressions.Unknown, expressions.Unknown], bool]](op.gt)
+contains = C_[Callable[[expressions.Unknown, expressions.Unknown], bool]](
+    op.contains
+)
 
 
 class Datalog(TranslateToLogic, DatalogProgram, ew.ExpressionBasicEvaluator):
@@ -208,6 +211,35 @@ def test_builtin_equality_only_sets_and_computations(chase_class):
 
     res = MapInstance({
         T: C_({(2,)}),
+    })
+    assert instance_update == res
+
+
+def test_chase_set_destroy(chase_class):
+    consts = [
+        C_(frozenset({5, 6})),
+        C_(frozenset({5, 8})),
+        C_(frozenset({15, 8})),
+    ]
+
+    datalog_program = Eb_(
+        tuple(Fact(Q(c)) for c in consts) +
+        (
+            Imp_(T(x), contains(y, x) & Q(y)),
+        )
+    )
+
+    dl = Datalog()
+    dl.walk(datalog_program)
+
+    instance_0 = MapInstance(dl.extensional_database())
+
+    rule = dl.symbol_table['T'].formulas[0]
+    dc = chase_class(dl)
+    instance_update = dc.chase_step(instance_0, rule)
+
+    res = MapInstance({
+        T: C_({(5,), (6,), (8,), (15,)}),
     })
     assert instance_update == res
 
