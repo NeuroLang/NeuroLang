@@ -1,6 +1,6 @@
 import operator as op
 from itertools import product
-from typing import Callable
+from typing import AbstractSet, Callable, Tuple
 
 from pytest import fixture
 
@@ -10,7 +10,7 @@ from ..basic_representation import DatalogProgram
 from ..chase import (ChaseGeneral, ChaseMGUMixin, ChaseNaive,
                      ChaseNamedRelationalAlgebraMixin, ChaseNode,
                      ChaseRelationalAlgebraPlusCeriMixin, ChaseSemiNaive)
-from ..expressions import Union, Fact, Implication, TranslateToLogic
+from ..expressions import Fact, Implication, TranslateToLogic, Union
 from ..instance import MapInstance
 
 C_ = expressions.Constant
@@ -204,6 +204,7 @@ def test_builtin_equality_only_sets_and_computations(chase_class):
     dl.walk(datalog_program)
 
     instance_0 = MapInstance(dl.extensional_database())
+    assert instance_0['Q'].type == AbstractSet[Tuple[AbstractSet[int]]]
 
     rule = dl.symbol_table['T'].formulas[0]
     dc = chase_class(dl)
@@ -213,6 +214,28 @@ def test_builtin_equality_only_sets_and_computations(chase_class):
         T: C_({(2,)}),
     })
     assert instance_update == res
+
+    const1 = C_(frozenset({6, 8}))
+    datalog_program = Eb_((
+        Fact(Q(const)),
+        Fact(Q(const1)),
+        Imp_(T(y), contains(y, C_(5)) & Q(y))
+    ))
+
+    dl = Datalog()
+    dl.walk(datalog_program)
+
+    instance_0 = MapInstance(dl.extensional_database())
+
+    rule = dl.symbol_table['T'].formulas[0]
+    dc = chase_class(dl)
+    instance_update = dc.chase_step(instance_0, rule)
+
+    res = MapInstance({
+        T: C_({(frozenset({5, 6}),)}),
+    })
+    assert instance_update == res
+    assert instance_update['T'].type == AbstractSet[Tuple[AbstractSet[int]]]
 
 
 def test_chase_set_destroy(chase_class):

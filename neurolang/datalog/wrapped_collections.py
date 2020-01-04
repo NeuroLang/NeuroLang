@@ -1,9 +1,12 @@
 from itertools import tee
 from typing import Tuple
 
+from ..expression_walker import ReplaceExpressionsByValues
 from ..expressions import Constant
 from ..type_system import infer_type
 from ..utils import RelationalAlgebraSet
+
+REBV = ReplaceExpressionsByValues({})
 
 
 class WrappedExpressionIterable:
@@ -50,7 +53,7 @@ class WrappedExpressionIterable:
         element_ = tuple()
         for e in element:
             if isinstance(e, Constant):
-                e = e.value
+                e = REBV.walk(e)
             element_ += (e,)
         super().add(element_)
 
