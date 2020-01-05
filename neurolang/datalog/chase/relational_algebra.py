@@ -219,7 +219,7 @@ class ChaseNamedRelationalAlgebraMixin:
         )
         if set(substitutions.columns).issuperset(already_computed.columns):
             already_computed = substitutions.naturaljoin(already_computed)
-        substitutions = substitutions - already_computed
+        # substitutions = substitutions - already_computed
         if not isinstance(substitutions, NamedRAFSTupleIterAdapter):
             substitutions = (
                 sorted(substitutions.columns),

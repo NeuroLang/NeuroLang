@@ -204,9 +204,9 @@ def test_builtin_equality_only_sets_and_computations(chase_class):
     dl.walk(datalog_program)
 
     instance_0 = MapInstance(dl.extensional_database())
-    assert instance_0['Q'].type == AbstractSet[Tuple[AbstractSet[int]]]
+    assert instance_0[Q].type == AbstractSet[Tuple[AbstractSet[int]]]
 
-    rule = dl.symbol_table['T'].formulas[0]
+    rule = dl.symbol_table[T].formulas[0]
     dc = chase_class(dl)
     instance_update = dc.chase_step(instance_0, rule)
 
@@ -227,7 +227,7 @@ def test_builtin_equality_only_sets_and_computations(chase_class):
 
     instance_0 = MapInstance(dl.extensional_database())
 
-    rule = dl.symbol_table['T'].formulas[0]
+    rule = dl.symbol_table[T].formulas[0]
     dc = chase_class(dl)
     instance_update = dc.chase_step(instance_0, rule)
 
@@ -235,7 +235,38 @@ def test_builtin_equality_only_sets_and_computations(chase_class):
         T: C_({(frozenset({5, 6}),)}),
     })
     assert instance_update == res
-    assert instance_update['T'].type == AbstractSet[Tuple[AbstractSet[int]]]
+    assert instance_update[T].type == AbstractSet[Tuple[AbstractSet[int]]]
+
+    datalog_program = Eb_((
+        Fact(Q(const)),
+        Fact(Q(const1)),
+        Fact(Q(C_(frozenset({0, 0})))),
+        Imp_(T(x, y), Q(y) & contains(y, x) & eq(x, C_(6))),
+        Imp_(S(x, y), Q(y) & eq(x, C_(6)) & contains(y, x)),
+        Imp_(S(x, y), Q(y) & eq(x, C_(5)) & contains(y, x)),
+    ))
+
+    dl = Datalog()
+    dl.walk(datalog_program)
+
+    dc = chase_class(dl)
+    instance_result = dc.build_chase_solution()
+
+    res = MapInstance({
+        T: C_({
+            (C_(6), frozenset({5, 6}),),
+            (C_(6), frozenset({6, 8}),)
+        }),
+        S: C_({
+            (C_(5), frozenset({5, 6}),),
+            (C_(6), frozenset({5, 6}),),
+            (C_(6), frozenset({6, 8}),)
+        }),
+    })
+    assert instance_result[T] == res[T]
+    assert instance_result[S] == res[S]
+    assert instance_result[T].type == AbstractSet[Tuple[int, AbstractSet[int]]]
+    assert instance_result[S].type == AbstractSet[Tuple[int, AbstractSet[int]]]
 
 
 def test_chase_set_destroy(chase_class):

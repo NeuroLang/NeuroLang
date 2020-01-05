@@ -132,11 +132,9 @@ class ChaseGeneral():
             if len(new_substitutions) == 0:
                 unresolved_predicates.append(predicate)
             else:
-                substitutions = [
-                    compose_substitutions(substitution, new_substitution)
-                    for substitution in substitutions
-                    for new_substitution in new_substitutions
-                ]
+                substitutions = self.compose_substitutions_no_conflict(
+                    substitutions, new_substitutions
+                )
                 predicates_to_evaluate += unresolved_predicates
                 unresolved_predicates = []
 
@@ -144,6 +142,29 @@ class ChaseGeneral():
             return substitutions
         else:
             return []
+
+    @staticmethod
+    def compose_substitutions_no_conflict(substitutions, new_substitutions):
+        composed_substitutions = []
+        for substitution in substitutions:
+            subs_keys = set(
+                k for k, v in substitution.items()
+                if not isinstance(v, Symbol)
+            )
+            for new_substitution in new_substitutions:
+                overlap = subs_keys & set(new_substitution)
+                if any(
+                    not isinstance(new_substitution[k], Symbol) and
+                    new_substitution[k] != substitution[k]
+                    for k in overlap
+                ):
+                    continue
+                subs = compose_substitutions(
+                    substitution, new_substitution
+                )
+                composed_substitutions.append(subs)
+        substitutions = composed_substitutions
+        return substitutions
 
     def unify_builtin_substitution(self, predicate, substitution):
         substituted_predicate = apply_substitution(predicate, substitution)
