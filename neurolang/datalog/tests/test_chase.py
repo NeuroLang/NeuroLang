@@ -6,6 +6,7 @@ from pytest import fixture
 
 from ... import expression_walker as ew
 from ... import expressions
+from ...type_system import Unknown
 from ..basic_representation import DatalogProgram
 from ..chase import (ChaseGeneral, ChaseMGUMixin, ChaseNaive,
                      ChaseNamedRelationalAlgebraMixin, ChaseNode,
@@ -294,6 +295,67 @@ def test_chase_set_destroy(chase_class):
 
     res = MapInstance({
         T: C_({(5,), (6,), (8,), (15,)}),
+    })
+    assert instance_update == res
+
+
+def test_chase_iterable_destroy(chase_class):
+    consts = [
+        C_(tuple([5, 2.])),
+        C_(tuple([5, 8])),
+        C_(tuple([15, 8])),
+    ]
+
+    datalog_program = Eb_(
+        tuple(Fact(Q(c)) for c in consts) +
+        (
+            Imp_(T(x), contains(y, x) & Q(y)),
+        )
+    )
+
+    dl = Datalog()
+    dl.walk(datalog_program)
+
+    instance_0 = MapInstance(dl.extensional_database())
+
+    rule = dl.symbol_table['T'].formulas[0]
+    dc = chase_class(dl)
+    instance_update = dc.chase_step(instance_0, rule)
+
+    res = MapInstance({
+        T: C_({(5.,), (2.,), (8.,), (15.,)}),
+    })
+    assert instance_update == res
+
+
+def test_chase_iterable_destroy_non_unifyable_types(chase_class):
+    consts = [
+        C_(tuple([5, 'a'])),
+        C_(tuple([5, 8])),
+        C_(tuple([15, 8])),
+    ]
+
+    datalog_program = Eb_(
+        tuple(Fact(Q(c)) for c in consts) +
+        (
+            Imp_(T(x), contains(y, x) & Q(y)),
+        )
+    )
+
+    dl = Datalog()
+    dl.walk(datalog_program)
+
+    instance_0 = MapInstance(dl.extensional_database())
+
+    rule = dl.symbol_table['T'].formulas[0]
+    dc = chase_class(dl)
+
+    instance_update = dc.chase_step(instance_0, rule)
+    res = MapInstance({
+        T: C_[AbstractSet[Tuple[Unknown]]](
+            {(5,), ('a',), (8,), (15,)},
+            auto_infer_type=False, verify_type=False
+        ),
     })
     assert instance_update == res
 

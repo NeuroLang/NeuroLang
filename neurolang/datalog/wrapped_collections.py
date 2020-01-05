@@ -10,8 +10,8 @@ REBV = ReplaceExpressionsByValues({})
 
 
 class WrappedExpressionIterable:
-    def __init__(self, iterable=None):
-        self.__row_type = None
+    def __init__(self, iterable=None, row_type=None):
+        self.__row_type = row_type
         if iterable is not None:
             if isinstance(iterable, type(self)):
                 iterable = iterable.unwrapped_iter()

@@ -1,13 +1,15 @@
 from collections import namedtuple
 from itertools import chain, tee
 from operator import contains, eq
-from typing import AbstractSet
+from typing import Iterable, Tuple
 
 from ...exceptions import NeuroLangException
 from ...expressions import Constant, FunctionApplication, Symbol
 from ...logic.unification import (apply_substitution,
                                   apply_substitution_arguments,
                                   compose_substitutions)
+from ...type_system import (NeuroLangTypeException, Unknown,
+                            is_leq_informative, unify_types)
 from ...utils import OrderedSet
 from ..expression_processing import (extract_logic_free_variables,
                                      extract_logic_predicates, is_linear_rule)
@@ -203,7 +205,7 @@ class ChaseGeneral():
             isinstance(predicate, FunctionApplication) and
             isinstance(predicate.functor, Constant) and
             predicate.functor.value is contains and
-            isinstance(predicate.args[0], Constant[AbstractSet]) and
+            isinstance(predicate.args[0], Constant[Iterable]) and
             isinstance(predicate.args[1], Symbol)
         )
 
@@ -231,7 +233,17 @@ class ChaseGeneral():
                 for v in set_value
             ]
         else:
-            el_type = evaluated_predicate.args[0].type.__args__[0]
+            iterable_subtype = evaluated_predicate.args[0].type
+            if is_leq_informative(iterable_subtype, Tuple):
+                el_type = iterable_subtype.__args__[0]
+                for another_type in iterable_subtype.__args__[1:]:
+                    try:
+                        el_type = unify_types(el_type, another_type)
+                    except NeuroLangTypeException:
+                        el_type = Unknown
+                        break
+            else:
+                el_type = evaluated_predicate.args[0].type.__args__[0]
             return [
                 {
                     symbol:
@@ -280,17 +292,23 @@ class ChaseGeneral():
         if restriction_instance is None:
             restriction_instance = MapInstance()
 
-        tuples = [
-            tuple(
-                a.value for a in
-                apply_substitution_arguments(
-                    rule.consequent.args, substitution
-                )
-            )
-            for substitution in substitutions
-            if len(substitutions) > 0
-        ]
-        new_tuples = self.datalog_program.new_set(tuples)
+        row_type = None
+        tuples = []
+        for substitution in substitutions:
+            tuple_ = tuple()
+            type_ = tuple()
+            for el in apply_substitution_arguments(
+                rule.consequent.args, substitution
+            ):
+                tuple_ += (el.value,)
+                type_ += (el.type,)
+            tuples.append(tuple_)
+            tuple_type = Tuple[type_]
+            if row_type is None:
+                row_type = tuple_type
+            elif row_type is not tuple_type:
+                row_type = unify_types(row_type, tuple_type)
+        new_tuples = self.datalog_program.new_set(tuples, row_type=row_type)
         return self.compute_instance_update(
             rule, new_tuples, instance, restriction_instance
         )
