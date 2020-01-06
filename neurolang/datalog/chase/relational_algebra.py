@@ -206,7 +206,8 @@ class ChaseNamedRelationalAlgebraMixin:
         return rule
 
     def eliminate_already_computed(self, consequent, instance, substitutions):
-        if len(consequent.args) > substitutions.arity:
+        substitutions_columns = set(substitutions.columns)
+        if substitutions_columns.isdisjoint(consequent.args):
             return substitutions
 
         args = tuple(
@@ -217,7 +218,7 @@ class ChaseNamedRelationalAlgebraMixin:
             args,
             instance[consequent.functor].value
         )
-        if set(substitutions.columns).issuperset(already_computed.columns):
+        if substitutions_columns.issuperset(already_computed.columns):
             already_computed = substitutions.naturaljoin(already_computed)
         substitutions = substitutions - already_computed
         if not isinstance(substitutions, NamedRAFSTupleIterAdapter):
