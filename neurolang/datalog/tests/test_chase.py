@@ -11,7 +11,8 @@ from ..basic_representation import DatalogProgram
 from ..chase import (ChaseGeneral, ChaseMGUMixin, ChaseNaive,
                      ChaseNamedRelationalAlgebraMixin, ChaseNode,
                      ChaseRelationalAlgebraPlusCeriMixin, ChaseSemiNaive)
-from ..expressions import Fact, Implication, TranslateToLogic, Union
+from ..expressions import (Conjunction, Fact, Implication, TranslateToLogic,
+                           Union)
 from ..instance import MapInstance
 
 C_ = expressions.Constant
@@ -358,6 +359,26 @@ def test_chase_iterable_destroy_non_unifyable_types(chase_class):
         ),
     })
     assert instance_update == res
+
+
+def test_builtin_equality_add_column(chase_class):
+    datalog_program = Eb_((
+        Imp_(Q(y), Conjunction((T(x), eq(y, C_(2) * x)))),
+    ))
+
+    dl = Datalog()
+    dl.add_extensional_predicate_from_tuples(T, ((i,) for i in range(8)))
+    dl.walk(datalog_program)
+
+    dc = chase_class(dl)
+    instance_out = dc.build_chase_solution()
+    res = MapInstance({
+        T: dl.extensional_database()[T],
+        Q: C_(
+            {C_((2 * i,)) for i in range(8)}
+        ),
+    })
+    assert instance_out == res
 
 
 def test_python_builtin_equaltiy_chase_step(chase_class):
