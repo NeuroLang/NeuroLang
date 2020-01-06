@@ -220,6 +220,10 @@ class ChaseNamedRelationalAlgebraMixin:
         )
         if substitutions_columns.issuperset(already_computed.columns):
             already_computed = substitutions.naturaljoin(already_computed)
+        elif substitutions_columns.issubset(already_computed.columns):
+            already_computed = already_computed.projection(
+                *substitutions_columns
+            )
         substitutions = substitutions - already_computed
         if not isinstance(substitutions, NamedRAFSTupleIterAdapter):
             substitutions = (
