@@ -10,7 +10,8 @@ from ..basic_representation import DatalogProgram
 from ..chase import (ChaseGeneral, ChaseMGUMixin, ChaseNaive,
                      ChaseNamedRelationalAlgebraMixin, ChaseNode,
                      ChaseRelationalAlgebraPlusCeriMixin, ChaseSemiNaive)
-from ..expressions import Union, Fact, Implication, TranslateToLogic
+from ..expressions import (Conjunction, Fact, Implication, TranslateToLogic,
+                           Union)
 from ..instance import MapInstance
 
 C_ = expressions.Constant
@@ -169,6 +170,30 @@ def test_builtin_equality_only(chase_class):
         Q: C_({C_((12, ))}),
     })
     assert instance_update == res
+
+
+def test_builtin_equality_add_column(chase_class):
+    datalog_program = Eb_((
+        Imp_(Q(x, y), T(x, y)),
+        Imp_(Q(x, y), Conjunction((eq(x, C_(1)),  T(x, z), Q(z, y)))),
+        Imp_(Q(x, y), Conjunction((eq(y, C_(4)),  T(x, z), Q(z, y)))),
+        Imp_(Q(x, y), Conjunction((eq(x, C_(2)),  T(x, z), Q(z, y)))),
+    ))
+
+    dl = Datalog()
+    dl.add_extensional_predicate_from_tuples(T, ((i, 2 * i) for i in range(8)))
+    dl.walk(datalog_program)
+
+    dc = chase_class(dl)
+    instance_out = dc.build_chase_solution()
+    res = MapInstance({
+        T: dl.extensional_database()[T],
+        Q: C_(
+            {C_((i, 2 * i)) for i in range(8)} |
+            {C_((1, 4)), C_((1, 8)), C_((2, 8))}
+        ),
+    })
+    assert instance_out == res
 
 
 def test_python_builtin_equaltiy_chase_step(chase_class):
