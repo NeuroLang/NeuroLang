@@ -23,9 +23,14 @@ class NeuroSynthHandler(object):
         if self._dataset is None:
             dataset = self.ns_load_dataset()
             self._dataset = dataset
-        studies_ids = self._dataset.get_studies(
-            features=terms, frequency_threshold=frequency_threshold
-        )
+        if isinstance(terms, list):
+            studies_ids = self._dataset.get_studies(
+                features=terms, frequency_threshold=frequency_threshold
+            )
+        else:
+            studies_ids = self._dataset.get_studies(
+                expression=terms, frequency_threshold=frequency_threshold
+            )
         ma = ns.meta.MetaAnalysis(self._dataset, studies_ids, q=q, prior=prior)
         data = ma.images[image_type]
         masked_data = self._dataset.masker.unmask(data)
