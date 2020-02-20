@@ -157,7 +157,6 @@ def test_gdatalog_translation():
 
 def test_conjunct_formulas():
     assert conjunct_formulas(P(x), Q(x)) == Conjunction([P(x), Q(x)])
-    a = P(x)
     b = Conjunction([Q(x), Z(x)])
     c = Conjunction([P(x), Q(x), Z(x)])
     d = Conjunction([Q(x), Z(x), P(x)])
