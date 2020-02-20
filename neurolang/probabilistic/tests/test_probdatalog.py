@@ -11,6 +11,7 @@ from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from ..ppdl import DeltaTerm
 from ..expressions import ProbabilisticPredicate, Grounding
 from ..probdatalog import (
+    ProbDatalogExistentialTranslator,
     GDatalogToProbDatalog,
     ProbDatalogProgram,
     conjunct_formulas,
@@ -311,3 +312,14 @@ def test_unsupported_grounding_program_with_disjunction():
     code = ExpressionBlock([Implication(Q(x), P(x)), Implication(Q(x), R(x))])
     with pytest.raises(NeuroLangException, match=r"supported"):
         ground_probdatalog_program(code)
+
+
+def test_existential_probabilistic_rewrite():
+    imp1 = Implication(P(x), Conjunction([Q(x, y), R(y)]))
+    imp2 = Implication(P(x), Q(x))
+    code = ExpressionBlock((imp1, imp2))
+
+    translator = ProbDatalogExistentialTranslator()
+    code = translator.walk(code)
+
+    assert len(code.expressions) == 3
