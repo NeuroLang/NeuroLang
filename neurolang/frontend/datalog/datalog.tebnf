@@ -1,0 +1,73 @@
+@@grammar::Datalog
+@@parseinfo :: True
+@@whitespace :: /[\t ]+/
+@@eol_comments :: /#([^\n]*?)$/
+
+start = expressions $ ;
+
+expressions = ( newline ).{ expression };
+
+
+probabilistic_expression = (number | int_ext_identifier ) '::' expression ;
+expression = rule | constraint | fact;
+fact = constant_predicate ;
+rule = head implication body ;
+constraint = body right_implication head ;
+head = head_predicate ;
+body = ( conjunction ).{ predicate } ;
+
+conjunction = ',' | '&' | '\N{LOGICAL AND}' ;
+implication = ':-' | '\N{LEFTWARDS ARROW}' ;
+right_implication = '-:' | '\N{RIGHTWARDS ARROW}' ;
+head_predicate = identifier'(' [ arguments ] ')' ;
+predicate = int_ext_identifier'(' [ arguments ] ')'
+            | negated_predicate
+            | comparison
+            | logical_constant ;
+
+constant_predicate = identifier'(' ','.{ literal } ')' ;
+
+negated_predicate = ('~' | '\u00AC' ) predicate ;
+
+comparison = argument comparison_operator argument ;
+
+arguments = ','.{ argument }+ ;
+argument = arithmetic_operation
+            | function_application
+            | '...' ;
+
+int_ext_identifier = identifier | ext_identifier ;
+ext_identifier = '@'identifier;
+
+function_application = int_ext_identifier'(' [ arguments ] ')';
+
+arithmetic_operation = term [ ('+' | '-') term ] ;
+
+term = factor [ ( '*' | '/' ) factor ] ;
+
+factor =  exponent [ '**' exponential ];
+
+exponential = exponent ;
+
+exponent = literal
+            | function_application
+            | int_ext_identifier
+            | '(' @:argument ')' ;
+
+literal = number
+        | text
+        | ext_identifier ;
+
+identifier = /[a-zA-Z_][a-zA-Z0-9_]*/ ;
+
+comparison_operator = '==' | '<' | '<=' | '>=' | '>' | '!=' ;
+
+text = '"' /[a-zA-Z0-9]*/ '"'
+        | "'" /[a-zA-Z0-9]*/ "'" ;
+
+number = [ '+' | '-' ] /[0-9]+/ ;
+logical_constant = TRUE | FALSE ;
+TRUE = 'True' | '\u22A4' ;
+FALSE = 'False' | '\u22A5' ;
+
+newline = {['\\u000C'] ['\\r'] '\\n'}+ ;
