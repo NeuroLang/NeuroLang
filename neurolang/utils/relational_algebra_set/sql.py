@@ -1,5 +1,5 @@
 from collections.abc import Set, MutableSet, Iterable
-from uuid import uuid1
+from uuid import uuid4
 
 import pandas as pd
 import sqlalchemy
@@ -53,7 +53,7 @@ class RelationalAlgebraFrozenSet(Set):
 
     @staticmethod
     def _new_name():
-        return "table_" + str(uuid1()).replace("-", "_")
+        return "table_" + str(uuid4()).replace("-", "_")
 
     def __del__(self):
         if self.arity == 0:
@@ -126,7 +126,7 @@ class RelationalAlgebraFrozenSet(Set):
 
     def equijoin(self, other, join_indices=None):
         if other is self:
-            other = self.view()
+            other = self.copy()
         new_name = self._new_name()
         result = (
             ", ".join(
@@ -309,12 +309,13 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
 
 class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
     def __init__(self, *args, **kwargs):
-        if kwargs['is_view']:
+        if kwargs.get('is_view', False):
             name = self._new_name()
+            old_name = kwargs['name']
             engine = kwargs['engine']
             conn = engine.connect()
             conn.execute(
-                f'CREATE TABLE {name} FROM SELECT * FROM {kwargs["name"]}'
+                f'CREATE TABLE {name} AS SELECT * FROM {old_name}'
             )
             kwargs['is_view'] = False
             kwargs['name'] = name
