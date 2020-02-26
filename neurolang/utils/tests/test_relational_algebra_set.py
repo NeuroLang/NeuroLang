@@ -13,7 +13,7 @@ from ..relational_algebra_set import pandas, sql
         {
             'frozen': sql.RelationalAlgebraFrozenSet,
             'mutable': sql.RelationalAlgebraSet,
-            'named': pandas.NamedRelationalAlgebraFrozenSet,
+            'named': sql.NamedRelationalAlgebraFrozenSet,
         },
     ),
     ids=['pandas', 'sql']
