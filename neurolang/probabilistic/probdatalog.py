@@ -138,9 +138,6 @@ def _fill_variables_in_head(free_vars, exp_head):
 
     return FunctionApplication(new_functor, args)
 
-def _process_existential_predicate(expressions):
-
-    pass
 
 def _extract_probfact_or_eprobfact_pred_symb(expression):
     if is_existential_probabilistic_fact(expression):
@@ -190,6 +187,10 @@ class ProbDatalogExistentialTranslator(ExpressionWalker):
             new_code += self.walk(expression)
 
         return ExpressionBlock(new_code)
+
+    @add_match(Implication(Expression, Constant))
+    def existential_fact(self, expression):
+        return (expression,)
 
     @add_match(
         Implication,
