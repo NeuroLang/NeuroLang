@@ -319,6 +319,7 @@ def test_existential_probabilistic_rewrite():
     code = ExpressionBlock((imp1, imp2))
 
     translator = ProbDatalogExistentialTranslator()
+
     code = translator.walk(code)
 
     assert len(code.expressions) == 3
