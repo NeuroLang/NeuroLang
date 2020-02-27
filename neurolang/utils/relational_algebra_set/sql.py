@@ -552,6 +552,8 @@ class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
         else:
             if not isinstance(value, Iterable):
                 value = (value,)
+            if self._len is None:
+                self._len = 0
             conn = self.engine.connect()
             conn.execute(
                 self.add_query,
