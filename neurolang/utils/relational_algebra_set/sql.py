@@ -65,6 +65,7 @@ class RelationalAlgebraFrozenSet(Set):
         self._create_queries()
 
     def _create_queries(self):
+        self._table = sqlalchemy.sql.table(self._name)
         self._contains_query = sqlalchemy.text(
             f"select * from {self._name}"
             + " where "
@@ -104,16 +105,22 @@ class RelationalAlgebraFrozenSet(Set):
 
     def __iter__(self):
         if self.arity > 0 and len(self) > 0:
+            no_dups = self.eliminate_duplicates()
+            query = sqlalchemy.sql.select(['*'], from_obj=no_dups._table)
             conn = self.engine.connect()
-            res = conn.execute(f"SELECT DISTINCT * FROM {self._name}")
+            res = conn.execute(query)
             for t in res:
                 yield tuple(t)
 
     def __len__(self):
         if self._len is None:
             no_dups = self.eliminate_duplicates()
+            query = sqlalchemy.sql.select(
+                [sqlalchemy.func.count('*')],
+                from_obj=no_dups._table
+            )
             conn = self.engine.connect()
-            res = conn.execute(f"SELECT COUNT(*) FROM {no_dups._name}")
+            res = conn.execute(query)
             r = next(res)
             self._len = r[0]
         return self._len
@@ -137,9 +144,7 @@ class RelationalAlgebraFrozenSet(Set):
 
     def selection(self, select_criteria):
         new_name = self._new_name()
-        table = sqlalchemy.sql.table(self._name)
-        query = sqlalchemy.sql.select(['*'])
-        query.append_from(table)
+        query = sqlalchemy.sql.select(['*'], from_obj=self._table)
         for k, v in select_criteria.items():
             query.append_whereclause(sqlalchemy.sql.column(str(k)) == v)
         query = query.compile(compile_kwargs={"literal_binds": True})
@@ -294,11 +299,14 @@ class RelationalAlgebraFrozenSet(Set):
             single_column = True
             columns = (columns,)
 
-        str_columns = ', '.join(f'`{i}`' for i in columns)
-
-        query = (
-            f'SELECT {str_columns} FROM {self._name}'
-            f' GROUP BY {str_columns}'
+        columns = tuple(
+            sqlalchemy.sql.column(str(c))
+            for c in columns
+        )
+        query = sqlalchemy.sql.select(
+            columns=columns,
+            from_obj=self._table,
+            group_by=columns
         )
 
         conn = self.engine.connect()
@@ -313,8 +321,13 @@ class RelationalAlgebraFrozenSet(Set):
 
     def __hash__(self):
         if self._hash is None:
+            query = sqlalchemy.sql.select(
+                columns=['*'],
+                distinct=True,
+                from_obj=self._table
+            )
             conn = self.engine.connect()
-            r = conn.execute(f'select DISTINCT * from {self._name}')
+            r = conn.execute(query)
             ts = tuple(tuple(t) for t in r.fetchall())
             self._hash = hash(ts)
         return self._hash
@@ -465,11 +478,15 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
             single_column = True
             columns = (columns,)
 
-        str_columns = ', '.join(f'`{i}`' for i in columns)
+        columns = tuple(
+            sqlalchemy.sql.column(str(c))
+            for c in columns
+        )
 
-        query = (
-            f'SELECT {str_columns} FROM {self._name}'
-            f' GROUP BY {str_columns}'
+        query = sqlalchemy.sql.select(
+            columns=columns,
+            from_obj=self._table,
+            group_by=columns
         )
 
         conn = self.engine.connect()
