@@ -26,7 +26,10 @@ class RelationalAlgebraFrozenSet(
 
     @property
     def arity(self):
-        return self._container.shape[1]
+        if self._container is None:
+            return 0
+        else:
+            return len(self._container.columns)
 
     def __contains__(self, element):
         element = self._normalise_element(element)
@@ -78,13 +81,6 @@ class RelationalAlgebraFrozenSet(
             container.itertuples(index=False, name=None)
         )
         container.set_index(new_indices, inplace=True)
-
-    @property
-    def arity(self):
-        if len(self) == 0:
-            return 0
-        else:
-            return len(self._container.columns)
 
     def _empty_set_same_structure(self):
         return type(self)()
@@ -280,10 +276,6 @@ class NamedRelationalAlgebraFrozenSet(
                 )
             self._container.columns = self._columns
         self._container.sort_index(axis=1, inplace=True)
-
-    @property
-    def arity(self):
-        return len(self._columns)
 
     def _empty_set_same_structure(self):
         return type(self)(self.columns)

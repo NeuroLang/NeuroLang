@@ -1,7 +1,7 @@
 from .orderedset import OrderedSet
-from .relational_algebra_set import (NamedRelationalAlgebraFrozenSet,
-                                     RelationalAlgebraFrozenSet,
-                                     RelationalAlgebraSet)
+from .relational_algebra_set.pandas import (NamedRelationalAlgebraFrozenSet,
+                                            RelationalAlgebraFrozenSet,
+                                            RelationalAlgebraSet)
 
 __all__ = [
     'OrderedSet', 'RelationalAlgebraSet',

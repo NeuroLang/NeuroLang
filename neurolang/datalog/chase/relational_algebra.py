@@ -9,8 +9,7 @@ from ...relational_algebra import (ColumnInt, Product, Projection,
                                    RelationalAlgebraOptimiser,
                                    RelationalAlgebraSolver, Selection, eq_)
 from ...type_system import is_leq_informative
-from ...utils.relational_algebra_set.pandas import \
-    NamedRelationalAlgebraFrozenSet
+from ...utils import NamedRelationalAlgebraFrozenSet
 from ..expression_processing import (extract_logic_free_variables,
                                      extract_logic_predicates)
 from ..expressions import Conjunction, Implication, Negation

@@ -10,7 +10,9 @@ from .. import OrderedSet, relational_algebra_set
 engine = sqlalchemy.create_engine("sqlite:///", echo=False)
 
 
-class RelationalAlgebraFrozenSet(relational_algebra_set.RelationalAlgebraFrozenSet):
+class RelationalAlgebraFrozenSet(
+    relational_algebra_set.RelationalAlgebraFrozenSet
+ ):
     def __init__(
         self,
         iterable=None,

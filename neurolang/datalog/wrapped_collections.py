@@ -4,7 +4,7 @@ from typing import Tuple
 from ..expressions import Constant
 from ..expression_walker import ReplaceExpressionsByValues
 from ..type_system import infer_type
-from ..utils.relational_algebra_set.pandas import RelationalAlgebraSet
+from ..utils import RelationalAlgebraSet
 
 
 REBV = ReplaceExpressionsByValues(dict())
@@ -18,7 +18,6 @@ class WrappedExpressionIterable:
         self.__row_type = None
         if iterable is not None:
             if isinstance(iterable, type(self)):
-                import pdb; pdb.set_trace()
                 iterable = iterable.unwrapped_iter()
             else:
                 iterable = self._obtain_value_iterable(iterable)
