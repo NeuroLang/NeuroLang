@@ -1,16 +1,16 @@
 from collections import namedtuple
-from collections.abc import Iterable, MutableSet, Set
+from collections import Iterable
 from uuid import uuid4
 
 import pandas as pd
 import sqlalchemy
 
-from .. import OrderedSet
+from .. import OrderedSet, relational_algebra_set
 
 engine = sqlalchemy.create_engine("sqlite:///", echo=False)
 
 
-class RelationalAlgebraFrozenSet(Set):
+class RelationalAlgebraFrozenSet(relational_algebra_set.RelationalAlgebraFrozenSet):
     def __init__(
         self,
         iterable=None,
@@ -26,9 +26,9 @@ class RelationalAlgebraFrozenSet(Set):
         if iterable is not None:
             self._create_table_from_iterable(iterable)
         else:
-            self.arity = 0
+            self._arity = 0
             self._len = 0
-            self.columns = tuple()
+            self._columns = tuple()
 
     @classmethod
     def create_from_table_or_view(
@@ -44,24 +44,34 @@ class RelationalAlgebraFrozenSet(Set):
         new_set.is_view = is_view
         new_set.parents = parents
         if columns is None:
-            new_set.columns = tuple(
+            new_set._columns = tuple(
                 column['name']
                 for column in
                 sqlalchemy.inspect(new_set.engine).get_columns(new_set._name)
             )
         else:
-            new_set.columns = columns
-        new_set.arity = len(new_set.columns)
+            new_set._columns = columns
+        new_set._arity = len(new_set.columns)
         new_set._len = None
         new_set._create_queries()
         return new_set
 
+    def _normalise_element(self, element):
+        if isinstance(element, dict):
+            pass
+        elif hasattr(element, '__iter__') and not isinstance(element, str):
+            element = dict(zip(self.columns, element))
+        else:
+            element = dict(zip(self.columns, (element,)))
+        return element
+
     def _create_table_from_iterable(self, iterable, column_names=None):
+        iterable = list(iterable)
         df = pd.DataFrame(list(iterable), columns=column_names)
         df.to_sql(self._name, self.engine, index=False)
-        self.arity = len(df.columns)
+        self._arity = len(df.columns)
         self._len = None
-        self.columns = tuple(df.columns)
+        self._columns = tuple(df.columns)
         self._create_queries()
 
     def _create_queries(self):
@@ -77,30 +87,30 @@ class RelationalAlgebraFrozenSet(Set):
         return "table_" + str(uuid4()).replace("-", "_")
 
     def __del__(self):
-        if self.arity == 0:
+        if self._arity == 0:
             return
         if self.is_view:
             self.engine.execute(f"drop view {self._name}")
         else:
             self.engine.execute(f"drop table {self._name}")
 
-    def __contains__(self, element):
-        if self.arity == 0:
-            return False
-        if not isinstance(element, Iterable):
-            element = (element,)
-        conn = self.engine.connect()
+    @property
+    def columns(self):
+        return self._columns
 
-        if isinstance(element, dict):
-            res = conn.execute(
-                self._contains_query,
-                **{f"t{i}": e for i, e in element.items()}
-            )
-        else:
-            res = conn.execute(
-                self._contains_query,
-                **{f"t{i}": e for i, e in zip(self.columns, element)}
-            )
+    @property
+    def arity(self):
+        return self._arity
+
+    def __contains__(self, element):
+        if self._arity == 0:
+            return False
+        element = self._normalise_element(element)
+        conn = self.engine.connect()
+        res = conn.execute(
+            self._contains_query,
+            **{f"t{i}": e for i, e in element.items()}
+        )
         return res.first() is not None
 
     def __iter__(self):
@@ -333,14 +343,17 @@ class RelationalAlgebraFrozenSet(Set):
         return self._hash
 
 
-class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
+class NamedRelationalAlgebraFrozenSet(
+    RelationalAlgebraFrozenSet,
+    relational_algebra_set.NamedRelationalAlgebraFrozenSet
+):
     def __init__(
         self, columns=None, iterable=None, engine=engine
     ):
         self.engine = engine
         if columns is None:
             columns = tuple()
-        self.columns = columns
+        self._columns = columns
         self._name = self._new_name()
 
         if (
@@ -355,7 +368,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
             self.is_view = False
         else:
             self._len = 0
-            self.arity = len(self.columns)
+            self._arity = len(self.columns)
             self.is_view = False
 
         self.named_tuple_type = None
@@ -373,7 +386,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         )
         conn = self.engine.connect()
         conn.execute(query)
-        self.arity = len(self.columns)
+        self._arity = len(self.columns)
         self.is_view = True
         if other.is_view:
             self.parents = other.parents
@@ -531,7 +544,9 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         )
 
 
-class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
+class RelationalAlgebraSet(
+    RelationalAlgebraFrozenSet, relational_algebra_set.RelationalAlgebraSet
+):
     def __init__(self, *args, **kwargs):
         if kwargs.get('is_view', False):
             name = self._new_name()
@@ -566,11 +581,12 @@ class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
         )
 
     def add(self, value):
-        if not isinstance(value, Iterable):
-            value = (value,)
+        if len(self.columns) == 0:
+            self._columns = list(range(len(value)))
+        value = self._normalise_element(value)
 
-        if self.arity == 0:
-            self._create_table_from_iterable(value)
+        if self._arity == 0:
+            self._create_table_from_iterable((value,))
             self._generate_mutable_queries()
         else:
             if self._len is None:
@@ -578,17 +594,16 @@ class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
             conn = self.engine.connect()
             conn.execute(
                 self.add_query,
-                {f't{i}': e for i, e in enumerate(value)}
+                {f't{i}': e for i, e in value.items()}
             )
             self._len += 1
 
     def discard(self, value):
-        if not isinstance(value, Iterable):
-            value = (value,)
+        value = self._normalise_element(value)
         conn = self.engine.connect()
         conn.execute(
             self.discard_query,
-            {f"t{i}": e for i, e in enumerate(value)}
+            {f"t{i}": e for i, e in value.items()}
         )
         self._len = None
 

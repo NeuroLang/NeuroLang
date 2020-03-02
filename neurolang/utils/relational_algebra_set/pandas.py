@@ -1,11 +1,14 @@
-from collections.abc import MutableSet, Set
 from typing import Iterable
 from uuid import uuid1
 
 import pandas as pd
 
+from .. import relational_algebra_set
 
-class RelationalAlgebraFrozenSet(Set):
+
+class RelationalAlgebraFrozenSet(
+    relational_algebra_set.RelationalAlgebraFrozenSet
+):
     def __init__(self, iterable=None):
         self._container = None
         if iterable is not None:
@@ -16,6 +19,14 @@ class RelationalAlgebraFrozenSet(Set):
                     list(iterable),
                 )
                 self._container = self._renew_index(self._container)
+
+    @property
+    def columns(self):
+        return self._container.columns
+
+    @property
+    def arity(self):
+        return self._container.shape[1]
 
     def __contains__(self, element):
         element = self._normalise_element(element)
@@ -235,7 +246,10 @@ class RelationalAlgebraFrozenSet(Set):
         return hash(v.data.tobytes())
 
 
-class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
+class NamedRelationalAlgebraFrozenSet(
+    RelationalAlgebraFrozenSet,
+    relational_algebra_set.NamedRelationalAlgebraFrozenSet
+):
     def __init__(self, columns, iterable=None):
         self._columns = tuple(columns)
         self._columns_sort = tuple(pd.Index(columns).argsort())
@@ -437,7 +451,10 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         raise NotImplementedError()
 
 
-class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
+class RelationalAlgebraSet(
+    RelationalAlgebraFrozenSet,
+    relational_algebra_set.RelationalAlgebraSet
+):
     def add(self, value):
         value = self._normalise_element(value)
         e_hash = hash(value)

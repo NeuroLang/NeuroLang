@@ -2,19 +2,27 @@ from itertools import tee
 from typing import Tuple
 
 from ..expressions import Constant
+from ..expression_walker import ReplaceExpressionsByValues
 from ..type_system import infer_type
 from ..utils.relational_algebra_set.pandas import RelationalAlgebraSet
 
 
+REBV = ReplaceExpressionsByValues(dict())
+
+
 class WrappedExpressionIterable:
     def __init__(self, iterable=None):
+        if iterable is not None:
+            orig_it = list(iterable)
+            iterable = orig_it
         self.__row_type = None
         if iterable is not None:
             if isinstance(iterable, type(self)):
+                import pdb; pdb.set_trace()
                 iterable = iterable.unwrapped_iter()
             else:
                 iterable = self._obtain_value_iterable(iterable)
-
+            iterable = list(iterable)
         super().__init__(iterable)
 
     def _obtain_value_iterable(self, iterable):
@@ -24,10 +32,9 @@ class WrappedExpressionIterable:
             iterator_of_constants = isinstance(val, Constant[Tuple])
             break
         if iterator_of_constants:
-            iterable = (
-                tuple(a.value for a in e.value)
-                for e in it2
-            )
+            iterable = []
+            for e in it2:
+                iterable.append(REBV.walk(e))
         return iterable
 
     def __iter__(self):
