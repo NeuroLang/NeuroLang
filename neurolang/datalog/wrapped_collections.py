@@ -3,7 +3,7 @@ from typing import Tuple
 
 from ..expressions import Constant
 from ..type_system import infer_type
-from ..utils.relational_algebra_set.sql import RelationalAlgebraSet
+from ..utils.relational_algebra_set.pandas import RelationalAlgebraSet
 
 
 class WrappedExpressionIterable:
