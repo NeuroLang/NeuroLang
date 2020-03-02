@@ -566,12 +566,13 @@ class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
         )
 
     def add(self, value):
+        if not isinstance(value, Iterable):
+            value = (value,)
+
         if self.arity == 0:
-            self._create_table_from_iterable([value])
+            self._create_table_from_iterable(value)
             self._generate_mutable_queries()
         else:
-            if not isinstance(value, Iterable):
-                value = (value,)
             if self._len is None:
                 self._len = 0
             conn = self.engine.connect()
