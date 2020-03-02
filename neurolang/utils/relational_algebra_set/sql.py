@@ -270,7 +270,7 @@ class RelationalAlgebraFrozenSet(Set):
         )
 
     def eliminate_duplicates(self):
-        new_name = self._new_name()
+        new_name = type(self)._new_name()
         query = sqlalchemy.text(
             f"CREATE VIEW {new_name} AS SELECT DISTINCT *"
             + f" FROM {self._name}"
@@ -343,7 +343,10 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         self.columns = columns
         self._name = self._new_name()
 
-        if isinstance(iterable, RelationalAlgebraFrozenSet):
+        if (
+            isinstance(iterable, RelationalAlgebraFrozenSet) and
+            iterable.arity > 0
+        ):
             self._initialize_from_instance_same_class(iterable)
         elif iterable is not None:
             self._create_table_from_iterable(
