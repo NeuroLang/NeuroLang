@@ -1,10 +1,11 @@
 from itertools import tee
 from typing import Tuple
+from inspect import getmro
 
 from ..expressions import Constant
 from ..expression_walker import ReplaceExpressionsByValues
 from ..type_system import infer_type
-from ..utils import RelationalAlgebraSet
+from ..utils.relational_algebra_set.sql import RelationalAlgebraSet
 
 
 REBV = ReplaceExpressionsByValues(dict())
@@ -12,19 +13,17 @@ REBV = ReplaceExpressionsByValues(dict())
 
 class WrappedExpressionIterable:
     def __init__(self, iterable=None):
-        if iterable is not None:
-            orig_it = list(iterable)
-            iterable = orig_it
         self.__row_type = None
         if iterable is not None:
             if isinstance(iterable, type(self)):
                 iterable = iterable.unwrapped_iter()
             else:
-                iterable = self._obtain_value_iterable(iterable)
+                iterable = type(self)._obtain_value_iterable(iterable)
             iterable = list(iterable)
         super().__init__(iterable)
 
-    def _obtain_value_iterable(self, iterable):
+    @staticmethod
+    def _obtain_value_iterable(iterable):
         it1, it2 = tee(iterable)
         iterator_of_constants = False
         for val in it1:
@@ -49,6 +48,9 @@ class WrappedExpressionIterable:
 
     def unwrapped_iter(self):
         return super().__iter__()
+
+    def unwrap(self):
+        raise NotImplementedError()
 
     def add(self, element):
         if isinstance(element, Constant[Tuple]):
@@ -89,3 +91,7 @@ class WrappedRelationalAlgebraSet(
             return all(
                 e in self for e in other
             )
+
+    def unwrap(self):
+        res = RelationalAlgebraSet(iterable=self)
+        return res

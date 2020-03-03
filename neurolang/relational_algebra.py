@@ -236,7 +236,11 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
                 raise NeuroLangException(
                     "Column name must be a Constant or Symbol"
                 )
-        new_set = NamedRelationalAlgebraFrozenSet(column_names, relation_set)
+        unwrapped_relation_set = relation_set.unwrap()
+        new_set = NamedRelationalAlgebraFrozenSet(
+            column_names,
+            unwrapped_relation_set
+        )
         return self._build_relation_constant(new_set)
 
     @ew.add_match(RenameColumn)

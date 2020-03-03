@@ -40,6 +40,7 @@ class RelationalAlgebraFrozenSet(
         is_view=False,
         columns=None,
         parents=None,
+        length=None
     ):
         new_set = cls()
         new_set._name = name
@@ -53,8 +54,8 @@ class RelationalAlgebraFrozenSet(
             )
         else:
             new_set._columns = columns
-        new_set._arity = len(new_set.columns)
-        new_set._len = None
+        new_set._arity = len(new_set._columns)
+        new_set._len = length
         new_set._create_queries()
         return new_set
 
@@ -68,12 +69,21 @@ class RelationalAlgebraFrozenSet(
         return element
 
     def _create_table_from_iterable(self, iterable, column_names=None):
-        iterable = list(iterable)
-        df = pd.DataFrame(list(iterable), columns=column_names)
-        df.to_sql(self._name, self.engine, index=False)
-        self._arity = len(df.columns)
-        self._len = None
-        self._columns = tuple(df.columns)
+        if isinstance(iterable, RelationalAlgebraFrozenSet):
+            self._name = iterable._name
+            self._columns = iterable._columns
+            self._arity = iterable._arity
+            self._len = iterable._len
+            self.parents = iterable.parents + [iterable]
+        else:
+            df = pd.DataFrame(list(iterable), columns=column_names)
+            self._columns = tuple(df.columns)
+            if len(self._columns) > 0:
+                df.to_sql(self._name, self.engine, index=False)
+                self._len = None
+            else:
+                self._len = 0
+            self._arity = len(df.columns)
         self._create_queries()
 
     def _create_queries(self):
@@ -93,7 +103,7 @@ class RelationalAlgebraFrozenSet(
             return
         if self.is_view:
             self.engine.execute(f"drop view {self._name}")
-        else:
+        elif len(self.parents) == 0:
             self.engine.execute(f"drop table {self._name}")
 
     @property
@@ -128,7 +138,7 @@ class RelationalAlgebraFrozenSet(
         if self._len is None:
             no_dups = self.eliminate_duplicates()
             query = sqlalchemy.sql.select(
-                [sqlalchemy.func.count('*')],
+                [sqlalchemy.func.count(sqlalchemy.sql.text('*'))],
                 from_obj=no_dups._table
             )
             conn = self.engine.connect()
@@ -138,6 +148,9 @@ class RelationalAlgebraFrozenSet(
         return self._len
 
     def projection(self, *columns):
+        if len(columns) == 0:
+            raise NotImplementedError()
+
         new_name = self._new_name()
         query = (
             f"CREATE VIEW {new_name} as select "
@@ -152,6 +165,7 @@ class RelationalAlgebraFrozenSet(
             is_view=True,
             columns=tuple(range(len(columns))),
             parents=[self],
+            length=self._len
         )
 
     def selection(self, select_criteria):
@@ -266,15 +280,17 @@ class RelationalAlgebraFrozenSet(
             columns=self.columns,
         )
 
-    def copy(self):
-        new_name = self._new_name()
+    def _create_view(self, src_table_name, dst_table_name):
         query = sqlalchemy.text(
-            f"CREATE VIEW {new_name} AS SELECT * FROM {self._name}"
+            f"CREATE VIEW {dst_table_name} AS SELECT * FROM {src_table_name}"
         )
         conn = self.engine.connect()
         conn.execute(query)
+
+    def copy(self):
+        new_name = self._new_name()
         return type(self).create_from_table_or_view(
-            name=new_name,
+            name=self._create_view(self._name, new_name),
             engine=self.engine,
             is_view=True,
             columns=self.columns,
@@ -417,6 +433,9 @@ class NamedRelationalAlgebraFrozenSet(
         )
 
     def projection(self, *columns):
+        if len(columns) == 0:
+            raise NotImplementedError()
+
         new_name = self._new_name()
         query = (
             f"CREATE VIEW {new_name} as select "
@@ -431,6 +450,7 @@ class NamedRelationalAlgebraFrozenSet(
             is_view=True,
             columns=columns,
             parents=[self],
+            length=self._len
         )
 
     def __iter__(self):
@@ -628,4 +648,5 @@ class RelationalAlgebraSet(
             return super().__isub__(other)
 
     def copy(self):
-        return self.deepcopy()
+        res = super().copy()
+        return res

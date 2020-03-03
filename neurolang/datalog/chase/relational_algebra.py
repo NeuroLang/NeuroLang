@@ -215,7 +215,7 @@ class ChaseNamedRelationalAlgebraMixin:
         )
         already_computed = NamedRAFSTupleIterAdapter(
             args,
-            instance[consequent.functor].value
+            instance[consequent.functor].value.unwrap()
         )
         if set(substitutions.columns).issuperset(already_computed.columns):
             already_computed = substitutions.naturaljoin(already_computed)
@@ -408,3 +408,6 @@ class NamedRAFSTupleIterAdapter(NamedRelationalAlgebraFrozenSet):
         else:
             for _ in range(len(self)):
                 yield dict()
+
+    def unwrapped_iter(self):
+        return super().__iter__()
