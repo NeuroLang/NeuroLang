@@ -64,6 +64,12 @@ def test_relational_algebra_ra_projection(ras_class):
     ras_0 = ras.projection(0, 2)
     assert all((i % 2, i * 2) for i in range(5))
 
+    ras_null = ras.projection()
+    assert ras_null.arity == 0 and len(ras_null) > 0
+
+    ras_null2 = RelationalAlgebraSet().projection()
+    assert ras_null2.arity == 0 and len(ras_null2) == 0
+
 
 def test_relational_algebra_ra_selection(ras_class):
     RelationalAlgebraSet = ras_class['mutable']

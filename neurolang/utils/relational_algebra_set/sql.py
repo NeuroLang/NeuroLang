@@ -185,7 +185,10 @@ class RelationalAlgebraFrozenSet(
 
     def projection(self, *columns):
         if len(columns) == 0:
-            raise NotImplementedError()
+            new = type(self)()
+            if len(self) > 0:
+                new._len = 1
+            return new
 
         new_name = self._new_name()
         query = (
@@ -470,7 +473,10 @@ class NamedRelationalAlgebraFrozenSet(
 
     def projection(self, *columns):
         if len(columns) == 0:
-            raise NotImplementedError()
+            new = type(self)()
+            if len(self) > 0:
+                new._len = 1
+            return new
 
         new_name = self._new_name()
         query = (
