@@ -82,6 +82,20 @@ def test_relational_algebra_ra_selection(ras_class):
     )
     assert ras_0 == a_sel
 
+    ras_1 = ras.selection({0: 'a'})
+    assert len(ras_1) == 0
+
+
+def test_relational_algebra_ra_selection_columns(ras_class):
+    RelationalAlgebraSet = ras_class['mutable']
+    a = [(i % 2, i, i * 2) for i in range(5)]
+
+    ras = RelationalAlgebraSet(a)
+
+    ras_0 = ras.selection_columns({0: 1})
+    a_sel = set((i % 2, i, i * 2) for i in range(5) if i % 2 == i)
+    assert ras_0 == a_sel
+
 
 def test_relational_algebra_ra_equijoin(ras_class):
     RelationalAlgebraSet = ras_class['mutable']
@@ -182,6 +196,12 @@ def test_named_relational_algebra_ra_projection(ras_class):
 
     ras_xz = ras.projection('x', 'z')
     assert all((i % 2, i * 2) in ras_xz for i in range(5))
+
+    ras_null = ras.projection()
+    assert ras_null.arity == 0 and len(ras_null) > 0
+
+    ras_null2 = NamedRelationalAlgebraFrozenSet(columns=['a']).projection()
+    assert ras_null2.arity == 0 and len(ras_null2) == 0
 
 
 def test_named_relational_algebra_ra_selection(ras_class):

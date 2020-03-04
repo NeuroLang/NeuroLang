@@ -1,6 +1,6 @@
-from collections import namedtuple
-from collections import Iterable
+from collections import Iterable, namedtuple
 from uuid import uuid4
+from warnings import warn
 
 import pandas as pd
 import sqlalchemy
@@ -24,6 +24,7 @@ class RelationalAlgebraFrozenSet(
         self._len = None
         self._hash = None
         self._name = self._new_name()
+        self._created = False
 
         if iterable is not None:
             self._create_table_from_iterable(iterable)
@@ -31,6 +32,27 @@ class RelationalAlgebraFrozenSet(
             self._arity = 0
             self._len = 0
             self._columns = tuple()
+            self._create_queries()
+
+    def _create_table_from_iterable(self, iterable, column_names=None):
+        if isinstance(iterable, RelationalAlgebraFrozenSet):
+            self._name = iterable._name
+            self._columns = iterable._columns
+            self._arity = iterable._arity
+            self._len = iterable._len
+            self.parents = iterable.parents + [iterable]
+            self._created = iterable._created
+        else:
+            df = pd.DataFrame(list(iterable), columns=column_names)
+            self._columns = tuple(df.columns)
+            if len(self._columns) > 0:
+                df.to_sql(self._name, self.engine, index=False)
+                self._len = None
+                self._created = True
+            else:
+                self._len = 0
+            self._arity = len(df.columns)
+        self._create_queries()
 
     @classmethod
     def create_from_table_or_view(
@@ -45,46 +67,49 @@ class RelationalAlgebraFrozenSet(
         new_set = cls()
         new_set._name = name
         new_set.is_view = is_view
-        new_set.parents = parents
+
+        inspector = sqlalchemy.inspect(new_set.engine)
+
+        if parents is not None:
+            new_set.parents = parents
         if columns is None:
             new_set._columns = tuple(
                 column['name']
                 for column in
-                sqlalchemy.inspect(new_set.engine).get_columns(new_set._name)
+                inspector.get_columns(new_set._name)
             )
         else:
             new_set._columns = columns
+
         new_set._arity = len(new_set._columns)
         new_set._len = length
+        if is_view:
+            new_set._created = (name in inspector.get_view_names())
+        else:
+            new_set._created = (name in inspector.get_table_names())
         new_set._create_queries()
         return new_set
 
-    def _normalise_element(self, element):
-        if isinstance(element, dict):
-            pass
-        elif hasattr(element, '__iter__') and not isinstance(element, str):
-            element = dict(zip(self.columns, element))
+    def _initialize_from_instance_same_class(self, other):
+        self.engine = other.engine
+        query = sqlalchemy.sql.text(
+            f'CREATE VIEW {self._name} AS SELECT ' +
+            ', '.join(
+                f'`{src_c}` as {dst_c}'
+                for src_c, dst_c in
+                zip(self.columns, other.columns)
+            ) +
+            f' FROM {other._name}'
+        )
+        conn = self.engine.connect()
+        conn.execute(query)
+        self._created = True
+        self._arity = len(self.columns)
+        self.is_view = True
+        if other.is_view:
+            self.parents = other.parents
         else:
-            element = dict(zip(self.columns, (element,)))
-        return element
-
-    def _create_table_from_iterable(self, iterable, column_names=None):
-        if isinstance(iterable, RelationalAlgebraFrozenSet):
-            self._name = iterable._name
-            self._columns = iterable._columns
-            self._arity = iterable._arity
-            self._len = iterable._len
-            self.parents = iterable.parents + [iterable]
-        else:
-            df = pd.DataFrame(list(iterable), columns=column_names)
-            self._columns = tuple(df.columns)
-            if len(self._columns) > 0:
-                df.to_sql(self._name, self.engine, index=False)
-                self._len = None
-            else:
-                self._len = 0
-            self._arity = len(df.columns)
-        self._create_queries()
+            self.parents = [other]
 
     def _create_queries(self):
         self._table = sqlalchemy.sql.table(self._name)
@@ -99,12 +124,20 @@ class RelationalAlgebraFrozenSet(
         return "table_" + str(uuid4()).replace("-", "_")
 
     def __del__(self):
-        if self._arity == 0:
-            return
-        if self.is_view:
-            self.engine.execute(f"drop view {self._name}")
-        elif len(self.parents) == 0:
-            self.engine.execute(f"drop table {self._name}")
+        if self._created:
+            if self.is_view:
+                self.engine.execute(f"drop view {self._name}")
+            elif len(self.parents) == 0:
+                self.engine.execute(f"drop table {self._name}")
+
+    def _normalise_element(self, element):
+        if isinstance(element, dict):
+            pass
+        elif hasattr(element, '__iter__') and not isinstance(element, str):
+            element = dict(zip(self.columns, element))
+        else:
+            element = dict(zip(self.columns, (element,)))
+        return element
 
     @property
     def columns(self):
@@ -136,15 +169,18 @@ class RelationalAlgebraFrozenSet(
 
     def __len__(self):
         if self._len is None:
-            no_dups = self.eliminate_duplicates()
-            query = sqlalchemy.sql.select(
-                [sqlalchemy.func.count(sqlalchemy.sql.text('*'))],
-                from_obj=no_dups._table
-            )
-            conn = self.engine.connect()
-            res = conn.execute(query)
-            r = next(res)
-            self._len = r[0]
+            if self._created:
+                no_dups = self.eliminate_duplicates()
+                query = sqlalchemy.sql.select(
+                    [sqlalchemy.func.count(sqlalchemy.sql.text('*'))],
+                    from_obj=no_dups._table
+                )
+                conn = self.engine.connect()
+                res = conn.execute(query)
+                r = next(res)
+                self._len = r[0]
+            else:
+                self._len = 0
         return self._len
 
     def projection(self, *columns):
@@ -173,6 +209,24 @@ class RelationalAlgebraFrozenSet(
         query = sqlalchemy.sql.select(['*'], from_obj=self._table)
         for k, v in select_criteria.items():
             query.append_whereclause(sqlalchemy.sql.column(str(k)) == v)
+        query = query.compile(compile_kwargs={"literal_binds": True})
+        query = f'CREATE VIEW {new_name} AS {query}'
+        conn = self.engine.connect()
+        conn.execute(query)
+        rr = list(conn.execute(f"SELECT * FROM {new_name}"))
+        result = type(self).create_from_table_or_view(
+            name=new_name, engine=self.engine, is_view=True,
+            columns=self.columns, parents=[self]
+        )
+        return result
+
+    def selection_columns(self, select_criteria):
+        new_name = self._new_name()
+        query = sqlalchemy.sql.select(['*'], from_obj=self._table)
+        for k, v in select_criteria.items():
+            query.append_whereclause(
+                sqlalchemy.sql.column(str(k)) == sqlalchemy.sql.column(str(v))
+            )
         query = query.compile(compile_kwargs={"literal_binds": True})
         query = f'CREATE VIEW {new_name} AS {query}'
         conn = self.engine.connect()
@@ -289,8 +343,9 @@ class RelationalAlgebraFrozenSet(
 
     def copy(self):
         new_name = self._new_name()
+        self._create_view(self._name, new_name),
         return type(self).create_from_table_or_view(
-            name=self._create_view(self._name, new_name),
+            name=new_name,
             engine=self.engine,
             is_view=True,
             columns=self.columns,
@@ -373,6 +428,7 @@ class NamedRelationalAlgebraFrozenSet(
             columns = tuple()
         self._columns = columns
         self._name = self._new_name()
+        self.parents = []
 
         if (
             isinstance(iterable, RelationalAlgebraFrozenSet) and
@@ -390,26 +446,6 @@ class NamedRelationalAlgebraFrozenSet(
             self.is_view = False
 
         self.named_tuple_type = None
-
-    def _initialize_from_instance_same_class(self, other):
-        self.engine = other.engine
-        query = sqlalchemy.sql.text(
-            f'CREATE VIEW {self._name} AS SELECT ' +
-            ', '.join(
-                f'`{src_c}` as {dst_c}'
-                for src_c, dst_c in
-                zip(self.columns, other.columns)
-            ) +
-            f' FROM {other._name}'
-        )
-        conn = self.engine.connect()
-        conn.execute(query)
-        self._arity = len(self.columns)
-        self.is_view = True
-        if other.is_view:
-            self.parents = other.parents
-        else:
-            self.parents = [other]
 
     def to_unnamed(self):
         new_name = self._new_name()
@@ -569,18 +605,8 @@ class NamedRelationalAlgebraFrozenSet(
 class RelationalAlgebraSet(
     RelationalAlgebraFrozenSet, relational_algebra_set.RelationalAlgebraSet
 ):
-    def __init__(self, *args, **kwargs):
-        if kwargs.get('is_view', False):
-            name = self._new_name()
-            old_name = kwargs['name']
-            engine = kwargs['engine']
-            conn = engine.connect()
-            conn.execute(
-                f'CREATE TABLE {name} AS SELECT * FROM {old_name}'
-            )
-            kwargs['is_view'] = False
-            kwargs['name'] = name
-        super().__init__(*args, **kwargs)
+    def __init__(self, iterable=None, engine=engine):
+        super().__init__(iterable=iterable, engine=engine)
         self._generate_mutable_queries()
 
     def _generate_mutable_queries(self):
@@ -650,3 +676,13 @@ class RelationalAlgebraSet(
     def copy(self):
         res = super().copy()
         return res
+
+    def __del__(self):
+        if self._created:
+            if self.is_view:
+                self.engine.execute(f"drop view {self._name}")
+            elif len(self.parents) == 0:
+                try:
+                    self.engine.execute(f"drop table {self._name}")
+                except:
+                    pass

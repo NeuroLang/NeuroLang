@@ -77,12 +77,11 @@ class WrappedRelationalAlgebraSet(
     WrappedExpressionIterable, RelationalAlgebraSet
 ):
     def __contains__(self, element):
-        if not isinstance(element, Constant):
+        if isinstance(element, Constant):
+            element = REBV.walk(element)
+        else:
             element = self._normalise_element(element)
-        return (
-            self._container is not None and
-            hash(element) in self._container.index
-        )
+        return super(RelationalAlgebraSet, self).__contains__(element)
 
     def __eq__(self, other):
         if isinstance(other, WrappedRelationalAlgebraSet):

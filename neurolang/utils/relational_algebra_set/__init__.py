@@ -20,6 +20,10 @@ class RelationalAlgebraFrozenSet(Set):
         pass
 
     @abstractmethod
+    def selection_columns(self, select_criteria):
+        pass
+
+    @abstractmethod
     def equijoin(self, other, join_indices=None):
         pass
 
