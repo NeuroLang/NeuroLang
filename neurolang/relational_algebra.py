@@ -155,7 +155,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         return self._build_relation_constant(selected_relation)
 
     def _build_relation_constant(self, relation):
-        if len(relation) > 0 and relation.arity > 0:
+        if relation.arity > 0 and len(relation) > 0:
             if hasattr(relation, 'row_type'):
                 row_type = relation.row_type
             else:
@@ -174,8 +174,8 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
     @ew.add_match(Selection(..., FA_(eq_, (C_[Column], ...))))
     def selection_by_constant(self, selection):
         col, val = selection.formula.args
-        selected_relation = self.walk(selection.relation)\
-            .value.selection({col.value: val.value})
+        selection_relation = self.walk(selection.relation).value
+        selected_relation = selection_relation.selection({col.value: val.value})
 
         return self._build_relation_constant(selected_relation)
 

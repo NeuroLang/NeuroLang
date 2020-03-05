@@ -91,6 +91,8 @@ def test_relational_algebra_ra_selection(ras_class):
     ras_1 = ras.selection({0: 'a'})
     assert len(ras_1) == 0
 
+    assert len(ras_1.selection({0: 1})) == 0
+
 
 def test_relational_algebra_ra_selection_columns(ras_class):
     RelationalAlgebraSet = ras_class['mutable']
@@ -149,6 +151,16 @@ def test_relational_algebra_ra_equijoin_mixed_types(ras_class):
 
     res = ras_a.equijoin(ras_b, [(1, 0)])
     assert res == ras_c
+
+
+def test_relational_algebra_null_operator(ras_class):
+    RelationalAlgebraSet = ras_class['mutable']
+    a = [(chr(ord('a') + i), i * 2) for i in range(5)]
+    ras = RelationalAlgebraSet(a)
+
+    ras_null = ras.projection()
+    assert ras_null.arity == 0
+    assert len(ras_null) > 0
 
 
 def test_groupby(ras_class):

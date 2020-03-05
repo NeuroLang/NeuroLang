@@ -173,7 +173,7 @@ class RelationalAlgebraFrozenSet(
                 no_dups = self.eliminate_duplicates()
                 query = sqlalchemy.sql.select(
                     [sqlalchemy.func.count(sqlalchemy.sql.text('*'))],
-                    from_obj=no_dups._table
+                    from_obj=no_dups._table,
                 )
                 conn = self.engine.connect()
                 res = conn.execute(query)
@@ -184,7 +184,7 @@ class RelationalAlgebraFrozenSet(
         return self._len
 
     def projection(self, *columns):
-        if len(columns) == 0:
+        if len(columns) == 0 or self.arity == 0:
             new = type(self)()
             if len(self) > 0:
                 new._len = 1
@@ -216,7 +216,6 @@ class RelationalAlgebraFrozenSet(
         query = f'CREATE VIEW {new_name} AS {query}'
         conn = self.engine.connect()
         conn.execute(query)
-        rr = list(conn.execute(f"SELECT * FROM {new_name}"))
         result = type(self).create_from_table_or_view(
             name=new_name, engine=self.engine, is_view=True,
             columns=self.columns, parents=[self]
