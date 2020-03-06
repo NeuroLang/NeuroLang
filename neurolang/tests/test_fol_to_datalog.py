@@ -99,5 +99,3 @@ def test_long_negated_chain():
                 )
             )
         ))
-
-

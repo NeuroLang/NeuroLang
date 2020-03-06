@@ -1,5 +1,6 @@
 
-from . import Implication, Conjunction, Disjunction, Negation, UniversalPredicate, ExistentialPredicate
+from . import (Implication, Conjunction, Disjunction, Negation,
+               UniversalPredicate, ExistentialPredicate)
 from ..expression_walker import IdentityWalker, add_match
 
 
@@ -37,16 +38,19 @@ class MoveNegationsToAtoms(IdentityWalker):
     @add_match(Negation(Conjunction(...)))
     def negated_conjunction(self, negation):
         conj = negation.formula
-        l = lambda e: self.walk(Negation(e))
-        return Disjunction(tuple(map(l, conj.formulas)))
+        return Disjunction(tuple(map(
+            lambda e: self.walk(Negation(e)),
+            conj.formulas
+        )))
 
     @add_match(Negation(Disjunction(...)))
     def negated_disjunction(self, negation):
         disj = negation.formula
-        l = lambda e: self.walk(Negation(e))
-        return Conjunction(tuple(map(l, disj.formulas)))
+        return Conjunction(tuple(map(
+            lambda e: self.walk(Negation(e)),
+            disj.formulas
+        )))
 
     @add_match(Negation(Negation(...)))
     def negated_negation(self, negation):
         return negation.formula.formula
-    
