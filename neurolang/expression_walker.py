@@ -158,7 +158,7 @@ class EntryPointPatternWalker(PatternWalker):
             self._entry_point_walked = False
 
 
-class IdentityWalker(PatternMatcher):
+class IdentityWalker(PatternWalker):
     """Walks through expresssions without doing
     a thing.
     """
