@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Mapping, AbstractSet
+from typing import Mapping, AbstractSet, Tuple
 import itertools
 
 from ..expressions import (
@@ -13,6 +13,7 @@ from ..datalog.expressions import Fact, TranslateToLogic
 from ..logic import Union, Implication, Conjunction, ExistentialPredicate
 from ..logic.expression_processing import extract_logic_predicates
 from ..exceptions import NeuroLangException
+from ..type_system import Unknown
 from ..datalog import DatalogProgram
 from ..expression_pattern_matching import add_match
 from ..expression_walker import (
@@ -182,6 +183,27 @@ class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
         return self.symbol_table.get(
             self.pfact_pred_symbs_symb, Constant[AbstractSet](set())
         ).value
+
+    def add_probfacts_from_tuples(self, symbol, iterable, type_=Unknown):
+        self._register_probfact_pred_symb(symbol)
+        if type_ is Unknown:
+            type_, iterable = self.infer_iterable_type(iterable)
+        # TODO check that type_ is a tuple
+        if type_.__args__[0] is not float:
+            raise NeuroLangException(
+                "Expected tuples to have a probability as their first element"
+            )
+        constant = Constant[AbstractSet[type_]](
+            self.new_probability_set(list(iterable)),
+            auto_infer_type=False,
+            verify_type=False,
+        )
+        symbol = symbol.cast(constant.type)
+        self.symbol_table[symbol] = constant
+
+    @staticmethod
+    def new_probability_set(iterable=None):
+        return WrappedRelationalAlgebraSet(iterable=iterable)
 
     @add_match(ExpressionBlock)
     def program_code(self, code):

@@ -270,7 +270,8 @@ def test_probdatalog_grounding():
     code = ExpressionBlock([pfact1, pfact2, rule, Fact(Q(a)), Fact(Q(b))])
     grounded = ground_probdatalog_program(code)
     matching_groundings = [
-        grounding for grounding in grounded.expressions
+        grounding
+        for grounding in grounded.expressions
         if is_probabilistic_fact(grounding.expression)
         and grounding.expression.consequent.body.functor == P
     ]
@@ -354,3 +355,26 @@ def test_unsupported_grounding_program_with_disjunction():
     code = ExpressionBlock([Implication(Q(x), P(x)), Implication(Q(x), R(x))])
     with pytest.raises(NeuroLangException, match=r"supported"):
         ground_probdatalog_program(code)
+
+
+def test_add_probfacts_from_tuple():
+    pd = ProbDatalogProgram()
+    pd.walk(ExpressionBlock([]))
+    pd.add_probfacts_from_tuples(
+        P, {(0.3, "hello", "gaston"), (0.7, "hello", "antonia"),},
+    )
+    assert P in pd.pfact_pred_symbs
+    assert (
+        Constant[float](0.7),
+        Constant[str]("hello"),
+        Constant[str]("antonia"),
+    ) in pd.symbol_table[P].value
+
+
+def test_add_probfacts_from_tuple_no_probability():
+    pd = ProbDatalogProgram()
+    pd.walk(ExpressionBlock([]))
+    with pytest.raises(NeuroLangException, match=r"probability"):
+        pd.add_probfacts_from_tuples(
+            P, {("hello", "gaston"), ("hello", "antonia"),},
+        )
