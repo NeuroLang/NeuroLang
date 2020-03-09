@@ -74,8 +74,6 @@ class Skolemize(ExpressionWalker):
     def fresh_skolem_constant(self):
         c = Symbol.fresh()
         c.skolem_constant = True
-        # Should check if the symbol is already present in the expression
-        # ... maybe not if using a stack for the existential variables
         self.used_symbols.append(c)
         return c
 
