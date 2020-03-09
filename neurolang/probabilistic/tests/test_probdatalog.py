@@ -14,9 +14,6 @@ from ..probdatalog import (
     GDatalogToProbDatalog,
     ProbDatalogProgram,
     conjunct_formulas,
-    _combine_typings,
-    _check_typing_consistency,
-    _infer_pfact_typing_pred_symbs,
     is_probabilistic_fact,
     ground_probdatalog_program,
 )
@@ -180,9 +177,6 @@ def test_program_with_eprobfact():
     )
     program = ProbDatalogProgram()
     program.walk(code)
-    assert program.symbol_table[program.typing_symbol].value[P] == Constant[
-        Mapping
-    ]({Constant[int](0): Constant[AbstractSet]({Q})})
 
     code = ExpressionBlock(
         [
@@ -270,6 +264,50 @@ def test_probdatalog_pfact_cant_infer_type():
 
 
 def test_probdatalog_grounding():
+    pfact1 = Implication(ProbabilisticPredicate(p, P(a)), Constant[bool](True))
+    pfact2 = Implication(ProbabilisticPredicate(p, P(b)), Constant[bool](True))
+    rule = Implication(Z(x), Conjunction([P(x), Q(x)]))
+    code = ExpressionBlock([pfact1, pfact2, rule, Fact(Q(a)), Fact(Q(b))])
+    grounded = ground_probdatalog_program(code)
+    matching_groundings = [
+        grounding for grounding in grounded.expressions
+        if is_probabilistic_fact(grounding.expression)
+        and grounding.expression.consequent.body.functor == P
+    ]
+    assert len(matching_groundings) == 1
+    expected = Grounding(
+        rule,
+        Constant[AbstractSet](
+            NamedRelationalAlgebraFrozenSet(iterable=["a", "b"], columns=["x"])
+        ),
+    )
+    assert expected in grounded.expressions
+
+    code = ExpressionBlock(
+        [Fact(P(a, b)), Fact(P(b, b)), Fact(Q(a)), Fact(Q(b))]
+    )
+    grounded = ground_probdatalog_program(code)
+    assert len(grounded.expressions) == 2
+    for grounding in grounded.expressions:
+        if grounding.expression.consequent.functor == P:
+            assert np.all(
+                np.vstack(list(grounding.relation.value.itervalues()))
+                == np.vstack(
+                    [
+                        np.array(["a", "b"], dtype=str),
+                        np.array(["b", "b"], dtype=str),
+                    ]
+                )
+            )
+        elif grounding.expression.consequent.functor == Q:
+            assert np.all(
+                np.array(list(grounding.relation.value.itervalues()))
+                == np.array([["a"], ["b"]], dtype=str)
+            )
+
+
+@pytest.mark.skip()
+def test_probdatalog_grounding_general():
     pfact = Implication(ProbabilisticPredicate(p, P(x)), Constant[bool](True))
     rule = Implication(Z(x), Conjunction([P(x), Q(x)]))
     code = ExpressionBlock([pfact, rule, Fact(Q(a)), Fact(Q(b))])

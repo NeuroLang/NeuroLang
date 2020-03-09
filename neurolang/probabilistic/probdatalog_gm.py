@@ -152,9 +152,25 @@ def multi_bernoulli_vect_table_distrib(grounding):
     return VectorisedTableDistribution(
         Constant[Mapping](
             {
-                Constant[bool](True): grounding.relation,
+                Constant[bool](True): RenameColumn(
+                    grounding.relation,
+                    Constant(
+                        ColumnStr(
+                            grounding.expression.consequent.probability.name
+                        )
+                    ),
+                    Constant(ColumnStr(make_numerical_col_symb().name)),
+                ),
                 Constant[bool](False): Constant[float](1.0)
-                - grounding.relation,
+                - RenameColumn(
+                    grounding.relation,
+                    Constant(
+                        ColumnStr(
+                            grounding.expression.consequent.probability.name
+                        )
+                    ),
+                    Constant(ColumnStr(make_numerical_col_symb().name)),
+                ),
             }
         ),
         grounding,
@@ -168,14 +184,27 @@ def extensional_vect_table_distrib(grounding):
 def get_rv_value_pointer(pred, grounding):
     rv_name = pred.functor.name
     result = RandomVariableValuePointer(rv_name)
-    for col, arg in zip(grounding.relation.value.columns, pred.args):
-        if isinstance(arg, Constant):
+    if is_probabilistic_fact(grounding.expression):
+        grounding_expression_args = grounding.expression.consequent.body.args
+    else:
+        grounding_expression_args = [
+            Symbol(col) for col in grounding.relation.value.columns
+        ]
+    if len(grounding_expression_args) != len(pred.args):
+        raise NeuroLangException(
+            "Number of args should be the same in "
+            "the grounded expression and predicate"
+        )
+    for arg1, arg2 in zip(grounding_expression_args, pred.args):
+        if isinstance(arg2, Constant):
             result = Selection(
-                result, eq_(Constant[ColumnStr](ColumnStr(col)), arg)
+                result, eq_(Constant[ColumnStr](ColumnStr(arg1.name)), arg2)
             )
         else:
             result = RenameColumn(
-                result, Constant(ColumnStr(col)), Constant(ColumnStr(arg.name))
+                result,
+                Constant(ColumnStr(arg1.name)),
+                Constant(ColumnStr(arg2.name)),
             )
     return result
 

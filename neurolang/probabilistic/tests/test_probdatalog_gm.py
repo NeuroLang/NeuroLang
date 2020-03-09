@@ -426,10 +426,15 @@ def test_succ_query_simple():
             Fact(T(a)),
             Fact(T(b)),
             Implication(
-                ProbabilisticPredicate(Constant[float](0.3), P(x)),
+                ProbabilisticPredicate(Constant[float](0.3), P(a)),
                 Constant[bool](True),
             ),
-            Implication(Q(x), Conjunction([P(x), T(x)])),
+            Implication(
+                ProbabilisticPredicate(Constant[float](0.3), P(b)),
+                Constant[bool](True),
+            ),
+            Implication(Q(x), P(x)),
+            # Implication(Q(x), Conjunction([P(x), ])),
         ]
     )
     result = succ_query(code, Q(x))
@@ -451,7 +456,11 @@ def test_succ_query_simple_const_in_antecedent():
             Fact(T(b)),
             Fact(R(a)),
             Implication(
-                ProbabilisticPredicate(Constant[float](0.3), P(x)),
+                ProbabilisticPredicate(Constant[float](0.3), P(a)),
+                Constant[bool](True),
+            ),
+            Implication(
+                ProbabilisticPredicate(Constant[float](0.3), P(b)),
                 Constant[bool](True),
             ),
             Implication(Q(x), Conjunction([P(x), T(x), R(a)])),
@@ -475,7 +484,11 @@ def test_succ_query_with_constant():
             Fact(T(a)),
             Fact(T(b)),
             Implication(
-                ProbabilisticPredicate(Constant[float](0.3), P(x)),
+                ProbabilisticPredicate(Constant[float](0.3), P(a)),
+                Constant[bool](True),
+            ),
+            Implication(
+                ProbabilisticPredicate(Constant[float](0.3), P(b)),
                 Constant[bool](True),
             ),
             Implication(Q(x), Conjunction([P(x), T(x)])),
@@ -505,11 +518,19 @@ def test_succ_query_multiple_parents():
             Fact(R(b)),
             Fact(R(c)),
             Implication(
-                ProbabilisticPredicate(Constant[float](0.5), P(x)),
+                ProbabilisticPredicate(Constant[float](0.5), P(a)),
                 Constant[bool](True),
             ),
             Implication(
-                ProbabilisticPredicate(Constant[float](0.2), Z(x)),
+                ProbabilisticPredicate(Constant[float](0.5), P(b)),
+                Constant[bool](True),
+            ),
+            Implication(
+                ProbabilisticPredicate(Constant[float](0.2), Z(b)),
+                Constant[bool](True),
+            ),
+            Implication(
+                ProbabilisticPredicate(Constant[float](0.2), Z(c)),
                 Constant[bool](True),
             ),
             Implication(Q(x, y), Conjunction([P(x), Z(y), T(x), R(y)])),
@@ -543,15 +564,27 @@ def test_succ_query_multi_level():
             Fact(R(b)),
             Fact(R(c)),
             Implication(
-                ProbabilisticPredicate(Constant[float](0.5), P(x)),
+                ProbabilisticPredicate(Constant[float](0.5), P(a)),
                 Constant[bool](True),
             ),
             Implication(
-                ProbabilisticPredicate(Constant[float](0.2), Z(x)),
+                ProbabilisticPredicate(Constant[float](0.5), P(b)),
                 Constant[bool](True),
             ),
             Implication(
-                ProbabilisticPredicate(Constant[float](0.7), Y(x)),
+                ProbabilisticPredicate(Constant[float](0.2), Z(b)),
+                Constant[bool](True),
+            ),
+            Implication(
+                ProbabilisticPredicate(Constant[float](0.2), Z(c)),
+                Constant[bool](True),
+            ),
+            Implication(
+                ProbabilisticPredicate(Constant[float](0.7), Y(a)),
+                Constant[bool](True),
+            ),
+            Implication(
+                ProbabilisticPredicate(Constant[float](0.7), Y(b)),
                 Constant[bool](True),
             ),
             Implication(Q(x, y), Conjunction([P(x), Z(y), T(x), R(y)])),
@@ -582,15 +615,23 @@ def test_succ_query_hundreds_of_facts():
         + facts_r
         + [
             Implication(
-                ProbabilisticPredicate(Constant[float](0.5), P(x)),
+                ProbabilisticPredicate(
+                    Constant[float](0.5), P(Constant[int](i))
+                ),
                 Constant[bool](True),
-            ),
-            Implication(
-                ProbabilisticPredicate(Constant[float](0.2), Z(x)),
-                Constant[bool](True),
-            ),
-            Implication(Q(x, y), Conjunction([P(x), Z(y), T(x), R(y)])),
+            )
+            for i in range(1000)
         ]
+        + [
+            Implication(
+                ProbabilisticPredicate(
+                    Constant[float](0.2), Z(Constant[int](i))
+                ),
+                Constant[bool](True),
+            )
+            for i in range(300)
+        ]
+        + [Implication(Q(x, y), Conjunction([P(x), Z(y), T(x), R(y)])),]
     )
     grounded = ground_probdatalog_program(code)
     gm = TranslateGroundedProbDatalogToGraphicalModel().walk(grounded)
