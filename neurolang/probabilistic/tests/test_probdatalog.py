@@ -199,6 +199,7 @@ def test_program_with_eprobfact():
         program.walk(code)
 
 
+@pytest.mark.skip()
 def test_combine_typings():
     typing_a = Constant[Mapping](
         {Constant[int](0): Constant[AbstractSet]({P, Q})}
@@ -219,6 +220,7 @@ def test_combine_typings():
     assert combined == typing_b
 
 
+@pytest.mark.skip()
 def test_check_typing_consistency():
     typing_a = Constant[Mapping](
         {Constant[int](0): Constant[AbstractSet]({P, Q})}
@@ -230,6 +232,7 @@ def test_check_typing_consistency():
         _check_typing_consistency(typing_a, typing_b)
 
 
+@pytest.mark.skip()
 def test_infer_pfact_typing_pred_symbs():
     rule = Implication(Z(x), Conjunction([P(x), Q(x)]))
     typing = _infer_pfact_typing_pred_symbs(P, rule)
@@ -241,6 +244,7 @@ def test_infer_pfact_typing_pred_symbs():
         _infer_pfact_typing_pred_symbs(P, rule)
 
 
+@pytest.mark.skip()
 def test_probdatalog_pfact_type_inference():
     code = ExpressionBlock(
         [
@@ -256,6 +260,7 @@ def test_probdatalog_pfact_type_inference():
     )
 
 
+@pytest.mark.skip()
 def test_probdatalog_pfact_cant_infer_type():
     pfact = Implication(ProbabilisticPredicate(p, P(x)), Constant[bool](True))
     rule = Implication(Q(x), Conjunction([P(x), Z(x), R(x)]))
