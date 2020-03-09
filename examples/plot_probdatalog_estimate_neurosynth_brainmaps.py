@@ -60,7 +60,7 @@ def study_ids_to_study_indices(study_ids):
     ).flatten()
 
 
-selected_terms = np.array(["cognitive control", "default mode"])
+selected_terms = np.array(["visual", "default mode"])
 selected_voxel_ids = np.arange(dataset.image_table.data.shape[0])
 
 term_study_dfs = []

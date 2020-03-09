@@ -16,6 +16,36 @@ import neurolang.regions
 import neurolang.datalog
 import neurolang.datalog.chase
 
+import os
+from collections import defaultdict
+import typing
+import itertools
+
+import neurosynth as ns
+from neurosynth.base import imageutils
+from neurosynth import Dataset
+from nilearn import plotting
+import numpy as np
+import pandas as pd
+
+import neurolang as nl
+from neurolang.expressions import Symbol, Constant, ExpressionBlock
+from neurolang.expression_walker import (
+    ExpressionBasicEvaluator,
+    ReplaceSymbolsByConstants,
+)
+from neurolang.datalog.expressions import Implication, Fact, Conjunction
+from neurolang.datalog.instance import SetInstance
+from neurolang.probabilistic.expressions import ProbabilisticPredicate
+from neurolang.probabilistic.probdatalog import ProbDatalogProgram
+from neurolang.probabilistic.probdatalog_gm import (
+    full_observability_parameter_estimation,
+    AlgebraSet,
+    succ_query,
+    ExtendedRelationalAlgebraSolver,
+    DivideColumns,
+    NaturalJoin,
+)
 
 class Datalog(
     nl.logic.expression_processing.TranslateToLogic,
@@ -37,15 +67,6 @@ class Chase(
 
 
 primary_visual_labels = {"visual_V1"}
-primary_auditory_labels = {"PAC_TE10", "PAC_TE11", "PAC_TE12"}
-primary_motor_labels = {"PMC_4p", "PMC_4a"}
-somatosensory_labels = {"PSC_1", "PSC_2", "PSC_3a", "PSC_3b"}
-sensory_motor_labels = (
-    primary_visual_labels
-    | primary_auditory_labels
-    | primary_motor_labels
-    | somatosensory_labels
-)
 
 ns_base_img = nibabel.load(
     os.path.join(
@@ -61,50 +82,16 @@ ns_affine = ns_base_img.affine
 fsaverage = nilearn.datasets.fetch_surf_fsaverage()
 
 
-def load_sensory_motor_pmaps(path):
+def load_visual_pmap(path):
     img = nibabel.load(path)
     labels = np.array(img.header.get_volume_labels())
     label_to_pmap = dict()
-    for label in sensory_motor_labels:
+    for label in primary_visual_labels:
         label_idx = next(iter(np.argwhere(labels == label)))
         label_to_pmap[label] = nibabel.Nifti1Image(
             (img.get_data()[..., label_idx] / 255).squeeze(), img.affine
         )
-    return label_to_pmap
-
-
-def combine_pmaps_max(pmaps):
-    affine = next(iter(pmaps)).affine
-    new_data = np.max(
-        np.vstack([pmap.get_data()[np.newaxis, ...] for pmap in pmaps]), axis=0
-    )
-    return nibabel.Nifti1Image(new_data, affine)
-
-def combine_rois(rois):
-    affine = next(iter(rois)).affine
-    new_data = np.sum(
-        np.vstack(
-            [
-                roi.get_data()[np.newaxis, ...]
-                for roi in rois
-            ]
-        ),
-        axis=0
-    ).clip(0, 1).astype(int)
-    return nibabel.Nifti1Image(new_data, affine)
-
-def combine_pmaps_exclude_overlapping(pmaps):
-    any_pmap = next(iter(pmaps))
-    affine = any_pmap.affine
-    shape = any_pmap.get_data().shape
-    counts = np.zeros(shape, dtype=np.int32)
-    new_data = np.zeros(shape, dtype=np.float32)
-    for pmap in pmaps:
-        data = pmap.get_data()
-        counts += (data > 0).astype(np.int32)
-        new_data += data
-    new_data[counts != 1] = 0
-    return nibabel.Nifti1Image(new_data, affine)
+    return label_to_pmap["visual_V1"]
 
 
 def pmap_to_roi(pmap):
@@ -129,32 +116,12 @@ def plot_roi(roi):
     )
 
 
-pmaps = load_sensory_motor_pmaps(
-    "examples/global_connectivity/dset_mni+tlrc.BRIK"
-)
-primary_visual_pmap = combine_pmaps_max(
-    [pmaps[label] for label in primary_visual_labels]
-)
-primary_auditory_pmap = combine_pmaps_max(
-    [pmaps[label] for label in primary_auditory_labels]
-)
-primary_motor_pmap = combine_pmaps_max(
-    [pmaps[label] for label in primary_motor_labels]
-)
-somatosensory_pmap = combine_pmaps_max(
-    [pmaps[label] for label in somatosensory_labels]
-)
-primary_visual_roi = pmap_to_roi(primary_visual_pmap)
-primary_auditory_roi = pmap_to_roi(primary_auditory_pmap)
-primary_motor_roi = pmap_to_roi(primary_motor_pmap)
-somatosensory_roi = pmap_to_roi(somatosensory_pmap)
-
-v = nl.Symbol("v")
-PrimaryVisual = nl.Symbol("PrimaryVisual")
-PrimaryAuditory = nl.Symbol("PrimaryAuditory")
-PrimaryMotor = nl.Symbol("PrimaryMotor")
-Somatosensory = nl.Symbol("Somatosensory")
-
+def plot_stat_map(stat_map):
+    nilearn.plotting.plot_stat_map(
+        stat_map,
+        display_mode="x",
+        cut_coords=np.linspace(-30, 0, 5),
+    )
 
 def roi_to_nl_region(roi):
     r = nl.regions.ExplicitVBR(
@@ -169,18 +136,16 @@ def roi_to_nl_region(roi):
     )
     return r
 
-
-region_rois = dict(
-    primary_visual=roi_to_nl_region(primary_visual_roi),
-    primary_auditory=roi_to_nl_region(primary_auditory_roi),
-    primary_motor=roi_to_nl_region(primary_motor_roi),
-    somatosensory=roi_to_nl_region(somatosensory_roi),
-)
-
-
 ns_query_result = pd.read_hdf(
-    "examples/global_connectivity/neurosynth_forward_maps.h5", "forward_maps"
+    "examples/global_connectivity/visual_estimated_pFgA.h5", "estimation"
 )
+
+v = nl.Symbol("v")
+PrimaryVisual = nl.Symbol("PrimaryVisual")
+PrimaryAuditory = nl.Symbol("PrimaryAuditory")
+PrimaryMotor = nl.Symbol("PrimaryMotor")
+Somatosensory = nl.Symbol("Somatosensory")
+
 
 facts = [
     nl.datalog.Fact(
@@ -359,11 +324,12 @@ def p_to_z(p, sign):
 
 
 itp_co_activation = pd.read_hdf(
-    "examples/global_connectivity/interpretations_co_activation.h5", "content"
+    "examples/global_connectivity/interpretations_co_activation_visual.h5",
+    "value"
 )
 
 itp_term_in_study = pd.read_hdf(
-    "examples/global_connectivity/interpretations_term_in_study.h5", "content"
+    "examples/global_connectivity/interpretations_term_in_study_visual.h5", "value"
 )
 
 
@@ -387,8 +353,8 @@ def get_n_unselected_active_voxels(term):
         .count()
         .reset_index()
     )
-    n_selected_active_voxels[d.v.values] = d.__interpretation_id__.values
-    return n_selected_active_voxels
+    n_unselected_active_voxels[d.v.values] = d.__interpretation_id__.values
+    return n_unselected_active_voxels
 
 
 def get_pAgF_from_nl_query_result(term):
@@ -418,7 +384,7 @@ def correct_pmap(term, q=0.1):
     p_vals = neurosynth.analysis.stats.two_way(cells)
     p_vals[p_vals < 1e-240] = 1e-240
     # pAgF = n_selected_active_voxels * 1.0 / n_selected
-    pAgF = get_pAgF_from_nl_query_result(term)
+    pAgF = visual_pAgF
     pAgU = n_unselected_active_voxels * 1.0 / n_unselected
     z_sign = np.sign(pAgF - pAgU).ravel()
     pFgA_z = p_to_z(p_vals, z_sign)

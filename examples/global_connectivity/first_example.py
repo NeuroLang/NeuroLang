@@ -103,7 +103,7 @@ program_code = ExpressionBlock(
 )
 
 succ1 = succ_query(program_code, CoActivation(v, t))
-succ2 = succ_query(program_code, VoxelReported(v))
+succ2 = succ_query(program_code, TermInStudy(t))
 
 succ1_prob_col = next(c for c in succ1.value.columns if c.startswith("fresh"))
 succ2_prob_col = next(c for c in succ2.value.columns if c.startswith("fresh"))
