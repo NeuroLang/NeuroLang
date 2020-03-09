@@ -429,9 +429,15 @@ def build_grounding(pd_program, dl_instance):
     )
 
 
-def ground_probdatalog_program(pd_code):
+def ground_probdatalog_program(
+    pd_code, probabilistic_sets=None, extensional_sets=None
+):
     pd_program = ProbDatalogProgram()
     pd_program.walk(pd_code)
+    for symb, probabilistic_set in probabilistic_sets.items():
+        pd_program.add_probfacts_from_tuples(symb, probabilistic_set)
+    for symb, extensional_set in extensional_sets.items():
+        pd_program.add_extensional_predicate_from_tuples(symb, extensional_set)
     for disjunction in pd_program.intensional_database().values():
         if len(disjunction.formulas) > 1:
             raise NeuroLangException(

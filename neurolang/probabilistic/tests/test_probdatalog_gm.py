@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 
 from ...exceptions import NeuroLangException
+from ...utils.relational_algebra_set import RelationalAlgebraSet
 from ..probdatalog_gm import (
     TranslateGroundedProbDatalogToGraphicalModel,
     AlgebraSet,
@@ -634,6 +635,28 @@ def test_succ_query_hundreds_of_facts():
         + [Implication(Q(x, y), Conjunction([P(x), Z(y), T(x), R(y)])),]
     )
     grounded = ground_probdatalog_program(code)
+    gm = TranslateGroundedProbDatalogToGraphicalModel().walk(grounded)
+    solver = QueryGraphicalModelSolver(gm)
+    result = solver.walk(SuccQuery(Q(x)))
+
+
+def test_succ_query_hundreds_of_facts_fast():
+    extensional_sets = {
+        T: [(i,) for i in range(1000)],
+        R: [(i,) for i in range(300)],
+    }
+    probabilistic_sets = {
+        P: [(0.2, i,) for i in range(1000)],
+        Z: [(0.5, i,) for i in range(300)],
+    }
+    code = ExpressionBlock(
+        [Implication(Q(x, y), Conjunction([P(x), Z(y), T(x), R(y)])),]
+    )
+    grounded = ground_probdatalog_program(
+        code,
+        probabilistic_sets=probabilistic_sets,
+        extensional_sets=extensional_sets,
+    )
     gm = TranslateGroundedProbDatalogToGraphicalModel().walk(grounded)
     solver = QueryGraphicalModelSolver(gm)
     result = solver.walk(SuccQuery(Q(x)))
