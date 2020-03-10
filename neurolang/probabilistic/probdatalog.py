@@ -2,6 +2,8 @@ from collections import defaultdict
 from typing import Mapping, AbstractSet, Tuple
 import itertools
 
+import numpy as np
+
 from ..expressions import (
     Expression,
     Constant,
@@ -168,7 +170,8 @@ class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
     probabilsitic fact and the value is the probabilistic fact itself.
     """
 
-    pfact_pred_symbs_symb = Symbol("__probabilistic_predicate_symbols__")
+    pfact_pred_symbs_symb = Symbol("__pfact_pred_symbs__")
+    pchoice_pred_symbs_symb = Symbol("__pchoice_pred_symbs__")
 
     @property
     def predicate_symbols(self):
@@ -176,6 +179,7 @@ class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
             set(self.intensional_database())
             | set(self.extensional_database())
             | set(self.pfact_pred_symbs)
+            | set(self.pchoice_pred_symbs)
         )
 
     @property
@@ -184,15 +188,29 @@ class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
             self.pfact_pred_symbs_symb, Constant[AbstractSet](set())
         ).value
 
+    @property
+    def pchoice_pred_symbs(self):
+        return self.symbol_table.get(
+            self.pchoice_pred_symbs_symb, Constant[AbstractSet](set())
+        ).value
+
+    def extensional_database(self):
+        exclude = (
+            self.protected_keywords
+            | self.pfact_pred_symbs
+            | self.pchoice_pred_symbs
+        )
+        ret = self.symbol_table.symbols_by_type(AbstractSet)
+        for keyword in exclude:
+            if keyword in ret:
+                del ret[keyword]
+        return ret
+
     def add_probfacts_from_tuples(self, symbol, iterable, type_=Unknown):
         self._register_probfact_pred_symb(symbol)
         if type_ is Unknown:
             type_, iterable = self.infer_iterable_type(iterable)
-        # TODO check that type_ is a tuple
-        if type_.__args__[0] is not float:
-            raise NeuroLangException(
-                "Expected tuples to have a probability as their first element"
-            )
+        _check_iterable_prob_type(type_)
         constant = Constant[AbstractSet[type_]](
             self.new_probability_set(list(iterable)),
             auto_infer_type=False,
@@ -200,6 +218,25 @@ class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
         )
         symbol = symbol.cast(constant.type)
         self.symbol_table[symbol] = constant
+
+    def add_probchoice_from_tuples(self, symbol, iterable, type_=Unknown):
+        """
+        Add a probabilistic choice to the symbol table.
+
+        """
+        self._register_probchoice_pred_symb(symbol)
+        if type_ is Unknown:
+            type_, iterable = self.infer_iterable_type(iterable)
+        _check_iterable_prob_type(type_)
+        if symbol in self.symbol_table:
+            raise NeuroLangException("Symbol already used")
+        ra_set = Constant[AbstractSet](
+            self.new_probability_set(list(iterable)),
+            auto_infer_type=False,
+            verify_type=False,
+        )
+        _check_probchoice_probs_sum_to_one(ra_set)
+        self.symbol_table[symbol] = ra_set
 
     @staticmethod
     def new_probability_set(iterable=None):
@@ -228,6 +265,12 @@ class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
             self.pfact_pred_symbs | {pred_symb}
         )
 
+    def _register_probchoice_pred_symb(self, pred_symb):
+        self.protected_keywords.add(self.pchoice_pred_symbs_symb.name)
+        self.symbol_table[self.pchoice_pred_symbs_symb] = Constant[
+            AbstractSet
+        ](self.pchoice_pred_symbs | {pred_symb})
+
     @add_match(
         Implication,
         lambda exp: is_probabilistic_fact(exp)
@@ -251,14 +294,6 @@ class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
             for k, v in self.symbol_table.items()
             if k in self.pfact_pred_symbs
         }
-
-    def extensional_database(self):
-        exclude = self.protected_keywords | self.pfact_pred_symbs
-        ret = self.symbol_table.symbols_by_type(AbstractSet)
-        for keyword in exclude:
-            if keyword in ret:
-                del ret[keyword]
-        return ret
 
 
 class GDatalogToProbDatalogTranslator(PatternWalker):
@@ -448,3 +483,26 @@ def ground_probdatalog_program(
     chase = Chase(dl_program)
     dl_instance = chase.build_chase_solution()
     return build_grounding(pd_program, dl_instance)
+
+
+def _check_iterable_prob_type(iterable_type):
+    if not (
+        issubclass(iterable_type.__origin__, Tuple)
+        and iterable_type.__args__[0] is float
+    ):
+        raise NeuroLangException(
+            "Expected tuples to have a probability as their first element"
+        )
+
+
+def _check_probchoice_probs_sum_to_one(ra_set):
+    probs_sum = sum(
+        v.value[0].value
+        for v in RelationalAlgebraSolver()
+        .walk(Projection(ra_set, (Constant(ColumnInt(0)),)))
+        .value
+    )
+    if not np.isclose(probs_sum, 1.0):
+        raise NeuroLangException(
+            "Probabilities of probabilistic choice should sum to 1"
+        )

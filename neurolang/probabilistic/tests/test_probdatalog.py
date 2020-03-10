@@ -378,3 +378,35 @@ def test_add_probfacts_from_tuple_no_probability():
         pd.add_probfacts_from_tuples(
             P, {("hello", "gaston"), ("hello", "antonia"),},
         )
+
+
+def test_add_probchoice_from_tuple():
+    probchoice_as_tuples_iterable = [
+        (0.5, "a", "a"),
+        (0.2, "a", "b"),
+        (0.3, "b", "b"),
+    ]
+    pd = ProbDatalogProgram()
+    pd.add_probchoice_from_tuples(P, probchoice_as_tuples_iterable)
+    assert P in pd.symbol_table
+    assert (
+        Constant[float](0.2),
+        Constant[str]("a"),
+        Constant[str]("b"),
+    ) in pd.symbol_table[P].value
+
+
+def test_add_probchoice_from_tuple_no_probability():
+    pd = ProbDatalogProgram()
+    with pytest.raises(NeuroLangException, match=r"probability"):
+        pd.add_probchoice_from_tuples(P, [("a", "b"), ("b", "b"),])
+
+def test_add_probchoice_does_not_sum_to_one():
+    probchoice_as_tuples_iterable = [
+        (0.5, "a", "a"),
+        (0.2, "a", "b"),
+        (0.1, "b", "b"),
+    ]
+    pd = ProbDatalogProgram()
+    with pytest.raises(NeuroLangException, match=r"sum"):
+        pd.add_probchoice_from_tuples(P, probchoice_as_tuples_iterable)
