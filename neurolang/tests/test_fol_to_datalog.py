@@ -180,3 +180,42 @@ def test_skolemize_repeated_symbols():
     res = sk.walk(exp)
     c0 = sk.used_symbols[0]
     assert res == UniversalPredicate(X, Disjunction((P(X), P(c0(X)))))
+
+
+def test_skolemize_nested_existentials():
+    X = Symbol("X")
+    Y = Symbol("Y")
+    P = Symbol("P")
+    R = Symbol("R")
+    exp = ExistentialPredicate(
+        X, Disjunction((P(X), ExistentialPredicate(X, P(X)), R(X)))
+    )
+    sk = Skolemize()
+    res = sk.walk(exp)
+    c0, c1 = sk.used_symbols
+    assert res == Disjunction((P(c0), P(c1), R(c0)))
+
+
+def test_skolemize_nested_universal_with_repeated_symbols():
+    X = Symbol("X")
+    Y = Symbol("Y")
+    P = Symbol("P")
+    R = Symbol("R")
+    exp = UniversalPredicate(
+        X,
+        Disjunction(
+            (P(X), UniversalPredicate(X, ExistentialPredicate(Y, R(Y, X))))
+        ),
+    )
+    sk = Skolemize()
+
+    res = sk.walk(exp)
+    c0 = sk.used_symbols[0]
+
+    assert isinstance(res, UniversalPredicate)
+    assert res.head == X
+    assert isinstance(res.body, Disjunction)
+    left, right = res.body.formulas
+    assert left == P(X)
+    assert isinstance(right, UniversalPredicate)
+    assert right.body == R(c0(X, right.head), right.head)

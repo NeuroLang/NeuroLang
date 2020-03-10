@@ -1,13 +1,20 @@
 from . import (
     Implication,
+    Union,
     Conjunction,
     Disjunction,
     Negation,
     UniversalPredicate,
     ExistentialPredicate,
+    LogicOperator,
+    Quantifier,
 )
 from ..expressions import Constant, Symbol, FunctionApplication
-from ..expression_walker import ExpressionWalker, add_match
+from ..expression_walker import (
+    add_match,
+    ExpressionWalker,
+    ReplaceSymbolWalker,
+)
 
 
 class EliminateImplications(ExpressionWalker):
@@ -77,11 +84,31 @@ class Skolemize(ExpressionWalker):
         self.used_symbols.append(c)
         return c
 
+    @add_match(Union)
+    def match_union(self, expression):
+        return expression.apply(tuple(map(self.walk, expression.formulas)))
+
+    @add_match(Disjunction)
+    def match_dijunction(self, expression):
+        return expression.apply(tuple(map(self.walk, expression.formulas)))
+
+    @add_match(Conjunction)
+    def match_conjunction(self, expression):
+        return expression.apply(tuple(map(self.walk, expression.formulas)))
+
+    @add_match(Negation)
+    def match_negation(self, expression):
+        return expression.apply(self.walk(expression.formula))
+
     @add_match(UniversalPredicate)
     def universal_quantifier(self, expression):
+        if expression.head in self.universally_quantified_variables:
+            expression = ReplaceSymbolWalker(
+                {expression.head: Symbol.fresh()}
+            ).walk(expression)
         self.universally_quantified_variables.append(expression.head)
         new_body = self.walk(expression.body)
-        self.universally_quantified_variables.remove(expression.head)
+        self.universally_quantified_variables.pop()
         return UniversalPredicate(expression.head, new_body)
 
     @add_match(ExistentialPredicate)
@@ -91,7 +118,7 @@ class Skolemize(ExpressionWalker):
             c = c(*self.universally_quantified_variables)
         self.mapping.append((expression.head, c))
         new_body = self.walk(expression.body)
-        self.mapping.remove((expression.head, c))
+        self.mapping.pop()
         return new_body
 
     @add_match(Symbol)
