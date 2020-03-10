@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Mapping, AbstractSet
+from typing import Mapping, AbstractSet, Tuple
 import itertools
 
 from ..expressions import (
@@ -16,6 +16,7 @@ from ..logic.expression_processing import (
     extract_logic_free_variables
 )
 from ..exceptions import NeuroLangException
+from ..type_system import Unknown
 from ..datalog import DatalogProgram
 from ..expression_pattern_matching import add_match
 from ..expression_walker import (
@@ -216,7 +217,6 @@ class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
     """
 
     pfact_pred_symbs_symb = Symbol("__probabilistic_predicate_symbols__")
-    typing_symbol = Symbol("__pfacts_typing__")
 
     @property
     def predicate_symbols(self):
@@ -232,10 +232,26 @@ class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
             self.pfact_pred_symbs_symb, Constant[AbstractSet](set())
         ).value
 
-    def get_pfact_typing(self, pfact_pred_symb):
-        return self.symbol_table.get(
-            self.typing_symbol, Constant[Mapping](dict())
-        ).value.get(pfact_pred_symb, Constant[Mapping](dict()))
+    def add_probfacts_from_tuples(self, symbol, iterable, type_=Unknown):
+        self._register_probfact_pred_symb(symbol)
+        if type_ is Unknown:
+            type_, iterable = self.infer_iterable_type(iterable)
+        # TODO check that type_ is a tuple
+        if type_.__args__[0] is not float:
+            raise NeuroLangException(
+                "Expected tuples to have a probability as their first element"
+            )
+        constant = Constant[AbstractSet[type_]](
+            self.new_probability_set(list(iterable)),
+            auto_infer_type=False,
+            verify_type=False,
+        )
+        symbol = symbol.cast(constant.type)
+        self.symbol_table[symbol] = constant
+
+    @staticmethod
+    def new_probability_set(iterable=None):
+        return WrappedRelationalAlgebraSet(iterable=iterable)
 
     @add_match(ExpressionBlock)
     def program_code(self, code):
@@ -253,7 +269,6 @@ class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
             else:
                 self.walk(list(pfacts)[0])
         super().process_expression(ExpressionBlock(other_expressions))
-        self._check_all_probfacts_variables_have_been_typed()
 
     def _register_probfact_pred_symb(self, pred_symb):
         self.protected_keywords.add(self.pfact_pred_symbs_symb.name)
@@ -269,7 +284,6 @@ class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
     def probfact_or_existential_probfact(self, expression):
         if is_existential_probabilistic_fact(expression):
             _check_existential_probfact_validity(expression)
-        self.protected_keywords.add(self.typing_symbol.name)
         pred_symb = _extract_probfact_or_eprobfact_pred_symb(expression)
         if pred_symb not in self.symbol_table:
             self.symbol_table[pred_symb] = ExpressionBlock(tuple())
@@ -277,94 +291,6 @@ class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
             self.symbol_table[pred_symb], [expression]
         )
         return expression
-
-    @add_match(
-        Implication(FunctionApplication[bool](Symbol, ...), Expression),
-        lambda exp: exp.antecedent != Constant[bool](True),
-    )
-    def statement_intensional(self, expression):
-        """
-        Ensure that the typing of the probabilistic facts in the given rule
-        stays consistent with the typing from previously seen rules.
-
-        Raises
-        ------
-        NeuroLangException
-            If the implication's antecedent has an existentially quantified
-            variable. See [1]_ for the definition of the syntax of CP-Logic
-            (the syntax of Prob(Data)Log can be viewed as a subset of the
-            syntax of CP-Logic).
-
-        .. [1] Vennekens, "Algebraic and logical study of constructive
-        processes in knowledge representation", section 5.2.1 Syntax.
-
-        """
-        for pred_symb in get_rule_pfact_pred_symbs(
-            expression, self.pfact_pred_symbs
-        ):
-            typing = _infer_pfact_typing_pred_symbs(pred_symb, expression)
-            self._update_pfact_typing(pred_symb, typing)
-        return super().statement_intensional(expression)
-
-    def _update_pfact_typing(self, pfact_pred_symb, typing):
-        """
-        Update typing information for a probabilistic fact's terms.
-
-        Parameters
-        ----------
-        symbol : Symbol
-            Probabilistic fact's predicate symbol.
-        typing : Mapping[int, AbstractSet[Symbol]]
-            New typing information that will be integrated.
-
-        """
-        if self.typing_symbol not in self.symbol_table:
-            self.symbol_table[self.typing_symbol] = Constant[Mapping](dict())
-        prev_typing = self.get_pfact_typing(pfact_pred_symb)
-        new_pfact_typing = _combine_typings(prev_typing, typing)
-        new_typing = Constant[Mapping](
-            {
-                pred_symb: (
-                    self.symbol_table[self.typing_symbol].value[pred_symb]
-                    if pred_symb != pfact_pred_symb
-                    else new_pfact_typing
-                )
-                for pred_symb in (
-                    set(self.symbol_table[self.typing_symbol].value)
-                    | {pfact_pred_symb}
-                )
-            }
-        )
-        self.symbol_table[self.typing_symbol] = new_typing
-
-    def _check_all_probfacts_variables_have_been_typed(self):
-        """
-        Check that the type of all the variables occurring in all the
-        probabilistic facts was correctly inferred from the rules of the
-        program.
-
-        Several candidate typing predicate symbols can be found during the
-        static analysis of the rules of the program. If at the end of the
-        static analysis several candidates remain, the type inference failed
-        and an exception is raised.
-
-        """
-        for pfact_pred_symb, pfacts in self.probabilistic_facts().items():
-            if isinstance(pfacts, Constant[AbstractSet]):
-                continue
-            typing = self.get_pfact_typing(pfact_pred_symb)
-            if any(
-                not (
-                    var_idx in typing.value
-                    and len(typing.value[var_idx].value) == 1
-                )
-                for var_idx in _get_pfact_var_idxs(pfacts.expressions[0])
-            ):
-                raise NeuroLangException(
-                    f"Types of variables of probabilistic facts with "
-                    f"predicate symbol {pfact_pred_symb} could not be "
-                    f"inferred from the program"
-                )
 
     def probabilistic_facts(self):
         """Return probabilistic facts of the symbol table."""
@@ -446,159 +372,22 @@ class GDatalogToProbDatalog(
     pass
 
 
-def _check_typing_consistency(typing, local_typing):
-    if any(
-        not typing.value[i].value & local_typing.value[i].value
-        for i in local_typing.value
-        if i in typing.value
-    ):
-        raise NeuroLangException(
-            "Inconsistent typing of probabilistic fact variables"
-        )
-
-
-def _combine_typings(typing_a, typing_b):
-    """
-    Combine two typings of a probabilistic fact's terms.
-
-    Parameters
-    ----------
-    typing_a : Dict[int, AbstractSet[Symbol]]
-        First typing.
-    typing_b : Dict[int, AbstractSet[Symbol]]
-        Second typing.
-
-    Returns
-    -------
-    Dict[int, AbstractSet[Symbol]]
-        Resulting combined typing.
-
-    """
-    return Constant[Mapping](
-        {
-            idx: Constant[AbstractSet](
-                (
-                    typing_a.value[idx].value
-                    if idx in typing_a.value
-                    else typing_b.value[idx].value
-                )
-                & (
-                    typing_b.value[idx].value
-                    if idx in typing_b.value
-                    else typing_a.value[idx].value
-                )
-            )
-            for idx in set(typing_a.value) | set(typing_b.value)
-        }
-    )
-
-
-def _infer_pfact_typing_pred_symbs(pfact_pred_symb, rule):
-    """
-    Infer a probabilistic fact's typing from a rule whose antecedent contains
-    the probabilistic fact's predicate symbol.
-
-    There can be several typing predicate symbol candidates in the rule. For
-    example, let `Q(x) :- A(x), Pfact(x), B(x)` be a rule where `Pfact` is the
-    probabilistic fact's predicate symbol. Both `A` and `B` can be the typing
-    predicate symbols for the variable `x` occurring in `Pfact(x)`. The output
-    will thus be `{0: {A, B}}`, `0` being the index of `x` in `Pfact(x)`.
-
-    Parameters
-    ----------
-    pfact_pred_symb : Symbol
-        Predicate symbol of the probabilistic fact.
-    rule : Implication
-        Rule that contains an atom with the probabilistic fact's predicate
-        symbol in its antecedent.
-
-    Returns
-    -------
-    typing : Mapping[int, AbstractSet[Symbol]]
-        Mapping from term indices in the probabilistic fact's literal to the
-        typing predicate symbol candidates found in the rule.
-
-    """
-    antecedent_atoms = extract_logic_predicates(rule.antecedent)
-    rule_pfact_atoms = [
-        atom for atom in antecedent_atoms if atom.functor == pfact_pred_symb
-    ]
-    if not rule_pfact_atoms:
-        raise NeuroLangException(
-            "Expected rule with atom whose predicate symbol is the "
-            "probabilistic fact's predicate symbol"
-        )
-    typing = Constant[Mapping](dict())
-    for rule_pfact_atom in rule_pfact_atoms:
-        idx_to_var = {
-            i: arg
-            for i, arg in enumerate(rule_pfact_atom.args)
-            if isinstance(arg, Symbol)
-        }
-        local_typing = Constant[Mapping](
-            {
-                Constant[int](i): Constant[AbstractSet](
-                    {
-                        atom.functor
-                        for atom in antecedent_atoms
-                        if atom.args == (var,)
-                        and atom.functor != pfact_pred_symb
-                    }
-                )
-                for i, var in idx_to_var.items()
-            }
-        )
-        _check_typing_consistency(typing, local_typing)
-        typing = _combine_typings(typing, local_typing)
-    return typing
-
-
-def _construct_pfact_intensional_rule(pfact, pfact_pred, typing):
-    """
-    Construct an intensional rule from a probabilistic fact that can later
-    be used to obtain the possible groundings of the probabilistic fact.
-
-    Let `p :: P(x_1, ..., x_n)` be a probabilistic fact and let `T_1, ...,
-    T_n` be the relations (predicate symbols) that type the variables `x_1,
-    ..., x_n` (respectively). This method will return the intensional rule
-    `P(x_1, ..., x_n) :- T_1(x_1), ..., T_n(x_n)`.
-
-    """
-    pfact_pred_symb = pfact_pred.functor
-    antecedent = conjunct_if_needed(
-        [
-            next(iter(typing.value[Constant[int](var_idx)].value))(var_symb)
-            for var_idx, var_symb in enumerate(pfact_pred.args)
-            if isinstance(var_symb, Symbol)
-        ]
-    )
-    return Implication(pfact_pred, antecedent)
-
-
 def probdatalog_to_datalog(pd_program):
     new_symbol_table = TypedSymbolTable()
     for pred_symb in pd_program.symbol_table:
         value = pd_program.symbol_table[pred_symb]
         if pred_symb in pd_program.pfact_pred_symbs:
-            if isinstance(value, Constant[AbstractSet]):
-                columns = tuple(
-                    Constant[ColumnInt](ColumnInt(i))
-                    for i in list(range(value.value.arity))[1:]
+            if not isinstance(value, Constant[AbstractSet]):
+                raise NeuroLangException(
+                    "Expected grounded probabilistic facts"
                 )
-                new_symbol_table[pred_symb] = RelationalAlgebraSolver().walk(
-                    Projection(value, columns)
-                )
-            else:
-                new_symbol_table[pred_symb] = Union(
-                    [
-                        _construct_pfact_intensional_rule(
-                            pfact,
-                            pfact.consequent.body,
-                            pd_program.get_pfact_typing(pred_symb),
-                        )
-                        for pfact in value.expressions
-                    ]
-                )
+            columns = tuple(
+                Constant[ColumnInt](ColumnInt(i))
+                for i in list(range(value.value.arity))[1:]
+            )
+            new_symbol_table[pred_symb] = RelationalAlgebraSolver().walk(
+                Projection(value, columns)
+            )
         else:
             new_symbol_table[pred_symb] = value
     return Datalog(new_symbol_table)
@@ -688,9 +477,15 @@ def build_grounding(pd_program, dl_instance):
     )
 
 
-def ground_probdatalog_program(pd_code):
+def ground_probdatalog_program(
+    pd_code, probabilistic_sets=None, extensional_sets=None
+):
     pd_program = ProbDatalogProgram()
     pd_program.walk(pd_code)
+    for symb, probabilistic_set in probabilistic_sets.items():
+        pd_program.add_probfacts_from_tuples(symb, probabilistic_set)
+    for symb, extensional_set in extensional_sets.items():
+        pd_program.add_extensional_predicate_from_tuples(symb, extensional_set)
     for disjunction in pd_program.intensional_database().values():
         if len(disjunction.formulas) > 1:
             raise NeuroLangException(
