@@ -401,6 +401,7 @@ def test_add_probchoice_from_tuple_no_probability():
     with pytest.raises(NeuroLangException, match=r"probability"):
         pd.add_probchoice_from_tuples(P, [("a", "b"), ("b", "b"),])
 
+
 def test_add_probchoice_does_not_sum_to_one():
     probchoice_as_tuples_iterable = [
         (0.5, "a", "a"),

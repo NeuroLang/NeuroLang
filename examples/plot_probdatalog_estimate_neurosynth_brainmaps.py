@@ -35,7 +35,7 @@ from neurolang.probabilistic.expressions import ProbabilisticPredicate
 from neurolang.probabilistic.probdatalog import ProbDatalogProgram
 from neurolang.probabilistic.probdatalog_gm import (
     full_observability_parameter_estimation,
-    AlgebraSet,
+    ExtendedAlgebraSet,
 )
 
 
@@ -107,7 +107,7 @@ t = Symbol("t")
 
 n_interpretations = len(set(big_data_table.study_id))
 interpretations = dict()
-interpretations[CoActivation] = AlgebraSet(
+interpretations[CoActivation] = ExtendedAlgebraSet(
     columns=["v", "t", "__interpretation_id__"],
     iterable=big_data_table.rename(
         columns={
@@ -118,14 +118,14 @@ interpretations[CoActivation] = AlgebraSet(
     )[["v", "t", "__interpretation_id__"]],
 )
 interpretations[DoesCoActivate] = interpretations[CoActivation]
-interpretations[TermInStudy] = AlgebraSet(
+interpretations[TermInStudy] = ExtendedAlgebraSet(
     columns=["t", "__interpretation_id__"],
     iterable=big_data_table[["term", "study_id"]]
     .drop_duplicates()
     .rename(columns={"term": "t", "study_id": "__interpretation_id__"}),
 )
 interpretations[TermDoesAppearInStudy] = interpretations[TermInStudy]
-interpretations[VoxelReported] = AlgebraSet(
+interpretations[VoxelReported] = ExtendedAlgebraSet(
     columns=["v", "__interpretation_id__"],
     iterable=big_data_table[["voxel_id", "study_id"]]
     .drop_duplicates()

@@ -38,6 +38,7 @@ from ..datalog.chase import (
 from ..datalog.wrapped_collections import WrappedRelationalAlgebraSet
 from .expressions import (
     ProbabilisticPredicate,
+    ProbabilisticChoice,
     Grounding,
     make_numerical_col_symb,
 )
@@ -363,7 +364,10 @@ def probdatalog_to_datalog(pd_program):
     new_symbol_table = TypedSymbolTable()
     for pred_symb in pd_program.symbol_table:
         value = pd_program.symbol_table[pred_symb]
-        if pred_symb in pd_program.pfact_pred_symbs:
+        if (
+            pred_symb
+            in pd_program.pfact_pred_symbs | pd_program.pchoice_pred_symbs
+        ):
             if not isinstance(value, Constant[AbstractSet]):
                 raise NeuroLangException(
                     "Expected grounded probabilistic facts"
@@ -413,6 +417,19 @@ def build_rule_grounding(pred_symb, st_item, tuple_set):
     )
 
 
+def build_pchoice_grounding(pred_symb, relation):
+    args = tuple(Symbol.fresh() for _ in range(relation.value.arity - 1))
+    predicate = pred_symb(*args)
+    expression = ProbabilisticChoice(predicate)
+    relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=(Symbol.fresh().name,) + tuple(a.name for a in args),
+            iterable=relation.value,
+        )
+    )
+    return Grounding(expression=expression, relation=relation)
+
+
 def build_pfact_grounding_from_set(pred_symb, relation):
     param_symb = Symbol.fresh()
     args = tuple(Symbol.fresh() for _ in range(relation.value.arity - 1))
@@ -434,6 +451,7 @@ def build_pfact_grounding_from_set(pred_symb, relation):
 def build_grounding(pd_program, dl_instance):
     extensional_groundings = []
     probfact_groundings = []
+    probchoice_groundings = []
     intensional_groundings = []
     for pred_symb in pd_program.predicate_symbols:
         st_item = pd_program.symbol_table[pred_symb]
@@ -448,6 +466,10 @@ def build_grounding(pd_program, dl_instance):
                         pred_symb, st_item, dl_instance[pred_symb]
                     )
                 )
+        elif pred_symb in pd_program.pchoice_pred_symbs:
+            probchoice_groundings.append(
+                build_pchoice_grounding(pred_symb, st_item)
+            )
         else:
             if isinstance(st_item, Constant[AbstractSet]):
                 extensional_groundings.append(
@@ -460,19 +482,32 @@ def build_grounding(pd_program, dl_instance):
                     )
                 )
     return ExpressionBlock(
-        probfact_groundings + extensional_groundings + intensional_groundings
+        probfact_groundings
+        + probchoice_groundings
+        + extensional_groundings
+        + intensional_groundings
     )
 
 
 def ground_probdatalog_program(
-    pd_code, probabilistic_sets=None, extensional_sets=None
+    pd_code,
+    probabilistic_sets=None,
+    extensional_sets=None,
+    probchoice_sets=None,
 ):
     pd_program = ProbDatalogProgram()
     pd_program.walk(pd_code)
-    for symb, probabilistic_set in probabilistic_sets.items():
-        pd_program.add_probfacts_from_tuples(symb, probabilistic_set)
-    for symb, extensional_set in extensional_sets.items():
-        pd_program.add_extensional_predicate_from_tuples(symb, extensional_set)
+    if probabilistic_sets is not None:
+        for symb, probabilistic_set in probabilistic_sets.items():
+            pd_program.add_probfacts_from_tuples(symb, probabilistic_set)
+    if extensional_sets is not None:
+        for symb, extensional_set in extensional_sets.items():
+            pd_program.add_extensional_predicate_from_tuples(
+                symb, extensional_set
+            )
+    if probchoice_sets is not None:
+        for symb, probchoice_set in probchoice_sets.items():
+            pd_program.add_probchoice_from_tuples(symb, probchoice_set)
     for disjunction in pd_program.intensional_database().values():
         if len(disjunction.formulas) > 1:
             raise NeuroLangException(

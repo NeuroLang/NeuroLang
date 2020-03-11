@@ -34,6 +34,11 @@ class ProbabilisticPredicate(Definition):
         )
 
 
+class ProbabilisticChoice(Definition):
+    def __init__(self, predicate):
+        self.predicate = predicate
+
+
 class Grounding(Definition):
     def __init__(self, expression, relation):
         self.expression = expression
@@ -60,6 +65,11 @@ class DiscreteDistribution(Distribution):
     pass
 
 
+class ChoiceDistribution(DiscreteDistribution):
+    def __init__(self, grounding):
+        self.grounding = grounding
+
+
 class TableDistribution(DiscreteDistribution):
     def __init__(self, table, parameters=Constant[Mapping]({})):
         self.table = table
@@ -74,6 +84,20 @@ class TableDistribution(DiscreteDistribution):
                 ]
             )
         )
+
+
+class SuccQuery(Definition):
+    def __init__(self, predicate):
+        self.predicate = predicate
+
+    def __repr__(self):
+        return "SUCC( {} )".format(repr(self.predicate))
+
+
+class MargQuery(Definition):
+    def __init__(self, predicate, evidence):
+        self.predicate = predicate
+        self.evidence = evidence
 
 
 class VectorisedTableDistribution(TableDistribution):
@@ -96,9 +120,10 @@ class AddIndexColumn(RelationalAlgebraOperation):
 
 
 class AddRepeatedValueColumn(RelationalAlgebraOperation):
-    def __init__(self, relation, repeated_value):
+    def __init__(self, relation, repeated_value, dst_column=None):
         self.relation = relation
         self.repeated_value = repeated_value
+        self.dst_column = dst_column
 
 
 class ArithmeticOperationOnColumns(RelationalAlgebraOperation):

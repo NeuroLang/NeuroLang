@@ -22,7 +22,7 @@ from neurolang.probabilistic.expressions import ProbabilisticPredicate
 from neurolang.probabilistic.probdatalog import ProbDatalogProgram
 from neurolang.probabilistic.probdatalog_gm import (
     full_observability_parameter_estimation,
-    AlgebraSet,
+    ExtendedAlgebraSet,
     succ_query,
     ExtendedRelationalAlgebraSolver,
     DivideColumns,
