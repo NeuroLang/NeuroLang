@@ -206,6 +206,16 @@ class ExpressionWalker(PatternWalker):
         return new_arg, changed
 
 
+class ChainedWalker():
+    def __init__(self, *walkers):
+        self.walkers = [w() if isinstance(w, type) else w for w in walkers]
+
+    def walk(self, expression):
+        for walker in self.walkers:
+            expression = walker.walk(expression)
+        return expression
+
+
 class ReplaceSymbolWalker(ExpressionWalker):
     def __init__(self, symbol_replacements):
         self.symbol_replacements = symbol_replacements
