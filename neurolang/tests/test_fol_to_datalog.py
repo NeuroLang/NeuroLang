@@ -1,12 +1,15 @@
 import typing
+from pytest import raises
 from unittest.mock import patch
 
+from ..exceptions import NeuroLangException
 from ..expressions import Symbol, Constant, FunctionApplication
 from ..logic.unification import most_general_unifier
 from ..logic import (
     Implication,
     Disjunction,
     Conjunction,
+    Union,
     Negation,
     UniversalPredicate,
     ExistentialPredicate,
@@ -22,6 +25,8 @@ from ..logic.horn_clauses import (
     CollapseDisjunctions,
     CollapseConjunctions,
     convert_to_pnf_with_cnf_matrix,
+    convert_to_horn_clauses,
+    HornClause,
 )
 
 
@@ -485,3 +490,101 @@ def test_transform_to_cnf_3():
             ),
         ),
     )
+
+
+def test_horn_clause_validation():
+    X = Symbol("X")
+    Y = Symbol("Y")
+    with raises(NeuroLangException):
+        HornClause(Disjunction((X, Y)), None)
+    with raises(NeuroLangException):
+        HornClause(None, None)
+    with raises(NeuroLangException):
+        HornClause(None)
+    with raises(NeuroLangException):
+        HornClause(None, Conjunction((X, Y)))
+    with raises(NeuroLangException):
+        HornClause(None, (X, None))
+    with raises(NeuroLangException):
+        HornClause(None, (Conjunction((X, Y)), Y))
+
+
+def test_transform_to_horn_1():
+    socrates = Symbol("socrates")
+    mortal = Symbol("mortal")
+    man = Symbol("man")
+    X = Symbol("X")
+    exp = Conjunction(
+        (UniversalPredicate(X, Implication(mortal(X), man(X))), man(socrates))
+    )
+    res = convert_to_horn_clauses(exp)
+    X = res.head
+    assert res == UniversalPredicate(
+        X,
+        Union(
+            (HornClause(mortal(X), (man(X),)), HornClause(man(socrates)))
+        ),
+    )
+
+
+def test_transform_to_horn_2():
+    father = Symbol("father")
+    sister = Symbol("sister")
+    Alice = Symbol("Alice")
+    Bob = Symbol("Bob")
+    Carol = Symbol("Carol")
+    X = Symbol("X")
+    Y = Symbol("Y")
+    Z = Symbol("Z")
+
+    exp = Conjunction(
+        (
+            UniversalPredicate(
+                X,
+                UniversalPredicate(
+                    Y,
+                    ExistentialPredicate(
+                        Z,
+                        Implication(
+                            sister(X, Y),
+                            Conjunction((father(X, Z), father(Y, Z))),
+                        ),
+                    ),
+                ),
+            ),
+            father(Alice, Bob),
+            father(Carol, Bob),
+        )
+    )
+
+    res = convert_to_horn_clauses(exp)
+
+    X, Y, Z = res.head, res.body.head, res.body.body.head
+    assert res == UniversalPredicate(
+        X,
+        UniversalPredicate(
+            Y,
+            ExistentialPredicate(
+                Z,
+                Union(
+                    (
+                        HornClause(sister(X, Y), (father(X, Z), father(Y, Z))),
+                        HornClause(father(Alice, Bob)),
+                        HornClause(father(Carol, Bob)),
+                    )
+                ),
+            ),
+        ),
+    )
+
+
+def test_transform_to_horn_fails():
+    A = Symbol("A")
+    B = Symbol("B")
+    C = Symbol("C")
+    D = Symbol("D")
+    P = Symbol("P")
+    Q = Symbol("Q")
+    exp = Disjunction((P, Conjunction((A, B, Disjunction((C, D)))), Q))
+    with raises(NeuroLangException):
+        convert_to_horn_clauses(exp)

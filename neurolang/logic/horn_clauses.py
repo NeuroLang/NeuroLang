@@ -9,6 +9,7 @@ from . import (
     LogicOperator,
     Quantifier,
 )
+from ..exceptions import NeuroLangException
 from ..expressions import Constant, Symbol, FunctionApplication
 from ..expression_walker import (
     add_match,
@@ -293,25 +294,82 @@ def convert_to_pnf_with_cnf_matrix(expression):
 class HornClause(LogicOperator):
     """Expression of the form `P(X) :- Q(X), S(X).`"""
 
-    def __init__(self, head, body):
+    def __init__(self, head, body=None):
         self.head = head
         self.body = body
 
-        self._symbols = head.symbols or set()
+        if not (head is None or self._is_literal(head)):
+            raise NeuroLangException(
+                f"Head must be a literal or None, {head} given"
+            )
+        if not head and not body:
+            raise NeuroLangException(f"Head and body can not both be empty")
+        if not (
+            body is None
+            or (
+                isinstance(body, tuple)
+                and all(self._is_literal(l) for l in body)
+            )
+        ):
+            raise NeuroLangException(
+                f"Body must be a tuple or None, {body} given"
+            )
+
+        self._symbols = head._symbols or set()
         if body is not None:
             for l in body:
                 self._symbols |= l._symbols
 
+    def _is_literal(self, exp):
+        return isinstance(exp, FunctionApplication) or isinstance(exp, Symbol)
+
     def __repr__(self):
-        r = 'HornClause{'
+        r = "HornClause{"
         if self.head is not None:
             r += repr(self.head)
             if self.body is not None:
-                r += ' :- '
+                r += " :- "
         else:
-            r += '?- '
+            r += "?- "
 
         if self.body is not None:
-            r += ', '.join(repr(l) for l in self.body)
-        r += '.}'
+            r += ", ".join(repr(l) for l in self.body)
+        r += ".}"
         return r
+
+
+def convert_to_horn_clauses(expression):
+    expression = convert_to_pnf_with_cnf_matrix(expression)
+    innermost_quantifier = None
+    matrix = expression
+    while isinstance(matrix, Quantifier):
+        innermost_quantifier = matrix
+        matrix = matrix.body
+
+    if isinstance(matrix, Conjunction):
+        clauses = Union(tuple(map(_build_clause, matrix.formulas)))
+    else:
+        clauses = Union((_build_clause(matrix),))
+
+    if innermost_quantifier:
+        innermost_quantifier.body = clauses
+        return expression
+    return clauses
+
+
+def _build_clause(exp):
+    if isinstance(exp, Disjunction):
+        positive = [f for f in exp.formulas if not isinstance(f, Negation)]
+        if len(positive) > 1:
+            raise NeuroLangException(
+                f"{exp} contains more than one positive literal"
+            )
+        negative = [f.formula for f in exp.formulas if isinstance(f, Negation)]
+
+        head = positive[0] if positive else None
+        body = tuple(negative) if negative else None
+        return HornClause(head, body)
+
+    elif isinstance(exp, Negation):
+        return HornClause(None, (exp,))
+    return HornClause(exp, None)
