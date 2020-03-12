@@ -10,7 +10,7 @@ from . import (
     Quantifier,
 )
 from ..exceptions import NeuroLangException
-from ..expressions import Constant, Symbol, FunctionApplication
+from ..expressions import Symbol, FunctionApplication
 from ..expression_walker import (
     add_match,
     ExpressionWalker,
@@ -304,9 +304,15 @@ class HornClause(LogicOperator):
     """
 
     def __init__(self, head, body=None):
+        self._validate(head, body)
         self.head = head
         self.body = body
+        self._symbols = head._symbols or set()
+        if body is not None:
+            for l in body:
+                self._symbols |= l._symbols
 
+    def _validate(self, head, body):
         if not (head is None or self._is_literal(head)):
             raise NeuroLangException(
                 f"Head must be a literal or None, {head} given"
@@ -323,11 +329,6 @@ class HornClause(LogicOperator):
             raise NeuroLangException(
                 f"Body must be a tuple or None, {body} given"
             )
-
-        self._symbols = head._symbols or set()
-        if body is not None:
-            for l in body:
-                self._symbols |= l._symbols
 
     def _is_literal(self, exp):
         return isinstance(exp, FunctionApplication) or isinstance(exp, Symbol)
@@ -368,17 +369,22 @@ def convert_to_horn_clauses(expression):
 
 def _build_clause(exp):
     if isinstance(exp, Disjunction):
-        positive = [f for f in exp.formulas if not isinstance(f, Negation)]
-        if len(positive) > 1:
-            raise NeuroLangException(
-                f"{exp} contains more than one positive literal"
-            )
-        negative = [f.formula for f in exp.formulas if isinstance(f, Negation)]
-
-        head = positive[0] if positive else None
-        body = tuple(negative) if negative else None
+        head, body = _extract_head_and_body(exp)
         return HornClause(head, body)
 
     elif isinstance(exp, Negation):
         return HornClause(None, (exp,))
     return HornClause(exp, None)
+
+
+def _extract_head_and_body(exp):
+    positive = [f for f in exp.formulas if not isinstance(f, Negation)]
+    if len(positive) > 1:
+        raise NeuroLangException(
+            f"{exp} contains more than one positive literal"
+        )
+    negative = [f.formula for f in exp.formulas if isinstance(f, Negation)]
+    return (
+        positive[0] if positive else None,
+        tuple(negative) if negative else None,
+    )
