@@ -19,6 +19,7 @@ from ..logic.horn_clauses import (
     MoveNegationsToAtoms,
     Skolemize,
     RemoveUniversalPredicates,
+    MoveQuantifiersUp,
     Symbol,
     DistributeDisjunctions,
     DesambiguateQuantifiedVariables,
@@ -296,6 +297,20 @@ def test_remove_sibling_universal_predicates():
     assert res == Disjunction((P(c0), Conjunction((P(c1), R(c1, Y))), P(Y)))
 
 
+def test_move_quantifiers_up():
+    Y = Symbol("Y")
+    X = Symbol("X")
+    P = Symbol("P")
+    R = Symbol("R")
+    exp = Disjunction(
+        (P, UniversalPredicate(X, Negation(ExistentialPredicate(Y, R(X, Y)))))
+    )
+    res = MoveQuantifiersUp().walk(exp)
+    assert res == UniversalPredicate(
+        X, UniversalPredicate(Y, Disjunction((P, Negation(R(X, Y)))))
+    )
+
+
 def test_distribute_disjunction():
     P = Symbol("P")
     Q = Symbol("Q")
@@ -521,9 +536,7 @@ def test_transform_to_horn_1():
     X = res.head
     assert res == UniversalPredicate(
         X,
-        Union(
-            (HornClause(mortal(X), (man(X),)), HornClause(man(socrates)))
-        ),
+        Union((HornClause(mortal(X), (man(X),)), HornClause(man(socrates)))),
     )
 
 

@@ -75,12 +75,19 @@ class MoveQuantifiersUp(ExpressionWalker):
     and the variables of the quantifiers are not repeated.
     """
 
-    @add_match(Negation(Quantifier))
+    @add_match(Negation(UniversalPredicate(..., ...)))
     def negated_universal(self, negation):
         quantifier = negation.formula
         x = quantifier.head
         p = self.walk(Negation(quantifier.body))
-        return quantifier.apply(x, p)
+        return ExistentialPredicate(x, p)
+
+    @add_match(Negation(ExistentialPredicate(..., ...)))
+    def negated_existential(self, negation):
+        quantifier = negation.formula
+        x = quantifier.head
+        p = self.walk(Negation(quantifier.body))
+        return UniversalPredicate(x, p)
 
     @add_match(
         Disjunction,
@@ -126,15 +133,15 @@ class DesambiguateQuantifiedVariables(ExpressionWalker):
 
     @add_match(Union)
     def match_union(self, expression):
-        return expression.apply(tuple(map(self.walk, expression.formulas)))
+        return expression.apply(self.walk(expression.formulas))
 
     @add_match(Disjunction)
     def match_dijunction(self, expression):
-        return expression.apply(tuple(map(self.walk, expression.formulas)))
+        return expression.apply(self.walk(expression.formulas))
 
     @add_match(Conjunction)
     def match_conjunction(self, expression):
-        return expression.apply(tuple(map(self.walk, expression.formulas)))
+        return expression.apply(self.walk(expression.formulas))
 
     @add_match(Negation)
     def match_negation(self, expression):
@@ -170,15 +177,15 @@ class Skolemize(ExpressionWalker):
 
     @add_match(Union)
     def match_union(self, expression):
-        return expression.apply(tuple(map(self.walk, expression.formulas)))
+        return expression.apply(self.walk(expression.formulas))
 
     @add_match(Disjunction)
     def match_dijunction(self, expression):
-        return expression.apply(tuple(map(self.walk, expression.formulas)))
+        return expression.apply(self.walk(expression.formulas))
 
     @add_match(Conjunction)
     def match_conjunction(self, expression):
-        return expression.apply(tuple(map(self.walk, expression.formulas)))
+        return expression.apply(self.walk(expression.formulas))
 
     @add_match(Negation)
     def match_negation(self, expression):
@@ -292,7 +299,9 @@ def convert_to_pnf_with_cnf_matrix(expression):
 
 
 class HornClause(LogicOperator):
-    """Expression of the form `P(X) :- Q(X), S(X).`"""
+    """
+    Expression of the form `P(X) \u2190 (Q(X) \u22C0 ... \u22C0 S(X))`
+    """
 
     def __init__(self, head, body=None):
         self.head = head
