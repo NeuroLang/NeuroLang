@@ -143,8 +143,15 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
     as objects with the same interface as :obj:`RelationalAlgebraSet`.
     """
 
-    def __init__(self, symbol_table=None):
+    def __init__(
+        self, symbol_table=None,
+        relational_algebra_set_class=RelationalAlgebraSet,
+        named_relational_algebra_set_class=NamedRelationalAlgebraFrozenSet
+    ):
         self.symbol_table = symbol_table
+        self.relational_algebra_set_class = relational_algebra_set_class
+        self.named_relational_algebra_set_class =\
+            named_relational_algebra_set_class
 
     @ew.add_match(Selection(..., FA_(eq_, (C_[Column], C_[Column]))))
     def selection_between_columns(self, selection):
@@ -191,7 +198,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
     @ew.add_match(Product)
     def ra_product(self, product):
         if len(product.relations) == 0:
-            return C_[AbstractSet](RelationalAlgebraSet(set()))
+            return C_[AbstractSet](self.relational_algebra_set_class(set()))
 
         res = self.walk(product.relations[0]).value
         for relation in product.relations[1:]:
@@ -226,18 +233,20 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
     def ra_name_columns(self, name_columns):
         relation = self.walk(name_columns.relation)
         relation_set = relation.value
-        column_names = []
-        for col in name_columns.column_names:
-            if isinstance(col, Symbol):
-                column_names.append(col.name)
-            elif isinstance(col, Constant):
-                column_names.append(col.value)
-            else:
-                raise NeuroLangException(
-                    "Column name must be a Constant or Symbol"
-                )
         unwrapped_relation_set = relation_set.unwrap()
-        new_set = NamedRelationalAlgebraFrozenSet(
+
+        column_names = []
+        if not relation_set.is_null():
+            for col in name_columns.column_names:
+                if isinstance(col, Symbol):
+                    column_names.append(col.name)
+                elif isinstance(col, Constant):
+                    column_names.append(col.value)
+                else:
+                    raise NeuroLangException(
+                        "Column name must be a Constant or Symbol"
+                    )
+        new_set = self.named_relational_algebra_set_class(
             column_names,
             unwrapped_relation_set
         )

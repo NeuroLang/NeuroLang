@@ -190,6 +190,9 @@ class FrozenMapInstance(FrozenInstance, Mapping):
     def __hash__(self):
         return super().__hash__()
 
+    def __repr__(self):
+        return '{' + ', '.join(f'{k}: {v}' for k, v in self.items()) + '}'
+
 
 class FrozenSetInstance(FrozenInstance, Set):
     def __contains__(self, predicate):

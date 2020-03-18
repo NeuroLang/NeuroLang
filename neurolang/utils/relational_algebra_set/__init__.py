@@ -11,6 +11,9 @@ class RelationalAlgebraFrozenSet(Set):
     def arity(self):
         pass
 
+    def is_null(self):
+        return self.arity == 0 or len(self) == 0
+
     @abstractmethod
     def projection(self, *columns):
         pass
@@ -51,6 +54,18 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
     @abstractmethod
     def rename_column(self, column_src, column_dst):
         pass
+
+    def __repr__(self):
+        out = '{'
+        for i, v in enumerate(self):
+            if i == 10:
+                out += '...'
+            out += repr(v) + ', '
+        out += '}'
+        return out
+
+    def __str__(self):
+        return repr(self)
 
 
 class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):

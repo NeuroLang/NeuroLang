@@ -93,6 +93,10 @@ def test_relational_algebra_ra_selection(ras_class):
 
     assert len(ras_1.selection({0: 1})) == 0
 
+    ras = RelationalAlgebraSet()
+    ras_1 = ras.selection({0: 1})
+    assert len(ras_1) == 0 & ras_1.arity == 0
+
 
 def test_relational_algebra_ra_selection_columns(ras_class):
     RelationalAlgebraSet = ras_class['mutable']
@@ -103,6 +107,10 @@ def test_relational_algebra_ra_selection_columns(ras_class):
     ras_0 = ras.selection_columns({0: 1})
     a_sel = set((i % 2, i, i * 2) for i in range(5) if i % 2 == i)
     assert ras_0 == a_sel
+
+    ras = RelationalAlgebraSet()
+    ras_1 = ras.selection_columns({0: 1})
+    assert len(ras_1) == 0 & ras_1.arity == 0
 
 
 def test_relational_algebra_ra_equijoin(ras_class):
@@ -116,12 +124,19 @@ def test_relational_algebra_ra_equijoin(ras_class):
     ras_b = RelationalAlgebraSet(b)
     ras_c = RelationalAlgebraSet(c)
     ras_d = RelationalAlgebraSet(d)
+    ras_null = RelationalAlgebraSet()
 
     res = ras_a.equijoin(ras_b, [(1, 0)])
     assert res == ras_c
 
     res = ras_a.equijoin(ras_a, [(0, 0)])
     assert res == ras_d
+
+    res = ras_a.equijoin(ras_null, [(0, 0)])
+    assert len(res) == 0 and res.arity == 0
+
+    res = ras_null.equijoin(ras_a, [(0, 0)])
+    assert len(res) == 0 and res.arity == 0
 
 
 def test_relational_algebra_ra_cross_product(ras_class):
@@ -133,9 +148,16 @@ def test_relational_algebra_ra_cross_product(ras_class):
     ras_a = RelationalAlgebraSet(a)
     ras_b = RelationalAlgebraSet(b)
     ras_c = RelationalAlgebraSet(c)
+    ras_null = RelationalAlgebraSet()
 
     res = ras_a.cross_product(ras_b)
     assert res == ras_c
+
+    res = ras_a.cross_product(ras_null)
+    assert len(res) == 0 and res.arity == 0
+
+    res = ras_null.cross_product(ras_a)
+    assert len(res) == 0 and res.arity == 0
 
 
 def test_relational_algebra_ra_equijoin_mixed_types(ras_class):
@@ -186,6 +208,7 @@ def test_groupby(ras_class):
 
 def test_named_relational_algebra_set_semantics_empty(ras_class):
     NamedRelationalAlgebraFrozenSet = ras_class['named']
+    RelationalAlgebraSet = ras_class['mutable']
 
     ras = NamedRelationalAlgebraFrozenSet(('y', 'x'))
 
@@ -199,6 +222,10 @@ def test_named_relational_algebra_set_semantics_empty(ras_class):
     assert {'y': 1, 'x': 1} not in ras
     assert len(ras) == 1
     assert ras.arity == 2
+
+    ras = RelationalAlgebraSet([(0, 1)]).projection()
+    ras_n = NamedRelationalAlgebraFrozenSet([], ras)
+    return ras_n.arity == 0 and len(ras_n) > 0
 
 
 def test_named_relational_algebra_ra_projection(ras_class):

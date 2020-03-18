@@ -149,7 +149,7 @@ class RelationalAlgebraFrozenSet(
         return output
 
     def cross_product(self, other):
-        if len(self) == 0:
+        if len(self) == 0 or len(other) == 0:
             return self._empty_set_same_structure()
         left = self._container.copy(deep=False)
         right = other._container.copy(deep=False)
@@ -254,6 +254,14 @@ class NamedRelationalAlgebraFrozenSet(
 
         if isinstance(iterable, RelationalAlgebraFrozenSet):
             self._initialize_from_instance_same_class(iterable)
+        elif isinstance(
+            iterable, relational_algebra_set.RelationalAlgebraFrozenSet
+        ) and iterable.arity == 0:
+            self._container = pd.DataFrame(
+                range(len(iterable))
+            )
+            if len(iterable) > 0:
+                self._container = self._container.set_index(0)
         else:
             self._container = pd.DataFrame(
                 list(iterable),

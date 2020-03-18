@@ -37,11 +37,16 @@ class WrappedExpressionIterable:
 
     def __iter__(self):
         type_ = self.row_type
+        if hasattr(type_, '__args__'):
+            element_types = type_.__args__
+        else:
+            element_types = tuple()
+
         for t in super().__iter__():
             yield Constant[type_](
                 tuple(
                     Constant[e_t](e, verify_type=False)
-                    for e_t, e in zip(type_.__args__, t)
+                    for e_t, e in zip(element_types, t)
                 ),
                 verify_type=False
             )
@@ -68,7 +73,10 @@ class WrappedExpressionIterable:
             return None
 
         if self.__row_type is None:
-            self.__row_type = infer_type(next(super().__iter__()))
+            if self.arity > 0:
+                self.__row_type = infer_type(next(super().__iter__()))
+            else:
+                self.__row_type = tuple()
 
         return self.__row_type
 

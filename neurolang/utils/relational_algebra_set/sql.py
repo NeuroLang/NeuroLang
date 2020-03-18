@@ -61,6 +61,7 @@ class RelationalAlgebraFrozenSet(
         engine=engine,
         is_view=False,
         columns=None,
+        indices=None,
         parents=None,
         length=None
     ):
@@ -123,6 +124,9 @@ class RelationalAlgebraFrozenSet(
     def _new_name():
         return "table_" + str(uuid4()).replace("-", "_")
 
+    def _new_index_name(self):
+        return f'idx_{self._name}'
+
     def __del__(self):
         if self._created:
             if self.is_view:
@@ -147,6 +151,9 @@ class RelationalAlgebraFrozenSet(
     def arity(self):
         return self._arity
 
+    def is_null(self):
+        return not self._created or (self.arity == 0 or len(self) == 0)
+
     def __contains__(self, element):
         if self._arity == 0:
             return False
@@ -161,11 +168,16 @@ class RelationalAlgebraFrozenSet(
     def __iter__(self):
         if self.arity > 0 and len(self) > 0:
             no_dups = self.eliminate_duplicates()
-            query = sqlalchemy.sql.select(['*'], from_obj=no_dups._table)
+            query = sqlalchemy.sql.select([
+                sqlalchemy.sql.column(str(c))
+                for c in self.columns
+            ], from_obj=no_dups._table)
             conn = self.engine.connect()
             res = conn.execute(query)
             for t in res:
                 yield tuple(t)
+        elif self.arity == 0 and len(self) > 0:
+            yield tuple()
 
     def __len__(self):
         if self._len is None:
@@ -208,6 +220,9 @@ class RelationalAlgebraFrozenSet(
         )
 
     def selection(self, select_criteria):
+        if self.is_null():
+            return type(self)()
+
         new_name = self._new_name()
         query = sqlalchemy.sql.select(['*'], from_obj=self._table)
         for k, v in select_criteria.items():
@@ -223,6 +238,9 @@ class RelationalAlgebraFrozenSet(
         return result
 
     def selection_columns(self, select_criteria):
+        if self.is_null():
+            return type(self)()
+
         new_name = self._new_name()
         query = sqlalchemy.sql.select(['*'], from_obj=self._table)
         for k, v in select_criteria.items():
@@ -240,6 +258,9 @@ class RelationalAlgebraFrozenSet(
         return result
 
     def equijoin(self, other, join_indices=None):
+        if self.is_null() or other.is_null():
+            return type(self)()
+
         if other is self:
             other = self.copy()
         new_name = self._new_name()
@@ -507,6 +528,9 @@ class NamedRelationalAlgebraFrozenSet(
                 yield self.named_tuple_type(**t)
 
     def naturaljoin(self, other):
+        if self.is_null() or other.is_null():
+            return type(self)(columns=tuple())
+
         if other is self:
             other = self.copy()
 
