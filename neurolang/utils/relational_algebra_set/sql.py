@@ -50,7 +50,7 @@ class RelationalAlgebraFrozenSet(
                 self._len = None
                 self._created = True
             else:
-                self._len = 0
+                self._len = len(df)
             self._arity = len(df.columns)
         self._create_queries()
 

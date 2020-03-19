@@ -40,6 +40,7 @@ class WrappedExpressionIterable:
         if hasattr(type_, '__args__'):
             element_types = type_.__args__
         else:
+            type_ = Tuple
             element_types = tuple()
 
         for t in super().__iter__():
