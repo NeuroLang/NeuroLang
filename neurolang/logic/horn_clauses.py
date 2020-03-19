@@ -133,7 +133,9 @@ class DesambiguateQuantifiedVariables(ExpressionWalker):
 
     @add_match(Implication)
     def match_implication(self, expression):
-        return expression.apply(self.walk(expression.consequent), self.walk(expression.antecedent))
+        return expression.apply(
+            self.walk(expression.consequent), self.walk(expression.antecedent)
+        )
 
     @add_match(Union)
     def match_union(self, expression):
@@ -393,18 +395,17 @@ class RemoveUniversalPredicates(ExpressionWalker):
     def match_universal(self, expression):
         return Negation(
             ExistentialPredicate(
-                expression.head,
-                Negation(self.walk(expression.body))
+                expression.head, Negation(self.walk(expression.body))
             )
         )
 
 
-
 class MoveNegationsToAtomsOrExistentialQuantifiers(ExpressionWalker):
-
     @add_match(Implication)
     def match_implication(self, expression):
-        return expression.apply(self.walk(expression.consequent), self.walk(expression.antecedent))
+        return expression.apply(
+            self.walk(expression.consequent), self.walk(expression.antecedent)
+        )
 
     @add_match(Union)
     def match_union(self, expression):
@@ -449,8 +450,6 @@ class MoveNegationsToAtomsOrExistentialQuantifiers(ExpressionWalker):
         return negation.formula.formula
 
 
-
-
 def convert_to_srnf(e):
     # e = DesambiguateQuantifiedVariables().walk(e)
     e = EliminateImplications().walk(e)
@@ -460,14 +459,73 @@ def convert_to_srnf(e):
 
 
 def is_safe_range(expression):
-    return expression._symbols == range_restricted_variables(expression)
-    
-
-class RangeRestrictedVariables(ExpressionWalker):
-    pass
-    
-
+    try:
+        return free_variables(expression) == range_restricted_variables(expression)
+    except NeuroLangException:
+        return False
 
 
 def range_restricted_variables(e):
     return RangeRestrictedVariables().walk(e)
+
+
+class RangeRestrictedVariables(ExpressionWalker):
+    @add_match(FunctionApplication)
+    def match_function(self, exp):
+        return set([a for a in exp.args if isinstance(a, Symbol)])
+
+    @add_match(Negation)
+    def match_negation(self, exp):
+        return set()
+
+    @add_match(Disjunction)
+    def match_disjunction(self, exp):
+        return set.intersection(*self.walk(exp.formulas))
+
+    @add_match(Conjunction)
+    def match_conjunction(self, exp):
+        return set.union(*self.walk(exp.formulas))
+
+    @add_match(UniversalPredicate)
+    def match_universal(self, exp):
+        return set()
+
+    @add_match(ExistentialPredicate)
+    def match_existential(self, exp):
+        r = self.walk(exp.body)
+        if exp.head in r:
+            return r - {exp.head}
+        # This better could be a return value
+        raise NeuroLangException(
+            "Some quantified variable is not range restricted"
+        )
+
+
+def free_variables(expression):
+    return FreeVariables().walk(expression)
+
+
+class FreeVariables(ExpressionWalker):
+    @add_match(FunctionApplication)
+    def match_function(self, exp):
+        return set([a for a in exp.args if isinstance(a, Symbol)])
+
+    @add_match(Negation)
+    def match_negation(self, exp):
+        return self.walk(exp.formula)
+
+    @add_match(Disjunction)
+    def match_disjunction(self, exp):
+        return set.union(*self.walk(exp.formulas))
+
+    @add_match(Implication)
+    def match_implication(self, exp):
+        return set.union(self.walk(exp.antecedent), self.walk(exp.consequent))
+
+    @add_match(Conjunction)
+    def match_conjunction(self, exp):
+        return set.union(*self.walk(exp.formulas))
+
+    @add_match(Quantifier)
+    def match_quantifier(self, exp):
+        return self.walk(exp.body) - {exp.head}

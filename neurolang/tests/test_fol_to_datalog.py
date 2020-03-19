@@ -26,10 +26,12 @@ from ..logic.horn_clauses import (
     DesambiguateQuantifiedVariables,
     CollapseDisjunctions,
     CollapseConjunctions,
+    HornClause,
     convert_to_pnf_with_cnf_matrix,
     convert_to_horn_clauses,
     convert_to_srnf,
-    HornClause,
+    range_restricted_variables,
+    is_safe_range,
 )
 
 
@@ -672,12 +674,55 @@ def test_convert_to_srnf():
             ExistentialPredicate(
                 Xd, ExistentialPredicate(Xa, Movies(Xt, Xd, Xa))
             ),
-            Negation(ExistentialPredicate(
-                Ya,
-                Conjunction((
-                    Negation(ExistentialPredicate(Zt, Movies(Zt, H, Ya))),
-                    ExistentialPredicate(Yd, Movies(Xt, Yd, Ya)),
-                )),
-            )),
+            Negation(
+                ExistentialPredicate(
+                    Ya,
+                    Conjunction(
+                        (
+                            Negation(
+                                ExistentialPredicate(Zt, Movies(Zt, H, Ya))
+                            ),
+                            ExistentialPredicate(Yd, Movies(Xt, Yd, Ya)),
+                        )
+                    ),
+                )
+            ),
         )
     )
+
+
+def test_range_restricted_variables():
+    Movies = Symbol("Movies")
+    Ans = Symbol("Ans")
+    H = Constant("'Hitchcock'")
+    Xt = Symbol("Xt")
+    Xd = Symbol("Xd")
+    Xa = Symbol("Xa")
+    Ya = Symbol("Ya")
+    Yd = Symbol("Yd")
+    Zt = Symbol("Zt")
+
+    exp = Conjunction(
+        (
+            ExistentialPredicate(
+                Xd, ExistentialPredicate(Xa, Movies(Xt, Xd, Xa))
+            ),
+            Negation(
+                ExistentialPredicate(
+                    Ya,
+                    Conjunction(
+                        (
+                            Negation(
+                                ExistentialPredicate(Zt, Movies(Zt, H, Ya))
+                            ),
+                            ExistentialPredicate(Yd, Movies(Xt, Yd, Ya)),
+                        )
+                    ),
+                )
+            ),
+        )
+    )
+
+    res = range_restricted_variables(exp)
+    assert res == {Xt}
+    assert is_safe_range(exp)
