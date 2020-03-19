@@ -131,6 +131,10 @@ class DesambiguateQuantifiedVariables(ExpressionWalker):
     Replaces each quantified variale to a fresh one.
     """
 
+    @add_match(Implication)
+    def match_implication(self, expression):
+        return expression.apply(self.walk(expression.consequent), self.walk(expression.antecedent))
+
     @add_match(Union)
     def match_union(self, expression):
         return expression.apply(self.walk(expression.formulas))
@@ -222,17 +226,6 @@ class Skolemize(ExpressionWalker):
         return f
 
 
-class RemoveUniversalPredicates(ExpressionWalker):
-    """
-    Removes the universal predicates and leaves free the bound variables.
-    Assumes that the quantified variables are unique.
-    """
-
-    @add_match(UniversalPredicate)
-    def match_universal(self, expression):
-        return self.walk(expression.body)
-
-
 class DistributeDisjunctions(ExpressionWalker):
     @add_match(Disjunction, lambda e: len(e.formulas) > 2)
     def match_split(self, expression):
@@ -289,7 +282,7 @@ def convert_to_pnf_with_cnf_matrix(expression):
     walker = ChainedWalker(
         EliminateImplications,
         MoveNegationsToAtoms,
-        DesambiguateQuantifiedVariables,
+        # DesambiguateQuantifiedVariables,
         MoveQuantifiersUp,
         DistributeDisjunctions,
         CollapseDisjunctions,
@@ -388,3 +381,93 @@ def _extract_head_and_body(exp):
         positive[0] if positive else None,
         tuple(negative) if negative else None,
     )
+
+
+class RemoveUniversalPredicates(ExpressionWalker):
+    """
+    Removes the universal predicates and leaves free the bound variables.
+    Assumes that the quantified variables are unique.
+    """
+
+    @add_match(UniversalPredicate)
+    def match_universal(self, expression):
+        return Negation(
+            ExistentialPredicate(
+                expression.head,
+                Negation(self.walk(expression.body))
+            )
+        )
+
+
+
+class MoveNegationsToAtomsOrExistentialQuantifiers(ExpressionWalker):
+
+    @add_match(Implication)
+    def match_implication(self, expression):
+        return expression.apply(self.walk(expression.consequent), self.walk(expression.antecedent))
+
+    @add_match(Union)
+    def match_union(self, expression):
+        return expression.apply(self.walk(expression.formulas))
+
+    @add_match(Disjunction)
+    def match_dijunction(self, expression):
+        return expression.apply(self.walk(expression.formulas))
+
+    @add_match(Conjunction)
+    def match_conjunction(self, expression):
+        return expression.apply(self.walk(expression.formulas))
+
+    @add_match(Negation(UniversalPredicate(..., ...)))
+    def negated_universal(self, negation):
+        quantifier = negation.formula
+        x = quantifier.head
+        p = self.walk(Negation(quantifier.body))
+        return ExistentialPredicate(x, p)
+
+    @add_match(Negation(ExistentialPredicate(..., ...)))
+    def negated_existential(self, negation):
+        quantifier = negation.formula
+        h = quantifier.head
+        b = self.walk(quantifier.body)
+        return Negation(ExistentialPredicate(h, b))
+
+    @add_match(Negation(Conjunction(...)))
+    def negated_conjunction(self, negation):
+        conj = negation.formula
+        formulas = map(lambda e: self.walk(Negation(e)), conj.formulas)
+        return Disjunction(tuple(formulas))
+
+    @add_match(Negation(Disjunction(...)))
+    def negated_disjunction(self, negation):
+        disj = negation.formula
+        formulas = map(lambda e: self.walk(Negation(e)), disj.formulas)
+        return Conjunction(tuple(formulas))
+
+    @add_match(Negation(Negation(...)))
+    def negated_negation(self, negation):
+        return negation.formula.formula
+
+
+
+
+def convert_to_srnf(e):
+    # e = DesambiguateQuantifiedVariables().walk(e)
+    e = EliminateImplications().walk(e)
+    e = RemoveUniversalPredicates().walk(e)
+    e = MoveNegationsToAtomsOrExistentialQuantifiers().walk(e)
+    return e
+
+
+def is_safe_range(expression):
+    return expression._symbols == range_restricted_variables(expression)
+    
+
+class RangeRestrictedVariables(ExpressionWalker):
+    pass
+    
+
+
+
+def range_restricted_variables(e):
+    return RangeRestrictedVariables().walk(e)

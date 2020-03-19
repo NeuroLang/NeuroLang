@@ -17,6 +17,7 @@ from ..logic import (
 from ..logic.horn_clauses import (
     EliminateImplications,
     MoveNegationsToAtoms,
+    MoveNegationsToAtomsOrExistentialQuantifiers,
     Skolemize,
     RemoveUniversalPredicates,
     MoveQuantifiersUp,
@@ -27,6 +28,7 @@ from ..logic.horn_clauses import (
     CollapseConjunctions,
     convert_to_pnf_with_cnf_matrix,
     convert_to_horn_clauses,
+    convert_to_srnf,
     HornClause,
 )
 
@@ -239,9 +241,8 @@ def test_remove_universal_predicate():
     P = Symbol("P")
     exp = UniversalPredicate(X, P(X))
     res = RemoveUniversalPredicates().walk(exp)
-    assert isinstance(res, FunctionApplication)
-    assert res.functor == P
-    assert isinstance(res.args[0], Symbol)
+
+    assert res == Negation(ExistentialPredicate(X, Negation(P(X))))
 
 
 def test_remove_nested_universal_predicates():
@@ -254,11 +255,19 @@ def test_remove_nested_universal_predicates():
     )
     res = RemoveUniversalPredicates().walk(exp)
 
-    c0 = res.formulas[0].args[0]
-    c1 = res.formulas[1].args[1]
-
-    assert c0 != c1
-    assert res == Disjunction((P(c0), R(c0, c1)))
+    assert res == Negation(
+        ExistentialPredicate(
+            X,
+            Negation(
+                Disjunction(
+                    (
+                        P(X),
+                        Negation(ExistentialPredicate(Y, Negation(R(X, Y)))),
+                    )
+                )
+            ),
+        )
+    )
 
 
 def test_remove_repeated_symbols_in_nested_universal_predicates():
@@ -287,14 +296,17 @@ def test_remove_sibling_universal_predicates():
             P(Y),
         )
     )
-    res = DesambiguateQuantifiedVariables().walk(exp)
-    res = RemoveUniversalPredicates().walk(res)
+    res = RemoveUniversalPredicates().walk(exp)
 
-    c0 = res.formulas[0].args[0]
-    c1 = res.formulas[1].formulas[0].args[0]
-
-    assert c0 != c1
-    assert res == Disjunction((P(c0), Conjunction((P(c1), R(c1, Y))), P(Y)))
+    assert res == Disjunction(
+        (
+            Negation(ExistentialPredicate(X, Negation(P(X)))),
+            Negation(
+                ExistentialPredicate(X, Negation(Conjunction((P(X), R(X, Y)))))
+            ),
+            P(Y),
+        )
+    )
 
 
 def test_move_quantifiers_up():
@@ -601,3 +613,71 @@ def test_transform_to_horn_fails():
     exp = Disjunction((P, Conjunction((A, B, Disjunction((C, D)))), Q))
     with raises(NeuroLangException):
         convert_to_horn_clauses(exp)
+
+
+def test_move_negations_to_atoms_or_existentials():
+    Y = Symbol("Y")
+    X = Symbol("X")
+    P = Symbol("P")
+    Q = Symbol("Q")
+    exp = Negation(
+        Disjunction(
+            (
+                P(X),
+                ExistentialPredicate(
+                    Y, Negation(Conjunction((P(Y), Negation(Q(Y)))))
+                ),
+            )
+        )
+    )
+    res = MoveNegationsToAtomsOrExistentialQuantifiers().walk(exp)
+    assert res == Conjunction(
+        (
+            Negation(P(X)),
+            Negation(
+                ExistentialPredicate(Y, Disjunction((Negation(P(Y)), Q(Y))))
+            ),
+        )
+    )
+
+
+def test_convert_to_srnf():
+    Movies = Symbol("Movies")
+    Ans = Symbol("Ans")
+    H = Symbol("'Hitchcock'")
+    Xt = Symbol("Xt")
+    Xd = Symbol("Xd")
+    Xa = Symbol("Xa")
+    Ya = Symbol("Ya")
+    Yd = Symbol("Yd")
+    Zt = Symbol("Zt")
+
+    exp = Conjunction(
+        (
+            ExistentialPredicate(
+                Xd, ExistentialPredicate(Xa, Movies(Xt, Xd, Xa))
+            ),
+            UniversalPredicate(
+                Ya,
+                Implication(
+                    ExistentialPredicate(Zt, Movies(Zt, H, Ya)),
+                    ExistentialPredicate(Yd, Movies(Xt, Yd, Ya)),
+                ),
+            ),
+        )
+    )
+    res = convert_to_srnf(exp)
+    assert res == Conjunction(
+        (
+            ExistentialPredicate(
+                Xd, ExistentialPredicate(Xa, Movies(Xt, Xd, Xa))
+            ),
+            Negation(ExistentialPredicate(
+                Ya,
+                Conjunction((
+                    Negation(ExistentialPredicate(Zt, Movies(Zt, H, Ya))),
+                    ExistentialPredicate(Yd, Movies(Xt, Yd, Ya)),
+                )),
+            )),
+        )
+    )
