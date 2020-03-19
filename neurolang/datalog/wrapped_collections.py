@@ -37,11 +37,7 @@ class WrappedExpressionIterable:
 
     def __iter__(self):
         type_ = self.row_type
-        if hasattr(type_, '__args__'):
-            element_types = type_.__args__
-        else:
-            type_ = Tuple
-            element_types = tuple()
+        element_types = type_.__args__
 
         for t in super().__iter__():
             yield Constant[type_](
@@ -70,14 +66,11 @@ class WrappedExpressionIterable:
 
     @property
     def row_type(self):
-        if len(self) == 0:
-            return None
-
         if self.__row_type is None:
-            if self.arity > 0:
+            if self.arity > 0 and len(self) > 0:
                 self.__row_type = infer_type(next(super().__iter__()))
             else:
-                self.__row_type = tuple()
+                self.__row_type = Tuple
 
         return self.__row_type
 
