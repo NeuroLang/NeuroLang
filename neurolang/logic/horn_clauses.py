@@ -10,9 +10,10 @@ from . import (
     Quantifier,
 )
 from ..exceptions import NeuroLangException
-from ..expressions import Symbol, FunctionApplication
+from ..expressions import Symbol, Constant, FunctionApplication
 from ..expression_walker import (
     add_match,
+    PatternWalker,
     ExpressionWalker,
     ChainedWalker,
     ReplaceSymbolWalker,
@@ -400,11 +401,29 @@ class RemoveUniversalPredicates(ExpressionWalker):
         )
 
 
-class MoveNegationsToAtomsOrExistentialQuantifiers(ExpressionWalker):
-    @add_match(Implication)
-    def match_implication(self, expression):
+class FirstOrderLogicWalker(PatternWalker):
+    @add_match(Quantifier)
+    def match_quantifier(self, expression):
         return expression.apply(
-            self.walk(expression.consequent), self.walk(expression.antecedent)
+            self.walk(expression.head), self.walk(expression.body)
+        )
+
+    @add_match(Constant)
+    def match_constant(self, expression):
+        return expression
+
+    @add_match(Symbol)
+    def match_symbol(self, expression):
+        return expression
+
+    @add_match(Negation)
+    def match_negation(self, expression):
+        return Negation(self.walk(expression.formula))
+
+    @add_match(FunctionApplication)
+    def match_function(self, expression):
+        return FunctionApplication(
+            expression.functor, tuple(map(self.walk, expression.args))
         )
 
     @add_match(Union)
@@ -413,11 +432,19 @@ class MoveNegationsToAtomsOrExistentialQuantifiers(ExpressionWalker):
 
     @add_match(Disjunction)
     def match_dijunction(self, expression):
-        return expression.apply(self.walk(expression.formulas))
+        return expression.apply(map(self.walk, expression.formulas))
 
     @add_match(Conjunction)
     def match_conjunction(self, expression):
-        return expression.apply(self.walk(expression.formulas))
+        return expression.apply(map(self.walk, expression.formulas))
+
+
+class MoveNegationsToAtomsOrExistentialQuantifiers(FirstOrderLogicWalker):
+    @add_match(Implication)
+    def match_implication(self, expression):
+        return expression.apply(
+            self.walk(expression.consequent), self.walk(expression.antecedent)
+        )
 
     @add_match(Negation(UniversalPredicate(..., ...)))
     def negated_universal(self, negation):
@@ -460,7 +487,9 @@ def convert_to_srnf(e):
 
 def is_safe_range(expression):
     try:
-        return free_variables(expression) == range_restricted_variables(expression)
+        return free_variables(expression) == range_restricted_variables(
+            expression
+        )
     except NeuroLangException:
         return False
 
@@ -469,7 +498,7 @@ def range_restricted_variables(e):
     return RangeRestrictedVariables().walk(e)
 
 
-class RangeRestrictedVariables(ExpressionWalker):
+class RangeRestrictedVariables(FirstOrderLogicWalker):
     @add_match(FunctionApplication)
     def match_function(self, exp):
         return set([a for a in exp.args if isinstance(a, Symbol)])

@@ -570,11 +570,10 @@ def test_transform_to_horn_2():
                 X,
                 UniversalPredicate(
                     Y,
-                    ExistentialPredicate(
-                        Z,
-                        Implication(
-                            sister(X, Y),
-                            Conjunction((father(X, Z), father(Y, Z))),
+                    Implication(
+                        sister(X, Y),
+                        ExistentialPredicate(
+                            Z, Conjunction((father(X, Z), father(Y, Z))),
                         ),
                     ),
                 ),
@@ -591,7 +590,7 @@ def test_transform_to_horn_2():
         X,
         UniversalPredicate(
             Y,
-            ExistentialPredicate(
+            UniversalPredicate(
                 Z,
                 Union(
                     (
@@ -693,7 +692,6 @@ def test_convert_to_srnf():
 
 def test_range_restricted_variables():
     Movies = Symbol("Movies")
-    Ans = Symbol("Ans")
     H = Constant("'Hitchcock'")
     Xt = Symbol("Xt")
     Xd = Symbol("Xd")
@@ -726,3 +724,95 @@ def test_range_restricted_variables():
     res = range_restricted_variables(exp)
     assert res == {Xt}
     assert is_safe_range(exp)
+
+
+def test_convert_to_srnf_2():
+    father = Symbol("father")
+    sister = Symbol("sister")
+    X = Symbol("X")
+    Y = Symbol("Y")
+    Z = Symbol("Z")
+
+    # Starting with this sentence:
+    exp = UniversalPredicate(
+        X,
+        UniversalPredicate(
+            Y,
+            Implication(
+                sister(X, Y),
+                ExistentialPredicate(
+                    Z, Conjunction((father(X, Z), father(Y, Z))),
+                ),
+            ),
+        ),
+    )
+
+    # The first thing to do is to remove implications:
+    exp = UniversalPredicate(
+        X,
+        UniversalPredicate(
+            Y,
+            Disjunction(
+                (
+                    sister(X, Y),
+                    Negation(
+                        ExistentialPredicate(
+                            Z, Conjunction((father(X, Z), father(Y, Z))),
+                        )
+                    ),
+                )
+            ),
+        ),
+    )
+
+    # Now, this is a universally quantified disjunction
+    # with one positive literal so we can treat the sister
+    # relation as the answer to:
+    exp = ExistentialPredicate(Z, Conjunction((father(X, Z), father(Y, Z))),)
+    res = convert_to_srnf(exp)
+    assert is_safe_range(res)
+
+    # And also the quantified variables from sister(X, Y) must
+    # appear in the query:
+    # (At this point we know that range_restricted_variables == free_variables)
+    assert {X, Y} == range_restricted_variables(exp)
+
+
+def test_convert_to_srnf_3():
+    n = Symbol("n")
+    m = Symbol("m")
+    m_ = Symbol("m'")
+    r = Symbol("r")
+    r_ = Symbol("r'")
+    Director = Symbol("Director")
+    Actor = Symbol("Actor")
+    Equal = Symbol("Equal")
+
+    # Which directors played exactly one role in each of their movies
+    exp = Conjunction(
+        (
+            ExistentialPredicate(m, Director(n, m)),
+            UniversalPredicate(
+                m_,
+                Implication(
+                    ExistentialPredicate(
+                        r,
+                        Conjunction(
+                            (
+                                Actor(n, m_, r),
+                                UniversalPredicate(
+                                    r_,
+                                    Implication(
+                                        Equal(r, r_), Actor(n, m_, r_)
+                                    ),
+                                ),
+                            )
+                        ),
+                    ),
+                    Director(n, m_),
+                ),
+            ),
+        )
+    )
+    res = convert_to_srnf(exp)
+    assert is_safe_range(res)
