@@ -298,6 +298,9 @@ class RelationalAlgebraFrozenSet(
         return self.equijoin(other)
 
     def __and__(self, other):
+        if not isinstance(other, RelationalAlgebraFrozenSet):
+            return super().__sub__(other)
+
         new_name = self._new_name()
         query = (
             f"CREATE VIEW {new_name} AS SELECT * from "
@@ -314,6 +317,9 @@ class RelationalAlgebraFrozenSet(
         )
 
     def __or__(self, other):
+        if not isinstance(other, RelationalAlgebraFrozenSet):
+            return super().__sub__(other)
+
         new_name = self._new_name()
         query = (
             f"CREATE VIEW {new_name} AS SELECT * "
@@ -330,6 +336,9 @@ class RelationalAlgebraFrozenSet(
         )
 
     def __sub__(self, other):
+        if not isinstance(other, RelationalAlgebraFrozenSet):
+            return super().__sub__(other)
+
         new_name = self._new_name()
         query = (
             f"CREATE VIEW {new_name} AS SELECT * from "
