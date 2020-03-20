@@ -364,7 +364,7 @@ def test_neurolang_dl_aggregation():
 
     @neurolang.add_symbol
     def sum_(x):
-        return sum(x)
+        return sum(x_[0] for x_ in x)
 
     for i in range(10):
         q[i % 2, i] = True

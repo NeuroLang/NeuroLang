@@ -158,13 +158,12 @@ class Chase(chase.Chase):
             rule, new_tuples, args
         )
 
-        new_tuples = [
-            Constant[Tuple](
-                apply_substitution_arguments(fvs, substitution)
-            )
-            for substitution in substitutions
-            if fvs <= set(substitution)
-        ]
+        new_tuples = []
+        for substitution in substitutions:
+            if fvs <= set(substitution):
+                value = apply_substitution_arguments(fvs, substitution)
+                new_tuples.append(Constant[Tuple](value))
+
         new_tuples = self.datalog_program.new_set(new_tuples)
         return self.compute_instance_update(
             rule, new_tuples, instance, restriction_instance
@@ -194,7 +193,7 @@ class Chase(chase.Chase):
             )
 
             if len(group_vars) == 1:
-                substitution[group_vars[0]] = Constant(g_id)
+                substitution[group_vars[0]] = Constant(g_id[0])
             elif len(group_vars) > 1:
                 substitution.update({
                     v: Constant(val)
@@ -209,9 +208,7 @@ class Chase(chase.Chase):
     ):
         agg_substitution = tuple(
             Constant[AbstractSet](
-                frozenset(
-                    v.value[0] for v in group.projection(args.index(v))
-                ),
+                group.projection(args.index(v)),
                 auto_infer_type=False,
                 verify_type=False
             ) for v in fvs_aggregation

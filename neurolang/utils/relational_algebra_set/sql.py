@@ -409,30 +409,31 @@ class RelationalAlgebraFrozenSet(
             return super().__eq__(other)
 
     def groupby(self, columns):
-        single_column = False
-        if not isinstance(columns, Iterable):
-            single_column = True
-            columns = (columns,)
+        if self.arity > 0:
+            single_column = False
+            if not isinstance(columns, Iterable):
+                single_column = True
+                columns = (columns,)
 
-        columns = tuple(
-            sqlalchemy.sql.column(str(c))
-            for c in columns
-        )
-        query = sqlalchemy.sql.select(
-            columns=columns,
-            from_obj=self._table,
-            group_by=columns
-        )
+            sql_columns = tuple(
+                sqlalchemy.sql.column(str(c))
+                for c in columns
+            )
+            query = sqlalchemy.sql.select(
+                columns=sql_columns,
+                from_obj=self._table,
+                group_by=sql_columns
+            )
 
-        conn = self.engine.connect()
-        r = conn.execute(query)
-        for t in r:
-            g = self.selection(dict(zip(columns, t)))
-            if single_column:
-                t_out = t[0]
-            else:
-                t_out = tuple(t)
-            yield t_out, g
+            conn = self.engine.connect()
+            r = conn.execute(query)
+            for t in r:
+                g = self.selection(dict(zip(columns, t)))
+                if single_column:
+                    t_out = t[0]
+                else:
+                    t_out = tuple(t)
+                yield t_out, g
 
     def __hash__(self):
         if self._hash is None:
@@ -585,31 +586,32 @@ class NamedRelationalAlgebraFrozenSet(
         return self.naturaljoin(other)
 
     def groupby(self, columns):
-        single_column = False
-        if isinstance(columns, str):
-            single_column = True
-            columns = (columns,)
+        if self.arity > 0:
+            single_column = False
+            if isinstance(columns, str):
+                single_column = True
+                columns = (columns,)
 
-        columns = tuple(
-            sqlalchemy.sql.column(str(c))
-            for c in columns
-        )
+            columns = tuple(
+                sqlalchemy.sql.column(str(c))
+                for c in columns
+            )
 
-        query = sqlalchemy.sql.select(
-            columns=columns,
-            from_obj=self._table,
-            group_by=columns
-        )
+            query = sqlalchemy.sql.select(
+                columns=columns,
+                from_obj=self._table,
+                group_by=columns
+            )
 
-        conn = self.engine.connect()
-        r = conn.execute(query)
-        for t in r:
-            g = self.selection(t)
-            if single_column:
-                t_out = t[0]
-            else:
-                t_out = tuple(t)
-            yield t_out, g
+            conn = self.engine.connect()
+            r = conn.execute(query)
+            for t in r:
+                g = self.selection(t)
+                if single_column:
+                    t_out = t[0]
+                else:
+                    t_out = tuple(t)
+                yield t_out, g
 
     def rename_column(self, column_src, column_dst):
         new_name = self._new_name()

@@ -108,7 +108,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         elif len(head) == 0:
             return len(solution_set.value) > 0
         else:
-            return RelationalAlgebraFrozenSet(solution_set.value)
+            return RelationalAlgebraFrozenSet(solution_set.value.unwrap())
 
     def execute_query(self, head, predicate):
         functor_orig = None
