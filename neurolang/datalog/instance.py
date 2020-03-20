@@ -283,7 +283,11 @@ class Instance(FrozenInstance):
 
 class MapInstance(Instance, FrozenMapInstance, MutableMapping):
     def __setitem__(self, predicate_symbol, value):
-        self.elements[predicate_symbol] = self._set_type(value.value)
+        if isinstance(value.value, WrappedRelationalAlgebraSet):
+            value_value = value.value.unwrap()
+        else:
+            value_value = self._rebv.walk(value.value)
+        self.elements[predicate_symbol] = self._set_type(value_value)
         self.set_types[predicate_symbol] = value.type.__args__[0]
 
     def __delitem__(self, predicate_symbol):
