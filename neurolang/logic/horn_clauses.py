@@ -1,3 +1,5 @@
+from functools import reduce
+from operator import add
 from . import (
     Implication,
     Union,
@@ -323,11 +325,23 @@ class HornClause(LogicOperator):
             )
         ):
             raise NeuroLangException(
-                f"Body must be a tuple or None, {body} given"
+                f"Body must be a tuple of literals or None, {body} given"
             )
 
     def _is_literal(self, exp):
-        return isinstance(exp, FunctionApplication) or isinstance(exp, Symbol)
+        return (
+            isinstance(exp, FunctionApplication)
+            or isinstance(exp, Symbol)
+            or isinstance(exp, Constant)
+            or (
+                isinstance(exp, Negation)
+                and (
+                    isinstance(exp.formula, FunctionApplication)
+                    or isinstance(exp.formula, Symbol)
+                    or isinstance(exp.formula, Constant)
+                )
+            )
+        )
 
     def __repr__(self):
         r = "HornClause{"
@@ -558,3 +572,53 @@ class FreeVariables(ExpressionWalker):
     @add_match(Quantifier)
     def match_quantifier(self, exp):
         return self.walk(exp.body) - {exp.head}
+
+
+def convert_srnf_to_horn_clauses(head, expression):
+    queue = [(head, expression)]
+    processed = []
+
+    while queue:
+        head, exp = queue.pop()
+        body, remainder = _process(exp)
+        processed.append(HornClause(head, body))
+        queue = remainder + queue
+
+    return Union(tuple(reversed(processed)))
+
+
+def _new_head_for(exp):
+    fv = free_variables(exp)
+    S = Symbol.fresh()
+    return S(*tuple(fv))
+
+
+# Rewrite this as a walker
+def _process(exp):
+    if isinstance(exp, Conjunction):
+        bodies, remainders = zip(*map(_process, exp.formulas))
+        return (
+            reduce(add, bodies),
+            reduce(add, remainders),
+        )
+
+    if isinstance(exp, Disjunction):
+        nh = _new_head_for(exp)
+        return (nh,), [(nh, f) for f in exp.formulas]
+
+    if isinstance(exp, ExistentialPredicate):
+        return _process(exp.body)
+
+    if isinstance(exp, Negation):
+        if isinstance(exp.formula, FunctionApplication):
+            return (exp,), []
+        if isinstance(exp.formula, ExistentialPredicate):
+            nh = _new_head_for(exp.formula)
+            return (Negation(nh),), [(nh, exp.formula)]
+
+    if isinstance(exp, FunctionApplication):
+        return (exp,), []
+
+    raise NeuroLangException(
+        "Expression not in safe range normal form: {}".format(exp)
+    )

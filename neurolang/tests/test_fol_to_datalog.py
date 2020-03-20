@@ -30,6 +30,7 @@ from ..logic.horn_clauses import (
     convert_to_pnf_with_cnf_matrix,
     convert_to_horn_clauses,
     convert_to_srnf,
+    convert_srnf_to_horn_clauses,
     range_restricted_variables,
     is_safe_range,
 )
@@ -816,3 +817,59 @@ def test_convert_to_srnf_3():
     )
     res = convert_to_srnf(exp)
     assert is_safe_range(res)
+
+
+def test_convert_srnf2horn():
+    Father = Symbol("Father")
+    X = Symbol("X")
+    Y = Symbol("Y")
+    Z = Symbol("Z")
+    Sister = Symbol("Sister")
+
+    exp = ExistentialPredicate(Z, Conjunction((Father(X, Z), Father(Y, Z))),)
+    exp = convert_to_srnf(exp)
+    res = convert_srnf_to_horn_clauses(Sister(X, Y), exp)
+
+    expected = Union((HornClause(Sister(X, Y), (Father(X, Z), Father(Y, Z))),))
+    assert res == expected
+
+
+def test_convert_srnf2horn_2():
+    Movies = Symbol("Movies")
+    Ans = Symbol("Ans")
+    H = Constant("'Hitchcock'")
+    Xt = Symbol("Xt")
+    Xd = Symbol("Xd")
+    Xa = Symbol("Xa")
+    Ya = Symbol("Ya")
+    Yd = Symbol("Yd")
+    Zt = Symbol("Zt")
+
+    exp = Conjunction(
+        (
+            ExistentialPredicate(
+                Xd, ExistentialPredicate(Xa, Movies(Xt, Xd, Xa))
+            ),
+            UniversalPredicate(
+                Ya,
+                Implication(
+                    ExistentialPredicate(Zt, Movies(Zt, H, Ya)),
+                    ExistentialPredicate(Yd, Movies(Xt, Yd, Ya)),
+                ),
+            ),
+        )
+    )
+    exp2 = convert_to_srnf(exp)
+    res = convert_srnf_to_horn_clauses(Ans(Xt), exp2)
+
+    Aux2 = res.formulas[0].head.functor
+    Aux1 = res.formulas[1].head.functor
+
+    expected = Union(
+        (
+            HornClause(Aux2(Ya), (Movies(Zt, H, Ya),)),
+            HornClause(Aux1(Xt), (Movies(Xt, Yd, Ya), Negation(Aux2(Ya)))),
+            HornClause(Ans(Xt), (Movies(Xt, Xd, Xa), Negation(Aux1(Xt)))),
+        )
+    )
+    assert res == expected
