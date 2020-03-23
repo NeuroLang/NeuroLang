@@ -1,6 +1,9 @@
 from functools import reduce
 from operator import add
 from . import (
+    Symbol,
+    Constant,
+    FunctionApplication,
     Implication,
     Union,
     Conjunction,
@@ -12,7 +15,6 @@ from . import (
     Quantifier,
 )
 from ..exceptions import NeuroLangException
-from ..expressions import Symbol, Constant, FunctionApplication
 from ..expression_walker import (
     add_match,
     PatternWalker,
@@ -20,251 +22,18 @@ from ..expression_walker import (
     ReplaceSymbolWalker,
 )
 
-
-class LogicExpressionWalker(PatternWalker):
-    @add_match(Quantifier)
-    def walk_quantifier(self, expression):
-        return expression.apply(
-            self.walk(expression.head), self.walk(expression.body)
-        )
-
-    @add_match(Constant)
-    def walk_constant(self, expression):
-        return expression
-
-    @add_match(Symbol)
-    def walk_symbol(self, expression):
-        return expression
-
-    @add_match(Negation)
-    def walk_negation(self, expression):
-        return Negation(self.walk(expression.formula))
-
-    @add_match(FunctionApplication)
-    def walk_function(self, expression):
-        return FunctionApplication(
-            expression.functor, tuple(map(self.walk, expression.args))
-        )
-
-    @add_match(Union)
-    def walk_union(self, expression):
-        return expression.apply(self.walk(expression.formulas))
-
-    @add_match(Disjunction)
-    def walk_disjunction(self, expression):
-        return expression.apply(map(self.walk, expression.formulas))
-
-    @add_match(Conjunction)
-    def walk_conjunction(self, expression):
-        return expression.apply(map(self.walk, expression.formulas))
-
-
-class EliminateImplications(LogicExpressionWalker):
-    """
-    Removes the implication ocurrences of an expression.
-    """
-
-    @add_match(Implication(..., ...))
-    def remove_implication(self, implication):
-        c = self.walk(implication.consequent)
-        a = self.walk(implication.antecedent)
-        return Disjunction((c, Negation(a)))
-
-
-class MoveNegationsToAtoms(LogicExpressionWalker):
-    """
-    Moves the negations the furthest possible to the atoms.
-    Assumes that there are no implications in the expression.
-    """
-
-    @add_match(Negation(UniversalPredicate(..., ...)))
-    def negated_universal(self, negation):
-        quantifier = negation.formula
-        x = quantifier.head
-        p = self.walk(Negation(quantifier.body))
-        return ExistentialPredicate(x, p)
-
-    @add_match(Negation(ExistentialPredicate(..., ...)))
-    def negated_existential(self, negation):
-        quantifier = negation.formula
-        x = quantifier.head
-        p = self.walk(Negation(quantifier.body))
-        return UniversalPredicate(x, p)
-
-    @add_match(Negation(Conjunction(...)))
-    def negated_conjunction(self, negation):
-        conj = negation.formula
-        formulas = map(lambda e: self.walk(Negation(e)), conj.formulas)
-        return Disjunction(tuple(formulas))
-
-    @add_match(Negation(Disjunction(...)))
-    def negated_disjunction(self, negation):
-        disj = negation.formula
-        formulas = map(lambda e: self.walk(Negation(e)), disj.formulas)
-        return Conjunction(tuple(formulas))
-
-    @add_match(Negation(Negation(...)))
-    def negated_negation(self, negation):
-        return negation.formula.formula
-
-
-class MoveQuantifiersUp(LogicExpressionWalker):
-    """
-    Moves the quantifiers up in order to format the expression
-    in prenex normal form. Assumes the expression contains no implications
-    and the variables of the quantifiers are not repeated.
-    """
-
-    @add_match(Negation(UniversalPredicate(..., ...)))
-    def negated_universal(self, negation):
-        quantifier = negation.formula
-        x = quantifier.head
-        return self.walk(ExistentialPredicate(x, Negation(quantifier.body)))
-
-    @add_match(Negation(ExistentialPredicate(..., ...)))
-    def negated_existential(self, negation):
-        quantifier = negation.formula
-        x = quantifier.head
-        return self.walk(UniversalPredicate(x, Negation(quantifier.body)))
-
-    @add_match(Disjunction)
-    def disjunction_with_quantifiers(self, expression):
-        expression = self.walk_disjunction(expression)
-        if not any(isinstance(f, Quantifier) for f in expression.formulas):
-            return expression
-
-        quantifiers = []
-        formulas = []
-        for f in expression.formulas:
-            if isinstance(f, Quantifier):
-                quantifiers.append(f)
-                formulas.append(f.body)
-            else:
-                formulas.append(f)
-        exp = Disjunction(tuple(formulas))
-        for q in reversed(quantifiers):
-            exp = q.apply(q.head, exp)
-        return self.walk(exp)
-
-    @add_match(Conjunction)
-    def conjunction_with_quantifiers(self, expression):
-        expression = self.walk_conjunction(expression)
-        if not any(isinstance(f, Quantifier) for f in expression.formulas):
-            return expression
-
-        quantifiers = []
-        formulas = []
-        for f in expression.formulas:
-            if isinstance(f, Quantifier):
-                quantifiers.append(f)
-                formulas.append(f.body)
-            else:
-                formulas.append(f)
-        exp = Conjunction(tuple(formulas))
-        for q in reversed(quantifiers):
-            exp = q.apply(q.head, exp)
-        return self.walk(exp)
-
-
-class DesambiguateQuantifiedVariables(LogicExpressionWalker):
-    """
-    Replaces each quantified variale to a fresh one.
-    """
-
-    @add_match(Implication)
-    def match_implication(self, expression):
-        return expression.apply(
-            self.walk(expression.consequent), self.walk(expression.antecedent)
-        )
-
-    @add_match(Union)
-    def match_union(self, expression):
-        return expression.apply(self.walk(expression.formulas))
-
-    @add_match(Disjunction)
-    def match_disjunction(self, expression):
-        return expression.apply(self.walk(expression.formulas))
-
-    @add_match(Conjunction)
-    def match_conjunction(self, expression):
-        return expression.apply(self.walk(expression.formulas))
-
-    @add_match(Negation)
-    def match_negation(self, expression):
-        return expression.apply(self.walk(expression.formula))
-
-    @add_match(Quantifier)
-    def match_quantifier(self, expression):
-        expression.body = self.walk(expression.body)
-        return ReplaceSymbolWalker({expression.head: Symbol.fresh()}).walk(
-            expression
-        )
-
-
-class DistributeDisjunctions(LogicExpressionWalker):
-    @add_match(Disjunction, lambda e: len(e.formulas) > 2)
-    def match_split(self, expression):
-        head, *rest = expression.formulas
-        rest = self.walk(Disjunction(tuple(rest)))
-        new_exp = Disjunction((head, rest))
-        return self.walk(new_exp)
-
-    @add_match(Disjunction((..., Conjunction)))
-    def match_rotate(self, expression):
-        q, c = expression.formulas
-        return self.walk(
-            Conjunction(tuple(map(lambda p: Disjunction((q, p)), c.formulas)))
-        )
-
-    @add_match(Disjunction((Conjunction, ...)))
-    def match_distribute(self, expression):
-        c, q = expression.formulas
-        return self.walk(
-            Conjunction(tuple(map(lambda p: Disjunction((p, q)), c.formulas)))
-        )
-
-
-class CollapseDisjunctions(LogicExpressionWalker):
-    @add_match(
-        Disjunction,
-        lambda e: any(isinstance(f, Disjunction) for f in e.formulas),
-    )
-    def match_disjunction(self, e):
-        new_arg = []
-        for f in map(self.walk, e.formulas):
-            if isinstance(f, Disjunction):
-                new_arg.extend(f.formulas)
-            else:
-                new_arg.append(f)
-        return Disjunction(tuple(new_arg))
-
-
-class CollapseConjunctions(LogicExpressionWalker):
-    @add_match(
-        Conjunction,
-        lambda e: any(isinstance(f, Conjunction) for f in e.formulas),
-    )
-    def match_conjunction(self, e):
-        new_arg = []
-        for f in map(self.walk, e.formulas):
-            if isinstance(f, Conjunction):
-                new_arg.extend(f.formulas)
-            else:
-                new_arg.append(f)
-        return Conjunction(tuple(new_arg))
-
-
-def convert_to_pnf_with_cnf_matrix(expression):
-    walker = ChainedWalker(
-        EliminateImplications,
-        MoveNegationsToAtoms,
-        # DesambiguateQuantifiedVariables,
-        MoveQuantifiersUp,
-        DistributeDisjunctions,
-        CollapseDisjunctions,
-        CollapseConjunctions,
-    )
-    return walker.walk(expression)
+from .transformations import (
+    LogicExpressionWalker,
+    EliminateImplications,
+    MoveNegationsToAtoms,
+    MoveQuantifiersUp,
+    DesambiguateQuantifiedVariables,
+    DistributeDisjunctions,
+    CollapseDisjunctions,
+    CollapseConjunctions,
+    RemoveUniversalPredicates,
+    convert_to_pnf_with_cnf_matrix,
+)
 
 
 class HornClause(LogicOperator):
@@ -327,63 +96,6 @@ class HornClause(LogicOperator):
             r += ", ".join(repr(l) for l in self.body)
         r += ".}"
         return r
-
-
-def convert_to_horn_clauses(expression):
-    expression = convert_to_pnf_with_cnf_matrix(expression)
-    innermost_quantifier = None
-    matrix = expression
-    while isinstance(matrix, Quantifier):
-        innermost_quantifier = matrix
-        matrix = matrix.body
-
-    if isinstance(matrix, Conjunction):
-        clauses = Union(tuple(map(_build_clause, matrix.formulas)))
-    else:
-        clauses = Union((_build_clause(matrix),))
-
-    if innermost_quantifier:
-        innermost_quantifier.body = clauses
-        return expression
-    return clauses
-
-
-def _build_clause(exp):
-    if isinstance(exp, Disjunction):
-        head, body = _extract_head_and_body(exp)
-        return HornClause(head, body)
-
-    elif isinstance(exp, Negation):
-        return HornClause(None, (exp,))
-    return HornClause(exp, None)
-
-
-def _extract_head_and_body(exp):
-    positive = [f for f in exp.formulas if not isinstance(f, Negation)]
-    if len(positive) > 1:
-        raise NeuroLangException(
-            f"{exp} contains more than one positive literal"
-        )
-    negative = [f.formula for f in exp.formulas if isinstance(f, Negation)]
-    return (
-        positive[0] if positive else None,
-        tuple(negative) if negative else None,
-    )
-
-
-class RemoveUniversalPredicates(LogicExpressionWalker):
-    """
-    Removes the universal predicates and leaves free the bound variables.
-    Assumes that the quantified variables are unique.
-    """
-
-    @add_match(UniversalPredicate)
-    def match_universal(self, expression):
-        return Negation(
-            ExistentialPredicate(
-                expression.head, Negation(self.walk(expression.body))
-            )
-        )
 
 
 class MoveNegationsToAtomsOrExistentialQuantifiers(MoveNegationsToAtoms):
