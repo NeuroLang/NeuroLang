@@ -453,42 +453,13 @@ class RemoveUniversalPredicates(LogicExpressionWalker):
         )
 
 
-class MoveNegationsToAtomsOrExistentialQuantifiers(LogicExpressionWalker):
-    @add_match(Implication)
-    def match_implication(self, expression):
-        return expression.apply(
-            self.walk(expression.consequent), self.walk(expression.antecedent)
-        )
-
-    @add_match(Negation(UniversalPredicate(..., ...)))
-    def negated_universal(self, negation):
-        quantifier = negation.formula
-        x = quantifier.head
-        p = self.walk(Negation(quantifier.body))
-        return ExistentialPredicate(x, p)
-
+class MoveNegationsToAtomsOrExistentialQuantifiers(MoveNegationsToAtoms):
     @add_match(Negation(ExistentialPredicate(..., ...)))
     def negated_existential(self, negation):
         quantifier = negation.formula
         h = quantifier.head
         b = self.walk(quantifier.body)
         return Negation(ExistentialPredicate(h, b))
-
-    @add_match(Negation(Conjunction(...)))
-    def negated_conjunction(self, negation):
-        conj = negation.formula
-        formulas = map(lambda e: self.walk(Negation(e)), conj.formulas)
-        return Disjunction(tuple(formulas))
-
-    @add_match(Negation(Disjunction(...)))
-    def negated_disjunction(self, negation):
-        disj = negation.formula
-        formulas = map(lambda e: self.walk(Negation(e)), disj.formulas)
-        return Conjunction(tuple(formulas))
-
-    @add_match(Negation(Negation(...)))
-    def negated_negation(self, negation):
-        return negation.formula.formula
 
 
 def convert_to_srnf(e):
