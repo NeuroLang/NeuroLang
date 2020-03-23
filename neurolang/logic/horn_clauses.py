@@ -580,46 +580,52 @@ def convert_srnf_to_horn_clauses(head, expression):
 
     while queue:
         head, exp = queue.pop()
-        body, remainder = _process(exp)
+        body, remainder = ConvertSRNFToHornClause().walk(exp)
         processed.append(HornClause(head, body))
         queue = remainder + queue
 
     return Union(tuple(reversed(processed)))
 
 
-def _new_head_for(exp):
-    fv = free_variables(exp)
-    fv = sorted(fv, key=lambda s: s.name)
-    S = Symbol.fresh()
-    return S(*tuple(fv))
-
-
-# Rewrite this as a walker
-def _process(exp):
-    if isinstance(exp, Conjunction):
-        bodies, remainders = zip(*map(_process, exp.formulas))
+class ConvertSRNFToHornClause(PatternWalker):
+    @add_match(Conjunction)
+    def match_conjunction(self, exp):
+        bodies, remainders = zip(*map(self.walk, exp.formulas))
         return (
             reduce(add, bodies),
             reduce(add, remainders),
         )
 
-    if isinstance(exp, Disjunction):
-        nh = _new_head_for(exp)
+    @add_match(Disjunction)
+    def match_disjunction(self, exp):
+        nh = self._new_head_for(exp)
         return (nh,), [(nh, f) for f in exp.formulas]
 
-    if isinstance(exp, ExistentialPredicate):
-        return _process(exp.body)
+    @add_match(ExistentialPredicate)
+    def match_existential(self, exp):
+        return self.walk(exp.body)
 
-    if isinstance(exp, Negation):
-        if isinstance(exp.formula, FunctionApplication):
-            return (exp,), []
-        if isinstance(exp.formula, ExistentialPredicate):
-            nh = _new_head_for(exp.formula)
-            return (Negation(nh),), [(nh, exp.formula)]
-
-    if isinstance(exp, FunctionApplication):
+    @add_match(Negation(FunctionApplication))
+    def match_negated_atom(self, exp):
         return (exp,), []
 
-    raise NeuroLangException(
-        "Expression not in safe range normal form: {}".format(exp)
-    )
+    @add_match(Negation(ExistentialPredicate))
+    def match_negated_existential(self, exp):
+        nh = self._new_head_for(exp.formula)
+        return (Negation(nh),), [(nh, exp.formula)]
+
+    @add_match(FunctionApplication)
+    def match_atom(self, exp):
+        return (exp,), []
+
+    @add_match(...)
+    def match_unknown(self, exp):
+        raise NeuroLangException(
+            "Expression not in safe range normal form: {}".format(exp)
+        )
+
+    def _new_head_for(self, exp):
+        fv = free_variables(exp)
+        fv = sorted(fv, key=lambda s: s.name)
+        S = Symbol.fresh()
+        return S(*tuple(fv))
