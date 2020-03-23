@@ -38,11 +38,11 @@ class LogicExpressionWalker(PatternWalker):
 
     @add_match(Negation)
     def walk_negation(self, expression):
-        return Negation(self.walk(expression.formula))
+        return expression.apply(self.walk(expression.formula))
 
     @add_match(FunctionApplication)
     def walk_function(self, expression):
-        return FunctionApplication(
+        return expression.apply(
             expression.functor, tuple(map(self.walk, expression.args))
         )
 
@@ -173,21 +173,27 @@ class DesambiguateQuantifiedVariables(LogicExpressionWalker):
 
     @add_match(Implication)
     def match_implication(self, expression):
-        return expression.apply(
-            self.walk(expression.consequent), self.walk(expression.antecedent)
-        )
+        fs = self.walk(expression.consequent), self.walk(expression.antecedent)
+        self.desambiguate(fs)
+        return expression.apply(*fs)
 
     @add_match(Union)
     def match_union(self, expression):
-        return expression.apply(self.walk(expression.formulas))
+        fs = self.walk(expression.formulas)
+        self.desambiguate(fs)
+        return expression.apply(fs)
 
     @add_match(Disjunction)
     def match_disjunction(self, expression):
-        return expression.apply(self.walk(expression.formulas))
+        fs = self.walk(expression.formulas)
+        self.desambiguate(fs)
+        return expression.apply(fs)
 
     @add_match(Conjunction)
     def match_conjunction(self, expression):
-        return expression.apply(self.walk(expression.formulas))
+        fs = self.walk(expression.formulas)
+        self.desambiguate(fs)
+        return expression.apply(fs)
 
     @add_match(Negation)
     def match_negation(self, expression):
@@ -196,9 +202,70 @@ class DesambiguateQuantifiedVariables(LogicExpressionWalker):
     @add_match(Quantifier)
     def match_quantifier(self, expression):
         expression.body = self.walk(expression.body)
-        return ReplaceSymbolWalker({expression.head: Symbol.fresh()}).walk(
-            expression
-        )
+        uq = UsedQuantifiers().walk(expression.body)
+        for q in uq:
+            if q.head == expression.head:
+                self.rename_quantifier(q)
+        return expression
+
+    def rename_quantifier(self, q):
+        ns = Symbol.fresh()
+        q.body = ReplaceFreeSymbolWalker({q.head: ns}).walk(q.body)
+        q.head = ns
+
+    def desambiguate(self, l):
+        qv = set()
+        for f in l:
+            uq = UsedQuantifiers().walk(f)
+            uv = set(map(lambda x: x.head, uq))
+            repeated = uv & qv
+            for s in repeated:
+                for q in uq:
+                    if q.head == s:
+                        self.rename_quantifier(q)
+            uv = set(map(lambda x: x.head, uq))
+            qv = qv | uv
+
+
+class ReplaceFreeSymbolWalker(ReplaceSymbolWalker):
+    @add_match(Quantifier)
+    def stop_if_bound(self, expression):
+        s = expression.head
+        r = self.symbol_replacements.pop(s, None)
+        expression.body = self.walk(expression.body)
+        if r:
+            self.symbol_replacements[s] = r
+        return expression
+
+
+class UsedQuantifiers(PatternWalker):
+    @add_match(FunctionApplication)
+    def match_function(self, exp):
+        return set()
+
+    @add_match(Symbol)
+    def match_symbol(self, exp):
+        return set()
+
+    @add_match(Negation)
+    def match_negation(self, exp):
+        return self.walk(exp.formula)
+
+    @add_match(Disjunction)
+    def match_disjunction(self, exp):
+        return set.union(*self.walk(exp.formulas))
+
+    @add_match(Implication)
+    def match_implication(self, exp):
+        return set.union(self.walk(exp.antecedent), self.walk(exp.consequent))
+
+    @add_match(Conjunction)
+    def match_conjunction(self, exp):
+        return set.union(*self.walk(exp.formulas))
+
+    @add_match(Quantifier)
+    def match_quantifier(self, exp):
+        return {exp} | self.walk(exp.body)
 
 
 class DistributeDisjunctions(LogicExpressionWalker):

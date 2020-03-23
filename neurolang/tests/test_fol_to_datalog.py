@@ -163,7 +163,7 @@ def test_remove_nested_universal_predicates():
     )
 
 
-def test_remove_repeated_symbols_in_nested_universal_predicates():
+def test_rename_repeated_symbols_in_nested_universal_predicates():
     X = Symbol("X")
     P = Symbol("P")
     exp = UniversalPredicate(
@@ -175,6 +175,86 @@ def test_remove_repeated_symbols_in_nested_universal_predicates():
     c1 = res.body.formulas[1].body.args[0]
 
     assert c0 != c1
+
+
+def test_rename_repeated_symbols_in_sibling_quantifiers():
+    X = Symbol("X")
+    P = Symbol("P")
+    Q = Symbol("Q")
+    exp = Conjunction(
+        (ExistentialPredicate(X, P(X)), ExistentialPredicate(X, Q(X)),)
+    )
+    res = DesambiguateQuantifiedVariables().walk(exp)
+
+    c0 = res.formulas[0].head
+    c1 = res.formulas[1].head
+    assert c0 != c1
+    assert res.formulas[0].body.args[0] != c1
+    assert res.formulas[1].body.args[0] != c0
+
+
+def test_dont_rename_when_there_is_no_need():
+    X = Symbol("X")
+    Y = Symbol("Y")
+    P = Symbol("P")
+    exp = Conjunction(
+        (ExistentialPredicate(X, P(X)), ExistentialPredicate(Y, P(Y)),)
+    )
+    res = DesambiguateQuantifiedVariables().walk(exp)
+
+    assert X == res.formulas[0].head
+    assert Y == res.formulas[1].head
+
+
+def test_rename_complex_repeated_symbols():
+    X = Symbol("X")
+    Y = Symbol("Y")
+    P = Symbol("P")
+    exp = Conjunction(
+        (
+            ExistentialPredicate(X, P(X)),
+            Negation(UniversalPredicate(X, P(X))),
+            Disjunction(
+                (
+                    UniversalPredicate(
+                        X, UniversalPredicate(Y, Disjunction((P(X), P(Y))))
+                    ),
+                    ExistentialPredicate(Y, P(Y)),
+                )
+            ),
+        )
+    )
+    res = DesambiguateQuantifiedVariables().walk(exp)
+
+    X1 = res.formulas[0].head
+    X2 = res.formulas[1].formula.head
+    X3 = res.formulas[2].formulas[0].head
+    Y1 = res.formulas[2].formulas[0].body.head
+    Y2 = res.formulas[2].formulas[1].head
+
+    assert X == X1
+    assert X1 != X2
+    assert X1 != X3
+    assert X2 != X3
+
+    assert Y == Y1
+    assert Y1 != Y2
+
+    expected = Conjunction(
+        (
+            ExistentialPredicate(X1, P(X)),
+            Negation(UniversalPredicate(X2, P(X2))),
+            Disjunction(
+                (
+                    UniversalPredicate(
+                        X3, UniversalPredicate(Y1, Disjunction((P(X3), P(Y1))))
+                    ),
+                    ExistentialPredicate(Y2, P(Y2)),
+                )
+            ),
+        )
+    )
+    assert expected == res
 
 
 def test_remove_sibling_universal_predicates():
