@@ -589,6 +589,7 @@ def convert_srnf_to_horn_clauses(head, expression):
 
 def _new_head_for(exp):
     fv = free_variables(exp)
+    fv = sorted(fv, key=lambda s: s.name)
     S = Symbol.fresh()
     return S(*tuple(fv))
 

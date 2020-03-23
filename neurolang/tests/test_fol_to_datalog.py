@@ -873,3 +873,59 @@ def test_convert_srnf2horn_2():
         )
     )
     assert res == expected
+
+
+def test_convert_srnf2horn_3():
+    n = Symbol("n")
+    m = Symbol("m")
+    m_ = Symbol("m'")
+    r = Symbol("r")
+    r_ = Symbol("r'")
+    Director = Symbol("Director")
+    Actor = Symbol("Actor")
+    Equal = Symbol("Equal")
+    Ans = Symbol("Ans")
+
+    # Which directors played exactly one role in each of their movies
+    exp = Conjunction(
+        (
+            ExistentialPredicate(m, Director(n, m)),
+            UniversalPredicate(
+                m_,
+                Implication(
+                    ExistentialPredicate(
+                        r,
+                        Conjunction(
+                            (
+                                Actor(n, m_, r),
+                                UniversalPredicate(
+                                    r_,
+                                    Implication(
+                                        Equal(r, r_), Actor(n, m_, r_)
+                                    ),
+                                ),
+                            )
+                        ),
+                    ),
+                    Director(n, m_),
+                ),
+            ),
+        )
+    )
+
+    exp2 = convert_to_srnf(exp)
+    res = convert_srnf_to_horn_clauses(Ans(n), exp2)
+
+    Aux1 = res.formulas[2].head.functor
+    Aux2 = res.formulas[1].head.functor
+    Aux3 = res.formulas[0].head.functor
+
+    expected = Union(
+        (
+            HornClause(Aux3(m_, n, r), (Actor(n, m_, r_), Negation(Equal(r, r_)))),
+            HornClause(Aux2(m_, n), (Actor(n, m_, r), Negation(Aux3(m_, n, r)))),
+            HornClause(Aux1(n), (Director(n, m_), Negation(Aux2(m_, n)))),
+            HornClause(Ans(n), (Director(n, m), Negation(Aux1(n)))),
+        )
+    )
+    assert res == expected
