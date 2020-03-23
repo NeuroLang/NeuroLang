@@ -130,12 +130,18 @@ class ArithmeticOperationOnColumns(RelationalAlgebraOperation):
     def __init__(self, relation):
         self.relation = relation
 
+class ArithmeticOperationOnRows(RelationalAlgebraOperation):
+    def __init__(self, relation):
+        self.relation = relation
 
 class SumColumns(ArithmeticOperationOnColumns):
     pass
 
 
 class MultiplyColumns(ArithmeticOperationOnColumns):
+    pass
+
+class SumRows(ArithmeticOperationOnRows):
     pass
 
 

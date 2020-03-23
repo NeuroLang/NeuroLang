@@ -11,6 +11,7 @@ from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from ..ppdl import DeltaTerm
 from ..expressions import ProbabilisticPredicate, Grounding
 from ..probdatalog import (
+    ProbDatalogExistentialTranslator,
     GDatalogToProbDatalog,
     ProbDatalogProgram,
     conjunct_formulas,
@@ -54,65 +55,60 @@ def test_probfact():
 def test_probdatalog_program():
     pd = ProbDatalogProgram()
 
-    code = ExpressionBlock(
-        [
-            Implication(
-                ProbabilisticPredicate(Constant[float](0.5), P(x)),
-                Constant[bool](True),
-            ),
-            Implication(Q(x), Conjunction([P(x), Z(x)])),
-            Fact(Z(a)),
-            Fact(Z(b)),
-        ]
-    )
+    code = ExpressionBlock([
+        Implication(
+            ProbabilisticPredicate(Constant[float](0.5), P(x)),
+            Constant[bool](True),
+        ),
+        Implication(Q(x), Conjunction([P(x), Z(x)])),
+        Fact(Z(a)),
+        Fact(Z(b)),
+    ])
 
     pd.walk(code)
 
     assert pd.extensional_database() == {
-        Z: C_(frozenset({C_((a,)), C_((b,))}))
+        Z: C_(frozenset({C_((a, )), C_((b, ))}))
     }
     assert pd.intensional_database() == {
         Q: Union([Implication(Q(x), Conjunction([P(x), Z(x)]))])
     }
     assert pd.probabilistic_facts() == {
-        P: ExpressionBlock(
-            [
-                Implication(
-                    ProbabilisticPredicate(Constant[float](0.5), P(x)),
-                    Constant[bool](True),
-                )
-            ]
-        )
+        P:
+        ExpressionBlock([
+            Implication(
+                ProbabilisticPredicate(Constant[float](0.5), P(x)),
+                Constant[bool](True),
+            )
+        ])
     }
 
     pfact = Implication(ProbabilisticPredicate(p, P(x)), Constant[bool](True))
-    code = ExpressionBlock(
-        [pfact, Implication(Q(x), Conjunction([P(x), Z(x)]))]
-    )
+    code = ExpressionBlock([
+        pfact, Implication(Q(x), Conjunction([P(x), Z(x)]))
+    ])
     program = ProbDatalogProgram()
     program.walk(code)
 
 
 def test_multiple_probfact_same_pred_symb():
     pd = ProbDatalogProgram()
-    code = ExpressionBlock(
-        [
-            Implication(
-                ProbabilisticPredicate(Constant[float](0.5), P(a)),
-                Constant[bool](True),
-            ),
-            Implication(
-                ProbabilisticPredicate(Constant[float](0.2), P(b)),
-                Constant[bool](True),
-            ),
-            Implication(Q(x), Conjunction([P(x), Z(x)])),
-            Fact(Z(a)),
-            Fact(Z(b)),
-        ]
-    )
+    code = ExpressionBlock([
+        Implication(
+            ProbabilisticPredicate(Constant[float](0.5), P(a)),
+            Constant[bool](True),
+        ),
+        Implication(
+            ProbabilisticPredicate(Constant[float](0.2), P(b)),
+            Constant[bool](True),
+        ),
+        Implication(Q(x), Conjunction([P(x), Z(x)])),
+        Fact(Z(a)),
+        Fact(Z(b)),
+    ])
     pd.walk(code)
     assert pd.extensional_database() == {
-        Z: C_(frozenset({C_((a,)), C_((b,))}))
+        Z: C_(frozenset({C_((a, )), C_((b, ))}))
     }
     assert pd.intensional_database() == {
         Q: Union([Implication(Q(x), Conjunction([P(x), Z(x)]))])
@@ -125,7 +121,7 @@ def test_multiple_probfact_same_pred_symb():
 
 def test_gdatalog_translation():
     probabilistic_rule = Implication(
-        Q(x, DeltaTerm(bernoulli, (C_(0.2),))), P(x)
+        Q(x, DeltaTerm(bernoulli, (C_(0.2), ))), P(x)
     )
     deterministic_rule = Implication(Z(x), P(x))
     program = ExpressionBlock(
@@ -153,7 +149,6 @@ def test_gdatalog_translation():
 
 def test_conjunct_formulas():
     assert conjunct_formulas(P(x), Q(x)) == Conjunction([P(x), Q(x)])
-    a = P(x)
     b = Conjunction([Q(x), Z(x)])
     c = Conjunction([P(x), Q(x), Z(x)])
     d = Conjunction([Q(x), Z(x), P(x)])
@@ -164,30 +159,26 @@ def test_conjunct_formulas():
 
 @pytest.mark.skip(reason="existential probfacts not working yet")
 def test_program_with_eprobfact():
-    code = ExpressionBlock(
-        [
-            Implication(
-                ExistentialPredicate(
-                    p, ProbabilisticPredicate(Symbol[float](p), P(x))
-                ),
-                Constant[bool](True),
+    code = ExpressionBlock([
+        Implication(
+            ExistentialPredicate(
+                p, ProbabilisticPredicate(Symbol[float](p), P(x))
             ),
-            Implication(Z(x), Conjunction([P(x), Q(x)])),
-        ]
-    )
+            Constant[bool](True),
+        ),
+        Implication(Z(x), Conjunction([P(x), Q(x)])),
+    ])
     program = ProbDatalogProgram()
     program.walk(code)
 
-    code = ExpressionBlock(
-        [
-            Implication(
-                ExistentialPredicate(
-                    z, ProbabilisticPredicate(Constant(0.2), P(z))
-                ),
-                Constant[bool](True),
-            )
-        ]
-    )
+    code = ExpressionBlock([
+        Implication(
+            ExistentialPredicate(
+                z, ProbabilisticPredicate(Constant(0.2), P(z))
+            ),
+            Constant[bool](True),
+        )
+    ])
     program = ProbDatalogProgram()
     with pytest.raises(NeuroLangException, match=r"can only be used"):
         program.walk(code)
@@ -195,33 +186,37 @@ def test_program_with_eprobfact():
 
 @pytest.mark.skip()
 def test_combine_typings():
-    typing_a = Constant[Mapping](
-        {Constant[int](0): Constant[AbstractSet]({P, Q})}
-    )
-    typing_b = Constant[Mapping](
-        {Constant[int](0): Constant[AbstractSet]({Z, Q})}
-    )
+    typing_a = Constant[Mapping]({
+        Constant[int](0):
+        Constant[AbstractSet]({P, Q})
+    })
+    typing_b = Constant[Mapping]({
+        Constant[int](0):
+        Constant[AbstractSet]({Z, Q})
+    })
     combined = _combine_typings(typing_a, typing_b)
-    assert combined == Constant[Mapping](
-        {Constant[int](0): Constant[AbstractSet]({Q})}
-    )
+    assert combined == Constant[Mapping]({
+        Constant[int](0):
+        Constant[AbstractSet]({Q})
+    })
 
     typing_a = Constant[Mapping](dict())
-    typing_b = Constant[Mapping](
-        {Constant[int](0): Constant[AbstractSet]({Q})}
-    )
+    typing_b = Constant[Mapping]({
+        Constant[int](0): Constant[AbstractSet]({Q})
+    })
     combined = _combine_typings(typing_a, typing_b)
     assert combined == typing_b
 
 
 @pytest.mark.skip()
 def test_check_typing_consistency():
-    typing_a = Constant[Mapping](
-        {Constant[int](0): Constant[AbstractSet]({P, Q})}
-    )
-    typing_b = Constant[Mapping](
-        {Constant[int](0): Constant[AbstractSet]({Z})}
-    )
+    typing_a = Constant[Mapping]({
+        Constant[int](0):
+        Constant[AbstractSet]({P, Q})
+    })
+    typing_b = Constant[Mapping]({
+        Constant[int](0): Constant[AbstractSet]({Z})
+    })
     with pytest.raises(NeuroLangException):
         _check_typing_consistency(typing_a, typing_b)
 
@@ -230,9 +225,10 @@ def test_check_typing_consistency():
 def test_infer_pfact_typing_pred_symbs():
     rule = Implication(Z(x), Conjunction([P(x), Q(x)]))
     typing = _infer_pfact_typing_pred_symbs(P, rule)
-    assert typing == Constant[Mapping](
-        {Constant[int](0): Constant[AbstractSet]({Q})}
-    )
+    assert typing == Constant[Mapping]({
+        Constant[int](0):
+        Constant[AbstractSet]({Q})
+    })
     with pytest.raises(NeuroLangException):
         rule = Implication(Z(x), Q(x))
         _infer_pfact_typing_pred_symbs(P, rule)
@@ -240,18 +236,19 @@ def test_infer_pfact_typing_pred_symbs():
 
 @pytest.mark.skip()
 def test_probdatalog_pfact_type_inference():
-    code = ExpressionBlock(
-        [
-            Implication(ProbabilisticPredicate(p, P(x)), Constant[bool](True)),
-            Implication(Q(x), Conjunction([P(x), Z(x), R(x)])),
-            Implication(Q(x), Conjunction([P(x), Y(x), R(x)])),
-        ]
-    )
+    code = ExpressionBlock([
+        Implication(ProbabilisticPredicate(p, P(x)), Constant[bool](True)),
+        Implication(Q(x), Conjunction([P(x), Z(x), R(x)])),
+        Implication(Q(x), Conjunction([P(x), Y(x), R(x)])),
+    ])
     program = ProbDatalogProgram()
     program.walk(code)
-    assert program.symbol_table[program.typing_symbol] == Constant[Mapping](
-        {P: Constant[Mapping]({Constant[int](0): Constant[AbstractSet]({R})})}
-    )
+    assert program.symbol_table[program.typing_symbol] == Constant[Mapping]({
+        P:
+        Constant[Mapping]({
+            Constant[int](0): Constant[AbstractSet]({R})
+        })
+    })
 
 
 @pytest.mark.skip()
@@ -270,40 +267,37 @@ def test_probdatalog_grounding():
     code = ExpressionBlock([pfact1, pfact2, rule, Fact(Q(a)), Fact(Q(b))])
     grounded = ground_probdatalog_program(code)
     matching_groundings = [
-        grounding
-        for grounding in grounded.expressions
-        if is_probabilistic_fact(grounding.expression)
-        and grounding.expression.consequent.body.functor == P
+        grounding for grounding in grounded.expressions
+        if is_probabilistic_fact(grounding.expression) and
+        grounding.expression.consequent.body.functor == P
     ]
     assert len(matching_groundings) == 1
     expected = Grounding(
         rule,
-        Constant[AbstractSet](
-            NamedRelationalAlgebraFrozenSet(iterable=["a", "b"], columns=["x"])
-        ),
+        Constant[AbstractSet]
+        (NamedRelationalAlgebraFrozenSet(iterable=["a", "b"], columns=["x"])),
     )
     assert expected in grounded.expressions
 
-    code = ExpressionBlock(
-        [Fact(P(a, b)), Fact(P(b, b)), Fact(Q(a)), Fact(Q(b))]
-    )
+    code = ExpressionBlock([
+        Fact(P(a, b)), Fact(P(b, b)),
+        Fact(Q(a)), Fact(Q(b))
+    ])
     grounded = ground_probdatalog_program(code)
     assert len(grounded.expressions) == 2
     for grounding in grounded.expressions:
         if grounding.expression.consequent.functor == P:
             assert np.all(
-                np.vstack(list(grounding.relation.value.itervalues()))
-                == np.vstack(
-                    [
-                        np.array(["a", "b"], dtype=str),
-                        np.array(["b", "b"], dtype=str),
-                    ]
-                )
+                np.vstack(list(grounding.relation.value.itervalues())) ==
+                np.vstack([
+                    np.array(["a", "b"], dtype=str),
+                    np.array(["b", "b"], dtype=str),
+                ])
             )
         elif grounding.expression.consequent.functor == Q:
             assert np.all(
-                np.array(list(grounding.relation.value.itervalues()))
-                == np.array([["a"], ["b"]], dtype=str)
+                np.array(list(grounding.relation.value.itervalues())) ==
+                np.array([["a"], ["b"]], dtype=str)
             )
 
 
@@ -315,39 +309,36 @@ def test_probdatalog_grounding_general():
     grounded = ground_probdatalog_program(code)
     expected = Grounding(
         pfact,
-        Constant[AbstractSet](
-            NamedRelationalAlgebraFrozenSet(iterable=["a", "b"], columns=["x"])
-        ),
+        Constant[AbstractSet]
+        (NamedRelationalAlgebraFrozenSet(iterable=["a", "b"], columns=["x"])),
     )
     assert expected in grounded.expressions
     expected = Grounding(
         rule,
-        Constant[AbstractSet](
-            NamedRelationalAlgebraFrozenSet(iterable=["a", "b"], columns=["x"])
-        ),
+        Constant[AbstractSet]
+        (NamedRelationalAlgebraFrozenSet(iterable=["a", "b"], columns=["x"])),
     )
     assert expected in grounded.expressions
 
-    code = ExpressionBlock(
-        [Fact(P(a, b)), Fact(P(b, b)), Fact(Q(a)), Fact(Q(b))]
-    )
+    code = ExpressionBlock([
+        Fact(P(a, b)), Fact(P(b, b)),
+        Fact(Q(a)), Fact(Q(b))
+    ])
     grounded = ground_probdatalog_program(code)
     assert len(grounded.expressions) == 2
     for grounding in grounded.expressions:
         if grounding.expression.consequent.functor == P:
             assert np.all(
-                np.vstack(list(grounding.relation.value.itervalues()))
-                == np.vstack(
-                    [
-                        np.array(["a", "b"], dtype=str),
-                        np.array(["b", "b"], dtype=str),
-                    ]
-                )
+                np.vstack(list(grounding.relation.value.itervalues())) ==
+                np.vstack([
+                    np.array(["a", "b"], dtype=str),
+                    np.array(["b", "b"], dtype=str),
+                ])
             )
         elif grounding.expression.consequent.functor == Q:
             assert np.all(
-                np.array(list(grounding.relation.value.itervalues()))
-                == np.array([["a"], ["b"]], dtype=str)
+                np.array(list(grounding.relation.value.itervalues())) ==
+                np.array([["a"], ["b"]], dtype=str)
             )
 
 
@@ -357,11 +348,27 @@ def test_unsupported_grounding_program_with_disjunction():
         ground_probdatalog_program(code)
 
 
+def test_existential_probabilistic_rewrite():
+    imp1 = Implication(P(x), Conjunction([Q(x, y), R(y)]))
+    imp2 = Implication(P(x), Q(x))
+    code = ExpressionBlock((imp1, imp2))
+
+    translator = ProbDatalogExistentialTranslator()
+
+    code = translator.walk(code)
+
+    assert len(code.expressions) == 3
+
+
 def test_add_probfacts_from_tuple():
     pd = ProbDatalogProgram()
     pd.walk(ExpressionBlock([]))
     pd.add_probfacts_from_tuples(
-        P, {(0.3, "hello", "gaston"), (0.7, "hello", "antonia"),},
+        P,
+        {
+            (0.3, "hello", "gaston"),
+            (0.7, "hello", "antonia"),
+        },
     )
     assert P in pd.pfact_pred_symbs
     assert (
@@ -376,7 +383,11 @@ def test_add_probfacts_from_tuple_no_probability():
     pd.walk(ExpressionBlock([]))
     with pytest.raises(NeuroLangException, match=r"probability"):
         pd.add_probfacts_from_tuples(
-            P, {("hello", "gaston"), ("hello", "antonia"),},
+            P,
+            {
+                ("hello", "gaston"),
+                ("hello", "antonia"),
+            },
         )
 
 

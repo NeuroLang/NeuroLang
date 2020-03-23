@@ -16,7 +16,10 @@ from ..expressions import (
     FunctionApplication,
     ExpressionBlock,
 )
-from ..logic.expression_processing import extract_logic_predicates
+from ..logic.expression_processing import (
+    extract_logic_predicates,
+    extract_logic_free_variables,
+)
 from ..datalog.expressions import Conjunction, Implication
 from ..relational_algebra import (
     RelationalAlgebraSolver,
@@ -56,11 +59,13 @@ from .expressions import (
     Union,
     SuccQuery,
     MargQuery,
+    SumRows,
 )
 from .probdatalog import (
     ground_probdatalog_program,
     is_probabilistic_fact,
     is_existential_probabilistic_fact,
+    is_existential_predicate,
 )
 
 
@@ -238,6 +243,49 @@ def extensional_vect_table_distrib(grounding):
     return bernoulli_vect_table_distrib(Constant[float](1.0), grounding)
 
 
+def get_rv_value_pointer(pred, grounding):
+    rv_name = pred.functor.name
+    result = RandomVariableValuePointer(rv_name)
+    if is_probabilistic_fact(grounding.expression):
+        grounding_expression_args = grounding.expression.consequent.body.args
+    else:
+        grounding_expression_args = [
+            Symbol(col) for col in grounding.relation.value.columns
+        ]
+    if len(grounding_expression_args) != len(pred.args):
+        raise NeuroLangException(
+            "Number of args should be the same in "
+            "the grounded expression and predicate"
+        )
+    for arg1, arg2 in zip(grounding_expression_args, pred.args):
+        if isinstance(arg2, Constant):
+            result = Selection(
+                result, eq_(Constant[ColumnStr](ColumnStr(arg1.name)), arg2)
+            )
+        else:
+            result = RenameColumn(
+                result,
+                Constant(ColumnStr(arg1.name)),
+                Constant(ColumnStr(arg2.name)),
+            )
+    return result
+
+
+def var_marginalization_table_distribution(
+    rule_grounding, parent_groundings, free_vars
+):
+    antecedent_preds = extract_logic_predicates(
+        rule_grounding.expression.antecedent
+    )
+
+    pred = antecedent_preds[0]
+    rv_name = pred.functor.name
+    result = RandomVariableValuePointer(rv_name)
+
+    not_free_vars = tuple(set(pred.args) - set(free_vars))
+    return SumRows(Projection(result, not_free_vars))
+
+
 def and_vect_table_distribution(rule_grounding, parent_groundings):
     antecedent_preds = extract_logic_predicates(
         rule_grounding.expression.antecedent
@@ -247,6 +295,59 @@ def and_vect_table_distribution(rule_grounding, parent_groundings):
         for pred in antecedent_preds
     )
     return MultiplyColumns(MultipleNaturalJoin(to_join))
+
+
+def _get_grounding_pred_symb(grounding):
+    if isinstance(grounding.expression.consequent, ProbabilisticPredicate):
+        return grounding.expression.consequent.body.functor
+    return grounding.expression.consequent.functor
+
+
+def _get_grounding_dependencies(grounding):
+    predicates = extract_logic_predicates(grounding.expression.antecedent)
+    return set(pred.functor for pred in predicates)
+
+
+def _topological_sort_groundings_util(
+    pred_symb, dependencies, visited, result
+):
+    for dep_symb in dependencies[pred_symb]:
+        if dep_symb not in visited:
+            _topological_sort_groundings_util(
+                dep_symb, dependencies, visited, result
+            )
+    if pred_symb not in visited:
+        result.append(pred_symb)
+    visited.add(pred_symb)
+
+
+def _topological_sort_groundings(groundings):
+    dependencies = defaultdict(dict)
+    pred_symb_to_grounding = dict()
+    for grounding in groundings:
+        pred_symb = _get_grounding_pred_symb(grounding)
+        pred_symb_to_grounding[pred_symb] = grounding
+        dependencies[pred_symb] = _get_grounding_dependencies(grounding)
+    result = list()
+    visited = set()
+    for grounding in groundings:
+        pred_symb = _get_grounding_pred_symb(grounding)
+        _topological_sort_groundings_util(
+            pred_symb, dependencies, visited, result
+        )
+    return [pred_symb_to_grounding.get(pred_symb) for pred_symb in result]
+
+
+def _get_free_var(grounding):
+    expression = grounding.expression
+    free_vars = extract_logic_free_variables(expression)
+    fv_position = [
+        value
+        for index, value in enumerate(expression.antecedent.args)
+        if value in free_vars
+    ]
+
+    return tuple(fv_position)
 
 
 class TranslateGroundedProbDatalogToGraphicalModel(PatternWalker):
@@ -325,6 +426,32 @@ class TranslateGroundedProbDatalogToGraphicalModel(PatternWalker):
                 grounding.expression.consequent.probability, grounding
             ),
         )
+
+    @add_match(Grounding, lambda exp: is_existential_predicate(exp.expression))
+    def existensional_predicate(self, grounding):
+        rv_symb = grounding.expression.consequent.functor
+        self._add_grounding(rv_symb, grounding)
+        parent_groundings = {
+            predicate.functor: self.groundings[predicate.functor]
+            for predicate in extract_logic_predicates(
+                grounding.expression.antecedent
+            )
+        }
+        free_vars = _get_free_var(grounding)
+        self._add_random_variable(
+            rv_symb,
+            var_marginalization_table_distribution(
+                grounding, parent_groundings, free_vars
+            ),
+        )
+
+        parent_rv_symbs = {
+            pred.functor
+            for pred in extract_logic_predicates(
+                grounding.expression.antecedent
+            )
+        }
+        self._add_edges(rv_symb, parent_rv_symbs)
 
     @add_match(Grounding)
     def rule_grounding(self, rule_grounding):
@@ -534,6 +661,58 @@ class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
                 result = result | self.walk(relation).value
         return Constant[AbstractSet](result)
 
+    @add_match(SumRows(Projection))
+    def sum_projected_probability(self, sum_projected):
+
+        projection = sum_projected.relation
+        projected = self.walk(projection.relation)
+
+        non_free_var = projection.attributes
+        prob_column = projected.value.columns[-1]
+
+        result = ExtendedProjection(
+            projected,
+            tuple(
+                [
+                    ExtendedProjectionListMember(
+                        fun_exp=Constant("1")
+                        - Constant(ColumnStr(prob_column)),
+                        dst_column=Constant(ColumnStr(prob_column)),
+                    )
+                ]
+            ),
+        )
+
+        result = self.walk(result)
+
+        mul = Constant[str]("prod")
+        non_free_var = [Constant(ColumnStr(x.name)) for x in non_free_var]
+
+        result = Aggregation(
+            mul,
+            result,
+            tuple(non_free_var),
+            Constant(ColumnStr(prob_column)),
+            Constant(ColumnStr(prob_column)),
+        )
+
+        result = self.walk(result)
+
+        result = ExtendedProjection(
+            result,
+            tuple(
+                [
+                    ExtendedProjectionListMember(
+                        fun_exp=Constant("1")
+                        - Constant(ColumnStr(prob_column)),
+                        dst_column=Constant(ColumnStr(prob_column)),
+                    )
+                ]
+            ),
+        )
+
+        return self.walk(result)
+
     @add_match(Constant[AbstractSet])
     def relation(self, relation):
         return relation
@@ -575,18 +754,18 @@ class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
     def sum_columns(self, sum_op):
         return _apply_arithmetic_column_op(self.walk(sum_op.relation), np.sum)
 
-    @add_match(MultiplyColumns)
-    def multiply_columns(self, multiply_op):
-        return _apply_arithmetic_column_op(
-            self.walk(multiply_op.relation), np.prod
-        )
-
     @add_match(DivideColumns)
     def divide_columns(self, divide_op):
         return _divide_columns(
             self.walk(divide_op.relation),
             divide_op.numerator_column,
             divide_op.denominator_column,
+        )
+
+    @add_match(MultiplyColumns)
+    def multiply_columns(self, multiply_op):
+        return _apply_arithmetic_column_op(
+            self.walk(multiply_op.relation), np.prod
         )
 
     @add_match(AddRepeatedValueColumn)
@@ -650,10 +829,8 @@ class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
                 )
             )
         group_columns = _cols_as_strings(agg_op.group_columns)
-        new_container = getattr(
-            relation.value._container.groupby(group_columns),
-            agg_op.agg_fun.value,
-        )()
+        gb = relation.value._container.groupby(group_columns)
+        new_container = getattr(gb, agg_op.agg_fun.value,)()
         new_container.rename(
             columns={
                 new_container.columns[0]: _get_column_name_from_expression(

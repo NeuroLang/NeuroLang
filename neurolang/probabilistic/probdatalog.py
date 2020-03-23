@@ -13,7 +13,10 @@ from ..expressions import (
 )
 from ..datalog.expressions import Fact, TranslateToLogic
 from ..logic import Union, Implication, Conjunction, ExistentialPredicate
-from ..logic.expression_processing import extract_logic_predicates
+from ..logic.expression_processing import (
+    extract_logic_predicates,
+    extract_logic_free_variables
+)
 from ..exceptions import NeuroLangException
 from ..type_system import Unknown
 from ..datalog import DatalogProgram
@@ -52,7 +55,6 @@ from ..relational_algebra import (
 from ..typed_symbol_table import TypedSymbolTable
 from ..logic import Union
 
-
 def is_probabilistic_fact(expression):
     return (
         isinstance(expression, Implication)
@@ -70,6 +72,12 @@ def is_existential_probabilistic_fact(expression):
         and isinstance(expression.consequent.body.body, FunctionApplication)
         and expression.antecedent == Constant[bool](True)
     )
+
+def is_existential_predicate(expression):
+    free_vars = extract_logic_free_variables(expression)
+    if len(free_vars) > 0:
+        return True
+    return False
 
 
 class Datalog(TranslateToLogic, DatalogProgram, ExpressionBasicEvaluator):
@@ -120,6 +128,20 @@ def _check_existential_probfact_validity(expression):
             "probability of the probability fact"
         )
 
+def _rewrite_existential_predicate(expression):
+    ext_free_vars = extract_logic_free_variables(expression)
+    new_head = _fill_variables_in_head(ext_free_vars, expression.consequent)
+    new_exp = Implication(new_head, expression.antecedent)
+    new_rule = Implication(expression.consequent, new_head)
+
+    return new_rule, new_exp
+
+def _fill_variables_in_head(free_vars, exp_head):
+    new_functor = Symbol.fresh()
+    args = exp_head.args + tuple(free_vars)
+
+    return FunctionApplication(new_functor, args)
+
 
 def _extract_probfact_or_eprobfact_pred_symb(expression):
     if is_existential_probabilistic_fact(expression):
@@ -159,6 +181,32 @@ def _build_pfact_set(pred_symb, pfacts):
     ]
     return Constant[AbstractSet](WrappedRelationalAlgebraSet(iterable))
 
+
+class ProbDatalogExistentialTranslator(ExpressionWalker):
+
+    @add_match(ExpressionBlock)
+    def expression_block(self, code):
+        new_code = tuple()
+        for expression in code.expressions:
+            new_code += self.walk(expression)
+
+        return ExpressionBlock(new_code)
+
+    @add_match(Implication(Expression, Constant))
+    def existential_fact(self, expression):
+        return (expression,)
+
+    @add_match(
+        Implication,
+        lambda exp: is_existential_predicate(exp)
+    )
+    def existential_predicate(self, expression):
+        modified_rule, new_rule = _rewrite_existential_predicate(expression)
+        return tuple([modified_rule, new_rule])
+
+    @add_match(Expression)
+    def definition(self, expression):
+        return (expression,)
 
 class ProbDatalogProgram(DatalogProgram, ExpressionWalker):
     """
