@@ -672,7 +672,7 @@ def test_succ_query_hundreds_of_facts_fast():
         T: [(i,) for i in range(1000)],
         R: [(i,) for i in range(300)],
     }
-    probabilistic_sets = {
+    probfact_sets = {
         P: [(0.2, i,) for i in range(1000)],
         Z: [(0.5, i,) for i in range(300)],
     }
@@ -680,9 +680,7 @@ def test_succ_query_hundreds_of_facts_fast():
         [Implication(Q(x, y), Conjunction([P(x), Z(y), T(x), R(y)])),]
     )
     grounded = ground_probdatalog_program(
-        code,
-        probabilistic_sets=probabilistic_sets,
-        extensional_sets=extensional_sets,
+        code, probfact_sets=probfact_sets, extensional_sets=extensional_sets,
     )
     gm = TranslateGroundedProbDatalogToGraphicalModel().walk(grounded)
     solver = QueryGraphicalModelSolver(gm)

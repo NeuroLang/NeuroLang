@@ -490,15 +490,12 @@ def build_grounding(pd_program, dl_instance):
 
 
 def ground_probdatalog_program(
-    pd_code,
-    probabilistic_sets=None,
-    extensional_sets=None,
-    probchoice_sets=None,
+    pd_code, probfact_sets=None, extensional_sets=None, probchoice_sets=None,
 ):
     pd_program = ProbDatalogProgram()
     pd_program.walk(pd_code)
-    if probabilistic_sets is not None:
-        for symb, probabilistic_set in probabilistic_sets.items():
+    if probfact_sets is not None:
+        for symb, probabilistic_set in probfact_sets.items():
             pd_program.add_probfacts_from_tuples(symb, probabilistic_set)
     if extensional_sets is not None:
         for symb, extensional_set in extensional_sets.items():
@@ -531,12 +528,7 @@ def _check_iterable_prob_type(iterable_type):
 
 
 def _check_probchoice_probs_sum_to_one(ra_set):
-    probs_sum = sum(
-        v.value[0].value
-        for v in RelationalAlgebraSolver()
-        .walk(Projection(ra_set, (Constant(ColumnInt(0)),)))
-        .value
-    )
+    probs_sum = sum(v.value[0].value for v in ra_set.value)
     if not np.isclose(probs_sum, 1.0):
         raise NeuroLangException(
             "Probabilities of probabilistic choice should sum to 1"
