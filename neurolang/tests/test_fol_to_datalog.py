@@ -18,7 +18,6 @@ from ..logic.horn_clauses import (
     EliminateImplications,
     MoveNegationsToAtoms,
     MoveNegationsToAtomsOrExistentialQuantifiers,
-    Skolemize,
     RemoveUniversalPredicates,
     MoveQuantifiersUp,
     Symbol,
@@ -127,116 +126,6 @@ def test_long_negated_chain():
     assert res == Conjunction(
         (Negation(A), ExistentialPredicate(X, UniversalPredicate(Y, R(X, Y))))
     )
-
-
-def test_skolemize_without_existentials():
-    A = Symbol("A")
-    B = Symbol("B")
-    exp = Negation(Conjunction((A, B)))
-    res = Skolemize().walk(exp)
-    assert res == exp
-
-
-def test_skolemize_simple_expression():
-    P = Symbol("P")
-    X = Symbol("X")
-    exp = ExistentialPredicate(X, P(X))
-    sk = Skolemize()
-    res = sk.walk(exp)
-    c0 = sk.used_symbols[0]
-    assert res == P(c0)
-
-
-def test_skolemize_universally_quantified():
-    X = Symbol("X")
-    Y = Symbol("Y")
-    exp = UniversalPredicate(Y, ExistentialPredicate(X, Disjunction((Y, X))))
-    sk = Skolemize()
-    res = sk.walk(exp)
-    c0 = sk.used_symbols[0]
-    assert res == UniversalPredicate(Y, Disjunction((Y, c0(Y))))
-
-
-def test_skolemize_nested_universals():
-    X = Symbol("X")
-    Y = Symbol("Y")
-    Z = Symbol("Z")
-    exp = UniversalPredicate(
-        Z,
-        UniversalPredicate(Y, ExistentialPredicate(X, Disjunction((Z, Y, X)))),
-    )
-    sk = Skolemize()
-    res = sk.walk(exp)
-    c0 = sk.used_symbols[0]
-    assert res == UniversalPredicate(
-        Z, UniversalPredicate(Y, Disjunction((Z, Y, c0(Z, Y)))),
-    )
-
-
-def test_skolemize_multiple_existentials():
-    X = Symbol("X")
-    Y = Symbol("Y")
-    Z = Symbol("Z")
-    exp = ExistentialPredicate(
-        X,
-        UniversalPredicate(Y, ExistentialPredicate(Z, Conjunction((X, Y, Z)))),
-    )
-    sk = Skolemize()
-    res = sk.walk(exp)
-    c0, c1 = sk.used_symbols
-    assert res == UniversalPredicate(Y, Conjunction((c0, Y, c1(Y))))
-
-
-def test_skolemize_repeated_symbols():
-    X = Symbol("X")
-    Y = Symbol("Y")
-    P = Symbol("P")
-    exp = UniversalPredicate(
-        X, Disjunction((P(X), ExistentialPredicate(X, P(X))))
-    )
-    sk = Skolemize()
-    res = sk.walk(exp)
-    c0 = sk.used_symbols[0]
-    assert res == UniversalPredicate(X, Disjunction((P(X), P(c0(X)))))
-
-
-def test_skolemize_nested_existentials():
-    X = Symbol("X")
-    Y = Symbol("Y")
-    P = Symbol("P")
-    R = Symbol("R")
-    exp = ExistentialPredicate(
-        X, Disjunction((P(X), ExistentialPredicate(X, P(X)), R(X)))
-    )
-    sk = Skolemize()
-    res = sk.walk(exp)
-    c0, c1 = sk.used_symbols
-    assert res == Disjunction((P(c0), P(c1), R(c0)))
-
-
-def test_skolemize_nested_universal_with_repeated_symbols():
-    X = Symbol("X")
-    Y = Symbol("Y")
-    P = Symbol("P")
-    R = Symbol("R")
-    exp = UniversalPredicate(
-        X,
-        Disjunction(
-            (P(X), UniversalPredicate(X, ExistentialPredicate(Y, R(Y, X))))
-        ),
-    )
-    sk = Skolemize()
-
-    res = sk.walk(exp)
-    c0 = sk.used_symbols[0]
-
-    assert isinstance(res, UniversalPredicate)
-    assert res.head == X
-    assert isinstance(res.body, Disjunction)
-    left, right = res.body.formulas
-    assert left == P(X)
-    assert isinstance(right, UniversalPredicate)
-    assert right.body == R(c0(X, right.head), right.head)
 
 
 def test_remove_universal_predicate():
@@ -922,8 +811,12 @@ def test_convert_srnf2horn_3():
 
     expected = Union(
         (
-            HornClause(Aux3(m_, n, r), (Actor(n, m_, r_), Negation(Equal(r, r_)))),
-            HornClause(Aux2(m_, n), (Actor(n, m_, r), Negation(Aux3(m_, n, r)))),
+            HornClause(
+                Aux3(m_, n, r), (Actor(n, m_, r_), Negation(Equal(r, r_)))
+            ),
+            HornClause(
+                Aux2(m_, n), (Actor(n, m_, r), Negation(Aux3(m_, n, r)))
+            ),
             HornClause(Aux1(n), (Director(n, m_), Negation(Aux2(m_, n)))),
             HornClause(Ans(n), (Director(n, m), Negation(Aux1(n)))),
         )
