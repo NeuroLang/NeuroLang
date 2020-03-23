@@ -16,13 +16,50 @@ from ..expressions import Symbol, Constant, FunctionApplication
 from ..expression_walker import (
     add_match,
     PatternWalker,
-    ExpressionWalker,
     ChainedWalker,
     ReplaceSymbolWalker,
 )
 
 
-class EliminateImplications(ExpressionWalker):
+class LogicExpressionWalker(PatternWalker):
+    @add_match(Quantifier)
+    def walk_quantifier(self, expression):
+        return expression.apply(
+            self.walk(expression.head), self.walk(expression.body)
+        )
+
+    @add_match(Constant)
+    def walk_constant(self, expression):
+        return expression
+
+    @add_match(Symbol)
+    def walk_symbol(self, expression):
+        return expression
+
+    @add_match(Negation)
+    def walk_negation(self, expression):
+        return Negation(self.walk(expression.formula))
+
+    @add_match(FunctionApplication)
+    def walk_function(self, expression):
+        return FunctionApplication(
+            expression.functor, tuple(map(self.walk, expression.args))
+        )
+
+    @add_match(Union)
+    def walk_union(self, expression):
+        return expression.apply(self.walk(expression.formulas))
+
+    @add_match(Disjunction)
+    def walk_disjunction(self, expression):
+        return expression.apply(map(self.walk, expression.formulas))
+
+    @add_match(Conjunction)
+    def walk_conjunction(self, expression):
+        return expression.apply(map(self.walk, expression.formulas))
+
+
+class EliminateImplications(LogicExpressionWalker):
     """
     Removes the implication ocurrences of an expression.
     """
@@ -34,7 +71,7 @@ class EliminateImplications(ExpressionWalker):
         return Disjunction((c, Negation(a)))
 
 
-class MoveNegationsToAtoms(ExpressionWalker):
+class MoveNegationsToAtoms(LogicExpressionWalker):
     """
     Moves the negations the furthest possible to the atoms.
     Assumes that there are no implications in the expression.
@@ -71,7 +108,7 @@ class MoveNegationsToAtoms(ExpressionWalker):
         return negation.formula.formula
 
 
-class MoveQuantifiersUp(ExpressionWalker):
+class MoveQuantifiersUp(LogicExpressionWalker):
     """
     Moves the quantifiers up in order to format the expression
     in prenex normal form. Assumes the expression contains no implications
@@ -82,21 +119,20 @@ class MoveQuantifiersUp(ExpressionWalker):
     def negated_universal(self, negation):
         quantifier = negation.formula
         x = quantifier.head
-        p = self.walk(Negation(quantifier.body))
-        return ExistentialPredicate(x, p)
+        return self.walk(ExistentialPredicate(x, Negation(quantifier.body)))
 
     @add_match(Negation(ExistentialPredicate(..., ...)))
     def negated_existential(self, negation):
         quantifier = negation.formula
         x = quantifier.head
-        p = self.walk(Negation(quantifier.body))
-        return UniversalPredicate(x, p)
+        return self.walk(UniversalPredicate(x, Negation(quantifier.body)))
 
-    @add_match(
-        Disjunction,
-        lambda e: any(isinstance(f, Quantifier) for f in e.formulas),
-    )
+    @add_match(Disjunction)
     def disjunction_with_quantifiers(self, expression):
+        expression = self.walk_disjunction(expression)
+        if not any(isinstance(f, Quantifier) for f in expression.formulas):
+            return expression
+
         quantifiers = []
         formulas = []
         for f in expression.formulas:
@@ -110,11 +146,12 @@ class MoveQuantifiersUp(ExpressionWalker):
             exp = q.apply(q.head, exp)
         return self.walk(exp)
 
-    @add_match(
-        Conjunction,
-        lambda e: any(isinstance(f, Quantifier) for f in e.formulas),
-    )
+    @add_match(Conjunction)
     def conjunction_with_quantifiers(self, expression):
+        expression = self.walk_conjunction(expression)
+        if not any(isinstance(f, Quantifier) for f in expression.formulas):
+            return expression
+
         quantifiers = []
         formulas = []
         for f in expression.formulas:
@@ -129,7 +166,7 @@ class MoveQuantifiersUp(ExpressionWalker):
         return self.walk(exp)
 
 
-class DesambiguateQuantifiedVariables(ExpressionWalker):
+class DesambiguateQuantifiedVariables(LogicExpressionWalker):
     """
     Replaces each quantified variale to a fresh one.
     """
@@ -145,7 +182,7 @@ class DesambiguateQuantifiedVariables(ExpressionWalker):
         return expression.apply(self.walk(expression.formulas))
 
     @add_match(Disjunction)
-    def match_dijunction(self, expression):
+    def match_disjunction(self, expression):
         return expression.apply(self.walk(expression.formulas))
 
     @add_match(Conjunction)
@@ -164,7 +201,7 @@ class DesambiguateQuantifiedVariables(ExpressionWalker):
         )
 
 
-class Skolemize(ExpressionWalker):
+class Skolemize(LogicExpressionWalker):
     """
     Replaces the existential quantifiers and introduces
     Skolem constants for quantified variables. Assumes that
@@ -189,7 +226,7 @@ class Skolemize(ExpressionWalker):
         return expression.apply(self.walk(expression.formulas))
 
     @add_match(Disjunction)
-    def match_dijunction(self, expression):
+    def match_disjunction(self, expression):
         return expression.apply(self.walk(expression.formulas))
 
     @add_match(Conjunction)
@@ -231,11 +268,12 @@ class Skolemize(ExpressionWalker):
         return f
 
 
-class DistributeDisjunctions(ExpressionWalker):
+class DistributeDisjunctions(LogicExpressionWalker):
     @add_match(Disjunction, lambda e: len(e.formulas) > 2)
     def match_split(self, expression):
         head, *rest = expression.formulas
-        new_exp = Disjunction((head, Disjunction(tuple(rest))))
+        rest = self.walk(Disjunction(tuple(rest)))
+        new_exp = Disjunction((head, rest))
         return self.walk(new_exp)
 
     @add_match(Disjunction((..., Conjunction)))
@@ -253,7 +291,7 @@ class DistributeDisjunctions(ExpressionWalker):
         )
 
 
-class CollapseDisjunctions(ExpressionWalker):
+class CollapseDisjunctions(LogicExpressionWalker):
     @add_match(
         Disjunction,
         lambda e: any(isinstance(f, Disjunction) for f in e.formulas),
@@ -268,7 +306,7 @@ class CollapseDisjunctions(ExpressionWalker):
         return Disjunction(tuple(new_arg))
 
 
-class CollapseConjunctions(ExpressionWalker):
+class CollapseConjunctions(LogicExpressionWalker):
     @add_match(
         Conjunction,
         lambda e: any(isinstance(f, Conjunction) for f in e.formulas),
@@ -400,7 +438,7 @@ def _extract_head_and_body(exp):
     )
 
 
-class RemoveUniversalPredicates(ExpressionWalker):
+class RemoveUniversalPredicates(LogicExpressionWalker):
     """
     Removes the universal predicates and leaves free the bound variables.
     Assumes that the quantified variables are unique.
@@ -415,45 +453,7 @@ class RemoveUniversalPredicates(ExpressionWalker):
         )
 
 
-class FirstOrderLogicWalker(PatternWalker):
-    @add_match(Quantifier)
-    def match_quantifier(self, expression):
-        return expression.apply(
-            self.walk(expression.head), self.walk(expression.body)
-        )
-
-    @add_match(Constant)
-    def match_constant(self, expression):
-        return expression
-
-    @add_match(Symbol)
-    def match_symbol(self, expression):
-        return expression
-
-    @add_match(Negation)
-    def match_negation(self, expression):
-        return Negation(self.walk(expression.formula))
-
-    @add_match(FunctionApplication)
-    def match_function(self, expression):
-        return FunctionApplication(
-            expression.functor, tuple(map(self.walk, expression.args))
-        )
-
-    @add_match(Union)
-    def match_union(self, expression):
-        return expression.apply(self.walk(expression.formulas))
-
-    @add_match(Disjunction)
-    def match_dijunction(self, expression):
-        return expression.apply(map(self.walk, expression.formulas))
-
-    @add_match(Conjunction)
-    def match_conjunction(self, expression):
-        return expression.apply(map(self.walk, expression.formulas))
-
-
-class MoveNegationsToAtomsOrExistentialQuantifiers(FirstOrderLogicWalker):
+class MoveNegationsToAtomsOrExistentialQuantifiers(LogicExpressionWalker):
     @add_match(Implication)
     def match_implication(self, expression):
         return expression.apply(
@@ -512,7 +512,7 @@ def range_restricted_variables(e):
     return RangeRestrictedVariables().walk(e)
 
 
-class RangeRestrictedVariables(FirstOrderLogicWalker):
+class RangeRestrictedVariables(LogicExpressionWalker):
     @add_match(FunctionApplication)
     def match_function(self, exp):
         return set([a for a in exp.args if isinstance(a, Symbol)])
@@ -548,7 +548,7 @@ def free_variables(expression):
     return FreeVariables().walk(expression)
 
 
-class FreeVariables(ExpressionWalker):
+class FreeVariables(PatternWalker):
     @add_match(FunctionApplication)
     def match_function(self, exp):
         return set([a for a in exp.args if isinstance(a, Symbol)])
