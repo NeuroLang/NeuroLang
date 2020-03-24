@@ -247,15 +247,25 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         if iterable is None:
             iterable = []
 
-        if isinstance(iterable, RelationalAlgebraFrozenSet):
-            self._initialize_from_instance_same_class(iterable)
+        if isinstance(iterable, NamedRelationalAlgebraFrozenSet):
+            self._initialize_from_named_ra_set(iterable)
+        elif isinstance(iterable, RelationalAlgebraFrozenSet):
+            self._initialize_from_unnamed_ra_set(iterable)
         else:
             self._container = pd.DataFrame(
                 list(iterable),
                 columns=self._columns
             )
 
-    def _initialize_from_instance_same_class(self, other):
+    def _initialize_from_named_ra_set(self, other):
+        if len(self._columns) != other.arity:
+            raise ValueError("Relations must have the same arity")
+        self._container = (
+            other._container[list(other.columns)].copy(deep=False)
+        )
+        self._container.sort_index(axis=1, inplace=True)
+
+    def _initialize_from_unnamed_ra_set(self, other):
         if other._container is None:
             self._container = pd.DataFrame(
                 list(other),
@@ -264,11 +274,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         else:
             if len(self._columns) != other.arity:
                 raise ValueError("Relations must have the same arity")
-            if isinstance(other, NamedRelationalAlgebraFrozenSet):
-                other_container = other._container[list(other.columns)]
-            else:
-                other_container = other._container
-            self._container = other_container.copy(deep=False)
+            self._container = other._container.copy(deep=False)
             self._container.columns = self._columns
         self._container.sort_index(axis=1, inplace=True)
 

@@ -20,9 +20,6 @@ class ColumnInt(int, Column):
 class ColumnStr(str, Column):
     pass
 
-def is_column_name(column):
-    return isinstance(column, Constant) and isinstance(column.value, ColumnStr)
-
 
 C_ = Constant
 S_ = Symbol
@@ -113,7 +110,13 @@ class Difference(RelationalAlgebraOperation):
 
 class NameColumns(RelationalAlgebraOperation):
     def __init__(self, relation, column_names):
-        if any(not is_column_name(col_name) for col_name in column_names):
+        if any(
+            not (
+                isinstance(col_name, Constant) and
+                isinstance(col_name.value, ColumnStr)
+            )
+            for col_name in column_names
+        ):
             raise NeuroLangException(
                 "All column names must be Constant[ColumnStr]"
             )
