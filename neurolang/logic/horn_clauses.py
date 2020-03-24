@@ -12,14 +12,12 @@ from . import (
     UniversalPredicate,
     ExistentialPredicate,
     LogicOperator,
-    Quantifier,
 )
 from ..exceptions import NeuroLangException
 from ..expression_walker import (
     add_match,
     PatternWalker,
     ChainedWalker,
-    ReplaceSymbolWalker,
 )
 from .expression_processing import extract_logic_free_variables
 
@@ -33,7 +31,6 @@ from .transformations import (
     CollapseDisjunctions,
     CollapseConjunctions,
     RemoveUniversalPredicates,
-    convert_to_pnf_with_cnf_matrix,
 )
 
 

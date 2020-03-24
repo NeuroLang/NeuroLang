@@ -28,7 +28,6 @@ from ..logic.transformations import (
 from ..logic.horn_clauses import (
     MoveNegationsToAtomsOrExistentialQuantifiers,
     HornClause,
-    convert_to_pnf_with_cnf_matrix,
     convert_to_srnf,
     convert_srnf_to_horn_clauses,
     range_restricted_variables,

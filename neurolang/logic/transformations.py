@@ -12,7 +12,6 @@ from . import (
     LogicOperator,
     Quantifier,
 )
-from ..exceptions import NeuroLangException
 from ..expression_walker import (
     add_match,
     PatternWalker,
@@ -127,12 +126,12 @@ class MoveQuantifiersUp(LogicExpressionWalker):
         x = quantifier.head
         return self.walk(UniversalPredicate(x, Negation(quantifier.body)))
 
-    @add_match(Disjunction)
+    @add_match(
+        Disjunction,
+        lambda exp: any(isinstance(f, Quantifier) for f in exp.formulas)
+    )
     def disjunction_with_quantifiers(self, expression):
         expression = self.walk_disjunction(expression)
-        if not any(isinstance(f, Quantifier) for f in expression.formulas):
-            return expression
-
         quantifiers = []
         formulas = []
         for f in expression.formulas:
@@ -146,12 +145,12 @@ class MoveQuantifiersUp(LogicExpressionWalker):
             exp = q.apply(q.head, exp)
         return self.walk(exp)
 
-    @add_match(Conjunction)
+    @add_match(
+        Conjunction,
+        lambda exp: any(isinstance(f, Quantifier) for f in exp.formulas)
+    )
     def conjunction_with_quantifiers(self, expression):
         expression = self.walk_conjunction(expression)
-        if not any(isinstance(f, Quantifier) for f in expression.formulas):
-            return expression
-
         quantifiers = []
         formulas = []
         for f in expression.formulas:
@@ -174,25 +173,25 @@ class DesambiguateQuantifiedVariables(LogicExpressionWalker):
     @add_match(Implication)
     def match_implication(self, expression):
         fs = self.walk(expression.consequent), self.walk(expression.antecedent)
-        self.desambiguate(fs)
+        self._desambiguate(fs)
         return expression.apply(*fs)
 
     @add_match(Union)
     def match_union(self, expression):
         fs = self.walk(expression.formulas)
-        self.desambiguate(fs)
+        self._desambiguate(fs)
         return expression.apply(fs)
 
     @add_match(Disjunction)
     def match_disjunction(self, expression):
         fs = self.walk(expression.formulas)
-        self.desambiguate(fs)
+        self._desambiguate(fs)
         return expression.apply(fs)
 
     @add_match(Conjunction)
     def match_conjunction(self, expression):
         fs = self.walk(expression.formulas)
-        self.desambiguate(fs)
+        self._desambiguate(fs)
         return expression.apply(fs)
 
     @add_match(Negation)
@@ -213,18 +212,21 @@ class DesambiguateQuantifiedVariables(LogicExpressionWalker):
         q.body = ReplaceFreeSymbolWalker({q.head: ns}).walk(q.body)
         q.head = ns
 
-    def desambiguate(self, l):
-        qv = set()
+    def _desambiguate(self, l):
+        used_variables = set()
         for f in l:
             uq = UsedQuantifiers().walk(f)
-            uv = set(map(lambda x: x.head, uq))
-            repeated = uv & qv
-            for s in repeated:
-                for q in uq:
-                    if q.head == s:
-                        self.rename_quantifier(q)
-            uv = set(map(lambda x: x.head, uq))
-            qv = qv | uv
+            for q in self._conflicted_quantifiers(used_variables, uq):
+                self.rename_quantifier(q)
+            used_variables |= self._bound_variables(uq)
+
+    def _conflicted_quantifiers(self, used_variables, quantifiers):
+            bv = self._bound_variables(quantifiers)
+            repeated = bv & used_variables
+            return [q for q in quantifiers if q.head in repeated]
+
+    def _bound_variables(self, quantifiers):
+        return set(map(lambda q: q.head, quantifiers))
 
 
 class ReplaceFreeSymbolWalker(ReplaceSymbolWalker):
