@@ -246,10 +246,9 @@ class ChaseNamedRelationalAlgebraMixin:
 
         result = RelationalAlgebraSolver(symbol_table).walk(ra_code)
 
-        result_value = result.value
         substitutions = NamedRAFSTupleIterAdapter(
-            sorted(result_value.columns),
-            result_value
+            result.value.columns,
+            result.value
         )
 
         return substitutions

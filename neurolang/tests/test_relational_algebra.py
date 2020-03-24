@@ -2,11 +2,11 @@ from typing import AbstractSet, Tuple
 
 from ..expressions import Constant
 from ..datalog.basic_representation import WrappedRelationalAlgebraSet
-from ..relational_algebra import (ColumnInt, ColumnStr, EquiJoin,
+from ..relational_algebra import (ColumnInt, ColumnStr, EquiJoin, NameColumns,
                                   NaturalJoin, Product, Projection,
                                   RelationalAlgebraOptimiser,
                                   RelationalAlgebraSolver, Selection, eq_)
-from ..utils import NamedRelationalAlgebraFrozenSet
+from ..utils import RelationalAlgebraFrozenSet, NamedRelationalAlgebraFrozenSet
 
 R1 = WrappedRelationalAlgebraSet([
     (i, i * 2)
@@ -263,3 +263,19 @@ def test_named_ra_projection():
             columns=("x",), iterable=[("c",), ("b",), ("a",)]
         )
     )
+
+
+def test_name_ra_set_after_projection():
+    r = Constant[AbstractSet](
+        RelationalAlgebraFrozenSet([(56, "bonjour"), (42, "second"),])
+    )
+    r = Projection(r, (Constant(ColumnInt(0)), Constant(ColumnInt(1))))
+    r = NameColumns(r, (Constant(ColumnStr("x")), Constant(ColumnStr("n"))))
+    solver = RelationalAlgebraSolver()
+    result = solver.walk(r).value
+    expected = NamedRelationalAlgebraFrozenSet(
+        ("x", "n"), [(56, "bonjour"), (42, "second"),],
+    )
+    assert result == expected
+    for tuple_result, tuple_expected in zip(result, expected):
+        assert tuple_result == tuple_expected
