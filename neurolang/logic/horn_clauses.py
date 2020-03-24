@@ -21,6 +21,7 @@ from ..expression_walker import (
     ChainedWalker,
     ReplaceSymbolWalker,
 )
+from .expression_processing import extract_logic_free_variables
 
 from .transformations import (
     LogicExpressionWalker,
@@ -34,6 +35,10 @@ from .transformations import (
     RemoveUniversalPredicates,
     convert_to_pnf_with_cnf_matrix,
 )
+
+
+class NeuroLangTranslateToHornClauseException(NeuroLangException):
+    pass
 
 
 class HornClause(LogicOperator):
@@ -104,22 +109,27 @@ class MoveNegationsToAtomsOrExistentialQuantifiers(MoveNegationsToAtoms):
         quantifier = negation.formula
         h = quantifier.head
         b = self.walk(quantifier.body)
-        return Negation(ExistentialPredicate(h, b))
+        exp = Negation(ExistentialPredicate(h, b))
+        if b != quantifier.body:
+            exp = self.walk(exp)
+        return exp
 
 
 def convert_to_srnf(e):
-    # e = DesambiguateQuantifiedVariables().walk(e)
-    e = EliminateImplications().walk(e)
-    e = RemoveUniversalPredicates().walk(e)
-    e = MoveNegationsToAtomsOrExistentialQuantifiers().walk(e)
-    return e
+    w = ChainedWalker(
+        DesambiguateQuantifiedVariables,
+        EliminateImplications,
+        RemoveUniversalPredicates,
+        MoveNegationsToAtomsOrExistentialQuantifiers,
+    )
+    return w.walk(e)
 
 
 def is_safe_range(expression):
     try:
-        return free_variables(expression) == range_restricted_variables(
+        return extract_logic_free_variables(
             expression
-        )
+        ) == range_restricted_variables(expression)
     except NeuroLangException:
         return False
 
@@ -160,37 +170,18 @@ class RangeRestrictedVariables(LogicExpressionWalker):
         )
 
 
-def free_variables(expression):
-    return FreeVariables().walk(expression)
-
-
-class FreeVariables(PatternWalker):
-    @add_match(FunctionApplication)
-    def match_function(self, exp):
-        return set([a for a in exp.args if isinstance(a, Symbol)])
-
-    @add_match(Negation)
-    def match_negation(self, exp):
-        return self.walk(exp.formula)
-
-    @add_match(Disjunction)
-    def match_disjunction(self, exp):
-        return set.union(*self.walk(exp.formulas))
-
-    @add_match(Implication)
-    def match_implication(self, exp):
-        return set.union(self.walk(exp.antecedent), self.walk(exp.consequent))
-
-    @add_match(Conjunction)
-    def match_conjunction(self, exp):
-        return set.union(*self.walk(exp.formulas))
-
-    @add_match(Quantifier)
-    def match_quantifier(self, exp):
-        return self.walk(exp.body) - {exp.head}
-
-
 def convert_srnf_to_horn_clauses(head, expression):
+    if not is_safe_range(expression):
+        raise NeuroLangTranslateToHornClauseException(
+            "Expression is not safe range: {}".format(expression)
+        )
+    if set(head.args) != range_restricted_variables(expression):
+        raise NeuroLangTranslateToHornClauseException(
+            "Variables in head ({}) must be present in body ({})".format(
+                head, expression
+            )
+        )
+
     queue = [(head, expression)]
     processed = []
 
@@ -236,12 +227,11 @@ class ConvertSRNFToHornClause(PatternWalker):
 
     @add_match(...)
     def match_unknown(self, exp):
-        raise NeuroLangException(
+        raise NeuroLangTranslateToHornClauseException(
             "Expression not in safe range normal form: {}".format(exp)
         )
 
     def _new_head_for(self, exp):
-        fv = free_variables(exp)
-        fv = sorted(fv, key=lambda s: s.name)
+        fv = extract_logic_free_variables(exp)
         S = Symbol.fresh()
         return S(*tuple(fv))

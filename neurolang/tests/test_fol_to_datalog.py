@@ -33,6 +33,7 @@ from ..logic.horn_clauses import (
     convert_srnf_to_horn_clauses,
     range_restricted_variables,
     is_safe_range,
+    NeuroLangTranslateToHornClauseException,
 )
 
 
@@ -61,7 +62,7 @@ def test_remove_nested_implication():
     )
 
 
-def test_remove_nested_implication():
+def test_remove_implication_in_disjunction():
     A = Symbol("A")
     B = Symbol("B")
     exp = Disjunction((A, Implication(B, A)))
@@ -528,7 +529,6 @@ def test_move_negations_to_atoms_or_existentials():
 
 def test_convert_to_srnf():
     Movies = Symbol("Movies")
-    Ans = Symbol("Ans")
     H = Symbol("'Hitchcock'")
     Xt = Symbol("Xt")
     Xd = Symbol("Xd")
@@ -806,13 +806,28 @@ def test_convert_srnf2horn_3():
     expected = Union(
         (
             HornClause(
-                Aux3(m_, n, r), (Actor(n, m_, r_), Negation(Equal(r, r_)))
+                Aux3(r, n, m_), (Actor(n, m_, r_), Negation(Equal(r, r_)))
             ),
             HornClause(
-                Aux2(m_, n), (Actor(n, m_, r), Negation(Aux3(m_, n, r)))
+                Aux2(n, m_), (Actor(n, m_, r), Negation(Aux3(r, n, m_)))
             ),
-            HornClause(Aux1(n), (Director(n, m_), Negation(Aux2(m_, n)))),
+            HornClause(Aux1(n), (Director(n, m_), Negation(Aux2(n, m_)))),
             HornClause(Ans(n), (Director(n, m), Negation(Aux1(n)))),
         )
     )
     assert res == expected
+
+
+def test_convert_srnf2horn_fails():
+    P = Symbol("P")
+    X = Symbol("X")
+    Y = Symbol("Y")
+    Ans = Symbol("Ans")
+
+    exp = Negation(P(X))
+    with raises(NeuroLangTranslateToHornClauseException):
+        convert_srnf_to_horn_clauses(Ans(X), exp)
+
+    exp = UniversalPredicate(Y, P(Y))
+    with raises(NeuroLangTranslateToHornClauseException):
+        convert_srnf_to_horn_clauses(Ans(X), exp)
