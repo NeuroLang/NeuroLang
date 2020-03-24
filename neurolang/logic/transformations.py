@@ -9,7 +9,6 @@ from . import (
     Negation,
     UniversalPredicate,
     ExistentialPredicate,
-    LogicOperator,
     Quantifier,
 )
 from ..expression_walker import (
