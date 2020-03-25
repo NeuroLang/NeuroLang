@@ -356,10 +356,12 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         return result
 
     def rename_column(self, src, dst):
-        if dst in self._columns:
-            raise ValueError(f'{dst} cannot be in the columns')
         if src not in self._columns:
             raise ValueError(f'{src} not in columns')
+        if src == dst:
+            return self
+        if dst in self._columns:
+            raise ValueError(f'{dst} cannot be in the columns')
         src_idx = self._columns.index(src)
         new_columns = (
             self._columns[:src_idx] +
