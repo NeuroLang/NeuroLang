@@ -2,16 +2,20 @@ from operator import eq
 
 from ...expression_walker import ExpressionBasicEvaluator
 from ...expressions import Constant, ExpressionBlock, Symbol
-from ...logic import ExistentialPredicate, Implication, Negation
+from ...logic import ExistentialPredicate, Implication, Negation, Conjunction
 from .. import DatalogProgram, Fact
 from ..expression_processing import (
-    TranslateToDatalogSemantics, extract_logic_free_variables,
-    extract_logic_predicates,
-    implication_has_existential_variable_in_antecedent,
+    TranslateToDatalogSemantics,
     is_conjunctive_expression,
-    is_conjunctive_expression_with_nested_predicates, is_linear_rule,
-    reachable_code, stratify)
-
+    is_conjunctive_expression_with_nested_predicates,
+    stratify, reachable_code, is_linear_rule,
+    implication_has_existential_variable_in_antecedent,
+    is_ground_predicate,
+    extract_logic_free_variables,
+    extract_logic_predicates,
+    conjunct_if_needed,
+    conjunct_formulas,
+)
 
 S_ = Symbol
 C_ = Constant
@@ -245,3 +249,34 @@ def test_implication_has_existential_variable_in_antecedent():
     assert not implication_has_existential_variable_in_antecedent(
         Implication(Q(x), R(x)),
     )
+
+
+def test_is_ground_predicate():
+    P = S_('P')
+    x = S_('x')
+    a = C_('a')
+    assert not is_ground_predicate(P(x))
+    assert is_ground_predicate(P(a))
+
+
+def test_conjunct_if_needed():
+    P = S_('P')
+    Q = S_('Q')
+    x = S_('x')
+    predicates = [P(x)]
+    assert conjunct_if_needed(predicates) == P(x)
+    predicates = [P(x), Q(x)]
+    assert conjunct_if_needed(predicates) == Conjunction(predicates)
+
+
+def test_conjunct_formulas():
+    P = S_('P')
+    Q = S_('Q')
+    x = S_('x')
+    y = S_('y')
+    f1 = Conjunction([P(x), Q(x, x)])
+    f2 = Conjunction([Q(x, y), Q(y, y)])
+    assert conjunct_formulas(f1, f2) == Conjunction([
+        P(x), Q(x, x), Q(x, y), Q(y, y)
+    ])
+    assert conjunct_formulas(P(x), Q(x)) == Conjunction([P(x), Q(x)])
