@@ -252,31 +252,31 @@ def test_implication_has_existential_variable_in_antecedent():
 
 
 def test_is_ground_predicate():
-    P = S_('P')
-    x = S_('x')
-    a = C_('a')
+    P = S_("P")
+    x = S_("x")
+    a = C_("a")
     assert not is_ground_predicate(P(x))
     assert is_ground_predicate(P(a))
 
 
 def test_conjunct_if_needed():
-    P = S_('P')
-    Q = S_('Q')
-    x = S_('x')
-    predicates = [P(x)]
+    P = S_("P")
+    Q = S_("Q")
+    x = S_("x")
+    predicates = (P(x),)
     assert conjunct_if_needed(predicates) == P(x)
-    predicates = [P(x), Q(x)]
+    predicates = (P(x), Q(x))
     assert conjunct_if_needed(predicates) == Conjunction(predicates)
 
 
 def test_conjunct_formulas():
-    P = S_('P')
-    Q = S_('Q')
-    x = S_('x')
-    y = S_('y')
-    f1 = Conjunction([P(x), Q(x, x)])
-    f2 = Conjunction([Q(x, y), Q(y, y)])
-    assert conjunct_formulas(f1, f2) == Conjunction([
-        P(x), Q(x, x), Q(x, y), Q(y, y)
-    ])
-    assert conjunct_formulas(P(x), Q(x)) == Conjunction([P(x), Q(x)])
+    P = S_("P")
+    Q = S_("Q")
+    x = S_("x")
+    y = S_("y")
+    f1 = Conjunction((P(x), Q(x, x)))
+    f2 = Conjunction((Q(x, y), Q(y, y)))
+    assert conjunct_formulas(f1, f2) == Conjunction(
+        (P(x), Q(x, x), Q(x, y), Q(y, y))
+    )
+    assert conjunct_formulas(P(x), Q(x)) == Conjunction((P(x), Q(x)))

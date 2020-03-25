@@ -279,13 +279,13 @@ def conjunct_if_needed(formulas):
 def conjunct_formulas(f1, f2):
     """Conjunct two logical formulas."""
     if isinstance(f1, Conjunction) and isinstance(f2, Conjunction):
-        return Conjunction(list(f1.formulas) + list(f2.formulas))
+        return Conjunction(tuple(f1.formulas) + tuple(f2.formulas))
     elif isinstance(f1, Conjunction):
-        return Conjunction(list(f1.formulas) + [f2])
+        return Conjunction(tuple(f1.formulas) + (f2, ))
     elif isinstance(f2, Conjunction):
-        return Conjunction([f1] + list(f2.formulas))
+        return Conjunction((f1, ) + tuple(f2.formulas))
     else:
-        return Conjunction([f1, f2])
+        return Conjunction((f1, f2))
 
 
 def is_ground_predicate(predicate):
