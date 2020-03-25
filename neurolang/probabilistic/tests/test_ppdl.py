@@ -2,15 +2,21 @@ import pytest
 
 from ...datalog import Fact
 from ...exceptions import NeuroLangException
-from ...existential_datalog import (Implication,
-                                    SolverNonRecursiveExistentialDatalog)
+from ...existential_datalog import (
+    Implication,
+    SolverNonRecursiveExistentialDatalog,
+)
 from ...expression_walker import ExpressionBasicEvaluator
 from ...expressions import Constant, ExpressionBlock, Symbol
 from ...logic.unification import apply_substitution, most_general_unifier
 from ...solver_datalog_extensional_db import ExtensionalDatabaseSolver
-from ..ppdl import (DeltaTerm, GenerativeDatalog, TranslateGDatalogToEDatalog,
-                    can_lead_to_object_uncertainty,
-                    concatenate_to_expression_block, get_dterm)
+from ..expressions import DeltaTerm
+from ..expression_processing import get_dterm, concatenate_to_expression_block
+from ..ppdl import (
+    PPDLProgram,
+    PPDLToExistentialDatalogTranslator,
+    can_lead_to_object_uncertainty,
+)
 
 C_ = Constant
 S_ = Symbol
@@ -32,11 +38,11 @@ b = C_("b")
 bernoulli = S_("bernoulli")
 
 
-class GenerativeDatalogTest(GenerativeDatalog, ExpressionBasicEvaluator):
+class PPDLTest(PPDLProgram, ExpressionBasicEvaluator):
     pass
 
 
-class GenerativeDatalogTestSolver(
+class PPDLTestSolver(
     ExtensionalDatabaseSolver,
     SolverNonRecursiveExistentialDatalog,
     ExpressionBasicEvaluator,
@@ -44,8 +50,6 @@ class GenerativeDatalogTestSolver(
     pass
 
 
-class TranslateGDatalogToEDatalogTestSolver(TranslateGDatalogToEDatalog):
-    pass
 
 
 def test_get_dterm():
@@ -83,7 +87,7 @@ def test_unification_of_delta_atom():
 def test_generative_datalog():
     tau_1 = Implication(P(x, DeltaTerm(bernoulli, (C_(0.5),))), Q(x))
     program = ExpressionBlock((tau_1,))
-    gdatalog = GenerativeDatalogTest()
+    gdatalog = PPDLTest()
     gdatalog.walk(program)
     edb = gdatalog.extensional_database()
     idb = gdatalog.intensional_database()
@@ -98,7 +102,7 @@ def test_generative_datalog():
             ),
             Q(x),
         )
-        gdatalog = GenerativeDatalogTest()
+        gdatalog = PPDLTest()
         gdatalog.walk(ExpressionBlock((tau_2, Fact(Q(C_(2))))))
         edb = gdatalog.extensional_database()
         idb = gdatalog.intensional_database()
@@ -115,7 +119,7 @@ def test_check_gdatalog_object_uncertainty():
             Implication(R(x), Q(x, C_(0))),
         )
     )
-    gdatalog = GenerativeDatalogTest()
+    gdatalog = PPDLTest()
     gdatalog.walk(program)
     assert can_lead_to_object_uncertainty(gdatalog)
 
@@ -127,13 +131,13 @@ def test_check_gdatalog_object_uncertainty():
             Implication(R(x), Q(x, y)),
         )
     )
-    gdatalog = GenerativeDatalogTest()
+    gdatalog = PPDLTest()
     gdatalog.walk(program)
     assert not can_lead_to_object_uncertainty(gdatalog)
 
 
 def test_translation_of_gdatalog_program_to_edatalog_program():
-    solver = TranslateGDatalogToEDatalogTestSolver()
+    solver = PPDLToExistentialDatalogTranslator()
     res = solver.walk(
         Implication(P(x, DeltaTerm(bernoulli, (C_(0.5),))), Q(x))
     )
@@ -150,7 +154,7 @@ def test_non_generative_rule_preserved_when_block_translated():
             Implication(Z(x, y, z), W(x, y) & K(y, z)),
         )
     )
-    translator = TranslateGDatalogToEDatalogTestSolver()
+    translator = PPDLToExistentialDatalogTranslator()
     translated_block = translator.walk(block)
     assert Fact(Q(a)) in translated_block.expressions
     assert (
@@ -196,12 +200,12 @@ def test_burglar():
         )
     )
 
-    translator = TranslateGDatalogToEDatalogTestSolver()
+    translator = PPDLToExistentialDatalogTranslator()
     translated = translator.walk(program)
     assert not any(
         isinstance(e, ExpressionBlock) for e in translated.expressions
     )
-    solver = GenerativeDatalogTestSolver()
+    solver = PPDLTestSolver()
     solver.walk(translated)
 
 
@@ -232,12 +236,12 @@ def test_pcs_example():
             Implication(pHasRPC(DeltaTerm(Uniform, (C_(0), C_(1)))), C_(True)),
         )
     )
-    translator = TranslateGDatalogToEDatalogTestSolver()
+    translator = PPDLToExistentialDatalogTranslator()
     translated = translator.walk(program)
     assert not any(
         isinstance(e, ExpressionBlock) for e in translated.expressions
     )
-    solver = GenerativeDatalogTestSolver()
+    solver = PPDLTestSolver()
     solver.walk(translated)
 
 
