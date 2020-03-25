@@ -247,27 +247,34 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         if iterable is None:
             iterable = []
 
-        if isinstance(iterable, RelationalAlgebraFrozenSet):
-            self._initialize_from_instance_same_class(iterable)
+        if isinstance(iterable, NamedRelationalAlgebraFrozenSet):
+            self._initialize_from_named_ra_set(iterable)
+        elif isinstance(iterable, RelationalAlgebraFrozenSet):
+            self._initialize_from_unnamed_ra_set(iterable)
         else:
             self._container = pd.DataFrame(
                 list(iterable),
                 columns=self._columns
             )
 
-    def _initialize_from_instance_same_class(self, iterable):
-        if iterable._container is None:
+    def _initialize_from_named_ra_set(self, other):
+        if len(self._columns) != other.arity:
+            raise ValueError("Relations must have the same arity")
+        self._container = (
+            other._container[list(other.columns)].copy(deep=False)
+        )
+        self._container.sort_index(axis=1, inplace=True)
+
+    def _initialize_from_unnamed_ra_set(self, other):
+        if other._container is None:
             self._container = pd.DataFrame(
-                list(iterable),
+                list(other),
                 columns=self._columns
             )
         else:
-            self._container = iterable._container.copy(deep=False)
-            if len(self._columns) != iterable.arity:
-                raise ValueError(
-                    'columns should have the same '
-                    'length as columns of {iterable}'
-                )
+            if len(self._columns) != other.arity:
+                raise ValueError("Relations must have the same arity")
+            self._container = other._container.copy(deep=False)
             self._container.columns = self._columns
         self._container.sort_index(axis=1, inplace=True)
 
@@ -350,7 +357,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
 
     def rename_column(self, src, dst):
         if dst in self._columns:
-            return self
+            raise ValueError(f'{dst} cannot be in the columns')
         if src not in self._columns:
             raise ValueError(f'{src} not in columns')
         src_idx = self._columns.index(src)

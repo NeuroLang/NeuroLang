@@ -27,7 +27,7 @@ def test_translate_set():
     res = tr.walk(fa)
     assert res == NameColumns(
         Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
-        (x, y)
+        (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
     )
 
     fa = R1(C_(1), y)
@@ -39,7 +39,7 @@ def test_translate_set():
             Selection(R1, C_(eq)(C_(ColumnInt(0)), C_(1))),
             (C_(ColumnInt(1)),)
         ),
-        (y,)
+        (Constant(ColumnStr('y')),)
     )
 
 
@@ -70,7 +70,7 @@ def test_equality_constant_symbol():
 
     fb_trans = NameColumns(
         Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
-        (x, y)
+        (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
     )
 
     res = tr.walk(exp)
@@ -88,7 +88,7 @@ def test_equality_symbols():
     fb = R1(x, y)
     fb_trans = NameColumns(
         Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
-        (x, y)
+        (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
     )
 
     exp = Conjunction((fb, C_(eq)(x, y)))
@@ -140,12 +140,12 @@ def test_joins():
 
     fa_trans = NameColumns(
         Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
-        (x, y)
+        (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
     )
 
     fb_trans = NameColumns(
         Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
-        (y, z)
+        (Constant(ColumnStr('y')), Constant(ColumnStr('z')))
     )
 
     tr = TranslateToNamedRA()
@@ -156,7 +156,7 @@ def test_joins():
     fb = R2(x, y)
     fb_trans = NameColumns(
         Projection(R2, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
-        (x, y)
+        (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
     )
     exp = Conjunction((fa, Negation(fb)))
 
@@ -171,7 +171,7 @@ def test_joins():
             Selection(R2, C_(eq)(C_(ColumnInt(1)), C_(0))),
             (C_(ColumnInt(0)),)
         ),
-        (y,)
+        (Constant(ColumnStr('y')),)
     )
 
     exp = Conjunction((fa, Negation(fb)))

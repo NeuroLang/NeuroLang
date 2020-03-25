@@ -89,23 +89,6 @@ def is_linear_rule(rule):
     ) < 2
 
 
-def is_ground_predicate(predicate):
-    """
-    Whether all the predicate's terms are all constant.
-
-    Parameters
-    ----------
-    predicate : FunctionApplication
-        The predicate to be tested.
-
-    Returns
-    -------
-    bool
-        Whether all the predicate's terms are all constant.
-    """
-    return all(isinstance(arg, Constant) for arg in predicate.args)
-
-
 def all_body_preds_in_set(implication, predicate_set):
     """Checks wether all predicates in the antecedent
     are in the functor_set or are the consequent functor.
@@ -286,7 +269,7 @@ def reachable_code(query, datalog):
 
 
 def conjunct_if_needed(formulas):
-    """Only conjunct the given formulas if there is more than one."""
+    """Only conjunct the given list of formulas if there is more than one."""
     if len(formulas) == 1:
         return formulas[0]
     else:
@@ -303,3 +286,8 @@ def conjunct_formulas(f1, f2):
         return Conjunction([f1] + list(f2.formulas))
     else:
         return Conjunction([f1, f2])
+
+
+def is_ground_predicate(predicate):
+    """Whether all the predicate's terms are all constant."""
+    return all(isinstance(arg, Constant) for arg in predicate.args)

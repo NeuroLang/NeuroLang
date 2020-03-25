@@ -2,7 +2,7 @@ from operator import eq
 
 from ...expression_walker import ExpressionBasicEvaluator
 from ...expressions import Constant, ExpressionBlock, Symbol
-from ...logic import ExistentialPredicate, Implication, Negation
+from ...logic import ExistentialPredicate, Implication, Negation, Conjunction
 from .. import DatalogProgram, Fact
 from ..expression_processing import (
     TranslateToDatalogSemantics,
@@ -13,6 +13,8 @@ from ..expression_processing import (
     is_ground_predicate,
     extract_logic_free_variables,
     extract_logic_predicates,
+    conjunct_if_needed,
+    conjunct_formulas,
 )
 
 S_ = Symbol
@@ -255,3 +257,26 @@ def test_is_ground_predicate():
     a = C_('a')
     assert not is_ground_predicate(P(x))
     assert is_ground_predicate(P(a))
+
+
+def test_conjunct_if_needed():
+    P = S_('P')
+    Q = S_('Q')
+    x = S_('x')
+    predicates = [P(x)]
+    assert conjunct_if_needed(predicates) == P(x)
+    predicates = [P(x), Q(x)]
+    assert conjunct_if_needed(predicates) == Conjunction(predicates)
+
+
+def test_conjunct_formulas():
+    P = S_('P')
+    Q = S_('Q')
+    x = S_('x')
+    y = S_('y')
+    f1 = Conjunction([P(x), Q(x, x)])
+    f2 = Conjunction([Q(x, y), Q(y, y)])
+    assert conjunct_formulas(f1, f2) == Conjunction([
+        P(x), Q(x, x), Q(x, y), Q(y, y)
+    ])
+    assert conjunct_formulas(P(x), Q(x)) == Conjunction([P(x), Q(x)])

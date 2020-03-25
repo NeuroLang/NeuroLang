@@ -110,6 +110,16 @@ class Difference(RelationalAlgebraOperation):
 
 class NameColumns(RelationalAlgebraOperation):
     def __init__(self, relation, column_names):
+        if any(
+            not (
+                isinstance(col_name, Constant) and
+                isinstance(col_name.value, ColumnStr)
+            )
+            for col_name in column_names
+        ):
+            raise NeuroLangException(
+                "All column names must be Constant[ColumnStr]"
+            )
         self.relation = relation
         self.column_names = column_names
 
