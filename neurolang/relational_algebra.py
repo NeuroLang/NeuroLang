@@ -14,11 +14,11 @@ class Column:
 
 
 class ColumnInt(int, Column):
-    pass
+    """Refer to a relational algebra set's column by its index."""
 
 
 class ColumnStr(str, Column):
-    pass
+    """Refer to a named relational algebra set's column by its name."""
 
 
 C_ = Constant
@@ -109,16 +109,29 @@ class Difference(RelationalAlgebraOperation):
 
 
 class NameColumns(RelationalAlgebraOperation):
+    """
+    Give names to the columns of a relational algebra set.
+
+    All columns must be named at once. Each column name must either be a
+    `Constant[ColumnStr]` or a `Symbol[ColumnStr]` pointing to a symbolic
+    column name resolved when the expression is compiled.
+
+    """
     def __init__(self, relation, column_names):
         if any(
             not (
-                isinstance(col_name, Constant) and
-                isinstance(col_name.value, ColumnStr)
+                isinstance(col_name, Constant)
+                and isinstance(col_name.value, ColumnStr)
+            )
+            and not (
+                isinstance(col_name, Symbol)
+                and type(col_name).type is ColumnStr
             )
             for col_name in column_names
         ):
             raise NeuroLangException(
-                "All column names must be Constant[ColumnStr]"
+                "All column names must either be instances of "
+                "Constant[ColumnStr] or Symbol[ColumnStr]"
             )
         self.relation = relation
         self.column_names = column_names
@@ -236,16 +249,10 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
     def ra_name_columns(self, name_columns):
         relation = self.walk(name_columns.relation)
         relation_set = relation.value
-        column_names = []
-        for col in name_columns.column_names:
-            if isinstance(col, Symbol):
-                column_names.append(col.name)
-            elif isinstance(col, Constant):
-                column_names.append(col.value)
-            else:
-                raise NeuroLangException(
-                    "Column name must be a Constant or Symbol"
-                )
+        column_names = tuple(
+            self.walk(column_name).value
+            for column_name in name_columns.column_names
+        )
         new_set = NamedRelationalAlgebraFrozenSet(column_names, relation_set)
         return self._build_relation_constant(new_set)
 

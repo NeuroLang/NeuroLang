@@ -1,10 +1,11 @@
 from typing import AbstractSet, Tuple
 
-from ..expressions import Constant
+from ..expressions import Constant, Symbol
 from ..datalog.basic_representation import WrappedRelationalAlgebraSet
 from ..relational_algebra import (ColumnInt, ColumnStr, EquiJoin, NameColumns,
                                   NaturalJoin, Product, Projection,
                                   RelationalAlgebraOptimiser,
+                                  RelationalAlgebraSet,
                                   RelationalAlgebraSolver, Selection, eq_)
 from ..utils import RelationalAlgebraFrozenSet, NamedRelationalAlgebraFrozenSet
 
@@ -247,7 +248,7 @@ def test_push_and_infer_equijoins():
     assert res == theoretical_res
 
 
-def test_named_ra_projection():
+def test_named_columns_projection():
     s = NamedRelationalAlgebraFrozenSet(
         columns=("x", "y"), iterable=[("c", "g"), ("b", "h"), ("a", "a")]
     )
@@ -265,7 +266,7 @@ def test_named_ra_projection():
     )
 
 
-def test_name_ra_set_after_projection():
+def test_name_columns_after_projection():
     r = Constant[AbstractSet](
         RelationalAlgebraFrozenSet([(56, "bonjour"), (42, "second"),])
     )
@@ -279,3 +280,18 @@ def test_name_ra_set_after_projection():
     assert result == expected
     for tuple_result, tuple_expected in zip(result, expected):
         assert tuple_result == tuple_expected
+
+
+def test_name_columns_symbolic_column_name():
+    relation = Constant[AbstractSet](
+        RelationalAlgebraSet([("hello", "world"), ("foo", "bar"),])
+    )
+    symbol_table = {
+        Symbol("my_column_name_symbol"): Constant[ColumnStr](
+            ColumnStr("a_column_name")
+        )
+    }
+    solver = RelationalAlgebraSolver(symbol_table)
+    assert solver.walk(Constant[ColumnStr](ColumnStr("test"))) == Constant[
+        ColumnStr
+    ](ColumnStr("test"))
