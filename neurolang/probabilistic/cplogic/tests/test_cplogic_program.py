@@ -1,17 +1,13 @@
 from typing import Mapping, AbstractSet
 
-import numpy as np
 import pytest
 
 from ....datalog.expressions import Fact
 from ....logic import Union, Conjunction, Implication, ExistentialPredicate
 from ....exceptions import NeuroLangException
 from ....expressions import Constant, ExpressionBlock, Symbol
-from ....utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
-from ...ppdl import DeltaTerm
-from ...expressions import ProbabilisticPredicate, Grounding
+from ...expressions import ProbabilisticPredicate
 from ..program import CPLogicProgram
-from ..from_ppdl import PPDLToCPLogicTranslator
 
 P = Symbol("P")
 Q = Symbol("Q")

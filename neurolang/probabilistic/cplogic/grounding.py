@@ -127,15 +127,12 @@ def build_grounding(pd_program, dl_instance):
         st_item = pd_program.symbol_table[pred_symb]
         if pred_symb in pd_program.pfact_pred_symbs:
             if isinstance(st_item, Constant[AbstractSet]):
-                probfact_groundings.append(
-                    build_pfact_grounding_from_set(pred_symb, st_item)
-                )
+                grounding = build_pfact_grounding_from_set(pred_symb, st_item)
             else:
-                probfact_groundings.append(
-                    build_rule_grounding(
-                        pred_symb, st_item, dl_instance[pred_symb]
-                    )
+                grounding = build_rule_grounding(
+                    pred_symb, st_item, dl_instance[pred_symb]
                 )
+            probfact_groundings.append(grounding)
         elif pred_symb in pd_program.pchoice_pred_symbs:
             probchoice_groundings.append(
                 build_pchoice_grounding(pred_symb, st_item)

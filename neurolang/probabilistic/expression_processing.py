@@ -130,10 +130,6 @@ def const_or_symb_as_python_type(exp):
 
 def build_pfact_set(pred_symb, pfacts):
     some_pfact = next(iter(pfacts))
-    cols = [ColumnStr(Symbol.fresh().name)] + [
-        ColumnStr(arg.name) if isinstance(arg, Symbol) else Symbol.fresh().name
-        for arg in some_pfact.consequent.body.args
-    ]
     iterable = [
         (const_or_symb_as_python_type(pf.consequent.probability),)
         + tuple(
