@@ -10,7 +10,7 @@ from ..region_solver import Region
 from ..regions import (ExplicitVBR, ImplicitVBR, SphericalVolume,
                        take_principal_regions)
 from ..type_system import Unknown, is_leq_informative
-from .neurosynth_utils import NeuroSynthHandler
+from .neurosynth_utils import NeuroSynthHandler, StudyID
 from .query_resolution_expressions import (All, Exists, Expression, Query,
                                            Symbol)
 
@@ -281,6 +281,14 @@ class NeuroSynthMixin:
             type_=Tuple[ExplicitVBR],
             name=name
         )
+
+    def load_neurosynth_term_study_ids(
+        self, term: str, name: str = None, q: float = 0.01
+    ):
+        if not name:
+            name = str(uuid1())
+        study_set = self.neurosynth_db.ns_study_id_set_from_term(term, q)
+        return self.add_tuple_set(study_set, type_=Tuple[StudyID], name=name)
 
 
 class QueryBuilderFirstOrder(RegionMixin, NeuroSynthMixin, QueryBuilderBase):

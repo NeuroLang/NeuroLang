@@ -7,6 +7,8 @@ try:
 except ModuleNotFoundError:
     raise ImportError("Neurosynth not installed in the system")
 
+class StudyID(str):
+    pass
 
 class NeuroSynthHandler(object):
     def __init__(self, ns_dataset=None):
@@ -33,6 +35,15 @@ class NeuroSynthHandler(object):
         dim = self._dataset.masker.dims
         region_set = region_set_from_masked_data(masked_data, affine, dim)
         return region_set
+
+    def ns_study_id_set_from_term(self, terms, frequency_threshold=0.05):
+        if self._dataset is None:
+            dataset = self.ns_load_dataset()
+            self._dataset = dataset
+        study_ids = self._dataset.get_studies(
+            features=terms, frequency_threshold=frequency_threshold
+        )
+        return set(StudyID(study_id) for study_id in study_ids)
 
     def ns_load_dataset(self):
 
