@@ -1,5 +1,5 @@
 from functools import reduce
-from operator import add
+import operator
 from . import (
     Symbol,
     Constant,
@@ -12,6 +12,7 @@ from . import (
     UniversalPredicate,
     ExistentialPredicate,
     LogicOperator,
+    Quantifier,
 )
 from ..exceptions import NeuroLangException
 from ..expression_walker import (
@@ -196,8 +197,8 @@ class ConvertSRNFToHornClause(PatternWalker):
     def match_conjunction(self, exp):
         bodies, remainders = zip(*map(self.walk, exp.formulas))
         return (
-            reduce(add, bodies),
-            reduce(add, remainders),
+            reduce(operator.add, bodies),
+            reduce(operator.add, remainders),
         )
 
     @add_match(Disjunction)
@@ -232,3 +233,30 @@ class ConvertSRNFToHornClause(PatternWalker):
         fv = extract_logic_free_variables(exp)
         S = Symbol.fresh()
         return S(*tuple(fv))
+
+
+def translate_horn_clauses_to_datalog(horn_clauses):
+    return TranslateHornClausesToDatalog().walk(horn_clauses)
+
+
+class TranslateHornClausesToDatalog(PatternWalker):
+    @add_match(Union)
+    def match_union(self, exp):
+        from ..expressions import ExpressionBlock
+
+        return ExpressionBlock(self.walk(exp.functions))
+
+    @add_match(Quantifier)
+    def match_quantifier(self, exp):
+        return self.walk(exp.body)
+
+    @add_match(HornClause, lambda e: not e.body)
+    def match_horn_fact(self, exp):
+        from ..datalog.expressions import Fact
+
+        return Fact(exp.head)
+
+    @add_match(HornClause, lambda e: e.body)
+    def match_horn_rule(self, exp):
+        b = reduce(operator.and_, exp.body)
+        return Implication(exp.head, b)
