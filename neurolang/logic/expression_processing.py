@@ -201,7 +201,7 @@ class ExtractFreeVariablesWalker(WalkLogicProgramAggregatingSets):
     @add_match(Implication)
     def extract_variables_s(self, expression):
         return (
-            self.walk(expression.antecedent) -
+            self.walk(expression.antecedent) |
             self.walk(expression.consequent)
         )
 

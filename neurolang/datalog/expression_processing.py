@@ -114,6 +114,15 @@ def all_body_preds_in_set(implication, predicate_set):
     return all(not isinstance(e, Symbol) or e in predicate_set for e in preds)
 
 
+class ExtractFreeVariablesWalker(elp.ExtractFreeVariablesWalker):
+    @elp.add_match(elp.Implication)
+    def extract_variables_s(self, expression):
+        return (
+            self.walk(expression.antecedent) -
+            self.walk(expression.consequent)
+        )
+
+
 def extract_logic_free_variables(expression):
     """Extract variables from expression assuming it's in datalog format.
 
@@ -129,7 +138,8 @@ def extract_logic_free_variables(expression):
     """
     translator = TranslateToDatalogSemantics()
     datalog_code = translator.walk(expression)
-    return elp.extract_logic_free_variables(datalog_code)
+    efvw = ExtractFreeVariablesWalker()
+    return efvw.walk(datalog_code)
 
 
 def extract_logic_predicates(expression):
