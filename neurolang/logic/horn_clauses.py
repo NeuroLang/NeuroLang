@@ -244,7 +244,7 @@ class TranslateHornClausesToDatalog(PatternWalker):
     def match_union(self, exp):
         from ..expressions import ExpressionBlock
 
-        return ExpressionBlock(self.walk(exp.functions))
+        return ExpressionBlock(self.walk(exp.formulas))
 
     @add_match(Quantifier)
     def match_quantifier(self, exp):
@@ -260,3 +260,8 @@ class TranslateHornClausesToDatalog(PatternWalker):
     def match_horn_rule(self, exp):
         b = reduce(operator.and_, exp.body)
         return Implication(exp.head, b)
+
+    @add_match(Negation)
+    def match_negation(self, exp):
+        return ~exp.formula
+
