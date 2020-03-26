@@ -26,31 +26,28 @@ from ..expressions import (
 from .program import CPLogicProgram
 
 
+class Datalog(TranslateToLogic, DatalogProgram, ExpressionBasicEvaluator):
+    pass
+
+
 def probdatalog_to_datalog(pd_program):
     new_symbol_table = TypedSymbolTable()
+    solver = RelationalAlgebraSolver()
     for pred_symb in pd_program.symbol_table:
         value = pd_program.symbol_table[pred_symb]
         if (
             pred_symb
             in pd_program.pfact_pred_symbs | pd_program.pchoice_pred_symbs
         ):
-            if not isinstance(value, Constant[AbstractSet]):
-                raise NeuroLangException(
-                    "Expected grounded probabilistic facts"
-                )
             columns = tuple(
                 Constant[ColumnInt](ColumnInt(i))
                 for i in list(range(value.value.arity))[1:]
             )
-            new_symbol_table[pred_symb] = RelationalAlgebraSolver().walk(
+            new_symbol_table[pred_symb] = solver.walk(
                 Projection(value, columns)
             )
         else:
             new_symbol_table[pred_symb] = value
-
-    class Datalog(TranslateToLogic, DatalogProgram, ExpressionBasicEvaluator):
-        pass
-
     return Datalog(new_symbol_table)
 
 

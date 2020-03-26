@@ -16,7 +16,6 @@ from ..logic.expression_processing import (
     extract_logic_predicates,
     extract_logic_free_variables,
 )
-from ..relational_algebra import ColumnStr
 from ..datalog import WrappedRelationalAlgebraSet
 from .expressions import ProbabilisticPredicate, DeltaTerm
 
@@ -129,7 +128,6 @@ def const_or_symb_as_python_type(exp):
 
 
 def build_pfact_set(pred_symb, pfacts):
-    some_pfact = next(iter(pfacts))
     iterable = [
         (const_or_symb_as_python_type(pf.consequent.probability),)
         + tuple(
