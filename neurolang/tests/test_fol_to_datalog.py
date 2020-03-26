@@ -33,6 +33,7 @@ from ..logic.horn_clauses import (
     range_restricted_variables,
     is_safe_range,
     NeuroLangTranslateToHornClauseException,
+    translate_horn_clauses_to_datalog,
 )
 
 
@@ -830,3 +831,50 @@ def test_convert_srnf2horn_fails():
     exp = UniversalPredicate(Y, P(Y))
     with raises(NeuroLangTranslateToHornClauseException):
         convert_srnf_to_horn_clauses(Ans(X), exp)
+
+
+def fol_query(head, exp):
+    exp = convert_to_srnf(exp)
+    horn_clauses = convert_srnf_to_horn_clauses(head, exp)
+    program = translate_horn_clauses_to_datalog(horn_clauses)
+    return program
+
+
+from ..datalog.negation import DatalogProgramNegation
+from ..expression_walker import ExpressionBasicEvaluator
+from ..datalog.expressions import TranslateToLogic
+
+
+class Datalog(
+    TranslateToLogic,
+    DatalogProgramNegation,
+    ExpressionBasicEvaluator
+):
+    def function_gt(self, x: int, y: int) -> bool:
+        return x > y
+
+from ..datalog.chase import Chase as Chase_
+from ..datalog.chase.negation import NegativeFactConstraints
+
+class Chase(NegativeFactConstraints, Chase_):
+    pass
+
+def test_safe_range_queries_in_datalog_solver():
+    x = Symbol("x")
+    G = Symbol("G")
+    T = Symbol("T")
+    V = Symbol("V")
+
+    program = fol_query(G(x), Conjunction((V(x), Negation(T(x)))))
+
+    dl = Datalog()
+    dl.walk(program)
+    dl.add_extensional_predicate_from_tuples(V, {(1,), (2,), (3,)})
+    dl.add_extensional_predicate_from_tuples(T, {(1,), (4,)})
+
+    dc = Chase(dl)
+    solution_instance = dc.build_chase_solution()
+
+    assert solution_instance["V"].value == {1, 2, 3}
+    assert solution_instance["T"].value == {1, 4}
+    assert solution_instance["G"].value == {2, 3}
