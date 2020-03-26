@@ -153,22 +153,21 @@ def build_grounding(pd_program, dl_instance):
     )
 
 
+class Chase(ChaseNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
+    pass
+
+
 def ground_probdatalog_program(
-    pd_code, probfact_sets=None, extensional_sets=None, probchoice_sets=None,
+    pd_code, **sets,
 ):
     pd_program = CPLogicProgram()
     pd_program.walk(pd_code)
-    if probfact_sets is not None:
-        for symb, probabilistic_set in probfact_sets.items():
-            pd_program.add_probfacts_from_tuples(symb, probabilistic_set)
-    if extensional_sets is not None:
-        for symb, extensional_set in extensional_sets.items():
-            pd_program.add_extensional_predicate_from_tuples(
-                symb, extensional_set
-            )
-    if probchoice_sets is not None:
-        for symb, probchoice_set in probchoice_sets.items():
-            pd_program.add_probchoice_from_tuples(symb, probchoice_set)
+    for prefix in ["probfact", "extensional_predicate", "probchoice"]:
+        if f"{prefix}_sets" not in sets:
+            continue
+        add_fun = getattr(pd_program, f"add_{prefix}_from_tuples")
+        for symb, the_set in sets[f"{prefix}_sets"]:
+            add_fun(symb, the_set)
     for disjunction in pd_program.intensional_database().values():
         if len(disjunction.formulas) > 1:
             raise NeuroLangException(
@@ -176,10 +175,6 @@ def ground_probdatalog_program(
                 "symbol are not currently supported"
             )
     dl_program = probdatalog_to_datalog(pd_program)
-
-    class Chase(ChaseNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
-        pass
-
     chase = Chase(dl_program)
     dl_instance = chase.build_chase_solution()
     return build_grounding(pd_program, dl_instance)
