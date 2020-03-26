@@ -134,17 +134,16 @@ def build_grounding(pd_program, dl_instance):
             probchoice_groundings.append(
                 build_pchoice_grounding(pred_symb, st_item)
             )
+        elif isinstance(st_item, Constant[AbstractSet]):
+            extensional_groundings.append(
+                build_extensional_grounding(pred_symb, st_item)
+            )
         else:
-            if isinstance(st_item, Constant[AbstractSet]):
-                extensional_groundings.append(
-                    build_extensional_grounding(pred_symb, st_item)
+            intensional_groundings.append(
+                build_rule_grounding(
+                    pred_symb, st_item, dl_instance[pred_symb]
                 )
-            else:
-                intensional_groundings.append(
-                    build_rule_grounding(
-                        pred_symb, st_item, dl_instance[pred_symb]
-                    )
-                )
+            )
     return ExpressionBlock(
         probfact_groundings
         + probchoice_groundings
