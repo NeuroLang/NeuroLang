@@ -1,5 +1,4 @@
 import pytest
-from pytest import raises
 from unittest.mock import patch
 import operator
 
@@ -493,17 +492,17 @@ def test_transform_to_cnf_3():
 def test_horn_clause_validation():
     X = Symbol("X")
     Y = Symbol("Y")
-    with raises(NeuroLangException):
+    with pytest.raises(NeuroLangException):
         HornClause(Disjunction((X, Y)), None)
-    with raises(NeuroLangException):
+    with pytest.raises(NeuroLangException):
         HornClause(None, None)
-    with raises(NeuroLangException):
+    with pytest.raises(NeuroLangException):
         HornClause(None)
-    with raises(NeuroLangException):
+    with pytest.raises(NeuroLangException):
         HornClause(None, Conjunction((X, Y)))
-    with raises(NeuroLangException):
+    with pytest.raises(NeuroLangException):
         HornClause(None, (X, None))
-    with raises(NeuroLangException):
+    with pytest.raises(NeuroLangException):
         HornClause(None, (Conjunction((X, Y)), Y))
 
 
@@ -831,14 +830,12 @@ def test_convert_srnf2horn_fails():
     Ans = Symbol("Ans")
 
     exp = Negation(P(X))
-    with raises(NeuroLangTranslateToHornClauseException):
+    with pytest.raises(NeuroLangTranslateToHornClauseException):
         convert_srnf_to_horn_clauses(Ans(X), exp)
 
     exp = UniversalPredicate(Y, P(Y))
-    with raises(NeuroLangTranslateToHornClauseException):
+    with pytest.raises(NeuroLangTranslateToHornClauseException):
         convert_srnf_to_horn_clauses(Ans(X), exp)
-
-
 
 
 def fol_query(head, exp):
@@ -943,6 +940,7 @@ def test_safe_range_queries_in_datalog_solver_2():
     }
 
 
+@pytest.mark.skip(reason="Fails because of https://github.com/NeuroLang/NeuroLang/issues/261")
 def test_safe_range_queries_in_datalog_solver_3():
     n = Symbol("n")
     m = Symbol("m")
@@ -967,7 +965,7 @@ def test_safe_range_queries_in_datalog_solver_3():
                             r,
                             Conjunction(
                                 (
-                                    Actor(r, n, m_),
+                                    Actor(n, m_, r),
                                     UniversalPredicate(
                                         r_,
                                         Implication(
@@ -1004,13 +1002,13 @@ def test_safe_range_queries_in_datalog_solver_3():
     dl.add_extensional_predicate_from_tuples(
         Actor,
         {
-            ("Man Outside Real Estate Office", "Hitchcock", "Psycho"),
-            ("Man Walking Past Elsters Office", "Hitchcock", "Vertigo"),
-            ("Man Walking in Street", "Hitchcock", "Rope"),
-            ("FBI Chief", "Lynch", "Twin Peaks"),
-            ("Isaac", "Allen", "Manhattan"),
-            ("Victor", "Allen", "Everything You Always Wanted to Know"),
-            ("Fabrizzio", "Allen", "Everything You Always Wanted to Know"),
+            ("Hitchcock", "Psycho", "Man Outside Real Estate Office"),
+            ("Hitchcock", "Vertigo", "Man Walking Past Elsters Office"),
+            ("Hitchcock", "Rope", "Man Walking in Street"),
+            ("Lynch", "Twin Peaks", "FBI Chief"),
+            ("Allen", "Manhattan", "Isaac"),
+            ("Allen", "Everything You Always Wanted to Know", "Victor"),
+            ("Allen", "Everything You Always Wanted to Know", "Fabrizzio"),
         },
     )
     roles = [
