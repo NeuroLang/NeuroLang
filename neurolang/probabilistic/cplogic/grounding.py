@@ -50,9 +50,7 @@ def cplogic_to_datalog(cpl_program):
                 relation = remove_probability_column(
                     cpl_program.symbol_table[pred_symb]
                 )
-            dl.add_extensional_predicate_from_tuples(
-                pred_symb, list(relation.value)
-            )
+            dl.add_extensional_predicate_from_tuples(pred_symb, relation.value)
     return dl
 
 

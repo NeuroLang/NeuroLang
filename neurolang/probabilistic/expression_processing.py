@@ -16,7 +16,7 @@ from .expressions import ProbabilisticPredicate
 
 
 def is_probabilistic_fact(expression):
-    """
+    r"""
     Whether the expression is a probabilistic fact.
 
     Notes
