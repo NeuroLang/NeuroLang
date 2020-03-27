@@ -7,8 +7,15 @@ from ....exceptions import NeuroLangException
 from ....expressions import Symbol, Constant, ExpressionBlock
 from ....logic import Implication, Conjunction
 from ....datalog import Fact
-from ....utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
-from ...expressions import ProbabilisticPredicate, Grounding
+from ....utils.relational_algebra_set import (
+    RelationalAlgebraFrozenSet,
+    NamedRelationalAlgebraFrozenSet,
+)
+from ...expressions import (
+    ProbabilisticPredicate,
+    Grounding,
+    ProbabilisticChoice,
+)
 from ...expression_processing import (
     is_probabilistic_fact,
     concatenate_to_expression_block,
@@ -94,6 +101,14 @@ def test_cplogic_grounding_general():
         and grounding.expression.consequent.body.functor == P
     )
     assert set(pfact_grounding.relation.value) == {(0.2, "a"), (0.6, "b")}
+
+
+def test_cplogic_grounding_with_pchoice():
+    probchoice_sets = {P: [(0.5, "a"), (0.25, "b"), (0.25, "c")]}
+    grounded = ground_cplogic_program(
+        ExpressionBlock(tuple()), probchoice_sets=probchoice_sets,
+    )
+    assert isinstance(grounded.expressions[0].expression, ProbabilisticChoice)
 
 
 def test_unsupported_grounding_program_with_disjunction():

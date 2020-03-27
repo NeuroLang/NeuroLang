@@ -110,18 +110,3 @@ def concatenate_to_expression_block(block, to_add):
             raise NeuroLangException("Expected Expression")
         return ExpressionBlock(block.expressions + tuple(to_add))
     raise NeuroLangException("Expected ExpressionBlock or Expression iterable")
-
-
-def get_antecedent_constant_indexes(rule):
-    """Get indexes of constants occurring in antecedent predicates."""
-    constant_indexes = dict()
-    for antecedent_atom in extract_logic_predicates(rule.antecedent):
-        predicate = antecedent_atom.functor.name
-        indexes = {
-            i
-            for i, arg in enumerate(antecedent_atom.args)
-            if isinstance(arg, Constant)
-        }
-        if len(indexes) > 0:
-            constant_indexes[predicate] = indexes
-    return constant_indexes

@@ -151,7 +151,7 @@ def ground_cplogic_program(cpl_code, **sets):
         if f"{prefix}_sets" not in sets:
             continue
         add_fun = getattr(cpl_program, f"add_{prefix}_from_tuples")
-        for symb, the_set in sets[f"{prefix}_sets"]:
+        for symb, the_set in sets[f"{prefix}_sets"].items():
             add_fun(symb, the_set)
     for disjunction in cpl_program.intensional_database().values():
         if len(disjunction.formulas) > 1:
