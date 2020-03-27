@@ -45,6 +45,23 @@ class NeuroSynthHandler(object):
         )
         return set(StudyID(study_id) for study_id in study_ids)
 
+    def ns_study_tfidf_feature_for_terms(self, terms):
+        if self._dataset is None:
+            dataset = self.ns_load_dataset()
+            self._dataset = dataset
+        feature_table = self._dataset.feature_table.data
+        result_set = set()
+        for term in terms:
+            if term not in feature_table.columns:
+                continue
+            result_set |= set(
+                (StudyID(tupl[0]), term, tupl[1])
+                for tupl in feature_table[[term]].itertuples(
+                    index=True, name=None
+                )
+            )
+        return result_set
+
     def ns_load_dataset(self):
 
         if resource_exists('neurolang.frontend',

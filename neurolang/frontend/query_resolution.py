@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from typing import AbstractSet, Callable, Tuple
+from typing import AbstractSet, Callable, Tuple, List
 from uuid import uuid1
 
 import numpy as np
@@ -283,12 +283,24 @@ class NeuroSynthMixin:
         )
 
     def load_neurosynth_term_study_ids(
-        self, term: str, name: str = None, q: float = 0.01
+        self, term: str, name: str = None, frequency_threshold: float = 0.05
     ):
         if not name:
             name = str(uuid1())
-        study_set = self.neurosynth_db.ns_study_id_set_from_term(term, q)
+        study_set = self.neurosynth_db.ns_study_id_set_from_term(
+            term, frequency_threshold
+        )
         return self.add_tuple_set(study_set, type_=Tuple[StudyID], name=name)
+
+    def load_neurosynth_study_tfidf_feature_for_terms(
+        self, terms: List[str], name: str = None,
+    ):
+        if not name:
+            name = str(uuid1())
+        result_set = self.neurosynth_db.ns_study_tfidf_feature_for_terms(terms)
+        return self.add_tuple_set(
+            result_set, type_=Tuple[StudyID, str, float], name=name
+        )
 
 
 class QueryBuilderFirstOrder(RegionMixin, NeuroSynthMixin, QueryBuilderBase):

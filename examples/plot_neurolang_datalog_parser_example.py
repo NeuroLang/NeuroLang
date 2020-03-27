@@ -81,10 +81,10 @@ with nl.environment as e:
     nl.execute_nat_datalog_program(q1)
     q1_res = nl.solve_all()["ans"]
 
-    for tupl in q1_res:
-        name = tupl.value[0].value
-        region = tupl.value[1].value
-        plotting.plot_roi(region.spatial_image(), title=name)
+    # for tupl in q1_res:
+        # name = tupl.value[0].value
+        # region = tupl.value[1].value
+        # plotting.plot_roi(region.spatial_image(), title=name)
 
 ########################################################################
 # Query ids of studies related to both terms "default mode" and
@@ -108,5 +108,28 @@ neurosynth_pcc_study_id(study_id)
 with nl.environment as e:
     nl.execute_nat_datalog_program(q2)
     q2_res = nl.solve_all()["ans2"]
+    print("matching study ids")
+    for tupl in q2_res:
+        study_id = tupl.value[0].value
+        print(study_id)
 
-    print(q2_res.describe())
+neurosynth_study_tfidf = nl.load_neurosynth_study_tfidf_feature_for_terms(
+    terms=["default mode", "pcc"], name="neurosynth_study_tfidf",
+)
+
+q3 = "".join("""
+ans3(study_id, term, tfidf)
+:-
+neurosynth_default_mode_study_id(study_id),
+neurosynth_pcc_study_id(study_id),
+neurosynth_study_tfidf(study_id, term, tfidf)
+""".splitlines(keepends=False))
+
+with nl.environment as e:
+    nl.execute_nat_datalog_program(q3)
+    q3_res = nl.solve_all()["ans3"]
+    for tupl in q3_res:
+        study_id = tupl.value[0].value
+        term = tupl.value[1].value
+        tfidf = tupl.value[2].value
+        print(study_id, term, tfidf)
