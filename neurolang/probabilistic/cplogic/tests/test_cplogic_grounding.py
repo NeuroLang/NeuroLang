@@ -9,7 +9,10 @@ from ....logic import Implication, Conjunction
 from ....datalog import Fact
 from ....utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from ...expressions import ProbabilisticPredicate, Grounding
-from ...expression_processing import is_probabilistic_fact
+from ...expression_processing import (
+    is_probabilistic_fact,
+    concatenate_to_expression_block,
+)
 from ..grounding import ground_cplogic_program
 
 P = Symbol("P")
@@ -66,48 +69,31 @@ def test_cplogic_grounding():
             )
 
 
-@pytest.mark.skip()
 def test_cplogic_grounding_general():
-    pfact = Implication(ProbabilisticPredicate(p, P(x)), Constant[bool](True))
+    pfacts = ExpressionBlock(
+        tuple(
+            Implication(
+                ProbabilisticPredicate(prob, P(const)), Constant[bool](True)
+            )
+            for (prob, const) in {
+                (Constant[float](0.2), a),
+                (Constant[float](0.6), b),
+            }
+        )
+    )
+    facts = [Fact(Q(a))]
     rule = Implication(Z(x), Conjunction([P(x), Q(x)]))
-    code = ExpressionBlock([pfact, rule, Fact(Q(a)), Fact(Q(b))])
+    code = concatenate_to_expression_block(pfacts, [rule])
+    code = concatenate_to_expression_block(pfacts, facts)
     grounded = ground_cplogic_program(code)
-    expected = Grounding(
-        pfact,
-        Constant[typing.AbstractSet](
-            NamedRelationalAlgebraFrozenSet(iterable=["a", "b"], columns=["x"])
-        ),
+    pfact_grounding = next(
+        grounding
+        for grounding in grounded.expressions
+        if isinstance(grounding.expression, Implication)
+        and isinstance(grounding.expression.consequent, ProbabilisticPredicate)
+        and grounding.expression.consequent.body.functor == P
     )
-    assert expected in grounded.expressions
-    expected = Grounding(
-        rule,
-        Constant[typing.AbstractSet](
-            NamedRelationalAlgebraFrozenSet(iterable=["a", "b"], columns=["x"])
-        ),
-    )
-    assert expected in grounded.expressions
-
-    code = ExpressionBlock(
-        [Fact(P(a, b)), Fact(P(b, b)), Fact(Q(a)), Fact(Q(b))]
-    )
-    grounded = ground_cplogic_program(code)
-    assert len(grounded.expressions) == 2
-    for grounding in grounded.expressions:
-        if grounding.expression.consequent.functor == P:
-            assert numpy.all(
-                numpy.vstack(list(grounding.relation.value.itervalues()))
-                == numpy.vstack(
-                    [
-                        numpy.array(["a", "b"], dtype=str),
-                        numpy.array(["b", "b"], dtype=str),
-                    ]
-                )
-            )
-        elif grounding.expression.consequent.functor == Q:
-            assert numpy.all(
-                numpy.array(list(grounding.relation.value.itervalues()))
-                == numpy.array([["a"], ["b"]], dtype=str)
-            )
+    assert set(pfact_grounding.relation.value) == {(0.2, "a"), (0.6, "b")}
 
 
 def test_unsupported_grounding_program_with_disjunction():

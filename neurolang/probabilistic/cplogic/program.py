@@ -29,8 +29,8 @@ class CPLogicProgram(DatalogProgram, ExpressionWalker):
     probabilsitic fact and the value is the probabilistic fact itself.
     """
 
-    pfact_pred_symbs_symb = Symbol("__pfact_pred_symbs__")
-    pchoice_pred_symbs_symb = Symbol("__pchoice_pred_symbs__")
+    pfact_pred_symb_set_symb = Symbol("__pfact_pred_symb_set_symb__")
+    pchoice_pred_symb_set_symb = Symbol("__pchoice_pred_symb_set_symb__")
 
     @property
     def predicate_symbols(self):
@@ -51,9 +51,9 @@ class CPLogicProgram(DatalogProgram, ExpressionWalker):
 
     def _get_pred_symbs(self, pfact_or_pchoice):
         if pfact_or_pchoice == "pfact":
-            symb = self.pfact_pred_symbs_symb
+            symb = self.pfact_pred_symb_set_symb
         else:
-            symb = self.pchoice_pred_symbs_symb
+            symb = self.pchoice_pred_symb_set_symb
         return self.symbol_table.get(
             symb, Constant[typing.AbstractSet](set())
         ).value
@@ -71,7 +71,7 @@ class CPLogicProgram(DatalogProgram, ExpressionWalker):
         return ret
 
     def add_probfacts_from_tuples(self, symbol, iterable, type_=Unknown):
-        self._register_probabilistic_pred_symb(symbol, "pfact")
+        self._register_prob_pred_symb_set_symb(symbol, "pfact")
         if type_ is Unknown:
             type_, iterable = self.infer_iterable_type(iterable)
         self._check_iterable_prob_type(type_)
@@ -88,7 +88,7 @@ class CPLogicProgram(DatalogProgram, ExpressionWalker):
         Add a probabilistic choice to the symbol table.
 
         """
-        self._register_probabilistic_pred_symb(symbol, "pchoice")
+        self._register_prob_pred_symb_set_symb(symbol, "pchoice")
         if type_ is Unknown:
             type_, iterable = self.infer_iterable_type(iterable)
         self._check_iterable_prob_type(type_)
@@ -120,7 +120,7 @@ class CPLogicProgram(DatalogProgram, ExpressionWalker):
     def program_code(self, code):
         probfacts, other_expressions = group_probfacts_by_pred_symb(code)
         for pred_symb, pfacts in probfacts.items():
-            self._register_probabilistic_pred_symb(pred_symb, "pfact")
+            self._register_prob_pred_symb_set_symb(pred_symb, "pfact")
             if pred_symb in self.symbol_table:
                 raise NeuroLangException(
                     "Probabilistic fact predicate symbol already seen"
@@ -133,11 +133,11 @@ class CPLogicProgram(DatalogProgram, ExpressionWalker):
                 self.walk(list(pfacts)[0])
         super().process_expression(ExpressionBlock(other_expressions))
 
-    def _register_probabilistic_pred_symb(self, pred_symb, pfact_or_pchoice):
+    def _register_prob_pred_symb_set_symb(self, pred_symb, pfact_or_pchoice):
         if pfact_or_pchoice == "pfact":
-            symb = self.pfact_pred_symbs_symb
+            symb = self.pfact_pred_symb_set_symb
         else:
-            symb = self.pchoice_pred_symbs_symb
+            symb = self.pchoice_pred_symb_set_symb
         if symb.name not in self.protected_keywords:
             self.protected_keywords.add(symb.name)
         if symb not in self.symbol_table:

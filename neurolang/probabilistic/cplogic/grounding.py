@@ -65,15 +65,6 @@ def build_extensional_grounding(pred_symb, tuple_set):
 
 
 def build_rule_grounding(pred_symb, st_item, tuple_set):
-    if not isinstance(st_item, Union):
-        raise ValueError(
-            "Expected the rule to be representend as a Union "
-            "in the symbol table"
-        )
-    if len(st_item.formulas) != 1:
-        raise NeuroLangException(
-            "Multiple rules with the same head predicate are not supported"
-        )
     rule = st_item.formulas[0]
     cols = tuple(arg.name for arg in rule.consequent.args)
     return Grounding(
@@ -125,12 +116,7 @@ def build_grounding(cpl_program, dl_instance):
     for pred_symb in cpl_program.predicate_symbols:
         st_item = cpl_program.symbol_table[pred_symb]
         if pred_symb in cpl_program.pfact_pred_symbs:
-            if isinstance(st_item, Constant[AbstractSet]):
-                grounding = build_pfact_grounding_from_set(pred_symb, st_item)
-            else:
-                grounding = build_rule_grounding(
-                    pred_symb, st_item, dl_instance[pred_symb]
-                )
+            grounding = build_pfact_grounding_from_set(pred_symb, st_item)
             probfact_groundings.append(grounding)
         elif pred_symb in cpl_program.pchoice_pred_symbs:
             probchoice_groundings.append(
