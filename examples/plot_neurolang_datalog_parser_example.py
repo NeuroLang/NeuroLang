@@ -81,6 +81,11 @@ with nl.environment as e:
     nl.execute_nat_datalog_program(q1)
     q1_res = nl.solve_all()["ans"]
 
+    for tupl in q1_res:
+        name = tupl.value[0].value
+        region = tupl.value[1].value
+        plotting.plot_roi(region.spatial_image(), title=name)
+
 ########################################################################
 # Query ids of studies related to both terms "default mode" and
 # "pcc" in the Neurosynth database
@@ -104,7 +109,4 @@ with nl.environment as e:
     nl.execute_nat_datalog_program(q2)
     q2_res = nl.solve_all()["ans2"]
 
-for tupl in q1_res:
-    name = tupl.value[0].value
-    region = tupl.value[1].value
-    plotting.plot_roi(region.spatial_image(), title=name)
+    print(q2_res.describe())
