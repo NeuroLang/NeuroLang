@@ -1,3 +1,4 @@
+import itertools
 from typing import AbstractSet
 
 from ...exceptions import NeuroLangException
@@ -109,35 +110,33 @@ def build_pfact_grounding_from_set(pred_symb, relation):
 
 
 def build_grounding(cpl_program, dl_instance):
-    extensional_groundings = []
-    probfact_groundings = []
-    probchoice_groundings = []
-    intensional_groundings = []
+    groundings = {
+        "extensional": [],
+        "intensional": [],
+        "probfact": [],
+        "probchoice": [],
+    }
     for pred_symb in cpl_program.predicate_symbols:
         st_item = cpl_program.symbol_table[pred_symb]
         if pred_symb in cpl_program.pfact_pred_symbs:
-            grounding = build_pfact_grounding_from_set(pred_symb, st_item)
-            probfact_groundings.append(grounding)
+            groundings["probfact"].append(
+                build_pfact_grounding_from_set(pred_symb, st_item)
+            )
         elif pred_symb in cpl_program.pchoice_pred_symbs:
-            probchoice_groundings.append(
+            groundings["probchoice"].append(
                 build_pchoice_grounding(pred_symb, st_item)
             )
         elif isinstance(st_item, Constant[AbstractSet]):
-            extensional_groundings.append(
+            groundings["extensional"].append(
                 build_extensional_grounding(pred_symb, st_item)
             )
         else:
-            intensional_groundings.append(
+            groundings["intensional"].append(
                 build_rule_grounding(
                     pred_symb, st_item, dl_instance[pred_symb]
                 )
             )
-    return ExpressionBlock(
-        probfact_groundings
-        + probchoice_groundings
-        + extensional_groundings
-        + intensional_groundings
-    )
+    return ExpressionBlock(itertools.chain(*groundings.values()))
 
 
 class Chase(ChaseNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
