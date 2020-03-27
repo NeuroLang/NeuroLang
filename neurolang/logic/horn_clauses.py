@@ -197,9 +197,16 @@ class ConvertSRNFToHornClause(PatternWalker):
     def match_conjunction(self, exp):
         bodies, remainders = zip(*map(self.walk, exp.formulas))
         return (
-            reduce(operator.add, bodies),
+            tuple(
+                sorted(
+                    reduce(operator.add, bodies), key=self._negation_order
+                )
+            ),
             reduce(operator.add, remainders),
         )
+
+    def _negation_order(self, exp):
+        return 1 if isinstance(exp, Negation) else 0
 
     @add_match(Disjunction)
     def match_disjunction(self, exp):
@@ -264,4 +271,3 @@ class TranslateHornClausesToDatalog(PatternWalker):
     @add_match(Negation)
     def match_negation(self, exp):
         return ~exp.formula
-

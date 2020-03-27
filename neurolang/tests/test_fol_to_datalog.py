@@ -1,4 +1,5 @@
 import typing
+import pytest
 from pytest import raises
 from unittest.mock import patch
 
@@ -833,6 +834,13 @@ def test_convert_srnf2horn_fails():
         convert_srnf_to_horn_clauses(Ans(X), exp)
 
 
+from ..datalog.negation import DatalogProgramNegation
+from ..expression_walker import ExpressionBasicEvaluator
+from ..datalog.expressions import TranslateToLogic
+from ..datalog.chase import Chase as Chase_
+from ..datalog.chase.negation import NegativeFactConstraints
+
+
 def fol_query(head, exp):
     exp = convert_to_srnf(exp)
     horn_clauses = convert_srnf_to_horn_clauses(head, exp)
@@ -840,24 +848,16 @@ def fol_query(head, exp):
     return program
 
 
-from ..datalog.negation import DatalogProgramNegation
-from ..expression_walker import ExpressionBasicEvaluator
-from ..datalog.expressions import TranslateToLogic
-
-
 class Datalog(
-    TranslateToLogic,
-    DatalogProgramNegation,
-    ExpressionBasicEvaluator
+    TranslateToLogic, DatalogProgramNegation, ExpressionBasicEvaluator
 ):
     def function_gt(self, x: int, y: int) -> bool:
         return x > y
 
-from ..datalog.chase import Chase as Chase_
-from ..datalog.chase.negation import NegativeFactConstraints
 
 class Chase(NegativeFactConstraints, Chase_):
     pass
+
 
 def test_safe_range_queries_in_datalog_solver():
     x = Symbol("x")
@@ -878,3 +878,105 @@ def test_safe_range_queries_in_datalog_solver():
     assert solution_instance["V"].value == {1, 2, 3}
     assert solution_instance["T"].value == {1, 4}
     assert solution_instance["G"].value == {2, 3}
+
+
+@pytest.mark.skip()
+def test_safe_range_queries_in_datalog_solver_2():
+    n = Symbol("n")
+    m = Symbol("m")
+    m_ = Symbol("m_")
+    r = Symbol("r")
+    r_ = Symbol("r_")
+    Director = Symbol("Director")
+    Actor = Symbol("Actor")
+    Equals = Symbol("Equals")
+    Different = Symbol("Different")
+    Ans = Symbol("Ans")
+
+    # Which directors played exactly one role in each of their movies
+    program = fol_query(
+        Ans(n),
+        Conjunction(
+            (
+                ExistentialPredicate(m, Director(n, m)),
+                UniversalPredicate(
+                    m_,
+                    Implication(
+                        ExistentialPredicate(
+                            r,
+                            Conjunction(
+                                (
+                                    Actor(n, m_, r),
+                                    UniversalPredicate(
+                                        r_,
+                                        # Implication(
+                                        #     Equals(r, r_), Actor(n, m_, r_)
+                                        # ),
+                                        Disjunction((
+                                            Negation(Different(r, r_)),
+                                            Negation(Actor(n, m_, r_))
+                                        ))
+                                    ),
+                                )
+                            ),
+                        ),
+                        Director(n, m_),
+                    ),
+                ),
+            )
+        )
+    )
+
+    dl = Datalog()
+    dl.walk(program)
+    dl.add_extensional_predicate_from_tuples(
+        Director, 
+        {
+            ('Hitchcock', 'Psycho'),
+            ('Hitchcock', 'Vertigo'),
+            ('Hitchcock', 'Rope'),
+            ('Wilder', 'The Apartment'),
+            ('Wilder', 'Sabrina'),
+            ('Wilder', 'Sunset Boulevard'),
+            ('Lynch', 'Mulholland Drive'),
+            ('Lynch', 'Twin Peaks'),
+            ('Allen', 'Manhattan'),
+            ('Allen', 'Everything You Always Wanted to Know'),
+        }
+    )
+    dl.add_extensional_predicate_from_tuples(
+        Actor, 
+        {
+            ('Hitchcock', 'Psycho', 'Man Outside Real Estate Office'),
+            ('Hitchcock', 'Vertigo', 'Man Walking Past Elsters Office'),
+            ('Hitchcock', 'Rope', 'Man Walking in Street'),
+            ('Lynch', 'Twin Peaks', 'FBI Chief'),
+            ('Allen', 'Manhattan', 'Isaac'),
+            ('Allen', 'Everything You Always Wanted to Know', 'Victor'),
+            ('Allen', 'Everything You Always Wanted to Know', 'Fabrizzio'),
+        }
+    )
+    roles = ['Man Outside Real Estate Office',
+            'Man Walking Past Elsters Office',
+            'Man Walking in Street',
+            'FBI Chief',
+            'Isaac',
+            'Victor',
+            'Fabrizzio']
+    dl.add_extensional_predicate_from_tuples(
+        Equals, 
+        set([(r, r) for role in roles])
+    )
+    different = set()
+    for r1 in roles:
+        for r2 in roles:
+            if r1 != r2:
+                different.add((r1, r2))
+    dl.add_extensional_predicate_from_tuples(
+        Different, 
+        different
+    )
+    dc = Chase(dl)
+    solution_instance = dc.build_chase_solution()
+
+    assert solution_instance["Ans"].value == {'Hitchcock'}
