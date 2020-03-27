@@ -107,6 +107,13 @@ class CPLogicProgram(DatalogProgram, ExpressionWalker):
 
     @staticmethod
     def new_probability_set(iterable=None):
+        """
+        Construct a relational algebra set whose first column is assumed to
+        contain the probability associated with the tuple made out of the
+        remaining columns. This is used to represent probabilistic facts and
+        choices.
+
+        """
         return WrappedRelationalAlgebraSet(iterable=iterable)
 
     @staticmethod
