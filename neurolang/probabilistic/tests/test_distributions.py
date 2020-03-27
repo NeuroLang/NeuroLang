@@ -29,11 +29,11 @@ jellyfish_dangerosity = {
 
 def test_abstract_distribution_class():
     with pytest.raises(NeuroLangException):
-        Distribution().probability(42)
+        _ = Distribution().probability(42)
     with pytest.raises(NeuroLangException):
-        Distribution().support
+        _ = Distribution().support
     with pytest.raises(NeuroLangException):
-        Distribution().expectation(lambda x: x)
+        _ = Distribution().expectation(lambda x: x)
 
 
 def test_table_distribution():
@@ -79,4 +79,5 @@ def test_compare_table_distribs():
 def test_compare_table_distrib_with_non_table_distrib():
     td = TableDistribution(beach_jellyfish_table)
     with pytest.raises(NeuroLangException):
-        td == Distribution()
+        if td == Distribution():
+            pass

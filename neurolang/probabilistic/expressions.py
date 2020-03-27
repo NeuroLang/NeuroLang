@@ -2,7 +2,6 @@ from typing import Mapping
 
 from ..exceptions import NeuroLangException
 from ..expressions import Definition, Constant, Symbol, FunctionApplication
-from ..relational_algebra import RelationalAlgebraOperation
 
 
 class ProbabilisticPredicate(Definition):

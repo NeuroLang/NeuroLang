@@ -3,7 +3,7 @@ import typing
 from ...exceptions import NeuroLangException
 from ...expression_walker import ExpressionWalker
 from ...expression_pattern_matching import add_match
-from ...expressions import Symbol, Constant, Unknown, ExpressionBlock
+from ...expressions import Symbol, Constant, ExpressionBlock
 from ...logic import Implication
 from ...datalog import DatalogProgram, WrappedRelationalAlgebraSet
 from ..expression_processing import (

@@ -7,15 +7,10 @@ from ..exceptions import NeuroLangException
 from ..expressions import (
     Expression,
     Constant,
-    Symbol,
     FunctionApplication,
     ExpressionBlock,
 )
-from ..logic import Implication, ExistentialPredicate
-from ..logic.expression_processing import (
-    extract_logic_predicates,
-    extract_logic_free_variables,
-)
+from ..logic import Implication
 from ..datalog import WrappedRelationalAlgebraSet
 from .expressions import ProbabilisticPredicate
 

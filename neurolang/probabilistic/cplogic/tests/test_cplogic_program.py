@@ -1,9 +1,9 @@
-from typing import Mapping, AbstractSet
+import typing
 
 import pytest
 
 from ....datalog.expressions import Fact
-from ....logic import Union, Conjunction, Implication, ExistentialPredicate
+from ....logic import Union, Conjunction, Implication
 from ....exceptions import NeuroLangException
 from ....expressions import Constant, ExpressionBlock, Symbol
 from ...expressions import ProbabilisticPredicate
@@ -99,7 +99,7 @@ def test_multiple_probfact_same_pred_symb():
     assert len(cpl.probabilistic_facts()) == 1
     assert P in cpl.probabilistic_facts()
     probfacts = cpl.probabilistic_facts()[P]
-    assert isinstance(probfacts, Constant[AbstractSet])
+    assert isinstance(probfacts, Constant[typing.AbstractSet])
 
 
 def test_add_probfacts_from_tuple():

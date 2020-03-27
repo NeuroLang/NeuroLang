@@ -1,7 +1,7 @@
 import pytest
 
 from ...exceptions import NeuroLangException
-from ...expressions import ExpressionBlock, Symbol, Constant
+from ...expressions import ExpressionBlock, Symbol
 from ..expression_processing import concatenate_to_expression_block
 
 P = Symbol("P")

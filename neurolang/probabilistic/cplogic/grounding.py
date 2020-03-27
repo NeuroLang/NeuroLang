@@ -3,7 +3,7 @@ from typing import AbstractSet
 from ...exceptions import NeuroLangException
 from ...expressions import Constant, Symbol, ExpressionBlock
 from ...expression_walker import ExpressionBasicEvaluator
-from ...logic import Implication, Union
+from ...logic import Implication
 from ...logic.expression_processing import TranslateToLogic
 from ...typed_symbol_table import TypedSymbolTable
 from ...datalog.basic_representation import DatalogProgram
