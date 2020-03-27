@@ -110,33 +110,24 @@ def build_pfact_grounding_from_set(pred_symb, relation):
 
 
 def build_grounding(cpl_program, dl_instance):
-    groundings = {
-        "extensional": [],
-        "intensional": [],
-        "probfact": [],
-        "probchoice": [],
-    }
+    groundings = []
     for pred_symb in cpl_program.predicate_symbols:
         st_item = cpl_program.symbol_table[pred_symb]
         if pred_symb in cpl_program.pfact_pred_symbs:
-            groundings["probfact"].append(
+            groundings.append(
                 build_pfact_grounding_from_set(pred_symb, st_item)
             )
         elif pred_symb in cpl_program.pchoice_pred_symbs:
-            groundings["probchoice"].append(
-                build_pchoice_grounding(pred_symb, st_item)
-            )
+            groundings.append(build_pchoice_grounding(pred_symb, st_item))
         elif isinstance(st_item, Constant[AbstractSet]):
-            groundings["extensional"].append(
-                build_extensional_grounding(pred_symb, st_item)
-            )
+            groundings.append(build_extensional_grounding(pred_symb, st_item))
         else:
-            groundings["intensional"].append(
+            groundings.append(
                 build_rule_grounding(
                     pred_symb, st_item, dl_instance[pred_symb]
                 )
             )
-    return ExpressionBlock(itertools.chain(*groundings.values()))
+    return ExpressionBlock(groundings)
 
 
 class Chase(ChaseNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
