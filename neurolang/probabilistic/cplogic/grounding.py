@@ -158,9 +158,7 @@ class Chase(ChaseNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
     pass
 
 
-def ground_probdatalog_program(
-    cpl_code, **sets,
-):
+def ground_cplogic_program(cpl_code, **sets):
     cpl_program = CPLogicProgram()
     cpl_program.walk(cpl_code)
     for prefix in ["probfact", "extensional_predicate", "probchoice"]:
