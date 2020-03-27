@@ -30,25 +30,31 @@ class Datalog(TranslateToLogic, DatalogProgram, ExpressionBasicEvaluator):
     pass
 
 
+def remove_probability_column(relation):
+    new_columns = tuple(
+        Constant[ColumnInt](ColumnInt(i))
+        for i in list(range(relation.value.arity))[1:]
+    )
+    return RelationalAlgebraSolver().walk(Projection(relation, new_columns))
+
+
 def cplogic_to_datalog(cpl_program):
-    new_symbol_table = TypedSymbolTable()
-    solver = RelationalAlgebraSolver()
-    for pred_symb in cpl_program.symbol_table:
-        value = cpl_program.symbol_table[pred_symb]
-        if (
-            pred_symb
-            in cpl_program.pfact_pred_symbs | cpl_program.pchoice_pred_symbs
-        ):
-            columns = tuple(
-                Constant[ColumnInt](ColumnInt(i))
-                for i in list(range(value.value.arity))[1:]
-            )
-            new_symbol_table[pred_symb] = solver.walk(
-                Projection(value, columns)
-            )
+    dl = Datalog()
+    for pred_symb in cpl_program.predicate_symbols:
+        if pred_symb in cpl_program.intensional_database():
+            for formula in cpl_program.symbol_table[pred_symb].formulas:
+                dl.walk(formula)
         else:
-            new_symbol_table[pred_symb] = value
-    return Datalog(new_symbol_table)
+            if pred_symb in cpl_program.extensional_database():
+                relation = cpl_program.symbol_table[pred_symb]
+            else:
+                relation = remove_probability_column(
+                    cpl_program.symbol_table[pred_symb]
+                )
+            dl.add_extensional_predicate_from_tuples(
+                pred_symb, list(relation.value)
+            )
+    return dl
 
 
 def build_extensional_grounding(pred_symb, tuple_set):
