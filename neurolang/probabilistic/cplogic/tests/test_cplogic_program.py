@@ -42,7 +42,6 @@ def test_probfact():
 
 def test_cplogic_program():
     cpl = CPLogicProgram()
-
     code = ExpressionBlock(
         [
             Implication(
@@ -54,9 +53,7 @@ def test_cplogic_program():
             Fact(Z(b)),
         ]
     )
-
     cpl.walk(code)
-
     assert cpl.extensional_database() == {
         Z: Constant(frozenset({Constant((a,)), Constant((b,))}))
     }
@@ -73,13 +70,6 @@ def test_cplogic_program():
             ]
         )
     }
-
-    pfact = Implication(ProbabilisticPredicate(p, P(x)), Constant[bool](True))
-    code = ExpressionBlock(
-        [pfact, Implication(Q(x), Conjunction([P(x), Z(x)]))]
-    )
-    cpl = CPLogicProgram()
-    cpl.walk(code)
 
 
 def test_multiple_probfact_same_pred_symb():
@@ -155,6 +145,14 @@ def test_add_probchoice_from_tuple_no_probability():
     cpl = CPLogicProgram()
     with pytest.raises(NeuroLangException, match=r"probability"):
         cpl.add_probchoice_from_tuples(P, [("a", "b"), ("b", "b"),])
+
+
+def test_add_probchoice_from_tuple_twice_same_pred_symb():
+    probchoice_as_tuples_iterable = [(1.0, "a", "a")]
+    cpl = CPLogicProgram()
+    cpl.add_probchoice_from_tuples(P, probchoice_as_tuples_iterable)
+    with pytest.raises(NeuroLangException):
+        cpl.add_probchoice_from_tuples(P, probchoice_as_tuples_iterable)
 
 
 def test_add_probchoice_does_not_sum_to_one():
