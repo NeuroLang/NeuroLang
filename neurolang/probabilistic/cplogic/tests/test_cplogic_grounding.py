@@ -68,7 +68,9 @@ def test_cplogic_grounding():
             )
         elif grounding.expression.consequent.functor == Q:
             assert numpy.all(
-                numpy.array(list(grounding.relation.value.itervalues()))
+                numpy.array(
+                    [tuple(nt) for nt in grounding.relation.value.itervalues()]
+                )
                 == numpy.array([["a"], ["b"]], dtype=str)
             )
 

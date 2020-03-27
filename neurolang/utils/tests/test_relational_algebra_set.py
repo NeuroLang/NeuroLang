@@ -285,13 +285,3 @@ def test_named_to_unnamed():
     ras_a = NamedRelationalAlgebraFrozenSet(cols, a)
     ras_b = RelationalAlgebraFrozenSet(a)
     assert ras_a.to_unnamed() == ras_b
-
-
-def test_named_ra_set_from_other():
-    first = NamedRelationalAlgebraFrozenSet(
-        ("x", "n"), [(56, "bonjour"), (42, "aurevoir"),]
-    )
-    second = NamedRelationalAlgebraFrozenSet(first.columns, first,)
-    assert first == second
-    for tuple_a, tuple_b in zip(first, second):
-        assert tuple_a == tuple_b

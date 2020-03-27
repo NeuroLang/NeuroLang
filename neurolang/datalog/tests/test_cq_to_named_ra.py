@@ -27,7 +27,7 @@ def test_translate_set():
     res = tr.walk(fa)
     assert res == NameColumns(
         Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
-        (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
+        (x, y)
     )
 
     fa = R1(C_(1), y)
@@ -39,7 +39,7 @@ def test_translate_set():
             Selection(R1, C_(eq)(C_(ColumnInt(0)), C_(1))),
             (C_(ColumnInt(1)),)
         ),
-        (Constant(ColumnStr('y')),)
+        (y,)
     )
 
 
@@ -70,7 +70,7 @@ def test_equality_constant_symbol():
 
     fb_trans = NameColumns(
         Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
-        (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
+        (x, y)
     )
 
     res = tr.walk(exp)
@@ -88,7 +88,7 @@ def test_equality_symbols():
     fb = R1(x, y)
     fb_trans = NameColumns(
         Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
-        (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
+        (x, y)
     )
 
     exp = Conjunction((fb, C_(eq)(x, y)))
@@ -105,8 +105,7 @@ def test_equality_symbols():
     exp = Conjunction((fb, C_(eq)(x, z)))
 
     expected_result = Selection(
-        NaturalJoin(fb_trans, RenameColumn(fb_trans, Constant(ColumnStr('x')),
-                                           Constant(ColumnStr('z')))),
+        NaturalJoin(fb_trans, RenameColumn(fb_trans, x, z)),
         C_(eq)(C_(ColumnStr('x')), C_(ColumnStr('z')))
     )
 
@@ -116,8 +115,7 @@ def test_equality_symbols():
     exp = Conjunction((fb, C_(eq)(z, x)))
 
     expected_result = Selection(
-        NaturalJoin(fb_trans, RenameColumn(fb_trans, Constant(ColumnStr('x')),
-                                           Constant(ColumnStr('z')))),
+        NaturalJoin(fb_trans, RenameColumn(fb_trans, x, z)),
         C_(eq)(C_(ColumnStr('z')), C_(ColumnStr('x')))
     )
 
@@ -140,12 +138,12 @@ def test_joins():
 
     fa_trans = NameColumns(
         Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
-        (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
+        (x, y)
     )
 
     fb_trans = NameColumns(
         Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
-        (Constant(ColumnStr('y')), Constant(ColumnStr('z')))
+        (y, z)
     )
 
     tr = TranslateToNamedRA()
@@ -156,7 +154,7 @@ def test_joins():
     fb = R2(x, y)
     fb_trans = NameColumns(
         Projection(R2, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
-        (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
+        (x, y)
     )
     exp = Conjunction((fa, Negation(fb)))
 
@@ -171,7 +169,7 @@ def test_joins():
             Selection(R2, C_(eq)(C_(ColumnInt(1)), C_(0))),
             (C_(ColumnInt(0)),)
         ),
-        (Constant(ColumnStr('y')),)
+        (y,)
     )
 
     exp = Conjunction((fa, Negation(fb)))

@@ -110,16 +110,6 @@ class Difference(RelationalAlgebraOperation):
 
 class NameColumns(RelationalAlgebraOperation):
     def __init__(self, relation, column_names):
-        if any(
-            not (
-                isinstance(col_name, Constant) and
-                isinstance(col_name.value, ColumnStr)
-            )
-            for col_name in column_names
-        ):
-            raise NeuroLangException(
-                "All column names must be Constant[ColumnStr]"
-            )
         self.relation = relation
         self.column_names = column_names
 
@@ -170,7 +160,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
                 row_type = relation.row_type
             else:
                 row_type = Tuple[tuple(
-                    type(arg) for arg in next(iter(relation))
+                    type(arg) for arg in next(iter(relation._container))
                 )]
 
             relation_type = AbstractSet[row_type]
@@ -252,8 +242,8 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
     @ew.add_match(RenameColumn)
     def ra_rename_column(self, rename_column):
         relation = self.walk(rename_column.relation)
-        src = rename_column.src.value
-        dst = rename_column.dst.value
+        src = rename_column.src.name
+        dst = rename_column.dst.name
         new_set = relation.value
 
         if len(new_set) > 0:
