@@ -17,7 +17,7 @@ from ..logic.expression_processing import (
     extract_logic_free_variables,
 )
 from ..datalog import WrappedRelationalAlgebraSet
-from .expressions import ProbabilisticPredicate, DeltaTerm
+from .expressions import ProbabilisticPredicate
 
 
 def is_probabilistic_fact(expression):
@@ -47,44 +47,6 @@ def is_probabilistic_fact(expression):
     )
 
 
-def is_existential_probabilistic_fact(expression):
-    return (
-        isinstance(expression, Implication)
-        and isinstance(expression.consequent, ExistentialPredicate)
-        and isinstance(expression.consequent.body, ProbabilisticPredicate)
-        and isinstance(expression.consequent.body.body, FunctionApplication)
-        and expression.antecedent == Constant[bool](True)
-    )
-
-
-def is_existential_predicate(expression):
-    free_vars = extract_logic_free_variables(expression)
-    if len(free_vars) > 0:
-        return True
-    return False
-
-
-def get_rule_pfact_pred_symbs(rule, pfact_pred_symbs):
-    return set(
-        p.functor
-        for p in extract_logic_predicates(rule.antecedent)
-        if p.functor in pfact_pred_symbs
-    )
-
-
-def put_probfacts_in_front(code_block):
-    probfacts = []
-    non_probfacts = []
-    for expression in code_block.expressions:
-        if is_probabilistic_fact(
-            expression
-        ) or is_existential_probabilistic_fact(expression):
-            probfacts.append(expression)
-        else:
-            non_probfacts.append(expression)
-    return ExpressionBlock(probfacts + non_probfacts)
-
-
 def group_probfacts_by_pred_symb(code_block):
     probfacts = collections.defaultdict(list)
     non_probfacts = list()
@@ -94,30 +56,6 @@ def group_probfacts_by_pred_symb(code_block):
         else:
             non_probfacts.append(expression)
     return probfacts, non_probfacts
-
-
-def check_existential_probfact_validity(expression):
-    qvar = expression.consequent.head
-    if qvar in expression.consequent.body.body._symbols:
-        raise NeuroLangException(
-            "Existentially quantified variable can only be used as the "
-            "probability of the probability fact"
-        )
-
-
-def extract_probfact_or_eprobfact_pred_symb(expression):
-    if is_existential_probabilistic_fact(expression):
-        return expression.consequent.body.body.functor
-    else:
-        return expression.consequent.body.functor
-
-
-def get_pfact_var_idxs(pfact):
-    if is_probabilistic_fact(pfact):
-        atom = pfact.consequent.body
-    else:
-        atom = pfact.consequent.body.body
-    return {i for i, arg in enumerate(atom.args) if isinstance(arg, Symbol)}
 
 
 def const_or_symb_as_python_type(exp):
@@ -145,16 +83,6 @@ def check_probchoice_probs_sum_to_one(ra_set):
         raise NeuroLangException(
             "Probabilities of probabilistic choice should sum to 1"
         )
-
-
-def get_dterm(datom):
-    return next(arg for arg in datom.args if isinstance(arg, DeltaTerm))
-
-
-def get_dterm_index(datom):
-    return next(
-        i for i, arg in enumerate(datom.args) if isinstance(arg, DeltaTerm)
-    )
 
 
 def concatenate_to_expression_block(block, to_add):

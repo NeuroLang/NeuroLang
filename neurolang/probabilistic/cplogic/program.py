@@ -8,10 +8,7 @@ from ...logic import Implication
 from ...datalog import DatalogProgram, WrappedRelationalAlgebraSet
 from ..expression_processing import (
     is_probabilistic_fact,
-    is_existential_probabilistic_fact,
     check_probchoice_probs_sum_to_one,
-    check_existential_probfact_validity,
-    extract_probfact_or_eprobfact_pred_symb,
     concatenate_to_expression_block,
     group_probfacts_by_pred_symb,
     build_pfact_set,
@@ -146,15 +143,9 @@ class CPLogicProgram(DatalogProgram, ExpressionWalker):
             self.symbol_table[symb].value | {pred_symb}
         )
 
-    @add_match(
-        Implication,
-        lambda exp: is_probabilistic_fact(exp)
-        or is_existential_probabilistic_fact(exp),
-    )
-    def probfact_or_existential_probfact(self, expression):
-        if is_existential_probabilistic_fact(expression):
-            check_existential_probfact_validity(expression)
-        pred_symb = extract_probfact_or_eprobfact_pred_symb(expression)
+    @add_match(Implication, lambda exp: is_probabilistic_fact(exp))
+    def probabilistic_fact(self, expression):
+        pred_symb = expression.consequent.body.functor
         if pred_symb not in self.symbol_table:
             self.symbol_table[pred_symb] = ExpressionBlock(tuple())
         self.symbol_table[pred_symb] = concatenate_to_expression_block(
