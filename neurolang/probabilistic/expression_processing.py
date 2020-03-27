@@ -107,7 +107,7 @@ def concatenate_to_expression_block(block, to_add):
         return ExpressionBlock(block.expressions + to_add.expressions)
     if isinstance(to_add, typing.Iterable):
         if not all(isinstance(item, Expression) for item in to_add):
-            raise NeuroLangException("Expected iterable on expressions")
+            raise NeuroLangException("Expected Expression")
         return ExpressionBlock(block.expressions + tuple(to_add))
     raise NeuroLangException("Expected ExpressionBlock or Expression iterable")
 

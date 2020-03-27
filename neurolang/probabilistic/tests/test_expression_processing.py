@@ -1,3 +1,6 @@
+import pytest
+
+from ...exceptions import NeuroLangException
 from ...expressions import ExpressionBlock, Symbol, Constant
 from ..expression_processing import concatenate_to_expression_block
 
@@ -25,3 +28,14 @@ def test_concatenate_to_expression_block():
             concatenate_to_expression_block(block1, block2), block3
         )
         assert expression in new_block.expressions
+
+
+def test_concatenate_to_expression_block_not_expression():
+    block = ExpressionBlock((P(x),))
+    with pytest.raises(NeuroLangException, match=r"Expected Expression"):
+        concatenate_to_expression_block(block, ["this_is_not_an_expression"])
+    with pytest.raises(
+        NeuroLangException,
+        match=r"Expected ExpressionBlock or Expression iterable",
+    ):
+        concatenate_to_expression_block(block, None)
