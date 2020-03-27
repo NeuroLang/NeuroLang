@@ -22,28 +22,12 @@ class ProbabilisticPredicate(Definition):
         )
 
 
-class Distribution(Definition):
-    def __init__(self, parameters):
-        self.parameters = parameters
+class ProbabilisticChoice(Definition):
+    def __init__(self, predicate):
+        self.predicate = predicate
 
 
-class DiscreteDistribution(Distribution):
-    pass
-
-
-class TableDistribution(DiscreteDistribution):
-    def __init__(self, table):
-        self.table = table
-        super().__init__(
-            Constant[Mapping]({Symbol[Constant[Mapping]]("table"): self.table})
-        )
-
-    def __repr__(self):
-        return "TableDistribution[\n{}\n]".format(
-            "\n".join(
-                [
-                    f"\t{value}:\t{prob}"
-                    for value, prob in self.table.value.items()
-                ]
-            )
-        )
+class Grounding(Definition):
+    def __init__(self, expression, relation):
+        self.expression = expression
+        self.relation = relation
