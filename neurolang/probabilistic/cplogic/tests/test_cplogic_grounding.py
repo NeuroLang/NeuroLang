@@ -33,7 +33,7 @@ def test_cplogic_grounding():
     pfact1 = Implication(ProbabilisticPredicate(p, P(a)), Constant[bool](True))
     pfact2 = Implication(ProbabilisticPredicate(p, P(b)), Constant[bool](True))
     rule = Implication(Z(x), Conjunction([P(x), Q(x)]))
-    code = ExpressionBlock([pfact1, pfact2, rule, Fact(Q(a)), Fact(Q(b))])
+    code = ExpressionBlock((pfact1, pfact2, rule, Fact(Q(a)), Fact(Q(b))))
     grounded = ground_cplogic_program(code)
     matching_groundings = [
         grounding
@@ -51,7 +51,7 @@ def test_cplogic_grounding():
     assert expected in grounded.expressions
 
     code = ExpressionBlock(
-        [Fact(P(a, b)), Fact(P(b, b)), Fact(Q(a)), Fact(Q(b))]
+        (Fact(P(a, b)), Fact(P(b, b)), Fact(Q(a)), Fact(Q(b)))
     )
     grounded = ground_cplogic_program(code)
     assert len(grounded.expressions) == 2
@@ -85,9 +85,9 @@ def test_cplogic_grounding_general():
             }
         )
     )
-    facts = [Fact(Q(a))]
-    rule = Implication(Z(x), Conjunction([P(x), Q(x)]))
-    code = concatenate_to_expression_block(pfacts, [rule])
+    facts = (Fact(Q(a)),)
+    rule = Implication(Z(x), Conjunction((P(x), Q(x))))
+    code = concatenate_to_expression_block(pfacts, (rule,))
     code = concatenate_to_expression_block(pfacts, facts)
     grounded = ground_cplogic_program(code)
     pfact_grounding = next(
@@ -101,7 +101,7 @@ def test_cplogic_grounding_general():
 
 
 def test_cplogic_grounding_with_pchoice():
-    probchoice_sets = {P: [(0.5, "a"), (0.25, "b"), (0.25, "c")]}
+    probchoice_sets = {P: {(0.5, "a"), (0.25, "b"), (0.25, "c")}}
     grounded = ground_cplogic_program(
         ExpressionBlock(tuple()), probchoice_sets=probchoice_sets,
     )
@@ -109,6 +109,6 @@ def test_cplogic_grounding_with_pchoice():
 
 
 def test_unsupported_grounding_program_with_disjunction():
-    code = ExpressionBlock([Implication(Q(x), P(x)), Implication(Q(x), R(x))])
+    code = ExpressionBlock((Implication(Q(x), P(x)), Implication(Q(x), R(x))))
     with pytest.raises(NeuroLangException, match=r"supported"):
         ground_cplogic_program(code)
