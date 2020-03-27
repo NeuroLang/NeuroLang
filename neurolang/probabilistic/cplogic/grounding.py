@@ -1,4 +1,3 @@
-import itertools
 from typing import AbstractSet
 
 from ...exceptions import NeuroLangException
