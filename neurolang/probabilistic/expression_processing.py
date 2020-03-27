@@ -147,14 +147,6 @@ def check_probchoice_probs_sum_to_one(ra_set):
         )
 
 
-def is_ppdl_rule(exp):
-    return (
-        isinstance(exp, Implication)
-        and isinstance(exp.consequent, FunctionApplication)
-        and sum(isinstance(arg, DeltaTerm) for arg in exp.consequent.args) == 1
-    )
-
-
 def get_dterm(datom):
     return next(arg for arg in datom.args if isinstance(arg, DeltaTerm))
 
