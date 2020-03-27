@@ -10,7 +10,7 @@ from ....datalog import Fact
 from ....utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from ...expressions import ProbabilisticPredicate, Grounding
 from ...expression_processing import is_probabilistic_fact
-from ..grounding import ground_probdatalog_program
+from ..grounding import ground_cplogic_program
 
 P = Symbol("P")
 Q = Symbol("Q")
@@ -22,12 +22,12 @@ a = Constant("a")
 b = Constant("b")
 
 
-def test_probdatalog_grounding():
+def test_cplogic_grounding():
     pfact1 = Implication(ProbabilisticPredicate(p, P(a)), Constant[bool](True))
     pfact2 = Implication(ProbabilisticPredicate(p, P(b)), Constant[bool](True))
     rule = Implication(Z(x), Conjunction([P(x), Q(x)]))
     code = ExpressionBlock([pfact1, pfact2, rule, Fact(Q(a)), Fact(Q(b))])
-    grounded = ground_probdatalog_program(code)
+    grounded = ground_cplogic_program(code)
     matching_groundings = [
         grounding
         for grounding in grounded.expressions
@@ -46,7 +46,7 @@ def test_probdatalog_grounding():
     code = ExpressionBlock(
         [Fact(P(a, b)), Fact(P(b, b)), Fact(Q(a)), Fact(Q(b))]
     )
-    grounded = ground_probdatalog_program(code)
+    grounded = ground_cplogic_program(code)
     assert len(grounded.expressions) == 2
     for grounding in grounded.expressions:
         if grounding.expression.consequent.functor == P:
@@ -67,11 +67,11 @@ def test_probdatalog_grounding():
 
 
 @pytest.mark.skip()
-def test_probdatalog_grounding_general():
+def test_cplogic_grounding_general():
     pfact = Implication(ProbabilisticPredicate(p, P(x)), Constant[bool](True))
     rule = Implication(Z(x), Conjunction([P(x), Q(x)]))
     code = ExpressionBlock([pfact, rule, Fact(Q(a)), Fact(Q(b))])
-    grounded = ground_probdatalog_program(code)
+    grounded = ground_cplogic_program(code)
     expected = Grounding(
         pfact,
         Constant[typing.AbstractSet](
@@ -90,7 +90,7 @@ def test_probdatalog_grounding_general():
     code = ExpressionBlock(
         [Fact(P(a, b)), Fact(P(b, b)), Fact(Q(a)), Fact(Q(b))]
     )
-    grounded = ground_probdatalog_program(code)
+    grounded = ground_cplogic_program(code)
     assert len(grounded.expressions) == 2
     for grounding in grounded.expressions:
         if grounding.expression.consequent.functor == P:
@@ -113,4 +113,4 @@ def test_probdatalog_grounding_general():
 def test_unsupported_grounding_program_with_disjunction():
     code = ExpressionBlock([Implication(Q(x), P(x)), Implication(Q(x), R(x))])
     with pytest.raises(NeuroLangException, match=r"supported"):
-        ground_probdatalog_program(code)
+        ground_cplogic_program(code)

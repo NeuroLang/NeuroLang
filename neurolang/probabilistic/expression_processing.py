@@ -197,13 +197,3 @@ def get_antecedent_constant_indexes(rule):
         if len(indexes) > 0:
             constant_indexes[predicate] = indexes
     return constant_indexes
-
-
-def get_predicate_probabilistic_rules(ppdl, predicate):
-    if predicate not in ppdl.symbol_table:
-        return set()
-    return set(
-        rule
-        for rule in ppdl.symbol_table[predicate].formulas
-        if is_ppdl_rule(rule)
-    )

@@ -40,8 +40,8 @@ def test_probfact():
         Implication(ProbabilisticPredicate(0.3, P(x)), Constant[bool](True))
 
 
-def test_probdatalog_program():
-    pd = CPLogicProgram()
+def test_cplogic_program():
+    cpl = CPLogicProgram()
 
     code = ExpressionBlock(
         [
@@ -55,15 +55,15 @@ def test_probdatalog_program():
         ]
     )
 
-    pd.walk(code)
+    cpl.walk(code)
 
-    assert pd.extensional_database() == {
+    assert cpl.extensional_database() == {
         Z: Constant(frozenset({Constant((a,)), Constant((b,))}))
     }
-    assert pd.intensional_database() == {
+    assert cpl.intensional_database() == {
         Q: Union([Implication(Q(x), Conjunction([P(x), Z(x)]))])
     }
-    assert pd.probabilistic_facts() == {
+    assert cpl.probabilistic_facts() == {
         P: ExpressionBlock(
             [
                 Implication(
@@ -78,12 +78,12 @@ def test_probdatalog_program():
     code = ExpressionBlock(
         [pfact, Implication(Q(x), Conjunction([P(x), Z(x)]))]
     )
-    program = CPLogicProgram()
-    program.walk(code)
+    cpl = CPLogicProgram()
+    cpl.walk(code)
 
 
 def test_multiple_probfact_same_pred_symb():
-    pd = CPLogicProgram()
+    cpl = CPLogicProgram()
     code = ExpressionBlock(
         [
             Implication(
@@ -99,16 +99,16 @@ def test_multiple_probfact_same_pred_symb():
             Fact(Z(b)),
         ]
     )
-    pd.walk(code)
-    assert pd.extensional_database() == {
+    cpl.walk(code)
+    assert cpl.extensional_database() == {
         Z: Constant(frozenset({Constant((a,)), Constant((b,))}))
     }
-    assert pd.intensional_database() == {
+    assert cpl.intensional_database() == {
         Q: Union([Implication(Q(x), Conjunction([P(x), Z(x)]))])
     }
-    assert len(pd.probabilistic_facts()) == 1
-    assert P in pd.probabilistic_facts()
-    probfacts = pd.probabilistic_facts()[P]
+    assert len(cpl.probabilistic_facts()) == 1
+    assert P in cpl.probabilistic_facts()
+    probfacts = cpl.probabilistic_facts()[P]
     assert isinstance(probfacts, Constant[AbstractSet])
 
 
@@ -125,8 +125,8 @@ def test_program_with_eprobfact():
             Implication(Z(x), Conjunction([P(x), Q(x)])),
         ]
     )
-    program = CPLogicProgram()
-    program.walk(code)
+    cpl = CPLogicProgram()
+    cpl.walk(code)
 
     code = ExpressionBlock(
         [
@@ -138,9 +138,9 @@ def test_program_with_eprobfact():
             )
         ]
     )
-    program = CPLogicProgram()
+    cpl = CPLogicProgram()
     with pytest.raises(NeuroLangException, match=r"can only be used"):
-        program.walk(code)
+        cpl.walk(code)
 
 
 @pytest.mark.skip()
@@ -189,7 +189,7 @@ def test_infer_pfact_typing_pred_symbs():
 
 
 @pytest.mark.skip()
-def test_probdatalog_pfact_type_inference():
+def test_cplogic_pfact_type_inference():
     code = ExpressionBlock(
         [
             Implication(ProbabilisticPredicate(p, P(x)), Constant[bool](True)),
@@ -197,41 +197,41 @@ def test_probdatalog_pfact_type_inference():
             Implication(Q(x), Conjunction([P(x), Y(x), R(x)])),
         ]
     )
-    program = CPLogicProgram()
-    program.walk(code)
-    assert program.symbol_table[program.typing_symbol] == Constant[Mapping](
+    cpl = CPLogicProgram()
+    cpl.walk(code)
+    assert cpl.symbol_table[cpl.typing_symbol] == Constant[Mapping](
         {P: Constant[Mapping]({Constant[int](0): Constant[AbstractSet]({R})})}
     )
 
 
 @pytest.mark.skip()
-def test_probdatalog_pfact_cant_infer_type():
+def test_cplogic_pfact_cant_infer_type():
     pfact = Implication(ProbabilisticPredicate(p, P(x)), Constant[bool](True))
     rule = Implication(Q(x), Conjunction([P(x), Z(x), R(x)]))
-    program = CPLogicProgram()
+    cpl = CPLogicProgram()
     with pytest.raises(NeuroLangException, match="could not be inferred"):
-        program.walk(ExpressionBlock([pfact, rule]))
+        cpl.walk(ExpressionBlock([pfact, rule]))
 
 
 def test_add_probfacts_from_tuple():
-    pd = CPLogicProgram()
-    pd.walk(ExpressionBlock([]))
-    pd.add_probfacts_from_tuples(
+    cpl = CPLogicProgram()
+    cpl.walk(ExpressionBlock([]))
+    cpl.add_probfacts_from_tuples(
         P, {(0.3, "hello", "gaston"), (0.7, "hello", "antonia"),},
     )
-    assert P in pd.pfact_pred_symbs
+    assert P in cpl.pfact_pred_symbs
     assert (
         Constant[float](0.7),
         Constant[str]("hello"),
         Constant[str]("antonia"),
-    ) in pd.symbol_table[P].value
+    ) in cpl.symbol_table[P].value
 
 
 def test_add_probfacts_from_tuple_no_probability():
-    pd = CPLogicProgram()
-    pd.walk(ExpressionBlock([]))
+    cpl = CPLogicProgram()
+    cpl.walk(ExpressionBlock([]))
     with pytest.raises(NeuroLangException, match=r"probability"):
-        pd.add_probfacts_from_tuples(
+        cpl.add_probfacts_from_tuples(
             P, {("hello", "gaston"), ("hello", "antonia"),},
         )
 
@@ -242,20 +242,20 @@ def test_add_probchoice_from_tuple():
         (0.2, "a", "b"),
         (0.3, "b", "b"),
     ]
-    pd = CPLogicProgram()
-    pd.add_probchoice_from_tuples(P, probchoice_as_tuples_iterable)
-    assert P in pd.symbol_table
+    cpl = CPLogicProgram()
+    cpl.add_probchoice_from_tuples(P, probchoice_as_tuples_iterable)
+    assert P in cpl.symbol_table
     assert (
         Constant[float](0.2),
         Constant[str]("a"),
         Constant[str]("b"),
-    ) in pd.symbol_table[P].value
+    ) in cpl.symbol_table[P].value
 
 
 def test_add_probchoice_from_tuple_no_probability():
-    pd = CPLogicProgram()
+    cpl = CPLogicProgram()
     with pytest.raises(NeuroLangException, match=r"probability"):
-        pd.add_probchoice_from_tuples(P, [("a", "b"), ("b", "b"),])
+        cpl.add_probchoice_from_tuples(P, [("a", "b"), ("b", "b"),])
 
 
 def test_add_probchoice_does_not_sum_to_one():
@@ -264,6 +264,6 @@ def test_add_probchoice_does_not_sum_to_one():
         (0.2, "a", "b"),
         (0.1, "b", "b"),
     ]
-    pd = CPLogicProgram()
+    cpl = CPLogicProgram()
     with pytest.raises(NeuroLangException, match=r"sum"):
-        pd.add_probchoice_from_tuples(P, probchoice_as_tuples_iterable)
+        cpl.add_probchoice_from_tuples(P, probchoice_as_tuples_iterable)

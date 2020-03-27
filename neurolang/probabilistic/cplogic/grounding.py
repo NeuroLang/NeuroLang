@@ -30,14 +30,14 @@ class Datalog(TranslateToLogic, DatalogProgram, ExpressionBasicEvaluator):
     pass
 
 
-def probdatalog_to_datalog(pd_program):
+def cplogic_to_datalog(cpl_program):
     new_symbol_table = TypedSymbolTable()
     solver = RelationalAlgebraSolver()
-    for pred_symb in pd_program.symbol_table:
-        value = pd_program.symbol_table[pred_symb]
+    for pred_symb in cpl_program.symbol_table:
+        value = cpl_program.symbol_table[pred_symb]
         if (
             pred_symb
-            in pd_program.pfact_pred_symbs | pd_program.pchoice_pred_symbs
+            in cpl_program.pfact_pred_symbs | cpl_program.pchoice_pred_symbs
         ):
             columns = tuple(
                 Constant[ColumnInt](ColumnInt(i))
@@ -65,17 +65,19 @@ def build_extensional_grounding(pred_symb, tuple_set):
 
 
 def build_rule_grounding(pred_symb, st_item, tuple_set):
-    if isinstance(st_item, Union):
-        st_item = st_item.formulas[0]
-    elif isinstance(st_item, ExpressionBlock):
-        st_item = st_item.expressions[0]
-    if isinstance(st_item.consequent, ProbabilisticPredicate):
-        pred = st_item.consequent.body
-    else:
-        pred = st_item.consequent
-    cols = tuple(arg.name for arg in pred.args)
+    if not isinstance(st_item, Union):
+        raise ValueError(
+            "Expected the rule to be representend as a Union "
+            "in the symbol table"
+        )
+    if len(st_item.formulas) != 1:
+        raise NeuroLangException(
+            "Multiple rules with the same head predicate are not supported"
+        )
+    rule = st_item.formulas[0]
+    cols = tuple(arg.name for arg in rule.consequent.args)
     return Grounding(
-        expression=st_item,
+        expression=rule,
         relation=Constant[AbstractSet](
             NamedRelationalAlgebraFrozenSet(
                 columns=cols, iterable=tuple_set.value
@@ -115,14 +117,14 @@ def build_pfact_grounding_from_set(pred_symb, relation):
     )
 
 
-def build_grounding(pd_program, dl_instance):
+def build_grounding(cpl_program, dl_instance):
     extensional_groundings = []
     probfact_groundings = []
     probchoice_groundings = []
     intensional_groundings = []
-    for pred_symb in pd_program.predicate_symbols:
-        st_item = pd_program.symbol_table[pred_symb]
-        if pred_symb in pd_program.pfact_pred_symbs:
+    for pred_symb in cpl_program.predicate_symbols:
+        st_item = cpl_program.symbol_table[pred_symb]
+        if pred_symb in cpl_program.pfact_pred_symbs:
             if isinstance(st_item, Constant[AbstractSet]):
                 grounding = build_pfact_grounding_from_set(pred_symb, st_item)
             else:
@@ -130,7 +132,7 @@ def build_grounding(pd_program, dl_instance):
                     pred_symb, st_item, dl_instance[pred_symb]
                 )
             probfact_groundings.append(grounding)
-        elif pred_symb in pd_program.pchoice_pred_symbs:
+        elif pred_symb in cpl_program.pchoice_pred_symbs:
             probchoice_groundings.append(
                 build_pchoice_grounding(pred_symb, st_item)
             )
@@ -157,23 +159,23 @@ class Chase(ChaseNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
 
 
 def ground_probdatalog_program(
-    pd_code, **sets,
+    cpl_code, **sets,
 ):
-    pd_program = CPLogicProgram()
-    pd_program.walk(pd_code)
+    cpl_program = CPLogicProgram()
+    cpl_program.walk(cpl_code)
     for prefix in ["probfact", "extensional_predicate", "probchoice"]:
         if f"{prefix}_sets" not in sets:
             continue
-        add_fun = getattr(pd_program, f"add_{prefix}_from_tuples")
+        add_fun = getattr(cpl_program, f"add_{prefix}_from_tuples")
         for symb, the_set in sets[f"{prefix}_sets"]:
             add_fun(symb, the_set)
-    for disjunction in pd_program.intensional_database().values():
+    for disjunction in cpl_program.intensional_database().values():
         if len(disjunction.formulas) > 1:
             raise NeuroLangException(
                 "Programs with several rules with the same head predicate "
                 "symbol are not currently supported"
             )
-    dl_program = probdatalog_to_datalog(pd_program)
+    dl_program = cplogic_to_datalog(cpl_program)
     chase = Chase(dl_program)
     dl_instance = chase.build_chase_solution()
-    return build_grounding(pd_program, dl_instance)
+    return build_grounding(cpl_program, dl_instance)
