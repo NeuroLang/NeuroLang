@@ -167,7 +167,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
                 row_type = relation.row_type
             else:
                 row_type = Tuple[tuple(
-                    type(arg) for arg in next(iter(relation._container))
+                    type(arg) for arg in next(iter(relation))
                 )]
 
             relation_type = AbstractSet[row_type]

@@ -98,7 +98,7 @@ class RelationalAlgebraFrozenSet(
             ', '.join(
                 f'`{src_c}` as {dst_c}'
                 for src_c, dst_c in
-                zip(self.columns, other.columns)
+                zip(other.columns, self.columns)
             ) +
             f' FROM {other._name}'
         )
@@ -106,6 +106,7 @@ class RelationalAlgebraFrozenSet(
         conn.execute(query)
         self._created = True
         self._arity = len(self.columns)
+        self._len = other._len
         self.is_view = True
         if other.is_view:
             self.parents = other.parents
@@ -578,7 +579,7 @@ class NamedRelationalAlgebraFrozenSet(
         return type(self).create_from_table_or_view(
             name=new_name,
             engine=self.engine,
-            columns=tuple(result),
+            columns=tuple(join_columns | remainder_columns),
             is_view=True,
             parents=[self, other],
         )
