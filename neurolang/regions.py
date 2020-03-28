@@ -87,7 +87,7 @@ class Region(object):
 
     @staticmethod
     def from_spatial_image_label(spatial_image, label, **kwargs):
-        data = spatial_image.get_data()
+        data = np.asanyarray(spatial_image.dataobj)
         voxels = np.transpose((data == label).nonzero())
         if 'image_dim' not in kwargs:
             kwargs['image_dim'] = spatial_image.shape
@@ -246,7 +246,7 @@ class PointSet(VolumetricBrainRegion):
               not np.allclose(out.affine, self.affine)):
             raise ValueError("Image data has incompatible dimensionality")
         else:
-            mask = out.get_data()
+            mask = np.asanyarray(out.dataobj)
 
         discrete_points_ijk = np.round(self.points_ijk).astype(int)
         mask[tuple(discrete_points_ijk.T)] = value
@@ -375,7 +375,7 @@ class ExplicitVBR(VolumetricBrainRegion):
               not np.allclose(out.affine, self.affine)):
             raise ValueError("Image data has incompatible dimensionality")
         else:
-            mask = out.get_data()
+            mask = np.asanyarray(out.dataobj)
 
         mask[tuple(self.voxels.T)] = value
         return out
