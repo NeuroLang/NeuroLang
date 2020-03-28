@@ -54,8 +54,8 @@ def test_equijoin():
 
 
 def test_naturaljoin():
-    r1_named = NamedRelationalAlgebraFrozenSet(('x', 'y'), R1)
-    r2_named = NamedRelationalAlgebraFrozenSet(('x', 'z'), R2)
+    r1_named = NamedRelationalAlgebraFrozenSet(('x', 'y'), R1.unwrap())
+    r2_named = NamedRelationalAlgebraFrozenSet(('x', 'z'), R2.unwrap())
     s = NaturalJoin(
         C_[AbstractSet[Tuple[int, int]]](r1_named),
         C_[AbstractSet[Tuple[int, int]]](r2_named)

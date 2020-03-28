@@ -264,7 +264,7 @@ class NamedRelationalAlgebraFrozenSet(
                 self._container = self._container.set_index(0)
         else:
             self._container = pd.DataFrame(
-                list(iterable),
+                iterable,
                 columns=self._columns
             )
             self._container = self._renew_index(self._container)
@@ -272,7 +272,7 @@ class NamedRelationalAlgebraFrozenSet(
     def _initialize_from_instance_same_class(self, iterable):
         if iterable._container is None:
             self._container = pd.DataFrame(
-                list(iterable),
+                iterable,
                 columns=self._columns
             )
         else:
