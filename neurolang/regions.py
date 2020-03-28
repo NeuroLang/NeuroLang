@@ -16,10 +16,16 @@ __all__ = [
 
 
 def region_union(region_set, affine=None):
+    region_set = (
+        region for region in region_set
+        if not isinstance(region, EmptyRegion)
+    )
     return region_set_algebraic_op(set.union, region_set, affine)
 
 
 def region_intersection(region_set, affine=None):
+    if any(isinstance(region, EmptyRegion) for region in region_set):
+        return EmptyRegion()    
     return region_set_algebraic_op(set.intersection, region_set, affine)
 
 
@@ -46,7 +52,7 @@ def region_set_algebraic_op(op, region_set, affine=None, n_dim=3):
 
     result_voxels = np.array(tuple(op(*voxels_set_of_regions)))
     if len(result_voxels) == 0:
-        return None
+        return EmptyRegion()
     return ExplicitVBR(result_voxels, affine, max_dim)
 
 
@@ -78,6 +84,32 @@ class Region(object):
 
     def __repr__(self):
         return f'Region(AABB={self.bounding_box})'
+
+    @staticmethod
+    def from_spatial_image_label(spatial_image, label, **kwargs):
+        data = spatial_image.get_data()
+        voxels = np.transpose((data == label).nonzero())
+        if 'image_dim' not in kwargs:
+            kwargs['image_dim'] = spatial_image.shape
+
+        if len(voxels) > 0:
+            return ExplicitVBR(voxels, spatial_image.affine, **kwargs)
+        else:
+            return EmptyRegion()
+
+
+class EmptyRegion(Region):
+    def __init__(self):
+        pass
+
+    def __hash__(self):
+        return hash(tuple())
+
+    def __eq__(self, other):
+        return isinstance(other, EmptyRegion)
+
+    def __repr__(self):
+        return 'EmptyRegion'
 
 
 class VolumetricBrainRegion(Region):

@@ -354,6 +354,32 @@ def test_neurolang_dl_solve_all():
     assert len(sol) == 2
 
 
+def test_neurolang_dl_datalog_code():
+    neurolang = frontend.NeurolangDL()
+    neurolang.execute_datalog_program('''
+    A(4, 5)
+    A(5, 6)
+    A(6, 5)
+    B(x,y) :- A(x, y)
+    B(x,y) :- B(x, z),A(z, y)
+    C(x) :- B(x, y), y == 5
+    D("x")
+    ''')
+
+    res = neurolang.solve_all()
+
+    assert res['A'] == {(4, 5), (5, 6), (6, 5)}
+    assert res['B'] == {
+        (4, 5), (5, 6), (6, 5), (4, 6), (5, 5)
+    }
+    assert res['C'] == {
+        (4,), (5,), (6,)
+    }
+    assert res['D'] == {
+        ('x',),
+    }
+
+
 def test_neurolang_dl_aggregation():
     neurolang = frontend.NeurolangDL()
     q = neurolang.new_symbol(name='q')
