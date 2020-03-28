@@ -43,7 +43,7 @@ class RelationalAlgebraFrozenSet(
             self.parents = iterable.parents + [iterable]
             self._created = iterable._created
         else:
-            df = pd.DataFrame(list(iterable), columns=column_names)
+            df = pd.DataFrame(iterable, columns=column_names)
             self._columns = tuple(df.columns)
             if len(self._columns) > 0:
                 df.to_sql(self._name, self.engine, index=False)
@@ -462,6 +462,7 @@ class NamedRelationalAlgebraFrozenSet(
         self._columns = columns
         self._name = self._new_name()
         self.parents = []
+        self._created = False
 
         if (
             isinstance(iterable, RelationalAlgebraFrozenSet) and
