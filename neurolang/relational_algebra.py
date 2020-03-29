@@ -108,6 +108,24 @@ class Difference(RelationalAlgebraOperation):
         )
 
 
+class Union(RelationalAlgebraOperation):
+    def __init__(self, first, second):
+        self.first = first
+        self.second = second
+
+    def __repr__(self):
+        return f"{self.first} ∪ {self.second}"
+
+
+class Intersection(RelationalAlgebraOperation):
+    def __init__(self, first, second):
+        self.first = first
+        self.second = second
+
+    def __repr__(self):
+        return f"{self.first} & {self.second}"
+
+
 class NameColumns(RelationalAlgebraOperation):
     def __init__(self, relation, column_names):
         self.relation = relation
@@ -220,6 +238,20 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         left = self.walk(difference.relation_left).value
         right = self.walk(difference.relation_right).value
         res = left - right
+        return self._build_relation_constant(res)
+
+    @ew.add_match(Union)
+    def ra_union(self, union):
+        left = self.walk(union.relation_left).value
+        right = self.walk(union.relation_right).value
+        res = left | right
+        return self._build_relation_constant(res)
+
+    @ew.add_match(Intersection)
+    def ra_intersection(self, intersection):
+        left = self.walk(intersection.relation_left).value
+        right = self.walk(intersection.relation_right).value
+        res = left & right
         return self._build_relation_constant(res)
 
     @ew.add_match(NameColumns)
