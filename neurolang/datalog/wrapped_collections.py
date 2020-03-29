@@ -1,12 +1,12 @@
+from inspect import getmro
 from itertools import tee
 from typing import Tuple
-from inspect import getmro
 
-from ..expressions import Constant
 from ..expression_walker import ReplaceExpressionsByValues
+from ..expressions import Constant
 from ..type_system import infer_type
-from ..utils.relational_algebra_set.sql import RelationalAlgebraSet
-
+from ..utils.relational_algebra_set.sql import (
+    NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet)
 
 REBV = ReplaceExpressionsByValues(dict())
 
@@ -102,3 +102,41 @@ class WrappedRelationalAlgebraSet(
     def unwrap(self):
         res = RelationalAlgebraSet(iterable=self)
         return res
+
+
+class WrappedNamedRelationalAlgebraFrozenSet(NamedRelationalAlgebraFrozenSet):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._row_types = dict()
+        self.row_types
+
+    @property
+    def row_types(self):
+        if (
+            len(self._row_types) == 0 and
+            self.arity > 0 and len(self) > 0
+        ):
+            element = next(super().__iter__())
+            self._row_types = {
+                c: Constant(getattr(element, c)).type
+                for c in self.columns
+            }
+
+        return self._row_types
+
+    def __iter__(self):
+        if self.arity > 0:
+            row_types = self.row_types
+            for row in super().__iter__():
+                yield {
+                    f: Constant[row_types[f]](
+                        v, verify_type=False
+                    )
+                    for f, v in zip(row._fields, row)
+                }
+        else:
+            for _ in range(len(self)):
+                yield dict()
+
+    def unwrapped_iter(self):
+        return super().__iter__()
