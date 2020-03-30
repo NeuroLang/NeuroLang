@@ -56,9 +56,9 @@ def test_non_recursive_negation():
     dc = Chase(dl)
     solution_instance = dc.build_chase_solution()
 
-    assert solution_instance['V'].value == {1, 2, 3}
-    assert solution_instance['T'].value == {1, 4}
-    assert solution_instance['G'].value == {2, 3}
+    assert solution_instance['V'].value == {(1,), (2,), (3,)}
+    assert solution_instance['T'].value == {(1,), (4,)}
+    assert solution_instance['G'].value == {(2,), (3,)}
 
 
 def test_stratified_and_chase():
