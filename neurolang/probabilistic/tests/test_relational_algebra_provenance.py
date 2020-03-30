@@ -1,24 +1,18 @@
 import pytest
 
-from ..expressions import (
-    Constant,
-    Symbol,
-)
+from ...expressions import (Constant, Symbol)
 from ...relational_algebra import (
-    ColumnStr,
-    EquiJoin,
-    NaturalJoin,
-    Product,
-    Projection,
-    Selection,
-    eq_,
-    RenameColumn,
+    ColumnStr, EquiJoin, NaturalJoin, Product, Projection, Selection, eq_,
+    RenameColumn
 )
 from ..relational_algebra_provenance import (
-    CountingSemiRing, RelationalAlgebraProvenanceSolver, ProvenanceAlgebraSet
+    CountingSemiRing,
+    RelationalAlgebraProvenanceSolver,
+    ProvenanceAlgebraSet,
+    Union,
+    Aggregation,
 )
 from ...utils import NamedRelationalAlgebraFrozenSet
-from ..expressions import Aggregation
 
 import numpy as np
 
@@ -150,7 +144,9 @@ def test_naturaljoin():
     res = RnjR._container.apply(
         lambda x: x['__provenance__1'] * x['__provenance__2'], axis=1
     )
-    assert sol.value._container['__provenance__'].equals(res)
+    prov_sol = sol.value._container['__provenance__'].values
+    prov_res = res.values
+    assert np.all(prov_sol == prov_res)
 
 
 def test_product():
@@ -196,7 +192,28 @@ def test_product():
     res = RnjR._container.apply(
         lambda x: x['__provenance__1'] * x['__provenance__2'], axis=1
     )
-    assert sol._container['__provenance__'].equals(res)
+    prov_sol = sol._container['__provenance__'].values
+    prov_res = res.values
+    assert np.all(prov_sol == prov_res)
+
+
+def test_union():
+    RA1 = NamedRelationalAlgebraFrozenSet(
+        columns=('col1', '__provenance__'),
+        iterable=[(i * 2, i) for i in range(10)]
+    )
+    pset_r1 = ProvenanceAlgebraSet(RA1, '__provenance__')
+
+    RA2 = NamedRelationalAlgebraFrozenSet(
+        columns=('col1', '__provenance__'),
+        iterable=[(i % 5, i) for i in range(20)]
+    )
+    pset_r2 = ProvenanceAlgebraSet(RA2, '__provenance__')
+
+    s = Union(pset_r1, pset_r2)
+    sol = RelationalAlgebraProvenanceSolver(CountingSemiRing).walk(s).value
+
+    assert sol == (RA1 | RA2)
 
 
 @pytest.mark.skip('Not implemented yet')

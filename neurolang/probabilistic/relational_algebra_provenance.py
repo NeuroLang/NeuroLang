@@ -7,8 +7,8 @@ from ..utils import (
     NamedRelationalAlgebraFrozenSet,
 )
 from ..relational_algebra import (
-    eq_, ColumnStr, Selection, Projection, Product, EquiJoin, NaturalJoin,
-    Difference, NameColumns, RenameColumn, RelationalAlgebraSolver
+    eq_, Column, ColumnStr, Selection, Projection, Product, EquiJoin,
+    NaturalJoin, Difference, NameColumns, RenameColumn, RelationalAlgebraSolver
 )
 
 from .expressions import (
@@ -16,24 +16,12 @@ from .expressions import (
     Symbol,
     Definition,
     FunctionApplication,
-    ChoiceDistribution,
-    RandomVariableValuePointer,
-    NegateProbability,
-    MultipleNaturalJoin,
-    Aggregation,
-    ExtendedProjection,
-    ExtendedProjectionListMember,
-    Unions,
-    Union,
-    SumRows,
 )
 
 FA_ = FunctionApplication
 C_ = Constant
 
-# TODO SemiRing exception
-# TODO Define a better SemiRing class
-# TODO Adapt _combine_relation_sum and _combine_relation_prod to use semiring
+# TODO Improve semiring implementation
 
 
 def arithmetic_operator_string(op):
@@ -81,6 +69,69 @@ class ProjectionNonProvenance(RelationalAlgebraOperation):
             f'\N{GREEK CAPITAL LETTER PI}'
             f'_{self.attributes}({self.relation})'
         )
+
+
+class ExtendedProjection(RelationalAlgebraOperation):
+    """
+    Projection operator extended to allow computation on components of tuples.
+    The concept of extended projection is formally defined in section 5.2.5
+    of [1]_.
+    .. [1] Garcia-Molina, Hector, Jeffrey D. Ullman, and Jennifer Widom.
+       "Database systems: the complete book." (2009).
+    """
+
+    def __init__(self, relation, projection_list):
+        self.relation = relation
+        self.projection_list = tuple(projection_list)
+
+    def __repr__(self):
+        join_str = "," if len(self.projection_list) < 2 else ",\n"
+        return "π_[{}]({})".format(
+            join_str.join([repr(member) for member in self.projection_list]),
+            repr(self.relation),
+        )
+
+
+class ExtendedProjectionListMember(Definition):
+    """
+    Member of a projection list.
+    As described in [1]_, a projection list member can either be
+        - a single attribute (column) name in the relation, resulting in a
+          normal non-extended projection,
+        - an expression `x -> y` where `x` and `y` are both attribute (column)
+          names, `x` effectively being rename as `y`,
+        - or an expression `E -> z` where `E` is an expression involving
+          attributes of the relation, arithmetic operators, and string
+          operators, and `z` is a new name for the attribute that results from
+          the calculation implied by `E`. For example, `a + b -> x` represents
+          the sum of the attributes `a` and `b`, renamed `x`.
+    .. [1] Garcia-Molina, Hector, Jeffrey D. Ullman, and Jennifer Widom.
+       "Database systems: the complete book." (2009).
+    """
+
+    def __init__(self, fun_exp, dst_column):
+        self.fun_exp = fun_exp
+        self.dst_column = dst_column
+
+    def __repr__(self):
+        return "{} -> {}".format(self.fun_exp, self.dst_column)
+
+
+class Union(RelationalAlgebraOperation):
+    def __init__(self, first, second):
+        self.first = first
+        self.second = second
+
+
+class Aggregation(RelationalAlgebraOperation):
+    def __init__(
+        self, agg_fun, relation, group_columns, agg_column, dst_column
+    ):
+        self.agg_fun = agg_fun
+        self.relation = relation
+        self.group_columns = tuple(group_columns)
+        self.agg_column = agg_column
+        self.dst_column = dst_column
 
 
 class SemiRing:
@@ -142,6 +193,26 @@ class RelationalAlgebraProvenanceSolver(ExpressionWalker):
         new_set = relation.value.projection(*non_provenance_col)
 
         return new_set
+
+    @add_match(Selection(..., FA_(eq_, (C_[Column], C_[Column]))))
+    def selection_between_columns(self, selection):
+        col1, col2 = selection.formula.args
+        selected_relation = self.walk(selection.relation)\
+            .value.selection_columns({col1.value: col2.value})
+
+        return self._build_provenance_set_from_set(
+            selected_relation, selection.relation.provenance_column
+        )
+
+    @add_match(Selection(..., FA_(eq_, (C_[Column], ...))))
+    def selection_by_constant(self, selection):
+        col, val = selection.formula.args
+        selected_relation = self.walk(selection.relation)\
+            .value.selection({col.value: val.value})
+
+        return self._build_provenance_set_from_set(
+            selected_relation, selection.relation.provenance_column
+        )
 
     @add_match(Projection)
     def prov_projection(self, projection):
@@ -287,55 +358,9 @@ class RelationalAlgebraProvenanceSolver(ExpressionWalker):
             union_op.first.provenance_column
         )
 
-    @add_match(Unions)
-    def prov_unions(self, unions_op):
-        result = None
-
-        for relation in unions_op.relations:
-            if result is None:
-                result = self.walk(relation).value
-            else:
-                result = result | self.walk(relation).value
-        return self._build_provenance_set_from_set(
-            result, unions_op.first.provenance_column
-        )
-
-    @add_match(SumRows(Projection))
-    def prov_sum_projected_probability(self, sum_projected):
-
-        projection = sum_projected.relation
-        projected = self.walk(projection.relation)
-
-        non_free_var = projection.attributes
-        prob_column = sum_projected.provenance_column
-
-        result = NegateProbability(projected)
-        result = self.walk(result)
-
-        mul = Constant[str]("prod")
-        non_free_var = [Constant(ColumnStr(x.name)) for x in non_free_var]
-
-        result = Aggregation(
-            mul,
-            result,
-            tuple(non_free_var),
-            Constant(ColumnStr(prob_column)),
-            Constant(ColumnStr(prob_column)),
-        )
-
-        result = self.walk(result)
-
-        result = NegateProbability(result)
-
-        return self.walk(result)
-
     @add_match(Constant[AbstractSet])
     def prov_relation(self, relation):
         return relation
-
-    @add_match(ChoiceDistribution)
-    def prov_choice_distribution(self, distrib):
-        return distrib
 
     @add_match(Aggregation)
     def prov_aggregation(self, agg_op):
