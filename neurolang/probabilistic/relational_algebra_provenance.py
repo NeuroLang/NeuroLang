@@ -101,13 +101,13 @@ CountingSemiRing = SemiRing([C_(0), C_(1)], [operator.add, operator.mul])
 
 
 class ProvenanceAlgebraSet(Constant):
-    def __init__(self, algebra_set, provenance_column):
-        self.algebra_set = algebra_set
+    def __init__(self, relations, provenance_column):
+        self.relations = relations
         self.provenance_column = provenance_column
 
     @property
     def value(self):
-        return self.algebra_set
+        return self.relations
 
 
 class RelationalAlgebraProvenanceSolver(ExpressionWalker):
