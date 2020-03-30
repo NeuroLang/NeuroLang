@@ -215,10 +215,22 @@ def test_named_relational_algebra_difference():
 
     ras_a = NamedRelationalAlgebraFrozenSet(('x', 'y'), a)
     ras_b = NamedRelationalAlgebraFrozenSet(('x', 'y'), b)
+    ras_b_inv = NamedRelationalAlgebraFrozenSet(
+        ('y', 'x'), [t[::-1] for t in b]
+    )
     ras_c = NamedRelationalAlgebraFrozenSet(('x', 'y'), c)
 
     res = ras_a - ras_b
     assert res == ras_c
+
+    res = ras_b - ras_a
+    assert len(res) == 0
+
+    res = ras_a - ras_b_inv
+    assert res == ras_c
+
+    res = ras_b_inv - ras_a
+    assert len(res) == 0
 
 
 def test_named_groupby():

@@ -3,10 +3,6 @@ import numpy as np
 from ..exceptions import NeuroLangException
 
 
-class InvalidProbabilityDistribution(NeuroLangException):
-    pass
-
-
 class Distribution:
     def probability(self, value):
         raise NeuroLangException("Not implemented for abstract class")

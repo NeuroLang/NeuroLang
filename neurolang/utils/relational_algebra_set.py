@@ -419,7 +419,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         return output
 
     def __sub__(self, other):
-        if self.columns != other.columns:
+        if not self._container.columns.equals(other._container.columns):
             raise ValueError(
                 "Difference defined only for sets with the same columns"
             )
