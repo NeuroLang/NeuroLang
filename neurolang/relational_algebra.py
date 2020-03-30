@@ -11,6 +11,7 @@ from .expressions import (
     Unknown,
 )
 from .utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet
+from .type_system import unify_types
 
 eq_ = Constant(eq)
 
@@ -292,7 +293,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         right = self.walk(ra_op.relation_right).value
         left_type = _get_relation_type(left)
         right_type = _get_relation_type(right)
-        type_ = _binary_op_most_informative_type(left_type, right_type)
+        type_ = unify_types(left_type, right_type)
         binary_op_fun_name = {
             Union: "__or__",
             Intersection: "__and__",
@@ -590,20 +591,3 @@ def _get_relation_type(relation):
         return AbstractSet[relation.row_type]
     row_type = Tuple[tuple(type(arg) for arg in next(iter(relation)))]
     return AbstractSet[row_type]
-
-
-def _binary_op_most_informative_type(type_a, type_b):
-    if type_a is type_b:
-        return type_a
-    tuple_args_a = type_a.__args__[0].__args__
-    tuple_args_b = type_b.__args__[0].__args__
-    if tuple_args_a and not tuple_args_b:
-        return type_a
-    elif tuple_args_b and not tuple_args_a:
-        return type_b
-    else:
-        n_unknowns_a = sum(arg_type is Unknown for arg_type in tuple_args_a)
-        n_unknowns_b = sum(arg_type is Unknown for arg_type in tuple_args_a)
-        if n_unknowns_a < n_unknowns_b:
-            return type_a
-        return type_b
