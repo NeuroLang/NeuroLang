@@ -1,13 +1,32 @@
 from typing import AbstractSet, Tuple
 
-from ..expressions import Constant, Symbol
 from ..datalog.basic_representation import WrappedRelationalAlgebraSet
-from ..relational_algebra import (ColumnInt, ColumnStr, EquiJoin, NameColumns,
-                                  NaturalJoin, Product, Projection,
-                                  RelationalAlgebraOptimiser,
-                                  RelationalAlgebraSet,
-                                  RelationalAlgebraSolver, Selection, eq_)
-from ..utils import RelationalAlgebraFrozenSet, NamedRelationalAlgebraFrozenSet
+from ..expressions import Constant, Symbol
+from ..relational_algebra import (
+    ColumnInt,
+    ColumnStr,
+    EquiJoin,
+    Intersection,
+    NameColumns,
+    NaturalJoin,
+    Product,
+    Projection,
+    RelationalAlgebraOptimiser,
+    RelationalAlgebraSolver,
+    Selection,
+    Union,
+    eq_,
+    _const_relation_type_is_known,
+    _sort_typed_const_named_relation_tuple_type_args,
+    _infer_relation_type,
+    _get_const_relation_type,
+)
+from ..utils import (
+    NamedRelationalAlgebraFrozenSet,
+    RelationalAlgebraFrozenSet,
+    RelationalAlgebraSet,
+)
+
 
 R1 = WrappedRelationalAlgebraSet([
     (i, i * 2)
@@ -64,6 +83,90 @@ def test_naturaljoin():
     sol = RelationalAlgebraSolver().walk(s).value
 
     assert sol == r1_named.naturaljoin(r2_named)
+
+
+def test_union_unnamed():
+    r1 = C_[AbstractSet](WrappedRelationalAlgebraSet([(1, 2), (7, 8)]))
+    r2 = C_[AbstractSet](WrappedRelationalAlgebraSet([(5, 0), (7, 8)]))
+    res = RelationalAlgebraSolver().walk(Union(r1, r2))
+    assert res == C_[AbstractSet](
+        WrappedRelationalAlgebraSet([(1, 2), (7, 8), (5, 0)])
+    )
+    assert (
+        RelationalAlgebraSolver().walk(
+            Union(r1, C_[AbstractSet](WrappedRelationalAlgebraSet()))
+        )
+        == r1
+    )
+
+
+def test_union_named():
+    r1 = C_[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(("x", "y"), [
+            (1, "a"),
+            (2, "b"),
+            (3, "a"),
+            (3, "b"),
+        ])
+    )
+    r2 = C_[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(("x", "y"), [
+            (3, "b"),
+            (3, "a"),
+            (3, "c"),
+        ])
+    )
+    empty  = C_[AbstractSet](NamedRelationalAlgebraFrozenSet(('x', 'y'), []))
+    res = RelationalAlgebraSolver().walk(Union(r1, r2))
+    expected = C_[AbstractSet[Tuple[int, str]]](
+        NamedRelationalAlgebraFrozenSet(('x', 'y'), [
+            (1, "a"), (2, "b"), (3, "a"), (3, "b"), (3, "c")
+        ])
+    )
+    assert res == expected
+    assert RelationalAlgebraSolver().walk(Union(r1, empty)) == r1
+    assert RelationalAlgebraSolver().walk(Union(empty, r1)) == r1
+
+
+def test_intersection_unnamed():
+    r1 = C_[AbstractSet](WrappedRelationalAlgebraSet([(1, 2), (7, 8)]))
+    r2 = C_[AbstractSet](WrappedRelationalAlgebraSet([(5, 0), (7, 8)]))
+    res = RelationalAlgebraSolver().walk(Union(r1, r2))
+    assert res == C_[AbstractSet](
+        WrappedRelationalAlgebraSet([(1, 2), (7, 8), (5, 0)])
+    )
+    assert (
+        RelationalAlgebraSolver().walk(
+            Union(r1, C_[AbstractSet](WrappedRelationalAlgebraSet()))
+        )
+        == r1
+    )
+
+
+def test_intersection_named():
+    r1 = C_[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(("x", "y"), [
+            (1, "a"),
+            (2, "b"),
+            (3, "a"),
+            (3, "b"),
+        ])
+    )
+    r2 = C_[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(("x", "y"), [
+            (3, "b"),
+            (3, "a"),
+            (3, "c"),
+        ])
+    )
+    empty  = C_[AbstractSet](NamedRelationalAlgebraFrozenSet(('x', 'y'), []))
+    res = RelationalAlgebraSolver().walk(Intersection(r1, r2))
+    expected = C_[AbstractSet[Tuple[int, str]]](
+        NamedRelationalAlgebraFrozenSet(('x', 'y'), [(3, "a"), (3, "b")])
+    )
+    assert res == expected
+    assert RelationalAlgebraSolver().walk(Intersection(r1, empty)) == empty
+    assert RelationalAlgebraSolver().walk(Intersection(empty, r1)) == empty
 
 
 def test_product():
@@ -295,3 +398,64 @@ def test_name_columns_symbolic_column_name():
     assert solver.walk(Constant[ColumnStr](ColumnStr("test"))) == Constant[
         ColumnStr
     ](ColumnStr("test"))
+
+
+def test_const_relation_type_is_known():
+    type_ = AbstractSet[Tuple[int, str]]
+    values = [(42, "bonjour"), (21, "galaxy")]
+    relation = RelationalAlgebraFrozenSet(values)
+    assert _const_relation_type_is_known(Constant[type_](relation))
+    assert not _const_relation_type_is_known(Constant[AbstractSet](relation))
+    assert not _const_relation_type_is_known(
+        Constant[AbstractSet[Tuple]](relation)
+    )
+
+
+def test_sort_typed_const_named_relation_tuple_type_args():
+    type_ = AbstractSet[Tuple[int, str]]
+    sorted_type = AbstractSet[Tuple[str, int]]
+    columns = ("b", "a")
+    values = [(42, "bonjour"), (21, "galaxy")]
+    sorted_named_relation = NamedRelationalAlgebraFrozenSet(
+        sorted(columns), [t[::-1] for t in values]
+    )
+    not_sorted_named_relation = NamedRelationalAlgebraFrozenSet(
+        columns, values
+    )
+    assert (
+        _sort_typed_const_named_relation_tuple_type_args(
+            Constant[type_](not_sorted_named_relation)
+        )
+        is sorted_type
+    )
+    assert (
+        _sort_typed_const_named_relation_tuple_type_args(
+            Constant[sorted_type](sorted_named_relation)
+        )
+        is sorted_type
+    )
+
+
+def test_infer_relation_type():
+    assert (
+        _infer_relation_type(RelationalAlgebraFrozenSet())
+        is AbstractSet[Tuple]
+    )
+    assert (
+        _infer_relation_type(RelationalAlgebraFrozenSet([(2, "hello")]))
+        is AbstractSet[Tuple[int, str]]
+    )
+
+
+def test_get_const_relation_type():
+    type_ = AbstractSet[Tuple[int, str]]
+    values = [(42, "bonjour"), (21, "galaxy")]
+    columns = ('y', 'z')
+    relation = NamedRelationalAlgebraFrozenSet(columns, values)
+    assert _get_const_relation_type(Constant[type_](relation)) is type_
+    type_ = AbstractSet[Tuple[int, str]]
+    sorted_type = AbstractSet[Tuple[str, int]]
+    values = [(42, "bonjour"), (21, "galaxy")]
+    columns = ('z', 'y')
+    relation = NamedRelationalAlgebraFrozenSet(columns, values)
+    assert _get_const_relation_type(Constant[type_](relation)) is sorted_type
