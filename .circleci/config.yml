@@ -68,8 +68,8 @@ commands:
             make test
             ./cc-test-reporter after-build --coverage-input-type coverage.py --exit-code $?
             python-codacy-coverage -r coverage.xml
-            mkdir test_reports
-            cp utest.xml test_reports
+            mkdir -p test_reports/neurolang
+            cp utest.xml test_reports/neurolang
 
       - store_artifacts:
           path: test_reports
