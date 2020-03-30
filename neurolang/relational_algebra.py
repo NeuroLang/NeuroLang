@@ -577,11 +577,11 @@ def _const_relation_type_is_known(const_relation):
     to be known.
 
     """
-    try:
-        tuple_type = next(iter(type_system.get_args(const_relation.type)))
-    except StopIteration:
+    type_args = type_system.get_args(const_relation.type)
+    if len(type_args) != 1:
         return False
-    return len(type_system.get_args(tuple_type)) > 0
+    tuple_type_args = type_system.get_args(type_args[0])
+    return len(tuple_type_args) > 0
 
 
 def _sort_typed_const_named_relation_tuple_type_args(const_named_relation):
