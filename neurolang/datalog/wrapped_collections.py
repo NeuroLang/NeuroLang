@@ -59,7 +59,7 @@ class WrappedRelationalAlgebraSetMixin:
     def __init__(self, iterable=None, **kwargs):
         kwargs = kwargs.copy()
         if iterable is not None:
-            if isinstance(iterable, (WrappedNamedRelationalAlgebraFrozenSet, WrappedRelationalAlgebraSetMixin)):
+            if isinstance(iterable, WrappedRelationalAlgebraSetMixin):
                 iterable = iterable.unwrap()
             else:
                 iterable = _obtain_value_iterable(iterable)
@@ -132,6 +132,16 @@ class WrappedRelationalAlgebraSet(
 class WrappedNamedRelationalAlgebraFrozenSet(
     WrappedRelationalAlgebraSetMixin, NamedRelationalAlgebraFrozenSet
 ):
+    def __init__(self, columns=None, iterable=None, **kwargs):
+        kwargs = kwargs.copy()
+        if iterable is not None:
+            if isinstance(iterable, WrappedRelationalAlgebraSetMixin):
+                iterable = iterable.unwrap()
+            else:
+                iterable = _obtain_value_iterable(iterable)
+        super().__init__(columns=columns, iterable=iterable, **kwargs)
+        self._row_type = None
+
     @property
     def row_type(self):
         if self._row_type is None:
