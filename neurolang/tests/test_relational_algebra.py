@@ -103,6 +103,7 @@ def test_union_named():
         NamedRelationalAlgebraFrozenSet(("x", "y"), [
             (3, "b"),
             (3, "a"),
+            (3, "c"),
         ])
     )
     r3 = C_[AbstractSet](
@@ -110,6 +111,12 @@ def test_union_named():
             (0, "pie"),
         ])
     )
+    # solver = RelationalAlgebraSolver()
+    # assert solver.walk(Union(r1, r2)) == C_[AbstractSet](
+        # NamedRelationalAlgebraFrozenSet(('x', 'y'), [
+            # (1, "a"), (2, "b"), (3, "a"), (3, "b"), (3, "c")
+        # ])
+    # )
 
 
 def test_product():

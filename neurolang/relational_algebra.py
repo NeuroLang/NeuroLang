@@ -299,7 +299,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
             Difference: "__sub__",
         }.get(type(ra_op))
         new_relation = getattr(left, binary_op_fun_name)(right)
-        return self._build_relation_constant(new_relation, type_=left_type)
+        return self._build_relation_constant(new_relation, type_=type_)
 
 
 class RelationalAlgebraSimplification(ew.ExpressionWalker):
