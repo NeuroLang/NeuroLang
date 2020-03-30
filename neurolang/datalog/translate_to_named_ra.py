@@ -87,7 +87,8 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
 
         in_set = Projection(in_set, projections)
         column_names = tuple(
-            Constant[ColumnStr](ColumnStr(arg.name)) for arg in named_args
+            Constant[ColumnStr](ColumnStr(arg.name), verify_type=False)
+            for arg in named_args
         )
         in_set = NameColumns(in_set, column_names)
         return in_set
