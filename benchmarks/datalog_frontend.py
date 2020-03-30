@@ -15,9 +15,10 @@ class TimeRegionComparisons:
 
     param_names = ['direction']
 
-    timeout = 5
+    timeout = 10 * 60
 
     def setup(self, direction):
+        raise NotImplementedError("Skip benchmark")
         if not hasattr(self, 'nl'):
             self.setup_()
 
