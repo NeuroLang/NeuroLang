@@ -118,21 +118,6 @@ class NameColumns(RelationalAlgebraOperation):
 
     """
     def __init__(self, relation, column_names):
-        if any(
-            not (
-                isinstance(col_name, Constant)
-                and isinstance(col_name.value, ColumnStr)
-            )
-            and not (
-                isinstance(col_name, Symbol)
-                and type(col_name).type is ColumnStr
-            )
-            for col_name in column_names
-        ):
-            raise NeuroLangException(
-                "All column names must either be instances of "
-                "Constant[ColumnStr] or Symbol[ColumnStr]"
-            )
         self.relation = relation
         self.column_names = column_names
 
