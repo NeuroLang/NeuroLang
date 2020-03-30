@@ -181,9 +181,9 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
 
     def _build_relation_constant(self, relation, type_=Unknown):
         if type_ is not Unknown:
-            relation_type = AbstractSet[type_]
+            relation_type = type_
         else:
-            relation_type = _get_relation_type(relation)
+            relation_type = _infer_relation_type(relation)
         return C_[relation_type](relation, verify_type=False)
 
     @ew.add_match(Selection(..., FA_(eq_, (C_[Column], ...))))
@@ -289,17 +289,17 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         type as A and B's tuples. This includes, but is not necessarily limited
         to, the Union, Intersection and Difference operations.
         """
-        left = self.walk(ra_op.relation_left).value
-        right = self.walk(ra_op.relation_right).value
-        left_type = _get_relation_type(left)
-        right_type = _get_relation_type(right)
+        left = self.walk(ra_op.relation_left)
+        right = self.walk(ra_op.relation_right)
+        left_type = _infer_const_relation_type_if_unknown(left)
+        right_type = _infer_const_relation_type_if_unknown(right)
         type_ = unify_types(left_type, right_type)
         binary_op_fun_name = {
             Union: "__or__",
             Intersection: "__and__",
             Difference: "__sub__",
         }.get(type(ra_op))
-        new_relation = getattr(left, binary_op_fun_name)(right)
+        new_relation = getattr(left.value, binary_op_fun_name)(right.value)
         return self._build_relation_constant(new_relation, type_=type_)
 
 
@@ -568,26 +568,54 @@ class RelationalAlgebraOptimiser(
     pass
 
 
-def _relation_type_already_set(relation):
+def _const_relation_type_is_known(const_relation):
+    if type(const_relation.type.__reduce__()) is str:
+        return False
+    set_type, tuple_type = const_relation.type.__reduce__()[1]
     return (
-        hasattr(relation, "type")
-        and relation.type is AbstractSet
-        and len(relation.type.__args__) == 1
-        and relation.type.__args__[0] is Tuple
-        and (
-            not any(
-                arg is Unknown for arg in relation.type.__args__[0].__args__
-            )
-        )
+        set_type is AbstractSet
+        and tuple_type.__reduce__()[1][0] is Tuple
+        and not any(arg is Unknown for arg in tuple_type.__args__)
     )
 
 
-def _get_relation_type(relation):
-    if _relation_type_already_set(relation):
-        return relation.type
+def _sort_typed_const_named_relation_tuple_type_args(const_named_relation):
+    """
+    Given a typed `Constant[NamedRelationalAlgebraFrozenSet]`, `R`, with
+    columns `c_1, ..., c_n` and whose tuples have the type `Tuple[x_1, ...,
+    x_n]`, this function obtains the new type of the relation
+    `AbstractSet[Tuple[y_1, ..., y_n]]` such that `y_1, ..., y_n` are the same
+    initial types `x_1, ..., x_n` but sorted based on the alphabetical sort of
+    columns `c_1, ..., c_n`.
+
+    Notes
+    -----
+    This is useful when comparing or unifying the types of two named relations.
+
+    """
+    tuple_args = const_named_relation.type.__args__[0].__args__
+    sorted_tuple_args = tuple(
+        tuple_args[idx] for idx in const_named_relation.value._columns_sort
+    )
+    return AbstractSet[Tuple[sorted_tuple_args]]
+
+
+def _infer_relation_type(relation):
     if len(relation) == 0 or relation.arity == 0:
         return AbstractSet[Tuple]
     if hasattr(relation, "row_type"):
         return AbstractSet[relation.row_type]
-    row_type = Tuple[tuple(type(arg) for arg in next(iter(relation)))]
-    return AbstractSet[row_type]
+    tuple_type = Tuple[tuple(type(arg) for arg in next(iter(relation)))]
+    return AbstractSet[tuple_type]
+
+
+def _infer_const_relation_type_if_unknown(const_relation):
+    if _const_relation_type_is_known(const_relation):
+        if isinstance(const_relation.value, NamedRelationalAlgebraFrozenSet):
+            return _sort_typed_const_named_relation_tuple_type_args(
+                const_relation
+            )
+        else:
+            return const_relation.type
+    else:
+        return _infer_relation_type(const_relation.value)
