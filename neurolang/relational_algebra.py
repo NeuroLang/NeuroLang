@@ -3,7 +3,13 @@ from typing import AbstractSet, Tuple
 
 from . import expression_walker as ew
 from .exceptions import NeuroLangException
-from .expressions import Constant, Definition, FunctionApplication, Symbol
+from .expressions import (
+    Constant,
+    Definition,
+    FunctionApplication,
+    Symbol,
+    Unknown,
+)
 from .utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet
 
 eq_ = Constant(eq)
@@ -109,21 +115,21 @@ class Difference(RelationalAlgebraOperation):
 
 
 class Union(RelationalAlgebraOperation):
-    def __init__(self, first, second):
-        self.first = first
-        self.second = second
+    def __init__(self, relation_left, relation_right):
+        self.relation_left = relation_left
+        self.relation_right = relation_right
 
     def __repr__(self):
-        return f"{self.first} ∪ {self.second}"
+        return f"{self.relation_left} ∪ {self.relation_right}"
 
 
 class Intersection(RelationalAlgebraOperation):
-    def __init__(self, first, second):
-        self.first = first
-        self.second = second
+    def __init__(self, relation_left, relation_right):
+        self.relation_left = relation_left
+        self.relation_right = relation_right
 
     def __repr__(self):
-        return f"{self.first} & {self.second}"
+        return f"{self.relation_left} & {self.relation_right}"
 
 
 class NameColumns(RelationalAlgebraOperation):
@@ -172,22 +178,12 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
 
         return self._build_relation_constant(selected_relation)
 
-    def _build_relation_constant(self, relation):
-        if len(relation) > 0 and relation.arity > 0:
-            if hasattr(relation, 'row_type'):
-                row_type = relation.row_type
-            else:
-                row_type = Tuple[tuple(
-                    type(arg) for arg in next(iter(relation._container))
-                )]
-
-            relation_type = AbstractSet[row_type]
+    def _build_relation_constant(self, relation, type_=Unknown):
+        if type_ is not Unknown:
+            relation_type = AbstractSet[type_]
         else:
-            relation_type = AbstractSet[Tuple]
-
-        return C_[relation_type](
-            relation, verify_type=False
-        )
+            relation_type = _get_relation_type(relation)
+        return C_[relation_type](relation, verify_type=False)
 
     @ew.add_match(Selection(..., FA_(eq_, (C_[Column], ...))))
     def selection_by_constant(self, selection):
@@ -235,24 +231,15 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
 
     @ew.add_match(Difference)
     def ra_difference(self, difference):
-        left = self.walk(difference.relation_left).value
-        right = self.walk(difference.relation_right).value
-        res = left - right
-        return self._build_relation_constant(res)
+        return self._type_preserving_binary_operation(difference)
 
     @ew.add_match(Union)
     def ra_union(self, union):
-        left = self.walk(union.relation_left).value
-        right = self.walk(union.relation_right).value
-        res = left | right
-        return self._build_relation_constant(res)
+        return self._type_preserving_binary_operation(union)
 
     @ew.add_match(Intersection)
     def ra_intersection(self, intersection):
-        left = self.walk(intersection.relation_left).value
-        right = self.walk(intersection.relation_right).value
-        res = left & right
-        return self._build_relation_constant(res)
+        return self._type_preserving_binary_operation(intersection)
 
     @ew.add_match(NameColumns)
     def ra_name_columns(self, name_columns):
@@ -293,6 +280,26 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         except KeyError:
             raise NeuroLangException(f'Symbol {symbol} not in table')
         return constant
+
+    def _type_preserving_binary_operation(self, ra_op):
+        """
+        Generic function to apply binary operations (A <op> B) where A and B's
+        tuples have the same type, and whose results's tuples have the same
+        type as A and B's tuples. This includes, but is not necessarily limited
+        to, the Union, Intersection and Difference operations.
+        """
+        left = self.walk(ra_op.relation_left).value
+        right = self.walk(ra_op.relation_right).value
+        left_type = _get_relation_type(left)
+        right_type = _get_relation_type(right)
+        type_ = _binary_op_most_informative_type(left_type, right_type)
+        binary_op_fun_name = {
+            Union: "__or__",
+            Intersection: "__and__",
+            Difference: "__sub__",
+        }.get(type(ra_op))
+        new_relation = getattr(left, binary_op_fun_name)(right)
+        return self._build_relation_constant(new_relation, type_=left_type)
 
 
 class RelationalAlgebraSimplification(ew.ExpressionWalker):
@@ -558,3 +565,45 @@ class RelationalAlgebraOptimiser(
     equi-selection/product compositions into equijoins.
     """
     pass
+
+
+def _relation_type_already_set(relation):
+    return (
+        hasattr(relation, "type")
+        and relation.type is AbstractSet
+        and len(relation.type.__args__) == 1
+        and relation.type.__args__[0] is Tuple
+        and (
+            not any(
+                arg is Unknown for arg in relation.type.__args__[0].__args__
+            )
+        )
+    )
+
+
+def _get_relation_type(relation):
+    if _relation_type_already_set(relation):
+        return relation.type
+    if len(relation) == 0 or relation.arity == 0:
+        return AbstractSet[Tuple]
+    if hasattr(relation, "row_type"):
+        return AbstractSet[relation.row_type]
+    row_type = Tuple[tuple(type(arg) for arg in next(iter(relation)))]
+    return AbstractSet[row_type]
+
+
+def _binary_op_most_informative_type(type_a, type_b):
+    if type_a is type_b:
+        return type_a
+    tuple_args_a = type_a.__args__[0].__args__
+    tuple_args_b = type_b.__args__[0].__args__
+    if tuple_args_a and not tuple_args_b:
+        return type_a
+    elif tuple_args_b and not tuple_args_a:
+        return type_b
+    else:
+        n_unknowns_a = sum(arg_type is Unknown for arg_type in tuple_args_a)
+        n_unknowns_b = sum(arg_type is Unknown for arg_type in tuple_args_a)
+        if n_unknowns_a < n_unknowns_b:
+            return type_a
+        return type_b

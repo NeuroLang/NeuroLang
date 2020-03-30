@@ -1,11 +1,21 @@
 from typing import AbstractSet, Tuple
 
-from ..expressions import Constant
 from ..datalog.basic_representation import WrappedRelationalAlgebraSet
-from ..relational_algebra import (ColumnInt, ColumnStr, EquiJoin,
-                                  NaturalJoin, Product, Projection,
-                                  RelationalAlgebraOptimiser,
-                                  RelationalAlgebraSolver, Selection, eq_)
+from ..expressions import Constant
+from ..relational_algebra import (
+    ColumnInt,
+    ColumnStr,
+    EquiJoin,
+    Intersection,
+    NaturalJoin,
+    Product,
+    Projection,
+    RelationalAlgebraOptimiser,
+    RelationalAlgebraSolver,
+    Selection,
+    Union,
+    eq_,
+)
 from ..utils import NamedRelationalAlgebraFrozenSet
 
 R1 = WrappedRelationalAlgebraSet([
@@ -63,6 +73,43 @@ def test_naturaljoin():
     sol = RelationalAlgebraSolver().walk(s).value
 
     assert sol == r1_named.naturaljoin(r2_named)
+
+
+def test_union_unnamed():
+    r1 = C_[AbstractSet](WrappedRelationalAlgebraSet([(1, 2), (7, 8)]))
+    r2 = C_[AbstractSet](WrappedRelationalAlgebraSet([(5, 0), (7, 8)]))
+    res = RelationalAlgebraSolver().walk(Union(r1, r2))
+    assert res == C_[AbstractSet](
+        WrappedRelationalAlgebraSet([(1, 2), (7, 8), (5, 0)])
+    )
+    assert (
+        RelationalAlgebraSolver().walk(
+            Union(r1, C_[AbstractSet](WrappedRelationalAlgebraSet()))
+        )
+        == r1
+    )
+
+
+def test_union_named():
+    r1 = C_[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(("x", "y"), [
+            (1, "a"),
+            (2, "b"),
+            (3, "a"),
+            (3, "b"),
+        ])
+    )
+    r2 = C_[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(("x", "y"), [
+            (3, "b"),
+            (3, "a"),
+        ])
+    )
+    r3 = C_[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(("x", "y"), [
+            (0, "pie"),
+        ])
+    )
 
 
 def test_product():
