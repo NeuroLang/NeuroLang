@@ -437,14 +437,25 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
                 "Union defined only for sets with the same columns"
             )
         new_container = pd.merge(
-            left=self._container, right=other._container, how="outer"
-        )
+            left=self._container.reset_index(),
+            right=other._container.reset_index(), how="outer",
+        ).set_index('index')
         output = type(self)(self.columns)
         output._container = new_container
         return output
 
     def __and__(self, other):
-        raise NotImplementedError()
+        if self.columns != other.columns:
+            raise ValueError(
+                "Union defined only for sets with the same columns"
+            )
+        new_container = pd.merge(
+            left=self._container.reset_index(),
+            right=other._container.reset_index(), how="inner",
+        ).set_index('index')
+        output = type(self)(self.columns)
+        output._container = new_container
+        return output
 
     def __lt__(self, other):
         raise NotImplementedError()

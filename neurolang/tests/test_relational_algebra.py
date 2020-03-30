@@ -116,17 +116,57 @@ def test_union_named():
             (3, "c"),
         ])
     )
-    r3 = C_[AbstractSet](
-        NamedRelationalAlgebraFrozenSet(("x", "y"), [
-            (0, "pie"),
+    empty  = C_[AbstractSet](NamedRelationalAlgebraFrozenSet(('x', 'y'), []))
+    res = RelationalAlgebraSolver().walk(Union(r1, r2))
+    expected = C_[AbstractSet[Tuple[int, str]]](
+        NamedRelationalAlgebraFrozenSet(('x', 'y'), [
+            (1, "a"), (2, "b"), (3, "a"), (3, "b"), (3, "c")
         ])
     )
-    # solver = RelationalAlgebraSolver()
-    # assert solver.walk(Union(r1, r2)) == C_[AbstractSet](
-        # NamedRelationalAlgebraFrozenSet(('x', 'y'), [
-            # (1, "a"), (2, "b"), (3, "a"), (3, "b"), (3, "c")
-        # ])
-    # )
+    assert res == expected
+    assert RelationalAlgebraSolver().walk(Union(r1, empty)) == r1
+    assert RelationalAlgebraSolver().walk(Union(empty, r1)) == r1
+
+
+def test_intersection_unnamed():
+    r1 = C_[AbstractSet](WrappedRelationalAlgebraSet([(1, 2), (7, 8)]))
+    r2 = C_[AbstractSet](WrappedRelationalAlgebraSet([(5, 0), (7, 8)]))
+    res = RelationalAlgebraSolver().walk(Union(r1, r2))
+    assert res == C_[AbstractSet](
+        WrappedRelationalAlgebraSet([(1, 2), (7, 8), (5, 0)])
+    )
+    assert (
+        RelationalAlgebraSolver().walk(
+            Union(r1, C_[AbstractSet](WrappedRelationalAlgebraSet()))
+        )
+        == r1
+    )
+
+
+def test_intersection_named():
+    r1 = C_[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(("x", "y"), [
+            (1, "a"),
+            (2, "b"),
+            (3, "a"),
+            (3, "b"),
+        ])
+    )
+    r2 = C_[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(("x", "y"), [
+            (3, "b"),
+            (3, "a"),
+            (3, "c"),
+        ])
+    )
+    empty  = C_[AbstractSet](NamedRelationalAlgebraFrozenSet(('x', 'y'), []))
+    res = RelationalAlgebraSolver().walk(Intersection(r1, r2))
+    expected = C_[AbstractSet[Tuple[int, str]]](
+        NamedRelationalAlgebraFrozenSet(('x', 'y'), [(3, "a"), (3, "b")])
+    )
+    assert res == expected
+    assert RelationalAlgebraSolver().walk(Intersection(r1, empty)) == empty
+    assert RelationalAlgebraSolver().walk(Intersection(empty, r1)) == empty
 
 
 def test_product():
