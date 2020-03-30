@@ -8,7 +8,7 @@ from typing import Tuple
 from ..expression_walker import ReplaceExpressionsByValues
 from ..expressions import Constant
 from ..type_system import infer_type
-from ..utils.relational_algebra_set.sql import (
+from ..utils.relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet)
 
 REBV = ReplaceExpressionsByValues(dict())

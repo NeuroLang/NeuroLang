@@ -214,14 +214,14 @@ class ChaseNamedRelationalAlgebraMixin:
             arg.name for arg in consequent.args
             if isinstance(arg, Symbol)
         )
-        already_computed = WrappedNamedRelationalAlgebraFrozenSetTupleIterAdapter(
+        already_computed = WrappedNamedRelationalAlgebraFrozenSet(
             args,
             instance[consequent.functor].value
         )
         if set(substitutions.columns).issuperset(already_computed.columns):
             already_computed = substitutions.naturaljoin(already_computed)
         substitutions = substitutions - already_computed
-        if not isinstance(substitutions, WrappedNamedRelationalAlgebraFrozenSetTupleIterAdapter):
+        if not isinstance(substitutions, WrappedNamedRelationalAlgebraFrozenSet):
             substitutions = (
                 sorted(substitutions.columns),
                 substitutions
@@ -248,7 +248,7 @@ class ChaseNamedRelationalAlgebraMixin:
         result = RelationalAlgebraSolver(symbol_table).walk(ra_code)
 
         result_value = result.value
-        substitutions = WrappedNamedRelationalAlgebraFrozenSetTupleIterAdapter(
+        substitutions = WrappedNamedRelationalAlgebraFrozenSet(
             sorted(result_value.columns),
             result_value
         )
