@@ -5,7 +5,7 @@ import nibabel as nib
 from neurolang import frontend as fe
 
 
-class TimeRegionComparisons:
+class SkipTimeRegionComparisons:
     params = [
         [
             'anterior_of', 'posterior_of', 'overlapping',
