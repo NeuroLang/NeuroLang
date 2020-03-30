@@ -307,3 +307,27 @@ def test_named_ra_set_from_other():
     assert first == second
     for tuple_a, tuple_b in zip(first, second):
         assert tuple_a == tuple_b
+
+
+def test_named_ra_union():
+    first = NamedRelationalAlgebraFrozenSet(("x", "y"), [(7, 8), (9, 2)])
+    second = NamedRelationalAlgebraFrozenSet(("x", "y"), [(9, 2), (42, 0)])
+    expected = NamedRelationalAlgebraFrozenSet(
+        ("x", "y"), [(7, 8), (9, 2), (42, 0)]
+    )
+    assert first | second == expected
+    empty = NamedRelationalAlgebraFrozenSet(('x', 'y'), [])
+    assert first | empty == first
+    assert empty | first == first
+    assert first | empty | second == first | second
+
+
+def test_named_ra_intersection():
+    first = NamedRelationalAlgebraFrozenSet(("x", "y"), [(7, 8), (9, 2)])
+    second = NamedRelationalAlgebraFrozenSet(("x", "y"), [(9, 2), (42, 0)])
+    expected = NamedRelationalAlgebraFrozenSet(("x", "y"), [(9, 2)])
+    assert first & second == expected
+    empty = NamedRelationalAlgebraFrozenSet(('x', 'y'), [])
+    assert first & empty == empty
+    assert empty & first == empty
+    assert first & empty & second == empty
