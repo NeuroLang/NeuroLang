@@ -14,11 +14,11 @@ class Column:
 
 
 class ColumnInt(int, Column):
-    pass
+    """Refer to a relational algebra set's column by its index."""
 
 
 class ColumnStr(str, Column):
-    pass
+    """Refer to a named relational algebra set's column by its name."""
 
 
 C_ = Constant
@@ -109,6 +109,14 @@ class Difference(RelationalAlgebraOperation):
 
 
 class NameColumns(RelationalAlgebraOperation):
+    """
+    Give names to the columns of a relational algebra set.
+
+    All columns must be named at once. Each column name must either be a
+    `Constant[ColumnStr]` or a `Symbol[ColumnStr]` pointing to a symbolic
+    column name resolved when the expression is compiled.
+
+    """
     def __init__(self, relation, column_names):
         self.relation = relation
         self.column_names = column_names
@@ -160,7 +168,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
                 row_type = relation.row_type
             else:
                 row_type = Tuple[tuple(
-                    type(arg) for arg in next(iter(relation._container))
+                    type(arg) for arg in next(iter(relation))
                 )]
 
             relation_type = AbstractSet[row_type]
@@ -226,24 +234,18 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
     def ra_name_columns(self, name_columns):
         relation = self.walk(name_columns.relation)
         relation_set = relation.value
-        column_names = []
-        for col in name_columns.column_names:
-            if isinstance(col, Symbol):
-                column_names.append(col.name)
-            elif isinstance(col, Constant):
-                column_names.append(col.value)
-            else:
-                raise NeuroLangException(
-                    "Column name must be a Constant or Symbol"
-                )
+        column_names = tuple(
+            self.walk(column_name).value
+            for column_name in name_columns.column_names
+        )
         new_set = NamedRelationalAlgebraFrozenSet(column_names, relation_set)
         return self._build_relation_constant(new_set)
 
     @ew.add_match(RenameColumn)
     def ra_rename_column(self, rename_column):
         relation = self.walk(rename_column.relation)
-        src = rename_column.src.name
-        dst = rename_column.dst.name
+        src = rename_column.src.value
+        dst = rename_column.dst.value
         new_set = relation.value
 
         if len(new_set) > 0:
