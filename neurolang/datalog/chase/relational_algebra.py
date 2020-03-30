@@ -15,7 +15,8 @@ from ..expression_processing import (extract_logic_free_variables,
 from ..expressions import Conjunction, Implication, Negation
 from ..instance import MapInstance
 from ..translate_to_named_ra import TranslateToNamedRA
-from ..wrapped_collections import WrappedRelationalAlgebraSet
+from ..wrapped_collections import (WrappedNamedRelationalAlgebraFrozenSet,
+                                   WrappedRelationalAlgebraSet)
 
 invert = Constant(operator.invert)
 
@@ -213,14 +214,14 @@ class ChaseNamedRelationalAlgebraMixin:
             arg.name for arg in consequent.args
             if isinstance(arg, Symbol)
         )
-        already_computed = NamedRAFSTupleIterAdapter(
+        already_computed = WrappedNamedRelationalAlgebraFrozenSetTupleIterAdapter(
             args,
             instance[consequent.functor].value
         )
         if set(substitutions.columns).issuperset(already_computed.columns):
             already_computed = substitutions.naturaljoin(already_computed)
         substitutions = substitutions - already_computed
-        if not isinstance(substitutions, NamedRAFSTupleIterAdapter):
+        if not isinstance(substitutions, WrappedNamedRelationalAlgebraFrozenSetTupleIterAdapter):
             substitutions = (
                 sorted(substitutions.columns),
                 substitutions
@@ -247,7 +248,7 @@ class ChaseNamedRelationalAlgebraMixin:
         result = RelationalAlgebraSolver(symbol_table).walk(ra_code)
 
         result_value = result.value
-        substitutions = NamedRAFSTupleIterAdapter(
+        substitutions = WrappedNamedRelationalAlgebraFrozenSetTupleIterAdapter(
             sorted(result_value.columns),
             result_value
         )
@@ -373,38 +374,3 @@ class ChaseNamedRelationalAlgebraMixin:
         return self.compute_instance_update(
             rule, new_tuples, instance, restriction_instance
         )
-
-
-class NamedRAFSTupleIterAdapter(NamedRelationalAlgebraFrozenSet):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._row_types = dict()
-        self.row_types
-
-    @property
-    def row_types(self):
-        if (
-            len(self._row_types) == 0 and
-            self.arity > 0 and len(self) > 0
-        ):
-            element = next(super().__iter__())
-            self._row_types = {
-                c: Constant(getattr(element, c)).type
-                for c in self.columns
-            }
-
-        return self._row_types
-
-    def __iter__(self):
-        if self.arity > 0:
-            row_types = self.row_types
-            for row in super().__iter__():
-                yield {
-                    f: Constant[row_types[f]](
-                        v, verify_type=False
-                    )
-                    for f, v in zip(row._fields, row)
-                }
-        else:
-            for _ in range(len(self)):
-                yield dict()
