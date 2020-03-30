@@ -5,7 +5,7 @@ import nibabel as nib
 from neurolang import frontend as fe
 
 
-class SkipTimeRegionComparisons:
+class TimeRegionComparisons:
     params = [
         [
             'anterior_of', 'posterior_of', 'overlapping',
@@ -15,7 +15,7 @@ class SkipTimeRegionComparisons:
 
     param_names = ['direction']
 
-    timeout = 60 * 10
+    timeout = 5
 
     def setup(self, direction):
         if not hasattr(self, 'nl'):
