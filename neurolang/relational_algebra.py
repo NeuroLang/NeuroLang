@@ -595,7 +595,8 @@ def _sort_typed_const_named_relation_tuple_type_args(const_named_relation):
 
     Notes
     -----
-    This is useful when comparing or unifying the types of two named relations.
+    This is useful when comparing or unifying the types of two named relations
+    that have a different column sorting.
 
     """
     tuple_args = const_named_relation.type.__args__[0].__args__
