@@ -2,15 +2,11 @@ import pytest
 
 from ...expressions import (Constant, Symbol)
 from ...relational_algebra import (
-    ColumnStr, EquiJoin, NaturalJoin, Product, Projection, Selection, eq_,
-    RenameColumn
+    ColumnStr, EquiJoin, NaturalJoin, Product, Selection, eq_, RenameColumn
 )
 from ..relational_algebra_provenance import (
-    CountingSemiRing,
-    RelationalAlgebraProvenanceSolver,
-    ProvenanceAlgebraSet,
-    Union,
-    Aggregation,
+    CountingSemiRing, RelationalAlgebraProvenanceSolver, ProvenanceAlgebraSet,
+    Union, ProjectionNonProvenance, Projection
 )
 from ...utils import NamedRelationalAlgebraFrozenSet
 
@@ -82,23 +78,13 @@ def test_provenance_rename():
     )
 
 
-def test_projections():
-    s = Projection(provenance_set_r1, (C_(ColumnStr('col1')), ))
+def test_projections_non_provenance():
+    s = ProjectionNonProvenance(provenance_set_r1, (C_(ColumnStr('col1')), ))
     sol = RelationalAlgebraProvenanceSolver(CountingSemiRing).walk(s).value
-    R1projA = R1.projection('col1')
-    R1projB = R1.projection('__provenance__')
-    container = np.hstack(
-        (R1projA._container.values, R1projB._container.values)
-    )
+    R1proj = R1.projection('col1')
 
-    R1proj = NamedRelationalAlgebraFrozenSet(
-        columns=[
-            'col1',
-            '__provenance__',
-        ], iterable=container
-    )
     assert sol == R1proj
-    assert '__provenance__' in sol.columns
+    assert '__provenance__' not in sol.columns
 
 
 def test_naturaljoin():
@@ -216,69 +202,31 @@ def test_union():
     assert sol == (RA1 | RA2)
 
 
-@pytest.mark.skip('Not implemented yet')
-def test_sum_aggregate():
+def test_projection():
     relation = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
             iterable=[
-                ("a", "b", 2, 1),
-                ("b", "a", 3, 1),
-                ("c", "a", 1, 1),
-                ("c", "a", 2, 1),
-                ("b", "a", 2, 1),
+                ("a", "b", 1),
+                ("b", "a", 2),
+                ("c", "a", 2),
+                ("c", "a", 1),
+                ("b", "a", 1),
             ],
-            columns=["x", "y", "z", '__provenance__'],
+            columns=["x", "y", '__provenance__'],
         ), '__provenance__'
     )
     expected = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
-            iterable=[("a", "b", 2, 1), ("b", "a", 5, 2), ("c", "a", 3, 2)],
-            columns=["x", "y", "w", '__provenance__'],
+            iterable=[("a", "b", 1), ("b", "a", 3), ("c", "a", 3)],
+            columns=["x", "y", '__provenance__'],
         ), '__provenance__'
     )
-    sum_agg_op = Aggregation(
-        Constant[str]("sum"),
+    sum_agg_op = Projection(
         relation,
-        [Constant(ColumnStr("x")),
-         Constant(ColumnStr("y"))],
-        Constant(ColumnStr("z")),
-        Constant(ColumnStr("w")),
+        tuple([Constant(ColumnStr("x")),
+               Constant(ColumnStr("y"))]),
     )
     solver = RelationalAlgebraProvenanceSolver(CountingSemiRing)
     result = solver.walk(sum_agg_op)
-
-    assert result == expected
-
-
-@pytest.mark.skip('Not implemented yet')
-def test_count_aggregate():
-    relation = ProvenanceAlgebraSet(
-        NamedRelationalAlgebraFrozenSet(
-            iterable=[
-                ("a", "b", 2, 1),
-                ("b", "a", 3, 1),
-                ("c", "a", 1, 1),
-                ("c", "a", 2, 1),
-                ("b", "a", 2, 1),
-            ],
-            columns=['x', 'y', 'z', '__provenance__'],
-        ), '__provenance__'
-    )
-    expected = ProvenanceAlgebraSet(
-        NamedRelationalAlgebraFrozenSet(
-            iterable=[("a", "b", 1, 1), ("b", "a", 2, 2), ("c", "a", 2, 2)],
-            columns=['x', 'y', 'w', '__provenance__'],
-        ), '__provenance__'
-    )
-    count_agg_op = Aggregation(
-        Constant[str]("count"),
-        relation,
-        [Constant(ColumnStr("x")),
-         Constant(ColumnStr("y"))],
-        Constant(ColumnStr("z")),
-        Constant(ColumnStr("w")),
-    )
-    solver = RelationalAlgebraProvenanceSolver(CountingSemiRing)
-    result = solver.walk(count_agg_op)
 
     assert result == expected

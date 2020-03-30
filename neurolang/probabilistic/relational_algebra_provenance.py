@@ -7,8 +7,8 @@ from ..utils import (
     NamedRelationalAlgebraFrozenSet,
 )
 from ..relational_algebra import (
-    eq_, Column, ColumnStr, Selection, Projection, Product, EquiJoin,
-    NaturalJoin, Difference, NameColumns, RenameColumn, RelationalAlgebraSolver
+    eq_, Column, ColumnStr, Selection, Product, EquiJoin, NaturalJoin,
+    Difference, NameColumns, RenameColumn, RelationalAlgebraSolver
 )
 
 from .expressions import (
@@ -123,15 +123,10 @@ class Union(RelationalAlgebraOperation):
         self.second = second
 
 
-class Aggregation(RelationalAlgebraOperation):
-    def __init__(
-        self, agg_fun, relation, group_columns, agg_column, dst_column
-    ):
-        self.agg_fun = agg_fun
+class Projection(RelationalAlgebraOperation):
+    def __init__(self, relation, attributes):
         self.relation = relation
-        self.group_columns = tuple(group_columns)
-        self.agg_column = agg_column
-        self.dst_column = dst_column
+        self.attributes = attributes
 
 
 class SemiRing:
@@ -214,16 +209,6 @@ class RelationalAlgebraProvenanceSolver(ExpressionWalker):
             selected_relation, selection.relation.provenance_column
         )
 
-    @add_match(Projection)
-    def prov_projection(self, projection):
-        relation = self.walk(projection.relation)
-        cols = tuple(v.value for v in projection.attributes
-                     ) + (relation.provenance_column, )
-        projected_relation = relation.value.projection(*cols)
-        return self._build_provenance_set_from_set(
-            projected_relation, relation.provenance_column
-        )
-
     @add_match(Product)
     def prov_product(self, product):
         rel_res = self.walk(product.relations[0])
@@ -241,15 +226,17 @@ class RelationalAlgebraProvenanceSolver(ExpressionWalker):
                            ).difference(set([rel_temp.provenance_column]))
             common = set_res & set_temp
             if common:
-                cols = set_res.difference(common)
+                cols = set_res.difference(common.union())
                 if len(cols) == 0:
                     cols = set_temp.difference(common)
-                    rel_temp = Projection(
+                    cols.add(rel_temp.provenance_column)
+                    rel_temp = ProjectionNonProvenance(
                         rel_temp, tuple([C_(ColumnStr(name)) for name in cols])
                     )
                     rel_temp = self.walk(rel_temp)
                 else:
-                    rel_res = Projection(
+                    cols.add(rel_res.provenance_column)
+                    rel_res = ProjectionNonProvenance(
                         rel_res, tuple([C_(ColumnStr(name)) for name in cols])
                     )
                     rel_res = self.walk(rel_res)
@@ -291,6 +278,25 @@ class RelationalAlgebraProvenanceSolver(ExpressionWalker):
             rel_res = self.walk(res)
 
         return rel_res
+
+    @add_match(Projection)
+    def aggregation(self, agg_op):
+        relation = self.walk(agg_op.relation)
+        prov_column = agg_op.relation.provenance_column
+
+        proj_columns = agg_op.attributes + tuple([C_(ColumnStr(prov_column))])
+        relation = self.walk(ProjectionNonProvenance(relation, proj_columns))
+
+        group_columns = [col.value for col in agg_op.attributes]
+        gb = relation.value._container.groupby(group_columns)
+        new_container = gb.sum()
+        new_container.reset_index(inplace=True)
+        new_relation = NamedRelationalAlgebraFrozenSet(
+            iterable=new_container.values, columns=list(new_container.columns)
+        )
+        return self._build_provenance_set_from_set(
+            new_relation, relation.provenance_column
+        )
 
     @add_match(CrossProductNonProvenance)
     def ra_product(self, product):
@@ -361,10 +367,6 @@ class RelationalAlgebraProvenanceSolver(ExpressionWalker):
     @add_match(Constant[AbstractSet])
     def prov_relation(self, relation):
         return relation
-
-    @add_match(Aggregation)
-    def prov_aggregation(self, agg_op):
-        raise NotImplementedError("Aggregations are not implemented.")
 
     @add_match(ExtendedProjection)
     def prov_extended_projection(self, proj_op):
