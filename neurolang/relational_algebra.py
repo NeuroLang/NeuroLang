@@ -597,7 +597,8 @@ def _sort_typed_const_named_relation_tuple_type_args(const_named_relation):
     """
     tuple_args = const_named_relation.type.__args__[0].__args__
     sorted_tuple_args = tuple(
-        tuple_args[idx] for idx in const_named_relation.value._columns_sort
+        tuple_args[i]
+        for i, _ in sorted(enumerate(tuple_args), key=lambda x: x[1])
     )
     return AbstractSet[Tuple[sorted_tuple_args]]
 
