@@ -1,12 +1,9 @@
 import pytest
 
-from typing import AbstractSet
-
 from ..expressions import (
     Constant,
     Symbol,
 )
-from ...exceptions import NeuroLangException
 from ...relational_algebra import (
     ColumnStr,
     EquiJoin,
@@ -24,7 +21,6 @@ from ...utils import NamedRelationalAlgebraFrozenSet
 from ..expressions import Aggregation
 
 import numpy as np
-import pandas as pd
 
 C_ = Constant
 S_ = Symbol

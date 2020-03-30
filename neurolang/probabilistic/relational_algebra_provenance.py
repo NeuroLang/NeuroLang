@@ -59,7 +59,7 @@ from ..relational_algebra import RelationalAlgebraOperation
 
 # TODO This operation was included until we
 # resolve the inheritance of the solver
-class CrossProduct(RelationalAlgebraOperation):
+class CrossProductNonProvenance(RelationalAlgebraOperation):
     def __init__(self, relations):
         self.relations = tuple(relations)
 
@@ -71,7 +71,7 @@ class CrossProduct(RelationalAlgebraOperation):
 
 # TODO This operation was included until we
 # resolve the inheritance of the solver
-class ProjectionNP(RelationalAlgebraOperation):
+class ProjectionNonProvenance(RelationalAlgebraOperation):
     def __init__(self, relation, attributes):
         self.relation = relation
         self.attributes = attributes
@@ -116,32 +116,32 @@ class RelationalAlgebraProvenanceSolver(ExpressionWalker):
     executes the operations and provenance calculations.
     """
 
-    def __init__(self, semiring, parent_values={}):
-        self.parent_values = parent_values
+    def __init__(self, semiring):
         if not isinstance(semiring, SemiRing):
             raise NeuroLangException(
                 "The semiring parameter does not belong to the SemiRing class"
             )
         self._semiring = semiring
 
-    def _build_set_from_set(self, rel_set, provenance_column):
+    def _build_provenance_set_from_set(self, rel_set, provenance_column):
         return ProvenanceAlgebraSet(rel_set, provenance_column)
 
-    def _build_set_from_iterable(self, iterable, columns, prov_col_name):
+    def _build_provenance_set_from_iterable(
+        self, iterable, columns, prov_col_name
+    ):
         return ProvenanceAlgebraSet(
             NamedRelationalAlgebraFrozenSet(
                 columns=columns, iterable=iterable
             ), prov_col_name
         )
 
-    def _separate_provenance(self, relation):
-        new_prov = relation.value.projection(relation.provenance_column)
+    def _eliminate_provenance(self, relation):
         non_provenance_col = set(relation.value.columns).difference(
             set([relation.provenance_column])
         )
         new_set = relation.value.projection(*non_provenance_col)
 
-        return new_prov, new_set
+        return new_set
 
     @add_match(Projection)
     def prov_projection(self, projection):
@@ -149,7 +149,7 @@ class RelationalAlgebraProvenanceSolver(ExpressionWalker):
         cols = tuple(v.value for v in projection.attributes
                      ) + (relation.provenance_column, )
         projected_relation = relation.value.projection(*cols)
-        return self._build_set_from_set(
+        return self._build_provenance_set_from_set(
             projected_relation, relation.provenance_column
         )
 
@@ -192,9 +192,9 @@ class RelationalAlgebraProvenanceSolver(ExpressionWalker):
                 C_(ColumnStr(name)) for name in set(proj_columns)
             ])
 
-            res = ProjectionNP(
+            res = ProjectionNonProvenance(
                 ExtendedProjection(
-                    CrossProduct((
+                    CrossProductNonProvenance((
                         RenameColumn(
                             rel_res, C_(ColumnStr(rel_res.provenance_column)),
                             C_(ColumnStr(column1))
@@ -221,24 +221,26 @@ class RelationalAlgebraProvenanceSolver(ExpressionWalker):
 
         return rel_res
 
-    @add_match(CrossProduct)
+    @add_match(CrossProductNonProvenance)
     def ra_product(self, product):
         if len(product.relations) == 0:
-            return self._build_set_from_set(set(), product.provenance_column)
+            return self._build_provenance_set_from_set(
+                set(), product.provenance_column
+            )
 
         res = self.walk(product.relations[0])
         prov_column = res.provenance_column
         res = res.value
         for relation in product.relations[1:]:
             res = res.cross_product(self.walk(relation).value)
-        return self._build_set_from_set(res, prov_column)
+        return self._build_provenance_set_from_set(res, prov_column)
 
-    @add_match(ProjectionNP)
+    @add_match(ProjectionNonProvenance)
     def prov_projection_non_provenance(self, projection):
         relation = self.walk(projection.relation)
         cols = tuple(v.value for v in projection.attributes)
         projected_relation = relation.value.projection(*cols)
-        return self._build_set_from_set(
+        return self._build_provenance_set_from_set(
             projected_relation, relation.provenance_column
         )
 
@@ -260,7 +262,7 @@ class RelationalAlgebraProvenanceSolver(ExpressionWalker):
         else:
             new_prov = relation.provenance_column
 
-        return self._build_set_from_set(new_set, new_prov)
+        return self._build_provenance_set_from_set(new_set, new_prov)
 
     @add_match(NaturalJoin)
     def prov_naturaljoin(self, naturaljoin):
@@ -270,17 +272,17 @@ class RelationalAlgebraProvenanceSolver(ExpressionWalker):
         res = Product((rel_left, rel_right))
         res = self.walk(res)
 
-        _, non_prov_left = self._separate_provenance(rel_left)
-        _, non_prov_right = self._separate_provenance(rel_right)
+        non_prov_left = self._eliminate_provenance(rel_left)
+        non_prov_right = self._eliminate_provenance(rel_right)
         comb = non_prov_left.naturaljoin(non_prov_right)
         op_applied = comb.naturaljoin(res.value)
-        return self._build_set_from_set(
+        return self._build_provenance_set_from_set(
             op_applied, naturaljoin.relation_left.provenance_column
         )
 
     @add_match(Union)
     def prov_union(self, union_op):
-        return self._build_set_from_set(
+        return self._build_provenance_set_from_set(
             self.walk(union_op.first).value | self.walk(union_op.second).value,
             union_op.first.provenance_column
         )
@@ -294,7 +296,7 @@ class RelationalAlgebraProvenanceSolver(ExpressionWalker):
                 result = self.walk(relation).value
             else:
                 result = result | self.walk(relation).value
-        return self._build_set_from_set(
+        return self._build_provenance_set_from_set(
             result, unions_op.first.provenance_column
         )
 
@@ -354,7 +356,7 @@ class RelationalAlgebraProvenanceSolver(ExpressionWalker):
         new_container = relation.value._container.eval(
             "/n".join(pandas_eval_expressions)
         )
-        return self._build_set_from_iterable(
+        return self._build_provenance_set_from_iterable(
             new_container.values, new_container.columns,
             relation.provenance_column
         )
