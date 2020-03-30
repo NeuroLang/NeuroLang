@@ -237,9 +237,9 @@ def test_named_relation_difference_columns_order():
     r1 = NamedRelationalAlgebraFrozenSet(
         ("x", "y"), [(42, "hello"), (21, "bonjour")]
     )
-    r2 = NamedRelationalAlgebraFrozenSet(("y", "x"), [("hello", 21)])
+    r2 = NamedRelationalAlgebraFrozenSet(("y", "x"), [("bonjour", 21)])
     res = r1 - r2
-    expected = NamedRelationalAlgebraFrozenSet(('x', 'y'), [(21, "bonjour")])
+    expected = NamedRelationalAlgebraFrozenSet(('x', 'y'), [(42, "hello")])
     assert res == expected
 
 
