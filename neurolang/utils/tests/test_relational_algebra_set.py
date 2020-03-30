@@ -210,11 +210,36 @@ def test_named_relational_algebra_ra_cross_product():
 
 def test_named_relational_algebra_difference():
     a = [(i, i * 2) for i in range(5)]
-    b = [(i, i * 2) for i in range(1, 5)]
-    c = [(i, i * 2) for i in range(1)]
+    b = [(i, i * 2) for i in range(2, 5)]
+    c = [(i, i * 2) for i in range(2)]
 
     ras_a = NamedRelationalAlgebraFrozenSet(('x', 'y'), a)
     ras_b = NamedRelationalAlgebraFrozenSet(('x', 'y'), b)
+    ras_b_inv = NamedRelationalAlgebraFrozenSet(
+        ('y', 'x'), [t[::-1] for t in b]
+    )
+    ras_c = NamedRelationalAlgebraFrozenSet(('x', 'y'), c)
+
+    res = ras_a - ras_b
+    assert res == ras_c
+
+    res = ras_b - ras_a
+    assert len(res) == 0
+
+    res = ras_a - ras_b_inv
+    assert res == ras_c
+
+    res = ras_b_inv - ras_a
+    assert len(res) == 0
+
+
+def test_named_relational_algebra_difference_unordered():
+    a = [(i, i * 2) for i in range(5)]
+    b = [(i * 2, i) for i in range(2, 5)]
+    c = [(i, i * 2) for i in range(2)]
+
+    ras_a = NamedRelationalAlgebraFrozenSet(('x', 'y'), a)
+    ras_b = NamedRelationalAlgebraFrozenSet(('y', 'x'), b)
     ras_b_inv = NamedRelationalAlgebraFrozenSet(
         ('y', 'x'), [t[::-1] for t in b]
     )
