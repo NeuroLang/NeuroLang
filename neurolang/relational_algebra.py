@@ -11,7 +11,7 @@ from .expressions import (
     Unknown,
 )
 from .utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet
-from .type_system import unify_types
+from . import type_system
 
 eq_ = Constant(eq)
 
@@ -293,9 +293,9 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         """
         left = self.walk(ra_op.relation_left)
         right = self.walk(ra_op.relation_right)
-        left_type = _infer_const_relation_type_if_unknown(left)
-        right_type = _infer_const_relation_type_if_unknown(right)
-        type_ = unify_types(left_type, right_type)
+        left_type = _get_const_relation_type(left)
+        right_type = _get_const_relation_type(right)
+        type_ = type_system.unify_types(left_type, right_type)
         binary_op_fun_name = {
             Union: "__or__",
             Intersection: "__and__",
@@ -571,14 +571,17 @@ class RelationalAlgebraOptimiser(
 
 
 def _const_relation_type_is_known(const_relation):
-    if type(const_relation.type.__reduce__()) is str:
+    """
+    Returns whether `T` in `Constant[T]` matches `AbstractSet[Tuple[type_1,
+    ..., type_n]]`, in which case we consider the type of the relation's tuples
+    to be known.
+
+    """
+    try:
+        tuple_type = next(iter(type_system.get_args(const_relation.type)))
+    except StopIteration:
         return False
-    set_type, tuple_type = const_relation.type.__reduce__()[1]
-    return (
-        set_type is AbstractSet
-        and tuple_type.__reduce__()[1][0] is Tuple
-        and not any(arg is Unknown for arg in tuple_type.__args__)
-    )
+    return len(type_system.get_args(tuple_type)) > 0
 
 
 def _sort_typed_const_named_relation_tuple_type_args(const_named_relation):
@@ -596,14 +599,19 @@ def _sort_typed_const_named_relation_tuple_type_args(const_named_relation):
 
     """
     tuple_args = const_named_relation.type.__args__[0].__args__
+    columns = const_named_relation.value.columns
     sorted_tuple_args = tuple(
         tuple_args[i]
-        for i, _ in sorted(enumerate(tuple_args), key=lambda x: x[1])
+        for i, _ in sorted(enumerate(columns), key=lambda x: x[1])
     )
     return AbstractSet[Tuple[sorted_tuple_args]]
 
 
 def _infer_relation_type(relation):
+    """
+    Infer the type of the tuples in the relation based on its first tuple. If
+    the relation is empty, just return `Abstract[Tuple]`.
+    """
     if len(relation) == 0 or relation.arity == 0:
         return AbstractSet[Tuple]
     if hasattr(relation, "row_type"):
@@ -612,7 +620,7 @@ def _infer_relation_type(relation):
     return AbstractSet[tuple_type]
 
 
-def _infer_const_relation_type_if_unknown(const_relation):
+def _get_const_relation_type(const_relation):
     if _const_relation_type_is_known(const_relation):
         if isinstance(const_relation.value, NamedRelationalAlgebraFrozenSet):
             return _sort_typed_const_named_relation_tuple_type_args(
