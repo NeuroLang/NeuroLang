@@ -24,8 +24,10 @@ class WrappedRelationalAlgebraSetMixin:
             if isinstance(iterable, WrappedRelationalAlgebraSetMixin):
                 iterable = iterable.unwrap()
             else:
-                iterable = WrappedRelationalAlgebraSetMixin._obtain_value_iterable(
-                    iterable
+                iterable = (
+                    WrappedRelationalAlgebraSetMixin._obtain_value_iterable(
+                        iterable
+                    )
                 )
         return iterable
 
