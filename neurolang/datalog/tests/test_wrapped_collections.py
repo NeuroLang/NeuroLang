@@ -1,6 +1,4 @@
 
-from typing import AbstractSet
-
 from ..expressions import Constant
 from ..wrapped_collections import WrappedRelationalAlgebraSet
 
@@ -33,6 +31,7 @@ def test_equal():
     assert not (R1 == R2)
     assert not (R2 == R1)
     assert R1 == r1__
+
 
 def test_intersection():
     r1 = WrappedRelationalAlgebraSet([(1, 2), (7, 8)])

@@ -19,6 +19,7 @@ def test_frozenset_instance_contains_facts():
     assert Q(C_(4)) not in instance
     assert hash(instance) is not None
 
+
 def test_set_instance_contains_facts():
     elements = {Q: ({(C_(2), ), (C_(3), )})}
     instance = SetInstance(elements)

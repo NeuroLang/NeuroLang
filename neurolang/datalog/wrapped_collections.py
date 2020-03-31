@@ -23,7 +23,7 @@ class WrappedRelationalAlgebraSetMixin:
     def _get_init_iterable(iterable):
         if iterable is not None:
             if isinstance(iterable, WrappedRelationalAlgebraSetMixin):
-                iterable = iterable._container.values #iterable.unwrap()
+                iterable = iterable._container.values  # iterable.unwrap()
             else:
                 iterable = (
                     WrappedRelationalAlgebraSetMixin._obtain_value_iterable(
@@ -135,6 +135,7 @@ class WrappedRelationalAlgebraSet(
                 ),
                 verify_type=False
             )
+
     def add(self, value):
         return super().add(REBV.walk(value))
 

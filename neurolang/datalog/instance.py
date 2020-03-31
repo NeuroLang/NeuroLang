@@ -1,11 +1,9 @@
 from collections.abc import Iterable, Mapping, MutableMapping, MutableSet, Set
-from functools import lru_cache
 from typing import AbstractSet, Tuple
 
 from ..expression_walker import ReplaceExpressionsByValues
 from ..expressions import Constant, FunctionApplication
-from ..type_system import Unknown, infer_type
-from ..utils import RelationalAlgebraFrozenSet, RelationalAlgebraSet
+from ..type_system import Unknown
 from .wrapped_collections import (WrappedRelationalAlgebraFrozenSet,
                                   WrappedRelationalAlgebraSet)
 
@@ -31,41 +29,32 @@ class FrozenInstance:
         in_elements = elements
         elements = dict()
         for k, v in in_elements.items():
-            v, set_type = self._get_set_and_type(v)
+            v = self._get_set_and_type(v)
             if len(v) > 0:
                 elements[k] = self._set_type(v)
         return elements
 
     def _get_set_and_type(self, v):
-        set_type = Unknown
         if isinstance(v, Constant[AbstractSet[Tuple]]):
-            set_type = v.type.__args__[0]
-            if isinstance(v.value, self._set_type):
-                v = v.value
-            else:
-                v = self._rebv.walk(v)
+            v = v.value
         else:
-            is_expression, set_type = self._infer_type(v, set_type)
+            is_expression = self._is_expression_iterable(v)
             if is_expression and not isinstance(v, self._set_type):
                 v = set(self._rebv.walk(e) for e in v)
-        return v, set_type
+        return v
 
-    def _infer_type(self, v, set_type):
+    def _is_expression_iterable(self, v):
         is_expression = False
         for element in v:
             if isinstance(element, Constant):
-                set_type = element.type
                 is_expression = True
             elif (
                 isinstance(element, tuple) and
                 isinstance(element[0], Constant)
             ):
-                set_type = Tuple[tuple(arg.type for arg in element)]
                 is_expression = True
-            else:
-                set_type = infer_type(element)
             break
-        return is_expression, set_type
+        return is_expression
 
     def _elements_from_iterable(self, iterable):
         result = dict()
