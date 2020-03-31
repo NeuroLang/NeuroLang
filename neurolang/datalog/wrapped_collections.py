@@ -3,9 +3,10 @@ from typing import Tuple
 
 from ..expression_walker import ReplaceExpressionsByValues
 from ..expressions import Constant
-from ..type_system import infer_type, get_args
-from ..utils.relational_algebra_set import (
-    NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet)
+from ..type_system import get_args, infer_type
+from ..utils.relational_algebra_set import (NamedRelationalAlgebraFrozenSet,
+                                            RelationalAlgebraFrozenSet,
+                                            RelationalAlgebraSet)
 
 REBV = ReplaceExpressionsByValues(dict())
 
@@ -22,7 +23,7 @@ class WrappedRelationalAlgebraSetMixin:
     def _get_init_iterable(iterable):
         if iterable is not None:
             if isinstance(iterable, WrappedRelationalAlgebraSetMixin):
-                iterable = iterable.unwrap()
+                iterable = iterable._container.values #iterable.unwrap()
             else:
                 iterable = (
                     WrappedRelationalAlgebraSetMixin._obtain_value_iterable(
@@ -82,6 +83,9 @@ class WrappedRelationalAlgebraSetMixin:
     def __sub__(self, other):
         return self._operator_wrapped('__sub__', other)
 
+    def __hash__(self):
+        return super().__hash__()
+
     def unwrapped_iter(self):
         return super().__iter__()
 
@@ -99,15 +103,9 @@ class WrappedRelationalAlgebraSetMixin:
         return self._row_type
 
 
-class WrappedRelationalAlgebraSet(
-    WrappedRelationalAlgebraSetMixin, RelationalAlgebraSet
+class WrappedRelationalAlgebraFrozenSet(
+    WrappedRelationalAlgebraSetMixin, RelationalAlgebraFrozenSet
 ):
-    def add(self, value):
-        return super().add(REBV.walk(value))
-
-    def discard(self, value):
-        return super().discard(REBV.walk(value))
-
     def __iter__(self):
         type_ = self.row_type
         element_types = get_args(type_)
@@ -120,6 +118,28 @@ class WrappedRelationalAlgebraSet(
                 ),
                 verify_type=False
             )
+
+
+class WrappedRelationalAlgebraSet(
+    WrappedRelationalAlgebraSetMixin, RelationalAlgebraSet
+):
+    def __iter__(self):
+        type_ = self.row_type
+        element_types = get_args(type_)
+
+        for t in super().__iter__():
+            yield Constant[type_](
+                tuple(
+                    Constant[e_t](e, verify_type=False)
+                    for e_t, e in zip(element_types, t)
+                ),
+                verify_type=False
+            )
+    def add(self, value):
+        return super().add(REBV.walk(value))
+
+    def discard(self, value):
+        return super().discard(REBV.walk(value))
 
 
 class WrappedNamedRelationalAlgebraFrozenSet(
