@@ -5,8 +5,8 @@ from ...relational_algebra import (
     ColumnStr, EquiJoin, NaturalJoin, Product, Selection, eq_, RenameColumn
 )
 from ..relational_algebra_provenance import (
-    CountingSemiRing, RelationalAlgebraProvenanceSolver, ProvenanceAlgebraSet,
-    Union, ProjectionNonProvenance, Projection
+    RelationalAlgebraProvenanceCountingSolver, ProvenanceAlgebraSet, Union,
+    ProjectionNonProvenance, Projection
 )
 from ...utils import NamedRelationalAlgebraFrozenSet
 
@@ -24,7 +24,7 @@ provenance_set_r1 = ProvenanceAlgebraSet(R1, '__provenance__')
 
 def test_selection():
     s = Selection(provenance_set_r1, eq_(C_(ColumnStr('col1')), C_(4)))
-    sol = RelationalAlgebraProvenanceSolver(CountingSemiRing).walk(s).value
+    sol = RelationalAlgebraProvenanceCountingSolver().walk(s).value
 
     assert sol == R1.selection({'col1': 4})
     assert '__provenance__' in sol.columns
@@ -36,7 +36,7 @@ def test_selection_columns():
     s = Selection(
         provenance_set_r1, eq_(C_(ColumnStr('col1')), C_(ColumnStr('col2')))
     )
-    sol = RelationalAlgebraProvenanceSolver(CountingSemiRing).walk(s).value
+    sol = RelationalAlgebraProvenanceCountingSolver().walk(s).value
 
     assert sol == R1.selection_columns({'col1': 'col2'})
     assert sol == R1.selection({'col1': 0})
@@ -47,7 +47,7 @@ def test_valid_rename():
     s = RenameColumn(
         provenance_set_r1, C_(ColumnStr('col1')), C_(ColumnStr('renamed'))
     )
-    sol = RelationalAlgebraProvenanceSolver(CountingSemiRing).walk(s).value
+    sol = RelationalAlgebraProvenanceCountingSolver().walk(s).value
 
     assert sol == R1.rename_column('col1', 'renamed')
     assert 'renamed' in sol.columns
@@ -65,7 +65,7 @@ def test_provenance_rename():
         C_(ColumnStr('renamed'))
     )
 
-    sol = RelationalAlgebraProvenanceSolver(CountingSemiRing).walk(s)
+    sol = RelationalAlgebraProvenanceCountingSolver().walk(s)
 
     assert sol.provenance_column == 'renamed'
     sol = sol.value
@@ -80,7 +80,7 @@ def test_provenance_rename():
 
 def test_projections_non_provenance():
     s = ProjectionNonProvenance(provenance_set_r1, (C_(ColumnStr('col1')), ))
-    sol = RelationalAlgebraProvenanceSolver(CountingSemiRing).walk(s).value
+    sol = RelationalAlgebraProvenanceCountingSolver().walk(s).value
     R1proj = R1.projection('col1')
 
     assert sol == R1proj
@@ -101,7 +101,7 @@ def test_naturaljoin():
     pset_r2 = ProvenanceAlgebraSet(RA2, '__provenance__')
 
     s = NaturalJoin(pset_r1, pset_r2)
-    sol = RelationalAlgebraProvenanceSolver(CountingSemiRing).walk(s)
+    sol = RelationalAlgebraProvenanceCountingSolver().walk(s)
 
     RA1_np = NamedRelationalAlgebraFrozenSet(
         columns=('col1', ), iterable=[(i * 2) for i in range(10)]
@@ -149,7 +149,7 @@ def test_product():
     pset_r2 = ProvenanceAlgebraSet(RA2, '__provenance__')
 
     s = Product((pset_r1, pset_r2))
-    sol = RelationalAlgebraProvenanceSolver(CountingSemiRing).walk(s).value
+    sol = RelationalAlgebraProvenanceCountingSolver().walk(s).value
 
     RA1_np = NamedRelationalAlgebraFrozenSet(
         columns=('col1', ), iterable=[(i * 2) for i in range(10)]
@@ -197,7 +197,7 @@ def test_union():
     pset_r2 = ProvenanceAlgebraSet(RA2, '__provenance__')
 
     s = Union(pset_r1, pset_r2)
-    sol = RelationalAlgebraProvenanceSolver(CountingSemiRing).walk(s).value
+    sol = RelationalAlgebraProvenanceCountingSolver().walk(s).value
 
     assert sol == (RA1 | RA2)
 
@@ -226,7 +226,7 @@ def test_projection():
         tuple([Constant(ColumnStr("x")),
                Constant(ColumnStr("y"))]),
     )
-    solver = RelationalAlgebraProvenanceSolver(CountingSemiRing)
+    solver = RelationalAlgebraProvenanceCountingSolver()
     result = solver.walk(sum_agg_op)
 
     assert result == expected

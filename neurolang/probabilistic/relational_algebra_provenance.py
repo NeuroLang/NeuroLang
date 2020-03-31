@@ -8,7 +8,8 @@ from ..utils import (
 )
 from ..relational_algebra import (
     eq_, Column, ColumnStr, Selection, Product, EquiJoin, NaturalJoin,
-    Difference, NameColumns, RenameColumn, RelationalAlgebraSolver
+    Difference, NameColumns, RenameColumn, RelationalAlgebraSolver,
+    RelationalAlgebraOperation
 )
 
 from .expressions import (
@@ -20,8 +21,6 @@ from .expressions import (
 
 FA_ = FunctionApplication
 C_ = Constant
-
-# TODO Improve semiring implementation
 
 
 def arithmetic_operator_string(op):
@@ -40,9 +39,6 @@ def is_arithmetic_operation(exp):
             operator.add, operator.sub, operator.mul, operator.truediv
         }
     )
-
-
-from ..relational_algebra import RelationalAlgebraOperation
 
 
 # TODO This operation was included until we
@@ -129,23 +125,6 @@ class Projection(RelationalAlgebraOperation):
         self.attributes = attributes
 
 
-class SemiRing:
-    def __init__(self, distinguished_elements, binary_operators):
-        if len(distinguished_elements) != 2:
-            raise NeuroLangException("Length of Distinguished Elements != 2")
-
-        if len(binary_operators) != 2:
-            raise NeuroLangException("Length of Binary Operators != 2")
-
-        self.distinguished_element_sum = distinguished_elements[0]
-        self.distinguished_element_prod = distinguished_elements[1]
-        self.binary_operator_sum = binary_operators[0]
-        self.binary_operator_prod = binary_operators[1]
-
-
-CountingSemiRing = SemiRing([C_(0), C_(1)], [operator.add, operator.mul])
-
-
 class ProvenanceAlgebraSet(Constant):
     def __init__(self, relations, provenance_column):
         self.relations = relations
@@ -156,18 +135,11 @@ class ProvenanceAlgebraSet(Constant):
         return self.relations
 
 
-class RelationalAlgebraProvenanceSolver(ExpressionWalker):
+class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
     """
     Mixing that walks through relational algebra expressions and
     executes the operations and provenance calculations.
     """
-
-    def __init__(self, semiring):
-        if not isinstance(semiring, SemiRing):
-            raise NeuroLangException(
-                "The semiring parameter does not belong to the SemiRing class"
-            )
-        self._semiring = semiring
 
     def _build_provenance_set_from_set(self, rel_set, provenance_column):
         return ProvenanceAlgebraSet(rel_set, provenance_column)
