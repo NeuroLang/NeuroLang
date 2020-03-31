@@ -1,7 +1,4 @@
-import operator as op
-from collections.abc import Set
 from functools import wraps
-from inspect import getmro
 from itertools import tee
 from typing import Tuple
 
@@ -12,34 +9,6 @@ from ..utils.relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet)
 
 REBV = ReplaceExpressionsByValues(dict())
-
-
-def unwrapped_operator_factory(operator, operator_name):
-    @wraps(operator)
-    def unwrapped_operator(self, other):
-        if not isinstance(other, WrappedRelationalAlgebraSetMixin):
-            other = (REBV.walk(el) for el in other)
-        return operator(self, other)
-    return unwrapped_operator
-
-
-class WrappedRelationalAlgebraSetType(type):
-    def __new__(cls, name, bases, classdict, **kwargscls):
-        for operator_name in (
-            '__sub__', '__or__', '__and__',
-            '__eq__', '__ne__',
-            '__lt__', '__gt__',
-            '__le__', '__ge__',
-            '__ior__', '__isub__'
-        ):
-            old_method = classdict[operator_name]
-            wrapped_operator_name = f'_wrapped_{operator_name}'
-            classdict[wrapped_operator_name] = old_method
-            classdict[operator_name] = unwrapped_operator_factory(
-                old_method,
-                wrapped_operator_name
-            )
-        return super().__new__(cls, name, bases, classdict, **kwargscls)
 
 
 class WrappedRelationalAlgebraSetMixin:
@@ -124,11 +93,11 @@ class WrappedRelationalAlgebraSetMixin:
 class WrappedRelationalAlgebraSet(
     WrappedRelationalAlgebraSetMixin, RelationalAlgebraSet
 ):
-    def add(self, element):
-        super().add(REBV.walk(element))
+    def add(self, value):
+        return super().add(REBV.walk(value))
 
-    def discard(self, element):
-        super().discard(REBV.walk(element))
+    def discard(self, value):
+        return super().discard(REBV.walk(value))
 
     def __iter__(self):
         type_ = self.row_type
@@ -161,9 +130,7 @@ class WrappedNamedRelationalAlgebraFrozenSet(
     def row_type(self):
         if self._row_type is None:
             if (self.arity > 0 and len(self) > 0):
-                mro = type(self).__mro__
-                nrafz = super()
-                element = next(nrafz.__iter__())
+                element = next(super().__iter__())
                 self._row_type = {
                     c: Constant(getattr(element, c)).type
                     for c in self.columns

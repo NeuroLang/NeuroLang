@@ -1,5 +1,5 @@
 
-from typing import AbstractSet, Tuple
+from typing import AbstractSet
 
 from ..expressions import Constant
 from ..wrapped_collections import WrappedRelationalAlgebraSet
