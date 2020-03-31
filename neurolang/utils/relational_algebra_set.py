@@ -214,7 +214,10 @@ class RelationalAlgebraFrozenSet(Set):
             return (
                 (len(scont) == 0 and len(ocont) == 0) or
                 (len(scont.columns) == 0 and len(ocont.columns) == 0) or
-                len(scont.index.difference(ocont.index)) == 0
+                (
+                    scont is not None and ocont is not None
+                    and len(scont.index.difference(ocont.index)) == 0
+                )
             )
         else:
             return super().__eq__(other)

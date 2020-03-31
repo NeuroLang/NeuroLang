@@ -19,6 +19,11 @@ def test_relational_algebra_set_semantics_empty():
 def test_relational_algebra_set_semantics():
     a = [5, 4, 3, 2, 3, 1]
     ras = RelationalAlgebraSet(a)
+    ras_ = RelationalAlgebraSet(a)
+    ras__ = set((e,) for e in a)
+
+    assert ras == ras_
+    assert ras == ras__
 
     assert len(ras) == len(a) - 1
     ras.discard(5)

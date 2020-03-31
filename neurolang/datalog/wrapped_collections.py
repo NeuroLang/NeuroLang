@@ -14,19 +14,6 @@ from ..utils.relational_algebra_set import (
 REBV = ReplaceExpressionsByValues(dict())
 
 
-def _obtain_value_iterable(iterable):
-    it1, it2 = tee(iterable)
-    iterator_of_constants = False
-    for val in it1:
-        iterator_of_constants = isinstance(val, Constant[Tuple])
-        break
-    if not iterator_of_constants:
-        return iterable
-    else:
-        for e in it2:
-            yield REBV.walk(e)
-
-
 def unwrapped_operator_factory(operator, operator_name):
     @wraps(operator)
     def unwrapped_operator(self, other):
@@ -62,7 +49,7 @@ class WrappedRelationalAlgebraSetMixin:
             if isinstance(iterable, WrappedRelationalAlgebraSetMixin):
                 iterable = iterable.unwrap()
             else:
-                iterable = _obtain_value_iterable(iterable)
+                iterable = self._obtain_value_iterable(iterable)
         super().__init__(iterable=iterable, **kwargs)
         self._row_type = None
 
@@ -83,6 +70,55 @@ class WrappedRelationalAlgebraSetMixin:
                 verify_type=False
             )
 
+    def _operator_wrapped(self, op, other):
+        if not isinstance(other, WrappedRelationalAlgebraSetMixin):
+            other = {el for el in self._obtain_value_iterable(other)}
+        operator = getattr(super(), op)
+        return operator(other)
+
+    @staticmethod
+    def _obtain_value_iterable(iterable):
+        it1, it2 = tee(iterable)
+        iterator_of_constants = False
+        for val in it1:
+            iterator_of_constants = isinstance(val, Constant[Tuple])
+            break
+        if not iterator_of_constants:
+            for e in it2:
+                yield e
+        else:
+            for e in it2:
+                yield REBV.walk(e)
+
+    def __eq__(self, other):
+        return self._operator_wrapped('__eq__', other)
+
+    def __ne__(self, other):
+        return self._operator_wrapped('__ne__', other)
+
+    def __lt__(self, other):
+        return self._operator_wrapped('__lt__', other)
+
+    def __gt__(self, other):
+        return self._operator_wrapped('__gt__', other)
+
+    def __le__(self, other):
+        return self._operator_wrapped('__le__', other)
+
+    def __ge__(self, other):
+        return self._operator_wrapped('__ge__', other)
+
+    def __and__(self, other):
+        return self._operator_wrapped('__and__', other)
+
+    def __or__(self, other):
+        return self._operator_wrapped('__or__', other)
+
+    def __sub__(self, other):
+        return self._operator_wrapped('__sub__', other)
+
+
+
     def unwrapped_iter(self):
         return super().__iter__()
 
@@ -100,19 +136,6 @@ class WrappedRelationalAlgebraSetMixin:
         return self._row_type
 
 
-def unwrap(op, operator_name):
-    @wraps(op)
-    def fun(self, other):
-        if hasattr(super(), operator_name):
-            if not isinstance(other, WrappedRelationalAlgebraSetMixin):
-                other = (REBV.walk(el) for el in other)
-            return getattr(super(), operator_name)(other)
-        else:
-            return None
-
-    return fun
-
-
 class WrappedRelationalAlgebraSet(
     WrappedRelationalAlgebraSetMixin, RelationalAlgebraSet
 ):
@@ -121,12 +144,6 @@ class WrappedRelationalAlgebraSet(
 
     def discard(self, element):
         super().discard(REBV.walk(element))
-
-    def __eq__(self, other):
-        if not isinstance(other, WrappedRelationalAlgebraSetMixin):
-            other = (REBV.walk(el) for el in other)
-        return super().__eq__(other)
-
 
 
 class WrappedNamedRelationalAlgebraFrozenSet(
@@ -138,7 +155,7 @@ class WrappedNamedRelationalAlgebraFrozenSet(
             if isinstance(iterable, WrappedRelationalAlgebraSetMixin):
                 iterable = iterable.unwrap()
             else:
-                iterable = _obtain_value_iterable(iterable)
+                iterable = self._obtain_value_iterable(iterable)
         super().__init__(columns=columns, iterable=iterable, **kwargs)
         self._row_type = None
 
@@ -169,8 +186,3 @@ class WrappedNamedRelationalAlgebraFrozenSet(
         else:
             for _ in range(len(self)):
                 yield dict()
-
-    def __eq__(self, other):
-        if not isinstance(other, WrappedRelationalAlgebraSetMixin):
-            other = (REBV.walk(el) for el in other)
-        return super().__eq__(other)
