@@ -57,19 +57,6 @@ class WrappedRelationalAlgebraSetMixin:
         element = REBV.walk(element)
         return super().__contains__(element)
 
-    def __iter__(self):
-        type_ = self.row_type
-        element_types = type_.__args__
-
-        for t in super().__iter__():
-            yield Constant[type_](
-                tuple(
-                    Constant[e_t](e, verify_type=False)
-                    for e_t, e in zip(element_types, t)
-                ),
-                verify_type=False
-            )
-
     def _operator_wrapped(self, op, other):
         if not isinstance(other, WrappedRelationalAlgebraSetMixin):
             other = {el for el in self._obtain_value_iterable(other)}
@@ -117,13 +104,11 @@ class WrappedRelationalAlgebraSetMixin:
     def __sub__(self, other):
         return self._operator_wrapped('__sub__', other)
 
-
-
     def unwrapped_iter(self):
         return super().__iter__()
 
     def unwrap(self):
-        raise super().copy()
+        return super().copy()
 
     @property
     def row_type(self):
@@ -145,6 +130,19 @@ class WrappedRelationalAlgebraSet(
     def discard(self, element):
         super().discard(REBV.walk(element))
 
+    def __iter__(self):
+        type_ = self.row_type
+        element_types = type_.__args__
+
+        for t in super().__iter__():
+            yield Constant[type_](
+                tuple(
+                    Constant[e_t](e, verify_type=False)
+                    for e_t, e in zip(element_types, t)
+                ),
+                verify_type=False
+            )
+
 
 class WrappedNamedRelationalAlgebraFrozenSet(
     WrappedRelationalAlgebraSetMixin, NamedRelationalAlgebraFrozenSet
@@ -163,7 +161,9 @@ class WrappedNamedRelationalAlgebraFrozenSet(
     def row_type(self):
         if self._row_type is None:
             if (self.arity > 0 and len(self) > 0):
-                element = next(super().__iter__())
+                mro = type(self).__mro__
+                nrafz = super()
+                element = next(nrafz.__iter__())
                 self._row_type = {
                     c: Constant(getattr(element, c)).type
                     for c in self.columns
