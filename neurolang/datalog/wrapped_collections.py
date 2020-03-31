@@ -12,7 +12,9 @@ REBV = ReplaceExpressionsByValues(dict())
 
 class WrappedRelationalAlgebraSetMixin:
     def __init__(self, iterable=None, **kwargs):
-        iterable = WrappedRelationalAlgebraSetMixin._get_init_iterable(iterable)
+        iterable = WrappedRelationalAlgebraSetMixin._get_init_iterable(
+            iterable
+        )
         super().__init__(iterable=iterable, **kwargs)
         self._row_type = None
 
@@ -22,9 +24,10 @@ class WrappedRelationalAlgebraSetMixin:
             if isinstance(iterable, WrappedRelationalAlgebraSetMixin):
                 iterable = iterable.unwrap()
             else:
-                iterable = WrappedRelationalAlgebraSetMixin._obtain_value_iterable(iterable)
+                iterable = WrappedRelationalAlgebraSetMixin._obtain_value_iterable(
+                    iterable
+                )
         return iterable
-
 
     def __contains__(self, element):
         element = REBV.walk(element)
@@ -121,7 +124,9 @@ class WrappedNamedRelationalAlgebraFrozenSet(
     WrappedRelationalAlgebraSetMixin, NamedRelationalAlgebraFrozenSet
 ):
     def __init__(self, columns=None, iterable=None, **kwargs):
-        iterable = WrappedRelationalAlgebraSetMixin._get_init_iterable(iterable)
+        iterable = WrappedRelationalAlgebraSetMixin._get_init_iterable(
+            iterable
+        )
         super().__init__(columns=columns, iterable=iterable, **kwargs)
         self._row_type = None
 
