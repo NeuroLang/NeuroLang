@@ -3,8 +3,15 @@ from typing import AbstractSet, Tuple
 
 from . import expression_walker as ew
 from .exceptions import NeuroLangException
-from .expressions import Constant, Definition, FunctionApplication, Symbol
+from .expressions import (
+    Constant,
+    Definition,
+    FunctionApplication,
+    Symbol,
+    Unknown,
+)
 from .utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet
+from . import type_system
 
 eq_ = Constant(eq)
 
@@ -14,11 +21,11 @@ class Column:
 
 
 class ColumnInt(int, Column):
-    pass
+    """Refer to a relational algebra set's column by its index."""
 
 
 class ColumnStr(str, Column):
-    pass
+    """Refer to a named relational algebra set's column by its name."""
 
 
 C_ = Constant
@@ -108,7 +115,33 @@ class Difference(RelationalAlgebraOperation):
         )
 
 
+class Union(RelationalAlgebraOperation):
+    def __init__(self, relation_left, relation_right):
+        self.relation_left = relation_left
+        self.relation_right = relation_right
+
+    def __repr__(self):
+        return f"{self.relation_left} ∪ {self.relation_right}"
+
+
+class Intersection(RelationalAlgebraOperation):
+    def __init__(self, relation_left, relation_right):
+        self.relation_left = relation_left
+        self.relation_right = relation_right
+
+    def __repr__(self):
+        return f"{self.relation_left} & {self.relation_right}"
+
+
 class NameColumns(RelationalAlgebraOperation):
+    """
+    Give names to the columns of a relational algebra set.
+
+    All columns must be named at once. Each column name must either be a
+    `Constant[ColumnStr]` or a `Symbol[ColumnStr]` pointing to a symbolic
+    column name resolved when the expression is compiled.
+
+    """
     def __init__(self, relation, column_names):
         self.relation = relation
         self.column_names = column_names
@@ -154,22 +187,12 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
 
         return self._build_relation_constant(selected_relation)
 
-    def _build_relation_constant(self, relation):
-        if len(relation) > 0 and relation.arity > 0:
-            if hasattr(relation, 'row_type'):
-                row_type = relation.row_type
-            else:
-                row_type = Tuple[tuple(
-                    type(arg) for arg in next(iter(relation._container))
-                )]
-
-            relation_type = AbstractSet[row_type]
+    def _build_relation_constant(self, relation, type_=Unknown):
+        if type_ is not Unknown:
+            relation_type = type_
         else:
-            relation_type = AbstractSet[Tuple]
-
-        return C_[relation_type](
-            relation, verify_type=False
-        )
+            relation_type = _infer_relation_type(relation)
+        return C_[relation_type](relation, verify_type=False)
 
     @ew.add_match(Selection(..., FA_(eq_, (C_[Column], ...))))
     def selection_by_constant(self, selection):
@@ -217,33 +240,32 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
 
     @ew.add_match(Difference)
     def ra_difference(self, difference):
-        left = self.walk(difference.relation_left).value
-        right = self.walk(difference.relation_right).value
-        res = left - right
-        return self._build_relation_constant(res)
+        return self._type_preserving_binary_operation(difference)
+
+    @ew.add_match(Union)
+    def ra_union(self, union):
+        return self._type_preserving_binary_operation(union)
+
+    @ew.add_match(Intersection)
+    def ra_intersection(self, intersection):
+        return self._type_preserving_binary_operation(intersection)
 
     @ew.add_match(NameColumns)
     def ra_name_columns(self, name_columns):
         relation = self.walk(name_columns.relation)
         relation_set = relation.value
-        column_names = []
-        for col in name_columns.column_names:
-            if isinstance(col, Symbol):
-                column_names.append(col.name)
-            elif isinstance(col, Constant):
-                column_names.append(col.value)
-            else:
-                raise NeuroLangException(
-                    "Column name must be a Constant or Symbol"
-                )
+        column_names = tuple(
+            self.walk(column_name).value
+            for column_name in name_columns.column_names
+        )
         new_set = NamedRelationalAlgebraFrozenSet(column_names, relation_set)
         return self._build_relation_constant(new_set)
 
     @ew.add_match(RenameColumn)
     def ra_rename_column(self, rename_column):
         relation = self.walk(rename_column.relation)
-        src = rename_column.src.name
-        dst = rename_column.dst.name
+        src = rename_column.src.value
+        dst = rename_column.dst.value
         new_set = relation.value
 
         if len(new_set) > 0:
@@ -261,6 +283,26 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         except KeyError:
             raise NeuroLangException(f'Symbol {symbol} not in table')
         return constant
+
+    def _type_preserving_binary_operation(self, ra_op):
+        """
+        Generic function to apply binary operations (A <op> B) where A and B's
+        tuples have the same type, and whose results's tuples have the same
+        type as A and B's tuples. This includes, but is not necessarily limited
+        to, the Union, Intersection and Difference operations.
+        """
+        left = self.walk(ra_op.relation_left)
+        right = self.walk(ra_op.relation_right)
+        left_type = _get_const_relation_type(left)
+        right_type = _get_const_relation_type(right)
+        type_ = type_system.unify_types(left_type, right_type)
+        binary_op_fun_name = {
+            Union: "__or__",
+            Intersection: "__and__",
+            Difference: "__sub__",
+        }.get(type(ra_op))
+        new_relation = getattr(left.value, binary_op_fun_name)(right.value)
+        return self._build_relation_constant(new_relation, type_=type_)
 
 
 class RelationalAlgebraSimplification(ew.ExpressionWalker):
@@ -526,3 +568,66 @@ class RelationalAlgebraOptimiser(
     equi-selection/product compositions into equijoins.
     """
     pass
+
+
+def _const_relation_type_is_known(const_relation):
+    """
+    Returns whether `T` in `Constant[T]` matches `AbstractSet[Tuple[type_1,
+    ..., type_n]]`, in which case we consider the type of the relation's tuples
+    to be known.
+
+    """
+    type_args = type_system.get_args(const_relation.type)
+    if len(type_args) != 1:
+        return False
+    tuple_type_args = type_system.get_args(type_args[0])
+    return len(tuple_type_args) > 0
+
+
+def _sort_typed_const_named_relation_tuple_type_args(const_named_relation):
+    """
+    Given a typed `Constant[NamedRelationalAlgebraFrozenSet]`, `R`, with
+    columns `c_1, ..., c_n` and whose tuples have the type `Tuple[x_1, ...,
+    x_n]`, this function obtains the new type of the relation
+    `AbstractSet[Tuple[y_1, ..., y_n]]` such that `y_1, ..., y_n` are the same
+    initial types `x_1, ..., x_n` but sorted based on the alphabetical sort of
+    columns `c_1, ..., c_n`.
+
+    Notes
+    -----
+    This is useful when comparing or unifying the types of two named relations
+    that have a different column sorting.
+
+    """
+    tuple_args = const_named_relation.type.__args__[0].__args__
+    columns = const_named_relation.value.columns
+    sorted_tuple_args = tuple(
+        tuple_args[i]
+        for i, _ in sorted(enumerate(columns), key=lambda x: x[1])
+    )
+    return AbstractSet[Tuple[sorted_tuple_args]]
+
+
+def _infer_relation_type(relation):
+    """
+    Infer the type of the tuples in the relation based on its first tuple. If
+    the relation is empty, just return `Abstract[Tuple]`.
+    """
+    if len(relation) == 0 or relation.arity == 0:
+        return AbstractSet[Tuple]
+    if hasattr(relation, "row_type"):
+        return AbstractSet[relation.row_type]
+    tuple_type = Tuple[tuple(type(arg) for arg in next(iter(relation)))]
+    return AbstractSet[tuple_type]
+
+
+def _get_const_relation_type(const_relation):
+    if _const_relation_type_is_known(const_relation):
+        if isinstance(const_relation.value, NamedRelationalAlgebraFrozenSet):
+            return _sort_typed_const_named_relation_tuple_type_args(
+                const_relation
+            )
+        else:
+            return const_relation.type
+    else:
+        return _infer_relation_type(const_relation.value)

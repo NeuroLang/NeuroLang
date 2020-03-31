@@ -174,4 +174,3 @@ class WrappedNamedRelationalAlgebraFrozenSet(
         if not isinstance(other, WrappedRelationalAlgebraSetMixin):
             other = (REBV.walk(el) for el in other)
         return super().__eq__(other)
-

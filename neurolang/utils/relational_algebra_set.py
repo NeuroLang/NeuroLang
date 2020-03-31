@@ -87,6 +87,10 @@ class RelationalAlgebraFrozenSet(Set):
             new_container,
             drop_duplicates=True
         )
+        output._container.rename(
+            columns={c: i for i, c in enumerate(output._container.columns)},
+            inplace=True,
+        )
         return output
 
     def selection(self, select_criteria):
@@ -226,8 +230,9 @@ class RelationalAlgebraFrozenSet(Set):
 
     def itervalues(self):
         if len(self) == 0:
-            raise StopIteration
-        return iter(self._container.values.squeeze())
+            return iter([])
+        else:
+            return iter(self._container.values)
 
     def __hash__(self):
         v = self._container.values
@@ -242,28 +247,35 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         if iterable is None:
             iterable = []
 
-        if isinstance(iterable, RelationalAlgebraFrozenSet):
-            self._initialize_from_instance_same_class(iterable)
+        if isinstance(iterable, NamedRelationalAlgebraFrozenSet):
+            self._initialize_from_named_ra_set(iterable)
+        elif isinstance(iterable, RelationalAlgebraFrozenSet):
+            self._initialize_from_unnamed_ra_set(iterable)
         else:
             self._container = pd.DataFrame(
                 list(iterable),
                 columns=self._columns
             )
-            self._container = self._renew_index(self._container)
+        self._container = self._renew_index(self._container)
 
-    def _initialize_from_instance_same_class(self, iterable):
-        if iterable._container is None:
+    def _initialize_from_named_ra_set(self, other):
+        if len(self._columns) != other.arity:
+            raise ValueError("Relations must have the same arity")
+        self._container = (
+            other._container[list(other.columns)].copy(deep=False)
+        )
+        self._container.sort_index(axis=1, inplace=True)
+
+    def _initialize_from_unnamed_ra_set(self, other):
+        if other._container is None:
             self._container = pd.DataFrame(
-                list(iterable),
+                list(other),
                 columns=self._columns
             )
         else:
-            self._container = iterable._container.copy(deep=False)
-            if len(self._columns) != iterable.arity:
-                raise ValueError(
-                    'columns should have the same '
-                    'length as columns of {iterable}'
-                )
+            if len(self._columns) != other.arity:
+                raise ValueError("Relations must have the same arity")
+            self._container = other._container.copy(deep=False)
             self._container.columns = self._columns
         self._container.sort_index(axis=1, inplace=True)
 
@@ -346,10 +358,12 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         return result
 
     def rename_column(self, src, dst):
-        if dst in self._columns:
-            raise ValueError(f'{dst} can not be in the columns')
         if src not in self._columns:
             raise ValueError(f'{src} not in columns')
+        if src == dst:
+            return self
+        if dst in self._columns:
+            raise ValueError(f'{dst} cannot be in the columns')
         src_idx = self._columns.index(src)
         new_columns = (
             self._columns[:src_idx] +
@@ -405,10 +419,9 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         return output
 
     def __sub__(self, other):
-        if self.columns != other.columns:
+        if not self._container.columns.equals(other._container.columns):
             raise ValueError(
-                'Difference defined only for '
-                'sets with the same columns'
+                "Difference defined only for sets with the same columns"
             )
         new_container_ix = self._container.index.difference(
             other._container.index
@@ -419,10 +432,30 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         return output
 
     def __or__(self, other):
-        raise NotImplementedError()
+        if self.columns != other.columns:
+            raise ValueError(
+                "Union defined only for sets with the same columns"
+            )
+        new_container = pd.merge(
+            left=self._container.reset_index(),
+            right=other._container.reset_index(), how="outer",
+        ).set_index('index')
+        output = type(self)(self.columns)
+        output._container = new_container
+        return output
 
     def __and__(self, other):
-        raise NotImplementedError()
+        if self.columns != other.columns:
+            raise ValueError(
+                "Union defined only for sets with the same columns"
+            )
+        new_container = pd.merge(
+            left=self._container.reset_index(),
+            right=other._container.reset_index(), how="inner",
+        ).set_index('index')
+        output = type(self)(self.columns)
+        output._container = new_container
+        return output
 
     def __lt__(self, other):
         raise NotImplementedError()
@@ -455,6 +488,10 @@ class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
                 pass
 
     def __ior__(self, other):
+        if self._container is not None:
+            self._container = self._renew_index(self._container)
+        if other._container is not None:
+            other._container = other._renew_index(other._container)
         if len(self) == 0:
             self._container = other._container.copy()
             return self
@@ -468,6 +505,10 @@ class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
             return super().__ior__(other)
 
     def __isub__(self, other):
+        if self._container is not None:
+            self._container = self._renew_index(self._container)
+        if other._container is not None:
+            other._container = other._renew_index(other._container)
         if len(self) == 0:
             return self
         if isinstance(other, RelationalAlgebraSet):

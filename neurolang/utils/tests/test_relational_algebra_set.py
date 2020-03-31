@@ -215,10 +215,22 @@ def test_named_relational_algebra_difference():
 
     ras_a = NamedRelationalAlgebraFrozenSet(('x', 'y'), a)
     ras_b = NamedRelationalAlgebraFrozenSet(('x', 'y'), b)
+    ras_b_inv = NamedRelationalAlgebraFrozenSet(
+        ('y', 'x'), [t[::-1] for t in b]
+    )
     ras_c = NamedRelationalAlgebraFrozenSet(('x', 'y'), c)
 
     res = ras_a - ras_b
     assert res == ras_c
+
+    res = ras_b - ras_a
+    assert len(res) == 0
+
+    res = ras_a - ras_b_inv
+    assert res == ras_c
+
+    res = ras_b_inv - ras_a
+    assert len(res) == 0
 
 
 def test_named_groupby():
@@ -285,3 +297,37 @@ def test_named_to_unnamed():
     ras_a = NamedRelationalAlgebraFrozenSet(cols, a)
     ras_b = RelationalAlgebraFrozenSet(a)
     assert ras_a.to_unnamed() == ras_b
+
+
+def test_named_ra_set_from_other():
+    first = NamedRelationalAlgebraFrozenSet(
+        ("x", "n"), [(56, "bonjour"), (42, "aurevoir"),]
+    )
+    second = NamedRelationalAlgebraFrozenSet(first.columns, first,)
+    assert first == second
+    for tuple_a, tuple_b in zip(first, second):
+        assert tuple_a == tuple_b
+
+
+def test_named_ra_union():
+    first = NamedRelationalAlgebraFrozenSet(("x", "y"), [(7, 8), (9, 2)])
+    second = NamedRelationalAlgebraFrozenSet(("x", "y"), [(9, 2), (42, 0)])
+    expected = NamedRelationalAlgebraFrozenSet(
+        ("x", "y"), [(7, 8), (9, 2), (42, 0)]
+    )
+    assert first | second == expected
+    empty = NamedRelationalAlgebraFrozenSet(('x', 'y'), [])
+    assert first | empty == first
+    assert empty | first == first
+    assert first | empty | second == first | second
+
+
+def test_named_ra_intersection():
+    first = NamedRelationalAlgebraFrozenSet(("x", "y"), [(7, 8), (9, 2)])
+    second = NamedRelationalAlgebraFrozenSet(("x", "y"), [(9, 2), (42, 0)])
+    expected = NamedRelationalAlgebraFrozenSet(("x", "y"), [(9, 2)])
+    assert first & second == expected
+    empty = NamedRelationalAlgebraFrozenSet(('x', 'y'), [])
+    assert first & empty == empty
+    assert empty & first == empty
+    assert first & empty & second == empty

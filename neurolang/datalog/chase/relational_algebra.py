@@ -249,7 +249,7 @@ class ChaseNamedRelationalAlgebraMixin:
 
         result_value = result.value
         substitutions = WrappedNamedRelationalAlgebraFrozenSet(
-            sorted(result_value.columns),
+            result_value.columns,
             result_value
         )
 
