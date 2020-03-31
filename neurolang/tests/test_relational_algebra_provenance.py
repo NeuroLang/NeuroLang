@@ -6,7 +6,7 @@ from ..relational_algebra import (
 )
 from ..relational_algebra_provenance import (
     RelationalAlgebraProvenanceCountingSolver, ProvenanceAlgebraSet, Union,
-    ProjectionNonProvenance, Projection
+    ProjectionNonProvenance, Projection, ConcatenateConstantColumn
 )
 from ..utils import NamedRelationalAlgebraFrozenSet
 
@@ -184,49 +184,81 @@ def test_product():
 
 
 def test_union():
-    RA1 = NamedRelationalAlgebraFrozenSet(
-        columns=('col1', '__provenance__'),
-        iterable=[(i * 2, i) for i in range(10)]
+    relation1 = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            iterable=[
+                ('a', 'b', 1),
+                ('b', 'a', 2),
+                ('c', 'a', 2),
+                ('c', 'a', 1),
+                ('b', 'a', 1),
+            ],
+            columns=['x', 'y', '__provenance__'],
+        ), '__provenance__'
     )
-    pset_r1 = ProvenanceAlgebraSet(RA1, '__provenance__')
-
-    RA2 = NamedRelationalAlgebraFrozenSet(
-        columns=('col1', '__provenance__'),
-        iterable=[(i % 5, i) for i in range(20)]
+    relation2 = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            iterable=[
+                ('a', 'b', 1),
+                ('b', 'a', 2),
+                ('d', 'a', 2),
+                ('c', 'a', 1),
+                ('b', 'a', 1),
+            ],
+            columns=['x', 'y', '__provenance__'],
+        ), '__provenance__'
     )
-    pset_r2 = ProvenanceAlgebraSet(RA2, '__provenance__')
 
-    s = Union(pset_r1, pset_r2)
+    expected = NamedRelationalAlgebraFrozenSet(
+        iterable=[('a', 'b', 2), ('b', 'a', 6), ('c', 'a', 4), ('d', 'a', 2)],
+        columns=['x', 'y', '__provenance__'],
+    )
+
+    s = Union(relation1, relation2)
     sol = RelationalAlgebraProvenanceCountingSolver().walk(s).value
 
-    assert sol == (RA1 | RA2)
+    assert sol == expected
 
 
 def test_projection():
     relation = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
             iterable=[
-                ("a", "b", 1),
-                ("b", "a", 2),
-                ("c", "a", 2),
-                ("c", "a", 1),
-                ("b", "a", 1),
+                ('a', 'b', 1),
+                ('b', 'a', 2),
+                ('c', 'a', 2),
+                ('c', 'a', 1),
+                ('b', 'a', 1),
             ],
-            columns=["x", "y", '__provenance__'],
+            columns=['x', 'y', '__provenance__'],
         ), '__provenance__'
     )
     expected = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
-            iterable=[("a", "b", 1), ("b", "a", 3), ("c", "a", 3)],
-            columns=["x", "y", '__provenance__'],
+            iterable=[('a', 'b', 1), ('b', 'a', 3), ('c', 'a', 3)],
+            columns=['x', 'y', '__provenance__'],
         ), '__provenance__'
     )
     sum_agg_op = Projection(
         relation,
-        tuple([Constant(ColumnStr("x")),
-               Constant(ColumnStr("y"))]),
+        tuple([Constant(ColumnStr('x')),
+               Constant(ColumnStr('y'))]),
     )
     solver = RelationalAlgebraProvenanceCountingSolver()
     result = solver.walk(sum_agg_op)
 
     assert result == expected
+
+
+def test_concatenate_constant():
+    s = ConcatenateConstantColumn(
+        provenance_set_r1, C_(ColumnStr('new_col')), C_(9)
+    )
+    sol = RelationalAlgebraProvenanceCountingSolver().walk(s).value
+
+    expected = NamedRelationalAlgebraFrozenSet(
+        columns=('col1', 'col2', '__provenance__', 'new_col'),
+        iterable=[(i, i * 2, i, 9) for i in range(10)]
+    )
+
+    assert expected == sol
