@@ -199,26 +199,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             column1 = f'{prov_res}1'
             column2 = f'{prov_temp}2'
 
-            set_res_cols = set(rel_res.value.columns)
-            set_res_cols.discard(rel_res.provenance_column)
-            set_temp_cols = set(rel_temp.value.columns)
-            set_temp_cols.discard(rel_temp.provenance_column)
-            common = set_res_cols & set_temp_cols
-            if common:
-                cols = set_res_cols.difference(common.union())
-                if len(cols) == 0:
-                    cols = set_temp_cols.difference(common)
-                    cols.add(rel_temp.provenance_column)
-                    rel_temp = ProjectionNonProvenance(
-                        rel_temp, tuple([C_(ColumnStr(name)) for name in cols])
-                    )
-                    rel_temp = self.walk(rel_temp)
-                else:
-                    cols.add(rel_res.provenance_column)
-                    rel_res = ProjectionNonProvenance(
-                        rel_res, tuple([C_(ColumnStr(name)) for name in cols])
-                    )
-                    rel_res = self.walk(rel_res)
+            rel_res, rel_temp = self._remove_common_columns(rel_res, rel_temp)
 
             proj_columns = tuple(
                 set(rel_res.value.columns) - set([column1])
@@ -257,6 +238,30 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             rel_res = self.walk(res)
 
         return rel_res
+
+    def _remove_common_columns(self, rel_res, rel_temp):
+        set_res_cols = set(rel_res.value.columns)
+        set_res_cols.discard(rel_res.provenance_column)
+        set_temp_cols = set(rel_temp.value.columns)
+        set_temp_cols.discard(rel_temp.provenance_column)
+        common = set_res_cols & set_temp_cols
+        if common:
+            cols = set_res_cols.difference(common.union())
+            if len(cols) == 0:
+                cols = set_temp_cols.difference(common)
+                cols.add(rel_temp.provenance_column)
+                rel_temp = ProjectionNonProvenance(
+                    rel_temp, tuple([C_(ColumnStr(name)) for name in cols])
+                )
+                rel_temp = self.walk(rel_temp)
+            else:
+                cols.add(rel_res.provenance_column)
+                rel_res = ProjectionNonProvenance(
+                    rel_res, tuple([C_(ColumnStr(name)) for name in cols])
+                )
+                rel_res = self.walk(rel_res)
+
+        return rel_res, rel_temp
 
     @add_match(Projection)
     def prov_projection(self, agg_op):
@@ -299,7 +304,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
 
     @add_match(EquiJoin(ProvenanceAlgebraSet, ..., ProvenanceAlgebraSet, ...))
     def prov_equijoin(self, equijoin):
-        raise NotImplementedError("Aggregations are not implemented.")
+        raise NotImplementedError("EquiJoin is not implemented.")
 
     @add_match(RenameColumn)
     def prov_rename_column(self, rename_column):
