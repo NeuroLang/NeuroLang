@@ -6,7 +6,8 @@ from ..relational_algebra import (
 )
 from ..relational_algebra_provenance import (
     RelationalAlgebraProvenanceCountingSolver, ProvenanceAlgebraSet, Union,
-    ProjectionNonProvenance, Projection, ConcatenateConstantColumn
+    ProjectionNonProvenance, Projection, ConcatenateConstantColumn,
+    ExtendedProjection, ExtendedProjectionListMember
 )
 from ..utils import NamedRelationalAlgebraFrozenSet
 
@@ -28,8 +29,6 @@ def test_selection():
 
     assert sol == R1.selection({'col1': 4})
     assert '__provenance__' in sol.columns
-    assert sol._container['__provenance__'
-                          ].values in R1._container['__provenance__'].values
 
 
 def test_selection_columns():
@@ -53,10 +52,7 @@ def test_valid_rename():
     assert 'renamed' in sol.columns
     assert 'col1' not in sol.columns
     assert '__provenance__' in sol.columns
-    assert np.array_equal(
-        R1._container['__provenance__'].values,
-        sol._container['__provenance__'].values
-    )
+    assert R1.projection('__provenance__') == sol.projection('__provenance__')
 
 
 def test_provenance_rename():
@@ -72,10 +68,6 @@ def test_provenance_rename():
     assert sol == R1.rename_column('__provenance__', 'renamed')
     assert 'renamed' in sol.columns
     assert '__provenance__' not in sol.columns
-    assert np.array_equal(
-        R1._container['__provenance__'].values,
-        sol._container['renamed'].values
-    )
 
 
 def test_projections_non_provenance():
@@ -127,11 +119,22 @@ def test_naturaljoin():
 
     R1cpR2 = R1.cross_product(R2)
     RnjR = R1cpR2.naturaljoin(R1njR2)
-    res = RnjR._container.apply(
-        lambda x: x['__provenance__1'] * x['__provenance__2'], axis=1
+
+    res = ExtendedProjection(
+        ProvenanceAlgebraSet(RnjR, '__provenance__'),
+        tuple([
+            ExtendedProjectionListMember(
+                fun_exp=Constant(ColumnStr('__provenance__1')) *
+                Constant(ColumnStr('__provenance__2')),
+                dst_column=Constant(ColumnStr('__provenance__')),
+            )
+        ])
     )
-    prov_sol = sol.value._container['__provenance__'].values
-    prov_res = res.values
+
+    res = RelationalAlgebraProvenanceCountingSolver().walk(res)
+
+    prov_sol = sol.value.projection('__provenance__')
+    prov_res = res.value.projection('__provenance__')
     assert np.all(prov_sol == prov_res)
 
 
@@ -175,11 +178,21 @@ def test_product():
 
     R1cpR2 = R1.cross_product(R2)
     RnjR = R1cpR2.naturaljoin(R1njR2)
-    res = RnjR._container.apply(
-        lambda x: x['__provenance__1'] * x['__provenance__2'], axis=1
+    res = ExtendedProjection(
+        ProvenanceAlgebraSet(RnjR, '__provenance__'),
+        tuple([
+            ExtendedProjectionListMember(
+                fun_exp=Constant(ColumnStr('__provenance__1')) *
+                Constant(ColumnStr('__provenance__2')),
+                dst_column=Constant(ColumnStr('__provenance__')),
+            )
+        ])
     )
-    prov_sol = sol._container['__provenance__'].values
-    prov_res = res.values
+
+    res = RelationalAlgebraProvenanceCountingSolver().walk(res)
+
+    prov_sol = sol.projection('__provenance__')
+    prov_res = res.value.projection('__provenance__')
     assert np.all(prov_sol == prov_res)
 
 
@@ -262,3 +275,44 @@ def test_concatenate_constant():
     )
 
     assert expected == sol
+
+
+def test_extended_projection():
+    relation = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            iterable=[
+                (5, 1, 1),
+                (6, 2, 2),
+                (7, 3, 2),
+                (1, 3, 1),
+                (2, 1, 1),
+            ],
+            columns=['x', 'y', '__provenance__'],
+        ), '__provenance__'
+    )
+
+    expected = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            iterable=[
+                (5, 1, 6, 1),
+                (6, 2, 8, 2),
+                (7, 3, 10, 2),
+                (1, 3, 4, 1),
+                (2, 1, 3, 1),
+            ],
+            columns=['x', 'y', 'sum', '__provenance__'],
+        ), '__provenance__'
+    )
+
+    res = ExtendedProjection(
+        relation,
+        tuple([
+            ExtendedProjectionListMember(
+                fun_exp=Constant(ColumnStr('x')) + Constant(ColumnStr('y')),
+                dst_column=Constant(ColumnStr('sum')),
+            )
+        ])
+    )
+
+    res = RelationalAlgebraProvenanceCountingSolver().walk(res)
+    assert res == expected
