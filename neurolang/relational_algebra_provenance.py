@@ -1,12 +1,12 @@
 import operator
 from typing import AbstractSet
 
-from ..expression_walker import PatternWalker, add_match, ExpressionWalker
-from ..exceptions import NeuroLangException
-from ..utils import (
+from .expression_walker import PatternWalker, add_match, ExpressionWalker
+from .exceptions import NeuroLangException
+from .utils import (
     NamedRelationalAlgebraFrozenSet,
 )
-from ..relational_algebra import (
+from .relational_algebra import (
     eq_, Column, ColumnStr, Selection, Product, EquiJoin, NaturalJoin,
     Difference, NameColumns, RenameColumn, RelationalAlgebraSolver,
     RelationalAlgebraOperation
