@@ -4,7 +4,7 @@ from typing import Tuple
 
 from ..expression_walker import ReplaceExpressionsByValues
 from ..expressions import Constant
-from ..type_system import infer_type
+from ..type_system import infer_type, get_args
 from ..utils.relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet)
 
@@ -101,7 +101,7 @@ class WrappedRelationalAlgebraSet(
 
     def __iter__(self):
         type_ = self.row_type
-        element_types = type_.__args__
+        element_types = get_args(type_)
 
         for t in super().__iter__():
             yield Constant[type_](
