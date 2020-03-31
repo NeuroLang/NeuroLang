@@ -29,9 +29,12 @@ class FrozenInstance:
         in_elements = elements
         elements = dict()
         for k, v in in_elements.items():
-            v = self._get_set_and_type(v)
+            if not isinstance(v, self._set_type):
+                v = self._get_set_and_type(v)
+                if len(v) > 0:
+                    v = self._set_type(v)
             if len(v) > 0:
-                elements[k] = self._set_type(v)
+                elements[k] = v
         return elements
 
     def _get_set_and_type(self, v):

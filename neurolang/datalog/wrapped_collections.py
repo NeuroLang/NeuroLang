@@ -22,8 +22,11 @@ class WrappedRelationalAlgebraSetMixin:
     @staticmethod
     def _get_init_iterable(iterable):
         if iterable is not None:
-            if isinstance(iterable, WrappedRelationalAlgebraSetMixin):
-                iterable = iterable._container.values  # iterable.unwrap()
+            if isinstance(
+                iterable,
+                (WrappedRelationalAlgebraSetMixin, RelationalAlgebraFrozenSet)
+            ):
+                iterable = iterable  # ._container.values  # iterable.unwrap()
             else:
                 iterable = (
                     WrappedRelationalAlgebraSetMixin._obtain_value_iterable(
