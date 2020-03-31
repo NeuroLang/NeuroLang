@@ -67,6 +67,15 @@ class ProjectionNonProvenance(RelationalAlgebraOperation):
         )
 
 
+class NaturalJoinNonProvenance(RelationalAlgebraOperation):
+    def __init__(self, relation_left, relation_right):
+        self.relation_left = relation_left
+        self.relation_right = relation_right
+
+    def __repr__(self):
+        return (f'[{self.relation_left}' f'\N{JOIN}' f'{self.relation_right}]')
+
+
 class ExtendedProjection(RelationalAlgebraOperation):
     """
     Projection operator extended to allow computation on components of tuples.
@@ -327,16 +336,45 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
         rel_left = self.walk(naturaljoin.relation_left)
         rel_right = self.walk(naturaljoin.relation_right)
 
-        res = Product((rel_left, rel_right))
+        column1 = f'{rel_left.provenance_column}1'
+        column2 = f'{rel_right.provenance_column}2'
+
+        proj_columns = set(rel_left.value.columns + rel_right.value.columns)
+        proj_columns = tuple([C_(ColumnStr(name)) for name in proj_columns])
+
+        res = ProjectionNonProvenance(
+            ExtendedProjection(
+                NaturalJoinNonProvenance(
+                    RenameColumn(
+                        rel_left, C_(ColumnStr(rel_left.provenance_column)),
+                        C_(ColumnStr(column1))
+                    ),
+                    RenameColumn(
+                        rel_right, C_(ColumnStr(rel_right.provenance_column)),
+                        C_(ColumnStr(column2))
+                    )
+                ),
+                tuple([
+                    ExtendedProjectionListMember(
+                        fun_exp=Constant(ColumnStr(column1)) *
+                        Constant(ColumnStr(column2)),
+                        dst_column=Constant(
+                            ColumnStr(rel_left.provenance_column)
+                        ),
+                    )
+                ])
+            ), proj_columns
+        )
         res = self.walk(res)
 
-        non_prov_left = self._eliminate_provenance(rel_left)
-        non_prov_right = self._eliminate_provenance(rel_right)
-        comb = non_prov_left.naturaljoin(non_prov_right)
-        op_applied = comb.naturaljoin(res.value)
-        return self._build_provenance_set_from_set(
-            op_applied, naturaljoin.relation_left.provenance_column
-        )
+        return res
+
+    @add_match(NaturalJoinNonProvenance)
+    def ra_naturaljoin(self, naturaljoin):
+        left = self.walk(naturaljoin.relation_left)
+        right = self.walk(naturaljoin.relation_right)
+        res = left.value.naturaljoin(right.value)
+        return self._build_provenance_set_from_set(res, left.provenance_column)
 
     @add_match(Union)
     def prov_union(self, union_op):
