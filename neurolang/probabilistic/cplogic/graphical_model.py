@@ -9,11 +9,9 @@ import pandas as pd
 from ...datalog.expressions import Conjunction, Implication
 from ...exceptions import NeuroLangException
 from ...expression_pattern_matching import add_match
-from ...expression_processing import is_probabilistic_fact
 from ...expression_walker import PatternWalker
 from ...expressions import (
     Constant,
-    Definition,
     ExpressionBlock,
     FunctionApplication,
     Symbol,
@@ -27,12 +25,14 @@ from ...relational_algebra import (
     RelationalAlgebraSolver,
     RenameColumn,
     Selection,
+    Union,
     eq_,
 )
 from ...utils.relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraFrozenSet,
 )
+from ..expression_processing import is_probabilistic_fact
 from ..expressions import (
     AddIndexColumn,
     AddRepeatedValueColumn,
@@ -44,7 +44,6 @@ from ..expressions import (
     ExtendedProjectionListMember,
     GraphicalModel,
     Grounding,
-    MargQuery,
     MultipleNaturalJoin,
     MultiplyColumns,
     NegateProbability,
@@ -53,8 +52,7 @@ from ..expressions import (
     RandomVariableValuePointer,
     SuccQuery,
     SumColumns,
-    Union,
-    Unions,
+    MultipleUnions,
     VectorisedTableDistribution,
     make_numerical_col_symb,
 )
@@ -66,29 +64,6 @@ def succ_query(program_code, query_pred):
     gm = CPLogicToGraphicalModelTranslator().walk(grounded)
     solver = QueryGraphicalModelSolver(gm)
     return solver.walk(SuccQuery(query_pred))
-
-
-def marg_query(code, query_pred, evidence_pred):
-    joint_rule = _build_joint_rule([query_pred, evidence_pred])
-    extended_code = ExpressionBlock(list(code.expressions) + [joint_rule])
-    grounded = ground_cplogic_program(extended_code)
-    gm = CPLogicToGraphicalModelTranslator().walk(grounded)
-    solver = QueryGraphicalModelSolver(gm)
-    evidence_prob = solver.walk(SuccQuery(evidence_pred))
-    joint_prob = solver.walk(SuccQuery(joint_rule.consequent))
-    evidence_prob_column = Constant(
-        ColumnStr(_split_numerical_cols(evidence_prob)[1][0])
-    )
-    joint_prob_column = Constant(
-        ColumnStr(_split_numerical_cols(joint_prob)[1][0])
-    )
-    return ExtendedRelationalAlgebraSolver({}).walk(
-        DivideColumns(
-            NaturalJoin(evidence_prob, joint_prob),
-            joint_prob_column,
-            evidence_prob_column,
-        )
-    )
 
 
 def full_observability_parameter_estimation(
@@ -106,7 +81,7 @@ def full_observability_parameter_estimation(
     result = ExtendedRelationalAlgebraSolver({}).walk(
         Aggregation(
             agg_fun=Constant[str]("mean"),
-            relation=Unions(estimations),
+            relation=MultipleUnions(estimations),
             group_columns=[Constant(ColumnStr("__parameter_name__"))],
             agg_column=Constant(ColumnStr("__parameter_estimate__")),
             dst_column=Constant(ColumnStr("__parameter_estimate__")),
@@ -428,10 +403,6 @@ class QueryGraphicalModelSolver(PatternWalker):
 
         return ExtendedRelationalAlgebraSolver({}).walk(result)
 
-    @add_match(MargQuery)
-    def marg_query(self, query):
-        evidence_prob = self.walk(SuccQuery(query.evidence))
-
     def _compute_marg_distrib(
         self, rv_symb, parent_marg_distribs, parent_groundings
     ):
@@ -515,13 +486,7 @@ class ExtendedRelationalAlgebraSolver(RelationalAlgebraSolver):
     def __init__(self, rv_values):
         self.rv_values = rv_values
 
-    @add_match(Union)
-    def union(self, union_op):
-        return Constant[AbstractSet](
-            self.walk(union_op.first).value | self.walk(union_op.second).value
-        )
-
-    @add_match(Unions)
+    @add_match(MultipleUnions)
     def unions(self, unions_op):
         result = None
         for relation in unions_op.relations:
@@ -905,7 +870,7 @@ def _build_interpretation_ra_sets(grounding, interpretations):
         for itp_id, itp in enumerate(itps_at_least_one_tuple)
     ]
     return ExtendedRelationalAlgebraSolver({}).walk(
-        NaturalJoin(grounding.relation, Unions(itp_ra_sets))
+        NaturalJoin(grounding.relation, MultipleUnions(itp_ra_sets))
     )
 
 
@@ -952,15 +917,6 @@ def _topological_sort_groundings(groundings):
             pred_symb, dependencies, visited, result
         )
     return [pred_symb_to_grounding.get(pred_symb) for pred_symb in result]
-
-
-def _build_joint_rule(joint_predicates):
-    variables = set()
-    for pred in joint_predicates:
-        variables |= set(arg for arg in pred.args if isinstance(arg, Symbol))
-    consequent = Symbol.fresh()(*sorted(variables, key=lambda arg: arg.name))
-    antecedent = Conjunction(joint_predicates)
-    return Implication(consequent, antecedent)
 
 
 def _iter_choice_variable(grounding):

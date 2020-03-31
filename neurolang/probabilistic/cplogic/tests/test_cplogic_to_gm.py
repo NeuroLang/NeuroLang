@@ -4,21 +4,21 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from ....datalog.expressions import Conjunction, Fact, Implication
 from ....exceptions import NeuroLangException
-from ....utils.relational_algebra_set import RelationalAlgebraSet
-from ...datalog.expressions import Conjunction, Fact, Implication
-from ...expressions import Constant, ExpressionBlock, Grounding, Symbol
-from ...relational_algebra import (
+from ....expressions import Constant, ExpressionBlock, Symbol
+from ....relational_algebra import (
     ColumnStr,
     NaturalJoin,
     RelationalAlgebraSolver,
 )
-from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
-from ..expressions import (
+from ....utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
+from ...expressions import (
     AddIndexColumn,
     AddRepeatedValueColumn,
     Aggregation,
     ConcatenateColumn,
+    Grounding,
     MultiplyColumns,
     ProbabilisticPredicate,
     RandomVariableValuePointer,
@@ -26,11 +26,11 @@ from ..expressions import (
     VectorisedTableDistribution,
 )
 from ..graphical_model import (
+    CPLogicToGraphicalModelTranslator,
     ExtendedAlgebraSet,
     ExtendedRelationalAlgebraSolver,
     QueryGraphicalModelSolver,
     SuccQuery,
-    CPLogicToGraphicalModelTranslator,
     _infer_pfact_params,
     _split_numerical_cols,
     and_vect_table_distribution,
@@ -662,27 +662,29 @@ def test_succ_query_hundreds_of_facts():
     grounded = ground_cplogic_program(code)
     gm = CPLogicToGraphicalModelTranslator().walk(grounded)
     solver = QueryGraphicalModelSolver(gm)
-    result = solver.walk(SuccQuery(Q(x)))
+    solver.walk(SuccQuery(Q(x)))
 
 
 def test_succ_query_hundreds_of_facts_fast():
-    extensional_sets = {
-        T: [(i,) for i in range(1000)],
-        R: [(i,) for i in range(300)],
+    extensional_predicate_sets = {
+        T: {(i,) for i in range(1000)},
+        R: {(i,) for i in range(300)},
     }
-    probfact_sets = {
-        P: [(0.2, i,) for i in range(1000)],
-        Z: [(0.5, i,) for i in range(300)],
+    probfacts_sets = {
+        P: {(0.2, i,) for i in range(1000)},
+        Z: {(0.5, i,) for i in range(300)},
     }
     code = ExpressionBlock(
-        [Implication(Q(x, y), Conjunction([P(x), Z(y), T(x), R(y)])),]
+        (Implication(Q(x, y), Conjunction((P(x), Z(y), T(x), R(y)))),)
     )
     grounded = ground_cplogic_program(
-        code, probfact_sets=probfact_sets, extensional_sets=extensional_sets,
+        code,
+        probfacts_sets=probfacts_sets,
+        extensional_predicate_sets=extensional_predicate_sets,
     )
     gm = CPLogicToGraphicalModelTranslator().walk(grounded)
     solver = QueryGraphicalModelSolver(gm)
-    result = solver.walk(SuccQuery(Q(x)))
+    solver.walk(SuccQuery(Q(x)))
 
 
 def test_sum_aggregate():
@@ -779,7 +781,7 @@ def test_exact_inference_pfact_params():
             columns=("x", "y", "__interpretation_id__"),
         )
     }
-    estimations = _infer_pfact_params(pfact_grounding, interpretations, 3)
+    _infer_pfact_params(pfact_grounding, interpretations, 3)
 
 
 def test_succ_query_with_probchoice_simple():

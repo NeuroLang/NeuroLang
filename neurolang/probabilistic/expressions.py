@@ -1,7 +1,8 @@
 from typing import Mapping
 
 from ..exceptions import NeuroLangException
-from ..expressions import Definition, Constant, Symbol, FunctionApplication
+from ..expressions import Constant, Definition, FunctionApplication, Symbol
+from ..relational_algebra import RelationalAlgebraOperation
 
 
 class ProbabilisticPredicate(Definition):
@@ -207,3 +208,8 @@ class ExtendedProjectionListMember(Definition):
 
     def __repr__(self):
         return "{} -> {}".format(self.fun_exp, self.dst_column)
+
+
+class MultipleUnions(RelationalAlgebraOperation):
+    def __init__(self, relations):
+        self.relations = relations

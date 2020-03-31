@@ -139,7 +139,7 @@ class Chase(ChaseNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
 def ground_cplogic_program(cpl_code, **sets):
     cpl_program = CPLogicProgram()
     cpl_program.walk(cpl_code)
-    for prefix in ["probfact", "extensional_predicate", "probchoice"]:
+    for prefix in ["probfacts", "extensional_predicate", "probchoice"]:
         if f"{prefix}_sets" not in sets:
             continue
         add_fun = getattr(cpl_program, f"add_{prefix}_from_tuples")
