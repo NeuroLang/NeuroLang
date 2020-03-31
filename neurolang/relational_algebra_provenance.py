@@ -263,6 +263,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
         relation = self.walk(agg_op.relation)
 
         group_columns = [col.value for col in agg_op.attributes]
+        # TODO avoid use _container
         gb = relation.value._container.groupby(group_columns)
         new_container = gb.sum()
         new_container.reset_index(inplace=True)
@@ -369,9 +370,6 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             first.value | second.value, union_op.first.provenance_column
         )
 
-        proj_columns_np = proj_columns + (
-            C_(ColumnStr(union_op.first.provenance_column)),
-        )
         return self.walk(Projection(new_relation, proj_columns))
 
     @add_match(ConcatenateConstantColumn)
@@ -406,6 +404,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
                     str_arithmetic_walker.walk(self.walk(member.fun_exp)),
                 )
             )
+        # TODO avoid use container
         new_container = relation.value._container.eval(
             "/n".join(pandas_eval_expressions)
         )
