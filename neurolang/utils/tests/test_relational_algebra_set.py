@@ -334,8 +334,16 @@ def test_aggegate():
 
 def test_extended_projection():
     initial_set = NamedRelationalAlgebraFrozenSet(("x", "y"), [(7, 8), (9, 2)])
-    expected = NamedRelationalAlgebraFrozenSet(("x", "y", "sum"), [(7, 8, 15),
-                                                                   (9, 2, 11)])
-    new_set = initial_set.extended_projection('sum = x + y')
+    
+    expected_sum = NamedRelationalAlgebraFrozenSet(("x", "y", "z"), [(7, 8, 15),(9, 2, 11)])
+    expected_str = NamedRelationalAlgebraFrozenSet(("x", "y", "z"), [(7, 8, 15),(9, 2, 11)])
+    expected_lambda = NamedRelationalAlgebraFrozenSet(("x", "y", "z"),[(7, 8, 14), (9, 2, 10)])
 
-    assert expected == new_set
+
+    new_set = initial_set.extended_projection({"z": sum})
+    assert expected_sum == new_set
+    new_set = initial_set.extended_projection({"z": "x+y"})
+    assert expected_str == new_set
+    new_set = initial_set.extended_projection({"z": lambda r: r.x + r.y - 1})
+    assert expected_lambda == new_set
+    
