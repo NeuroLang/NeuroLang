@@ -118,10 +118,10 @@ jobs:
               [ "${CIRCLE_BRANCH}" = "master" ]
             then
               asv run -v $(git rev-parse HEAD)...$(git rev-parse HEAD~5)
-              RESULT = $?
+              export RESULT=$?
             else
               asv continuous --strict -v master $(git rev-parse HEAD)
-              RESULT = $?
+              export RESULT=$?
             fi
             asv publish
             exit ${RESULT}
