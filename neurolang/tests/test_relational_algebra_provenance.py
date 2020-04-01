@@ -71,7 +71,7 @@ def test_provenance_rename():
 
 def test_projections_non_provenance():
     s = ProjectionNonProvenance(provenance_set_r1, (C_(ColumnStr('col1')), ))
-    sol = RelationalAlgebraProvenanceCountingSolver().walk(s).value
+    sol = RelationalAlgebraProvenanceCountingSolver().walk(s)
     R1proj = R1.projection('col1')
 
     assert sol == R1proj
@@ -137,6 +137,27 @@ def test_naturaljoin():
     assert np.all(prov_sol == prov_res)
 
 
+def test_naturaljoin_provenance_name():
+    RA1 = NamedRelationalAlgebraFrozenSet(
+        columns=('col1', '__provenance__1'),
+        iterable=[(i * 2, i) for i in range(10)]
+    )
+    pset_r1 = ProvenanceAlgebraSet(RA1, '__provenance__1')
+
+    RA2 = NamedRelationalAlgebraFrozenSet(
+        columns=('col1', 'colA', '__provenance__2'),
+        iterable=[(i % 5, i * 3, i) for i in range(20)]
+    )
+    pset_r2 = ProvenanceAlgebraSet(RA2, '__provenance__2')
+
+    s = NaturalJoin(pset_r1, pset_r2)
+    sol = RelationalAlgebraProvenanceCountingSolver().walk(s)
+
+    assert sol.provenance_column == '__provenance__1'
+    assert '__provenance__1' in sol.value.columns
+    assert '__provenance__2' not in sol.value.columns
+
+
 def test_product():
     RA1 = NamedRelationalAlgebraFrozenSet(
         columns=('col1', '__provenance__'),
@@ -193,6 +214,27 @@ def test_product():
     prov_sol = sol.projection('__provenance__')
     prov_res = res.value.projection('__provenance__')
     assert np.all(prov_sol == prov_res)
+
+
+def test_product_provenance_name():
+    RA1 = NamedRelationalAlgebraFrozenSet(
+        columns=('col1', '__provenance__1'),
+        iterable=[(i * 2, i) for i in range(10)]
+    )
+    pset_r1 = ProvenanceAlgebraSet(RA1, '__provenance__1')
+
+    RA2 = NamedRelationalAlgebraFrozenSet(
+        columns=('col1', 'colA', '__provenance__2'),
+        iterable=[(i % 5, i * 3, i) for i in range(20)]
+    )
+    pset_r2 = ProvenanceAlgebraSet(RA2, '__provenance__2')
+
+    s = Product((pset_r1, pset_r2))
+    sol = RelationalAlgebraProvenanceCountingSolver().walk(s)
+
+    assert sol.provenance_column == '__provenance__1'
+    assert '__provenance__1' in sol.value.columns
+    assert '__provenance__2' not in sol.value.columns
 
 
 def test_union():
