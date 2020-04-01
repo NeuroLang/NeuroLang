@@ -379,9 +379,8 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
             yield g_id, group_set
 
     def aggregate(self, group_columns, aggregate_function):
-        new_container = getattr(
-            self._container.groupby(group_columns), aggregate_function
-        )()
+        new_container = self._container.groupby(group_columns
+                                                ).agg(aggregate_function)
         new_container.reset_index(inplace=True)
         output = self._empty_set_same_structure()
         output._container = self._renew_index(new_container)

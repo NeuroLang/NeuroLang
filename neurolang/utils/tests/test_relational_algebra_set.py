@@ -2,6 +2,7 @@ from ..relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet,
     RelationalAlgebraSet
 )
+import operator
 
 
 def test_relational_algebra_set_semantics_empty():
@@ -316,11 +317,20 @@ def test_named_ra_intersection():
 
 def test_aggegate():
     initial_set = NamedRelationalAlgebraFrozenSet(("x", "y", "z"), [(7, 8, 1),
-                                                                    (7, 8, 2)])
-    expected = NamedRelationalAlgebraFrozenSet(("x", "y", "z"), [(7, 8, 3)])
+                                                                    (7, 8, 9)])
+    expected_sum = NamedRelationalAlgebraFrozenSet(("x", "y", "z"),
+                                                   [(7, 8, 10)])
+    expected_str = NamedRelationalAlgebraFrozenSet(("x", "y", "z"),
+                                                   [(7, 8, 2)])
+    expected_lambda = NamedRelationalAlgebraFrozenSet(("x", "y", "z"),
+                                                      [(7, 8, 8)])
 
-    new_set = initial_set.aggregate(["x", "y"], "sum")
-    assert expected == new_set
+    new_set = initial_set.aggregate(["x", "y"], {"z": sum})
+    assert expected_sum == new_set
+    new_set = initial_set.aggregate(["x", "y"], {"z": "count"})
+    assert expected_str == new_set
+    new_set = initial_set.aggregate(["x", "y"], {"z": lambda x: max(x) - 1})
+    assert expected_lambda == new_set
 
 
 def test_extended_projection():
