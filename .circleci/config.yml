@@ -117,11 +117,12 @@ jobs:
             if 
               [ "${CIRCLE_BRANCH}" = "master" ]
             then
-              asv run -v $(git rev-parse HEAD)...$(git rev-parse HEAD~5)
+              result=$( asv run -v $(git rev-parse HEAD)...$(git rev-parse HEAD~5) )
             else
-              asv continuous -v master $(git rev-parse HEAD)
+              RESULT=$( asv continuous --strict -v master $(git rev-parse HEAD) )
             fi
             asv publish
+            exit ${RESULT}
           no_output_timeout: 1h
       - store_artifacts:
           path: .asv/html

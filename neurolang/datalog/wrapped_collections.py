@@ -74,7 +74,10 @@ class WrappedRelationalAlgebraSetMixin:
         for val in it1:
             iterator_of_constants = (
                 isinstance(val, Constant[Tuple]) or
-                isinstance(val, tuple) and isinstance(val[0], Constant)
+                (
+                    isinstance(val, tuple) and (len(val) > 0)
+                    and isinstance(val[0], Constant)
+                )
             )
             break
         if not iterator_of_constants:

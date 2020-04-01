@@ -14,12 +14,10 @@ class FrozenInstance:
 
     def __init__(self, elements=None):
         self.cached_hash = None
-        self._set_types = dict()
         if elements is None:
             elements = dict()
         elif isinstance(elements, FrozenInstance):
             self.cached_hash = elements.cached_hash
-            self._set_types = elements._set_types.copy()
             elements = elements.elements.copy()
         elif isinstance(elements, Mapping):
             elements = self._elements_from_mapping(elements)
@@ -43,14 +41,14 @@ class FrozenInstance:
         return elements
 
     def _get_set_and_type(self, v):
-        set_type = Unknown
+        row_type = Unknown
         if isinstance(v, Constant[AbstractSet[Tuple]]):
-            set_type = get_args(v.type)[0]
+            row_type = get_args(v.type)[0]
             if isinstance(v.value, self._set_type):
                 v = v.value
             else:
                 v = self._rebv.walk(v)
-        return v, set_type
+        return v, row_type
 
     def _is_expression_iterable(self, v):
         is_expression = False
@@ -86,35 +84,23 @@ class FrozenInstance:
         if not isinstance(other, Instance):
             return super().__or__(other)
         new_elements = dict()
-        set_types = dict()
         for predicate in (self.elements.keys() | other.elements.keys()):
             new_elements[predicate] = self._set_type(
                 self.elements.get(predicate, self._set_type()) |
                 other.elements.get(predicate, self._set_type())
             )
-            if predicate in self._set_types:
-                set_types[predicate] = self._set_types[predicate]
-            elif predicate in other._set_types:
-                set_types[predicate] = other._set_types[predicate]
         res = type(self)(new_elements)
-        res._set_types = set_types
         return res
 
     def __sub__(self, other):
         if not isinstance(other, Instance):
             return super().__sub__(other)
         new_elements = dict()
-        set_types = dict()
         for predicate, tuple_set in self.elements.items():
             new_set = tuple_set - other.elements.get(predicate, set())
             if len(new_set) > 0:
                 new_elements[predicate] = new_set
-                if predicate in self._set_types:
-                    set_types[predicate] = self._set_types[predicate]
-                elif predicate in other._set_types:
-                    set_types[predicate] = other._set_types[predicate]
         res = type(self)(new_elements)
-        res._set_types = set_types
         return res
 
     def __and__(self, other):
@@ -127,25 +113,18 @@ class FrozenInstance:
             new_set = self.elements[predicate] & other.elements[predicate]
             if len(new_set) > 0:
                 new_elements[predicate] = new_set
-                if predicate in self._set_types:
-                    set_types[predicate] = self._set_types[predicate]
-                elif predicate in other._set_types:
-                    set_types[predicate] = other._set_types[predicate]
         res = type(self)(new_elements)
-        res._set_types = set_types
         return res
 
     def copy(self):
         new_copy = type(self)()
         new_copy.elements = self.elements.copy()
-        new_copy._set_types = self._set_types.copy()
         new_copy.hash = self.cached_hash
         return new_copy
 
     def _create_view(self, class_):
         out = class_()
         out.elements = self.elements
-        out._set_types = self._set_types
         return out
 
     def __eq__(self, other):
@@ -153,11 +132,6 @@ class FrozenInstance:
             return self.elements == other.elements
         else:
             return super().__eq__(other)
-
-    def set_type(self, predicate):
-        if predicate not in self._set_types:
-            self._set_types[predicate] = self.elements[predicate].row_type
-        return self._set_types[predicate]
 
 
 class FrozenMapInstance(FrozenInstance, Mapping):
@@ -171,7 +145,7 @@ class FrozenMapInstance(FrozenInstance, Mapping):
 
     def __getitem__(self, predicate_symbol):
         set_ = self.elements[predicate_symbol]
-        type_ = self.set_type(predicate_symbol)
+        type_ = set_.row_type
         return self._set_to_constant(set_, type_=type_)
 
     def __iter__(self):
@@ -182,15 +156,15 @@ class FrozenMapInstance(FrozenInstance, Mapping):
 
     def items(self):
         for k, v in self.elements.items():
-            set_type = self.set_type(k)
+            row_type = v.row_type
             yield k, self._set_to_constant(
-                v, type_=set_type
+                v, type_=row_type
             )
 
     def values(self):
         for k, v in self.elements.items():
-            set_type = self.set_type(k)
-            yield self._set_to_constant(v, type_=set_type)
+            row_type = v.row_type
+            yield self._set_to_constant(v, type_=row_type)
 
     def as_set(self):
         return self._create_view(FrozenSetInstance)
@@ -247,15 +221,8 @@ class Instance(FrozenInstance):
 
         for predicate in (self.elements.keys() & other.elements.keys()):
             self.elements[predicate] |= other.elements[predicate]
-            if (
-                predicate not in other._set_types and
-                predicate in other._set_types
-            ):
-                self._set_types[predicate] = other._set_types[predicate]
         for predicate in (other.elements.keys() - self.elements.keys()):
             self.elements[predicate] = other.elements[predicate]
-            if predicate in other._set_types:
-                self._set_types[predicate] = other._set_types[predicate]
         return self
 
     def _remove_predicate_symbol(self, predicate_symbol):
@@ -285,7 +252,6 @@ class Instance(FrozenInstance):
     def copy(self):
         new_copy = type(self)()
         new_copy.elements = self.elements.copy()
-        new_copy._set_types = self._set_types.copy()
         return new_copy
 
 
