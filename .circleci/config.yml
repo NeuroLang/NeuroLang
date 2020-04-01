@@ -124,7 +124,11 @@ jobs:
               export RESULT=$?
             fi
             asv publish
-            exit ${RESULT}
+            if 
+              [ $RESULT -ne 0 ]
+            then
+              exit 1
+            fi
           no_output_timeout: 1h
       - store_artifacts:
           path: .asv/html
