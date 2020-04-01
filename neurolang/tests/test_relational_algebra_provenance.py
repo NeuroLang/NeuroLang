@@ -1,17 +1,16 @@
+import numpy as np
 import pytest
 
-from ..expressions import (Constant, Symbol)
+from ..expressions import Constant, Symbol
 from ..relational_algebra import (
-    ColumnStr, EquiJoin, NaturalJoin, Product, Selection, eq_, RenameColumn
+    ColumnStr, EquiJoin, NaturalJoin, Product, RenameColumn, Selection, eq_
 )
 from ..relational_algebra_provenance import (
-    RelationalAlgebraProvenanceCountingSolver, ProvenanceAlgebraSet, Union,
-    ProjectionNonProvenance, Projection, ConcatenateConstantColumn,
-    ExtendedProjection, ExtendedProjectionListMember
+    ConcatenateConstantColumn, ExtendedProjection,
+    ExtendedProjectionListMember, Projection, ProjectionNonProvenance,
+    ProvenanceAlgebraSet, RelationalAlgebraProvenanceCountingSolver, Union
 )
 from ..utils import NamedRelationalAlgebraFrozenSet
-
-import numpy as np
 
 C_ = Constant
 S_ = Symbol

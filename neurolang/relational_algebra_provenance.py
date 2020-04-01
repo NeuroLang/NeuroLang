@@ -1,23 +1,15 @@
 import operator
 from typing import AbstractSet
 
-from .expression_walker import PatternWalker, add_match, ExpressionWalker
 from .exceptions import NeuroLangException
-from .utils import (
-    NamedRelationalAlgebraFrozenSet,
-)
+from .expression_walker import ExpressionWalker, PatternWalker, add_match
+from .expressions import Constant, Definition, FunctionApplication, Symbol
 from .relational_algebra import (
-    eq_, Column, ColumnStr, Selection, Product, EquiJoin, NaturalJoin,
-    Difference, NameColumns, RenameColumn, RelationalAlgebraSolver,
-    RelationalAlgebraOperation
+    Column, ColumnStr, Difference, EquiJoin, NameColumns, NaturalJoin, Product,
+    RelationalAlgebraOperation, RelationalAlgebraSolver, RenameColumn,
+    Selection, eq_
 )
-
-from .expressions import (
-    Constant,
-    Symbol,
-    Definition,
-    FunctionApplication,
-)
+from .utils import NamedRelationalAlgebraFrozenSet
 
 FA_ = FunctionApplication
 C_ = Constant
