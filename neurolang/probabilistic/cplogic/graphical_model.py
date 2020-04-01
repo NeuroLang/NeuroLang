@@ -262,8 +262,7 @@ class CPLogicToGraphicalModelTranslator(PatternWalker):
         Grounding,
         lambda exp: isinstance(exp.expression, Implication)
         and isinstance(exp.expression.consequent, FunctionApplication)
-        and isinstance(exp.expression.antecedent, Constant[bool])
-        and exp.expression.antecedent.value == True,
+        and exp.expression.antecedent == Constant[bool](True)
     )
     def extensional_grounding(self, grounding):
         rv_symb = grounding.expression.consequent.functor
