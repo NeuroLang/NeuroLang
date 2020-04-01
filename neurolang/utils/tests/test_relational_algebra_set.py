@@ -2,7 +2,6 @@ from ..relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet,
     RelationalAlgebraSet
 )
-import operator
 
 
 def test_relational_algebra_set_semantics_empty():
