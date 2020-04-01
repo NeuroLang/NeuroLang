@@ -3,7 +3,7 @@ from typing import Tuple
 
 from ..expression_walker import ReplaceExpressionsByValues
 from ..expressions import Constant
-from ..type_system import get_args, infer_type
+from ..type_system import Unknown, get_args, infer_type, unify_types
 from ..utils.relational_algebra_set import (NamedRelationalAlgebraFrozenSet,
                                             RelationalAlgebraFrozenSet,
                                             RelationalAlgebraSet)
@@ -12,12 +12,24 @@ REBV = ReplaceExpressionsByValues(dict())
 
 
 class WrappedRelationalAlgebraSetMixin:
-    def __init__(self, iterable=None, **kwargs):
+    def __init__(
+        self, iterable=None, row_type=Unknown, verify_row_type=True, **kwargs
+    ):
         iterable = WrappedRelationalAlgebraSetMixin._get_init_iterable(
             iterable
         )
         super().__init__(iterable=iterable, **kwargs)
-        self._row_type = None
+        self._set_row_type(iterable, row_type, verify_row_type)
+
+    def _set_row_type(self, iterable, row_type, verify_row_type):
+        if row_type is not Unknown:
+            if verify_row_type:
+                raise NotImplemented()
+            self._row_type = row_type
+        elif isinstance(iterable, WrappedRelationalAlgebraSetMixin):
+            self._row_type = iterable._row_type
+        else:
+            self._row_type = None
 
     @staticmethod
     def _get_init_iterable(iterable):
@@ -40,17 +52,30 @@ class WrappedRelationalAlgebraSetMixin:
         return super().__contains__(element)
 
     def _operator_wrapped(self, op, other):
-        if not isinstance(other, WrappedRelationalAlgebraSetMixin):
+        other_is_wras = isinstance(other, WrappedRelationalAlgebraSetMixin)
+        if not other_is_wras:
             other = {el for el in self._obtain_value_iterable(other)}
         operator = getattr(super(), op)
-        return operator(other)
+        res = operator(other)
+        if isinstance(res, WrappedRelationalAlgebraSetMixin):
+            row_type = self._row_type
+            if other_is_wras:
+                if row_type is not None and other._row_type is not None:
+                    row_type = unify_types(row_type, other._row_type)
+                elif row_type is None:
+                    row_type = other._row_type
+            res._row_type = row_type
+        return res
 
     @staticmethod
     def _obtain_value_iterable(iterable):
         it1, it2 = tee(iterable)
         iterator_of_constants = False
         for val in it1:
-            iterator_of_constants = isinstance(val, Constant[Tuple])
+            iterator_of_constants = (
+                isinstance(val, Constant[Tuple]) or
+                isinstance(val, tuple) and isinstance(val[0], Constant)
+            )
             break
         if not iterator_of_constants:
             iterator = it2
@@ -149,12 +174,15 @@ class WrappedRelationalAlgebraSet(
 class WrappedNamedRelationalAlgebraFrozenSet(
     WrappedRelationalAlgebraSetMixin, NamedRelationalAlgebraFrozenSet
 ):
-    def __init__(self, columns=None, iterable=None, **kwargs):
+    def __init__(
+        self, columns=None, iterable=None,
+        row_type=Unknown, verify_row_type=True, **kwargs
+    ):
         iterable = WrappedRelationalAlgebraSetMixin._get_init_iterable(
             iterable
         )
         super().__init__(columns=columns, iterable=iterable, **kwargs)
-        self._row_type = None
+        self._set_row_type(iterable, row_type, verify_row_type)
 
     @property
     def row_type(self):
