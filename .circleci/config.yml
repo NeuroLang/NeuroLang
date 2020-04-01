@@ -117,9 +117,11 @@ jobs:
             if 
               [ "${CIRCLE_BRANCH}" = "master" ]
             then
-              result=$( asv run -v $(git rev-parse HEAD)...$(git rev-parse HEAD~5) )
+              asv run -v $(git rev-parse HEAD)...$(git rev-parse HEAD~5)
+              RESULT = $?
             else
-              RESULT=$( asv continuous --strict -v master $(git rev-parse HEAD) )
+              asv continuous --strict -v master $(git rev-parse HEAD)
+              RESULT = $?
             fi
             asv publish
             exit ${RESULT}
