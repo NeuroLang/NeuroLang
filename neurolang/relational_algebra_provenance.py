@@ -41,8 +41,6 @@ def is_arithmetic_operation(exp):
     )
 
 
-# TODO This operation was included until we
-# resolve the inheritance of the solver
 class CrossProductNonProvenance(RelationalAlgebraOperation):
     def __init__(self, relations):
         self.relations = tuple(relations)
@@ -53,8 +51,6 @@ class CrossProductNonProvenance(RelationalAlgebraOperation):
         ) + ']'
 
 
-# TODO This operation was included until we
-# resolve the inheritance of the solver
 class ProjectionNonProvenance(RelationalAlgebraOperation):
     def __init__(self, relation, attributes):
         self.relation = relation
@@ -160,15 +156,6 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
     def _build_provenance_set_from_set(self, rel_set, provenance_column):
         return ProvenanceAlgebraSet(rel_set, provenance_column)
 
-    def _build_provenance_set_from_iterable(
-        self, iterable, columns, prov_col_name
-    ):
-        return ProvenanceAlgebraSet(
-            NamedRelationalAlgebraFrozenSet(
-                columns=columns, iterable=iterable
-            ), prov_col_name
-        )
-
     def _eliminate_provenance(self, relation):
         non_provenance_col = set(relation.value.columns).difference(
             set([relation.provenance_column])
@@ -273,19 +260,16 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
         return rel_res, rel_temp
 
     @add_match(Projection)
-    def prov_projection(self, agg_op):
-        relation = self.walk(agg_op.relation)
+    def prov_projection(self, projection):
+        relation = self.walk(projection.relation)
 
-        group_columns = [col.value for col in agg_op.attributes]
-        # TODO avoid use _container
-        gb = relation.value._container.groupby(group_columns)
-        new_container = gb.sum()
-        new_container.reset_index(inplace=True)
-        new_relation = NamedRelationalAlgebraFrozenSet(
-            iterable=new_container.values, columns=list(new_container.columns)
+        group_columns = [col.value for col in projection.attributes]
+        new_container = relation.value.aggregate(
+            group_columns, {relation.provenance_column: sum}
         )
+
         return self._build_provenance_set_from_set(
-            new_relation, relation.provenance_column
+            new_container, relation.provenance_column
         )
 
     @add_match(CrossProductNonProvenance)
@@ -422,9 +406,11 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
         new_column_name = concat_op.column_name.value
         new_column_value = concat_op.column_value.value
 
-        new_column_set = self._build_provenance_set_from_iterable([
-            new_column_value
-        ], [new_column_name], new_column_name)
+        new_column_set = ProvenanceAlgebraSet(
+            NamedRelationalAlgebraFrozenSet(
+                columns=[new_column_name], iterable=[new_column_value]
+            ), new_column_name
+        )
 
         res = CrossProductNonProvenance((relation, new_column_set))
         new_relation = self.walk(res)
@@ -439,21 +425,15 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
     def prov_extended_projection(self, proj_op):
         relation = self.walk(proj_op.relation)
         str_arithmetic_walker = StringArithmeticWalker()
-        pandas_eval_expressions = []
+        eval_expressions = {}
         for member in proj_op.projection_list:
-            pandas_eval_expressions.append(
-                "{} = {}".format(
-                    member.dst_column.value,
-                    str_arithmetic_walker.walk(self.walk(member.fun_exp)),
-                )
-            )
-        # TODO avoid use container
-        new_container = relation.value._container.eval(
-            "/n".join(pandas_eval_expressions)
-        )
-        return self._build_provenance_set_from_iterable(
-            new_container.values, new_container.columns,
-            relation.provenance_column
+            eval_expressions[member.dst_column.value
+                             ] = str_arithmetic_walker.walk(
+                                 self.walk(member.fun_exp)
+                             )
+        new_container = relation.value.extended_projection(eval_expressions)
+        return self._build_provenance_set_from_set(
+            new_container, relation.provenance_column
         )
 
     @add_match(FunctionApplication, is_arithmetic_operation)
