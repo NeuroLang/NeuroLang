@@ -32,7 +32,7 @@ commands:
               [ ${CIRCLE_JOB} == "benchmark" ]
             then
               pip install virtualenv==16.7.9
-              pip install asv
+              pip install git+https://github.com/airspeed-velocity/asv
             fi
 
       - run:
@@ -68,8 +68,8 @@ commands:
             make test
             ./cc-test-reporter after-build --coverage-input-type coverage.py --exit-code $?
             python-codacy-coverage -r coverage.xml
-            mkdir test_reports
-            cp utest.xml test_reports
+            mkdir -p test_reports/neurolang
+            cp utest.xml test_reports/neurolang
 
       - store_artifacts:
           path: test_reports
@@ -118,10 +118,17 @@ jobs:
               [ "${CIRCLE_BRANCH}" = "master" ]
             then
               asv run -v $(git rev-parse HEAD)...$(git rev-parse HEAD~5)
+              export RESULT=$?
             else
-              asv continuous -v master
+              asv continuous --strict -v $(git rev-parse master) $(git rev-parse HEAD)
+              export RESULT=$?
             fi
             asv publish
+            if 
+              [ $RESULT -ne 0 ]
+            then
+              exit 1
+            fi
           no_output_timeout: 1h
       - store_artifacts:
           path: .asv/html
