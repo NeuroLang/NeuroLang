@@ -120,7 +120,7 @@ jobs:
               asv run -v $(git rev-parse HEAD)...$(git rev-parse HEAD~5)
               export RESULT=$?
             else
-              asv continuous --strict -v master $(git rev-parse HEAD)
+              asv continuous --strict -v $(git rev-parse master) $(git rev-parse HEAD)
               export RESULT=$?
             fi
             asv publish
