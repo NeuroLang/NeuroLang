@@ -314,7 +314,7 @@ def test_named_ra_intersection():
     assert first & empty & second == empty
 
 
-def test_aggegate():
+def test_aggregate():
     initial_set = NamedRelationalAlgebraFrozenSet(("x", "y", "z"), [(7, 8, 1),
                                                                     (7, 8, 9)])
     expected_sum = NamedRelationalAlgebraFrozenSet(("x", "y", "z"),

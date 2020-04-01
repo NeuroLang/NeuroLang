@@ -13,7 +13,7 @@ class RelationalAlgebraFrozenSet(Set):
             if isinstance(iterable, RelationalAlgebraFrozenSet):
                 self._container = iterable._container
             else:
-                self._container = pd.DataFrame(list(iterable))
+                self._container = pd.DataFrame(iterable)
                 self._container = self._renew_index(self._container)
 
     def __contains__(self, element):
