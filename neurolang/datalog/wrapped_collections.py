@@ -38,7 +38,7 @@ class WrappedRelationalAlgebraSetMixin:
                 iterable,
                 (WrappedRelationalAlgebraSetMixin, RelationalAlgebraFrozenSet)
             ):
-                iterable = iterable  # ._container.values  # iterable.unwrap()
+                iterable = iterable
             else:
                 iterable = (
                     WrappedRelationalAlgebraSetMixin._obtain_value_iterable(
@@ -58,14 +58,17 @@ class WrappedRelationalAlgebraSetMixin:
         operator = getattr(super(), op)
         res = operator(other)
         if isinstance(res, WrappedRelationalAlgebraSetMixin):
-            row_type = self._row_type
-            if other_is_wras:
-                if row_type is not None and other._row_type is not None:
-                    row_type = unify_types(row_type, other._row_type)
-                elif row_type is None:
-                    row_type = other._row_type
-            res._row_type = row_type
+            res._row_type = self._get_new_row_type(other, other_is_wras)
         return res
+
+    def _get_new_row_type(self, other, other_is_wras):
+        row_type = self._row_type
+        if other_is_wras:
+            if row_type is not None and other._row_type is not None:
+                row_type = unify_types(row_type, other._row_type)
+            elif row_type is None:
+                row_type = other._row_type
+        return row_type
 
     @staticmethod
     def _obtain_value_iterable(iterable):

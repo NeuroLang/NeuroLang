@@ -29,16 +29,20 @@ class FrozenInstance:
         in_elements = elements
         elements = dict()
         for k, v in in_elements.items():
-            v_type = Unknown
-            if not isinstance(v, self._set_type):
-                v, v_type = self._get_set_and_type(v)
-                if len(v) > 0:
-                    v = self._set_type(
-                        v, row_type=v_type, verify_row_type=False
-                    )
+            v = self._get_set(v)
             if len(v) > 0:
                 elements[k] = v
         return elements
+
+    def _get_set(self, v):
+        v_type = Unknown
+        if not isinstance(v, self._set_type):
+            v, v_type = self._get_set_and_type(v)
+            if len(v) > 0:
+                v = self._set_type(
+                    v, row_type=v_type, verify_row_type=False
+                )
+        return v
 
     def _get_set_and_type(self, v):
         row_type = Unknown
@@ -108,7 +112,6 @@ class FrozenInstance:
             return super().__and__(other)
 
         new_elements = dict()
-        set_types = dict()
         for predicate in (self.elements.keys() & other.elements.keys()):
             new_set = self.elements[predicate] & other.elements[predicate]
             if len(new_set) > 0:

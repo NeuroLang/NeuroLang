@@ -32,7 +32,7 @@ commands:
               [ ${CIRCLE_JOB} == "benchmark" ]
             then
               pip install virtualenv==16.7.9
-              pip install asv
+              pip install git+https://github.com/airspeed-velocity/asv
             fi
 
       - run:
