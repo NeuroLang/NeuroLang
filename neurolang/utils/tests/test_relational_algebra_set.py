@@ -324,21 +324,37 @@ def test_aggegate():
     expected_lambda = NamedRelationalAlgebraFrozenSet(("x", "y", "z"),
                                                       [(7, 8, 8)])
 
+    initial_set2 = NamedRelationalAlgebraFrozenSet(("w", "x", "y", "z"),
+                                                   [(1, 7, 8, 1),
+                                                    (2, 7, 8, 9)])
+    expected_op2 = NamedRelationalAlgebraFrozenSet(("w", "x", "y", "z"),
+                                                   [(2, 7, 8, 8)])
+
     new_set = initial_set.aggregate(["x", "y"], {"z": sum})
     assert expected_sum == new_set
     new_set = initial_set.aggregate(["x", "y"], {"z": "count"})
     assert expected_str == new_set
     new_set = initial_set.aggregate(["x", "y"], {"z": lambda x: max(x) - 1})
     assert expected_lambda == new_set
+    new_set = initial_set2.aggregate(["x", "y"], {
+        "z": lambda x: max(x) - 1,
+        "w": "count"
+    })
+    assert expected_op2 == new_set
 
 
 def test_extended_projection():
     initial_set = NamedRelationalAlgebraFrozenSet(("x", "y"), [(7, 8), (9, 2)])
-    
-    expected_sum = NamedRelationalAlgebraFrozenSet(("x", "y", "z"), [(7, 8, 15),(9, 2, 11)])
-    expected_str = NamedRelationalAlgebraFrozenSet(("x", "y", "z"), [(7, 8, 15),(9, 2, 11)])
-    expected_lambda = NamedRelationalAlgebraFrozenSet(("x", "y", "z"),[(7, 8, 14), (9, 2, 10)])
 
+    expected_sum = NamedRelationalAlgebraFrozenSet(("x", "y", "z"),
+                                                   [(7, 8, 15), (9, 2, 11)])
+    expected_str = NamedRelationalAlgebraFrozenSet(("x", "y", "z"),
+                                                   [(7, 8, 15), (9, 2, 11)])
+    expected_lambda = NamedRelationalAlgebraFrozenSet(("x", "y", "z"),
+                                                      [(7, 8, 14), (9, 2, 10)])
+    expected_lambda2 = NamedRelationalAlgebraFrozenSet(("x", "y", "z"),
+                                                       [(8, 8, 14),
+                                                        (10, 2, 10)])
 
     new_set = initial_set.extended_projection({"z": sum})
     assert expected_sum == new_set
@@ -346,4 +362,8 @@ def test_extended_projection():
     assert expected_str == new_set
     new_set = initial_set.extended_projection({"z": lambda r: r.x + r.y - 1})
     assert expected_lambda == new_set
-    
+    new_set = initial_set.extended_projection({
+        "z": lambda r: r.x + r.y - 1,
+        "x": "x+1"
+    })
+    assert expected_lambda2 == new_set
