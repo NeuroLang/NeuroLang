@@ -398,11 +398,11 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
 
         res1 = ConcatenateConstantColumn(
             Projection(first, proj_columns),
-            C_(ColumnStr('__new_col_union__')), C_("union_temp_value_1")
+            C_(ColumnStr('__new_col_union__')), C_(0)
         )
         res2 = ConcatenateConstantColumn(
             Projection(second, proj_columns),
-            C_(ColumnStr('__new_col_union__')), C_("union_temp_value_2")
+            C_(ColumnStr('__new_col_union__')), C_(1)
         )
 
         first = self.walk(res1)
