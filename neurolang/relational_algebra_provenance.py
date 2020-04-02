@@ -417,22 +417,20 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
     @add_match(ConcatenateConstantColumn)
     def concatenate_column(self, concat_op):
         relation = self.walk(concat_op.relation)
-
-        new_column_name = concat_op.column_name.value
-        new_column_value = concat_op.column_value.value
-
-        new_column_set = ProvenanceAlgebraSet(
-            NamedRelationalAlgebraFrozenSet(
-                columns=[new_column_name], iterable=[new_column_value]
-            ), new_column_name
+        new_column_name = concat_op.column_name
+        new_column_value = concat_op.column_value
+        res = ExtendedProjection(
+            relation,
+            (
+                ExtendedProjectionListMember(
+                    fun_exp=new_column_value,
+                    dst_column=new_column_name
+                ),
+            )
         )
-
-        res = CrossProductNonProvenance((relation, new_column_set))
         new_relation = self.walk(res)
 
-        return self._build_provenance_set_from_set(
-            new_relation, relation.provenance_column
-        )
+        return new_relation
 
     @add_match(Constant[AbstractSet])
     def prov_relation(self, relation):

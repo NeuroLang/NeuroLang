@@ -382,16 +382,18 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
 
     def extended_projection(self, eval_expressions):
         new_columns = []
+        new_container = self._container.copy()
         for op_column, operation in eval_expressions.items():
             new_columns.append(op_column)
             if isinstance(operation, str):
                 op = f"{op_column}={operation}"
                 new_container = self._container.eval(op)
-            else:
-                self._container[op_column] = self._container.apply(
+            elif callable(operation):
+                new_container[op_column] = self._container.apply(
                     operation, axis=1
                 )
-                new_container = self._container
+            else:
+                new_container[op_column] = operation
 
         new_columns = self.columns + tuple(new_columns)
         output = type(self)(new_columns)
