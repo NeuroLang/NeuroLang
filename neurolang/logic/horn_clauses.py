@@ -14,7 +14,9 @@ from . import (
     LogicOperator,
     Quantifier,
 )
+from ..datalog.expressions import Fact
 from ..exceptions import NeuroLangException
+from ..expressions import ExpressionBlock
 from ..expression_walker import (
     add_match,
     PatternWalker,
@@ -249,8 +251,6 @@ def translate_horn_clauses_to_datalog(horn_clauses):
 class TranslateHornClausesToDatalog(PatternWalker):
     @add_match(Union)
     def match_union(self, exp):
-        from ..expressions import ExpressionBlock
-
         return ExpressionBlock(self.walk(exp.formulas))
 
     @add_match(Quantifier)
@@ -259,8 +259,6 @@ class TranslateHornClausesToDatalog(PatternWalker):
 
     @add_match(HornClause, lambda e: not e.body)
     def match_horn_fact(self, exp):
-        from ..datalog.expressions import Fact
-
         return Fact(exp.head)
 
     @add_match(HornClause, lambda e: e.body)
