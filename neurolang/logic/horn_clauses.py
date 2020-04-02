@@ -196,8 +196,8 @@ def convert_srnf_to_horn_clauses(head, expression):
 
 
 def _restrict_variables(head, body, positive_atoms):
-    while not set(head.args).issubset(_restricted_vars(body)):
-        uv = set(head.args) - _restricted_vars(body)
+    while not set(head.args).issubset(_restricted_variables(body)):
+        uv = set(head.args) - _restricted_variables(body)
         new_atoms = _chose_restriction_atoms(uv, positive_atoms, head)
         body = new_atoms + body
     return body
@@ -213,20 +213,19 @@ def _chose_restriction_atoms(unrestricted_variables, available_atoms, head):
     valid_choices = sorted(valid_choices, key=lambda t: t[1])
     a, _variables_not_in_head = valid_choices[0]
     return (a,)
-    
 
-def _restricted_vars(body):
+
+def _restricted_variables(body):
     atoms = _positive_atoms(body)
-    rv = set()
-    for a in atoms:
-        for s in a.args:
-            if isinstance(s, Symbol):
-                rv.add(s)
-    return rv
+    return set().union(*[_atom_variables(a) for a in atoms])
 
 
 def _positive_atoms(atoms):
     return set(a for a in atoms if not isinstance(a, Negation))
+
+
+def _atom_variables(atom):
+    return set([s for s in atom.args if isinstance(s, Symbol)])
 
 
 class ConvertSRNFToHornClause(PatternWalker):
