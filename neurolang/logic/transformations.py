@@ -103,7 +103,7 @@ class MoveNegationsToAtoms(LogicExpressionWalker):
 
     @add_match(Negation(Negation(...)))
     def negated_negation(self, negation):
-        return negation.formula.formula
+        return self.walk(negation.formula.formula)
 
 
 class MoveQuantifiersUp(LogicExpressionWalker):
