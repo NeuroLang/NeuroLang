@@ -3,10 +3,10 @@ from typing import AbstractSet
 
 from .exceptions import NeuroLangException
 from .expression_walker import ExpressionWalker, PatternWalker, add_match
-from .expressions import Constant, Definition, FunctionApplication, Symbol
+from .expressions import Constant, Definition, FunctionApplication
 from .relational_algebra import (
-    Column, ColumnStr, Difference, EquiJoin, NameColumns, NaturalJoin, Product,
-    RelationalAlgebraOperation, RelationalAlgebraSolver, RenameColumn,
+    Column, ColumnStr, EquiJoin, NaturalJoin, Product,
+    RelationalAlgebraOperation, RenameColumn,
     Selection, eq_
 )
 from .utils import NamedRelationalAlgebraFrozenSet
