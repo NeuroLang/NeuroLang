@@ -3,7 +3,10 @@ from typing import Iterable
 from uuid import uuid1
 
 import pandas as pd
-import re
+
+
+class RelationalAlgebraExpression(str):
+    pass
 
 
 class RelationalAlgebraFrozenSet(Set):
@@ -385,7 +388,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         new_container = self._container.copy()
         for op_column, operation in eval_expressions.items():
             new_columns.append(op_column)
-            if isinstance(operation, str):
+            if isinstance(operation, RelationalAlgebraExpression):
                 op = f"{op_column}={operation}"
                 new_container = self._container.eval(op)
             elif callable(operation):

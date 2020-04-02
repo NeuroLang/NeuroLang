@@ -1,15 +1,13 @@
 import operator
 from typing import AbstractSet
 
+from .utils.relational_algebra_set import RelationalAlgebraExpression
 from .exceptions import NeuroLangException
 from .expression_walker import ExpressionWalker, PatternWalker, add_match
 from .expressions import Constant, Definition, FunctionApplication
-from .relational_algebra import (
-    Column, ColumnStr, EquiJoin, NaturalJoin, Product,
-    RelationalAlgebraOperation, RenameColumn,
-    Selection, eq_
-)
-
+from .relational_algebra import (Column, ColumnStr, EquiJoin, NaturalJoin,
+                                 Product, RelationalAlgebraOperation,
+                                 RenameColumn, Selection, eq_)
 
 FA_ = FunctionApplication
 C_ = Constant
@@ -398,11 +396,11 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
 
         res1 = ConcatenateConstantColumn(
             Projection(first, proj_columns),
-            C_(ColumnStr('__new_col_union__')), C_(0)
+            C_(ColumnStr('__new_col_union__')), C_[str]('union_temp_value_1')
         )
         res2 = ConcatenateConstantColumn(
             Projection(second, proj_columns),
-            C_(ColumnStr('__new_col_union__')), C_(1)
+            C_(ColumnStr('__new_col_union__')), C_[str]('union_temp_value_2')
         )
 
         first = self.walk(res1)
@@ -472,8 +470,8 @@ class StringArithmeticWalker(PatternWalker):
 
     @add_match(FunctionApplication, is_arithmetic_operation)
     def arithmetic_operation(self, fa):
-        return "({} {} {})".format(
+        return RelationalAlgebraExpression("({} {} {})".format(
             self.walk(fa.args[0]),
             arithmetic_operator_string(fa.functor.value),
             self.walk(fa.args[1]),
-        )
+        ))
