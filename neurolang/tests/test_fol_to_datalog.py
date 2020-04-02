@@ -968,7 +968,6 @@ def test_safe_range_queries_in_datalog_solver_2():
     }
 
 
-@pytest.mark.skip(reason="Fails because of https://github.com/NeuroLang/NeuroLang/issues/261")
 def test_safe_range_queries_in_datalog_solver_3():
     n = Symbol("n")
     m = Symbol("m")

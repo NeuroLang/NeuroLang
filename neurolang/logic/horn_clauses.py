@@ -180,16 +180,53 @@ def convert_srnf_to_horn_clauses(head, expression):
             )
         )
 
-    queue = [(head, expression)]
+    queue = [(head, expression, set())]
     processed = []
 
     while queue:
-        head, exp = queue.pop()
+        head, exp, positive_atoms = queue.pop()
         body, remainder = ConvertSRNFToHornClause().walk(exp)
+        body = _restrict_variables(head, body, positive_atoms)
+        positive_atoms |= _positive_atoms(body)
+        remainder = [r + (positive_atoms,) for r in remainder]
         processed.append(HornClause(head, body))
         queue = remainder + queue
 
     return Union(tuple(reversed(processed)))
+
+
+def _restrict_variables(head, body, positive_atoms):
+    while not set(head.args).issubset(_restricted_vars(body)):
+        uv = set(head.args) - _restricted_vars(body)
+        new_atoms = _chose_restriction_atoms(uv, positive_atoms, head)
+        body = new_atoms + body
+    return body
+
+
+def _chose_restriction_atoms(unrestricted_variables, available_atoms, head):
+    x = list(unrestricted_variables)[0]
+    valid_choices = [
+        (a, (set(a.args) - set(head.args)))
+        for a in available_atoms
+        if (x in a.args) and (a != head)
+    ]
+    valid_choices = sorted(valid_choices, key=lambda t: t[1])
+    a, _variables_not_in_head = valid_choices[0]
+    return (a,)
+    
+
+def _restricted_vars(body):
+    atoms = _positive_atoms(body)
+    rv = set()
+    for a in atoms:
+        for s in a.args:
+            if isinstance(s, Symbol):
+                rv.add(s)
+    return rv
+
+
+def _positive_atoms(atoms):
+    return set(a for a in atoms if not isinstance(a, Negation))
 
 
 class ConvertSRNFToHornClause(PatternWalker):
