@@ -9,7 +9,7 @@ from .relational_algebra import (
     RelationalAlgebraOperation, RenameColumn,
     Selection, eq_
 )
-from .utils import NamedRelationalAlgebraFrozenSet
+
 
 FA_ = FunctionApplication
 C_ = Constant
