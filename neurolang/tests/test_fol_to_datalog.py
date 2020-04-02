@@ -616,6 +616,18 @@ def test_range_restricted_variables():
     assert is_safe_range(exp)
 
 
+def test_not_safe_range():
+    x = Symbol("x")
+    y = Symbol("y")
+    P = Symbol("P")
+
+    exp = Conjunction(
+        (P(x), Negation(ExistentialPredicate(y, Negation(P(y)))),)
+    )
+
+    assert not is_safe_range(exp)
+
+
 def test_convert_to_srnf_2():
     father = Symbol("father")
     sister = Symbol("sister")
@@ -866,9 +878,9 @@ def test_safe_range_queries_in_datalog_solver():
     dc = Chase(dl)
     solution_instance = dc.build_chase_solution()
 
-    assert solution_instance["V"].value == {1, 2, 3}
-    assert solution_instance["T"].value == {1, 4}
-    assert solution_instance["G"].value == {2, 3}
+    assert solution_instance["V"].value == {(1,), (2,), (3,)}
+    assert solution_instance["T"].value == {(1,), (4,)}
+    assert solution_instance["G"].value == {(2,), (3,)}
 
 
 def test_safe_range_queries_in_datalog_solver_2():

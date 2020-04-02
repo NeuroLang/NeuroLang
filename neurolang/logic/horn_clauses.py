@@ -145,6 +145,7 @@ class RangeRestrictedVariables(LogicExpressionWalker):
 
     @add_match(Negation)
     def match_negation(self, exp):
+        self.walk(exp.formula)
         return set()
 
     @add_match(Disjunction)
@@ -154,10 +155,6 @@ class RangeRestrictedVariables(LogicExpressionWalker):
     @add_match(Conjunction)
     def match_conjunction(self, exp):
         return set.union(*self.walk(exp.formulas))
-
-    @add_match(UniversalPredicate)
-    def match_universal(self, exp):
-        return set()
 
     @add_match(ExistentialPredicate)
     def match_existential(self, exp):
