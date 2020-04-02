@@ -18,7 +18,6 @@ def test_frozenset_instance_contains_facts():
     assert Q(C_(3)) in instance
     assert Q(C_(4)) not in instance
     assert hash(instance) is not None
-    assert len(set(instance) & {Q(C_(2)), Q(C_(3))}) == 2
 
 
 def test_set_instance_contains_facts():

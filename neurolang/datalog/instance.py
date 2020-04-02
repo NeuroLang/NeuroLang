@@ -1,24 +1,22 @@
-from collections.abc import Set, Mapping, MutableSet, MutableMapping, Iterable
+from collections.abc import Iterable, Mapping, MutableMapping, MutableSet, Set
 from typing import AbstractSet, Tuple
 
 from ..expression_walker import ReplaceExpressionsByValues
 from ..expressions import Constant, FunctionApplication
-from .wrapped_collections import WrappedRelationalAlgebraSet
-from ..utils import RelationalAlgebraFrozenSet, RelationalAlgebraSet
-from ..type_system import infer_type, Unknown
+from ..type_system import Unknown, get_args
+from .wrapped_collections import (WrappedRelationalAlgebraFrozenSet,
+                                  WrappedRelationalAlgebraSet)
 
 
 class FrozenInstance:
-    _set_type = RelationalAlgebraFrozenSet
+    _set_type = WrappedRelationalAlgebraFrozenSet
     _rebv = ReplaceExpressionsByValues({})
 
     def __init__(self, elements=None):
-        self.set_types = dict()
         self.cached_hash = None
         if elements is None:
             elements = dict()
         elif isinstance(elements, FrozenInstance):
-            self.set_types = elements.set_types.copy()
             self.cached_hash = elements.cached_hash
             elements = elements.elements.copy()
         elif isinstance(elements, Mapping):
@@ -31,42 +29,43 @@ class FrozenInstance:
         in_elements = elements
         elements = dict()
         for k, v in in_elements.items():
-            v, set_type = self._get_set_and_type(v)
+            v = self._get_set(v)
             if len(v) > 0:
-                elements[k] = self._set_type(v)
-                self.set_types[k] = set_type
+                elements[k] = v
         return elements
 
+    def _get_set(self, v):
+        v_type = Unknown
+        if not isinstance(v, self._set_type):
+            v, v_type = self._get_set_and_type(v)
+            if len(v) > 0:
+                v = self._set_type(
+                    v, row_type=v_type, verify_row_type=False
+                )
+        return v
+
     def _get_set_and_type(self, v):
-        set_type = Unknown
+        row_type = Unknown
         if isinstance(v, Constant[AbstractSet[Tuple]]):
-            set_type = v.type.__args__[0]
+            row_type = get_args(v.type)[0]
             if isinstance(v.value, self._set_type):
                 v = v.value
             else:
                 v = self._rebv.walk(v)
-        else:
-            is_expression, set_type = self._infer_type(v, set_type)
-            if is_expression and not isinstance(v, self._set_type):
-                v = set(self._rebv.walk(e) for e in v)
-        return v, set_type
+        return v, row_type
 
-    def _infer_type(self, v, set_type):
+    def _is_expression_iterable(self, v):
         is_expression = False
         for element in v:
             if isinstance(element, Constant):
-                set_type = element.type
                 is_expression = True
             elif (
                 isinstance(element, tuple) and
                 isinstance(element[0], Constant)
             ):
-                set_type = Tuple[tuple(arg.type for arg in element)]
                 is_expression = True
-            else:
-                set_type = infer_type(element)
             break
-        return is_expression, set_type
+        return is_expression
 
     def _elements_from_iterable(self, iterable):
         result = dict()
@@ -74,14 +73,10 @@ class FrozenInstance:
             symbol = predicate.functor
             if symbol not in result:
                 result[symbol] = []
-                self.set_types[symbol] = Tuple[
-                    tuple(arg.type for arg in predicate.args)
-                ]
             result[symbol].append(self._rebv.walk(predicate.args))
 
         for symbol in result:
             result[symbol] = self._set_type(result[symbol])
-
         return result
 
     def __hash__(self):
@@ -98,19 +93,19 @@ class FrozenInstance:
                 self.elements.get(predicate, self._set_type()) |
                 other.elements.get(predicate, self._set_type())
             )
-
-        return type(self)(new_elements)
+        res = type(self)(new_elements)
+        return res
 
     def __sub__(self, other):
         if not isinstance(other, Instance):
             return super().__sub__(other)
-
         new_elements = dict()
         for predicate, tuple_set in self.elements.items():
             new_set = tuple_set - other.elements.get(predicate, set())
             if len(new_set) > 0:
                 new_elements[predicate] = new_set
-        return type(self)(new_elements)
+        res = type(self)(new_elements)
+        return res
 
     def __and__(self, other):
         if not isinstance(other, Instance):
@@ -121,19 +116,18 @@ class FrozenInstance:
             new_set = self.elements[predicate] & other.elements[predicate]
             if len(new_set) > 0:
                 new_elements[predicate] = new_set
-        return type(self)(new_elements)
+        res = type(self)(new_elements)
+        return res
 
     def copy(self):
         new_copy = type(self)()
         new_copy.elements = self.elements.copy()
         new_copy.hash = self.cached_hash
-        new_copy.set_types = self.set_types.copy()
         return new_copy
 
     def _create_view(self, class_):
         out = class_()
         out.elements = self.elements
-        out.set_types = self.set_types
         return out
 
     def __eq__(self, other):
@@ -145,25 +139,17 @@ class FrozenInstance:
 
 class FrozenMapInstance(FrozenInstance, Mapping):
     def _set_to_constant(self, set_, type_=Unknown):
-        if len(set_) > 0:
-            if type_ is Unknown:
-                first = next(iter(set_))
-                type_ = infer_type(first)
-            return Constant[AbstractSet[type_]](
-                WrappedRelationalAlgebraSet(set_),
-                verify_type=False
-            )
-        else:
-            return Constant[AbstractSet](
-                WrappedRelationalAlgebraSet(),
-                verify_type=False
-            )
+        if type_ is Unknown:
+            type_ = set_.row_type
+        return Constant[AbstractSet[type_]](
+            set_,
+            verify_type=False
+        )
 
     def __getitem__(self, predicate_symbol):
-        return self._set_to_constant(
-            self.elements[predicate_symbol],
-            type_=self.set_types[predicate_symbol]
-        )
+        set_ = self.elements[predicate_symbol]
+        type_ = set_.row_type
+        return self._set_to_constant(set_, type_=type_)
 
     def __iter__(self):
         return iter(self.elements)
@@ -173,13 +159,15 @@ class FrozenMapInstance(FrozenInstance, Mapping):
 
     def items(self):
         for k, v in self.elements.items():
+            row_type = v.row_type
             yield k, self._set_to_constant(
-                v, type_=self.set_types[k]
+                v, type_=row_type
             )
 
     def values(self):
         for k, v in self.elements.items():
-            yield self._set_to_constant(v, type_=self.set_types[k])
+            row_type = v.row_type
+            yield self._set_to_constant(v, type_=row_type)
 
     def as_set(self):
         return self._create_view(FrozenSetInstance)
@@ -205,13 +193,8 @@ class FrozenSetInstance(FrozenInstance, Set):
 
     def __iter__(self):
         for predicate, tuples in self.elements.items():
-            types_ = self.set_types[predicate].__args__
             for t in tuples:
-                arg = tuple(
-                    Constant[type_](v, verify_type=False)
-                    for type_, v in zip(types_, t)
-                )
-
+                arg = t.value
                 yield FunctionApplication(
                     predicate, arg
                 )
@@ -227,7 +210,7 @@ class FrozenSetInstance(FrozenInstance, Set):
 
 
 class Instance(FrozenInstance):
-    _set_type = RelationalAlgebraSet
+    _set_type = WrappedRelationalAlgebraSet
 
     def __init__(self, elements=None):
         super().__init__(elements=elements)
@@ -243,12 +226,10 @@ class Instance(FrozenInstance):
             self.elements[predicate] |= other.elements[predicate]
         for predicate in (other.elements.keys() - self.elements.keys()):
             self.elements[predicate] = other.elements[predicate]
-            self.set_types[predicate] = other.set_types[predicate]
         return self
 
     def _remove_predicate_symbol(self, predicate_symbol):
         del self.elements[predicate_symbol]
-        del self.set_types[predicate_symbol]
 
     def __isub__(self, other):
         if not isinstance(other, Instance):
@@ -274,14 +255,13 @@ class Instance(FrozenInstance):
     def copy(self):
         new_copy = type(self)()
         new_copy.elements = self.elements.copy()
-        new_copy.set_types = self.set_types.copy()
         return new_copy
 
 
 class MapInstance(Instance, FrozenMapInstance, MutableMapping):
     def __setitem__(self, predicate_symbol, value):
-        self.elements[predicate_symbol] = self._set_type(value.value)
-        self.set_types[predicate_symbol] = value.type.__args__[0]
+        set_ = self._set_type(value.value)
+        self.elements[predicate_symbol] = set_
 
     def __delitem__(self, predicate_symbol):
         self._remove_predicate_symbol(predicate_symbol)
@@ -295,16 +275,15 @@ class MapInstance(Instance, FrozenMapInstance, MutableMapping):
 
 class SetInstance(Instance, FrozenSetInstance, MutableSet):
     def add(self, value):
-        if value.functor not in self.elements:
-            self.elements[value.functor] = self._set_type()
-            self.set_types[value.functor] = Tuple[
-                tuple(arg.type for arg in value.args)
-            ]
-        self.elements[value.functor].add(self._rebv.walk(value.args))
+        functor = value.functor
+        args = value.args
+        if functor not in self.elements:
+            self.elements[functor] = self._set_type()
+        self.elements[value.functor].add(args)
 
     def discard(self, value):
         functor = value.functor
-        value = self._rebv.walk(value.args)
+        value = value.args
         self.elements[functor].discard(value)
         if len(self.elements[functor]) == 0:
             self._remove_predicate_symbol(functor)
