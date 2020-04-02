@@ -57,22 +57,24 @@ class HornClause(LogicOperator):
                 self._symbols |= l._symbols
 
     def _validate(self, head, body):
-        if not (head is None or self._is_literal(head)):
+        if not self._is_none_or_literal(head):
             raise NeuroLangException(
                 f"Head must be a literal or None, {head} given"
             )
         if not head and not body:
             raise NeuroLangException(f"Head and body can not both be empty")
-        if not (
-            body is None
-            or (
-                isinstance(body, tuple)
-                and all(self._is_literal(l) for l in body)
-            )
-        ):
+        if not self._is_none_or_tuple_of_literals(body):
             raise NeuroLangException(
                 f"Body must be a tuple of literals or None, {body} given"
             )
+
+    def _is_none_or_literal(self, exp):
+        return exp is None or self._is_literal(exp)
+
+    def _is_none_or_tuple_of_literals(self, exp):
+        return exp is None or (
+            isinstance(exp, tuple) and all(self._is_literal(l) for l in exp)
+        )
 
     def _is_literal(self, exp):
         return (
