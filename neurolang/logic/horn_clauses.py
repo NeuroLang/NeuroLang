@@ -271,3 +271,10 @@ class TranslateHornClausesToDatalog(PatternWalker):
     @add_match(Negation)
     def match_negation(self, exp):
         return ~exp.formula
+
+
+def fol_query(head, exp):
+    exp = convert_to_srnf(exp)
+    horn_clauses = convert_srnf_to_horn_clauses(head, exp)
+    program = translate_horn_clauses_to_datalog(horn_clauses)
+    return program

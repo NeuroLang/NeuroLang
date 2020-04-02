@@ -34,6 +34,7 @@ from ..logic.horn_clauses import (
     is_safe_range,
     NeuroLangTranslateToHornClauseException,
     translate_horn_clauses_to_datalog,
+    fol_query,
 )
 from ..datalog.negation import DatalogProgramNegation
 from ..expression_walker import ExpressionBasicEvaluator
@@ -836,13 +837,6 @@ def test_convert_srnf2horn_fails():
     exp = UniversalPredicate(Y, P(Y))
     with pytest.raises(NeuroLangTranslateToHornClauseException):
         convert_srnf_to_horn_clauses(Ans(X), exp)
-
-
-def fol_query(head, exp):
-    exp = convert_to_srnf(exp)
-    horn_clauses = convert_srnf_to_horn_clauses(head, exp)
-    program = translate_horn_clauses_to_datalog(horn_clauses)
-    return program
 
 
 class Datalog(
