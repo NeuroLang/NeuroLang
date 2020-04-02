@@ -3,7 +3,12 @@ from unittest.mock import patch
 import operator
 
 from ..exceptions import NeuroLangException
-from ..expressions import Symbol, Constant, FunctionApplication
+from ..expressions import (
+    Symbol,
+    Constant,
+    FunctionApplication,
+    ExpressionBlock,
+)
 from ..logic.unification import most_general_unifier
 from ..logic import (
     Implication,
@@ -849,6 +854,23 @@ def test_convert_srnf2horn_fails():
     exp = UniversalPredicate(Y, P(Y))
     with pytest.raises(NeuroLangTranslateToHornClauseException):
         convert_srnf_to_horn_clauses(Ans(X), exp)
+
+
+def test_convert_srnf2horn_disjunction():
+    x = Symbol("x")
+    P = Symbol("P")
+    Q = Symbol("Q")
+    Ans = Symbol("Ans")
+    program = fol_query(Ans(x), Disjunction((P(x), Q(x))))
+    aux = program.expressions[0].consequent.functor
+    expected = ExpressionBlock(
+        (
+            Implication(aux(x), P(x)),
+            Implication(aux(x), Q(x)),
+            Implication(Ans(x), aux(x)),
+        )
+    )
+    assert program == expected
 
 
 class Datalog(

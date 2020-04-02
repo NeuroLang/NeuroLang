@@ -24,6 +24,7 @@ from ..expression_walker import (
 )
 from .expression_processing import extract_logic_free_variables
 
+
 from .transformations import (
     LogicExpressionWalker,
     EliminateImplications,
@@ -256,8 +257,12 @@ class TranslateHornClausesToDatalog(PatternWalker):
     def match_horn_fact(self, exp):
         return Fact(exp.head)
 
-    @add_match(HornClause, lambda e: e.body)
-    def match_horn_rule(self, exp):
+    @add_match(HornClause, lambda e: e.body and len(e.body) == 1)
+    def match_horn_rule_1(self, exp):
+        return Implication(exp.head, self.walk(exp.body[0]))
+
+    @add_match(HornClause, lambda e: e.body and len(e.body) > 1)
+    def match_horn_rule_2(self, exp):
         return Implication(exp.head, Conjunction(self.walk(exp.body)))
 
     @add_match(Negation)
