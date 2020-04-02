@@ -1,15 +1,13 @@
 import operator
 from typing import AbstractSet
 
+from .utils.relational_algebra_set import RelationalAlgebraExpression
 from .exceptions import NeuroLangException
 from .expression_walker import ExpressionWalker, PatternWalker, add_match
-from .expressions import Constant, Definition, FunctionApplication, Symbol
-from .relational_algebra import (
-    Column, ColumnStr, Difference, EquiJoin, NameColumns, NaturalJoin, Product,
-    RelationalAlgebraOperation, RelationalAlgebraSolver, RenameColumn,
-    Selection, eq_
-)
-from .utils import NamedRelationalAlgebraFrozenSet
+from .expressions import Constant, Definition, FunctionApplication
+from .relational_algebra import (Column, ColumnStr, EquiJoin, NaturalJoin,
+                                 Product, RelationalAlgebraOperation,
+                                 RenameColumn, Selection, eq_)
 
 FA_ = FunctionApplication
 C_ = Constant
@@ -398,11 +396,11 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
 
         res1 = ConcatenateConstantColumn(
             Projection(first, proj_columns),
-            C_(ColumnStr('__new_col_union__')), C_("union_temp_value_1")
+            C_(ColumnStr('__new_col_union__')), C_[str]('union_temp_value_1')
         )
         res2 = ConcatenateConstantColumn(
             Projection(second, proj_columns),
-            C_(ColumnStr('__new_col_union__')), C_("union_temp_value_2")
+            C_(ColumnStr('__new_col_union__')), C_[str]('union_temp_value_2')
         )
 
         first = self.walk(res1)
@@ -417,22 +415,20 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
     @add_match(ConcatenateConstantColumn)
     def concatenate_column(self, concat_op):
         relation = self.walk(concat_op.relation)
-
-        new_column_name = concat_op.column_name.value
-        new_column_value = concat_op.column_value.value
-
-        new_column_set = ProvenanceAlgebraSet(
-            NamedRelationalAlgebraFrozenSet(
-                columns=[new_column_name], iterable=[new_column_value]
-            ), new_column_name
+        new_column_name = concat_op.column_name
+        new_column_value = concat_op.column_value
+        res = ExtendedProjection(
+            relation,
+            (
+                ExtendedProjectionListMember(
+                    fun_exp=new_column_value,
+                    dst_column=new_column_name
+                ),
+            )
         )
-
-        res = CrossProductNonProvenance((relation, new_column_set))
         new_relation = self.walk(res)
 
-        return self._build_provenance_set_from_set(
-            new_relation, relation.provenance_column
-        )
+        return new_relation
 
     @add_match(Constant[AbstractSet])
     def prov_relation(self, relation):
@@ -474,8 +470,8 @@ class StringArithmeticWalker(PatternWalker):
 
     @add_match(FunctionApplication, is_arithmetic_operation)
     def arithmetic_operation(self, fa):
-        return "({} {} {})".format(
+        return RelationalAlgebraExpression("({} {} {})".format(
             self.walk(fa.args[0]),
             arithmetic_operator_string(fa.functor.value),
             self.walk(fa.args[1]),
-        )
+        ))

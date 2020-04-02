@@ -1,9 +1,8 @@
 import numpy as np
-import pytest
 
 from ..expressions import Constant, Symbol
 from ..relational_algebra import (
-    ColumnStr, EquiJoin, NaturalJoin, Product, RenameColumn, Selection, eq_
+    ColumnStr, NaturalJoin, Product, RenameColumn, Selection, eq_
 )
 from ..relational_algebra_provenance import (
     ConcatenateConstantColumn, ExtendedProjection,
