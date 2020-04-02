@@ -266,3 +266,28 @@ def reachable_code(query, datalog):
                     to_reach.append(functor)
 
     return Union(reachable_code[::-1])
+
+
+def conjunct_if_needed(formulas):
+    """Only conjunct the given list of formulas if there is more than one."""
+    if len(formulas) == 1:
+        return formulas[0]
+    else:
+        return Conjunction(formulas)
+
+
+def conjunct_formulas(f1, f2):
+    """Conjunct two logical formulas."""
+    if isinstance(f1, Conjunction) and isinstance(f2, Conjunction):
+        return Conjunction(tuple(f1.formulas) + tuple(f2.formulas))
+    elif isinstance(f1, Conjunction):
+        return Conjunction(tuple(f1.formulas) + (f2, ))
+    elif isinstance(f2, Conjunction):
+        return Conjunction((f1, ) + tuple(f2.formulas))
+    else:
+        return Conjunction((f1, f2))
+
+
+def is_ground_predicate(predicate):
+    """Whether all the predicate's terms are all constant."""
+    return all(isinstance(arg, Constant) for arg in predicate.args)

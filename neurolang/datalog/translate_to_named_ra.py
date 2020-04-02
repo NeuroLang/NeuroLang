@@ -91,7 +91,11 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             in_set = Selection(in_set, criterium)
 
         in_set = Projection(in_set, projections)
-        in_set = NameColumns(in_set, named_args)
+        column_names = tuple(
+            Constant[ColumnStr](ColumnStr(arg.name), verify_type=False)
+            for arg in named_args
+        )
+        in_set = NameColumns(in_set, column_names)
         return in_set
 
     @add_match(Negation)
@@ -183,25 +187,24 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
     def process_equality_formulas(eq_formulas, named_columns, output):
         for formula in eq_formulas:
             left, right = formula.args
-            criteria = EQ(
-                Constant[ColumnStr](
-                    ColumnStr(left.name), verify_type=False
-                ),
-                Constant[ColumnStr](
-                    ColumnStr(right.name), verify_type=False
-                )
+            left_col = Constant[ColumnStr](
+                ColumnStr(left.name), verify_type=False
             )
+            right_col = Constant[ColumnStr](
+                ColumnStr(right.name), verify_type=False
+            )
+            criteria = EQ(left_col, right_col)
             if left in named_columns and right in named_columns:
                 output = Selection(output, criteria)
             elif left in named_columns:
                 output = Selection(NaturalJoin(
-                        output, RenameColumn(output, left, right)
+                        output, RenameColumn(output, left_col, right_col)
                     ),
                     criteria
                 )
             elif right in named_columns:
                 output = Selection(NaturalJoin(
-                        output, RenameColumn(output, right, left)
+                        output, RenameColumn(output, right_col, left_col)
                     ),
                     criteria
                 )
