@@ -200,9 +200,7 @@ class ConvertSRNFToHornClause(PatternWalker):
         bodies, remainders = zip(*map(self.walk, exp.formulas))
         return (
             tuple(
-                sorted(
-                    reduce(operator.add, bodies), key=self._negation_order
-                )
+                sorted(reduce(operator.add, bodies), key=self._negation_order)
             ),
             reduce(operator.add, remainders),
         )
@@ -263,12 +261,19 @@ class TranslateHornClausesToDatalog(PatternWalker):
 
     @add_match(HornClause, lambda e: e.body)
     def match_horn_rule(self, exp):
-        b = reduce(operator.and_, exp.body)
-        return Implication(exp.head, b)
+        return Implication(exp.head, Conjunction(self.walk(exp.body)))
 
     @add_match(Negation)
     def match_negation(self, exp):
-        return ~exp.formula
+        return Negation(self.walk(exp.formula))
+
+    @add_match(FunctionApplication)
+    def match_fa(self, exp):
+        return exp
+
+    @add_match(Symbol)
+    def match_symbol(self, exp):
+        return exp
 
 
 def fol_query(head, exp):
