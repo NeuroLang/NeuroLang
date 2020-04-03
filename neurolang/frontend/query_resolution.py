@@ -10,7 +10,7 @@ from ..region_solver import Region
 from ..regions import (ExplicitVBR, ImplicitVBR, SphericalVolume,
                        take_principal_regions)
 from ..type_system import Unknown, is_leq_informative
-from .neurosynth_utils import NeuroSynthHandler, StudyID
+from .neurosynth_utils import NeuroSynthHandler, StudyID, TfIDf
 from .query_resolution_expressions import (All, Exists, Expression, Query,
                                            Symbol)
 
@@ -303,7 +303,7 @@ class NeuroSynthMixin:
             name = str(uuid1())
         result_set = self.neurosynth_db.ns_study_tfidf_feature_for_terms(terms)
         return self.add_tuple_set(
-            result_set, type_=Tuple[StudyID, str, float], name=name
+            result_set, type_=Tuple[StudyID, str, TfIDf], name=name
         )
 
 
