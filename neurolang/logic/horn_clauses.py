@@ -1,3 +1,16 @@
+"""
+Translation from First Order Logic to Horn clauses.
+
+This module defines the HornClause expression class and algorithms to translate
+First Order Logic expressions to a union of Horn clauses.  Between the
+algorithms here are implemented a translation from FOL sentences to an
+equivalent expression in safe range normal form, how to obtain the set of range
+restricted variables of an expression, how to check if the expression is safe
+range and, if so, how to translate the expression to a union of horn clauses.
+Furthermore the resulting horn clauses can be translated to a datalog
+expression block to use in a solver.
+
+"""
 from functools import reduce
 import operator
 from . import (
@@ -123,6 +136,14 @@ class MoveNegationsToAtomsOrExistentialQuantifiers(MoveNegationsToAtoms):
 
 
 def convert_to_srnf(e):
+    """
+    Convert an expression to safe range normal form.
+
+    Safe range normal form is an equivalent expression
+    but where the there are no implications or universal
+    quantifiers and also the negations are only applied
+    over atoms or existential quantifiers.
+    """
     w = ChainedWalker(
         DesambiguateQuantifiedVariables,
         EliminateImplications,
@@ -133,6 +154,13 @@ def convert_to_srnf(e):
 
 
 def is_safe_range(expression):
+    """
+    Return true if an expression is safe range.
+
+    This function receives an expression in safe range
+    normal form and returns true if all its free variables
+    are range restricted.
+    """
     try:
         return extract_logic_free_variables(
             expression
@@ -146,6 +174,24 @@ def range_restricted_variables(e):
 
 
 class RangeRestrictedVariables(LogicExpressionWalker):
+    """
+    The set of variables which are range restricted in a expression.
+
+    The range restricted variables are defined recursively as follows:
+    - For atoms: The variables occurring in the arguments.
+    - For negation: The empty set.
+    - For existential predicates: The restricted variables of the body without
+      the head.
+    - For conjunction: The union of the restricted variables of the involved
+      expressions.
+    - For disjunction: The intersection of the restricted variables of the
+      involved expressions.
+
+    Also, if an existentially quantified variable is not restricted in the body
+    of its predicate then the expression does not have a restricted range. This
+    also counts for existentials inside negations.
+    """
+
     @add_match(FunctionApplication)
     def match_function(self, exp):
         return set([a for a in exp.args if isinstance(a, Symbol)])
@@ -175,6 +221,37 @@ class RangeRestrictedVariables(LogicExpressionWalker):
 
 
 def convert_srnf_to_horn_clauses(head, expression):
+    """
+    Converts a safe range query into an union of horn clauses.
+
+    Given a query represented by a _answer_ head and a range restricted
+    expression in safe range normal form, returns an union of horn clauses in
+    which the result set given to head is equivalent. Also, is required that
+    the variables of the head appear free in the expression.
+
+    The algorithm is implemented using a queue of queries to process, which
+    starts with the query given as parameter. In each iteration, a query is
+    processed and the result is a Horn clause with a remainder of auxiliar
+    queries which appear in the clause. The clause is then added to the result
+    and the remainder queries are added to the queue.
+
+    The cases where auxiliar queries are needed are the negation over an
+    existential predicate and the disjunction. For the disjunction an auxiliar
+    query is introduced for each formula in the disjunction, but all with the
+    same head. For a negated existential another query is added because
+    negation can only be applied over atoms.
+
+    Care must be taken to ensure that the auxiliar queries are also range
+    restricted. To do so, a set of the positive atoms which appear in the
+    parent expressions is added alongside each query in the queue. Those
+    atoms are precisely the ones that restrict the range of the variables. If
+    is the case that a query is not range restricted then some of those atoms
+    are added to the body of the query to ensure the range restriction. This
+    restricts the result set of the auxiliar queries but does not alter the
+    equivalence for the overall query because the range of those variables was
+    already restricted in some of its parents.
+    """
+
     if not is_safe_range(expression):
         raise NeuroLangTranslateToHornClauseException(
             "Expression is not safe range: {}".format(expression)
@@ -191,7 +268,7 @@ def convert_srnf_to_horn_clauses(head, expression):
 
     while queue:
         head, exp, positive_atoms = queue.pop()
-        body, remainder = ConvertSRNFToHornClause().walk(exp)
+        body, remainder = _ConvertSRNFToHornClause().walk(exp)
         body = _restrict_variables(head, body, positive_atoms)
         positive_atoms |= _positive_atoms(body)
         remainder = [r + (positive_atoms,) for r in remainder]
@@ -242,7 +319,7 @@ def _atom_variables(atom):
     return set([s for s in atom.args if isinstance(s, Symbol)])
 
 
-class ConvertSRNFToHornClause(PatternWalker):
+class _ConvertSRNFToHornClause(PatternWalker):
     @add_match(Conjunction)
     def match_conjunction(self, exp):
         bodies, remainders = zip(*map(self.walk, exp.formulas))
@@ -291,6 +368,9 @@ class ConvertSRNFToHornClause(PatternWalker):
 
 
 def translate_horn_clauses_to_datalog(horn_clauses):
+    """
+    Straightforward translation from Horn clauses a datalog expression block.
+    """
     return TranslateHornClausesToDatalog().walk(horn_clauses)
 
 
@@ -329,6 +409,15 @@ class TranslateHornClausesToDatalog(PatternWalker):
 
 
 def fol_query(head, exp):
+    """
+    Tries to return datalog program for a given query in first order logic.
+
+    Given a query represented by a _answer_ head and an expression in first
+    order logic, converts the expression to safe range normal form and then, if
+    the query is safe range, returns an ExpressionBlock with the equivalent
+    program in datalog. Throw a NeuroLangTranslateToHornClauseException
+    otherwise.
+    """
     exp = convert_to_srnf(exp)
     horn_clauses = convert_srnf_to_horn_clauses(head, exp)
     program = translate_horn_clauses_to_datalog(horn_clauses)
