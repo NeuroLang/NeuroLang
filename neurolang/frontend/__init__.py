@@ -52,7 +52,7 @@ class RegionFrontend(QueryBuilderFirstOrder):
         self.solver.symbol_table[isin_symbol] = Constant(function_isin)
 
     def load_parcellation(self, parc_im, selected_labels=None):
-        labels = parc_im.get_data()
+        labels = np.asanyarray(parc_im.dataobj)
         label_regions_map = parse_region_label_map(
             parc_im, selected_labels=selected_labels
         )
