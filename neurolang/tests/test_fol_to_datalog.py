@@ -736,7 +736,9 @@ def test_convert_srnf2horn():
     exp = convert_to_srnf(exp)
     res = convert_srnf_to_horn_clauses(Sister(X, Y), exp)
 
-    expected = Union((HornClause(Sister(X, Y), (Father(X, Z), Father(Y, Z))),))
+    expected = Union(
+        (HornClause(Sister(X, Y), Conjunction((Father(X, Z), Father(Y, Z)))),)
+    )
     assert res == expected
 
 
@@ -773,9 +775,13 @@ def test_convert_srnf2horn_2():
 
     expected = Union(
         (
-            HornClause(Aux2(Ya), (Movies(Zt, H, Ya),)),
-            HornClause(Aux1(Xt), (Movies(Xt, Yd, Ya), Negation(Aux2(Ya)))),
-            HornClause(Ans(Xt), (Movies(Xt, Xd, Xa), Negation(Aux1(Xt)))),
+            HornClause(Aux2(Ya), Movies(Zt, H, Ya)),
+            HornClause(
+                Aux1(Xt), Conjunction((Movies(Xt, Yd, Ya), Negation(Aux2(Ya))))
+            ),
+            HornClause(
+                Ans(Xt), Conjunction((Movies(Xt, Xd, Xa), Negation(Aux1(Xt))))
+            ),
         )
     )
     assert res == expected
@@ -829,13 +835,19 @@ def test_convert_srnf2horn_3():
     expected = Union(
         (
             HornClause(
-                Aux3(r, n, m_), (Actor(n, m_, r_), Negation(Equal(r, r_)))
+                Aux3(r, n, m_),
+                Conjunction((Actor(n, m_, r_), Negation(Equal(r, r_)))),
             ),
             HornClause(
-                Aux2(n, m_), (Actor(n, m_, r), Negation(Aux3(r, n, m_)))
+                Aux2(n, m_),
+                Conjunction((Actor(n, m_, r), Negation(Aux3(r, n, m_)))),
             ),
-            HornClause(Aux1(n), (Director(n, m_), Negation(Aux2(n, m_)))),
-            HornClause(Ans(n), (Director(n, m), Negation(Aux1(n)))),
+            HornClause(
+                Aux1(n), Conjunction((Director(n, m_), Negation(Aux2(n, m_))))
+            ),
+            HornClause(
+                Ans(n), Conjunction((Director(n, m), Negation(Aux1(n))))
+            ),
         )
     )
     assert res == expected

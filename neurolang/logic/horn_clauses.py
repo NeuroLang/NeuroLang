@@ -13,6 +13,8 @@ from . import (
     ExistentialPredicate,
     LogicOperator,
     Quantifier,
+    TRUE,
+    FALSE,
 )
 from ..datalog.expressions import Fact
 from ..exceptions import NeuroLangException
@@ -47,33 +49,35 @@ class HornClause(LogicOperator):
     Expression of the form `P(X) \u2190 (Q(X) \u22C0 ... \u22C0 S(X))`
     """
 
-    def __init__(self, head, body=None):
+    def __init__(self, head, body=TRUE):
         self._validate(head, body)
         self.head = head
         self.body = body
-        self._symbols = head._symbols or set()
-        if body is not None:
-            for l in body:
-                self._symbols |= l._symbols
+        self._symbols = head._symbols | body._symbols
 
     def _validate(self, head, body):
-        if not self._is_none_or_literal(head):
+        if not self._is_valid_as_head(head):
             raise NeuroLangException(
-                f"Head must be a literal or None, {head} given"
-            )
-        if not head and not body:
-            raise NeuroLangException(f"Head and body can not both be empty")
-        if not self._is_none_or_tuple_of_literals(body):
-            raise NeuroLangException(
-                f"Body must be a tuple of literals or None, {body} given"
+                f"Head must be a literal or FALSE, {head} given"
             )
 
-    def _is_none_or_literal(self, exp):
-        return exp is None or self._is_literal(exp)
+        if not self._is_valid_as_body(body):
+            raise NeuroLangException(
+                f"Body must be a Conjunction of literals, a single"
+                " literal or TRUE, {body} given"
+            )
 
-    def _is_none_or_tuple_of_literals(self, exp):
-        return exp is None or (
-            isinstance(exp, tuple) and all(self._is_literal(l) for l in exp)
+    def _is_valid_as_head(self, exp):
+        return exp == FALSE or self._is_literal(exp)
+
+    def _is_valid_as_body(self, exp):
+        return (
+            exp == TRUE
+            or self._is_literal(exp)
+            or (
+                isinstance(exp, Conjunction)
+                and all(self._is_literal(l) for l in exp.formulas)
+            )
         )
 
     def _is_literal(self, exp):
@@ -191,21 +195,29 @@ def convert_srnf_to_horn_clauses(head, expression):
         body = _restrict_variables(head, body, positive_atoms)
         positive_atoms |= _positive_atoms(body)
         remainder = [r + (positive_atoms,) for r in remainder]
-        processed.append(HornClause(head, body))
+        processed.append(HornClause(head, _tuple_to_conjunction(body)))
         queue = remainder + queue
 
     return Union(tuple(reversed(processed)))
 
 
+def _tuple_to_conjunction(t):
+    if len(t) == 0:
+        return TRUE
+    if len(t) == 1:
+        return t[0]
+    return Conjunction(t)
+
+
 def _restrict_variables(head, body, positive_atoms):
     while not set(head.args).issubset(_restricted_variables(body)):
         uv = set(head.args) - _restricted_variables(body)
-        new_atoms = _chose_restriction_atoms(uv, positive_atoms, head)
+        new_atoms = _choose_restriction_atoms(uv, positive_atoms, head)
         body = new_atoms + body
     return body
 
 
-def _chose_restriction_atoms(unrestricted_variables, available_atoms, head):
+def _choose_restriction_atoms(unrestricted_variables, available_atoms, head):
     x = list(unrestricted_variables)[0]
     valid_choices = [
         (a, (set(a.args) - set(head.args)))
@@ -291,17 +303,13 @@ class TranslateHornClausesToDatalog(PatternWalker):
     def match_quantifier(self, exp):
         return self.walk(exp.body)
 
-    @add_match(HornClause, lambda e: not e.body)
+    @add_match(HornClause, lambda e: e.body == TRUE)
     def match_horn_fact(self, exp):
         return Fact(exp.head)
 
-    @add_match(HornClause, lambda e: e.body and len(e.body) == 1)
-    def match_horn_rule_1(self, exp):
-        return Implication(exp.head, self.walk(exp.body[0]))
-
-    @add_match(HornClause, lambda e: e.body and len(e.body) > 1)
-    def match_horn_rule_2(self, exp):
-        return Implication(exp.head, Conjunction(self.walk(exp.body)))
+    @add_match(HornClause, lambda e: e.body != TRUE)
+    def match_horn_rule(self, exp):
+        return Implication(exp.head, self.walk(exp.body))
 
     @add_match(Negation)
     def match_negation(self, exp):
@@ -314,6 +322,10 @@ class TranslateHornClausesToDatalog(PatternWalker):
     @add_match(Symbol)
     def match_symbol(self, exp):
         return exp
+
+    @add_match(Conjunction)
+    def match_conjunction(self, exp):
+        return Conjunction(self.walk(exp.formulas))
 
 
 def fol_query(head, exp):
