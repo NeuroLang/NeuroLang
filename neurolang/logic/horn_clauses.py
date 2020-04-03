@@ -268,7 +268,7 @@ def convert_srnf_to_horn_clauses(head, expression):
 
     while queue:
         head, exp, positive_atoms = queue.pop()
-        body, remainder = _ConvertSRNFToHornClause().walk(exp)
+        body, remainder = ConvertSRNFToHornClause().walk(exp)
         body = _restrict_variables(head, body, positive_atoms)
         positive_atoms |= _positive_atoms(body)
         remainder = [r + (positive_atoms,) for r in remainder]
@@ -319,7 +319,13 @@ def _atom_variables(atom):
     return set([s for s in atom.args if isinstance(s, Symbol)])
 
 
-class _ConvertSRNFToHornClause(PatternWalker):
+class ConvertSRNFToHornClause(PatternWalker):
+    """
+    Converts a expression in safe range normal form into the atoms of a horn
+    clause and a list of auxiliar queries remaining to be processed.
+
+    See `convert_srnf_to_horn_clauses`.
+    """
     @add_match(Conjunction)
     def match_conjunction(self, exp):
         bodies, remainders = zip(*map(self.walk, exp.formulas))
