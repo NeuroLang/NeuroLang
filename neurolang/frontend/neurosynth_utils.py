@@ -13,10 +13,13 @@ class NeuroSynthHandler(object):
         self._dataset = ns_dataset
 
     def ns_region_set_from_term(
-        self, terms, frequency_threshold=0.05, q=0.01,
-        prior=0.5, image_type=None
+        self,
+        terms,
+        frequency_threshold=0.05,
+        q=0.01,
+        prior=0.5,
+        image_type=None
     ):
-
         if image_type is None:
             image_type = f'association-test_z_FDR_{q}'
 
@@ -41,10 +44,12 @@ class NeuroSynthHandler(object):
 
     def ns_load_dataset(self):
 
-        if resource_exists('neurolang.frontend',
-                           'neurosynth_data/dataset.pkl'):
-            file = resource_filename('neurolang.frontend',
-                                     'neurosynth_data/dataset.pkl')
+        if resource_exists(
+            'neurolang.frontend', 'neurosynth_data/dataset.pkl'
+        ):
+            file = resource_filename(
+                'neurolang.frontend', 'neurosynth_data/dataset.pkl'
+            )
             dataset = ns.Dataset.load(file)
         else:
             path = resource_filename('neurolang.frontend', 'neurosynth_data')
