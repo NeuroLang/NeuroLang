@@ -56,9 +56,9 @@ def test_non_recursive_negation():
     dc = Chase(dl)
     solution_instance = dc.build_chase_solution()
 
-    assert solution_instance['V'].value == {1, 2, 3}
-    assert solution_instance['T'].value == {1, 4}
-    assert solution_instance['G'].value == {2, 3}
+    assert solution_instance['V'].value == {(1,), (2,), (3,)}
+    assert solution_instance['T'].value == {(1,), (4,)}
+    assert solution_instance['G'].value == {(2,), (3,)}
 
 
 def test_stratified_and_chase():
@@ -213,3 +213,27 @@ def test_negative_fact():
         exceptions.NeuroLangException, match=r'There is a contradiction .*'
     ):
         dc.build_chase_solution()
+
+
+def test_symbol_order_in_datalog_solver():
+    n = S_("n")
+    l = S_("l")
+    R = S_("R")
+    S = S_("S")
+    Ans = S_("Ans")
+
+    program = Eb_((Implication(Ans(l), R(l, n) & ~S(n, l)),))
+
+    dl = Datalog()
+    dl.walk(program)
+    dl.add_extensional_predicate_from_tuples(
+        R, {("a", 1), ("a", 2), ("a", 3), ("b", 3), ("b", 4)}
+    )
+    dl.add_extensional_predicate_from_tuples(
+        S, {(1, "a"), (2, "a"), (3, "b"), (4, "b")}
+    )
+
+    dc = Chase(dl)
+    solution_instance = dc.build_chase_solution()
+
+    assert solution_instance["Ans"].value == {("a",)}

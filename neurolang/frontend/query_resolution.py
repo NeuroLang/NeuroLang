@@ -211,7 +211,11 @@ class RegionMixin:
 
     @staticmethod
     def create_region(spatial_image, label=1, prebuild_tree=False):
-        voxels = np.transpose((spatial_image.get_data() == label).nonzero())
+        voxels = np.transpose(
+            (
+                np.asanyarray(spatial_image.dataobj) == label
+            ).nonzero()
+        )
         if len(voxels) == 0:
             return None
         region = ExplicitVBR(
