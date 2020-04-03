@@ -66,7 +66,7 @@ class EliminateImplications(LogicExpressionWalker):
     def remove_implication(self, implication):
         c = self.walk(implication.consequent)
         a = self.walk(implication.antecedent)
-        return Disjunction((c, Negation(a)))
+        return self.walk(Disjunction((c, Negation(a))))
 
 
 class MoveNegationsToAtoms(LogicExpressionWalker):
@@ -80,26 +80,26 @@ class MoveNegationsToAtoms(LogicExpressionWalker):
         quantifier = negation.formula
         x = quantifier.head
         p = self.walk(Negation(quantifier.body))
-        return ExistentialPredicate(x, p)
+        return self.walk(ExistentialPredicate(x, p))
 
     @add_match(Negation(ExistentialPredicate(..., ...)))
     def negated_existential(self, negation):
         quantifier = negation.formula
         x = quantifier.head
         p = self.walk(Negation(quantifier.body))
-        return UniversalPredicate(x, p)
+        return self.walk(UniversalPredicate(x, p))
 
     @add_match(Negation(Conjunction(...)))
     def negated_conjunction(self, negation):
         conj = negation.formula
         formulas = map(lambda e: self.walk(Negation(e)), conj.formulas)
-        return Disjunction(tuple(formulas))
+        return self.walk(Disjunction(tuple(formulas)))
 
     @add_match(Negation(Disjunction(...)))
     def negated_disjunction(self, negation):
         disj = negation.formula
         formulas = map(lambda e: self.walk(Negation(e)), disj.formulas)
-        return Conjunction(tuple(formulas))
+        return self.walk(Conjunction(tuple(formulas)))
 
     @add_match(Negation(Negation(...)))
     def negated_negation(self, negation):
@@ -127,7 +127,7 @@ class MoveQuantifiersUp(LogicExpressionWalker):
 
     @add_match(
         Disjunction,
-        lambda exp: any(isinstance(f, Quantifier) for f in exp.formulas)
+        lambda exp: any(isinstance(f, Quantifier) for f in exp.formulas),
     )
     def disjunction_with_quantifiers(self, expression):
         expression = self.walk_disjunction(expression)
@@ -146,7 +146,7 @@ class MoveQuantifiersUp(LogicExpressionWalker):
 
     @add_match(
         Conjunction,
-        lambda exp: any(isinstance(f, Quantifier) for f in exp.formulas)
+        lambda exp: any(isinstance(f, Quantifier) for f in exp.formulas),
     )
     def conjunction_with_quantifiers(self, expression):
         expression = self.walk_conjunction(expression)
@@ -220,9 +220,9 @@ class DesambiguateQuantifiedVariables(LogicExpressionWalker):
             used_variables |= self._bound_variables(uq)
 
     def _conflicted_quantifiers(self, used_variables, quantifiers):
-            bv = self._bound_variables(quantifiers)
-            repeated = bv & used_variables
-            return [q for q in quantifiers if q.head in repeated]
+        bv = self._bound_variables(quantifiers)
+        repeated = bv & used_variables
+        return [q for q in quantifiers if q.head in repeated]
 
     def _bound_variables(self, quantifiers):
         return set(map(lambda q: q.head, quantifiers))
@@ -304,7 +304,7 @@ class CollapseDisjunctions(LogicExpressionWalker):
                 new_arg.extend(f.formulas)
             else:
                 new_arg.append(f)
-        return Disjunction(tuple(new_arg))
+        return self.walk(Disjunction(tuple(new_arg)))
 
 
 class CollapseConjunctions(LogicExpressionWalker):
@@ -319,7 +319,7 @@ class CollapseConjunctions(LogicExpressionWalker):
                 new_arg.extend(f.formulas)
             else:
                 new_arg.append(f)
-        return Conjunction(tuple(new_arg))
+        return self.walk(Conjunction(tuple(new_arg)))
 
 
 class RemoveUniversalPredicates(LogicExpressionWalker):
@@ -330,9 +330,11 @@ class RemoveUniversalPredicates(LogicExpressionWalker):
 
     @add_match(UniversalPredicate)
     def match_universal(self, expression):
-        return Negation(
-            ExistentialPredicate(
-                expression.head, Negation(self.walk(expression.body))
+        return self.walk(
+            Negation(
+                ExistentialPredicate(
+                    expression.head, Negation(self.walk(expression.body))
+                )
             )
         )
 
