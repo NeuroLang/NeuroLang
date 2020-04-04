@@ -322,14 +322,19 @@ class RelationalAlgebraFrozenSet(
             parents=[self, other],
         )
 
+    def _equal_sets_structure(self, other):
+        return set(self.columns) != set(other.columns)
+
     def __or__(self, other):
         if not isinstance(other, RelationalAlgebraFrozenSet):
             return super().__sub__(other)
+        if self._equal_sets_structure(other):
+            raise ValueError("Sets do not have the same columns")
 
         new_name = self._new_name()
         query = (
             f"CREATE VIEW {new_name} AS SELECT * "
-            "from {self._name} UNION SELECT * from {other._name}"
+            f"from {self._name} UNION SELECT * from {other._name}"
         )
         conn = self.engine.connect()
         conn.execute(query)
@@ -345,10 +350,14 @@ class RelationalAlgebraFrozenSet(
         if not isinstance(other, RelationalAlgebraFrozenSet):
             return super().__sub__(other)
 
+        if self._equal_sets_structure(other):
+            raise ValueError("Sets do not have the same columns")
+
         new_name = self._new_name()
+        columns = ', '.join(self.columns)
         query = (
-            f"CREATE VIEW {new_name} AS SELECT * from "
-            f"{self._name} EXCEPT SELECT * from {other._name}"
+            f"CREATE VIEW {new_name} AS SELECT {columns} from "
+            f"{self._name} EXCEPT SELECT {columns} from {other._name}"
         )
         conn = self.engine.connect()
         conn.execute(query)
@@ -435,10 +444,7 @@ class RelationalAlgebraFrozenSet(
             r = conn.execute(query)
             for t in r:
                 g = self.selection(dict(zip(columns, t)))
-                if single_column:
-                    t_out = t[0]
-                else:
-                    t_out = tuple(t)
+                t_out = tuple(t)
                 yield t_out, g
 
     def __hash__(self):
