@@ -1,93 +1,131 @@
-import operator as op
-from collections.abc import Set
-from functools import wraps
-from inspect import getmro
 from itertools import tee
 from typing import Tuple
 
 from ..expression_walker import ReplaceExpressionsByValues
 from ..expressions import Constant
-from ..type_system import infer_type
-from ..utils.relational_algebra_set.sql import (
-    NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet)
+from ..type_system import Unknown, get_args, infer_type, unify_types
+from ..utils.relational_algebra_set.pandas import (
+    NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet,
+    RelationalAlgebraSet)
+
 
 REBV = ReplaceExpressionsByValues(dict())
 
 
-def _obtain_value_iterable(iterable):
-    it1, it2 = tee(iterable)
-    iterator_of_constants = False
-    for val in it1:
-        iterator_of_constants = isinstance(val, Constant[Tuple])
-        break
-    if not iterator_of_constants:
-        return iterable
-    else:
-        for e in it2:
-            yield REBV.walk(e)
-
-
-def unwrapped_operator_factory(operator, operator_name):
-    @wraps(operator)
-    def unwrapped_operator(self, other):
-        if not isinstance(other, WrappedRelationalAlgebraSetMixin):
-            other = (REBV.walk(el) for el in other)
-        return operator(self, other)
-    return unwrapped_operator
-
-
-class WrappedRelationalAlgebraSetType(type):
-    def __new__(cls, name, bases, classdict, **kwargscls):
-        for operator_name in (
-            '__sub__', '__or__', '__and__',
-            '__eq__', '__ne__',
-            '__lt__', '__gt__',
-            '__le__', '__ge__',
-            '__ior__', '__isub__'
-        ):
-            old_method = classdict[operator_name]
-            wrapped_operator_name = f'_wrapped_{operator_name}'
-            classdict[wrapped_operator_name] = old_method
-            classdict[operator_name] = unwrapped_operator_factory(
-                old_method,
-                wrapped_operator_name
-            )
-        return super().__new__(cls, name, bases, classdict, **kwargscls)
-
-
 class WrappedRelationalAlgebraSetMixin:
-    def __init__(self, iterable=None, **kwargs):
-        kwargs = kwargs.copy()
-        if iterable is not None:
-            if isinstance(iterable, (WrappedNamedRelationalAlgebraFrozenSet, WrappedRelationalAlgebraSetMixin)):
-                iterable = iterable.unwrap()
-            else:
-                iterable = _obtain_value_iterable(iterable)
+    def __init__(
+        self, iterable=None, row_type=Unknown, verify_row_type=True, **kwargs
+    ):
+        iterable = WrappedRelationalAlgebraSetMixin._get_init_iterable(
+            iterable
+        )
         super().__init__(iterable=iterable, **kwargs)
-        self._row_type = None
+        self._set_row_type(iterable, row_type, verify_row_type)
+
+    def _set_row_type(self, iterable, row_type, verify_row_type):
+        if row_type is not Unknown:
+            if verify_row_type:
+                raise NotImplemented()
+            self._row_type = row_type
+        elif isinstance(iterable, WrappedRelationalAlgebraSetMixin):
+            self._row_type = iterable._row_type
+        else:
+            self._row_type = None
+
+    @staticmethod
+    def _get_init_iterable(iterable):
+        if iterable is not None:
+            if isinstance(
+                iterable,
+                (WrappedRelationalAlgebraSetMixin, RelationalAlgebraFrozenSet)
+            ):
+                iterable = iterable
+            else:
+                iterable = (
+                    WrappedRelationalAlgebraSetMixin._obtain_value_iterable(
+                        iterable
+                    )
+                )
+        return iterable
 
     def __contains__(self, element):
         element = REBV.walk(element)
         return super().__contains__(element)
 
-    def __iter__(self):
-        type_ = self.row_type
-        element_types = type_.__args__
+    def _operator_wrapped(self, op, other):
+        other_is_wras = isinstance(other, WrappedRelationalAlgebraSetMixin)
+        if not other_is_wras:
+            other = {el for el in self._obtain_value_iterable(other)}
+        operator = getattr(super(), op)
+        res = operator(other)
+        if isinstance(res, WrappedRelationalAlgebraSetMixin):
+            res._row_type = self._get_new_row_type(other, other_is_wras)
+        return res
 
-        for t in super().__iter__():
-            yield Constant[type_](
-                tuple(
-                    Constant[e_t](e, verify_type=False)
-                    for e_t, e in zip(element_types, t)
-                ),
-                verify_type=False
+    def _get_new_row_type(self, other, other_is_wras):
+        row_type = self._row_type
+        if other_is_wras:
+            if row_type is not None and other._row_type is not None:
+                row_type = unify_types(row_type, other._row_type)
+            elif row_type is None:
+                row_type = other._row_type
+        return row_type
+
+    @staticmethod
+    def _obtain_value_iterable(iterable):
+        it1, it2 = tee(iterable)
+        iterator_of_constants = False
+        for val in it1:
+            iterator_of_constants = (
+                isinstance(val, Constant[Tuple]) or
+                (
+                    isinstance(val, tuple) and (len(val) > 0)
+                    and isinstance(val[0], Constant)
+                )
             )
+            break
+        if not iterator_of_constants:
+            iterator = it2
+        else:
+            iterator = (REBV.walk(e) for e in it2)
+        for e in iterator:
+            yield e
+
+    def __eq__(self, other):
+        return self._operator_wrapped('__eq__', other)
+
+    def __ne__(self, other):
+        return self._operator_wrapped('__ne__', other)
+
+    def __lt__(self, other):
+        return self._operator_wrapped('__lt__', other)
+
+    def __gt__(self, other):
+        return self._operator_wrapped('__gt__', other)
+
+    def __le__(self, other):
+        return self._operator_wrapped('__le__', other)
+
+    def __ge__(self, other):
+        return self._operator_wrapped('__ge__', other)
+
+    def __and__(self, other):
+        return self._operator_wrapped('__and__', other)
+
+    def __or__(self, other):
+        return self._operator_wrapped('__or__', other)
+
+    def __sub__(self, other):
+        return self._operator_wrapped('__sub__', other)
+
+    def __hash__(self):
+        return super().__hash__()
 
     def unwrapped_iter(self):
         return super().__iter__()
 
     def unwrap(self):
-        raise super().copy()
+        return super().copy()
 
     @property
     def row_type(self):
@@ -100,38 +138,59 @@ class WrappedRelationalAlgebraSetMixin:
         return self._row_type
 
 
-def unwrap(op, operator_name):
-    @wraps(op)
-    def fun(self, other):
-        if hasattr(super(), operator_name):
-            if not isinstance(other, WrappedRelationalAlgebraSetMixin):
-                other = (REBV.walk(el) for el in other)
-            return getattr(super(), operator_name)(other)
-        else:
-            return None
+class WrappedRelationalAlgebraFrozenSet(
+    WrappedRelationalAlgebraSetMixin, RelationalAlgebraFrozenSet
+):
+    def __iter__(self):
+        type_ = self.row_type
+        element_types = get_args(type_)
 
-    return fun
+        for t in super().__iter__():
+            yield Constant[type_](
+                tuple(
+                    Constant[e_t](e, verify_type=False)
+                    for e_t, e in zip(element_types, t)
+                ),
+                verify_type=False
+            )
 
 
 class WrappedRelationalAlgebraSet(
     WrappedRelationalAlgebraSetMixin, RelationalAlgebraSet
 ):
-    def add(self, element):
-        super().add(REBV.walk(element))
+    def __iter__(self):
+        type_ = self.row_type
+        element_types = get_args(type_)
 
-    def discard(self, element):
-        super().discard(REBV.walk(element))
+        for t in super().__iter__():
+            yield Constant[type_](
+                tuple(
+                    Constant[e_t](e, verify_type=False)
+                    for e_t, e in zip(element_types, t)
+                ),
+                verify_type=False
+            )
 
-    def __eq__(self, other):
-        if not isinstance(other, WrappedRelationalAlgebraSetMixin):
-            other = (REBV.walk(el) for el in other)
-        return super().__eq__(other)
+    def add(self, value):
+        return super().add(REBV.walk(value))
 
+    def discard(self, value):
+        return super().discard(REBV.walk(value))
 
 
 class WrappedNamedRelationalAlgebraFrozenSet(
     WrappedRelationalAlgebraSetMixin, NamedRelationalAlgebraFrozenSet
 ):
+    def __init__(
+        self, columns=None, iterable=None,
+        row_type=Unknown, verify_row_type=True, **kwargs
+    ):
+        iterable = WrappedRelationalAlgebraSetMixin._get_init_iterable(
+            iterable
+        )
+        super().__init__(columns=columns, iterable=iterable, **kwargs)
+        self._set_row_type(iterable, row_type, verify_row_type)
+
     @property
     def row_type(self):
         if self._row_type is None:
@@ -159,9 +218,3 @@ class WrappedNamedRelationalAlgebraFrozenSet(
         else:
             for _ in range(len(self)):
                 yield dict()
-
-    def __eq__(self, other):
-        if not isinstance(other, WrappedRelationalAlgebraSetMixin):
-            other = (REBV.walk(el) for el in other)
-        return super().__eq__(other)
-

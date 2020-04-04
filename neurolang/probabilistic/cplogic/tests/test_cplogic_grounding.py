@@ -7,7 +7,7 @@ from ....exceptions import NeuroLangException
 from ....expressions import Symbol, Constant, ExpressionBlock
 from ....logic import Implication, Conjunction
 from ....datalog import Fact
-from ....utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
+from ....utils import NamedRelationalAlgebraFrozenSet
 from ...expressions import (
     ProbabilisticPredicate,
     Grounding,

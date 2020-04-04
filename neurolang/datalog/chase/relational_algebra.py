@@ -216,12 +216,15 @@ class ChaseNamedRelationalAlgebraMixin:
         )
         already_computed = WrappedNamedRelationalAlgebraFrozenSet(
             args,
-            instance[consequent.functor].value.unwrap()
+            instance[consequent.functor].value
         )
         if set(substitutions.columns).issuperset(already_computed.columns):
             already_computed = substitutions.naturaljoin(already_computed)
         substitutions = substitutions - already_computed
-        if not isinstance(substitutions, WrappedNamedRelationalAlgebraFrozenSet):
+        if not isinstance(
+            substitutions,
+            WrappedNamedRelationalAlgebraFrozenSet
+        ):
             substitutions = (
                 sorted(substitutions.columns),
                 substitutions
@@ -249,7 +252,7 @@ class ChaseNamedRelationalAlgebraMixin:
 
         result_value = result.value
         substitutions = WrappedNamedRelationalAlgebraFrozenSet(
-            sorted(result_value.columns),
+            result_value.columns,
             result_value
         )
 

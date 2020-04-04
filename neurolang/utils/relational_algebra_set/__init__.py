@@ -1,4 +1,4 @@
-from collections import Set, MutableSet
+from collections.abc import Set, MutableSet
 from abc import abstractmethod
 
 
@@ -53,6 +53,14 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
 
     @abstractmethod
     def rename_column(self, column_src, column_dst):
+        pass
+
+    @abstractmethod
+    def aggregate(self, group_columns, aggregate_function):
+        pass
+
+    @abstractmethod
+    def extended_projection(self, eval_expressions):
         pass
 
     def __repr__(self):

@@ -1,6 +1,6 @@
-from collections import Iterable, namedtuple
+from collections import namedtuple
+from collections.abc import Iterable
 from uuid import uuid4
-from warnings import warn
 
 import pandas as pd
 import sqlalchemy
@@ -8,6 +8,10 @@ import sqlalchemy
 from .. import OrderedSet, relational_algebra_set
 
 engine = sqlalchemy.create_engine("sqlite:///", echo=False)
+
+
+class RelationalAlgebraExpression(str):
+    pass
 
 
 class RelationalAlgebraFrozenSet(
@@ -133,7 +137,8 @@ class RelationalAlgebraFrozenSet(
             if self.is_view:
                 self.engine.execute(f"drop view {self._name}")
             elif len(self.parents) == 0:
-                self.engine.execute(f"drop table {self._name}")
+                pass
+                # self.engine.execute(f"drop table {self._name}")
 
     def _normalise_element(self, element):
         if isinstance(element, dict):
@@ -643,6 +648,12 @@ class NamedRelationalAlgebraFrozenSet(
             parents=[self],
         )
 
+    def aggregate(self, group_columns, aggregate_function):
+        raise NotImplementedError()
+
+    def extended_projection(self, eval_expressions):
+        raise NotImplementedError()
+
 
 class RelationalAlgebraSet(
     RelationalAlgebraFrozenSet, relational_algebra_set.RelationalAlgebraSet
@@ -724,7 +735,4 @@ class RelationalAlgebraSet(
             if self.is_view:
                 self.engine.execute(f"drop view {self._name}")
             elif len(self.parents) == 0:
-                try:
-                    self.engine.execute(f"drop table {self._name}")
-                except:
-                    pass
+                self.engine.execute(f"drop table {self._name}")
