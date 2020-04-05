@@ -138,9 +138,7 @@ class WrappedRelationalAlgebraSetMixin:
         return self._row_type
 
 
-class WrappedRelationalAlgebraFrozenSet(
-    WrappedRelationalAlgebraSetMixin, RelationalAlgebraFrozenSet
-):
+class WrappedRelationalAlgebraFrozenSetMixin(WrappedRelationalAlgebraSetMixin):
     def __iter__(self):
         type_ = self.row_type
         element_types = get_args(type_)
@@ -155,9 +153,7 @@ class WrappedRelationalAlgebraFrozenSet(
             )
 
 
-class WrappedRelationalAlgebraSet(
-    WrappedRelationalAlgebraSetMixin, RelationalAlgebraSet
-):
+class WrappedRelationalAlgebraSetMixin(WrappedRelationalAlgebraSetMixin):
     def __iter__(self):
         type_ = self.row_type
         element_types = get_args(type_)
@@ -178,8 +174,8 @@ class WrappedRelationalAlgebraSet(
         return super().discard(REBV.walk(value))
 
 
-class WrappedNamedRelationalAlgebraFrozenSet(
-    WrappedRelationalAlgebraSetMixin, NamedRelationalAlgebraFrozenSet
+class WrappedNamedRelationalAlgebraFrozenSetMixin(
+    WrappedRelationalAlgebraSetMixin
 ):
     def __init__(
         self, columns=None, iterable=None,
@@ -218,3 +214,24 @@ class WrappedNamedRelationalAlgebraFrozenSet(
         else:
             for _ in range(len(self)):
                 yield dict()
+
+
+class WrappedRelationalAlgebraFrozenSet(
+    WrappedRelationalAlgebraFrozenSetMixin,
+    RelationalAlgebraFrozenSet
+):
+    pass
+
+
+class WrappedRelationalAlgebraSet(
+    WrappedRelationalAlgebraSetMixin,
+    RelationalAlgebraSet
+):
+    pass
+
+
+class WrappedNamedRelationalAlgebraFrozenSet(
+    WrappedNamedRelationalAlgebraFrozenSetMixin,
+    NamedRelationalAlgebraFrozenSet
+):
+    pass
