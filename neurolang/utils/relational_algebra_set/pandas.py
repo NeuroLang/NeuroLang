@@ -1,9 +1,22 @@
 from typing import Iterable
 from uuid import uuid1
+import builtins
 
 import pandas as pd
 
 from .. import relational_algebra_set
+
+
+class ColumnOperators:
+    sum = sum
+    max = max
+    min = min
+    all = all
+    any = any
+    len = len
+
+
+column_operators = ColumnOperators
 
 
 class RelationalAlgebraExpression(str):

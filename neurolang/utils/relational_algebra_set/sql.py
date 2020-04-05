@@ -1,13 +1,19 @@
+import types
 from collections import namedtuple
 from collections.abc import Iterable
+from itertools import chain
 from uuid import uuid4
 
 import pandas as pd
 import sqlalchemy
 
 from .. import OrderedSet, relational_algebra_set
+from .sqlalchemy_helpers import CreateView
 
 engine = sqlalchemy.create_engine("sqlite:///", echo=False)
+
+
+column_operators = sqlalchemy.func
 
 
 class RelationalAlgebraExpression(str):
@@ -97,14 +103,15 @@ class RelationalAlgebraFrozenSet(
 
     def _initialize_from_instance_same_class(self, other):
         self.engine = other.engine
-        query = sqlalchemy.sql.text(
-            f'CREATE VIEW {self._name} AS SELECT ' +
-            ', '.join(
-                f'`{src_c}` as {dst_c}'
-                for src_c, dst_c in
-                zip(other.columns, self.columns)
-            ) +
-            f' FROM {other._name}'
+        query = CreateView(
+            self._name,
+            sqlalchemy.select(
+                [
+                    c.label(new_c)
+                    for c, new_c in zip(other._sql_columns, self.columns)
+                ],
+                from_obj=other._table
+            )
         )
         conn = self.engine.connect()
         conn.execute(query)
@@ -116,9 +123,14 @@ class RelationalAlgebraFrozenSet(
             self.parents = other.parents
         else:
             self.parents = [other]
+        self._create_queries()
 
     def _create_queries(self):
-        self._table = sqlalchemy.sql.table(self._name)
+        self._sql_columns = [
+            sqlalchemy.column(str(c))
+            for c in self.columns
+        ]
+        self._table = sqlalchemy.sql.table(self._name, *self._sql_columns)
         self._contains_query = sqlalchemy.text(
             f"select * from {self._name}"
             + " where "
@@ -137,8 +149,7 @@ class RelationalAlgebraFrozenSet(
             if self.is_view:
                 self.engine.execute(f"drop view {self._name}")
             elif len(self.parents) == 0:
-                pass
-                # self.engine.execute(f"drop table {self._name}")
+                self.engine.execute(f"drop table {self._name}")
 
     def _normalise_element(self, element):
         if isinstance(element, dict):
@@ -190,13 +201,12 @@ class RelationalAlgebraFrozenSet(
             if self._created:
                 no_dups = self.eliminate_duplicates()
                 query = sqlalchemy.sql.select(
-                    [sqlalchemy.func.count(sqlalchemy.sql.text('*'))],
-                    from_obj=no_dups._table,
+                    [sqlalchemy.sql.text('count(*)')],
+                    from_obj=no_dups._table
                 )
                 conn = self.engine.connect()
-                res = conn.execute(query)
-                r = next(res)
-                self._len = r[0]
+                res = conn.execute(query).scalar()
+                self._len = res
             else:
                 self._len = 0
         return self._len
@@ -209,10 +219,15 @@ class RelationalAlgebraFrozenSet(
             return new
 
         new_name = self._new_name()
-        query = (
-            f"CREATE VIEW {new_name} as select "
-            + ", ".join(f"`{c}` as `{i}`" for i, c in enumerate(columns))
-            + f" from {self._name}"
+        query = CreateView(
+            new_name,
+            sqlalchemy.select(
+                [
+                    sqlalchemy.column(str(c)).label(str(i))
+                    for i, c in enumerate(columns)
+                ],
+                from_obj=self._table
+            )
         )
         conn = self.engine.connect()
         conn.execute(query)
@@ -233,8 +248,7 @@ class RelationalAlgebraFrozenSet(
         query = sqlalchemy.sql.select(['*'], from_obj=self._table)
         for k, v in select_criteria.items():
             query.append_whereclause(sqlalchemy.sql.column(str(k)) == v)
-        query = query.compile(compile_kwargs={"literal_binds": True})
-        query = f'CREATE VIEW {new_name} AS {query}'
+        query = CreateView(new_name, query)
         conn = self.engine.connect()
         conn.execute(query)
         result = type(self).create_from_table_or_view(
@@ -253,8 +267,7 @@ class RelationalAlgebraFrozenSet(
             query.append_whereclause(
                 sqlalchemy.sql.column(str(k)) == sqlalchemy.sql.column(str(v))
             )
-        query = query.compile(compile_kwargs={"literal_binds": True})
-        query = f'CREATE VIEW {new_name} AS {query}'
+        query = CreateView(new_name, query)
         conn = self.engine.connect()
         conn.execute(query)
         result = type(self).create_from_table_or_view(
@@ -270,26 +283,29 @@ class RelationalAlgebraFrozenSet(
         if other is self:
             other = self.copy()
         new_name = self._new_name()
-        result = (
-            ", ".join(
-                f"{self._name}.`{i}` as `{i}`" for i in range(self.arity)
-            )
-            + ", "
-            + ", ".join(
-                f"{other._name}.`{i}` as `{i + self.arity}`"
-                for i in range(other.arity)
-            )
-        )
-        query = (
-            f"CREATE VIEW {new_name} AS SELECT {result} "
-            + f"FROM {self._name} INNER JOIN {other._name} "
-        )
-        if join_indices is not None:
-            query += " ON " + " AND ".join(
-                f"{self._name}.`{i}` = {other._name}.`{j}`"
-                for i, j in join_indices
-            )
 
+        select = sqlalchemy.select(
+            [self._table.c[str(i)] for i in range(self.arity)] +
+            [
+                other._table.c[str(i)].label(str(i + self.arity))
+                for i in range(other.arity)
+            ]
+        ).select_from(self._table)
+
+        if join_indices is None:
+            join = other._table
+        else:
+            join_clause = True
+            for i, j in join_indices:
+                jc = (
+                    self._table.c[str(i)] == other._table.c[str(j)]
+                )
+                join_clause = jc & join_clause
+            join = sqlalchemy.join(
+                self._table, other._table, join_clause
+            )
+        select = select.select_from(join)
+        query = CreateView(new_name, select)
         conn = self.engine.connect()
         conn.execute(query)
         return type(self).create_from_table_or_view(
@@ -305,12 +321,21 @@ class RelationalAlgebraFrozenSet(
 
     def __and__(self, other):
         if not isinstance(other, RelationalAlgebraFrozenSet):
-            return super().__sub__(other)
+            return super().__and__(other)
 
+        if not self._equal_sets_structure(other):
+            raise ValueError(
+                "Relational algebra set columns should be the same"
+            )
+
+        columns = [sqlalchemy.column(str(c)) for c in self.columns]
         new_name = self._new_name()
-        query = (
-            f"CREATE VIEW {new_name} AS SELECT * from "
-            f"{self._name} INTERSECT SELECT * from {other._name}"
+        query = CreateView(
+            new_name,
+            sqlalchemy.intersect(
+                sqlalchemy.select(columns, from_obj=self._table),
+                sqlalchemy.select(columns, from_obj=other._table)
+            )
         )
         conn = self.engine.connect()
         conn.execute(query)
@@ -323,18 +348,25 @@ class RelationalAlgebraFrozenSet(
         )
 
     def _equal_sets_structure(self, other):
-        return set(self.columns) != set(other.columns)
+        return set(self.columns) == set(other.columns)
 
     def __or__(self, other):
         if not isinstance(other, RelationalAlgebraFrozenSet):
             return super().__sub__(other)
-        if self._equal_sets_structure(other):
+        if not self._equal_sets_structure(other):
             raise ValueError("Sets do not have the same columns")
 
         new_name = self._new_name()
-        query = (
-            f"CREATE VIEW {new_name} AS SELECT * "
-            f"from {self._name} UNION SELECT * from {other._name}"
+        columns = [
+            sqlalchemy.column(str(c))
+            for c in self.columns
+        ]
+        query = CreateView(
+            new_name,
+            sqlalchemy.union(
+                sqlalchemy.select(columns, self._table),
+                sqlalchemy.select(columns, other._table)
+            )
         )
         conn = self.engine.connect()
         conn.execute(query)
@@ -350,14 +382,20 @@ class RelationalAlgebraFrozenSet(
         if not isinstance(other, RelationalAlgebraFrozenSet):
             return super().__sub__(other)
 
-        if self._equal_sets_structure(other):
+        if not self._equal_sets_structure(other):
             raise ValueError("Sets do not have the same columns")
 
         new_name = self._new_name()
-        columns = ', '.join(self.columns)
-        query = (
-            f"CREATE VIEW {new_name} AS SELECT {columns} from "
-            f"{self._name} EXCEPT SELECT {columns} from {other._name}"
+        columns = [
+            sqlalchemy.column(str(c))
+            for c in self.columns
+        ]
+        query = CreateView(
+            new_name,
+            sqlalchemy.except_(
+                sqlalchemy.select(columns, self._table),
+                sqlalchemy.select(columns, other._table)
+            )
         )
         conn = self.engine.connect()
         conn.execute(query)
@@ -382,9 +420,11 @@ class RelationalAlgebraFrozenSet(
         )
 
     def _create_view(self, src_table_name, dst_table_name):
-        query = sqlalchemy.text(
-            f"CREATE VIEW {dst_table_name} AS SELECT * FROM {src_table_name}"
+        select = sqlalchemy.select(
+            [sqlalchemy.text('*')],
+            from_obj=sqlalchemy.table(src_table_name)
         )
+        query = CreateView(dst_table_name, select)
         conn = self.engine.connect()
         conn.execute(query)
 
@@ -401,9 +441,13 @@ class RelationalAlgebraFrozenSet(
 
     def eliminate_duplicates(self):
         new_name = type(self)._new_name()
-        query = sqlalchemy.text(
-            f"CREATE VIEW {new_name} AS SELECT DISTINCT *"
-            + f" FROM {self._name}"
+        query = CreateView(
+            new_name,
+            sqlalchemy.select(
+                self._sql_columns,
+                from_obj=self._table,
+                distinct=True
+            )
         )
         conn = self.engine.connect()
         conn.execute(query)
@@ -417,17 +461,38 @@ class RelationalAlgebraFrozenSet(
 
     def __eq__(self, other):
         if isinstance(other, RelationalAlgebraFrozenSet):
-            return not (self._name != other._name) or len(self & other) == len(
-                self
-            )
+            if self._name == other._name:
+                res = True
+            elif not self._equal_sets_structure(other):
+                res = False
+            else:
+                columns = [
+                    sqlalchemy.column(str(c)) for c in self.columns
+                ]
+                select_left = sqlalchemy.select(
+                    columns=columns,
+                    from_obj=self._table
+                )
+                select_right = sqlalchemy.select(
+                    columns=columns,
+                    from_obj=other._table
+                )
+                diff_left = select_left.except_(select_right)
+                diff_right = select_right.except_(select_left)
+                conn = self.engine.connect()
+                if conn.execute(diff_left).fetchone() is not None:
+                    res = False
+                elif conn.execute(diff_right).fetchone() is not None:
+                    res = False
+                else:
+                    res = True
+                return res
         else:
             return super().__eq__(other)
 
     def groupby(self, columns):
         if self.arity > 0:
-            single_column = False
             if not isinstance(columns, Iterable):
-                single_column = True
                 columns = (columns,)
 
             sql_columns = tuple(
@@ -446,6 +511,54 @@ class RelationalAlgebraFrozenSet(
                 g = self.selection(dict(zip(columns, t)))
                 t_out = tuple(t)
                 yield t_out, g
+
+    def aggregate(self, group_columns, aggregate_function):
+            if (
+                isinstance(group_columns, str) or
+                not isinstance(group_columns, Iterable)
+            ):
+                group_columns = (group_columns,)
+
+            result_cols = []
+            for k, v in aggregate_function.items():
+                if isinstance(v, types.BuiltinFunctionType):
+                    v = v.__name__
+
+                if callable(v):
+                    f = v
+                elif isinstance(v, str):
+                    f = getattr(sqlalchemy.func, v)
+                else:
+                    raise ValueError(
+                        f"aggregate function for {k} needs "
+                        "to be callable or a string"
+                    )
+                c_ = sqlalchemy.column(str(k))
+                v = sqlalchemy.sql.label(str(k), f(c_))
+                result_cols.append(v)
+
+            group_columns_sql = [
+                sqlalchemy.column(str(c))
+                for c in group_columns
+            ]
+
+            new_name = type(self)._new_name()
+            select = sqlalchemy.select(
+                columns=group_columns_sql + result_cols,
+                from_obj=self._table,
+            ).group_by(*group_columns_sql)
+
+            query = CreateView(new_name, select)
+            conn = self.engine.connect()
+            conn.execute(query)
+
+            return type(self).create_from_table_or_view(
+                name=new_name,
+                engine=self.engine,
+                is_view=True,
+                columns=list(chain(group_columns, aggregate_function.keys())),
+                parents=[self],
+            )
 
     def __hash__(self):
         if self._hash is None:
@@ -495,14 +608,12 @@ class NamedRelationalAlgebraFrozenSet(
 
     def to_unnamed(self):
         new_name = self._new_name()
-        query = sqlalchemy.sql.text(
-            f'CREATE VIEW {new_name} AS SELECT ' +
-            ', '.join(
-                f'{src_c} as `{dst_c}`'
-                for dst_c, src_c in
-                enumerate(self.columns)
-            ) +
-            f' FROM {self._name}'
+        query = CreateView(
+            new_name,
+            sqlalchemy.select(
+                [c.label(str(i)) for i, c in enumerate(self._sql_columns)],
+                from_obj=self._table
+            )
         )
         conn = self.engine.connect()
         conn.execute(query)
@@ -522,10 +633,12 @@ class NamedRelationalAlgebraFrozenSet(
             return new
 
         new_name = self._new_name()
-        query = (
-            f"CREATE VIEW {new_name} as select "
-            + ", ".join(f"{c}" for c in columns)
-            + f" from {self._name}"
+        query = CreateView(
+            new_name,
+            sqlalchemy.select(
+                [sqlalchemy.column(c) for c in columns],
+                from_obj=self._table
+            )
         )
         conn = self.engine.connect()
         conn.execute(query)
@@ -544,9 +657,10 @@ class NamedRelationalAlgebraFrozenSet(
 
         if self.arity > 0 and len(self) > 0:
             conn = self.engine.connect()
-            res = conn.execute(
-                f"SELECT DISTINCT {', '.join(self.columns)} FROM {self._name}"
-            )
+            res = conn.execute(sqlalchemy.select(
+                self._sql_columns, from_obj=self._table,
+                distinct=True
+            ))
             for t in res:
                 yield self.named_tuple_type(**t)
 
@@ -559,31 +673,34 @@ class NamedRelationalAlgebraFrozenSet(
 
         columns = OrderedSet(self.columns)
         other_columns = OrderedSet(other.columns)
-        remainder_columns = other_columns - columns
+        remainder_columns = (
+            (other_columns - columns) |
+            (columns - other_columns)
+        )
         join_columns = columns & other_columns
 
         new_name = self._new_name()
 
-        result = (
-            ', '.join(f'{self._name}.{c} as {c}' for c in columns)
-        )
-        if len(remainder_columns) > 0:
-            result += (
-                ', ' +
-                ', '.join(
-                        f'{other._name}.{c} as {c}'
-                        for c in remainder_columns
-                    )
-            )
-        query = (
-            f"CREATE VIEW {new_name} AS SELECT {result} "
-            + f"FROM {self._name} INNER JOIN {other._name} "
-        )
+        select = sqlalchemy.select(
+            [sqlalchemy.column(c) for c in remainder_columns] +
+            [self._table.c[str(c)] for c in join_columns]
+        ).select_from(self._table)
+
+        join_clause = None
         if len(join_columns) > 0:
-            query += " ON " + " AND ".join(
-                f"{self._name}.{c} = {other._name}.{c}"
-                for c in join_columns
+            join_clause = True
+            for c in join_columns:
+                jc = (
+                    self._table.c[str(c)] == other._table.c[str(c)]
+                )
+                join_clause = jc & join_clause
+            join = sqlalchemy.join(
+                self._table, other._table, join_clause
             )
+        else:
+            join = other._table
+        select = select.select_from(join)
+        query = CreateView(new_name, select)
 
         conn = self.engine.connect()
         conn.execute(query)
@@ -629,36 +746,61 @@ class NamedRelationalAlgebraFrozenSet(
     def rename_column(self, column_src, column_dst):
         new_name = self._new_name()
         columns = []
-        result_columns = tuple()
+        result_columns = []
         for column in self.columns:
+            col = sqlalchemy.column(str(column))
+            rc = column
             if column == column_src:
-                c_dst = column_dst
-            else:
-                c_dst = column
+                col = col.label(str(column_dst))
+                rc = column_dst
+            columns.append(col)
+            result_columns.append(rc)
 
-            col_str = f'{self._name}.{column} as {c_dst}'
-            result_columns += (c_dst,)
-            columns.append(col_str)
-
-        str_columns = ', '.join(columns)
-        query = (
-            f'CREATE VIEW {new_name} AS SELECT {str_columns} FROM {self._name}'
+        query = CreateView(
+            new_name,
+            sqlalchemy.select(columns, from_obj=self._table)
         )
         conn = self.engine.connect()
         conn.execute(query)
         return type(self).create_from_table_or_view(
             name=new_name,
             engine=self.engine,
-            columns=tuple(result_columns),
+            columns=result_columns,
             is_view=True,
             parents=[self],
         )
 
-    def aggregate(self, group_columns, aggregate_function):
-        raise NotImplementedError()
-
     def extended_projection(self, eval_expressions):
-        raise NotImplementedError()
+        T = namedtuple('T', self.columns)
+        t = T(**{c: sqlalchemy.column(c) for c in self.columns})
+        result_cols = []
+        for k, v in eval_expressions.items():
+            if callable(v):
+                v = v(t)
+            elif isinstance(v, RelationalAlgebraExpression):
+                v = sqlalchemy.text(v)
+            else:
+                v = sqlalchemy.literal(v)
+            v = sqlalchemy.sql.label(str(k), v)
+            result_cols.append(v)
+        result_cols = [
+            c for c in self._sql_columns
+            if c.name not in eval_expressions
+        ] + result_cols
+        select = sqlalchemy.select(
+            result_cols, from_obj=self._table
+        )
+        new_name = type(self)._new_name()
+        query = CreateView(new_name, select)
+        conn = self.engine.connect()
+        conn.execute(query)
+        return type(self).create_from_table_or_view(
+            name=new_name,
+            engine=self.engine,
+            is_view=True,
+            columns=[c.name for c in result_cols],
+            parents=[self],
+        )
 
 
 class RelationalAlgebraSet(

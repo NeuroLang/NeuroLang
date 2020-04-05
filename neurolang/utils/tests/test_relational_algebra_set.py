@@ -9,13 +9,15 @@ from ..relational_algebra_set import pandas, sql
             'frozen': pandas.RelationalAlgebraFrozenSet,
             'mutable': pandas.RelationalAlgebraSet,
             'named': pandas.NamedRelationalAlgebraFrozenSet,
-            'expression': pandas.RelationalAlgebraExpression
+            'expression': pandas.RelationalAlgebraExpression,
+            'operators': pandas.column_operators
         },
         {
             'frozen': sql.RelationalAlgebraFrozenSet,
             'mutable': sql.RelationalAlgebraSet,
             'named': sql.NamedRelationalAlgebraFrozenSet,
-            'expression': sql.RelationalAlgebraExpression
+            'expression': sql.RelationalAlgebraExpression,
+            'operators': sql.column_operators
         },
     ),
     ids=['pandas', 'sql']
@@ -435,6 +437,7 @@ def test_named_ra_intersection(ras_class):
 
 def test_aggregate(ras_class):
     NamedRelationalAlgebraFrozenSet = ras_class['named']
+    operators = ras_class['operators']
 
     initial_set = NamedRelationalAlgebraFrozenSet(("x", "y", "z"), [(7, 8, 1),
                                                                     (7, 8, 9)])
@@ -455,10 +458,12 @@ def test_aggregate(ras_class):
     assert expected_sum == new_set
     new_set = initial_set.aggregate(["x", "y"], {"z": "count"})
     assert expected_str == new_set
-    new_set = initial_set.aggregate(["x", "y"], {"z": lambda x: max(x) - 1})
+    new_set = initial_set.aggregate(
+        ["x", "y"], {"z": lambda x: operators.max(x) - 1}
+    )
     assert expected_lambda == new_set
     new_set = initial_set2.aggregate(["x", "y"], {
-        "z": lambda x: max(x) - 1,
+        "z": lambda x: operators.max(x) - 1,
         "w": "count"
     })
     assert expected_op2 == new_set
@@ -467,6 +472,7 @@ def test_aggregate(ras_class):
 def test_extended_projection(ras_class):
     NamedRelationalAlgebraFrozenSet = ras_class['named']
     RelationalAlgebraExpression = ras_class['expression']
+    operators = ras_class['operators']
 
     initial_set = NamedRelationalAlgebraFrozenSet(("x", "y"), [(7, 8), (9, 2)])
 
