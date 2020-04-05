@@ -1,3 +1,5 @@
+from collections import namedtuple
+
 from pytest import fixture
 
 from ..relational_algebra_set import pandas, sql
@@ -59,6 +61,34 @@ def test_relational_algebra_set_semantics(ras_class):
     assert len(ras) == len(a) - 1
     assert 10 in ras
     assert all(a_ in ras for a_ in a if a_ != 5)
+
+
+def test_object_column(ras_class):
+    RelationalAlgebraSet = ras_class['mutable']
+    T = namedtuple('T', ['x'])
+    t = T(0)
+    a = set([(t,)])
+    ras = RelationalAlgebraSet(a)
+
+    assert len(ras) == 1
+    assert ras == a
+
+    class T1:
+        def __init__(self, a):
+            self.a = a
+        
+        def __eq__(self, other):
+            return self.a == other.a
+
+        def __hash__(self):
+            return hash(self.a)
+
+    t = T1(0)
+    a = set([(t,)])
+    ras = RelationalAlgebraSet(a)
+
+    assert len(ras) == 1
+    assert ras == a
 
 
 def test_relational_algebra_ra_projection(ras_class):
@@ -416,10 +446,14 @@ def test_named_ra_union(ras_class):
     expected = NamedRelationalAlgebraFrozenSet(("x", "y"), [(7, 8), (9, 2),
                                                             (42, 0)])
     assert first | second == expected
-    empty = NamedRelationalAlgebraFrozenSet(('x', 'y'), [])
+    empty_w_cols = NamedRelationalAlgebraFrozenSet(('x', 'y'), [])
+    assert first | empty_w_cols == first
+    assert empty_w_cols | first == first
+    assert first | empty_w_cols | second == first | second
+
+    empty = NamedRelationalAlgebraFrozenSet(columns=tuple())
     assert first | empty == first
     assert empty | first == first
-    assert first | empty | second == first | second
 
 
 def test_named_ra_intersection(ras_class):
@@ -433,6 +467,10 @@ def test_named_ra_intersection(ras_class):
     assert first & empty == empty
     assert empty & first == empty
     assert first & empty & second == empty
+
+    empty = NamedRelationalAlgebraFrozenSet(columns=tuple())
+    assert first & empty == empty
+    assert empty & first == empty
 
 
 def test_aggregate(ras_class):

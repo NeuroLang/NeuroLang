@@ -452,6 +452,10 @@ class NamedRelationalAlgebraFrozenSet(
         return output
 
     def __or__(self, other):
+        if self.arity == 0 and len(self) == 0:
+            return other
+        if other.arity == 0 and len(other) == 0:
+            return self
         if self.columns != other.columns:
             raise ValueError(
                 "Union defined only for sets with the same columns"
@@ -466,6 +470,10 @@ class NamedRelationalAlgebraFrozenSet(
         return output
 
     def __and__(self, other):
+        if self.arity == 0 and len(self) == 0:
+            return self
+        if other.arity == 0 and len(other) == 0:
+            return other        
         if self.columns != other.columns:
             raise ValueError(
                 "Union defined only for sets with the same columns"

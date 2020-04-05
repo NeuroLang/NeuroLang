@@ -149,7 +149,8 @@ class RelationalAlgebraFrozenSet(
             if self.is_view:
                 self.engine.execute(f"drop view {self._name}")
             elif len(self.parents) == 0:
-                self.engine.execute(f"drop table {self._name}")
+                pass
+                #  self.engine.execute(f"drop table {self._name}")
 
     def _normalise_element(self, element):
         if isinstance(element, dict):
@@ -322,7 +323,10 @@ class RelationalAlgebraFrozenSet(
     def __and__(self, other):
         if not isinstance(other, RelationalAlgebraFrozenSet):
             return super().__and__(other)
-
+        if self.arity == 0 and len(self) == 0:
+            return self
+        if other.arity == 0 and len(other) == 0:
+            return other
         if not self._equal_sets_structure(other):
             raise ValueError(
                 "Relational algebra set columns should be the same"
@@ -353,6 +357,10 @@ class RelationalAlgebraFrozenSet(
     def __or__(self, other):
         if not isinstance(other, RelationalAlgebraFrozenSet):
             return super().__sub__(other)
+        if self.arity == 0 and len(self) == 0:
+            return other
+        if other.arity == 0 and len(other) == 0:
+            return self
         if not self._equal_sets_structure(other):
             raise ValueError("Sets do not have the same columns")
 
@@ -486,7 +494,7 @@ class RelationalAlgebraFrozenSet(
                     res = False
                 else:
                     res = True
-                return res
+            return res
         else:
             return super().__eq__(other)
 
@@ -883,4 +891,5 @@ class RelationalAlgebraSet(
             if self.is_view:
                 self.engine.execute(f"drop view {self._name}")
             elif len(self.parents) == 0:
-                self.engine.execute(f"drop table {self._name}")
+                pass
+                #  self.engine.execute(f"drop table {self._name}")
