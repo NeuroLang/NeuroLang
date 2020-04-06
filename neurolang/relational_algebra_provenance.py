@@ -22,6 +22,20 @@ C_ = Constant
 
 
 def arithmetic_operator_string(op):
+    """
+    Get the string representation of an arithmetic operator.
+
+    Parameters
+    ----------
+    op : builting operator
+        Python builtin operator (add, sub, mul or truediv).
+
+    Returns
+    -------
+    str
+        String representation of the operator (e.g. operator.add is "+").
+
+    """
     return {
         operator.add: "+",
         operator.sub: "-",
@@ -31,6 +45,18 @@ def arithmetic_operator_string(op):
 
 
 def is_arithmetic_operation(exp):
+    """
+    Whether the expression is an arithmetic operation function application.
+
+    Parameters
+    ----------
+    exp : Expression
+
+    Returns
+    -------
+    bool
+
+    """
     return (
         isinstance(exp, FunctionApplication)
         and isinstance(exp.functor, Constant)
@@ -40,6 +66,15 @@ def is_arithmetic_operation(exp):
 
 
 class CrossProductNonProvenance(RelationalAlgebraOperation):
+    """
+    FIXME
+
+    Parameters
+    ----------
+    relations : FIXME
+        FIXME
+
+    """
     def __init__(self, relations):
         self.relations = tuple(relations)
 
@@ -52,6 +87,18 @@ class CrossProductNonProvenance(RelationalAlgebraOperation):
 
 
 class ProjectionNonProvenance(RelationalAlgebraOperation):
+    """
+    FIXME
+
+    Parameters
+    ----------
+    relation : FIXME
+        FIXME
+
+    attributes : FIXME
+        FIXME
+
+    """
     def __init__(self, relation, attributes):
         self.relation = relation
         self.attributes = attributes
@@ -64,6 +111,18 @@ class ProjectionNonProvenance(RelationalAlgebraOperation):
 
 
 class NaturalJoinNonProvenance(RelationalAlgebraOperation):
+    """
+    FIXME
+
+    Parameters
+    ----------
+    relation_left : FIXME
+        FIXME
+
+    relation_right : FIXME
+        FIXME
+
+    """
     def __init__(self, relation_left, relation_right):
         self.relation_left = relation_left
         self.relation_right = relation_right
@@ -74,11 +133,24 @@ class NaturalJoinNonProvenance(RelationalAlgebraOperation):
 
 class ExtendedProjection(RelationalAlgebraOperation):
     """
-    Projection operator extended to allow computation on components of tuples.
+    General operation defining string-based relational algebra projections
+    allowing flexible computations on a relation's columns.
+
+    Attributes
+    ----------
+    relation : Expression[AbstractSet]
+        Relation on which the projections are applied.
+    projection_list : Tuple[ExtendedProjectionListMember]
+        List of projections to apply.
+
+    Note
+    ----
     The concept of extended projection is formally defined in section 5.2.5
     of [1]_.
+
     .. [1] Garcia-Molina, Hector, Jeffrey D. Ullman, and Jennifer Widom.
        "Database systems: the complete book." (2009).
+
     """
 
     def __init__(self, relation, projection_list):
@@ -96,6 +168,16 @@ class ExtendedProjection(RelationalAlgebraOperation):
 class ExtendedProjectionListMember(Definition):
     """
     Member of a projection list.
+
+    Attributes
+    ----------
+    fun_exp : `Constant[str]`
+        Constant string representation of the extended projection operation.
+    dst_column : `Constant[ColumnStr]` or `Symbol[ColumnStr]`
+        Constant column string of the destination column.
+
+    Notes
+    -----
     As described in [1]_, a projection list member can either be
         - a single attribute (column) name in the relation, resulting in a
           normal non-extended projection,
@@ -106,8 +188,10 @@ class ExtendedProjectionListMember(Definition):
           operators, and `z` is a new name for the attribute that results from
           the calculation implied by `E`. For example, `a + b -> x` represents
           the sum of the attributes `a` and `b`, renamed `x`.
+
     .. [1] Garcia-Molina, Hector, Jeffrey D. Ullman, and Jennifer Widom.
        "Database systems: the complete book." (2009).
+
     """
 
     def __init__(self, fun_exp, dst_column):
@@ -131,6 +215,29 @@ class Projection(RelationalAlgebraOperation):
 
 
 class ConcatenateConstantColumn(RelationalAlgebraOperation):
+    """
+    Add a column with a repeated constant value to a relation.
+
+    Parameters
+    ----------
+    relation : Constant[RelationalAlgebraSet]
+        Relation to which the column will be added.
+
+    column_name : Constant[ColumnStr] or Symbol[ColumnStr]
+        Name of the newly added column.
+
+    column_value : Constant
+        Constant value repeated in the new column.
+
+    Note
+    ----
+    It is generally not possible to add a column to a relation in relational
+    algebra since a relation represents an unordered set of tuples and we
+    wouldn't know which tuple would be assigned which value from the new
+    column. Here, this is possible because the new column is defined by a
+    single constant value that will be repeatedly added to all tuples.
+
+    """
     def __init__(self, relation, column_name, column_value):
         self.relation = relation
         self.column_name = column_name
@@ -397,7 +504,6 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
 
     @add_match(Union)
     def prov_union(self, union_op):
-
         first = self.walk(union_op.first)
         second = self.walk(union_op.second)
 
@@ -480,6 +586,14 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
 
 
 class StringArithmeticWalker(PatternWalker):
+    """
+    Walker translating an Expression with basic arithmetic operations on a
+    relation's columns to its equivalent string representation.
+
+    The expression can refer to the names a relation's columns or to the
+    length of an other constant relation.
+
+    """
     @add_match(Constant)
     def constant(self, cst):
         return cst.value
