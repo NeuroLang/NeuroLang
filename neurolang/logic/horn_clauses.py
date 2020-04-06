@@ -251,11 +251,11 @@ def convert_srnf_to_horn_clauses(head, expression):
     which the result set given to head is equivalent. Also, it is required that
     all the variables appear free in the body.
 
-    The algorithm is implemented using a queue of queries to process, which
+    The algorithm is implemented using a stack of queries to process, which
     starts with the query given as parameter. In each iteration, a query is
     processed and the result is a Horn clause with a remainder of auxiliar
     queries which appear in the clause. The clause is then added to the result
-    and the remainder queries are added to the queue.
+    and the remainder queries are added to the stack.
 
     The cases where auxiliar queries are needed are the negation over an
     existential predicate and the disjunction. For the disjunction an auxiliar
@@ -265,7 +265,7 @@ def convert_srnf_to_horn_clauses(head, expression):
 
     Care must be taken to ensure that the auxiliar queries are also range
     restricted. To do so, a set of the positive atoms which appear in the
-    parent expressions is added alongside each query in the queue. Those
+    parent expressions is added alongside each query in the stack. Those
     atoms are precisely the ones that restrict the range of the variables. If
     is the case that a query is not range restricted then some of those atoms
     are added to the body of the query to ensure the range restriction. This
@@ -285,17 +285,17 @@ def convert_srnf_to_horn_clauses(head, expression):
             )
         )
 
-    queue = [(head, expression, set())]
+    stack = [(head, expression, set())]
     processed = []
 
-    while queue:
-        head, exp, positive_atoms = queue.pop()
+    while stack:
+        head, exp, positive_atoms = stack.pop()
         body, remainder = ConvertSRNFToHornClause().walk(exp)
         body = _restrict_variables(head, body, positive_atoms)
         positive_atoms |= _positive_atoms(body)
         remainder = [r + (positive_atoms,) for r in remainder]
         processed.append(_to_horn_clause(head, body))
-        queue = remainder + queue
+        stack += remainder
 
     return Union(tuple(reversed(processed)))
 
