@@ -8,7 +8,9 @@ equivalent expression in safe range normal form, how to obtain the set of range
 restricted variables of an expression, how to check if the expression is safe
 range and, if so, how to translate the expression to a union of horn clauses.
 Furthermore the resulting horn clauses can be translated to a datalog
-expression block to use in a solver.
+expression block to use in a solver. The theory behind this is mostly taken
+from the chapter 4 of _Abiteboul, Hull, and Vianu, Foundations of Databases:
+The Logical Level_.
 
 """
 from functools import reduce
@@ -224,10 +226,10 @@ def convert_srnf_to_horn_clauses(head, expression):
     """
     Converts a safe range query into an union of horn clauses.
 
-    Given a query represented by a _answer_ head and a range restricted
+    Given a query represented by an _answer_ head and a range restricted
     expression in safe range normal form, returns an union of horn clauses in
-    which the result set given to head is equivalent. Also, is required that
-    the variables of the head appear free in the expression.
+    which the result set given to head is equivalent. Also, it is required that
+    all the variables appear free in the body.
 
     The algorithm is implemented using a queue of queries to process, which
     starts with the query given as parameter. In each iteration, a query is
@@ -280,10 +282,12 @@ def convert_srnf_to_horn_clauses(head, expression):
 
 def _tuple_to_conjunction(t):
     if len(t) == 0:
-        return TRUE
-    if len(t) == 1:
-        return t[0]
-    return Conjunction(t)
+        r = TRUE
+    elif len(t) == 1:
+        r = t[0]
+    else:
+        r = Conjunction(t)
+    return r
 
 
 def _restrict_variables(head, body, positive_atoms):
