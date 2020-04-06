@@ -17,9 +17,6 @@ from .relational_algebra import (
 )
 from .utils.relational_algebra_set import RelationalAlgebraExpression
 
-FA_ = FunctionApplication
-C_ = Constant
-
 
 def arithmetic_operator_string(op):
     """
@@ -239,7 +236,11 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
 
         return new_set
 
-    @add_match(Selection(..., FA_(eq_, (C_[Column], C_[Column]))))
+    @add_match(
+        Selection(
+            ..., FunctionApplication(eq_, (Constant[Column], Constant[Column]))
+        )
+    )
     def selection_between_columns(self, selection):
         col1, col2 = selection.formula.args
         selected_relation = self.walk(
@@ -250,7 +251,9 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             selected_relation, selection.relation.provenance_column
         )
 
-    @add_match(Selection(..., FA_(eq_, (C_[Column], ...))))
+    @add_match(
+        Selection(..., FunctionApplication(eq_, (Constant[Column], ...)))
+    )
     def selection_by_constant(self, selection):
         col, val = selection.formula.args
         selected_relation = self.walk(selection.relation).value.selection(
@@ -280,7 +283,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             proj_columns = set_res_cols.union(set_temp_cols)
 
             proj_columns = tuple(
-                [C_(ColumnStr(name)) for name in set(proj_columns)]
+                [Constant(ColumnStr(name)) for name in set(proj_columns)]
             )
 
             final_prov_column = rel_res.provenance_column
@@ -292,13 +295,17 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
                             (
                                 RenameColumn(
                                     rel_res,
-                                    C_(ColumnStr(rel_res.provenance_column)),
-                                    C_(ColumnStr(column1)),
+                                    Constant(
+                                        ColumnStr(rel_res.provenance_column)
+                                    ),
+                                    Constant(ColumnStr(column1)),
                                 ),
                                 RenameColumn(
                                     rel_temp,
-                                    C_(ColumnStr(rel_temp.provenance_column)),
-                                    C_(ColumnStr(column2)),
+                                    Constant(
+                                        ColumnStr(rel_temp.provenance_column)
+                                    ),
+                                    Constant(ColumnStr(column2)),
                                 ),
                             )
                         ),
@@ -340,7 +347,8 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
                 cols.add(rel_temp.provenance_column)
                 temp_provenance = rel_temp.provenance_column
                 rel_temp = ProjectionNonProvenance(
-                    rel_temp, tuple([C_(ColumnStr(name)) for name in cols])
+                    rel_temp,
+                    tuple([Constant(ColumnStr(name)) for name in cols]),
                 )
                 rel_temp = self.walk(rel_temp)
                 rel_temp = self._build_provenance_set_from_set(
@@ -350,7 +358,8 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
                 res_provenance = rel_res.provenance_column
                 cols.add(rel_res.provenance_column)
                 rel_res = ProjectionNonProvenance(
-                    rel_res, tuple([C_(ColumnStr(name)) for name in cols])
+                    rel_res,
+                    tuple([Constant(ColumnStr(name)) for name in cols]),
                 )
                 rel_res = self.walk(rel_res)
                 rel_res = self._build_provenance_set_from_set(
@@ -424,7 +433,9 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
         set_right_cols = set(rel_right.value.columns)
         set_right_cols.discard(rel_right.provenance_column)
         proj_columns = set_left_cols.union(set_right_cols)
-        proj_columns = tuple([C_(ColumnStr(name)) for name in proj_columns])
+        proj_columns = tuple(
+            [Constant(ColumnStr(name)) for name in proj_columns]
+        )
 
         final_prov_column = rel_left.provenance_column
 
@@ -434,13 +445,13 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
                     NaturalJoinNonProvenance(
                         RenameColumn(
                             rel_left,
-                            C_(ColumnStr(rel_left.provenance_column)),
-                            C_(ColumnStr(column1)),
+                            Constant(ColumnStr(rel_left.provenance_column)),
+                            Constant(ColumnStr(column1)),
                         ),
                         RenameColumn(
                             rel_right,
-                            C_(ColumnStr(rel_right.provenance_column)),
-                            C_(ColumnStr(column2)),
+                            Constant(ColumnStr(rel_right.provenance_column)),
+                            Constant(ColumnStr(column2)),
                         ),
                     ),
                     column1,
@@ -488,17 +499,19 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
                 "At the union, both sets must have the same columns"
             )
 
-        proj_columns = tuple([C_(ColumnStr(name)) for name in first_cols])
+        proj_columns = tuple(
+            [Constant(ColumnStr(name)) for name in first_cols]
+        )
 
         res1 = ConcatenateConstantColumn(
             Projection(first, proj_columns),
-            C_(ColumnStr("__new_col_union__")),
-            C_[str]("union_temp_value_1"),
+            Constant(ColumnStr("__new_col_union__")),
+            Constant[str]("union_temp_value_1"),
         )
         res2 = ConcatenateConstantColumn(
             Projection(second, proj_columns),
-            C_(ColumnStr("__new_col_union__")),
-            C_[str]("union_temp_value_2"),
+            Constant(ColumnStr("__new_col_union__")),
+            Constant[str]("union_temp_value_2"),
         )
 
         first = self.walk(res1)
