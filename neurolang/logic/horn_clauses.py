@@ -311,8 +311,10 @@ def _choose_restriction_atoms(unrestricted_variables, available_atoms, head):
 
 
 def _restricted_variables(body):
-    atoms = _positive_atoms(body)
-    return set().union(*[_atom_variables(a) for a in atoms])
+    r = set()
+    for a in _positive_atoms(body):
+        r |= _atom_variables(a)
+    return r
 
 
 def _positive_atoms(atoms):
@@ -320,7 +322,7 @@ def _positive_atoms(atoms):
 
 
 def _atom_variables(atom):
-    return set([s for s in atom.args if isinstance(s, Symbol)])
+    return set(s for s in atom.args if isinstance(s, Symbol))
 
 
 class ConvertSRNFToHornClause(PatternWalker):
@@ -420,9 +422,9 @@ class TranslateHornClausesToDatalog(PatternWalker):
 
 def fol_query(head, exp):
     """
-    Tries to return datalog program for a given query in first order logic.
+    Returns a datalog program for a given query in first order logic.
 
-    Given a query represented by a _answer_ head and an expression in first
+    Given a query represented by an _answer_ head and an expression in first
     order logic, converts the expression to safe range normal form and then, if
     the query is safe range, returns an ExpressionBlock with the equivalent
     program in datalog. Throw a NeuroLangTranslateToHornClauseException
