@@ -66,16 +66,6 @@ def is_arithmetic_operation(exp):
 
 
 class CrossProductNonProvenance(RelationalAlgebraOperation):
-    """
-    FIXME
-
-    Parameters
-    ----------
-    relations : FIXME
-        FIXME
-
-    """
-
     def __init__(self, relations):
         self.relations = tuple(relations)
 
@@ -88,19 +78,6 @@ class CrossProductNonProvenance(RelationalAlgebraOperation):
 
 
 class ProjectionNonProvenance(RelationalAlgebraOperation):
-    """
-    FIXME
-
-    Parameters
-    ----------
-    relation : FIXME
-        FIXME
-
-    attributes : FIXME
-        FIXME
-
-    """
-
     def __init__(self, relation, attributes):
         self.relation = relation
         self.attributes = attributes
@@ -113,19 +90,6 @@ class ProjectionNonProvenance(RelationalAlgebraOperation):
 
 
 class NaturalJoinNonProvenance(RelationalAlgebraOperation):
-    """
-    FIXME
-
-    Parameters
-    ----------
-    relation_left : FIXME
-        FIXME
-
-    relation_right : FIXME
-        FIXME
-
-    """
-
     def __init__(self, relation_left, relation_right):
         self.relation_left = relation_left
         self.relation_right = relation_right
