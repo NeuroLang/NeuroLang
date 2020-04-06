@@ -64,7 +64,7 @@ class HornClause(LogicOperator):
     Expression of the form `P(X) \u2190 (Q(X) \u22C0 ... \u22C0 S(X))`
     """
 
-    def __init__(self, head, body=TRUE):
+    def __init__(self, head, body):
         self._validate(head, body)
         self.head = head
         self.body = body
@@ -119,8 +119,28 @@ class HornClause(LogicOperator):
         else:
             r += "?- "
 
-        if self.body is not None:
-            r += ", ".join(repr(l) for l in self.body)
+        if self.body != TRUE:
+            r += repr(self.body)
+        r += ".}"
+        return r
+
+
+class HornFact(HornClause):
+    """
+    Expression of the form `P(X) \u2190 TRUE`
+    """
+
+    def __init__(self, head):
+        if head == FALSE:
+            raise NeuroLangException(
+                "A HornFact can not have FALSE as head."
+            )
+        super().__init__(head, TRUE)
+
+    def __repr__(self):
+        r = "HornFact{"
+        if self.head is not None:
+            r += repr(self.head)
         r += ".}"
         return r
 
@@ -274,19 +294,19 @@ def convert_srnf_to_horn_clauses(head, expression):
         body = _restrict_variables(head, body, positive_atoms)
         positive_atoms |= _positive_atoms(body)
         remainder = [r + (positive_atoms,) for r in remainder]
-        processed.append(HornClause(head, _tuple_to_conjunction(body)))
+        processed.append(_to_horn_clause(head, body))
         queue = remainder + queue
 
     return Union(tuple(reversed(processed)))
 
 
-def _tuple_to_conjunction(t):
-    if len(t) == 0:
-        r = TRUE
-    elif len(t) == 1:
-        r = t[0]
+def _to_horn_clause(head, body):
+    if len(body) == 0:
+        r = HornFact(head)
+    elif len(body) == 1:
+        r = HornClause(head, body[0])
     else:
-        r = Conjunction(t)
+        r = HornClause(head, Conjunction(body))
     return r
 
 
@@ -395,11 +415,11 @@ class TranslateHornClausesToDatalog(PatternWalker):
     def match_quantifier(self, exp):
         return self.walk(exp.body)
 
-    @add_match(HornClause, lambda e: e.body == TRUE)
+    @add_match(HornFact)
     def match_horn_fact(self, exp):
         return Fact(exp.head)
 
-    @add_match(HornClause, lambda e: e.body != TRUE)
+    @add_match(HornClause)
     def match_horn_rule(self, exp):
         return Implication(exp.head, self.walk(exp.body))
 

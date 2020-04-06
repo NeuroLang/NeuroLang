@@ -33,6 +33,7 @@ from ..logic.transformations import (
 from ..logic.horn_clauses import (
     MoveNegationsToAtomsOrExistentialQuantifiers,
     HornClause,
+    HornFact,
     convert_to_srnf,
     convert_srnf_to_horn_clauses,
     range_restricted_variables,
@@ -503,7 +504,7 @@ def test_horn_clause_validation():
     with pytest.raises(NeuroLangException):
         HornClause(None, None)
     with pytest.raises(NeuroLangException):
-        HornClause(None)
+        HornFact(None)
     with pytest.raises(NeuroLangException):
         HornClause(None, Conjunction((X, Y)))
     with pytest.raises(NeuroLangException):
@@ -836,7 +837,7 @@ def test_convert_srnf2horn_3():
         (
             HornClause(
                 Aux3(r, n, m_),
-                Conjunction((Actor(n, m_, r_), Negation(Equal(r, r_)))),
+                Conjunction((Actor(n, m_, r), Actor(n, m_, r_), Negation(Equal(r, r_)))),
             ),
             HornClause(
                 Aux2(n, m_),
