@@ -5,9 +5,17 @@ from .utils.relational_algebra_set import RelationalAlgebraExpression
 from .exceptions import NeuroLangException
 from .expression_walker import ExpressionWalker, PatternWalker, add_match
 from .expressions import Constant, Definition, FunctionApplication
-from .relational_algebra import (Column, ColumnStr, EquiJoin, NaturalJoin,
-                                 Product, RelationalAlgebraOperation,
-                                 RenameColumn, Selection, eq_)
+from .relational_algebra import (
+    Column,
+    ColumnStr,
+    EquiJoin,
+    NaturalJoin,
+    Product,
+    RelationalAlgebraOperation,
+    RenameColumn,
+    Selection,
+    eq_,
+)
 
 FA_ = FunctionApplication
 C_ = Constant
@@ -24,10 +32,10 @@ def arithmetic_operator_string(op):
 
 def is_arithmetic_operation(exp):
     return (
-        isinstance(exp, FunctionApplication) and
-        isinstance(exp.functor, Constant) and exp.functor.value in {
-            operator.add, operator.sub, operator.mul, operator.truediv
-        }
+        isinstance(exp, FunctionApplication)
+        and isinstance(exp.functor, Constant)
+        and exp.functor.value
+        in {operator.add, operator.sub, operator.mul, operator.truediv}
     )
 
 
@@ -36,9 +44,11 @@ class CrossProductNonProvenance(RelationalAlgebraOperation):
         self.relations = tuple(relations)
 
     def __repr__(self):
-        return '[' + f'\N{n-ary times operator}'.join(
-            repr(r) for r in self.relations
-        ) + ']'
+        return (
+            "["
+            + f"\N{n-ary times operator}".join(repr(r) for r in self.relations)
+            + "]"
+        )
 
 
 class ProjectionNonProvenance(RelationalAlgebraOperation):
@@ -48,8 +58,8 @@ class ProjectionNonProvenance(RelationalAlgebraOperation):
 
     def __repr__(self):
         return (
-            f'\N{GREEK CAPITAL LETTER PI}'
-            f'_{self.attributes}({self.relation})'
+            f"\N{GREEK CAPITAL LETTER PI}"
+            f"_{self.attributes}({self.relation})"
         )
 
 
@@ -59,7 +69,7 @@ class NaturalJoinNonProvenance(RelationalAlgebraOperation):
         self.relation_right = relation_right
 
     def __repr__(self):
-        return (f'[{self.relation_left}' f'\N{JOIN}' f'{self.relation_right}]')
+        return f"[{self.relation_left}" f"\N{JOIN}" f"{self.relation_right}]"
 
 
 class ExtendedProjection(RelationalAlgebraOperation):
@@ -157,8 +167,9 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
     @add_match(Selection(..., FA_(eq_, (C_[Column], C_[Column]))))
     def selection_between_columns(self, selection):
         col1, col2 = selection.formula.args
-        selected_relation = self.walk(selection.relation)\
-            .value.selection_columns({col1.value: col2.value})
+        selected_relation = self.walk(
+            selection.relation
+        ).value.selection_columns({col1.value: col2.value})
 
         return self._build_provenance_set_from_set(
             selected_relation, selection.relation.provenance_column
@@ -167,8 +178,9 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
     @add_match(Selection(..., FA_(eq_, (C_[Column], ...))))
     def selection_by_constant(self, selection):
         col, val = selection.formula.args
-        selected_relation = self.walk(selection.relation)\
-            .value.selection({col.value: val.value})
+        selected_relation = self.walk(selection.relation).value.selection(
+            {col.value: val.value}
+        )
 
         return self._build_provenance_set_from_set(
             selected_relation, selection.relation.provenance_column
@@ -182,8 +194,8 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             rel_temp = self.walk(relation)
             prov_temp = rel_temp.provenance_column
 
-            column1 = f'{prov_res}1'
-            column2 = f'{prov_temp}2'
+            column1 = f"{prov_res}1"
+            column2 = f"{prov_temp}2"
 
             rel_res, rel_temp = self._remove_common_columns(rel_res, rel_temp)
 
@@ -192,38 +204,44 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             set_temp_cols.discard(rel_temp.provenance_column)
             proj_columns = set_res_cols.union(set_temp_cols)
 
-            proj_columns = tuple([
-                C_(ColumnStr(name)) for name in set(proj_columns)
-            ])
+            proj_columns = tuple(
+                [C_(ColumnStr(name)) for name in set(proj_columns)]
+            )
 
             final_prov_column = rel_res.provenance_column
 
             res = ProjectionNonProvenance(
                 ExtendedProjection(
                     ProvenanceAlgebraSet(
-                        CrossProductNonProvenance((
-                            RenameColumn(
-                                rel_res,
-                                C_(ColumnStr(rel_res.provenance_column)),
-                                C_(ColumnStr(column1))
-                            ),
-                            RenameColumn(
-                                rel_temp,
-                                C_(ColumnStr(rel_temp.provenance_column)),
-                                C_(ColumnStr(column2))
+                        CrossProductNonProvenance(
+                            (
+                                RenameColumn(
+                                    rel_res,
+                                    C_(ColumnStr(rel_res.provenance_column)),
+                                    C_(ColumnStr(column1)),
+                                ),
+                                RenameColumn(
+                                    rel_temp,
+                                    C_(ColumnStr(rel_temp.provenance_column)),
+                                    C_(ColumnStr(column2)),
+                                ),
                             )
-                        )), final_prov_column
+                        ),
+                        final_prov_column,
                     ),
-                    tuple([
-                        ExtendedProjectionListMember(
-                            fun_exp=Constant(ColumnStr(column1)) *
-                            Constant(ColumnStr(column2)),
-                            dst_column=Constant(
-                                ColumnStr(rel_res.provenance_column)
-                            ),
-                        )
-                    ]),
-                ), proj_columns
+                    tuple(
+                        [
+                            ExtendedProjectionListMember(
+                                fun_exp=Constant(ColumnStr(column1))
+                                * Constant(ColumnStr(column2)),
+                                dst_column=Constant(
+                                    ColumnStr(rel_res.provenance_column)
+                                ),
+                            )
+                        ]
+                    ),
+                ),
+                proj_columns,
             )
 
             rel_res = self.walk(res)
@@ -324,8 +342,8 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
         rel_left = self.walk(naturaljoin.relation_left)
         rel_right = self.walk(naturaljoin.relation_right)
 
-        column1 = f'{rel_left.provenance_column}1'
-        column2 = f'{rel_right.provenance_column}2'
+        column1 = f"{rel_left.provenance_column}1"
+        column2 = f"{rel_right.provenance_column}2"
 
         set_left_cols = set(rel_left.value.columns)
         set_right_cols = set(rel_right.value.columns)
@@ -342,25 +360,29 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
                         RenameColumn(
                             rel_left,
                             C_(ColumnStr(rel_left.provenance_column)),
-                            C_(ColumnStr(column1))
+                            C_(ColumnStr(column1)),
                         ),
                         RenameColumn(
                             rel_right,
                             C_(ColumnStr(rel_right.provenance_column)),
-                            C_(ColumnStr(column2))
-                        )
-                    ), column1
-                ),
-                tuple([
-                    ExtendedProjectionListMember(
-                        fun_exp=Constant(ColumnStr(column1)) *
-                        Constant(ColumnStr(column2)),
-                        dst_column=Constant(
-                            ColumnStr(rel_left.provenance_column)
+                            C_(ColumnStr(column2)),
                         ),
-                    )
-                ])
-            ), proj_columns
+                    ),
+                    column1,
+                ),
+                tuple(
+                    [
+                        ExtendedProjectionListMember(
+                            fun_exp=Constant(ColumnStr(column1))
+                            * Constant(ColumnStr(column2)),
+                            dst_column=Constant(
+                                ColumnStr(rel_left.provenance_column)
+                            ),
+                        )
+                    ]
+                ),
+            ),
+            proj_columns,
         )
         res = self.walk(res)
 
@@ -385,22 +407,24 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
         second_cols.discard(second.provenance_column)
 
         if (
-            len(first_cols.difference(second_cols)) > 0 or
-            len(second_cols.difference(first_cols)) > 0
+            len(first_cols.difference(second_cols)) > 0
+            or len(second_cols.difference(first_cols)) > 0
         ):
             raise NeuroLangException(
-                'At the union, both sets must have the same columns'
+                "At the union, both sets must have the same columns"
             )
 
         proj_columns = tuple([C_(ColumnStr(name)) for name in first_cols])
 
         res1 = ConcatenateConstantColumn(
             Projection(first, proj_columns),
-            C_(ColumnStr('__new_col_union__')), C_[str]('union_temp_value_1')
+            C_(ColumnStr("__new_col_union__")),
+            C_[str]("union_temp_value_1"),
         )
         res2 = ConcatenateConstantColumn(
             Projection(second, proj_columns),
-            C_(ColumnStr('__new_col_union__')), C_[str]('union_temp_value_2')
+            C_(ColumnStr("__new_col_union__")),
+            C_[str]("union_temp_value_2"),
         )
 
         first = self.walk(res1)
@@ -421,10 +445,9 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             relation,
             (
                 ExtendedProjectionListMember(
-                    fun_exp=new_column_value,
-                    dst_column=new_column_name
+                    fun_exp=new_column_value, dst_column=new_column_name
                 ),
-            )
+            ),
         )
         new_relation = self.walk(res)
 
@@ -440,10 +463,9 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
         str_arithmetic_walker = StringArithmeticWalker()
         eval_expressions = {}
         for member in proj_op.projection_list:
-            eval_expressions[member.dst_column.value
-                             ] = str_arithmetic_walker.walk(
-                                 self.walk(member.fun_exp)
-                             )
+            eval_expressions[
+                member.dst_column.value
+            ] = str_arithmetic_walker.walk(self.walk(member.fun_exp))
         new_container = relation.value.extended_projection(eval_expressions)
         return self._build_provenance_set_from_set(
             new_container, relation.provenance_column
@@ -470,8 +492,10 @@ class StringArithmeticWalker(PatternWalker):
 
     @add_match(FunctionApplication, is_arithmetic_operation)
     def arithmetic_operation(self, fa):
-        return RelationalAlgebraExpression("({} {} {})".format(
-            self.walk(fa.args[0]),
-            arithmetic_operator_string(fa.functor.value),
-            self.walk(fa.args[1]),
-        ))
+        return RelationalAlgebraExpression(
+            "({} {} {})".format(
+                self.walk(fa.args[0]),
+                arithmetic_operator_string(fa.functor.value),
+                self.walk(fa.args[1]),
+            )
+        )
