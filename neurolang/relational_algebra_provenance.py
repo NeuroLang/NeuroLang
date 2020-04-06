@@ -1,7 +1,6 @@
 import operator
 from typing import AbstractSet
 
-from .utils.relational_algebra_set import RelationalAlgebraExpression
 from .exceptions import NeuroLangException
 from .expression_walker import ExpressionWalker, PatternWalker, add_match
 from .expressions import Constant, Definition, FunctionApplication
@@ -16,6 +15,7 @@ from .relational_algebra import (
     Selection,
     eq_,
 )
+from .utils.relational_algebra_set import RelationalAlgebraExpression
 
 FA_ = FunctionApplication
 C_ = Constant
@@ -75,6 +75,7 @@ class CrossProductNonProvenance(RelationalAlgebraOperation):
         FIXME
 
     """
+
     def __init__(self, relations):
         self.relations = tuple(relations)
 
@@ -99,6 +100,7 @@ class ProjectionNonProvenance(RelationalAlgebraOperation):
         FIXME
 
     """
+
     def __init__(self, relation, attributes):
         self.relation = relation
         self.attributes = attributes
@@ -123,6 +125,7 @@ class NaturalJoinNonProvenance(RelationalAlgebraOperation):
         FIXME
 
     """
+
     def __init__(self, relation_left, relation_right):
         self.relation_left = relation_left
         self.relation_right = relation_right
@@ -238,6 +241,7 @@ class ConcatenateConstantColumn(RelationalAlgebraOperation):
     single constant value that will be repeatedly added to all tuples.
 
     """
+
     def __init__(self, relation, column_name, column_value):
         self.relation = relation
         self.column_name = column_name
@@ -594,6 +598,7 @@ class StringArithmeticWalker(PatternWalker):
     length of an other constant relation.
 
     """
+
     @add_match(Constant)
     def constant(self, cst):
         return cst.value
