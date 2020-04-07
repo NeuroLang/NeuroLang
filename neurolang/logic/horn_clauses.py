@@ -406,7 +406,7 @@ def translate_horn_clauses_to_datalog(horn_clauses):
     return TranslateHornClausesToDatalog().walk(horn_clauses)
 
 
-class TranslateHornClausesToDatalog(PatternWalker):
+class TranslateHornClausesToDatalog(LogicExpressionWalker):
     @add_match(Union)
     def match_union(self, exp):
         return ExpressionBlock(self.walk(exp.formulas))
@@ -423,24 +423,8 @@ class TranslateHornClausesToDatalog(PatternWalker):
     def match_horn_rule(self, exp):
         return Implication(exp.head, self.walk(exp.body))
 
-    @add_match(Negation)
-    def match_negation(self, exp):
-        return Negation(self.walk(exp.formula))
 
-    @add_match(FunctionApplication)
-    def match_fa(self, exp):
-        return exp
-
-    @add_match(Symbol)
-    def match_symbol(self, exp):
-        return exp
-
-    @add_match(Conjunction)
-    def match_conjunction(self, exp):
-        return Conjunction(self.walk(exp.formulas))
-
-
-def fol_query(head, exp):
+def fol_query_to_datalog_program(head, exp):
     """
     Returns a datalog program for a given query in first order logic.
 
