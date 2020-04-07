@@ -170,35 +170,35 @@ class DesambiguateQuantifiedVariables(LogicExpressionWalker):
     """
 
     @add_match(Implication)
-    def match_implication(self, expression):
+    def implication(self, expression):
         fs = self.walk(expression.consequent), self.walk(expression.antecedent)
         self._desambiguate(fs)
         return expression.apply(*fs)
 
     @add_match(Union)
-    def match_union(self, expression):
+    def union(self, expression):
         fs = self.walk(expression.formulas)
         self._desambiguate(fs)
         return expression.apply(fs)
 
     @add_match(Disjunction)
-    def match_disjunction(self, expression):
+    def disjunction(self, expression):
         fs = self.walk(expression.formulas)
         self._desambiguate(fs)
         return expression.apply(fs)
 
     @add_match(Conjunction)
-    def match_conjunction(self, expression):
+    def conjunction(self, expression):
         fs = self.walk(expression.formulas)
         self._desambiguate(fs)
         return expression.apply(fs)
 
     @add_match(Negation)
-    def match_negation(self, expression):
+    def negation(self, expression):
         return expression.apply(self.walk(expression.formula))
 
     @add_match(Quantifier)
-    def match_quantifier(self, expression):
+    def quantifier(self, expression):
         expression.body = self.walk(expression.body)
         uq = UsedQuantifiers().walk(expression.body)
         for q in uq:
@@ -241,51 +241,51 @@ class ReplaceFreeSymbolWalker(ReplaceSymbolWalker):
 
 class UsedQuantifiers(PatternWalker):
     @add_match(FunctionApplication)
-    def match_function(self, exp):
+    def function(self, exp):
         return set()
 
     @add_match(Symbol)
-    def match_symbol(self, exp):
+    def symbol(self, exp):
         return set()
 
     @add_match(Negation)
-    def match_negation(self, exp):
+    def negation(self, exp):
         return self.walk(exp.formula)
 
     @add_match(Disjunction)
-    def match_disjunction(self, exp):
+    def disjunction(self, exp):
         return set.union(*self.walk(exp.formulas))
 
     @add_match(Implication)
-    def match_implication(self, exp):
+    def implication(self, exp):
         return set.union(self.walk(exp.antecedent), self.walk(exp.consequent))
 
     @add_match(Conjunction)
-    def match_conjunction(self, exp):
+    def conjunction(self, exp):
         return set.union(*self.walk(exp.formulas))
 
     @add_match(Quantifier)
-    def match_quantifier(self, exp):
+    def quantifier(self, exp):
         return {exp} | self.walk(exp.body)
 
 
 class DistributeDisjunctions(LogicExpressionWalker):
     @add_match(Disjunction, lambda e: len(e.formulas) > 2)
-    def match_split(self, expression):
+    def split(self, expression):
         head, *rest = expression.formulas
         rest = self.walk(Disjunction(tuple(rest)))
         new_exp = Disjunction((head, rest))
         return self.walk(new_exp)
 
     @add_match(Disjunction((..., Conjunction)))
-    def match_rotate(self, expression):
+    def rotate(self, expression):
         q, c = expression.formulas
         return self.walk(
             Conjunction(tuple(map(lambda p: Disjunction((q, p)), c.formulas)))
         )
 
     @add_match(Disjunction((Conjunction, ...)))
-    def match_distribute(self, expression):
+    def distribute(self, expression):
         c, q = expression.formulas
         return self.walk(
             Conjunction(tuple(map(lambda p: Disjunction((p, q)), c.formulas)))
@@ -297,7 +297,7 @@ class CollapseDisjunctions(LogicExpressionWalker):
         Disjunction,
         lambda e: any(isinstance(f, Disjunction) for f in e.formulas),
     )
-    def match_disjunction(self, e):
+    def disjunction(self, e):
         new_arg = []
         for f in map(self.walk, e.formulas):
             if isinstance(f, Disjunction):
@@ -312,7 +312,7 @@ class CollapseConjunctions(LogicExpressionWalker):
         Conjunction,
         lambda e: any(isinstance(f, Conjunction) for f in e.formulas),
     )
-    def match_conjunction(self, e):
+    def conjunction(self, e):
         new_arg = []
         for f in map(self.walk, e.formulas):
             if isinstance(f, Conjunction):
@@ -329,7 +329,7 @@ class RemoveUniversalPredicates(LogicExpressionWalker):
     """
 
     @add_match(UniversalPredicate)
-    def match_universal(self, expression):
+    def universal(self, expression):
         return self.walk(
             Negation(
                 ExistentialPredicate(
