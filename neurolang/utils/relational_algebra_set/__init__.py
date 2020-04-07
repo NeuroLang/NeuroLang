@@ -44,13 +44,17 @@ class RelationalAlgebraFrozenSet(Set):
     def __str__(self):
         str_ = '{'
         sep = ''
-        for i, t in enumerate(self):
-            str_ += str(t)
+        for i, t in enumerate(iter(self)):
             str_ += sep
-            sep = ', '
+            str_ += str(t)
             if i == 5:
                 str_ += '...'
+            sep = ', '
         str_ += '}'
+        return str_
+
+    def __repr__(self):
+        return self.__str__()
 
 
 class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):

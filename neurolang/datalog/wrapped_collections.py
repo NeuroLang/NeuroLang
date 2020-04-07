@@ -28,7 +28,7 @@ class WrappedRelationalAlgebraSetBaseMixin:
                 raise NotImplemented()
             self._row_type = row_type
         elif isinstance(iterable, WrappedRelationalAlgebraSetBaseMixin):
-            self._row_type = iterable._row_type
+            self._row_type = iterable.row_type
         else:
             self._row_type = None
 
@@ -185,6 +185,8 @@ class WrappedNamedRelationalAlgebraFrozenSetMixin(
         iterable = WrappedRelationalAlgebraSetBaseMixin._get_init_iterable(
             iterable
         )
+        if columns is None:
+            columns = iterable.columns
         super().__init__(columns=columns, iterable=iterable, **kwargs)
         self._set_row_type(iterable, row_type, verify_row_type)
 

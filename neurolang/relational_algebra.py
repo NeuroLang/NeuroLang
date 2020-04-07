@@ -261,6 +261,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
             for column_name in name_columns.column_names
         )
         new_set = self._named_set_class(column_names, relation_set)
+        it = next(iter(new_set))
         return self._build_relation_constant(new_set)
 
     @ew.add_match(RenameColumn)

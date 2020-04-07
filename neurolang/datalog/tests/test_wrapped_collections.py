@@ -26,6 +26,21 @@ R3 = WrappedNamedRelationalAlgebraFrozenSet(
 C_ = Constant
 
 
+def test_init_from_wrapped():
+    r1 = WrappedRelationalAlgebraSet(R1)
+
+    assert r1.row_type == R1.row_type
+    assert set(r1) == set(R1)
+
+
+def test_init_named_from_wrapped():
+    rt = R3.row_type
+    r3 = WrappedNamedRelationalAlgebraFrozenSet(iterable=R3)
+    assert r3.row_type == R3.row_type
+    assert r3.columns == R3.columns
+    assert set(r3) == set(R3)
+
+
 def test_unwrap():
     r2_u = R2.unwrap()
     r3_u = R3.unwrap()
