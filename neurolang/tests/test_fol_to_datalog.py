@@ -837,7 +837,9 @@ def test_convert_srnf2horn_3():
         (
             HornClause(
                 Aux3(r, n, m_),
-                Conjunction((Actor(n, m_, r), Actor(n, m_, r_), Negation(Equal(r, r_)))),
+                Conjunction(
+                    (Actor(n, m_, r), Actor(n, m_, r_), Negation(Equal(r, r_)))
+                ),
             ),
             HornClause(
                 Aux2(n, m_),
@@ -903,7 +905,9 @@ def test_safe_range_queries_in_datalog_solver():
     T = Symbol("T")
     V = Symbol("V")
 
-    program = fol_query_to_datalog_program(G(x), Conjunction((V(x), Negation(T(x)))))
+    program = fol_query_to_datalog_program(
+        G(x), Conjunction((V(x), Negation(T(x))))
+    )
 
     dl = Datalog()
     dl.walk(program)

@@ -132,9 +132,7 @@ class HornFact(HornClause):
 
     def __init__(self, head):
         if head == FALSE:
-            raise NeuroLangException(
-                "A HornFact can not have FALSE as head."
-            )
+            raise NeuroLangException("A HornFact can not have FALSE as head.")
         super().__init__(head, TRUE)
 
     def __repr__(self):
@@ -352,6 +350,7 @@ class ConvertSRNFToHornClause(PatternWalker):
 
     See `convert_srnf_to_horn_clauses`.
     """
+
     @add_match(Conjunction)
     def match_conjunction(self, exp):
         bodies, remainders = zip(*map(self.walk, exp.formulas))
