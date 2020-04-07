@@ -40,7 +40,7 @@ from ..logic.horn_clauses import (
     is_safe_range,
     NeuroLangTranslateToHornClauseException,
     translate_horn_clauses_to_datalog,
-    fol_query,
+    fol_query_to_datalog_program,
 )
 from ..datalog.negation import DatalogProgramNegation
 from ..expression_walker import ExpressionBasicEvaluator
@@ -837,7 +837,9 @@ def test_convert_srnf2horn_3():
         (
             HornClause(
                 Aux3(r, n, m_),
-                Conjunction((Actor(n, m_, r), Actor(n, m_, r_), Negation(Equal(r, r_)))),
+                Conjunction(
+                    (Actor(n, m_, r), Actor(n, m_, r_), Negation(Equal(r, r_)))
+                ),
             ),
             HornClause(
                 Aux2(n, m_),
@@ -874,7 +876,7 @@ def test_convert_srnf2horn_disjunction():
     P = Symbol("P")
     Q = Symbol("Q")
     Ans = Symbol("Ans")
-    program = fol_query(Ans(x), Disjunction((P(x), Q(x))))
+    program = fol_query_to_datalog_program(Ans(x), Disjunction((P(x), Q(x))))
     aux = program.expressions[0].consequent.functor
     expected = ExpressionBlock(
         (
@@ -903,7 +905,9 @@ def test_safe_range_queries_in_datalog_solver():
     T = Symbol("T")
     V = Symbol("V")
 
-    program = fol_query(G(x), Conjunction((V(x), Negation(T(x)))))
+    program = fol_query_to_datalog_program(
+        G(x), Conjunction((V(x), Negation(T(x))))
+    )
 
     dl = Datalog()
     dl.walk(program)
@@ -929,7 +933,7 @@ def test_safe_range_queries_in_datalog_solver_2():
     Zt = Symbol("Zt")
     Ans = Symbol("Ans")
 
-    program = fol_query(
+    program = fol_query_to_datalog_program(
         Ans(Xt),
         Conjunction(
             (
@@ -993,7 +997,7 @@ def test_safe_range_queries_in_datalog_solver_3():
     Ans = Symbol("Ans")
 
     # Which directors played exactly one role in each of their movies
-    program = fol_query(
+    program = fol_query_to_datalog_program(
         Ans(n),
         Conjunction(
             (

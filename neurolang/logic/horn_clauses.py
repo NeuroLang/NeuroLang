@@ -9,9 +9,9 @@ restricted variables of an expression, how to check if the expression is safe
 range and, if so, how to translate the expression to a union of horn clauses.
 Furthermore the resulting horn clauses can be translated to a datalog
 expression block to use in a solver. The theory behind this is mostly taken
-from the chapter 4 of _Abiteboul, Hull, and Vianu, Foundations of Databases:
-The Logical Level_.
+from the chapter 4 of [1]_.
 
+.. [1] Abiteboul, Hull, and Vianu, Foundations of Databases: The Logical Level.
 """
 from functools import reduce
 import operator
@@ -132,9 +132,7 @@ class HornFact(HornClause):
 
     def __init__(self, head):
         if head == FALSE:
-            raise NeuroLangException(
-                "A HornFact can not have FALSE as head."
-            )
+            raise NeuroLangException("A HornFact can not have FALSE as head.")
         super().__init__(head, TRUE)
 
     def __repr__(self):
@@ -215,24 +213,24 @@ class RangeRestrictedVariables(LogicExpressionWalker):
     """
 
     @add_match(FunctionApplication)
-    def match_function(self, exp):
+    def function(self, exp):
         return set([a for a in exp.args if isinstance(a, Symbol)])
 
     @add_match(Negation)
-    def match_negation(self, exp):
+    def negation(self, exp):
         self.walk(exp.formula)
         return set()
 
     @add_match(Disjunction)
-    def match_disjunction(self, exp):
+    def disjunction(self, exp):
         return set.intersection(*self.walk(exp.formulas))
 
     @add_match(Conjunction)
-    def match_conjunction(self, exp):
+    def conjunction(self, exp):
         return set.union(*self.walk(exp.formulas))
 
     @add_match(ExistentialPredicate)
-    def match_existential(self, exp):
+    def existential(self, exp):
         r = self.walk(exp.body)
         if exp.head in r:
             return r - {exp.head}
@@ -352,8 +350,9 @@ class ConvertSRNFToHornClause(PatternWalker):
 
     See `convert_srnf_to_horn_clauses`.
     """
+
     @add_match(Conjunction)
-    def match_conjunction(self, exp):
+    def conjunction(self, exp):
         bodies, remainders = zip(*map(self.walk, exp.formulas))
         return (
             tuple(
@@ -366,29 +365,29 @@ class ConvertSRNFToHornClause(PatternWalker):
         return 1 if isinstance(exp, Negation) else 0
 
     @add_match(Disjunction)
-    def match_disjunction(self, exp):
+    def disjunction(self, exp):
         nh = self._new_head_for(exp)
         return (nh,), [(nh, f) for f in exp.formulas]
 
     @add_match(ExistentialPredicate)
-    def match_existential(self, exp):
+    def existential(self, exp):
         return self.walk(exp.body)
 
     @add_match(Negation(FunctionApplication))
-    def match_negated_atom(self, exp):
+    def negated_atom(self, exp):
         return (exp,), []
 
     @add_match(Negation(ExistentialPredicate))
-    def match_negated_existential(self, exp):
+    def negated_existential(self, exp):
         nh = self._new_head_for(exp.formula)
         return (Negation(nh),), [(nh, exp.formula)]
 
     @add_match(FunctionApplication)
-    def match_atom(self, exp):
+    def atom(self, exp):
         return (exp,), []
 
     @add_match(...)
-    def match_unknown(self, exp):
+    def unknown(self, exp):
         raise NeuroLangTranslateToHornClauseException(
             "Expression not in safe range normal form: {}".format(exp)
         )
@@ -406,41 +405,25 @@ def translate_horn_clauses_to_datalog(horn_clauses):
     return TranslateHornClausesToDatalog().walk(horn_clauses)
 
 
-class TranslateHornClausesToDatalog(PatternWalker):
+class TranslateHornClausesToDatalog(LogicExpressionWalker):
     @add_match(Union)
-    def match_union(self, exp):
+    def union(self, exp):
         return ExpressionBlock(self.walk(exp.formulas))
 
     @add_match(Quantifier)
-    def match_quantifier(self, exp):
+    def quantifier(self, exp):
         return self.walk(exp.body)
 
     @add_match(HornFact)
-    def match_horn_fact(self, exp):
+    def horn_fact(self, exp):
         return Fact(exp.head)
 
     @add_match(HornClause)
-    def match_horn_rule(self, exp):
+    def horn_rule(self, exp):
         return Implication(exp.head, self.walk(exp.body))
 
-    @add_match(Negation)
-    def match_negation(self, exp):
-        return Negation(self.walk(exp.formula))
 
-    @add_match(FunctionApplication)
-    def match_fa(self, exp):
-        return exp
-
-    @add_match(Symbol)
-    def match_symbol(self, exp):
-        return exp
-
-    @add_match(Conjunction)
-    def match_conjunction(self, exp):
-        return Conjunction(self.walk(exp.formulas))
-
-
-def fol_query(head, exp):
+def fol_query_to_datalog_program(head, exp):
     """
     Returns a datalog program for a given query in first order logic.
 
