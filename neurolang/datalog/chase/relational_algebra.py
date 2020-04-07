@@ -252,7 +252,11 @@ class ChaseNamedRelationalAlgebraParameterisedMixin:
             Conjunction(predicates)
         )
 
-        result = RelationalAlgebraSolver(symbol_table).walk(ra_code)
+        result = RelationalAlgebraSolver(
+            symbol_table,
+            set_class=type(self)._set,
+            named_set_class=type(self)._named_frozen_set
+        ).walk(ra_code)
 
         result_value = result.value
         substitutions = type(self)._named_frozen_set(

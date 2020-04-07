@@ -41,6 +41,17 @@ class RelationalAlgebraFrozenSet(Set):
     def __hash__(self):
         pass
 
+    def __str__(self):
+        str_ = '{'
+        sep = ''
+        for i, t in enumerate(self):
+            str_ += str(t)
+            str_ += sep
+            sep = ', '
+            if i == 5:
+                str_ += '...'
+        str_ += '}'
+
 
 class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
     @abstractmethod
