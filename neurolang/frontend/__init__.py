@@ -14,6 +14,7 @@ from ..solver_datalog_extensional_db import ExtensionalDatabaseSolver
 from ..utils.data_manipulation import parse_region_label_map
 from .query_resolution import QueryBuilderFirstOrder
 from .query_resolution_datalog import QueryBuilderDatalog
+from .query_resolution_fol_through_datalog import QueryBuilderFirstOrderThroughDatalog
 
 __all__ = [
     'NeurolangDL', 'RegionFrontend',
@@ -69,6 +70,11 @@ class RegionFrontend(QueryBuilderFirstOrder):
             res.append(s)
 
         return res
+
+
+class RegionFrontendFolThroughDatalog(QueryBuilderFirstOrderThroughDatalog):
+    def __init__(self, solver=None):
+        raise Exception("Not implemented exception")
 
 
 class NeurolangDL(QueryBuilderDatalog):
