@@ -9,9 +9,9 @@ restricted variables of an expression, how to check if the expression is safe
 range and, if so, how to translate the expression to a union of horn clauses.
 Furthermore the resulting horn clauses can be translated to a datalog
 expression block to use in a solver. The theory behind this is mostly taken
-from the chapter 4 of _Abiteboul, Hull, and Vianu, Foundations of Databases:
-The Logical Level_.
+from the chapter 4 of [1]_.
 
+.. [1] Abiteboul, Hull, and Vianu, Foundations of Databases: The Logical Level.
 """
 from functools import reduce
 import operator
