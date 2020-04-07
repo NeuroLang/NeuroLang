@@ -1,6 +1,9 @@
 
 from ..expressions import Constant
-from ..wrapped_collections import WrappedRelationalAlgebraSet
+from ..wrapped_collections import (RelationalAlgebraFrozenSet,
+                                   NamedRelationalAlgebraFrozenSet,
+                                   WrappedNamedRelationalAlgebraFrozenSet,
+                                   WrappedRelationalAlgebraSet)
 
 R1 = WrappedRelationalAlgebraSet([
     (i, i * 2)
@@ -12,8 +15,28 @@ R2 = WrappedRelationalAlgebraSet([
     for i in range(10)
 ])
 
+R3 = WrappedNamedRelationalAlgebraFrozenSet(
+    columns=('x', 'y'),
+    iterable=[
+        (i * 2, i * 3)
+        for i in range(10)
+    ]
+)
 
 C_ = Constant
+
+
+def test_unwrap():
+    r2_u = R2.unwrap()
+    r3_u = R3.unwrap()
+
+    assert not isinstance(r2_u, WrappedRelationalAlgebraSet)
+    assert isinstance(r2_u, RelationalAlgebraFrozenSet)
+    assert r2_u == set(R2.unwrapped_iter())
+
+    assert not isinstance(r3_u, WrappedNamedRelationalAlgebraFrozenSet)
+    assert isinstance(r3_u, NamedRelationalAlgebraFrozenSet)
+    assert r3_u == set(R3.unwrapped_iter())
 
 
 def test_contains():

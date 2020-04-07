@@ -2,16 +2,12 @@ from operator import eq
 from typing import AbstractSet, Tuple
 
 from . import expression_walker as ew
-from .exceptions import NeuroLangException
-from .expressions import (
-    Constant,
-    Definition,
-    FunctionApplication,
-    Symbol,
-    Unknown,
-)
-from .utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet
 from . import type_system
+from .exceptions import NeuroLangException
+from .expressions import (Constant, Definition, FunctionApplication, Symbol,
+                          Unknown)
+from .utils.relational_algebra_set.sql import (NamedRelationalAlgebraFrozenSet,
+                                               RelationalAlgebraSet)
 
 eq_ = Constant(eq)
 
@@ -176,7 +172,13 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
     as objects with the same interface as :obj:`RelationalAlgebraSet`.
     """
 
-    def __init__(self, symbol_table=None):
+    def __init__(
+        self, symbol_table=None,
+        set_class=RelationalAlgebraSet,
+        named_set_class=NamedRelationalAlgebraFrozenSet
+    ):
+        self._set_class = set_class
+        self._named_set_class = named_set_class
         self.symbol_table = symbol_table
 
     @ew.add_match(Selection(..., FA_(eq_, (C_[Column], C_[Column]))))
@@ -214,7 +216,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
     @ew.add_match(Product)
     def ra_product(self, product):
         if len(product.relations) == 0:
-            return C_[AbstractSet](RelationalAlgebraSet(set()))
+            return C_[AbstractSet](self._set_class(set()))
 
         res = self.walk(product.relations[0]).value
         for relation in product.relations[1:]:
@@ -258,7 +260,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
             self.walk(column_name).value
             for column_name in name_columns.column_names
         )
-        new_set = NamedRelationalAlgebraFrozenSet(column_names, relation_set)
+        new_set = self._named_set_class(column_names, relation_set)
         return self._build_relation_constant(new_set)
 
     @ew.add_match(RenameColumn)

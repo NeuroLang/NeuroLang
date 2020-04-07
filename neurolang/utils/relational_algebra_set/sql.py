@@ -1,6 +1,6 @@
 import types
 from collections import namedtuple
-from collections.abc import Iterable
+from collections.abc import Iterable, Set
 from itertools import chain
 from uuid import uuid4
 
@@ -42,7 +42,7 @@ class RelationalAlgebraFrozenSet(
             self._arity = 0
             self._len = 0
             self._columns = tuple()
-            self._create_queries()
+        self._create_queries()
 
     def _create_table_from_iterable(self, iterable, column_names=None):
         if isinstance(iterable, RelationalAlgebraFrozenSet):
@@ -62,7 +62,6 @@ class RelationalAlgebraFrozenSet(
             else:
                 self._len = len(df)
             self._arity = len(df.columns)
-        self._create_queries()
 
     @classmethod
     def create_from_table_or_view(
@@ -611,7 +610,7 @@ class NamedRelationalAlgebraFrozenSet(
             self._len = 0
             self._arity = len(self.columns)
             self.is_view = False
-
+        self._create_queries()
         self.named_tuple_type = None
 
     def to_unnamed(self):
@@ -844,16 +843,16 @@ class RelationalAlgebraSet(
 
         if self._arity == 0:
             self._create_table_from_iterable((value,))
+            self._create_queries()
             self._generate_mutable_queries()
         else:
-            if self._len is None:
-                self._len = 0
             conn = self.engine.connect()
             conn.execute(
                 self.add_query,
                 {f't{i}': e for i, e in value.items()}
             )
-            self._len += 1
+            if self._len is not None:
+                self._len = None
 
     def discard(self, value):
         value = self._normalise_element(value)
