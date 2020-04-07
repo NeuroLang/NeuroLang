@@ -272,7 +272,6 @@ class NeuroSynthMixin:
     ):
         if not hasattr(self, 'neurosynth_db'):
             self.neurosynth_db = NeuroSynthHandler()
-
         if not name:
             name = str(uuid1())
         region_set = self.neurosynth_db.ns_region_set_from_term(term, q)
@@ -289,6 +288,8 @@ class NeuroSynthMixin:
     def load_neurosynth_term_study_ids(
         self, term: str, name: str = None, frequency_threshold: float = 0.05
     ):
+        if not hasattr(self, 'neurosynth_db'):
+            self.neurosynth_db = NeuroSynthHandler()
         if not name:
             name = str(uuid1())
         study_set = self.neurosynth_db.ns_study_id_set_from_term(
@@ -299,6 +300,8 @@ class NeuroSynthMixin:
     def load_neurosynth_study_tfidf_feature_for_terms(
         self, terms: List[str], name: str = None,
     ):
+        if not hasattr(self, 'neurosynth_db'):
+            self.neurosynth_db = NeuroSynthHandler()
         if not name:
             name = str(uuid1())
         result_set = self.neurosynth_db.ns_study_tfidf_feature_for_terms(terms)
