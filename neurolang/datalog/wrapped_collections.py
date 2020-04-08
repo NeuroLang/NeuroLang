@@ -1,3 +1,4 @@
+from collections import namedtuple
 from itertools import tee
 from typing import Tuple
 
@@ -28,7 +29,7 @@ class WrappedRelationalAlgebraSetBaseMixin:
                 raise NotImplemented()
             self._row_type = row_type
         elif isinstance(iterable, WrappedRelationalAlgebraSetBaseMixin):
-            self._row_type = iterable.row_type
+            self._row_type = iterable._row_type
         else:
             self._row_type = None
 
@@ -185,10 +186,11 @@ class WrappedNamedRelationalAlgebraFrozenSetMixin(
         iterable = WrappedRelationalAlgebraSetBaseMixin._get_init_iterable(
             iterable
         )
-        if columns is None:
+        if columns is None and iterable is not None:
             columns = iterable.columns
         super().__init__(columns=columns, iterable=iterable, **kwargs)
         self._set_row_type(iterable, row_type, verify_row_type)
+        self.named_tuple_type = None
 
     @property
     def row_type(self):
@@ -207,13 +209,16 @@ class WrappedNamedRelationalAlgebraFrozenSetMixin(
     def __iter__(self):
         if self.arity > 0:
             row_types = self.row_type
+            if self.named_tuple_type is None:
+                self.named_tuple_type = namedtuple('tuple', self.columns)
+
             for row in super().__iter__():
-                yield {
+                yield self.named_tuple_type(**{
                     f: Constant[row_types[f]](
                         v, verify_type=False
                     )
                     for f, v in zip(row._fields, row)
-                }
+                })
         else:
             for _ in range(len(self)):
                 yield dict()

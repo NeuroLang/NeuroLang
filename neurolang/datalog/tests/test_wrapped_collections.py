@@ -34,10 +34,10 @@ def test_init_from_wrapped():
 
 
 def test_init_named_from_wrapped():
-    rt = R3.row_type
     r3 = WrappedNamedRelationalAlgebraFrozenSet(iterable=R3)
     assert r3.row_type == R3.row_type
     assert r3.columns == R3.columns
+    assert r3 == R3
     assert set(r3) == set(R3)
 
 
