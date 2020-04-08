@@ -137,9 +137,31 @@ def test_entry_point_walker():
     with raises(
         expressions.NeuroLangException, match="Entry point not declared"
     ):
+
         class PM3(expression_walker.EntryPointPatternWalker):
             @expression_walker.add_match(F_)
             def __(self, expression):
                 return expression
 
         PM3()
+
+
+def test_chained_walker():
+    class WalkerA(expression_walker.ExpressionWalker):
+        @expression_walker.add_match(S_("A"))
+        def match_a(self, expression):
+            return S_("B")
+
+    class WalkerB(expression_walker.ExpressionWalker):
+        @expression_walker.add_match(S_("A"))
+        def match_a(self, expression):
+            return S_("Q")
+
+        @expression_walker.add_match(S_("B"))
+        def match_a(self, expression):
+            return S_("C")
+
+    walker = expression_walker.ChainedWalker(WalkerA, WalkerB)
+    exp = S_("A")
+    res = walker.walk(exp)
+    assert res == S_("C")
