@@ -8,19 +8,19 @@ sets.
 
 from itertools import tee
 from typing import AbstractSet, Any, Callable, Tuple
+from warnings import warn
 
 from ..expression_walker import PatternWalker, add_match
 from ..expressions import (Constant, Expression, FunctionApplication,
                            NeuroLangException, Symbol, TypedSymbolTableMixin,
                            is_leq_informative)
-from ..type_system import Unknown, infer_type
+from ..type_system import Unknown, get_args, infer_type
 from .expression_processing import (
     extract_logic_free_variables, is_conjunctive_expression,
     is_conjunctive_expression_with_nested_predicates)
-from .expressions import (NULL, UNDEFINED, Union, Fact, Implication,
-                          NullConstant, Undefined)
+from .expressions import (NULL, UNDEFINED, Fact, Implication, NullConstant,
+                          Undefined, Union)
 from .wrapped_collections import WrappedRelationalAlgebraSet
-
 
 __all__ = [
     "Implication", "Fact", "Undefined", "NullConstant",
@@ -195,6 +195,30 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
                 isinstance(v, Union)
             )
         }
+
+    def predicate_parameter_names(self, predicate):
+        try:
+            pred_repr = self.symbol_table[predicate]
+            if isinstance(pred_repr, Union):
+                head_args = None
+                for formula in pred_repr.formulas:
+                    if head_args is None:
+                        head_args = formula.consequent.args
+                    elif head_args != formula.consequent.args:
+                        warn(
+                            'Several argument names found in the rules '
+                            f'defining {predicate}, keeping one'
+                        )
+                        break
+                return head_args
+            elif is_leq_informative(pred_repr.type, AbstractSet):
+                row_type = get_args(pred_repr.type)[0]
+                row_len = len(get_args(row_type))
+                return tuple(range(row_len))
+            else:
+                raise NeuroLangException(f'Predicate {predicate} not found')
+        except KeyError:
+            raise NeuroLangException(f'Predicate {predicate} not found')
 
     def extensional_database(self):
         ret = self.symbol_table.symbols_by_type(AbstractSet)
