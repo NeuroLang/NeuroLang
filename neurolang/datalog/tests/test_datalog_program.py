@@ -123,6 +123,7 @@ def test_intensional_extensional_database():
     R0 = S_('R0')  # noqa: N806
     R = S_('R')  # noqa: N806
     T = S_('T')  # noqa: N806
+    w = S_('w')
     x = S_('x')
     y = S_('y')
     z = S_('z')
@@ -178,6 +179,18 @@ def test_intensional_extensional_database():
     assert len(idb) == 2
     assert len(idb['R'].formulas) == 2
     assert len(idb['T'].formulas) == 1
+
+    assert dl.predicate_parameter_names('R') == ('x', 'y', 'z')
+    assert dl.predicate_parameter_names('R0') == ('0', '1', '2')
+
+    dl.walk(Imp_(R(x, y, w), R0(x, y, w)))
+    assert (
+        dl.predicate_parameter_names('R') == ('x', 'y', 'z') or
+        dl.predicate_parameter_names('R') == ('x', 'y', 'w')
+    )
+
+    with pytest.raises(NeuroLangException):
+        dl.predicate_parameter_names('QQ')
 
 
 def test_not_conjunctive():

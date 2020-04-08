@@ -352,6 +352,21 @@ def test_neurolang_dl_solve_all():
     assert sol['q'] == dataset
     assert sol['r'] == set((i,) for i, j in dataset if i == j)
     assert len(sol) == 2
+    assert neurolang.predicate_parameter_names(r) == ('x',)
+
+
+def test_neurolange_dl_get_param_names():
+    neurolang = frontend.NeurolangDL()
+    r = neurolang.new_symbol(name='r')
+    x = neurolang.new_symbol(name='x')
+
+    dataset = {(i, i * 2) for i in range(10)}
+    q = neurolang.add_tuple_set(dataset, name='q')
+    r[x] = q(x, x)
+
+    assert neurolang.predicate_parameter_names('q') == ('0', '1')
+    assert neurolang.predicate_parameter_names(q) == ('0', '1')
+    assert neurolang.predicate_parameter_names(r) == ('x',)
 
 
 def test_neurolang_dl_datalog_code():

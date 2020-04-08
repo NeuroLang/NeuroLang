@@ -214,7 +214,10 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
             elif is_leq_informative(pred_repr.type, AbstractSet):
                 row_type = get_args(pred_repr.type)[0]
                 row_len = len(get_args(row_type))
-                return tuple(range(row_len))
+                return tuple(
+                    Symbol(str(i))
+                    for i in range(row_len)
+                )
             else:
                 raise NeuroLangException(f'Predicate {predicate} not found')
         except KeyError:
