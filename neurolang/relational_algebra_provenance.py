@@ -172,7 +172,7 @@ class ConcatenateConstantColumn(RelationalAlgebraOperation):
     """
     Add a column with a repeated constant value to a relation.
 
-    Parameters
+    Attributes
     ----------
     relation : Constant[RelationalAlgebraSet]
         Relation to which the column will be added.
