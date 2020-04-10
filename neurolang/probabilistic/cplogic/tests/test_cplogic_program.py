@@ -3,9 +3,9 @@ import typing
 import pytest
 
 from ....datalog.expressions import Fact
-from ....logic import Union, Conjunction, Implication
 from ....exceptions import NeuroLangException
 from ....expressions import Constant, ExpressionBlock, Symbol
+from ....logic import Conjunction, Implication, Union
 from ...expressions import ProbabilisticPredicate
 from ..program import CPLogicProgram
 

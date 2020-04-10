@@ -1,26 +1,26 @@
 from typing import AbstractSet
 
-from ...exceptions import NeuroLangException
-from ...expressions import Constant, Symbol, ExpressionBlock
-from ...expression_walker import ExpressionBasicEvaluator
-from ...logic import Implication
-from ...logic.expression_processing import TranslateToLogic
 from ...datalog.basic_representation import DatalogProgram
 from ...datalog.chase import (
-    ChaseNaive,
     ChaseGeneral,
+    ChaseNaive,
     ChaseNamedRelationalAlgebraMixin,
 )
+from ...exceptions import NeuroLangException
+from ...expression_walker import ExpressionBasicEvaluator
+from ...expressions import Constant, ExpressionBlock, Symbol
+from ...logic import Implication
+from ...logic.expression_processing import TranslateToLogic
 from ...relational_algebra import (
     ColumnInt,
-    RelationalAlgebraSolver,
-    Projection,
     NamedRelationalAlgebraFrozenSet,
+    Projection,
+    RelationalAlgebraSolver,
 )
 from ..expressions import (
     Grounding,
-    ProbabilisticPredicate,
     ProbabilisticChoice,
+    ProbabilisticPredicate,
 )
 from .program import CPLogicProgram
 

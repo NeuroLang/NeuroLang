@@ -1,17 +1,17 @@
-import typing
 import collections
+import typing
 
 import numpy
 
+from ..datalog import WrappedRelationalAlgebraSet
 from ..exceptions import NeuroLangException
 from ..expressions import (
-    Expression,
     Constant,
-    FunctionApplication,
+    Expression,
     ExpressionBlock,
+    FunctionApplication,
 )
 from ..logic import Implication
-from ..datalog import WrappedRelationalAlgebraSet
 from .expressions import ProbabilisticPredicate
 
 

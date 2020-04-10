@@ -45,6 +45,7 @@ from ..expressions import (
     GraphicalModel,
     Grounding,
     MultipleNaturalJoin,
+    MultipleUnions,
     MultiplyColumns,
     NegateProbability,
     ProbabilisticChoice,
@@ -52,7 +53,6 @@ from ..expressions import (
     RandomVariableValuePointer,
     SuccQuery,
     SumColumns,
-    MultipleUnions,
     VectorisedTableDistribution,
     make_numerical_col_symb,
 )
@@ -262,7 +262,7 @@ class CPLogicToGraphicalModelTranslator(PatternWalker):
         Grounding,
         lambda exp: isinstance(exp.expression, Implication)
         and isinstance(exp.expression.consequent, FunctionApplication)
-        and exp.expression.antecedent == Constant[bool](True)
+        and exp.expression.antecedent == Constant[bool](True),
     )
     def extensional_grounding(self, grounding):
         rv_symb = grounding.expression.consequent.functor

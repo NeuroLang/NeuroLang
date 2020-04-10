@@ -1,21 +1,21 @@
 import typing
 
-import pytest
 import numpy
+import pytest
 
-from ....exceptions import NeuroLangException
-from ....expressions import Symbol, Constant, ExpressionBlock
-from ....logic import Implication, Conjunction
 from ....datalog import Fact
+from ....exceptions import NeuroLangException
+from ....expressions import Constant, ExpressionBlock, Symbol
+from ....logic import Conjunction, Implication
 from ....utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
+from ...expression_processing import (
+    concatenate_to_expression_block,
+    is_probabilistic_fact,
+)
 from ...expressions import (
-    ProbabilisticPredicate,
     Grounding,
     ProbabilisticChoice,
-)
-from ...expression_processing import (
-    is_probabilistic_fact,
-    concatenate_to_expression_block,
+    ProbabilisticPredicate,
 )
 from ..grounding import ground_cplogic_program
 

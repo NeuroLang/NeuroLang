@@ -1,17 +1,17 @@
 import typing
 
-from ...exceptions import NeuroLangException
-from ...expression_walker import ExpressionWalker
-from ...expression_pattern_matching import add_match
-from ...expressions import Symbol, Constant, ExpressionBlock
-from ...logic import Implication
 from ...datalog import DatalogProgram, WrappedRelationalAlgebraSet
+from ...exceptions import NeuroLangException
+from ...expression_pattern_matching import add_match
+from ...expression_walker import ExpressionWalker
+from ...expressions import Constant, ExpressionBlock, Symbol
+from ...logic import Implication
 from ..expression_processing import (
-    is_probabilistic_fact,
+    build_pfact_set,
     check_probchoice_probs_sum_to_one,
     concatenate_to_expression_block,
     group_probfacts_by_pred_symb,
-    build_pfact_set,
+    is_probabilistic_fact,
 )
 
 
