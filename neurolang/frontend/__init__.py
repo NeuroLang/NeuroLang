@@ -83,8 +83,6 @@ class RegionFrontendFolThroughDatalog(
     QueryBuilderFirstOrderThroughDatalog, LoadParcellationMixin
 ):
     def __init__(self, solver=None):
-        if solver is None:
-            solver = RegionFrontendDatalogSolver()
         super().__init__(solver)
         isin_symbol = Symbol[Callable[[Any, AbstractSet[Any]], bool]]("isin")
         self.solver.symbol_table[isin_symbol] = Constant(function_isin)
