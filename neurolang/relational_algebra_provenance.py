@@ -221,7 +221,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             selection.relation
         ).value.selection_columns({col1.value: col2.value})
 
-        return self._build_provenance_set_from_set(
+        return ProvenanceAlgebraSet(
             selected_relation, selection.relation.provenance_column
         )
 
@@ -234,7 +234,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             {col.value: val.value}
         )
 
-        return self._build_provenance_set_from_set(
+        return ProvenanceAlgebraSet(
             selected_relation, selection.relation.provenance_column
         )
 
@@ -302,9 +302,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
 
             rel_res = self.walk(res)
 
-            rel_res = self._build_provenance_set_from_set(
-                rel_res, final_prov_column
-            )
+            rel_res = ProvenanceAlgebraSet(rel_res, final_prov_column)
 
         return rel_res
 
@@ -325,9 +323,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
                     tuple([Constant(ColumnStr(name)) for name in cols]),
                 )
                 rel_temp = self.walk(rel_temp)
-                rel_temp = self._build_provenance_set_from_set(
-                    rel_temp, temp_provenance
-                )
+                rel_temp = ProvenanceAlgebraSet(rel_temp, temp_provenance)
             else:
                 res_provenance = rel_res.provenance_column
                 cols.add(rel_res.provenance_column)
@@ -336,9 +332,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
                     tuple([Constant(ColumnStr(name)) for name in cols]),
                 )
                 rel_res = self.walk(rel_res)
-                rel_res = self._build_provenance_set_from_set(
-                    rel_res, res_provenance
-                )
+                rel_res = ProvenanceAlgebraSet(rel_res, res_provenance)
 
         return rel_res, rel_temp
 
@@ -351,16 +345,12 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             group_columns, {relation.provenance_column: sum}
         )
 
-        return self._build_provenance_set_from_set(
-            new_container, relation.provenance_column
-        )
+        return ProvenanceAlgebraSet(new_container, relation.provenance_column)
 
     @add_match(CrossProductNonProvenance)
     def ra_product(self, product):
         if len(product.relations) == 0:
-            return self._build_provenance_set_from_set(
-                set(), product.provenance_column
-            )
+            return ProvenanceAlgebraSet(set(), product.provenance_column)
 
         res = self.walk(product.relations[0])
         res = res.value
@@ -393,7 +383,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
         else:
             new_prov = relation.provenance_column
 
-        return self._build_provenance_set_from_set(new_set, new_prov)
+        return ProvenanceAlgebraSet(new_set, new_prov)
 
     @add_match(NaturalJoin)
     def prov_naturaljoin(self, naturaljoin):
@@ -446,7 +436,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
         )
         res = self.walk(res)
 
-        return self._build_provenance_set_from_set(res, final_prov_column)
+        return ProvenanceAlgebraSet(res, final_prov_column)
 
     @add_match(NaturalJoinNonProvenance)
     def ra_naturaljoin(self, naturaljoin):
@@ -489,7 +479,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
         left = self.walk(res1)
         right = self.walk(res2)
 
-        new_relation = self._build_provenance_set_from_set(
+        new_relation = ProvenanceAlgebraSet(
             left.value | right.value, union_op.relation_left.provenance_column
         )
 
@@ -526,9 +516,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
                 member.dst_column.value
             ] = str_arithmetic_walker.walk(self.walk(member.fun_exp))
         new_container = relation.value.extended_projection(eval_expressions)
-        return self._build_provenance_set_from_set(
-            new_container, relation.provenance_column
-        )
+        return ProvenanceAlgebraSet(new_container, relation.provenance_column)
 
     @add_match(FunctionApplication, is_arithmetic_operation)
     def prov_arithmetic_operation(self, arithmetic_op):
