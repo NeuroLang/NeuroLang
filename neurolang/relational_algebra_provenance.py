@@ -107,8 +107,8 @@ class ExtendedProjection(RelationalAlgebraOperation):
     projection_list : Tuple[ExtendedProjectionListMember]
         List of projections to apply.
 
-    Note
-    ----
+    Notes
+    -----
     The concept of extended projection is formally defined in section 5.2.5
     of [1]_.
 
@@ -192,14 +192,6 @@ class ConcatenateConstantColumn(RelationalAlgebraOperation):
 
     column_value : Constant
         Constant value repeated in the new column.
-
-    Note
-    ----
-    It is generally not possible to add a column to a relation in relational
-    algebra since a relation represents an unordered set of tuples and we
-    wouldn't know which tuple would be assigned which value from the new
-    column. Here, this is possible because the new column is defined by a
-    single constant value that will be repeatedly added to all tuples.
 
     """
 
