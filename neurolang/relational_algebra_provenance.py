@@ -210,14 +210,6 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
     def _build_provenance_set_from_set(self, rel_set, provenance_column):
         return ProvenanceAlgebraSet(rel_set, provenance_column)
 
-    def _eliminate_provenance(self, relation):
-        non_provenance_col = set(relation.value.columns).difference(
-            set([relation.provenance_column])
-        )
-        new_set = relation.value.projection(*non_provenance_col)
-
-        return new_set
-
     @add_match(
         Selection(
             ..., FunctionApplication(eq_, (Constant[Column], Constant[Column]))
