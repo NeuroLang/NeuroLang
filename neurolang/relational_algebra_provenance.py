@@ -238,7 +238,6 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
     @add_match(Product)
     def prov_product(self, product):
         rel_res = self.walk(product.relations[0])
-        prov_res = rel_res.provenance_column
         for relation in product.relations[1:]:
             rel_temp = self.walk(relation)
             rel_res, rel_temp = self._remove_common_columns(rel_res, rel_temp)
