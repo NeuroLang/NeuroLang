@@ -10,9 +10,11 @@ from .relational_algebra import (
     EquiJoin,
     NaturalJoin,
     Product,
+    Projection,
     RelationalAlgebraOperation,
     RenameColumn,
     Selection,
+    Union,
     eq_,
 )
 from .utils.relational_algebra_set import RelationalAlgebraExpression
@@ -164,18 +166,6 @@ class ExtendedProjectionListMember(Definition):
 
     def __repr__(self):
         return "{} -> {}".format(self.fun_exp, self.dst_column)
-
-
-class Union(RelationalAlgebraOperation):
-    def __init__(self, first, second):
-        self.first = first
-        self.second = second
-
-
-class Projection(RelationalAlgebraOperation):
-    def __init__(self, relation, attributes):
-        self.relation = relation
-        self.attributes = attributes
 
 
 class ConcatenateConstantColumn(RelationalAlgebraOperation):
@@ -475,42 +465,40 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
 
     @add_match(Union)
     def prov_union(self, union_op):
-        first = self.walk(union_op.first)
-        second = self.walk(union_op.second)
+        left = self.walk(union_op.relation_left)
+        right = self.walk(union_op.relation_right)
 
-        first_cols = set(first.value.columns)
-        first_cols.discard(first.provenance_column)
-        second_cols = set(second.value.columns)
-        second_cols.discard(second.provenance_column)
+        left_cols = set(left.value.columns)
+        left_cols.discard(left.provenance_column)
+        right_cols = set(right.value.columns)
+        right_cols.discard(right.provenance_column)
 
         if (
-            len(first_cols.difference(second_cols)) > 0
-            or len(second_cols.difference(first_cols)) > 0
+            len(left_cols.difference(right_cols)) > 0
+            or len(right_cols.difference(left_cols)) > 0
         ):
             raise NeuroLangException(
                 "At the union, both sets must have the same columns"
             )
 
-        proj_columns = tuple(
-            [Constant(ColumnStr(name)) for name in first_cols]
-        )
+        proj_columns = tuple([Constant(ColumnStr(name)) for name in left_cols])
 
         res1 = ConcatenateConstantColumn(
-            Projection(first, proj_columns),
+            Projection(left, proj_columns),
             Constant(ColumnStr("__new_col_union__")),
             Constant[str]("union_temp_value_1"),
         )
         res2 = ConcatenateConstantColumn(
-            Projection(second, proj_columns),
+            Projection(right, proj_columns),
             Constant(ColumnStr("__new_col_union__")),
             Constant[str]("union_temp_value_2"),
         )
 
-        first = self.walk(res1)
-        second = self.walk(res2)
+        left = self.walk(res1)
+        right = self.walk(res2)
 
         new_relation = self._build_provenance_set_from_set(
-            first.value | second.value, union_op.first.provenance_column
+            left.value | right.value, union_op.relation_left.provenance_column
         )
 
         return self.walk(Projection(new_relation, proj_columns))
