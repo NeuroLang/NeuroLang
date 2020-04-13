@@ -103,6 +103,7 @@ def test_relational_algebra_ra_projection(ras_class):
     ras = RelationalAlgebraSet(a)
 
     ras_0 = ras.projection(0)
+    len(ras_0)
     assert (0, ) in ras_0 and (1, ) in ras_0
     assert len(ras_0) == 2
 
@@ -523,10 +524,22 @@ def test_aggregate(ras_class):
     assert expected_op2 == new_set
 
 
+def test_mutable_built_from_frozen(ras_class):
+    RelationalAlgebraFrozenSet = ras_class['frozen']
+    RelationalAlgebraSet = ras_class['mutable']
+
+    rafs = RelationalAlgebraFrozenSet([0, 1, 2, 3])
+    ras = RelationalAlgebraSet(rafs)
+
+    assert rafs == ras
+    ras.discard(0)
+    assert 0 not in ras
+    assert len(rafs) - 1 == len(ras)
+
+
 def test_extended_projection(ras_class):
     NamedRelationalAlgebraFrozenSet = ras_class['named']
     RelationalAlgebraExpression = ras_class['expression']
-    operators = ras_class['operators']
 
     initial_set = NamedRelationalAlgebraFrozenSet(("x", "y"), [(7, 8), (9, 2)])
 

@@ -504,6 +504,11 @@ class RelationalAlgebraSet(
     RelationalAlgebraFrozenSet,
     relational_algebra_set.RelationalAlgebraSet
 ):
+    def __init__(self, iterable=None):
+        if isinstance(iterable, RelationalAlgebraFrozenSet):
+            iterable = iterable.copy()
+        super().__init__(iterable=iterable)
+
     def add(self, value):
         value = self._normalise_element(value)
         e_hash = hash(value)

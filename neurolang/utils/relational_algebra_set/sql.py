@@ -52,6 +52,7 @@ class RelationalAlgebraFrozenSet(
             self._len = iterable._len
             self.parents = iterable.parents + [iterable]
             self._created = iterable._created
+            self.is_view = iterable.is_view
         else:
             df = pd.DataFrame(iterable, columns=column_names)
             self._columns = tuple(df.columns)
@@ -93,10 +94,16 @@ class RelationalAlgebraFrozenSet(
 
         new_set._arity = len(new_set._columns)
         new_set._len = length
+        view_names = set(inspector.get_view_names())
+        table_names = set(inspector.get_table_names())
+        all_names = view_names | table_names
         if is_view:
-            new_set._created = (name in inspector.get_view_names())
+            new_set._created = (
+                (name in view_names) and
+                all(parent._name in all_names for parent in new_set.parents)
+            )
         else:
-            new_set._created = (name in inspector.get_table_names())
+            new_set._created = (name in table_names)
         new_set._create_queries()
         return new_set
 
@@ -148,8 +155,7 @@ class RelationalAlgebraFrozenSet(
             if self.is_view:
                 self.engine.execute(f"drop view {self._name}")
             elif len(self.parents) == 0:
-                pass
-                #  self.engine.execute(f"drop table {self._name}")
+                self.engine.execute(f"drop table {self._name}")
 
     def _normalise_element(self, element):
         if isinstance(element, dict):
@@ -237,7 +243,7 @@ class RelationalAlgebraFrozenSet(
             is_view=True,
             columns=tuple(range(len(columns))),
             parents=[self],
-            length=self._len
+            length=None
         )
 
     def selection(self, select_criteria):
@@ -818,6 +824,8 @@ class RelationalAlgebraSet(
     RelationalAlgebraFrozenSet, relational_algebra_set.RelationalAlgebraSet
 ):
     def __init__(self, iterable=None, engine=engine):
+        if isinstance(iterable, RelationalAlgebraFrozenSet):
+            iterable = iterable.deepcopy()
         super().__init__(iterable=iterable, engine=engine)
         self._generate_mutable_queries()
 
