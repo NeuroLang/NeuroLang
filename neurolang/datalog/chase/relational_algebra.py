@@ -229,7 +229,7 @@ class ChaseNamedRelationalAlgebraParameterisedMixin:
             substitutions,
             self._named_frozen_set
         ):
-            substitutions = (
+            substitutions = self._named_frozen_set(
                 sorted(substitutions.columns),
                 substitutions
             )
@@ -364,7 +364,7 @@ class ChaseNamedRelationalAlgebraParameterisedMixin:
         if restriction_instance is None:
             restriction_instance = MapInstance
 
-        if isinstance(substitutions, NamedRelationalAlgebraFrozenSet):
+        if isinstance(substitutions, type(self)._named_frozen_set):
             new_tuples = substitutions.projection(
                 *(arg.name for arg in rule.consequent.args)
             )
