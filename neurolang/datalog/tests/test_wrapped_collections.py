@@ -1,3 +1,4 @@
+from typing import Tuple
 
 from ..expressions import Constant
 from ..wrapped_collections import (RelationalAlgebraFrozenSet,
@@ -18,12 +19,18 @@ R2 = WrappedRelationalAlgebraSet([
 R3 = WrappedNamedRelationalAlgebraFrozenSet(
     columns=('x', 'y'),
     iterable=[
-        (i * 2, i * 3)
+        (i * 2, str(i * 3))
         for i in range(10)
     ]
 )
 
 C_ = Constant
+
+
+def test_row_types():
+    assert R2.row_type == Tuple[int, int]
+    assert R3.columns == ('x', 'y')
+    assert R3.row_type == Tuple[int, str]
 
 
 def test_init_from_wrapped():

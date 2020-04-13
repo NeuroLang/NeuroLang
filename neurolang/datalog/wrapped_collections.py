@@ -4,11 +4,11 @@ from typing import Tuple
 
 from ..expression_walker import ReplaceExpressionsByValues
 from ..expressions import Constant
-from ..type_system import Unknown, get_args, infer_type, unify_types
+from ..type_system import (Unknown, get_args, infer_type, is_leq_informative,
+                           unify_types)
 from ..utils.relational_algebra_set.sql import (
     NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet,
     RelationalAlgebraSet)
-
 
 REBV = ReplaceExpressionsByValues(dict())
 
@@ -61,6 +61,8 @@ class WrappedRelationalAlgebraSetBaseMixin:
         res = operator(other)
         if isinstance(res, WrappedRelationalAlgebraSetBaseMixin):
             res._row_type = self._get_new_row_type(other, other_is_wras)
+        elif isinstance(res, RelationalAlgebraFrozenSet):
+            res = type(self)(iterable=res)
         return res
 
     def _get_new_row_type(self, other, other_is_wras):
@@ -176,6 +178,16 @@ class WrappedRelationalAlgebraSetMixin(
         return super().discard(REBV.walk(value))
 
 
+def named_tuple_as_dict(*args, **kwargs):
+    nt = namedtuple(*args, **kwargs)
+    nt.get = lambda self, key, default=None: self._asdict().get(key, default)
+    nt.keys = lambda self: self._asdict().keys()
+    nt.items = lambda self: self._asdict().items()
+    nt.values = lambda self: self._asdict().values()
+    nt.__getitem__ = lambda self, key: self._asdict()[key]
+    return nt
+
+
 class WrappedNamedRelationalAlgebraFrozenSetMixin(
     WrappedRelationalAlgebraSetBaseMixin
 ):
@@ -197,28 +209,34 @@ class WrappedNamedRelationalAlgebraFrozenSetMixin(
         if self._row_type is None:
             if (self.arity > 0 and len(self) > 0):
                 element = next(super().__iter__())
-                self._row_type = {
-                    c: Constant(getattr(element, c)).type
+                self._row_type = Tuple[tuple(
+                    Constant(getattr(element, c)).type
                     for c in self.columns
-                }
+                )]
             else:
-                self._row_type = dict()
+                self._row_type = Tuple
 
         return self._row_type
 
     def __iter__(self):
         if self.arity > 0:
-            row_types = self.row_type
             if self.named_tuple_type is None:
-                self.named_tuple_type = namedtuple('tuple', self.columns)
+                self.named_tuple_type = named_tuple_as_dict(
+                    'tuple', self.columns
+                )
 
+            row_types = {
+                c: t
+                for c, t in zip(self.columns, get_args(self.row_type))
+            }
             for row in super().__iter__():
-                yield self.named_tuple_type(**{
+                nt = self.named_tuple_type(**{
                     f: Constant[row_types[f]](
                         v, verify_type=False
                     )
                     for f, v in zip(row._fields, row)
                 })
+                yield nt
         else:
             for _ in range(len(self)):
                 yield dict()
