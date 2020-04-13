@@ -90,3 +90,10 @@ def test_union():
     r2 = WrappedRelationalAlgebraSet([(5, 0), (7, 8)])
     res = r1 | r2
     assert res == WrappedRelationalAlgebraSet([(1, 2), (7, 8), (5, 0)])
+
+
+def test_update_difference():
+    r1 = WrappedRelationalAlgebraSet([(1, 2), (7, 8)])
+    r2 = WrappedRelationalAlgebraSet([(5, 0), (7, 8)])
+    r1 -= r2
+    assert r1 == WrappedRelationalAlgebraSet([(1, 2)])
