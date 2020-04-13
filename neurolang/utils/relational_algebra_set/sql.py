@@ -878,9 +878,26 @@ class RelationalAlgebraSet(
             return super().__ior__(other)
 
     def __isub__(self, other):
-        if False and isinstance(other, RelationalAlgebraSet):
-            diff_ix = ~self._container.index.isin(other._container.index)
-            self._container = self._container.loc[diff_ix]
+        if isinstance(other, RelationalAlgebraSet):
+            query = (
+                self._table
+                .delete()
+                .where(
+                    sqlalchemy.tuple_(*self._table.columns)
+                    .in_(
+                        sqlalchemy.select(
+                            (
+                                other._table.c[c.name]
+                                for c in self._table.columns
+                            ),
+                            from_obj=other._table
+                        )
+                    )
+                )
+            )
+            conn = self.engine.connect()
+            conn.execute(query)
+            self._len = None
             return self
         else:
             return super().__isub__(other)

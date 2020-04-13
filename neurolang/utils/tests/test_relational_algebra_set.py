@@ -62,6 +62,12 @@ def test_relational_algebra_set_semantics(ras_class):
     assert 10 in ras
     assert all(a_ in ras for a_ in a if a_ != 5)
 
+    ras = RelationalAlgebraSet(a)
+    ras_ = RelationalAlgebraSet([5, 4])
+    ras -= ras_
+    assert len(ras) == (len(set(a)) - 2)
+    assert (5 not in ras) and (4 not in ras)
+
 
 def test_object_column(ras_class):
     RelationalAlgebraSet = ras_class['mutable']
