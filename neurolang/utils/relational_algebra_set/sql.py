@@ -119,7 +119,7 @@ class RelationalAlgebraFrozenSet(
         self._len = other._len
         self.is_view = True
         if other.is_view:
-            self.parents = other.parents
+            self.parents = other.parents + [other]
         else:
             self.parents = [other]
         self._create_queries()
@@ -389,6 +389,9 @@ class RelationalAlgebraFrozenSet(
         if not isinstance(other, RelationalAlgebraFrozenSet):
             return super().__sub__(other)
 
+        if other.is_null():
+            return self
+
         if not self._equal_sets_structure(other):
             raise ValueError("Sets do not have the same columns")
 
@@ -629,7 +632,8 @@ class NamedRelationalAlgebraFrozenSet(
             name=new_name,
             is_view=True,
             columns=tuple(range(self.arity)),
-            parents=[self]
+            parents=[self],
+            length=self._len
         )
 
     def projection(self, *columns):

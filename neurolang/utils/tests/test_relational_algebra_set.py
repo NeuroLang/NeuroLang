@@ -366,6 +366,11 @@ def test_named_relational_algebra_difference(ras_class):
     res = ras_b_inv - ras_a
     assert len(res) == 0
 
+    res = ras_a - NamedRelationalAlgebraFrozenSet(
+        columns=ras_a.columns, iterable=[]
+    )
+    assert ras_a == res
+
 
 def test_named_groupby(ras_class):
     NamedRelationalAlgebraFrozenSet = ras_class['named']
@@ -420,6 +425,11 @@ def test_named_to_unnamed(ras_class):
     ras_a = NamedRelationalAlgebraFrozenSet(cols, a)
     ras_b = RelationalAlgebraFrozenSet(a)
     assert ras_a.to_unnamed() == ras_b
+
+    ras_zero = NamedRelationalAlgebraFrozenSet(columns=cols, iterable=[])
+    ras_zero_un = ras_zero.to_unnamed()
+    assert ras_zero_un.arity == 2
+    assert len(ras_zero_un) == 0
 
 
 def test_named_ra_set_from_other(ras_class):
