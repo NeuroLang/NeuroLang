@@ -264,13 +264,13 @@ class OntologiesParser():
 
         return ''
 
-    def _process_hasValue():
+    def _process_hasValue(self):
         pass
 
-    def _process_minCardinality():
+    def _process_minCardinality(self):
         pass
 
-    def _process_allValuesFrom():
+    def _process_allValuesFrom(self):
         pass
 
     def get_triples(self):
