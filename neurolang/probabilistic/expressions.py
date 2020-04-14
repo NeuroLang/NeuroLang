@@ -32,6 +32,11 @@ class Grounding(Definition):
         self.expression = expression
         self.relation = relation
 
+    def __repr__(self):
+        return "Grounding{{{}}}\n{}".format(
+            repr(self.expression, repr(self.relation))
+        )
+
 
 class GraphicalModel(Definition):
     def __init__(self, edges, cpds, groundings):
