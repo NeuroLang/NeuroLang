@@ -424,16 +424,19 @@ class RelationalAlgebraFrozenSet(
         )
 
     def deepcopy(self):
-        new_name = self._new_name()
-        query = sqlalchemy.text(
-            f"CREATE TABLE {new_name} AS SELECT * FROM {self._name}"
-        )
-        conn = self.engine.connect()
-        conn.execute(query)
-        return type(self).create_from_table_or_view(
-            name=new_name, engine=self.engine, is_view=False,
-            columns=self.columns,
-        )
+        if len(self) > 0:
+            new_name = self._new_name()
+            query = sqlalchemy.text(
+                f"CREATE TABLE {new_name} AS SELECT * FROM {self._name}"
+            )
+            conn = self.engine.connect()
+            conn.execute(query)
+            return type(self).create_from_table_or_view(
+                name=new_name, engine=self.engine, is_view=False,
+                columns=self.columns,
+            )
+        else:
+            return type(self)()
 
     def _create_view(self, src_table_name, dst_table_name):
         select = sqlalchemy.select(
