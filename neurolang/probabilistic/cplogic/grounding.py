@@ -155,3 +155,59 @@ def ground_cplogic_program(cpl_code, **sets):
     chase = Chase(dl_program)
     dl_instance = chase.build_chase_solution()
     return build_grounding(cpl_program, dl_instance)
+
+
+def _get_predicate_from_grounded_expression(expression):
+    if isinstance(expression, ProbabilisticChoice):
+        return expression.predicate
+    elif is_probabilistic_fact(expression):
+        return expression.consequent.body
+    elif isinstance(expression, FunctionApplication):
+        return expression
+    else:
+        return expression.consequent
+
+
+def _get_grounding_pred_symb(grounding):
+    if isinstance(grounding.expression, ProbabilisticChoice):
+        return grounding.expression.predicate.functor
+    elif isinstance(grounding.expression.consequent, ProbabilisticPredicate):
+        return grounding.expression.consequent.body.functor
+    return grounding.expression.consequent.functor
+
+
+def _get_grounding_dependencies(grounding):
+    if isinstance(grounding.expression, ProbabilisticChoice):
+        return set()
+    predicates = extract_logic_predicates(grounding.expression.antecedent)
+    return set(pred.functor for pred in predicates)
+
+
+def _topological_sort_groundings_util(
+    pred_symb, dependencies, visited, result
+):
+    for dep_symb in dependencies[pred_symb]:
+        if dep_symb not in visited:
+            _topological_sort_groundings_util(
+                dep_symb, dependencies, visited, result
+            )
+    if pred_symb not in visited:
+        result.append(pred_symb)
+    visited.add(pred_symb)
+
+
+def _topological_sort_groundings(groundings):
+    dependencies = defaultdict(dict)
+    pred_symb_to_grounding = dict()
+    for grounding in groundings:
+        pred_symb = _get_grounding_pred_symb(grounding)
+        pred_symb_to_grounding[pred_symb] = grounding
+        dependencies[pred_symb] = _get_grounding_dependencies(grounding)
+    result = list()
+    visited = set()
+    for grounding in groundings:
+        pred_symb = _get_grounding_pred_symb(grounding)
+        _topological_sort_groundings_util(
+            pred_symb, dependencies, visited, result
+        )
+    return [pred_symb_to_grounding.get(pred_symb) for pred_symb in result]
