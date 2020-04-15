@@ -1,12 +1,8 @@
 import itertools
-import operator
-from collections import defaultdict
 from typing import AbstractSet, Mapping
 
-import numpy as np
-import pandas as pd
 
-from ...datalog.expressions import Conjunction, Implication
+from ...datalog.expressions import Implication
 from ...exceptions import NeuroLangException
 from ...expression_pattern_matching import add_match
 from ...expression_walker import PatternWalker
@@ -48,13 +44,6 @@ from .grounding import (
     ground_cplogic_program,
     topological_sort_groundings,
 )
-
-
-def succ_query(program_code, query_pred):
-    grounded = ground_cplogic_program(program_code)
-    gm = CPLogicToGraphicalModelTranslator().walk(grounded)
-    solver = QueryGraphicalModelSolver(gm)
-    return solver.walk(SuccQuery(query_pred))
 
 
 def bernoulli_vect_table_distrib(p, grounding):
@@ -279,6 +268,13 @@ class CPLogicToGraphicalModelTranslator(PatternWalker):
             raise NeuroLangException(
                 f"Already processed predicate symbol {rv_symb}"
             )
+
+
+def succ_query(program_code, query_pred):
+    grounded = ground_cplogic_program(program_code)
+    gm = CPLogicToGraphicalModelTranslator().walk(grounded)
+    solver = QueryGraphicalModelSolver(gm)
+    return solver.walk(SuccQuery(query_pred))
 
 
 class QueryGraphicalModelSolver(PatternWalker):
