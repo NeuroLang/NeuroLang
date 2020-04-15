@@ -270,7 +270,7 @@ class OntologiesParser():
                 process_restriction_method = getattr(
                     self, f'_process_{res_type}'
                 )
-                process_restriction_method()
+                process_restriction_method(cut_graph)
             except AttributeError:
                 raise NeuroLangNotImplementedError(
                     f'Ontology parser doesn\'t handle restrictions of type {res_type}'
@@ -285,14 +285,90 @@ class OntologiesParser():
 
         return ''
 
-    def _process_hasValue(self):
+    def _process_hasValue(self, cut_graph):
         pass
 
-    def _process_minCardinality(self):
+    def _process_minCardinality(self, cut_graph):
         pass
 
-    def _process_allValuesFrom(self):
-        pass
+    def _process_allValuesFrom(self, cut_graph):
+        '''
+        AllValuesFrom defines a class of individuals x 
+        for which holds that if the pair (x,y) is an instance of 
+        P (the property concerned), then y should be an instance 
+        of the class description.
+
+        <owl:Restriction>
+            <owl:onProperty rdf:resource="#hasParent" />
+            <owl:allValuesFrom rdf:resource="#Human"  />
+        </owl:Restriction>
+        
+        This example describes an anonymous OWL class of all individuals 
+        for which the hasParent property only has values of class Human'''
+
+        restriction_node = list(cut_graph)[0][0]
+        restricted_node = list(
+            self.graph.triples((None, None, restriction_node))
+        )[0][0]
+        for triple in cut_graph:
+            if OWL.onProperty == triple[1]:
+                parsed_property = self._parse_uri(str(triple[2]))
+                continue
+            if OWL.allValuesFrom == triple[1]:
+                values_node = triple[2]
+                continue
+
+        allValuesFrom = self._parse_list(values_node)
+
+        constraints = ExpressionBlock(())
+        # TODO clean this
+        rdf_schema_subClassOf = Symbol('rdf_schema_subClassOf')
+        property_symbol = Symbol(parsed_property)
+        owl_Class = Symbol('owl_Class')
+        x = Symbol('x')
+        y = Symbol('y')
+        #TODO clean this
+
+        for value in allValuesFrom:
+            constraints = ExpressionBlock(
+                constraints.expressions + (
+                    RightImplication(
+                        Conjunction((
+                            rdf_schema_subClassOf(x, restricted_node),
+                            property_symbol(x, y)
+                        )), owl_Class(y, value)
+                    )
+                )
+            )
+
+        self.eb = ExpressionBlock(self.eb.expressions + (constraints, ))
+
+    def _parse_list(self, initial_node):
+        for node_triples in self.graph.triples((initial_node, None, None)):
+            if OWL.unionOf == node_triples[1]:
+                list_node = node_triples[2]
+
+        values = []
+        while list_node != RDF.nil:
+            list_iter = self.graph.triples((list_node, None, None))
+            values.append(self._get_list_first_value(list_iter))
+            list_node = self._get_list_rest_value(list_iter)
+
+        return values
+
+    def _get_list_first_value(self, list_iter):
+        for triple in list_iter:
+            if RDF.first == triple[1]:
+                return triple[2]
+
+    def _get_list_rest_value(self, list_iter):
+        for triple in list_iter:
+            if RDF.rest == triple[1]:
+                return triple[2]
+
+    def _parse_uri(self, uri):
+        uri = uri.split('/')[-1].split('#')
+        return uri[0] + '_' + uri[1]
 
     def get_triples(self):
         return self.graph.triples((None, None, None))
