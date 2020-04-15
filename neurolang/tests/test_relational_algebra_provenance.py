@@ -34,43 +34,6 @@ R1 = NamedRelationalAlgebraFrozenSet(
 provenance_set_r1 = ProvenanceAlgebraSet(R1, C_(ColumnStr("__provenance__")))
 
 
-def equal_prov_sets(first, second):
-    # check that the non-provenance columns match
-    if first.non_provenance_columns != second.non_provenance_columns:
-        return False
-    first_relation = Constant[typing.AbstractSet](first.value)
-    second_relation = Constant[typing.AbstractSet](second.value)
-    solver = RelationalAlgebraSolver()
-    # check that the tuple values (without the provenance column) match
-    if not (
-        solver.walk(Projection(first_relation, first.non_provenance_columns))
-        == solver.walk(
-            Projection(second_relation, second.non_provenance_columns)
-        )
-    ):
-        return False
-    # temporarily rename provenance columns to apply natural join
-    first_tmp_prov_col = Constant(ColumnStr(Symbol.fresh().name))
-    second_tmp_prov_col = Constant(ColumnStr(Symbol.fresh().name))
-    first_rename = RenameColumn(
-        first_relation, first.provenance_column, first_tmp_prov_col
-    )
-    second_rename = RenameColumn(
-        second_relation, second.provenance_column, second_tmp_prov_col
-    )
-    joined = solver.walk(NaturalJoin(first_rename, second_rename))
-    projected = solver.walk(
-        Projection(joined, (first_tmp_prov_col, second_tmp_prov_col))
-    )
-    # check that the provenance columns are numerically very close
-    return np.all(
-        np.isclose(
-            projected.value._container[first_tmp_prov_col.value].values,
-            projected.value._container[second_tmp_prov_col.value].values,
-        )
-    )
-
-
 def test_selection():
     s = Selection(provenance_set_r1, eq_(C_(ColumnStr("col1")), C_(4)))
     sol = RelationalAlgebraProvenanceCountingSolver().walk(s).value
@@ -430,10 +393,8 @@ def test_provenance_projection():
     projection = Projection(relation, (Constant(ColumnStr("x")),))
     solver = RelationalAlgebraProvenanceCountingSolver()
     result = solver.walk(projection)
-    expected = ProvenanceAlgebraSet(
-        NamedRelationalAlgebraFrozenSet(
-            iterable=[(1.0, "a"), (0.8, "b"),], columns=["myprov", "x"],
-        ),
-        Constant(ColumnStr("myprov")),
-    )
-    assert equal_prov_sets(result, expected)
+    for exp_prob, exp_x in [(1.0, "a"), (0.8, "b")]:
+        mask = result.value._container["x"] == exp_x
+        values = result.value._container.loc[mask]
+        assert len(values) == 1
+        assert np.isclose(exp_prob, values.iloc[0]["myprov"])
