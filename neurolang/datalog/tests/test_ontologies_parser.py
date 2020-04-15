@@ -92,8 +92,7 @@ def test_has_value():
     </rdf:RDF>
     '''
 
-    expected = 
-    '''
+    expected = '''
     first:p rdf:type owl:ObjectProperty .
     first:p rdfs:domain first:d .
     first:q rdf:type owl:ObjectProperty .
