@@ -163,7 +163,7 @@ class QueryBuilderBase:
 
     @staticmethod
     def _create_symbol_and_get_constant(element, element_type):
-        symbol = exp.Symbol[element_type].fresh()
+        symbol = exp.Symbol.fresh().cast(element_type)
         if isinstance(element, exp.Constant):
             constant = element.cast(element_type)
         elif is_leq_informative(element_type, Tuple):
