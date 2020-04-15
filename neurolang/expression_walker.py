@@ -1,7 +1,7 @@
 import logging
 import typing
 from collections import deque
-from itertools import product
+from itertools import product, tee
 
 from .expression_pattern_matching import (PatternMatcher, add_match,
                                           add_entry_point_match)
@@ -179,7 +179,11 @@ class ExpressionWalker(PatternWalker):
             if isinstance(arg, Expression):
                 new_arg = self.walk(arg)
                 changed |= new_arg is not arg
-            elif isinstance(arg, (tuple, list)):
+            elif (
+                isinstance(arg, tuple) and
+                len(arg) > 0 and
+                isinstance(arg[0], Expression)
+            ):
                 new_arg, change = self.process_iterable_argument(arg)
                 changed |= change
             elif arg is Ellipsis:
@@ -280,15 +284,48 @@ class ReplaceExpressionsByValues(ExpressionWalker):
 
     @add_match(Constant[typing.AbstractSet])
     def constant_abstract_set(self, constant_abstract_set):
-        return frozenset(
-            self.walk(expression) for expression in constant_abstract_set.value
-        )
+        value = constant_abstract_set.value
+        if (
+            len(value) > 0 and
+            isinstance(next(iter(value)), (Expression, tuple))
+        ):
+            value = frozenset(
+                self.walk(expression) for expression in value
+            )
+        return value
 
     @add_match(Constant[typing.Tuple])
     def constant_tuple(self, constant_tuple):
-        return tuple(
-            self.walk(expression) for expression in constant_tuple.value
-        )
+        value = constant_tuple.value
+        if (
+            len(value) > 0 and
+            isinstance(value[0], (Expression, tuple))
+        ):
+            value = tuple(
+                self.walk(expression) for expression in constant_tuple.value
+            )
+        return value
+
+    @add_match(Constant[typing.Iterable])
+    def constant_iterable(self, constant_tuple):
+        value = constant_tuple.value
+        it1, it2 = tee(value)
+
+        iterable_of_expressions = False
+        for el1 in it1:
+            if isinstance(el1, Expression):
+                iterable_of_expressions = True
+            break
+
+        if iterable_of_expressions:
+            raise NeuroLangException(
+                'Iterable of Expressions needs to be a Tuple or Set'
+            )
+
+        if isinstance(value, typing.Generator):
+            return it2
+        else:
+            return value
 
     @add_match(Constant)
     def constant(self, constant):

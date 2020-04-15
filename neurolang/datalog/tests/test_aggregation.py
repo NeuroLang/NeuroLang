@@ -5,12 +5,12 @@ import pytest
 from ...expression_walker import ExpressionBasicEvaluator
 from ...expressions import (Constant, ExpressionBlock, NeuroLangException,
                             Symbol)
+from ...type_system import Unknown
 from .. import DatalogProgram, Fact, Implication
 from ..aggregation import (AggregationApplication, Chase,
-                           DatalogWithAggregationMixin)
-from ...type_system import Unknown
-from ..expressions import TranslateToLogic, Union
-
+                           DatalogWithAggregationMixin,
+                           TranslateToLogicWithAggregation)
+from ..expressions import Union
 
 S_ = Symbol
 C_ = Constant
@@ -22,7 +22,7 @@ F_ = Fact
 
 
 class Datalog(
-    TranslateToLogic,
+    TranslateToLogicWithAggregation,
     DatalogWithAggregationMixin, DatalogProgram,
     ExpressionBasicEvaluator
 ):
@@ -31,6 +31,9 @@ class Datalog(
 
     def function_sum2(self, x: AbstractSet, y: AbstractSet) -> Unknown:
         return sum(v + w for v, w in zip(x, y))
+
+    def function_set_create(self, x: AbstractSet) -> Unknown:
+        return frozenset(x)
 
 
 def test_aggregation_parsing():
@@ -151,6 +154,35 @@ def test_aggregation_chase_single_grouping():
     res = dl.extensional_database()['R']
 
     assert solution[Q] == res
+
+
+def test_aggregation_set_creation():
+    dl = Datalog()
+    P = S_('P')
+    Q = S_('Q')
+    x = S_('x')
+    y = S_('y')
+
+    edb = tuple(
+        F_(P(C_(0), C_(i)))
+        for i in range(3)
+    )
+
+    code = Eb_(edb + (
+        Imp_(
+            Q(x, Fa_(S_('set_create'), (y,))),
+            P(x, y)
+        ),
+    ))
+
+    dl.walk(code)
+    chase = Chase(dl)
+    solution = chase.build_chase_solution()
+
+    assert Q in solution
+    assert set(solution[Q].value.unwrapped_iter()) == {
+        (0, frozenset(i for i in range(3)))
+    }
 
 
 def test_aggregation_emptyset():

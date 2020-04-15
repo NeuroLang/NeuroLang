@@ -184,8 +184,11 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
             )
 
     @staticmethod
-    def new_set(iterable=None):
-        return WrappedRelationalAlgebraSet(iterable=iterable)
+    def new_set(iterable=None, row_type=None, verify_row_type=False):
+        return WrappedRelationalAlgebraSet(
+            iterable=iterable, row_type=row_type,
+            verify_row_type=verify_row_type
+        )
 
     def intensional_database(self):
         return {
