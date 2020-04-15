@@ -115,7 +115,7 @@ class OntologiesParser():
         z = Symbol('z')
 
         symbols = ()
-        for _, trans in self.predicates_translation:
+        for _, trans in self.predicates_translation.items():
             symbol_name = trans
             symbol = Symbol(symbol_name)
             const = Constant(symbol_name)
@@ -233,7 +233,7 @@ class OntologiesParser():
             restriction_ids.append(s)
 
         for rest in restriction_ids:
-            cut_graph = self.graph.triples((rest, None, None))
+            cut_graph = list(self.graph.triples((rest, None, None)))
             res_type = self._identify_restriction_type(cut_graph)
 
             try:
@@ -243,7 +243,8 @@ class OntologiesParser():
                 process_restriction_method(cut_graph)
             except AttributeError:
                 raise NeuroLangNotImplementedError(
-                    f'Ontology parser doesn\'t handle restrictions of type {res_type}'
+                    f'''Ontology parser doesn\'t handle 
+                    restrictions of type {res_type}'''
                 )
 
     def _identify_restriction_type(self, list_of_triples):
@@ -345,10 +346,11 @@ class OntologiesParser():
                 constraints.expressions + (
                     RightImplication(
                         Conjunction((
-                            rdf_schema_subClassOf(x, restricted_node),
-                            property_symbol(x, y)
-                        )), owl_Class(y, value)
-                    )
+                            rdf_schema_subClassOf(
+                                x, Constant(str(restricted_node))
+                            ), property_symbol(x, y)
+                        )), owl_Class(y, Constant(str(value)))
+                    ),
                 )
             )
 
@@ -357,7 +359,7 @@ class OntologiesParser():
         )
 
     def _parse_restriction_nodes(self, cut_graph):
-        restriction_node = list(cut_graph)[0][0]
+        restriction_node = cut_graph[0][0]
         restricted_node = list(
             self.graph.triples((None, None, restriction_node))
         )[0][0]
@@ -370,11 +372,14 @@ class OntologiesParser():
         return parsed_property, restricted_node, value
 
     def _parse_list(self, initial_node):
+        list_node = RDF.nil
+        values = []
         for node_triples in self.graph.triples((initial_node, None, None)):
             if OWL.unionOf == node_triples[1]:
                 list_node = node_triples[2]
+            else:
+                values.append(node_triples[0])
 
-        values = []
         while list_node != RDF.nil:
             list_iter = self.graph.triples((list_node, None, None))
             values.append(self._get_list_first_value(list_iter))
