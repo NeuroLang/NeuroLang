@@ -176,8 +176,6 @@ def test_tuple_symbol_multiple_types_query():
     r1 = ExplicitVBR(np.array([[0, 0, 5], [1, 1, 10]]), np.eye(4))
     r2 = ExplicitVBR(np.array([[0, 0, -10], [1, 1, -5]]), np.eye(4))
 
-    from neurolang.utils.printing import print_symbol_table
-
     neurolang.add_region(r1, name="r1")
     neurolang.add_region(r2, name="r2")
 
