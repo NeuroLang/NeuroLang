@@ -2,14 +2,26 @@ import rdflib
 import pandas as pd
 import nibabel as nib
 from nilearn import datasets
-from .ontologies_rewriter import RightImplication
 from ..expressions import Symbol, ExpressionBlock, Constant
+from ..logic import Conjunction, LogicOperator
+from ..exceptions import NeuroLangNotImplementedError
 from rdflib import OWL, RDF, BNode
 
-C_ = Constant
-S_ = Symbol
-EB_ = ExpressionBlock
-RI_ = RightImplication
+
+class RightImplication(LogicOperator):
+    '''This class defines implications to the right. They are used to define
+    constraints derived from ontologies. The functionality is the same as
+    that of an implication, but with body and head inverted in position'''
+
+    def __init__(self, antecedent, consequent):
+        self.antecedent = antecedent
+        self.consequent = consequent
+        self._symbols = consequent._symbols | antecedent._symbols
+
+    def __repr__(self):
+        return 'RightImplication{{{} \u2192 {}}}'.format(
+            repr(self.consequent), repr(self.antecedent)
+        )
 
 
 class OntologiesParser():
@@ -20,6 +32,10 @@ class OntologiesParser():
             self._load_ontology(paths, load_format)
         else:
             self._load_ontology([paths], load_format)
+
+        self._triple = Symbol.fresh()
+        self._pointer = Symbol.fresh()
+        self._dom = Symbol.fresh()
 
     def _load_ontology(self, paths, load_format):
         self._create_graph(paths, load_format)
@@ -61,7 +77,7 @@ class OntologiesParser():
         return prop
 
     def parse_ontology(self, neurolangDL):
-        self.eb = EB_(())
+        self.eb = ExpressionBlock(())
         self.neurolangDL = neurolangDL
 
         self._load_domain()
@@ -72,41 +88,39 @@ class OntologiesParser():
         return self.neurolangDL
 
     def _load_domain(self):
-        triple = S_('triple')
-        triples = tuple([
-            triple(C_(e1), C_(e2), C_(e3)) for e1, e2, e3 in self.get_triples()
-        ])
-
         pointers = list(
             filter(lambda x: isinstance(x, BNode), set(self.graph.subjects()))
         )
-        pointer = S_('pointer')
-        pointer_list = tuple([pointer(C_(e)) for e in pointers])
 
-        dom = S_('dom')
-        x = S_('x')
-        y = S_('y')
-        z = S_('z')
+        x = Symbol('x')
+        y = Symbol('y')
+        z = Symbol('z')
 
-        dom1 = RightImplication(triple(x, y, z), dom(x))
-        dom2 = RightImplication(triple(x, y, z), dom(y))
-        dom3 = RightImplication(triple(x, y, z), dom(z))
+        dom1 = RightImplication(self._triple(x, y, z), self._dom(x))
+        dom2 = RightImplication(self._triple(x, y, z), self._dom(y))
+        dom3 = RightImplication(self._triple(x, y, z), self._dom(z))
 
-        self.eb = EB_(
-            self.eb.expressions + triples + pointer_list + (dom1, dom2, dom3)
+        self.neurolangDL.add_extensional_predicate_from_tuples(
+            self._triple, self.get_triples()
+        )
+        self.neurolangDL.add_extensional_predicate_from_tuples(
+            self._pointer, pointers
         )
 
+        self.eb = ExpressionBlock(self.eb.expressions + (dom1, dom2, dom3))
+
     def _load_properties(self):
-        x = S_('x')
-        z = S_('z')
-        triple = S_('triple')
+        x = Symbol('x')
+        z = Symbol('z')
 
         symbols = ()
         for _, trans in self.predicates_translation:
             symbol_name = trans
-            symbol = S_(symbol_name)
-            const = C_(symbol_name)
-            symbols += (RightImplication(triple(x, const, z), symbol(x, z)), )
+            symbol = Symbol(symbol_name)
+            const = Constant(symbol_name)
+            symbols += (
+                RightImplication(self._triple(x, const, z), symbol(x, z)),
+            )
 
         self.eb = ExpressionBlock(self.eb.expressions + symbols)
 
@@ -115,32 +129,35 @@ class OntologiesParser():
         self._parse_disjoint()
 
     def _parse_subproperties(self):
-        rdf_schema_subPropertyOf = S_('rdf_schema_subPropertyOf')
-        rdf_schema_subPropertyOf2 = S_('rdf_schema_subPropertyOf2')
-        w = S_('w')
-        x = S_('x')
-        y = S_('y')
-        z = S_('z')
+        rdf_schema_subPropertyOf = Symbol('rdf_schema_subPropertyOf')
+        rdf_schema_subPropertyOf2 = Symbol('rdf_schema_subPropertyOf2')
+        w = Symbol('w')
+        x = Symbol('x')
+        y = Symbol('y')
+        z = Symbol('z')
 
-        subProperty = RI_(
+        subProperty = RightImplication(
             rdf_schema_subPropertyOf2(x, y), rdf_schema_subPropertyOf(x, y)
         )
-        subProperty2 = RI_(
-            rdf_schema_subPropertyOf2(x, y) & rdf_schema_subPropertyOf(y, z),
-            rdf_schema_subPropertyOf(x, z)
+        subProperty2 = RightImplication(
+            Conjunction((
+                rdf_schema_subPropertyOf2(x,
+                                          y), rdf_schema_subPropertyOf(y, z)
+            )), rdf_schema_subPropertyOf(x, z)
         )
 
-        owl_inverseOf = S_('owl_inverseOf')
-        inverseOf = RI_(
-            rdf_schema_subPropertyOf(x, y) & owl_inverseOf(w, x) &
-            owl_inverseOf(z, y), rdf_schema_subPropertyOf(w, z)
+        owl_inverseOf = Symbol('owl_inverseOf')
+        inverseOf = RightImplication(
+            Conjunction((
+                rdf_schema_subPropertyOf(x, y), owl_inverseOf(w, x),
+                owl_inverseOf(z, y)
+            )), rdf_schema_subPropertyOf(w, z)
         )
 
-        rdf_syntax_ns_type = S_('rdf_syntax_ns_type')
-        objectProperty = RI_(
-            rdf_syntax_ns_type(
-                x, C_('http://www.w3.org/2002/07/owl#ObjectProperty')
-            ), rdf_schema_subPropertyOf(x, x)
+        rdf_syntax_ns_type = Symbol('rdf_syntax_ns_type')
+        objectProperty = RightImplication(
+            rdf_syntax_ns_type(x, Constant(str(OWL.ObjectProperty))),
+            rdf_schema_subPropertyOf(x, x)
         )
 
         self.eb = ExpressionBlock(
@@ -153,30 +170,33 @@ class OntologiesParser():
         )
 
     def _parse_subclasses(self):
-        rdf_schema_subClassOf = S_('rdf_schema_subClassOf')
-        rdf_schema_subClassOf2 = S_('rdf_schema_subClassOf2')
-        w = S_('w')
-        x = S_('x')
-        y = S_('y')
-        z = S_('z')
+        rdf_schema_subClassOf = Symbol('rdf_schema_subClassOf')
+        rdf_schema_subClassOf2 = Symbol('rdf_schema_subClassOf2')
+        w = Symbol('w')
+        x = Symbol('x')
+        y = Symbol('y')
+        z = Symbol('z')
 
-        subClass = RI_(
+        subClass = RightImplication(
             rdf_schema_subClassOf2(x, y), rdf_schema_subClassOf(x, y)
         )
-        subClass2 = RI_(
-            rdf_schema_subClassOf2(x, y) & rdf_schema_subClassOf(y, z),
-            rdf_schema_subClassOf(x, z)
+        subClass2 = RightImplication(
+            Conjunction(
+                (rdf_schema_subClassOf2(x, y), rdf_schema_subClassOf(y, z))
+            ), rdf_schema_subClassOf(x, z)
         )
 
-        rdf_syntax_ns_rest = S_('rdf_syntax_ns_rest')
-        ns_rest = RI_(
-            rdf_schema_subClassOf(x, y) & rdf_syntax_ns_rest(w, x) &
-            rdf_syntax_ns_rest(z, y), rdf_schema_subClassOf(w, z)
+        rdf_syntax_ns_rest = Symbol('rdf_syntax_ns_rest')
+        ns_rest = RightImplication(
+            Conjunction((
+                rdf_schema_subClassOf(x, y), rdf_syntax_ns_rest(w, x),
+                rdf_syntax_ns_rest(z, y)
+            )), rdf_schema_subClassOf(w, z)
         )
 
-        rdf_syntax_ns_type = S_('rdf_syntax_ns_type')
-        class_sim = RI_(
-            rdf_syntax_ns_type(x, C_('http://www.w3.org/2002/07/owl#Class')),
+        rdf_syntax_ns_type = Symbol('rdf_syntax_ns_type')
+        class_sim = RightImplication(
+            rdf_syntax_ns_type(x, Constant(str(OWL.Class))),
             rdf_schema_subClassOf(x, x)
         )
 
@@ -195,11 +215,13 @@ class OntologiesParser():
         y = Symbol('y')
         z = Symbol('z')
 
-        owl_disjointWith = S_('owl_disjointWith')
-        rdf_schema_subClassOf = S_('rdf_schema_subClassOf')
-        disjoint = RI_(
-            owl_disjointWith(x, y) & rdf_schema_subClassOf(w, x) &
-            rdf_schema_subClassOf(z, y), owl_disjointWith(w, z)
+        owl_disjointWith = Symbol('owl_disjointWith')
+        rdf_schema_subClassOf = Symbol('rdf_schema_subClassOf')
+        disjoint = RightImplication(
+            Conjunction((
+                owl_disjointWith(x, y), rdf_schema_subClassOf(w, x),
+                rdf_schema_subClassOf(z, y)
+            )), owl_disjointWith(w, z)
         )
 
         self.eb = ExpressionBlock(self.eb.expressions + (disjoint, ))
@@ -212,19 +234,18 @@ class OntologiesParser():
 
         owl_onProperty = S_('owl_onProperty')
         owl_onProperty2 = S_('owl_onProperty2')
-        onProperty = RI_(owl_onProperty2(x, y), owl_onProperty(x, y))
+        onProperty = RightImplication(owl_onProperty2(x, y), owl_onProperty(x, y))
 
         owl_someValuesFrom = S_('owl_someValuesFrom')
         owl_someValuesFrom2 = S_('owl_someValuesFrom2')
-        someValueFrom = RI_(
+        someValueFrom = RightImplication(
             owl_someValuesFrom2(x, y), owl_someValuesFrom(x, y)
         )
 
-        pointer = S_('pointer')
         rdf_schema_subClassOf = S_('rdf_schema_subClassOf')
 
-        temp_triple = RI_(
-            pointer(w) & owl_someValuesFrom(w, z) & owl_onProperty(w, y) &
+        temp_triple = RightImplication(
+            self._pointer(w) & owl_someValuesFrom(w, z) & owl_onProperty(w, y) &
             rdf_schema_subClassOf(x, w), y(x, z)
         )
 
@@ -242,18 +263,18 @@ class OntologiesParser():
             restriction_ids.append(s)
 
         for rest in restriction_ids:
-            cutted_graph = list(self.graph.triples((rest, None, None)))
-            res_type = self._identify_restriction_type(cutted_graph)
+            cut_graph = self.graph.triples((rest, None, None))
+            res_type = self._identify_restriction_type(cut_graph)
 
-            if res_type == 'hasValue':
-                self._process_hasValue()
-            elif res_type == 'minCardinality':
-                self._process_minCardinality()
-            elif res_type == 'allValuesFrom':
-                self._process_allValuesFrom()
-            else:
-                pass
-                #TODO WARNING
+            try:
+                process_restriction_method = getattr(
+                    self, f'_process_{res_type}'
+                )
+                process_restriction_method()
+            except AttributeError:
+                raise NeuroLangNotImplementedError(
+                    f'Ontology parser doesn\'t handle restrictions of type {res_type}'
+                )
 
     def _identify_restriction_type(self, list_of_triples):
         for triple in list_of_triples:

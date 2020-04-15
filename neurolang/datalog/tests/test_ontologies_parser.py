@@ -76,6 +76,7 @@ def test_has_value():
     </rdf:RDF>
     '''
 
+    io.StringIO(test_case)
     pass
 
 
@@ -106,4 +107,5 @@ def test_min_cardinality():
     </rdf:RDF>
     '''
 
+    io.StringIO(test_case)
     pass
