@@ -396,5 +396,5 @@ def test_provenance_projection():
     assert result.provenance_column == Constant(ColumnStr("myprov"))
     for exp_prob, exp_x in [(1.0, "a"), (0.8, "b")]:
         for tupl in result.value:
-            if getattr(tupl, "x") == exp_x:
-                assert np.isclose(exp_prob, getattr(tupl, "myprov"))
+            if tupl.x == exp_x:
+                assert np.isclose(exp_prob, tupl.myprov)
