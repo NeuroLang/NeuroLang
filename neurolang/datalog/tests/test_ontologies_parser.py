@@ -1,9 +1,10 @@
+import io
+
 import pytest
 
+from ...expression_walker import ExpressionBasicEvaluator
 from ..constraints_representation import DatalogConstraintsProgram
 from ..ontologies_parser import OntologiesParser
-from ...expression_walker import ExpressionBasicEvaluator
-import io
 
 
 class Datalog(DatalogConstraintsProgram, ExpressionBasicEvaluator):

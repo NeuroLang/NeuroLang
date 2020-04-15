@@ -1,11 +1,12 @@
-import rdflib
-import pandas as pd
 import nibabel as nib
+import pandas as pd
+import rdflib
 from nilearn import datasets
-from ..expressions import Symbol, ExpressionBlock, Constant
-from ..logic import Conjunction, LogicOperator
-from ..exceptions import NeuroLangNotImplementedError
 from rdflib import OWL, RDF, BNode
+
+from ..exceptions import NeuroLangNotImplementedError
+from ..expressions import Constant, ExpressionBlock, Symbol
+from ..logic import Conjunction, LogicOperator
 
 
 class RightImplication(LogicOperator):
@@ -260,7 +261,7 @@ class OntologiesParser():
         of all individuals for which the property concerned has at least
         one value semantically equal to V (it may have other values as well)
 
-        The following example describes the class of individuals 
+        The following example describes the class of individuals
         who have the individual referred to as Clinton as their parent:
 
         <owl:Restriction>
@@ -288,12 +289,12 @@ class OntologiesParser():
 
     def _process_minCardinality(self, cut_graph):
         '''
-        A restriction containing an owl:minCardinality constraint describes 
+        A restriction containing an owl:minCardinality constraint describes
         a class of all individuals that have at least N semantically distinct
-        values (individuals or data values) for the property concerned, 
+        values (individuals or data values) for the property concerned,
         where N is the value of the cardinality constraint.
 
-        The following example describes a class of individuals 
+        The following example describes a class of individuals
         that have at least two parents:
 
         <owl:Restriction>
@@ -310,9 +311,9 @@ class OntologiesParser():
 
     def _process_allValuesFrom(self, cut_graph):
         '''
-        AllValuesFrom defines a class of individuals x 
-        for which holds that if the pair (x,y) is an instance of 
-        P (the property concerned), then y should be an instance 
+        AllValuesFrom defines a class of individuals x
+        for which holds that if the pair (x,y) is an instance of
+        P (the property concerned), then y should be an instance
         of the class description.
 
         <owl:Restriction>
@@ -320,8 +321,9 @@ class OntologiesParser():
             <owl:allValuesFrom rdf:resource="#Human"  />
         </owl:Restriction>
         
-        This example describes an anonymous OWL class of all individuals 
-        for which the hasParent property only has values of class Human'''
+        This example describes an anonymous OWL class of all individuals
+        for which the hasParent property only has values of class Human
+        '''
 
         parsed_property, restricted_node, values_node = self._parse_restriction_nodes(
             cut_graph
