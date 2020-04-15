@@ -6,7 +6,7 @@ from scipy.linalg import kron
 
 from .interval_algebra import (v_before, v_during, v_equals, v_finishes,
                                v_meets, v_overlaps, v_starts)
-from .regions import ExplicitVBR, ImplicitVBR, Region, EmptyRegion
+from .regions import ExplicitVBR, ImplicitVBR, Region
 
 __all__ = ['cardinal_relation']
 
@@ -56,12 +56,6 @@ def cardinal_relation(
     stop_at=None
 ):
     if region is reference_region:
-        return False
-
-    if (
-        isinstance(region, EmptyRegion) or
-        isinstance(reference_region, EmptyRegion)
-    ):
         return False
 
     if type(region) is Region and type(reference_region) is Region:
