@@ -393,6 +393,7 @@ def test_provenance_projection():
     projection = Projection(relation, (Constant(ColumnStr("x")),))
     solver = RelationalAlgebraProvenanceCountingSolver()
     result = solver.walk(projection)
+    assert len(result.value) == 2
     for exp_prob, exp_x in [(1.0, "a"), (0.8, "b")]:
         for tupl in result.value:
             if tupl.x == exp_x:
