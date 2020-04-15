@@ -241,7 +241,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
         for relation in product.relations[1:]:
             rel_temp = self.walk(relation)
             rel_res, rel_temp = self._remove_common_columns(rel_res, rel_temp)
-            rel_res = self._apply_provenance_operation(
+            rel_res = self._apply_provenance_join_operation(
                 rel_res, rel_temp, CrossProductNonProvenance
             )
         return rel_res
@@ -327,13 +327,13 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
 
     @add_match(NaturalJoin)
     def prov_naturaljoin(self, naturaljoin):
-        return self._apply_provenance_operation(
+        return self._apply_provenance_join_operation(
             naturaljoin.relation_left,
             naturaljoin.relation_right,
             NaturalJoinNonProvenance,
         )
 
-    def _apply_provenance_operation(self, left, right, np_op):
+    def _apply_provenance_join_operation(self, left, right, np_op):
         res_columns = set(left.value.columns) | (
             set(right.value.columns) - {right.provenance_column.value}
         )
