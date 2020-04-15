@@ -393,8 +393,8 @@ def test_provenance_projection():
     projection = Projection(relation, (Constant(ColumnStr("x")),))
     solver = RelationalAlgebraProvenanceCountingSolver()
     result = solver.walk(projection)
+    assert result.provenance_column == Constant(ColumnStr("myprov"))
     for exp_prob, exp_x in [(1.0, "a"), (0.8, "b")]:
-        mask = result.value._container["x"] == exp_x
-        values = result.value._container.loc[mask]
-        assert len(values) == 1
-        assert np.isclose(exp_prob, values.iloc[0]["myprov"])
+        for tupl in result.value:
+            if getattr(tupl, "x") == exp_x:
+                assert np.isclose(exp_prob, getattr(tupl, "myprov"))
