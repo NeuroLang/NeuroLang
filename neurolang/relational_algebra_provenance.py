@@ -1,9 +1,11 @@
 import operator
 from typing import AbstractSet
 
+import numpy as np
+
 from .exceptions import NeuroLangException
 from .expression_walker import ExpressionWalker, PatternWalker, add_match
-from .expressions import Constant, Definition, FunctionApplication
+from .expressions import Constant, Definition, FunctionApplication, Symbol
 from .relational_algebra import (
     Column,
     ColumnStr,
@@ -12,6 +14,7 @@ from .relational_algebra import (
     Product,
     Projection,
     RelationalAlgebraOperation,
+    RelationalAlgebraSolver,
     RenameColumn,
     Selection,
     Union,
@@ -200,6 +203,53 @@ class ProvenanceAlgebraSet(Constant):
     def value(self):
         return self.relations
 
+    @property
+    def non_provenance_columns(self):
+        non_prov_cols = set(self.value.columns) - {
+            self.provenance_column.value
+        }
+        return tuple(
+            Constant[ColumnStr](ColumnStr(col), verify_type=False)
+            for col in sorted(non_prov_cols)
+        )
+
+    def __eq__(self, other):
+        # check that the non-provenance columns match
+        if self.non_provenance_columns != other.non_provenance_columns:
+            return False
+        self_relation = Constant[AbstractSet](self.value)
+        other_relation = Constant[AbstractSet](other.value)
+        solver = RelationalAlgebraSolver()
+        # check that the tuple values (without the provenance column) match
+        if not (
+            solver.walk(Projection(self_relation, self.non_provenance_columns))
+            == solver.walk(
+                Projection(other_relation, other.non_provenance_columns)
+            )
+        ):
+            return False
+        # temporarily rename provenance columns to apply natural join
+        self_tmp_prov_col = Constant(ColumnStr(Symbol.fresh().name))
+        other_tmp_prov_col = Constant(ColumnStr(Symbol.fresh().name))
+        self_rename = RenameColumn(
+            self_relation, self.provenance_column, self_tmp_prov_col
+        )
+        other_rename = RenameColumn(
+            other_relation, other.provenance_column, other_tmp_prov_col
+        )
+        joined = solver.walk(NaturalJoin(self_rename, other_rename))
+        projected = solver.walk(
+            Projection(joined, (self_tmp_prov_col, other_tmp_prov_col))
+        )
+        # check that the provenance columns are numerically very close
+        # TODO: do not access _container here, @demianw help needed
+        return np.all(
+            np.isclose(
+                projected.value._container[self_tmp_prov_col.value].values,
+                projected.value._container[other_tmp_prov_col.value].values,
+            )
+        )
+
 
 class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
     """
@@ -278,14 +328,18 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
 
     @add_match(Projection)
     def prov_projection(self, projection):
-        relation = self.walk(projection.relation)
-
+        prov_set = self.walk(projection.relation)
+        prov_col = prov_set.provenance_column.value
+        relation = prov_set.value
+        # aggregate the provenance column grouped by the projection columns
         group_columns = [col.value for col in projection.attributes]
-        new_container = relation.value.aggregate(
-            group_columns, {relation.provenance_column.value: sum}
+        agg_relation = relation.aggregate(group_columns, {prov_col: sum})
+        # project the provenance column and the desired projection columns
+        proj_columns = [prov_col] + group_columns
+        projected_relation = agg_relation.projection(*proj_columns)
+        return ProvenanceAlgebraSet(
+            projected_relation, prov_set.provenance_column
         )
-
-        return ProvenanceAlgebraSet(new_container, relation.provenance_column)
 
     @add_match(CrossProductNonProvenance)
     def ra_product(self, product):

@@ -372,3 +372,28 @@ def test_extended_projection():
 
     res = RelationalAlgebraProvenanceCountingSolver().walk(res)
     assert res == expected
+
+
+def test_provenance_projection():
+    relation = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            iterable=[
+                (0.8, "a", 42),
+                (0.7, "b", 84),
+                (0.2, "a", 21),
+                (0.1, "b", 128),
+            ],
+            columns=["myprov", "x", "y"],
+        ),
+        Constant(ColumnStr("myprov")),
+    )
+    projection = Projection(relation, (Constant(ColumnStr("x")),))
+    solver = RelationalAlgebraProvenanceCountingSolver()
+    result = solver.walk(projection)
+    expected = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            iterable=[(1.0, "a"), (0.8, "b"),], columns=["myprov", "x"],
+        ),
+        Constant(ColumnStr("myprov")),
+    )
+    assert result == expected
