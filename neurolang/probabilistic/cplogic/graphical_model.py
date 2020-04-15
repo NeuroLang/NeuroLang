@@ -42,9 +42,12 @@ from ..expressions import (
     RandomVariableValuePointer,
     SuccQuery,
     VectorisedTableDistribution,
-    make_numerical_col_symb,
 )
-from .grounding import ground_cplogic_program
+from .grounding import (
+    get_predicate_from_grounded_expression,
+    ground_cplogic_program,
+    topological_sort_groundings,
+)
 
 
 def succ_query(program_code, query_pred):
@@ -157,7 +160,7 @@ def and_vect_table_distribution(rule_grounding, parent_groundings):
         rule_grounding.expression.antecedent
     )
     to_join = tuple(
-        _make_rv_value_pointer(pred, parent_groundings[pred.functor])
+        make_rv_value_pointer(pred, parent_groundings[pred.functor])
         for pred in antecedent_preds
     )
     return MultiplyColumns(MultipleNaturalJoin(to_join))
@@ -176,7 +179,7 @@ class CPLogicToGraphicalModelTranslator(PatternWalker):
         ),
     )
     def block_of_groundings(self, block):
-        for grounding in _topological_sort_groundings(block.expressions):
+        for grounding in topological_sort_groundings(block.expressions):
             self.walk(grounding)
         return GraphicalModel(
             Constant[Mapping](self.edges),
@@ -190,15 +193,13 @@ class CPLogicToGraphicalModelTranslator(PatternWalker):
     def probchoice_grounding(self, grounding):
         rv_symb = grounding.expression.predicate.functor
         choice_rv_symb = Symbol("__choice__{}".format(rv_symb.name))
-        self._add_grounding(rv_symb, grounding)
-        self._add_random_variable(
+        self.add_grounding(rv_symb, grounding)
+        self.add_random_variable(
             rv_symb, probchoice_distribution(grounding, choice_rv_symb)
         )
-        self._add_random_variable(
-            choice_rv_symb, ChoiceDistribution(grounding)
-        )
-        self._add_grounding(choice_rv_symb, grounding)
-        self._add_edges(rv_symb, {choice_rv_symb})
+        self.add_random_variable(choice_rv_symb, ChoiceDistribution(grounding))
+        self.add_grounding(choice_rv_symb, grounding)
+        self.add_edges(rv_symb, {choice_rv_symb})
 
     @add_match(
         Grounding,
@@ -208,8 +209,8 @@ class CPLogicToGraphicalModelTranslator(PatternWalker):
     )
     def extensional_grounding(self, grounding):
         rv_symb = grounding.expression.consequent.functor
-        self._add_grounding(rv_symb, grounding)
-        self._add_random_variable(
+        self.add_grounding(rv_symb, grounding)
+        self.add_random_variable(
             rv_symb, extensional_vect_table_distrib(grounding)
         )
 
@@ -223,16 +224,16 @@ class CPLogicToGraphicalModelTranslator(PatternWalker):
     )
     def ground_probfact_grounding(self, grounding):
         rv_symb = grounding.expression.consequent.body.functor
-        self._add_grounding(rv_symb, grounding)
-        self._add_random_variable(
+        self.add_grounding(rv_symb, grounding)
+        self.add_random_variable(
             rv_symb, multi_bernoulli_vect_table_distrib(grounding)
         )
 
     @add_match(Grounding, lambda exp: is_probabilistic_fact(exp.expression))
     def probfact_grounding(self, grounding):
         rv_symb = grounding.expression.consequent.body.functor
-        self._add_grounding(rv_symb, grounding)
-        self._add_random_variable(
+        self.add_grounding(rv_symb, grounding)
+        self.add_random_variable(
             rv_symb,
             bernoulli_vect_table_distrib(
                 grounding.expression.consequent.probability, grounding
@@ -242,14 +243,14 @@ class CPLogicToGraphicalModelTranslator(PatternWalker):
     @add_match(Grounding)
     def rule_grounding(self, rule_grounding):
         rv_symb = rule_grounding.expression.consequent.functor
-        self._add_grounding(rv_symb, rule_grounding)
+        self.add_grounding(rv_symb, rule_grounding)
         parent_groundings = {
             predicate.functor: self.groundings[predicate.functor]
             for predicate in extract_logic_predicates(
                 rule_grounding.expression.antecedent
             )
         }
-        self._add_random_variable(
+        self.add_random_variable(
             rv_symb,
             and_vect_table_distribution(rule_grounding, parent_groundings),
         )
@@ -259,21 +260,21 @@ class CPLogicToGraphicalModelTranslator(PatternWalker):
                 rule_grounding.expression.antecedent
             )
         }
-        self._add_edges(rv_symb, parent_rv_symbs)
+        self.add_edges(rv_symb, parent_rv_symbs)
 
-    def _add_edges(self, rv_symb, parent_rv_symbs):
+    def add_edges(self, rv_symb, parent_rv_symbs):
         if rv_symb not in self.edges:
             self.edges[rv_symb] = set()
         self.edges[rv_symb] |= parent_rv_symbs
 
-    def _add_grounding(self, rv_symb, grounding):
+    def add_grounding(self, rv_symb, grounding):
         self.groundings[rv_symb] = grounding
 
-    def _add_random_variable(self, rv_symb, cpd_factory):
-        self._check_random_variable_not_already_defined(rv_symb)
+    def add_random_variable(self, rv_symb, cpd_factory):
+        self.check_random_variable_not_already_defined(rv_symb)
         self.cpds[rv_symb] = cpd_factory
 
-    def _check_random_variable_not_already_defined(self, rv_symb):
+    def check_random_variable_not_already_defined(self, rv_symb):
         if rv_symb in self.cpds:
             raise NeuroLangException(
                 f"Already processed predicate symbol {rv_symb}"
@@ -286,22 +287,20 @@ class QueryGraphicalModelSolver(PatternWalker):
 
     @add_match(SuccQuery)
     def succ_query(self, query):
-        predicate = _get_predicate_from_grounded_expression(
+        predicate = get_predicate_from_grounded_expression(
             self.graphical_model.groundings.value[
                 query.predicate.functor
             ].expression
         )
         rv_symb = predicate.functor
         if rv_symb not in self.graphical_model.edges.value:
-            marginal = self._compute_marg_distrib(rv_symb, {}, {})
+            marginal = self.compute_marg_distrib(rv_symb, {}, {})
         else:
             parent_symbs = self.graphical_model.edges.value[rv_symb]
             exp = self.graphical_model.groundings.value[rv_symb].expression
             if isinstance(exp, ProbabilisticChoice):
                 parent_marginal_distribs = {
-                    parent_symb: self._compute_marg_distrib(
-                        parent_symb, {}, {}
-                    )
+                    parent_symb: self.compute_marg_distrib(parent_symb, {}, {})
                     for parent_symb in parent_symbs
                 }
             else:
@@ -316,7 +315,7 @@ class QueryGraphicalModelSolver(PatternWalker):
                 parent_symb: self.graphical_model.groundings.value[parent_symb]
                 for parent_symb in parent_symbs
             }
-            marginal = self._compute_marg_distrib(
+            marginal = self.compute_marg_distrib(
                 rv_symb, parent_marginal_distribs, parent_groundings,
             )
         result = marginal
@@ -329,7 +328,7 @@ class QueryGraphicalModelSolver(PatternWalker):
                     eq_(
                         Constant[ColumnStr](
                             ColumnStr(
-                                _get_column_name_from_expression(marginal_arg)
+                                get_column_name_from_expression(marginal_arg)
                             )
                         ),
                         qpred_arg,
@@ -344,7 +343,7 @@ class QueryGraphicalModelSolver(PatternWalker):
 
         return ExtendedRelationalAlgebraSolver({}).walk(result)
 
-    def _compute_marg_distrib(
+    def compute_marg_distrib(
         self, rv_symb, parent_marg_distribs, parent_groundings
     ):
         cpd = self.graphical_model.cpds.value.get(rv_symb)
@@ -352,7 +351,7 @@ class QueryGraphicalModelSolver(PatternWalker):
             return ExtendedRelationalAlgebraSolver({}).walk(cpd)
         else:
             terms = []
-            for parent_values, parent_probs in self._iter_parents(
+            for parent_values, parent_probs in self.iter_parents(
                 parent_marg_distribs
             ):
                 solver = ExtendedRelationalAlgebraSolver(parent_values)
@@ -367,16 +366,16 @@ class QueryGraphicalModelSolver(PatternWalker):
                 SumColumns(MultipleNaturalJoin(tuple(terms)))
             )
 
-    def _iter_parents(self, parent_marg_distribs):
+    def iter_parents(self, parent_marg_distribs):
         parent_symbs = sorted(parent_marg_distribs, key=lambda symb: symb.name)
         parent_iterables = dict()
         for parent_symb in parent_symbs:
             if parent_symb.name.startswith("__choice__"):
-                parent_iterables[parent_symb] = _iter_choice_variable(
+                parent_iterables[parent_symb] = iter_choice_variable(
                     self.graphical_model.groundings.value[parent_symb]
                 )
             else:
-                parent_iterables[parent_symb] = self._iter_bool_variable(
+                parent_iterables[parent_symb] = self.iter_bool_variable(
                     parent_symb, parent_marg_distribs[parent_symb]
                 )
         for parents in itertools.product(
@@ -388,9 +387,9 @@ class QueryGraphicalModelSolver(PatternWalker):
                 dict(zip(parent_symbs, parent_probs)),
             )
 
-    def _iter_bool_variable(self, pred_symb, marg_distrib):
+    def iter_bool_variable(self, pred_symb, marg_distrib):
         grounding = self.graphical_model.groundings.value[pred_symb]
-        predicate = _get_predicate_from_grounded_expression(
+        predicate = get_predicate_from_grounded_expression(
             grounding.expression
         )
         relation = Projection(
@@ -405,7 +404,7 @@ class QueryGraphicalModelSolver(PatternWalker):
         yield false_val, false_prob
 
 
-def _iter_choice_variable(grounding):
+def iter_choice_variable(grounding):
     for tupl in grounding.relation.value:
         relation = Constant[AbstractSet](
             NamedRelationalAlgebraFrozenSet(
@@ -427,7 +426,7 @@ def _iter_choice_variable(grounding):
         yield value, probs
 
 
-def _make_rv_value_pointer(pred, grounding):
+def make_rv_value_pointer(pred, grounding):
     rv_name = pred.functor.name
     result = RandomVariableValuePointer(rv_name)
     if is_probabilistic_fact(grounding.expression):

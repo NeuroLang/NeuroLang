@@ -14,29 +14,18 @@ from ....relational_algebra import (
 )
 from ....utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from ...expressions import (
-    AddIndexColumn,
-    AddRepeatedValueColumn,
-    Aggregation,
-    ConcatenateColumn,
     Grounding,
-    MultiplyColumns,
     ProbabilisticPredicate,
     RandomVariableValuePointer,
-    SumColumns,
     VectorisedTableDistribution,
 )
 from ..graphical_model import (
     CPLogicToGraphicalModelTranslator,
-    ExtendedAlgebraSet,
-    ExtendedRelationalAlgebraSolver,
     QueryGraphicalModelSolver,
     SuccQuery,
-    _infer_pfact_params,
-    _split_numerical_cols,
     and_vect_table_distribution,
     bernoulli_vect_table_distrib,
     extensional_vect_table_distrib,
-    make_numerical_col_symb,
     succ_query,
 )
 from ..grounding import ground_cplogic_program
@@ -177,22 +166,6 @@ def test_intensional_grounding():
     assert gm.edges == Constant[Mapping]({Q: {P, T}})
 
 
-def test_construct_abstract_set_from_pandas_dataframe():
-    df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [5, 6, 7, 8]})
-    abstract_set = ExtendedAlgebraSet(iterable=df, columns=df.columns)
-    assert np.all(
-        np.array(list(abstract_set.itervalues()))
-        == np.array(
-            [
-                np.array([1, 5]),
-                np.array([2, 6]),
-                np.array([3, 7]),
-                np.array([4, 8]),
-            ]
-        )
-    )
-
-
 def test_bernoulli_vect_table_distrib():
     grounding = Grounding(
         P(x),
@@ -242,115 +215,6 @@ def test_rv_value_pointer():
     walked = solver.walk(RandomVariableValuePointer(P))
     assert isinstance(walked, Constant[AbstractSet])
     assert isinstance(walked.value, ExtendedAlgebraSet)
-
-
-def test_concatenate_column():
-    solver = ExtendedRelationalAlgebraSolver({})
-    relation = Constant[AbstractSet](
-        ExtendedAlgebraSet(iterable=range(100), columns=["x"])
-    )
-    column_name = y
-    column_values = Constant[np.ndarray](np.arange(100) * 2)
-    expected = Constant[AbstractSet](
-        ExtendedAlgebraSet(
-            iterable=np.hstack(
-                [
-                    relation.value.to_numpy(),
-                    np.atleast_2d(column_values.value).T,
-                ]
-            ),
-            columns=["x", "y"],
-        )
-    )
-    result = solver.walk(
-        ConcatenateColumn(relation, column_name, column_values)
-    )
-    _assert_relations_almost_equal(result, expected)
-
-
-def test_add_index_column():
-    solver = ExtendedRelationalAlgebraSolver({})
-    relation = Constant[AbstractSet](
-        ExtendedAlgebraSet(iterable=np.arange(100) * 4, columns=["x"])
-    )
-    expected = Constant[AbstractSet](
-        ExtendedAlgebraSet(
-            iterable=np.hstack(
-                [np.atleast_2d(np.arange(100)).T, relation.value.to_numpy()]
-            ),
-            columns=["whatever", "x"],
-        )
-    )
-    result = solver.walk(AddIndexColumn(relation, Constant[str]("whatever")))
-    _assert_relations_almost_equal(result, expected)
-    assert set(result.value.columns) == set(expected.value.columns)
-
-
-def test_sum_columns():
-    solver = ExtendedRelationalAlgebraSolver({})
-    r1 = Constant[AbstractSet](
-        ExtendedAlgebraSet(
-            iterable=np.arange(100) * 4,
-            columns=[make_numerical_col_symb().name],
-        )
-    )
-    expected = Constant[AbstractSet](
-        ExtendedAlgebraSet(
-            iterable=np.arange(100) * 14,
-            columns=[make_numerical_col_symb().name],
-        )
-    )
-    result = solver.walk(
-        SumColumns(
-            ConcatenateColumn(
-                r1,
-                make_numerical_col_symb(),
-                Constant[np.ndarray](np.arange(100) * 10),
-            )
-        )
-    )
-    _assert_relations_almost_equal(result, expected)
-
-
-def test_multiply_columns():
-    solver = ExtendedRelationalAlgebraSolver({})
-    r1 = Constant[AbstractSet](
-        ExtendedAlgebraSet(
-            iterable=np.arange(100) * 4,
-            columns=[make_numerical_col_symb().name],
-        )
-    )
-    expected = Constant[AbstractSet](
-        ExtendedAlgebraSet(
-            iterable=np.arange(100) * 40 * np.arange(100),
-            columns=[make_numerical_col_symb().name],
-        )
-    )
-    result = solver.walk(
-        MultiplyColumns(
-            ConcatenateColumn(
-                r1,
-                make_numerical_col_symb(),
-                Constant[np.ndarray](np.arange(100) * 10),
-            )
-        )
-    )
-    _assert_relations_almost_equal(result, expected)
-
-
-def test_add_repeated_value_column():
-    solver = ExtendedRelationalAlgebraSolver({})
-    relation = Constant[AbstractSet](
-        ExtendedAlgebraSet(iterable=["a", "b", "c"], columns=["x"])
-    )
-    expected = Constant[AbstractSet](
-        ExtendedAlgebraSet(
-            iterable=[("a", 0), ("b", 0), ("c", 0)],
-            columns=["x", make_numerical_col_symb().name],
-        )
-    )
-    result = solver.walk(AddRepeatedValueColumn(relation, Constant[int](0)))
-    _assert_relations_almost_equal(result, expected)
 
 
 @pytest.mark.skip
@@ -687,68 +551,6 @@ def test_succ_query_hundreds_of_facts_fast():
     solver.walk(SuccQuery(Q(x)))
 
 
-def test_sum_aggregate():
-    relation = Constant[AbstractSet](
-        ExtendedAlgebraSet(
-            iterable=[
-                ("a", "b", 2),
-                ("b", "a", 3),
-                ("c", "a", 1),
-                ("c", "a", 2),
-                ("b", "a", 2),
-            ],
-            columns=["x", "y", "z"],
-        )
-    )
-    expected = Constant[AbstractSet](
-        ExtendedAlgebraSet(
-            iterable=[("a", "b", 2), ("b", "a", 5), ("c", "a", 3)],
-            columns=["x", "y", "w"],
-        )
-    )
-    sum_agg_op = Aggregation(
-        Constant[str]("sum"),
-        relation,
-        [Constant(ColumnStr("x")), Constant(ColumnStr("y"))],
-        Constant(ColumnStr("z")),
-        Constant(ColumnStr("w")),
-    )
-    solver = ExtendedRelationalAlgebraSolver({})
-    result = solver.walk(sum_agg_op)
-    _assert_relations_almost_equal(result, expected)
-
-
-def test_count_aggregate():
-    relation = Constant[AbstractSet](
-        ExtendedAlgebraSet(
-            iterable=[
-                ("a", "b", 2),
-                ("b", "a", 3),
-                ("c", "a", 1),
-                ("c", "a", 2),
-                ("b", "a", 2),
-            ],
-            columns=["x", "y", "z"],
-        )
-    )
-    expected = Constant[AbstractSet](
-        ExtendedAlgebraSet(
-            iterable=[("a", "b", 1), ("b", "a", 2), ("c", "a", 2)],
-            columns=["x", "y", "w"],
-        )
-    )
-    count_agg_op = Aggregation(
-        Constant[str]("count"),
-        relation,
-        [Constant(ColumnStr("x")), Constant(ColumnStr("y"))],
-        Constant(ColumnStr("z")),
-        Constant(ColumnStr("w")),
-    )
-    solver = ExtendedRelationalAlgebraSolver({})
-    result = solver.walk(count_agg_op)
-    _assert_relations_almost_equal(result, expected)
-
-
 def test_exact_inference_pfact_params():
     param_symb = Symbol.fresh()
     pfact = Implication(
@@ -781,7 +583,7 @@ def test_exact_inference_pfact_params():
             columns=("x", "y", "__interpretation_id__"),
         )
     }
-    _infer_pfact_params(pfact_grounding, interpretations, 3)
+    infer_pfact_params(pfact_grounding, interpretations, 3)
 
 
 def test_succ_query_with_probchoice_simple():
