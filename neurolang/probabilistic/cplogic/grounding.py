@@ -1,4 +1,5 @@
-from typing import AbstractSet
+import collections
+import typing
 
 from ...datalog.basic_representation import DatalogProgram
 from ...datalog.chase import (
@@ -10,7 +11,10 @@ from ...exceptions import NeuroLangException
 from ...expression_walker import ExpressionBasicEvaluator
 from ...expressions import Constant, ExpressionBlock, Symbol
 from ...logic import Implication
-from ...logic.expression_processing import TranslateToLogic
+from ...logic.expression_processing import (
+    TranslateToLogic,
+    extract_logic_predicates,
+)
 from ...relational_algebra import (
     ColumnInt,
     NamedRelationalAlgebraFrozenSet,
@@ -59,7 +63,7 @@ def build_extensional_grounding(pred_symb, tuple_set):
     cols = tuple(arg.name for arg in args)
     return Grounding(
         expression=Implication(pred_symb(*args), Constant[bool](True)),
-        relation=Constant[AbstractSet](
+        relation=Constant[typing.AbstractSet](
             NamedRelationalAlgebraFrozenSet(
                 columns=cols, iterable=tuple_set.value
             )
@@ -72,7 +76,7 @@ def build_rule_grounding(pred_symb, st_item, tuple_set):
     cols = tuple(arg.name for arg in rule.consequent.args)
     return Grounding(
         expression=rule,
-        relation=Constant[AbstractSet](
+        relation=Constant[typing.AbstractSet](
             NamedRelationalAlgebraFrozenSet(
                 columns=cols, iterable=tuple_set.value
             )
@@ -84,7 +88,7 @@ def build_pchoice_grounding(pred_symb, relation):
     args = tuple(Symbol.fresh() for _ in range(relation.value.arity - 1))
     predicate = pred_symb(*args)
     expression = ProbabilisticChoice(predicate)
-    relation = Constant[AbstractSet](
+    relation = Constant[typing.AbstractSet](
         NamedRelationalAlgebraFrozenSet(
             columns=(Symbol.fresh().name,) + tuple(a.name for a in args),
             iterable=relation.value,
@@ -102,7 +106,7 @@ def build_pfact_grounding_from_set(pred_symb, relation):
     )
     return Grounding(
         expression=expression,
-        relation=Constant[AbstractSet](
+        relation=Constant[typing.AbstractSet](
             NamedRelationalAlgebraFrozenSet(
                 columns=(param_symb.name,) + tuple(arg.name for arg in args),
                 iterable=relation.value,
@@ -121,7 +125,7 @@ def build_grounding(cpl_program, dl_instance):
             )
         elif pred_symb in cpl_program.pchoice_pred_symbs:
             groundings.append(build_pchoice_grounding(pred_symb, st_item))
-        elif isinstance(st_item, Constant[AbstractSet]):
+        elif isinstance(st_item, Constant[typing.AbstractSet]):
             groundings.append(build_extensional_grounding(pred_symb, st_item))
         else:
             groundings.append(
@@ -195,7 +199,7 @@ def topological_sort_groundings_util(pred_symb, dependencies, visited, result):
 
 
 def topological_sort_groundings(groundings):
-    dependencies = defaultdict(dict)
+    dependencies = collections.defaultdict(dict)
     pred_symb_to_grounding = dict()
     for grounding in groundings:
         pred_symb = get_grounding_pred_symb(grounding)
