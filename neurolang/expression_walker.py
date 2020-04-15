@@ -158,7 +158,7 @@ class EntryPointPatternWalker(PatternWalker):
             self._entry_point_walked = False
 
 
-class IdentityWalker(PatternMatcher):
+class IdentityWalker(PatternWalker):
     """Walks through expresssions without doing
     a thing.
     """
@@ -208,6 +208,19 @@ class ExpressionWalker(PatternWalker):
             changed |= new_arg[-1] is not sub_arg
         new_arg = type(arg)(new_arg)
         return new_arg, changed
+
+
+class ChainedWalker():
+    def __init__(self, *walkers):
+        self.walkers = [w() if isinstance(w, type) else w for w in walkers]
+
+    def walk(self, expression):
+        for walker in self.walkers:
+            logging.debug(
+                "Walking over {} with {}".format(expression, walker.__class__)
+            )
+            expression = walker.walk(expression)
+        return expression
 
 
 class ReplaceSymbolWalker(ExpressionWalker):

@@ -29,7 +29,7 @@ class NeuroSynthHandler(object):
         ma = ns.meta.MetaAnalysis(self._dataset, studies_ids, q=q, prior=prior)
         data = ma.images[image_type]
         masked_data = self._dataset.masker.unmask(data)
-        affine = self._dataset.masker.header.get_sform()
+        affine = self._dataset.masker.get_header().get_sform()
         dim = self._dataset.masker.dims
         region_set = region_set_from_masked_data(masked_data, affine, dim)
         return region_set
