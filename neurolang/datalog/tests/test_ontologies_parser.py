@@ -2,6 +2,7 @@ import io
 
 import pytest
 
+from ...exceptions import NeuroLangNotImplementedError
 from ...expression_walker import ExpressionBasicEvaluator
 from ..constraints_representation import DatalogConstraintsProgram
 from ..ontologies_parser import OntologiesParser
@@ -116,7 +117,7 @@ def test_has_value():
     dl = onto.parse_ontology(dl)
 
 
-def test_min_cardinality():
+def test_not_implemented():
 
     test_case = '''
     <rdf:RDF
@@ -148,24 +149,8 @@ def test_min_cardinality():
     </rdf:RDF>
     '''
 
-    expected = '''
-    second:c rdf:type owl:Class .
-    _:a rdf:type owl:Class .
-    _:c rdf:type owl:Restriction .
-    _:c owl:onProperty second:p .
-    _:c owl:maxCardinality "2"^^xsd:nonNegativeInteger  .
-    _:e rdf:type owl:Restriction .
-    _:e owl:onProperty second:p .
-    _:e owl:minCardinality "2"^^xsd:nonNegativeInteger  .
-    _:g rdf:first _:e .
-    _:g rdf:rest rdf:nil .
-    _:i rdf:first _:c .
-    _:i rdf:rest _:g .
-    _:a owl:intersectionOf _:i .
-    second:c rdfs:subClassOf _:a .
-    second:p rdf:type owl:ObjectProperty .
-    '''
-
     dl = Datalog()
     onto = OntologiesParser(io.StringIO(test_case))
-    dl = onto.parse_ontology(dl)
+
+    with pytest.raises(NeuroLangNotImplementedError):
+        dl = onto.parse_ontology(dl)
