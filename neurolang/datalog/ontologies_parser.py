@@ -226,37 +226,6 @@ class OntologiesParser():
 
         self.eb = ExpressionBlock(self.eb.expressions + (disjoint, ))
 
-    '''def _parse_somevalue_properties(self):
-        w = S_('w')
-        x = S_('x')
-        y = S_('y')
-        z = S_('z')
-
-        owl_onProperty = S_('owl_onProperty')
-        owl_onProperty2 = S_('owl_onProperty2')
-        onProperty = RightImplication(owl_onProperty2(x, y), owl_onProperty(x, y))
-
-        owl_someValuesFrom = S_('owl_someValuesFrom')
-        owl_someValuesFrom2 = S_('owl_someValuesFrom2')
-        someValueFrom = RightImplication(
-            owl_someValuesFrom2(x, y), owl_someValuesFrom(x, y)
-        )
-
-        rdf_schema_subClassOf = S_('rdf_schema_subClassOf')
-
-        temp_triple = RightImplication(
-            self._pointer(w) & owl_someValuesFrom(w, z) & owl_onProperty(w, y) &
-            rdf_schema_subClassOf(x, w), y(x, z)
-        )
-
-        self.eb = ExpressionBlock(
-            self.eb.expressions + (
-                onProperty,
-                someValueFrom,
-                temp_triple,
-            )
-        )'''
-
     def _load_constraints(self):
         restriction_ids = []
         for s, _, _ in self.graph.triples((None, None, OWL.Restriction)):
@@ -318,6 +287,25 @@ class OntologiesParser():
         self.eb = ExpressionBlock(self.eb.expressions + (constraint, ))
 
     def _process_minCardinality(self, cut_graph):
+        '''
+        A restriction containing an owl:minCardinality constraint describes 
+        a class of all individuals that have at least N semantically distinct
+        values (individuals or data values) for the property concerned, 
+        where N is the value of the cardinality constraint.
+
+        The following example describes a class of individuals 
+        that have at least two parents:
+
+        <owl:Restriction>
+            <owl:onProperty rdf:resource="#hasParent" />
+            <owl:minCardinality rdf:datatype="&xsd;nonNegativeInteger">
+                2
+            </owl:minCardinality>
+        </owl:Restriction>
+        
+        Note that an owl:minCardinality of one or more means that all
+        instances of the class must have a value for the property.
+        '''
         pass
 
     def _process_allValuesFrom(self, cut_graph):
@@ -374,10 +362,8 @@ class OntologiesParser():
         for triple in cut_graph:
             if OWL.onProperty == triple[1]:
                 parsed_property = self._parse_uri(str(triple[2]))
-                continue
-            if OWL.allValuesFrom == triple[1] or OWL.hasValue == triple[1]:
+            elif OWL.allValuesFrom == triple[1] or OWL.hasValue == triple[1]:
                 value = triple[2]
-                continue
 
         return parsed_property, restricted_node, value
 
