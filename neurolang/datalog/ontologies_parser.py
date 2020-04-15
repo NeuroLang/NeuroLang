@@ -286,7 +286,36 @@ class OntologiesParser():
         return ''
 
     def _process_hasValue(self, cut_graph):
-        pass
+        '''
+        A restriction containing a owl:hasValue constraint describes a class
+        of all individuals for which the property concerned has at least
+        one value semantically equal to V (it may have other values as well)
+
+        The following example describes the class of individuals 
+        who have the individual referred to as Clinton as their parent:
+
+        <owl:Restriction>
+            <owl:onProperty rdf:resource="#hasParent" />
+            <owl:hasValue rdf:resource="#Clinton" />
+        </owl:Restriction>
+        '''
+        parsed_property, restricted_node, value = self._parse_restriction_nodes(
+            cut_graph
+        )
+
+        rdf_schema_subClassOf = Symbol('rdf_schema_subClassOf')
+        property_symbol = Symbol(parsed_property)
+
+        x = Symbol('x')
+
+        constraint = ExpressionBlock(
+            RightImplication(
+                rdf_schema_subClassOf(x, restricted_node),
+                property_symbol(x, value)
+            )
+        )
+
+        self.eb = ExpressionBlock(self.eb.expressions + (constraint, ))
 
     def _process_minCardinality(self, cut_graph):
         pass
@@ -306,17 +335,9 @@ class OntologiesParser():
         This example describes an anonymous OWL class of all individuals 
         for which the hasParent property only has values of class Human'''
 
-        restriction_node = list(cut_graph)[0][0]
-        restricted_node = list(
-            self.graph.triples((None, None, restriction_node))
-        )[0][0]
-        for triple in cut_graph:
-            if OWL.onProperty == triple[1]:
-                parsed_property = self._parse_uri(str(triple[2]))
-                continue
-            if OWL.allValuesFrom == triple[1]:
-                values_node = triple[2]
-                continue
+        parsed_property, restricted_node, values_node = self._parse_restriction_nodes(
+            cut_graph
+        )
 
         allValuesFrom = self._parse_list(values_node)
 
@@ -341,7 +362,24 @@ class OntologiesParser():
                 )
             )
 
-        self.eb = ExpressionBlock(self.eb.expressions + (constraints, ))
+        self.eb = ExpressionBlock(
+            self.eb.expressions + constraints.expressions
+        )
+
+    def _parse_restriction_nodes(self, cut_graph):
+        restriction_node = list(cut_graph)[0][0]
+        restricted_node = list(
+            self.graph.triples((None, None, restriction_node))
+        )[0][0]
+        for triple in cut_graph:
+            if OWL.onProperty == triple[1]:
+                parsed_property = self._parse_uri(str(triple[2]))
+                continue
+            if OWL.allValuesFrom == triple[1] or OWL.hasValue == triple[1]:
+                value = triple[2]
+                continue
+
+        return parsed_property, restricted_node, value
 
     def _parse_list(self, initial_node):
         for node_triples in self.graph.triples((initial_node, None, None)):
