@@ -97,23 +97,23 @@ class QueryBuilderFirstOrderThroughDatalog(
         if name is None:
             name = str(uuid1())
 
-        def getValue(x):
-            if isinstance(x, exp.Constant):
-                x = x.value
-            return x
-
-        def enforceTuple(x):
-            if not hasattr(x, "__iter__"):
-                x = (x,)
-            return tuple(x)
-
-        items = list(map(enforceTuple, map(getValue, iterable)))
+        items = list(map(self._enforceTuple, map(self._getValue, iterable)))
 
         if isinstance(type_, tuple):
             type_ = Tuple[type_]
         elif not is_leq_informative(type_, Tuple):
             type_ = Tuple[type_]
 
+        self._add_indifidual_symbols_to_table(items, type_)
+
+        symbol = exp.Symbol[AbstractSet[type_]](name)
+        self.solver.add_extensional_predicate_from_tuples(
+            symbol, items, type_=type_
+        )
+
+        return Symbol(self, name)
+
+    def _add_indifidual_symbols_to_table(self, items, type_):
         # This may not be the best way of doing this but doing
         # so I ensure that they are returned by symbols_by_type
         for row in items:
@@ -122,12 +122,15 @@ class QueryBuilderFirstOrderThroughDatalog(
                     s, c = self._create_symbol_and_get_constant(e, t)
                     self.symbol_table[s] = c
 
-        symbol = exp.Symbol[AbstractSet[type_]](name)
-        self.solver.add_extensional_predicate_from_tuples(
-            symbol, items, type_=type_
-        )
+    def _getValue(self, x):
+        if isinstance(x, exp.Constant):
+            x = x.value
+        return x
 
-        return Symbol(self, name)
+    def _enforceTuple(self, x):
+        if not hasattr(x, "__iter__"):
+            x = (x,)
+        return tuple(x)
 
     def type_predicate_for(self, var):
         type_ = var.type
@@ -206,9 +209,8 @@ class RestrictVariablesByType(TranslateToLogic, RemoveUniversalPredicates):
 def _contains_type_restrictions(body):
     if isinstance(body, logic.Conjunction):
         for pred in body.formulas:
-            if (
-                isinstance(pred, exp.FunctionApplication)
-                and hasattr(pred.functor, "is_type_symbol_for")
+            if isinstance(pred, exp.FunctionApplication) and hasattr(
+                pred.functor, "is_type_symbol_for"
             ):
                 return True
     return False
