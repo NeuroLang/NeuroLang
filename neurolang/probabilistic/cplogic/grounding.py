@@ -1,5 +1,4 @@
-import collections
-import typing
+from typing import AbstractSet
 
 from ...datalog.basic_representation import DatalogProgram
 from ...datalog.chase import (
@@ -63,7 +62,7 @@ def build_extensional_grounding(pred_symb, tuple_set):
     cols = tuple(arg.name for arg in args)
     return Grounding(
         expression=Implication(pred_symb(*args), Constant[bool](True)),
-        relation=Constant[typing.AbstractSet](
+        relation=Constant[AbstractSet](
             NamedRelationalAlgebraFrozenSet(
                 columns=cols, iterable=tuple_set.value
             )
@@ -76,7 +75,7 @@ def build_rule_grounding(pred_symb, st_item, tuple_set):
     cols = tuple(arg.name for arg in rule.consequent.args)
     return Grounding(
         expression=rule,
-        relation=Constant[typing.AbstractSet](
+        relation=Constant[AbstractSet](
             NamedRelationalAlgebraFrozenSet(
                 columns=cols, iterable=tuple_set.value
             )
@@ -88,7 +87,7 @@ def build_pchoice_grounding(pred_symb, relation):
     args = tuple(Symbol.fresh() for _ in range(relation.value.arity - 1))
     predicate = pred_symb(*args)
     expression = ProbabilisticChoice(predicate)
-    relation = Constant[typing.AbstractSet](
+    relation = Constant[AbstractSet](
         NamedRelationalAlgebraFrozenSet(
             columns=(Symbol.fresh().name,) + tuple(a.name for a in args),
             iterable=relation.value,
@@ -106,7 +105,7 @@ def build_pfact_grounding_from_set(pred_symb, relation):
     )
     return Grounding(
         expression=expression,
-        relation=Constant[typing.AbstractSet](
+        relation=Constant[AbstractSet](
             NamedRelationalAlgebraFrozenSet(
                 columns=(param_symb.name,) + tuple(arg.name for arg in args),
                 iterable=relation.value,
@@ -125,7 +124,7 @@ def build_grounding(cpl_program, dl_instance):
             )
         elif pred_symb in cpl_program.pchoice_pred_symbs:
             groundings.append(build_pchoice_grounding(pred_symb, st_item))
-        elif isinstance(st_item, Constant[typing.AbstractSet]):
+        elif isinstance(st_item, Constant[AbstractSet]):
             groundings.append(build_extensional_grounding(pred_symb, st_item))
         else:
             groundings.append(
@@ -199,7 +198,7 @@ def topological_sort_groundings_util(pred_symb, dependencies, visited, result):
 
 
 def topological_sort_groundings(groundings):
-    dependencies = collections.defaultdict(dict)
+    dependencies = dict()
     pred_symb_to_grounding = dict()
     for grounding in groundings:
         pred_symb = get_grounding_pred_symb(grounding)
