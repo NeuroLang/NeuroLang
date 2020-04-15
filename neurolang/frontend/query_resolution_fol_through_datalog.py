@@ -104,7 +104,9 @@ class QueryBuilderFirstOrderThroughDatalog(
         elif not is_leq_informative(type_, Tuple):
             type_ = Tuple[type_]
 
-        self._add_indifidual_symbols_to_table(items, type_)
+        # This may not be the best way of doing this but doing
+        # so I ensure that they are returned by symbols_by_type
+        self._add_individual_items_to_symbol_table(items, type_)
 
         symbol = exp.Symbol[AbstractSet[type_]](name)
         self.solver.add_extensional_predicate_from_tuples(
@@ -113,14 +115,15 @@ class QueryBuilderFirstOrderThroughDatalog(
 
         return Symbol(self, name)
 
-    def _add_indifidual_symbols_to_table(self, items, type_):
-        # This may not be the best way of doing this but doing
-        # so I ensure that they are returned by symbols_by_type
+    def _add_individual_items_to_symbol_table(self, items, type_):
         for row in items:
-            for e, t in zip(row, type_.__args__):
-                if not (isinstance(e, Symbol)):
-                    s, c = self._create_symbol_and_get_constant(e, t)
-                    self.symbol_table[s] = c
+            self._add_row_to_symbol_table(row, type_)
+
+    def _add_row_to_symbol_table(self, row, type_):
+        for e, t in zip(row, type_.__args__):
+            if not isinstance(e, Symbol):
+                s, c = self._create_symbol_and_get_constant(e, t)
+                self.symbol_table[s] = c
 
     def _getValue(self, x):
         if isinstance(x, exp.Constant):
