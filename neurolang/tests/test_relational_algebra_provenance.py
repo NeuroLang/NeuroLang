@@ -1,3 +1,5 @@
+import typing
+
 import numpy as np
 
 from ..expressions import Constant, Symbol
@@ -5,6 +7,7 @@ from ..relational_algebra import (
     ColumnStr,
     NaturalJoin,
     Product,
+    RelationalAlgebraSolver,
     RenameColumn,
     Selection,
     eq_,
@@ -29,6 +32,43 @@ R1 = NamedRelationalAlgebraFrozenSet(
     iterable=[(i, i * 2, i) for i in range(10)],
 )
 provenance_set_r1 = ProvenanceAlgebraSet(R1, C_(ColumnStr("__provenance__")))
+
+
+def equal_prov_sets(first, second):
+    # check that the non-provenance columns match
+    if first.non_provenance_columns != second.non_provenance_columns:
+        return False
+    first_relation = Constant[typing.AbstractSet](first.value)
+    second_relation = Constant[typing.AbstractSet](second.value)
+    solver = RelationalAlgebraSolver()
+    # check that the tuple values (without the provenance column) match
+    if not (
+        solver.walk(Projection(first_relation, first.non_provenance_columns))
+        == solver.walk(
+            Projection(second_relation, second.non_provenance_columns)
+        )
+    ):
+        return False
+    # temporarily rename provenance columns to apply natural join
+    first_tmp_prov_col = Constant(ColumnStr(Symbol.fresh().name))
+    second_tmp_prov_col = Constant(ColumnStr(Symbol.fresh().name))
+    first_rename = RenameColumn(
+        first_relation, first.provenance_column, first_tmp_prov_col
+    )
+    second_rename = RenameColumn(
+        second_relation, second.provenance_column, second_tmp_prov_col
+    )
+    joined = solver.walk(NaturalJoin(first_rename, second_rename))
+    projected = solver.walk(
+        Projection(joined, (first_tmp_prov_col, second_tmp_prov_col))
+    )
+    # check that the provenance columns are numerically very close
+    return np.all(
+        np.isclose(
+            projected.value._container[first_tmp_prov_col.value].values,
+            projected.value._container[second_tmp_prov_col.value].values,
+        )
+    )
 
 
 def test_selection():
@@ -396,4 +436,4 @@ def test_provenance_projection():
         ),
         Constant(ColumnStr("myprov")),
     )
-    assert result == expected
+    assert equal_prov_sets(result, expected)
