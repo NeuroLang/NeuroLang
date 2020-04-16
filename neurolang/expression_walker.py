@@ -308,23 +308,22 @@ class ReplaceExpressionsByValues(ExpressionWalker):
         return value
 
     @add_match(Constant[typing.Iterable])
-    def constant_iterable(self, constant_tuple):
-        value = constant_tuple.value
+    def constant_iterable(self, constant_iterable):
+        value = constant_iterable.value
         it1, it2 = tee(value)
-        ReplaceExpressionsByValues.validate_iterable(it1)
+        (
+            ReplaceExpressionsByValues
+            ._validate_iterable_for_constant_iterable_case(it1)
+        )
         if isinstance(value, typing.Generator):
             return it2
         else:
             return value
 
     @staticmethod
-    def validate_iterable(it1):
+    def _validate_iterable_for_constant_iterable_case(it1):
         iterable_of_expressions = False
-        for el1 in it1:
-            if isinstance(el1, Expression):
-                iterable_of_expressions = True
-            break
-
+        iterable_of_expressions = any(isinstance(e, Expression) for e in it1)
         if iterable_of_expressions:
             raise NeuroLangException(
                 'Iterable of Expressions needs to be a Tuple or Set'

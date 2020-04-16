@@ -68,7 +68,10 @@ class TranslateToLogicWithAggregation(TranslateToLogic):
             consequent_arguments += (arg,)
 
         return self.walk(
-            rule(rule.consequent(*consequent_arguments), rule.antecedent)
+            Implication(
+                rule.consequent.functor(*consequent_arguments),
+                rule.antecedent
+            )
         )
 
 

@@ -51,7 +51,7 @@ def test_aggregation_parsing():
     ]
 
     code = Disj_(edb + [
-        Imp_(Q(x, Fa_(S_('sum'), (y,))), P(x, y)),
+        Imp_(Q(x, S_('sum')(y,)), P(x, y)),
     ])
 
     dl.walk(code)
