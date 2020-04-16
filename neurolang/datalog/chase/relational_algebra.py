@@ -225,6 +225,10 @@ class ChaseNamedRelationalAlgebraMixin:
             already_computed = already_computed.projection(
                 *substitutions_columns
             )
+        elif substitutions_columns.symmetric_difference(
+            already_computed.columns
+        ):
+            return substitutions
         substitutions = substitutions - already_computed
         if not isinstance(
             substitutions,
