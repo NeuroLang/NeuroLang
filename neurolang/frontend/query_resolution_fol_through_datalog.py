@@ -11,7 +11,6 @@ from ..logic.horn_clauses import fol_query_to_datalog_program
 from ..type_system import Unknown, is_leq_informative
 from ..datalog.expressions import TranslateToLogic
 from ..expression_walker import (
-    ExpressionWalker,
     add_match,
     ExpressionBasicEvaluator,
 )
@@ -21,11 +20,9 @@ from .query_resolution import QueryBuilderBase, RegionMixin, NeuroSynthMixin
 from .query_resolution_expressions import (
     All,
     Exists,
-    Expression,
     Query,
     Symbol,
 )
-from uuid import uuid1
 
 
 __all__ = ["QueryBuilderFirstOrderThroughDatalog"]
@@ -55,36 +52,35 @@ class QueryBuilderFirstOrderThroughDatalog(
         self.chase_class = chase_class
 
     def execute_expression(self, expression, name=None):
-        if name is None:
-            name = str(uuid1())
-
         if not isinstance(expression, exp.Query):
             raise NotImplementedError(
                 f"{self.__class__.__name__} can only evaluate Query "
                 f"expressions, {expression.__class__.__name__} given"
             )
-        program = self._get_program_from_query(expression, name)
+        symbol, program = self._get_program_from_query(expression, name)
         self.solver.walk(program)
         self._populate_type_predicates()
 
         solution = self.chase_class(self.solver).build_chase_solution()
-        solution_set = solution.get(name, exp.Constant(set()))
+        solution_set = solution.get(symbol, exp.Constant(set()))
 
-        self.symbol_table[exp.Symbol[solution_set.type](name)] = solution_set
-        return Symbol(self, name)
+        self.symbol_table[symbol] = solution_set
+        return Symbol(self, symbol.name)
 
     def _populate_type_predicates(self):
         for type_, pred_symbol in self.type_predicate_symbols.items():
             symbols = self.symbol_table.symbols_by_type(type_).values()
             self.add_tuple_set(symbols, type_, pred_symbol.name)
 
-    def _get_program_from_query(self, query, name):
+    def _get_program_from_query(self, query, name=None):
         query = RestrictVariablesByType(self).walk(query)
         args = _get_head_symbols(query.head)
         type_ = self._head_type(args)
-        head_symbol = exp.Symbol[type_](name)
+
+        st = exp.Symbol[type_]
+        head_symbol = st(name) if name else st.fresh()
         head = head_symbol(*args)
-        return fol_query_to_datalog_program(head, query.body)
+        return head_symbol, fol_query_to_datalog_program(head, query.body)
 
     def _head_type(self, args):
         if len(args) == 1:
@@ -94,9 +90,6 @@ class QueryBuilderFirstOrderThroughDatalog(
         return AbstractSet[type_]
 
     def add_tuple_set(self, iterable, type_=Unknown, name=None):
-        if name is None:
-            name = str(uuid1())
-
         items = list(map(self._enforceTuple, map(self._getValue, iterable)))
 
         if isinstance(type_, tuple):
@@ -108,12 +101,13 @@ class QueryBuilderFirstOrderThroughDatalog(
         # so I ensure that they are returned by symbols_by_type
         self._add_individual_items_to_symbol_table(items, type_)
 
-        symbol = exp.Symbol[AbstractSet[type_]](name)
+        st = exp.Symbol[type_]
+        symbol = st(name) if name else st.fresh()
         self.solver.add_extensional_predicate_from_tuples(
             symbol, items, type_=type_
         )
 
-        return Symbol(self, name)
+        return Symbol(self, symbol.name)
 
     def _add_individual_items_to_symbol_table(self, items, type_):
         for row in items:
