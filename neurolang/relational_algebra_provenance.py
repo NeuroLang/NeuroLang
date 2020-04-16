@@ -43,13 +43,15 @@ class ProvenanceAlgebraSet(Constant):
 
 
 def check_do_not_share_non_prov_col(prov_set_1, prov_set_2):
-    shared_columns = set(
-        col.value for col in prov_set_1.non_provenance_columns
-    ) & set(col.value for col in prov_set_2.non_provenance_columns)
+    shared_columns = set(prov_set_1.non_provenance_columns) & set(
+        prov_set_2.non_provenance_columns
+    )
     if len(shared_columns) > 0:
         raise NeuroLangException(
             "Provenance sets should not share non-provenance columns. "
-            "Shared columns found: {}".format(", ".join(shared_columns))
+            "Shared columns found: {}".format(
+                ", ".join(repr(col) for col in shared_columns)
+            )
         )
 
 

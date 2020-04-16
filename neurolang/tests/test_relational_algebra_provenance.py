@@ -415,7 +415,12 @@ def test_provenance_product_with_shared_non_prov_col_should_fail():
     )
     product = Product((r1, r2))
     solver = RelationalAlgebraProvenanceCountingSolver()
-    with pytest.raises(NeuroLangException, match=r"Shared columns found: x"):
+    with pytest.raises(
+        NeuroLangException,
+        match=r"Shared columns found: {}".format(
+            repr(Constant(ColumnStr("x")))
+        ),
+    ):
         solver.walk(product)
 
 
