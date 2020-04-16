@@ -168,6 +168,25 @@ class ChaseGeneral():
         substitutions = composed_substitutions
         return substitutions
 
+    @staticmethod
+    def compose_substitutions_ignoring_conflicts(
+        new_substitutions,
+        subs_keys,
+        substitution
+    ):
+        for new_substitution in new_substitutions:
+            overlap = subs_keys & set(new_substitution)
+            if any(
+                not isinstance(new_substitution[k], Symbol) and
+                new_substitution[k] != substitution[k]
+                for k in overlap
+            ):
+                continue
+            subs = compose_substitutions(
+                substitution, new_substitution
+            )
+        return subs
+
     def unify_builtin_substitution(self, predicate, substitution):
         substituted_predicate = apply_substitution(predicate, substitution)
         evaluated_predicate = self.datalog_program.walk(substituted_predicate)
@@ -233,27 +252,40 @@ class ChaseGeneral():
                 for v in set_value
             ]
         else:
-            iterable_subtype = evaluated_predicate.args[0].type
-            if is_leq_informative(iterable_subtype, Tuple):
-                el_type = iterable_subtype.__args__[0]
-                for another_type in iterable_subtype.__args__[1:]:
-                    try:
-                        el_type = unify_types(el_type, another_type)
-                    except NeuroLangTypeException:
-                        el_type = Unknown
-                        break
-            else:
-                el_type = evaluated_predicate.args[0].type.__args__[0]
-            return [
-                {
-                    symbol:
-                    Constant[el_type](
-                        v,
-                        auto_infer_type=False, verify_type=False
-                    )
-                }
-                for v in set_value
-            ]
+            return (
+                ChaseGeneral
+                .unify_builtin_substitution_containment_non_constant_iterable(
+                    evaluated_predicate, symbol, set_value
+                )
+            )
+
+    @staticmethod
+    def unify_builtin_substitution_containment_non_constant_iterable(
+        evaluated_predicate,
+        symbol,
+        set_value
+    ):
+        iterable_subtype = evaluated_predicate.args[0].type
+        if is_leq_informative(iterable_subtype, Tuple):
+            el_type = iterable_subtype.__args__[0]
+            for another_type in iterable_subtype.__args__[1:]:
+                try:
+                    el_type = unify_types(el_type, another_type)
+                except NeuroLangTypeException:
+                    el_type = Unknown
+                    break
+        else:
+            el_type = evaluated_predicate.args[0].type.__args__[0]
+        return [
+            {
+                symbol:
+                Constant[el_type](
+                    v,
+                    auto_infer_type=False, verify_type=False
+                )
+            }
+            for v in set_value
+        ]
 
     def extract_rule_predicates(
         self, rule, instance, restriction_instance=None
