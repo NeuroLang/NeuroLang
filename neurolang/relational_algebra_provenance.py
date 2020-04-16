@@ -78,14 +78,18 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
     """
     Mixing that walks through relational algebra expressions and
     executes the operations and provenance calculations.
+
     """
+
+    def __init__(self, symbol_table=None):
+        self.symbol_table = symbol_table
 
     @add_match(
         RelationalAlgebraOperation,
         lambda exp: not is_provenance_operation(exp),
     )
     def non_provenance_operation(self, operation):
-        return RelationalAlgebraSolver().walk(operation)
+        return RelationalAlgebraSolver(self.symbol_table).walk(operation)
 
     @add_match(
         Selection(
