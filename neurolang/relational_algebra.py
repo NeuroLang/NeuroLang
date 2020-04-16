@@ -447,6 +447,13 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         relation = self.walk(concat_op.relation)
         new_column_name = concat_op.column_name
         new_column_value = concat_op.column_value
+        if new_column_name.value in relation.value.columns:
+            raise NeuroLangException(
+                "Cannot concatenate column to a relation that already "
+                "has a column with that name. Same column name: {}".format(
+                    new_column_name
+                )
+            )
         res = ExtendedProjection(
             relation,
             (

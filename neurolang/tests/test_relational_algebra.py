@@ -1,11 +1,17 @@
 from typing import AbstractSet, Tuple
 
+import pytest
+
 from ..datalog.basic_representation import WrappedRelationalAlgebraSet
+from ..exceptions import NeuroLangException
 from ..expressions import Constant, Symbol
 from ..relational_algebra import (
     ColumnInt,
     ColumnStr,
+    ConcatenateConstantColumn,
     EquiJoin,
+    ExtendedProjection,
+    ExtendedProjectionListMember,
     Intersection,
     NameColumns,
     NaturalJoin,
@@ -459,3 +465,36 @@ def test_get_const_relation_type():
     columns = ('z', 'y')
     relation = NamedRelationalAlgebraFrozenSet(columns, values)
     assert _get_const_relation_type(Constant[type_](relation)) is sorted_type
+
+
+def test_concatenate_constant_column():
+    columns = ("x", "y")
+    values = [("a", "b"), ("a", "c")]
+    dst_column = Constant(ColumnStr("z"))
+    cst = Constant(3)
+    exp_columns = ("x", "y", dst_column.value)
+    exp_values = list(val + (cst.value,) for val in values)
+    relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(columns, values)
+    )
+    expected = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(exp_columns, exp_values)
+    )
+    concat_op = ConcatenateConstantColumn(relation, dst_column, cst)
+    solver = RelationalAlgebraSolver()
+    result = solver.walk(concat_op)
+    assert result == expected
+
+
+def test_concatenate_constant_column_already_existing_column():
+    columns = ("x", "y")
+    values = [("a", "b"), ("a", "c")]
+    dst_column = Constant(ColumnStr("y"))
+    cst = Constant(3)
+    relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(columns, values)
+    )
+    concat_op = ConcatenateConstantColumn(relation, dst_column, cst)
+    solver = RelationalAlgebraSolver()
+    with pytest.raises(NeuroLangException, match=r"Cannot concatenate"):
+        solver.walk(concat_op)
