@@ -196,6 +196,13 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
     @add_match(ExtendedProjection)
     def prov_extended_projection(self, extended_proj):
         relation = self.walk(extended_proj.relation)
+        if any(
+            proj_list_member.dst_column == relation.provenance_column
+            for proj_list_member in extended_proj.projection_list
+        ):
+            new_prov_col = Constant(ColumnStr(Symbol.fresh().name))
+        else:
+            new_prov_col = relation.provenance_column
         return ProvenanceAlgebraSet(
             self.walk(
                 ExtendedProjection(
@@ -203,7 +210,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
                     extended_proj.projection_list,
                 )
             ).value,
-            relation.provenance_column,
+            new_prov_col,
         )
 
     @add_match(NaturalJoin)
