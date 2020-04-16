@@ -2,20 +2,34 @@ import io
 
 import pytest
 
+from ... import expression_walker as ew
 from ...exceptions import NeuroLangNotImplementedError
 from ...expression_walker import ExpressionBasicEvaluator
+from ...expressions import Constant, ExpressionBlock, Symbol
+from ..aggregation import DatalogWithAggregationMixin
 from ..chase import Chase
 from ..constraints_representation import DatalogConstraintsProgram
-from ..ontologies_parser import OntologiesParser
+from ..expressions import Implication, TranslateToLogic
+from ..ontologies_parser import OntologyParser
+from ..ontologies_rewriter import OntologyRewriter
 
 
 class Datalog(DatalogConstraintsProgram, ExpressionBasicEvaluator):
     pass
 
 
+class DatalogTranslator(
+    TranslateToLogic, ew.IdentityWalker, DatalogWithAggregationMixin
+):
+    pass
+
+
+Eb_ = ExpressionBlock
+
+
 def test_all_values_from():
 
-    test_case = '''
+    test_case = """
     <rdf:RDF
     xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
     xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
@@ -30,8 +44,20 @@ def test_all_values_from():
                 </owl:Restriction>
             </rdfs:subClassOf>
         </owl:Class>
-        <owl:ObjectProperty rdf:ID="p"/>
         <owl:Class rdf:ID="c"/>
+        <owl:ObjectProperty rdf:ID="p"/>
+    </rdf:RDF>
+    """
+
+    test_base = """
+    <rdf:RDF
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+    xmlns:owl="http://www.w3.org/2002/07/owl#"
+    xmlns:first="http://www.w3.org/2002/03owlt/allValuesFrom/premises001#"
+    xml:base="http://www.w3.org/2002/03owlt/allValuesFrom/premises001" >
+    <owl:Class rdf:ID="c"/>
+    <owl:ObjectProperty rdf:ID="p"/>
         <first:r rdf:ID="i">
             <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Thing"/>
             <first:p>
@@ -39,9 +65,9 @@ def test_all_values_from():
             </first:p>
         </first:r>
     </rdf:RDF>
-    '''
+    """
 
-    expected = '''
+    expected = """
     <rdf:RDF
     xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
     xmlns:first="http://www.w3.org/2002/03owlt/allValuesFrom/premises001#"
@@ -52,19 +78,33 @@ def test_all_values_from():
         </first:c>
         <owl:Class rdf:about="premises001#c"/>
     </rdf:RDF>  
-    '''
+    """
+
+    # x = Symbol("x")
+    # y = Symbol("y")
+    # owl_class = Symbol("owl_Class")
+    # elem1 = Constant("elem1")
+
+    owl_class(elem1)
 
     dl = Datalog()
-    onto = OntologiesParser(io.StringIO(test_case))
+    onto = OntologyParser(io.StringIO(test_case))
     dl = onto.parse_ontology(dl)
+    sigmaB = dl.get_constraints()
 
-    dc = Chase(dl)
-    solution_instance = dc.build_chase_solution()
+    # q = I_(p(b), hasCollaborator(a, db, b))
+    # qB = EB_((q,))
+
+    dt = DatalogTranslator()
+    qB = dt.walk(qB)
+
+    orw = OntologyRewriter(qB, sigmaB)
+    rewrite = orw.Xrewrite()
 
 
 def test_has_value():
 
-    test_case = '''
+    test_case = """
     <rdf:RDF
     xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
     xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
@@ -94,9 +134,9 @@ def test_has_value():
             </owl:equivalentClass>
         </owl:Class>
     </rdf:RDF>
-    '''
+    """
 
-    expected = '''
+    expected = """
     <rdf:RDF
     xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
     xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
@@ -108,16 +148,16 @@ def test_has_value():
             </owl:equivalentProperty>
         </owl:ObjectProperty>
     </rdf:RDF>
-    '''
+    """
 
     dl = Datalog()
-    onto = OntologiesParser(io.StringIO(test_case))
+    onto = OntologyParser(io.StringIO(test_case))
     dl = onto.parse_ontology(dl)
 
 
 def test_not_implemented():
 
-    test_case = '''
+    test_case = """
     <rdf:RDF
     xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
     xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
@@ -136,10 +176,10 @@ def test_not_implemented():
         <owl:Class rdf:ID="c"/>
         <first:r rdf:ID="i"/>
     </rdf:RDF>
-    '''
+    """
 
     dl = Datalog()
-    onto = OntologiesParser(io.StringIO(test_case))
+    onto = OntologyParser(io.StringIO(test_case))
 
     with pytest.raises(NeuroLangNotImplementedError):
         dl = onto.parse_ontology(dl)

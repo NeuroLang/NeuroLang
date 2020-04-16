@@ -1,12 +1,19 @@
 import typing
 
 from ..expression_walker import (
-    ExpressionWalker, ReplaceExpressionWalker, ReplaceSymbolWalker, add_match
+    ExpressionWalker,
+    ReplaceExpressionWalker,
+    ReplaceSymbolWalker,
+    add_match,
 )
 from ..expressions import Expression, Symbol
 from ..logic import (
-    Conjunction, Constant, FunctionApplication, Implication, LogicOperator,
-    NaryLogicOperator
+    Conjunction,
+    Constant,
+    FunctionApplication,
+    Implication,
+    LogicOperator,
+    NaryLogicOperator,
 )
 from ..logic.expression_processing import ExtractFreeVariablesWalker
 from ..logic.unification import apply_substitution, most_general_unifier
@@ -16,26 +23,25 @@ from .ontologies_parser import RightImplication
 class ExtractFreeVariablesRightImplicationWalker(ExtractFreeVariablesWalker):
     @add_match(RightImplication)
     def extract_variables_s(self, expression):
-        return (
-            self.walk(expression.consequent) -
-            self.walk(expression.antecedent)
+        return self.walk(expression.consequent) - self.walk(
+            expression.antecedent
         )
 
 
-class OntologyRewriter():
+class OntologyRewriter:
     def __init__(self, dl, owl):
         self.dl = dl
         self.owl = owl
 
     def Xrewrite(self):
-        '''Algorithm based on the one proposed in
+        """Algorithm based on the one proposed in
         G. Gottlob, G. Orsi, and A. Pieris,
         “Query Rewriting and Optimization for Ontological Databases,”
-        ACM Transactions on Database Systems, vol. 39, May 2014.'''
+        ACM Transactions on Database Systems, vol. 39, May 2014."""
         i = 0
         Q_rew = set({})
         for t in self.dl.formulas:
-            Q_rew.add((t, 'r', 'u'))
+            Q_rew.add((t, "r", "u"))
 
         sigma_free_vars = []
         for sigma in self.owl.formulas:
@@ -48,7 +54,7 @@ class OntologyRewriter():
         while Q_rew != Q_temp:
             Q_temp = Q_rew.copy()
             for q in Q_temp:
-                if q[2] == 'e':
+                if q[2] == "e":
                     continue
                 q0 = q[0]
                 for sigma in sigma_free_vars:
@@ -63,31 +69,35 @@ class OntologyRewriter():
                             new_q0 = self._combine_rewriting(
                                 q0, qS, S, sigma_i.antecedent
                             )
-                            if (new_q0, 'r', 'u') not in Q_rew and (
-                                new_q0, 'r', 'e'
+                            if (new_q0, "r", "u") not in Q_rew and (
+                                new_q0,
+                                "r",
+                                "e",
                             ) not in Q_rew:
-                                Q_rew.add((new_q0, 'r', 'u'))
+                                Q_rew.add((new_q0, "r", "u"))
 
                     # factorization step
                     body_q = q0.antecedent
                     S_factorizable = self._get_factorizable(sigma, body_q)
                     if len(S_factorizable) > 1:
                         qS = self._full_unification(S_factorizable)
-                        #qS = most_general_unifier(S, body_q)
+                        # qS = most_general_unifier(S, body_q)
                         if qS is not None:
                             new_q0 = self._combine_factorization(
                                 q0.consequent, qS
                             )
-                            if ((new_q0, 'r', 'u') not in Q_rew and
-                                (new_q0, 'r', 'e') not in Q_rew and
-                                (new_q0, 'f', 'u') not in Q_rew and
-                                (new_q0, 'f', 'e') not in Q_rew):
-                                Q_rew.add((new_q0, 'f', 'u'))
+                            if (
+                                (new_q0, "r", "u") not in Q_rew
+                                and (new_q0, "r", "e") not in Q_rew
+                                and (new_q0, "f", "u") not in Q_rew
+                                and (new_q0, "f", "e") not in Q_rew
+                            ):
+                                Q_rew.add((new_q0, "f", "u"))
                 # query is now explored
                 Q_rew.remove(q)
-                Q_rew.add((q[0], q[1], 'e'))
+                Q_rew.add((q[0], q[1], "e"))
 
-        return {x for x in Q_rew if x[2] == 'e'}
+        return {x for x in Q_rew if x[2] == "e"}
 
     def _full_unification(self, S):
         acum = S[0]
@@ -107,10 +117,11 @@ class OntologyRewriter():
             S = self._get_term(q, sigma[0].consequent)
             if not S:
                 return []
-            if self._is_factorizable(S, existential_position
-                                     ) and self._var_same_position(
-                                         existential_position, free_var, q, S
-                                     ):
+            if self._is_factorizable(
+                S, existential_position
+            ) and self._var_same_position(
+                existential_position, free_var, q, S
+            ):
                 factorizable.append(S)
 
         return sum(factorizable, [])
@@ -182,9 +193,8 @@ class OntologyRewriter():
         return q_args
 
     def _is_applicable(self, sigma, q, S):
-        if (
-            self._unifies(S, sigma[0].consequent) and
-            self._not_in_existential(q, S, sigma)
+        if self._unifies(S, sigma[0].consequent) and self._not_in_existential(
+            q, S, sigma
         ):
             return True
 

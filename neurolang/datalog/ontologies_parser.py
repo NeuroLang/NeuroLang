@@ -10,9 +10,9 @@ from ..logic import Conjunction, LogicOperator
 
 
 class RightImplication(LogicOperator):
-    '''This class defines implications to the right. They are used to define
+    """This class defines implications to the right. They are used to define
     constraints derived from ontologies. The functionality is the same as
-    that of an implication, but with body and head inverted in position'''
+    that of an implication, but with body and head inverted in position"""
 
     def __init__(self, antecedent, consequent):
         self.antecedent = antecedent
@@ -20,13 +20,13 @@ class RightImplication(LogicOperator):
         self._symbols = consequent._symbols | antecedent._symbols
 
     def __repr__(self):
-        return 'RightImplication{{{} \u2192 {}}}'.format(
+        return "RightImplication{{{} \u2192 {}}}".format(
             repr(self.antecedent), repr(self.consequent)
         )
 
 
-class OntologiesParser():
-    def __init__(self, paths, load_format='xml'):
+class OntologyParser:
+    def __init__(self, paths, load_format="xml"):
         self.namespaces_dic = None
         self.owl_dic = None
         if isinstance(paths, list):
@@ -55,25 +55,23 @@ class OntologiesParser():
             map(
                 lambda a: list(
                     map(
-                        lambda s: s.replace('-', '_'),
-                        a.split('/')[-1].split('#')
+                        lambda s: s.replace("-", "_"),
+                        a.split("/")[-1].split("#"),
                     )
-                ), predicates
+                ),
+                predicates,
             )
         )
         properties = list(
             map(
-                lambda x: x[0] + '_' + self._replace_property(x[1]), properties
+                lambda x: x[0] + "_" + self._replace_property(x[1]), properties
             )
         )
         self.predicates_translation = dict(zip(predicates, properties))
 
     def _replace_property(self, prop):
-        if prop in [
-            'rdf_schema_subClassOf',
-            'rdf_schema_subPropertyOf',
-        ]:
-            prop = prop + '2'
+        if prop in ["rdf_schema_subClassOf", "rdf_schema_subPropertyOf"]:
+            prop = prop + "2"
 
         return prop
 
@@ -91,14 +89,14 @@ class OntologiesParser():
     def _load_domain(self):
         pointers = map(
             lambda x: str(x),
-            filter(lambda x: isinstance(x, BNode), set(self.graph.subjects()))
+            filter(lambda x: isinstance(x, BNode), set(self.graph.subjects())),
         )
 
         triples = map(lambda x: str(x), self.get_triples())
 
-        x = Symbol('x')
-        y = Symbol('y')
-        z = Symbol('z')
+        x = Symbol("x")
+        y = Symbol("y")
+        z = Symbol("z")
 
         dom1 = RightImplication(self._triple(x, y, z), self._dom(x))
         dom2 = RightImplication(self._triple(x, y, z), self._dom(y))
@@ -114,8 +112,8 @@ class OntologiesParser():
         self.eb = ExpressionBlock(self.eb.expressions + (dom1, dom2, dom3))
 
     def _load_properties(self):
-        x = Symbol('x')
-        z = Symbol('z')
+        x = Symbol("x")
+        z = Symbol("z")
 
         symbols = ()
         for _, trans in self.predicates_translation.items():
@@ -133,53 +131,56 @@ class OntologiesParser():
         self._parse_disjoint()
 
     def _parse_subproperties(self):
-        rdf_schema_subPropertyOf = Symbol('rdf_schema_subPropertyOf')
-        rdf_schema_subPropertyOf2 = Symbol('rdf_schema_subPropertyOf2')
-        w = Symbol('w')
-        x = Symbol('x')
-        y = Symbol('y')
-        z = Symbol('z')
+        rdf_schema_subPropertyOf = Symbol("rdf_schema_subPropertyOf")
+        rdf_schema_subPropertyOf2 = Symbol("rdf_schema_subPropertyOf2")
+        w = Symbol("w")
+        x = Symbol("x")
+        y = Symbol("y")
+        z = Symbol("z")
 
         subProperty = RightImplication(
             rdf_schema_subPropertyOf2(x, y), rdf_schema_subPropertyOf(x, y)
         )
         subProperty2 = RightImplication(
-            Conjunction((
-                rdf_schema_subPropertyOf2(x,
-                                          y), rdf_schema_subPropertyOf(y, z)
-            )), rdf_schema_subPropertyOf(x, z)
+            Conjunction(
+                (
+                    rdf_schema_subPropertyOf2(x, y),
+                    rdf_schema_subPropertyOf(y, z),
+                )
+            ),
+            rdf_schema_subPropertyOf(x, z),
         )
 
-        owl_inverseOf = Symbol('owl_inverseOf')
+        owl_inverseOf = Symbol("owl_inverseOf")
         inverseOf = RightImplication(
-            Conjunction((
-                rdf_schema_subPropertyOf(x, y), owl_inverseOf(w, x),
-                owl_inverseOf(z, y)
-            )), rdf_schema_subPropertyOf(w, z)
+            Conjunction(
+                (
+                    rdf_schema_subPropertyOf(x, y),
+                    owl_inverseOf(w, x),
+                    owl_inverseOf(z, y),
+                )
+            ),
+            rdf_schema_subPropertyOf(w, z),
         )
 
-        rdf_syntax_ns_type = Symbol('rdf_syntax_ns_type')
+        rdf_syntax_ns_type = Symbol("rdf_syntax_ns_type")
         objectProperty = RightImplication(
             rdf_syntax_ns_type(x, Constant(str(OWL.ObjectProperty))),
-            rdf_schema_subPropertyOf(x, x)
+            rdf_schema_subPropertyOf(x, x),
         )
 
         self.eb = ExpressionBlock(
-            self.eb.expressions + (
-                subProperty,
-                subProperty2,
-                inverseOf,
-                objectProperty,
-            )
+            self.eb.expressions
+            + (subProperty, subProperty2, inverseOf, objectProperty)
         )
 
     def _parse_subclasses(self):
-        rdf_schema_subClassOf = Symbol('rdf_schema_subClassOf')
-        rdf_schema_subClassOf2 = Symbol('rdf_schema_subClassOf2')
-        w = Symbol('w')
-        x = Symbol('x')
-        y = Symbol('y')
-        z = Symbol('z')
+        rdf_schema_subClassOf = Symbol("rdf_schema_subClassOf")
+        rdf_schema_subClassOf2 = Symbol("rdf_schema_subClassOf2")
+        w = Symbol("w")
+        x = Symbol("x")
+        y = Symbol("y")
+        z = Symbol("z")
 
         subClass = RightImplication(
             rdf_schema_subClassOf2(x, y), rdf_schema_subClassOf(x, y)
@@ -187,48 +188,52 @@ class OntologiesParser():
         subClass2 = RightImplication(
             Conjunction(
                 (rdf_schema_subClassOf2(x, y), rdf_schema_subClassOf(y, z))
-            ), rdf_schema_subClassOf(x, z)
+            ),
+            rdf_schema_subClassOf(x, z),
         )
 
-        rdf_syntax_ns_rest = Symbol('rdf_syntax_ns_rest')
+        rdf_syntax_ns_rest = Symbol("rdf_syntax_ns_rest")
         ns_rest = RightImplication(
-            Conjunction((
-                rdf_schema_subClassOf(x, y), rdf_syntax_ns_rest(w, x),
-                rdf_syntax_ns_rest(z, y)
-            )), rdf_schema_subClassOf(w, z)
+            Conjunction(
+                (
+                    rdf_schema_subClassOf(x, y),
+                    rdf_syntax_ns_rest(w, x),
+                    rdf_syntax_ns_rest(z, y),
+                )
+            ),
+            rdf_schema_subClassOf(w, z),
         )
 
-        rdf_syntax_ns_type = Symbol('rdf_syntax_ns_type')
+        rdf_syntax_ns_type = Symbol("rdf_syntax_ns_type")
         class_sim = RightImplication(
             rdf_syntax_ns_type(x, Constant(str(OWL.Class))),
-            rdf_schema_subClassOf(x, x)
+            rdf_schema_subClassOf(x, x),
         )
 
         self.eb = ExpressionBlock(
-            self.eb.expressions + (
-                subClass,
-                subClass2,
-                ns_rest,
-                class_sim,
-            )
+            self.eb.expressions + (subClass, subClass2, ns_rest, class_sim)
         )
 
     def _parse_disjoint(self):
-        w = Symbol('w')
-        x = Symbol('x')
-        y = Symbol('y')
-        z = Symbol('z')
+        w = Symbol("w")
+        x = Symbol("x")
+        y = Symbol("y")
+        z = Symbol("z")
 
-        owl_disjointWith = Symbol('owl_disjointWith')
-        rdf_schema_subClassOf = Symbol('rdf_schema_subClassOf')
+        owl_disjointWith = Symbol("owl_disjointWith")
+        rdf_schema_subClassOf = Symbol("rdf_schema_subClassOf")
         disjoint = RightImplication(
-            Conjunction((
-                owl_disjointWith(x, y), rdf_schema_subClassOf(w, x),
-                rdf_schema_subClassOf(z, y)
-            )), owl_disjointWith(w, z)
+            Conjunction(
+                (
+                    owl_disjointWith(x, y),
+                    rdf_schema_subClassOf(w, x),
+                    rdf_schema_subClassOf(z, y),
+                )
+            ),
+            owl_disjointWith(w, z),
         )
 
-        self.eb = ExpressionBlock(self.eb.expressions + (disjoint, ))
+        self.eb = ExpressionBlock(self.eb.expressions + (disjoint,))
 
     def _load_constraints(self):
         restriction_ids = []
@@ -241,13 +246,13 @@ class OntologiesParser():
 
             try:
                 process_restriction_method = getattr(
-                    self, f'_process_{res_type}'
+                    self, f"_process_{res_type}"
                 )
                 process_restriction_method(cut_graph)
             except AttributeError:
                 raise NeuroLangNotImplementedError(
-                    f'''Ontology parser doesn\'t handle 
-                    restrictions of type {res_type}'''
+                    f"""Ontology parser doesn\'t handle 
+                    restrictions of type {res_type}"""
                 )
 
     def _identify_restriction_type(self, list_of_triples):
@@ -255,12 +260,12 @@ class OntologiesParser():
             if triple[1] == OWL.onProperty or triple[1] == RDF.type:
                 continue
             else:
-                return triple[1].rsplit('#')[-1]
+                return triple[1].rsplit("#")[-1]
 
-        return ''
+        return ""
 
     def _process_hasValue(self, cut_graph):
-        '''
+        """
         A restriction containing a owl:hasValue constraint describes a class
         of all individuals for which the property concerned has at least
         one value semantically equal to V (it may have other values as well)
@@ -272,27 +277,27 @@ class OntologiesParser():
             <owl:onProperty rdf:resource="#hasParent" />
             <owl:hasValue rdf:resource="#Clinton" />
         </owl:Restriction>
-        '''
+        """
         parsed_property, restricted_node, value = self._parse_restriction_nodes(
             cut_graph
         )
 
-        rdf_schema_subClassOf = Symbol('rdf_schema_subClassOf')
+        rdf_schema_subClassOf = Symbol("rdf_schema_subClassOf")
         property_symbol = Symbol(parsed_property)
 
-        x = Symbol('x')
+        x = Symbol("x")
 
         constraint = ExpressionBlock(
             RightImplication(
                 rdf_schema_subClassOf(x, restricted_node),
-                property_symbol(x, value)
+                property_symbol(x, value),
             )
         )
 
-        self.eb = ExpressionBlock(self.eb.expressions + (constraint, ))
+        self.eb = ExpressionBlock(self.eb.expressions + (constraint,))
 
     def _process_minCardinality(self, cut_graph):
-        '''
+        """
         A restriction containing an owl:minCardinality constraint describes
         a class of all individuals that have at least N semantically distinct
         values (individuals or data values) for the property concerned,
@@ -310,11 +315,11 @@ class OntologiesParser():
         
         Note that an owl:minCardinality of one or more means that all
         instances of the class must have a value for the property.
-        '''
+        """
         pass
 
     def _process_allValuesFrom(self, cut_graph):
-        '''
+        """
         AllValuesFrom defines a class of individuals x
         for which holds that if the pair (x,y) is an instance of
         P (the property concerned), then y should be an instance
@@ -327,7 +332,7 @@ class OntologiesParser():
         
         This example describes an anonymous OWL class of all individuals
         for which the hasParent property only has values of class Human
-        '''
+        """
 
         parsed_property, restricted_node, values_node = self._parse_restriction_nodes(
             cut_graph
@@ -339,16 +344,17 @@ class OntologiesParser():
 
         type_restricted = self.graph.triples((None, RDF.type, restricted_node))
         property_symbol = Symbol(parsed_property)
-        owl_Class = Symbol('owl_Class')
-        x = Symbol('x')
+        owl_Class = Symbol("owl_Class")
+        x = Symbol("x")
 
         for n_type, _, _ in type_restricted:
             for value in allValuesFrom:
                 constraints = ExpressionBlock(
-                    constraints.expressions + (
+                    constraints.expressions
+                    + (
                         RightImplication(
                             property_symbol(Constant(str(n_type)), x),
-                            owl_Class(x, Constant(str(value)))
+                            owl_Class(x, Constant(str(value))),
                         ),
                     )
                 )
@@ -397,8 +403,8 @@ class OntologiesParser():
                 return triple[2]
 
     def _parse_uri(self, uri):
-        uri = uri.split('/')[-1].split('#')
-        return uri[0] + '_' + uri[1]
+        uri = uri.split("/")[-1].split("#")
+        return uri[0] + "_" + uri[1]
 
     def get_triples(self):
         return self.graph.triples((None, None, None))
