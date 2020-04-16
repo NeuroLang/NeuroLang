@@ -17,7 +17,7 @@ C_ = Constant
 Imp_ = Implication
 Fa_ = AggregationApplication
 Eb_ = ExpressionBlock
-Disj_ = Union
+U_ = Union
 F_ = Fact
 
 
@@ -50,7 +50,7 @@ def test_aggregation_parsing():
         for j in range(3)
     ]
 
-    code = Disj_(edb + [
+    code = U_(edb + [
         Imp_(Q(x, S_('sum')(y,)), P(x, y)),
     ])
 
@@ -60,7 +60,7 @@ def test_aggregation_parsing():
     assert P in dl.extensional_database()
 
     with pytest.raises(NeuroLangException):
-        dl.walk(Disj_([
+        dl.walk(U_([
             Imp_(Q(x, Fa_(C_(sum), (y,)), Fa_(C_(sum), (y,))), P(x, y)),
         ]))
 
@@ -100,7 +100,7 @@ def test_aggregation_chase_no_grouping():
         for i in range(3)
     ]
 
-    code = Disj_(edb + [
+    code = U_(edb + [
         Imp_(Q(Fa_(S_('sum2'), (x, y))), P(x, y)),
     ])
 
