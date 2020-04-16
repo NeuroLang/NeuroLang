@@ -153,20 +153,30 @@ class ChaseGeneral():
                 k for k, v in substitution.items()
                 if not isinstance(v, Symbol)
             )
-            for new_substitution in new_substitutions:
-                overlap = subs_keys & set(new_substitution)
-                if any(
-                    not isinstance(new_substitution[k], Symbol) and
-                    new_substitution[k] != substitution[k]
-                    for k in overlap
-                ):
-                    continue
-                subs = compose_substitutions(
-                    substitution, new_substitution
-                )
-                composed_substitutions.append(subs)
+            composed_substitutions += ChaseGeneral.compose_all_subtitutions(
+                new_substitutions,
+                subs_keys,
+                substitution
+            )
         substitutions = composed_substitutions
         return substitutions
+
+    @staticmethod
+    def compose_all_subtitutions(new_substitutions, subs_keys, substitution):
+        composed_subtitutions_ = []
+        for new_substitution in new_substitutions:
+            overlap = subs_keys & set(new_substitution)
+            if any(
+                not isinstance(new_substitution[k], Symbol) and
+                new_substitution[k] != substitution[k]
+                for k in overlap
+            ):
+                continue
+            subs = compose_substitutions(
+                substitution, new_substitution
+            )
+            composed_subtitutions_.append(subs)
+        return composed_subtitutions_
 
     @staticmethod
     def compose_substitutions_ignoring_conflicts(
@@ -318,23 +328,37 @@ class ChaseGeneral():
         row_type = None
         tuples = []
         for substitution in substitutions:
-            tuple_ = tuple()
-            type_ = tuple()
-            for el in apply_substitution_arguments(
-                rule.consequent.args, substitution
-            ):
-                tuple_ += (el.value,)
-                type_ += (el.type,)
+            tuple_, tuple_type = self.compute_new_tuple_and_type(
+                rule,
+                substitution
+            )
             tuples.append(tuple_)
-            tuple_type = Tuple[type_]
-            if row_type is None:
-                row_type = tuple_type
-            elif row_type is not tuple_type:
-                row_type = unify_types(row_type, tuple_type)
+            row_type = self.aggregate_tuple_type_into_row_type(
+                row_type,
+                tuple_type
+            )
         new_tuples = self.datalog_program.new_set(tuples, row_type=row_type)
         return self.compute_instance_update(
             rule, new_tuples, instance, restriction_instance
         )
+
+    def aggregate_tuple_type_into_row_type(self, row_type, tuple_type):
+        if row_type is None:
+            row_type = tuple_type
+        elif row_type is not tuple_type:
+            row_type = unify_types(row_type, tuple_type)
+        return row_type
+
+    def compute_new_tuple_and_type(self, rule, substitution):
+        tuple_ = tuple()
+        type_ = tuple()
+        for el in apply_substitution_arguments(
+            rule.consequent.args, substitution
+        ):
+            tuple_ += (el.value,)
+            type_ += (el.type,)
+        tuple_type = Tuple[type_]
+        return tuple_, tuple_type
 
     def compute_instance_update(
         self, rule, new_tuples, instance, restriction_instance
