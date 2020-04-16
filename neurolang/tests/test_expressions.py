@@ -57,8 +57,15 @@ def test_fresh_symbol():
 
 
 def test_fresh_symbol_2():
-    s1 = S_[int].fresh()
+    # Reset sequence generators as if the program just started
+    if hasattr(S_, "_fresh_generator_"):
+        del S_._fresh_generator_
+    if hasattr(S_[str], "_fresh_generator_"):
+        del S_[str]._fresh_generator_
+
     s2 = S_[str].fresh()
+    s1 = S_.fresh()
+
     assert s1.name != s2.name
 
 
