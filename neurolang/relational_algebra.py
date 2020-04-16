@@ -1,5 +1,4 @@
 import operator
-from operator import eq
 from typing import AbstractSet, Tuple
 
 from . import expression_walker as ew
@@ -15,7 +14,7 @@ from .utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet
 from .utils.relational_algebra_set import RelationalAlgebraExpression
 from . import type_system
 
-eq_ = Constant(eq)
+eq_ = Constant(operator.eq)
 
 
 class Column:
