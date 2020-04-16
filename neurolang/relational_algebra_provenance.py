@@ -64,11 +64,7 @@ def is_provenance_operation(operation):
         if isinstance(stack_element, ProvenanceAlgebraSet):
             return True
         elif isinstance(stack_element, tuple):
-            for tupl_element in stack_element:
-                if isinstance(tupl_element, ProvenanceAlgebraSet):
-                    return True
-                elif isinstance(tupl_element, RelationalAlgebraOperation):
-                    stack.append(tupl_element)
+            stack += list(stack_element)
         elif isinstance(stack_element, RelationalAlgebraOperation):
             stack += list(stack_element.unapply())
     return False
