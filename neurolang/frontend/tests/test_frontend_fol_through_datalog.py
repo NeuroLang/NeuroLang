@@ -261,13 +261,13 @@ def test_nested_quantifiers_in_query():
 
     x = nl.new_symbol(name="x", type_=int)
     y = nl.new_symbol(name="y", type_=int)
-    l = nl.new_symbol(name="l", type_=str)
+    z = nl.new_symbol(name="z", type_=str)
 
     def leq_f(x, y):
         return x < y
 
     leq = nl.add_symbol(leq_f, "leq")
 
-    q = nl.query(x, nl.all(y, leq(y, x) | ~A(y)) & nl.exists(l, R(l, x)))
+    q = nl.query(x, nl.all(y, leq(y, x) | ~A(y)) & nl.exists(z, R(z, x)))
     res = q.do()
     assert res.value == frozenset({(13,), (16,)})

@@ -56,6 +56,12 @@ def test_fresh_symbol():
     assert s1 != s2 and s2 != s3 and s3.type is int
 
 
+def test_fresh_symbol_2():
+    s1 = S_[int].fresh()
+    s2 = S_[str].fresh()
+    assert s1.name != s2.name
+
+
 def evaluate(expression, **kwargs):
     ebe = Evaluator()
     for k, v in kwargs.items():
