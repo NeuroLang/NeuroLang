@@ -1,3 +1,4 @@
+import operator
 from operator import eq
 from typing import AbstractSet, Tuple
 
@@ -11,6 +12,7 @@ from .expressions import (
     Unknown,
 )
 from .utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet
+from .utils.relational_algebra_set import RelationalAlgebraExpression
 from . import type_system
 
 eq_ = Constant(eq)
@@ -167,6 +169,175 @@ class RenameColumn(RelationalAlgebraOperation):
         )
 
 
+class ExtendedProjection(RelationalAlgebraOperation):
+    """
+    General operation defining string-based relational algebra projections
+    allowing flexible computations on a relation's columns.
+
+    Attributes
+    ----------
+    relation : Expression[AbstractSet]
+        Relation on which the projections are applied.
+    projection_list : Tuple[ExtendedProjectionListMember]
+        List of projections to apply.
+
+    Notes
+    -----
+    The concept of extended projection is formally defined in section 5.2.5
+    of [1]_.
+
+    .. [1] Garcia-Molina, Hector, Jeffrey D. Ullman, and Jennifer Widom.
+       "Database systems: the complete book." (2009).
+
+    """
+
+    def __init__(self, relation, projection_list):
+        self.relation = relation
+        self.projection_list = tuple(projection_list)
+
+    def __repr__(self):
+        join_str = "," if len(self.projection_list) < 2 else ",\n"
+        return "π_[{}]({})".format(
+            join_str.join([repr(member) for member in self.projection_list]),
+            repr(self.relation),
+        )
+
+
+class ExtendedProjectionListMember(Definition):
+    """
+    Member of a projection list.
+
+    Attributes
+    ----------
+    fun_exp : `Constant[str]`
+        Constant string representation of the extended projection operation.
+    dst_column : `Constant[ColumnStr]` or `Symbol[ColumnStr]`
+        Constant column string of the destination column.
+
+    Notes
+    -----
+    As described in [1]_, a projection list member can either be
+        - a single attribute (column) name in the relation, resulting in a
+          normal non-extended projection,
+        - an expression `x -> y` where `x` and `y` are both attribute (column)
+          names, `x` effectively being rename as `y`,
+        - or an expression `E -> z` where `E` is an expression involving
+          attributes of the relation, arithmetic operators, and string
+          operators, and `z` is a new name for the attribute that results from
+          the calculation implied by `E`. For example, `a + b -> x` represents
+          the sum of the attributes `a` and `b`, renamed `x`.
+
+    .. [1] Garcia-Molina, Hector, Jeffrey D. Ullman, and Jennifer Widom.
+       "Database systems: the complete book." (2009).
+
+    """
+
+    def __init__(self, fun_exp, dst_column):
+        self.fun_exp = fun_exp
+        self.dst_column = dst_column
+
+    def __repr__(self):
+        return "{} -> {}".format(self.fun_exp, self.dst_column)
+
+
+class ConcatenateConstantColumn(RelationalAlgebraOperation):
+    """
+    Add a column with a repeated constant value to a relation.
+
+    Attributes
+    ----------
+    relation : Constant[RelationalAlgebraSet]
+        Relation to which the column will be added.
+
+    column_name : Constant[ColumnStr] or Symbol[ColumnStr]
+        Name of the newly added column.
+
+    column_value : Constant
+        Constant value repeated in the new column.
+
+    """
+
+    def __init__(self, relation, column_name, column_value):
+        self.relation = relation
+        self.column_name = column_name
+        self.column_value = column_value
+
+
+def arithmetic_operator_string(op):
+    """
+    Get the string representation of an arithmetic operator.
+
+    Parameters
+    ----------
+    op : builting operator
+        Python builtin operator (add, sub, mul or truediv).
+
+    Returns
+    -------
+    str
+        String representation of the operator (e.g. operator.add is "+").
+
+    """
+    return {
+        operator.add: "+",
+        operator.sub: "-",
+        operator.mul: "*",
+        operator.truediv: "/",
+    }[op]
+
+
+def is_arithmetic_operation(exp):
+    """
+    Whether the expression is an arithmetic operation function application.
+
+    Parameters
+    ----------
+    exp : Expression
+
+    Returns
+    -------
+    bool
+
+    """
+    return (
+        isinstance(exp, FunctionApplication)
+        and isinstance(exp.functor, Constant)
+        and exp.functor.value
+        in {operator.add, operator.sub, operator.mul, operator.truediv}
+    )
+
+
+class StringArithmeticWalker(ew.PatternWalker):
+    """
+    Walker translating an Expression with basic arithmetic operations on a
+    relation's columns to its equivalent string representation.
+
+    The expression can refer to the names a relation's columns or to the
+    length of an other constant relation.
+
+    """
+
+    @ew.add_match(Constant)
+    def constant(self, cst):
+        return cst.value
+
+    @ew.add_match(FunctionApplication(Constant(len), ...))
+    def len(self, fa):
+        if not isinstance(fa.args[0], Constant[AbstractSet]):
+            raise NeuroLangException("Expected constant RA relation")
+        return str(len(fa.args[0].value))
+
+    @ew.add_match(FunctionApplication, is_arithmetic_operation)
+    def arithmetic_operation(self, fa):
+        return RelationalAlgebraExpression(
+            "({} {} {})".format(
+                self.walk(fa.args[0]),
+                arithmetic_operator_string(fa.functor.value),
+                self.walk(fa.args[1]),
+            )
+        )
+
+
 class RelationalAlgebraSolver(ew.ExpressionWalker):
     """
     Mixing that walks through relational algebra expressions and
@@ -271,6 +442,42 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         if len(new_set) > 0:
             new_set = new_set.rename_column(src, dst)
         return self._build_relation_constant(new_set)
+
+    @ew.add_match(ConcatenateConstantColumn)
+    def concatenate_constant_column(self, concat_op):
+        relation = self.walk(concat_op.relation)
+        new_column_name = concat_op.column_name
+        new_column_value = concat_op.column_value
+        res = ExtendedProjection(
+            relation,
+            (
+                ExtendedProjectionListMember(
+                    fun_exp=new_column_value, dst_column=new_column_name
+                ),
+            ),
+        )
+        new_relation = self.walk(res)
+        return new_relation
+
+    @ew.add_match(ExtendedProjection)
+    def extended_projection(self, proj_op):
+        relation = self.walk(proj_op.relation)
+        str_arithmetic_walker = StringArithmeticWalker()
+        eval_expressions = {}
+        for member in proj_op.projection_list:
+            eval_expressions[
+                member.dst_column.value
+            ] = str_arithmetic_walker.walk(self.walk(member.fun_exp))
+        return self._build_relation_constant(
+            relation.value.extended_projection(eval_expressions)
+        )
+
+    @ew.add_match(FunctionApplication, is_arithmetic_operation)
+    def prov_arithmetic_operation(self, arithmetic_op):
+        return FunctionApplication[arithmetic_op.type](
+            arithmetic_op.functor,
+            tuple(self.walk(arg) for arg in arithmetic_op.args),
+        )
 
     @ew.add_match(Constant)
     def ra_constant(self, constant):

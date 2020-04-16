@@ -1,13 +1,14 @@
-import typing
+from typing import AbstractSet
 
 import numpy as np
+import pytest
 
+from ..exceptions import NeuroLangException
 from ..expressions import Constant, Symbol
 from ..relational_algebra import (
     ColumnStr,
     NaturalJoin,
     Product,
-    RelationalAlgebraSolver,
     RenameColumn,
     Selection,
     eq_,
@@ -17,7 +18,6 @@ from ..relational_algebra_provenance import (
     ExtendedProjection,
     ExtendedProjectionListMember,
     Projection,
-    ProjectionNonProvenance,
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
     Union,
@@ -79,15 +79,6 @@ def test_provenance_rename():
     sol = sol.value
     assert sol == R1.rename_column("__provenance__", "renamed")
     assert "renamed" in sol.columns
-    assert "__provenance__" not in sol.columns
-
-
-def test_projections_non_provenance():
-    s = ProjectionNonProvenance(provenance_set_r1, (C_(ColumnStr("col1")),))
-    sol = RelationalAlgebraProvenanceCountingSolver().walk(s)
-    R1proj = R1.projection("col1")
-
-    assert sol == R1proj
     assert "__provenance__" not in sol.columns
 
 
@@ -241,7 +232,7 @@ def test_product_provenance_name():
     pset_r1 = ProvenanceAlgebraSet(RA1, C_(ColumnStr("__provenance__1")))
 
     RA2 = NamedRelationalAlgebraFrozenSet(
-        columns=("col1", "colA", "__provenance__2"),
+        columns=("col2", "colA", "__provenance__2"),
         iterable=[(i % 5, i * 3, i) for i in range(20)],
     )
     pset_r2 = ProvenanceAlgebraSet(RA2, C_(ColumnStr("__provenance__2")))
@@ -340,7 +331,7 @@ def test_concatenate_constant():
 def test_extended_projection():
     relation = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
-            iterable=[(5, 1, 1), (6, 2, 2), (7, 3, 2), (1, 3, 1), (2, 1, 1),],
+            iterable=[(5, 1, 1), (6, 2, 2), (7, 3, 2), (1, 3, 1), (2, 1, 1)],
             columns=["x", "y", "__provenance__"],
         ),
         C_(ColumnStr("__provenance__")),
@@ -400,3 +391,48 @@ def test_provenance_projection():
                 assert np.isclose(
                     exp_prob, getattr(tupl, result.provenance_column.value)
                 )
+
+
+def test_provenance_product_with_shared_non_prov_col_should_fail():
+    r1 = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            iterable=[
+                (0.8, "a", 42),
+                (0.7, "b", 84),
+                (0.2, "a", 21),
+                (0.1, "b", 128),
+            ],
+            columns=["myprov", "x", "y"],
+        ),
+        Constant(ColumnStr("myprov")),
+    )
+    r2 = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            iterable=[(0.2, "a", 42), (0.5, "b", 84)],
+            columns=["myprov", "x", "z"],
+        ),
+        Constant(ColumnStr("myprov")),
+    )
+    product = Product((r1, r2))
+    solver = RelationalAlgebraProvenanceCountingSolver()
+    with pytest.raises(NeuroLangException, match=r"Shared columns found: x"):
+        solver.walk(product)
+
+
+def test_concatenate_column_to_ra_relation():
+    relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            iterable=[("a", "b"), ("c", "d")], columns=["x", "y"],
+        )
+    )
+    solver = RelationalAlgebraProvenanceCountingSolver()
+    concat_op = ConcatenateConstantColumn(
+        relation, Constant(ColumnStr("z")), Constant[int](3)
+    )
+    result = solver.walk(concat_op)
+    expected = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            iterable=[("a", "b", 3), ("c", "d", 3)], columns=["x", "y", "z"],
+        )
+    )
+    assert result == expected
