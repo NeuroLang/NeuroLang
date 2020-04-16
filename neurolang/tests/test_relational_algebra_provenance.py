@@ -124,7 +124,7 @@ def test_naturaljoin():
     RnjR = R1cpR2.naturaljoin(R1njR2)
 
     res = ExtendedProjection(
-        ProvenanceAlgebraSet(RnjR, C_(ColumnStr("__provenance__"))),
+        ProvenanceAlgebraSet(RnjR, C_(ColumnStr("__provenance__1"))),
         tuple(
             [
                 ExtendedProjectionListMember(
@@ -205,7 +205,7 @@ def test_product():
     R1cpR2 = R1.cross_product(R2)
     RnjR = R1cpR2.naturaljoin(R1njR2)
     res = ExtendedProjection(
-        ProvenanceAlgebraSet(RnjR, C_(ColumnStr("__provenance__"))),
+        ProvenanceAlgebraSet(RnjR, C_(ColumnStr("__provenance__1"))),
         tuple(
             [
                 ExtendedProjectionListMember(
@@ -339,14 +339,8 @@ def test_extended_projection():
 
     expected = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
-            iterable=[
-                (5, 1, 6, 1),
-                (6, 2, 8, 2),
-                (7, 3, 10, 2),
-                (1, 3, 4, 1),
-                (2, 1, 3, 1),
-            ],
-            columns=["x", "y", "sum", "__provenance__"],
+            iterable=[(6, 1), (8, 2), (10, 2), (4, 1), (3, 1),],
+            columns=["sum", "__provenance__"],
         ),
         C_(ColumnStr("__provenance__")),
     )

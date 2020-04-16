@@ -1,5 +1,5 @@
 import operator
-from typing import AbstractSet, Tuple
+from typing import AbstractSet, Tuple, Callable
 
 from . import expression_walker as ew
 from .exceptions import NeuroLangException
@@ -11,7 +11,7 @@ from .expressions import (
     Unknown,
 )
 from .utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet
-from .utils.relational_algebra_set import RelationalAlgebraExpression
+from .utils.relational_algebra_set import StringArithmeticExpression
 from . import type_system
 
 eq_ = Constant(operator.eq)
@@ -316,25 +316,41 @@ class StringArithmeticWalker(ew.PatternWalker):
 
     """
 
-    @ew.add_match(Constant)
-    def constant(self, cst):
-        return cst.value
-
-    @ew.add_match(FunctionApplication(Constant(len), ...))
+    @ew.add_match(
+        FunctionApplication(Constant(len), (Constant[AbstractSet],))
+    )
     def len(self, fa):
-        if not isinstance(fa.args[0], Constant[AbstractSet]):
-            raise NeuroLangException("Expected constant RA relation")
-        return str(len(fa.args[0].value))
+        return Constant[StringArithmeticExpression](
+            str(len(fa.args[0].value)),
+            auto_infer_type=False,
+            verify_type=False,
+        )
 
     @ew.add_match(FunctionApplication, is_arithmetic_operation)
     def arithmetic_operation(self, fa):
-        return RelationalAlgebraExpression(
-            "({} {} {})".format(
-                self.walk(fa.args[0]),
-                arithmetic_operator_string(fa.functor.value),
-                self.walk(fa.args[1]),
-            )
+        return Constant[StringArithmeticExpression](
+            StringArithmeticExpression(
+                "({} {} {})".format(
+                    str(self.walk(fa.args[0]).value),
+                    arithmetic_operator_string(fa.functor.value),
+                    str(self.walk(fa.args[1]).value),
+                ),
+            ),
+            auto_infer_type=False,
+            verify_type=False,
         )
+
+    @ew.add_match(Constant[ColumnStr])
+    def constant_column_str(self, cst_col_str):
+        return Constant[StringArithmeticExpression](
+            StringArithmeticExpression(cst_col_str.value),
+            auto_infer_type=False,
+            verify_type=False,
+        )
+
+    @ew.add_match(Constant)
+    def constant(self, cst):
+        return cst
 
 
 class RelationalAlgebraSolver(ew.ExpressionWalker):
@@ -445,25 +461,34 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
     @ew.add_match(ConcatenateConstantColumn)
     def concatenate_constant_column(self, concat_op):
         relation = self.walk(concat_op.relation)
-        new_column_name = concat_op.column_name
+        new_column = concat_op.column_name
         new_column_value = concat_op.column_value
-        if new_column_name.value in relation.value.columns:
+        if new_column.value in relation.value.columns:
             raise NeuroLangException(
                 "Cannot concatenate column to a relation that already "
                 "has a column with that name. Same column name: {}".format(
-                    new_column_name
+                    new_column
                 )
             )
-        res = ExtendedProjection(
-            relation,
-            (
+        ext_proj_list_members = []
+        for column in relation.value.columns:
+            cst_column = Constant[ColumnStr](
+                column,
+                auto_infer_type=False,
+                verify_type=False
+            )
+            ext_proj_list_members.append(
                 ExtendedProjectionListMember(
-                    fun_exp=new_column_value, dst_column=new_column_name
-                ),
-            ),
+                    fun_exp=cst_column,
+                    dst_column=cst_column,
+                )
+            )
+        ext_proj_list_members.append(
+            ExtendedProjectionListMember(
+                fun_exp=new_column_value, dst_column=new_column
+            )
         )
-        new_relation = self.walk(res)
-        return new_relation
+        return self.walk(ExtendedProjection(relation, ext_proj_list_members))
 
     @ew.add_match(ExtendedProjection)
     def extended_projection(self, proj_op):
@@ -471,9 +496,9 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         str_arithmetic_walker = StringArithmeticWalker()
         eval_expressions = {}
         for member in proj_op.projection_list:
-            eval_expressions[
-                member.dst_column.value
-            ] = str_arithmetic_walker.walk(self.walk(member.fun_exp))
+            eval_expressions[member.dst_column.value] = (
+                str_arithmetic_walker.walk(self.walk(member.fun_exp)).value
+            )
         return self._build_relation_constant(
             relation.value.extended_projection(eval_expressions)
         )
@@ -496,6 +521,10 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         except KeyError:
             raise NeuroLangException(f'Symbol {symbol} not in table')
         return constant
+
+    @ew.add_match(Constant[StringArithmeticExpression])
+    def arithmetic_string_expression(self, expression):
+        return expression
 
     def _type_preserving_binary_operation(self, ra_op):
         """

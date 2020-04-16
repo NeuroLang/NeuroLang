@@ -138,7 +138,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
     @add_match(ConcatenateConstantColumn)
     def prov_concatenate_constant_column(self, concat_op):
         relation = self.walk(concat_op.relation)
-        if concat_op == relation.provenance_column:
+        if concat_op.column_name == relation.provenance_column:
             new_prov_col = Constant[ColumnStr](
                 ColumnStr(Symbol.fresh().name),
                 auto_infer_type=False,
@@ -146,16 +146,15 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             )
         else:
             new_prov_col = relation.provenance_column
-        return ProvenanceAlgebraSet(
-            self.walk(
-                ConcatenateConstantColumn(
-                    Constant[AbstractSet](relation.value),
-                    concat_op.column_name,
-                    concat_op.column_value,
-                )
-            ).value,
+        relation = RenameColumn(
+            Constant[AbstractSet](relation.value),
+            relation.provenance_column,
             new_prov_col,
         )
+        relation = ConcatenateConstantColumn(
+            relation, concat_op.column_name, concat_op.column_value,
+        )
+        return ProvenanceAlgebraSet(self.walk(relation).value, new_prov_col)
 
     @add_match(Projection)
     def prov_projection(self, projection):
@@ -203,11 +202,18 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             new_prov_col = Constant(ColumnStr(Symbol.fresh().name))
         else:
             new_prov_col = relation.provenance_column
+        relation = self.walk(
+            RenameColumn(relation, relation.provenance_column, new_prov_col)
+        )
+        new_proj_list = extended_proj.projection_list + (
+            ExtendedProjectionListMember(
+                fun_exp=new_prov_col, dst_column=new_prov_col
+            ),
+        )
         return ProvenanceAlgebraSet(
             self.walk(
                 ExtendedProjection(
-                    Constant[AbstractSet](relation.value),
-                    extended_proj.projection_list,
+                    Constant[AbstractSet](relation.value), new_proj_list,
                 )
             ).value,
             new_prov_col,
@@ -265,9 +271,12 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
                     fun_exp=tmp_left_col * tmp_right_col,
                     dst_column=res_prov_col,
                 ),
+            )
+            + tuple(
+                ExtendedProjectionListMember(fun_exp=col, dst_column=col)
+                for col in set(res_columns) - {res_prov_col}
             ),
         )
-        result = Projection(result, res_columns)
         return ProvenanceAlgebraSet(self.walk(result).value, res_prov_col)
 
     @add_match(Union)

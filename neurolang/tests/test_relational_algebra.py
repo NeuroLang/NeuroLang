@@ -32,6 +32,7 @@ from ..utils import (
     RelationalAlgebraFrozenSet,
     RelationalAlgebraSet,
 )
+from ..utils.relational_algebra_set import StringArithmeticExpression
 
 
 R1 = WrappedRelationalAlgebraSet([
@@ -498,3 +499,81 @@ def test_concatenate_constant_column_already_existing_column():
     solver = RelationalAlgebraSolver()
     with pytest.raises(NeuroLangException, match=r"Cannot concatenate"):
         solver.walk(concat_op)
+
+
+def test_extended_projection_divide_columns():
+    relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y"), iterable=[(50, 100), (20, 80),]
+        )
+    )
+    dst_column = Constant(ColumnStr('z'))
+    proj = ExtendedProjectionListMember(
+        Constant(ColumnStr('y')) / Constant(ColumnStr('x')),
+        dst_column
+    )
+    extended_proj_op = ExtendedProjection(relation, (proj, ))
+    expected = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=("z",), iterable=[(2.0, ), (4.0, )]
+        )
+    )
+    solver = RelationalAlgebraSolver()
+    result = solver.walk(extended_proj_op)
+    assert result == expected
+
+
+def test_extended_projection_lambda_function():
+    relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y"), iterable=[(50, 100), (20, 80),]
+        )
+    )
+    lambda_fun = lambda df: (df.x + df.y) / 10.0
+    extended_proj_op = ExtendedProjection(
+        relation,
+        (
+            ExtendedProjectionListMember(
+                Constant(lambda_fun), Constant(ColumnStr("z"))
+            ),
+            ExtendedProjectionListMember(
+                Constant(StringArithmeticExpression("x")),
+                Constant(ColumnStr("pomme_de_terre"))
+            )
+        )
+    )
+    expected = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=("z", "pomme_de_terre"),
+            iterable=[(15.0, 50), (10.0, 20)]
+        )
+    )
+    solver = RelationalAlgebraSolver()
+    result = solver.walk(extended_proj_op)
+    assert result == expected
+
+
+def test_extended_projection_other_relation_length():
+    r1 = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=("x", "y"), iterable=[("a", 100), ("b", 80)]
+        )
+    )
+    length = 2
+    r2 = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=("hello",), iterable=[(i,) for i in range(length)]
+        )
+    )
+    proj = ExtendedProjectionListMember(
+        Constant(ColumnStr("y")) / Constant(len)(r2), Constant(ColumnStr("y"))
+    )
+    extended_proj_op = ExtendedProjection(r1, (proj, ))
+    expected = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=("y",), iterable=[(50.0,), (40.0,)]
+        )
+    )
+    solver = RelationalAlgebraSolver()
+    result = solver.walk(extended_proj_op)
+    assert result == expected

@@ -1,6 +1,8 @@
 from ..relational_algebra_set import (
-    NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet,
-    RelationalAlgebraSet, RelationalAlgebraExpression
+    NamedRelationalAlgebraFrozenSet,
+    RelationalAlgebraFrozenSet,
+    RelationalAlgebraSet,
+    StringArithmeticExpression,
 )
 
 
@@ -345,40 +347,35 @@ def test_aggregate():
 
 def test_extended_projection():
     initial_set = NamedRelationalAlgebraFrozenSet(("x", "y"), [(7, 8), (9, 2)])
-
-    expected_sum = NamedRelationalAlgebraFrozenSet(("x", "y", "z"),
-                                                   [(7, 8, 15), (9, 2, 11)])
-    expected_str = NamedRelationalAlgebraFrozenSet(("x", "y", "z"),
-                                                   [(7, 8, 15), (9, 2, 11)])
-    expected_lambda = NamedRelationalAlgebraFrozenSet(("x", "y", "z"),
-                                                      [(7, 8, 14), (9, 2, 10)])
-    expected_lambda2 = NamedRelationalAlgebraFrozenSet(("x", "y", "z"),
-                                                       [(8, 8, 14),
-                                                        (10, 2, 10)])
-    expected_new_colum_str = NamedRelationalAlgebraFrozenSet(("x", "y", "z"),
-                                                             [(7, 8, "a"),
-                                                              (9, 2, "a")])
-    expected_new_colum_int = NamedRelationalAlgebraFrozenSet(("x", "y", "z"),
-                                                             [(7, 8, 1),
-                                                              (9, 2, 1)])
-
+    expected_sum = NamedRelationalAlgebraFrozenSet(("z",), [(15,), (11,)])
+    expected_lambda = NamedRelationalAlgebraFrozenSet(("z",), [(14,), (10,)])
+    expected_lambda2 = NamedRelationalAlgebraFrozenSet(
+        ("z", "x"), [(14, 8), (10, 10)]
+    )
+    expected_new_colum_str = NamedRelationalAlgebraFrozenSet(
+        ("x", "z",), [(7, "a",), (9, "a",)]
+    )
+    expected_new_colum_int = NamedRelationalAlgebraFrozenSet(
+        ("z",), [(1,), (1,)]
+    )
     new_set = initial_set.extended_projection({"z": sum})
     assert expected_sum == new_set
-    new_set = initial_set.extended_projection({
-        "z":
-        RelationalAlgebraExpression("x+y")
-    })
-    assert expected_str == new_set
+    new_set = initial_set.extended_projection(
+        {"z": StringArithmeticExpression("x+y")}
+    )
+    assert expected_sum == new_set
     new_set = initial_set.extended_projection({"z": lambda r: r.x + r.y - 1})
     assert expected_lambda == new_set
     new_set = initial_set.extended_projection(
         {
             "z": lambda r: (r.x + r.y - 1),
-            "x": RelationalAlgebraExpression("x+1")
+            "x": StringArithmeticExpression("x+1"),
         }
     )
     assert expected_lambda2 == new_set
-    new_set = initial_set.extended_projection({"z": "a"})
+    new_set = initial_set.extended_projection(
+        {"z": "a", "x": StringArithmeticExpression("x"),}
+    )
     assert expected_new_colum_str == new_set
-    new_set = initial_set.extended_projection({"z": 1})
+    new_set = initial_set.extended_projection({"z": 1,})
     assert expected_new_colum_int == new_set
