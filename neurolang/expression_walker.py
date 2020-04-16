@@ -219,6 +219,17 @@ class ReplaceSymbolWalker(ExpressionWalker):
         else:
             return symbol
 
+class ReplaceExpressionWalker(ExpressionWalker):
+    def __init__(self, symbol_replacements):
+        self.symbol_replacements = symbol_replacements
+
+    @add_match(Expression)
+    def replace_free_variable(self, expression):
+        if expression in self.symbol_replacements:
+            replacement = self.symbol_replacements[expression]
+            return replacement
+        else:
+            return self.process_expression(expression)
 
 class ReplaceSymbolsByConstants(ExpressionWalker):
     def __init__(self, symbol_table):

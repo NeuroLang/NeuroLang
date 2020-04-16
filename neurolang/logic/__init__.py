@@ -9,8 +9,11 @@ class LogicOperator(Definition):
 class UnaryLogicOperator(LogicOperator):
     pass
 
+class NaryLogicOperator(LogicOperator):
+    pass
 
-class Conjunction(LogicOperator):
+
+class Conjunction(NaryLogicOperator):
     def __init__(self, formulas):
         self.formulas = tuple(formulas)
 
@@ -24,7 +27,7 @@ class Conjunction(LogicOperator):
         ) + ')'
 
 
-class Disjunction(LogicOperator):
+class Disjunction(NaryLogicOperator):
     def __init__(self, formulas):
         self.formulas = tuple(formulas)
 
@@ -49,7 +52,7 @@ class Disjunction(LogicOperator):
         ) + ')'
 
 
-class Union(LogicOperator):
+class Union(NaryLogicOperator):
     def __init__(self, formulas):
         self.formulas = tuple(formulas)
 
