@@ -21,7 +21,7 @@ class RightImplication(LogicOperator):
 
     def __repr__(self):
         return 'RightImplication{{{} \u2192 {}}}'.format(
-            repr(self.consequent), repr(self.antecedent)
+            repr(self.antecedent), repr(self.consequent)
         )
 
 
@@ -89,9 +89,12 @@ class OntologiesParser():
         return self.neurolangDL
 
     def _load_domain(self):
-        pointers = list(
+        pointers = map(
+            lambda x: str(x),
             filter(lambda x: isinstance(x, BNode), set(self.graph.subjects()))
         )
+
+        triples = map(lambda x: str(x), self.get_triples())
 
         x = Symbol('x')
         y = Symbol('y')
@@ -102,7 +105,7 @@ class OntologiesParser():
         dom3 = RightImplication(self._triple(x, y, z), self._dom(z))
 
         self.neurolangDL.add_extensional_predicate_from_tuples(
-            self._triple, self.get_triples()
+            self._triple, triples
         )
         self.neurolangDL.add_extensional_predicate_from_tuples(
             self._pointer, pointers
