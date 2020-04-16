@@ -8,7 +8,7 @@ from ...expressions import Constant, FunctionApplication, Symbol
 from ...logic.unification import (apply_substitution,
                                   apply_substitution_arguments,
                                   compose_substitutions)
-from ...type_system import (NeuroLangTypeException, Unknown,
+from ...type_system import (NeuroLangTypeException, Unknown, get_args,
                             is_leq_informative, unify_types)
 from ...utils import OrderedSet
 from ..expression_processing import (extract_logic_free_variables,
@@ -252,40 +252,31 @@ class ChaseGeneral():
                 for v in set_value
             ]
         else:
-            return (
-                ChaseGeneral
-                .unify_builtin_substitution_containment_non_constant_iterable(
-                    evaluated_predicate, symbol, set_value
-                )
-            )
+            el_type = ChaseGeneral.infer_iterable_subtype(evaluated_predicate)
+            return [
+                {
+                    symbol:
+                    Constant[el_type](
+                        v,
+                        auto_infer_type=False, verify_type=False
+                    )
+                }
+                for v in set_value
+            ]
 
     @staticmethod
-    def unify_builtin_substitution_containment_non_constant_iterable(
-        evaluated_predicate,
-        symbol,
-        set_value
-    ):
+    def infer_iterable_subtype(evaluated_predicate):
         iterable_subtype = evaluated_predicate.args[0].type
+        type_args = get_args(iterable_subtype)
+        el_type = type_args[0]
         if is_leq_informative(iterable_subtype, Tuple):
-            el_type = iterable_subtype.__args__[0]
-            for another_type in iterable_subtype.__args__[1:]:
+            for another_type in type_args[1:]:
                 try:
                     el_type = unify_types(el_type, another_type)
                 except NeuroLangTypeException:
                     el_type = Unknown
                     break
-        else:
-            el_type = evaluated_predicate.args[0].type.__args__[0]
-        return [
-            {
-                symbol:
-                Constant[el_type](
-                    v,
-                    auto_infer_type=False, verify_type=False
-                )
-            }
-            for v in set_value
-        ]
+        return el_type
 
     def extract_rule_predicates(
         self, rule, instance, restriction_instance=None
