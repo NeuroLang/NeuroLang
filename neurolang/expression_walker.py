@@ -289,7 +289,7 @@ class ReplaceExpressionsByValues(ExpressionWalker):
             len(value) > 0 and
             isinstance(next(iter(value)), (Expression, tuple))
         ):
-            value = frozenset(
+            value = type(value)(
                 self.walk(expression) for expression in value
             )
         return value
@@ -301,7 +301,8 @@ class ReplaceExpressionsByValues(ExpressionWalker):
             len(value) > 0 and
             isinstance(value[0], (Expression, tuple))
         ):
-            value = tuple(
+            value = constant_tuple.value
+            value = type(value)(
                 self.walk(expression) for expression in constant_tuple.value
             )
         return value
