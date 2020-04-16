@@ -314,6 +314,6 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
 
         return self.walk(Projection(new_relation, proj_columns))
 
-    @add_match(ProvenanceAlgebraSet)
-    def prov_relation(self, relation):
+    @add_match(Constant[AbstractSet])
+    def constant_relation_or_provenance_set(self, relation):
         return relation
