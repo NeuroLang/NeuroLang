@@ -56,21 +56,20 @@ def check_do_not_share_non_prov_col(prov_set_1, prov_set_2):
 
 
 def is_provenance_operation(operation):
-    if not isinstance(operation, RelationalAlgebraOperation):
-        return False
-    return any(
-        isinstance(arg, ProvenanceAlgebraSet)
-        or is_provenance_operation(arg)
-        or (
-            isinstance(arg, tuple)
-            and any(
-                isinstance(element, ProvenanceAlgebraSet)
-                or is_provenance_operation(element)
-                for element in arg
-            )
-        )
-        for arg in operation.unapply()
-    )
+    stack = list(operation.unapply())
+    while stack:
+        stack_element = stack.pop()
+        if isinstance(stack_element, ProvenanceAlgebraSet):
+            return True
+        elif isinstance(stack_element, tuple):
+            for tupl_element in stack_element:
+                if isinstance(tupl_element, ProvenanceAlgebraSet):
+                    return True
+                elif isinstance(tupl_element, RelationalAlgebraOperation):
+                    stack.append(tupl_element)
+        elif isinstance(stack_element, RelationalAlgebraOperation):
+            stack += list(stack_element.unapply())
+    return False
 
 
 class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
