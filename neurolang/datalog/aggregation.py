@@ -18,6 +18,7 @@ from ..expression_walker import PatternWalker, add_match
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..logic.unification import apply_substitution_arguments
 from ..utils import OrderedSet
+from .expressions import TranslateToLogic
 from . import (Union, Implication, chase, extract_logic_free_variables,
                is_conjunctive_expression_with_nested_predicates)
 
@@ -45,6 +46,33 @@ def is_aggregation_predicate(predicate):
     return any(
         isinstance(arg, AggregationApplication) for arg in predicate.args
     )
+
+
+class TranslateToLogicWithAggregation(TranslateToLogic):
+    @add_match(
+        Implication(FunctionApplication(Symbol, ...), Expression),
+        lambda rule: any(
+            isinstance(arg, FunctionApplication) and
+            not isinstance(arg, AggregationApplication)
+            for arg in rule.consequent.args
+        )
+    )
+    def transform_function_application_consequent_to_aggregation(self, rule):
+        consequent_arguments = tuple()
+        for arg in rule.consequent.args:
+            if (
+                isinstance(arg, FunctionApplication) and
+                not isinstance(arg, AggregationApplication)
+            ):
+                arg = AggregationApplication(*arg.unapply())
+            consequent_arguments += (arg,)
+
+        return self.walk(
+            Implication(
+                rule.consequent.functor(*consequent_arguments),
+                rule.antecedent
+            )
+        )
 
 
 class DatalogWithAggregationMixin(PatternWalker):
