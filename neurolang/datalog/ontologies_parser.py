@@ -336,35 +336,31 @@ class OntologiesParser():
         allValuesFrom = self._parse_list(values_node)
 
         constraints = ExpressionBlock(())
-        # TODO clean this
-        rdf_schema_subClassOf = Symbol('rdf_schema_subClassOf')
+
+        type_restricted = self.graph.triples((None, RDF.type, restricted_node))
         property_symbol = Symbol(parsed_property)
         owl_Class = Symbol('owl_Class')
         x = Symbol('x')
-        y = Symbol('y')
-        #TODO clean this
 
-        for value in allValuesFrom:
-            constraints = ExpressionBlock(
-                constraints.expressions + (
-                    RightImplication(
-                        Conjunction((
-                            rdf_schema_subClassOf(
-                                x, Constant(str(restricted_node))
-                            ), property_symbol(x, y)
-                        )), owl_Class(y, Constant(str(value)))
-                    ),
+        for n_type, _, _ in type_restricted:
+            for value in allValuesFrom:
+                constraints = ExpressionBlock(
+                    constraints.expressions + (
+                        RightImplication(
+                            property_symbol(Constant(str(n_type)), x),
+                            owl_Class(x, Constant(str(value)))
+                        ),
+                    )
                 )
-            )
 
         self.eb = ExpressionBlock(
             self.eb.expressions + constraints.expressions
         )
 
     def _parse_restriction_nodes(self, cut_graph):
-        restriction_node = cut_graph[0][0]
+        restricted_node = cut_graph[0][0]
         restricted_node = list(
-            self.graph.triples((None, None, restriction_node))
+            self.graph.triples((None, None, restricted_node))
         )[0][0]
         for triple in cut_graph:
             if OWL.onProperty == triple[1]:

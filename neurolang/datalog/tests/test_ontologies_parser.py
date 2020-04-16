@@ -4,6 +4,7 @@ import pytest
 
 from ...exceptions import NeuroLangNotImplementedError
 from ...expression_walker import ExpressionBasicEvaluator
+from ..chase import Chase
 from ..constraints_representation import DatalogConstraintsProgram
 from ..ontologies_parser import OntologiesParser
 
@@ -41,25 +42,24 @@ def test_all_values_from():
     '''
 
     expected = '''
-    first:r rdf:type owl:Class .
-    _:a rdf:type owl:Restriction .
-    _:a owl:onProperty first:p .
-    _:a owl:allValuesFrom first:c .
-    first:r rdfs:subClassOf _:a .
-    first:p rdf:type owl:ObjectProperty .
-    first:c rdf:type owl:Class .
-    first:i rdf:type first:r .
-    first:i rdf:type owl:Thing .
-    first:o rdf:type owl:Thing .
-    first:i first:p first:o .
+    <rdf:RDF
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:first="http://www.w3.org/2002/03owlt/allValuesFrom/premises001#"
+    xmlns:owl="http://www.w3.org/2002/07/owl#"
+    xml:base="http://www.w3.org/2002/03owlt/allValuesFrom/conclusions001" >
+        <first:c rdf:about="premises001#o">
+            <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Thing"/>
+        </first:c>
+        <owl:Class rdf:about="premises001#c"/>
+    </rdf:RDF>  
     '''
 
     dl = Datalog()
     onto = OntologiesParser(io.StringIO(test_case))
     dl = onto.parse_ontology(dl)
 
-    for restriction in dl.get_constraints().expressions:
-        print(restriction)
+    dc = Chase(dl)
+    solution_instance = dc.build_chase_solution()
 
 
 def test_has_value():
@@ -97,22 +97,17 @@ def test_has_value():
     '''
 
     expected = '''
-    first:p rdf:type owl:ObjectProperty .
-    first:p rdfs:domain first:d .
-    first:q rdf:type owl:ObjectProperty .
-    first:q rdfs:domain first:d .
-    first:q rdf:type owl:FunctionalProperty .
-    first:p rdf:type owl:FunctionalProperty .
-    first:v rdf:type owl:Thing .
-    first:d rdf:type owl:Class .
-    _:a rdf:type owl:Restriction .
-    _:a owl:onProperty first:p .
-    _:a owl:hasValue first:v .
-    first:d owl:equivalentClass _:a .
-    _:c rdf:type owl:Restriction .
-    _:c owl:onProperty first:q .
-    _:c owl:hasValue first:v .
-    first:d owl:equivalentClass _:c .
+    <rdf:RDF
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+    xmlns:owl="http://www.w3.org/2002/07/owl#"
+    xml:base="http://www.w3.org/2002/03owlt/equivalentProperty/conclusions004" >
+        <owl:ObjectProperty rdf:about="premises004#p">
+            <owl:equivalentProperty>
+                <owl:ObjectProperty rdf:about="premises004#q"/>
+            </owl:equivalentProperty>
+        </owl:ObjectProperty>
+    </rdf:RDF>
     '''
 
     dl = Datalog()
