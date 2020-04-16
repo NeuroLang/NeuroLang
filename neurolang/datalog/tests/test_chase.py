@@ -6,7 +6,6 @@ from pytest import fixture
 
 from ... import expression_walker as ew
 from ... import expressions
-from ...type_system import Unknown
 from ..basic_representation import DatalogProgram
 from ..chase import (ChaseGeneral, ChaseMGUMixin, ChaseNaive,
                      ChaseNamedRelationalAlgebraMixin, ChaseNode,
@@ -538,10 +537,10 @@ def test_recursive_predicate_chase_tree(chase_class):
     assert second_child.instance == instance_2
 
 
-def test_nonrecursive_predicate_chase_solution(chase_class, N=10):
+def test_nonrecursive_predicate_chase_solution(chase_class, n=10):
     datalog_program = DT.walk(Eb_(
         tuple(F_(Q(C_(i), C_(i + 1)))
-              for i in range(N)) + (Imp_(T(x, y),
+              for i in range(n)) + (Imp_(T(x, y),
                                          Q(x, z) & Q(z, y)), )
     ))
 
@@ -553,18 +552,18 @@ def test_nonrecursive_predicate_chase_solution(chase_class, N=10):
 
     final_instance = MapInstance({
         Q: C_({C_((C_(i), C_(i + 1)))
-               for i in range(N)}),
+               for i in range(n)}),
         T: C_({C_((C_(i), C_(i + 2)))
-               for i in range(N - 1)})
+               for i in range(n - 1)})
     })
 
     assert solution_instance == final_instance
 
 
-def test_nonrecursive_predicate_chase_solution_constant(chase_class, N=10):
+def test_nonrecursive_predicate_chase_solution_constant(chase_class, n=10):
     datalog_program = Eb_(
         tuple(F_(Q(C_(i), C_(i + 1)))
-              for i in range(N)) + (Imp_(T(y),
+              for i in range(n)) + (Imp_(T(y),
                                          Q(C_(1), z) & Q(z, y)), )
     )
 
@@ -576,7 +575,7 @@ def test_nonrecursive_predicate_chase_solution_constant(chase_class, N=10):
 
     final_instance = MapInstance({
         Q: C_({C_((C_(i), C_(i + 1)))
-               for i in range(N)}),
+               for i in range(n)}),
         T: C_({C_((C_(i + 2), ))
                for i in (1, )})
     })
