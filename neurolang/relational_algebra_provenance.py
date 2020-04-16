@@ -2,7 +2,7 @@ from typing import AbstractSet
 
 from .exceptions import NeuroLangException
 from .expression_walker import ExpressionWalker, add_match
-from .expressions import Constant, FunctionApplication
+from .expressions import Constant, FunctionApplication, Symbol
 from .relational_algebra import (
     Column,
     ColumnStr,
@@ -37,7 +37,9 @@ class ProvenanceAlgebraSet(Constant):
             self.provenance_column.value
         }
         return tuple(
-            Constant[ColumnStr](ColumnStr(col), verify_type=False)
+            Constant[ColumnStr](
+                ColumnStr(col), verify_type=False, auto_infer_type=False
+            )
             for col in sorted(non_prov_cols)
         )
 
@@ -137,10 +139,13 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
     def prov_concatenate_constant_column(self, concat_op):
         relation = self.walk(concat_op.relation)
         if concat_op == relation.provenance_column:
-            raise NeuroLangException(
-                "Name of concatenated column cannot be the same as the "
-                "provenance column's name"
+            new_prov_col = Constant[ColumnStr](
+                ColumnStr(Symbol.fresh().name),
+                auto_infer_type=False,
+                verify_type=False,
             )
+        else:
+            new_prov_col = relation.provenance_column
         return ProvenanceAlgebraSet(
             self.walk(
                 ConcatenateConstantColumn(
@@ -149,7 +154,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
                     concat_op.column_value,
                 )
             ).value,
-            relation.provenance_column,
+            new_prov_col,
         )
 
     @add_match(Projection)
@@ -218,10 +223,14 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
         # provenance columns are temporarily renamed for executing the
         # non-provenance operation on the relations
         tmp_left_col = Constant[ColumnStr](
-            ColumnStr(f"{left.provenance_column.value}1"), verify_type=False,
+            ColumnStr(f"{left.provenance_column.value}1"),
+            verify_type=False,
+            auto_infer_type=False,
         )
         tmp_right_col = Constant[ColumnStr](
-            ColumnStr(f"{right.provenance_column.value}2"), verify_type=False,
+            ColumnStr(f"{right.provenance_column.value}2"),
+            verify_type=False,
+            auto_infer_type=False,
         )
         tmp_left = RenameColumn(
             Constant[AbstractSet](left.value),
