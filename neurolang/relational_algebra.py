@@ -319,7 +319,7 @@ class StringArithmeticWalker(ew.PatternWalker):
     @ew.add_match(
         FunctionApplication(Constant(len), (Constant[AbstractSet],))
     )
-    def len(self, fa):
+    def cardinality_of_other_relation(self, fa):
         return Constant[RelationalAlgebraStringExpression](
             str(len(fa.args[0].value)),
             auto_infer_type=False,
