@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from typing import AbstractSet, Callable, Tuple
+from typing import AbstractSet, Callable, Tuple, List
 from uuid import uuid1
 
 import numpy as np
@@ -10,7 +10,7 @@ from ..region_solver import Region
 from ..regions import (ExplicitVBR, ImplicitVBR, SphericalVolume,
                        take_principal_regions)
 from ..type_system import Unknown, is_leq_informative
-from .neurosynth_utils import NeuroSynthHandler
+from .neurosynth_utils import NeuroSynthHandler, StudyID, TfIDf
 from .query_resolution_expressions import (All, Exists, Expression, Query,
                                            Symbol)
 
@@ -272,7 +272,6 @@ class NeuroSynthMixin:
     ):
         if not hasattr(self, 'neurosynth_db'):
             self.neurosynth_db = NeuroSynthHandler()
-
         if not name:
             name = str(uuid1())
         region_set = self.neurosynth_db.ns_region_set_from_term(term, q)
@@ -284,6 +283,30 @@ class NeuroSynthMixin:
             region_set,
             type_=Tuple[ExplicitVBR],
             name=name
+        )
+
+    def load_neurosynth_term_study_ids(
+        self, term: str, name: str = None, frequency_threshold: float = 0.05
+    ):
+        if not hasattr(self, 'neurosynth_db'):
+            self.neurosynth_db = NeuroSynthHandler()
+        if not name:
+            name = str(uuid1())
+        study_set = self.neurosynth_db.ns_study_id_set_from_term(
+            term, frequency_threshold
+        )
+        return self.add_tuple_set(study_set, type_=Tuple[StudyID], name=name)
+
+    def load_neurosynth_study_tfidf_feature_for_terms(
+        self, terms: List[str], name: str = None,
+    ):
+        if not hasattr(self, 'neurosynth_db'):
+            self.neurosynth_db = NeuroSynthHandler()
+        if not name:
+            name = str(uuid1())
+        result_set = self.neurosynth_db.ns_study_tfidf_feature_for_terms(terms)
+        return self.add_tuple_set(
+            result_set, type_=Tuple[StudyID, str, TfIDf], name=name
         )
 
 
