@@ -88,17 +88,12 @@ class OntologyParser:
 
     def _load_domain(self):
         pointers = map(
-            lambda x: Constant(str(x)),
+            lambda x: (str(x),),
             filter(lambda x: isinstance(x, BNode), set(self.graph.subjects())),
         )
 
         triples = map(
-            lambda x: (
-                Constant(str(x[0])),
-                Constant(str(x[1])),
-                Constant(str(x[2])),
-            ),
-            self.get_triples(),
+            lambda x: (str(x[0]), str(x[1]), str(x[2])), self.get_triples()
         )
 
         x = Symbol("x")
