@@ -88,11 +88,18 @@ class OntologyParser:
 
     def _load_domain(self):
         pointers = map(
-            lambda x: str(x),
+            lambda x: Constant(str(x)),
             filter(lambda x: isinstance(x, BNode), set(self.graph.subjects())),
         )
 
-        triples = map(lambda x: str(x), self.get_triples())
+        triples = map(
+            lambda x: (
+                Constant(str(x[0])),
+                Constant(str(x[1])),
+                Constant(str(x[2])),
+            ),
+            self.get_triples(),
+        )
 
         x = Symbol("x")
         y = Symbol("y")
@@ -289,8 +296,8 @@ class OntologyParser:
 
         constraint = ExpressionBlock(
             RightImplication(
-                rdf_schema_subClassOf(x, restricted_node),
-                property_symbol(x, value),
+                rdf_schema_subClassOf(x, Constant(str(restricted_node))),
+                property_symbol(x, Constant(str(value))),
             )
         )
 
@@ -344,7 +351,7 @@ class OntologyParser:
 
         type_restricted = self.graph.triples((None, RDF.type, restricted_node))
         property_symbol = Symbol(parsed_property)
-        owl_Class = Symbol("owl_Class")
+        rdf_type = Symbol("rdf_syntax_ns_type")
         x = Symbol("x")
 
         for n_type, _, _ in type_restricted:
@@ -354,7 +361,7 @@ class OntologyParser:
                     + (
                         RightImplication(
                             property_symbol(Constant(str(n_type)), x),
-                            owl_Class(x, Constant(str(value))),
+                            rdf_type(x, Constant(str(value))),
                         ),
                     )
                 )
