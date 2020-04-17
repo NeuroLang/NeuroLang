@@ -393,9 +393,9 @@ class Symbol(NonConstant):
 
     @classmethod
     def fresh(cls):
-        if not hasattr(cls, '_fresh_generator_'):
-            cls._fresh_generator_ = cls._fresh_generator()
-        new_symbol = next(cls._fresh_generator_)
+        if not hasattr(Symbol, '_fresh_generator_'):
+            Symbol._fresh_generator_ = Symbol._fresh_generator()
+        new_symbol = next(Symbol._fresh_generator_)
         if cls.type is not typing.Any:
             new_symbol = new_symbol.cast(cls.type)
         return new_symbol

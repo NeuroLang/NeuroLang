@@ -2,7 +2,8 @@ from operator import eq, invert
 from typing import AbstractSet, Tuple
 
 from ..exceptions import NeuroLangException
-from ..expression_walker import ExpressionBasicEvaluator, add_match
+from ..expression_walker import (ExpressionBasicEvaluator,
+                                 ReplaceExpressionsByValues, add_match)
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..relational_algebra import (ColumnInt, ColumnStr, Difference,
                                   NameColumns, NaturalJoin, Projection,
@@ -11,6 +12,7 @@ from ..utils import NamedRelationalAlgebraFrozenSet
 from .expressions import Conjunction, Negation
 
 EQ = Constant(eq)
+REBV = ReplaceExpressionsByValues({})
 
 
 class TranslateToNamedRA(ExpressionBasicEvaluator):
@@ -27,7 +29,10 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
     def translate_eq_s_c(self, expression):
         symbol, constant = expression.args
         return Constant[AbstractSet[Tuple[constant.type]]](
-            NamedRelationalAlgebraFrozenSet((symbol.name,), (constant.value,))
+            NamedRelationalAlgebraFrozenSet(
+                (symbol.name,),
+                [(REBV.walk(constant),)]
+            )
         )
 
     @add_match(FunctionApplication(EQ, ...))

@@ -5,8 +5,9 @@ from uuid import uuid1
 import pandas as pd
 
 
-class RelationalAlgebraExpression(str):
-    pass
+class RelationalAlgebraStringExpression(str):
+    def __repr__(self):
+        return "{}{{ {} }}".format(self.__class__.__name__, super().__repr__())
 
 
 class RelationalAlgebraFrozenSet(Set):
@@ -384,22 +385,22 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         return output
 
     def extended_projection(self, eval_expressions):
-        new_columns = []
+        proj_columns = list(eval_expressions.keys())
         new_container = self._container.copy()
-        for op_column, operation in eval_expressions.items():
-            new_columns.append(op_column)
-            if isinstance(operation, RelationalAlgebraExpression):
-                op = f"{op_column}={operation}"
-                new_container = new_container.eval(op)
+        for dst_column, operation in eval_expressions.items():
+            if isinstance(operation, RelationalAlgebraStringExpression):
+                if str(operation) != str(dst_column):
+                    new_container = new_container.eval(
+                        "{}={}".format(str(dst_column), str(operation))
+                    )
             elif callable(operation):
-                new_container[op_column] = new_container.apply(
+                new_container[dst_column] = new_container.apply(
                     operation, axis=1
                 )
             else:
-                new_container[op_column] = operation
-
-        new_columns = set(self.columns + tuple(new_columns))
-        output = type(self)(new_columns)
+                new_container[dst_column] = operation
+        new_container = new_container[proj_columns]
+        output = type(self)(proj_columns)
         output._container = self._renew_index(new_container)
         return output
 
