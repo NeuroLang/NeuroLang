@@ -32,7 +32,7 @@ from ..utils import (
     RelationalAlgebraFrozenSet,
     RelationalAlgebraSet,
 )
-from ..utils.relational_algebra_set import StringArithmeticExpression
+from ..utils.relational_algebra_set import RelationalAlgebraStringExpression
 
 
 R1 = WrappedRelationalAlgebraSet([
@@ -537,7 +537,7 @@ def test_extended_projection_lambda_function():
                 Constant(lambda_fun), Constant(ColumnStr("z"))
             ),
             ExtendedProjectionListMember(
-                Constant(StringArithmeticExpression("x")),
+                Constant(RelationalAlgebraStringExpression("x")),
                 Constant(ColumnStr("pomme_de_terre"))
             )
         )

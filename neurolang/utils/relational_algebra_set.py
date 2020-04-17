@@ -5,9 +5,9 @@ from uuid import uuid1
 import pandas as pd
 
 
-class StringArithmeticExpression(str):
+class RelationalAlgebraStringExpression(str):
     def __repr__(self):
-        return "StringArithmeticExpression{{ {} }}".format(super().__repr__())
+        return "{}{{ {} }}".format(self.__class__.__name__, super().__repr__())
 
 
 class RelationalAlgebraFrozenSet(Set):
@@ -388,7 +388,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         proj_columns = list(eval_expressions.keys())
         new_container = self._container.copy()
         for dst_column, operation in eval_expressions.items():
-            if isinstance(operation, StringArithmeticExpression):
+            if isinstance(operation, RelationalAlgebraStringExpression):
                 if str(operation) != str(dst_column):
                     new_container = new_container.eval(
                         "{}={}".format(str(dst_column), str(operation))

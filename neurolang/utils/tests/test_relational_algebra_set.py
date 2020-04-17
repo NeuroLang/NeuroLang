@@ -2,7 +2,7 @@ from ..relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraFrozenSet,
     RelationalAlgebraSet,
-    StringArithmeticExpression,
+    RelationalAlgebraStringExpression,
 )
 
 
@@ -361,7 +361,7 @@ def test_extended_projection():
     new_set = initial_set.extended_projection({"z": sum})
     assert expected_sum == new_set
     new_set = initial_set.extended_projection(
-        {"z": StringArithmeticExpression("x+y")}
+        {"z": RelationalAlgebraStringExpression("x+y")}
     )
     assert expected_sum == new_set
     new_set = initial_set.extended_projection({"z": lambda r: r.x + r.y - 1})
@@ -369,12 +369,12 @@ def test_extended_projection():
     new_set = initial_set.extended_projection(
         {
             "z": lambda r: (r.x + r.y - 1),
-            "x": StringArithmeticExpression("x+1"),
+            "x": RelationalAlgebraStringExpression("x+1"),
         }
     )
     assert expected_lambda2 == new_set
     new_set = initial_set.extended_projection(
-        {"z": "a", "x": StringArithmeticExpression("x"),}
+        {"z": "a", "x": RelationalAlgebraStringExpression("x"),}
     )
     assert expected_new_colum_str == new_set
     new_set = initial_set.extended_projection({"z": 1,})

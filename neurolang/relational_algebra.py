@@ -11,7 +11,7 @@ from .expressions import (
     Unknown,
 )
 from .utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet
-from .utils.relational_algebra_set import StringArithmeticExpression
+from .utils.relational_algebra_set import RelationalAlgebraStringExpression
 from . import type_system
 
 eq_ = Constant(operator.eq)
@@ -320,7 +320,7 @@ class StringArithmeticWalker(ew.PatternWalker):
         FunctionApplication(Constant(len), (Constant[AbstractSet],))
     )
     def len(self, fa):
-        return Constant[StringArithmeticExpression](
+        return Constant[RelationalAlgebraStringExpression](
             str(len(fa.args[0].value)),
             auto_infer_type=False,
             verify_type=False,
@@ -328,8 +328,8 @@ class StringArithmeticWalker(ew.PatternWalker):
 
     @ew.add_match(FunctionApplication, is_arithmetic_operation)
     def arithmetic_operation(self, fa):
-        return Constant[StringArithmeticExpression](
-            StringArithmeticExpression(
+        return Constant[RelationalAlgebraStringExpression](
+            RelationalAlgebraStringExpression(
                 "({} {} {})".format(
                     str(self.walk(fa.args[0]).value),
                     arithmetic_operator_string(fa.functor.value),
@@ -342,8 +342,8 @@ class StringArithmeticWalker(ew.PatternWalker):
 
     @ew.add_match(Constant[ColumnStr])
     def constant_column_str(self, cst_col_str):
-        return Constant[StringArithmeticExpression](
-            StringArithmeticExpression(cst_col_str.value),
+        return Constant[RelationalAlgebraStringExpression](
+            RelationalAlgebraStringExpression(cst_col_str.value),
             auto_infer_type=False,
             verify_type=False,
         )
@@ -522,7 +522,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
             raise NeuroLangException(f'Symbol {symbol} not in table')
         return constant
 
-    @ew.add_match(Constant[StringArithmeticExpression])
+    @ew.add_match(Constant[RelationalAlgebraStringExpression])
     def arithmetic_string_expression(self, expression):
         return expression
 
