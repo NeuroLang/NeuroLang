@@ -271,3 +271,17 @@ def test_nested_quantifiers_in_query():
     q = nl.query(x, nl.all(y, leq(y, x) | ~A(y)) & nl.exists(z, R(z, x)))
     res = q.do()
     assert res.value == frozenset({(13,), (16,)})
+
+
+def test_isin():
+    nl = RegionFrontendFolThroughDatalog()
+
+    A = nl.add_tuple_set(range(10), int, name="A")
+    B = nl.add_tuple_set(range(20), int, name="B")
+
+    x = nl.new_symbol(name="x", type_=int)
+
+    q = nl.query(x, nl.symbols.isin(x, A))
+    res = q.do()
+    assert res.value == frozenset(set((i,) for i in range(10)))
+
