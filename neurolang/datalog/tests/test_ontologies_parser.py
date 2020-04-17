@@ -1,6 +1,7 @@
 import io
 
 import pytest
+from rdflib import RDF
 
 from ... import expression_walker as ew
 from ...exceptions import NeuroLangNotImplementedError
@@ -28,8 +29,15 @@ Eb_ = ExpressionBlock
 
 
 def test_all_values_from():
+    """
+    Test case acquired from:
+    http://owl.semanticweb.org/page/TestCase:WebOnt-allValuesFrom-001.html
 
-    test_case_onto = """
+    Since the original test is a test of entailment, a query is derived that
+    simulates the information implied by the Conclusion ontology
+    """
+
+    premise_ontology = """
     <rdf:RDF
         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
@@ -56,7 +64,7 @@ def test_all_values_from():
     </rdf:RDF>
     """
 
-    expected = """
+    conclusion_ontology = """
     <rdf:RDF
     xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
     xmlns:first="http://www.w3.org/2002/03owlt/allValuesFrom/premises001#"
@@ -69,14 +77,14 @@ def test_all_values_from():
     </rdf:RDF>  
     """
 
-    rdf_type = Symbol("rdf_syntax_ns_type")
+    rdf_type = Symbol(str(RDF.type))
     answer = Symbol("answer")
     x = Symbol("x")
     y = Symbol("y")
     test_base_q = Eb_((Implication(answer(x, y), rdf_type(x, y)),))
 
     dl = Datalog()
-    onto = OntologyParser(io.StringIO(test_case_onto))
+    onto = OntologyParser(io.StringIO(premise_ontology))
     dl = onto.parse_ontology(dl)
     sigmaB = dl.get_constraints()
 
@@ -95,6 +103,13 @@ def test_all_values_from():
     dl.walk(eB)
     dc = Chase(dl)
     solution_instance = dc.build_chase_solution()
+
+    resp = list(solution_instance["answer"].value.unwrapped_iter())
+
+    assert (
+        "http://www.w3.org/2002/03owlt/allValuesFrom/premises001#o",
+        "http://www.w3.org/2002/03owlt/allValuesFrom/premises001#c",
+    ) in resp
 
 
 def test_has_value():

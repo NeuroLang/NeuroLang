@@ -2,7 +2,7 @@ import nibabel as nib
 import pandas as pd
 import rdflib
 from nilearn import datasets
-from rdflib import OWL, RDF, BNode
+from rdflib import OWL, RDF, RDFS, BNode
 
 from ..exceptions import NeuroLangNotImplementedError
 from ..expressions import Constant, ExpressionBlock, Symbol
@@ -40,7 +40,6 @@ class OntologyParser:
 
     def _load_ontology(self, paths, load_format):
         self._create_graph(paths, load_format)
-        self._process_properties()
 
     def _create_graph(self, paths, load_format):
         g = rdflib.Graph()
@@ -48,32 +47,6 @@ class OntologyParser:
             g.load(path, format=load_format)
 
         self.graph = g
-
-    def _process_properties(self):
-        predicates = set(self.graph.predicates())
-        properties = list(
-            map(
-                lambda a: list(
-                    map(
-                        lambda s: s.replace("-", "_"),
-                        a.split("/")[-1].split("#"),
-                    )
-                ),
-                predicates,
-            )
-        )
-        properties = list(
-            map(
-                lambda x: x[0] + "_" + self._replace_property(x[1]), properties
-            )
-        )
-        self.predicates_translation = dict(zip(predicates, properties))
-
-    def _replace_property(self, prop):
-        if prop in ["rdf_schema_subClassOf", "rdf_schema_subPropertyOf"]:
-            prop = prop + "2"
-
-        return prop
 
     def parse_ontology(self, neurolangDL):
         self.eb = ExpressionBlock(())
@@ -118,8 +91,8 @@ class OntologyParser:
         z = Symbol("z")
 
         symbols = ()
-        for _, trans in self.predicates_translation.items():
-            symbol_name = trans
+        for pred in set(self.graph.predicates()):
+            symbol_name = str(pred)
             symbol = Symbol(symbol_name)
             const = Constant(symbol_name)
             symbols += (
@@ -133,8 +106,9 @@ class OntologyParser:
         self._parse_disjoint()
 
     def _parse_subproperties(self):
-        rdf_schema_subPropertyOf = Symbol("rdf_schema_subPropertyOf")
-        rdf_schema_subPropertyOf2 = Symbol("rdf_schema_subPropertyOf2")
+        rdf_schema_subPropertyOf = Symbol(str(RDFS.subPropertyOf))
+        rdf_schema_subPropertyOf2 = Symbol(str(RDFS.subPropertyOf) + "2")
+
         w = Symbol("w")
         x = Symbol("x")
         y = Symbol("y")
@@ -153,7 +127,7 @@ class OntologyParser:
             rdf_schema_subPropertyOf(x, z),
         )
 
-        owl_inverseOf = Symbol("owl_inverseOf")
+        owl_inverseOf = Symbol(str(OWL.inverseOf))
         inverseOf = RightImplication(
             Conjunction(
                 (
@@ -165,7 +139,7 @@ class OntologyParser:
             rdf_schema_subPropertyOf(w, z),
         )
 
-        rdf_syntax_ns_type = Symbol("rdf_syntax_ns_type")
+        rdf_syntax_ns_type = Symbol(str(RDF.type))
         objectProperty = RightImplication(
             rdf_syntax_ns_type(x, Constant(str(OWL.ObjectProperty))),
             rdf_schema_subPropertyOf(x, x),
@@ -177,8 +151,8 @@ class OntologyParser:
         )
 
     def _parse_subclasses(self):
-        rdf_schema_subClassOf = Symbol("rdf_schema_subClassOf")
-        rdf_schema_subClassOf2 = Symbol("rdf_schema_subClassOf2")
+        rdf_schema_subClassOf = Symbol(str(RDFS.subClassOf))
+        rdf_schema_subClassOf2 = Symbol(str(RDFS.subClassOf) + "2")
         w = Symbol("w")
         x = Symbol("x")
         y = Symbol("y")
@@ -194,7 +168,7 @@ class OntologyParser:
             rdf_schema_subClassOf(x, z),
         )
 
-        rdf_syntax_ns_rest = Symbol("rdf_syntax_ns_rest")
+        rdf_syntax_ns_rest = Symbol(str(RDF.rest))
         ns_rest = RightImplication(
             Conjunction(
                 (
@@ -206,7 +180,7 @@ class OntologyParser:
             rdf_schema_subClassOf(w, z),
         )
 
-        rdf_syntax_ns_type = Symbol("rdf_syntax_ns_type")
+        rdf_syntax_ns_type = Symbol(str(RDF.type))
         class_sim = RightImplication(
             rdf_syntax_ns_type(x, Constant(str(OWL.Class))),
             rdf_schema_subClassOf(x, x),
@@ -222,8 +196,8 @@ class OntologyParser:
         y = Symbol("y")
         z = Symbol("z")
 
-        owl_disjointWith = Symbol("owl_disjointWith")
-        rdf_schema_subClassOf = Symbol("rdf_schema_subClassOf")
+        owl_disjointWith = Symbol(str(OWL.disjointWith))
+        rdf_schema_subClassOf = Symbol(str(RDFS.subClassOf))
         disjoint = RightImplication(
             Conjunction(
                 (
@@ -284,7 +258,7 @@ class OntologyParser:
             cut_graph
         )
 
-        rdf_schema_subClassOf = Symbol("rdf_schema_subClassOf")
+        rdf_schema_subClassOf = Symbol(str(RDFS.subClassOf))
         property_symbol = Symbol(parsed_property)
 
         x = Symbol("x")
@@ -346,7 +320,7 @@ class OntologyParser:
 
         type_restricted = self.graph.triples((None, RDF.type, restricted_node))
         property_symbol = Symbol(parsed_property)
-        rdf_type = Symbol("rdf_syntax_ns_type")
+        rdf_type = Symbol(str(RDF.type))
         x = Symbol("x")
 
         for n_type, _, _ in type_restricted:
@@ -372,7 +346,7 @@ class OntologyParser:
         )[0][0]
         for triple in cut_graph:
             if OWL.onProperty == triple[1]:
-                parsed_property = self._parse_uri(str(triple[2]))
+                parsed_property = str(triple[2])
             elif OWL.allValuesFrom == triple[1] or OWL.hasValue == triple[1]:
                 value = triple[2]
 
@@ -403,10 +377,6 @@ class OntologyParser:
         for triple in list_iter:
             if RDF.rest == triple[1]:
                 return triple[2]
-
-    def _parse_uri(self, uri):
-        uri = uri.split("/")[-1].split("#")
-        return uri[0] + "_" + uri[1]
 
     def get_triples(self):
         return self.graph.triples((None, None, None))
