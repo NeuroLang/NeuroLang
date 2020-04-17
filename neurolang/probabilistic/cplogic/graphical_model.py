@@ -19,11 +19,14 @@ from ...relational_algebra import (
     NaturalJoin,
     Projection,
     RelationalAlgebraSolver,
+    ConcatenateConstantColumn,
     RenameColumn,
     Selection,
+    str2columnstr,
     Union,
     eq_,
 )
+from ...relational_algebra_provenance import ProvenanceAlgebraSet
 from ...utils.relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraFrozenSet,
@@ -51,15 +54,15 @@ def bernoulli_vect_table_distrib(p, grounding):
         raise NeuroLangException(
             "Bernoulli's parameter must be Constant[float]"
         )
-    return VectorisedTableDistribution(
-        Constant[Mapping](
-            {
-                Constant[bool](False): Constant[float](1.0 - p.value),
-                Constant[bool](True): p,
-            }
-        ),
-        grounding,
+    provenance_column = str2columnstr("__p__")
+    relation = ConcatenateConstantColumn(
+        relation=grounding.relation,
+        column_value=p,
+        column_name=provenance_column,
     )
+    # TODO: don't solve here but nest in RAP solver
+    relation = RelationalAlgebraSolver().walk(relation)
+    return ProvenanceAlgebraSet(relation, provenance_column)
 
 
 def multi_bernoulli_vect_table_distrib(grounding):
@@ -67,20 +70,10 @@ def multi_bernoulli_vect_table_distrib(grounding):
         raise NeuroLangException(
             "Bernoulli's parameter must be Constant[AbstractSet]"
         )
-    prob_col = Constant(
-        ColumnStr(grounding.expression.consequent.probability.name)
+    probability_column = str2columnstr(
+            grounding.expression.consequent.probability.name
     )
-    prob_num_col = Constant(ColumnStr(make_numerical_col_symb().name))
-    rename = RenameColumn(grounding.relation, prob_col, prob_num_col)
-    return VectorisedTableDistribution(
-        Constant[Mapping](
-            {
-                Constant[bool](True): rename,
-                Constant[bool](False): NegateProbability(rename),
-            }
-        ),
-        grounding,
-    )
+    return ProvenanceAlgebraSet(grounding.relation, probability_column)
 
 
 def probchoice_distribution(grounding, choice_rv_symb):
@@ -108,10 +101,8 @@ def probchoice_distribution(grounding, choice_rv_symb):
 
     """
     columns = tuple(
-        Constant(ColumnStr(arg.name))
-        for arg in grounding.expression.predicate.args
+        str2columnstr(arg.name) for arg in grounding.expression.predicate.args
     )
-    shared_num_col = Constant(ColumnStr(make_numerical_col_symb().name))
     truth_prob = Union(
         AddRepeatedValueColumn(
             Difference(
