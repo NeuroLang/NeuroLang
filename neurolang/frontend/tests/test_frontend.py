@@ -1,9 +1,9 @@
+from collections import namedtuple
 from typing import AbstractSet, Callable, Tuple
 from unittest.mock import patch
 
 import numpy as np
 import pytest
-
 from neurolang import frontend
 from neurolang.frontend import query_resolution
 
@@ -422,6 +422,24 @@ def test_neurolang_dl_aggregation():
     assert len(sol) == 2
     assert sol[r] == res_q
     assert sol[p] == res_q
+
+
+def test_neurolang_dl_attribute_access():
+    neurolang = frontend.NeurolangDL()
+    one_element = namedtuple('t', ('x', 'y'))(1, 2)
+
+    a = neurolang.add_tuple_set([(one_element,)], name='a')
+    with neurolang.scope as e:
+        e.q[e.x] = a[e.x]
+        e.r[e.y] = a[e.w] & (e.y == e.w.x)
+        res = neurolang.solve_all()
+
+    q = res['q']
+    r = res['r']
+    assert len(q) == 1
+    el = next(q.unwrapped_iter())[0]
+    assert el == one_element
+    assert r.unwrap() == {(one_element.x,)}
 
 
 def test_multiple_symbols_query():
