@@ -14,17 +14,14 @@ class NoisyORProbabilityProvenanceSolver(
 ):
     @add_match(Projection)
     def projection(self, projection_op):
-        prov_cst_relation = self.walk(projection_op.relation)
-        prov_col = prov_cst_relation.provenance_column
-        cst_relation = prov_cst_relation.value
+        prov_set = self.walk(projection_op.relation)
+        prov_col = prov_set.provenance_column
         group_cols = list(col.value for col in projection_op.attributes)
-        aggregations = {prov_col: noisy_or_aggregation}
-        new_relation = cst_relation.value
+        aggregations = {prov_col.value: lambda s: 1 - (1 - s).prod()}
+        new_relation = prov_set.value
         new_relation = new_relation.aggregate(group_cols, aggregations)
-        proj_cols = [prov_col] + group_cols
+        proj_cols = [prov_col.value] + group_cols
         new_relation = new_relation.projection(*proj_cols)
         return ProvenanceAlgebraSet(new_relation, prov_col)
 
 
-def noisy_or_aggregation(probs_series):
-    return 1 - (1 - probs_series).prod()
