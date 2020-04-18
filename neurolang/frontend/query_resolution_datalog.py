@@ -201,5 +201,5 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             raise ValueError(f'{predicate_name} is not a string or symbol')
         return tuple(
             s.name
-            for s in self.solver.predicate_parameter_names(predicate_name)
+            for s in self.solver.predicate_terms(predicate_name)
         )

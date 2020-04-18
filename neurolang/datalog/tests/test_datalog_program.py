@@ -180,17 +180,17 @@ def test_intensional_extensional_database():
     assert len(idb['R'].formulas) == 2
     assert len(idb['T'].formulas) == 1
 
-    assert dl.predicate_parameter_names('R') == ('x', 'y', 'z')
-    assert dl.predicate_parameter_names('R0') == ('0', '1', '2')
+    assert dl.predicate_terms('R') == ('x', 'y', 'z')
+    assert dl.predicate_terms('R0') == ('0', '1', '2')
 
     dl.walk(Imp_(R(x, y, w), R0(x, y, w)))
     assert (
-        dl.predicate_parameter_names('R') == ('x', 'y', 'z') or
-        dl.predicate_parameter_names('R') == ('x', 'y', 'w')
+        dl.predicate_terms('R') == ('x', 'y', 'z') or
+        dl.predicate_terms('R') == ('x', 'y', 'w')
     )
 
     with pytest.raises(NeuroLangException):
-        dl.predicate_parameter_names('QQ')
+        dl.predicate_terms('QQ')
 
 
 def test_not_conjunctive():

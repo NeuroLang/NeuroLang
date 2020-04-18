@@ -199,7 +199,7 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
             )
         }
 
-    def predicate_parameter_names(self, predicate):
+    def predicate_terms(self, predicate):
         try:
             pred_repr = self.symbol_table[predicate]
             if isinstance(pred_repr, Union):
