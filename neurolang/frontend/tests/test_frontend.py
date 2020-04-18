@@ -12,6 +12,7 @@ from ...datalog import DatalogProgram, Fact, Implication
 from ...expression_walker import ExpressionBasicEvaluator
 from ...regions import ExplicitVBR, Region, SphericalVolume
 from ...type_system import Unknown
+from ...utils import FrozenArrayView
 from .. import query_resolution_expressions as qre
 from ..query_resolution_expressions import Symbol
 
@@ -440,6 +441,26 @@ def test_neurolang_dl_attribute_access():
     el = next(q.unwrapped_iter())[0]
     assert el == one_element
     assert r.unwrap() == {(one_element.x,)}
+
+
+def test_neurolang_dl_attribute_access_ndarray():
+    neurolang = frontend.NeurolangDL()
+    one_element = namedtuple('t', ('x', 'y'))(
+        1, np.eye(3).view(FrozenArrayView)
+    )
+
+    a = neurolang.add_tuple_set([(one_element,)], name='a')
+    with neurolang.scope as e:
+        e.q[e.x] = a[e.x]
+        e.r[e.y] = a[e.w] & (e.y == e.w.y)
+        res = neurolang.solve_all()
+
+    q = res['q']
+    #r = res['r']
+    assert len(q) == 1
+    el = next(q.unwrapped_iter())[0]
+    assert el == one_element
+    #assert r.unwrap() == {(one_element.y,)}
 
 
 def test_multiple_symbols_query():
