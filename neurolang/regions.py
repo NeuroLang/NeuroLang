@@ -417,6 +417,15 @@ class ExplicitVBROverlay(ExplicitVBR):
             image_dim = self.image_dim
         else:
             image_dim = self.image_dim + self.overlay.shape[1:]
+        out = self._obtain_empty_spatial_image(
+            out, image_dim, background_value
+        )
+        image_data = out.dataobj
+
+        image_data[tuple(self.voxels.T)] = self.overlay.squeeze()
+        return out
+
+    def _obtain_empty_spatial_image(self, out, image_dim, background_value):
         if out is None:
             mask = np.zeros(
                 image_dim,
@@ -434,8 +443,6 @@ class ExplicitVBROverlay(ExplicitVBR):
         else:
             mask = np.asanyarray(out.dataobj)
             mask[:] = background_value
-
-        mask[tuple(self.voxels.T)] = self.overlay.squeeze()
         return out
 
     def __eq__(self, other):
