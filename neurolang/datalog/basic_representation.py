@@ -203,16 +203,7 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
         try:
             pred_repr = self.symbol_table[predicate]
             if isinstance(pred_repr, Union):
-                head_args = None
-                for formula in pred_repr.formulas:
-                    if head_args is None:
-                        head_args = formula.consequent.args
-                    elif head_args != formula.consequent.args:
-                        warn(
-                            'Several argument names found in the rules '
-                            f'defining {predicate}, keeping one'
-                        )
-                        break
+                head_args = self._predicate_terms_intensional(pred_repr)
                 return head_args
             elif is_leq_informative(pred_repr.type, AbstractSet):
                 row_type = get_args(pred_repr.type)[0]
@@ -225,6 +216,19 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
                 raise NeuroLangException(f'Predicate {predicate} not found')
         except KeyError:
             raise NeuroLangException(f'Predicate {predicate} not found')
+
+    def _predicate_terms_intensional(self, pred_repr):
+        head_args = None
+        for formula in pred_repr.formulas:
+            if head_args is None:
+                head_args = formula.consequent.args
+            elif head_args != formula.consequent.args:
+                warn(
+                    'Several argument names found in the rules '
+                    f'defining {formula.consequent.functor.name}, keeping one'
+                )
+                break
+        return head_args
 
     def extensional_database(self):
         ret = self.symbol_table.symbols_by_type(AbstractSet)
