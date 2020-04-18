@@ -273,6 +273,8 @@ class ExplicitVBR(VolumetricBrainRegion):
         self.voxels = np.asanyarray(voxels, dtype=int)
         self.affine = affine_matrix
         self.affine_inv = np.linalg.inv(self.affine)
+        for ar in (self.voxels, self.affine, self.affine_inv):
+            ar.setflags(write=False)
         self.image_dim = image_dim
         self._aabb_tree = None
         self._bounding_box = self.generate_bounding_box(self.voxels)
@@ -389,6 +391,82 @@ class ExplicitVBR(VolumetricBrainRegion):
 
     def __hash__(self):
         return hash((self.voxels.tobytes(), self.affine.tobytes()))
+
+
+class ExplicitVBROverlay(ExplicitVBR):
+    def __init__(
+        self, voxels, affine_matrix, overlay,
+        image_dim=None, prebuild_tree=False
+    ):
+        super().__init__(
+            voxels, affine_matrix,
+            image_dim=image_dim, prebuild_tree=prebuild_tree
+        )
+        self.overlay = np.atleast_2d(overlay)
+        if self.overlay.shape == (1, len(self.voxels)):
+            self.overlay = self.overlay.T
+        self.overlay.setflags(write=False)
+        if self.overlay.shape[0] != self.voxels.shape[0]:
+            raise ValueError(
+                'The length of the overlay must be '
+                'the same as that of the voxels'
+            )
+
+    def spatial_image(self, out=None, background_value=0):
+        if self.overlay.shape[1:] == (1,):
+            image_dim = self.image_dim
+        else:
+            image_dim = self.image_dim + self.overlay.shape[1:]
+        out = self._obtain_empty_spatial_image(
+            out, image_dim, background_value
+        )
+        image_data = out.dataobj
+
+        image_data[tuple(self.voxels.T)] = self.overlay.squeeze()
+        return out
+
+    def _obtain_empty_spatial_image(self, out, image_dim, background_value):
+        if out is None:
+            mask = np.zeros(
+                image_dim,
+                dtype=self.overlay.dtype
+            )
+            out = nib.spatialimages.SpatialImage(mask, self.affine)
+        elif (
+            out.shape != image_dim and
+            not np.allclose(out.affine, self.affine) and
+            self.overlay.dtype != out.dataobj.dtype
+        ):
+            raise ValueError(
+                "Image data has incompatible dimensionality or type"
+            )
+        else:
+            mask = np.asanyarray(out.dataobj)
+            mask[:] = background_value
+        return out
+
+    def __eq__(self, other):
+        return (
+            isinstance(other, ExplicitVBROverlay) and
+            np.array_equiv(self.affine, other.affine) and
+            np.array_equiv(self.voxels, other.voxels) and
+            np.array_equiv(self.overlay, other.overlay)
+        )
+
+    def __repr__(self):
+        return (
+            f'Region(VBR= affine:{self.affine}, '
+            f'voxels:{self.voxels}, overlay:{self.overlay})'
+        )
+
+    def __hash__(self):
+        return hash(
+            (
+                self.voxels.tobytes(),
+                self.affine.tobytes(),
+                self.overlay.tobytes()
+            )
+        )
 
 
 def region_set_from_masked_data(data, affine, dim):
