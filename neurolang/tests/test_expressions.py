@@ -2,14 +2,12 @@ import inspect
 import operator as op
 from typing import AbstractSet, Callable, Mapping, Sequence, Tuple
 
-import numpy as np
 import pytest
 
 from .. import expressions, logic
 from ..expression_walker import (ExpressionBasicEvaluator,
                                  TypedSymbolTableEvaluator)
 from ..expressions import Expression, Unknown, expressions_behave_as_objects
-from ..utils import FrozenArrayView
 
 C_ = expressions.Constant
 S_ = expressions.Symbol
@@ -46,11 +44,6 @@ def test_build_constants():
     assert len(b.value) == 1
     assert C_('a') in b.value
     assert C_(1) in b.value.values()
-
-    b = C_(np.eye(4))
-    assert issubclass(b.type, np.ndarray)
-    assert b.type is FrozenArrayView
-    assert np.array_equiv(b.value, np.eye(4))
 
 
 def test_fresh_symbol():

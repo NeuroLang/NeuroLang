@@ -18,7 +18,6 @@ from .type_system import get_args as get_type_args
 from .type_system import infer_type as _infer_type
 from .type_system import infer_type_builtins, is_leq_informative, unify_types
 from .typed_symbol_table import TypedSymbolTable
-from .utils import FrozenArrayView
 
 __all__ = [
     'Symbol', 'FunctionApplication', 'Statement',
@@ -442,9 +441,6 @@ class Constant(Expression):
         self._symbols = set()
         if is_leq_informative(self.type, typing.Mapping):
             self._auto_build_mapping_()
-        elif isinstance(self.value, np.ndarray):
-            self.value = self.value.view(FrozenArrayView)
-            self.type = FrozenArrayView
         elif (
             not is_leq_informative(self.type, typing.Text) and
             is_leq_informative(self.type, typing.Iterable)

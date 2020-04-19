@@ -13,7 +13,6 @@ from ...datalog import DatalogProgram, Fact, Implication
 from ...expression_walker import ExpressionBasicEvaluator
 from ...regions import ExplicitVBR, Region, SphericalVolume
 from ...type_system import Unknown
-from ...utils import FrozenArrayView
 from .. import query_resolution_expressions as qre
 from ..query_resolution_expressions import Symbol
 
@@ -444,26 +443,6 @@ def test_neurolang_dl_attribute_access():
     assert r.unwrap() == {(one_element.x,)}
 
 
-def test_neurolang_dl_attribute_access_ndarray():
-    neurolang = frontend.NeurolangDL()
-    one_element = namedtuple('t', ('x', 'y'))(
-        1, np.eye(3).view(FrozenArrayView)
-    )
-
-    a = neurolang.add_tuple_set([(one_element,)], name='a')
-    with neurolang.scope as e:
-        e.q[e.x] = a[e.x]
-        e.r[e.y] = a[e.w] & (e.y == e.w.y)
-        res = neurolang.solve_all()
-
-    q = res['q']
-    r = res['r']
-    assert len(q) == 1
-    el = next(q.unwrapped_iter())[0]
-    assert el == one_element
-    assert r.unwrap() == {(one_element.y,)}
-
-
 def test_neurolang_dl_set_destroy():
     neurolang = frontend.NeurolangDL()
     contains_ = neurolang.add_symbol(contains)
@@ -476,23 +455,6 @@ def test_neurolang_dl_set_destroy():
     q = res['q'].unwrap()
     assert len(q) == 3
     assert set(q.unwrap()) == {(0,), (1,), (2,)}
-
-
-def test_neurolang_dl_region_destroy():
-    neurolang = frontend.NeurolangDL()
-    contains_ = neurolang.add_symbol(contains)
-
-    a = neurolang.add_tuple_set([
-        (ExplicitVBR(np.eye(3), np.eye(4)),)
-    ], name='a')
-    with neurolang.scope as e:
-        e.v[e.y] = a[e.x] & (e.y == e.x.voxels)
-        e.q[e.y] = e.v[e.x] & contains_(e.x, e.y)
-        res = neurolang.solve_all()
-
-    q = res['q'].unwrap()
-    assert len(q) == 3
-    assert set(q.unwrap()) == set(np.eye(3))
 
 
 def test_multiple_symbols_query():
