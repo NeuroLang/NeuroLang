@@ -94,7 +94,8 @@ class Expression(object):
 
 
 binary_operations = (
-    op.add, op.sub, op.mul, op.ge, op.le, op.gt, op.lt, op.eq
+    op.add, op.sub, op.mul, op.ge, op.le, op.gt, op.lt, op.eq,
+    op.contains
 )
 
 
@@ -111,10 +112,11 @@ def op_bind(op):
             op, auto_infer_type=False
         )
         new_expression = functor(*new_args)
-        return Operation(
+        res = Operation(
             self.query_builder, new_expression, op,
             (self,) + args, infix=len(args) > 0
         )
+        return res
 
     return fun
 

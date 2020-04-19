@@ -1,4 +1,5 @@
 from collections import namedtuple
+from operator import contains
 from typing import AbstractSet, Callable, Tuple
 from unittest.mock import patch
 
@@ -461,6 +462,37 @@ def test_neurolang_dl_attribute_access_ndarray():
     el = next(q.unwrapped_iter())[0]
     assert el == one_element
     assert r.unwrap() == {(one_element.y,)}
+
+
+def test_neurolang_dl_set_destroy():
+    neurolang = frontend.NeurolangDL()
+    contains_ = neurolang.add_symbol(contains)
+
+    a = neurolang.add_tuple_set([(frozenset((0, 1, 2)),)], name='a')
+    with neurolang.scope as e:
+        e.q[e.y] = a[e.x] & contains_(e.x, e.y)
+        res = neurolang.solve_all()
+
+    q = res['q'].unwrap()
+    assert len(q) == 3
+    assert set(q.unwrap()) == {(0,), (1,), (2,)}
+
+
+def test_neurolang_dl_region_destroy():
+    neurolang = frontend.NeurolangDL()
+    contains_ = neurolang.add_symbol(contains)
+
+    a = neurolang.add_tuple_set([
+        (ExplicitVBR(np.eye(3), np.eye(4)),)
+    ], name='a')
+    with neurolang.scope as e:
+        e.v[e.y] = a[e.x] & (e.y == e.x.voxels)
+        e.q[e.y] = e.v[e.x] & contains_(e.x, e.y)
+        res = neurolang.solve_all()
+
+    q = res['q'].unwrap()
+    assert len(q) == 3
+    assert set(q.unwrap()) == set(np.eye(3))
 
 
 def test_multiple_symbols_query():
