@@ -456,11 +456,11 @@ def test_neurolang_dl_attribute_access_ndarray():
         res = neurolang.solve_all()
 
     q = res['q']
-    #r = res['r']
+    r = res['r']
     assert len(q) == 1
     el = next(q.unwrapped_iter())[0]
     assert el == one_element
-    #assert r.unwrap() == {(one_element.y,)}
+    assert r.unwrap() == {(one_element.y,)}
 
 
 def test_multiple_symbols_query():
