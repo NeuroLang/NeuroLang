@@ -29,9 +29,6 @@ class ColumnStr(str, Column):
     """Refer to a named relational algebra set's column by its name."""
 
 
-FunctionApplication = FunctionApplication
-
-
 class RelationalAlgebraOperation(Definition):
     pass
 
