@@ -1,6 +1,6 @@
 from typing import AbstractSet, Callable, Tuple
 
-from ..expression_walker import add_match
+from ..expression_walker import add_match, PatternWalker
 from ..expressions import (Constant, FunctionApplication, NeuroLangException,
                            NonConstant, Symbol, is_leq_informative)
 from ..type_system import Unknown
@@ -27,7 +27,7 @@ class NegativeFact(Implication):
         )
 
 
-class DatalogProgramNegationMixin(DatalogProgram):
+class DatalogProgramNegationMixin(PatternWalker):
     '''Datalog solver that implements negation. Adds the possibility of
     inverted terms when checking that expressions are in conjunctive
     normal form.'''
