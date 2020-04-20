@@ -297,11 +297,74 @@ class OntologyParser:
         instances of the class must have a value for the property.
         """
         pass
+        parsed_property, restricted_node, value = self._parse_restriction_nodes(
+            cut_graph
+        )
+
+        rdf_type = Symbol(str(RDF.type))
+        property_symbol = Symbol(parsed_property)
+
+        x = Symbol("x")
+        y = Symbol("y")
+
+        constraint = ExpressionBlock(
+            (
+                RightImplication(
+                    Conjunction(
+                        (
+                            rdf_type(x, Constant(str(restricted_node))),
+                            property_symbol(x, y),
+                        )
+                    ),
+                    len(y) > value,
+                ),
+            )
+        )
+
+        self.eb = ExpressionBlock(
+            self.eb.expressions + (constraint.expressions)
+        )
 
     def _process_maxCardinality(self, cut_graph):
+        """
+        A restriction containing an owl:maxCardinality constraint describes
+        a class of all individuals that have at most N semantically distinct
+        values (individuals or data values) for the property concerned,
+        where N is the value of the cardinality constraint.
+
+        The following example describes a class of individuals
+        that have at most two parents:
+
+        <owl:Restriction>
+            <owl:onProperty rdf:resource="#hasParent" />
+            <owl:maxCardinality rdf:datatype="&xsd;nonNegativeInteger">
+                2
+            </owl:maxCardinality>
+        </owl:Restriction>
+        """
         pass
 
     def _process_cardinality(self, cut_graph):
+        """
+        A restriction containing an owl:cardinality constraint describes
+        a class of all individuals that have exactly N semantically distinct
+        values (individuals or data values) for the property concerned,
+        where N is the value of the cardinality constraint.
+
+        This construct is in fact redundant as it can always be replaced
+        by a pair of matching owl:minCardinality and owl:maxCardinality
+        constraints with the same value. It is included as a convenient
+        shorthand for the user.
+
+        The following example describes a class of individuals that have exactly two parents:
+
+        <owl:Restriction>
+            <owl:onProperty rdf:resource="#hasParent" />
+            <owl:cardinality rdf:datatype="&xsd;nonNegativeInteger">
+                2
+            </owl:cardinality>
+        </owl:Restriction>
+        """
         pass
 
     def _process_allValuesFrom(self, cut_graph):
@@ -328,22 +391,26 @@ class OntologyParser:
 
         constraints = ExpressionBlock(())
 
-        type_restricted = self.graph.triples((None, RDF.type, restricted_node))
         property_symbol = Symbol(parsed_property)
         rdf_type = Symbol(str(RDF.type))
         x = Symbol("x")
+        y = Symbol("y")
 
-        for n_type, _, _ in type_restricted:
-            for value in allValuesFrom:
-                constraints = ExpressionBlock(
-                    constraints.expressions
-                    + (
-                        RightImplication(
-                            property_symbol(Constant(str(n_type)), x),
-                            rdf_type(x, Constant(str(value))),
+        for value in allValuesFrom:
+            constraints = ExpressionBlock(
+                constraints.expressions
+                + (
+                    RightImplication(
+                        Conjunction(
+                            (
+                                rdf_type(y, Constant(str(restricted_node))),
+                                property_symbol(y, x),
+                            )
                         ),
-                    )
+                        rdf_type(x, Constant(str(value))),
+                    ),
                 )
+            )
 
         self.eb = ExpressionBlock(
             self.eb.expressions + constraints.expressions

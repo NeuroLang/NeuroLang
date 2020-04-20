@@ -176,6 +176,120 @@ def test_has_value():
     ) in resp
 
 
+def test_min_cardinality():
+    test_case = """
+    <rdf:RDF
+        xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+        xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+        xmlns:owl="http://www.w3.org/2002/07/owl#"
+        xml:base="http://www.w3.org/2002/03owlt/cardinality/conclusions001" >
+        <owl:Class rdf:about="premises001#c">
+        <rdfs:subClassOf>
+            <owl:Restriction>
+                <owl:onProperty rdf:resource="premises001#p"/>
+                <owl:minCardinality 
+                    rdf:datatype="http://www.w3.org/2001/XMLSchema#nonNegativeInteger">
+                    2
+                </owl:minCardinality>
+            </owl:Restriction>
+        </rdfs:subClassOf>
+        </owl:Class>
+        <owl:ObjectProperty rdf:about="premises001#p"/>
+    </rdf:RDF>
+    """
+
+    answer = Symbol("answer")
+    x = Symbol("x")
+    y = Symbol("y")
+    p2 = Symbol("http://www.w3.org/2002/03owlt/hasValue/premises001#p2")
+    test_base_q = Eb_((Implication(answer(x, y), p2(x, y)),))
+
+    dl = Datalog()
+    onto = OntologyParser(io.StringIO(test_case))
+    dl = onto.parse_ontology(dl)
+    sigmaB = dl.get_constraints()
+
+    dt = DatalogTranslator()
+    qB = dt.walk(test_base_q)
+    sigmaB = dt.walk(sigmaB)
+
+    orw = OntologyRewriter(qB, sigmaB)
+    rewrite = orw.Xrewrite()
+
+    eB = ()
+    for imp in rewrite:
+        eB += (imp[0],)
+    eB = ExpressionBlock(eB)
+
+    dl.walk(eB)
+    dc = Chase(dl)
+    solution_instance = dc.build_chase_solution()
+
+    resp = list(solution_instance["answer"].value.unwrapped_iter())
+
+    assert (
+        "http://www.w3.org/2002/03owlt/hasValue/premises001#i",
+        "true",
+    ) in resp
+
+
+def test_max_cardinality():
+    test_case = """
+    <rdf:RDF
+        xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+        xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+        xmlns:owl="http://www.w3.org/2002/07/owl#"
+        xml:base="http://www.w3.org/2002/03owlt/cardinality/conclusions001" >
+        <owl:Class rdf:about="premises001#c">
+        <rdfs:subClassOf>
+            <owl:Restriction>
+                <owl:onProperty rdf:resource="premises001#p"/>
+                <owl:maxCardinality 
+                    rdf:datatype="http://www.w3.org/2001/XMLSchema#nonNegativeInteger">
+                    2
+                </owl:maxCardinality>
+            </owl:Restriction>
+        </rdfs:subClassOf>
+        </owl:Class>
+        <owl:ObjectProperty rdf:about="premises001#p"/>
+    </rdf:RDF>
+    """
+
+    answer = Symbol("answer")
+    x = Symbol("x")
+    y = Symbol("y")
+    p2 = Symbol("http://www.w3.org/2002/03owlt/hasValue/premises001#p2")
+    test_base_q = Eb_((Implication(answer(x, y), p2(x, y)),))
+
+    dl = Datalog()
+    onto = OntologyParser(io.StringIO(test_case))
+    dl = onto.parse_ontology(dl)
+    sigmaB = dl.get_constraints()
+
+    dt = DatalogTranslator()
+    qB = dt.walk(test_base_q)
+    sigmaB = dt.walk(sigmaB)
+
+    orw = OntologyRewriter(qB, sigmaB)
+    rewrite = orw.Xrewrite()
+
+    eB = ()
+    for imp in rewrite:
+        eB += (imp[0],)
+    eB = ExpressionBlock(eB)
+
+    dl.walk(eB)
+    dc = Chase(dl)
+    solution_instance = dc.build_chase_solution()
+
+    resp = list(solution_instance["answer"].value.unwrapped_iter())
+
+    assert (
+        "http://www.w3.org/2002/03owlt/hasValue/premises001#i",
+        "true",
+    ) in resp
+
+
 def test_not_implemented():
 
     test_case = """
