@@ -40,13 +40,16 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
     In the symbol table the value for a symbol `S` is implemented as:
 
     * If `S` is part of the extensional database, then the value of the symbol
-    is a set of tuples `a` representing `S(*a)` as facts
+    is a set of tuples `a` representing `S(*a)` as facts. The type of the
+    symbol must be more informative than `AbstractSet[Tuple]`
 
     * If `S` is part of the intensional database then its value is an
     `Union` of `Implications`. For instance
     `Q(x) :- R(x, x)` and `Q(x) :- T(x)` is represented as a symbol `Q`
      with value
-     `Union((Implication(Q(x), R(x, x)), Implication(Q(x), T(x))))`
+     `Union((Implication(Q(x), R(x, x)), Implication(Q(x), T(x))))`.
+     The type of the symbol `Q` in the symbol_table will be
+     `UnionOfConjunctiveQueries`.
     '''
 
     protected_keywords = set()

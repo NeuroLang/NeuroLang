@@ -18,9 +18,10 @@ from ..expression_walker import PatternWalker, add_match
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..logic.unification import apply_substitution_arguments
 from ..utils import OrderedSet
-from .expressions import TranslateToLogic
-from . import (Union, Implication, chase, extract_logic_free_variables,
+from . import (Implication, Union, chase, extract_logic_free_variables,
                is_conjunctive_expression_with_nested_predicates)
+from .basic_representation import UnionOfConjunctiveQueries
+from .expressions import TranslateToLogic
 
 
 class AggregationApplication(FunctionApplication):
@@ -92,8 +93,8 @@ class DatalogWithAggregationMixin(PatternWalker):
             eb = tuple()
 
         eb = eb + (expression, )
-
-        self.symbol_table[consequent.functor] = Union(eb)
+        symbol = consequent.functor.cast(UnionOfConjunctiveQueries)
+        self.symbol_table[symbol] = Union(eb)
 
         return expression
 
