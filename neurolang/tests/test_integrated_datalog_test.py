@@ -38,3 +38,11 @@ def test_all_composed():
 
     dl = Datalog()
     dl.walk(program)
+
+    assert len(dl.extensional_database()) == 2
+    assert len(dl.intensional_database()) == 2
+    assert len(dl.probabilistic_facts()) == 1
+
+    assert A in dl.extensional_database() and B in dl.extensional_database()
+    assert D in dl.intensional_database() and E in dl.intensional_database()
+    assert B in dl.probabilistic_facts()
