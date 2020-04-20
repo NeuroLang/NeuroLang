@@ -6,7 +6,8 @@ from rdflib import RDF
 from ... import expression_walker as ew
 from ...exceptions import NeuroLangNotImplementedError
 from ...expression_walker import ExpressionBasicEvaluator
-from ...expressions import Constant, ExpressionBlock, Symbol
+from ...expressions import Constant, Symbol
+from ...logic import Union
 from ..aggregation import DatalogWithAggregationMixin
 from ..chase import Chase
 from ..constraints_representation import DatalogConstraintsProgram
@@ -17,15 +18,6 @@ from ..ontologies_rewriter import OntologyRewriter
 
 class Datalog(DatalogConstraintsProgram, ExpressionBasicEvaluator):
     pass
-
-
-class DatalogTranslator(
-    TranslateToLogic, DatalogWithAggregationMixin, ew.IdentityWalker
-):
-    pass
-
-
-Eb_ = ExpressionBlock
 
 
 def test_all_values_from():
@@ -81,24 +73,20 @@ def test_all_values_from():
     answer = Symbol("answer")
     x = Symbol("x")
     y = Symbol("y")
-    test_base_q = Eb_((Implication(answer(x, y), rdf_type(x, y)),))
+    test_base_q = Union((Implication(answer(x, y), rdf_type(x, y)),))
 
     dl = Datalog()
     onto = OntologyParser(io.StringIO(premise_ontology))
     dl = onto.parse_ontology(dl)
     sigmaB = dl.get_constraints()
 
-    dt = DatalogTranslator()
-    qB = dt.walk(test_base_q)
-    sigmaB = dt.walk(sigmaB)
-
-    orw = OntologyRewriter(qB, sigmaB)
+    orw = OntologyRewriter(test_base_q, sigmaB)
     rewrite = orw.Xrewrite()
 
     eB = ()
     for imp in rewrite:
         eB += (imp[0],)
-    eB = ExpressionBlock(eB)
+    eB = Union(eB)
 
     dl.walk(eB)
     dc = Chase(dl)
@@ -145,24 +133,20 @@ def test_has_value():
     x = Symbol("x")
     y = Symbol("y")
     p2 = Symbol("http://www.w3.org/2002/03owlt/hasValue/premises001#p2")
-    test_base_q = Eb_((Implication(answer(x, y), p2(x, y)),))
+    test_base_q = Union((Implication(answer(x, y), p2(x, y)),))
 
     dl = Datalog()
     onto = OntologyParser(io.StringIO(test_case))
     dl = onto.parse_ontology(dl)
     sigmaB = dl.get_constraints()
 
-    dt = DatalogTranslator()
-    qB = dt.walk(test_base_q)
-    sigmaB = dt.walk(sigmaB)
-
-    orw = OntologyRewriter(qB, sigmaB)
+    orw = OntologyRewriter(test_base_q, sigmaB)
     rewrite = orw.Xrewrite()
 
     eB = ()
     for imp in rewrite:
         eB += (imp[0],)
-    eB = ExpressionBlock(eB)
+    eB = Union(eB)
 
     dl.walk(eB)
     dc = Chase(dl)
@@ -212,24 +196,20 @@ def test_min_cardinality():
     x = Symbol("x")
     y = Symbol("y")
     p2 = Symbol("http://www.w3.org/2002/03owlt/hasValue/premises001#p")
-    test_base_q = Eb_((Implication(answer(x, y), p2(x, y)),))
+    test_base_q = Union((Implication(answer(x, y), p2(x, y)),))
 
     dl = Datalog()
     onto = OntologyParser(io.StringIO(test_case))
     dl = onto.parse_ontology(dl)
     sigmaB = dl.get_constraints()
 
-    dt = DatalogTranslator()
-    qB = dt.walk(test_base_q)
-    sigmaB = dt.walk(sigmaB)
-
-    orw = OntologyRewriter(qB, sigmaB)
+    orw = OntologyRewriter(test_base_q, sigmaB)
     rewrite = orw.Xrewrite()
 
     eB = ()
     for imp in rewrite:
         eB += (imp[0],)
-    eB = ExpressionBlock(eB)
+    eB = Union(eB)
 
     dl.walk(eB)
     dc = Chase(dl)
@@ -274,24 +254,20 @@ def test_max_cardinality():
     x = Symbol("x")
     y = Symbol("y")
     p2 = Symbol("http://www.w3.org/2002/03owlt/hasValue/premises001#p")
-    test_base_q = Eb_((Implication(answer(x, y), p2(x, y)),))
+    test_base_q = Union((Implication(answer(x, y), p2(x, y)),))
 
     dl = Datalog()
     onto = OntologyParser(io.StringIO(test_case))
     dl = onto.parse_ontology(dl)
     sigmaB = dl.get_constraints()
 
-    dt = DatalogTranslator()
-    qB = dt.walk(test_base_q)
-    sigmaB = dt.walk(sigmaB)
-
-    orw = OntologyRewriter(qB, sigmaB)
+    orw = OntologyRewriter(test_base_q, sigmaB)
     rewrite = orw.Xrewrite()
 
     eB = ()
     for imp in rewrite:
         eB += (imp[0],)
-    eB = ExpressionBlock(eB)
+    eB = Union(eB)
 
     dl.walk(eB)
     dc = Chase(dl)
