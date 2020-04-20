@@ -258,19 +258,23 @@ class OntologyParser:
             cut_graph
         )
 
-        rdf_schema_subClassOf = Symbol(str(RDFS.subClassOf))
+        rdf_type = Symbol(str(RDF.type))
         property_symbol = Symbol(parsed_property)
 
         x = Symbol("x")
 
         constraint = ExpressionBlock(
-            RightImplication(
-                rdf_schema_subClassOf(x, Constant(str(restricted_node))),
-                property_symbol(x, Constant(str(value))),
+            (
+                RightImplication(
+                    rdf_type(x, Constant(str(restricted_node))),
+                    property_symbol(x, Constant(str(value))),
+                ),
             )
         )
 
-        self.eb = ExpressionBlock(self.eb.expressions + (constraint,))
+        self.eb = ExpressionBlock(
+            self.eb.expressions + (constraint.expressions)
+        )
 
     def _process_minCardinality(self, cut_graph):
         """
@@ -292,6 +296,12 @@ class OntologyParser:
         Note that an owl:minCardinality of one or more means that all
         instances of the class must have a value for the property.
         """
+        pass
+
+    def _process_maxCardinality(self, cut_graph):
+        pass
+
+    def _process_cardinality(self, cut_graph):
         pass
 
     def _process_allValuesFrom(self, cut_graph):
