@@ -9,6 +9,7 @@ class LogicOperator(Definition):
 class UnaryLogicOperator(LogicOperator):
     pass
 
+
 class NaryLogicOperator(LogicOperator):
     pass
 

@@ -6,7 +6,7 @@ from rdflib import OWL, RDF, RDFS, BNode
 
 from ..exceptions import NeuroLangNotImplementedError
 from ..expressions import Constant, ExpressionBlock, Symbol
-from ..logic import Conjunction, LogicOperator
+from ..logic import Conjunction, LogicOperator, Union
 
 
 class RightImplication(LogicOperator):
@@ -37,6 +37,14 @@ class OntologyParser:
         self._triple = Symbol.fresh()
         self._pointer = Symbol.fresh()
         self._dom = Symbol.fresh()
+
+        self.parsed_restrictions = [
+            OWL.allValuesFrom,
+            OWL.hasValue,
+            OWL.minCardinality,
+            OWL.maxCardinality,
+            OWL.cardinality,
+        ]
 
     def _load_ontology(self, paths, load_format):
         self._create_graph(paths, load_format)
@@ -227,7 +235,7 @@ class OntologyParser:
                 process_restriction_method(cut_graph)
             except AttributeError:
                 raise NeuroLangNotImplementedError(
-                    f"""Ontology parser doesn\'t handle 
+                    f"""Ontology parser doesn\'t handle
                     restrictions of type {res_type}"""
                 )
 
@@ -254,12 +262,12 @@ class OntologyParser:
             <owl:hasValue rdf:resource="#Clinton" />
         </owl:Restriction>
         """
-        parsed_property, restricted_node, value = self._parse_restriction_nodes(
+        parsed_prop, restricted_node, value = self._parse_restriction_nodes(
             cut_graph
         )
 
         rdf_type = Symbol(str(RDF.type))
-        property_symbol = Symbol(parsed_property)
+        property_symbol = Symbol(parsed_prop)
 
         x = Symbol("x")
 
@@ -296,27 +304,28 @@ class OntologyParser:
         Note that an owl:minCardinality of one or more means that all
         instances of the class must have a value for the property.
         """
-        pass
-        parsed_property, restricted_node, value = self._parse_restriction_nodes(
+
+        parsed_prop, restricted_node, value = self._parse_restriction_nodes(
             cut_graph
         )
 
         rdf_type = Symbol(str(RDF.type))
-        property_symbol = Symbol(parsed_property)
+        property_symbol = Symbol(parsed_prop)
 
         x = Symbol("x")
         y = Symbol("y")
+        count = Symbol("count")
 
         constraint = ExpressionBlock(
             (
                 RightImplication(
-                    Conjunction(
+                    Union(
                         (
                             rdf_type(x, Constant(str(restricted_node))),
                             property_symbol(x, y),
                         )
                     ),
-                    len(y) > value,
+                    len(y) >= value,
                 ),
             )
         )
@@ -342,7 +351,34 @@ class OntologyParser:
             </owl:maxCardinality>
         </owl:Restriction>
         """
-        pass
+
+        parsed_prop, restricted_node, value = self._parse_restriction_nodes(
+            cut_graph
+        )
+
+        rdf_type = Symbol(str(RDF.type))
+        property_symbol = Symbol(parsed_prop)
+
+        x = Symbol("x")
+        y = Symbol("y")
+
+        constraint = ExpressionBlock(
+            (
+                RightImplication(
+                    Union(
+                        (
+                            rdf_type(x, Constant(str(restricted_node))),
+                            property_symbol(x, y),
+                        )
+                    ),
+                    len(y) <= value,
+                ),
+            )
+        )
+
+        self.eb = ExpressionBlock(
+            self.eb.expressions + (constraint.expressions)
+        )
 
     def _process_cardinality(self, cut_graph):
         """
@@ -356,7 +392,8 @@ class OntologyParser:
         constraints with the same value. It is included as a convenient
         shorthand for the user.
 
-        The following example describes a class of individuals that have exactly two parents:
+        The following example describes a class of individuals that have
+        exactly two parents:
 
         <owl:Restriction>
             <owl:onProperty rdf:resource="#hasParent" />
@@ -365,7 +402,33 @@ class OntologyParser:
             </owl:cardinality>
         </owl:Restriction>
         """
-        pass
+        parsed_prop, restricted_node, value = self._parse_restriction_nodes(
+            cut_graph
+        )
+
+        rdf_type = Symbol(str(RDF.type))
+        property_symbol = Symbol(parsed_prop)
+
+        x = Symbol("x")
+        y = Symbol("y")
+
+        constraint = ExpressionBlock(
+            (
+                RightImplication(
+                    Union(
+                        (
+                            rdf_type(x, Constant(str(restricted_node))),
+                            property_symbol(x, y),
+                        )
+                    ),
+                    len(y) == value,
+                ),
+            )
+        )
+
+        self.eb = ExpressionBlock(
+            self.eb.expressions + (constraint.expressions)
+        )
 
     def _process_allValuesFrom(self, cut_graph):
         """
@@ -383,15 +446,15 @@ class OntologyParser:
         for which the hasParent property only has values of class Human
         """
 
-        parsed_property, restricted_node, values_node = self._parse_restriction_nodes(
+        parsed_prop, restricted_node, values = self._parse_restriction_nodes(
             cut_graph
         )
 
-        allValuesFrom = self._parse_list(values_node)
+        allValuesFrom = self._parse_list(values)
 
         constraints = ExpressionBlock(())
 
-        property_symbol = Symbol(parsed_property)
+        property_symbol = Symbol(parsed_prop)
         rdf_type = Symbol(str(RDF.type))
         x = Symbol("x")
         y = Symbol("y")
@@ -417,6 +480,7 @@ class OntologyParser:
         )
 
     def _parse_restriction_nodes(self, cut_graph):
+
         restricted_node = cut_graph[0][0]
         restricted_node = list(
             self.graph.triples((None, None, restricted_node))
@@ -424,7 +488,7 @@ class OntologyParser:
         for triple in cut_graph:
             if OWL.onProperty == triple[1]:
                 parsed_property = str(triple[2])
-            elif OWL.allValuesFrom == triple[1] or OWL.hasValue == triple[1]:
+            elif triple[1] in self.parsed_restrictions:
                 value = triple[2]
 
         return parsed_property, restricted_node, value

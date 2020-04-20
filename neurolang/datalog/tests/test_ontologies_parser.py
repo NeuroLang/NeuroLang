@@ -20,7 +20,7 @@ class Datalog(DatalogConstraintsProgram, ExpressionBasicEvaluator):
 
 
 class DatalogTranslator(
-    TranslateToLogic, ew.IdentityWalker, DatalogWithAggregationMixin
+    TranslateToLogic, DatalogWithAggregationMixin, ew.IdentityWalker
 ):
     pass
 
@@ -177,6 +177,15 @@ def test_has_value():
 
 
 def test_min_cardinality():
+    """
+    Test case acquired from:
+    http://owl.semanticweb.org/page/TestCase:WebOnt-cardinality-001.html
+
+    Since the original test is a test of entailment between cardinality
+    and minCardinality and maxCardinality, a query is derived that
+    simulates the information implied.
+    """
+
     test_case = """
     <rdf:RDF
         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
@@ -234,6 +243,15 @@ def test_min_cardinality():
 
 
 def test_max_cardinality():
+    """
+    Test case acquired from:
+    http://owl.semanticweb.org/page/TestCase:WebOnt-cardinality-001.html
+
+    Since the original test is a test of entailment between cardinality
+    and minCardinality and maxCardinality, a query is derived that
+    simulates the information implied.
+    """
+
     test_case = """
     <rdf:RDF
         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
