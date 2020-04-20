@@ -45,17 +45,20 @@ needs_sphinx = '1.0'  # numpydoc requires sphinc >= 1.0
 # ones.
 sys.path.append(os.path.abspath('sphinxext'))
 
-extensions = ['sphinx.ext.autodoc',
-              'sphinx.ext.autosummary',
-              ('sphinx.ext.imgmath'  # only available for sphinx >= 1.4
-                  if sphinx.version_info[:2] >= (1, 4)
-                  else 'sphinx.ext.pngmath'),
-              'sphinx.ext.intersphinx',
-              'numpydoc.numpydoc',
-              'sphinx_gallery.gen_gallery',
-              ]
+extensions = [
+    # 'sphinx.ext.autodoc',
+    # 'sphinx.ext.autosummary',
+    # (
+    #    'sphinx.ext.imgmath'  # only available for sphinx >= 1.4
+    #    if sphinx.version_info[:2] >= (1, 4)
+    #    else 'sphinx.ext.pngmath'
+    # ),
+    # 'sphinx.ext.intersphinx',
+    # 'numpydoc.numpydoc',
+    'sphinx_gallery.gen_gallery',
+]
 
-# 
+
 # extensions = ['sphinx.ext.autodoc',
 #               'sphinx.ext.doctest',
 #               'sphinx.ext.intersphinx',

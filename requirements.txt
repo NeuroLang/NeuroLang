@@ -2,7 +2,7 @@
 numpy
 scipy
 nibabel
-pandas>=0.23.4
+pandas>=0.23.4,<1.0
 tatsu
 neurosynth==0.3.7
 matplotlib
