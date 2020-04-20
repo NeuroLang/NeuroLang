@@ -5,8 +5,9 @@ Magic Sets [1] rewriting implementation for Datalog.
 '''
 
 from ..expressions import Constant, Symbol
+from ..type_system import Unknown
 from . import expression_processing, extract_logic_predicates
-from .expressions import Union, Implication, Conjunction
+from .expressions import Conjunction, Implication, Union
 
 
 class AdornedExpression(Symbol):
@@ -15,7 +16,8 @@ class AdornedExpression(Symbol):
         self.adornment = adornment
         self.number = number
         self._symbols = expression._symbols
-        self.type = self.expression.type
+        if self.type is Unknown:
+            self.type = self.expression.type
 
     @property
     def name(self):

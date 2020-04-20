@@ -25,8 +25,12 @@ from .wrapped_collections import WrappedRelationalAlgebraSet
 __all__ = [
     "Implication", "Fact", "Undefined", "NullConstant",
     "UNDEFINED", "NULL", "WrappedRelationalAlgebraSet",
-    "DatalogProgram"
+    "DatalogProgram", "UnionOfConjunctiveQueries"
 ]
+
+
+class UnionOfConjunctiveQueries:
+    pass
 
 
 class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
@@ -36,13 +40,16 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
     In the symbol table the value for a symbol `S` is implemented as:
 
     * If `S` is part of the extensional database, then the value of the symbol
-    is a set of tuples `a` representing `S(*a)` as facts
+    is a set of tuples `a` representing `S(*a)` as facts. The type of the
+    symbol must be more informative than `AbstractSet[Tuple]`
 
     * If `S` is part of the intensional database then its value is an
     `Union` of `Implications`. For instance
     `Q(x) :- R(x, x)` and `Q(x) :- T(x)` is represented as a symbol `Q`
      with value
-     `Union((Implication(Q(x), R(x, x)), Implication(Q(x), T(x))))`
+     `Union((Implication(Q(x), R(x, x)), Implication(Q(x), T(x))))`.
+     The type of the symbol `Q` in the symbol_table will be
+     `UnionOfConjunctiveQueries`.
     '''
 
     protected_keywords = set()
@@ -115,7 +122,9 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
 
         self._validate_implication_syntax(consequent, antecedent)
 
-        if consequent.functor in self.symbol_table:
+        symbol = consequent.functor.cast(UnionOfConjunctiveQueries)
+
+        if symbol in self.symbol_table:
             disj = self._new_intensional_internal_representation(consequent)
         else:
             disj = tuple()
@@ -123,12 +132,13 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
         if expression not in disj:
             disj += (expression,)
 
-        self.symbol_table[consequent.functor] = Union(disj)
+        self.symbol_table[symbol] = Union(disj)
 
         return expression
 
     def _new_intensional_internal_representation(self, consequent):
-        value = self.symbol_table[consequent.functor]
+        symbol = consequent.functor.cast(UnionOfConjunctiveQueries)
+        value = self.symbol_table[symbol]
         if (
             isinstance(value, Constant) and
             is_leq_informative(value.type, AbstractSet)
@@ -137,7 +147,7 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
                 f'{consequent.functor.name} has been previously '
                 'defined as Fact or extensional database.'
             )
-        disj = self.symbol_table[consequent.functor].formulas
+        disj = self.symbol_table[symbol].formulas
 
         if (
             not isinstance(disj[0].consequent, FunctionApplication) or
@@ -192,10 +202,11 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
 
     def intensional_database(self):
         return {
-            k: v for k, v in self.symbol_table.items()
+            k: v for k, v
+            in self.symbol_table.items()
             if (
-                k not in self.protected_keywords and
-                isinstance(v, Union)
+                k not in self.protected_keywords
+                and k.type is UnionOfConjunctiveQueries
             )
         }
 
