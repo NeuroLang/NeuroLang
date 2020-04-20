@@ -57,7 +57,6 @@ extensions = [
         else 'sphinx.ext.pngmath'
     ),
     'sphinx.ext.intersphinx',
-    'math_dollar',  # has to go before numpydoc
     'numpydoc.numpydoc',
     # 'sphinx_gallery.gen_gallery',
 ]
