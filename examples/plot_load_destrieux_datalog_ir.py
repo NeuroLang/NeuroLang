@@ -134,8 +134,7 @@ solution = Chase(dl).build_chase_solution()
 
 rsbv = ew.ReplaceExpressionsByValues({})
 result = rsbv.walk(solution['superior_sts_l'])
-r = next(iter(result))[0]
 
-for name, region in result:
+for name, region in result.unwrapped_iter():
     plt.figure()
     plotting.plot_roi(region.spatial_image(), title=name)
