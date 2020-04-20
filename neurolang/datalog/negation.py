@@ -1,10 +1,10 @@
 from typing import AbstractSet, Callable, Tuple
 
-from ..expression_walker import add_match
+from ..expression_walker import add_match, PatternWalker
 from ..expressions import (Constant, FunctionApplication, NeuroLangException,
                            NonConstant, Symbol, is_leq_informative)
 from ..type_system import Unknown
-from .basic_representation import DatalogProgram
+from .basic_representation import DatalogProgram, UnionOfConjunctiveQueries
 from .expression_processing import extract_logic_free_variables
 from ..logic import Conjunction, Union, Implication, Negation, Quantifier
 
@@ -27,7 +27,7 @@ class NegativeFact(Implication):
         )
 
 
-class DatalogProgramNegation(DatalogProgram):
+class DatalogProgramNegationMixin(PatternWalker):
     '''Datalog solver that implements negation. Adds the possibility of
     inverted terms when checking that expressions are in conjunctive
     normal form.'''
@@ -69,9 +69,10 @@ class DatalogProgramNegation(DatalogProgram):
             disj = tuple()
 
         if expression not in disj:
-            disj += (expression, )
+            disj += (expression,)
 
-        self.symbol_table[consequent.functor.name] = Union(disj)
+        symbol = consequent.functor.cast(UnionOfConjunctiveQueries)
+        self.symbol_table[symbol] = Union(disj)
 
         return expression
 
@@ -169,3 +170,7 @@ def is_conjunctive_negation(expression):
             return False
 
     return True
+
+
+class DatalogProgramNegation(DatalogProgramNegationMixin, DatalogProgram):
+    pass
