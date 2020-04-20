@@ -19,7 +19,7 @@ import sphinx
 
 # General information about the project.
 project = 'neurolang'
-copyright = '2017, Demian Wassermann'
+copyright = '2017, Inria & the NeuroLang team'
 
 currentdir = os.path.abspath(os.path.dirname(__file__))
 ver_file = os.path.join(currentdir, '..', project, 'version.py')
@@ -46,33 +46,21 @@ needs_sphinx = '1.0'  # numpydoc requires sphinc >= 1.0
 sys.path.append(os.path.abspath('sphinxext'))
 
 extensions = [
-    # 'sphinx.ext.autodoc',
-    # 'sphinx.ext.autosummary',
-    # (
-    #    'sphinx.ext.imgmath'  # only available for sphinx >= 1.4
-    #    if sphinx.version_info[:2] >= (1, 4)
-    #    else 'sphinx.ext.pngmath'
-    # ),
-    # 'sphinx.ext.intersphinx',
-    # 'numpydoc.numpydoc',
+    'sphinx.ext.autodoc',
+    'sphinx.ext.autosummary',
+    'sphinx.ext.mathjax',
+    'sphinx.ext.coverage',
+    'sphinx.ext.ifconfig',
+    (
+        'sphinx.ext.imgmath'  # only available for sphinx >= 1.4
+        if sphinx.version_info[:2] >= (1, 4)
+        else 'sphinx.ext.pngmath'
+    ),
+    'sphinx.ext.intersphinx',
+    'math_dollar',  # has to go before numpydoc
+    'numpydoc.numpydoc',
     # 'sphinx_gallery.gen_gallery',
 ]
-
-
-# extensions = ['sphinx.ext.autodoc',
-#               'sphinx.ext.doctest',
-#               'sphinx.ext.intersphinx',
-#               'sphinx.ext.todo',
-#               'sphinx.ext.coverage',
-#               'sphinx.ext.ifconfig',
-#               'sphinx.ext.autosummary',
-#               'sphinx.ext.mathjax',
-#               'math_dollar',  # has to go before numpydoc
-#               'numpydoc.numpydoc',
-#               'github',
-#               'sphinx_gallery.gen_gallery',
-#               'sphinxcontrib.restbuilder',
-#               ]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -81,7 +69,7 @@ templates_path = ['_templates']
 source_suffix = '.rst'
 
 # The encoding of source files.
-# source_encoding = 'utf-8-sig'
+source_encoding = 'utf-8-sig'
 
 # The master toctree document.
 master_doc = 'index'
@@ -284,7 +272,7 @@ latex_documents = [
 # (source start file, name, description, authors, manual section).
 man_pages = [
     ('index', 'neurolang', 'neurolang Documentation',
-     ['Demian Wassermann'], 1)
+     ['The NeuroLang Team'], 1)
 ]
 
 # If true, show URL addresses after external links.
@@ -298,7 +286,7 @@ man_pages = [
 #  dir menu entry, description, category)
 texinfo_documents = [
   ('index', 'neurolang', 'neurolang Documentation',
-   'Demian Wassermann', 'neurolang', 'One line description of project.',
+   'The NeuroLang Team', 'neurolang', 'One line description of project.',
    'Miscellaneous'),
 ]
 
