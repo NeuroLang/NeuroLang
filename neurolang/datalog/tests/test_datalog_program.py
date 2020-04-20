@@ -6,8 +6,9 @@ from ...expression_walker import ExpressionBasicEvaluator, IdentityWalker
 from ...expressions import (Constant, ExpressionBlock, FunctionApplication,
                             Lambda, NeuroLangException, Query, Symbol,
                             is_leq_informative)
-from ...logic import Union, ExistentialPredicate, Implication
+from ...logic import ExistentialPredicate, Implication, Union
 from .. import DatalogProgram, Fact
+from ..basic_representation import UnionOfConjunctiveQueries
 from ..expressions import TranslateToLogic
 
 S_ = Symbol
@@ -179,6 +180,16 @@ def test_intensional_extensional_database():
     assert len(idb) == 2
     assert len(idb['R'].formulas) == 2
     assert len(idb['T'].formulas) == 1
+    assert all(
+        k.type is UnionOfConjunctiveQueries
+        for k in idb.keys()
+        if k.name in ('R', 'T')
+    )
+    assert len([
+        k
+        for k in idb.keys()
+        if k.type is UnionOfConjunctiveQueries
+    ]) == 2
 
     assert dl.predicate_terms('R') == ('x', 'y', 'z')
     assert dl.predicate_terms('R0') == ('0', '1', '2')
