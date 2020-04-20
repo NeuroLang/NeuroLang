@@ -24,6 +24,7 @@ def test_all_composed():
     B = Symbol('B')
     C = Symbol('C')
     D = Symbol('D')
+    E = Symbol('E')
     x = Symbol('x')
 
     program = Union((
@@ -31,8 +32,8 @@ def test_all_composed():
         Fact(A(Constant(2))),
         Fact(C(Constant(3))),
         Fact(ProbabilisticPredicate(Constant(.5), B(Constant(2)))),
-        Implication(AggregationApplication(Symbol('length'), (x,)), A(x)),
-        Implication(D(x), Conjunction((A(x), Negation(D(x))))),
+        Implication(D(AggregationApplication(Symbol('length'), (x,))), A(x)),
+        Implication(E(x), Conjunction((A(x), Negation(D(x))))),
     ))
 
     dl = Datalog()
