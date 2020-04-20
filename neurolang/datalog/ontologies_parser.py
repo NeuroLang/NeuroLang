@@ -59,14 +59,14 @@ class OntologyParser:
         self.graph = g
 
     def parse_ontology(self, neurolangDL):
-        self.eb = ExpressionBlock(())
+        self.union_of_constraints = Union(())
         self.neurolangDL = neurolangDL
 
         self._load_domain()
         self._load_properties()
         self._load_constraints()
 
-        self.neurolangDL.load_constraints(self.eb)
+        self.neurolangDL.load_constraints(self.union_of_constraints)
         return self.neurolangDL
 
     def _load_domain(self):
@@ -94,22 +94,26 @@ class OntologyParser:
             self._pointer, pointers
         )
 
-        self.eb = ExpressionBlock(self.eb.expressions + (dom1, dom2, dom3))
+        self.union_of_constraints = Union(
+            self.union_of_constraints.formulas + (dom1, dom2, dom3)
+        )
 
     def _load_properties(self):
         x = Symbol("x")
         z = Symbol("z")
 
-        symbols = ()
+        constraints = ()
         for pred in set(self.graph.predicates()):
             symbol_name = str(pred)
             symbol = Symbol(symbol_name)
             const = Constant(symbol_name)
-            symbols += (
+            constraints += (
                 RightImplication(self._triple(x, const, z), symbol(x, z)),
             )
 
-        self.eb = ExpressionBlock(self.eb.expressions + symbols)
+        self.union_of_constraints = Union(
+            self.union_of_constraints.formulas + constraints
+        )
 
         self._parse_subproperties()
         self._parse_subclasses()
@@ -155,8 +159,8 @@ class OntologyParser:
             rdf_schema_subPropertyOf(x, x),
         )
 
-        self.eb = ExpressionBlock(
-            self.eb.expressions
+        self.union_of_constraints = Union(
+            self.union_of_constraints.formulas
             + (subProperty, subProperty2, inverseOf, objectProperty)
         )
 
@@ -196,8 +200,9 @@ class OntologyParser:
             rdf_schema_subClassOf(x, x),
         )
 
-        self.eb = ExpressionBlock(
-            self.eb.expressions + (subClass, subClass2, ns_rest, class_sim)
+        self.union_of_constraints = Union(
+            self.union_of_constraints.formulas
+            + (subClass, subClass2, ns_rest, class_sim)
         )
 
     def _parse_disjoint(self):
@@ -219,7 +224,9 @@ class OntologyParser:
             owl_disjointWith(w, z),
         )
 
-        self.eb = ExpressionBlock(self.eb.expressions + (disjoint,))
+        self.union_of_constraints = Union(
+            self.union_of_constraints.formulas + (disjoint,)
+        )
 
     def _load_constraints(self):
         restriction_ids = []
@@ -273,7 +280,7 @@ class OntologyParser:
 
         x = Symbol("x")
 
-        constraint = ExpressionBlock(
+        constraint = Union(
             (
                 RightImplication(
                     rdf_type(x, Constant(str(restricted_node))),
@@ -282,8 +289,8 @@ class OntologyParser:
             )
         )
 
-        self.eb = ExpressionBlock(
-            self.eb.expressions + (constraint.expressions)
+        self.union_of_constraints = Union(
+            self.union_of_constraints.formulas + (constraint.formulas)
         )
 
     def _process_minCardinality(self, cut_graph):
@@ -393,7 +400,7 @@ class OntologyParser:
 
         allValuesFrom = self._parse_list(values)
 
-        constraints = ExpressionBlock(())
+        constraints = Union(())
 
         property_symbol = Symbol(parsed_prop)
         rdf_type = Symbol(str(RDF.type))
@@ -401,8 +408,8 @@ class OntologyParser:
         y = Symbol("y")
 
         for value in allValuesFrom:
-            constraints = ExpressionBlock(
-                constraints.expressions
+            constraints = Union(
+                constraints.formulas
                 + (
                     RightImplication(
                         Conjunction(
@@ -416,8 +423,8 @@ class OntologyParser:
                 )
             )
 
-        self.eb = ExpressionBlock(
-            self.eb.expressions + constraints.expressions
+        self.union_of_constraints = Union(
+            self.union_of_constraints.formulas + constraints.formulas
         )
 
     def _parse_restriction_nodes(self, cut_graph):

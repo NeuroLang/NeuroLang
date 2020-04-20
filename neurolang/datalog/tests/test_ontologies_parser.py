@@ -176,6 +176,7 @@ def test_has_value():
     ) in resp
 
 
+@pytest.mark.skip()
 def test_min_cardinality():
     """
     Test case based on:
