@@ -55,7 +55,7 @@ extensions = [
     # ),
     # 'sphinx.ext.intersphinx',
     # 'numpydoc.numpydoc',
-    'sphinx_gallery.gen_gallery',
+    # 'sphinx_gallery.gen_gallery',
 ]
 
 

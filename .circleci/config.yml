@@ -158,11 +158,11 @@ workflows:
   version: 2
   test_benchmark_build:
     jobs:
-      - py36
+      # - py36
       - py37
-      - benchmark:
-          requires:
-            - py37
+      # - benchmark:
+      #  requires:
+      #    - py37
       - docs:
           requires:
             - py37
