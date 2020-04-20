@@ -1,3 +1,5 @@
+import warnings
+
 import nibabel as nib
 import pandas as pd
 import rdflib
@@ -309,29 +311,8 @@ class OntologyParser:
             cut_graph
         )
 
-        rdf_type = Symbol(str(RDF.type))
-        property_symbol = Symbol(parsed_prop)
-
-        x = Symbol("x")
-        y = Symbol("y")
-        count = Symbol("count")
-
-        constraint = ExpressionBlock(
-            (
-                RightImplication(
-                    Union(
-                        (
-                            rdf_type(x, Constant(str(restricted_node))),
-                            property_symbol(x, y),
-                        )
-                    ),
-                    len(y) >= value,
-                ),
-            )
-        )
-
-        self.eb = ExpressionBlock(
-            self.eb.expressions + (constraint.expressions)
+        raise Warning(
+            f"The restriction minCardinality has not been parsed for {restricted_node}"
         )
 
     def _process_maxCardinality(self, cut_graph):
@@ -356,28 +337,8 @@ class OntologyParser:
             cut_graph
         )
 
-        rdf_type = Symbol(str(RDF.type))
-        property_symbol = Symbol(parsed_prop)
-
-        x = Symbol("x")
-        y = Symbol("y")
-
-        constraint = ExpressionBlock(
-            (
-                RightImplication(
-                    Union(
-                        (
-                            rdf_type(x, Constant(str(restricted_node))),
-                            property_symbol(x, y),
-                        )
-                    ),
-                    len(y) <= value,
-                ),
-            )
-        )
-
-        self.eb = ExpressionBlock(
-            self.eb.expressions + (constraint.expressions)
+        raise Warning(
+            f"The restriction maxCardinality has not been parsed for {parsed_restrictions}"
         )
 
     def _process_cardinality(self, cut_graph):
@@ -406,28 +367,8 @@ class OntologyParser:
             cut_graph
         )
 
-        rdf_type = Symbol(str(RDF.type))
-        property_symbol = Symbol(parsed_prop)
-
-        x = Symbol("x")
-        y = Symbol("y")
-
-        constraint = ExpressionBlock(
-            (
-                RightImplication(
-                    Union(
-                        (
-                            rdf_type(x, Constant(str(restricted_node))),
-                            property_symbol(x, y),
-                        )
-                    ),
-                    len(y) == value,
-                ),
-            )
-        )
-
-        self.eb = ExpressionBlock(
-            self.eb.expressions + (constraint.expressions)
+        raise Warning(
+            f"The restriction cardinality has not been parsed for {restricted_node}"
         )
 
     def _process_allValuesFrom(self, cut_graph):
