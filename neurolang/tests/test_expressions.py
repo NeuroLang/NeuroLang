@@ -56,6 +56,19 @@ def test_fresh_symbol():
     assert s1 != s2 and s2 != s3 and s3.type is int
 
 
+def test_fresh_symbol_2():
+    # Reset sequence generators as if the program just started
+    if hasattr(S_, "_fresh_generator_"):
+        del S_._fresh_generator_
+    if hasattr(S_[str], "_fresh_generator_"):
+        del S_[str]._fresh_generator_
+
+    s2 = S_[str].fresh()
+    s1 = S_.fresh()
+
+    assert s1.name != s2.name
+
+
 def evaluate(expression, **kwargs):
     ebe = Evaluator()
     for k, v in kwargs.items():
