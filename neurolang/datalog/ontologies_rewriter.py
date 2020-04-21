@@ -80,14 +80,17 @@ class OntologyRewriter:
             qS = most_general_unifier(sigma_i.consequent, S)
             if qS is not None:
                 new_q0 = self._combine_rewriting(q0, qS, S, sigma_i.antecedent)
-                if (new_q0, "r", "u") not in Q_rew and (
-                    new_q0,
-                    "r",
-                    "e",
-                ) not in Q_rew:
+                if self._is_new_rewriting(new_q0, Q_rew):
                     Q_rew.add((new_q0, "r", "u"))
 
         return Q_rew
+
+    def _is_new_rewriting(self, new_q0, Q_rew):
+        return (new_q0, "r", "u") not in Q_rew and (
+            new_q0,
+            "r",
+            "e",
+        ) not in Q_rew
 
     def factorization_step(self, q0, sigma, Q_rew):
         body_q = q0.antecedent
@@ -96,15 +99,18 @@ class OntologyRewriter:
             qS = self._full_unification(S_factorizable)
             if qS is not None:
                 new_q0 = Implication(q0.consequent, qS)
-                if (
-                    (new_q0, "r", "u") not in Q_rew
-                    and (new_q0, "r", "e") not in Q_rew
-                    and (new_q0, "f", "u") not in Q_rew
-                    and (new_q0, "f", "e") not in Q_rew
-                ):
+                if self._is_new_factorization(new_q0, Q_rew):
                     Q_rew.add((new_q0, "f", "u"))
 
         return Q_rew
+
+    def _is_new_factorization(self, new_q0, Q_rew):
+        return (
+            (new_q0, "r", "u") not in Q_rew
+            and (new_q0, "r", "e") not in Q_rew
+            and (new_q0, "f", "u") not in Q_rew
+            and (new_q0, "f", "e") not in Q_rew
+        )
 
     def _full_unification(self, S):
         acum = S[0]
@@ -134,7 +140,7 @@ class OntologyRewriter:
         return sum(factorizable, [])
 
     def _var_same_position(self, pos, free_var, q, S):
-        eq_vars = self.equivalent_var(pos, S)
+        eq_vars = self._equivalent_var(pos, S)
         for var in eq_vars:
             if self._free_var_other_term(var, q, S):
                 return False
@@ -144,7 +150,7 @@ class OntologyRewriter:
 
         return True
 
-    def equivalent_var(self, pos, S):
+    def _equivalent_var(self, pos, S):
         eq_vars = []
         for elem in pos:
             eq_vars.append(S[0].args[elem])
