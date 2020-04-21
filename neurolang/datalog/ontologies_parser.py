@@ -12,9 +12,11 @@ from ..logic import Conjunction, LogicOperator, Union
 
 
 class RightImplication(LogicOperator):
-    """This class defines implications to the right. They are used to define
+    """
+    This class defines implications to the right. They are used to define
     constraints derived from ontologies. The functionality is the same as
-    that of an implication, but with body and head inverted in position"""
+    that of an implication, but with body and head inverted in position
+    """
 
     def __init__(self, antecedent, consequent):
         self.antecedent = antecedent
@@ -28,6 +30,11 @@ class RightImplication(LogicOperator):
 
 
 class OntologyParser:
+    """
+    This class is in charge of generating the rules that can be derived
+    from an ontology, both at entity and constraint levels.
+    """
+
     def __init__(self, paths, load_format="xml"):
         self.namespaces_dic = None
         self.owl_dic = None
@@ -249,6 +256,22 @@ class OntologyParser:
                 )
 
     def _identify_restriction_type(self, list_of_triples):
+        """
+        Given a list of nodes associated to a restriction,
+        this function returns the name of the restriction
+        to be applied (hasValue, minCardinality, etc).
+
+        Parameters
+        ----------
+        list_of_triples : list
+            List of nodes associated to a restriction.
+
+        Returns
+        -------
+        str
+            the name of the restriction or an empty string
+            if the name cannot be identified.
+        """
         for triple in list_of_triples:
             if triple[1] == OWL.onProperty or triple[1] == RDF.type:
                 continue
@@ -428,7 +451,25 @@ class OntologyParser:
         )
 
     def _parse_restriction_nodes(self, cut_graph):
+        """
+        Given the list of nodes associated with a restriction,
+        this function returns: The restricted node, the property that
+        restricts it and the value associated to it.
 
+        Parameters
+        ----------
+        cut_graph : list
+            List of nodes associated to a restriction.
+
+        Returns
+        -------
+        parsed_property : str
+            The URI of the property.
+        restricted_node : URIRef
+            The node restricted by the property.
+        value : URIRef
+            The value of the property
+        """
         restricted_node = cut_graph[0][0]
         restricted_node = list(
             self.graph.triples((None, None, restricted_node))
@@ -442,6 +483,21 @@ class OntologyParser:
         return parsed_property, restricted_node, value
 
     def _parse_list(self, initial_node):
+        """
+        This function receives an initial BNode from a list of nodes
+        and goes through the list collecting the values from it and
+        returns them as an array
+
+        Parameters
+        ----------
+        initial_node : BNode
+            Initial node of the list that you want to go through.
+
+        Returns
+        -------
+        values : list
+            Array of nodes that are part of the list.
+        """
         list_node = RDF.nil
         values = []
         for node_triples in self.graph.triples((initial_node, None, None)):
@@ -458,11 +514,41 @@ class OntologyParser:
         return values
 
     def _get_list_first_value(self, list_iter):
+        """
+        Given a list of triples, as a result of the iteration of a list,
+        this function returns the node associated to the rdf:first property.
+
+        Parameters
+        ----------
+        list_iter : generator
+            Generator that represents the list of nodes that
+            form a position in a list.
+
+        Returns
+        -------
+        URIRef
+            Node associated to the rdf:first property.
+        """
         for triple in list_iter:
             if RDF.first == triple[1]:
                 return triple[2]
 
     def _get_list_rest_value(self, list_iter):
+        """
+        Given a list of triples, as a result of the iteration of a list,
+        this function returns the node associated to the rdf:rest property.
+
+        Parameters
+        ----------
+        list_iter : generator
+            Generator that represents the list of nodes that
+            form a position in a list.
+
+        Returns
+        -------
+        URIRef
+            Node associated to the rdf:rest property.
+        """
         for triple in list_iter:
             if RDF.rest == triple[1]:
                 return triple[2]
