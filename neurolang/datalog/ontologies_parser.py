@@ -41,7 +41,7 @@ class OntologyParser:
         if isinstance(paths, list):
             self._load_ontology(paths, load_format)
         else:
-            self._load_ontology([paths], load_format)
+            self._load_ontology([paths], [load_format])
 
         self._triple = Symbol.fresh()
         self._pointer = Symbol.fresh()
@@ -56,12 +56,9 @@ class OntologyParser:
         ]
 
     def _load_ontology(self, paths, load_format):
-        self._create_graph(paths, load_format)
-
-    def _create_graph(self, paths, load_format):
         g = rdflib.Graph()
-        for path in paths:
-            g.load(path, format=load_format)
+        for counter, path in enumerate(paths):
+            g.load(path, format=load_format[counter])
 
         self.graph = g
 
@@ -77,6 +74,13 @@ class OntologyParser:
         return self.neurolangDL
 
     def _load_domain(self):
+        """
+        Function that generates the rules that compose the ontology
+        domain following the rules proposed by Gottlob et al[1].
+
+        [1] Gottlob, G. & Pieris, A. Beyond SPARQL underOWL 2
+        QL Entailment Regime: Rules to the Rescue.
+        """
         pointers = map(
             lambda x: (str(x),),
             filter(lambda x: isinstance(x, BNode), set(self.graph.subjects())),
@@ -106,6 +110,10 @@ class OntologyParser:
         )
 
     def _load_properties(self):
+        """
+        Function that parse all the properties defined in
+        the ontology.
+        """
         x = Symbol("x")
         z = Symbol("z")
 
@@ -127,6 +135,13 @@ class OntologyParser:
         self._parse_disjoint()
 
     def _parse_subproperties(self):
+        """
+        Function that parse the relationships between
+        subproperties following the rules proposed by Gottlob et al[1].
+
+        [1] Gottlob, G. & Pieris, A. Beyond SPARQL underOWL 2
+        QL Entailment Regime: Rules to the Rescue.
+        """
         rdf_schema_subPropertyOf = Symbol(str(RDFS.subPropertyOf))
         rdf_schema_subPropertyOf2 = Symbol(str(RDFS.subPropertyOf) + "2")
 
@@ -172,6 +187,13 @@ class OntologyParser:
         )
 
     def _parse_subclasses(self):
+        """
+        Function that parse the relationships between
+        subclasses following the rules proposed by Gottlob et al[1].
+
+        [1] Gottlob, G. & Pieris, A. Beyond SPARQL underOWL 2
+        QL Entailment Regime: Rules to the Rescue.
+        """
         rdf_schema_subClassOf = Symbol(str(RDFS.subClassOf))
         rdf_schema_subClassOf2 = Symbol(str(RDFS.subClassOf) + "2")
         w = Symbol("w")
@@ -213,6 +235,13 @@ class OntologyParser:
         )
 
     def _parse_disjoint(self):
+        """
+        Function that parse the disjunctions following
+        the rules proposed by Gottlob et al[1].
+
+        [1] Gottlob, G. & Pieris, A. Beyond SPARQL underOWL 2
+        QL Entailment Regime: Rules to the Rescue.
+        """
         w = Symbol("w")
         x = Symbol("x")
         y = Symbol("y")
@@ -236,6 +265,11 @@ class OntologyParser:
         )
 
     def _load_constraints(self):
+        """
+        Function in charge of parsing the ontology's restrictions.
+        It needs a function "_process_X", where X is the name of
+        the restriction to be processed, to be defined.
+        """
         restriction_ids = []
         for s, _, _ in self.graph.triples((None, None, OWL.Restriction)):
             restriction_ids.append(s)
