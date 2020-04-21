@@ -1,4 +1,4 @@
-from typing import AbstractSet, Tuple, Callable
+from typing import AbstractSet, Tuple, Callable, Any
 
 from .. import expressions as exp
 from .. import logic
@@ -38,7 +38,17 @@ class RegionFrontendFolThroughDatalogSolver(
     DatalogProgramNegation,
     ExpressionBasicEvaluator,
 ):
-    pass
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        isin_symbol = exp.Symbol[Callable[[Any, AbstractSet[Any]], bool]](
+            "isin"
+        )
+        self.symbol_table[isin_symbol] = isin_symbol
+
+    @add_match(exp.FunctionApplication(exp.Symbol("isin"), ...))
+    def replace_isin(self, fa):
+        elem, set_ = fa.args
+        return self.walk(exp.Constant[bool](elem in set_.value))
 
 
 class QueryBuilderFirstOrderThroughDatalog(
@@ -133,7 +143,7 @@ class QueryBuilderFirstOrderThroughDatalog(
         type_ = var.type
         if type_ not in self.type_predicate_symbols:
             s = exp.Symbol("type_of(" + str(type_) + ")")
-            s = s.cast(Callable[[type_], bool])
+            s = s.cast(AbstractSet[type_])
             s.is_type_symbol_for = type_
             self.type_predicate_symbols[type_] = s
         return self.type_predicate_symbols[type_](var)

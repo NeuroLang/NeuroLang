@@ -31,6 +31,8 @@ from . import (
     TRUE,
     FALSE,
 )
+from typing import Callable
+from ..type_system import is_leq_informative, Unknown
 from ..datalog.expressions import Fact
 from ..exceptions import NeuroLangException
 from ..expressions import ExpressionBlock
@@ -287,11 +289,11 @@ def convert_srnf_to_horn_clauses(head, expression):
     processed = []
 
     while stack:
-        head, exp, positive_atoms = stack.pop()
+        head, exp, restrictive_atoms = stack.pop()
         body, remainder = ConvertSRNFToHornClause().walk(exp)
-        body = _restrict_variables(head, body, positive_atoms)
-        positive_atoms |= _positive_atoms(body)
-        remainder = [r + (positive_atoms,) for r in remainder]
+        body = _restrict_variables(head, body, restrictive_atoms)
+        restrictive_atoms |= _restrictive_atoms(body)
+        remainder = [r + (restrictive_atoms,) for r in remainder]
         processed.append(_to_horn_clause(head, body))
         stack += remainder
 
@@ -308,10 +310,10 @@ def _to_horn_clause(head, body):
     return r
 
 
-def _restrict_variables(head, body, positive_atoms):
+def _restrict_variables(head, body, restrictive_atoms):
     while not set(head.args).issubset(_restricted_variables(body)):
         uv = set(head.args) - _restricted_variables(body)
-        new_atoms = _choose_restriction_atoms(uv, positive_atoms, head)
+        new_atoms = _choose_restriction_atoms(uv, restrictive_atoms, head)
         body = new_atoms + body
     return body
 
@@ -330,13 +332,21 @@ def _choose_restriction_atoms(unrestricted_variables, available_atoms, head):
 
 def _restricted_variables(body):
     r = set()
-    for a in _positive_atoms(body):
+    for a in _restrictive_atoms(body):
         r |= _atom_variables(a)
     return r
 
 
-def _positive_atoms(atoms):
-    return set(a for a in atoms if not isinstance(a, Negation))
+def _restrictive_atoms(atoms):
+    return set(a for a in atoms if _is_restriction(a))
+
+
+def _is_restriction(atom):
+    if isinstance(atom, FunctionApplication):
+        if is_leq_informative(atom.functor.type, Unknown):
+            return True
+        return not is_leq_informative(atom.functor.type, Callable)
+    return False
 
 
 def _atom_variables(atom):

@@ -285,3 +285,18 @@ def test_isin():
     res = q.do()
     assert res.value == frozenset(set((i,) for i in range(10)))
 
+
+def test_isin_2():
+    nl = RegionFrontendFolThroughDatalog()
+
+    nl.add_tuple_set(range(10), int, name="D")
+
+    is_even = nl.add_symbol(lambda x: x % 2 == 0, "is_even")
+
+    x = nl.new_symbol(name="x", type_=int)
+    B = nl.query(x, is_even(x)).do(name="B")
+
+    R = nl.query(x, nl.symbols.isin(x, B)).do(name="R")
+    expected = frozenset(set((i,) for i in range(10) if i % 2 == 0))
+    assert R.value == expected
+
