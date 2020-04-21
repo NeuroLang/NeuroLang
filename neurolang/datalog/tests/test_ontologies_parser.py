@@ -75,12 +75,21 @@ def test_all_values_from():
     y = Symbol("y")
     test_base_q = Union((Implication(answer(x, y), rdf_type(x, y)),))
 
-    dl = Datalog()
     onto = OntologyParser(io.StringIO(premise_ontology))
-    dl = onto.parse_ontology(dl)
-    sigmaB = dl.get_constraints()
+    predicate_tuples, union_of_constraints = onto.parse_ontology()
 
-    orw = OntologyRewriter(test_base_q, sigmaB)
+    triples = predicate_tuples[onto.get_triples_symbol()]
+    pointers = predicate_tuples[onto.get_pointers_symbol()]
+
+    dl = Datalog()
+    dl.add_extensional_predicate_from_tuples(
+        onto.get_triples_symbol(), triples
+    )
+    dl.add_extensional_predicate_from_tuples(
+        onto.get_pointers_symbol(), pointers
+    )
+
+    orw = OntologyRewriter(test_base_q, union_of_constraints)
     rewrite = orw.Xrewrite()
 
     eB = ()
@@ -135,12 +144,21 @@ def test_has_value():
     p2 = Symbol("http://www.w3.org/2002/03owlt/hasValue/premises001#p2")
     test_base_q = Union((Implication(answer(x, y), p2(x, y)),))
 
-    dl = Datalog()
     onto = OntologyParser(io.StringIO(test_case))
-    dl = onto.parse_ontology(dl)
-    sigmaB = dl.get_constraints()
+    predicate_tuples, union_of_constraints = onto.parse_ontology()
 
-    orw = OntologyRewriter(test_base_q, sigmaB)
+    triples = predicate_tuples[onto.get_triples_symbol()]
+    pointers = predicate_tuples[onto.get_pointers_symbol()]
+
+    dl = Datalog()
+    dl.add_extensional_predicate_from_tuples(
+        onto.get_triples_symbol(), triples
+    )
+    dl.add_extensional_predicate_from_tuples(
+        onto.get_pointers_symbol(), pointers
+    )
+
+    orw = OntologyRewriter(test_base_q, union_of_constraints)
     rewrite = orw.Xrewrite()
 
     eB = ()
@@ -198,12 +216,21 @@ def test_min_cardinality():
     p2 = Symbol("http://www.w3.org/2002/03owlt/hasValue/premises001#p")
     test_base_q = Union((Implication(answer(x, y), p2(x, y)),))
 
-    dl = Datalog()
     onto = OntologyParser(io.StringIO(test_case))
-    dl = onto.parse_ontology(dl)
-    sigmaB = dl.get_constraints()
+    predicate_tuples, union_of_constraints = onto.parse_ontology()
 
-    orw = OntologyRewriter(test_base_q, sigmaB)
+    triples = predicate_tuples[onto.get_triples_symbol()]
+    pointers = predicate_tuples[onto.get_pointers_symbol()]
+
+    dl = Datalog()
+    dl.add_extensional_predicate_from_tuples(
+        onto.get_triples_symbol(), triples
+    )
+    dl.add_extensional_predicate_from_tuples(
+        onto.get_pointers_symbol(), pointers
+    )
+
+    orw = OntologyRewriter(test_base_q, union_of_constraints)
     rewrite = orw.Xrewrite()
 
     eB = ()
@@ -256,12 +283,21 @@ def test_max_cardinality():
     p2 = Symbol("http://www.w3.org/2002/03owlt/hasValue/premises001#p")
     test_base_q = Union((Implication(answer(x, y), p2(x, y)),))
 
-    dl = Datalog()
     onto = OntologyParser(io.StringIO(test_case))
-    dl = onto.parse_ontology(dl)
-    sigmaB = dl.get_constraints()
+    predicate_tuples, union_of_constraints = onto.parse_ontology()
 
-    orw = OntologyRewriter(test_base_q, sigmaB)
+    triples = predicate_tuples[onto.get_triples_symbol()]
+    pointers = predicate_tuples[onto.get_pointers_symbol()]
+
+    dl = Datalog()
+    dl.add_extensional_predicate_from_tuples(
+        onto.get_triples_symbol(), triples
+    )
+    dl.add_extensional_predicate_from_tuples(
+        onto.get_pointers_symbol(), pointers
+    )
+
+    orw = OntologyRewriter(test_base_q, union_of_constraints)
     rewrite = orw.Xrewrite()
 
     eB = ()
@@ -298,9 +334,7 @@ def test_not_implemented():
         <first:r rdf:ID="i"/>
     </rdf:RDF>
     """
-
-    dl = Datalog()
     onto = OntologyParser(io.StringIO(test_case))
 
     with pytest.raises(NeuroLangNotImplementedError):
-        dl = onto.parse_ontology(dl)
+        predicate_tuples, union_of_constraints = onto.parse_ontology()

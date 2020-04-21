@@ -9,15 +9,15 @@ sets and has support for constraints.
 from .basic_representation import DatalogProgram
 
 
-class DatalogConstraintsProgramMixin():
+class DatalogConstraintsProgramMixin:
 
-    protected_keywords = set({'__constraints__'})
+    protected_keywords = set({"__constraints__"})
 
-    def load_constraints(self, expression_block):
-        self.symbol_table['__constraints__'] = expression_block
+    def load_constraints(self, union_of_constraints):
+        self.symbol_table["__constraints__"] = union_of_constraints
 
     def get_constraints(self):
-        return self.symbol_table['__constraints__']
+        return self.symbol_table["__constraints__"]
 
 
 class DatalogConstraintsProgram(

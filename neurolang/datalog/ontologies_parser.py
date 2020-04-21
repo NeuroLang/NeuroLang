@@ -1,13 +1,10 @@
 import warnings
 
-import nibabel as nib
-import pandas as pd
 import rdflib
-from nilearn import datasets
 from rdflib import OWL, RDF, RDFS, BNode
 
 from ..exceptions import NeuroLangNotImplementedError
-from ..expressions import Constant, ExpressionBlock, Symbol
+from ..expressions import Constant, Symbol
 from ..logic import Conjunction, LogicOperator, Union
 
 
@@ -62,16 +59,29 @@ class OntologyParser:
 
         self.graph = g
 
-    def parse_ontology(self, neurolangDL):
-        self.union_of_constraints = Union(())
-        self.neurolangDL = neurolangDL
+    def parse_ontology(self):
+        extensional_predicate_tuples, union_of_constraints_dom = (
+            self._load_domain()
+        )
+        union_of_constraints_prop = self._load_properties()
+        union_of_constraints = self._load_constraints()
 
-        self._load_domain()
-        self._load_properties()
-        self._load_constraints()
+        union_of_constraints = Union(
+            union_of_constraints_dom.formulas
+            + union_of_constraints_prop.formulas
+            + union_of_constraints
+        )
 
-        self.neurolangDL.load_constraints(self.union_of_constraints)
-        return self.neurolangDL
+        return extensional_predicate_tuples, union_of_constraints
+
+    def get_triples_symbol(self):
+        return self._triple
+
+    def get_pointers_symbol(self):
+        return self._pointer
+
+    def get_domain_symbol(self):
+        return self._dom
 
     def _load_domain(self):
         """
@@ -81,13 +91,12 @@ class OntologyParser:
         [1] Gottlob, G. & Pieris, A. Beyond SPARQL underOWL 2
         QL Entailment Regime: Rules to the Rescue.
         """
-        pointers = map(
-            lambda x: (str(x),),
-            filter(lambda x: isinstance(x, BNode), set(self.graph.subjects())),
+        pointers = frozenset(
+            (str(x),) for x in self.graph.subjects() if isinstance(x, BNode)
         )
 
-        triples = map(
-            lambda x: (str(x[0]), str(x[1]), str(x[2])), self.get_triples()
+        triples = frozenset(
+            (str(x[0]), str(x[1]), str(x[2])) for x in self.get_triples()
         )
 
         x = Symbol("x")
@@ -98,16 +107,13 @@ class OntologyParser:
         dom2 = RightImplication(self._triple(x, y, z), self._dom(y))
         dom3 = RightImplication(self._triple(x, y, z), self._dom(z))
 
-        self.neurolangDL.add_extensional_predicate_from_tuples(
-            self._triple, triples
-        )
-        self.neurolangDL.add_extensional_predicate_from_tuples(
-            self._pointer, pointers
-        )
+        extensional_predicate_tuples = {}
+        extensional_predicate_tuples[self._triple] = triples
+        extensional_predicate_tuples[self._pointer] = pointers
 
-        self.union_of_constraints = Union(
-            self.union_of_constraints.formulas + (dom1, dom2, dom3)
-        )
+        union_of_constraints = Union((dom1, dom2, dom3))
+
+        return extensional_predicate_tuples, union_of_constraints
 
     def _load_properties(self):
         """
@@ -130,9 +136,16 @@ class OntologyParser:
             self.union_of_constraints.formulas + constraints
         )
 
-        self._parse_subproperties()
-        self._parse_subclasses()
-        self._parse_disjoint()
+        constraints_subproperties = self._parse_subproperties()
+        constraints_subclasses = self._parse_subclasses()
+        constraints_disjoint = self._parse_disjoint()
+
+        union_of_constraints = Union(
+            constraints_subproperties.formulas
+            + constraints_subclasses.formulas
+            + constraints_disjoint.formulas
+            + constraints
+        )
 
     def _parse_subproperties(self):
         """
@@ -181,10 +194,11 @@ class OntologyParser:
             rdf_schema_subPropertyOf(x, x),
         )
 
-        self.union_of_constraints = Union(
-            self.union_of_constraints.formulas
-            + (subProperty, subProperty2, inverseOf, objectProperty)
+        union_of_constraints = Union(
+            (subProperty, subProperty2, inverseOf, objectProperty)
         )
+
+        return union_of_constraints
 
     def _parse_subclasses(self):
         """
@@ -229,10 +243,9 @@ class OntologyParser:
             rdf_schema_subClassOf(x, x),
         )
 
-        self.union_of_constraints = Union(
-            self.union_of_constraints.formulas
-            + (subClass, subClass2, ns_rest, class_sim)
-        )
+        union_of_constraints = Union((subClass, subClass2, ns_rest, class_sim))
+
+        return union_of_constraints
 
     def _parse_disjoint(self):
         """
@@ -260,9 +273,9 @@ class OntologyParser:
             owl_disjointWith(w, z),
         )
 
-        self.union_of_constraints = Union(
-            self.union_of_constraints.formulas + (disjoint,)
-        )
+        union_of_constraints = Union((disjoint,))
+
+        return union_of_constraints
 
     def _load_constraints(self):
         """
@@ -274,6 +287,7 @@ class OntologyParser:
         for s, _, _ in self.graph.triples((None, None, OWL.Restriction)):
             restriction_ids.append(s)
 
+        union_of_constraints = Union(())
         for rest in restriction_ids:
             cut_graph = list(self.graph.triples((rest, None, None)))
             res_type = self._identify_restriction_type(cut_graph)
@@ -282,12 +296,17 @@ class OntologyParser:
                 process_restriction_method = getattr(
                     self, f"_process_{res_type}"
                 )
-                process_restriction_method(cut_graph)
+                constraints = process_restriction_method(cut_graph)
+                union_of_constraints = Union(
+                    union_of_constraints.formulas + constraints.formulas
+                )
             except AttributeError:
                 raise NeuroLangNotImplementedError(
                     f"""Ontology parser doesn\'t handle
                     restrictions of type {res_type}"""
                 )
+
+        return union_of_constraints
 
     def _identify_restriction_type(self, list_of_triples):
         """
@@ -346,9 +365,7 @@ class OntologyParser:
             )
         )
 
-        self.union_of_constraints = Union(
-            self.union_of_constraints.formulas + (constraint.formulas)
-        )
+        return constraint
 
     def _process_minCardinality(self, cut_graph):
         """
@@ -375,9 +392,11 @@ class OntologyParser:
             cut_graph
         )
 
-        raise Warning(
+        warnings.warn(
             f"The restriction minCardinality has not been parsed for {restricted_node}"
         )
+
+        return Union(())
 
     def _process_maxCardinality(self, cut_graph):
         """
@@ -401,9 +420,11 @@ class OntologyParser:
             cut_graph
         )
 
-        raise Warning(
+        warnings.warn(
             f"The restriction maxCardinality has not been parsed for {parsed_restrictions}"
         )
+
+        return Union(())
 
     def _process_cardinality(self, cut_graph):
         """
@@ -431,9 +452,11 @@ class OntologyParser:
             cut_graph
         )
 
-        raise Warning(
+        warnings.warn(
             f"The restriction cardinality has not been parsed for {restricted_node}"
         )
+
+        return Union(())
 
     def _process_allValuesFrom(self, cut_graph):
         """
@@ -480,9 +503,7 @@ class OntologyParser:
                 )
             )
 
-        self.union_of_constraints = Union(
-            self.union_of_constraints.formulas + constraints.formulas
-        )
+        return constraints
 
     def _parse_restriction_nodes(self, cut_graph):
         """

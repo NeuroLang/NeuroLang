@@ -75,13 +75,11 @@ class OntologyRewriter:
                                 "e",
                             ) not in Q_rew:
                                 Q_rew.add((new_q0, "r", "u"))
-
                     # factorization step
                     body_q = q0.antecedent
                     S_factorizable = self._get_factorizable(sigma, body_q)
                     if len(S_factorizable) > 1:
                         qS = self._full_unification(S_factorizable)
-                        # qS = most_general_unifier(S, body_q)
                         if qS is not None:
                             new_q0 = self._combine_factorization(
                                 q0.consequent, qS
@@ -127,7 +125,6 @@ class OntologyRewriter:
         return sum(factorizable, [])
 
     def _var_same_position(self, pos, free_var, q, S):
-        # revisar si este cambio tiene logica, o porque dio marcha atras dos test
         eq_vars = self.equivalent_var(pos, S)
         for var in eq_vars:
             if self._free_var_other_term(var, q, S):
@@ -267,8 +264,7 @@ class OntologyRewriter:
         a, renamed = self._replace(sigma.antecedent, index, renamed)
         b, renamed = self._replace(sigma.consequent, index, renamed)
         sus = {**a, **b}
-        rsw = ReplaceSymbolWalker(sus)
-        sigma = rsw.walk(sigma)
+        sigma = ReplaceSymbolWalker(sus).walk(sigma)
 
         return sigma
 
