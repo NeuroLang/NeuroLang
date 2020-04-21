@@ -92,12 +92,12 @@ def test_all_values_from():
     orw = OntologyRewriter(test_base_q, union_of_constraints)
     rewrite = orw.Xrewrite()
 
-    eB = ()
+    uc = ()
     for imp in rewrite:
-        eB += (imp[0],)
-    eB = Union(eB)
+        uc += (imp[0],)
+    uc = Union(uc)
 
-    dl.walk(eB)
+    dl.walk(uc)
     dc = Chase(dl)
     solution_instance = dc.build_chase_solution()
 
@@ -161,12 +161,12 @@ def test_has_value():
     orw = OntologyRewriter(test_base_q, union_of_constraints)
     rewrite = orw.Xrewrite()
 
-    eB = ()
+    uc = ()
     for imp in rewrite:
-        eB += (imp[0],)
-    eB = Union(eB)
+        uc += (imp[0],)
+    uc = Union(uc)
 
-    dl.walk(eB)
+    dl.walk(uc)
     dc = Chase(dl)
     solution_instance = dc.build_chase_solution()
 
@@ -233,12 +233,12 @@ def test_min_cardinality():
     orw = OntologyRewriter(test_base_q, union_of_constraints)
     rewrite = orw.Xrewrite()
 
-    eB = ()
+    uc = ()
     for imp in rewrite:
-        eB += (imp[0],)
-    eB = Union(eB)
+        uc += (imp[0],)
+    uc = Union(uc)
 
-    dl.walk(eB)
+    dl.walk(uc)
     dc = Chase(dl)
     solution_instance = dc.build_chase_solution()
 
@@ -300,12 +300,12 @@ def test_max_cardinality():
     orw = OntologyRewriter(test_base_q, union_of_constraints)
     rewrite = orw.Xrewrite()
 
-    eB = ()
+    uc = ()
     for imp in rewrite:
-        eB += (imp[0],)
-    eB = Union(eB)
+        uc += (imp[0],)
+    uc = Union(uc)
 
-    dl.walk(eB)
+    dl.walk(uc)
     dc = Chase(dl)
     solution_instance = dc.build_chase_solution()
 
