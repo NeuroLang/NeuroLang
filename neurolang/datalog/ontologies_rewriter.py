@@ -29,26 +29,21 @@ class ExtractFreeVariablesRightImplicationWalker(ExtractFreeVariablesWalker):
 
 
 class OntologyRewriter:
-    def __init__(self, dl, owl):
-        self.dl = dl
-        self.owl = owl
+    def __init__(self, query, union_of_constraints):
+        self.query = query
+        self.union_of_constraints = union_of_constraints
 
     def Xrewrite(self):
         """Algorithm based on the one proposed in
         G. Gottlob, G. Orsi, and A. Pieris,
         “Query Rewriting and Optimization for Ontological Databases,”
         ACM Transactions on Database Systems, vol. 39, May 2014."""
-        i = 0
+        rename_count = 0
         Q_rew = set({})
-        for t in self.dl.formulas:
+        for t in self.query.formulas:
             Q_rew.add((t, "r", "u"))
 
-        sigma_free_vars = []
-        for sigma in self.owl.formulas:
-            if isinstance(sigma, RightImplication):
-                efvw = ExtractFreeVariablesRightImplicationWalker()
-                free_vars = efvw.walk(sigma)
-                sigma_free_vars.append((sigma, free_vars))
+        sigma_free_vars = self._extract_free_variables()
 
         Q_temp = set({})
         while Q_rew != Q_temp:
@@ -58,44 +53,58 @@ class OntologyRewriter:
                     continue
                 q0 = q[0]
                 for sigma in sigma_free_vars:
-                    # rewriting step
-                    body_q = q0.antecedent
-                    S_applicable = self._get_applicable(sigma, body_q)
-                    for S in S_applicable:
-                        i += 1
-                        sigma_i = self._rename(sigma[0], i)
-                        qS = most_general_unifier(sigma_i.consequent, S)
-                        if qS is not None:
-                            new_q0 = self._combine_rewriting(
-                                q0, qS, S, sigma_i.antecedent
-                            )
-                            if (new_q0, "r", "u") not in Q_rew and (
-                                new_q0,
-                                "r",
-                                "e",
-                            ) not in Q_rew:
-                                Q_rew.add((new_q0, "r", "u"))
-                    # factorization step
-                    body_q = q0.antecedent
-                    S_factorizable = self._get_factorizable(sigma, body_q)
-                    if len(S_factorizable) > 1:
-                        qS = self._full_unification(S_factorizable)
-                        if qS is not None:
-                            new_q0 = self._combine_factorization(
-                                q0.consequent, qS
-                            )
-                            if (
-                                (new_q0, "r", "u") not in Q_rew
-                                and (new_q0, "r", "e") not in Q_rew
-                                and (new_q0, "f", "u") not in Q_rew
-                                and (new_q0, "f", "e") not in Q_rew
-                            ):
-                                Q_rew.add((new_q0, "f", "u"))
-                # query is now explored
+                    Q_rew = self.rewriting_step(q0, sigma, rename_count, Q_rew)
+                    Q_rew = self.factorization_step(q0, sigma, Q_rew)
+
                 Q_rew.remove(q)
                 Q_rew.add((q[0], q[1], "e"))
 
         return {x for x in Q_rew if x[2] == "e"}
+
+    def _extract_free_variables(self):
+        sigma_free_vars = []
+        for sigma in self.union_of_constraints.formulas:
+            if isinstance(sigma, RightImplication):
+                efvw = ExtractFreeVariablesRightImplicationWalker()
+                free_vars = efvw.walk(sigma)
+                sigma_free_vars.append((sigma, free_vars))
+
+        return sigma_free_vars
+
+    def rewriting_step(self, q0, sigma, rename_count, Q_rew):
+        body_q = q0.antecedent
+        S_applicable = self._get_applicable(sigma, body_q)
+        for S in S_applicable:
+            rename_count += 1
+            sigma_i = self._rename(sigma[0], rename_count)
+            qS = most_general_unifier(sigma_i.consequent, S)
+            if qS is not None:
+                new_q0 = self._combine_rewriting(q0, qS, S, sigma_i.antecedent)
+                if (new_q0, "r", "u") not in Q_rew and (
+                    new_q0,
+                    "r",
+                    "e",
+                ) not in Q_rew:
+                    Q_rew.add((new_q0, "r", "u"))
+
+        return Q_rew
+
+    def factorization_step(self, q0, sigma, Q_rew):
+        body_q = q0.antecedent
+        S_factorizable = self._get_factorizable(sigma, body_q)
+        if len(S_factorizable) > 1:
+            qS = self._full_unification(S_factorizable)
+            if qS is not None:
+                new_q0 = Implication(q0.consequent, qS)
+                if (
+                    (new_q0, "r", "u") not in Q_rew
+                    and (new_q0, "r", "e") not in Q_rew
+                    and (new_q0, "f", "u") not in Q_rew
+                    and (new_q0, "f", "e") not in Q_rew
+                ):
+                    Q_rew.add((new_q0, "f", "u"))
+
+        return Q_rew
 
     def _full_unification(self, S):
         acum = S[0]
@@ -293,11 +302,4 @@ class OntologyRewriter:
 
         q_cons = apply_substitution(q.consequent, qS[0])
 
-        q0 = Implication(q_cons, sigma_ant)
-
-        return q0
-
-    def _combine_factorization(self, q_cons, qS):
-        q0 = Implication(q_cons, qS)
-
-        return q0
+        return Implication(q_cons, sigma_ant)
