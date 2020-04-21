@@ -381,7 +381,7 @@ class OntologyParser:
                 2
             </owl:minCardinality>
         </owl:Restriction>
-        
+
         Note that an owl:minCardinality of one or more means that all
         instances of the class must have a value for the property.
         """
@@ -470,7 +470,7 @@ class OntologyParser:
             <owl:onProperty rdf:resource="#hasParent" />
             <owl:allValuesFrom rdf:resource="#Human"  />
         </owl:Restriction>
-        
+
         This example describes an anonymous OWL class of all individuals
         for which the hasParent property only has values of class Human
         """
