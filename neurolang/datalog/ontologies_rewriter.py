@@ -78,7 +78,7 @@ class OntologyRewriter:
             rename_count += 1
             sigma_i = self._rename(sigma[0], rename_count)
             qS = most_general_unifier(sigma_i.consequent, S)
-            if qS is not None:
+            if qS:
                 new_q0 = self._combine_rewriting(q0, qS, S, sigma_i.antecedent)
                 if self._is_new_rewriting(new_q0, Q_rew):
                     Q_rew.add((new_q0, "r", "u"))
@@ -97,7 +97,7 @@ class OntologyRewriter:
         S_factorizable = self._get_factorizable(sigma, body_q)
         if len(S_factorizable) > 1:
             qS = self._full_unification(S_factorizable)
-            if qS is not None:
+            if qS:
                 new_q0 = Implication(q0.consequent, qS)
                 if self._is_new_factorization(new_q0, Q_rew):
                     Q_rew.add((new_q0, "f", "u"))
@@ -128,12 +128,12 @@ class OntologyRewriter:
                 sigma[0].consequent, free_var
             )
             S = self._get_term(q, sigma[0].consequent)
-            if not S:
-                return []
-            if self._is_factorizable(
-                S, existential_position
-            ) and self._var_same_position(
-                existential_position, free_var, q, S
+            if (
+                S
+                and self._is_factorizable(S, existential_position)
+                and self._var_same_position(
+                    existential_position, free_var, q, S
+                )
             ):
                 factorizable.append(S)
 
@@ -159,9 +159,10 @@ class OntologyRewriter:
 
     def _free_var_other_term(self, free_var, q, S):
         if isinstance(q, NaryLogicOperator):
-            for formula in q.formulas:
-                if formula not in S and free_var in formula.args:
-                    return True
+            return any(
+                formula not in S and free_var in formula.args
+                for formula in q.formulas
+            )
         else:
             if q != S and free_var in q.args:
                 return True
@@ -169,7 +170,6 @@ class OntologyRewriter:
         return False
 
     def _free_var_same_term_other_position(self, free_var, pos, q):
-        i = 0
         if isinstance(q, NaryLogicOperator):
             for formula in q.formulas:
                 i = 0
@@ -178,10 +178,9 @@ class OntologyRewriter:
                         return True
                     i += 1
         else:
-            for arg in q.args:
-                if arg == free_var and i != pos:
-                    return True
-                i += 1
+            return any(
+                arg == free_var and i != pos for i, arg in enumerate(q.args)
+            )
 
         return False
 
@@ -195,9 +194,11 @@ class OntologyRewriter:
     def _get_term(self, q, sigma_con):
         q_args = []
         if isinstance(q, NaryLogicOperator):
-            for formula in q.formulas:
-                if formula.functor == sigma_con.functor:
-                    q_args.append(formula)
+            q_args = [
+                formula
+                for formula in q.formulas
+                if formula.functor == sigma_con.functor
+            ]
         else:
             if q.functor == sigma_con.functor:
                 q_args.append(q)
@@ -205,29 +206,15 @@ class OntologyRewriter:
         return q_args
 
     def _is_applicable(self, sigma, q, S):
-        if self._unifies(S, sigma[0].consequent) and self._not_in_existential(
-            q, S, sigma
-        ):
-            return True
-
-        return False
+        return self._unifies(
+            S, sigma[0].consequent
+        ) and self._not_in_existential(q, S, sigma)
 
     def _is_factorizable(self, S, pos):
-        for term in S:
-            if most_general_unifier(term, S[0]) is None:
-                return False
-
-        if not pos:
-            return False
-
-        return True
+        return any(most_general_unifier(term, S[0]) for term in S) or pos
 
     def _unifies(self, S, sigma):
-        for term in S:
-            if most_general_unifier(term, sigma) is None:
-                return False
-
-        return True
+        return all(most_general_unifier(term, sigma) for term in S)
 
     def _not_in_existential(self, q, S, sigma):
         for free_var in sigma[1]._list:
@@ -261,18 +248,10 @@ class OntologyRewriter:
     def _is_shared(self, a, q):
         count = 0
         if isinstance(q, NaryLogicOperator):
-            for term in q.formulas:
-                if a in term.args:
-                    count += 1
+            count = sum(a in term.args for term in q.formulas)
         else:
-            for term in q.args:
-                if a == term:
-                    count += 1
-
-        if count > 1:
-            return True
-
-        return False
+            count = sum(a == term for term in q.args)
+        return count > 1
 
     def _rename(self, sigma, index):
         renamed = set({})
