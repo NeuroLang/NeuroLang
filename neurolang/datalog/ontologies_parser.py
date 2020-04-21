@@ -391,7 +391,8 @@ class OntologyParser:
         )
 
         warnings.warn(
-            f"The restriction minCardinality has not been parsed for {restricted_node}"
+            f"""The restriction minCardinality has not
+            been parsed for {restricted_node}"""
         )
 
         return Union(())
@@ -419,7 +420,8 @@ class OntologyParser:
         )
 
         warnings.warn(
-            f"The restriction maxCardinality has not been parsed for {parsed_restrictions}"
+            f"""The restriction maxCardinality has not
+            been parsed for {parsed_restrictions}"""
         )
 
         return Union(())
@@ -451,7 +453,8 @@ class OntologyParser:
         )
 
         warnings.warn(
-            f"The restriction cardinality has not been parsed for {restricted_node}"
+            f"""The restriction cardinality has not
+            been parsed for {restricted_node}"""
         )
 
         return Union(())
