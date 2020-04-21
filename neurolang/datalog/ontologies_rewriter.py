@@ -171,12 +171,11 @@ class OntologyRewriter:
 
     def _free_var_same_term_other_position(self, free_var, pos, q):
         if isinstance(q, NaryLogicOperator):
-            for formula in q.formulas:
-                i = 0
-                for sub_arg in formula.args:
-                    if sub_arg == free_var and i not in pos:
-                        return True
-                    i += 1
+            return any(
+                sub_arg == free_var and index not in pos
+                for formula in q.formulas
+                for index, sub_arg in enumerate(formula.args)
+            )
         else:
             return any(
                 arg == free_var and i != pos for i, arg in enumerate(q.args)
@@ -227,26 +226,19 @@ class OntologyRewriter:
         return True
 
     def _get_position_existential(self, sigma, free_var):
-        positions = []
-        count = 0
-        for symbol in sigma.args:
-            if symbol == free_var:
-                positions.append(count)
-            count += 1
-
-        return positions
+        return [
+            pos for pos, symbol in enumerate(sigma.args) if symbol == free_var
+        ]
 
     def _position_shared_or_constant(self, q, S, positions):
-        for pos in positions:
-            for term in S:
-                a = term.args[pos]
-                if isinstance(a, Constant) or self._is_shared(a, q):
-                    return True
-
-        return False
+        return any(
+            isinstance(term.args[pos], Constant)
+            or self._is_shared(term.args[pos], q)
+            for pos in positions
+            for term in S
+        )
 
     def _is_shared(self, a, q):
-        count = 0
         if isinstance(q, NaryLogicOperator):
             count = sum(a in term.args for term in q.formulas)
         else:
@@ -264,18 +256,16 @@ class OntologyRewriter:
 
     def _replace(self, sigma, index, renamed):
         new_args = {}
-
         if isinstance(sigma, NaryLogicOperator):
             for app in sigma.formulas:
                 new_arg, renamed = self._replace(app, index, renamed)
                 new_args = {**new_args, **new_arg}
         else:
             for arg in sigma.args:
-                if arg not in renamed:
-                    if isinstance(arg, Symbol):
-                        temp = arg.fresh()
-                        temp.name = arg.name + str(index)
-                        new_args[arg] = temp
+                if arg not in renamed and isinstance(arg, Symbol):
+                    temp = arg.fresh()
+                    temp.name = arg.name + str(index)
+                    new_args[arg] = temp
                 renamed.add(arg)
         return new_args, renamed
 
