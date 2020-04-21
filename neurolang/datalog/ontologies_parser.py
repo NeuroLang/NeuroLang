@@ -69,7 +69,7 @@ class OntologyParser:
         union_of_constraints = Union(
             union_of_constraints_dom.formulas
             + union_of_constraints_prop.formulas
-            + union_of_constraints
+            + union_of_constraints.formulas
         )
 
         return extensional_predicate_tuples, union_of_constraints
@@ -132,10 +132,6 @@ class OntologyParser:
                 RightImplication(self._triple(x, const, z), symbol(x, z)),
             )
 
-        self.union_of_constraints = Union(
-            self.union_of_constraints.formulas + constraints
-        )
-
         constraints_subproperties = self._parse_subproperties()
         constraints_subclasses = self._parse_subclasses()
         constraints_disjoint = self._parse_disjoint()
@@ -146,6 +142,8 @@ class OntologyParser:
             + constraints_disjoint.formulas
             + constraints
         )
+
+        return union_of_constraints
 
     def _parse_subproperties(self):
         """
