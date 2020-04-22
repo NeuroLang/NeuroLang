@@ -1,15 +1,15 @@
 from ..datalog import DatalogProgram
 from ..datalog.aggregation import (AggregationApplication,
                                    DatalogWithAggregationMixin)
+from ..datalog.constraints_representation import (
+    DatalogConstraintsProgramMixin, RightImplication)
 from ..datalog.expressions import Fact
 from ..datalog.negation import DatalogProgramNegationMixin
-from ..datalog.constraints_representation import RightImplication, DatalogConstraintsProgramMixin
 from ..expressions import Constant, Symbol
 from ..logic import Conjunction, Implication, Negation, Union
 from ..probabilistic.cplogic.program import CPLogicProgram
 from ..probabilistic.expressions import ProbabilisticPredicate
 from ..type_system import Unknown
-
 
 A = Symbol('A')
 B = Symbol('B')
