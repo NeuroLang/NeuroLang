@@ -1,5 +1,3 @@
-import pytest
-
 from ... import expression_walker as ew
 from ...expressions import Constant, ExpressionBlock, Symbol
 from ...logic import ExistentialPredicate, FunctionApplication, Implication

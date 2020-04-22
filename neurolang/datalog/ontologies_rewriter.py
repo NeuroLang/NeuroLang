@@ -1,18 +1,12 @@
-import typing
-
 from ..expression_walker import (
-    ExpressionWalker,
     ReplaceExpressionWalker,
     ReplaceSymbolWalker,
     add_match,
 )
-from ..expressions import Expression, Symbol
+from ..expressions import Symbol
 from ..logic import (
-    Conjunction,
     Constant,
-    FunctionApplication,
     Implication,
-    LogicOperator,
     NaryLogicOperator,
 )
 from ..logic.expression_processing import ExtractFreeVariablesWalker
