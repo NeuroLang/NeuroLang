@@ -35,7 +35,7 @@ class DatalogConstraintsProgramMixin:
     def load_constraints(self, union_of_constraints):
         self.symbol_table["__constraints__"] = union_of_constraints
 
-    def get_constraints(self):
+    def constraints(self):
         return self.symbol_table["__constraints__"]
 
 
