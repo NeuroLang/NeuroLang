@@ -3,15 +3,13 @@ import io
 import pytest
 from rdflib import RDF
 
-from ... import expression_walker as ew
 from ...exceptions import NeuroLangNotImplementedError
 from ...expression_walker import ExpressionBasicEvaluator
-from ...expressions import Constant, Symbol
+from ...expressions import Symbol
 from ...logic import Union
-from ..aggregation import DatalogWithAggregationMixin
 from ..chase import Chase
 from ..constraints_representation import DatalogConstraintsProgram
-from ..expressions import Implication, TranslateToLogic
+from ..expressions import Implication
 from ..ontologies_parser import OntologyParser
 from ..ontologies_rewriter import OntologyRewriter
 
@@ -199,7 +197,7 @@ def test_min_cardinality():
         <rdfs:subClassOf>
             <owl:Restriction>
                 <owl:onProperty rdf:resource="premises001#p"/>
-                <owl:minCardinality 
+                <owl:minCardinality
                     rdf:datatype="http://www.w3.org/2001/XMLSchema#nonNegativeInteger">
                     2
                 </owl:minCardinality>

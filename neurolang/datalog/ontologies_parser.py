@@ -5,25 +5,8 @@ from rdflib import OWL, RDF, RDFS, BNode
 
 from ..exceptions import NeuroLangNotImplementedError
 from ..expressions import Constant, Symbol
-from ..logic import Conjunction, LogicOperator, Union
-
-
-class RightImplication(LogicOperator):
-    """
-    This class defines implications to the right. They are used to define
-    constraints derived from ontologies. The functionality is the same as
-    that of an implication, but with body and head inverted in position
-    """
-
-    def __init__(self, antecedent, consequent):
-        self.antecedent = antecedent
-        self.consequent = consequent
-        self._symbols = consequent._symbols | antecedent._symbols
-
-    def __repr__(self):
-        return "RightImplication{{{} \u2192 {}}}".format(
-            repr(self.antecedent), repr(self.consequent)
-        )
+from ..logic import Conjunction, Union
+from .constraints_representation import RightImplication
 
 
 class OntologyParser:
