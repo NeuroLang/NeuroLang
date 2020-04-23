@@ -1,6 +1,6 @@
 import typing
 
-from ...datalog import DatalogProgram, WrappedRelationalAlgebraSet
+from ...datalog import DatalogProgram
 from ...exceptions import NeuroLangException
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker
