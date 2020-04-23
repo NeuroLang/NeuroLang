@@ -156,9 +156,15 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         Construct the provenance expression that calculates
         the truth probabilities of an AND random variable
         in the network.
+
         """
         rv_symb = app_op.rv_symbol
+        # retrieve the expression of the intensional rule corresponding
+        # to the AND node for which we wish to calculate the probabilities
         expression = self.graphical_model.expressions.value[rv_symb]
+        # map the predicate symbol of each antecedent predicate to the names
+        # of its argument (TODO: handle constant terms in the arguments
+        # instead of assuming all the arguments are quantified variables)
         antecedent_pred_symb_to_args = {
             pred.functor: pred.args
             for pred in extract_logic_predicates(expression.antecedent)
@@ -172,6 +178,10 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
                 parent_expression
             ).args
             desired_args = antecedent_pred_symb_to_args[parent_symb]
+            # ensure the names of the columns match before the natural join
+            # the renaming scheme is based on the antecedent of the
+            # intensional rule attached to the AND node for which
+            # we wish to compute the conditional probabilities
             parent_value = rename_columns_for_args_to_match(
                 parent_value, current_args, desired_args
             )
