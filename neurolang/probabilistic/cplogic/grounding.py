@@ -8,7 +8,12 @@ from ...datalog.chase import (
 )
 from ...exceptions import NeuroLangException
 from ...expression_walker import ExpressionBasicEvaluator
-from ...expressions import Constant, ExpressionBlock, Symbol
+from ...expressions import (
+    Constant,
+    ExpressionBlock,
+    Symbol,
+    FunctionApplication,
+)
 from ...logic import Implication
 from ...logic.expression_processing import (
     TranslateToLogic,
@@ -20,6 +25,7 @@ from ...relational_algebra import (
     Projection,
     RelationalAlgebraSolver,
 )
+from ..expression_processing import is_probabilistic_fact
 from ..expressions import (
     Grounding,
     ProbabilisticChoice,

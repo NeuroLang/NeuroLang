@@ -23,5 +23,3 @@ class NoisyORProbabilityProvenanceSolver(
         proj_cols = [prov_col.value] + group_cols
         new_relation = new_relation.projection(*proj_cols)
         return ProvenanceAlgebraSet(new_relation, prov_col)
-
-

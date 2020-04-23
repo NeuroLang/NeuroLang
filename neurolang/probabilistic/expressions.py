@@ -22,11 +22,6 @@ class ProbabilisticPredicate(Definition):
         )
 
 
-class ProbabilisticChoice(Definition):
-    def __init__(self, predicate):
-        self.predicate = predicate
-
-
 class Grounding(Definition):
     def __init__(self, expression, relation):
         self.expression = expression
@@ -34,70 +29,21 @@ class Grounding(Definition):
 
     def __repr__(self):
         return "Grounding{{{}}}\n{}".format(
-            repr(self.expression, repr(self.relation))
+            repr(self.expression), repr(self.relation)
         )
 
 
 class GraphicalModel(Definition):
-    def __init__(self, edges, cpds, groundings):
+    def __init__(self, edges, cpd_factories, expressions):
         self.edges = edges
-        self.cpds = cpds
-        self.groundings = groundings
+        self.cpd_factories = cpd_factories
+        self.expressions = expressions
 
     @property
     def random_variables(self):
-        return set(self.cpds.value)
+        return set(self.cpd_factories.value)
 
 
-class Distribution(Definition):
-    def __init__(self, parameters):
-        self.parameters = parameters
-
-
-class DiscreteDistribution(Distribution):
-    pass
-
-
-class ChoiceDistribution(DiscreteDistribution):
-    def __init__(self, grounding):
-        self.grounding = grounding
-
-
-class TableDistribution(DiscreteDistribution):
-    def __init__(self, table, parameters=Constant[Mapping]({})):
-        self.table = table
-        super().__init__(parameters)
-
-    def __repr__(self):
-        return "TableDistribution[\n{}\n]".format(
-            "\n".join(
-                [
-                    f"\t{value}:\t{prob}"
-                    for value, prob in self.table.value.items()
-                ]
-            )
-        )
-
-
-class SuccQuery(Definition):
+class ProbabilisticChoice(Definition):
     def __init__(self, predicate):
         self.predicate = predicate
-
-    def __repr__(self):
-        return "SUCC( {} )".format(repr(self.predicate))
-
-
-class MargQuery(Definition):
-    def __init__(self, predicate, evidence):
-        self.predicate = predicate
-        self.evidence = evidence
-
-
-class VectorisedTableDistribution(TableDistribution):
-    def __init__(self, table, grounding, parameters=Constant[Mapping]({})):
-        self.grounding = grounding
-        super().__init__(table, parameters)
-
-
-class RandomVariableValuePointer(Symbol):
-    pass
