@@ -97,8 +97,9 @@ class AndCPDFactory(CPDFactory):
     and let Y_1, ..., Y_n be n parent boolean random variables.
 
     The AND CPD encodes that
-
-        P(X = T | Y_1 = T, ... Y_n = T) = 1.0
+                                              |- 1  if all y_i = T
+        P(X = T | Y_1 = y_1, ... Y_n = y_1) = |
+                                              |- 0  otherwise
 
     """
 
