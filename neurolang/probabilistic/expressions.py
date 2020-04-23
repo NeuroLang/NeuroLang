@@ -50,7 +50,3 @@ class GraphicalModel(Definition):
         self.edges = edges
         self.cpd_factories = cpd_factories
         self.expressions = expressions
-
-    @property
-    def random_variables(self):
-        return set(self.cpd_factories.value)
