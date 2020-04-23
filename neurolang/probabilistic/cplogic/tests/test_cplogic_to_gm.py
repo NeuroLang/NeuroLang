@@ -1,15 +1,16 @@
 from typing import AbstractSet
+
 from ....datalog import Fact
 from ....expressions import Constant, ExpressionBlock, Symbol
 from ....logic import Implication
 from ....relational_algebra import NamedRelationalAlgebraFrozenSet
-from ..cplogic_to_graphical_model import (
+from .. import testing
+from ..cplogic_to_gm import (
     AndCPDFactory,
     BernoulliCPDFactory,
     CPLogicGroundingToGraphicalModelTranslator,
 )
 from ..grounding import ground_cplogic_program
-from .. import testing
 
 P = Symbol("P")
 Q = Symbol("Q")

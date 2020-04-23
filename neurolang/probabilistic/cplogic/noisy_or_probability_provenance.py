@@ -1,7 +1,4 @@
-import typing
-
 from ...expression_pattern_matching import add_match
-from ...expressions import Constant
 from ...relational_algebra import Projection
 from ...relational_algebra_provenance import (
     ProvenanceAlgebraSet,

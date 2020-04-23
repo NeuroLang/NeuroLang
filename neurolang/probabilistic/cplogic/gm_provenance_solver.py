@@ -6,7 +6,6 @@ from ...relational_algebra_provenance import (
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
 )
-from ..expressions import GraphicalModel, Grounding
 from .cplogic_to_gm import (
     AndCPDFactory,
     BernoulliCPDFactory,
