@@ -19,7 +19,7 @@ class OntologyParser:
         self.namespaces_dic = None
         self.owl_dic = None
         if isinstance(paths, list):
-            self._load_ontology(paths, load_format)
+            self._load_ontology(paths, [load_format])
         else:
             self._load_ontology([paths], [load_format])
 
