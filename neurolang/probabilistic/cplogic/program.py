@@ -78,9 +78,7 @@ class CPLogicProgram(DatalogProgram, ExpressionWalker):
         type_, iterable = self.infer_iterable_type(iterable)
         self._check_iterable_prob_type(type_)
         constant = Constant[typing.AbstractSet[type_]](
-            self.new_probability_set(list(iterable)),
-            auto_infer_type=False,
-            verify_type=False,
+            self.new_set(iterable), auto_infer_type=False, verify_type=False,
         )
         symbol = symbol.cast(constant.type)
         self.symbol_table[symbol] = constant
@@ -98,23 +96,10 @@ class CPLogicProgram(DatalogProgram, ExpressionWalker):
         if symbol in self.symbol_table:
             raise NeuroLangException("Symbol already used")
         ra_set = Constant[typing.AbstractSet](
-            self.new_probability_set(list(iterable)),
-            auto_infer_type=False,
-            verify_type=False,
+            self.new_set(iterable), auto_infer_type=False, verify_type=False,
         )
         check_probchoice_probs_sum_to_one(ra_set)
         self.symbol_table[symbol] = ra_set
-
-    @staticmethod
-    def new_probability_set(iterable=None):
-        """
-        Construct a relational algebra set whose first column is assumed to
-        contain the probability associated with the tuple made out of the
-        remaining columns. This is used to represent probabilistic facts and
-        choices.
-
-        """
-        return WrappedRelationalAlgebraSet(iterable=iterable)
 
     @staticmethod
     def _check_iterable_prob_type(iterable_type):
