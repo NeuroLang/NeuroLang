@@ -1,11 +1,6 @@
 import collections
-import typing
 
-import pandas as pd
-
-from ....expressions import Constant
 from ....relational_algebra import (
-    ColumnStr,
     NamedRelationalAlgebraFrozenSet,
     NaturalJoin,
     Projection,
@@ -61,9 +56,6 @@ def test_noisy_or_projection_and_naturaljoin():
     R_C =   | _p_   | x  |
             | 0.168 | x1 |
     """
-    _p_ = Constant(ColumnStr("_p_"))
-    x = Constant(ColumnStr("x"))
-    y = Constant(ColumnStr("y"))
     r_Q = make_prov_set(
         [(0.2, "x1", "y1"), (0.1, "x1", "y2"), (0.9, "x2", "y2")],
         ("_p_", "x", "y"),
