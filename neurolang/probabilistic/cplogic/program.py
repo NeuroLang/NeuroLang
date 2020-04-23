@@ -7,10 +7,10 @@ from ...expression_walker import ExpressionWalker
 from ...expressions import Constant, ExpressionBlock, Symbol
 from ...logic import Implication
 from ..expression_processing import (
-    build_pfact_set,
-    check_probchoice_probs_sum_to_one,
+    build_probabilistic_fact_set,
+    check_probabilistic_choice_set_probabilities_sum_to_one,
     concatenate_to_expression_block,
-    group_probfacts_by_pred_symb,
+    group_probabilistic_facts_by_pred_symb,
     is_probabilistic_fact,
 )
 
@@ -71,7 +71,7 @@ class CPLogicProgram(DatalogProgram, ExpressionWalker):
                 del ret[keyword]
         return ret
 
-    def add_probfacts_from_tuples(self, symbol, iterable):
+    def add_probabilistic_facts_from_tuples(self, symbol, iterable):
         self._register_prob_pred_symb_set_symb(
             symbol, self.pfact_pred_symb_set_symb
         )
@@ -83,7 +83,7 @@ class CPLogicProgram(DatalogProgram, ExpressionWalker):
         symbol = symbol.cast(constant.type)
         self.symbol_table[symbol] = constant
 
-    def add_probchoice_from_tuples(self, symbol, iterable):
+    def add_probabilistic_choice_from_tuples(self, symbol, iterable):
         """
         Add a probabilistic choice to the symbol table.
 
@@ -98,7 +98,7 @@ class CPLogicProgram(DatalogProgram, ExpressionWalker):
         ra_set = Constant[typing.AbstractSet](
             self.new_set(iterable), auto_infer_type=False, verify_type=False,
         )
-        check_probchoice_probs_sum_to_one(ra_set)
+        check_probabilistic_choice_set_probabilities_sum_to_one(ra_set)
         self.symbol_table[symbol] = ra_set
 
     @staticmethod
@@ -113,13 +113,15 @@ class CPLogicProgram(DatalogProgram, ExpressionWalker):
 
     @add_match(ExpressionBlock)
     def program_code(self, code):
-        probfacts, other_expressions = group_probfacts_by_pred_symb(code)
-        for pred_symb, pfacts in probfacts.items():
+        pfacts, other_expressions = group_probabilistic_facts_by_pred_symb(
+            code
+        )
+        for pred_symb, pfacts in pfacts.items():
             self._register_prob_pred_symb_set_symb(
                 pred_symb, self.pfact_pred_symb_set_symb
             )
             if len(pfacts) > 1:
-                self.symbol_table[pred_symb] = build_pfact_set(
+                self.symbol_table[pred_symb] = build_probabilistic_fact_set(
                     pred_symb, pfacts
                 )
             else:

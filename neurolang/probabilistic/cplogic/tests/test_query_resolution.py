@@ -56,7 +56,9 @@ def test_simple_bernoulli_program():
     """
     code = ExpressionBlock(())
     probfacts_sets = {P: {(0.7, "a"), (0.8, "b")}}
-    result = solve_succ_query(P(x), code, probfacts_sets=probfacts_sets)
+    result = solve_succ_query(
+        P(x), code, probabilistic_facts_sets=probfacts_sets
+    )
     assert len(result.value) == 2
     assert set(result.value) == {(0.7, "a"), (0.8, "b")}
 
@@ -70,7 +72,9 @@ def test_conjunction_bernoulli_program():
         Q: {(0.9, "b"), (0.1, "c")},
         R: {(0.9, "b"), (0.1, "c")},
     }
-    result = solve_succ_query(Z(x), code, probfacts_sets=probfacts_sets)
+    result = solve_succ_query(
+        Z(x), code, probabilistic_facts_sets=probfacts_sets
+    )
     assert len(result.value) == 1
     assert set(result.value) == {(0.5 * 0.9 * 0.9, "b")}
 
@@ -106,7 +110,9 @@ def test_multi_level_conjunctive_program():
             Implication(H(x, y), Conjunction((Z(x), R(x, y)))),
         )
     )
-    result = solve_succ_query(H(x, y), code, probfacts_sets=probfacts_sets)
+    result = solve_succ_query(
+        H(x, y), code, probabilistic_facts_sets=probfacts_sets
+    )
     expected = testing.make_prov_set(
         [(0.2 * 0.9 * 0.1, "a", "a"), (0.2 * 0.9 * 0.5, "a", "b"),],
         ("_p", "x", "y"),

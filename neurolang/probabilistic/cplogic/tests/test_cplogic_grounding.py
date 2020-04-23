@@ -105,7 +105,7 @@ def test_cplogic_grounding_general():
 def test_cplogic_grounding_with_pchoice():
     probchoice_sets = {P: {(0.5, "a"), (0.25, "b"), (0.25, "c")}}
     grounded = ground_cplogic_program(
-        ExpressionBlock(tuple()), probchoice_sets=probchoice_sets,
+        ExpressionBlock(tuple()), probabilistic_choice_sets=probchoice_sets,
     )
     assert isinstance(grounded.expressions[0], ProbabilisticChoiceGrounding)
 

@@ -42,7 +42,7 @@ def is_probabilistic_fact(expression):
     )
 
 
-def group_probfacts_by_pred_symb(code_block):
+def group_probabilistic_facts_by_pred_symb(code_block):
     probfacts = collections.defaultdict(list)
     non_probfacts = list()
     for expression in code_block.expressions:
@@ -60,7 +60,7 @@ def const_or_symb_as_python_type(exp):
         return exp.name
 
 
-def build_pfact_set(pred_symb, pfacts):
+def build_probabilistic_fact_set(pred_symb, pfacts):
     iterable = [
         (const_or_symb_as_python_type(pf.consequent.probability),)
         + tuple(
@@ -72,7 +72,7 @@ def build_pfact_set(pred_symb, pfacts):
     return Constant[typing.AbstractSet](WrappedRelationalAlgebraSet(iterable))
 
 
-def check_probchoice_probs_sum_to_one(ra_set):
+def check_probabilistic_choice_set_probabilities_sum_to_one(ra_set):
     probs_sum = sum(v.value[0].value for v in ra_set.value)
     if not numpy.isclose(probs_sum, 1.0):
         raise NeuroLangException(

@@ -32,7 +32,7 @@ def test_simple_deterministic_program():
 def test_program_with_probfacts():
     code = ExpressionBlock((Implication(Q(x), P(x)),))
     probfacts_sets = {P: {(1.0, "a"), (0.5, "b"), (0.3, "c")}}
-    gm = testing.build_gm(code, probfacts_sets=probfacts_sets)
+    gm = testing.build_gm(code, probabilistic_facts_sets=probfacts_sets)
     assert set(gm.edges.value) == {Q}
     assert gm.edges.value[Q] == {P}
     assert isinstance(gm.cpd_factories.value[Q], AndCPDFactory)

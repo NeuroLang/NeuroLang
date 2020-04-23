@@ -151,13 +151,24 @@ class Chase(ChaseNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
 
 
 def ground_cplogic_program(cpl_code, **sets):
+    set_prefixes = {
+        "probabilistic_facts",
+        "extensional_predicate",
+        "probabilistic_choice",
+    }
+    if any(
+        not set_kwarg.endswith("_sets")
+        or set_kwarg.split("_sets")[0] not in set_prefixes
+        for set_kwarg in sets
+    ):
+        raise ValueError("Unknown set kwarg")
     cpl_program = CPLogicProgram()
     cpl_program.walk(cpl_code)
-    for prefix in ["probfacts", "extensional_predicate", "probchoice"]:
-        if f"{prefix}_sets" not in sets:
+    for set_prefix in set_prefixes:
+        if f"{set_prefix}_sets" not in sets:
             continue
-        add_fun = getattr(cpl_program, f"add_{prefix}_from_tuples")
-        for symb, the_set in sets[f"{prefix}_sets"].items():
+        add_fun = getattr(cpl_program, f"add_{set_prefix}_from_tuples")
+        for symb, the_set in sets[f"{set_prefix}_sets"].items():
             add_fun(symb, the_set)
     for disjunction in cpl_program.intensional_database().values():
         if len(disjunction.formulas) > 1:
