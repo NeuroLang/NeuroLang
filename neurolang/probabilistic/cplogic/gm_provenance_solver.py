@@ -98,7 +98,8 @@ def solve_succ_query(query_predicate, cplogic_code, **sets):
     grounded = ground_cplogic_program(cplogic_code, **sets)
     translator = CPLogicGroundingToGraphicalModelTranslator()
     gm = translator.walk(grounded)
-    qpred_symb, qpred_args = query_predicate.unapply()
+    qpred_symb = query_predicate.functor
+    qpred_args = query_predicate.args
     solver = CPLogicGraphicalModelProvenanceSolver(gm)
     marginal = solver.walk(Marginalise(qpred_symb))
     args = get_predicate_from_grounded_expression(
