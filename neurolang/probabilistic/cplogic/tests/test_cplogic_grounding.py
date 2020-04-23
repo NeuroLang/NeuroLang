@@ -14,7 +14,7 @@ from ...expression_processing import (
 )
 from ...expressions import (
     Grounding,
-    ProbabilisticChoice,
+    ProbabilisticChoiceGrounding,
     ProbabilisticPredicate,
 )
 from ..grounding import ground_cplogic_program
@@ -107,7 +107,7 @@ def test_cplogic_grounding_with_pchoice():
     grounded = ground_cplogic_program(
         ExpressionBlock(tuple()), probchoice_sets=probchoice_sets,
     )
-    assert isinstance(grounded.expressions[0].expression, ProbabilisticChoice)
+    assert isinstance(grounded.expressions[0], ProbabilisticChoiceGrounding)
 
 
 def test_unsupported_grounding_program_with_disjunction():

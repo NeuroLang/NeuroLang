@@ -33,6 +33,18 @@ class Grounding(Definition):
         )
 
 
+class ProbabilisticChoiceGrounding(Grounding):
+    """
+    Class used to differentiate the grounding of a probabilistic
+    choice from the grounding of other choices.
+
+    """
+
+    def __init__(self, expression, relation, probability_column):
+        super().__init__(expression, relation)
+        self.probability_column = probability_column
+
+
 class GraphicalModel(Definition):
     def __init__(self, edges, cpd_factories, expressions):
         self.edges = edges
@@ -42,8 +54,3 @@ class GraphicalModel(Definition):
     @property
     def random_variables(self):
         return set(self.cpd_factories.value)
-
-
-class ProbabilisticChoice(Definition):
-    def __init__(self, predicate):
-        self.predicate = predicate

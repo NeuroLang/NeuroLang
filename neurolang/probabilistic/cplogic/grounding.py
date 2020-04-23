@@ -24,11 +24,12 @@ from ...relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     Projection,
     RelationalAlgebraSolver,
+    str2columnstr,
 )
 from ..expression_processing import is_probabilistic_fact
 from ..expressions import (
     Grounding,
-    ProbabilisticChoice,
+    ProbabilisticChoiceGrounding,
     ProbabilisticPredicate,
 )
 from .program import CPLogicProgram
@@ -92,14 +93,18 @@ def build_rule_grounding(pred_symb, st_item, tuple_set):
 def build_pchoice_grounding(pred_symb, relation):
     args = tuple(Symbol.fresh() for _ in range(relation.value.arity - 1))
     predicate = pred_symb(*args)
-    expression = ProbabilisticChoice(predicate)
+    probability_column = str2columnstr(Symbol.fresh().name)
     relation = Constant[AbstractSet](
         NamedRelationalAlgebraFrozenSet(
-            columns=(Symbol.fresh().name,) + tuple(a.name for a in args),
+            columns=(probability_column.value,) + tuple(a.name for a in args),
             iterable=relation.value,
         )
     )
-    return Grounding(expression=expression, relation=relation)
+    return ProbabilisticChoiceGrounding(
+        expression=predicate,
+        relation=relation,
+        probability_column=probability_column,
+    )
 
 
 def build_pfact_grounding_from_set(pred_symb, relation):
@@ -167,8 +172,8 @@ def ground_cplogic_program(cpl_code, **sets):
 
 
 def get_predicate_from_grounded_expression(expression):
-    if isinstance(expression, ProbabilisticChoice):
-        return expression.predicate
+    if isinstance(expression, FunctionApplication):
+        return expression
     elif is_probabilistic_fact(expression):
         return expression.consequent.body
     elif isinstance(expression, FunctionApplication):
@@ -178,15 +183,15 @@ def get_predicate_from_grounded_expression(expression):
 
 
 def get_grounding_pred_symb(grounding):
-    if isinstance(grounding.expression, ProbabilisticChoice):
-        return grounding.expression.predicate.functor
+    if isinstance(grounding, ProbabilisticChoiceGrounding):
+        return grounding.expression.functor
     elif isinstance(grounding.expression.consequent, ProbabilisticPredicate):
         return grounding.expression.consequent.body.functor
     return grounding.expression.consequent.functor
 
 
 def get_grounding_dependencies(grounding):
-    if isinstance(grounding.expression, ProbabilisticChoice):
+    if isinstance(grounding, ProbabilisticChoiceGrounding):
         return set()
     predicates = extract_logic_predicates(grounding.expression.antecedent)
     return set(pred.functor for pred in predicates)

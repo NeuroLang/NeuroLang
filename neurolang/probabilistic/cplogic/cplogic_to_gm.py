@@ -16,7 +16,12 @@ from ...relational_algebra import (
     RelationalAlgebraSolver,
     str2columnstr,
 )
-from ..expressions import GraphicalModel, Grounding, ProbabilisticPredicate
+from ..expressions import (
+    GraphicalModel,
+    Grounding,
+    ProbabilisticPredicate,
+    ProbabilisticChoiceGrounding,
+)
 from .grounding import topological_sort_groundings
 
 
@@ -160,6 +165,15 @@ class CPLogicGroundingToGraphicalModelTranslator(PatternWalker):
         cpd_factory = BernoulliCPDFactory(relation, probability_column)
         expression = grounding.expression
         self.add_random_variable(rv_symb, cpd_factory, expression)
+
+    @add_match(ProbabilisticChoiceGrounding)
+    def probchoice_grounding(self, grounding):
+        """
+        Represent a probabilistic choice as a n-ary choice random
+        variable.
+        """
+        rv_symb = grounding.expression.predicate.functor
+        probability_column = str2columnstr()
 
     @add_match(Grounding(Implication, Constant[AbstractSet]))
     def intensional_rule_grounding(self, grounding):
