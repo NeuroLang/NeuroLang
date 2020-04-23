@@ -46,6 +46,49 @@ def rename_columns_for_args_to_match(relation, current_args, desired_args):
 
 
 def solve_succ_query(query_predicate, cplogic_code, **sets):
+    """
+    Obtain the solution of a SUCC query on a CP-Logic program.
+
+    Solving a SUCC query is a multi-step process:
+
+        1.  First, the program is grounded. That is because the
+            algorithm used to convert it to a graphical model in
+            the next step only works on grounded CP-Logic programs.
+            A grounding of a program is an ExpressionBlock where
+            each expression is a Grounding expression. Each of this
+            Grounding contains both the grounded expression itself
+            and a relation representing all the replacements of the
+            variables in the grounded expression. This way, we can
+            represent many rules of the program using relations.
+
+        2.  Then, a graphical model representation of that grounded
+            program is constructed, using the algorithm detailed in [1]_.
+            In the resulting graphical model, each ground atom in the
+            grounded program is associated with a random variable.
+            The random variables are represented using relations for
+            compactness and make it possible to leverage relational
+            algebra operations to solve queries on the graphical model,
+            as is detailed in the next step. The links between the
+            random variables of the graphical model anad their CPDs are
+            determined by the structure of the initial program. A view
+            of the initial grounded expressions is maintained because it
+            is necessary for solving queries.
+
+        3.  Finally, the query is solved from the joint probability
+            distribution defined by the graphical model. Only the parts
+            of the graphical model necessary to solve the query are
+            calculated. The solver generates a provenance relational
+            expression that is left un-evaluated (lazy calculation) and
+            that is solved only at the end. This separation between the
+            representation of the operations necessary to solve the query
+            and the actual resolution makes it possible to choose between
+            multiple solvers.
+
+    .. [1]: Meert, Wannes, Jan Struyf, and Hendrik Blockeel. “Learning Ground
+    CP-Logic Theories by Leveraging Bayesian Network Learning Techniques,”
+    n.d., 30.
+
+    """
     grounded = ground_cplogic_program(cplogic_code, **sets)
     translator = CPLogicGroundingToGraphicalModelTranslator()
     gm = translator.walk(grounded)
