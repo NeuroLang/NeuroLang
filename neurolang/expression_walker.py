@@ -3,13 +3,26 @@ import typing
 from collections import deque
 from itertools import product, tee
 
-from .expression_pattern_matching import (PatternMatcher, add_match,
-                                          add_entry_point_match)
-from .expressions import (Constant, Expression, FunctionApplication, Lambda,
-                          NeuroLangException, NeuroLangTypeException,
-                          Projection, Statement, Symbol, TypedSymbolTableMixin,
-                          Unknown, is_leq_informative, unify_types)
-
+from .expression_pattern_matching import (
+    PatternMatcher,
+    add_entry_point_match,
+    add_match
+)
+from .expressions import (
+    Constant,
+    Expression,
+    FunctionApplication,
+    Lambda,
+    NeuroLangException,
+    NeuroLangTypeException,
+    Projection,
+    Statement,
+    Symbol,
+    TypedSymbolTableMixin,
+    Unknown,
+    is_leq_informative,
+    unify_types
+)
 
 __all__ = [
     'expression_iterator', 'PatternWalker',
@@ -235,6 +248,19 @@ class ReplaceSymbolWalker(ExpressionWalker):
             return replacement.cast(replacement_type)
         else:
             return symbol
+
+
+class ReplaceExpressionWalker(ExpressionWalker):
+    def __init__(self, symbol_replacements):
+        self.symbol_replacements = symbol_replacements
+
+    @add_match(Expression)
+    def replace_free_variable(self, expression):
+        if expression in self.symbol_replacements:
+            replacement = self.symbol_replacements[expression]
+            return replacement
+        else:
+            return self.process_expression(expression)
 
 
 class ReplaceSymbolsByConstants(ExpressionWalker):
