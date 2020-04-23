@@ -1,12 +1,12 @@
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker
 from ...expressions import Definition, Symbol
+from ...logic.expression_processing import extract_logic_predicates
 from ...relational_algebra import NaturalJoin, RenameColumn, str2columnstr
 from ...relational_algebra_provenance import (
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
 )
-from ...logic.expression_processing import extract_logic_predicates
 from .cplogic_to_gm import (
     AndCPDFactory,
     BernoulliCPDFactory,
