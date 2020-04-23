@@ -181,9 +181,6 @@ class CPLogicGroundingToGraphicalModelTranslator(PatternWalker):
     def add_random_variable(
         self, rv_symb, cpd_factory, expression, parent_rv_symbs=None
     ):
-        assert rv_symb not in self.cpd_factories
-        assert rv_symb not in self.edges
-        assert rv_symb not in self.expressions
         self.cpd_factories[rv_symb] = cpd_factory
         self.expressions[rv_symb] = expression
         if parent_rv_symbs is not None:

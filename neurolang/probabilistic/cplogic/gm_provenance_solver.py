@@ -37,9 +37,6 @@ def rename_columns_for_args_to_match(relation, current_args, desired_args):
         The unsolved nested operations that apply the renaming scheme.
 
     """
-    assert all(isinstance(arg, Symbol) for arg in current_args)
-    assert all(isinstance(arg, Symbol) for arg in desired_args)
-    assert len(current_args) == len(desired_args)
     result = relation
     for src, dst in zip(current_args, desired_args):
         result = RenameColumn(
@@ -148,7 +145,6 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         the truth probabilities of a set of independent
         Bernoulli-distributed random variables.
         """
-        assert app_op.parent_values == tuple()
         return ProvenanceAlgebraSet(
             app_op.cpd_factory.relation.value,
             app_op.cpd_factory.probability_column,
