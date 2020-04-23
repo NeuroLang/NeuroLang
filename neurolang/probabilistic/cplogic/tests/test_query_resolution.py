@@ -107,10 +107,11 @@ def test_multi_level_conjunctive_program():
         )
     )
     result = solve_succ_query(H(x, y), code, probfacts_sets=probfacts_sets)
-    assert testing.get_named_relation_tuples(result.value) == {
-        (0.2 * 0.9 * 0.1, "a", "a"),
-        (0.2 * 0.9 * 0.5, "a", "b"),
-    }
+    expected = testing.make_prov_set(
+        [(0.2 * 0.9 * 0.1, "a", "a"), (0.2 * 0.9 * 0.5, "a", "b"),],
+        ("_p", "x", "y"),
+    )
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_simple_existential():
