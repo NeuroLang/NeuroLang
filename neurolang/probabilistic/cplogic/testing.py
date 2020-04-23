@@ -3,7 +3,7 @@ import numpy as np
 from ...expressions import Constant, Symbol
 from ...relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
-    str2columnstr,
+    str2columnstr_constant,
 )
 from ...relational_algebra_provenance import ProvenanceAlgebraSet
 from .cplogic_to_gm import CPLogicGroundingToGraphicalModelTranslator
@@ -47,5 +47,5 @@ def eq_prov_relations(pas1, pas2):
 def make_prov_set(iterable, columns):
     return ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(columns, iterable),
-        str2columnstr(columns[0]),
+        str2columnstr_constant(columns[0]),
     )

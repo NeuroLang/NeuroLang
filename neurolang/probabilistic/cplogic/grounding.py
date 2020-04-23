@@ -24,7 +24,7 @@ from ...relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     Projection,
     RelationalAlgebraSolver,
-    str2columnstr,
+    str2columnstr_constant,
 )
 from ..expression_processing import is_probabilistic_fact
 from ..expressions import (
@@ -93,7 +93,7 @@ def build_rule_grounding(pred_symb, st_item, tuple_set):
 def build_pchoice_grounding(pred_symb, relation):
     args = tuple(Symbol.fresh() for _ in range(relation.value.arity - 1))
     predicate = pred_symb(*args)
-    probability_column = str2columnstr(Symbol.fresh().name)
+    probability_column = str2columnstr_constant(Symbol.fresh().name)
     relation = Constant[AbstractSet](
         NamedRelationalAlgebraFrozenSet(
             columns=(probability_column.value,) + tuple(a.name for a in args),

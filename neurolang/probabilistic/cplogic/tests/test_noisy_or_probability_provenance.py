@@ -3,7 +3,7 @@ import collections
 from ....relational_algebra import (
     NaturalJoin,
     Projection,
-    str2columnstr,
+    str2columnstr_constant,
 )
 from .. import testing
 from ..noisy_or_probability_provenance import (
@@ -20,7 +20,7 @@ def test_simple_noisy_or_projection():
         (0.1, "a", "z"),
     ]
     prov_set = testing.make_prov_set(iterable, columns)
-    projection = Projection(prov_set, (str2columnstr("bar"),))
+    projection = Projection(prov_set, (str2columnstr_constant("bar"),))
     solver = NoisyORProbabilityProvenanceSolver()
     result = solver.walk(projection)
     expected_tuples = [(1 - 0.8 * 0.9, "a"), (0.5, "b")]
@@ -55,8 +55,8 @@ def test_noisy_or_projection_and_naturaljoin():
     r_Z = testing.make_prov_set(
         [(0.6, "x1", "y3"), (0.9, "x3", "y3")], ("_p_", "x", "y"),
     )
-    r_A = Projection(r_Q, (str2columnstr("x"),))
-    r_B = Projection(r_Z, (str2columnstr("x"),))
+    r_A = Projection(r_Q, (str2columnstr_constant("x"),))
+    r_B = Projection(r_Z, (str2columnstr_constant("x"),))
     r_C = NaturalJoin(r_A, r_B)
     result = NoisyORProbabilityProvenanceSolver().walk(r_A)
     expected = testing.make_prov_set(

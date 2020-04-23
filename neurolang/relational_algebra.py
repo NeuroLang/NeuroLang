@@ -29,7 +29,7 @@ class ColumnStr(str, Column):
     """Refer to a named relational algebra set's column by its name."""
 
 
-def str2columnstr(name):
+def str2columnstr_constant(name):
     return Constant[ColumnStr](
         ColumnStr(name), auto_infer_type=False, verify_type=False,
     )

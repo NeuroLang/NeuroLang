@@ -14,7 +14,7 @@ from ...logic.expression_processing import extract_logic_predicates
 from ...relational_algebra import (
     ConcatenateConstantColumn,
     RelationalAlgebraSolver,
-    str2columnstr,
+    str2columnstr_constant,
 )
 from ..expressions import (
     GraphicalModel,
@@ -143,7 +143,7 @@ class CPLogicGroundingToGraphicalModelTranslator(PatternWalker):
         all probabilities set to 1.0.
         """
         rv_symb = grounding.expression.consequent.functor
-        probability_column = str2columnstr(Symbol.fresh().name)
+        probability_column = str2columnstr_constant(Symbol.fresh().name)
         relation = ConcatenateConstantColumn(
             grounding.relation, probability_column, Constant[float](1.0)
         )
@@ -158,7 +158,7 @@ class CPLogicGroundingToGraphicalModelTranslator(PatternWalker):
         Represent a set of probabilistic facts with a Bernoulli node.
         """
         rv_symb = grounding.expression.consequent.body.functor
-        probability_column = str2columnstr(
+        probability_column = str2columnstr_constant(
             grounding.expression.consequent.probability.name
         )
         relation = grounding.relation
@@ -173,7 +173,7 @@ class CPLogicGroundingToGraphicalModelTranslator(PatternWalker):
         variable.
         """
         rv_symb = grounding.expression.predicate.functor
-        probability_column = str2columnstr()
+        probability_column = str2columnstr_constant()
 
     @add_match(Grounding(Implication, Constant[AbstractSet]))
     def intensional_rule_grounding(self, grounding):

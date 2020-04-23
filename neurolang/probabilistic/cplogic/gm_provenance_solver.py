@@ -2,7 +2,11 @@ from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker
 from ...expressions import Definition, Symbol
 from ...logic.expression_processing import extract_logic_predicates
-from ...relational_algebra import NaturalJoin, RenameColumn, str2columnstr
+from ...relational_algebra import (
+    NaturalJoin,
+    RenameColumn,
+    str2columnstr_constant,
+)
 from ...relational_algebra_provenance import (
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
@@ -40,7 +44,9 @@ def rename_columns_for_args_to_match(relation, current_args, desired_args):
     result = relation
     for src, dst in zip(current_args, desired_args):
         result = RenameColumn(
-            result, str2columnstr(src.name), str2columnstr(dst.name)
+            result,
+            str2columnstr_constant(src.name),
+            str2columnstr_constant(dst.name),
         )
     return result
 
