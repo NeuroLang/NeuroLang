@@ -19,6 +19,7 @@ from ..relational_algebra import (
     Projection,
     RelationalAlgebraOptimiser,
     RelationalAlgebraSolver,
+    RenameColumns,
     Selection,
     Union,
     eq_,
@@ -576,4 +577,27 @@ def test_extended_projection_other_relation_length():
     )
     solver = RelationalAlgebraSolver()
     result = solver.walk(extended_proj_op)
+    assert result == expected
+
+
+def test_rename_columns():
+    relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=("a", "b"),
+            iterable=[("bonjour", "hello"), ("namaste", "ciao")],
+        )
+    )
+    rename = RenameColumns(
+        relation,
+        (Constant(ColumnStr("a")), Constant(ColumnStr("b"))),
+        (Constant(ColumnStr("d")), Constant(ColumnStr("e"))),
+    )
+    expected = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=("d", "e"),
+            iterable=[("bonjour", "hello"), ("namaste", "ciao")],
+        )
+    )
+    solver = RelationalAlgebraSolver()
+    result = solver.walk(rename)
     assert result == expected

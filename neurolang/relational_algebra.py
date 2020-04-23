@@ -154,6 +154,29 @@ class RenameColumn(RelationalAlgebraOperation):
         )
 
 
+class RenameColumns(RelationalAlgebraOperation):
+    """
+    Convenient operation for renaming multiple columns at the same time.
+    """
+
+    def __init__(self, relation, src_columns, dst_columns):
+        self.relation = relation
+        self.src_columns = src_columns
+        self.dst_columns = dst_columns
+
+    def __repr__(self):
+        return (
+            f"\N{GREEK SMALL LETTER DELTA}"
+            + "_({})".format(
+                ", ".join(
+                    "{}\N{RIGHTWARDS ARROW}{}".format(src, dst)
+                    for src, dst in zip(self.src_columns, self.dst_columns)
+                )
+            )
+            + f"({self.relation})"
+        )
+
+
 class ExtendedProjection(RelationalAlgebraOperation):
     """
     General operation defining string-based relational algebra projections
@@ -448,6 +471,15 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
             new_set = new_set.rename_column(src, dst)
         return self._build_relation_constant(new_set)
 
+    @ew.add_match(RenameColumns)
+    def ra_rename_columns(self, rename_columns):
+        new_relation = rename_columns.relation
+        for src, dst in zip(
+            rename_columns.src_columns, rename_columns.dst_columns
+        ):
+            new_relation = RenameColumn(new_relation, src, dst)
+        return self.walk(new_relation)
+
     @ew.add_match(ConcatenateConstantColumn)
     def concatenate_constant_column(self, concat_op):
         relation = self.walk(concat_op.relation)
@@ -648,7 +680,7 @@ class RelationalAlgebraRewriteSelections(ew.ExpressionWalker):
         else:
             inner_relations = Product(inner_relations)
 
-        outer_relations = tuple(relations[i + 1:])
+        outer_relations = tuple(relations[i + 1 :])
 
         arg_left = selection.formula.args[0]
 
