@@ -4,7 +4,7 @@ from ...expressions import Definition, Symbol
 from ...logic.expression_processing import extract_logic_predicates
 from ...relational_algebra import (
     NaturalJoin,
-    RenameColumn,
+    RenameColumns,
     str2columnstr_constant,
 )
 from ...relational_algebra_provenance import (
@@ -41,14 +41,16 @@ def rename_columns_for_args_to_match(relation, current_args, desired_args):
         The unsolved nested operations that apply the renaming scheme.
 
     """
-    result = relation
-    for src, dst in zip(current_args, desired_args):
-        result = RenameColumn(
-            result,
-            str2columnstr_constant(src.name),
-            str2columnstr_constant(dst.name),
-        )
-    return result
+    return RenameColumns(
+        relation,
+        tuple(
+            (
+                str2columnstr_constant(src_arg.name),
+                str2columnstr_constant(dst_arg.name),
+            )
+            for src_arg, dst_arg in zip(current_args, desired_args)
+        ),
+    )
 
 
 def solve_succ_query(query_predicate, cpl_program):
