@@ -1,5 +1,3 @@
-from typing import Mapping
-
 from ..exceptions import NeuroLangException
 from ..expressions import Constant, Definition, FunctionApplication, Symbol
 
@@ -39,10 +37,6 @@ class ProbabilisticChoiceGrounding(Grounding):
     choice from the grounding of other choices.
 
     """
-
-    def __init__(self, expression, relation, probability_column):
-        super().__init__(expression, relation)
-        self.probability_column = probability_column
 
 
 class GraphicalModel(Definition):

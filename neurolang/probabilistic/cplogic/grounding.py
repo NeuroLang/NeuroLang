@@ -11,8 +11,8 @@ from ...expression_walker import ExpressionBasicEvaluator
 from ...expressions import (
     Constant,
     ExpressionBlock,
-    Symbol,
     FunctionApplication,
+    Symbol,
 )
 from ...logic import Implication
 from ...logic.expression_processing import (
@@ -24,7 +24,6 @@ from ...relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     Projection,
     RelationalAlgebraSolver,
-    str2columnstr_constant,
 )
 from ..expression_processing import is_probabilistic_fact
 from ..expressions import (
@@ -89,57 +88,54 @@ def build_rule_grounding(pred_symb, st_item, tuple_set):
     )
 
 
-def build_pchoice_grounding(pred_symb, relation):
+def build_probabilistic_grounding(pred_symb, relation, grounding_cls):
+    # construct the grounded expression with fresh symbols
+    # fresh symbol for the probability p in ( P(x) : p ) <- T
+    prob_symb = Symbol.fresh()
+    # fresh symbols for the terms x1, ..., xn in ( P(x1, ..., xn) : p ) <- T
     args = tuple(Symbol.fresh() for _ in range(relation.value.arity - 1))
-    predicate = pred_symb(*args)
-    probability_column = str2columnstr_constant(Symbol.fresh().name)
-    relation = Constant[AbstractSet](
+    # grounded expression
+    expression = Implication(
+        ProbabilisticPredicate(prob_symb, pred_symb(*args)),
+        Constant[bool](True),
+    )
+    # build the new relation (TODO: this could be done with a RenameColumns)
+    new_relation = Constant[AbstractSet](
         NamedRelationalAlgebraFrozenSet(
-            columns=(probability_column.value,) + tuple(a.name for a in args),
+            columns=(prob_symb.name,) + tuple(arg.name for arg in args),
             iterable=relation.value,
         )
     )
-    return ProbabilisticChoiceGrounding(
-        expression=predicate,
-        relation=relation,
-        probability_column=probability_column,
+    # finally construct the grounding using the given class
+    return grounding_cls(expression=expression, relation=new_relation)
+
+
+def build_pchoice_grounding(pred_symb, relation):
+    return build_probabilistic_grounding(
+        pred_symb, relation, ProbabilisticChoiceGrounding
     )
 
 
 def build_pfact_grounding_from_set(pred_symb, relation):
-    param_symb = Symbol.fresh()
-    args = tuple(Symbol.fresh() for _ in range(relation.value.arity - 1))
-    expression = Implication(
-        ProbabilisticPredicate(param_symb, pred_symb(*args)),
-        Constant[bool](True),
-    )
-    return Grounding(
-        expression=expression,
-        relation=Constant[AbstractSet](
-            NamedRelationalAlgebraFrozenSet(
-                columns=(param_symb.name,) + tuple(arg.name for arg in args),
-                iterable=relation.value,
-            )
-        ),
-    )
+    return build_probabilistic_grounding(pred_symb, relation, Grounding)
 
 
 def build_grounding(cpl_program, dl_instance):
     groundings = []
     for pred_symb in cpl_program.predicate_symbols:
-        st_item = cpl_program.symbol_table[pred_symb]
+        relation = cpl_program.symbol_table[pred_symb]
         if pred_symb in cpl_program.pfact_pred_symbs:
             groundings.append(
-                build_pfact_grounding_from_set(pred_symb, st_item)
+                build_pfact_grounding_from_set(pred_symb, relation)
             )
         elif pred_symb in cpl_program.pchoice_pred_symbs:
-            groundings.append(build_pchoice_grounding(pred_symb, st_item))
-        elif isinstance(st_item, Constant[AbstractSet]):
-            groundings.append(build_extensional_grounding(pred_symb, st_item))
+            groundings.append(build_pchoice_grounding(pred_symb, relation))
+        elif isinstance(relation, Constant[AbstractSet]):
+            groundings.append(build_extensional_grounding(pred_symb, relation))
         else:
             groundings.append(
                 build_rule_grounding(
-                    pred_symb, st_item, dl_instance[pred_symb]
+                    pred_symb, relation, dl_instance[pred_symb]
                 )
             )
     return ExpressionBlock(groundings)
