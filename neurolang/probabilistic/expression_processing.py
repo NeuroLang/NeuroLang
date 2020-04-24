@@ -105,3 +105,7 @@ def concatenate_to_expression_block(block, to_add):
             raise NeuroLangException("Expected Expression")
         return ExpressionBlock(block.expressions + tuple(to_add))
     raise NeuroLangException("Expected ExpressionBlock or Expression iterable")
+
+
+def block_contains_probabilistic_facts(block):
+    return any(is_probabilistic_fact(exp) for exp in block.expressions)

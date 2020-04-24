@@ -3,10 +3,11 @@ import typing
 from ...datalog import DatalogProgram
 from ...exceptions import NeuroLangException
 from ...expression_pattern_matching import add_match
-from ...expression_walker import ExpressionWalker
+from ...expression_walker import ExpressionWalker, PatternWalker
 from ...expressions import Constant, ExpressionBlock, Symbol
 from ...logic import Implication
 from ..expression_processing import (
+    block_contains_probabilistic_facts,
     build_probabilistic_fact_set,
     check_probabilistic_choice_set_probabilities_sum_to_one,
     concatenate_to_expression_block,
@@ -15,7 +16,7 @@ from ..expression_processing import (
 )
 
 
-class CPLogicProgram(DatalogProgram, ExpressionWalker):
+class CPLogicMixin(PatternWalker):
     """
     Datalog extended with probabilistic facts semantics from ProbLog.
 
@@ -111,8 +112,8 @@ class CPLogicProgram(DatalogProgram, ExpressionWalker):
                 "Expected tuples to have a probability as their first element"
             )
 
-    @add_match(ExpressionBlock)
-    def program_code(self, code):
+    @add_match(ExpressionBlock, block_contains_probabilistic_facts)
+    def block_with_probabilistic_facts(self, code):
         pfacts, other_expressions = group_probabilistic_facts_by_pred_symb(
             code
         )
@@ -126,7 +127,7 @@ class CPLogicProgram(DatalogProgram, ExpressionWalker):
                 )
             else:
                 self.walk(list(pfacts)[0])
-        super().process_expression(ExpressionBlock(other_expressions))
+        self.walk(ExpressionBlock(other_expressions))
 
     def _register_prob_pred_symb_set_symb(self, pred_symb, set_symb):
         if set_symb.name not in self.protected_keywords:
@@ -146,3 +147,7 @@ class CPLogicProgram(DatalogProgram, ExpressionWalker):
             self.symbol_table[pred_symb], [expression]
         )
         return expression
+
+
+class CPLogicProgram(CPLogicMixin, DatalogProgram, ExpressionWalker):
+    pass
