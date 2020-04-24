@@ -19,6 +19,7 @@ from ..relational_algebra import (
     Projection,
     RelationalAlgebraOptimiser,
     RelationalAlgebraSolver,
+    RenameColumn,
     RenameColumns,
     Selection,
     Union,
@@ -602,4 +603,37 @@ def test_rename_columns():
     )
     solver = RelationalAlgebraSolver()
     result = solver.walk(rename)
+    assert result == expected
+
+
+def test_rename_columns_empty_relation():
+    relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(columns=("x", "y"))
+    )
+    rename = RenameColumns(
+        relation, (
+            (Constant(ColumnStr("x")), Constant(ColumnStr("z"))),
+            (Constant(ColumnStr("y")), Constant(ColumnStr("x"))),
+        )
+    )
+    solver = RelationalAlgebraSolver()
+    result = solver.walk(rename)
+    expected = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(columns=("x", "z"))
+    )
+    assert result == expected
+
+
+def test_rename_column_empty_relation():
+    relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(columns=("x", "y"))
+    )
+    rename = RenameColumn(
+        relation, Constant(ColumnStr("x")), Constant(ColumnStr("z"))
+    )
+    solver = RelationalAlgebraSolver()
+    result = solver.walk(rename)
+    expected = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(columns=("z", "y"))
+    )
     assert result == expected

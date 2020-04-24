@@ -356,9 +356,10 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         return new_set
 
     def rename_columns(self, renames):
-        # get the missing source columns, for a more convenient error message
-        not_found_cols = set(c for c in renames if c not in self._columns)
-        if not_found_cols:
+        if not set(renames).issubset(self.columns):
+            # get the missing source columns
+            # for a more convenient error message
+            not_found_cols = set(c for c in renames if c not in self._columns)
             raise ValueError(
                 f"Cannot rename non-existing columns: {not_found_cols}"
             )

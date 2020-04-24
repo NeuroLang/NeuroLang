@@ -473,20 +473,17 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         src = rename_column.src.value
         dst = rename_column.dst.value
         new_set = relation.value
-
-        if len(new_set) > 0:
-            new_set = new_set.rename_column(src, dst)
+        new_set = new_set.rename_column(src, dst)
         return self._build_relation_constant(new_set)
 
     @ew.add_match(RenameColumns)
     def ra_rename_columns(self, rename_columns):
         relation = self.walk(rename_columns.relation)
         new_set = relation.value
-        if len(new_set) > 0:
-            renames = {
-                src.value: dst.value for src, dst in rename_columns.renames
-            }
-            new_set = new_set.rename_columns(renames)
+        renames = {
+            src.value: dst.value for src, dst in rename_columns.renames
+        }
+        new_set = new_set.rename_columns(renames)
         return self._build_relation_constant(new_set)
 
     @ew.add_match(ConcatenateConstantColumn)
