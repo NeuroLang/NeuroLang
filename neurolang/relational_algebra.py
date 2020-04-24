@@ -689,7 +689,7 @@ class RelationalAlgebraRewriteSelections(ew.ExpressionWalker):
         else:
             inner_relations = Product(inner_relations)
 
-        outer_relations = tuple(relations[i + 1 :])
+        outer_relations = tuple(relations[i + 1:])
 
         arg_left = selection.formula.args[0]
 
