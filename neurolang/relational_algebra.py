@@ -154,6 +154,36 @@ class RenameColumn(RelationalAlgebraOperation):
         )
 
 
+class RenameColumns(RelationalAlgebraOperation):
+    """
+    Convenient operation for renaming multiple columns at the same time.
+
+    Attributes
+    ----------
+    relation : NamedRelationalAlgebraFrozenSet
+        The relation whose columns shall be renamed.
+    renames : tuple of pairs of Constant[ColumnStr] or Symbol[ColumnStr]
+        The renamings that should happen, represented as tuples (src, dst).
+
+    """
+
+    def __init__(self, relation, renames):
+        self.relation = relation
+        self.renames = renames
+
+    def __repr__(self):
+        return (
+            f"\N{GREEK SMALL LETTER DELTA}"
+            + "_({})".format(
+                ", ".join(
+                    "{}\N{RIGHTWARDS ARROW}{}".format(src, dst)
+                    for src, dst in self.renames
+                )
+            )
+            + f"({self.relation})"
+        )
+
+
 class ExtendedProjection(RelationalAlgebraOperation):
     """
     General operation defining string-based relational algebra projections
@@ -443,9 +473,17 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         src = rename_column.src.value
         dst = rename_column.dst.value
         new_set = relation.value
+        new_set = new_set.rename_column(src, dst)
+        return self._build_relation_constant(new_set)
 
-        if len(new_set) > 0:
-            new_set = new_set.rename_column(src, dst)
+    @ew.add_match(RenameColumns)
+    def ra_rename_columns(self, rename_columns):
+        relation = self.walk(rename_columns.relation)
+        new_set = relation.value
+        renames = {
+            src.value: dst.value for src, dst in rename_columns.renames
+        }
+        new_set = new_set.rename_columns(renames)
         return self._build_relation_constant(new_set)
 
     @ew.add_match(ConcatenateConstantColumn)
