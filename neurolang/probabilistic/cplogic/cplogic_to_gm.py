@@ -5,6 +5,7 @@ from ...expression_walker import PatternWalker
 from ...expressions import (
     Constant,
     Definition,
+    Expression,
     ExpressionBlock,
     FunctionApplication,
     Symbol,
@@ -16,11 +17,7 @@ from ...relational_algebra import (
     RelationalAlgebraSolver,
     str2columnstr_constant,
 )
-from ..expressions import (
-    GraphicalModel,
-    Grounding,
-    ProbabilisticPredicate,
-)
+from ..expressions import GraphicalModel, Grounding, ProbabilisticPredicate
 from .grounding import topological_sort_groundings
 
 
@@ -130,9 +127,9 @@ class CPLogicGroundingToGraphicalModelTranslator(PatternWalker):
         for grounding in topological_sort_groundings(block.expressions):
             self.walk(grounding)
         return GraphicalModel(
-            Constant[Mapping](self.edges),
-            Constant[Mapping](self.cpd_factories),
-            Constant[Mapping](self.expressions),
+            Constant[Mapping[Symbol, AbstractSet[Symbol]]](self.edges),
+            Constant[Mapping[Symbol, CPDFactory]](self.cpd_factories),
+            Constant[Mapping[Symbol, Expression]](self.expressions),
         )
 
     @add_match(Grounding, is_extensional_grounding)
