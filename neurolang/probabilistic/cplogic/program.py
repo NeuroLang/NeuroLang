@@ -5,7 +5,7 @@ from ...exceptions import NeuroLangException
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
 from ...expressions import Constant, ExpressionBlock, Symbol
-from ...logic import Implication
+from ...logic import Implication, Union
 from ..expression_processing import (
     block_contains_probabilistic_facts,
     build_probabilistic_fact_set,
@@ -127,7 +127,7 @@ class CPLogicMixin(PatternWalker):
                 )
             else:
                 self.walk(list(pfacts)[0])
-        self.walk(ExpressionBlock(other_expressions))
+        self.walk(Union(other_expressions))
 
     def _register_prob_pred_symb_set_symb(self, pred_symb, set_symb):
         if set_symb.name not in self.protected_keywords:
