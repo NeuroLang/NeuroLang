@@ -4,13 +4,13 @@ from ...datalog import DatalogProgram
 from ...exceptions import NeuroLangException
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
-from ...expressions import Constant, ExpressionBlock, Symbol
+from ...expressions import Constant, Symbol
 from ...logic import Implication, Union
 from ..expression_processing import (
-    block_contains_probabilistic_facts,
+    union_contains_probabilistic_facts,
     build_probabilistic_fact_set,
     check_probabilistic_choice_set_probabilities_sum_to_one,
-    concatenate_to_expression_block,
+    add_to_union,
     group_probabilistic_facts_by_pred_symb,
     is_probabilistic_fact,
 )
@@ -112,8 +112,8 @@ class CPLogicMixin(PatternWalker):
                 "Expected tuples to have a probability as their first element"
             )
 
-    @add_match(ExpressionBlock, block_contains_probabilistic_facts)
-    def block_with_probabilistic_facts(self, code):
+    @add_match(Union, union_contains_probabilistic_facts)
+    def union_with_probabilistic_facts(self, code):
         pfacts, other_expressions = group_probabilistic_facts_by_pred_symb(
             code
         )
@@ -142,8 +142,8 @@ class CPLogicMixin(PatternWalker):
     def probabilistic_fact(self, expression):
         pred_symb = expression.consequent.body.functor
         if pred_symb not in self.symbol_table:
-            self.symbol_table[pred_symb] = ExpressionBlock(tuple())
-        self.symbol_table[pred_symb] = concatenate_to_expression_block(
+            self.symbol_table[pred_symb] = Union(tuple())
+        self.symbol_table[pred_symb] = add_to_union(
             self.symbol_table[pred_symb], [expression]
         )
         return expression

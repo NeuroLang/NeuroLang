@@ -1,6 +1,6 @@
 from ....datalog import Fact
-from ....expressions import Constant, ExpressionBlock, Symbol
-from ....logic import Conjunction, Implication
+from ....expressions import Constant, Symbol
+from ....logic import Conjunction, Implication, Union
 from .. import testing
 from ..gm_provenance_solver import solve_succ_query
 from ..program import CPLogicProgram
@@ -32,7 +32,7 @@ def test_deterministic_program():
         1.0 | b
 
     """
-    code = ExpressionBlock((Fact(Q(a)), Fact(Q(b)), Implication(P(x), Q(x)),))
+    code = Union((Fact(Q(a)), Fact(Q(b)), Implication(P(x), Q(x)),))
     cpl_program = CPLogicProgram()
     cpl_program.walk(code)
     query_pred = P(x)
@@ -57,7 +57,7 @@ def test_simple_bernoulli_program():
         0.8 | b
 
     """
-    code = ExpressionBlock(())
+    code = Union(())
     cpl_program = CPLogicProgram()
     cpl_program.walk(code)
     cpl_program.add_probabilistic_facts_from_tuples(
@@ -69,9 +69,7 @@ def test_simple_bernoulli_program():
 
 
 def test_conjunction_bernoulli_program():
-    code = ExpressionBlock(
-        (Implication(Z(x), Conjunction((P(x), Q(x), R(x)))),)
-    )
+    code = Union((Implication(Z(x), Conjunction((P(x), Q(x), R(x)))),))
     probfacts_sets = {
         P: {(1.0, "a"), (0.5, "b")},
         Q: {(0.9, "b"), (0.1, "c")},
@@ -111,7 +109,7 @@ def test_multi_level_conjunctive_program():
         Q: {(0.9, "a")},
         R: {(0.1, "a", "a"), (0.5, "a", "b")},
     }
-    code = ExpressionBlock(
+    code = Union(
         (
             Implication(Z(x), Conjunction((P(x), Q(x)))),
             Implication(H(x, y), Conjunction((Z(x), R(x, y)))),

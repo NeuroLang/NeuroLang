@@ -4,7 +4,7 @@ import pytest
 
 from ....datalog.expressions import Fact
 from ....exceptions import NeuroLangException
-from ....expressions import Constant, ExpressionBlock, Symbol
+from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Union
 from ...expressions import ProbabilisticPredicate
 from ..program import CPLogicProgram
@@ -40,9 +40,24 @@ def test_probfact():
         Implication(ProbabilisticPredicate(0.3, P(x)), Constant[bool](True))
 
 
+def test_deterministic_program():
+    code = Union(
+        (Implication(Z(x), Conjunction((P(x), Q(x)))), Fact(Q(a)), Fact(P(a)),)
+    )
+    cpl_program = CPLogicProgram()
+    cpl_program.walk(code)
+    assert cpl_program.extensional_database() == {
+        Q: Constant(frozenset({(a,)})),
+        P: Constant(frozenset({(a,)})),
+    }
+    assert cpl_program.intensional_database() == {
+        Z: Union((Implication(Z(x), Conjunction((P(x), Q(x)))),))
+    }
+
+
 def test_cplogic_program():
     cpl = CPLogicProgram()
-    code = ExpressionBlock(
+    code = Union(
         [
             Implication(
                 ProbabilisticPredicate(Constant[float](0.5), P(x)),
@@ -61,7 +76,7 @@ def test_cplogic_program():
         Q: Union((Implication(Q(x), Conjunction((P(x), Z(x)))),))
     }
     assert cpl.probabilistic_facts() == {
-        P: ExpressionBlock(
+        P: Union(
             [
                 Implication(
                     ProbabilisticPredicate(Constant[float](0.5), P(x)),
@@ -74,7 +89,7 @@ def test_cplogic_program():
 
 def test_multiple_probfact_same_pred_symb():
     cpl = CPLogicProgram()
-    code = ExpressionBlock(
+    code = Union(
         [
             Implication(
                 ProbabilisticPredicate(Constant[float](0.5), P(a)),
@@ -104,7 +119,7 @@ def test_multiple_probfact_same_pred_symb():
 
 def test_add_probfacts_from_tuple():
     cpl = CPLogicProgram()
-    cpl.walk(ExpressionBlock(tuple()))
+    cpl.walk(Union(tuple()))
     cpl.add_probabilistic_facts_from_tuples(
         P, {(0.3, "hello", "gaston"), (0.7, "hello", "antonia"),},
     )
@@ -118,7 +133,7 @@ def test_add_probfacts_from_tuple():
 
 def test_add_probfacts_from_tuple_no_probability():
     cpl = CPLogicProgram()
-    cpl.walk(ExpressionBlock(tuple()))
+    cpl.walk(Union(tuple()))
     with pytest.raises(NeuroLangException, match=r"probability"):
         cpl.add_probabilistic_facts_from_tuples(
             P, {("hello", "gaston"), ("hello", "antonia"),},
