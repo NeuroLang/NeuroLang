@@ -10,8 +10,8 @@ from .cplogic_to_gm import CPLogicGroundingToGraphicalModelTranslator
 from .grounding import ground_cplogic_program
 
 
-def build_gm(code, **sets):
-    grounded = ground_cplogic_program(code, **sets)
+def build_gm(cpl_program):
+    grounded = ground_cplogic_program(cpl_program)
     translator = CPLogicGroundingToGraphicalModelTranslator()
     gm = translator.walk(grounded)
     return gm

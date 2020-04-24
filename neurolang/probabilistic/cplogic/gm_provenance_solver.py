@@ -51,7 +51,7 @@ def rename_columns_for_args_to_match(relation, current_args, desired_args):
     return result
 
 
-def solve_succ_query(query_predicate, cplogic_code, **sets):
+def solve_succ_query(query_predicate, cpl_program):
     """
     Obtain the solution of a SUCC query on a CP-Logic program.
 
@@ -95,7 +95,7 @@ def solve_succ_query(query_predicate, cplogic_code, **sets):
     n.d., 30.
 
     """
-    grounded = ground_cplogic_program(cplogic_code, **sets)
+    grounded = ground_cplogic_program(cpl_program)
     translator = CPLogicGroundingToGraphicalModelTranslator()
     gm = translator.walk(grounded)
     qpred_symb = query_predicate.functor
