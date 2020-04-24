@@ -2,6 +2,7 @@ from collections.abc import MutableSet, Set
 from typing import Iterable
 from uuid import uuid1
 
+import numpy as np
 import pandas as pd
 
 
