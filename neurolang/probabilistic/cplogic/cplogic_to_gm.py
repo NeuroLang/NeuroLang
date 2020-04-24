@@ -174,7 +174,7 @@ class CPLogicGroundingToGraphicalModelTranslator(PatternWalker):
         """
         Represent a probabilistic choice as a n-ary choice node.
         """
-        rv_symb = grounding.expression.consequent.functor
+        rv_symb = grounding.expression.consequent.body.functor
         probability_column = str2columnstr_constant(
             grounding.expression.consequent.probability.name
         )

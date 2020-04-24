@@ -170,16 +170,12 @@ def get_predicate_from_grounded_expression(expression):
 
 
 def get_grounding_pred_symb(grounding):
-    if isinstance(grounding, ProbabilisticChoiceGrounding):
-        return grounding.expression.functor
-    elif isinstance(grounding.expression.consequent, ProbabilisticPredicate):
+    if isinstance(grounding.expression.consequent, ProbabilisticPredicate):
         return grounding.expression.consequent.body.functor
     return grounding.expression.consequent.functor
 
 
 def get_grounding_dependencies(grounding):
-    if isinstance(grounding, ProbabilisticChoiceGrounding):
-        return set()
     predicates = extract_logic_predicates(grounding.expression.antecedent)
     return set(pred.functor for pred in predicates)
 
