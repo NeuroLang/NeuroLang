@@ -589,8 +589,10 @@ def test_rename_columns():
     )
     rename = RenameColumns(
         relation,
-        (Constant(ColumnStr("a")), Constant(ColumnStr("b"))),
-        (Constant(ColumnStr("d")), Constant(ColumnStr("e"))),
+        (
+            (Constant(ColumnStr("a")), Constant(ColumnStr("d"))),
+            (Constant(ColumnStr("b")), Constant(ColumnStr("e"))),
+        )
     )
     expected = Constant[AbstractSet](
         NamedRelationalAlgebraFrozenSet(

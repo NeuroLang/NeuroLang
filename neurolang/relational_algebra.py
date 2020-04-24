@@ -157,12 +157,19 @@ class RenameColumn(RelationalAlgebraOperation):
 class RenameColumns(RelationalAlgebraOperation):
     """
     Convenient operation for renaming multiple columns at the same time.
+
+    Attributes
+    ----------
+    relation : NamedRelationalAlgebraFrozenSet
+        The relation whose columns shall be renamed.
+    renames : tuple of pairs of Constant[ColumnStr] or Symbol[ColumnStr]
+        The renamings that should happen, represented as tuples (src, dst).
+
     """
 
-    def __init__(self, relation, src_columns, dst_columns):
+    def __init__(self, relation, renames):
         self.relation = relation
-        self.src_columns = src_columns
-        self.dst_columns = dst_columns
+        self.renames = renames
 
     def __repr__(self):
         return (
@@ -170,7 +177,7 @@ class RenameColumns(RelationalAlgebraOperation):
             + "_({})".format(
                 ", ".join(
                     "{}\N{RIGHTWARDS ARROW}{}".format(src, dst)
-                    for src, dst in zip(self.src_columns, self.dst_columns)
+                    for src, dst in self.renames
                 )
             )
             + f"({self.relation})"
@@ -473,12 +480,14 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
 
     @ew.add_match(RenameColumns)
     def ra_rename_columns(self, rename_columns):
-        new_relation = rename_columns.relation
-        for src, dst in zip(
-            rename_columns.src_columns, rename_columns.dst_columns
-        ):
-            new_relation = RenameColumn(new_relation, src, dst)
-        return self.walk(new_relation)
+        relation = self.walk(rename_columns.relation)
+        new_set = relation.value
+        if len(new_set) > 0:
+            renames = {
+                src.value: dst.value for src, dst in rename_columns.renames
+            }
+            new_set = new_set.rename_columns(renames)
+        return self._build_relation_constant(new_set)
 
     @ew.add_match(ConcatenateConstantColumn)
     def concatenate_constant_column(self, concat_op):

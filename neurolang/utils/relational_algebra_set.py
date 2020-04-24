@@ -355,6 +355,28 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
 
         return new_set
 
+    def rename_columns(self, renames):
+        # get the missing source columns, for a more convenient error message
+        not_found_cols = set(c for c in renames if c not in self._columns)
+        if not_found_cols:
+            raise ValueError(
+                f"Cannot rename non-existing columns: {not_found_cols}"
+            )
+        # only rename when the new column name is different than the previous
+        actual_renames = {
+            src: dst for src, dst in renames.items()
+            if dst != src
+        }
+        new_columns = tuple(
+            actual_renames.get(col, col) for col in self._columns
+        )
+        new_container = self._container.rename(columns=actual_renames)
+        new_container = self._renew_index(new_container)
+        new_set = type(self)(new_columns)
+        new_set._container = new_container
+        new_set._columns_sort = tuple(pd.Index(new_columns).argsort())
+        return new_set
+
     def __eq__(self, other):
         scontainer = self._container
         ocontainer = other._container

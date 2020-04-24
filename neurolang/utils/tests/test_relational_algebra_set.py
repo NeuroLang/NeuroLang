@@ -1,3 +1,5 @@
+import pytest
+
 from ..relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraFrozenSet,
@@ -379,3 +381,19 @@ def test_extended_projection():
     assert expected_new_colum_str == new_set
     new_set = initial_set.extended_projection({"z": 1,})
     assert expected_new_colum_int == new_set
+
+
+def test_rename_columns():
+    first = NamedRelationalAlgebraFrozenSet(
+        ("x", "y"),
+        [(0, 2), (0, 4)],
+    )
+    assert first.rename_columns({"x": "x"}) == first
+    assert id(first.rename_columns({"x": "x"})) != id(first)
+    second = NamedRelationalAlgebraFrozenSet(
+        ("y", "x"),
+        [(0, 2), (0, 4)],
+    )
+    assert first.rename_columns({"x": "y", "y": "x"}) == second
+    with pytest.raises(ValueError, match=r"non-existing columns: {'z'}"):
+        first.rename_columns({"z": "w"})
