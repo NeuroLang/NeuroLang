@@ -17,7 +17,12 @@ from ...relational_algebra import (
     RelationalAlgebraSolver,
     str2columnstr_constant,
 )
-from ..expressions import GraphicalModel, Grounding, ProbabilisticPredicate
+from ..expressions import (
+    GraphicalModel,
+    Grounding,
+    ProbabilisticChoiceGrounding,
+    ProbabilisticPredicate,
+)
 from .grounding import topological_sort_groundings
 
 
@@ -105,6 +110,22 @@ class AndCPDFactory(CPDFactory):
     """
 
 
+class NaryChoiceCPDFactory(CPDFactory):
+    """
+    Object used to represent the distribution of a single
+    n-ary choice random variable.
+
+    The relation does not represent multiple random variables
+    but the different predicates that can be chosen by the rule,
+    alongside their associated probability.
+
+    """
+
+    def __init__(self, relation, probability_column):
+        super().__init__(relation)
+        self.probability_column = probability_column
+
+
 def is_extensional_grounding(grounding):
     """TODO: represent extensional grounding with a fact instead?"""
     return (
@@ -145,6 +166,20 @@ class CPLogicGroundingToGraphicalModelTranslator(PatternWalker):
         )
         relation = RelationalAlgebraSolver().walk(relation)
         cpd_factory = BernoulliCPDFactory(relation, probability_column)
+        expression = grounding.expression
+        self.add_random_variable(rv_symb, cpd_factory, expression)
+
+    @add_match(ProbabilisticChoiceGrounding)
+    def probabilistic_choice_grounding(self, grounding):
+        """
+        Represent a probabilistic choice as a n-ary choice node.
+        """
+        rv_symb = grounding.expression.consequent.functor
+        probability_column = str2columnstr_constant(
+            grounding.expression.consequent.probability.name
+        )
+        relation = grounding.relation
+        cpd_factory = NaryChoiceCPDFactory(relation, probability_column)
         expression = grounding.expression
         self.add_random_variable(rv_symb, cpd_factory, expression)
 
