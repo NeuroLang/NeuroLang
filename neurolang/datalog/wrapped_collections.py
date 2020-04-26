@@ -1,21 +1,23 @@
+from collections import namedtuple
 from itertools import tee
 from typing import Tuple
 
 from ..expression_walker import ReplaceExpressionsByValues
 from ..expressions import Constant
-from ..type_system import Unknown, get_args, infer_type, unify_types
-from ..utils.relational_algebra_set import (NamedRelationalAlgebraFrozenSet,
-                                            RelationalAlgebraFrozenSet,
-                                            RelationalAlgebraSet)
+from ..type_system import (Unknown, get_args, infer_type,
+                           unify_types)
+from ..utils import (
+    NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet,
+    RelationalAlgebraSet)
 
 REBV = ReplaceExpressionsByValues(dict())
 
 
-class WrappedRelationalAlgebraSetMixin:
+class WrappedRelationalAlgebraSetBaseMixin:
     def __init__(
         self, iterable=None, row_type=Unknown, verify_row_type=True, **kwargs
     ):
-        iterable = WrappedRelationalAlgebraSetMixin._get_init_iterable(
+        iterable = WrappedRelationalAlgebraSetBaseMixin._get_init_iterable(
             iterable
         )
         super().__init__(iterable=iterable, **kwargs)
@@ -26,7 +28,7 @@ class WrappedRelationalAlgebraSetMixin:
             if verify_row_type:
                 raise NotImplemented()
             self._row_type = row_type
-        elif isinstance(iterable, WrappedRelationalAlgebraSetMixin):
+        elif isinstance(iterable, WrappedRelationalAlgebraSetBaseMixin):
             self._row_type = iterable._row_type
         else:
             self._row_type = None
@@ -36,12 +38,12 @@ class WrappedRelationalAlgebraSetMixin:
         if iterable is not None:
             if isinstance(
                 iterable,
-                (WrappedRelationalAlgebraSetMixin, RelationalAlgebraFrozenSet)
+                (WrappedRelationalAlgebraSetBaseMixin, RelationalAlgebraFrozenSet)
             ):
                 iterable = iterable
             else:
                 iterable = (
-                    WrappedRelationalAlgebraSetMixin._obtain_value_iterable(
+                    WrappedRelationalAlgebraSetBaseMixin._obtain_value_iterable(
                         iterable
                     )
                 )
@@ -52,13 +54,15 @@ class WrappedRelationalAlgebraSetMixin:
         return super().__contains__(element)
 
     def _operator_wrapped(self, op, other):
-        other_is_wras = isinstance(other, WrappedRelationalAlgebraSetMixin)
+        other_is_wras = isinstance(other, WrappedRelationalAlgebraSetBaseMixin)
         if not other_is_wras:
             other = {el for el in self._obtain_value_iterable(other)}
-        operator = getattr(super(), op)
+        operator = getattr(self.unwrap(), op)
         res = operator(other)
-        if isinstance(res, WrappedRelationalAlgebraSetMixin):
+        if isinstance(res, WrappedRelationalAlgebraSetBaseMixin):
             res._row_type = self._get_new_row_type(other, other_is_wras)
+        elif isinstance(res, RelationalAlgebraFrozenSet):
+            res = type(self)(iterable=res)
         return res
 
     def _get_new_row_type(self, other, other_is_wras):
@@ -123,9 +127,6 @@ class WrappedRelationalAlgebraSetMixin:
     def unwrapped_iter(self):
         return super().__iter__()
 
-    def unwrap(self):
-        return super().copy()
-
     @property
     def row_type(self):
         if self._row_type is None:
@@ -137,8 +138,8 @@ class WrappedRelationalAlgebraSetMixin:
         return self._row_type
 
 
-class WrappedRelationalAlgebraFrozenSet(
-    WrappedRelationalAlgebraSetMixin, RelationalAlgebraFrozenSet
+class WrappedRelationalAlgebraFrozenSetMixin(
+    WrappedRelationalAlgebraSetBaseMixin
 ):
     def __iter__(self):
         type_ = self.row_type
@@ -154,8 +155,8 @@ class WrappedRelationalAlgebraFrozenSet(
             )
 
 
-class WrappedRelationalAlgebraSet(
-    WrappedRelationalAlgebraSetMixin, RelationalAlgebraSet
+class WrappedRelationalAlgebraSetMixin(
+    WrappedRelationalAlgebraSetBaseMixin
 ):
     def __iter__(self):
         type_ = self.row_type
@@ -177,43 +178,91 @@ class WrappedRelationalAlgebraSet(
         return super().discard(REBV.walk(value))
 
 
-class WrappedNamedRelationalAlgebraFrozenSet(
-    WrappedRelationalAlgebraSetMixin, NamedRelationalAlgebraFrozenSet
+def named_tuple_as_dict(*args, **kwargs):
+    nt = namedtuple(*args, **kwargs)
+    nt.get = lambda self, key, default=None: self._asdict().get(key, default)
+    nt.keys = lambda self: self._asdict().keys()
+    nt.items = lambda self: self._asdict().items()
+    nt.values = lambda self: self._asdict().values()
+    nt.__getitem__ = lambda self, key: self._asdict()[key]
+    return nt
+
+
+class WrappedNamedRelationalAlgebraFrozenSetMixin(
+    WrappedRelationalAlgebraSetBaseMixin
 ):
     def __init__(
         self, columns=None, iterable=None,
         row_type=Unknown, verify_row_type=True, **kwargs
     ):
-        iterable = WrappedRelationalAlgebraSetMixin._get_init_iterable(
+        iterable = WrappedRelationalAlgebraSetBaseMixin._get_init_iterable(
             iterable
         )
+        if columns is None and iterable is not None:
+            columns = iterable.columns
         super().__init__(columns=columns, iterable=iterable, **kwargs)
         self._set_row_type(iterable, row_type, verify_row_type)
+        self.named_tuple_type = None
 
     @property
     def row_type(self):
         if self._row_type is None:
             if (self.arity > 0 and len(self) > 0):
                 element = next(super().__iter__())
-                self._row_type = {
-                    c: Constant(getattr(element, c)).type
+                self._row_type = Tuple[tuple(
+                    Constant(getattr(element, c)).type
                     for c in self.columns
-                }
+                )]
             else:
-                self._row_type = dict()
+                self._row_type = Tuple
 
         return self._row_type
 
     def __iter__(self):
         if self.arity > 0:
-            row_types = self.row_type
+            if self.named_tuple_type is None:
+                self.named_tuple_type = named_tuple_as_dict(
+                    'tuple', self.columns
+                )
+
+            row_types = {
+                c: t
+                for c, t in zip(self.columns, get_args(self.row_type))
+            }
             for row in super().__iter__():
-                yield {
+                nt = self.named_tuple_type(**{
                     f: Constant[row_types[f]](
                         v, verify_type=False
                     )
                     for f, v in zip(row._fields, row)
-                }
+                })
+                yield nt
         else:
             for _ in range(len(self)):
                 yield dict()
+
+
+class WrappedRelationalAlgebraFrozenSet(
+    WrappedRelationalAlgebraFrozenSetMixin,
+    RelationalAlgebraFrozenSet
+):
+    def unwrap(self):
+        return RelationalAlgebraFrozenSet(self)
+
+
+class WrappedRelationalAlgebraSet(
+    WrappedRelationalAlgebraSetMixin,
+    RelationalAlgebraSet
+):
+    def unwrap(self):
+        return RelationalAlgebraSet(self)
+
+
+class WrappedNamedRelationalAlgebraFrozenSet(
+    WrappedNamedRelationalAlgebraFrozenSetMixin,
+    NamedRelationalAlgebraFrozenSet
+):
+    def unwrap(self):
+        return NamedRelationalAlgebraFrozenSet(
+            columns=self.columns, iterable=self
+        )
