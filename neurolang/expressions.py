@@ -282,7 +282,10 @@ class Expression(metaclass=ExpressionMeta):
         else:
             ret = self.__class__[type_](*args)
 
-        if ret.type is not type_:
+        # TODO: this should be ret.type is not type_
+        #       but there is an issue with the type caching of Python
+        #       that makes them different ( id(res.type) != id(type_) )
+        if ret.type != type_:
             raise NeuroLangTypeException('Cast impossible')
         return ret
 

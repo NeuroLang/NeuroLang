@@ -1,7 +1,5 @@
-from typing import Mapping
-
 from ..exceptions import NeuroLangException
-from ..expressions import Definition, Constant, Symbol, FunctionApplication
+from ..expressions import Constant, Definition, FunctionApplication, Symbol
 
 
 class ProbabilisticPredicate(Definition):
@@ -22,12 +20,27 @@ class ProbabilisticPredicate(Definition):
         )
 
 
-class ProbabilisticChoice(Definition):
-    def __init__(self, predicate):
-        self.predicate = predicate
-
-
 class Grounding(Definition):
     def __init__(self, expression, relation):
         self.expression = expression
         self.relation = relation
+
+    def __repr__(self):
+        return "Grounding{{{}}}\n{}".format(
+            repr(self.expression), repr(self.relation)
+        )
+
+
+class ProbabilisticChoiceGrounding(Grounding):
+    """
+    Class used to differentiate the grounding of a probabilistic
+    choice from the grounding of other choices.
+
+    """
+
+
+class GraphicalModel(Definition):
+    def __init__(self, edges, cpd_factories, expressions):
+        self.edges = edges
+        self.cpd_factories = cpd_factories
+        self.expressions = expressions
