@@ -121,7 +121,7 @@ class CPLogicMixin(PatternWalker):
 
         adds the probabilistic choice
 
-            P(a) : 0.2  v  P(b) : 0.8
+            P(a) : 0.2  v  P(b) : 0.8  <-  T
 
         to the program.
 
