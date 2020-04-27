@@ -350,7 +350,7 @@ class ChaseNamedRelationalAlgebraMixin:
             return False
 
         return (
-            functor == eq_ and
+            functor.value == eq_ and
             not any(isinstance(arg, Definition) for arg in pred.args) and
             any(
                 isinstance(arg, Constant) or

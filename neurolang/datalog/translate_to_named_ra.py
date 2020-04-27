@@ -1,5 +1,5 @@
 from operator import eq, invert
-from typing import AbstractSet, Tuple
+from typing import AbstractSet, Any, Tuple
 
 from ..exceptions import NeuroLangException
 from ..expression_walker import (ExpressionBasicEvaluator,
@@ -11,7 +11,7 @@ from ..relational_algebra import (ColumnInt, ColumnStr, Difference,
 from ..utils import NamedRelationalAlgebraFrozenSet
 from .expressions import Conjunction, Negation
 
-EQ = Constant(eq)
+EQ = Constant[Any](eq)
 REBV = ReplaceExpressionsByValues({})
 
 
