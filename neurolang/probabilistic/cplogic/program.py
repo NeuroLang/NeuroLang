@@ -73,6 +73,26 @@ class CPLogicMixin(PatternWalker):
         return ret
 
     def add_probabilistic_facts_from_tuples(self, symbol, iterable):
+        """
+        Add probabilistic facts from tuples whose first element
+        contains the probability label attached to that tuple.
+
+        Examples
+        --------
+        The following
+
+        >>> P = Symbol('P')
+        >>> tuples = {(0.9, 'a'), (0.8, 'b')}
+        >>> program.add_probabilistic_facts_from_tuples(P, tuples)
+
+        adds the probabilistic facts
+
+            P(a) : 0.9  <-  T
+            P(b) : 0.8  <-  T
+
+        to the program.
+
+        """
         self._register_prob_pred_symb_set_symb(
             symbol, self.pfact_pred_symb_set_symb
         )
@@ -86,7 +106,24 @@ class CPLogicMixin(PatternWalker):
 
     def add_probabilistic_choice_from_tuples(self, symbol, iterable):
         """
-        Add a probabilistic choice to the symbol table.
+        Add a probabilistic choice from a predicate symbol and a set of
+        tuples where the first element is the probability label
+        attached to a head predicate and the other elements are the
+        constant terms of the head predicate.
+
+        Examples
+        --------
+        The following
+
+        >>> P = Symbol('P')
+        >>> tuples = {(0.2, 'a'), (0.8, 'b')}
+        >>> program.add_probabilistic_choice_from_tuples(P, tuples)
+
+        adds the probabilistic choice
+
+            P(a) : 0.2  v  P(b) : 0.8
+
+        to the program.
 
         """
         self._register_prob_pred_symb_set_symb(
