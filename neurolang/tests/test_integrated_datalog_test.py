@@ -5,9 +5,10 @@ from ..datalog.constraints_representation import (
     DatalogConstraintsProgramMixin, RightImplication)
 from ..datalog.expressions import Fact
 from ..datalog.negation import DatalogProgramNegationMixin
+from ..expression_walker import ExpressionWalker
 from ..expressions import Constant, Symbol
 from ..logic import Conjunction, Implication, Negation, Union
-from ..probabilistic.cplogic.program import CPLogicProgram
+from ..probabilistic.cplogic.program import CPLogicMixin
 from ..probabilistic.expressions import ProbabilisticPredicate
 from ..type_system import Unknown
 
@@ -21,11 +22,12 @@ F = Symbol('F')
 
 def test_all_composed():
     class Datalog(
-        CPLogicProgram,
+        CPLogicMixin,
         DatalogWithAggregationMixin,
         DatalogProgramNegationMixin,
         DatalogConstraintsProgramMixin,
-        DatalogProgram
+        DatalogProgram,
+        ExpressionWalker
     ):
         def function_length(self, x: Unknown) -> int:
             return len(x)
@@ -46,7 +48,7 @@ def test_all_composed():
     dl = Datalog()
     dl.walk(program)
 
-    assert {A, B, C} == set(dl.extensional_database())
-    assert {D, E} == set(dl.intensional_database())
+    assert {A, C} == set(dl.extensional_database())
+    assert {D, E, F} == set(dl.intensional_database())
     assert {B} == set(dl.probabilistic_facts())
     assert {F} == set(dl.constraints())
