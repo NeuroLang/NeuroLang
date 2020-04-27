@@ -75,3 +75,5 @@ def test_program_with_probchoice_and_intensional_rule():
     )
     gm = testing.build_gm(cpl_program)
     assert gm.edges.value[Q] == {P, Z}
+    assert isinstance(gm.cpd_factories.value[Z], BernoulliCPDFactory)
+    assert isinstance(gm.cpd_factories.value[P], NaryChoiceCPDFactory)

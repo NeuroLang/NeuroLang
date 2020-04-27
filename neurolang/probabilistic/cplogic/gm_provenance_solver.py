@@ -14,6 +14,7 @@ from ...relational_algebra_provenance import (
 from .cplogic_to_gm import (
     AndCPDFactory,
     BernoulliCPDFactory,
+    NaryChoiceCPDFactory,
     CPLogicGroundingToGraphicalModelTranslator,
 )
 from .grounding import (
@@ -174,20 +175,23 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         Construct the provenance expression that calculates
         the marginal distribution of a random variable in
         the graphical model.
+
         """
         rv_symb = marg_op.rv_symbol
         cpd_factory = self.graphical_model.cpd_factories.value[rv_symb]
         parent_rv_symbs = self.graphical_model.edges.value.get(rv_symb, set())
         if isinstance(cpd_factory, BernoulliCPDFactory):
-            parent_values = tuple()
+            result = self.walk(ApplyCPD(rv_symb, cpd_factory, tuple()))
         elif isinstance(cpd_factory, AndCPDFactory):
             parent_values = {
                 parent_rv_symb: self.walk(Marginalise(parent_rv_symb))
                 for parent_rv_symb in parent_rv_symbs
             }
+            result = self.walk(ApplyCPD(rv_symb, cpd_factory, parent_values))
+        elif isinstance(cpd_factory, NaryChoiceCPDFactory):
+            parent_values = {}
         else:
             raise NotImplementedError("Unknown CPD")
-        result = self.walk(ApplyCPD(rv_symb, cpd_factory, parent_values))
         return result
 
     @add_match(ApplyCPD(Symbol, BernoulliCPDFactory, ...))
@@ -196,6 +200,7 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         Construct the provenance algebra set that represents
         the truth probabilities of a set of independent
         Bernoulli-distributed random variables.
+
         """
         return ProvenanceAlgebraSet(
             app_op.cpd_factory.relation.value,
@@ -206,8 +211,27 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
     def apply_and_cpd(self, app_op):
         """
         Construct the provenance expression that calculates
-        the truth probabilities of an AND random variable
-        in the network.
+        the truth conditional probabilities of an AND random
+        variable in the graphical model.
+
+        Given an implication rule of the form
+
+            Z(x, y)  <-  Q(x, y), P(x, y)
+
+        The AND conditional probability distribution is obtained by
+        applying a provenance natural join to the parent value
+        relations
+
+               Q(x, y)        P(x, y)         Z(x, y)
+
+            _p_ | x | y     _p_ | x | y     _p_ | x | y
+            ====|===|===    ============    ====|===|===
+            1.0 | a | a     1.0 | a | a     1.0 | a | a
+            0.0 | a | b     1.0 | b | b
+
+        where the probabilities in the provenance column _p_ always
+        are 1.0 or 0.0 because this is a deterministic CPD and all
+        random variables that play a role here are boolean.
 
         """
         rv_symb = app_op.rv_symbol
@@ -242,3 +266,20 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
             else:
                 result = NaturalJoin(result, parent_value)
         return result
+
+    @add_match(ApplyCPD(Symbol, NaryChoiceCPDFactory, ...))
+    def nary_choice_cpd_app(self, app_op):
+        """
+        Construct the provenance expression that calculates
+        the truth probabilities of a n-ary choice random
+        variable in the graphical model.
+
+        Given the probabilistic choice for predicate symbol P
+
+            P_i : p_1  v  ...  v  P_n : p_n  :-  T
+
+        """
+        return ProvenanceAlgebraSet(
+            app_op.cpd_factory.relation.value,
+            app_op.cpd_factory.probability_column,
+        )

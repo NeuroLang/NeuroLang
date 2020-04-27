@@ -70,9 +70,9 @@ class BernoulliCPDFactory(CPDFactory):
          0.7 | a
          0.2 | b
 
-    where each row represents one random variable P(x) and where the
-    column _p_ encodes the Bernoulli parameter of the distribution
-    of P(x).
+    where each row represents one random variable P(x) and where
+    the column _p_ encodes the Bernoulli parameter of the
+    distribution of P(x).
 
     Attributes
     ----------
@@ -118,6 +118,27 @@ class NaryChoiceCPDFactory(CPDFactory):
     The relation does not represent multiple random variables
     but the different predicates that can be chosen by the rule,
     alongside their associated probability.
+
+    Given a CP-Event of the form
+
+        P(a_1) : p_1  v  ...  v  P(a_n) : p_n  <-  T
+
+    where p_1, ..., p_n are the probability labels attached to each
+    head predicate P(a_1), ..., P(a_n) -- respectively,
+
+    the conditional probability distribution of the choice random
+    variable (which is its marginal because there is no parent) is
+    defined by the relation
+
+        _p_ | x
+        ====|====
+        p_1 | a_1
+        p_2 | a_2
+        ... | ...
+        p_n | a_n
+
+    where each row represents a possible value of the random variable
+    with its probability.
 
     """
 
