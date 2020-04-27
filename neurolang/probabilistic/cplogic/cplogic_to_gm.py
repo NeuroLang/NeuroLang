@@ -14,6 +14,7 @@ from ...logic import Implication
 from ...logic.expression_processing import extract_logic_predicates
 from ...relational_algebra import (
     ConcatenateConstantColumn,
+    Projection,
     RelationalAlgebraSolver,
     str2columnstr_constant,
 )
@@ -147,6 +148,10 @@ class NaryChoiceCPDFactory(CPDFactory):
         self.probability_column = probability_column
 
 
+class NaryChoiceResultCPDFactory(CPDFactory):
+    pass
+
+
 def is_extensional_grounding(grounding):
     """TODO: represent extensional grounding with a fact instead?"""
     return (
@@ -195,14 +200,37 @@ class CPLogicGroundingToGraphicalModelTranslator(PatternWalker):
         """
         Represent a probabilistic choice as a n-ary choice node.
         """
-        rv_symb = grounding.expression.consequent.body.functor
         probability_column = str2columnstr_constant(
             grounding.expression.consequent.probability.name
         )
         relation = grounding.relation
-        cpd_factory = NaryChoiceCPDFactory(relation, probability_column)
         expression = grounding.expression
-        self.add_random_variable(rv_symb, cpd_factory, expression)
+        # add a n-ary choice random variable
+        choice_rv_symb = Symbol.fresh()
+        choice_cpd_factory = NaryChoiceCPDFactory(relation, probability_column)
+        self.add_random_variable(
+            choice_rv_symb, choice_cpd_factory, expression
+        )
+        # remove the probability column as it is not neeeded to represent the
+        # CPD factories of boolean random variables whose value is
+        # deterministically determined by the value of their parent choice
+        # variable
+        relation = RelationalAlgebraSolver().walk(
+            Projection(
+                relation,
+                tuple(
+                    str2columnstr_constant(col)
+                    for col in relation.value.columns
+                    if col != probability_column.value
+                ),
+            )
+        )
+        rv_symb = grounding.expression.consequent.body.functor
+        cpd_factory = NaryChoiceResultCPDFactory(relation)
+        expression = grounding.expression
+        self.add_random_variable(
+            rv_symb, cpd_factory, expression, parent_rv_symbs={choice_rv_symb}
+        )
 
     @add_match(Grounding(Implication(ProbabilisticPredicate, ...), ...))
     def probfact_set_grounding(self, grounding):

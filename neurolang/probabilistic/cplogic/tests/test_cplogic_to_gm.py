@@ -1,11 +1,12 @@
 from ....datalog import Fact
 from ....expressions import Constant, Symbol
-from ....logic import Implication, Union, Conjunction
+from ....logic import Conjunction, Implication, Union
 from .. import testing
 from ..cplogic_to_gm import (
     AndCPDFactory,
     BernoulliCPDFactory,
     NaryChoiceCPDFactory,
+    NaryChoiceResultCPDFactory,
 )
 from ..program import CPLogicProgram
 
@@ -61,7 +62,12 @@ def test_program_with_probchoice():
     )
     gm = testing.build_gm(cpl_program)
     assert P in gm.cpd_factories.value
-    assert isinstance(gm.cpd_factories.value[P], NaryChoiceCPDFactory)
+    assert isinstance(gm.cpd_factories.value[P], NaryChoiceResultCPDFactory)
+    assert len(gm.edges.value[P]) == 1
+    choice_rv_symb = next(iter(gm.edges.value[P]))
+    assert isinstance(
+        gm.cpd_factories.value[choice_rv_symb], NaryChoiceCPDFactory
+    )
 
 
 def test_program_with_probchoice_and_intensional_rule():
@@ -75,5 +81,10 @@ def test_program_with_probchoice_and_intensional_rule():
     )
     gm = testing.build_gm(cpl_program)
     assert gm.edges.value[Q] == {P, Z}
+    assert len(gm.edges.value[P]) == 1
+    choice_rv_symb = next(iter(gm.edges.value[P]))
     assert isinstance(gm.cpd_factories.value[Z], BernoulliCPDFactory)
-    assert isinstance(gm.cpd_factories.value[P], NaryChoiceCPDFactory)
+    assert isinstance(gm.cpd_factories.value[P], NaryChoiceResultCPDFactory)
+    assert isinstance(
+        gm.cpd_factories.value[choice_rv_symb], NaryChoiceCPDFactory
+    )
