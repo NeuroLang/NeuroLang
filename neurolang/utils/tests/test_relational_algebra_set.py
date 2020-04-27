@@ -139,6 +139,9 @@ def test_named_relational_algebra_set_semantics_empty():
     assert len(ras) == 1
     assert ras.arity == 2
 
+    ras_b = NamedRelationalAlgebraFrozenSet(('y', 'z'), [(0, 1)])
+    assert ras != ras_b
+
 
 def test_named_relational_algebra_ra_projection():
     a = [(i % 2, i, i * 2) for i in range(5)]
@@ -293,6 +296,13 @@ def test_named_ra_set_from_other():
     assert first == second
     for tuple_a, tuple_b in zip(first, second):
         assert tuple_a == tuple_b
+
+    third = NamedRelationalAlgebraFrozenSet(
+        ("x",), NamedRelationalAlgebraFrozenSet(tuple())
+    )
+
+    assert len(third) == 0
+    assert third.columns == ("x",)
 
 
 def test_named_ra_union():

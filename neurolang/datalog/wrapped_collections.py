@@ -6,7 +6,7 @@ from ..expression_walker import ReplaceExpressionsByValues
 from ..expressions import Constant
 from ..type_system import (Unknown, get_args, infer_type,
                            unify_types)
-from ..utils import (
+from ..utils.relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet,
     RelationalAlgebraSet)
 
@@ -55,7 +55,9 @@ class WrappedRelationalAlgebraSetBaseMixin:
 
     def _operator_wrapped(self, op, other):
         other_is_wras = isinstance(other, WrappedRelationalAlgebraSetBaseMixin)
-        if not other_is_wras:
+        if other_is_wras:
+            other = other.unwrap()
+        else:
             other = {el for el in self._obtain_value_iterable(other)}
         operator = getattr(self.unwrap(), op)
         res = operator(other)
@@ -247,7 +249,7 @@ class WrappedRelationalAlgebraFrozenSet(
     RelationalAlgebraFrozenSet
 ):
     def unwrap(self):
-        return RelationalAlgebraFrozenSet(self)
+        return RelationalAlgebraFrozenSet.create_view_from(self)
 
 
 class WrappedRelationalAlgebraSet(
@@ -255,7 +257,7 @@ class WrappedRelationalAlgebraSet(
     RelationalAlgebraSet
 ):
     def unwrap(self):
-        return RelationalAlgebraSet(self)
+        return RelationalAlgebraSet.create_view_from(self)
 
 
 class WrappedNamedRelationalAlgebraFrozenSet(
@@ -263,6 +265,4 @@ class WrappedNamedRelationalAlgebraFrozenSet(
     NamedRelationalAlgebraFrozenSet
 ):
     def unwrap(self):
-        return NamedRelationalAlgebraFrozenSet(
-            columns=self.columns, iterable=self
-        )
+        return NamedRelationalAlgebraFrozenSet.create_view_from(self)

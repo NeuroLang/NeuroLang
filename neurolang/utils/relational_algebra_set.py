@@ -21,6 +21,16 @@ class RelationalAlgebraFrozenSet(Set):
                 self._container = pd.DataFrame(iterable)
                 self._container = self._renew_index(self._container)
 
+    @classmethod
+    def create_view_from(cls, other):
+        if not isinstance(other, cls):
+            raise ValueError(
+                "View can only be created from an object of the same class"
+            )
+        output = cls()
+        output._container = other._container
+        return output
+
     def __contains__(self, element):
         element = self._normalise_element(element)
         return len(self) > 0 and hash(element) in self._container.index
@@ -74,6 +84,10 @@ class RelationalAlgebraFrozenSet(Set):
             return 0
         else:
             return len(self._container.columns)
+
+    @property
+    def columns(self):
+        return self._container.columns
 
     def _empty_set_same_structure(self):
         return type(self)()
@@ -251,10 +265,17 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         self._container = self._renew_index(self._container)
 
     def _initialize_from_named_ra_set(self, other):
-        if len(self._columns) != other.arity:
+        if (
+            not (len(other) == 0 and other.arity == 0)
+            and len(self._columns) != other.arity
+        ):
             raise ValueError("Relations must have the same arity")
-        self._container = other._container[list(other.columns
-                                                )].copy(deep=False)
+
+        if len(other) > 0:
+            self._container = other._container[list(other.columns
+                                                    )].copy(deep=False)
+        else:
+            self._container = pd.DataFrame(columns=self._columns)
         self._container.sort_index(axis=1, inplace=True)
 
     def _initialize_from_unnamed_ra_set(self, other):
@@ -267,9 +288,17 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
             self._container.columns = self._columns
         self._container.sort_index(axis=1, inplace=True)
 
-    @property
-    def arity(self):
-        return len(self._columns)
+    @classmethod
+    def create_view_from(cls, other):
+        if not isinstance(other, cls):
+            raise ValueError(
+                "View can only be created from an object of the same class"
+            )
+        output = cls(columns=tuple())
+        output._container = other._container
+        output._columns = other._columns
+        output._columns_sort = other._columns_sort
+        return output
 
     def _empty_set_same_structure(self):
         return type(self)(self.columns)
@@ -278,6 +307,10 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
     def columns(self):
         return self._columns
 
+    @property
+    def arity(self):
+        return len(self._columns)
+    
     def __contains__(self, element):
         if isinstance(element, dict) and len(element) == self.arity:
             element = tuple(element[c] for c in self._container.columns)
