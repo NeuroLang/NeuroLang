@@ -38,12 +38,16 @@ class WrappedRelationalAlgebraSetBaseMixin:
         if iterable is not None:
             if isinstance(
                 iterable,
-                (WrappedRelationalAlgebraSetBaseMixin, RelationalAlgebraFrozenSet)
+                (
+                    WrappedRelationalAlgebraSetBaseMixin,
+                    RelationalAlgebraFrozenSet
+                )
             ):
                 iterable = iterable
             else:
                 iterable = (
-                    WrappedRelationalAlgebraSetBaseMixin._obtain_value_iterable(
+                    WrappedRelationalAlgebraSetBaseMixin
+                    ._obtain_value_iterable(
                         iterable
                     )
                 )

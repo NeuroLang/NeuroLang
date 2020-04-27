@@ -2,7 +2,6 @@ from collections.abc import MutableSet, Set
 from typing import Iterable
 from uuid import uuid1
 
-import numpy as np
 import pandas as pd
 
 
@@ -310,7 +309,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
     @property
     def arity(self):
         return len(self._columns)
-    
+
     def __contains__(self, element):
         if isinstance(element, dict) and len(element) == self.arity:
             element = tuple(element[c] for c in self._container.columns)
