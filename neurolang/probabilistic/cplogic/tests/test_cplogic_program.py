@@ -3,9 +3,9 @@ import typing
 import pytest
 
 from ....datalog.expressions import Fact
-from ....logic import Union, Conjunction, Implication
 from ....exceptions import NeuroLangException
-from ....expressions import Constant, ExpressionBlock, Symbol
+from ....expressions import Constant, Symbol
+from ....logic import Conjunction, Implication, Union
 from ...expressions import ProbabilisticPredicate
 from ..program import CPLogicProgram
 
@@ -40,9 +40,24 @@ def test_probfact():
         Implication(ProbabilisticPredicate(0.3, P(x)), Constant[bool](True))
 
 
+def test_deterministic_program():
+    code = Union(
+        (Implication(Z(x), Conjunction((P(x), Q(x)))), Fact(Q(a)), Fact(P(a)),)
+    )
+    cpl_program = CPLogicProgram()
+    cpl_program.walk(code)
+    assert cpl_program.extensional_database() == {
+        Q: Constant(frozenset({(a,)})),
+        P: Constant(frozenset({(a,)})),
+    }
+    assert cpl_program.intensional_database() == {
+        Z: Union((Implication(Z(x), Conjunction((P(x), Q(x)))),))
+    }
+
+
 def test_cplogic_program():
     cpl = CPLogicProgram()
-    code = ExpressionBlock(
+    code = Union(
         [
             Implication(
                 ProbabilisticPredicate(Constant[float](0.5), P(x)),
@@ -61,7 +76,7 @@ def test_cplogic_program():
         Q: Union((Implication(Q(x), Conjunction((P(x), Z(x)))),))
     }
     assert cpl.probabilistic_facts() == {
-        P: ExpressionBlock(
+        P: Union(
             [
                 Implication(
                     ProbabilisticPredicate(Constant[float](0.5), P(x)),
@@ -74,7 +89,7 @@ def test_cplogic_program():
 
 def test_multiple_probfact_same_pred_symb():
     cpl = CPLogicProgram()
-    code = ExpressionBlock(
+    code = Union(
         [
             Implication(
                 ProbabilisticPredicate(Constant[float](0.5), P(a)),
@@ -104,8 +119,8 @@ def test_multiple_probfact_same_pred_symb():
 
 def test_add_probfacts_from_tuple():
     cpl = CPLogicProgram()
-    cpl.walk(ExpressionBlock(tuple()))
-    cpl.add_probfacts_from_tuples(
+    cpl.walk(Union(tuple()))
+    cpl.add_probabilistic_facts_from_tuples(
         P, {(0.3, "hello", "gaston"), (0.7, "hello", "antonia"),},
     )
     assert P in cpl.pfact_pred_symbs
@@ -118,9 +133,9 @@ def test_add_probfacts_from_tuple():
 
 def test_add_probfacts_from_tuple_no_probability():
     cpl = CPLogicProgram()
-    cpl.walk(ExpressionBlock(tuple()))
+    cpl.walk(Union(tuple()))
     with pytest.raises(NeuroLangException, match=r"probability"):
-        cpl.add_probfacts_from_tuples(
+        cpl.add_probabilistic_facts_from_tuples(
             P, {("hello", "gaston"), ("hello", "antonia"),},
         )
 
@@ -132,7 +147,7 @@ def test_add_probchoice_from_tuple():
         (0.3, "b", "b"),
     }
     cpl = CPLogicProgram()
-    cpl.add_probchoice_from_tuples(P, probchoice_as_tuples_iterable)
+    cpl.add_probabilistic_choice_from_tuples(P, probchoice_as_tuples_iterable)
     assert P in cpl.symbol_table
     assert (
         Constant[float](0.2),
@@ -144,15 +159,17 @@ def test_add_probchoice_from_tuple():
 def test_add_probchoice_from_tuple_no_probability():
     cpl = CPLogicProgram()
     with pytest.raises(NeuroLangException, match=r"probability"):
-        cpl.add_probchoice_from_tuples(P, {("a", "b"), ("b", "b")})
+        cpl.add_probabilistic_choice_from_tuples(P, {("a", "b"), ("b", "b")})
 
 
 def test_add_probchoice_from_tuple_twice_same_pred_symb():
     probchoice_as_tuples_iterable = {(1.0, "a", "a")}
     cpl = CPLogicProgram()
-    cpl.add_probchoice_from_tuples(P, probchoice_as_tuples_iterable)
+    cpl.add_probabilistic_choice_from_tuples(P, probchoice_as_tuples_iterable)
     with pytest.raises(NeuroLangException):
-        cpl.add_probchoice_from_tuples(P, probchoice_as_tuples_iterable)
+        cpl.add_probabilistic_choice_from_tuples(
+            P, probchoice_as_tuples_iterable
+        )
 
 
 def test_add_probchoice_does_not_sum_to_one():
@@ -163,4 +180,6 @@ def test_add_probchoice_does_not_sum_to_one():
     }
     cpl = CPLogicProgram()
     with pytest.raises(NeuroLangException, match=r"sum"):
-        cpl.add_probchoice_from_tuples(P, probchoice_as_tuples_iterable)
+        cpl.add_probabilistic_choice_from_tuples(
+            P, probchoice_as_tuples_iterable
+        )

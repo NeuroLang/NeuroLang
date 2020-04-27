@@ -16,6 +16,7 @@ from .relational_algebra import (
     RelationalAlgebraOperation,
     RelationalAlgebraSolver,
     RenameColumn,
+    RenameColumns,
     Selection,
     Union,
     eq_,
@@ -187,6 +188,25 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
                     Constant[AbstractSet](prov_relation.value),
                     rename_column.src,
                     rename_column.dst,
+                )
+            ).value,
+            new_prov_col,
+        )
+
+    @add_match(RenameColumns)
+    def prov_rename_columns(self, rename_columns):
+        prov_relation = self.walk(rename_columns.relation)
+        new_prov_col = prov_relation.provenance_column
+        prov_col_rename = dict(rename_columns.renames).get(
+            prov_relation.provenance_column, None
+        )
+        if prov_col_rename is not None:
+            new_prov_col = prov_col_rename
+        return ProvenanceAlgebraSet(
+            self.walk(
+                RenameColumns(
+                    Constant[AbstractSet](prov_relation.value),
+                    rename_columns.renames,
                 )
             ).value,
             new_prov_col,

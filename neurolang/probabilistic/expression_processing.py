@@ -1,17 +1,12 @@
-import typing
 import collections
+import typing
 
 import numpy
 
-from ..exceptions import NeuroLangException
-from ..expressions import (
-    Expression,
-    Constant,
-    FunctionApplication,
-    ExpressionBlock,
-)
-from ..logic import Implication
 from ..datalog import WrappedRelationalAlgebraSet
+from ..exceptions import NeuroLangException
+from ..expressions import Constant, Expression, FunctionApplication
+from ..logic import Implication, Union
 from .expressions import ProbabilisticPredicate
 
 
@@ -42,10 +37,10 @@ def is_probabilistic_fact(expression):
     )
 
 
-def group_probfacts_by_pred_symb(code_block):
+def group_probabilistic_facts_by_pred_symb(union):
     probfacts = collections.defaultdict(list)
     non_probfacts = list()
-    for expression in code_block.expressions:
+    for expression in union.formulas:
         if is_probabilistic_fact(expression):
             probfacts[expression.consequent.body.functor].append(expression)
         else:
@@ -60,7 +55,7 @@ def const_or_symb_as_python_type(exp):
         return exp.name
 
 
-def build_pfact_set(pred_symb, pfacts):
+def build_probabilistic_fact_set(pred_symb, pfacts):
     iterable = [
         (const_or_symb_as_python_type(pf.consequent.probability),)
         + tuple(
@@ -72,7 +67,7 @@ def build_pfact_set(pred_symb, pfacts):
     return Constant[typing.AbstractSet](WrappedRelationalAlgebraSet(iterable))
 
 
-def check_probchoice_probs_sum_to_one(ra_set):
+def check_probabilistic_choice_set_probabilities_sum_to_one(ra_set):
     probs_sum = sum(v.value[0].value for v in ra_set.value)
     if not numpy.isclose(probs_sum, 1.0):
         raise NeuroLangException(
@@ -80,28 +75,31 @@ def check_probchoice_probs_sum_to_one(ra_set):
         )
 
 
-def concatenate_to_expression_block(block, to_add):
+def add_to_union(union, to_add):
     """
-    Extend `ExpressionBlock` with another `ExpressionBlock` or
-    an iterable of `Expression`.
+    Extend `Union` with another `Union` or an iterable of `Expression`.
 
     Parameters
     ----------
-    block: ExpressionBlock
-        The initial `ExpressionBlock` to which expressions will be added.
-    to_add: ExpressionBlock or Expression iterable
-        `Expression`s to be added to the `ExpressionBlock`.
+    union: Union
+        The initial `Union` to which expressions will be added.
+    to_add: Unino or Expression iterable
+        `Expression`s to be added to the `Union`.
 
     Returns
     -------
-    new_block: ExpressionBlock
-        A new `ExpressionBlock` containing the new expressions.
+    new_union: Union
+        A new `Union` containing the new expressions.
 
     """
-    if isinstance(to_add, ExpressionBlock):
-        return ExpressionBlock(block.expressions + to_add.expressions)
+    if isinstance(to_add, Union):
+        return Union(union.formulas + to_add.formulas)
     if isinstance(to_add, typing.Iterable):
         if not all(isinstance(item, Expression) for item in to_add):
             raise NeuroLangException("Expected Expression")
-        return ExpressionBlock(block.expressions + tuple(to_add))
-    raise NeuroLangException("Expected ExpressionBlock or Expression iterable")
+        return Union(union.formulas + tuple(to_add))
+    raise NeuroLangException("Expected Union or Expression iterable")
+
+
+def union_contains_probabilistic_facts(union):
+    return any(is_probabilistic_fact(exp) for exp in union.formulas)

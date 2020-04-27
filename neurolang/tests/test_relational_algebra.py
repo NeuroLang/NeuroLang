@@ -19,6 +19,8 @@ from ..relational_algebra import (
     Projection,
     RelationalAlgebraOptimiser,
     RelationalAlgebraSolver,
+    RenameColumn,
+    RenameColumns,
     Selection,
     Union,
     eq_,
@@ -576,4 +578,62 @@ def test_extended_projection_other_relation_length():
     )
     solver = RelationalAlgebraSolver()
     result = solver.walk(extended_proj_op)
+    assert result == expected
+
+
+def test_rename_columns():
+    relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=("a", "b"),
+            iterable=[("bonjour", "hello"), ("namaste", "ciao")],
+        )
+    )
+    rename = RenameColumns(
+        relation,
+        (
+            (Constant(ColumnStr("a")), Constant(ColumnStr("d"))),
+            (Constant(ColumnStr("b")), Constant(ColumnStr("e"))),
+        )
+    )
+    expected = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=("d", "e"),
+            iterable=[("bonjour", "hello"), ("namaste", "ciao")],
+        )
+    )
+    solver = RelationalAlgebraSolver()
+    result = solver.walk(rename)
+    assert result == expected
+
+
+def test_rename_columns_empty_relation():
+    relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(columns=("x", "y"))
+    )
+    rename = RenameColumns(
+        relation, (
+            (Constant(ColumnStr("x")), Constant(ColumnStr("z"))),
+            (Constant(ColumnStr("y")), Constant(ColumnStr("x"))),
+        )
+    )
+    solver = RelationalAlgebraSolver()
+    result = solver.walk(rename)
+    expected = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(columns=("x", "z"))
+    )
+    assert result == expected
+
+
+def test_rename_column_empty_relation():
+    relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(columns=("x", "y"))
+    )
+    rename = RenameColumn(
+        relation, Constant(ColumnStr("x")), Constant(ColumnStr("z"))
+    )
+    solver = RelationalAlgebraSolver()
+    result = solver.walk(rename)
+    expected = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(columns=("z", "y"))
+    )
     assert result == expected

@@ -10,8 +10,10 @@ from ..relational_algebra import (
     NaturalJoin,
     Product,
     RenameColumn,
+    RenameColumns,
     Selection,
     eq_,
+    str2columnstr_constant,
 )
 from ..relational_algebra_provenance import (
     ConcatenateConstantColumn,
@@ -23,6 +25,8 @@ from ..relational_algebra_provenance import (
     Union,
 )
 from ..utils import NamedRelationalAlgebraFrozenSet
+from ..probabilistic.cplogic.testing import eq_prov_relations
+
 
 C_ = Constant
 S_ = Symbol
@@ -435,3 +439,27 @@ def test_concatenate_column_to_ra_relation():
         )
     )
     assert result == expected
+
+
+def test_rename_columns():
+    prov_relation = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            columns=("_p_", "x", "y"),
+            iterable=[(0.1, "a", 0), (1.0, "b", 44)],
+        ),
+        provenance_column=str2columnstr_constant("_p_"),
+    )
+    rename_columns = RenameColumns(
+        prov_relation,
+        ((str2columnstr_constant("x"), str2columnstr_constant("z")),),
+    )
+    expected = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            columns=("_p_", "z", "y"),
+            iterable=[(0.1, "a", 0), (1.0, "b", 44)],
+        ),
+        provenance_column=str2columnstr_constant("_p_"),
+    )
+    solver = RelationalAlgebraProvenanceCountingSolver()
+    result = solver.walk(rename_columns)
+    assert eq_prov_relations(result, expected)
