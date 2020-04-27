@@ -1,6 +1,8 @@
+from typing import AbstractSet
+
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker
-from ...expressions import Definition, Symbol
+from ...expressions import Definition, Symbol, Constant
 from ...logic.expression_processing import extract_logic_predicates
 from ...relational_algebra import (
     NaturalJoin,
@@ -58,6 +60,19 @@ def solve_succ_query(query_predicate, cpl_program):
     """
     Obtain the solution of a SUCC query on a CP-Logic program.
 
+    The SUCC query must take the form
+
+        SUCC[ P(x) ]
+
+    where
+
+        -   P(x) is a positive literal
+        -   P is any (probabilistic, intensional, extensional)
+            predicate symbol
+        -   x is a universally-quantified variable
+
+    TODO: add support for SUCC[ P(a) ] where a is a constant term.
+
     Solving a SUCC query is a multi-step process:
 
         1.  First, the program is grounded. That is because the
@@ -104,7 +119,9 @@ def solve_succ_query(query_predicate, cpl_program):
     qpred_symb = query_predicate.functor
     qpred_args = query_predicate.args
     solver = CPLogicGraphicalModelProvenanceSolver(gm)
-    marginal = solver.walk(Marginalise(qpred_symb))
+    marginal = solver.walk(
+        MarginalProbability(qpred_symb, Constant[bool](True))
+    )
     args = get_predicate_from_grounded_expression(
         gm.expressions.value[qpred_symb]
     ).args
@@ -113,24 +130,40 @@ def solve_succ_query(query_predicate, cpl_program):
     return solver.walk(result)
 
 
-class ProbabilityOperation(Definition):
+class ProbabilityOperation(Definition[float]):
     """
-    Operation representing probability calculations on sets of random
-    variables.
-    """
-
-    def __init__(self, rv_symbol):
-        self.rv_symbol = rv_symbol
-
-
-class ApplyCPD(ProbabilityOperation):
-    """
-    Application of a conditional probability distribution.
+    Operation representing a probability calculation on sets of
+    random variables.
 
     Attributes
     ----------
     rv_symb : Symbol
         Random variable symbol.
+    rv_values : Constant[AbstractSet] or Constant
+        Random variable values for which the probability is calculated.
+
+    """
+
+    def __init__(self, rv_symbol, rv_values):
+        self.rv_symbol = rv_symbol
+        self.rv_values = rv_values
+
+
+class ConditionalProbability(ProbabilityOperation):
+    """
+    Operation representing the calculation of the conditional
+    probabilities
+
+        P(X_1 = x_1 | Y_11 = y_1, ..., y_1m)
+        ...
+        P(X_n = x_n | Y_n1 = y_1, ..., y_nm)
+
+    where, for each i = 1, ..., n, random variables
+    { X_i, Y_i1, ..., Y_im } share the same structure in the network.
+    { Y_i1, ..., Y_im } are parents of the random variable X_i.
+
+    Attributes
+    ----------
     cpd_factory : CPDFactory
         Object used to produce the conditional probability distributions
         from the values of the parents.
@@ -139,16 +172,17 @@ class ApplyCPD(ProbabilityOperation):
 
     """
 
-    def __init__(self, rv_symbol, cpd_factory, parent_values):
-        super().__init__(rv_symbol)
+    def __init__(self, rv_symbol, rv_values, cpd_factory, parent_values):
+        super().__init__(rv_symbol, rv_values)
         self.cpd_factory = cpd_factory
         self.parent_values = parent_values
 
 
-class Marginalise(ProbabilityOperation):
+class MarginalProbability(ProbabilityOperation):
     """
     Operation representing the calculation of the marginal
     probability of a set of random variables.
+
     """
 
 
@@ -169,7 +203,7 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
     def __init__(self, graphical_model):
         self.graphical_model = graphical_model
 
-    @add_match(Marginalise)
+    @add_match(MarginalProbability)
     def marginalise(self, marg_op):
         """
         Construct the provenance expression that calculates
@@ -178,24 +212,43 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
 
         """
         rv_symb = marg_op.rv_symbol
+        rv_values = marg_op.rv_values
         cpd_factory = self.graphical_model.cpd_factories.value[rv_symb]
         parent_rv_symbs = self.graphical_model.edges.value.get(rv_symb, set())
         if isinstance(cpd_factory, BernoulliCPDFactory):
-            result = self.walk(ApplyCPD(rv_symb, cpd_factory, tuple()))
+            result = self.walk(
+                ConditionalProbability(
+                    rv_symb, Constant[bool](True), cpd_factory, tuple()
+                )
+            )
         elif isinstance(cpd_factory, AndCPDFactory):
+            if rv_values != Constant[bool](True):
+                raise NotImplementedError(
+                    "Can only calculate _truth_ probability of AND nodes"
+                )
             parent_values = {
-                parent_rv_symb: self.walk(Marginalise(parent_rv_symb))
+                parent_rv_symb: self.walk(
+                    MarginalProbability(parent_rv_symb, Constant[bool](True))
+                )
                 for parent_rv_symb in parent_rv_symbs
             }
-            result = self.walk(ApplyCPD(rv_symb, cpd_factory, parent_values))
+            result = self.walk(
+                ConditionalProbability(
+                    rv_symb, rv_values, cpd_factory, parent_values
+                )
+            )
         elif isinstance(cpd_factory, NaryChoiceCPDFactory):
             parent_values = {}
         else:
             raise NotImplementedError("Unknown CPD")
         return result
 
-    @add_match(ApplyCPD(Symbol, BernoulliCPDFactory, ...))
-    def apply_bernoulli_cpd(self, app_op):
+    @add_match(
+        ConditionalProbability(
+            Symbol, Constant[bool](True), BernoulliCPDFactory, ...
+        )
+    )
+    def apply_bernoulli_cpd(self, cp_op):
         """
         Construct the provenance algebra set that represents
         the truth probabilities of a set of independent
@@ -203,12 +256,16 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
 
         """
         return ProvenanceAlgebraSet(
-            app_op.cpd_factory.relation.value,
-            app_op.cpd_factory.probability_column,
+            cp_op.cpd_factory.relation.value,
+            cp_op.cpd_factory.probability_column,
         )
 
-    @add_match(ApplyCPD(Symbol, AndCPDFactory, ...))
-    def apply_and_cpd(self, app_op):
+    @add_match(
+        ConditionalProbability(
+            Symbol, Constant[bool](True), AndCPDFactory, ...
+        )
+    )
+    def apply_and_cpd(self, cp_op):
         """
         Construct the provenance expression that calculates
         the truth conditional probabilities of an AND random
@@ -234,7 +291,7 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         random variables that play a role here are boolean.
 
         """
-        rv_symb = app_op.rv_symbol
+        rv_symb = cp_op.rv_symbol
         # retrieve the expression of the intensional rule corresponding
         # to the AND node for which we wish to calculate the probabilities
         expression = self.graphical_model.expressions.value[rv_symb]
@@ -246,7 +303,7 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
             for pred in extract_logic_predicates(expression.antecedent)
         }
         result = None
-        for parent_symb, parent_value in app_op.parent_values.items():
+        for parent_symb, parent_value in cp_op.parent_values.items():
             parent_expression = self.graphical_model.expressions.value[
                 parent_symb
             ]
@@ -267,8 +324,12 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
                 result = NaturalJoin(result, parent_value)
         return result
 
-    @add_match(ApplyCPD(Symbol, NaryChoiceCPDFactory, ...))
-    def nary_choice_cpd_app(self, app_op):
+    @add_match(
+        ConditionalProbability(
+            Symbol, Constant[AbstractSet], NaryChoiceCPDFactory, ...
+        )
+    )
+    def nary_choice_cpd_app(self, cp_op):
         """
         Construct the provenance expression that calculates
         the truth probabilities of a n-ary choice random
@@ -280,6 +341,6 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
 
         """
         return ProvenanceAlgebraSet(
-            app_op.cpd_factory.relation.value,
-            app_op.cpd_factory.probability_column,
+            cp_op.cpd_factory.relation.value,
+            cp_op.cpd_factory.probability_column,
         )
