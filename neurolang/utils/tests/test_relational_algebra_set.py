@@ -350,6 +350,15 @@ def test_aggregate():
     assert expected_str == new_set
     new_set = initial_set.aggregate(["x", "y"], {"z": lambda x: max(x) - 1})
     assert expected_lambda == new_set
+    new_set = initial_set.aggregate(
+        ["x", "y"],
+        [
+            ("x", "x", lambda x: next(iter(x))),
+            ("y", "y", lambda x: next(iter(x))),
+            ("z", "z", lambda x: max(x) - 1)
+        ]
+    )
+    assert expected_lambda == new_set
     new_set = initial_set2.aggregate(["x", "y"], {
         "z": lambda x: max(x) - 1,
         "w": "count"

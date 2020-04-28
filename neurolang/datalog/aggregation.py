@@ -155,6 +155,10 @@ def extract_aggregation_atom_free_variables(atom):
 
 
 class Chase(chase.Chase):
+    @staticmethod
+    def first_element(x):
+        return next(iter(x))
+
     def check_constraints(self, instance_update):
         warn(
             "No check performed. Should implement check for stratified"
@@ -175,25 +179,44 @@ class Chase(chase.Chase):
         if restriction_instance is None:
             restriction_instance = dict()
 
-        args = extract_logic_free_variables(rule.consequent)
-        new_tuples = self.datalog_program.new_set(
-            Constant[Tuple](
-                apply_substitution_arguments(args, substitution)
+        output_args = []
+        group_vars = []
+        for arg in rule.consequent.args:
+            if isinstance(arg, Symbol):
+                group_vars.append(arg.name)
+                aggregation_args = arg.name
+                fun = Chase.first_element
+            elif isinstance(arg, AggregationApplication):
+                fun = self.datalog_program.walk(arg.functor).value
+                aggregation_args = arg.args[0].name
+            output_args.append(
+                (
+                    Symbol.fresh().name,
+                    aggregation_args,
+                    fun
+                )
             )
-            for substitution in substitutions
-        )
-
-        fvs, substitutions = self.compute_aggregation_substitutions(
-            rule, new_tuples, args
-        )
-
-        new_tuples = [
-            Constant[Tuple](
-                apply_substitution_arguments(fvs, substitution)
+        new_tuples = substitutions.aggregate(group_vars, output_args).to_unnamed()
+        if False:
+            args = extract_logic_free_variables(rule.consequent)
+            new_tuples = self.datalog_program.new_set(
+                Constant[Tuple](
+                    apply_substitution_arguments(args, substitution)
+                )
+                for substitution in substitutions
             )
-            for substitution in substitutions
-            if fvs <= set(substitution)
-        ]
+
+            fvs, substitutions = self.compute_aggregation_substitutions(
+                rule, new_tuples, args
+            )
+
+            new_tuples = [
+                Constant[Tuple](
+                    apply_substitution_arguments(fvs, substitution)
+                )
+                for substitution in substitutions
+                if fvs <= set(substitution)
+            ]
         new_tuples = self.datalog_program.new_set(new_tuples)
         return self.compute_instance_update(
             rule, new_tuples, instance, restriction_instance

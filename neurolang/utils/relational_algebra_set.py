@@ -1,3 +1,4 @@
+from collections import OrderedDict
 from collections.abc import MutableSet, Set
 from typing import Iterable
 from uuid import uuid1
@@ -414,7 +415,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         ) and (len(scontainer.index.difference(ocontainer.index)) == 0)
 
     def _renew_index(self, container, drop_duplicates=True):
-        container.sort_index(axis=1, inplace=True)
+        container = container.sort_index(axis=1)
         return super()._renew_index(container, drop_duplicates=True)
 
     def groupby(self, columns):
@@ -428,10 +429,24 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
             yield g_id, group_set
 
     def aggregate(self, group_columns, aggregate_function):
-        new_container = self._container.groupby(group_columns
-                                                ).agg(aggregate_function)
-        new_container.reset_index(inplace=True)
-        output = self._empty_set_same_structure()
+        group_columns = list(group_columns)
+        if len(group_columns) > 0:
+            groups = self._container.groupby(group_columns)
+        else:
+            groups = self._container.groupby(lambda x: 0)
+
+        if (
+            isinstance(aggregate_function, (tuple, list))
+        ):
+            args = OrderedDict({
+                t[0]: pd.NamedAgg(t[1], t[2])
+                for t in aggregate_function
+            })
+            new_container = groups.agg(**args)
+        else:
+            new_container = groups.agg(aggregate_function)
+            new_container.reset_index(inplace=True)
+        output = type(self)(columns=list(new_container.columns))
         output._container = self._renew_index(new_container)
         return output
 

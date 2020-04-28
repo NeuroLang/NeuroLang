@@ -95,6 +95,16 @@ def test_aggregation_chase_no_grouping():
 
     assert solution[Q] == res
 
+
+@pytest.mark.skip("Aggregation with 2 args not implemented")
+def test_aggregation_chase_no_grouping_2args():
+
+    P = S_('P')  # noqa: N806
+    Q = S_('Q')  # noqa: N806
+    R = S_('R')  # noqa: N806
+    x = S_('x')
+    y = S_('y')
+
     edb = [
         F_(P(C_(i), C_(2 * i)))
         for i in range(3)
