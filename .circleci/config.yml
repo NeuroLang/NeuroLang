@@ -72,10 +72,12 @@ commands:
             cp utest.xml test_reports/neurolang/results.xml
 
       - store_artifacts:
+          when: always
           path: test_reports
           destination: test_reports
       - store_test_results:
           path: test_reports
+          when: always
 
 
 jobs:

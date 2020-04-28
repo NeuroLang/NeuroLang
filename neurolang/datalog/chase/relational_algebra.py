@@ -256,7 +256,6 @@ class ChaseNamedRelationalAlgebraMixin:
         ra_code = self.translate_conjunction_to_named_ra(
             Conjunction(predicates)
         )
-
         result = RelationalAlgebraSolver(symbol_table).walk(ra_code)
 
         result_value = result.value
@@ -350,7 +349,7 @@ class ChaseNamedRelationalAlgebraMixin:
             return False
 
         return (
-            functor == eq_ and
+            functor.value == eq_ and
             not any(isinstance(arg, Definition) for arg in pred.args) and
             any(
                 isinstance(arg, Constant) or
