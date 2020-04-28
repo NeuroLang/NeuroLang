@@ -30,11 +30,11 @@ class RightImplication(LogicOperator):
         )
 
 
-class DatalogConstraintsWalker(ExpressionWalker):
+class DatalogConstraintsMixin(ExpressionWalker):
     @add_match(NaryLogicOperator)
     def add_nary_constraint(self, expression):
-        for term in expression.formulas:
-            self.walk(term)
+        for formula in expression.formulas:
+            self.walk(formula)
 
     @add_match(LogicOperator)
     def add_logic_constraint(self, expression):
@@ -49,13 +49,8 @@ class DatalogConstraintsWalker(ExpressionWalker):
             self.symbol_table["__constraints__"] = Union((expression,))
 
     def constraints(self):
-        if "__constraints__" in self.symbol_table:
-            cons = self.symbol_table["__constraints__"]
-        else:
-            cons = Union(())
-
-        return cons
+        return self.symbol_table.get("__constraints__", Union(()))
 
 
-class DatalogConstraintsProgram(DatalogProgram, DatalogConstraintsWalker):
+class DatalogConstraintsProgram(DatalogProgram, DatalogConstraintsMixin):
     pass
