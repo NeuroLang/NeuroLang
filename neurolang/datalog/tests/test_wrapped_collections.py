@@ -1,5 +1,6 @@
 from typing import Tuple
 
+import numpy as np
 from pytest import mark
 
 from ..expressions import Constant
@@ -108,3 +109,10 @@ def test_update_difference():
     r2 = WrappedRelationalAlgebraSet([(5, 0), (7, 8)])
     r1 -= r2
     assert r1 == WrappedRelationalAlgebraSet([(1, 2)])
+
+
+def test_create_from_array():
+    r1 = WrappedRelationalAlgebraSet(np.eye(2, dtype=int))
+
+    assert len(r1) == 2
+    assert {(1, 0), (0, 1)} == r1.unwrap()

@@ -255,10 +255,13 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
         self, symbol, iterable, type_=Unknown
     ):
         if type_ is Unknown:
-            type_, iterable = self.infer_iterable_type(iterable)
+            new_set = self.new_set(iterable)
+            type_ = new_set.row_type
+        else:
+            new_set = self.new_set(iterable=iterable, row_type=type_)
 
         constant = Constant[AbstractSet[type_]](
-            self.new_set(list(iterable)),
+            new_set,
             auto_infer_type=False,
             verify_type=False
         )

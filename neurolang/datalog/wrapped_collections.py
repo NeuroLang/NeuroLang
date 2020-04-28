@@ -44,6 +44,13 @@ class WrappedRelationalAlgebraSetBaseMixin:
                 )
             ):
                 iterable = iterable
+            elif hasattr(iterable, '__getitem__'):
+                iterable = (
+                    WrappedRelationalAlgebraSetBaseMixin
+                    ._obtain_value_collection(
+                        iterable
+                    )
+                )
             else:
                 iterable = (
                     WrappedRelationalAlgebraSetBaseMixin
@@ -99,6 +106,24 @@ class WrappedRelationalAlgebraSetBaseMixin:
             iterator = (REBV.walk(e) for e in it2)
         for e in iterator:
             yield e
+
+    @staticmethod
+    def _obtain_value_collection(iterable):
+        if len(iterable) == 0:
+            return iterable
+
+        val = iterable[0]
+        collection_of_constants = (
+            isinstance(val, Constant[Tuple]) or
+            (
+                isinstance(val, tuple) and (len(val) > 0)
+                and isinstance(val[0], Constant)
+            )
+        )
+        if not collection_of_constants:
+            return iterable
+        else:
+            return (REBV.walk(e) for e in iterable)
 
     def __eq__(self, other):
         return self._operator_wrapped('__eq__', other)
