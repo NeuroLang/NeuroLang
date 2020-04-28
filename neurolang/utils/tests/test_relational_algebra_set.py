@@ -395,10 +395,10 @@ def test_extended_projection():
     )
     assert expected_lambda2 == new_set
     new_set = initial_set.extended_projection(
-        {"z": "a", "x": RelationalAlgebraStringExpression("x"),}
+        {"z": "a", "x": RelationalAlgebraStringExpression("x")}
     )
     assert expected_new_colum_str == new_set
-    new_set = initial_set.extended_projection({"z": 1,})
+    new_set = initial_set.extended_projection({"z": 1})
     assert expected_new_colum_int == new_set
 
 

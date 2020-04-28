@@ -10,13 +10,12 @@ in the set ``Q``.
    FNT in Databases. 5, 105–195 (2012).
 """
 
-from typing import AbstractSet, Tuple
+from typing import AbstractSet
 from warnings import warn
 
 from ..exceptions import NeuroLangException
 from ..expression_walker import PatternWalker, add_match
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
-from ..logic.unification import apply_substitution_arguments
 from ..utils import OrderedSet
 from . import (Implication, Union, chase, extract_logic_free_variables,
                is_conjunctive_expression_with_nested_predicates)

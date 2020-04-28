@@ -71,7 +71,6 @@ def test_aggregation_chase_no_grouping():
     Q = S_('Q')  # noqa: N806
     R = S_('R')  # noqa: N806
     x = S_('x')
-    y = S_('y')
 
     edb = [
         F_(P(C_(i)))
