@@ -31,29 +31,25 @@ class RightImplication(LogicOperator):
         )
 
 
-class ConstraintsWalker(ExpressionWalker):
-    @add_match(NaryLogicOperator)
-    def add_nary_constraint(self, expression):
-        constrains = ()
-        for term in expression:
-            cons = self.walk(term)
-            constrains = Union(constrains + cons)
-        return constrains
-
-    @add_match(LogicOperator)
-    def add_logic_constraint(self, expression):
-        if isinstance(expression, RightImplication):
-            return (expression,)
-
-        return ()
-
-
-class DatalogConstraintsProgramMixin:
+class DatalogConstraintsProgramMixin(ExpressionWalker):
 
     protected_keywords = set({"__constraints__"})
 
-    def load_constraints(self, union_of_constraints):
-        self.symbol_table["__constraints__"] = union_of_constraints
+    @add_match(NaryLogicOperator)
+    def add_nary_constraint(self, expression):
+        for term in expression.formulas:
+            self.walk(term)
+
+    @add_match(LogicOperator)
+    def add_logic_constraint(self, expression):
+        if (
+            isinstance(expression, RightImplication)
+            and "__constraints__" in self.symbol_table
+        ):
+            constrains = self.symbol_table["__constraints__"]
+            constrains = Union((constrains.formulas + (expression,)))
+        elif isinstance(expression, RightImplication):
+            self.symbol_table["__constraints__"] = Union((expression))
 
     def constraints(self):
         return self.symbol_table["__constraints__"]
