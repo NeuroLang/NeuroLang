@@ -256,7 +256,7 @@ class ChaseNamedRelationalAlgebraMixin:
         ra_code = self.translate_conjunction_to_named_ra(
             Conjunction(predicates)
         )
-
+        print(ra_code)
         result = RelationalAlgebraSolver(symbol_table).walk(ra_code)
 
         result_value = result.value

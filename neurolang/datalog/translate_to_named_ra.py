@@ -11,7 +11,7 @@ from ..relational_algebra import (ColumnInt, ColumnStr, Difference,
 from ..utils import NamedRelationalAlgebraFrozenSet
 from .expressions import Conjunction, Negation
 
-EQ = Constant[Any](eq)
+EQ = Constant(eq)
 REBV = ReplaceExpressionsByValues({})
 
 
