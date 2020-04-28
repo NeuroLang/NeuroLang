@@ -270,6 +270,22 @@ def test_builtin_equality_only_sets_and_computations(chase_class):
     assert instance_result[S].type == AbstractSet[Tuple[int, AbstractSet[int]]]
 
 
+def test_builtin_equality_simple_chase_solution(chase_class):
+    datalog_program = Eb_((
+        F_(Q(C_(5), C_(6))),
+        F_(Q(C_(7), C_(8))),
+        F_(S(C_(5))),
+        Imp_(T(x), eq(C_(6), y) & Q(x, y)),
+    ))
+
+    dl = Datalog()
+    dl.walk(datalog_program)
+
+    dc = chase_class(dl)
+    res = dc.build_chase_solution()
+    assert res['T'] == res['S']
+
+
 def test_builtin_equality_chase_solution(chase_class):
     datalog_program = Eb_((
         F_(Q(C_(5), C_(6))),
