@@ -10,7 +10,6 @@ in the set ``Q``.
    FNT in Databases. 5, 105–195 (2012).
 """
 
-from typing import AbstractSet
 from warnings import warn
 
 from ..exceptions import NeuroLangException
@@ -208,59 +207,6 @@ class Chase(chase.Chase):
                 )
             )
         return group_vars, output_args
-
-    def compute_aggregation_substitutions(self, rule, new_tuples, args):
-        fvs, fvs_aggregation, agg_fresh_var, agg_application = \
-            extract_aggregation_atom_free_variables(rule.consequent)
-
-        group_ind_vars = tuple(
-            zip(
-                *((i, v) for i, v in enumerate(fvs) if v is not agg_fresh_var)
-            )
-        )
-
-        if len(group_ind_vars) > 0:
-            group_indices, group_vars = group_ind_vars
-            grouped_iterator = new_tuples.groupby(group_indices)
-        else:
-            group_vars = tuple()
-            grouped_iterator = [(None, new_tuples)]
-
-        substitutions = []
-        for g_id, group in grouped_iterator:
-            substitution = self.compute_group_substitution(
-                group, args, fvs_aggregation, agg_application, agg_fresh_var
-            )
-
-            if len(group_vars) == 1:
-                substitution[group_vars[0]] = Constant(g_id)
-            elif len(group_vars) > 1:
-                substitution.update({
-                    v: Constant(val)
-                    for v, val in zip(group_vars, g_id)
-                })
-
-            substitutions.append(substitution)
-        return fvs, substitutions
-
-    def compute_group_substitution(
-        self, group, args, fvs_aggregation, agg_application, agg_fresh_var
-    ):
-        agg_substitution = tuple(
-            Constant[AbstractSet](
-                frozenset(
-                    v.value[0] for v in group.projection(args.index(v))
-                ),
-                auto_infer_type=False,
-                verify_type=False
-            ) for v in fvs_aggregation
-        )
-        if any(len(rs.value) == 0 for rs in agg_substitution):
-            return {}
-        else:
-            fa_ = agg_application.functor(*agg_substitution)
-            substitution = {agg_fresh_var: self.datalog_program.walk(fa_)}
-            return substitution
 
     def eliminate_already_computed(self, consequent, instance, substitutions):
         if is_aggregation_predicate(consequent):
