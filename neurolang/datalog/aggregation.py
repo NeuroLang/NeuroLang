@@ -196,27 +196,11 @@ class Chase(chase.Chase):
                     fun
                 )
             )
-        new_tuples = substitutions.aggregate(group_vars, output_args).to_unnamed()
-        if False:
-            args = extract_logic_free_variables(rule.consequent)
-            new_tuples = self.datalog_program.new_set(
-                Constant[Tuple](
-                    apply_substitution_arguments(args, substitution)
-                )
-                for substitution in substitutions
-            )
-
-            fvs, substitutions = self.compute_aggregation_substitutions(
-                rule, new_tuples, args
-            )
-
-            new_tuples = [
-                Constant[Tuple](
-                    apply_substitution_arguments(fvs, substitution)
-                )
-                for substitution in substitutions
-                if fvs <= set(substitution)
-            ]
+        new_tuples = (
+            substitutions
+            .aggregate(group_vars, output_args)
+            .to_unnamed()
+        )
         new_tuples = self.datalog_program.new_set(new_tuples)
         return self.compute_instance_update(
             rule, new_tuples, instance, restriction_instance
