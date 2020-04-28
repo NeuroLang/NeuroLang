@@ -179,6 +179,18 @@ class Chase(chase.Chase):
         if restriction_instance is None:
             restriction_instance = dict()
 
+        group_vars, output_args = self._get_groups_and_aggregations(rule)
+        new_tuples = (
+            substitutions
+            .aggregate(group_vars, output_args)
+            .to_unnamed()
+        )
+        new_tuples = self.datalog_program.new_set(new_tuples)
+        return self.compute_instance_update(
+            rule, new_tuples, instance, restriction_instance
+        )
+
+    def _get_groups_and_aggregations(self, rule):
         output_args = []
         group_vars = []
         for arg in rule.consequent.args:
@@ -196,15 +208,7 @@ class Chase(chase.Chase):
                     fun
                 )
             )
-        new_tuples = (
-            substitutions
-            .aggregate(group_vars, output_args)
-            .to_unnamed()
-        )
-        new_tuples = self.datalog_program.new_set(new_tuples)
-        return self.compute_instance_update(
-            rule, new_tuples, instance, restriction_instance
-        )
+        return group_vars, output_args
 
     def compute_aggregation_substitutions(self, rule, new_tuples, args):
         fvs, fvs_aggregation, agg_fresh_var, agg_application = \
