@@ -115,18 +115,18 @@ class OntologyParser:
                 RightImplication(self._triple(x, const, z), symbol(x, z)),
             )
 
-        constraints_subproperties = self._parse_subproperties()
-        constraints_subclasses = self._parse_subclasses()
-        constraints_disjoint = self._parse_disjoint()
+        # constraints_subproperties = self._parse_subproperties()
+        # constraints_subclasses = self._parse_subclasses()
+        # constraints_disjoint = self._parse_disjoint()
 
-        union_of_constraints = Union(
-            constraints_subproperties.formulas
-            + constraints_subclasses.formulas
-            + constraints_disjoint.formulas
-            + constraints
-        )
+        # union_of_constraints = Union(
+        # constraints
+        # + constraints_subproperties.formulas
+        # + constraints_subclasses.formulas
+        # + constraints_disjoint.formulas
+        # )
 
-        return union_of_constraints
+        return constraints
 
     def _parse_subproperties(self):
         """
