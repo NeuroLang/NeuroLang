@@ -93,11 +93,8 @@ class WrappedRelationalAlgebraSetBaseMixin:
         iterator_of_constants = False
         for val in it1:
             iterator_of_constants = (
-                isinstance(val, Constant[Tuple]) or
-                (
-                    isinstance(val, tuple) and (len(val) > 0)
-                    and isinstance(val[0], Constant)
-                )
+                WrappedRelationalAlgebraSetBaseMixin.
+                is_constant_tuple_or_tuple_of_constants(val)
             )
             break
         if not iterator_of_constants:
@@ -114,16 +111,23 @@ class WrappedRelationalAlgebraSetBaseMixin:
 
         val = iterable[0]
         collection_of_constants = (
+            WrappedRelationalAlgebraSetBaseMixin.
+            is_constant_tuple_or_tuple_of_constants(val)
+        )
+        if not collection_of_constants:
+            return iterable
+        else:
+            return (REBV.walk(e) for e in iterable)
+
+    @staticmethod
+    def is_constant_tuple_or_tuple_of_constants(val):
+        return (
             isinstance(val, Constant[Tuple]) or
             (
                 isinstance(val, tuple) and (len(val) > 0)
                 and isinstance(val[0], Constant)
             )
         )
-        if not collection_of_constants:
-            return iterable
-        else:
-            return (REBV.walk(e) for e in iterable)
 
     def __eq__(self, other):
         return self._operator_wrapped('__eq__', other)

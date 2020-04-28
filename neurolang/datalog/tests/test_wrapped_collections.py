@@ -52,6 +52,20 @@ def test_init_named_from_wrapped():
     assert set(r3) == set(R3)
 
 
+def test_init_named_from_iterator_and_collection():
+    it = ((i,) for i in range(5))
+    col = [(i,) for i in range(5)]
+    r = WrappedRelationalAlgebraSet(iterable=it)
+    assert r.arity == 1
+    assert len(r) == 5
+    assert set(r.unwrap()) == set(col)
+
+    r = WrappedRelationalAlgebraSet(iterable=col)
+    assert r.arity == 1
+    assert len(r) == 5
+    assert set(r.unwrap()) == set(col)
+
+
 def test_unwrap():
     r2_u = R2.unwrap()
     r3_u = R3.unwrap()
