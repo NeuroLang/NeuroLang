@@ -15,8 +15,7 @@ from warnings import warn
 from ..exceptions import NeuroLangException
 from ..expression_walker import PatternWalker, add_match
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
-from ..utils import OrderedSet
-from . import (Implication, Union, chase, extract_logic_free_variables,
+from . import (Implication, Union, chase,
                is_conjunctive_expression_with_nested_predicates)
 from .basic_representation import UnionOfConjunctiveQueries
 from .expressions import TranslateToLogic
@@ -132,24 +131,6 @@ class DatalogWithAggregationMixin(PatternWalker):
             raise NeuroLangException(
                 f'Expression {antecedent} is not conjunctive'
             )
-
-
-def extract_aggregation_atom_free_variables(atom):
-    free_variables = OrderedSet()
-    aggregation_fresh_variable = Symbol.fresh()
-    for arg in atom.args:
-        free_variables_arg = extract_logic_free_variables(arg)
-        if isinstance(arg, AggregationApplication):
-            free_variables_aggregation = free_variables_arg
-            free_variables.add(aggregation_fresh_variable)
-            aggregation_application = arg
-        else:
-            free_variables |= free_variables_arg
-
-    return (
-        free_variables, free_variables_aggregation, aggregation_fresh_variable,
-        aggregation_application
-    )
 
 
 class Chase(chase.Chase):
