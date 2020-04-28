@@ -6,7 +6,10 @@ the extensional, intensional, and builtin
 sets and has support for constraints.
 """
 
-from ..logic import LogicOperator
+from expression_walker import ExpressionWalker, add_match
+from expressions import Expression
+
+from ..logic import LogicOperator, NaryLogicOperator
 from .basic_representation import DatalogProgram
 
 
@@ -26,6 +29,23 @@ class RightImplication(LogicOperator):
         return "RightImplication{{{} \u2192 {}}}".format(
             repr(self.antecedent), repr(self.consequent)
         )
+
+
+class ConstraintsWalker(ExpressionWalker):
+    @add_match(NaryLogicOperator)
+    def add_nary_constraint(self, expression):
+        constrains = ()
+        for term in expression:
+            cons = self.walk(term)
+            constrains = Union(constrains + cons)
+        return constrains
+
+    @add_match(LogicOperator)
+    def add_logic_constraint(self, expression):
+        if isinstance(expression, RightImplication):
+            return (expression,)
+
+        return ()
 
 
 class DatalogConstraintsProgramMixin:
