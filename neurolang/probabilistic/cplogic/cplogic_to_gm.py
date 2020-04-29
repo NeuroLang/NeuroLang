@@ -19,35 +19,91 @@ from ...relational_algebra import (
     str2columnstr_constant,
 )
 from ..expressions import (
-    GraphicalModel,
     Grounding,
     ProbabilisticChoiceGrounding,
     ProbabilisticPredicate,
 )
-from .grounding import topological_sort_groundings
+from .grounding import (
+    topological_sort_groundings,
+    get_predicate_from_grounded_expression,
+)
 
 
-class CPDFactory(Definition):
+class GraphicalModel(Definition):
+    def __init__(self, nodes, edges):
+        self.nodes = nodes
+        self.edges = edges
+
+    def get_node(self, node_symbol):
+        nodes_as_dict = dict(self.nodes)
+        if node_symbol not in nodes_as_dict:
+            raise KeyError(f"Node {node_symbol} not found")
+        return nodes_as_dict[node_symbol]
+
+    def get_parent_node_symbols(self, node_symbol):
+        return set(
+            edge_parent_node_symb
+            for edge_node_symb, edge_parent_node_symb in self.edges
+            if edge_node_symb == node_symbol
+        )
+
+
+class PlateNode(Definition):
+    def __init__(self, node_symbol, expression, relation):
+        self.node_symbol = node_symbol
+        self.expression = expression
+        self.relation = relation
+
+    def __repr__(self):
+        return f"{self.node_symbol} ~ {self.__class__.__name__}"
+
+
+class ProbabilisticPlateNode(PlateNode):
     """
-    Object used to produce conditional probability distributions of
-    multiple random variables at the same time.
+    Object used to represent non-deterministic nodes.represent
+    non-deterministic nodes
 
-    Each random variable is represented by a row in the ``relation``
-    attribute of the factory.
+    Although this object is called a "CPD" factory, there is no parent
+    to this distribution. Instead, it represents the marginal
+    distributions of a batch of independent Bernoulli random variables.
+
+    An extra column in the relation used to represent the random
+    variables is used to encode the probability of that specific
+    random variable's Bernoulli distribution:
+
+    For example, to represent the program
+
+        P(a) : 0.7 <- T
+        P(b) : 0.2 <- T
+
+    One would use the following relation
+
+         _p_ | x
+        =====|===
+         0.7 | a
+         0.2 | b
+
+    where each row represents one random variable P(x) and where
+    the column _p_ encodes the Bernoulli parameter of the
+    distribution of P(x).
 
     Attributes
     ----------
-    relation : Constant[AbstractSet]
+    relation: Constant[AbstractSet]
         A relation that encodes all the variables for which a
         conditional probability distribution will be produced.
+    probability_column: Constant[ColumnStr]
+        The column that contains the Bernoulli parameter associated
+        to each random variable.
 
     """
 
-    def __init__(self, relation):
-        self.relation = relation
+    def __init__(self, node_symbol, expression, relation, probability_column):
+        super().__init__(node_symbol, expression, relation)
+        self.probability_column = probability_column
 
 
-class BernoulliCPDFactory(CPDFactory):
+class BernoulliPlateNode(ProbabilisticPlateNode):
     """
     Object used to produce Bernoulli-distributed random variables.
 
@@ -86,12 +142,8 @@ class BernoulliCPDFactory(CPDFactory):
 
     """
 
-    def __init__(self, relation, probability_column):
-        super().__init__(relation)
-        self.probability_column = probability_column
 
-
-class AndCPDFactory(CPDFactory):
+class AndPlateNode(PlateNode):
     """
     Object used to produce deterministic conditional probabilities
     that conjunct the values of boolean parent random variables.
@@ -111,7 +163,7 @@ class AndCPDFactory(CPDFactory):
     """
 
 
-class NaryChoiceCPDFactory(CPDFactory):
+class NaryChoicePlateNode(ProbabilisticPlateNode):
     """
     Object used to represent the distribution of a single
     n-ary choice random variable.
@@ -143,12 +195,8 @@ class NaryChoiceCPDFactory(CPDFactory):
 
     """
 
-    def __init__(self, relation, probability_column):
-        super().__init__(relation)
-        self.probability_column = probability_column
 
-
-class NaryChoiceResultCPDFactory(CPDFactory):
+class NaryChoiceResultPlateNode(PlateNode):
     pass
 
 
@@ -163,9 +211,8 @@ def is_extensional_grounding(grounding):
 
 class CPLogicGroundingToGraphicalModelTranslator(PatternWalker):
     def __init__(self):
-        self.edges = dict()
-        self.cpd_factories = dict()
-        self.expressions = dict()
+        self.edges = []
+        self.nodes = []
 
     @add_match(ExpressionBlock)
     def block_of_groundings(self, block):
@@ -173,44 +220,45 @@ class CPLogicGroundingToGraphicalModelTranslator(PatternWalker):
             raise ValueError("Expected block of groundings")
         for grounding in topological_sort_groundings(block.expressions):
             self.walk(grounding)
-        return GraphicalModel(
-            Constant[Mapping[Symbol, AbstractSet[Symbol]]](self.edges),
-            Constant[Mapping[Symbol, CPDFactory]](self.cpd_factories),
-            Constant[Mapping[Symbol, Expression]](self.expressions),
-        )
+        return GraphicalModel(tuple(self.nodes), tuple(self.edges))
 
     @add_match(Grounding, is_extensional_grounding)
     def extensional_set_grounding(self, grounding):
         """
         Represent a set of ground facts as a Bernoulli node with
         all probabilities set to 1.0.
+
         """
-        rv_symb = grounding.expression.consequent.functor
+        expression = grounding.expression
+        node_symbol = get_predicate_from_grounded_expression(
+            expression
+        ).functor
         probability_column = str2columnstr_constant(Symbol.fresh().name)
         relation = ConcatenateConstantColumn(
             grounding.relation, probability_column, Constant[float](1.0)
         )
         relation = RelationalAlgebraSolver().walk(relation)
-        cpd_factory = BernoulliCPDFactory(relation, probability_column)
-        expression = grounding.expression
-        self.add_random_variable(rv_symb, cpd_factory, expression)
+        node = BernoulliPlateNode(
+            node_symbol, expression, relation, probability_column
+        )
+        self.add_plate_node(node_symbol, node)
 
     @add_match(ProbabilisticChoiceGrounding)
     def probabilistic_choice_grounding(self, grounding):
         """
         Represent a probabilistic choice as a n-ary choice node.
         """
+        expression = grounding.expression
+        choice_node_symbol = Symbol.fresh()
         probability_column = str2columnstr_constant(
             grounding.expression.consequent.probability.name
         )
         relation = grounding.relation
-        expression = grounding.expression
         # add a n-ary choice random variable
-        choice_rv_symb = Symbol.fresh()
-        choice_cpd_factory = NaryChoiceCPDFactory(relation, probability_column)
-        self.add_random_variable(
-            choice_rv_symb, choice_cpd_factory, expression
+        choice_node = NaryChoicePlateNode(
+            choice_node_symbol, expression, relation, probability_column
         )
+        self.add_plate_node(choice_node_symbol, choice_node)
         # remove the probability column as it is not neeeded to represent the
         # CPD factories of boolean random variables whose value is
         # deterministically determined by the value of their parent choice
@@ -225,11 +273,12 @@ class CPLogicGroundingToGraphicalModelTranslator(PatternWalker):
                 ),
             )
         )
-        rv_symb = grounding.expression.consequent.body.functor
-        cpd_factory = NaryChoiceResultCPDFactory(relation)
-        expression = grounding.expression
-        self.add_random_variable(
-            rv_symb, cpd_factory, expression, parent_rv_symbs={choice_rv_symb}
+        node_symbol = get_predicate_from_grounded_expression(
+            expression
+        ).functor
+        node = NaryChoiceResultPlateNode(node_symbol, expression, relation)
+        self.add_plate_node(
+            node_symbol, node, parent_node_symbols={choice_node_symbol}
         )
 
     @add_match(Grounding(Implication(ProbabilisticPredicate, ...), ...))
@@ -237,37 +286,41 @@ class CPLogicGroundingToGraphicalModelTranslator(PatternWalker):
         """
         Represent a set of probabilistic facts with a Bernoulli node.
         """
-        rv_symb = grounding.expression.consequent.body.functor
+        expression = grounding.expression
+        node_symbol = get_predicate_from_grounded_expression(
+            expression
+        ).functor
         probability_column = str2columnstr_constant(
             grounding.expression.consequent.probability.name
         )
         relation = grounding.relation
-        cpd_factory = BernoulliCPDFactory(relation, probability_column)
-        expression = grounding.expression
-        self.add_random_variable(rv_symb, cpd_factory, expression)
+        node = BernoulliPlateNode(
+            node_symbol, expression, relation, probability_column
+        )
+        self.add_plate_node(node_symbol, node)
 
     @add_match(Grounding(Implication, Constant[AbstractSet]))
     def intensional_rule_grounding(self, grounding):
         """
         Represent a deterministic intensional rule with an AND node.
         """
-        rv_symb = grounding.expression.consequent.functor
-        parent_rv_symbs = set(
+        expression = grounding.expression
+        node_symbol = get_predicate_from_grounded_expression(
+            expression
+        ).functor
+        parent_node_symbols = set(
             predicate.functor
             for predicate in extract_logic_predicates(
                 grounding.expression.antecedent
             )
         )
-        cpd_factory = AndCPDFactory(grounding.relation)
-        expression = grounding.expression
-        self.add_random_variable(
-            rv_symb, cpd_factory, expression, parent_rv_symbs
-        )
+        node = AndPlateNode(node_symbol, expression, grounding.relation)
+        self.add_plate_node(node_symbol, node, parent_node_symbols)
 
-    def add_random_variable(
-        self, rv_symb, cpd_factory, expression, parent_rv_symbs=None
-    ):
-        self.cpd_factories[rv_symb] = cpd_factory
-        self.expressions[rv_symb] = expression
-        if parent_rv_symbs is not None:
-            self.edges[rv_symb] = parent_rv_symbs
+    def add_plate_node(self, node_symbol, node, parent_node_symbols=None):
+        self.nodes.append((node_symbol, node))
+        if parent_node_symbols is not None:
+            self.edges += [
+                (node_symbol, parent_node_symb)
+                for parent_node_symb in parent_node_symbols
+            ]

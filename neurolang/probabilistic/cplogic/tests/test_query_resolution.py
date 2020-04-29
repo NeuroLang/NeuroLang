@@ -122,8 +122,39 @@ def test_multi_level_conjunctive_program():
     result = solve_succ_query(H(x, y), cpl_program)
     expected = testing.make_prov_set(
         [(0.2 * 0.9 * 0.1, "a", "a"), (0.2 * 0.9 * 0.5, "a", "b"),],
-        ("_p", "x", "y"),
+        ("_p_", "x", "y"),
     )
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_intertwined_conjunctions_and_probfacts():
+    """
+    We consider the program
+
+        P(a) : 0.8  <-  T
+        C(a) : 0.5  <-  T
+              A(x)  <-  B(x), C(x)
+              B(x)  <-  P(x)
+              Z(x)  <-  A(x), B(x), C(x)
+
+    And expect SUCC[ Z(x) ] to yield the provenance relation
+
+        _p_ | x
+        ====| ==
+        0.4 | a
+
+    """
+
+
+def test_simple_probchoice_query_resolution():
+    pchoice_as_sets = {P: {(0.2, "a"), (0.8, "b")}}
+    cpl_program = CPLogicProgram()
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    result = solve_succ_query(P(x), cpl_program)
+    expected = testing.make_prov_set([(0.2, "a"), (0.8, "b"),], ("_p_", "x"),)
     assert testing.eq_prov_relations(result, expected)
 
 

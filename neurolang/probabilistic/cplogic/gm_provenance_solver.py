@@ -1,28 +1,40 @@
+import itertools
 from typing import AbstractSet
 
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker
-from ...expressions import Definition, Symbol, Constant
+from ...expressions import Constant, Definition, Symbol
 from ...logic.expression_processing import extract_logic_predicates
 from ...relational_algebra import (
+    ConcatenateConstantColumn,
+    Difference,
     NaturalJoin,
+    Projection,
+    RelationalAlgebraSolver,
     RenameColumns,
+    Union,
     str2columnstr_constant,
 )
 from ...relational_algebra_provenance import (
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
 )
+from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from .cplogic_to_gm import (
-    AndCPDFactory,
-    BernoulliCPDFactory,
-    NaryChoiceCPDFactory,
+    AndPlateNode,
+    BernoulliPlateNode,
     CPLogicGroundingToGraphicalModelTranslator,
+    NaryChoicePlateNode,
+    NaryChoiceResultPlateNode,
+    ProbabilisticPlateNode,
+    PlateNode,
 )
 from .grounding import (
     get_predicate_from_grounded_expression,
     ground_cplogic_program,
 )
+
+TRUE = Constant[bool](True, verify_type=False, auto_infer_type=False)
 
 
 def rename_columns_for_args_to_match(relation, current_args, desired_args):
@@ -119,71 +131,117 @@ def solve_succ_query(query_predicate, cpl_program):
     qpred_symb = query_predicate.functor
     qpred_args = query_predicate.args
     solver = CPLogicGraphicalModelProvenanceSolver(gm)
-    marginal = solver.walk(
-        MarginalProbability(qpred_symb, Constant[bool](True))
+    query_node = gm.get_node(qpred_symb)
+    marginal_provenance_expression = solver.walk(
+        ProbabilityOperation(((query_node, TRUE),), tuple())
     )
-    args = get_predicate_from_grounded_expression(
-        gm.expressions.value[qpred_symb]
+    __import__("pdb").set_trace()
+    result_args = get_predicate_from_grounded_expression(
+        query_node.expression
     ).args
-    result = rename_columns_for_args_to_match(marginal, args, qpred_args)
+    result = rename_columns_for_args_to_match(
+        marginal_provenance_expression, result_args, qpred_args
+    )
     solver = RelationalAlgebraProvenanceCountingSolver()
     return solver.walk(result)
 
 
-class ProbabilityOperation(Definition[float]):
+class ProbabilityOperation(Definition):
     """
-    Operation representing a probability calculation on sets of
-    random variables.
+    Operation representing a probability calculation on multiple sets
+    of random variables (possibly with conditioning random variables).
 
     Attributes
     ----------
-    rv_symb : Symbol
-        Random variable symbol.
-    rv_values : Constant[AbstractSet] or Constant
-        Random variable values for which the probability is calculated.
+    nodes : tuple of (PlateNode, Constant) tuples
+        Plate nodes containing the random variables whose probability
+        is calculated for specific values. If TRUE is
+        given, it is seen as all the random variables being True.
+    condition_rv_values : tuple of (PlateNode, Constant) tuples
+        Plate nodes containing the random variables conditioning the
+        evaluated probabilities and their values.
 
     """
 
-    def __init__(self, rv_symbol, rv_values):
-        self.rv_symbol = rv_symbol
-        self.rv_values = rv_values
+    def __init__(self, valued_nodes, condition_valued_nodes):
+        self.valued_nodes = valued_nodes
+        self.condition_valued_nodes = condition_valued_nodes
+
+    def __repr__(self):
+        return "P[ {}{} ]".format(
+            ", ".join(node.node_symbol.name for node, _ in self.valued_nodes),
+            (
+                ""
+                if not self.condition_valued_nodes
+                else " | "
+                + ", ".join(
+                    node.node_symbol.name
+                    for node, _ in self.condition_valued_nodes
+                )
+            ),
+        )
 
 
-class ConditionalProbability(ProbabilityOperation):
-    """
-    Operation representing the calculation of the conditional
-    probabilities
+def ra_binary_to_nary(op):
+    def nary_op(relations):
+        it = iter(relations)
+        result = next(it)
+        for relation in it:
+            result = op(result, relation)
+        return result
 
-        P(X_1 = x_1 | Y_11 = y_1, ..., y_1m)
-        ...
-        P(X_n = x_n | Y_n1 = y_1, ..., y_nm)
-
-    where, for each i = 1, ..., n, random variables
-    { X_i, Y_i1, ..., Y_im } share the same structure in the network.
-    { Y_i1, ..., Y_im } are parents of the random variable X_i.
-
-    Attributes
-    ----------
-    cpd_factory : CPDFactory
-        Object used to produce the conditional probability distributions
-        from the values of the parents.
-    parent_values : Dict[Symbol, ProvenanceAlgebraSet]
-        Values of the parents defining the distribution.
-
-    """
-
-    def __init__(self, rv_symbol, rv_values, cpd_factory, parent_values):
-        super().__init__(rv_symbol, rv_values)
-        self.cpd_factory = cpd_factory
-        self.parent_values = parent_values
+    return nary_op
 
 
-class MarginalProbability(ProbabilityOperation):
-    """
-    Operation representing the calculation of the marginal
-    probability of a set of random variables.
+def get_node_support(node):
+    if isinstance(node, (NaryChoicePlateNode, NaryChoiceResultPlateNode)):
+        return tuple(
+            Constant[AbstractSet](
+                NamedRelationalAlgebraFrozenSet(
+                    columns=node.relation.value.columns, iterable=[tupl],
+                )
+            )
+            for tupl in node.relation.value
+        )
+    else:
+        return (TRUE,)
 
-    """
+
+def is_bernoulli_truth_probability(operation):
+    return (
+        len(operation.valued_nodes) == 1
+        and len(operation.condition_valued_nodes) == 0
+        and isinstance(operation.valued_nodes[0][0], BernoulliPlateNode)
+        and operation.valued_nodes[0][1] == TRUE
+    )
+
+
+def is_and_truth_conditional_probability(operation):
+    return (
+        len(operation.valued_nodes) == 1
+        and len(operation.condition_valued_nodes) > 0
+        and isinstance(operation.valued_nodes[0][0], AndPlateNode)
+        and operation.valued_nodes[0][1] == TRUE
+    )
+
+
+def is_nary_choice_probability(operation):
+    return (
+        len(operation.valued_nodes) == 1
+        and len(operation.condition_valued_nodes) == 0
+        and isinstance(operation.valued_nodes[0][0], NaryChoicePlateNode)
+        and isinstance(operation.valued_nodes[0][1], Constant)
+        and operation.valued_nodes[0][1].type is AbstractSet
+    )
+
+
+def is_nary_choice_result_truth_conditional_probability(operation):
+    return (
+        len(operation.valued_nodes) == 1
+        and len(operation.condition_valued_nodes) == 1
+        and isinstance(operation.valued_nodes[0][0], NaryChoiceResultPlateNode)
+        and operation.valued_nodes[0][1] == TRUE
+    )
 
 
 class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
@@ -203,69 +261,21 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
     def __init__(self, graphical_model):
         self.graphical_model = graphical_model
 
-    @add_match(MarginalProbability)
-    def marginalise(self, marg_op):
-        """
-        Construct the provenance expression that calculates
-        the marginal distribution of a random variable in
-        the graphical model.
-
-        """
-        rv_symb = marg_op.rv_symbol
-        rv_values = marg_op.rv_values
-        cpd_factory = self.graphical_model.cpd_factories.value[rv_symb]
-        parent_rv_symbs = self.graphical_model.edges.value.get(rv_symb, set())
-        if isinstance(cpd_factory, BernoulliCPDFactory):
-            result = self.walk(
-                ConditionalProbability(
-                    rv_symb, Constant[bool](True), cpd_factory, tuple()
-                )
-            )
-        elif isinstance(cpd_factory, AndCPDFactory):
-            if rv_values != Constant[bool](True):
-                raise NotImplementedError(
-                    "Can only calculate _truth_ probability of AND nodes"
-                )
-            parent_values = {
-                parent_rv_symb: self.walk(
-                    MarginalProbability(parent_rv_symb, Constant[bool](True))
-                )
-                for parent_rv_symb in parent_rv_symbs
-            }
-            result = self.walk(
-                ConditionalProbability(
-                    rv_symb, rv_values, cpd_factory, parent_values
-                )
-            )
-        elif isinstance(cpd_factory, NaryChoiceCPDFactory):
-            parent_values = {}
-        else:
-            raise NotImplementedError("Unknown CPD")
-        return result
-
-    @add_match(
-        ConditionalProbability(
-            Symbol, Constant[bool](True), BernoulliCPDFactory, ...
-        )
-    )
-    def apply_bernoulli_cpd(self, cp_op):
+    @add_match(ProbabilityOperation, is_bernoulli_truth_probability)
+    def bernoulli_truth_probability(self, operation):
         """
         Construct the provenance algebra set that represents
         the truth probabilities of a set of independent
         Bernoulli-distributed random variables.
 
         """
-        return ProvenanceAlgebraSet(
-            cp_op.cpd_factory.relation.value,
-            cp_op.cpd_factory.probability_column,
-        )
+        node = operation.valued_nodes[0][0]
+        relation = node.relation.value
+        prov_col = node.probability_column
+        return ProvenanceAlgebraSet(relation, prov_col)
 
-    @add_match(
-        ConditionalProbability(
-            Symbol, Constant[bool](True), AndCPDFactory, ...
-        )
-    )
-    def apply_and_cpd(self, cp_op):
+    @add_match(ProbabilityOperation, is_and_truth_conditional_probability)
+    def and_truth_conditional_probability(self, operation):
         """
         Construct the provenance expression that calculates
         the truth conditional probabilities of an AND random
@@ -291,56 +301,157 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         random variables that play a role here are boolean.
 
         """
-        rv_symb = cp_op.rv_symbol
-        # retrieve the expression of the intensional rule corresponding
-        # to the AND node for which we wish to calculate the probabilities
-        expression = self.graphical_model.expressions.value[rv_symb]
-        # map the predicate symbol of each antecedent predicate to the names
-        # of its argument (TODO: handle constant terms in the arguments
+        node = operation.valued_nodes[0][0]
+        expression = node.expression
+        # map the predicate symbol of each antecedent predicate to the symbols
+        # in its arguments (TODO: handle constant terms in the arguments
         # instead of assuming all the arguments are quantified variables)
-        antecedent_pred_symb_to_args = {
+        pred_symb_to_child_args = {
             pred.functor: pred.args
             for pred in extract_logic_predicates(expression.antecedent)
         }
         result = None
-        for parent_symb, parent_value in cp_op.parent_values.items():
-            parent_expression = self.graphical_model.expressions.value[
-                parent_symb
-            ]
-            current_args = get_predicate_from_grounded_expression(
-                parent_expression
+        for cnode, cnode_value in operation.condition_valued_nodes:
+            if cnode_value != TRUE:
+                raise ValueError(
+                    "Expected conditioning node to have a T value"
+                )
+            parent_args = get_predicate_from_grounded_expression(
+                cnode.expression
             ).args
-            desired_args = antecedent_pred_symb_to_args[parent_symb]
+            child_args = pred_symb_to_child_args[cnode.node_symbol]
+            parent_relation = cnode.relation
+            if isinstance(cnode, ProbabilisticPlateNode):
+                parent_relation = Projection(
+                    parent_relation,
+                    tuple(
+                        str2columnstr_constant(col)
+                        for col in parent_relation.value.columns
+                        if col != cnode.probability_column
+                    ),
+                )
             # ensure the names of the columns match before the natural join
             # the renaming scheme is based on the antecedent of the
             # intensional rule attached to the AND node for which
             # we wish to compute the conditional probabilities
-            parent_value = rename_columns_for_args_to_match(
-                parent_value, current_args, desired_args
+            parent_relation = rename_columns_for_args_to_match(
+                parent_relation, parent_args, child_args
             )
             if result is None:
-                result = parent_value
+                result = parent_relation
             else:
-                result = NaturalJoin(result, parent_value)
-        return result
-
-    @add_match(
-        ConditionalProbability(
-            Symbol, Constant[AbstractSet], NaryChoiceCPDFactory, ...
+                result = NaturalJoin(result, parent_relation)
+        prov_col = str2columnstr_constant(Symbol.fresh().name)
+        result = ConcatenateConstantColumn(
+            result, prov_col, Constant[float](1.0)
         )
-    )
-    def nary_choice_cpd_app(self, cp_op):
+        result = RelationalAlgebraSolver().walk(result)
+        return ProvenanceAlgebraSet(result.value, prov_col)
+
+    @add_match(ProbabilityOperation, is_nary_choice_probability)
+    def nary_choice_probability(self, operation):
         """
-        Construct the provenance expression that calculates
-        the truth probabilities of a n-ary choice random
+        Construct the provenance relation that represents the truth
+        probability of a specific value of a n-ary choice random
         variable in the graphical model.
 
-        Given the probabilistic choice for predicate symbol P
+        Let the probabilistic choice for predicate symbol P be
 
             P_i : p_1  v  ...  v  P_n : p_n  :-  T
 
+        where P_i = P(a_i1, ..., a_im) and a_i1, ..., a_im are
+        constant terms.
+
+        The distribution of the choice variable associated with this
+        probabilistic choice is represented by the relation
+
+            _p_ | x_1  | ... | x_m
+            ====|======|=====|=====
+            p_1 | a_11 | ... | a_1m
+            ... | ...  | ... | ...
+            p_n | a_n1 | ... | a_nm
+
+        Given a specific value of the choice variable
+
+             x_1  | ... | x_m
+            ======|=====|=====
+             a_i1 | ... | a_im
+
+        this function returns the provenance relation
+
+            _p_ | x_1  | ... | x_m
+            ====|======|=====|=====
+            p_i | a_i1 | ... | a_im
+
+        representing that Pr[ c_P = i ] = p_i.
+
         """
-        return ProvenanceAlgebraSet(
-            cp_op.cpd_factory.relation.value,
-            cp_op.cpd_factory.probability_column,
+        choice_node, choice_value = operation.valued_nodes[0]
+        relation = NaturalJoin(choice_node.relation, choice_value)
+        # TODO: optimise by nesting non-provenance operation?
+        relation = RelationalAlgebraSolver().walk(relation)
+        prov_col = str2columnstr_constant(Symbol.fresh().name)
+        return ProvenanceAlgebraSet(relation.value, prov_col)
+
+    @add_match(
+        ProbabilityOperation,
+        is_nary_choice_result_truth_conditional_probability,
+    )
+    def nary_choice_result_truth_conditional_probability(self, operation):
+        result_value = operation.valued_nodes[0][1]
+        choice_value = operation.condition_valued_nodes[0][1]
+        relation = NaturalJoin(result_value, choice_value)
+        prov_col = str2columnstr_constant(Symbol.fresh().name)
+        relation = ConcatenateConstantColumn(
+            relation, prov_col, Constant[float](1.0),
         )
+        relation = RelationalAlgebraSolver().walk(relation)
+        return ProvenanceAlgebraSet(relation.value, prov_col)
+
+    @add_match(ProbabilityOperation(((PlateNode, TRUE),), tuple()))
+    def single_node_truth_probability(self, operation):
+        the_node = operation.valued_nodes[0][0]
+        cpd_templates = set()
+        cross_product_node_values = {the_node.node_symbol: {TRUE}}
+        node_symbs_stack = {the_node.node_symbol}
+        while node_symbs_stack:
+            node_symb = node_symbs_stack.pop()
+            parent_node_symbs = self.graphical_model.get_parent_node_symbols(
+                node_symb
+            )
+            node = self.graphical_model.get_node(node_symb)
+            node_symbs_stack |= parent_node_symbs
+            cpd_templates.add((node_symb, tuple(parent_node_symbs)))
+            cross_product_node_values[node_symb] = get_node_support(node)
+        jpd_marg_terms = []
+        for valued_nodes in itertools.product(
+            *(
+                tuple((node_symb, value) for value in values)
+                for node_symb, values in cross_product_node_values.items()
+            )
+        ):
+            values = dict(valued_nodes)
+            cpd_terms = []
+            for node_symb, parent_node_symbs in cpd_templates:
+                node = self.graphical_model.get_node(node_symb)
+                node_value = values[node_symb]
+                valued_node = (node, node_value)
+                parent_valued_nodes = tuple(
+                    (
+                        self.graphical_model.get_node(parent_node_symb),
+                        values[parent_node_symb],
+                    )
+                    for parent_node_symb in parent_node_symbs
+                )
+                cpd_term = ProbabilityOperation(
+                    (valued_node,), parent_valued_nodes
+                )
+                cpd_term = self.walk(cpd_term)
+                cpd_terms.append(cpd_term)
+            term = ra_binary_to_nary(NaturalJoin)(cpd_terms)
+            jpd_marg_terms.append(term)
+        return ra_binary_to_nary(Union)(jpd_marg_terms)
+
+    @add_match(ProbabilityOperation)
+    def capture_unsolved_probability_operation(self, op):
+        raise ValueError(f"Could not solve operation {op}")

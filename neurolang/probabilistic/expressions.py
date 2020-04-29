@@ -37,10 +37,3 @@ class ProbabilisticChoiceGrounding(Grounding):
     choice from the grounding of other choices.
 
     """
-
-
-class GraphicalModel(Definition):
-    def __init__(self, edges, cpd_factories, expressions):
-        self.edges = edges
-        self.cpd_factories = cpd_factories
-        self.expressions = expressions
