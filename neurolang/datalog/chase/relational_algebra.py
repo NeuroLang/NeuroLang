@@ -3,13 +3,10 @@ from collections import defaultdict
 from functools import lru_cache
 from typing import AbstractSet, Callable, Sequence
 
-from ...expression_walker import ExpressionWalker, add_match
-from ...expressions import (Constant, Definition, FunctionApplication, Symbol,
-                            TypedSymbolTableMixin)
+from ...expressions import Constant, Definition, FunctionApplication, Symbol
 from ...logic.unification import apply_substitution_arguments
-from ...relational_algebra import (ColumnInt, ColumnStr, ExtendedProjection,
-                                   ExtendedProjectionListMember, Product,
-                                   Projection, RelationalAlgebraOptimiser,
+from ...relational_algebra import (ColumnInt, Product, Projection,
+                                   RelationalAlgebraOptimiser,
                                    RelationalAlgebraSolver, Selection, eq_)
 from ...type_system import is_leq_informative
 from ...utils import NamedRelationalAlgebraFrozenSet
@@ -177,53 +174,6 @@ class ChaseNamedRelationalAlgebraMixin:
         return self.compute_result_set(
             rule, substitutions, instance, restriction_instance
         )
-
-    def evaluate_builtins(self, builtin_predicates, substitutions):
-
-        class ExpToEProjArg(TypedSymbolTableMixin, ExpressionWalker):
-            @add_match(Symbol)
-            def symbol_to_column(self, expression):
-                if expression in self.symbol_table:
-                    return self.walk(self.symbol_table[expression])
-                col = Constant[ColumnStr](
-                    ColumnStr(expression.name),
-                    verify_type=False
-                )
-                return self.walk(col)
-
-            @add_match(FunctionApplication)
-            def fa_to_extended_projection_expression(self, expression):
-                fa = expression.functor(*self.walk(expression.args))
-                return fa
-
-        e2eparg = ExpToEProjArg()
-        extended_proj_lm = []
-        selections = []
-        for builtin in builtin_predicates:
-            epp = e2eparg.walk(builtin[0])
-            dst_column = None
-            if epp.functor.value == operator.eq:
-                left_col = isinstance(epp.args[0], Constant[ColumnStr])
-                right_col = isinstance(epp.args[1], Constant[ColumnStr])
-                if left_col and epp.args[0].value not in substitutions.columns:
-                    dst_column = epp.args[0]
-                elif right_col and epp.args[1].value not in substitutions.columns:
-                    dst_column = epp.args[1]
-            if dst_column is None:
-                dst_column = Constant[ColumnStr](Symbol.fresh().name, verify_type=False)
-                selections.append(dst_column)
-            extended_proj_lm.append(ExtendedProjectionListMember(epp, dst_column))
-
-        ra_code = ExtendedProjection(
-            Constant[AbstractSet[substitutions.row_type]](substitutions, verify_type=False),
-            tuple(extended_proj_lm)
-        )
-        for selection in selections:
-            ra_code = Selection(ra_code, selection, Constant[bool](True, verify_type=False))
-        result = RelationalAlgebraSolver().walk(ra_code)
-
-        return result
-        return super().evaluate_builtins(builtin_predicates, substitutions)
 
     @lru_cache(1024)
     def rewrite_constants_in_consequent(self, rule):
