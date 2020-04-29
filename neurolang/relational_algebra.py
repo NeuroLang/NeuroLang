@@ -552,8 +552,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
             for arg_new, arg_old in zip(args, arithmetic_op.args)
         ):
             return FunctionApplication[arithmetic_op.type](
-                arithmetic_op.functor,
-                tuple(self.walk(arg) for arg in arithmetic_op.args),
+                arithmetic_op.functor, args
             )
         else:
             return arithmetic_op

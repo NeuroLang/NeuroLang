@@ -10,8 +10,6 @@ from functools import WRAPPER_ASSIGNMENTS, lru_cache, wraps
 from itertools import chain
 from warnings import warn
 
-import numpy as np
-
 from .exceptions import NeuroLangException
 from .type_system import NeuroLangTypeException, Unknown
 from .type_system import get_args as get_type_args
