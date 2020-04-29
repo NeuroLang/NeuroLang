@@ -380,6 +380,8 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
     """
 
     _rccsbs = ReplaceConstantColumnStrBySymbol()
+    _saw = StringArithmeticWalker()
+    _fa_2_lambda = ew.FunctionApplicationToPythonLambda()
 
     def __init__(self, symbol_table=None):
         self.symbol_table = symbol_table
@@ -534,12 +536,10 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         )
 
     def _compile_extended_projection_fun_exp(self, fun_exp):
-        str_arithmetic_walker = StringArithmeticWalker()
-        fa_2_lambda = ew.FunctionApplicationToPythonLambda()
         try:
-            return str_arithmetic_walker.walk(fun_exp).value
+            return self._saw.walk(fun_exp).value
         except NeuroLangException as e:
-            fun, args = fa_2_lambda.walk(self._rccsbs.walk(fun_exp))
+            fun, args = self._fa_2_lambda.walk(self._rccsbs.walk(fun_exp))
             return lambda t: fun(
                 **{arg: getattr(t, arg) for arg in args}
             )
