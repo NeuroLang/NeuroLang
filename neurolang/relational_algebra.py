@@ -373,6 +373,39 @@ class StringArithmeticWalker(ew.PatternWalker):
         return cst
 
 
+class FunctionApplicationToPythonLambda(ew.PatternWalker):
+    @ew.add_match(Constant)
+    def constant(self, e):
+        return(e.value)
+
+    @ew.add_match(
+        FunctionApplication(Constant, ...),
+        lambda e: all(isinstance(a, (Symbol, Constant)) for a in e.args)
+    )
+    def fa(self, e):
+        arg_sym = []
+        arg_dict = {}
+        param_sym = []
+        single_param_sym = Symbol.fresh().name
+        for arg in e.args:
+            if isinstance(arg, Constant):
+                n = Symbol.fresh().name
+                arg_dict[n] = arg.value
+                arg_sym.append(n)
+            else:
+                arg_sym.append(f'frozenset({single_param_sym}.{arg.name})')
+                param_sym.append(f'{single_param_sym}.{arg.name}')
+
+        fun_sym = Symbol.fresh().name
+        arg_dict[fun_sym] = e.functor.value
+        str_eval = f"lambda {single_param_sym}: {fun_sym}({','.join(arg_sym)})"
+        gs = globals()
+        ls = locals()
+        gs.update(arg_dict)
+        print(str_eval, arg_dict)
+        return eval(str_eval, gs, ls)
+
+
 class RelationalAlgebraSolver(ew.ExpressionWalker):
     """
     Mixing that walks through relational algebra expressions and
@@ -527,19 +560,27 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         str_arithmetic_walker = StringArithmeticWalker()
         eval_expressions = {}
         for member in proj_op.projection_list:
+            fun_exp = self.walk(member.fun_exp)
             eval_expressions[
                 member.dst_column.value
-            ] = str_arithmetic_walker.walk(self.walk(member.fun_exp)).value
+            ] = str_arithmetic_walker.walk(fun_exp).value
         return self._build_relation_constant(
             relation.value.extended_projection(eval_expressions)
         )
 
     @ew.add_match(FunctionApplication, is_arithmetic_operation)
     def prov_arithmetic_operation(self, arithmetic_op):
-        return FunctionApplication[arithmetic_op.type](
-            arithmetic_op.functor,
-            tuple(self.walk(arg) for arg in arithmetic_op.args),
-        )
+        args = self.walk(arithmetic_op.args)
+        if any(
+            arg_new is not arg_old
+            for arg_new, arg_old in zip(args, arithmetic_op.args)
+        ):
+            return FunctionApplication[arithmetic_op.type](
+                arithmetic_op.functor,
+                tuple(self.walk(arg) for arg in arithmetic_op.args),
+            )
+        else:
+            return arithmetic_op
 
     @ew.add_match(Constant)
     def ra_constant(self, constant):
