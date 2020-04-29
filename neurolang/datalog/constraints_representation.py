@@ -53,4 +53,4 @@ class DatalogConstraintsMixin(ExpressionWalker):
 
 
 class DatalogConstraintsProgram(DatalogProgram, DatalogConstraintsMixin):
-    pass
+    protected_keywords = {"__constraints__"}

@@ -19,6 +19,11 @@ y = Symbol("y")
 z = Symbol("z")
 
 
+def test_protected_word():
+    dl = Datalog()
+    assert "__constraints__" in dl.protected_keywords
+
+
 def test_one_constraints():
     cons = RightImplication(P(y, z), Q(y, z))
 
