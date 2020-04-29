@@ -52,6 +52,16 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
      `UnionOfConjunctiveQueries`.
     '''
 
+    def __init_subclass__(cls, **kwargs):
+        for c in cls.mro()[1:-1]:
+            if not hasattr(c, 'protected_keywords'):
+                continue
+            cls.protected_keywords = (
+                cls.protected_keywords |
+                c.protected_keywords
+            )
+        super().__init_subclass__(**kwargs)
+
     protected_keywords = set()
 
     def function_equals(self, a: Any, b: Any) -> bool:

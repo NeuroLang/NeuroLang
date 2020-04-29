@@ -38,6 +38,30 @@ class Datalog(
     pass
 
 
+def test_aggregate_protected_keywords():
+    class A(Datalog):
+        protected_keywords = {'q1'}
+
+    class B(A):
+        protected_keywords = {'q2'}
+
+    class C:
+        protected_keywords = {'q3'}
+
+    class D(C, B):
+        pass
+
+    datalog = Datalog()
+    a = A()
+    b = B()
+    d = D()
+    assert a.protected_keywords == datalog.protected_keywords | {'q1'}
+    assert b.protected_keywords == datalog.protected_keywords | {'q1', 'q2'}
+    assert d.protected_keywords == (
+        datalog.protected_keywords | {'q1', 'q2', 'q3'}
+    )
+
+
 def test_facts_constants():
     dl = Datalog()
 
