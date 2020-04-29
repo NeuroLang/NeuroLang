@@ -27,13 +27,32 @@ class Grammar:
 
 
 class ChartParser:
-    Edge = namedtuple("Edge", "head rule completed remaining")
+    Edge = namedtuple("Edge", "head rule completed remaining used_edges")
 
     def __init__(self, grammar):
         self.grammar = grammar
 
     def recognize(self, string):
         tokens = [Constant[str](t) for t in string.split()]
+        chart = self._fill_chart(tokens)
+        return any(e.rule.is_root for e in chart[0][len(tokens)])
+
+    def parse(self, string):
+        tokens = [Constant[str](t) for t in string.split()]
+        chart = self._fill_chart(tokens)
+        compl = [
+            e
+            for e in chart[0][len(tokens)]
+            if e.rule.is_root and not e.remaining
+        ]
+        return [self._build_tree(e) for e in compl]
+
+    def _build_tree(self, edge):
+        if edge.used_edges:
+            return edge.head(*map(self._build_tree, edge.used_edges))
+        return edge.head
+
+    def _fill_chart(self, tokens):
         chart = [
             [[] for _ in range(len(tokens) + 1)]
             for _ in range(len(tokens) + 1)
@@ -47,15 +66,14 @@ class ChartParser:
             self._predict(edge, i, j, chart, agenda)
             self._complete(edge, i, j, chart, agenda)
 
-        # Return all of the parse trees in the chart.
-        return any(e.rule.is_root for e in chart[0][len(tokens)])
+        return chart
 
     # For every word wi add the edge
     #   [wi →  • , (i, i+1)]
     #
     def _initialize(self, tokens, chart, agenda):
         for i, t in enumerate(tokens):
-            edge = self.Edge(t, None, [], [])
+            edge = self.Edge(t, None, [], [], [])
             chart[i][i + 1].append(edge)
             agenda.append((edge, i, i + 1))
 
@@ -71,7 +89,7 @@ class ChartParser:
             u = _lu.unify(rule.constituents[0], edge.head)
             if u is not None:
                 chart[i][i].append(
-                    self.Edge(None, rule, [], rule.constituents[:])
+                    self.Edge(None, rule, [], rule.constituents[:], [])
                 )
 
     # If the chart contains the edges
@@ -84,24 +102,31 @@ class ChartParser:
     #
     def _complete(self, completed_edge, j, k, chart, agenda):
         for i in range(j + 1):
-            for head, rule, completed, remaining in chart[i][j]:
-                if not remaining:
+            for e in chart[i][j]:
+                if not e.remaining:
                     continue
-                u = _lu.unify(remaining[0], completed_edge.head)
+                u = _lu.unify(e.remaining[0], completed_edge.head)
                 if not u:
                     continue
                 # here completed could have the references
                 #   to the involved edges
-                completed = completed + [u[1]]
-                remaining = remaining[1:]
-                if remaining:
-                    remaining = [_lu.substitute(r, u[0]) for r in remaining]
-                    new_edge = self.Edge(head, rule, completed, remaining)
+                n_completed = e.completed + [u[1]]
+                n_used_edges = e.used_edges + [completed_edge]
+                n_remaining = e.remaining[1:]
+                if n_remaining:
+                    n_remaining = [
+                        _lu.substitute(r, u[0]) for r in n_remaining
+                    ]
+                    new_edge = self.Edge(
+                        e.head, e.rule, n_completed, n_remaining, n_used_edges
+                    )
                 else:
-                    new_head = rule.constructor(*completed)
+                    new_head = e.rule.constructor(*n_completed)
                     if not new_head:
                         continue
-                    new_edge = self.Edge(new_head, rule, completed, [])
+                    new_edge = self.Edge(
+                        new_head, e.rule, n_completed, [], n_used_edges
+                    )
                     agenda.append((new_edge, i, k))
                 chart[i][k].append(new_edge)
 
