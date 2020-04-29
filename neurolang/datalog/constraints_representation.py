@@ -31,6 +31,8 @@ class RightImplication(LogicOperator):
 
 
 class DatalogConstraintsMixin(ExpressionWalker):
+    protected_keywords = {"__constraints__"}
+
     @add_match(NaryLogicOperator)
     def add_nary_constraint(self, expression):
         for formula in expression.formulas:
@@ -53,4 +55,4 @@ class DatalogConstraintsMixin(ExpressionWalker):
 
 
 class DatalogConstraintsProgram(DatalogProgram, DatalogConstraintsMixin):
-    protected_keywords = {"__constraints__"}
+    pass
