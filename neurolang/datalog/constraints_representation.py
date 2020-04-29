@@ -6,7 +6,9 @@ the extensional, intensional, and builtin
 sets and has support for constraints.
 """
 
-from ..logic import LogicOperator
+from ..expression_walker import ExpressionWalker, add_match
+from ..logic import LogicOperator, NaryLogicOperator, Union
+from ..solver_datalog_naive import DatalogBasic
 from .basic_representation import DatalogProgram
 
 
@@ -28,18 +30,29 @@ class RightImplication(LogicOperator):
         )
 
 
-class DatalogConstraintsProgramMixin:
+class DatalogConstraintsMixin(ExpressionWalker):
+    protected_keywords = {"__constraints__"}
 
-    protected_keywords = set({"__constraints__"})
+    @add_match(NaryLogicOperator)
+    def add_nary_constraint(self, expression):
+        for formula in expression.formulas:
+            self.walk(formula)
 
-    def load_constraints(self, union_of_constraints):
-        self.symbol_table["__constraints__"] = union_of_constraints
+    @add_match(LogicOperator)
+    def add_logic_constraint(self, expression):
+        if (
+            isinstance(expression, RightImplication)
+            and "__constraints__" in self.symbol_table
+        ):
+            constrains = self.symbol_table["__constraints__"]
+            constrains = Union((constrains.formulas + (expression,)))
+            self.symbol_table["__constraints__"] = constrains
+        elif isinstance(expression, RightImplication):
+            self.symbol_table["__constraints__"] = Union((expression,))
 
     def constraints(self):
-        return self.symbol_table["__constraints__"]
+        return self.symbol_table.get("__constraints__", Union(()))
 
 
-class DatalogConstraintsProgram(
-    DatalogConstraintsProgramMixin, DatalogProgram
-):
+class DatalogConstraintsProgram(DatalogProgram, DatalogConstraintsMixin):
     pass
