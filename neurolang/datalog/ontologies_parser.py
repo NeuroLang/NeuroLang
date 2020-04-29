@@ -126,7 +126,7 @@ class OntologyParser:
         # + constraints_disjoint.formulas
         # )
 
-        return constraints
+        return Union(constraints)
 
     def _parse_subproperties(self):
         """
