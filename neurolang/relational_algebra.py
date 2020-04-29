@@ -337,15 +337,6 @@ class StringArithmeticWalker(ew.PatternWalker):
     length of an other constant relation.
 
     """
-
-    @ew.add_match(FunctionApplication(Constant(len), (Constant[AbstractSet],)))
-    def cardinality_of_other_relation(self, fa):
-        return Constant[RelationalAlgebraStringExpression](
-            str(len(fa.args[0].value)),
-            auto_infer_type=False,
-            verify_type=False,
-        )
-
     @ew.add_match(FunctionApplication, is_arithmetic_operation)
     def arithmetic_operation(self, fa):
         return Constant[RelationalAlgebraStringExpression](
@@ -373,37 +364,10 @@ class StringArithmeticWalker(ew.PatternWalker):
         return cst
 
 
-class FunctionApplicationToPythonLambda(ew.PatternWalker):
-    @ew.add_match(Constant)
-    def constant(self, e):
-        return(e.value)
-
-    @ew.add_match(
-        FunctionApplication(Constant, ...),
-        lambda e: all(isinstance(a, (Symbol, Constant)) for a in e.args)
-    )
-    def fa(self, e):
-        arg_sym = []
-        arg_dict = {}
-        param_sym = []
-        single_param_sym = Symbol.fresh().name
-        for arg in e.args:
-            if isinstance(arg, Constant):
-                n = Symbol.fresh().name
-                arg_dict[n] = arg.value
-                arg_sym.append(n)
-            else:
-                arg_sym.append(f'frozenset({single_param_sym}.{arg.name})')
-                param_sym.append(f'{single_param_sym}.{arg.name}')
-
-        fun_sym = Symbol.fresh().name
-        arg_dict[fun_sym] = e.functor.value
-        str_eval = f"lambda {single_param_sym}: {fun_sym}({','.join(arg_sym)})"
-        gs = globals()
-        ls = locals()
-        gs.update(arg_dict)
-        print(str_eval, arg_dict)
-        return eval(str_eval, gs, ls)
+class ReplaceConstantColumnStrBySymbol(ew.ExpressionWalker):
+    @ew.add_match(Constant[ColumnStr])
+    def column_str(self, expression):
+        return Symbol[ColumnStr](expression.value)
 
 
 class RelationalAlgebraSolver(ew.ExpressionWalker):
@@ -414,6 +378,8 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
     Relations are expected to be represented
     as objects with the same interface as :obj:`RelationalAlgebraSet`.
     """
+
+    _rccsbs = ReplaceConstantColumnStrBySymbol()
 
     def __init__(self, symbol_table=None):
         self.symbol_table = symbol_table
@@ -557,16 +523,26 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
     @ew.add_match(ExtendedProjection)
     def extended_projection(self, proj_op):
         relation = self.walk(proj_op.relation)
-        str_arithmetic_walker = StringArithmeticWalker()
         eval_expressions = {}
         for member in proj_op.projection_list:
             fun_exp = self.walk(member.fun_exp)
             eval_expressions[
                 member.dst_column.value
-            ] = str_arithmetic_walker.walk(fun_exp).value
+            ] = self._compile_extended_projection_fun_exp(fun_exp)
         return self._build_relation_constant(
             relation.value.extended_projection(eval_expressions)
         )
+
+    def _compile_extended_projection_fun_exp(self, fun_exp):
+        str_arithmetic_walker = StringArithmeticWalker()
+        fa_2_lambda = ew.FunctionApplicationToPythonLambda()
+        try:
+            return str_arithmetic_walker.walk(fun_exp).value
+        except NeuroLangException as e:
+            fun, args = fa_2_lambda.walk(self._rccsbs.walk(fun_exp))
+            return lambda t: fun(
+                **{arg: getattr(t, arg) for arg in args}
+            )
 
     @ew.add_match(FunctionApplication, is_arithmetic_operation)
     def prov_arithmetic_operation(self, arithmetic_op):
