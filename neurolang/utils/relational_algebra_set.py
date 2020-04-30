@@ -445,7 +445,8 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
                 self._might_have_duplicates |
                 other._might_have_duplicates
             ),
-            sort_columns=True
+            sort_columns=True,
+            columns=new_columns
         )
 
     def rename_column(self, src, dst):
