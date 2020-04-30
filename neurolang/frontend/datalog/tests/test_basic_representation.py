@@ -1,4 +1,4 @@
-from neurolang import frontend as fe
+from .... import frontend as fe
 
 
 def test_add_tuple_set_length():

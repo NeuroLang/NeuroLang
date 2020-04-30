@@ -454,7 +454,7 @@ def test_neurolang_dl_set_destroy():
 
     q = res['q'].unwrap()
     assert len(q) == 3
-    assert set(q.unwrap()) == {(0,), (1,), (2,)}
+    assert set(q) == {(0,), (1,), (2,)}
 
 
 def test_multiple_symbols_query():

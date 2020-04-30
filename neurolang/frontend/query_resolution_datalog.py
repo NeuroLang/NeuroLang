@@ -200,6 +200,6 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         elif not isinstance(predicate_name, str):
             raise ValueError(f'{predicate_name} is not a string or symbol')
         return tuple(
-            s.name
+            s.name if hasattr(s, 'name') else exp.Symbol.fresh().name
             for s in self.solver.predicate_terms(predicate_name)
         )

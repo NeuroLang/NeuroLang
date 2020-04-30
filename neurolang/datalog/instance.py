@@ -4,6 +4,7 @@ from typing import AbstractSet, Tuple
 from ..expression_walker import ReplaceExpressionsByValues
 from ..expressions import Constant, FunctionApplication
 from ..type_system import Unknown, get_args
+from ..utils.relational_algebra_set import RelationalAlgebraFrozenSet
 from .wrapped_collections import (WrappedRelationalAlgebraFrozenSet,
                                   WrappedRelationalAlgebraSet)
 
@@ -30,7 +31,7 @@ class FrozenInstance:
         elements = dict()
         for k, v in in_elements.items():
             v = self._get_set(v)
-            if len(v) > 0:
+            if self._set_not_empty(v):
                 elements[k] = v
         return elements
 
@@ -38,11 +39,17 @@ class FrozenInstance:
         v_type = Unknown
         if not isinstance(v, self._set_type):
             v, v_type = self._get_set_and_type(v)
-            if len(v) > 0:
+            if self._set_not_empty(v):
                 v = self._set_type(
                     v, row_type=v_type, verify_row_type=False
                 )
         return v
+
+    def _set_not_empty(self, v):
+        return (
+            (isinstance(v, RelationalAlgebraFrozenSet) and not v.is_null())
+            or len(v) > 0
+        )
 
     def _get_set_and_type(self, v):
         row_type = Unknown
@@ -102,7 +109,7 @@ class FrozenInstance:
         new_elements = dict()
         for predicate, tuple_set in self.elements.items():
             new_set = tuple_set - other.elements.get(predicate, set())
-            if len(new_set) > 0:
+            if not new_set.is_null():
                 new_elements[predicate] = new_set
         res = type(self)(new_elements)
         return res
@@ -114,7 +121,7 @@ class FrozenInstance:
         new_elements = dict()
         for predicate in (self.elements.keys() & other.elements.keys()):
             new_set = self.elements[predicate] & other.elements[predicate]
-            if len(new_set) > 0:
+            if not new_set.is_null():
                 new_elements[predicate] = new_set
         res = type(self)(new_elements)
         return res
@@ -236,7 +243,7 @@ class Instance(FrozenInstance):
             return super().__isub__(other)
         for predicate in (self.elements.keys() & other.elements.keys()):
             self.elements[predicate] -= other.elements[predicate]
-            if len(self.elements[predicate]) == 0:
+            if self.elements[predicate].is_null():
                 self._remove_predicate_symbol(predicate)
         return self
 
@@ -248,7 +255,7 @@ class Instance(FrozenInstance):
             self._remove_predicate_symbol(predicate)
         for predicate in self.elements:
             self.elements[predicate] &= other.elements[predicate]
-            if len(self.elements[predicate]) == 0:
+            if self.elements[predicate].is_null():
                 self._remove_predicate_symbol(predicate)
         return self
 
@@ -285,7 +292,7 @@ class SetInstance(Instance, FrozenSetInstance, MutableSet):
         functor = value.functor
         value = value.args
         self.elements[functor].discard(value)
-        if len(self.elements[functor]) == 0:
+        if self.elements[functor].is_null():
             self._remove_predicate_symbol(functor)
 
     def as_set(self):
