@@ -159,6 +159,11 @@ def test_named_relational_algebra_ra_projection():
     ras_xz = ras.projection('x', 'z')
     assert all((i % 2, i * 2) in ras_xz for i in range(5))
 
+    ras_ = ras.projection()
+    assert ras_.arity == 0
+    assert len(ras_) > 0
+    assert ras_.projection('x') == ras_
+
 
 def test_named_relational_algebra_ra_selection():
     a = [(i % 2, i, i * 2) for i in range(5)]
@@ -190,6 +195,15 @@ def test_named_relational_algebra_ra_naturaljoin():
     ras_b2 = NamedRelationalAlgebraFrozenSet(('u', 'v'), b)
     ras_c = NamedRelationalAlgebraFrozenSet(('z', 'y', 'x'), c)
     ras_d = NamedRelationalAlgebraFrozenSet(('z', 'y', 'u', 'v'), d)
+    empty = NamedRelationalAlgebraFrozenSet(('z', 'y'), [])
+    empty_plus = NamedRelationalAlgebraFrozenSet(
+        ('z', 'y'), [(0, 1)]
+    ).projection()
+
+    assert len(ras_a.naturaljoin(empty)) == 0
+    assert len(empty.naturaljoin(ras_a)) == 0
+    assert ras_a.naturaljoin(empty_plus) == ras_a
+    assert empty_plus.naturaljoin(ras_a) == ras_a
 
     res = ras_a.naturaljoin(ras_b)
     assert res == ras_c

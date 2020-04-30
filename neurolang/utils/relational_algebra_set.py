@@ -248,6 +248,8 @@ class RelationalAlgebraFrozenSet(Set):
             ocont = other._container
             if len(scont) == 0 and len(ocont) == 0:
                 res = True
+            elif self.arity != other.arity:
+                res = False
             elif len(scont.columns) == 0 and len(ocont.columns) == 0:
                 res = len(scont) > 0 and len(ocont) > 0
             elif scont is not None and ocont is not None:
@@ -381,6 +383,8 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
     def projection(self, *columns):
         if self.is_null():
             return type(self)(columns)
+        if self.arity == 0:
+            return self
         new_container = self._container[list(columns)]
         return self._light_init_same_structure(
             new_container,
@@ -419,8 +423,13 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
                 "is not valid"
             )
         new_columns = self.columns + other.columns
-        if self.is_null():
+        if self.is_null() or other.is_null():
             return type(self)(new_columns)
+        elif self.arity == 0:
+            return other.copy()
+        elif other.arity == 0:
+            return self.copy()
+
         left = self._container.copy(deep=False)
         right = other._container.copy(deep=False)
         tmpcol = str(uuid1())
