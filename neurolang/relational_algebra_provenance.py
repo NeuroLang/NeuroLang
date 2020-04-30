@@ -311,7 +311,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
                 )
             )
         prov_col = left.provenance_column
-        result_columns = (prov_col,) + left.non_provenance_columns
+        result_columns = left.non_provenance_columns
         # move to non-provenance relational algebra
         np_left = Constant[AbstractSet](left.value)
         np_right = Constant[AbstractSet](right.value)
@@ -328,10 +328,10 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
         )
         ra_union_op = Union(np_left, np_right)
         new_relation = self.walk(ra_union_op)
-        result = ProvenanceAlgebraSet(new_relation, prov_col)
+        result = ProvenanceAlgebraSet(new_relation.value, prov_col)
         # provenance projection that removes the dummy column and sums the
         # provenance of matching tuples
-        result = Projection(result.value, result_columns)
+        result = Projection(result, result_columns)
         return self.walk(result)
 
     @add_match(Constant[AbstractSet])
