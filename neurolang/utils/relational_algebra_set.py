@@ -33,7 +33,16 @@ class RelationalAlgebraFrozenSet(Set):
 
     def __contains__(self, element):
         element = self._normalise_element(element)
-        return len(self) > 0 and hash(element) in self._container.index
+        if (
+            len(self) > 0 and
+            len(element) == self.arity
+        ):
+            col = True
+            for e, c in zip(element, self._container.iteritems()):
+                col = col & (c[1] == e)
+            return col.any()
+        else:
+            return False
 
     @staticmethod
     def _normalise_element(element):
@@ -65,14 +74,16 @@ class RelationalAlgebraFrozenSet(Set):
 
         RelationalAlgebraFrozenSet.refresh_index(container)
         if drop_duplicates:
-            duplicated = container.index.duplicated()
-            if duplicated.any():
-                container = container.loc[~duplicated].dropna()
+            container = container.drop_duplicates()
+            #duplicated = container.index.duplicated()
+            #if duplicated.any():
+            #    container = container.loc[~duplicated].dropna()
 
         return container
 
     @staticmethod
     def refresh_index(container):
+        return container
         new_indices = pd.Index(
             hash(t) for t in container.itertuples(index=False, name=None)
         )
@@ -165,6 +176,7 @@ class RelationalAlgebraFrozenSet(Set):
         right[tmpcol] = 1
         new_container = pd.merge(left, right, on=tmpcol)
         del new_container[tmpcol]
+        new_container.columns = range(new_container.shape[1])
         result = self._empty_set_same_structure()
         result._container = self._renew_index(new_container)
         return result
@@ -192,8 +204,10 @@ class RelationalAlgebraFrozenSet(Set):
             elif other is None:
                 new_container = self._container.copy()
             else:
-                new_container = self._container.append(
-                    other.loc[~other.index.isin(self._container.index)]
+                new_container = pd.merge(
+                    left=self._container,
+                    right=other._container,
+                    how="outer",
                 )
             output = self._empty_set_same_structure()
             output._container = new_container
@@ -205,8 +219,11 @@ class RelationalAlgebraFrozenSet(Set):
         if len(self) == 0:
             return self.copy()
         if isinstance(other, RelationalAlgebraSet):
-            index_intersection = self._container.index & other._container.index
-            new_container = self._container.loc[index_intersection]
+            new_container = pd.merge(
+                left=self._container,
+                right=other._container,
+                how="inner",
+            )
             output = self._empty_set_same_structure()
             output._container = new_container
             return output
@@ -221,7 +238,8 @@ class RelationalAlgebraFrozenSet(Set):
             return ((len(scont) == 0 and len(ocont) == 0) or
                     (len(scont.columns) == 0 and len(ocont.columns) == 0) or (
                         scont is not None and ocont is not None and
-                        len(scont.index.difference(ocont.index)) == 0
+                        len(ocont) == len(scont) and
+                        len(scont.merge(ocont, how='inner').drop_duplicates()) == len(scont)
                     ))
         else:
             return super().__eq__(other)
@@ -408,11 +426,16 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         return new_set
 
     def __eq__(self, other):
-        scontainer = self._container
-        ocontainer = other._container
-        return scontainer.columns.equals(
-            ocontainer.columns
-        ) and (len(scontainer.index.difference(ocontainer.index)) == 0)
+        scont = self._container
+        ocont = other._container
+        if not scont.columns.equals(ocont.columns):
+            return False
+        return ((len(scont) == 0 and len(ocont) == 0) or
+                (len(scont.columns) == 0 and len(ocont.columns) == 0) or (
+                    scont is not None and ocont is not None and
+                    len(ocont) == len(scont) and
+                    len(scont.merge(ocont, how='inner')) == len(scont)
+                ))
 
     def _renew_index(self, container, drop_duplicates=True):
         container = container.sort_index(axis=1)
@@ -443,6 +466,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
                 for t in aggregate_function
             })
             new_container = groups.agg(**args)
+            new_container.index = pd.RangeIndex(len(new_container))
         else:
             new_container = groups.agg(aggregate_function)
             new_container.reset_index(inplace=True)
@@ -489,10 +513,10 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
             raise ValueError(
                 "Difference defined only for sets with the same columns"
             )
-        new_container_ix = self._container.index.difference(
-            other._container.index
-        )
-        new_container = self._container.loc[new_container_ix]
+        new_container = self._container.merge(other._container, indicator=True, how='outer')
+        new_container = new_container[
+            new_container.iloc[:, -1] == 'left_only'
+        ].iloc[:, :-1]
         output = type(self)(self.columns)
         output._container = new_container
         return output
@@ -503,10 +527,10 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
                 "Union defined only for sets with the same columns"
             )
         new_container = pd.merge(
-            left=self._container.reset_index(),
-            right=other._container.reset_index(),
+            left=self._container,
+            right=other._container,
             how="outer",
-        ).set_index("index")
+        )
         output = type(self)(self.columns)
         output._container = new_container
         return output
@@ -517,10 +541,10 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
                 "Union defined only for sets with the same columns"
             )
         new_container = pd.merge(
-            left=self._container.reset_index(),
-            right=other._container.reset_index(),
+            left=self._container,
+            right=other._container,
             how="inner",
-        ).set_index("index")
+        )
         output = type(self)(self.columns)
         output._container = new_container
         return output
@@ -551,7 +575,11 @@ class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
         if len(self) > 0:
             try:
                 value = self._normalise_element(value)
-                self._container.drop(index=hash(value), inplace=True)
+                col = True
+                for e, c in zip(value, self._container.iteritems()):
+                    col = col & (c[1] == e)
+                ix = self._container.index[col]
+                self._container.drop(index=ix, inplace=True)
             except KeyError:
                 pass
 
