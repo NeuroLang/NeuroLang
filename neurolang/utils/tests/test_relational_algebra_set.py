@@ -38,6 +38,7 @@ def test_relational_algebra_set_semantics():
     assert len(ras) == len(a) - 1
     assert 10 in ras
     assert all(a_ in ras for a_ in a if a_ != 5)
+    assert ras.fetch_one() in ras__
 
 
 def test_relational_algebra_ra_projection():
@@ -142,6 +143,9 @@ def test_named_relational_algebra_set_semantics_empty():
     ras_b = NamedRelationalAlgebraFrozenSet(('y', 'z'), [(0, 1)])
     assert ras != ras_b
 
+    ras_c = NamedRelationalAlgebraFrozenSet(('x', 'y'), [(1, 0)])
+    assert ras == ras_c
+
 
 def test_named_relational_algebra_ra_projection():
     a = [(i % 2, i, i * 2) for i in range(5)]
@@ -154,6 +158,11 @@ def test_named_relational_algebra_ra_projection():
 
     ras_xz = ras.projection('x', 'z')
     assert all((i % 2, i * 2) in ras_xz for i in range(5))
+
+    ras_ = ras.projection()
+    assert ras_.arity == 0
+    assert len(ras_) > 0
+    assert ras_.projection('x') == ras_
 
 
 def test_named_relational_algebra_ra_selection():
@@ -186,6 +195,15 @@ def test_named_relational_algebra_ra_naturaljoin():
     ras_b2 = NamedRelationalAlgebraFrozenSet(('u', 'v'), b)
     ras_c = NamedRelationalAlgebraFrozenSet(('z', 'y', 'x'), c)
     ras_d = NamedRelationalAlgebraFrozenSet(('z', 'y', 'u', 'v'), d)
+    empty = NamedRelationalAlgebraFrozenSet(('z', 'y'), [])
+    empty_plus = NamedRelationalAlgebraFrozenSet(
+        ('z', 'y'), [(0, 1)]
+    ).projection()
+
+    assert len(ras_a.naturaljoin(empty)) == 0
+    assert len(empty.naturaljoin(ras_a)) == 0
+    assert ras_a.naturaljoin(empty_plus) == ras_a
+    assert empty_plus.naturaljoin(ras_a) == ras_a
 
     res = ras_a.naturaljoin(ras_b)
     assert res == ras_c
@@ -221,6 +239,17 @@ def test_named_relational_algebra_difference():
                                                 [t[::-1] for t in b])
     ras_c = NamedRelationalAlgebraFrozenSet(('x', 'y'), c)
 
+    empty = NamedRelationalAlgebraFrozenSet(('x', 'y'), [])
+    unit_empty = NamedRelationalAlgebraFrozenSet(
+        ('x', 'y'), [(0, 1)]
+    ).projection()
+
+    assert (ras_a - empty) == ras_a
+    assert (empty - ras_a) == empty
+    assert (empty - empty) == empty
+    assert (unit_empty - empty) == unit_empty
+    assert (unit_empty - unit_empty) == NamedRelationalAlgebraFrozenSet(())
+
     res = ras_a - ras_b
     assert res == ras_c
 
@@ -251,7 +280,7 @@ def test_named_groupby():
     assert res[1] == (2, ras_c)
 
 
-def test_named_iter():
+def test_named_iter_and_fecth_one():
     a = [(i, i * j) for i in (1, 2) for j in (2, 3, 4)]
 
     cols = ('y', 'x')
@@ -259,6 +288,7 @@ def test_named_iter():
     ras_a = NamedRelationalAlgebraFrozenSet(cols, a)
     res = list(iter(ras_a))
     assert res == a
+    assert ras_a.fetch_one() in res
 
 
 def test_rename_column():
@@ -312,8 +342,12 @@ def test_named_ra_union():
                                                             (42, 0)])
     assert first | second == expected
     empty = NamedRelationalAlgebraFrozenSet(('x', 'y'), [])
+    unit_empty = NamedRelationalAlgebraFrozenSet(
+        ('x', 'y'), [(0, 1)]
+    ).projection()
     assert first | empty == first
     assert empty | first == first
+    assert unit_empty | unit_empty == unit_empty
     assert first | empty | second == first | second
 
 
