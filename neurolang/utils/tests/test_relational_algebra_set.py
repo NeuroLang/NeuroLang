@@ -222,6 +222,17 @@ def test_named_relational_algebra_difference():
                                                 [t[::-1] for t in b])
     ras_c = NamedRelationalAlgebraFrozenSet(('x', 'y'), c)
 
+    empty = NamedRelationalAlgebraFrozenSet(('x', 'y'), [])
+    unit_empty = NamedRelationalAlgebraFrozenSet(
+        ('x', 'y'), [(0, 1)]
+    ).projection()
+
+    assert (ras_a - empty) == ras_a
+    assert (empty - ras_a) == empty
+    assert (empty - empty) == empty
+    assert (unit_empty - empty) == unit_empty
+    assert (unit_empty - unit_empty) == NamedRelationalAlgebraFrozenSet(())
+
     res = ras_a - ras_b
     assert res == ras_c
 
@@ -314,8 +325,12 @@ def test_named_ra_union():
                                                             (42, 0)])
     assert first | second == expected
     empty = NamedRelationalAlgebraFrozenSet(('x', 'y'), [])
+    unit_empty = NamedRelationalAlgebraFrozenSet(
+        ('x', 'y'), [(0, 1)]
+    ).projection()
     assert first | empty == first
     assert empty | first == first
+    assert unit_empty | unit_empty == unit_empty
     assert first | empty | second == first | second
 
 

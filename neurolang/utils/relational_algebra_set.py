@@ -552,7 +552,10 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         return output
 
     def __sub__(self, other):
-        if not self._container.columns.equals(other._container.columns):
+        if (
+            (self.arity > 0 and other.arity > 0) and
+            not self._container.columns.equals(other._container.columns)
+        ):
             raise ValueError(
                 "Difference defined only for sets with the same columns"
             )
@@ -583,6 +586,11 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
             raise ValueError(
                 "Union defined only for sets with the same columns"
             )
+        if len(self.columns) == 0:
+            if len(self._container) > 0:
+                return self.copy()
+            else:
+                return other.copy()
         new_container = pd.merge(
             left=self._container,
             right=other._container,
