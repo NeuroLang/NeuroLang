@@ -319,7 +319,6 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
                                                     )].copy(deep=False)
         else:
             self._container = pd.DataFrame(columns=self._columns)
-        self._container.sort_index(axis=1, inplace=True)
 
     def _initialize_from_unnamed_ra_set(self, other):
         if other._container is None:
@@ -329,7 +328,6 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
                 raise ValueError("Relations must have the same arity")
             self._container = other._container.copy(deep=False)
             self._container.columns = self._columns
-        self._container.sort_index(axis=1, inplace=True)
 
     @classmethod
     def create_view_from(cls, other):
