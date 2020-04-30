@@ -289,8 +289,8 @@ def test_union():
 
 
 def test_union_different_prov_col_names():
-    r1 = testing.make_prov_set([(0.1, "a"), (0.2, "b")], ("_p_", "x"))
-    r2 = testing.make_prov_set([(0.5, "a"), (0.9, "c")], ("_p'_", "x"))
+    r1 = testing.make_prov_set([(0.1, "a"), (0.2, "b")], ("_p1_", "x"))
+    r2 = testing.make_prov_set([(0.5, "a"), (0.9, "c")], ("_p2_", "x"))
     expected = testing.make_prov_set(
         [(0.6, "a"), (0.2, "b"), (0.9, "c")], ("_whatever_", "x"),
     )
