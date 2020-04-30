@@ -556,7 +556,11 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
             raise ValueError(
                 "Difference defined only for sets with the same columns"
             )
-        new_container = self._container.merge(other._container, indicator=True, how='outer')
+        new_container = self._container.merge(
+            other._container,
+            indicator=True,
+            how='outer'
+        )
         new_container = new_container[
             new_container.iloc[:, -1] == 'left_only'
         ].iloc[:, :-1]
@@ -657,21 +661,20 @@ class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
             if other.is_null() or other.arity == 0:
                 if self.is_null() or other.arity == 0:
                     self._container = self._container.iloc[:0]
-                    return self
-                return self
-            if other.arity != self.arity:
+            elif other.arity != self.arity:
                 raise ValueError(
                     "Operation only valid for sets with the same arity"
                 )
-            new_container = pd.merge(
-                left=self._container,
-                right=other._container,
-                how="left",  indicator=True
-            )
-            new_container = new_container[
-                new_container.iloc[:, -1] == 'left_only'
-            ].iloc[:, :-1]
-            self._container = new_container
+            else:
+                new_container = pd.merge(
+                    left=self._container,
+                    right=other._container,
+                    how="left",  indicator=True
+                )
+                new_container = new_container[
+                    new_container.iloc[:, -1] == 'left_only'
+                ].iloc[:, :-1]
+                self._container = new_container
             return self
         else:
             return super().__isub__(other)

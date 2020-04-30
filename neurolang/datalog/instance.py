@@ -31,10 +31,7 @@ class FrozenInstance:
         elements = dict()
         for k, v in in_elements.items():
             v = self._get_set(v)
-            if (
-                (isinstance(v, RelationalAlgebraFrozenSet) and not v.is_null())
-                or len(v) > 0
-            ):
+            if self._set_not_empty(v):
                 elements[k] = v
         return elements
 
@@ -42,14 +39,17 @@ class FrozenInstance:
         v_type = Unknown
         if not isinstance(v, self._set_type):
             v, v_type = self._get_set_and_type(v)
-            if (
-                (isinstance(v, RelationalAlgebraFrozenSet) and not v.is_null())
-                or len(v) > 0
-            ):
+            if self._set_not_empty(v):
                 v = self._set_type(
                     v, row_type=v_type, verify_row_type=False
                 )
         return v
+
+    def _set_not_empty(self, v):
+        return (
+            (isinstance(v, RelationalAlgebraFrozenSet) and not v.is_null())
+            or len(v) > 0
+        )
 
     def _get_set_and_type(self, v):
         row_type = Unknown
