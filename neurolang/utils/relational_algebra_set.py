@@ -385,7 +385,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
             return type(self)(columns)
         if self.arity == 0:
             return self
-        new_container = self._container[list(columns)]
+        new_container = self._container[list(sorted(columns))]
         return self._light_init_same_structure(
             new_container,
             might_have_duplicates=True,
