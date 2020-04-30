@@ -573,7 +573,9 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
             new_container.iloc[:, -1] == 'left_only'
         ].iloc[:, :-1]
         output = type(self)(self.columns)
-        output._container = new_container
+        output._container = output._sort_columns(
+            new_container, drop_duplicates=False
+        )
         return output
 
     def __or__(self, other):
@@ -587,7 +589,9 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
             how="outer",
         )
         output = type(self)(self.columns)
-        output._container = new_container
+        output._container = output._sort_columns(
+            new_container, drop_duplicates=False
+        )
         return output
 
     def __and__(self, other):
@@ -601,7 +605,9 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
             how="inner",
         )
         output = type(self)(self.columns)
-        output._container = new_container
+        output._container = output._sort_columns(
+            new_container, drop_duplicates=False
+        )
         return output
 
     def __lt__(self, other):
