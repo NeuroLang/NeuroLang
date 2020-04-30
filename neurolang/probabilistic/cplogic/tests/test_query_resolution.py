@@ -13,6 +13,9 @@ Q = Symbol("Q")
 R = Symbol("R")
 Z = Symbol("Z")
 H = Symbol("H")
+A = Symbol("A")
+B = Symbol("B")
+C = Symbol("C")
 x = Symbol("x")
 y = Symbol("y")
 
@@ -136,6 +139,7 @@ def test_intertwined_conjunctions_and_probfacts():
 
         P(a) : 0.8  <-  T
         C(a) : 0.5  <-  T
+        C(b) : 0.9  <-  T
               A(x)  <-  B(x), C(x)
               B(x)  <-  P(x)
               Z(x)  <-  A(x), B(x), C(x)
@@ -147,6 +151,18 @@ def test_intertwined_conjunctions_and_probfacts():
         0.4 | a
 
     """
+    cpl_code = Union(
+        (
+            Implication(A(x), Conjunction((B(x), C(x)))),
+            Implication(B(x), P(x)),
+            Implication(Z(x), Conjunction((A(x), B(x), C(x)))),
+        )
+    )
+    cpl = CPLogicProgram()
+    cpl.walk(cpl_code)
+    cpl.add_probabilistic_facts_from_tuples(P, {(0.8, "a")})
+    cpl.add_probabilistic_facts_from_tuples(C, {(0.5, "a"), (0.9, "b")})
+    result = solve_succ_query(Z(x), cpl)
 
 
 def test_simple_probchoice_query_resolution():
