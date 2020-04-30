@@ -143,6 +143,9 @@ def test_named_relational_algebra_set_semantics_empty():
     ras_b = NamedRelationalAlgebraFrozenSet(('y', 'z'), [(0, 1)])
     assert ras != ras_b
 
+    ras_c = NamedRelationalAlgebraFrozenSet(('x', 'y'), [(1, 0)])
+    assert ras == ras_c
+
 
 def test_named_relational_algebra_ra_projection():
     a = [(i % 2, i, i * 2) for i in range(5)]

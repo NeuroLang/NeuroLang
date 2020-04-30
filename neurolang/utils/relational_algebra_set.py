@@ -345,6 +345,24 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
     def _empty_set_same_structure(self):
         return type(self)(self.columns)
 
+    def _light_init_same_structure(
+        self, container,
+        sort_columns=False,
+        might_have_duplicates=True,
+        columns=None
+    ):
+        if columns is None:
+            columns = self.columns
+        output = type(self)(columns)
+        output._container = container
+        if sort_columns:
+            output._container = self._sort_columns(
+                container,
+                drop_duplicates=False
+            )
+        output._might_have_duplicates = might_have_duplicates
+        return output
+
     @property
     def columns(self):
         return self._columns
@@ -364,9 +382,11 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         if self.is_null():
             return type(self)(columns)
         new_container = self._container[list(columns)]
-        output = type(self)(columns)
-        output._container = new_container
-        return output
+        return self._light_init_same_structure(
+            new_container,
+            might_have_duplicates=True,
+            columns=columns
+        )
 
     def equijoin(self, other, join_indices, return_mappings=False):
         raise NotImplementedError()
@@ -382,15 +402,15 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         )
 
         new_container = self._container.merge(other._container)
-        output = type(self)(new_columns)
-        output._container = output._sort_columns(
-            new_container, drop_duplicates=False
+        return self._light_init_same_structure(
+            new_container,
+            might_have_duplicates=(
+                self._might_have_duplicates |
+                other._might_have_duplicates
+            ),
+            sort_columns=True,
+            columns=new_columns
         )
-        output._might_have_duplicates = (
-            self._might_have_duplicates |
-            other._might_have_duplicates
-        )
-        return output
 
     def cross_product(self, other):
         if len(self._container.columns.intersection(other.columns)) > 0:
@@ -410,15 +430,14 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         del new_container[tmpcol]
         new_container.columns = tuple(self._container.columns
                                       ) + tuple(other._container.columns)
-        output = type(self)(new_columns)
-        output._container = self._sort_columns(
-            new_container, drop_duplicates=False
+        return self._light_init_same_structure(
+            new_container,
+            might_have_duplicates=(
+                self._might_have_duplicates |
+                other._might_have_duplicates
+            ),
+            sort_columns=True
         )
-        output._might_have_duplicates = (
-            self._might_have_duplicates |
-            other._might_have_duplicates
-        )
-        return output
 
     def rename_column(self, src, dst):
         if src not in self._columns:
@@ -433,12 +452,12 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
                                                                    1:]
         new_container = self._container.rename(columns={src: dst})
         new_container.sort_index(axis=1, inplace=True)
-
-        new_set = type(self)(new_columns)
-        new_set._container = new_container
-        new_set._columns_sort = tuple(pd.Index(new_columns).argsort())
-
-        return new_set
+        return self._light_init_same_structure(
+            new_container,
+            might_have_duplicates=self._might_have_duplicates,
+            sort_columns=True,
+            columns=new_columns
+        )
 
     def rename_columns(self, renames):
         if not set(renames).issubset(self.columns):
@@ -452,11 +471,12 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
             renames.get(col, col) for col in self._columns
         )
         new_container = self._container.rename(columns=renames)
-        new_container = self._sort_columns(new_container)
-        new_set = type(self)(new_columns)
-        new_set._container = new_container
-        new_set._columns_sort = tuple(pd.Index(new_columns).argsort())
-        return new_set
+        return self._light_init_same_structure(
+            new_container,
+            might_have_duplicates=self._might_have_duplicates,
+            sort_columns=True,
+            columns=new_columns
+        )
 
     def __eq__(self, other):
         scont = self._container
@@ -488,8 +508,12 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         if not isinstance(columns, Iterable):
             columns = [columns]
         for g_id, group in self._container.groupby(by=list(columns)):
-            group_set = type(self)(self.columns)
-            group_set._container = group
+            group_set = self._light_init_same_structure(
+                group,
+                might_have_duplicates=self._might_have_duplicates,
+                sort_columns=False,
+                columns=self.columns
+            )
             yield g_id, group_set
 
     def aggregate(self, group_columns, aggregate_function):
@@ -511,8 +535,13 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         else:
             new_container = groups.agg(aggregate_function)
             new_container.reset_index(inplace=True)
-        output = type(self)(columns=list(new_container.columns))
-        output._container = self._sort_columns(new_container)
+
+        output = self._light_init_same_structure(
+            new_container,
+            might_have_duplicates=self._might_have_duplicates,
+            sort_columns=True,
+            columns=list(new_container.columns)
+        )
         return output
 
     def extended_projection(self, eval_expressions):
@@ -531,8 +560,12 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
             else:
                 new_container[dst_column] = operation
         new_container = new_container[proj_columns]
-        output = type(self)(proj_columns)
-        output._container = self._sort_columns(new_container)
+        output = self._light_init_same_structure(
+            new_container,
+            might_have_duplicates=self._might_have_duplicates,
+            sort_columns=True,
+            columns=proj_columns
+        )
         return output
 
     def __iter__(self):
@@ -575,9 +608,11 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         new_container = new_container[
             new_container.iloc[:, -1] == 'left_only'
         ].iloc[:, :-1]
-        output = type(self)(self.columns)
-        output._container = output._sort_columns(
-            new_container, drop_duplicates=False
+
+        output = self._light_init_same_structure(
+            new_container,
+            might_have_duplicates=self._might_have_duplicates,
+            sort_columns=False,
         )
         return output
 
@@ -596,9 +631,10 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
             right=other._container,
             how="outer",
         )
-        output = type(self)(self.columns)
-        output._container = output._sort_columns(
-            new_container, drop_duplicates=False
+        output = self._light_init_same_structure(
+            new_container,
+            might_have_duplicates=True,
+            sort_columns=False,
         )
         return output
 
@@ -612,9 +648,10 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
             right=other._container,
             how="inner",
         )
-        output = type(self)(self.columns)
-        output._container = output._sort_columns(
-            new_container, drop_duplicates=False
+        output = self._light_init_same_structure(
+            new_container,
+            might_have_duplicates=self._might_have_duplicates,
+            sort_columns=False,
         )
         return output
 
