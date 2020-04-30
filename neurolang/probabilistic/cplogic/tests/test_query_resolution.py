@@ -1,6 +1,9 @@
 from ....datalog import Fact
 from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Union
+from ....relational_algebra import str2columnstr_constant
+from ....relational_algebra_provenance import ProvenanceAlgebraSet
+from ....utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from .. import testing
 from ..gm_provenance_solver import solve_succ_query
 from ..program import CPLogicProgram
@@ -37,8 +40,8 @@ def test_deterministic_program():
     cpl_program.walk(code)
     query_pred = P(x)
     result = solve_succ_query(query_pred, cpl_program)
-    assert len(result.value) == 2
-    assert set(result.value) == {("a", 1.0), ("b", 1.0)}
+    expected = testing.make_prov_set([(1.0, "a"), (1.0, "b")], ("_p_", "x"))
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_simple_bernoulli_program():
@@ -64,8 +67,8 @@ def test_simple_bernoulli_program():
         P, {(0.7, "a"), (0.8, "b")}
     )
     result = solve_succ_query(P(x), cpl_program)
-    assert len(result.value) == 2
-    assert set(result.value) == {(0.7, "a"), (0.8, "b")}
+    expected = testing.make_prov_set([(0.7, "a"), (0.8, "b")], ("_p_", "x"))
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_conjunction_bernoulli_program():

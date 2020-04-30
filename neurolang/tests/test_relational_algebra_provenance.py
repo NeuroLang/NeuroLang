@@ -25,7 +25,7 @@ from ..relational_algebra_provenance import (
     Union,
 )
 from ..utils import NamedRelationalAlgebraFrozenSet
-from ..probabilistic.cplogic.testing import eq_prov_relations
+from ..probabilistic.cplogic import testing
 
 
 C_ = Constant
@@ -288,6 +288,18 @@ def test_union():
     assert sol == expected
 
 
+def test_union_different_prov_col_names():
+    r1 = testing.make_prov_set([(0.1, "a"), (0.2, "b")], ("_p_", "x"))
+    r2 = testing.make_prov_set([(0.5, "a"), (0.9, "c")], ("_p'_", "x"))
+    expected = testing.make_prov_set(
+        [(0.6, "a"), (0.2, "b"), (0.9, "c")], ("_whatever_", "x"),
+    )
+    operation = Union(r1, r2)
+    solver = RelationalAlgebraProvenanceCountingSolver()
+    result = solver.walk(operation)
+    assert testing.eq_prov_relations(result, expected)
+
+
 def test_projection():
     relation = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
@@ -462,4 +474,4 @@ def test_rename_columns():
     )
     solver = RelationalAlgebraProvenanceCountingSolver()
     result = solver.walk(rename_columns)
-    assert eq_prov_relations(result, expected)
+    assert testing.eq_prov_relations(result, expected)
