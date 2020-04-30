@@ -5,6 +5,7 @@ import pytest
 
 from ..exceptions import NeuroLangException
 from ..expressions import Constant, Symbol
+from ..probabilistic.cplogic import testing
 from ..relational_algebra import (
     ColumnStr,
     NaturalJoin,
@@ -25,8 +26,6 @@ from ..relational_algebra_provenance import (
     Union,
 )
 from ..utils import NamedRelationalAlgebraFrozenSet
-from ..probabilistic.cplogic import testing
-
 
 C_ = Constant
 S_ = Symbol
@@ -298,6 +297,15 @@ def test_union_different_prov_col_names():
     solver = RelationalAlgebraProvenanceCountingSolver()
     result = solver.walk(operation)
     assert testing.eq_prov_relations(result, expected)
+
+
+def test_union_with_empty_set():
+    r = testing.make_prov_set([(0.1, "a"), (0.2, "b")], ("_p_", "x"))
+    empty = testing.make_prov_set([], ("_p_", "x"))
+    operation = Union(r, empty)
+    solver = RelationalAlgebraProvenanceCountingSolver()
+    result = solver.walk(operation)
+    assert testing.eq_prov_relations(result, r)
 
 
 def test_projection():
