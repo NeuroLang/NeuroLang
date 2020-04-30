@@ -556,6 +556,14 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
             raise ValueError(
                 "Difference defined only for sets with the same columns"
             )
+        if self.is_null() or other.is_null():
+            return self.copy()
+        if (
+            self.arity == 0 and
+            len(self._container) > 0 and
+            len(other._container) > 0
+        ):
+            return type(self)(self.columns)
         new_container = self._container.merge(
             other._container,
             indicator=True,
