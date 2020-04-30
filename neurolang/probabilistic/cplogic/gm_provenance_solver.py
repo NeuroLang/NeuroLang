@@ -1,4 +1,5 @@
 import itertools
+import logging
 from typing import AbstractSet
 
 from ...expression_pattern_matching import add_match
@@ -26,8 +27,8 @@ from .cplogic_to_gm import (
     CPLogicGroundingToGraphicalModelTranslator,
     NaryChoicePlateNode,
     NaryChoiceResultPlateNode,
-    ProbabilisticPlateNode,
     PlateNode,
+    ProbabilisticPlateNode,
 )
 from .grounding import (
     get_predicate_from_grounded_expression,

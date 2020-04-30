@@ -147,7 +147,7 @@ def test_intertwined_conjunctions_and_probfacts():
     And expect SUCC[ Z(x) ] to yield the provenance relation
 
         _p_ | x
-        ====| ==
+        ====|===
         0.4 | a
 
     """
@@ -162,7 +162,9 @@ def test_intertwined_conjunctions_and_probfacts():
     cpl.walk(cpl_code)
     cpl.add_probabilistic_facts_from_tuples(P, {(0.8, "a")})
     cpl.add_probabilistic_facts_from_tuples(C, {(0.5, "a"), (0.9, "b")})
-    result = solve_succ_query(Z(x), cpl)
+    result = solve_succ_query(Z(y), cpl)
+    expected = testing.make_prov_set([(0.8 * 0.5, "a")], ("_p_", "y"))
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_simple_probchoice_query_resolution():
@@ -199,4 +201,3 @@ def test_simple_existential():
         - Pr[Q(a)] = 1.0
 
     """
-    pass
