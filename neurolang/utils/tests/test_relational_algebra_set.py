@@ -38,6 +38,7 @@ def test_relational_algebra_set_semantics():
     assert len(ras) == len(a) - 1
     assert 10 in ras
     assert all(a_ in ras for a_ in a if a_ != 5)
+    assert ras.fetch_one() in ras__
 
 
 def test_relational_algebra_ra_projection():
@@ -251,7 +252,7 @@ def test_named_groupby():
     assert res[1] == (2, ras_c)
 
 
-def test_named_iter():
+def test_named_iter_and_fecth_one():
     a = [(i, i * j) for i in (1, 2) for j in (2, 3, 4)]
 
     cols = ('y', 'x')
@@ -259,6 +260,7 @@ def test_named_iter():
     ras_a = NamedRelationalAlgebraFrozenSet(cols, a)
     res = list(iter(ras_a))
     assert res == a
+    assert ras_a.fetch_one() in res
 
 
 def test_rename_column():
