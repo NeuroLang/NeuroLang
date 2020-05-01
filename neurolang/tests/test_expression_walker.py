@@ -165,31 +165,3 @@ def test_chained_walker():
     exp = S_("A")
     res = walker.walk(exp)
     assert res == S_("C")
-
-
-def test_convert_to_lambda():
-    add = C_(lambda x, y: x + y)
-    func = add(S_('x'), C_(1))
-
-    fa2pl = expression_walker.FunctionApplicationToPythonLambda()
-
-    l0, args = fa2pl.walk(func)
-    assert l0(x=3) == 4
-    assert args == {'x'}
-
-    func = add(S_('x'), S_('y'))
-    l1, args = fa2pl.walk(func)
-    assert l1(x=3, y=1) == 4
-    assert args == {'x', 'y'}
-
-    sub = C_(lambda x, y: x - y)
-    func = sub(add(S_('x'), C_(1)), C_(2))
-    l2, args = fa2pl.walk(func)
-    assert l2(x=3) == 2
-    assert args == {'x'}
-
-    one = C_(lambda: 1)
-    func = sub(add(S_('x'), one()), C_(2))
-    l3, args = fa2pl.walk(func)
-    assert l3(x=3) == 2
-    assert args == {'x'}

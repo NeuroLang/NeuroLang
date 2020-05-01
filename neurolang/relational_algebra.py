@@ -337,6 +337,15 @@ class StringArithmeticWalker(ew.PatternWalker):
     length of an other constant relation.
 
     """
+
+    @ew.add_match(FunctionApplication(Constant(len), (Constant[AbstractSet],)))
+    def cardinality_of_other_relation(self, fa):
+        return Constant[RelationalAlgebraStringExpression](
+            str(len(fa.args[0].value)),
+            auto_infer_type=False,
+            verify_type=False,
+        )
+
     @ew.add_match(FunctionApplication, is_arithmetic_operation)
     def arithmetic_operation(self, fa):
         return Constant[RelationalAlgebraStringExpression](
@@ -364,12 +373,6 @@ class StringArithmeticWalker(ew.PatternWalker):
         return cst
 
 
-class ReplaceConstantColumnStrBySymbol(ew.ExpressionWalker):
-    @ew.add_match(Constant[ColumnStr])
-    def column_str(self, expression):
-        return Symbol[ColumnStr](expression.value)
-
-
 class RelationalAlgebraSolver(ew.ExpressionWalker):
     """
     Mixing that walks through relational algebra expressions and
@@ -378,10 +381,6 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
     Relations are expected to be represented
     as objects with the same interface as :obj:`RelationalAlgebraSet`.
     """
-
-    _rccsbs = ReplaceConstantColumnStrBySymbol()
-    _saw = StringArithmeticWalker()
-    _fa_2_lambda = ew.FunctionApplicationToPythonLambda()
 
     def __init__(self, symbol_table=None):
         self.symbol_table = symbol_table
@@ -525,37 +524,22 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
     @ew.add_match(ExtendedProjection)
     def extended_projection(self, proj_op):
         relation = self.walk(proj_op.relation)
+        str_arithmetic_walker = StringArithmeticWalker()
         eval_expressions = {}
         for member in proj_op.projection_list:
-            fun_exp = self.walk(member.fun_exp)
             eval_expressions[
                 member.dst_column.value
-            ] = self._compile_extended_projection_fun_exp(fun_exp)
+            ] = str_arithmetic_walker.walk(self.walk(member.fun_exp)).value
         return self._build_relation_constant(
             relation.value.extended_projection(eval_expressions)
         )
 
-    def _compile_extended_projection_fun_exp(self, fun_exp):
-        try:
-            return self._saw.walk(fun_exp).value
-        except NeuroLangException as e:
-            fun, args = self._fa_2_lambda.walk(self._rccsbs.walk(fun_exp))
-            return lambda t: fun(
-                **{arg: getattr(t, arg) for arg in args}
-            )
-
     @ew.add_match(FunctionApplication, is_arithmetic_operation)
     def prov_arithmetic_operation(self, arithmetic_op):
-        args = self.walk(arithmetic_op.args)
-        if any(
-            arg_new is not arg_old
-            for arg_new, arg_old in zip(args, arithmetic_op.args)
-        ):
-            return FunctionApplication[arithmetic_op.type](
-                arithmetic_op.functor, args
-            )
-        else:
-            return arithmetic_op
+        return FunctionApplication[arithmetic_op.type](
+            arithmetic_op.functor,
+            tuple(self.walk(arg) for arg in arithmetic_op.args),
+        )
 
     @ew.add_match(Constant)
     def ra_constant(self, constant):
