@@ -582,14 +582,13 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
             len(other._container) > 0
         ):
             return type(self)(self.columns)
-        new_container = self._container.merge(
-            other._container,
-            indicator=True,
-            how='outer'
-        )
-        new_container = new_container[
-            new_container.iloc[:, -1] == 'left_only'
-        ].iloc[:, :-1]
+
+        is_in_both = True
+        for c in self.columns:
+            is_in_both &= (
+                self._container[c].isin(other._container[c])
+            )
+        new_container = self._container[~is_in_both]
 
         output = self._light_init_same_structure(
             new_container,
@@ -704,14 +703,12 @@ class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
                     "Operation only valid for sets with the same arity"
                 )
             else:
-                new_container = pd.merge(
-                    left=self._container,
-                    right=other._container,
-                    how="left",  indicator=True
-                )
-                new_container = new_container[
-                    new_container.iloc[:, -1] == 'left_only'
-                ].iloc[:, :-1]
+                is_in_both = True
+                for c in self.columns:
+                    is_in_both &= (
+                        self._container[c].isin(other._container[c])
+                    )
+                new_container = self._container[~is_in_both]
                 self._container = new_container
             return self
         else:
