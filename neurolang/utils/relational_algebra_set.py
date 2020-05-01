@@ -287,7 +287,6 @@ class RelationalAlgebraFrozenSet(Set):
 class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
     def __init__(self, columns, iterable=None):
         self._columns = tuple(columns)
-        self._columns_sort = tuple(pd.Index(columns).argsort())
         self._might_have_duplicates = True
         if iterable is None:
             iterable = []
@@ -302,10 +301,6 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
             self._container = pd.DataFrame(
                 iterable, columns=self._columns
             )
-        self._container = self._sort_columns(
-            self._container,
-            drop_duplicates=False
-        )
 
     def _initialize_from_named_ra_set(self, other):
         if (
@@ -315,14 +310,13 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
             raise ValueError("Relations must have the same arity")
 
         if not other.is_null():
-            self._container = other._container[list(other.columns
-                                                    )].copy(deep=False)
+            self._container = other._container.copy(deep=False)
         else:
             self._container = pd.DataFrame(columns=self._columns)
 
     def _initialize_from_unnamed_ra_set(self, other):
         if other._container is None:
-            self._container = pd.DataFrame(list(other), columns=self._columns)
+            self._container = pd.DataFrame([], columns=self._columns)
         else:
             if len(self._columns) != other.arity:
                 raise ValueError("Relations must have the same arity")
@@ -338,7 +332,6 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         output = cls(columns=tuple())
         output._container = other._container
         output._columns = other._columns
-        output._columns_sort = other._columns_sort
         output._might_have_duplicates = other._might_have_duplicates
         return output
 
@@ -347,7 +340,6 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
 
     def _light_init_same_structure(
         self, container,
-        sort_columns=False,
         might_have_duplicates=True,
         columns=None
     ):
@@ -355,11 +347,6 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
             columns = self.columns
         output = type(self)(columns)
         output._container = container
-        if sort_columns:
-            output._container = self._sort_columns(
-                container,
-                drop_duplicates=False
-            )
         output._might_have_duplicates = might_have_duplicates
         return output
 
@@ -372,10 +359,10 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         return len(self._columns)
 
     def __contains__(self, element):
+        if hasattr(element, '_asdict'):
+            element = element._asdict()
         if isinstance(element, dict) and len(element) == self.arity:
             element = tuple(element[c] for c in self._container.columns)
-        else:
-            element = tuple(element[i] for i in self._columns_sort)
         return super().__contains__(element)
 
     def projection(self, *columns):
@@ -410,7 +397,6 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
                 self._might_have_duplicates |
                 other._might_have_duplicates
             ),
-            sort_columns=True,
             columns=new_columns
         )
 
@@ -443,7 +429,6 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
                 self._might_have_duplicates |
                 other._might_have_duplicates
             ),
-            sort_columns=True,
             columns=new_columns
         )
 
@@ -459,11 +444,9 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
                                                  ) + self._columns[src_idx +
                                                                    1:]
         new_container = self._container.rename(columns={src: dst})
-        new_container.sort_index(axis=1, inplace=True)
         return self._light_init_same_structure(
             new_container,
             might_have_duplicates=self._might_have_duplicates,
-            sort_columns=True,
             columns=new_columns
         )
 
@@ -482,14 +465,13 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         return self._light_init_same_structure(
             new_container,
             might_have_duplicates=self._might_have_duplicates,
-            sort_columns=True,
             columns=new_columns
         )
 
     def __eq__(self, other):
         scont = self._container
         ocont = other._container
-        if not scont.columns.equals(ocont.columns):
+        if not set(scont.columns) == set(ocont.columns):
             res = False
         elif len(scont) == 0 and len(ocont) == 0:
             res = True
@@ -504,12 +486,6 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
             res = False
         return res
 
-    def _sort_columns(self, container, drop_duplicates=True):
-        container = container.sort_index(axis=1)
-        if drop_duplicates:
-            container = self._drop_duplicates(container)
-        return container
-
     def groupby(self, columns):
         if self.is_null():
             raise StopIteration
@@ -519,7 +495,6 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
             group_set = self._light_init_same_structure(
                 group,
                 might_have_duplicates=self._might_have_duplicates,
-                sort_columns=False,
                 columns=self.columns
             )
             yield g_id, group_set
@@ -548,7 +523,6 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         output = self._light_init_same_structure(
             new_container,
             might_have_duplicates=self._might_have_duplicates,
-            sort_columns=True,
             columns=list(new_container.columns)
         )
         return output
@@ -572,18 +546,17 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         output = self._light_init_same_structure(
             new_container,
             might_have_duplicates=self._might_have_duplicates,
-            sort_columns=True,
             columns=proj_columns
         )
         return output
 
     def __iter__(self):
         self._drop_duplicates_if_needed()
-        container = self._container[list(self.columns)]
+        container = self._container
         return container.itertuples(index=False, name="tuple")
 
     def fetch_one(self):
-        container = self._container[list(self.columns)]
+        container = self._container
         return next(container.itertuples(index=False, name="tuple"))
 
     def to_unnamed(self):
@@ -596,7 +569,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
     def __sub__(self, other):
         if (
             (self.arity > 0 and other.arity > 0) and
-            not self._container.columns.equals(other._container.columns)
+            not set(self._container.columns) == set(other._container.columns)
         ):
             raise ValueError(
                 "Difference defined only for sets with the same columns"
@@ -621,7 +594,6 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         output = self._light_init_same_structure(
             new_container,
             might_have_duplicates=self._might_have_duplicates,
-            sort_columns=False,
         )
         return output
 
@@ -643,7 +615,6 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         output = self._light_init_same_structure(
             new_container,
             might_have_duplicates=True,
-            sort_columns=False,
         )
         return output
 
@@ -660,7 +631,6 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         output = self._light_init_same_structure(
             new_container,
             might_have_duplicates=self._might_have_duplicates,
-            sort_columns=False,
         )
         return output
 
