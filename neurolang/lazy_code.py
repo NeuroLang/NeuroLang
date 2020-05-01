@@ -1,18 +1,11 @@
 from . import expression_walker as ew
-from . import type_system
-from .exceptions import NeuroLangException
 from .expressions import (
     Constant,
-    Definition,
     Statement,
-    FunctionApplication,
     Symbol,
     Unknown,
-    ExpressionBlock,
     Expression
 )
-from .utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet
-from .utils.relational_algebra_set import RelationalAlgebraStringExpression
 
 
 class Evaluate(Expression):

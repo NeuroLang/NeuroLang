@@ -2,7 +2,7 @@ import operator
 
 from .. import lazy_code
 from ..expression_walker import ExpressionBasicEvaluator, ExpressionWalker
-from ..expressions import (Constant, ExpressionBlock, FunctionApplication,
+from ..expressions import (Constant, ExpressionBlock,
                            Statement, Symbol)
 
 
@@ -69,4 +69,3 @@ def test_evaluations():
     assert lce.symbol_table[A] == Constant(1)
     assert lce.symbol_table[B] == A
     assert lce.symbol_table[C] == Constant(3)
-
