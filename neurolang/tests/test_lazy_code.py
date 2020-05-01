@@ -39,7 +39,7 @@ def test_statement():
     assert lce.symbol_table[A] == Constant(1)
     assert lce.symbol_table[B] == Symbol(A)
 
-    lce.walk(lazy_code.Execute(B))
+    lce.walk(lazy_code.Evaluate(B))
     assert lce.symbol_table[B] == Constant(1)
 
 
@@ -58,14 +58,14 @@ def test_evaluations():
     assert lce.symbol_table[B] == Symbol(A)
     assert lce.symbol_table[C] == ADD(Constant(2), A)
 
-    lce.walk(lazy_code.Execute(B))
+    lce.walk(lazy_code.Evaluate(B))
     assert lce.symbol_table[B] == Constant(1)
     assert lce.symbol_table[C] == ADD(Constant(2), A)
 
     lce = LazyCodeBasicExpressionEvaluator()
     lce.walk(code)
 
-    assert lce.walk(lazy_code.Execute(C)) == Constant(3)
+    assert lce.walk(lazy_code.Evaluate(C)) == Constant(3)
     assert lce.symbol_table[A] == Constant(1)
     assert lce.symbol_table[B] == A
     assert lce.symbol_table[C] == Constant(3)
