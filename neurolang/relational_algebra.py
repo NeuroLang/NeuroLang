@@ -934,7 +934,7 @@ def _infer_relation_type(relation):
     Infer the type of the tuples in the relation based on its first tuple. If
     the relation is empty, just return `Abstract[Tuple]`.
     """
-    if relation.is_null() or relation.arity == 0:
+    if relation.is_empty() or relation.arity == 0:
         return AbstractSet[Tuple]
     if hasattr(relation, "row_type"):
         return AbstractSet[relation.row_type]
