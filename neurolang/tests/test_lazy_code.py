@@ -2,20 +2,15 @@ import operator
 
 from .. import lazy_code
 from ..expression_walker import ExpressionBasicEvaluator, ExpressionWalker
-from ..expressions import (Constant, ExpressionBlock,
-                           Statement, Symbol)
+from ..expressions import (Constant, ExpressionBlock, Statement, Symbol)
 
 
-class LazyCode(
-    lazy_code.LazyCodeEvaluationMixin,
-    ExpressionWalker
-):
+class LazyCode(lazy_code.LazyCodeEvaluationMixin, ExpressionWalker):
     pass
 
 
 class LazyCodeBasicExpressionEvaluator(
-    lazy_code.LazyCodeEvaluationMixin,
-    ExpressionBasicEvaluator
+    lazy_code.LazyCodeEvaluationMixin, ExpressionBasicEvaluator
 ):
     pass
 
@@ -28,10 +23,7 @@ ADD = Constant(operator.add)
 
 
 def test_statement():
-    code = ExpressionBlock((
-        Statement(A, Constant(1)),
-        Statement(B, A)
-    ))
+    code = ExpressionBlock((Statement(A, Constant(1)), Statement(B, A)))
 
     lce = LazyCode()
     lce.walk(code)
@@ -45,10 +37,8 @@ def test_statement():
 
 def test_evaluations():
     code = ExpressionBlock((
-        Statement(A, Constant(1)),
-        Statement(B, A),
-        Statement(C, ADD(Constant(2), A)),
-        Statement(D, C)
+        Statement(A, Constant(1)), Statement(B, A),
+        Statement(C, ADD(Constant(2), A)), Statement(D, C)
     ))
 
     lce = LazyCodeBasicExpressionEvaluator()

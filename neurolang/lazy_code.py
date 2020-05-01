@@ -1,11 +1,5 @@
 from . import expression_walker as ew
-from .expressions import (
-    Constant,
-    Statement,
-    Symbol,
-    Unknown,
-    Expression
-)
+from .expressions import (Constant, Statement, Symbol, Unknown, Expression)
 
 
 class Evaluate(Expression):
@@ -51,15 +45,11 @@ class LazyCodeEvaluationMixin(ew.TypedSymbolTableMixin, ew.PatternWalker):
     @ew.add_match(Evaluate(Expression))
     def execute(self, expression):
         args = tuple(
-            self.walk(Evaluate(arg))
-            for arg in expression.expression.unapply()
+            self.walk(Evaluate(arg)) for arg in expression.expression.unapply()
         )
         return self.walk(expression.expression.apply(*args))
 
     @ew.add_match(Evaluate)
     def execute_tuple(self, expression):
-        args = tuple(
-            self.walk(Evaluate(arg))
-            for arg in expression.expression
-        )
+        args = tuple(self.walk(Evaluate(arg)) for arg in expression.expression)
         return args
