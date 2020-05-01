@@ -15,6 +15,7 @@ from warnings import warn
 from ..exceptions import NeuroLangException
 from ..expression_walker import PatternWalker, add_match
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
+from ..utils.relational_algebra_set import RelationalAlgebraStringExpression
 from . import (Implication, Union, chase,
                is_conjunctive_expression_with_nested_predicates)
 from .basic_representation import UnionOfConjunctiveQueries
@@ -134,10 +135,6 @@ class DatalogWithAggregationMixin(PatternWalker):
 
 
 class Chase(chase.Chase):
-    @staticmethod
-    def first_element(x):
-        return next(iter(x))
-
     def check_constraints(self, instance_update):
         warn(
             "No check performed. Should implement check for stratified"
@@ -176,7 +173,7 @@ class Chase(chase.Chase):
             if isinstance(arg, Symbol):
                 group_vars.append(arg.name)
                 aggregation_args = arg.name
-                fun = Chase.first_element
+                fun = RelationalAlgebraStringExpression('first')
             elif isinstance(arg, AggregationApplication):
                 fun = self.datalog_program.walk(arg.functor).value
                 aggregation_args = arg.args[0].name

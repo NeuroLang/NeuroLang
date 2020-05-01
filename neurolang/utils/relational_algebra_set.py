@@ -534,10 +534,11 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         if (
             isinstance(aggregate_function, (tuple, list))
         ):
-            args = OrderedDict({
-                t[0]: pd.NamedAgg(t[1], t[2])
-                for t in aggregate_function
-            })
+            args = OrderedDict()
+            for dst, src, fun in aggregate_function:
+                if hasattr(fun, 'sql_operation_string'):
+                    fun = fun.sql_operation_string
+                args[dst] = pd.NamedAgg(src, fun)
             new_container = groups.agg(**args)
             new_container.index = pd.RangeIndex(len(new_container))
         else:
