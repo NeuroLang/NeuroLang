@@ -1,0 +1,72 @@
+from . import expression_walker as ew
+from . import type_system
+from .exceptions import NeuroLangException
+from .expressions import (
+    Constant,
+    Definition,
+    Statement,
+    FunctionApplication,
+    Symbol,
+    Unknown,
+    ExpressionBlock,
+    Expression
+)
+from .utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet
+from .utils.relational_algebra_set import RelationalAlgebraStringExpression
+
+
+class Execute(Expression):
+    """Executes the evaluation of a symbol of expresion and returns
+    the result
+
+    Parameters
+    ----------
+    expression : Expression
+        expression or symbol to be evaluated
+    """
+
+    def __init__(self, expression):
+        self.expression = expression
+
+
+class LazyCodeEvaluationMixin(ew.TypedSymbolTableMixin, ew.PatternWalker):
+    @ew.add_match(Statement)
+    def statement(self, expression):
+        if expression.lhs.type is Unknown:
+            expression.lhs.change_type(expression.rhs)
+        self.symbol_table[expression.lhs] = expression.rhs
+        return expression.lhs
+
+    @ew.add_match(Symbol)
+    def symbol(self, expression):
+        return expression
+
+    @ew.add_match(Execute(Symbol))
+    def execute_symbol(self, expression):
+        symbol = expression.expression
+        value = self.symbol_table[symbol]
+        if value != symbol:
+            value = self.walk(Execute(value))
+            expression.change_type(value.type)
+            self.symbol_table[symbol] = value
+        return value
+
+    @ew.add_match(Execute(Constant))
+    def execute_constant(self, expression):
+        return expression.expression
+
+    @ew.add_match(Execute(Expression))
+    def execute(self, expression):
+        args = tuple(
+            self.walk(Execute(arg))
+            for arg in expression.expression.unapply()
+        )
+        return self.walk(expression.expression.apply(*args))
+
+    @ew.add_match(Execute)
+    def execute_tuple(self, expression):
+        args = tuple(
+            self.walk(Execute(arg))
+            for arg in expression.expression
+        )
+        return args
