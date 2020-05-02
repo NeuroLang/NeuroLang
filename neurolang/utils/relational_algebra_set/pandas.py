@@ -171,6 +171,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         return output
 
     def equijoin(self, other, join_indices, return_mappings=False):
+        res = self._dee_dum_product(other)
+        if res is not None:
+            return res
         if self.is_empty() or other.is_empty():
             return self._empty_set_same_structure()
         other_columns = range(
@@ -193,6 +196,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         return output
 
     def cross_product(self, other):
+        res = self._dee_dum_product(other)
+        if res is not None:
+            return res
         if self.is_empty():
             return self._empty_set_same_structure()
         left = self._container.copy(deep=False)
@@ -225,10 +231,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     def __or__(self, other):
         if self is other:
             return self.copy()
-        elif self.is_dum():
-            return other
-        elif other.is_dum():
-            return self
+        res = self._dee_dum_sum(other)
+        if res is not None:
+            return res
         elif isinstance(other, RelationalAlgebraSet):
             ocont = other._container
             if self.is_empty() and other.is_empty():
@@ -250,6 +255,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             return super().__or__(other)
 
     def __and__(self, other):
+        res = self._dee_dum_product(other)
+        if res is not None:
+            return res
         if self.is_empty():
             return self.copy()
         if isinstance(other, RelationalAlgebraSet):
@@ -320,7 +328,6 @@ class NamedRelationalAlgebraFrozenSet(
 ):
     def __init__(self, columns, iterable=None):
         self._columns = tuple(columns)
-        self._columns_sort = tuple(pd.Index(columns).argsort())
         self._might_have_duplicates = True
         if iterable is None:
             iterable = []
@@ -335,10 +342,6 @@ class NamedRelationalAlgebraFrozenSet(
             self._container = pd.DataFrame(
                 iterable, columns=self._columns
             )
-        self._container = self._sort_columns(
-            self._container,
-            drop_duplicates=False
-        )
 
     def _initialize_from_named_ra_set(self, other):
         if (
@@ -371,7 +374,6 @@ class NamedRelationalAlgebraFrozenSet(
         output = cls(columns=tuple())
         output._container = other._container
         output._columns = other._columns
-        output._columns_sort = other._columns_sort
         output._might_have_duplicates = other._might_have_duplicates
         return output
 
@@ -390,7 +392,6 @@ class NamedRelationalAlgebraFrozenSet(
 
     def _light_init_same_structure(
         self, container,
-        sort_columns=False,
         might_have_duplicates=True,
         columns=None
     ):
@@ -398,11 +399,6 @@ class NamedRelationalAlgebraFrozenSet(
             columns = self.columns
         output = type(self)(columns)
         output._container = container
-        if sort_columns:
-            output._container = self._sort_columns(
-                container,
-                drop_duplicates=False
-            )
         output._might_have_duplicates = might_have_duplicates
         return output
 
@@ -417,8 +413,6 @@ class NamedRelationalAlgebraFrozenSet(
     def __contains__(self, element):
         if isinstance(element, dict) and len(element) == self.arity:
             element = tuple(element[c] for c in self._container.columns)
-        else:
-            element = tuple(element[i] for i in self._columns_sort)
         return super().__contains__(element)
 
     def projection(self, *columns):
@@ -426,7 +420,7 @@ class NamedRelationalAlgebraFrozenSet(
             return type(self)(columns)
         if self.arity == 0:
             return self
-        new_container = self._container[list(sorted(columns))]
+        new_container = self._container[list(columns)]
         return self._light_init_same_structure(
             new_container,
             might_have_duplicates=True,
@@ -437,14 +431,9 @@ class NamedRelationalAlgebraFrozenSet(
         raise NotImplementedError()
 
     def naturaljoin(self, other):
-        if self.is_dum():
-            return self
-        elif other.is_dum():
-            return other
-        elif self.is_dee():
-            return other
-        elif other.is_dee():
-            return self
+        res = self._dee_dum_product(other)
+        if res is not None:
+            return res
         on = [c for c in self.columns if c in other.columns]
 
         if len(on) == 0:
@@ -461,19 +450,13 @@ class NamedRelationalAlgebraFrozenSet(
                 self._might_have_duplicates |
                 other._might_have_duplicates
             ),
-            sort_columns=True,
             columns=new_columns
         )
 
     def cross_product(self, other):
-        if self.is_dum():
-            return self
-        elif other.is_dum():
-            return other
-        elif self.is_dee():
-            return other
-        elif other.is_dee():
-            return self
+        res = self._dee_dum_product(other)
+        if res is not None:
+            return res
         if len(self._container.columns.intersection(other.columns)) > 0:
             raise ValueError(
                 "Cross product with common columns "
@@ -502,7 +485,6 @@ class NamedRelationalAlgebraFrozenSet(
                 self._might_have_duplicates |
                 other._might_have_duplicates
             ),
-            sort_columns=True,
             columns=new_columns
         )
 
@@ -518,11 +500,9 @@ class NamedRelationalAlgebraFrozenSet(
                                                  ) + self._columns[src_idx +
                                                                    1:]
         new_container = self._container.rename(columns={src: dst})
-        new_container.sort_index(axis=1, inplace=True)
         return self._light_init_same_structure(
             new_container,
             might_have_duplicates=self._might_have_duplicates,
-            sort_columns=True,
             columns=new_columns
         )
 
@@ -541,14 +521,13 @@ class NamedRelationalAlgebraFrozenSet(
         return self._light_init_same_structure(
             new_container,
             might_have_duplicates=self._might_have_duplicates,
-            sort_columns=True,
             columns=new_columns
         )
 
     def __eq__(self, other):
         scont = self._container
         ocont = other._container
-        if not scont.columns.equals(ocont.columns):
+        if len(scont.columns.difference(ocont.columns)) > 0:
             res = False
         elif len(scont) == 0 and len(ocont) == 0:
             res = True
@@ -563,12 +542,6 @@ class NamedRelationalAlgebraFrozenSet(
             res = False
         return res
 
-    def _sort_columns(self, container, drop_duplicates=True):
-        container = container.sort_index(axis=1)
-        if drop_duplicates:
-            container = self._drop_duplicates(container)
-        return container
-
     def groupby(self, columns):
         if self.is_empty():
             raise StopIteration
@@ -578,7 +551,6 @@ class NamedRelationalAlgebraFrozenSet(
             group_set = self._light_init_same_structure(
                 group,
                 might_have_duplicates=self._might_have_duplicates,
-                sort_columns=False,
                 columns=self.columns
             )
             yield g_id, group_set
@@ -606,7 +578,6 @@ class NamedRelationalAlgebraFrozenSet(
         output = self._light_init_same_structure(
             new_container,
             might_have_duplicates=self._might_have_duplicates,
-            sort_columns=True,
             columns=list(new_container.columns)
         )
         return output
@@ -630,7 +601,6 @@ class NamedRelationalAlgebraFrozenSet(
         output = self._light_init_same_structure(
             new_container,
             might_have_duplicates=self._might_have_duplicates,
-            sort_columns=True,
             columns=proj_columns
         )
         return output
@@ -654,7 +624,11 @@ class NamedRelationalAlgebraFrozenSet(
     def __sub__(self, other):
         if (
             (self.arity > 0 and other.arity > 0) and
-            not self._container.columns.equals(other._container.columns)
+            len(
+                self._container.columns.difference(
+                    other._container.columns
+                )
+            ) > 0
         ):
             raise ValueError(
                 "Difference defined only for sets with the same columns"
@@ -668,7 +642,7 @@ class NamedRelationalAlgebraFrozenSet(
         new_container = self._container.merge(
             other._container,
             indicator=True,
-            how='outer'
+            how='left'
         )
         new_container = new_container[
             new_container.iloc[:, -1] == 'left_only'
@@ -677,19 +651,13 @@ class NamedRelationalAlgebraFrozenSet(
         output = self._light_init_same_structure(
             new_container,
             might_have_duplicates=self._might_have_duplicates,
-            sort_columns=False,
         )
         return output
 
     def __or__(self, other):
-        if self.is_dum():
-            return other
-        elif other.is_dum():
-            return self
-        elif self.is_dee():
-            return self
-        elif other.is_dee():
-            return other
+        res = self._dee_dum_sum(other)
+        if res is not None:
+            return res
         elif self.columns != other.columns:
             raise ValueError(
                 "Union defined only for sets with the same columns"
@@ -702,11 +670,13 @@ class NamedRelationalAlgebraFrozenSet(
         output = self._light_init_same_structure(
             new_container,
             might_have_duplicates=True,
-            sort_columns=False,
         )
         return output
 
     def __and__(self, other):
+        res = self._dee_dum_product(other)
+        if res is not None:
+            return res
         if self.columns != other.columns:
             raise ValueError(
                 "Union defined only for sets with the same columns"
@@ -721,7 +691,6 @@ class NamedRelationalAlgebraFrozenSet(
         output = self._light_init_same_structure(
             new_container,
             might_have_duplicates=self._might_have_duplicates,
-            sort_columns=False,
         )
         return output
 

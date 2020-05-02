@@ -86,6 +86,28 @@ class RelationalAlgebraFrozenSet(Set):
     def itervalues(self):
         pass
 
+    def _dee_dum_product(self, other):
+        res = None
+        if self.is_dum():
+            res = self
+        elif other.is_dum():
+            res = other
+        elif self.is_dee():
+            res = other
+        elif other.is_dee():
+            res = self
+        return res
+
+    def _dee_dum_sum(self, other):
+        res = None
+        if self.is_dum():
+            res = other
+        elif other.is_dum():
+            res = self
+        elif self.is_dee() and other.is_dee():
+            return self
+        return res
+
 
 class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
     def __init__(self, columns, iterable=None):
