@@ -12,8 +12,10 @@ def test_relational_algebra_set_semantics_empty():
     ras = RelationalAlgebraSet()
 
     assert len(ras) == 0
+    assert ras.is_empty()
     assert ras.arity == 0
     assert list(iter(ras)) == []
+    assert ras == RelationalAlgebraSet.dum()
 
     ras.add((0, 1))
     assert (0, 1) in ras
@@ -40,6 +42,12 @@ def test_relational_algebra_set_semantics():
     assert all(a_ in ras for a_ in a if a_ != 5)
     assert ras.fetch_one() in ras__
 
+    dee = RelationalAlgebraSet.dee()
+    dum = RelationalAlgebraSet.dum()
+
+    assert len(dee) > 0 and dee.arity == 0
+    assert len(dum) == 0 and dum.arity == 0
+
 
 def test_relational_algebra_ra_projection():
     a = [(i % 2, i, i * 2) for i in range(5)]
@@ -51,6 +59,7 @@ def test_relational_algebra_ra_projection():
 
     ras_0 = ras.projection(0, 2)
     assert all((i % 2, i * 2) for i in range(5))
+    assert ras.projection() == RelationalAlgebraSet.dee()
 
 
 def test_relational_algebra_ra_selection():
@@ -125,13 +134,23 @@ def test_groupby():
     assert res[0] == (1, ras_b)
     assert res[1] == (2, ras_c)
 
+    dee = NamedRelationalAlgebraFrozenSet.dee()
+    dum = NamedRelationalAlgebraFrozenSet.dum()
+
+    assert len(dee) > 0 and dee.arity == 0
+    assert len(dum) == 0 and dum.arity == 0
+    assert dee != dum
+
 
 def test_named_relational_algebra_set_semantics_empty():
     ras = NamedRelationalAlgebraFrozenSet(('y', 'x'))
 
+    assert ras.is_empty()
     assert len(ras) == 0
     assert ras.arity == 2
     assert list(iter(ras)) == []
+    assert ras != NamedRelationalAlgebraFrozenSet.dum()
+    assert ras.projection() == NamedRelationalAlgebraFrozenSet.dum()
 
     ras = NamedRelationalAlgebraFrozenSet(('y', 'x'), [(0, 1)])
     assert (0, 1) in ras
@@ -163,6 +182,8 @@ def test_named_relational_algebra_ra_projection():
     assert ras_.arity == 0
     assert len(ras_) > 0
     assert ras_.projection('x') == ras_
+
+    assert ras_.projection() == NamedRelationalAlgebraFrozenSet.dee()
 
 
 def test_named_relational_algebra_ra_selection():
@@ -240,15 +261,13 @@ def test_named_relational_algebra_difference():
     ras_c = NamedRelationalAlgebraFrozenSet(('x', 'y'), c)
 
     empty = NamedRelationalAlgebraFrozenSet(('x', 'y'), [])
-    unit_empty = NamedRelationalAlgebraFrozenSet(
-        ('x', 'y'), [(0, 1)]
-    ).projection()
+    dee = NamedRelationalAlgebraFrozenSet.dee()
 
     assert (ras_a - empty) == ras_a
     assert (empty - ras_a) == empty
     assert (empty - empty) == empty
-    assert (unit_empty - empty) == unit_empty
-    assert (unit_empty - unit_empty) == NamedRelationalAlgebraFrozenSet(())
+    assert (dee - empty) == dee
+    assert (dee - dee) == NamedRelationalAlgebraFrozenSet.dum()
 
     res = ras_a - ras_b
     assert res == ras_c
@@ -342,12 +361,10 @@ def test_named_ra_union():
                                                             (42, 0)])
     assert first | second == expected
     empty = NamedRelationalAlgebraFrozenSet(('x', 'y'), [])
-    unit_empty = NamedRelationalAlgebraFrozenSet(
-        ('x', 'y'), [(0, 1)]
-    ).projection()
+    dee = NamedRelationalAlgebraFrozenSet.dee()
     assert first | empty == first
     assert empty | first == first
-    assert unit_empty | unit_empty == unit_empty
+    assert dee | dee == dee
     assert first | empty | second == first | second
 
 
