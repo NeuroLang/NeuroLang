@@ -474,8 +474,10 @@ class NamedRelationalAlgebraFrozenSet(
             right[tmpcol] = 1
             new_container = pd.merge(left, right, on=tmpcol)
             del new_container[tmpcol]
-            new_container.columns = tuple(self._container.columns
-                                        ) + tuple(other._container.columns)
+            new_container.columns = (
+                tuple(self._container.columns) +
+                tuple(other._container.columns)
+            )
             res = self._light_init_same_structure(
                 new_container,
                 might_have_duplicates=(
