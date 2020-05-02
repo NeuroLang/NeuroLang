@@ -5,13 +5,15 @@ from uuid import uuid1
 
 import pandas as pd
 
+from . import abstract as abc
+
 
 class RelationalAlgebraStringExpression(str):
     def __repr__(self):
         return "{}{{ {} }}".format(self.__class__.__name__, super().__repr__())
 
 
-class RelationalAlgebraFrozenSet(Set):
+class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     def __init__(self, iterable=None):
         self._container = None
         self._might_have_duplicates = True
@@ -308,7 +310,10 @@ class RelationalAlgebraFrozenSet(Set):
         )
 
 
-class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
+class NamedRelationalAlgebraFrozenSet(
+    RelationalAlgebraFrozenSet,
+    abc.NamedRelationalAlgebraFrozenSet
+):
     def __init__(self, columns, iterable=None):
         self._columns = tuple(columns)
         self._columns_sort = tuple(pd.Index(columns).argsort())
@@ -710,8 +715,10 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         raise NotImplementedError()
 
 
-class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
-
+class RelationalAlgebraSet(
+    RelationalAlgebraFrozenSet,
+    abc.RelationalAlgebraSet
+):
     def add(self, value):
         value = self._normalise_element(value)
         e_hash = hash(value)

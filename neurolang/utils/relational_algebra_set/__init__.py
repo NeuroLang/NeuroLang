@@ -1,10 +1,6 @@
-from .pandas import (
-    RelationalAlgebraStringExpression,
-    RelationalAlgebraFrozenSet,
-    RelationalAlgebraSet,
-    NamedRelationalAlgebraFrozenSet
-)
-
+from .pandas import (NamedRelationalAlgebraFrozenSet,
+                     RelationalAlgebraFrozenSet, RelationalAlgebraSet,
+                     RelationalAlgebraStringExpression)
 
 __all__ = [
     "RelationalAlgebraStringExpression",

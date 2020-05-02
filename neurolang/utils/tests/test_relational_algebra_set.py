@@ -1,21 +1,21 @@
 import pytest
 
-from ..relational_algebra_set import (
-    NamedRelationalAlgebraFrozenSet,
-    RelationalAlgebraFrozenSet,
-    RelationalAlgebraSet,
-    RelationalAlgebraStringExpression,
-)
+from ..relational_algebra_set import pandas
 
 
-def test_relational_algebra_set_semantics_empty():
-    ras = RelationalAlgebraSet()
+@pytest.fixture(params=[(pandas,)])
+def ra_module(request):
+    return request.param[0]
+
+
+def test_relational_algebra_set_semantics_empty(ra_module):
+    ras = ra_module.RelationalAlgebraSet()
 
     assert len(ras) == 0
     assert ras.is_empty()
     assert ras.arity == 0
     assert list(iter(ras)) == []
-    assert ras == RelationalAlgebraSet.dum()
+    assert ras == ra_module.RelationalAlgebraSet.dum()
 
     ras.add((0, 1))
     assert (0, 1) in ras
@@ -23,10 +23,10 @@ def test_relational_algebra_set_semantics_empty():
     assert ras.arity == 2
 
 
-def test_relational_algebra_set_semantics():
+def test_relational_algebra_set_semantics(ra_module):
     a = [5, 4, 3, 2, 3, 1]
-    ras = RelationalAlgebraSet(a)
-    ras_ = RelationalAlgebraSet(a)
+    ras = ra_module.RelationalAlgebraSet(a)
+    ras_ = ra_module.RelationalAlgebraSet(a)
     ras__ = set((e, ) for e in a)
 
     assert ras == ras_
@@ -42,16 +42,16 @@ def test_relational_algebra_set_semantics():
     assert all(a_ in ras for a_ in a if a_ != 5)
     assert ras.fetch_one() in ras__
 
-    dee = RelationalAlgebraSet.dee()
-    dum = RelationalAlgebraSet.dum()
+    dee = ra_module.RelationalAlgebraSet.dee()
+    dum = ra_module.RelationalAlgebraSet.dum()
 
     assert len(dee) > 0 and dee.arity == 0
     assert len(dum) == 0 and dum.arity == 0
 
 
-def test_relational_algebra_ra_projection():
+def test_relational_algebra_ra_projection(ra_module):
     a = [(i % 2, i, i * 2) for i in range(5)]
-    ras = RelationalAlgebraSet(a)
+    ras = ra_module.RelationalAlgebraSet(a)
 
     ras_0 = ras.projection(0)
     assert (0, ) in ras_0 and (1, ) in ras_0
@@ -59,13 +59,13 @@ def test_relational_algebra_ra_projection():
 
     ras_0 = ras.projection(0, 2)
     assert all((i % 2, i * 2) for i in range(5))
-    assert ras.projection() == RelationalAlgebraSet.dee()
+    assert ras.projection() == ra_module.RelationalAlgebraSet.dee()
 
 
-def test_relational_algebra_ra_selection():
+def test_relational_algebra_ra_selection(ra_module):
     a = [(i % 2, i, i * 2) for i in range(5)]
 
-    ras = RelationalAlgebraSet(a)
+    ras = ra_module.RelationalAlgebraSet(a)
 
     ras_0 = ras.selection({0: 1})
     a_sel = set((i % 2, i, i * 2) for i in range(5) if i % 2 == 1)
@@ -76,16 +76,16 @@ def test_relational_algebra_ra_selection():
     assert ras_0 == a_sel
 
 
-def test_relational_algebra_ra_equijoin():
+def test_relational_algebra_ra_equijoin(ra_module):
     a = [(i, i * 2) for i in range(5)]
     b = [(i * 2, i * 3) for i in range(5)]
     c = [(i, i * 2, i * 2, i * 3) for i in range(5)]
     d = [(i, i * 2, i, i * 2) for i in range(5)]
 
-    ras_a = RelationalAlgebraSet(a)
-    ras_b = RelationalAlgebraSet(b)
-    ras_c = RelationalAlgebraSet(c)
-    ras_d = RelationalAlgebraSet(d)
+    ras_a = ra_module.RelationalAlgebraSet(a)
+    ras_b = ra_module.RelationalAlgebraSet(b)
+    ras_c = ra_module.RelationalAlgebraSet(c)
+    ras_d = ra_module.RelationalAlgebraSet(d)
 
     res = ras_a.equijoin(ras_b, [(1, 0)])
     assert res == ras_c
@@ -94,81 +94,81 @@ def test_relational_algebra_ra_equijoin():
     assert res == ras_d
 
 
-def test_relational_algebra_ra_cross_product():
+def test_relational_algebra_ra_cross_product(ra_module):
     a = [(i, i * 2) for i in range(5)]
     b = [(i * 2, i * 3) for i in range(5)]
     c = [u + v for u in a for v in b]
 
-    ras_a = RelationalAlgebraSet(a)
-    ras_b = RelationalAlgebraSet(b)
-    ras_c = RelationalAlgebraSet(c)
+    ras_a = ra_module.RelationalAlgebraSet(a)
+    ras_b = ra_module.RelationalAlgebraSet(b)
+    ras_c = ra_module.RelationalAlgebraSet(c)
 
     res = ras_a.cross_product(ras_b)
     assert res == ras_c
 
 
-def test_relational_algebra_ra_equijoin_mixed_types():
+def test_relational_algebra_ra_equijoin_mixed_types(ra_module):
     a = [(chr(ord('a') + i), i * 2) for i in range(5)]
     b = [(i * 2, i * 3) for i in range(5)]
     c = [(chr(ord('a') + i), i * 2, i * 2, i * 3) for i in range(5)]
 
-    ras_a = RelationalAlgebraSet(a)
-    ras_b = RelationalAlgebraSet(b)
-    ras_c = RelationalAlgebraSet(c)
+    ras_a = ra_module.RelationalAlgebraSet(a)
+    ras_b = ra_module.RelationalAlgebraSet(b)
+    ras_c = ra_module.RelationalAlgebraSet(c)
 
     res = ras_a.equijoin(ras_b, [(1, 0)])
     assert res == ras_c
 
 
-def test_groupby():
+def test_groupby(ra_module):
     a = [(i, i * j) for i in (1, 2) for j in (2, 3, 4)]
 
     b = [(1, j) for j in (2, 3, 4)]
     c = [(2, 2 * j) for j in (2, 3, 4)]
 
-    ras_a = RelationalAlgebraSet(a)
-    ras_b = RelationalAlgebraSet(b)
-    ras_c = RelationalAlgebraSet(c)
+    ras_a = ra_module.RelationalAlgebraSet(a)
+    ras_b = ra_module.RelationalAlgebraSet(b)
+    ras_c = ra_module.RelationalAlgebraSet(c)
 
     res = list(ras_a.groupby(0))
     assert res[0] == (1, ras_b)
     assert res[1] == (2, ras_c)
 
-    dee = NamedRelationalAlgebraFrozenSet.dee()
-    dum = NamedRelationalAlgebraFrozenSet.dum()
+    dee = ra_module.NamedRelationalAlgebraFrozenSet.dee()
+    dum = ra_module.NamedRelationalAlgebraFrozenSet.dum()
 
     assert len(dee) > 0 and dee.arity == 0
     assert len(dum) == 0 and dum.arity == 0
     assert dee != dum
 
 
-def test_named_relational_algebra_set_semantics_empty():
-    ras = NamedRelationalAlgebraFrozenSet(('y', 'x'))
+def test_named_relational_algebra_set_semantics_empty(ra_module):
+    ras = ra_module.NamedRelationalAlgebraFrozenSet(('y', 'x'))
 
     assert ras.is_empty()
     assert len(ras) == 0
     assert ras.arity == 2
     assert list(iter(ras)) == []
-    assert ras != NamedRelationalAlgebraFrozenSet.dum()
-    assert ras.projection() == NamedRelationalAlgebraFrozenSet.dum()
+    assert ras != ra_module.NamedRelationalAlgebraFrozenSet.dum()
+    assert ras.projection() == ra_module.NamedRelationalAlgebraFrozenSet.dum()
 
-    ras = NamedRelationalAlgebraFrozenSet(('y', 'x'), [(0, 1)])
+    ras = ra_module.NamedRelationalAlgebraFrozenSet(('y', 'x'), [(0, 1)])
     assert (0, 1) in ras
     assert {'x': 1, 'y': 0} in ras
     assert {'y': 1, 'x': 1} not in ras
     assert len(ras) == 1
     assert ras.arity == 2
 
-    ras_b = NamedRelationalAlgebraFrozenSet(('y', 'z'), [(0, 1)])
+    ras_b = ra_module.NamedRelationalAlgebraFrozenSet(('y', 'z'), [(0, 1)])
     assert ras != ras_b
 
-    ras_c = NamedRelationalAlgebraFrozenSet(('x', 'y'), [(1, 0)])
+    ras_c = ra_module.NamedRelationalAlgebraFrozenSet(('x', 'y'), [(1, 0)])
     assert ras == ras_c
 
 
-def test_named_relational_algebra_ra_projection():
+def test_named_relational_algebra_ra_projection(ra_module):
     a = [(i % 2, i, i * 2) for i in range(5)]
-    ras = NamedRelationalAlgebraFrozenSet(('x', 'y', 'z'), a)
+    ras = ra_module.NamedRelationalAlgebraFrozenSet(('x', 'y', 'z'), a)
 
     ras_x = ras.projection('x')
     assert (0, ) in ras_x and (1, ) in ras_x
@@ -183,41 +183,41 @@ def test_named_relational_algebra_ra_projection():
     assert len(ras_) > 0
     assert ras_.projection('x') == ras_
 
-    assert ras_.projection() == NamedRelationalAlgebraFrozenSet.dee()
+    assert ras_.projection() == ra_module.NamedRelationalAlgebraFrozenSet.dee()
 
 
-def test_named_relational_algebra_ra_selection():
+def test_named_relational_algebra_ra_selection(ra_module):
     a = [(i % 2, i, i * 2) for i in range(5)]
 
-    ras = NamedRelationalAlgebraFrozenSet(('x', 'y', 'z'), a)
+    ras = ra_module.NamedRelationalAlgebraFrozenSet(('x', 'y', 'z'), a)
 
     ras_0 = ras.selection({'x': 1})
-    a_sel = NamedRelationalAlgebraFrozenSet(
+    a_sel = ra_module.NamedRelationalAlgebraFrozenSet(
         ras.columns, set((i % 2, i, i * 2) for i in range(5) if i % 2 == 1)
     )
     assert ras_0 == a_sel
 
     ras_0 = ras.selection({'x': 1, 'y': 2})
-    a_sel = NamedRelationalAlgebraFrozenSet(
+    a_sel = ra_module.NamedRelationalAlgebraFrozenSet(
         ras.columns,
         set((i % 2, i, i * 2) for i in range(5) if i % 2 == 1 and i == 2)
     )
     assert ras_0 == a_sel
 
 
-def test_named_relational_algebra_ra_naturaljoin():
+def test_named_relational_algebra_ra_naturaljoin(ra_module):
     a = [(i, i * 2) for i in range(5)]
     b = [(i * 2, i * 3) for i in range(5)]
     c = [(i, i * 2, i * 3) for i in range(5)]
     d = [(i, i * 2, j * 2, j * 3) for i in range(5) for j in range(5)]
 
-    ras_a = NamedRelationalAlgebraFrozenSet(('z', 'y'), a)
-    ras_b = NamedRelationalAlgebraFrozenSet(('y', 'x'), b)
-    ras_b2 = NamedRelationalAlgebraFrozenSet(('u', 'v'), b)
-    ras_c = NamedRelationalAlgebraFrozenSet(('z', 'y', 'x'), c)
-    ras_d = NamedRelationalAlgebraFrozenSet(('z', 'y', 'u', 'v'), d)
-    empty = NamedRelationalAlgebraFrozenSet(('z', 'y'), [])
-    empty_plus = NamedRelationalAlgebraFrozenSet(
+    ras_a = ra_module.NamedRelationalAlgebraFrozenSet(('z', 'y'), a)
+    ras_b = ra_module.NamedRelationalAlgebraFrozenSet(('y', 'x'), b)
+    ras_b2 = ra_module.NamedRelationalAlgebraFrozenSet(('u', 'v'), b)
+    ras_c = ra_module.NamedRelationalAlgebraFrozenSet(('z', 'y', 'x'), c)
+    ras_d = ra_module.NamedRelationalAlgebraFrozenSet(('z', 'y', 'u', 'v'), d)
+    empty = ra_module.NamedRelationalAlgebraFrozenSet(('z', 'y'), [])
+    empty_plus = ra_module.NamedRelationalAlgebraFrozenSet(
         ('z', 'y'), [(0, 1)]
     ).projection()
 
@@ -236,38 +236,38 @@ def test_named_relational_algebra_ra_naturaljoin():
     assert res == ras_d
 
 
-def test_named_relational_algebra_ra_cross_product():
+def test_named_relational_algebra_ra_cross_product(ra_module):
     a = [(i, i * 2) for i in range(5)]
     b = [(i * 2, i * 3) for i in range(5)]
     c = [u + v for u in a for v in b]
 
-    ras_a = NamedRelationalAlgebraFrozenSet(('x', 'y'), a)
-    ras_b = NamedRelationalAlgebraFrozenSet(('u', 'v'), b)
-    ras_c = NamedRelationalAlgebraFrozenSet(('x', 'y', 'u', 'v'), c)
+    ras_a = ra_module.NamedRelationalAlgebraFrozenSet(('x', 'y'), a)
+    ras_b = ra_module.NamedRelationalAlgebraFrozenSet(('u', 'v'), b)
+    ras_c = ra_module.NamedRelationalAlgebraFrozenSet(('x', 'y', 'u', 'v'), c)
 
     res = ras_a.cross_product(ras_b)
     assert res == ras_c
 
 
-def test_named_relational_algebra_difference():
+def test_named_relational_algebra_difference(ra_module):
     a = [(i, i * 2) for i in range(5)]
     b = [(i, i * 2) for i in range(1, 5)]
     c = [(i, i * 2) for i in range(1)]
 
-    ras_a = NamedRelationalAlgebraFrozenSet(('x', 'y'), a)
-    ras_b = NamedRelationalAlgebraFrozenSet(('x', 'y'), b)
-    ras_b_inv = NamedRelationalAlgebraFrozenSet(('y', 'x'),
+    ras_a = ra_module.NamedRelationalAlgebraFrozenSet(('x', 'y'), a)
+    ras_b = ra_module.NamedRelationalAlgebraFrozenSet(('x', 'y'), b)
+    ras_b_inv = ra_module.NamedRelationalAlgebraFrozenSet(('y', 'x'),
                                                 [t[::-1] for t in b])
-    ras_c = NamedRelationalAlgebraFrozenSet(('x', 'y'), c)
+    ras_c = ra_module.NamedRelationalAlgebraFrozenSet(('x', 'y'), c)
 
-    empty = NamedRelationalAlgebraFrozenSet(('x', 'y'), [])
-    dee = NamedRelationalAlgebraFrozenSet.dee()
+    empty = ra_module.NamedRelationalAlgebraFrozenSet(('x', 'y'), [])
+    dee = ra_module.NamedRelationalAlgebraFrozenSet.dee()
 
     assert (ras_a - empty) == ras_a
     assert (empty - ras_a) == empty
     assert (empty - empty) == empty
     assert (dee - empty) == dee
-    assert (dee - dee) == NamedRelationalAlgebraFrozenSet.dum()
+    assert (dee - dee) == ra_module.NamedRelationalAlgebraFrozenSet.dum()
 
     res = ras_a - ras_b
     assert res == ras_c
@@ -282,7 +282,7 @@ def test_named_relational_algebra_difference():
     assert len(res) == 0
 
 
-def test_named_groupby():
+def test_named_groupby(ra_module):
     a = [(i, i * j) for i in (1, 2) for j in (2, 3, 4)]
 
     b = [(1, j) for j in (2, 3, 4)]
@@ -290,32 +290,32 @@ def test_named_groupby():
 
     cols = ('x', 'y')
 
-    ras_a = NamedRelationalAlgebraFrozenSet(cols, a)
-    ras_b = NamedRelationalAlgebraFrozenSet(cols, b)
-    ras_c = NamedRelationalAlgebraFrozenSet(cols, c)
+    ras_a = ra_module.NamedRelationalAlgebraFrozenSet(cols, a)
+    ras_b = ra_module.NamedRelationalAlgebraFrozenSet(cols, b)
+    ras_c = ra_module.NamedRelationalAlgebraFrozenSet(cols, c)
 
     res = list(ras_a.groupby('x'))
     assert res[0] == (1, ras_b)
     assert res[1] == (2, ras_c)
 
 
-def test_named_iter_and_fecth_one():
+def test_named_iter_and_fecth_one(ra_module):
     a = [(i, i * j) for i in (1, 2) for j in (2, 3, 4)]
 
     cols = ('y', 'x')
 
-    ras_a = NamedRelationalAlgebraFrozenSet(cols, a)
+    ras_a = ra_module.NamedRelationalAlgebraFrozenSet(cols, a)
     res = list(iter(ras_a))
     assert res == a
     assert ras_a.fetch_one() in res
 
 
-def test_rename_column():
+def test_rename_column(ra_module):
     a = [(i, i * j) for i in (1, 2) for j in (2, 3, 4)]
 
     cols = ('y', 'x')
 
-    ras_a = NamedRelationalAlgebraFrozenSet(cols, a)
+    ras_a = ra_module.NamedRelationalAlgebraFrozenSet(cols, a)
     ras_b = ras_a.rename_column('y', 'z')
     assert all(
         el_a.x == el_b.x and el_a.y == el_b.z
@@ -323,22 +323,22 @@ def test_rename_column():
     )
 
 
-def test_named_to_unnamed():
+def test_named_to_unnamed(ra_module):
     a = [(i, i * j) for i in (1, 2) for j in (2, 3, 4)]
 
     cols = ('y', 'x')
 
-    ras_a = NamedRelationalAlgebraFrozenSet(cols, a)
-    ras_b = RelationalAlgebraFrozenSet(a)
+    ras_a = ra_module.NamedRelationalAlgebraFrozenSet(cols, a)
+    ras_b = ra_module.RelationalAlgebraFrozenSet(a)
     assert ras_a.to_unnamed() == ras_b
 
 
-def test_named_ra_set_from_other():
-    first = NamedRelationalAlgebraFrozenSet(("x", "n"), [
+def test_named_ra_set_from_other(ra_module):
+    first = ra_module.NamedRelationalAlgebraFrozenSet(("x", "n"), [
         (56, "bonjour"),
         (42, "aurevoir"),
     ])
-    second = NamedRelationalAlgebraFrozenSet(
+    second = ra_module.NamedRelationalAlgebraFrozenSet(
         first.columns,
         first,
     )
@@ -346,53 +346,53 @@ def test_named_ra_set_from_other():
     for tuple_a, tuple_b in zip(first, second):
         assert tuple_a == tuple_b
 
-    third = NamedRelationalAlgebraFrozenSet(
-        ("x",), NamedRelationalAlgebraFrozenSet(tuple())
+    third = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("x",), ra_module.NamedRelationalAlgebraFrozenSet(tuple())
     )
 
     assert len(third) == 0
     assert third.columns == ("x",)
 
 
-def test_named_ra_union():
-    first = NamedRelationalAlgebraFrozenSet(("x", "y"), [(7, 8), (9, 2)])
-    second = NamedRelationalAlgebraFrozenSet(("x", "y"), [(9, 2), (42, 0)])
-    expected = NamedRelationalAlgebraFrozenSet(("x", "y"), [(7, 8), (9, 2),
+def test_named_ra_union(ra_module):
+    first = ra_module.NamedRelationalAlgebraFrozenSet(("x", "y"), [(7, 8), (9, 2)])
+    second = ra_module.NamedRelationalAlgebraFrozenSet(("x", "y"), [(9, 2), (42, 0)])
+    expected = ra_module.NamedRelationalAlgebraFrozenSet(("x", "y"), [(7, 8), (9, 2),
                                                             (42, 0)])
     assert first | second == expected
-    empty = NamedRelationalAlgebraFrozenSet(('x', 'y'), [])
-    dee = NamedRelationalAlgebraFrozenSet.dee()
+    empty = ra_module.NamedRelationalAlgebraFrozenSet(('x', 'y'), [])
+    dee = ra_module.NamedRelationalAlgebraFrozenSet.dee()
     assert first | empty == first
     assert empty | first == first
     assert dee | dee == dee
     assert first | empty | second == first | second
 
 
-def test_named_ra_intersection():
-    first = NamedRelationalAlgebraFrozenSet(("x", "y"), [(7, 8), (9, 2)])
-    second = NamedRelationalAlgebraFrozenSet(("x", "y"), [(9, 2), (42, 0)])
-    expected = NamedRelationalAlgebraFrozenSet(("x", "y"), [(9, 2)])
+def test_named_ra_intersection(ra_module):
+    first = ra_module.NamedRelationalAlgebraFrozenSet(("x", "y"), [(7, 8), (9, 2)])
+    second = ra_module.NamedRelationalAlgebraFrozenSet(("x", "y"), [(9, 2), (42, 0)])
+    expected = ra_module.NamedRelationalAlgebraFrozenSet(("x", "y"), [(9, 2)])
     assert first & second == expected
-    empty = NamedRelationalAlgebraFrozenSet(('x', 'y'), [])
+    empty = ra_module.NamedRelationalAlgebraFrozenSet(('x', 'y'), [])
     assert first & empty == empty
     assert empty & first == empty
     assert first & empty & second == empty
 
 
-def test_aggregate():
-    initial_set = NamedRelationalAlgebraFrozenSet(("x", "y", "z"), [(7, 8, 1),
+def test_aggregate(ra_module):
+    initial_set = ra_module.NamedRelationalAlgebraFrozenSet(("x", "y", "z"), [(7, 8, 1),
                                                                     (7, 8, 9)])
-    expected_sum = NamedRelationalAlgebraFrozenSet(("x", "y", "z"),
+    expected_sum = ra_module.NamedRelationalAlgebraFrozenSet(("x", "y", "z"),
                                                    [(7, 8, 10)])
-    expected_str = NamedRelationalAlgebraFrozenSet(("x", "y", "z"),
+    expected_str = ra_module.NamedRelationalAlgebraFrozenSet(("x", "y", "z"),
                                                    [(7, 8, 2)])
-    expected_lambda = NamedRelationalAlgebraFrozenSet(("x", "y", "z"),
+    expected_lambda = ra_module.NamedRelationalAlgebraFrozenSet(("x", "y", "z"),
                                                       [(7, 8, 8)])
 
-    initial_set2 = NamedRelationalAlgebraFrozenSet(("w", "x", "y", "z"),
+    initial_set2 = ra_module.NamedRelationalAlgebraFrozenSet(("w", "x", "y", "z"),
                                                    [(1, 7, 8, 1),
                                                     (2, 7, 8, 9)])
-    expected_op2 = NamedRelationalAlgebraFrozenSet(("w", "x", "y", "z"),
+    expected_op2 = ra_module.NamedRelationalAlgebraFrozenSet(("w", "x", "y", "z"),
                                                    [(2, 7, 8, 8)])
 
     new_set = initial_set.aggregate(["x", "y"], {"z": sum})
@@ -417,23 +417,29 @@ def test_aggregate():
     assert expected_op2 == new_set
 
 
-def test_extended_projection():
-    initial_set = NamedRelationalAlgebraFrozenSet(("x", "y"), [(7, 8), (9, 2)])
-    expected_sum = NamedRelationalAlgebraFrozenSet(("z",), [(15,), (11,)])
-    expected_lambda = NamedRelationalAlgebraFrozenSet(("z",), [(14,), (10,)])
-    expected_lambda2 = NamedRelationalAlgebraFrozenSet(
+def test_extended_projection(ra_module):
+    initial_set = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("x", "y"), [(7, 8), (9, 2)]
+    )
+    expected_sum = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("z",), [(15,), (11,)]
+    )
+    expected_lambda = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("z",), [(14,), (10,)]
+    )
+    expected_lambda2 = ra_module.NamedRelationalAlgebraFrozenSet(
         ("z", "x"), [(14, 8), (10, 10)]
     )
-    expected_new_colum_str = NamedRelationalAlgebraFrozenSet(
+    expected_new_colum_str = ra_module.NamedRelationalAlgebraFrozenSet(
         ("x", "z",), [(7, "a",), (9, "a",)]
     )
-    expected_new_colum_int = NamedRelationalAlgebraFrozenSet(
+    expected_new_colum_int = ra_module.NamedRelationalAlgebraFrozenSet(
         ("z",), [(1,), (1,)]
     )
     new_set = initial_set.extended_projection({"z": sum})
     assert expected_sum == new_set
     new_set = initial_set.extended_projection(
-        {"z": RelationalAlgebraStringExpression("x+y")}
+        {"z": ra_module.RelationalAlgebraStringExpression("x+y")}
     )
     assert expected_sum == new_set
     new_set = initial_set.extended_projection({"z": lambda r: r.x + r.y - 1})
@@ -441,26 +447,26 @@ def test_extended_projection():
     new_set = initial_set.extended_projection(
         {
             "z": lambda r: (r.x + r.y - 1),
-            "x": RelationalAlgebraStringExpression("x+1"),
+            "x": ra_module.RelationalAlgebraStringExpression("x+1"),
         }
     )
     assert expected_lambda2 == new_set
     new_set = initial_set.extended_projection(
-        {"z": "a", "x": RelationalAlgebraStringExpression("x")}
+        {"z": "a", "x": ra_module.RelationalAlgebraStringExpression("x")}
     )
     assert expected_new_colum_str == new_set
     new_set = initial_set.extended_projection({"z": 1})
     assert expected_new_colum_int == new_set
 
 
-def test_rename_columns():
-    first = NamedRelationalAlgebraFrozenSet(
+def test_rename_columns(ra_module):
+    first = ra_module.NamedRelationalAlgebraFrozenSet(
         ("x", "y"),
         [(0, 2), (0, 4)],
     )
     assert first.rename_columns({"x": "x"}) == first
     assert id(first.rename_columns({"x": "x"})) != id(first)
-    second = NamedRelationalAlgebraFrozenSet(
+    second = ra_module.NamedRelationalAlgebraFrozenSet(
         ("y", "x"),
         [(0, 2), (0, 4)],
     )
