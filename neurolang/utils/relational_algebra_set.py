@@ -267,7 +267,7 @@ class RelationalAlgebraFrozenSet(Set):
         if isinstance(other, type(self)):
             scont = self._container
             ocont = other._container
-            if (self.is_empty() and other.is_empty):
+            if self.is_empty() and other.is_empty():
                 res = True
             elif self.arity != other.arity:
                 res = False
