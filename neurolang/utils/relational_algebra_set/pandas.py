@@ -1,17 +1,32 @@
 from collections import OrderedDict
-from collections.abc import MutableSet, Set
 from typing import Iterable
 from uuid import uuid1
 
 import pandas as pd
 
+from .. import relational_algebra_set
 
-class RelationalAlgebraStringExpression(str):
+
+class ColumnOperators:
+    sum = sum
+    max = max
+    min = min
+    all = all
+    any = any
+    len = len
+
+
+column_operators = ColumnOperators
+
+
+class RelationalAlgebraExpression(str):
     def __repr__(self):
         return "{}{{ {} }}".format(self.__class__.__name__, super().__repr__())
 
 
-class RelationalAlgebraFrozenSet(Set):
+class RelationalAlgebraFrozenSet(
+    relational_algebra_set.RelationalAlgebraFrozenSet
+):
     def __init__(self, iterable=None):
         self._container = None
         self._might_have_duplicates = True
@@ -268,6 +283,8 @@ class RelationalAlgebraFrozenSet(Set):
             if not isinstance(columns, Iterable):
                 columns = [columns]
             for g_id, group in self._container.groupby(by=list(columns)):
+                if len(columns) == 1:
+                    g_id = (g_id,)
                 group_set = self._empty_set_same_structure()
                 group_set._container = group
                 yield g_id, group_set
@@ -284,7 +301,10 @@ class RelationalAlgebraFrozenSet(Set):
         return hash(v.data.tobytes())
 
 
-class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
+class NamedRelationalAlgebraFrozenSet(
+    RelationalAlgebraFrozenSet,
+    relational_algebra_set.NamedRelationalAlgebraFrozenSet
+):
     def __init__(self, columns, iterable=None):
         self._columns = tuple(columns)
         self._columns_sort = tuple(pd.Index(columns).argsort())
@@ -556,7 +576,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         proj_columns = list(eval_expressions.keys())
         new_container = self._container.copy()
         for dst_column, operation in eval_expressions.items():
-            if isinstance(operation, RelationalAlgebraStringExpression):
+            if isinstance(operation, RelationalAlgebraExpression):
                 if str(operation) != str(dst_column):
                     new_container = new_container.eval(
                         "{}={}".format(str(dst_column), str(operation))
@@ -676,7 +696,10 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         raise NotImplementedError()
 
 
-class RelationalAlgebraSet(RelationalAlgebraFrozenSet, MutableSet):
+class RelationalAlgebraSet(
+    RelationalAlgebraFrozenSet,
+    relational_algebra_set.RelationalAlgebraSet
+):
 
     def add(self, value):
         value = self._normalise_element(value)

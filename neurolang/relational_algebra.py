@@ -4,15 +4,10 @@ from typing import AbstractSet, Tuple
 from . import expression_walker as ew
 from . import type_system
 from .exceptions import NeuroLangException
-from .expressions import (
-    Constant,
-    Definition,
-    FunctionApplication,
-    Symbol,
-    Unknown,
-)
-from .utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet
-from .utils.relational_algebra_set import RelationalAlgebraStringExpression
+from .expressions import (Constant, Definition, FunctionApplication, Symbol,
+                          Unknown)
+from .utils import (NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet,
+                    RelationalAlgebraStringExpression)
 
 eq_ = Constant(operator.eq)
 

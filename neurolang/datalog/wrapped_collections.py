@@ -6,7 +6,7 @@ from ..expression_walker import ReplaceExpressionsByValues
 from ..expressions import Constant
 from ..type_system import (Unknown, get_args, infer_type,
                            unify_types)
-from ..utils.relational_algebra_set import (
+from ..utils import (
     NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet,
     RelationalAlgebraSet)
 

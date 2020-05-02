@@ -499,9 +499,16 @@ def test_named_ra_union(ras_class):
     assert first | second == expected
     empty = NamedRelationalAlgebraFrozenSet(('x', 'y'), [])
     dee = NamedRelationalAlgebraFrozenSet.dee()
+    dum = NamedRelationalAlgebraFrozenSet.dum()
     assert first | empty == first
     assert empty | first == first
     assert dee | dee == dee
+    assert dum | dum == dum
+    assert dee | dum == dee
+    assert first | dee == first
+    assert dee | first == first
+    assert first | dum == dum
+    assert dum | first == dum
     assert first | empty | second == first | second
 
 
@@ -517,9 +524,18 @@ def test_named_ra_intersection(ras_class):
     assert empty & first == empty
     assert first & empty & second == empty
 
-    empty = NamedRelationalAlgebraFrozenSet(columns=tuple())
-    assert first & empty == empty
-    assert empty & first == empty
+    dee = NamedRelationalAlgebraFrozenSet.dum()
+    assert first & dee() == first
+    assert dee & first == first
+
+    dum = NamedRelationalAlgebraFrozenSet.dum()
+    assert first & dum == dum
+    assert dum & first == dum
+
+    assert dee & dee == dee
+    assert dum & dum == dum
+    assert dee & dum == dum
+    assert dum & dee == dum
 
 
 def test_aggregate(ras_class):

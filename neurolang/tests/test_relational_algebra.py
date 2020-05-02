@@ -33,8 +33,8 @@ from ..utils import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraFrozenSet,
     RelationalAlgebraSet,
+    RelationalAlgebraStringExpression
 )
-from ..utils.relational_algebra_set import RelationalAlgebraStringExpression
 
 
 R1 = WrappedRelationalAlgebraSet([
