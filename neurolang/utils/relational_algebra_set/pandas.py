@@ -225,6 +225,10 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     def __or__(self, other):
         if self is other:
             return self.copy()
+        elif self.is_dum():
+            return other
+        elif other.is_dum():
+            return self
         elif isinstance(other, RelationalAlgebraSet):
             ocont = other._container
             if self.is_empty() and other.is_empty():
@@ -433,6 +437,14 @@ class NamedRelationalAlgebraFrozenSet(
         raise NotImplementedError()
 
     def naturaljoin(self, other):
+        if self.is_dum():
+            return self
+        elif other.is_dum():
+            return other
+        elif self.is_dee():
+            return other
+        elif other.is_dee():
+            return self
         on = [c for c in self.columns if c in other.columns]
 
         if len(on) == 0:
@@ -454,6 +466,14 @@ class NamedRelationalAlgebraFrozenSet(
         )
 
     def cross_product(self, other):
+        if self.is_dum():
+            return self
+        elif other.is_dum():
+            return other
+        elif self.is_dee():
+            return other
+        elif other.is_dee():
+            return self
         if len(self._container.columns.intersection(other.columns)) > 0:
             raise ValueError(
                 "Cross product with common columns "
@@ -662,15 +682,18 @@ class NamedRelationalAlgebraFrozenSet(
         return output
 
     def __or__(self, other):
-        if self.columns != other.columns:
+        if self.is_dum():
+            return other
+        elif other.is_dum():
+            return self
+        elif self.is_dee():
+            return self
+        elif other.is_dee():
+            return other
+        elif self.columns != other.columns:
             raise ValueError(
                 "Union defined only for sets with the same columns"
             )
-        if len(self.columns) == 0:
-            if len(self._container) > 0:
-                return self.copy()
-            else:
-                return other.copy()
         new_container = pd.merge(
             left=self._container,
             right=other._container,

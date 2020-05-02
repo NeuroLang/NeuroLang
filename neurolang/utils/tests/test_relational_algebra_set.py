@@ -134,13 +134,6 @@ def test_groupby(ra_module):
     assert res[0] == (1, ras_b)
     assert res[1] == (2, ras_c)
 
-    dee = ra_module.NamedRelationalAlgebraFrozenSet.dee()
-    dum = ra_module.NamedRelationalAlgebraFrozenSet.dum()
-
-    assert len(dee) > 0 and dee.arity == 0
-    assert len(dum) == 0 and dum.arity == 0
-    assert dee != dum
-
 
 def test_named_relational_algebra_set_semantics_empty(ra_module):
     ras = ra_module.NamedRelationalAlgebraFrozenSet(("y", "x"))
@@ -164,6 +157,13 @@ def test_named_relational_algebra_set_semantics_empty(ra_module):
 
     ras_c = ra_module.NamedRelationalAlgebraFrozenSet(("x", "y"), [(1, 0)])
     assert ras == ras_c
+
+    dee = ra_module.NamedRelationalAlgebraFrozenSet.dee()
+    dum = ra_module.NamedRelationalAlgebraFrozenSet.dum()
+
+    assert len(dee) > 0 and dee.arity == 0
+    assert len(dum) == 0 and dum.arity == 0
+    assert dee != dum
 
 
 def test_named_relational_algebra_ra_projection(ra_module):
@@ -217,14 +217,15 @@ def test_named_relational_algebra_ra_naturaljoin(ra_module):
     ras_c = ra_module.NamedRelationalAlgebraFrozenSet(("z", "y", "x"), c)
     ras_d = ra_module.NamedRelationalAlgebraFrozenSet(("z", "y", "u", "v"), d)
     empty = ra_module.NamedRelationalAlgebraFrozenSet(("z", "y"), [])
-    empty_plus = ra_module.NamedRelationalAlgebraFrozenSet(
-        ("z", "y"), [(0, 1)]
-    ).projection()
+    dee = ra_module.NamedRelationalAlgebraFrozenSet.dee()
+    dum = ra_module.NamedRelationalAlgebraFrozenSet.dum()
 
     assert len(ras_a.naturaljoin(empty)) == 0
     assert len(empty.naturaljoin(ras_a)) == 0
-    assert ras_a.naturaljoin(empty_plus) == ras_a
-    assert empty_plus.naturaljoin(ras_a) == ras_a
+    assert ras_a.naturaljoin(dee) == ras_a
+    assert dee.naturaljoin(ras_a) == ras_a
+    assert ras_a.naturaljoin(dum) == dum
+    assert dum.naturaljoin(ras_a) == dum
 
     res = ras_a.naturaljoin(ras_b)
     assert res == ras_c
@@ -244,9 +245,16 @@ def test_named_relational_algebra_ra_cross_product(ra_module):
     ras_a = ra_module.NamedRelationalAlgebraFrozenSet(("x", "y"), a)
     ras_b = ra_module.NamedRelationalAlgebraFrozenSet(("u", "v"), b)
     ras_c = ra_module.NamedRelationalAlgebraFrozenSet(("x", "y", "u", "v"), c)
+    dee = ra_module.NamedRelationalAlgebraFrozenSet.dee()
+    dum = ra_module.NamedRelationalAlgebraFrozenSet.dum()
 
     res = ras_a.cross_product(ras_b)
     assert res == ras_c
+
+    assert ras_a.naturaljoin(dee) == ras_a
+    assert dee.naturaljoin(ras_a) == ras_a
+    assert ras_a.naturaljoin(dum) == dum
+    assert dum.naturaljoin(ras_a) == dum
 
 
 def test_named_relational_algebra_difference(ra_module):
@@ -364,9 +372,13 @@ def test_named_ra_union(ra_module):
     assert first | second == expected
     empty = ra_module.NamedRelationalAlgebraFrozenSet(("x", "y"), [])
     dee = ra_module.NamedRelationalAlgebraFrozenSet.dee()
+    dum = ra_module.NamedRelationalAlgebraFrozenSet.dum()
+
     assert first | empty == first
     assert empty | first == first
     assert dee | dee == dee
+    assert first | dum == first
+    assert dum | first == first
     assert first | empty | second == first | second
 
 
