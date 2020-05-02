@@ -130,7 +130,7 @@ class ChaseRelationalAlgebraPlusCeriMixin:
         return substitutions
 
 
-class ChaseNamedRelationalAlgebraParameterisedMixin:
+class ChaseNamedRelationalAlgebraMixin:
     """
     Conjunctive query solving using the algorithm 5.4.8 from Abiteboul et al
     [1]_ algorithm for named relational algebra.
@@ -139,10 +139,6 @@ class ChaseNamedRelationalAlgebraParameterisedMixin:
       (Addison Wesley, 1995), Addison-Wesley.
 
     """
-
-    _set = WrappedRelationalAlgebraSet
-    _named_frozen_set = WrappedNamedRelationalAlgebraFrozenSet
-
     def chase_step(self, instance, rule, restriction_instance=None):
         if restriction_instance is None:
             restriction_instance = MapInstance()
@@ -211,25 +207,34 @@ class ChaseNamedRelationalAlgebraParameterisedMixin:
         return rule
 
     def eliminate_already_computed(self, consequent, instance, substitutions):
-        if len(consequent.args) > substitutions.arity:
+        substitutions_columns = set(substitutions.columns)
+        if substitutions_columns.isdisjoint(consequent.args):
             return substitutions
 
         args = tuple(
             arg.name for arg in consequent.args
             if isinstance(arg, Symbol)
         )
-        already_computed = self._named_frozen_set(
+        already_computed = WrappedNamedRelationalAlgebraFrozenSet(
             args,
             instance[consequent.functor].value
         )
-        if set(substitutions.columns).issuperset(already_computed.columns):
+        if substitutions_columns.issuperset(already_computed.columns):
             already_computed = substitutions.naturaljoin(already_computed)
+        elif substitutions_columns.issubset(already_computed.columns):
+            already_computed = already_computed.projection(
+                *substitutions_columns
+            )
+        elif substitutions_columns.symmetric_difference(
+            already_computed.columns
+        ):
+            return substitutions
         substitutions = substitutions - already_computed
         if not isinstance(
             substitutions,
-            self._named_frozen_set
+            WrappedNamedRelationalAlgebraFrozenSet
         ):
-            substitutions = self._named_frozen_set(
+            substitutions = (
                 sorted(substitutions.columns),
                 substitutions
             )
@@ -239,7 +244,7 @@ class ChaseNamedRelationalAlgebraParameterisedMixin:
         self, rule_predicates_iterator, instance, restriction_instance
     ):
         symbol_table = defaultdict(
-            lambda: Constant[AbstractSet](type(self)._set())
+            lambda: Constant[AbstractSet](WrappedRelationalAlgebraSet())
         )
         symbol_table.update(instance)
         symbol_table.update(restriction_instance)
@@ -251,15 +256,10 @@ class ChaseNamedRelationalAlgebraParameterisedMixin:
         ra_code = self.translate_conjunction_to_named_ra(
             Conjunction(predicates)
         )
-
-        result = RelationalAlgebraSolver(
-            symbol_table,
-            set_class=type(self)._set,
-            named_set_class=type(self)._named_frozen_set
-        ).walk(ra_code)
+        result = RelationalAlgebraSolver(symbol_table).walk(ra_code)
 
         result_value = result.value
-        substitutions = type(self)._named_frozen_set(
+        substitutions = WrappedNamedRelationalAlgebraFrozenSet(
             result_value.columns,
             result_value
         )
@@ -326,7 +326,7 @@ class ChaseNamedRelationalAlgebraParameterisedMixin:
         builtin_vectorized_predicates = []
         for pred, functor in builtin_predicates:
             if (
-                type(self).
+                ChaseNamedRelationalAlgebraMixin.
                 is_eq_expressible_as_ra(functor, pred, cq_free_vars)
             ):
                 edb_idb_predicates.append(pred)
@@ -349,7 +349,7 @@ class ChaseNamedRelationalAlgebraParameterisedMixin:
             return False
 
         return (
-            functor == eq_ and
+            functor.value == eq_ and
             not any(isinstance(arg, Definition) for arg in pred.args) and
             any(
                 isinstance(arg, Constant) or
@@ -364,11 +364,11 @@ class ChaseNamedRelationalAlgebraParameterisedMixin:
         if restriction_instance is None:
             restriction_instance = MapInstance
 
-        if isinstance(substitutions, type(self)._named_frozen_set):
+        if isinstance(substitutions, NamedRelationalAlgebraFrozenSet):
             new_tuples = substitutions.projection(
                 *(arg.name for arg in rule.consequent.args)
             )
-            new_tuples = type(self)._set(new_tuples.to_unnamed())
+            new_tuples = WrappedRelationalAlgebraSet(new_tuples.to_unnamed())
         else:
             tuples = [
                 tuple(
@@ -385,10 +385,3 @@ class ChaseNamedRelationalAlgebraParameterisedMixin:
         return self.compute_instance_update(
             rule, new_tuples, instance, restriction_instance
         )
-
-
-class ChaseNamedRelationalAlgebraMixin(
-    ChaseNamedRelationalAlgebraParameterisedMixin
- ):
-    _set = WrappedRelationalAlgebraSet
-    _named_frozen_set = WrappedNamedRelationalAlgebraFrozenSet

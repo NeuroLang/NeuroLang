@@ -8,25 +8,29 @@ sets.
 
 from itertools import tee
 from typing import AbstractSet, Any, Callable, Tuple
+from warnings import warn
 
 from ..expression_walker import PatternWalker, add_match
 from ..expressions import (Constant, Expression, FunctionApplication,
                            NeuroLangException, Symbol, TypedSymbolTableMixin,
                            is_leq_informative)
-from ..type_system import Unknown, infer_type
+from ..type_system import Unknown, get_args, infer_type
 from .expression_processing import (
     extract_logic_free_variables, is_conjunctive_expression,
     is_conjunctive_expression_with_nested_predicates)
-from .expressions import (NULL, UNDEFINED, Union, Fact, Implication,
-                          NullConstant, Undefined)
+from .expressions import (NULL, UNDEFINED, Fact, Implication, NullConstant,
+                          Undefined, Union)
 from .wrapped_collections import WrappedRelationalAlgebraSet
-
 
 __all__ = [
     "Implication", "Fact", "Undefined", "NullConstant",
     "UNDEFINED", "NULL", "WrappedRelationalAlgebraSet",
-    "DatalogProgram"
+    "DatalogProgram", "UnionOfConjunctiveQueries"
 ]
+
+
+class UnionOfConjunctiveQueries:
+    pass
 
 
 class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
@@ -36,14 +40,27 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
     In the symbol table the value for a symbol `S` is implemented as:
 
     * If `S` is part of the extensional database, then the value of the symbol
-    is a set of tuples `a` representing `S(*a)` as facts
+    is a set of tuples `a` representing `S(*a)` as facts. The type of the
+    symbol must be more informative than `AbstractSet[Tuple]`
 
     * If `S` is part of the intensional database then its value is an
     `Union` of `Implications`. For instance
     `Q(x) :- R(x, x)` and `Q(x) :- T(x)` is represented as a symbol `Q`
      with value
-     `Union((Implication(Q(x), R(x, x)), Implication(Q(x), T(x))))`
+     `Union((Implication(Q(x), R(x, x)), Implication(Q(x), T(x))))`.
+     The type of the symbol `Q` in the symbol_table will be
+     `UnionOfConjunctiveQueries`.
     '''
+
+    def __init_subclass__(cls, **kwargs):
+        for c in cls.mro()[1:-1]:
+            if not hasattr(c, 'protected_keywords'):
+                continue
+            cls.protected_keywords = (
+                cls.protected_keywords |
+                c.protected_keywords
+            )
+        super().__init_subclass__(**kwargs)
 
     protected_keywords = set()
 
@@ -115,7 +132,9 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
 
         self._validate_implication_syntax(consequent, antecedent)
 
-        if consequent.functor in self.symbol_table:
+        symbol = consequent.functor.cast(UnionOfConjunctiveQueries)
+
+        if symbol in self.symbol_table:
             disj = self._new_intensional_internal_representation(consequent)
         else:
             disj = tuple()
@@ -123,12 +142,13 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
         if expression not in disj:
             disj += (expression,)
 
-        self.symbol_table[consequent.functor] = Union(disj)
+        self.symbol_table[symbol] = Union(disj)
 
         return expression
 
     def _new_intensional_internal_representation(self, consequent):
-        value = self.symbol_table[consequent.functor]
+        symbol = consequent.functor.cast(UnionOfConjunctiveQueries)
+        value = self.symbol_table[symbol]
         if (
             isinstance(value, Constant) and
             is_leq_informative(value.type, AbstractSet)
@@ -137,7 +157,7 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
                 f'{consequent.functor.name} has been previously '
                 'defined as Fact or extensional database.'
             )
-        disj = self.symbol_table[consequent.functor].formulas
+        disj = self.symbol_table[symbol].formulas
 
         if (
             not isinstance(disj[0].consequent, FunctionApplication) or
@@ -184,17 +204,52 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
             )
 
     @staticmethod
-    def new_set(iterable=None):
-        return WrappedRelationalAlgebraSet(iterable=iterable)
+    def new_set(iterable=None, row_type=None, verify_row_type=False):
+        return WrappedRelationalAlgebraSet(
+            iterable=iterable, row_type=row_type,
+            verify_row_type=verify_row_type
+        )
 
     def intensional_database(self):
         return {
-            k: v for k, v in self.symbol_table.items()
+            k: v for k, v
+            in self.symbol_table.items()
             if (
-                k not in self.protected_keywords and
-                isinstance(v, Union)
+                k not in self.protected_keywords
+                and k.type is UnionOfConjunctiveQueries
             )
         }
+
+    def predicate_terms(self, predicate):
+        try:
+            pred_repr = self.symbol_table[predicate]
+            if isinstance(pred_repr, Union):
+                head_args = self._predicate_terms_intensional(pred_repr)
+                return head_args
+            elif is_leq_informative(pred_repr.type, AbstractSet):
+                row_type = get_args(pred_repr.type)[0]
+                row_len = len(get_args(row_type))
+                return tuple(
+                    Symbol(str(i))
+                    for i in range(row_len)
+                )
+            else:
+                raise NeuroLangException(f'Predicate {predicate} not found')
+        except KeyError:
+            raise NeuroLangException(f'Predicate {predicate} not found')
+
+    def _predicate_terms_intensional(self, pred_repr):
+        head_args = None
+        for formula in pred_repr.formulas:
+            if head_args is None:
+                head_args = formula.consequent.args
+            elif head_args != formula.consequent.args:
+                warn(
+                    'Several argument names found in the rules '
+                    f'defining {formula.consequent.functor.name}, keeping one'
+                )
+                break
+        return head_args
 
     def extensional_database(self):
         ret = self.symbol_table.symbols_by_type(AbstractSet)
@@ -210,10 +265,13 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
         self, symbol, iterable, type_=Unknown
     ):
         if type_ is Unknown:
-            type_, iterable = self.infer_iterable_type(iterable)
+            new_set = self.new_set(iterable)
+            type_ = new_set.row_type
+        else:
+            new_set = self.new_set(iterable=iterable, row_type=type_)
 
         constant = Constant[AbstractSet[type_]](
-            self.new_set(list(iterable)),
+            new_set,
             auto_infer_type=False,
             verify_type=False
         )

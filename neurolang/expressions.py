@@ -1,24 +1,23 @@
 """Expressions for the intermediate representation and auxiliary functions."""
-from itertools import chain
-import operator as op
-import typing
 import inspect
-from functools import wraps, WRAPPER_ASSIGNMENTS, lru_cache
-import types
-import threading
-from warnings import warn
 import logging
+import operator as op
+import threading
+import types
+import typing
 from contextlib import contextmanager
+from functools import WRAPPER_ASSIGNMENTS, lru_cache, wraps
+from itertools import chain
+from warnings import warn
+
+import numpy as np
+
 from .exceptions import NeuroLangException
-from .type_system import (
-    is_leq_informative, Unknown,
-    unify_types, NeuroLangTypeException,
-)
+from .type_system import NeuroLangTypeException, Unknown
 from .type_system import get_args as get_type_args
 from .type_system import infer_type as _infer_type
-from .type_system import infer_type_builtins
+from .type_system import infer_type_builtins, is_leq_informative, unify_types
 from .typed_symbol_table import TypedSymbolTable
-
 
 __all__ = [
     'Symbol', 'FunctionApplication', 'Statement',
@@ -283,7 +282,10 @@ class Expression(metaclass=ExpressionMeta):
         else:
             ret = self.__class__[type_](*args)
 
-        if ret.type is not type_:
+        # TODO: this should be ret.type is not type_
+        #       but there is an issue with the type caching of Python
+        #       that makes them different ( id(res.type) != id(type_) )
+        if ret.type != type_:
             raise NeuroLangTypeException('Cast impossible')
         return ret
 
@@ -393,9 +395,9 @@ class Symbol(NonConstant):
 
     @classmethod
     def fresh(cls):
-        if not hasattr(cls, '_fresh_generator_'):
-            cls._fresh_generator_ = cls._fresh_generator()
-        new_symbol = next(cls._fresh_generator_)
+        if not hasattr(Symbol, '_fresh_generator_'):
+            Symbol._fresh_generator_ = Symbol._fresh_generator()
+        new_symbol = next(Symbol._fresh_generator_)
         if cls.type is not typing.Any:
             new_symbol = new_symbol.cast(cls.type)
         return new_symbol

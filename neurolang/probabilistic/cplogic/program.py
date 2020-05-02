@@ -1,21 +1,22 @@
 import typing
 
+from ...datalog import DatalogProgram
 from ...exceptions import NeuroLangException
-from ...expression_walker import ExpressionWalker
 from ...expression_pattern_matching import add_match
-from ...expressions import Symbol, Constant, ExpressionBlock
-from ...logic import Implication
-from ...datalog import DatalogProgram, WrappedRelationalAlgebraSet
+from ...expression_walker import ExpressionWalker, PatternWalker
+from ...expressions import Constant, Symbol
+from ...logic import Implication, Union
 from ..expression_processing import (
+    union_contains_probabilistic_facts,
+    build_probabilistic_fact_set,
+    check_probabilistic_choice_set_probabilities_sum_to_one,
+    add_to_union,
+    group_probabilistic_facts_by_pred_symb,
     is_probabilistic_fact,
-    check_probchoice_probs_sum_to_one,
-    concatenate_to_expression_block,
-    group_probfacts_by_pred_symb,
-    build_pfact_set,
 )
 
 
-class CPLogicProgram(DatalogProgram, ExpressionWalker):
+class CPLogicMixin(PatternWalker):
     """
     Datalog extended with probabilistic facts semantics from ProbLog.
 
@@ -71,23 +72,58 @@ class CPLogicProgram(DatalogProgram, ExpressionWalker):
                 del ret[keyword]
         return ret
 
-    def add_probfacts_from_tuples(self, symbol, iterable):
+    def add_probabilistic_facts_from_tuples(self, symbol, iterable):
+        """
+        Add probabilistic facts from tuples whose first element
+        contains the probability label attached to that tuple.
+
+        Examples
+        --------
+        The following
+
+        >>> P = Symbol('P')
+        >>> tuples = {(0.9, 'a'), (0.8, 'b')}
+        >>> program.add_probabilistic_facts_from_tuples(P, tuples)
+
+        adds the probabilistic facts
+
+            P(a) : 0.9  <-  T
+            P(b) : 0.8  <-  T
+
+        to the program.
+
+        """
         self._register_prob_pred_symb_set_symb(
             symbol, self.pfact_pred_symb_set_symb
         )
         type_, iterable = self.infer_iterable_type(iterable)
         self._check_iterable_prob_type(type_)
         constant = Constant[typing.AbstractSet[type_]](
-            self.new_probability_set(list(iterable)),
-            auto_infer_type=False,
-            verify_type=False,
+            self.new_set(iterable), auto_infer_type=False, verify_type=False,
         )
         symbol = symbol.cast(constant.type)
         self.symbol_table[symbol] = constant
 
-    def add_probchoice_from_tuples(self, symbol, iterable):
+    def add_probabilistic_choice_from_tuples(self, symbol, iterable):
         """
-        Add a probabilistic choice to the symbol table.
+        Add a probabilistic choice from a predicate symbol and a set of
+        tuples where the first element is the probability label
+        attached to a head predicate and the other elements are the
+        constant terms of the head predicate.
+
+        Examples
+        --------
+        The following
+
+        >>> P = Symbol('P')
+        >>> tuples = {(0.2, 'a'), (0.8, 'b')}
+        >>> program.add_probabilistic_choice_from_tuples(P, tuples)
+
+        adds the probabilistic choice
+
+            P(a) : 0.2  v  P(b) : 0.8  <-  T
+
+        to the program.
 
         """
         self._register_prob_pred_symb_set_symb(
@@ -98,23 +134,10 @@ class CPLogicProgram(DatalogProgram, ExpressionWalker):
         if symbol in self.symbol_table:
             raise NeuroLangException("Symbol already used")
         ra_set = Constant[typing.AbstractSet](
-            self.new_probability_set(list(iterable)),
-            auto_infer_type=False,
-            verify_type=False,
+            self.new_set(iterable), auto_infer_type=False, verify_type=False,
         )
-        check_probchoice_probs_sum_to_one(ra_set)
+        check_probabilistic_choice_set_probabilities_sum_to_one(ra_set)
         self.symbol_table[symbol] = ra_set
-
-    @staticmethod
-    def new_probability_set(iterable=None):
-        """
-        Construct a relational algebra set whose first column is assumed to
-        contain the probability associated with the tuple made out of the
-        remaining columns. This is used to represent probabilistic facts and
-        choices.
-
-        """
-        return WrappedRelationalAlgebraSet(iterable=iterable)
 
     @staticmethod
     def _check_iterable_prob_type(iterable_type):
@@ -126,20 +149,22 @@ class CPLogicProgram(DatalogProgram, ExpressionWalker):
                 "Expected tuples to have a probability as their first element"
             )
 
-    @add_match(ExpressionBlock)
-    def program_code(self, code):
-        probfacts, other_expressions = group_probfacts_by_pred_symb(code)
-        for pred_symb, pfacts in probfacts.items():
+    @add_match(Union, union_contains_probabilistic_facts)
+    def union_with_probabilistic_facts(self, code):
+        pfacts, other_expressions = group_probabilistic_facts_by_pred_symb(
+            code
+        )
+        for pred_symb, pfacts in pfacts.items():
             self._register_prob_pred_symb_set_symb(
                 pred_symb, self.pfact_pred_symb_set_symb
             )
             if len(pfacts) > 1:
-                self.symbol_table[pred_symb] = build_pfact_set(
+                self.symbol_table[pred_symb] = build_probabilistic_fact_set(
                     pred_symb, pfacts
                 )
             else:
                 self.walk(list(pfacts)[0])
-        super().process_expression(ExpressionBlock(other_expressions))
+        self.walk(Union(other_expressions))
 
     def _register_prob_pred_symb_set_symb(self, pred_symb, set_symb):
         if set_symb.name not in self.protected_keywords:
@@ -154,8 +179,12 @@ class CPLogicProgram(DatalogProgram, ExpressionWalker):
     def probabilistic_fact(self, expression):
         pred_symb = expression.consequent.body.functor
         if pred_symb not in self.symbol_table:
-            self.symbol_table[pred_symb] = ExpressionBlock(tuple())
-        self.symbol_table[pred_symb] = concatenate_to_expression_block(
+            self.symbol_table[pred_symb] = Union(tuple())
+        self.symbol_table[pred_symb] = add_to_union(
             self.symbol_table[pred_symb], [expression]
         )
         return expression
+
+
+class CPLogicProgram(CPLogicMixin, DatalogProgram, ExpressionWalker):
+    pass

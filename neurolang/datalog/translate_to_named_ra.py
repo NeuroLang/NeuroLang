@@ -1,8 +1,9 @@
 from operator import eq, invert
-from typing import AbstractSet, Tuple
+from typing import AbstractSet, Tuple, Callable
 
 from ..exceptions import NeuroLangException
-from ..expression_walker import ExpressionBasicEvaluator, add_match
+from ..expression_walker import (ExpressionBasicEvaluator,
+                                 ReplaceExpressionsByValues, add_match)
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..relational_algebra import (ColumnInt, ColumnStr, Difference,
                                   NameColumns, NaturalJoin, Projection,
@@ -11,6 +12,8 @@ from ..utils import NamedRelationalAlgebraFrozenSet
 from .expressions import Conjunction, Negation
 
 EQ = Constant(eq)
+EQ_pattern = Constant[Callable](eq)
+REBV = ReplaceExpressionsByValues({})
 
 
 class TranslateToNamedRA(ExpressionBasicEvaluator):
@@ -19,18 +22,21 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
     .. [1] S. Abiteboul, R. Hull, V. Vianu, Foundations of databases
        (Addison Wesley, 1995), Addison-Wesley.
     """
-    @add_match(FunctionApplication(EQ, (Constant, Symbol)))
+    @add_match(FunctionApplication(EQ_pattern, (Constant, Symbol)))
     def translate_eq_c_s(self, expression):
         return self.walk(EQ(*expression.args[::-1]))
 
-    @add_match(FunctionApplication(EQ, (Symbol, Constant)))
+    @add_match(FunctionApplication(EQ_pattern, (Symbol, Constant)))
     def translate_eq_s_c(self, expression):
         symbol, constant = expression.args
         return Constant[AbstractSet[Tuple[constant.type]]](
-            NamedRelationalAlgebraFrozenSet((symbol.name,), (constant.value,))
+            NamedRelationalAlgebraFrozenSet(
+                (symbol.name,),
+                [(REBV.walk(constant),)]
+            )
         )
 
-    @add_match(FunctionApplication(EQ, ...))
+    @add_match(FunctionApplication(EQ_pattern, ...))
     def translate_eq(self, expression):
         new_args = tuple()
         changed = False

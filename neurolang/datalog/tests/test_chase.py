@@ -1,6 +1,6 @@
 import operator as op
 from itertools import product
-from typing import Callable
+from typing import AbstractSet, Callable, Tuple
 
 from pytest import fixture
 
@@ -10,7 +10,8 @@ from ..basic_representation import DatalogProgram
 from ..chase import (ChaseGeneral, ChaseMGUMixin, ChaseNaive,
                      ChaseNamedRelationalAlgebraMixin, ChaseNode,
                      ChaseRelationalAlgebraPlusCeriMixin, ChaseSemiNaive)
-from ..expressions import Union, Fact, Implication, TranslateToLogic
+from ..expressions import (Conjunction, Fact, Implication, TranslateToLogic,
+                           Union)
 from ..instance import MapInstance
 
 C_ = expressions.Constant
@@ -41,6 +42,9 @@ b = C_('b')
 c = C_('c')
 eq = C_[Callable[[expressions.Unknown, expressions.Unknown], bool]](op.eq)
 gt = C_[Callable[[expressions.Unknown, expressions.Unknown], bool]](op.gt)
+contains = C_[Callable[[expressions.Unknown, expressions.Unknown], bool]](
+    op.contains
+)
 
 
 class Datalog(TranslateToLogic, DatalogProgram, ew.ExpressionBasicEvaluator):
@@ -169,6 +173,194 @@ def test_builtin_equality_only(chase_class):
         Q: C_({C_((12, ))}),
     })
     assert instance_update == res
+
+
+def test_builtin_equality_only_sets(chase_class):
+    const = C_(frozenset({5, 6}))
+    datalog_program = Eb_((Imp_(Q(x), eq(x, const)),))
+
+    dl = Datalog()
+    dl.walk(datalog_program)
+
+    instance_0 = MapInstance(dl.extensional_database())
+
+    rule = datalog_program.expressions[0]
+    dc = chase_class(dl)
+    instance_update = dc.chase_step(instance_0, rule)
+    res = MapInstance({
+        Q: C_({(const.value,)}),
+    })
+    assert instance_update == res
+
+
+def test_builtin_equality_only_sets_and_computations(chase_class):
+    const = C_(frozenset({5, 6}))
+    len_ = C_(len)
+    datalog_program = Eb_((
+        Fact(Q(const)),
+        Imp_(T(x), eq(x, len_(y)) & Q(y))
+    ))
+
+    dl = Datalog()
+    dl.walk(datalog_program)
+
+    instance_0 = MapInstance(dl.extensional_database())
+    assert instance_0[Q].type == AbstractSet[Tuple[AbstractSet[int]]]
+
+    rule = dl.symbol_table[T].formulas[0]
+    dc = chase_class(dl)
+    instance_update = dc.chase_step(instance_0, rule)
+
+    res = MapInstance({
+        T: C_({(2,)}),
+    })
+    assert instance_update == res
+
+    const1 = C_(frozenset({6, 8}))
+    datalog_program = Eb_((
+        Fact(Q(const)),
+        Fact(Q(const1)),
+        Imp_(T(y), contains(y, C_(5)) & Q(y))
+    ))
+
+    dl = Datalog()
+    dl.walk(datalog_program)
+
+    instance_0 = MapInstance(dl.extensional_database())
+
+    rule = dl.symbol_table[T].formulas[0]
+    dc = chase_class(dl)
+    instance_update = dc.chase_step(instance_0, rule)
+
+    res = MapInstance({
+        T: C_({(frozenset({5, 6}),)}),
+    })
+    assert instance_update == res
+    assert instance_update[T].type == AbstractSet[Tuple[AbstractSet[int]]]
+
+    datalog_program = Eb_((
+        Fact(Q(const)),
+        Fact(Q(const1)),
+        Fact(Q(C_(frozenset({0, 0})))),
+        Imp_(T(x, y), Q(y) & contains(y, x) & eq(x, C_(6))),
+        Imp_(S(x, y), Q(y) & eq(x, C_(6)) & contains(y, x)),
+        Imp_(S(x, y), Q(y) & eq(x, C_(5)) & contains(y, x)),
+    ))
+
+    dl = Datalog()
+    dl.walk(datalog_program)
+
+    dc = chase_class(dl)
+    instance_result = dc.build_chase_solution()
+
+    res = MapInstance({
+        T: C_({
+            (C_(6), frozenset({5, 6}),),
+            (C_(6), frozenset({6, 8}),)
+        }),
+        S: C_({
+            (C_(5), frozenset({5, 6}),),
+            (C_(6), frozenset({5, 6}),),
+            (C_(6), frozenset({6, 8}),)
+        }),
+    })
+    assert instance_result[T] == res[T]
+    assert instance_result[S] == res[S]
+    assert instance_result[T].type == AbstractSet[Tuple[int, AbstractSet[int]]]
+    assert instance_result[S].type == AbstractSet[Tuple[int, AbstractSet[int]]]
+
+
+def test_builtin_equality_simple_chase_solution(chase_class):
+    datalog_program = Eb_((
+        F_(Q(C_(5), C_(6))),
+        F_(Q(C_(7), C_(8))),
+        F_(S(C_(5))),
+        Imp_(T(x), eq(C_(6), y) & Q(x, y)),
+    ))
+
+    dl = Datalog()
+    dl.walk(datalog_program)
+
+    dc = chase_class(dl)
+    res = dc.build_chase_solution()
+    assert res['T'] == res['S']
+
+
+def test_builtin_equality_chase_solution(chase_class):
+    datalog_program = Eb_((
+        F_(Q(C_(5), C_(6))),
+        F_(Q(C_(7), C_(8))),
+        Imp_(T(x, z), eq(z, y) & Q(x, y)),
+    ))
+
+    dl = Datalog()
+    dl.walk(datalog_program)
+
+    dc = chase_class(dl)
+    res = dc.build_chase_solution()
+    assert res['Q'] == res['T']
+
+    datalog_program = Eb_((
+        F_(Q(C_(5), C_(6))),
+        F_(Q(C_(7), C_(8))),
+        Imp_(T(x, z), eq(z, y * C_(1)) & Q(x, y)),
+    ))
+
+    dl = Datalog()
+    dl.walk(datalog_program)
+
+    dc = chase_class(dl)
+    res = dc.build_chase_solution()
+    assert res['Q'] == res['T']
+
+
+def test_chase_set_destroy(chase_class):
+    consts = [
+        C_(frozenset({5, 6})),
+        C_(frozenset({5, 8})),
+        C_(frozenset({15, 8})),
+    ]
+
+    datalog_program = Eb_(
+        tuple(Fact(Q(c)) for c in consts) +
+        (
+            Imp_(T(x), contains(y, x) & Q(y)),
+        )
+    )
+
+    dl = Datalog()
+    dl.walk(datalog_program)
+
+    instance_0 = MapInstance(dl.extensional_database())
+
+    rule = dl.symbol_table['T'].formulas[0]
+    dc = chase_class(dl)
+    instance_update = dc.chase_step(instance_0, rule)
+
+    res = MapInstance({
+        T: C_({(5,), (6,), (8,), (15,)}),
+    })
+    assert instance_update == res
+
+
+def test_builtin_equality_add_column(chase_class):
+    datalog_program = Eb_((
+        Imp_(Q(y), Conjunction((T(x), eq(y, C_(2) * x)))),
+    ))
+
+    dl = Datalog()
+    dl.add_extensional_predicate_from_tuples(T, ((i,) for i in range(8)))
+    dl.walk(datalog_program)
+
+    dc = chase_class(dl)
+    instance_out = dc.build_chase_solution()
+    res = MapInstance({
+        T: dl.extensional_database()[T],
+        Q: C_(
+            {C_((2 * i,)) for i in range(8)}
+        ),
+    })
+    assert instance_out == res
 
 
 def test_python_builtin_equaltiy_chase_step(chase_class):
@@ -394,10 +586,10 @@ def test_recursive_predicate_chase_tree(chase_class):
     assert second_child.instance == instance_2
 
 
-def test_nonrecursive_predicate_chase_solution(chase_class, N=10):
+def test_nonrecursive_predicate_chase_solution(chase_class, n=10):
     datalog_program = DT.walk(Eb_(
         tuple(F_(Q(C_(i), C_(i + 1)))
-              for i in range(N)) + (Imp_(T(x, y),
+              for i in range(n)) + (Imp_(T(x, y),
                                          Q(x, z) & Q(z, y)), )
     ))
 
@@ -409,18 +601,18 @@ def test_nonrecursive_predicate_chase_solution(chase_class, N=10):
 
     final_instance = MapInstance({
         Q: C_({C_((C_(i), C_(i + 1)))
-               for i in range(N)}),
+               for i in range(n)}),
         T: C_({C_((C_(i), C_(i + 2)))
-               for i in range(N - 1)})
+               for i in range(n - 1)})
     })
 
     assert solution_instance == final_instance
 
 
-def test_nonrecursive_predicate_chase_solution_constant(chase_class, N=10):
+def test_nonrecursive_predicate_chase_solution_constant(chase_class, n=10):
     datalog_program = Eb_(
         tuple(F_(Q(C_(i), C_(i + 1)))
-              for i in range(N)) + (Imp_(T(y),
+              for i in range(n)) + (Imp_(T(y),
                                          Q(C_(1), z) & Q(z, y)), )
     )
 
@@ -432,7 +624,7 @@ def test_nonrecursive_predicate_chase_solution_constant(chase_class, N=10):
 
     final_instance = MapInstance({
         Q: C_({C_((C_(i), C_(i + 1)))
-               for i in range(N)}),
+               for i in range(n)}),
         T: C_({C_((C_(i + 2), ))
                for i in (1, )})
     })

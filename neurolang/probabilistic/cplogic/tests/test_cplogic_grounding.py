@@ -1,23 +1,24 @@
 import typing
 
-import pytest
 import numpy
+import pytest
 
-from ....exceptions import NeuroLangException
-from ....expressions import Symbol, Constant, ExpressionBlock
-from ....logic import Implication, Conjunction
 from ....datalog import Fact
-from ....utils import NamedRelationalAlgebraFrozenSet
-from ...expressions import (
-    ProbabilisticPredicate,
-    Grounding,
-    ProbabilisticChoice,
-)
+from ....exceptions import NeuroLangException
+from ....expressions import Constant, Symbol
+from ....logic import Conjunction, Implication, Union
+from ....utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from ...expression_processing import (
+    add_to_union,
     is_probabilistic_fact,
-    concatenate_to_expression_block,
+)
+from ...expressions import (
+    Grounding,
+    ProbabilisticChoiceGrounding,
+    ProbabilisticPredicate,
 )
 from ..grounding import ground_cplogic_program
+from ..program import CPLogicProgram
 
 P = Symbol("P")
 Q = Symbol("Q")
@@ -33,8 +34,10 @@ def test_cplogic_grounding():
     pfact1 = Implication(ProbabilisticPredicate(p, P(a)), Constant[bool](True))
     pfact2 = Implication(ProbabilisticPredicate(p, P(b)), Constant[bool](True))
     rule = Implication(Z(x), Conjunction([P(x), Q(x)]))
-    code = ExpressionBlock((pfact1, pfact2, rule, Fact(Q(a)), Fact(Q(b))))
-    grounded = ground_cplogic_program(code)
+    code = Union((pfact1, pfact2, rule, Fact(Q(a)), Fact(Q(b))))
+    cpl_program = CPLogicProgram()
+    cpl_program.walk(code)
+    grounded = ground_cplogic_program(cpl_program)
     matching_groundings = [
         grounding
         for grounding in grounded.expressions
@@ -50,10 +53,10 @@ def test_cplogic_grounding():
     )
     assert expected in grounded.expressions
 
-    code = ExpressionBlock(
-        (Fact(P(a, b)), Fact(P(b, b)), Fact(Q(a)), Fact(Q(b)))
-    )
-    grounded = ground_cplogic_program(code)
+    code = Union((Fact(P(a, b)), Fact(P(b, b)), Fact(Q(a)), Fact(Q(b))))
+    cpl_program = CPLogicProgram()
+    cpl_program.walk(code)
+    grounded = ground_cplogic_program(cpl_program)
     assert len(grounded.expressions) == 2
     for grounding in grounded.expressions:
         if grounding.expression.consequent.functor == P:
@@ -76,7 +79,7 @@ def test_cplogic_grounding():
 
 
 def test_cplogic_grounding_general():
-    pfacts = ExpressionBlock(
+    pfacts = Union(
         tuple(
             Implication(
                 ProbabilisticPredicate(prob, P(const)), Constant[bool](True)
@@ -89,9 +92,11 @@ def test_cplogic_grounding_general():
     )
     facts = (Fact(Q(a)),)
     rule = Implication(Z(x), Conjunction((P(x), Q(x))))
-    code = concatenate_to_expression_block(pfacts, (rule,))
-    code = concatenate_to_expression_block(pfacts, facts)
-    grounded = ground_cplogic_program(code)
+    code = add_to_union(pfacts, (rule,))
+    code = add_to_union(pfacts, facts)
+    cpl_program = CPLogicProgram()
+    cpl_program.walk(code)
+    grounded = ground_cplogic_program(cpl_program)
     pfact_grounding = next(
         grounding
         for grounding in grounded.expressions
@@ -103,14 +108,18 @@ def test_cplogic_grounding_general():
 
 
 def test_cplogic_grounding_with_pchoice():
-    probchoice_sets = {P: {(0.5, "a"), (0.25, "b"), (0.25, "c")}}
-    grounded = ground_cplogic_program(
-        ExpressionBlock(tuple()), probchoice_sets=probchoice_sets,
-    )
-    assert isinstance(grounded.expressions[0].expression, ProbabilisticChoice)
+    probchoice_set = {(0.5, "a"), (0.25, "b"), (0.25, "c")}
+    code = Union(tuple())
+    cpl_program = CPLogicProgram()
+    cpl_program.walk(code)
+    cpl_program.add_probabilistic_choice_from_tuples(P, probchoice_set)
+    grounded = ground_cplogic_program(cpl_program)
+    assert isinstance(grounded.expressions[0], ProbabilisticChoiceGrounding)
 
 
 def test_unsupported_grounding_program_with_disjunction():
-    code = ExpressionBlock((Implication(Q(x), P(x)), Implication(Q(x), R(x))))
+    code = Union((Implication(Q(x), P(x)), Implication(Q(x), R(x))))
+    cpl_program = CPLogicProgram()
+    cpl_program.walk(code)
     with pytest.raises(NeuroLangException, match=r"supported"):
-        ground_cplogic_program(code)
+        ground_cplogic_program(cpl_program)

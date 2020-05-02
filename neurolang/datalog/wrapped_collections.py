@@ -4,9 +4,9 @@ from typing import Tuple
 
 from ..expression_walker import ReplaceExpressionsByValues
 from ..expressions import Constant
-from ..type_system import (Unknown, get_args, infer_type, is_leq_informative,
+from ..type_system import (Unknown, get_args, infer_type,
                            unify_types)
-from ..utils.relational_algebra_set.sql import (
+from ..utils.relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet,
     RelationalAlgebraSet)
 
@@ -38,12 +38,23 @@ class WrappedRelationalAlgebraSetBaseMixin:
         if iterable is not None:
             if isinstance(
                 iterable,
-                (WrappedRelationalAlgebraSetBaseMixin, RelationalAlgebraFrozenSet)
+                (
+                    WrappedRelationalAlgebraSetBaseMixin,
+                    RelationalAlgebraFrozenSet
+                )
             ):
                 iterable = iterable
+            elif hasattr(iterable, '__getitem__'):
+                iterable = (
+                    WrappedRelationalAlgebraSetBaseMixin
+                    ._obtain_value_collection(
+                        iterable
+                    )
+                )
             else:
                 iterable = (
-                    WrappedRelationalAlgebraSetBaseMixin._obtain_value_iterable(
+                    WrappedRelationalAlgebraSetBaseMixin
+                    ._obtain_value_iterable(
                         iterable
                     )
                 )
@@ -55,7 +66,9 @@ class WrappedRelationalAlgebraSetBaseMixin:
 
     def _operator_wrapped(self, op, other):
         other_is_wras = isinstance(other, WrappedRelationalAlgebraSetBaseMixin)
-        if not other_is_wras:
+        if other_is_wras:
+            other = other.unwrap()
+        else:
             other = {el for el in self._obtain_value_iterable(other)}
         operator = getattr(self.unwrap(), op)
         res = operator(other)
@@ -80,11 +93,8 @@ class WrappedRelationalAlgebraSetBaseMixin:
         iterator_of_constants = False
         for val in it1:
             iterator_of_constants = (
-                isinstance(val, Constant[Tuple]) or
-                (
-                    isinstance(val, tuple) and (len(val) > 0)
-                    and isinstance(val[0], Constant)
-                )
+                WrappedRelationalAlgebraSetBaseMixin.
+                is_constant_tuple_or_tuple_of_constants(val)
             )
             break
         if not iterator_of_constants:
@@ -93,6 +103,31 @@ class WrappedRelationalAlgebraSetBaseMixin:
             iterator = (REBV.walk(e) for e in it2)
         for e in iterator:
             yield e
+
+    @staticmethod
+    def _obtain_value_collection(iterable):
+        if len(iterable) == 0:
+            return iterable
+
+        val = iterable[0]
+        collection_of_constants = (
+            WrappedRelationalAlgebraSetBaseMixin.
+            is_constant_tuple_or_tuple_of_constants(val)
+        )
+        if not collection_of_constants:
+            return iterable
+        else:
+            return (REBV.walk(e) for e in iterable)
+
+    @staticmethod
+    def is_constant_tuple_or_tuple_of_constants(val):
+        return (
+            isinstance(val, Constant[Tuple]) or
+            (
+                isinstance(val, tuple) and (len(val) > 0)
+                and isinstance(val[0], Constant)
+            )
+        )
 
     def __eq__(self, other):
         return self._operator_wrapped('__eq__', other)
@@ -130,8 +165,8 @@ class WrappedRelationalAlgebraSetBaseMixin:
     @property
     def row_type(self):
         if self._row_type is None:
-            if self.arity > 0 and len(self) > 0:
-                self._row_type = infer_type(next(super().__iter__()))
+            if self.arity > 0 and not self.is_null():
+                self._row_type = infer_type(super().fetch_one())
             else:
                 self._row_type = Tuple
 
@@ -207,8 +242,8 @@ class WrappedNamedRelationalAlgebraFrozenSetMixin(
     @property
     def row_type(self):
         if self._row_type is None:
-            if (self.arity > 0 and len(self) > 0):
-                element = next(super().__iter__())
+            if (self.arity > 0 and not self.is_null()):
+                element = super().fetch_one()
                 self._row_type = Tuple[tuple(
                     Constant(getattr(element, c)).type
                     for c in self.columns
@@ -247,7 +282,7 @@ class WrappedRelationalAlgebraFrozenSet(
     RelationalAlgebraFrozenSet
 ):
     def unwrap(self):
-        return RelationalAlgebraFrozenSet(self)
+        return RelationalAlgebraFrozenSet.create_view_from(self)
 
 
 class WrappedRelationalAlgebraSet(
@@ -255,7 +290,7 @@ class WrappedRelationalAlgebraSet(
     RelationalAlgebraSet
 ):
     def unwrap(self):
-        return RelationalAlgebraSet(self)
+        return RelationalAlgebraSet.create_view_from(self)
 
 
 class WrappedNamedRelationalAlgebraFrozenSet(
@@ -263,6 +298,4 @@ class WrappedNamedRelationalAlgebraFrozenSet(
     NamedRelationalAlgebraFrozenSet
 ):
     def unwrap(self):
-        return NamedRelationalAlgebraFrozenSet(
-            columns=self.columns, iterable=self
-        )
+        return NamedRelationalAlgebraFrozenSet.create_view_from(self)

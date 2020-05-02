@@ -1,15 +1,28 @@
 import logging
 import typing
 from collections import deque
-from itertools import product
+from itertools import product, tee
 
-from .expression_pattern_matching import (PatternMatcher, add_match,
-                                          add_entry_point_match)
-from .expressions import (Constant, Expression, FunctionApplication, Lambda,
-                          NeuroLangException, NeuroLangTypeException,
-                          Projection, Statement, Symbol, TypedSymbolTableMixin,
-                          Unknown, is_leq_informative, unify_types)
-
+from .expression_pattern_matching import (
+    PatternMatcher,
+    add_entry_point_match,
+    add_match
+)
+from .expressions import (
+    Constant,
+    Expression,
+    FunctionApplication,
+    Lambda,
+    NeuroLangException,
+    NeuroLangTypeException,
+    Projection,
+    Statement,
+    Symbol,
+    TypedSymbolTableMixin,
+    Unknown,
+    is_leq_informative,
+    unify_types
+)
 
 __all__ = [
     'expression_iterator', 'PatternWalker',
@@ -158,7 +171,7 @@ class EntryPointPatternWalker(PatternWalker):
             self._entry_point_walked = False
 
 
-class IdentityWalker(PatternMatcher):
+class IdentityWalker(PatternWalker):
     """Walks through expresssions without doing
     a thing.
     """
@@ -179,7 +192,11 @@ class ExpressionWalker(PatternWalker):
             if isinstance(arg, Expression):
                 new_arg = self.walk(arg)
                 changed |= new_arg is not arg
-            elif isinstance(arg, (tuple, list)):
+            elif (
+                isinstance(arg, tuple) and
+                len(arg) > 0 and
+                isinstance(arg[0], Expression)
+            ):
                 new_arg, change = self.process_iterable_argument(arg)
                 changed |= change
             elif arg is Ellipsis:
@@ -206,6 +223,19 @@ class ExpressionWalker(PatternWalker):
         return new_arg, changed
 
 
+class ChainedWalker():
+    def __init__(self, *walkers):
+        self.walkers = [w() if isinstance(w, type) else w for w in walkers]
+
+    def walk(self, expression):
+        for walker in self.walkers:
+            logging.debug(
+                "Walking over {} with {}".format(expression, walker.__class__)
+            )
+            expression = walker.walk(expression)
+        return expression
+
+
 class ReplaceSymbolWalker(ExpressionWalker):
     def __init__(self, symbol_replacements):
         self.symbol_replacements = symbol_replacements
@@ -218,6 +248,19 @@ class ReplaceSymbolWalker(ExpressionWalker):
             return replacement.cast(replacement_type)
         else:
             return symbol
+
+
+class ReplaceExpressionWalker(ExpressionWalker):
+    def __init__(self, symbol_replacements):
+        self.symbol_replacements = symbol_replacements
+
+    @add_match(Expression)
+    def replace_free_variable(self, expression):
+        if expression in self.symbol_replacements:
+            replacement = self.symbol_replacements[expression]
+            return replacement
+        else:
+            return self.process_expression(expression)
 
 
 class ReplaceSymbolsByConstants(ExpressionWalker):
@@ -267,15 +310,52 @@ class ReplaceExpressionsByValues(ExpressionWalker):
 
     @add_match(Constant[typing.AbstractSet])
     def constant_abstract_set(self, constant_abstract_set):
-        return frozenset(
-            self.walk(expression) for expression in constant_abstract_set.value
-        )
+        value = constant_abstract_set.value
+        if (
+            len(value) > 0 and
+            isinstance(next(iter(value)), (Expression, tuple))
+        ):
+            value = type(value)(
+                self.walk(expression) for expression in value
+            )
+        return value
 
     @add_match(Constant[typing.Tuple])
     def constant_tuple(self, constant_tuple):
-        return tuple(
-            self.walk(expression) for expression in constant_tuple.value
+        value = constant_tuple.value
+        if (
+            len(value) > 0 and
+            isinstance(value[0], (Expression, tuple))
+        ):
+            value = constant_tuple.value
+            value = type(value)(
+                self.walk(expression) for expression in constant_tuple.value
+            )
+        return value
+
+    @add_match(Constant[typing.Iterable])
+    def constant_iterable(self, constant_iterable):
+        value = constant_iterable.value
+        it1, it2 = tee(value)
+        (
+            ReplaceExpressionsByValues
+            ._validate_iterable_for_constant_iterable_case(it1)
         )
+        if isinstance(value, typing.Generator):
+            return it2
+        else:
+            return value
+
+    @staticmethod
+    def _validate_iterable_for_constant_iterable_case(iterable):
+        iterable_of_expressions = False
+        iterable_of_expressions = any(
+            isinstance(e, Expression) for e in iterable
+        )
+        if iterable_of_expressions:
+            raise NeuroLangException(
+                'Iterable of Expressions needs to be a Tuple or Set'
+            )
 
     @add_match(Constant)
     def constant(self, constant):
