@@ -456,37 +456,35 @@ class NamedRelationalAlgebraFrozenSet(
     def cross_product(self, other):
         res = self._dee_dum_product(other)
         if res is not None:
-            return res
+            return res.copy()
         if len(self._container.columns.intersection(other.columns)) > 0:
             raise ValueError(
                 "Cross product with common columns "
                 "is not valid"
             )
+
         new_columns = self.columns + other.columns
         if self.is_empty() or other.is_empty():
-            return type(self)(new_columns)
-        elif self.arity == 0:
-            return other.copy()
-        elif other.arity == 0:
-            return self.copy()
-
-        left = self._container.copy(deep=False)
-        right = other._container.copy(deep=False)
-        tmpcol = str(uuid1())
-        left[tmpcol] = 1
-        right[tmpcol] = 1
-        new_container = pd.merge(left, right, on=tmpcol)
-        del new_container[tmpcol]
-        new_container.columns = tuple(self._container.columns
-                                      ) + tuple(other._container.columns)
-        return self._light_init_same_structure(
-            new_container,
-            might_have_duplicates=(
-                self._might_have_duplicates |
-                other._might_have_duplicates
-            ),
-            columns=new_columns
-        )
+            res = type(self)(new_columns)
+        else:
+            left = self._container.copy(deep=False)
+            right = other._container.copy(deep=False)
+            tmpcol = str(uuid1())
+            left[tmpcol] = 1
+            right[tmpcol] = 1
+            new_container = pd.merge(left, right, on=tmpcol)
+            del new_container[tmpcol]
+            new_container.columns = tuple(self._container.columns
+                                        ) + tuple(other._container.columns)
+            res = self._light_init_same_structure(
+                new_container,
+                might_have_duplicates=(
+                    self._might_have_duplicates |
+                    other._might_have_duplicates
+                ),
+                columns=new_columns
+            )
+        return res
 
     def rename_column(self, src, dst):
         if src not in self._columns:
