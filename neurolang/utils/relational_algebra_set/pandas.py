@@ -123,6 +123,11 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     def columns(self):
         return self._container.columns
 
+    def as_numpy_array(self):
+        res = self._container.values.view()
+        res.setflags(write=False)
+        return res
+
     def _empty_set_same_structure(self):
         return type(self)()
 

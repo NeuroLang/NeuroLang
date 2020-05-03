@@ -3,7 +3,7 @@ import pytest
 from ..relational_algebra_set import pandas
 
 
-@pytest.fixture(params=[(pandas,)])
+@pytest.fixture(ids=['pandas'], params=[(pandas,)])
 def ra_module(request):
     return request.param[0]
 
@@ -60,6 +60,15 @@ def test_relational_algebra_set_semantics(ra_module):
     r = ra_module.RelationalAlgebraSet(ras)
     assert r == ras
     assert r is not ras
+
+
+def test_as_numpy_array(ra_module):
+    a = set((i % 2, i, i * 2) for i in range(5))
+    ras = ra_module.RelationalAlgebraSet(a)
+    ras_array = ras.as_numpy_array()
+    assert ras_array.shape == (5, 3)
+    assert ras_array.dtype == int
+    assert set(tuple(r) for r in ras_array) == a
 
 
 def test_relational_algebra_ra_projection(ra_module):

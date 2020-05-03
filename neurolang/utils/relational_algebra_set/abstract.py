@@ -86,6 +86,10 @@ class RelationalAlgebraFrozenSet(Set):
     def itervalues(self):
         pass
 
+    @abstractmethod
+    def as_numpy_array():
+        pass
+
     def _dee_dum_product(self, other):
         res = None
         if self.is_dum():
