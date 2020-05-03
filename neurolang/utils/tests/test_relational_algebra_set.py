@@ -14,6 +14,7 @@ def test_relational_algebra_set_semantics_empty(ra_module):
     assert len(ras) == 0
     assert ras.is_empty()
     assert ras.arity == 0
+    assert 0 not in ras
     assert list(iter(ras)) == []
     assert ras == ra_module.RelationalAlgebraSet.dum()
 
@@ -29,6 +30,8 @@ def test_relational_algebra_set_semantics(ra_module):
     ras_ = ra_module.RelationalAlgebraSet(a)
     ras__ = set((e,) for e in a)
 
+    assert ras.columns == [0]
+
     assert ras == ras_
     assert ras == ras__
 
@@ -39,6 +42,8 @@ def test_relational_algebra_set_semantics(ra_module):
     ras.add(10)
     assert len(ras) == len(a) - 1
     assert 10 in ras
+    assert [10] in ras
+    assert (5, 2) not in ras
     assert all(a_ in ras for a_ in a if a_ != 5)
     assert ras.fetch_one() in ras__
 
@@ -48,6 +53,14 @@ def test_relational_algebra_set_semantics(ra_module):
     assert len(dee) > 0 and dee.arity == 0
     assert len(dum) == 0 and dum.arity == 0
 
+    r = ra_module.RelationalAlgebraSet.create_view_from(ras)
+    assert r == ras
+    assert r is not ras
+
+    r = ra_module.RelationalAlgebraSet(ras)
+    assert r == ras
+    assert r is not ras
+
 
 def test_relational_algebra_ra_projection(ra_module):
     a = [(i % 2, i, i * 2) for i in range(5)]
@@ -56,6 +69,8 @@ def test_relational_algebra_ra_projection(ra_module):
     ras_0 = ras.projection(0)
     assert (0,) in ras_0 and (1,) in ras_0
     assert len(ras_0) == 2
+    assert ra_module.RelationalAlgebraSet.dum().projection(0).is_empty()
+    assert ra_module.RelationalAlgebraSet.dee().projection().is_dee()
 
     ras_0 = ras.projection(0, 2)
     assert all((i % 2, i * 2) for i in range(5))
@@ -75,6 +90,12 @@ def test_relational_algebra_ra_selection(ra_module):
     a_sel = set((i % 2, i, i * 2) for i in range(5) if i % 2 == 1 and i == 2)
     assert ras_0 == a_sel
 
+    ras_1 = ras.selection_columns({0: 1, 1: 2})
+    assert ras_1 == set(t for t in a if t[0] == t[1] & t[1] == t[2])
+    assert ras.selection({0: 10000}).selection_columns({0: 1}).is_empty()
+
+    assert ra_module.RelationalAlgebraSet.dum().selection({0: 1}).is_empty()
+
 
 def test_relational_algebra_ra_equijoin(ra_module):
     a = [(i, i * 2) for i in range(5)]
@@ -86,12 +107,24 @@ def test_relational_algebra_ra_equijoin(ra_module):
     ras_b = ra_module.RelationalAlgebraSet(b)
     ras_c = ra_module.RelationalAlgebraSet(c)
     ras_d = ra_module.RelationalAlgebraSet(d)
+    ras_empty = ras_d.selection({0: 1000})
+    dee = ra_module.RelationalAlgebraSet.dee()
+    dum = ra_module.RelationalAlgebraSet.dum()
 
     res = ras_a.equijoin(ras_b, [(1, 0)])
     assert res == ras_c
 
     res = ras_a.equijoin(ras_a, [(0, 0)])
     assert res == ras_d
+
+    res = ras_a.equijoin(dee, [(0, 0)])
+    assert res == ras_a
+
+    res = ras_a.equijoin(dum, [(0, 0)])
+    assert res == dum
+
+    res = ras_a.equijoin(ras_empty, [(0, 0)])
+    assert res.is_empty()
 
 
 def test_relational_algebra_ra_cross_product(ra_module):
@@ -102,9 +135,24 @@ def test_relational_algebra_ra_cross_product(ra_module):
     ras_a = ra_module.RelationalAlgebraSet(a)
     ras_b = ra_module.RelationalAlgebraSet(b)
     ras_c = ra_module.RelationalAlgebraSet(c)
+    ras_empty = ras_a.selection({0: 1000})
+    dee = ra_module.RelationalAlgebraSet.dee()
+    dum = ra_module.RelationalAlgebraSet.dum()
 
     res = ras_a.cross_product(ras_b)
     assert res == ras_c
+
+    res = ras_a.cross_product(dee)
+    assert res == ras_a
+
+    res = ras_a.cross_product(dum)
+    assert res == dum
+
+    res = ras_a.cross_product(ras_empty)
+    assert res.is_empty()
+
+    res = ras_empty.cross_product(ras_a)
+    assert res.is_empty()
 
 
 def test_relational_algebra_ra_equijoin_mixed_types(ra_module):
@@ -135,8 +183,205 @@ def test_groupby(ra_module):
     assert res[1] == (2, ras_c)
 
 
+def test_relational_algebra_ra_union(ra_module):
+    first = ra_module.RelationalAlgebraFrozenSet(
+        [(7, 8), (9, 2)]
+    )
+    second = ra_module.RelationalAlgebraFrozenSet(
+        [(9, 2), (42, 0)]
+    )
+    assert first | first == first
+    expected = ra_module.RelationalAlgebraFrozenSet(
+        [(7, 8), (9, 2), (42, 0)]
+    )
+    assert first | second == expected
+    empty = ra_module.RelationalAlgebraFrozenSet([])
+    dee = ra_module.RelationalAlgebraFrozenSet.dee()
+    dum = ra_module.RelationalAlgebraFrozenSet.dum()
+
+    assert first | empty == first
+    assert empty | first == first
+    assert dee | dee == dee
+    assert first | dum == first
+    assert dum | first == first
+    assert first | empty | second == first | second
+
+    assert first | set() == first
+
+
+def test_relational_algebra_ra_intersection(ra_module):
+    first = ra_module.RelationalAlgebraFrozenSet(
+        [(7, 8), (9, 2)]
+    )
+    second = ra_module.RelationalAlgebraFrozenSet(
+        [(9, 2), (42, 0)]
+    )
+    assert first & first == first
+    expected = ra_module.RelationalAlgebraFrozenSet([(9, 2)])
+    assert first & second == expected
+    empty = ra_module.RelationalAlgebraFrozenSet([])
+    assert first & empty == empty
+    assert empty & first == empty
+    assert first & empty & second == empty
+
+    assert first & set() == empty
+
+
+def test_relational_algebra_ra_union_update(ra_module):
+    first = ra_module.RelationalAlgebraSet(
+        [(7, 8), (9, 2)]
+    )
+    second = ra_module.RelationalAlgebraSet(
+        [(9, 2), (42, 0)]
+    )
+    f = first.copy()
+    f |= first
+    assert f == first
+    expected = ra_module.RelationalAlgebraSet(
+        [(7, 8), (9, 2), (42, 0)]
+    )
+    f = first.copy()
+    f |= second
+    assert f == expected
+    empty = ra_module.RelationalAlgebraSet([])
+    dee = ra_module.RelationalAlgebraSet.dee()
+    dum = ra_module.RelationalAlgebraSet.dum()
+
+    f = first.copy()
+    f |= empty
+    assert f == first
+
+    e = empty.copy()
+    e |= first
+    assert e == first
+
+    d = dee.copy()
+    d |= dee
+    assert d == dee
+
+    f = first.copy()
+    f |= dum
+    assert f == first
+
+    d = dum.copy()
+    d |= first
+    assert d == first
+
+    f = first.copy()
+    f |= empty
+    f |= second
+    assert f == first | second
+
+    f = first.copy()
+    f |= set()
+    assert f == first
+
+
+@pytest.mark.skip("Not implemented yet")
+def test_relational_algebra_ra_intersection_update(ra_module):
+    first = ra_module.RelationalAlgebraSet(
+        [(7, 8), (9, 2)]
+    )
+    second = ra_module.RelationalAlgebraSet(
+        [(9, 2), (42, 0)]
+    )
+    f = first.copy()
+    f |= first
+    assert f == first
+    expected = ra_module.RelationalAlgebraSet(
+        [(9, 2)]
+    )
+    f = first.copy()
+    f &= second
+    assert f == expected
+    empty = ra_module.RelationalAlgebraSet([])
+    dee = ra_module.RelationalAlgebraSet.dee()
+    dum = ra_module.RelationalAlgebraSet.dum()
+
+    f = first.copy()
+    f &= empty
+    assert f.is_empty()
+
+    e = empty.copy()
+    e &= first
+    assert e.is_empty()
+
+    d = dee.copy()
+    d &= dee
+    assert d == dee
+
+    f = first.copy()
+    f &= dum
+    assert f == dum
+
+    d = dum.copy()
+    d &= first
+    assert d == dum
+
+    f = first.copy()
+    f &= second
+    assert f == first & second
+
+    f = first.copy()
+    f &= set()
+    assert f.is_empty()
+
+
+def test_relational_algebra_ra_difference_update(ra_module):
+    first = ra_module.RelationalAlgebraSet(
+        [(7, 8), (9, 2)]
+    )
+    second = ra_module.RelationalAlgebraSet(
+        [(9, 2), (42, 0)]
+    )
+    f = first.copy()
+    f -= first
+    assert f.is_empty()
+    expected = ra_module.RelationalAlgebraSet(
+        [(7, 8)]
+    )
+    f = first.copy()
+    f -= second
+    assert f == expected
+    empty = ra_module.RelationalAlgebraSet([])
+    dee = ra_module.RelationalAlgebraSet.dee()
+    dum = ra_module.RelationalAlgebraSet.dum()
+
+    f = first.copy()
+    f -= empty
+    assert f == first
+
+    e = empty.copy()
+    e -= first
+    assert e.is_empty()
+
+    d = dee.copy()
+    d -= dee
+    assert d.is_empty()
+    assert d.is_dum()
+
+    f = first.copy()
+    f -= dum
+    assert f == first
+
+    d = dum.copy()
+    d -= first
+    assert d.is_dum()
+
+    f = first.copy()
+    f -= empty
+    f -= second
+    assert f == expected
+
+    f = first.copy()
+    f |= set()
+    assert f == first
+
+
 def test_named_relational_algebra_set_semantics_empty(ra_module):
     ras = ra_module.NamedRelationalAlgebraFrozenSet(("y", "x"))
+
+    assert ras.columns == ('y', 'x')
 
     assert ras.is_empty()
     assert len(ras) == 0
@@ -164,6 +409,18 @@ def test_named_relational_algebra_set_semantics_empty(ra_module):
     assert len(dee) > 0 and dee.arity == 0
     assert len(dum) == 0 and dum.arity == 0
     assert dee != dum
+
+    r = ra_module.NamedRelationalAlgebraFrozenSet.create_view_from(ras)
+    assert r == ras
+    assert r is not ras
+
+    r = ra_module.NamedRelationalAlgebraFrozenSet(ras)
+    assert r == ras
+    assert r is not ras
+
+    r_unnamed = ra_module.RelationalAlgebraSet([(0, 1)])
+    r = ra_module.NamedRelationalAlgebraFrozenSet(['y', 'x'], r_unnamed)
+    assert r == ras
 
 
 def test_named_relational_algebra_ra_projection(ra_module):
@@ -302,10 +559,13 @@ def test_named_groupby(ra_module):
     ras_a = ra_module.NamedRelationalAlgebraFrozenSet(cols, a)
     ras_b = ra_module.NamedRelationalAlgebraFrozenSet(cols, b)
     ras_c = ra_module.NamedRelationalAlgebraFrozenSet(cols, c)
+    empty = ra_module.NamedRelationalAlgebraFrozenSet(cols, [])
 
     res = list(ras_a.groupby("x"))
     assert res[0] == (1, ras_b)
     assert res[1] == (2, ras_c)
+
+    assert list(empty.groupby("x")) == []
 
 
 def test_named_iter_and_fecth_one(ra_module):

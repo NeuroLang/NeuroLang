@@ -69,7 +69,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     def __contains__(self, element):
         element = self._normalise_element(element)
         if (
-            not self.is_empty() and
+            not (self.is_empty() or self.is_dee()) and
             len(element) == self.arity
         ):
             col = True
@@ -199,7 +199,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         res = self._dee_dum_product(other)
         if res is not None:
             return res
-        if self.is_empty():
+        if self.is_empty() or other.is_empty():
             return self._empty_set_same_structure()
         left = self._container.copy(deep=False)
         right = other._container.copy(deep=False)
@@ -231,23 +231,16 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     def __or__(self, other):
         if self is other:
             return self.copy()
-        res = self._dee_dum_sum(other)
-        if res is not None:
-            return res
-        elif isinstance(other, RelationalAlgebraSet):
+        elif isinstance(other, RelationalAlgebraFrozenSet):
+            res = self._dee_dum_sum(other)
+            if res is not None:
+                return res
             ocont = other._container
-            if self.is_empty() and other.is_empty():
-                new_container = None
-            elif self.is_empty():
-                new_container = ocont.copy()
-            elif other.is_empty():
-                new_container = self._container.copy()
-            else:
-                new_container = pd.merge(
-                    left=self._container,
-                    right=ocont,
-                    how="outer",
-                )
+            new_container = pd.merge(
+                left=self._container,
+                right=ocont,
+                how="outer",
+            )
             output = self._empty_set_same_structure()
             output._container = new_container
             return output
@@ -255,12 +248,12 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             return super().__or__(other)
 
     def __and__(self, other):
-        res = self._dee_dum_product(other)
-        if res is not None:
-            return res
-        if self.is_empty():
+        if self is other:
             return self.copy()
-        if isinstance(other, RelationalAlgebraSet):
+        if isinstance(other, RelationalAlgebraFrozenSet):
+            res = self._dee_dum_product(other)
+            if res is not None:
+                return res
             new_container = pd.merge(
                 left=self._container,
                 right=other._container,
@@ -273,7 +266,6 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
                 other._might_have_duplicates
             )
             return output
-
         else:
             return super().__and__(other)
 
@@ -327,6 +319,10 @@ class NamedRelationalAlgebraFrozenSet(
     abc.NamedRelationalAlgebraFrozenSet
 ):
     def __init__(self, columns, iterable=None):
+        if isinstance(columns, NamedRelationalAlgebraFrozenSet):
+            iterable = columns
+            columns = columns.columns
+
         self._columns = tuple(columns)
         self._might_have_duplicates = True
         if iterable is None:
@@ -544,9 +540,7 @@ class NamedRelationalAlgebraFrozenSet(
 
     def groupby(self, columns):
         if self.is_empty():
-            raise StopIteration
-        if not isinstance(columns, Iterable):
-            columns = [columns]
+            return
         for g_id, group in self._container.groupby(by=list(columns)):
             group_set = self._light_init_same_structure(
                 group,
@@ -759,7 +753,7 @@ class RelationalAlgebraSet(
             return self
         if isinstance(other, RelationalAlgebraSet):
             if other.is_empty() or other.arity == 0:
-                if self.is_empty() or other.arity == 0:
+                if self.is_empty() or self.arity == 0:
                     self._container = self._container.iloc[:0]
             elif other.arity != self.arity:
                 raise ValueError(
