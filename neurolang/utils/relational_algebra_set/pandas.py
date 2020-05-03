@@ -154,21 +154,25 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         elif isinstance(select_criteria, RelationalAlgebraStringExpression):
             ix = self._container.eval(select_criteria)
         else:
-            it = iter(select_criteria.items())
-            col, value = next(it)
-            ix = self._container[col] == value
-            for col, value in it:
-                if callable(value):
-                    selector = self._container[col].apply(value)
-                else:
-                    selector = self._container[col] == value
-                ix &= selector
+            ix = self.newmethod238(select_criteria)
 
         new_container = self._container[ix]
 
         output = self._empty_set_same_structure()
         output._container = new_container
         return output
+
+    def newmethod238(self, select_criteria):
+        it = iter(select_criteria.items())
+        col, value = next(it)
+        ix = self._container[col] == value
+        for col, value in it:
+            if callable(value):
+                selector = self._container[col].apply(value)
+            else:
+                selector = self._container[col] == value
+            ix &= selector
+        return ix
 
     def selection_columns(self, select_criteria):
         if self.is_empty():
