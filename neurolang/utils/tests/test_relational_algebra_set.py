@@ -604,7 +604,7 @@ def test_named_to_unnamed(ra_module):
 
 def test_named_ra_set_from_other(ra_module):
     first = ra_module.NamedRelationalAlgebraFrozenSet(
-        ("x", "n"), [(56, "bonjour"), (42, "aurevoir"),]
+        ("x", "n"), [(56, "bonjour"), (42, "aurevoir")]
     )
     second = ra_module.NamedRelationalAlgebraFrozenSet(first.columns, first,)
     assert first == second

@@ -1,5 +1,4 @@
 from collections import OrderedDict
-from collections.abc import MutableSet, Set
 from typing import Iterable
 from uuid import uuid1
 
