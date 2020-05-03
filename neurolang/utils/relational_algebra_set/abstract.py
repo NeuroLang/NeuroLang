@@ -151,7 +151,7 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
     @abstractmethod
     def cross_product(self, other):
         pass
-    
+
     @abstractmethod
     def rename_column(self, src, dst):
         pass

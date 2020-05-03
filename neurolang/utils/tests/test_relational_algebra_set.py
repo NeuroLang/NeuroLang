@@ -470,6 +470,17 @@ def test_named_relational_algebra_ra_selection(ra_module):
     )
     assert ras_0 == a_sel
 
+    ras_0 = ras.selection({"x": lambda x: x == 1, "y": lambda y: y == 2})
+    assert ras_0 == a_sel
+
+    ras_0 = ras.selection(lambda t: t.x == 1 and t.y == 2)
+    assert ras_0 == a_sel
+
+    ras_0 = ras.selection(
+        ra_module.RelationalAlgebraStringExpression("x == 1 and y == 2")
+    )
+    assert ras_0 == a_sel
+
 
 def test_named_relational_algebra_ra_naturaljoin(ra_module):
     a = [(i, i * 2) for i in range(5)]

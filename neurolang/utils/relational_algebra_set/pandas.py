@@ -68,15 +68,16 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     def __contains__(self, element):
         element = self._normalise_element(element)
         if (
-            not (self.is_empty() or self.is_dee()) and
-            len(element) == self.arity
+            self.is_empty() or self.is_dee() or
+            len(element) != self.arity
         ):
+            res = False
+        else:
             col = True
             for e, c in zip(element, self._container.iteritems()):
                 col = col & (c[1] == e)
-            return col.any()
-        else:
-            return False
+            res = col.any()
+        return res
 
     @staticmethod
     def _normalise_element(element):
@@ -147,11 +148,21 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     def selection(self, select_criteria):
         if self.is_empty():
             return self._empty_set_same_structure()
-        it = iter(select_criteria.items())
-        col, value = next(it)
-        ix = self._container[col] == value
-        for col, value in it:
-            ix &= self._container[col] == value
+
+        if callable(select_criteria):
+            ix = self._container.apply(select_criteria, axis=1)
+        elif isinstance(select_criteria, RelationalAlgebraStringExpression):
+            ix = self._container.eval(select_criteria)
+        else:
+            it = iter(select_criteria.items())
+            col, value = next(it)
+            ix = self._container[col] == value
+            for col, value in it:
+                if callable(value):
+                    selector = self._container[col].apply(value)
+                else:
+                    selector = self._container[col] == value
+                ix &= selector
 
         new_container = self._container[ix]
 
