@@ -1,0 +1,28 @@
+name: Lint python
+
+on:
+  # Trigger the workflow on push or pull request,
+  # but only for the master branch
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  linters:
+    runs-on: ubuntu-latest
+    container:
+      image: python:3.8.2-slim-buster
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install linters
+      run: |
+        pip install black flake8
+    - name: Run black
+      run: |
+        black --check .
+    - name: Run flake8
+      run: |
+        flake8
