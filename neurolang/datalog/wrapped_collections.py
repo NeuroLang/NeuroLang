@@ -1,6 +1,7 @@
 from collections import namedtuple
 from itertools import tee
 from typing import Tuple
+import numpy as np
 
 from ..expression_walker import ReplaceExpressionsByValues
 from ..expressions import Constant
@@ -11,6 +12,22 @@ from ..utils.relational_algebra_set import (
     RelationalAlgebraSet)
 
 REBV = ReplaceExpressionsByValues(dict())
+
+
+class WrappedTypeMap:
+    row_maps = {
+        np.dtype('i8'): int,
+        np.dtype('f8'): float
+    }
+
+    def backend_2_python(self, value):
+        res = self.row_maps.get(value, value)
+        if res is value:
+            print(f'Not translated: {res}')
+        return res
+
+
+TYPEMAP = WrappedTypeMap()
 
 
 class WrappedRelationalAlgebraSetBaseMixin:
@@ -166,7 +183,10 @@ class WrappedRelationalAlgebraSetBaseMixin:
     def row_type(self):
         if self._row_type is None:
             if self.arity > 0 and not self.is_empty():
-                self._row_type = infer_type(super().fetch_one())
+                self._row_type = Tuple[tuple(
+                    TYPEMAP.backend_2_python(t)
+                    for t in get_args(infer_type(super().fetch_one()))
+                )]
             else:
                 self._row_type = Tuple
 

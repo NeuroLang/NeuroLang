@@ -4,6 +4,7 @@ from functools import lru_cache
 from typing import AbstractSet, Callable, Sequence
 
 from ...expressions import Constant, Definition, FunctionApplication, Symbol
+from ...expression_walker import ReplaceSymbolWalker
 from ...logic.unification import apply_substitution_arguments
 from ...relational_algebra import (ColumnInt, Product, Projection,
                                    RelationalAlgebraOptimiser,
@@ -18,7 +19,9 @@ from ..translate_to_named_ra import TranslateToNamedRA
 from ..wrapped_collections import (WrappedNamedRelationalAlgebraFrozenSet,
                                    WrappedRelationalAlgebraSet)
 
+
 invert = Constant(operator.invert)
+eq = Constant(operator.eq)
 
 
 class ChaseRelationalAlgebraPlusCeriMixin:
@@ -144,19 +147,25 @@ class ChaseNamedRelationalAlgebraMixin:
             restriction_instance = MapInstance()
 
         rule = self.rewrite_constants_in_consequent(rule)
+        rule = self.rewrite_antecedent_equalities(rule)
 
         consequent = rule.consequent
-        rule_predicates = self.extract_rule_predicates(
-            rule, instance, restriction_instance=restriction_instance
-        )
+        # rule_predicates = self.extract_rule_predicates(
+        #    rule, instance, restriction_instance=restriction_instance
+        # )
 
-        if all(len(predicate_list) == 0 for predicate_list in rule_predicates):
-            return MapInstance()
+        # if all(len(predicate_list) == 0 for predicate_list in rule_predicates):
+        #     return MapInstance()
 
-        rule_predicates_iterator, builtin_predicates = rule_predicates
+        # rule_predicates_iterator, builtin_predicates = rule_predicates
+
+        if isinstance(rule.antecedent, Conjunction):
+            predicates = rule.antecedent.formulas
+        else:
+            predicates = (rule.antecedent,)
 
         substitutions = self.obtain_substitutions(
-            rule_predicates_iterator, instance, restriction_instance
+            predicates, instance, restriction_instance
         )
 
         if consequent.functor in instance:
@@ -167,9 +176,9 @@ class ChaseNamedRelationalAlgebraMixin:
             substitutions = self.eliminate_already_computed(
                 consequent, restriction_instance, substitutions
             )
-        substitutions = self.evaluate_builtins(
-            builtin_predicates, substitutions
-        )
+        # substitutions = self.evaluate_builtins(
+        #    builtin_predicates, substitutions
+        # )
 
         return self.compute_result_set(
             rule, substitutions, instance, restriction_instance
@@ -190,6 +199,42 @@ class ChaseNamedRelationalAlgebraMixin:
                 rule, new_args, new_equalities
             )
         return rule
+
+    @lru_cache(1024)
+    def rewrite_antecedent_equalities(self, rule):
+        if not isinstance(rule.antecedent, Conjunction):
+            return rule
+
+        free_variables = (
+            extract_logic_free_variables(rule.antecedent) |
+            extract_logic_free_variables(rule.consequent)
+        )
+        cont = True
+        while cont:
+            cont = False
+            for pos, predicate in enumerate(rule.antecedent.formulas):
+                if (
+                    isinstance(predicate, FunctionApplication) and
+                    predicate.functor == eq and
+                    predicate.args[0] in free_variables and
+                    predicate.args[1] in free_variables
+                ):
+                    equality = predicate
+                    new_antecedent_preds = (
+                        rule.antecedent.formulas[:pos] +
+                        rule.antecedent.formulas[pos + 1:]
+                    )
+                    cont = len(new_antecedent_preds) > 1
+                    new_antecedent = Conjunction(new_antecedent_preds)
+                    rule = Implication(rule.consequent, new_antecedent)
+                    rule = ReplaceSymbolWalker(
+                        {equality.args[0]: equality.args[1]}
+                    ).walk(rule)
+        return rule
+
+
+
+
 
     @staticmethod
     def rewrite_rule_consequent_constants_to_equalities(

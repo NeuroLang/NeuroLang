@@ -1,4 +1,4 @@
-from operator import eq
+from operator import eq, gt, mul
 from typing import AbstractSet, Tuple
 
 import pytest
@@ -6,8 +6,10 @@ import pytest
 from ...exceptions import NeuroLangException
 from ...expressions import Constant, FunctionApplication, Symbol
 from ...relational_algebra import (ColumnInt, ColumnStr, Difference,
-                                   NameColumns, NaturalJoin, Projection,
-                                   RenameColumn, Selection)
+                                   ExtendedProjection,
+                                   ExtendedProjectionListMember, NameColumns,
+                                   NaturalJoin, Projection, RenameColumn,
+                                   Selection)
 from ...utils import NamedRelationalAlgebraFrozenSet
 from ..expressions import Conjunction, Negation
 from ..translate_to_named_ra import TranslateToNamedRA
@@ -180,3 +182,41 @@ def test_joins():
     res = tr.walk(exp)
 
     assert res == Difference(fa_trans, NaturalJoin(fa_trans, fb_trans))
+
+
+def test_selection():
+    x = S_('x')
+    y = S_('y')
+    R1 = S_('R1')
+    fa = R1(x, y)
+    builtin_condition = C_(gt)(x, C_(3))
+    exp = Conjunction((fa, builtin_condition))
+
+    tr = TranslateToNamedRA()
+    res = tr.walk(exp)
+    fa_trans = NameColumns(
+        Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
+        (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
+    )
+    assert res == Selection(fa_trans, builtin_condition)
+
+
+def test_extended_projection():
+    x = S_('x')
+    y = S_('y')
+    z = S_('z')
+    R1 = S_('R1')
+    fa = R1(x, y)
+    builtin_condition = C_(eq)(C_(mul)(x, C_(3)), z)
+    exp = Conjunction((fa, builtin_condition))
+
+    tr = TranslateToNamedRA()
+    res = tr.walk(exp)
+    fa_trans = NameColumns(
+        Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
+        (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
+    )
+    exp_trans = ExtendedProjection(
+        fa_trans, [ExtendedProjectionListMember(*builtin_condition.args)]
+    )
+    assert res == exp_trans
