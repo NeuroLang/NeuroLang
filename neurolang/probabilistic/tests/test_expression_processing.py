@@ -1,8 +1,9 @@
 import pytest
 
 from ...exceptions import NeuroLangException
-from ...expressions import ExpressionBlock, Symbol
-from ..expression_processing import concatenate_to_expression_block
+from ...expressions import Symbol
+from ...logic import Union
+from ..expression_processing import add_to_union
 
 P = Symbol("P")
 Q = Symbol("Q")
@@ -11,31 +12,26 @@ y = Symbol("y")
 z = Symbol("z")
 
 
-def test_concatenate_to_expression_block():
-    block1 = ExpressionBlock((P(x),))
-    block2 = ExpressionBlock((Q(z), Q(y), Q(x)))
-    block3 = ExpressionBlock((P(z), P(y)))
-    assert P(y) in concatenate_to_expression_block(block1, [P(y)]).expressions
-    for expression in block2.expressions:
-        new_block = concatenate_to_expression_block(block1, block2)
-        assert expression in new_block.expressions
-        new_block = concatenate_to_expression_block(block1, block2)
-        assert expression in new_block.expressions
-    for expression in (
-        block1.expressions + block2.expressions + block3.expressions
-    ):
-        new_block = concatenate_to_expression_block(
-            concatenate_to_expression_block(block1, block2), block3
-        )
-        assert expression in new_block.expressions
+def test_concatenate_to_union():
+    union1 = Union((P(x),))
+    union2 = Union((Q(z), Q(y), Q(x)))
+    union3 = Union((P(z), P(y)))
+    assert P(y) in add_to_union(union1, [P(y)]).formulas
+    for expression in union2.formulas:
+        new_union = add_to_union(union1, union2)
+        assert expression in new_union.formulas
+        new_union = add_to_union(union1, union2)
+        assert expression in new_union.formulas
+    for expression in union1.formulas + union2.formulas + union3.formulas:
+        new_union = add_to_union(add_to_union(union1, union2), union3)
+        assert expression in new_union.formulas
 
 
-def test_concatenate_to_expression_block_not_expression():
-    block = ExpressionBlock((P(x),))
+def test_concatenate_to_union_not_expression():
+    union = Union((P(x),))
     with pytest.raises(NeuroLangException, match=r"Expected Expression"):
-        concatenate_to_expression_block(block, ["this_is_not_an_expression"])
+        add_to_union(union, ["this_is_not_an_expression"])
     with pytest.raises(
-        NeuroLangException,
-        match=r"Expected ExpressionBlock or Expression iterable",
+        NeuroLangException, match=r"Expected Union or Expression iterable",
     ):
-        concatenate_to_expression_block(block, None)
+        add_to_union(union, None)

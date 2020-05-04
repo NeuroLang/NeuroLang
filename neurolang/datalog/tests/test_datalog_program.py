@@ -6,8 +6,9 @@ from ...expression_walker import ExpressionBasicEvaluator, IdentityWalker
 from ...expressions import (Constant, ExpressionBlock, FunctionApplication,
                             Lambda, NeuroLangException, Query, Symbol,
                             is_leq_informative)
-from ...logic import Union, ExistentialPredicate, Implication
+from ...logic import ExistentialPredicate, Implication, Union
 from .. import DatalogProgram, Fact
+from ..basic_representation import UnionOfConjunctiveQueries
 from ..expressions import TranslateToLogic
 
 S_ = Symbol
@@ -35,6 +36,30 @@ class Datalog(
     ExpressionBasicEvaluator
 ):
     pass
+
+
+def test_aggregate_protected_keywords():
+    class A(Datalog):
+        protected_keywords = {'q1'}
+
+    class B(A):
+        protected_keywords = {'q2'}
+
+    class C:
+        protected_keywords = {'q3'}
+
+    class D(C, B):
+        pass
+
+    datalog = Datalog()
+    a = A()
+    b = B()
+    d = D()
+    assert a.protected_keywords == datalog.protected_keywords | {'q1'}
+    assert b.protected_keywords == datalog.protected_keywords | {'q1', 'q2'}
+    assert d.protected_keywords == (
+        datalog.protected_keywords | {'q1', 'q2', 'q3'}
+    )
 
 
 def test_facts_constants():
@@ -123,6 +148,7 @@ def test_intensional_extensional_database():
     R0 = S_('R0')  # noqa: N806
     R = S_('R')  # noqa: N806
     T = S_('T')  # noqa: N806
+    w = S_('w')
     x = S_('x')
     y = S_('y')
     z = S_('z')
@@ -178,6 +204,28 @@ def test_intensional_extensional_database():
     assert len(idb) == 2
     assert len(idb['R'].formulas) == 2
     assert len(idb['T'].formulas) == 1
+    assert all(
+        k.type is UnionOfConjunctiveQueries
+        for k in idb.keys()
+        if k.name in ('R', 'T')
+    )
+    assert len([
+        k
+        for k in idb.keys()
+        if k.type is UnionOfConjunctiveQueries
+    ]) == 2
+
+    assert dl.predicate_terms('R') == ('x', 'y', 'z')
+    assert dl.predicate_terms('R0') == ('0', '1', '2')
+
+    dl.walk(Imp_(R(x, y, w), R0(x, y, w)))
+    assert (
+        dl.predicate_terms('R') == ('x', 'y', 'z') or
+        dl.predicate_terms('R') == ('x', 'y', 'w')
+    )
+
+    with pytest.raises(NeuroLangException):
+        dl.predicate_terms('QQ')
 
 
 def test_not_conjunctive():

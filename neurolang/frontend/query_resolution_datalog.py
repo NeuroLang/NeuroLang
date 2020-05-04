@@ -13,7 +13,7 @@ from .datalog import parser as datalog_parser
 from .datalog.natural_syntax_datalog import parser as nat_datalog_parser
 from .query_resolution import NeuroSynthMixin, QueryBuilderBase, RegionMixin
 from .query_resolution_expressions import (
-    Operation, Symbol, TranslateExpressionToFrontEndExpression)
+    Expression, Operation, Symbol, TranslateExpressionToFrontEndExpression)
 
 __all__ = ['QueryBuilderDatalog']
 
@@ -188,3 +188,18 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         )
 
         return Symbol(self, name)
+
+    def predicate_parameter_names(self, predicate_name):
+        if isinstance(predicate_name, Symbol):
+            predicate_name = predicate_name.neurolang_symbol
+        elif (
+            isinstance(predicate_name, Expression) and
+            isinstance(predicate_name.expression, exp.Symbol)
+        ):
+            predicate_name = predicate_name.expression
+        elif not isinstance(predicate_name, str):
+            raise ValueError(f'{predicate_name} is not a string or symbol')
+        return tuple(
+            s.name if hasattr(s, 'name') else exp.Symbol.fresh().name
+            for s in self.solver.predicate_terms(predicate_name)
+        )

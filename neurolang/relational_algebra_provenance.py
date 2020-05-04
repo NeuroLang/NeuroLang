@@ -1,194 +1,27 @@
-import operator
 from typing import AbstractSet
 
 from .exceptions import NeuroLangException
-from .expression_walker import ExpressionWalker, PatternWalker, add_match
-from .expressions import Constant, Definition, FunctionApplication, Symbol
+from .expression_walker import ExpressionWalker, add_match
+from .expressions import Constant, FunctionApplication, Symbol
 from .relational_algebra import (
     Column,
     ColumnStr,
+    ConcatenateConstantColumn,
     EquiJoin,
+    ExtendedProjection,
+    ExtendedProjectionListMember,
     NaturalJoin,
     Product,
     Projection,
     RelationalAlgebraOperation,
+    RelationalAlgebraSolver,
     RenameColumn,
+    RenameColumns,
     Selection,
     Union,
     eq_,
+    str2columnstr_constant,
 )
-from .utils.relational_algebra_set import RelationalAlgebraExpression
-
-
-def arithmetic_operator_string(op):
-    """
-    Get the string representation of an arithmetic operator.
-
-    Parameters
-    ----------
-    op : builting operator
-        Python builtin operator (add, sub, mul or truediv).
-
-    Returns
-    -------
-    str
-        String representation of the operator (e.g. operator.add is "+").
-
-    """
-    return {
-        operator.add: "+",
-        operator.sub: "-",
-        operator.mul: "*",
-        operator.truediv: "/",
-    }[op]
-
-
-def is_arithmetic_operation(exp):
-    """
-    Whether the expression is an arithmetic operation function application.
-
-    Parameters
-    ----------
-    exp : Expression
-
-    Returns
-    -------
-    bool
-
-    """
-    return (
-        isinstance(exp, FunctionApplication)
-        and isinstance(exp.functor, Constant)
-        and exp.functor.value
-        in {operator.add, operator.sub, operator.mul, operator.truediv}
-    )
-
-
-class CrossProductNonProvenance(RelationalAlgebraOperation):
-    def __init__(self, relations):
-        self.relations = tuple(relations)
-
-    def __repr__(self):
-        return (
-            "["
-            + f"\N{n-ary times operator}".join(repr(r) for r in self.relations)
-            + "]"
-        )
-
-
-class ProjectionNonProvenance(RelationalAlgebraOperation):
-    def __init__(self, relation, attributes):
-        self.relation = relation
-        self.attributes = attributes
-
-    def __repr__(self):
-        return (
-            f"\N{GREEK CAPITAL LETTER PI}"
-            f"_{self.attributes}({self.relation})"
-        )
-
-
-class NaturalJoinNonProvenance(RelationalAlgebraOperation):
-    def __init__(self, relation_left, relation_right):
-        self.relation_left = relation_left
-        self.relation_right = relation_right
-
-    def __repr__(self):
-        return f"[{self.relation_left}" f"\N{JOIN}" f"{self.relation_right}]"
-
-
-class ExtendedProjection(RelationalAlgebraOperation):
-    """
-    General operation defining string-based relational algebra projections
-    allowing flexible computations on a relation's columns.
-
-    Attributes
-    ----------
-    relation : Expression[AbstractSet]
-        Relation on which the projections are applied.
-    projection_list : Tuple[ExtendedProjectionListMember]
-        List of projections to apply.
-
-    Notes
-    -----
-    The concept of extended projection is formally defined in section 5.2.5
-    of [1]_.
-
-    .. [1] Garcia-Molina, Hector, Jeffrey D. Ullman, and Jennifer Widom.
-       "Database systems: the complete book." (2009).
-
-    """
-
-    def __init__(self, relation, projection_list):
-        self.relation = relation
-        self.projection_list = tuple(projection_list)
-
-    def __repr__(self):
-        join_str = "," if len(self.projection_list) < 2 else ",\n"
-        return "π_[{}]({})".format(
-            join_str.join([repr(member) for member in self.projection_list]),
-            repr(self.relation),
-        )
-
-
-class ExtendedProjectionListMember(Definition):
-    """
-    Member of a projection list.
-
-    Attributes
-    ----------
-    fun_exp : `Constant[str]`
-        Constant string representation of the extended projection operation.
-    dst_column : `Constant[ColumnStr]` or `Symbol[ColumnStr]`
-        Constant column string of the destination column.
-
-    Notes
-    -----
-    As described in [1]_, a projection list member can either be
-        - a single attribute (column) name in the relation, resulting in a
-          normal non-extended projection,
-        - an expression `x -> y` where `x` and `y` are both attribute (column)
-          names, `x` effectively being rename as `y`,
-        - or an expression `E -> z` where `E` is an expression involving
-          attributes of the relation, arithmetic operators, and string
-          operators, and `z` is a new name for the attribute that results from
-          the calculation implied by `E`. For example, `a + b -> x` represents
-          the sum of the attributes `a` and `b`, renamed `x`.
-
-    .. [1] Garcia-Molina, Hector, Jeffrey D. Ullman, and Jennifer Widom.
-       "Database systems: the complete book." (2009).
-
-    """
-
-    def __init__(self, fun_exp, dst_column):
-        self.fun_exp = fun_exp
-        self.dst_column = dst_column
-
-    def __repr__(self):
-        return "{} -> {}".format(self.fun_exp, self.dst_column)
-
-
-class ConcatenateConstantColumn(RelationalAlgebraOperation):
-    """
-    Add a column with a repeated constant value to a relation.
-
-    Attributes
-    ----------
-    relation : Constant[RelationalAlgebraSet]
-        Relation to which the column will be added.
-
-    column_name : Constant[ColumnStr] or Symbol[ColumnStr]
-        Name of the newly added column.
-
-    column_value : Constant
-        Constant value repeated in the new column.
-
-    """
-
-    def __init__(self, relation, column_name, column_value):
-        self.relation = relation
-        self.column_name = column_name
-        self.column_value = column_value
 
 
 class ProvenanceAlgebraSet(Constant):
@@ -206,43 +39,91 @@ class ProvenanceAlgebraSet(Constant):
             self.provenance_column.value
         }
         return tuple(
-            Constant[ColumnStr](ColumnStr(col), verify_type=False)
+            Constant[ColumnStr](
+                ColumnStr(col), verify_type=False, auto_infer_type=False
+            )
             for col in sorted(non_prov_cols)
         )
+
+
+def check_do_not_share_non_prov_col(prov_set_1, prov_set_2):
+    shared_columns = set(prov_set_1.non_provenance_columns) & set(
+        prov_set_2.non_provenance_columns
+    )
+    if len(shared_columns) > 0:
+        raise NeuroLangException(
+            "Provenance sets should not share non-provenance columns. "
+            "Shared columns found: {}".format(
+                ", ".join(repr(col) for col in shared_columns)
+            )
+        )
+
+
+def is_provenance_operation(operation):
+    stack = list(operation.unapply())
+    while stack:
+        stack_element = stack.pop()
+        if isinstance(stack_element, ProvenanceAlgebraSet):
+            return True
+        if isinstance(stack_element, tuple):
+            stack += list(stack_element)
+        elif isinstance(stack_element, RelationalAlgebraOperation):
+            stack += list(stack_element.unapply())
+    return False
 
 
 class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
     """
     Mixing that walks through relational algebra expressions and
     executes the operations and provenance calculations.
+
     """
+
+    def __init__(self, symbol_table=None):
+        self.symbol_table = symbol_table
+
+    @add_match(
+        RelationalAlgebraOperation,
+        lambda exp: not is_provenance_operation(exp),
+    )
+    def non_provenance_operation(self, operation):
+        return RelationalAlgebraSolver(self.symbol_table).walk(operation)
 
     @add_match(
         Selection(
-            ..., FunctionApplication(eq_, (Constant[Column], Constant[Column]))
+            ...,
+            FunctionApplication(eq_, (Constant[Column], Constant[Column])),
         )
     )
     def selection_between_columns(self, selection):
-        col1, col2 = selection.formula.args
-        selected_relation = self.walk(
-            selection.relation
-        ).value.selection_columns({col1.value: col2.value})
-
+        relation = self.walk(selection.relation)
+        if any(
+            col == relation.provenance_column for col in selection.formula.args
+        ):
+            raise NeuroLangException("Cannot select on provenance column")
         return ProvenanceAlgebraSet(
-            selected_relation, selection.relation.provenance_column
+            self.walk(
+                Selection(
+                    Constant[AbstractSet](relation.value), selection.formula
+                )
+            ).value,
+            relation.provenance_column,
         )
 
     @add_match(
-        Selection(..., FunctionApplication(eq_, (Constant[Column], ...)))
+        Selection(..., FunctionApplication(eq_, (Constant[Column], Constant)),)
     )
     def selection_by_constant(self, selection):
-        col, val = selection.formula.args
-        selected_relation = self.walk(selection.relation).value.selection(
-            {col.value: val.value}
-        )
-
+        relation = self.walk(selection.relation)
+        if selection.formula.args[0] == relation.provenance_column:
+            raise NeuroLangException("Cannot select on provenance column")
         return ProvenanceAlgebraSet(
-            selected_relation, selection.relation.provenance_column
+            self.walk(
+                Selection(
+                    Constant[AbstractSet](relation.value), selection.formula
+                )
+            ).value,
+            relation.provenance_column,
         )
 
     @add_match(Product)
@@ -250,41 +131,32 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
         rel_res = self.walk(product.relations[0])
         for relation in product.relations[1:]:
             rel_temp = self.walk(relation)
-            rel_res, rel_temp = self._remove_common_columns(rel_res, rel_temp)
+            check_do_not_share_non_prov_col(rel_res, rel_temp)
             rel_res = self._apply_provenance_join_operation(
-                rel_res, rel_temp, CrossProductNonProvenance
+                rel_res, rel_temp, Product
             )
         return rel_res
 
-    def _remove_common_columns(self, rel_res, rel_temp):
-        set_res_cols = set(rel_res.value.columns)
-        set_res_cols.discard(rel_res.provenance_column.value)
-        set_temp_cols = set(rel_temp.value.columns)
-        set_temp_cols.discard(rel_temp.provenance_column.value)
-        common = set_res_cols & set_temp_cols
-        if common:
-            cols = set_res_cols.difference(common.union())
-            if len(cols) == 0:
-                cols = set_temp_cols.difference(common)
-                cols.add(rel_temp.provenance_column.value)
-                temp_provenance = rel_temp.provenance_column
-                rel_temp = ProjectionNonProvenance(
-                    rel_temp,
-                    tuple([Constant(ColumnStr(name)) for name in cols]),
-                )
-                rel_temp = self.walk(rel_temp)
-                rel_temp = ProvenanceAlgebraSet(rel_temp, temp_provenance)
-            else:
-                res_provenance = rel_res.provenance_column
-                cols.add(rel_res.provenance_column.value)
-                rel_res = ProjectionNonProvenance(
-                    rel_res,
-                    tuple([Constant(ColumnStr(name)) for name in cols]),
-                )
-                rel_res = self.walk(rel_res)
-                rel_res = ProvenanceAlgebraSet(rel_res, res_provenance)
-
-        return rel_res, rel_temp
+    @add_match(ConcatenateConstantColumn)
+    def prov_concatenate_constant_column(self, concat_op):
+        relation = self.walk(concat_op.relation)
+        if concat_op.column_name == relation.provenance_column:
+            new_prov_col = Constant[ColumnStr](
+                ColumnStr(Symbol.fresh().name),
+                auto_infer_type=False,
+                verify_type=False,
+            )
+        else:
+            new_prov_col = relation.provenance_column
+        relation = RenameColumn(
+            Constant[AbstractSet](relation.value),
+            relation.provenance_column,
+            new_prov_col,
+        )
+        relation = ConcatenateConstantColumn(
+            relation, concat_op.column_name, concat_op.column_value,
+        )
+        return ProvenanceAlgebraSet(self.walk(relation).value, new_prov_col)
 
     @add_match(Projection)
     def prov_projection(self, projection):
@@ -301,53 +173,82 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             projected_relation, prov_set.provenance_column
         )
 
-    @add_match(CrossProductNonProvenance)
-    def ra_product(self, product):
-        if len(product.relations) == 0:
-            return ProvenanceAlgebraSet(set(), product.provenance_column)
-
-        res = self.walk(product.relations[0])
-        res = res.value
-        for relation in product.relations[1:]:
-            res = res.cross_product(self.walk(relation).value)
-        return res
-
-    @add_match(ProjectionNonProvenance)
-    def ra_projection(self, projection):
-        relation = self.walk(projection.relation)
-        cols = tuple(v.value for v in projection.attributes)
-        projected_relation = relation.value.projection(*cols)
-        return projected_relation
-
     @add_match(EquiJoin(ProvenanceAlgebraSet, ..., ProvenanceAlgebraSet, ...))
     def prov_equijoin(self, equijoin):
         raise NotImplementedError("EquiJoin is not implemented.")
 
     @add_match(RenameColumn)
     def prov_rename_column(self, rename_column):
-        relation = self.walk(rename_column.relation)
-        src = rename_column.src.value
-        dst = rename_column.dst.value
-        new_set = relation.value
-        if len(new_set) > 0:
-            new_set = new_set.rename_column(src, dst)
+        prov_relation = self.walk(rename_column.relation)
+        new_prov_col = prov_relation.provenance_column
+        if rename_column.src == prov_relation.provenance_column:
+            new_prov_col = rename_column.dst
+        return ProvenanceAlgebraSet(
+            self.walk(
+                RenameColumn(
+                    Constant[AbstractSet](prov_relation.value),
+                    rename_column.src,
+                    rename_column.dst,
+                )
+            ).value,
+            new_prov_col,
+        )
 
-        if src == relation.provenance_column.value:
-            new_prov = dst
+    @add_match(RenameColumns)
+    def prov_rename_columns(self, rename_columns):
+        prov_relation = self.walk(rename_columns.relation)
+        new_prov_col = prov_relation.provenance_column
+        prov_col_rename = dict(rename_columns.renames).get(
+            prov_relation.provenance_column, None
+        )
+        if prov_col_rename is not None:
+            new_prov_col = prov_col_rename
+        return ProvenanceAlgebraSet(
+            self.walk(
+                RenameColumns(
+                    Constant[AbstractSet](prov_relation.value),
+                    rename_columns.renames,
+                )
+            ).value,
+            new_prov_col,
+        )
+
+    @add_match(ExtendedProjection)
+    def prov_extended_projection(self, extended_proj):
+        relation = self.walk(extended_proj.relation)
+        if any(
+            proj_list_member.dst_column == relation.provenance_column
+            for proj_list_member in extended_proj.projection_list
+        ):
+            new_prov_col = Constant(ColumnStr(Symbol.fresh().name))
         else:
-            new_prov = relation.provenance_column.value
-
-        return ProvenanceAlgebraSet(new_set, new_prov)
+            new_prov_col = relation.provenance_column
+        relation = self.walk(
+            RenameColumn(relation, relation.provenance_column, new_prov_col)
+        )
+        new_proj_list = extended_proj.projection_list + (
+            ExtendedProjectionListMember(
+                fun_exp=new_prov_col, dst_column=new_prov_col
+            ),
+        )
+        return ProvenanceAlgebraSet(
+            self.walk(
+                ExtendedProjection(
+                    Constant[AbstractSet](relation.value), new_proj_list,
+                )
+            ).value,
+            new_prov_col,
+        )
 
     @add_match(NaturalJoin)
     def prov_naturaljoin(self, naturaljoin):
         return self._apply_provenance_join_operation(
-            naturaljoin.relation_left,
-            naturaljoin.relation_right,
-            NaturalJoinNonProvenance,
+            naturaljoin.relation_left, naturaljoin.relation_right, NaturalJoin,
         )
 
     def _apply_provenance_join_operation(self, left, right, np_op):
+        left = self.walk(left)
+        right = self.walk(right)
         res_columns = set(left.value.columns) | (
             set(right.value.columns) - {right.provenance_column.value}
         )
@@ -356,22 +257,30 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
         # provenance columns are temporarily renamed for executing the
         # non-provenance operation on the relations
         tmp_left_col = Constant[ColumnStr](
-            ColumnStr(f"{left.provenance_column.value}1"), verify_type=False,
+            ColumnStr(f"{left.provenance_column.value}1"),
+            verify_type=False,
+            auto_infer_type=False,
         )
         tmp_right_col = Constant[ColumnStr](
-            ColumnStr(f"{right.provenance_column.value}2"), verify_type=False,
+            ColumnStr(f"{right.provenance_column.value}2"),
+            verify_type=False,
+            auto_infer_type=False,
         )
-        tmp_left = RenameColumn(left, left.provenance_column, tmp_left_col)
-        tmp_right = RenameColumn(right, right.provenance_column, tmp_right_col)
+        tmp_left = RenameColumn(
+            Constant[AbstractSet](left.value),
+            left.provenance_column,
+            tmp_left_col,
+        )
+        tmp_right = RenameColumn(
+            Constant[AbstractSet](right.value),
+            right.provenance_column,
+            tmp_right_col,
+        )
         tmp_np_op_args = (tmp_left, tmp_right)
-        if np_op is CrossProductNonProvenance:
-            tmp_non_prov_result = ProvenanceAlgebraSet(
-                np_op(tmp_np_op_args), right.provenance_column
-            )
-        elif np_op is NaturalJoinNonProvenance:
-            tmp_non_prov_result = ProvenanceAlgebraSet(
-                np_op(*tmp_np_op_args), tmp_left_col
-            )
+        if np_op is Product:
+            tmp_non_prov_result = np_op(tmp_np_op_args)
+        elif np_op is NaturalJoin:
+            tmp_non_prov_result = np_op(*tmp_np_op_args)
         else:
             raise NeuroLangException(
                 "Cannot apply non-provenance operation: {}".format(np_op)
@@ -383,125 +292,48 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
                     fun_exp=tmp_left_col * tmp_right_col,
                     dst_column=res_prov_col,
                 ),
+            )
+            + tuple(
+                ExtendedProjectionListMember(fun_exp=col, dst_column=col)
+                for col in set(res_columns) - {res_prov_col}
             ),
         )
-        result = ProjectionNonProvenance(result, res_columns)
-        return ProvenanceAlgebraSet(self.walk(result), res_prov_col)
-
-    @add_match(NaturalJoinNonProvenance)
-    def ra_naturaljoin(self, naturaljoin):
-        left = self.walk(naturaljoin.relation_left)
-        right = self.walk(naturaljoin.relation_right)
-        res = left.value.naturaljoin(right.value)
-        return res
+        return ProvenanceAlgebraSet(self.walk(result).value, res_prov_col)
 
     @add_match(Union)
     def prov_union(self, union_op):
         left = self.walk(union_op.relation_left)
         right = self.walk(union_op.relation_right)
-
-        left_cols = set(left.value.columns)
-        left_cols.discard(left.provenance_column.value)
-        right_cols = set(right.value.columns)
-        right_cols.discard(right.provenance_column.value)
-
-        if (
-            len(left_cols.difference(right_cols)) > 0
-            or len(right_cols.difference(left_cols)) > 0
-        ):
+        if left.non_provenance_columns != right.non_provenance_columns:
             raise NeuroLangException(
-                "At the union, both sets must have the same columns"
+                "All non-provenance columns must be the same: {} != {}".format(
+                    left.non_provenance_columns, right.non_provenance_columns,
+                )
             )
-
-        proj_columns = tuple([Constant(ColumnStr(name)) for name in left_cols])
-
-        res1 = ConcatenateConstantColumn(
-            Projection(left, proj_columns),
-            Constant(ColumnStr("__new_col_union__")),
-            Constant[str]("union_temp_value_1"),
+        prov_col = left.provenance_column
+        result_columns = left.non_provenance_columns
+        # move to non-provenance relational algebra
+        np_left = Constant[AbstractSet](left.value)
+        np_right = Constant[AbstractSet](right.value)
+        # make the the provenance columns match
+        np_right = RenameColumn(np_right, right.provenance_column, prov_col)
+        # add a dummy column with different values for each relation
+        # this ensures that all the tuples will be part of the result
+        dummy_col = str2columnstr_constant(Symbol.fresh().name)
+        np_left = ConcatenateConstantColumn(
+            np_left, dummy_col, Constant[int](0)
         )
-        res2 = ConcatenateConstantColumn(
-            Projection(right, proj_columns),
-            Constant(ColumnStr("__new_col_union__")),
-            Constant[str]("union_temp_value_2"),
+        np_right = ConcatenateConstantColumn(
+            np_right, dummy_col, Constant[int](1)
         )
-
-        left = self.walk(res1)
-        right = self.walk(res2)
-
-        new_relation = ProvenanceAlgebraSet(
-            left.value | right.value, union_op.relation_left.provenance_column
-        )
-
-        return self.walk(Projection(new_relation, proj_columns))
-
-    @add_match(ConcatenateConstantColumn)
-    def concatenate_column(self, concat_op):
-        relation = self.walk(concat_op.relation)
-        new_column_name = concat_op.column_name
-        new_column_value = concat_op.column_value
-        res = ExtendedProjection(
-            relation,
-            (
-                ExtendedProjectionListMember(
-                    fun_exp=new_column_value, dst_column=new_column_name
-                ),
-            ),
-        )
-        new_relation = self.walk(res)
-
-        return new_relation
+        ra_union_op = Union(np_left, np_right)
+        new_relation = self.walk(ra_union_op)
+        result = ProvenanceAlgebraSet(new_relation.value, prov_col)
+        # provenance projection that removes the dummy column and sums the
+        # provenance of matching tuples
+        result = Projection(result, result_columns)
+        return self.walk(result)
 
     @add_match(Constant[AbstractSet])
-    def prov_relation(self, relation):
+    def constant_relation_or_provenance_set(self, relation):
         return relation
-
-    @add_match(ExtendedProjection)
-    def prov_extended_projection(self, proj_op):
-        relation = self.walk(proj_op.relation)
-        str_arithmetic_walker = StringArithmeticWalker()
-        eval_expressions = {}
-        for member in proj_op.projection_list:
-            eval_expressions[
-                member.dst_column.value
-            ] = str_arithmetic_walker.walk(self.walk(member.fun_exp))
-        new_container = relation.value.extended_projection(eval_expressions)
-        return ProvenanceAlgebraSet(new_container, relation.provenance_column)
-
-    @add_match(FunctionApplication, is_arithmetic_operation)
-    def prov_arithmetic_operation(self, arithmetic_op):
-        return FunctionApplication[arithmetic_op.type](
-            arithmetic_op.functor,
-            tuple(self.walk(arg) for arg in arithmetic_op.args),
-        )
-
-
-class StringArithmeticWalker(PatternWalker):
-    """
-    Walker translating an Expression with basic arithmetic operations on a
-    relation's columns to its equivalent string representation.
-
-    The expression can refer to the names a relation's columns or to the
-    length of an other constant relation.
-
-    """
-
-    @add_match(Constant)
-    def constant(self, cst):
-        return cst.value
-
-    @add_match(FunctionApplication(Constant(len), ...))
-    def len(self, fa):
-        if not isinstance(fa.args[0], Constant[AbstractSet]):
-            raise NeuroLangException("Expected constant RA relation")
-        return str(len(fa.args[0].value))
-
-    @add_match(FunctionApplication, is_arithmetic_operation)
-    def arithmetic_operation(self, fa):
-        return RelationalAlgebraExpression(
-            "({} {} {})".format(
-                self.walk(fa.args[0]),
-                arithmetic_operator_string(fa.functor.value),
-                self.walk(fa.args[1]),
-            )
-        )

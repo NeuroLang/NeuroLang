@@ -5,13 +5,13 @@ from numpy import random
 import nibabel as nib
 
 from ..aabb_tree import AABB
-from ..CD_relations import (
-    cardinal_relation, direction_matrix, is_in_direction,
-    cardinal_relation_prepare_regions
-)
+from ..CD_relations import (cardinal_relation,
+                            cardinal_relation_prepare_regions,
+                            direction_matrix, is_in_direction)
 from ..exceptions import NeuroLangException
-from ..regions import (ExplicitVBR, PlanarVolume, Region, SphericalVolume,
-                       region_difference, region_intersection, region_union)
+from ..regions import (ExplicitVBR, ExplicitVBROverlay, PlanarVolume, Region,
+                       SphericalVolume, region_difference, region_intersection,
+                       region_union)
 
 
 def _generate_random_box(size_bounds, *args):
@@ -221,6 +221,69 @@ def test_explicit_region():
         [0., 0., 0., 1.]
     ]).round(2)
     region1 = ExplicitVBR(voxels, affine)
+    assert np.array_equal(region1.voxels, region1.to_ijk(affine))
+
+
+def test_explicit_region_overlay():
+
+    def randint(size=None):
+        return random.randint(0, 256, size=size)
+
+    voxels = [(randint(), randint(), randint()) for _ in range(50)]
+    overlay = randint(size=50)
+    affine = np.eye(4)
+    image = np.zeros((256, 256, 256))
+    image[tuple(zip(*voxels))] = overlay
+    vbr = ExplicitVBROverlay(voxels, affine, overlay, image_dim=(256,) * 3)
+    assert np.array_equal(vbr.to_ijk(affine), vbr.voxels)
+    assert vbr.aabb_tree is not None
+    assert np.all(vbr.bounding_box.lb >= 0)
+    assert np.all(vbr.bounding_box.lb <= 256)
+
+    res_spi = vbr.spatial_image()
+    assert np.array_equiv(
+        np.asanyarray(res_spi.dataobj, dtype=int),
+        image
+    )
+    spi = nib.spatialimages.SpatialImage(
+        image,
+        affine
+    )
+
+    assert np.array_equiv(res_spi.affine, spi.affine)
+    assert np.array_equiv(res_spi.dataobj, spi.dataobj)
+    assert res_spi.shape == spi.shape
+
+    spi_out = nib.spatialimages.SpatialImage(
+        np.empty_like(image),
+        affine
+    )
+    vbr.spatial_image(out=spi_out)
+    assert np.array_equiv(spi_out.affine, spi.affine)
+    assert np.array_equiv(spi_out.dataobj, spi.dataobj)
+    assert spi_out.shape == spi.shape
+
+    affine = np.eye(4)
+    region1 = ExplicitVBROverlay(voxels, affine, overlay)
+    assert np.array_equal(region1.voxels, region1.to_ijk(affine))
+
+    affine = np.eye(4) * 2
+    affine[-1] = 1
+    region1 = ExplicitVBR(voxels, affine, overlay)
+    assert np.array_equal(region1.voxels, region1.to_ijk(affine))
+
+    affine = np.eye(4)
+    affine[:, -1] = np.array([1, 1, 1, 1])
+    region1 = ExplicitVBROverlay(voxels, affine, overlay)
+    assert np.array_equal(region1.voxels, region1.to_ijk(affine))
+
+    affine = np.array([
+        [-0.69999999, 0., 0., 90.],
+        [0., 0.69999999, 0., -126.],
+        [0., 0., 0.69999999, -72.],
+        [0., 0., 0., 1.]
+    ]).round(2)
+    region1 = ExplicitVBR(voxels, affine, overlay)
     assert np.array_equal(region1.voxels, region1.to_ijk(affine))
 
 
