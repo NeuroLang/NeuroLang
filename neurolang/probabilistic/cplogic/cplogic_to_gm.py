@@ -196,10 +196,6 @@ class NaryChoicePlateNode(ProbabilisticPlateNode):
     """
 
 
-class NaryChoiceResultPlateNode(PlateNode):
-    pass
-
-
 def is_extensional_grounding(grounding):
     """TODO: represent extensional grounding with a fact instead?"""
     return (
@@ -249,37 +245,16 @@ class CPLogicGroundingToGraphicalModelTranslator(PatternWalker):
         Represent a probabilistic choice as a n-ary choice node.
         """
         expression = grounding.expression
-        choice_node_symbol = Symbol.fresh()
+        node_symb = get_predicate_from_grounded_expression(expression).functor
         probability_column = str2columnstr_constant(
             grounding.expression.consequent.probability.name
         )
         relation = grounding.relation
         # add a n-ary choice random variable
         choice_node = NaryChoicePlateNode(
-            choice_node_symbol, expression, relation, probability_column
+            node_symb, expression, relation, probability_column
         )
-        self.add_plate_node(choice_node_symbol, choice_node)
-        # remove the probability column as it is not neeeded to represent the
-        # CPD factories of boolean random variables whose value is
-        # deterministically determined by the value of their parent choice
-        # variable
-        relation = RelationalAlgebraSolver().walk(
-            Projection(
-                relation,
-                tuple(
-                    str2columnstr_constant(col)
-                    for col in relation.value.columns
-                    if col != probability_column.value
-                ),
-            )
-        )
-        node_symbol = get_predicate_from_grounded_expression(
-            expression
-        ).functor
-        node = NaryChoiceResultPlateNode(node_symbol, expression, relation)
-        self.add_plate_node(
-            node_symbol, node, parent_node_symbols={choice_node_symbol}
-        )
+        self.add_plate_node(node_symb, choice_node)
 
     @add_match(Grounding(Implication(ProbabilisticPredicate, ...), ...))
     def probfact_set_grounding(self, grounding):
