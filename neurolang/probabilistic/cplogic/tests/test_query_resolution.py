@@ -1,3 +1,5 @@
+import pytest
+
 from ....datalog import Fact
 from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Union
@@ -23,7 +25,7 @@ a = Constant("a")
 b = Constant("b")
 
 
-def test_deterministic_program():
+def test_deterministic():
     """
     We define the program
 
@@ -47,7 +49,24 @@ def test_deterministic_program():
     assert testing.eq_prov_relations(result, expected)
 
 
-def test_simple_bernoulli_program():
+def test_deterministic_conjunction_varying_arity():
+    code = Union(
+        (
+            Fact(Q(a, b)),
+            Fact(P(a)),
+            Fact(P(b)),
+            Implication(Z(x, y), Conjunction((Q(x, y), P(x), P(y)))),
+        )
+    )
+    cpl_program = CPLogicProgram()
+    cpl_program.walk(code)
+    query_pred = Z(x, y)
+    result = solve_succ_query(query_pred, cpl_program)
+    expected = testing.make_prov_set([(1.0, "a", "b")], ("_p_", "x", "y"))
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_simple_bernoulli():
     """
     We define the program
 
@@ -74,7 +93,7 @@ def test_simple_bernoulli_program():
     assert testing.eq_prov_relations(result, expected)
 
 
-def test_conjunction_bernoulli_program():
+def test_bernoulli_conjunction():
     code = Union((Implication(Z(x), Conjunction((P(x), Q(x), R(x)))),))
     probfacts_sets = {
         P: {(1.0, "a"), (0.5, "b")},
@@ -90,7 +109,7 @@ def test_conjunction_bernoulli_program():
     assert set(result.value) == {(0.5 * 0.9 * 0.9, "b")}
 
 
-def test_multi_level_conjunctive_program():
+def test_multi_level_conjunction():
     """
     We consider the program
 
@@ -167,7 +186,7 @@ def test_intertwined_conjunctions_and_probfacts():
     assert testing.eq_prov_relations(result, expected)
 
 
-def test_simple_probchoice_query_resolution():
+def test_simple_probchoice():
     pchoice_as_sets = {P: {(0.2, "a"), (0.8, "b")}}
     cpl_program = CPLogicProgram()
     for pred_symb, pchoice_as_set in pchoice_as_sets.items():
@@ -179,25 +198,29 @@ def test_simple_probchoice_query_resolution():
     assert testing.eq_prov_relations(result, expected)
 
 
+@pytest.mark.skip
 def test_simple_existential():
     """
     We define the following program
 
-        P(a) : 0.2 v P(b) : 0.8 <- T
-                           Q(a) <- ∃x, P(x)
-
-    Whose equivalent graphical model is
-
-             P(a) ----|
-              ^       |
-        c_P --|       |-> Q(a)
-              v       |
-             P(b) ----|
+        P(a, a) : 0.2 v P(a, b) : 0.8 <- T
+                           Q(x) <- ∃y, P(x, y)
 
     We expect the following to hold
 
-        - Pr[P(a)] = 0.2
-        - Pr[P(b)] = 0.8
+        - Pr[P(a, a)] = 0.2
+        - Pr[P(a, b)] = 0.8
         - Pr[Q(a)] = 1.0
 
     """
+    pchoice_as_sets = {P: {(0.2, "a", "a"), (0.8, "a", "b")}}
+    code = Union((Implication(Q(x), P(x, y)),))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    cpl_program.walk(code)
+    result = solve_succ_query(Q(x), cpl_program)
+    expected = testing.make_prov_set([(1.0, "a")], ("_p_", "x"))
+    assert testing.eq_prov_relations(result, expected)
