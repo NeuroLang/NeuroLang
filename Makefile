@@ -14,7 +14,7 @@ flake8:
 
 test:
 	$(PYTEST) --cov=neurolang --cov-config=.coveragerc --cov-report=xml --cov-report=term-missing \
-	  -vv neurolang neurolang --junitxml=utest.xml --html=htmltest.html --self-contained-html
+	  -vv neurolang neurolang --junitxml=utest.xml #--html=htmltest.html --self-contained-html
 
 ctags:
 	# make tags for symbol based navigation in emacs and vim
