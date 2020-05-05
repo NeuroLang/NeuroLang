@@ -198,6 +198,23 @@ def test_simple_probchoice():
     assert testing.eq_prov_relations(result, expected)
 
 
+def test_mutual_exclusivity():
+    pchoice_as_sets = {P: {(0.2, "a"), (0.8, "b")}}
+    pfact_sets = {Q: {(0.5, "a", "b")}}
+    code = Union((Implication(Z(x, y), Conjunction((P(x), P(y), Q(x, y)))),))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+    cpl_program.walk(code)
+    result = solve_succ_query(Z(x, y), cpl_program)
+    expected = testing.make_prov_set([], ("_p_", "x", "y"))
+    assert testing.eq_prov_relations(result, expected)
+
+
 @pytest.mark.skip
 def test_simple_existential():
     """
