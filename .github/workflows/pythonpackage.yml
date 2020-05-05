@@ -43,6 +43,7 @@ jobs:
       with:
         name: coverage
         path: htmlcov/*
+    - uses: actions/upload-artifact@v2
       with:
         name: test_report
         path: htmltest.html
