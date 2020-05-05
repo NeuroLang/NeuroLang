@@ -165,7 +165,7 @@ class WrappedRelationalAlgebraSetBaseMixin:
     @property
     def row_type(self):
         if self._row_type is None:
-            if self.arity > 0 and not self.is_null():
+            if self.arity > 0 and not self.is_empty():
                 self._row_type = infer_type(super().fetch_one())
             else:
                 self._row_type = Tuple
@@ -242,7 +242,7 @@ class WrappedNamedRelationalAlgebraFrozenSetMixin(
     @property
     def row_type(self):
         if self._row_type is None:
-            if (self.arity > 0 and not self.is_null()):
+            if (self.arity > 0 and not self.is_empty()):
                 element = super().fetch_one()
                 self._row_type = Tuple[tuple(
                     Constant(getattr(element, c)).type
