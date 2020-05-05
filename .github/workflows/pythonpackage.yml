@@ -47,21 +47,20 @@ jobs:
 #      with:
 #        name: test_report
 #        path: htmltest.html
-
-      - name: Test
-        run: |
-          pytest neurolang --junitxml=junit/test-results-${{ matrix.python-version }}.xml --cov=neurolang --cov-config=.coveragerc --cov-report=xml --cov-report=term-missing
-          coverage html --directory=htmlcov-${{ matrix.python-version }} 
-      - name: Upload pytest test results
-        uses: actions/upload-artifact@master
-        with:
-          name: pytest-results-${{ matrix.python-version }}
-          path: junit/test-results-${{ matrix.python-version }}.xml
+    - name: Test
+      run: |
+        pytest neurolang --junitxml=junit/test-results-${{ matrix.python-version }}.xml --cov=neurolang --cov-config=.coveragerc --cov-report=xml --cov-report=term-missing
+        coverage html --directory=htmlcov-${{ matrix.python-version }} 
+    - name: Upload pytest test results
+      uses: actions/upload-artifact@master
+      with:
+        name: pytest-results-${{ matrix.python-version }}
+        path: junit/test-results-${{ matrix.python-version }}.xml
         # Use always() to always run this step to publish test results when there are test failures
-        if: ${{ always() }}
-      - name: Upload coverage results
-        uses: actions/upload-artifact@v2
-          with:
-            name: coverage
-            path: htmlcov-${{ matrix.python-version }}/*
-        if: ${{ always() }}
+      if: ${{ always() }}
+    - name: Upload coverage results
+      uses: actions/upload-artifact@master
+        with:
+          name: coverage
+          path: htmlcov-${{ matrix.python-version }}/*
+      if: ${{ always() }}
