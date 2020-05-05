@@ -31,9 +31,9 @@ jobs:
       continue-on-error: True
       run: |
         # stop the build if there are Python syntax errors or undefined names
-        flake8 neurolang --exit-zero --count --show-source --statistics --select=E9,F63,F7,F82 
+        flake8 neurolang --count --show-source --statistics --select=E9,F63,F7,F82 --max-complexity=6 --max-line-length=80 
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        flake8 neurolang --count --exit-zero --max-complexity=10 --max-line-length=80 --statistics
+        flake8 neurolang --count --exit-zero --statistics
     - name: Test
       run: |
         pytest neurolang --junitxml=junit/test-results-${{ matrix.python-version }}.xml --cov=neurolang --cov-config=.coveragerc --cov-report=xml --cov-report=term-missing --html=htmltest-${{ matrix.python-version }}.html --self-contained-html
