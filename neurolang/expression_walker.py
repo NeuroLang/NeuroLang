@@ -3,26 +3,13 @@ import typing
 from collections import deque
 from itertools import product, tee
 
-from .expression_pattern_matching import (
-    PatternMatcher,
-    add_entry_point_match,
-    add_match
-)
-from .expressions import (
-    Constant,
-    Expression,
-    FunctionApplication,
-    Lambda,
-    NeuroLangException,
-    NeuroLangTypeException,
-    Projection,
-    Statement,
-    Symbol,
-    TypedSymbolTableMixin,
-    Unknown,
-    is_leq_informative,
-    unify_types
-)
+from .expression_pattern_matching import (PatternMatcher,
+                                          add_entry_point_match, add_match)
+from .expressions import (Constant, Expression, FunctionApplication, Lambda,
+                          NeuroLangException, NeuroLangTypeException,
+                          Projection, Statement, Symbol, TypedSymbolTableMixin,
+                          Unknown, is_leq_informative, unify_types)
+from .utils import OrderedSet
 
 __all__ = [
     'expression_iterator', 'PatternWalker',
@@ -450,3 +437,48 @@ class ExpressionBasicEvaluator(ExpressionWalker):
             return self.walk(rsw.walk(lambda_.function_expression))
         else:
             return lambda_.function_expression
+
+
+class FunctionApplicationToPythonLambda(PatternWalker):
+    '''
+    Convert a `FunctionApplication` expression with constant functor
+    into a python `lambda` expression where the symbols are the parameters.
+    '''
+    @add_match(Constant)
+    def constant(self, e):
+        return e.value, OrderedSet()
+
+    @add_match(
+        FunctionApplication(Constant, ...),
+        lambda e: all(
+            isinstance(a, (Symbol, Constant, FunctionApplication))
+            for a in e.args
+        )
+    )
+    def fa(self, e):
+        arg_sym = []
+        arg_dict = {}
+        param_sym = OrderedSet()
+        single_param_sym = Symbol.fresh().name
+        for arg in e.args:
+            if isinstance(arg, (Constant, FunctionApplication)):
+                value, param_sym_ = self.walk(arg)
+                n = Symbol.fresh().name
+                arg_dict[n] = value
+                if isinstance(arg, FunctionApplication):
+                    n = f"{n}({','.join(param_sym_)})"
+                arg_sym.append(n)
+                param_sym |= param_sym_
+            else:
+                arg_sym.append(f'{arg.name}')
+                param_sym.add(f'{arg.name}')
+
+        fun_sym = Symbol.fresh().name
+        arg_dict[fun_sym] = e.functor.value
+        str_eval = (
+            f"lambda {', '.join(param_sym)}: {fun_sym}({', '.join(arg_sym)})"
+        )
+        gs = globals()
+        ls = locals()
+        gs.update(arg_dict)
+        return eval(str_eval, gs, ls), param_sym
