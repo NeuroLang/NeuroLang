@@ -43,3 +43,6 @@ jobs:
       with:
         name: coverage
         path: htmlcov/*
+      with:
+        name: test_report
+        path: htmltest.html

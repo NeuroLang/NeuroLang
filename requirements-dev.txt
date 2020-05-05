@@ -6,3 +6,4 @@ codacy-coverage
 pytest
 pytest-benchmark
 pytest-cov
+pytest-html
