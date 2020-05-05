@@ -60,7 +60,7 @@ jobs:
       if: ${{ always() }}
     - name: Upload coverage results
       uses: actions/upload-artifact@master
-        with:
-          name: coverage
-          path: htmlcov-${{ matrix.python-version }}/*
+      with:
+        name: coverage
+        path: htmlcov-${{ matrix.python-version }}/*
       if: ${{ always() }}
