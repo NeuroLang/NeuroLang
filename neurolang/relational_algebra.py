@@ -416,6 +416,16 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
 
         return self._build_relation_constant(selected_relation)
 
+    @ew.add_match(
+        Selection(..., FunctionApplication(..., (Constant[Column], ...)))
+    )
+    def selection_general_selection_by_constant(self, selection):
+        relation = self.walk(selection.relation)
+        str_arithmetic_walker = StringArithmeticWalker()
+        formula = str_arithmetic_walker.walk(self.walk(selection.formula)).value
+        selected_relation = relation.value.selection(formula)
+        return self._build_relation_constant(selected_relation)
+
     @ew.add_match(Projection)
     def ra_projection(self, projection):
         relation = self.walk(projection.relation)

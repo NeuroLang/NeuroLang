@@ -9,7 +9,7 @@ from ..relational_algebra import (ColumnInt, ColumnStr, Difference,
                                   ExtendedProjection,
                                   ExtendedProjectionListMember, NameColumns,
                                   NaturalJoin, Projection, RenameColumn,
-                                  Selection)
+                                  Selection, RelationalAlgebraOperation)
 from ..utils import NamedRelationalAlgebraFrozenSet
 from .expressions import Conjunction, Negation
 
@@ -45,12 +45,20 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
 
     @add_match(FunctionApplication(EQ_pattern, (Symbol, FunctionApplication)))
     def translate_eq_c_fa(self, expression):
-        dst = Constant[ColumnStr](
-            ColumnStr(expression.args[0].name),
-            verify_type=False
-        )
         processed_fa = self.walk(expression.args[1])
-        return FunctionApplication(EQ, (dst, processed_fa))
+        if isinstance(processed_fa, RelationalAlgebraOperation):
+            processed_fa = expression.args[1]
+        if processed_fa is not expression.args[1]:
+            res = self.walk(
+                FunctionApplication(EQ, (expression.args[0], processed_fa))
+            )
+        else:
+            dst = Constant[ColumnStr](
+                ColumnStr(expression.args[0].name),
+                verify_type=False
+            )
+            res = FunctionApplication(EQ, (dst, processed_fa))
+        return res
 
     @add_match(FunctionApplication(EQ_pattern, ...))
     def translate_eq(self, expression):
@@ -90,6 +98,17 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         else:
             res = expression
         return res
+
+    @add_match(
+        FunctionApplication(Builtin_pattern, ...),
+        lambda exp: all(
+            isinstance(arg, Constant) and
+            not issubclass(arg.type, (ColumnInt, ColumnStr))
+            for arg in exp.args
+        )
+    )
+    def translate_builtin_fa_constants(self, expression):
+        return ExpressionBasicEvaluator.evaluate_function(self, expression)
 
     @add_match(FunctionApplication)
     def translate_fa(self, expression):

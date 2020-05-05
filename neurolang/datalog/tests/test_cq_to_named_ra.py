@@ -220,3 +220,22 @@ def test_extended_projection():
         fa_trans, [ExtendedProjectionListMember(*builtin_condition.args)]
     )
     assert res == exp_trans
+
+
+def test_extended_projection_algebraic_expression():
+    x = S_('x')
+    y = S_('y')
+    R1 = S_('R1')
+    fa = R1(x, y)
+    builtin_condition = C_(eq)(C_(mul)(C_(2), C_(3)), y)
+    exp = Conjunction((fa, builtin_condition))
+
+    tr = TranslateToNamedRA()
+    res = tr.walk(exp)
+    fa_trans = NameColumns(
+        Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
+        (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
+    )
+    assert res.relation_left == fa_trans
+    assert len(res.relation_right.value)
+    assert ({'y': 6} in res.relation_right.value)
