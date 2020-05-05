@@ -1,3 +1,4 @@
+import collections
 import logging
 import os
 
@@ -51,8 +52,8 @@ class NeuroSynthHandler(object):
         if self._dataset is None:
             dataset = self.ns_load_dataset()
             self._dataset = dataset
-        if not isinstance(terms, types.StringTypes) and isinstance(
-            term, collections.Iterable
+        if not isinstance(terms, str) and isinstance(
+            terms, collections.Iterable
         ):
             studies_ids = self._dataset.get_studies(
                 features=terms, frequency_threshold=frequency_threshold
