@@ -1,3 +1,4 @@
+import operator
 from typing import AbstractSet, Tuple
 
 import pytest
@@ -63,6 +64,16 @@ def test_selection_columns():
     sol = RelationalAlgebraSolver().walk(s).value
 
     assert sol == R1.selection_columns({0: 1})
+
+
+def test_selection_general():
+    gt_ = C_(operator.gt)
+    r1_named = NamedRelationalAlgebraFrozenSet(('x', 'y'), R1)
+    c = C_[AbstractSet[Tuple[int, int]]](r1_named)
+    s = Selection(c, gt_(C_(ColumnStr('x')), C_(5)))
+    sol = RelationalAlgebraSolver().walk(s).value
+
+    assert sol == r1_named.selection(lambda t: t.x > 5)
 
 
 def test_projections():

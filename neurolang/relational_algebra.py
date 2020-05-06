@@ -418,13 +418,14 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         return self._build_relation_constant(selected_relation)
 
     @ew.add_match(
-        Selection(..., FunctionApplication(..., (Constant[Column], ...)))
+        Selection(..., FunctionApplication(..., (Constant[ColumnStr], ...)))
     )
     def selection_general_selection_by_constant(self, selection):
         relation = self.walk(selection.relation)
-        str_arithmetic_walker = StringArithmeticWalker()
-        formula = str_arithmetic_walker.walk(self.walk(selection.formula)).value
-        selected_relation = relation.value.selection(formula)
+        compiled_formula = self._compile_function_application_to_sql_fun_exp(
+            selection.formula
+        )
+        selected_relation = relation.value.selection(compiled_formula)
         return self._build_relation_constant(selected_relation)
 
     @ew.add_match(Projection)
@@ -540,12 +541,12 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
             fun_exp = self.walk(member.fun_exp)
             eval_expressions[
                 member.dst_column.value
-            ] = self._compile_extended_projection_fun_exp(fun_exp)
+            ] = self._compile_function_application_to_sql_fun_exp(fun_exp)
         return self._build_relation_constant(
             relation.value.extended_projection(eval_expressions)
         )
 
-    def _compile_extended_projection_fun_exp(self, fun_exp):
+    def _compile_function_application_to_sql_fun_exp(self, fun_exp):
         try:
             return self._saw.walk(fun_exp).value
         except NeuroLangException as e:
