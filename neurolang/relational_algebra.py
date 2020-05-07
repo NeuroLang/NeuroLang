@@ -223,6 +223,22 @@ class ExtendedProjection(RelationalAlgebraOperation):
             repr(self.relation),
         )
 
+    def __eq__(self, other):
+        if not isinstance(other, ExtendedProjection):
+            return False
+
+        return (
+            self.relation == other.relation and
+            len(self.projection_list) == len(other.projection_list) and
+            all(
+                any(
+                    element_self == element_other
+                    for element_other in other.projection_list
+                )
+                for element_self in self.projection_list
+            )
+        )
+
 
 class ExtendedProjectionListMember(Definition):
     """
@@ -259,6 +275,42 @@ class ExtendedProjectionListMember(Definition):
 
     def __repr__(self):
         return "{} -> {}".format(self.fun_exp, self.dst_column)
+
+
+class Destroy(RelationalAlgebraOperation):
+    """
+    Operation to map a column of a collection of elements into
+    a new column with all collections concatenated
+
+    Attributes
+    ----------
+    relation : Expression[AbstractSet]
+        Relation on which the projections are applied.
+    src_column : Constant[ColumnStr]
+        Column to destroy in the operation.
+
+    dst_column : Constant[ColumnStr]
+        Column to map onto the new set.
+
+    Notes
+    -----
+    The concept of set destruction is formally defined in chapter 20
+    of [1]_.
+
+    .. [1] Abiteboul, S., Hull, R. & Vianu, V. "Foundations of databases". (
+           Addison Wesley, 1995).
+    """
+
+    def __init__(self, relation, src_column, dst_column):
+        self.relation = relation
+        self.src_column = src_column
+        self.dst_column = dst_column
+
+    def __repr__(self):
+        return (
+            f"set_destroy[{self.relation}, "
+            "{self.src_column} -> {src.dst_column}]"
+        )
 
 
 class ConcatenateConstantColumn(RelationalAlgebraOperation):

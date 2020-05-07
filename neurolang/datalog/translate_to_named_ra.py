@@ -1,19 +1,21 @@
-from operator import eq, invert
+from operator import contains, eq, invert
 from typing import AbstractSet, Callable, Tuple
 
 from ..exceptions import NeuroLangException
 from ..expression_walker import (ExpressionBasicEvaluator,
                                  ReplaceExpressionsByValues, add_match)
-from ..expressions import Constant, FunctionApplication, Symbol, NonConstant
-from ..relational_algebra import (ColumnInt, ColumnStr, Difference,
+from ..expressions import Constant, FunctionApplication, NonConstant, Symbol
+from ..relational_algebra import (ColumnInt, ColumnStr, Destroy, Difference,
                                   ExtendedProjection,
                                   ExtendedProjectionListMember, NameColumns,
-                                  NaturalJoin, Projection, RenameColumn,
-                                  Selection, RelationalAlgebraOperation)
+                                  NaturalJoin, Projection,
+                                  RelationalAlgebraOperation, RenameColumn,
+                                  Selection)
 from ..utils import NamedRelationalAlgebraFrozenSet
 from .expressions import Conjunction, Negation
 
 EQ = Constant(eq)
+CONTAINS = Constant(contains)
 EQ_pattern = Constant[Callable](eq)
 Builtin_pattern = Constant[Callable]
 REBV = ReplaceExpressionsByValues({})
@@ -186,73 +188,78 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             return NamedRelationalAlgebraFrozenSet([])
 
         output = TranslateToNamedRA.process_negative_formulas(
-            classified_formulas['neg_formulas'], classified_formulas['named_columns'],
+            classified_formulas,
             output
         )
 
         output = TranslateToNamedRA.process_equality_formulas(
-            classified_formulas['eq_formulas'],
-            classified_formulas['named_columns'],
+            classified_formulas,
             output
         )
 
-        extended_projections = []
-        for ext_proj in classified_formulas['ext_proj_formulas']:
-            dst_column, fun_exp = ext_proj.args
-            extended_projections.append(
-                ExtendedProjectionListMember(fun_exp, dst_column)
-            )
-        if len(extended_projections) > 0:
-            for column in classified_formulas['named_columns']:
-                extended_projections.append(
-                    ExtendedProjectionListMember(column, column)
-                )
-            output = ExtendedProjection(output, extended_projections)
+        output = TranslateToNamedRA.process_extended_projection_formulas(
+            classified_formulas,
+            output
+        )
 
         for selection in classified_formulas['selection_formulas']:
             output = Selection(output, selection)
 
+        for destroy in classified_formulas['destroy_formulas']:
+            output = Destroy(output, destroy.args[1], destroy.args[0])
+
         return output
 
     def classify_formulas_obtain_names(self, expression):
-        pos_formulas = []
-        neg_formulas = []
-        selection_formulas = []
-        ext_proj_formulas = []
-        eq_formulas = []
-        named_columns = set()
+        classified_formulas = {
+            'pos_formulas': [],
+            'neg_formulas': [],
+            'eq_formulas': [],
+            'ext_proj_formulas': [],
+            'selection_formulas': [],
+            'destroy_formulas': [],
+            'named_columns': set()
+        }
+        
         for formula in expression.formulas:
             formula = self.walk(formula)
             if isinstance(formula, Negation):
-                neg_formulas.append(formula.formula)
+                classified_formulas['neg_formulas'].append(formula.formula)
             elif isinstance(formula, FunctionApplication):
-                if formula.functor == EQ:
-                    if formula.args[0] == formula.args[1]:
-                        continue
-                    elif isinstance(formula.args[1], (Constant, Symbol)):
-                        eq_formulas.append(formula)
-                    elif isinstance(formula.args[1], FunctionApplication):
-                        ext_proj_formulas.append(formula)
-                else:
-                    selection_formulas.append(formula)
+                self.classify_formulas_obtain_named_function_applications(
+                    formula, classified_formulas
+                )
             else:
-                pos_formulas.append(formula)
+                classified_formulas['pos_formulas'].append(formula)
                 if isinstance(formula, Constant):
-                    named_columns.update(formula.value.columns)
+                    classified_formulas['named_columns'].update(
+                        formula.value.columns
+                    )
                 elif isinstance(formula, NameColumns):
-                    named_columns.update(formula.column_names)
-        return {
-            'pos_formulas': pos_formulas,
-            'neg_formulas': neg_formulas,
-            'eq_formulas': eq_formulas,
-            'ext_proj_formulas': ext_proj_formulas,
-            'selection_formulas': selection_formulas,
-            'named_columns': named_columns
-        }
+                    classified_formulas['named_columns'].update(
+                        formula.column_names
+                    )
+        return classified_formulas
+
+    def classify_formulas_obtain_named_function_applications(
+        self, formula, classified_formulas
+    ):
+        if formula.functor == EQ:
+            if formula.args[0] == formula.args[1]:
+                pass
+            elif isinstance(formula.args[1], (Constant, Symbol)):
+                classified_formulas['eq_formulas'].append(formula)
+            elif isinstance(formula.args[1], FunctionApplication):
+                classified_formulas['ext_proj_formulas'].append(formula)
+        elif formula.functor == CONTAINS:
+            classified_formulas['destroy_formulas'].append(formula)
+        else:
+            classified_formulas['selection_formulas'].append(formula)
 
     @staticmethod
-    def process_negative_formulas(neg_formulas, named_columns, output):
-        for neg_formula in neg_formulas:
+    def process_negative_formulas(classified_formulas, output):
+        named_columns = classified_formulas['named_columns']
+        for neg_formula in classified_formulas['neg_formulas']:
             neg_cols = TranslateToNamedRA.obtain_negative_columns(neg_formula)
             if named_columns > neg_cols:
                 neg_formula = NaturalJoin(output, neg_formula)
@@ -276,8 +283,9 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         return neg_cols
 
     @staticmethod
-    def process_equality_formulas(eq_formulas, named_columns, output):
-        for formula in eq_formulas:
+    def process_equality_formulas(classified_formulas, output):
+        named_columns = classified_formulas['named_columns']
+        for formula in classified_formulas['eq_formulas']:
             left, right = formula.args
             left_col = Constant[ColumnStr](
                 ColumnStr(left.name), verify_type=False
@@ -305,4 +313,20 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
                     f'At least one of the symbols {left} {right} must be '
                     'in the free variables of the antecedent'
                 )
+        return output
+
+    @staticmethod
+    def process_extended_projection_formulas(classified_formulas, output):
+        extended_projections = []
+        for ext_proj in classified_formulas['ext_proj_formulas']:
+            dst_column, fun_exp = ext_proj.args
+            extended_projections.append(
+                ExtendedProjectionListMember(fun_exp, dst_column)
+            )
+        if len(extended_projections) > 0:
+            for column in classified_formulas['named_columns']:
+                extended_projections.append(
+                    ExtendedProjectionListMember(column, column)
+                )
+            output = ExtendedProjection(output, extended_projections)
         return output

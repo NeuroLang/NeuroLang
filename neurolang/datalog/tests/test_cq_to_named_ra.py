@@ -1,11 +1,11 @@
-from operator import eq, gt, mul
+from operator import contains, eq, gt, mul
 from typing import AbstractSet, Tuple
 
 import pytest
 
 from ...exceptions import NeuroLangException
 from ...expressions import Constant, FunctionApplication, Symbol
-from ...relational_algebra import (ColumnInt, ColumnStr, Difference,
+from ...relational_algebra import (ColumnInt, ColumnStr, Destroy, Difference,
                                    ExtendedProjection,
                                    ExtendedProjectionListMember, NameColumns,
                                    NaturalJoin, Projection, RenameColumn,
@@ -217,7 +217,11 @@ def test_extended_projection():
         (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
     )
     exp_trans = ExtendedProjection(
-        fa_trans, [ExtendedProjectionListMember(*builtin_condition.args)]
+        fa_trans, [
+            ExtendedProjectionListMember(*builtin_condition.args),
+            ExtendedProjectionListMember(x, x),
+            ExtendedProjectionListMember(y, y)
+        ]
     )
     assert res == exp_trans
 
@@ -239,3 +243,19 @@ def test_extended_projection_algebraic_expression():
     assert res.relation_left == fa_trans
     assert len(res.relation_right.value)
     assert ({'y': 6} in res.relation_right.value)
+
+
+def test_set_destroy():
+    r1 = S_('R1')
+    x = S_('x')
+    y = S_('y')
+    exp = Conjunction((C_(contains)(y, x), r1(x)))
+
+    tr = TranslateToNamedRA()
+    res = tr.walk(exp)
+
+    exp_result = Destroy(
+        NameColumns(Projection(r1, (C_(0),)), (C_('x'),)),
+        x, y
+    )
+    assert res == exp_result
