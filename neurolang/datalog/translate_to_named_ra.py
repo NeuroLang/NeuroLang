@@ -206,7 +206,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             output = Selection(output, selection)
 
         for destroy in classified_formulas['destroy_formulas']:
-            output = Destroy(output, destroy.args[1], destroy.args[0])
+            output = Destroy(output, destroy.args[0], destroy.args[1])
 
         return output
 

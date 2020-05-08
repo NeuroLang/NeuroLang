@@ -640,7 +640,11 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         cols.remove(src_column)
         set_type = type(relation)
         result_set = set_type(columns=cols + [dst_column])
-        for g, t in relation.groupby(cols):
+        if len(cols) > 0:
+            row_group_iterator = (t for _, t in relation.groupby(cols))
+        else:
+            row_group_iterator = (relation,)
+        for t in row_group_iterator:
             destroyed_set = set_type(columns=[dst_column])
             for row in t:
                 row_set = set_type(

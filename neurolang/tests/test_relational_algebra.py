@@ -682,3 +682,36 @@ def test_set_destroy():
     result = solver.walk(destroy)
 
     assert result == expected_relation
+
+
+def test_set_destroy_no_grouping():
+    relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=['z'],
+            iterable=[
+                (frozenset({3, 4}),),
+                (frozenset({5}),),
+            ]
+        )
+    )
+    expected_relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=['w'],
+            iterable=[
+                (3,),
+                (4,),
+                (5,),
+            ]
+        )
+    )
+
+    destroy = Destroy(
+        relation,
+        Constant(ColumnStr('z')),
+        Constant(ColumnStr('w'))
+    )
+
+    solver = RelationalAlgebraSolver()
+    result = solver.walk(destroy)
+
+    assert result == expected_relation

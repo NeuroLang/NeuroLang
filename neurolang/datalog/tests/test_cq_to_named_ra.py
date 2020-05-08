@@ -249,7 +249,7 @@ def test_set_destroy():
     r1 = S_('R1')
     x = S_('x')
     y = S_('y')
-    exp = Conjunction((C_(contains)(y, x), r1(x)))
+    exp = Conjunction((C_(contains)(x, y), r1(x)))
 
     tr = TranslateToNamedRA()
     res = tr.walk(exp)
