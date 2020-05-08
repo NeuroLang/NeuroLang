@@ -620,6 +620,42 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         else:
             return arithmetic_op
 
+    @ew.add_match(Destroy)
+    def set_destroy(self, destroy):
+        relation = self.walk(destroy.relation).value
+        src_column = self.walk(destroy.src_column).value
+        dst_column = self.walk(destroy.dst_column).value
+        if dst_column in relation.columns:
+            raise NeuroLangException(
+                f"destination column {dst_column} present in "
+                "set's columns"
+            )
+        if src_column not in relation.columns:
+            raise NeuroLangException(
+                f"source column {src_column} not present in "
+                "set's columns"
+            )
+
+        cols = list(relation.columns)
+        cols.remove(src_column)
+        set_type = type(relation)
+        result_set = set_type(columns=cols + [dst_column])
+        for g, t in relation.groupby(cols):
+            destroyed_set = set_type(columns=[dst_column])
+            for row in t:
+                row_set = set_type(
+                    columns=(dst_column,),
+                    iterable=getattr(row, src_column)
+                )
+                destroyed_set = destroyed_set | row_set
+            new_set = (
+                t
+                .projection(*cols)
+                .cross_product(destroyed_set)
+            )
+            result_set = result_set | new_set
+        return self._build_relation_constant(result_set)
+
     @ew.add_match(Constant)
     def ra_constant(self, constant):
         return constant

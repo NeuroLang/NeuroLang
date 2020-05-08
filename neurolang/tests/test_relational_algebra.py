@@ -10,6 +10,7 @@ from ..relational_algebra import (
     ColumnInt,
     ColumnStr,
     ConcatenateConstantColumn,
+    Destroy,
     EquiJoin,
     ExtendedProjection,
     ExtendedProjectionListMember,
@@ -648,3 +649,36 @@ def test_rename_column_empty_relation():
         NamedRelationalAlgebraFrozenSet(columns=("z", "y"))
     )
     assert result == expected
+
+
+def test_set_destroy():
+    relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=['x', 'y', 'z'],
+            iterable=[
+                (0, 1, frozenset({3, 4})),
+                (0, 2, frozenset({5})),
+            ]
+        )
+    )
+    expected_relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=['x', 'y', 'w'],
+            iterable=[
+                (0, 1, 3),
+                (0, 1, 4),
+                (0, 2, 5),
+            ]
+        )
+    )
+
+    destroy = Destroy(
+        relation,
+        Constant(ColumnStr('z')),
+        Constant(ColumnStr('w'))
+    )
+
+    solver = RelationalAlgebraSolver()
+    result = solver.walk(destroy)
+
+    assert result == expected_relation
