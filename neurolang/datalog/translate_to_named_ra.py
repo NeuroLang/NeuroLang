@@ -192,6 +192,9 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             output
         )
 
+        for destroy in classified_formulas['destroy_formulas']:
+            output = Destroy(output, destroy.args[0], destroy.args[1])
+
         output = TranslateToNamedRA.process_equality_formulas(
             classified_formulas,
             output
@@ -204,9 +207,6 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
 
         for selection in classified_formulas['selection_formulas']:
             output = Selection(output, selection)
-
-        for destroy in classified_formulas['destroy_formulas']:
-            output = Destroy(output, destroy.args[0], destroy.args[1])
 
         return output
 
@@ -251,7 +251,10 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
                 classified_formulas['eq_formulas'].append(formula)
             elif isinstance(formula.args[1], FunctionApplication):
                 classified_formulas['ext_proj_formulas'].append(formula)
-        elif formula.functor == CONTAINS:
+        elif (
+            formula.functor == CONTAINS and
+            isinstance(formula.args[1], Constant[ColumnStr])
+        ):
             classified_formulas['destroy_formulas'].append(formula)
         else:
             classified_formulas['selection_formulas'].append(formula)

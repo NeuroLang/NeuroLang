@@ -259,3 +259,18 @@ def test_set_destroy():
         x, y
     )
     assert res == exp_result
+
+
+def test_set_constant_contains():
+    r1 = S_('R1')
+    x = S_('x')
+    exp = Conjunction((C_(contains)(x, C_(0)), r1(x)))
+
+    tr = TranslateToNamedRA()
+    res = tr.walk(exp)
+
+    exp_result = Selection(
+        NameColumns(Projection(r1, (C_(0),)), (C_('x'),)),
+        C_(contains)(x, C_(0))
+    )
+    assert res == exp_result

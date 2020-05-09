@@ -446,10 +446,13 @@ def test_non_recursive_predicate_chase_step(chase_class):
     gt = S_('gt')
 
     datalog_program = DT.walk(Eb_((
-        F_(Q(C_(1), C_(2))), F_(Q(C_(2), C_(3))), F_(Q(C_(8), C_(6))),
+        F_(Q(C_(1), C_(2))),
+        F_(Q(C_(2), C_(3))),
+        F_(Q(C_(8), C_(6))),
         Imp_(T(x, y),
-             Q(x, z) & Q(z, y)), Imp_(S(x, y),
-                                      Q(x, y) & gt(x, y))
+             Q(x, z) & Q(z, y)),
+        Imp_(S(x, y),
+             Q(x, y) & gt(x, y))
     )))
 
     dl = Datalog()

@@ -663,11 +663,11 @@ def test_set_destroy():
     )
     expected_relation = Constant[AbstractSet](
         NamedRelationalAlgebraFrozenSet(
-            columns=['x', 'y', 'w'],
+            columns=['x', 'y', 'z', 'w'],
             iterable=[
-                (0, 1, 3),
-                (0, 1, 4),
-                (0, 2, 5),
+                (0, 1, frozenset({3, 4}), 3),
+                (0, 1, frozenset({3, 4}), 4),
+                (0, 2, frozenset({5}), 5),
             ]
         )
     )

@@ -1,6 +1,9 @@
 from collections import namedtuple
+from inspect import isclass
 from itertools import tee
+from functools import lru_cache
 from typing import Tuple
+
 import numpy as np
 
 from ..expression_walker import ReplaceExpressionsByValues
@@ -16,15 +19,19 @@ REBV = ReplaceExpressionsByValues(dict())
 
 class WrappedTypeMap:
     row_maps = {
-        np.dtype('i8'): int,
-        np.dtype('f8'): float
+        np.integer: int,
+        np.float: float
     }
 
+    @lru_cache(maxsize=256)
     def backend_2_python(self, value):
-        res = self.row_maps.get(value, value)
-        if res is value:
-            print(f'Not translated: {res}')
-        return res
+        for k, v in self.row_maps.items():
+            if (
+                (isclass(value) and issubclass(value, k)) or
+                value == k
+            ):
+                return v
+        return value
 
 
 TYPEMAP = WrappedTypeMap()

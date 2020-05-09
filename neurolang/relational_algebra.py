@@ -625,21 +625,19 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         relation = self.walk(destroy.relation).value
         src_column = self.walk(destroy.src_column).value
         dst_column = self.walk(destroy.dst_column).value
-        if dst_column in relation.columns:
-            raise NeuroLangException(
-                f"destination column {dst_column} present in "
-                "set's columns"
-            )
         if src_column not in relation.columns:
             raise NeuroLangException(
                 f"source column {src_column} not present in "
                 "set's columns"
             )
 
-        cols = list(relation.columns)
-        cols.remove(src_column)
+        cols = relation.columns
         set_type = type(relation)
-        result_set = set_type(columns=cols + [dst_column])
+        if dst_column not in cols:
+            dst_cols = cols + (dst_column,)
+        else:
+            dst_cols = cols
+        result_set = set_type(columns=dst_cols)
         if len(cols) > 0:
             row_group_iterator = (t for _, t in relation.groupby(cols))
         else:
@@ -655,7 +653,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
             new_set = (
                 t
                 .projection(*cols)
-                .cross_product(destroyed_set)
+                .naturaljoin(destroyed_set)
             )
             result_set = result_set | new_set
         return self._build_relation_constant(result_set)
