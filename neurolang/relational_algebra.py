@@ -470,7 +470,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         return self._build_relation_constant(selected_relation)
 
     @ew.add_match(
-        Selection(..., FunctionApplication(..., (Constant[ColumnStr], ...)))
+        Selection(..., FunctionApplication)
     )
     def selection_general_selection_by_constant(self, selection):
         relation = self.walk(selection.relation)

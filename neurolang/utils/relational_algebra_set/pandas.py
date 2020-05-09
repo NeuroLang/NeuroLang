@@ -155,6 +155,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             ix = self._container.eval(select_criteria)
         else:
             ix = self._selection_dict(select_criteria)
+        ix = ix.astype(bool)
         new_container = self._container[ix]
 
         output = self._empty_set_same_structure()

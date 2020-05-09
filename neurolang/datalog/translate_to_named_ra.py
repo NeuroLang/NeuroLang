@@ -1,4 +1,4 @@
-from operator import contains, eq, invert
+from operator import contains, eq, not_
 from typing import AbstractSet, Callable, Tuple
 
 from ..exceptions import NeuroLangException
@@ -171,7 +171,8 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             isinstance(formula, FunctionApplication) and
             isinstance(formula.functor, Constant)
         ):
-            res = FunctionApplication(Constant(invert), (formula,))
+            res = FunctionApplication(Constant(not_), (formula,))
+            res = self.walk(res)
         else:
             res = Negation(self.walk(expression.formula))
         return res

@@ -9,7 +9,7 @@ from ...logic.unification import apply_substitution_arguments
 from ...relational_algebra import (ColumnInt, Product, Projection,
                                    RelationalAlgebraOptimiser,
                                    RelationalAlgebraSolver, Selection, eq_)
-from ...type_system import is_leq_informative
+from ...type_system import Unknown, is_leq_informative
 from ...utils import NamedRelationalAlgebraFrozenSet
 from ..expression_processing import (extract_logic_free_variables,
                                      extract_logic_predicates)
@@ -232,10 +232,6 @@ class ChaseNamedRelationalAlgebraMixin:
                     ).walk(rule)
         return rule
 
-
-
-
-
     @staticmethod
     def rewrite_rule_consequent_constants_to_equalities(
         rule, new_args, new_equalities
@@ -313,6 +309,16 @@ class ChaseNamedRelationalAlgebraMixin:
 
     @lru_cache(1024)
     def translate_conjunction_to_named_ra(self, conjunction):
+        builtin_symbols = {
+            k: v
+            for k, v in self.datalog_program.symbol_table.items()
+            if (
+                v.type is not Unknown and
+                is_leq_informative(v.type, Callable)
+            )
+        }
+        rsw = ReplaceSymbolWalker(builtin_symbols)
+        conjunction = rsw.walk(conjunction)
         traslator_to_named_ra = TranslateToNamedRA()
         return traslator_to_named_ra.walk(conjunction)
 
