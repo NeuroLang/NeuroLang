@@ -150,14 +150,6 @@ class ChaseNamedRelationalAlgebraMixin:
         rule = self.rewrite_antecedent_equalities(rule)
 
         consequent = rule.consequent
-        # rule_predicates = self.extract_rule_predicates(
-        #    rule, instance, restriction_instance=restriction_instance
-        # )
-
-        # if all(len(predicate_list) == 0 for predicate_list in rule_predicates):
-        #     return MapInstance()
-
-        # rule_predicates_iterator, builtin_predicates = rule_predicates
 
         if isinstance(rule.antecedent, Conjunction):
             predicates = rule.antecedent.formulas
@@ -176,9 +168,6 @@ class ChaseNamedRelationalAlgebraMixin:
             substitutions = self.eliminate_already_computed(
                 consequent, restriction_instance, substitutions
             )
-        # substitutions = self.evaluate_builtins(
-        #    builtin_predicates, substitutions
-        # )
 
         return self.compute_result_set(
             rule, substitutions, instance, restriction_instance
