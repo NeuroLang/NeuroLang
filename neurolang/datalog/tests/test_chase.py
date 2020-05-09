@@ -57,12 +57,12 @@ chase_configurations = [
     for step_class, cq_class in product(
         (
             ChaseNaive,
-            #ChaseSemiNaive
+            ChaseSemiNaive
         ),
         (
-            #ChaseMGUMixin,
+            ChaseMGUMixin,
             ChaseNamedRelationalAlgebraMixin,
-            #ChaseRelationalAlgebraPlusCeriMixin,
+            ChaseRelationalAlgebraPlusCeriMixin,
         )
     )
 ]
