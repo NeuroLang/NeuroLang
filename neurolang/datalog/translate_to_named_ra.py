@@ -1,5 +1,6 @@
+from enum import Enum, auto
 from operator import contains, eq, not_
-from typing import AbstractSet, Callable, Tuple
+from typing import AbstractSet, Callable, Tuple, NamedTuple
 
 from ..exceptions import NeuroLangException
 from ..expression_walker import (ExpressionBasicEvaluator,
@@ -19,6 +20,22 @@ CONTAINS = Constant(contains)
 EQ_pattern = Constant[Callable](eq)
 Builtin_pattern = Constant[Callable]
 REBV = ReplaceExpressionsByValues({})
+
+
+class FormulaType(Enum):
+    POSITIVE = auto()
+    NEGATIVE = auto()
+    EQUALITY = auto()
+    EXTENDED_PROJECTION = auto()
+    SELECTION = auto()
+    DESTROY = auto()
+
+
+class Formula(NamedTuple):
+    formula: RelationalAlgebraOperation
+    type: FormulaType
+    required_vars: AbstractSet = set()
+    new_vars: AbstractSet = set()
 
 
 class TranslateToNamedRA(ExpressionBasicEvaluator):
@@ -128,6 +145,12 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
                 projections += (Constant[ColumnInt](i, verify_type=False),)
                 named_args += (arg,)
 
+        if (
+            len(expression.args) > 0 and
+            len(projections) == len(expression.args)
+        ):
+            projections = None
+
         in_set = self.generate_ra_expression(
             functor,
             selections, selection_columns,
@@ -153,7 +176,9 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             )
             in_set = Selection(in_set, criterium)
 
-        in_set = Projection(in_set, projections)
+        if projections is not None:
+            in_set = Projection(in_set, projections)
+
         column_names = tuple(
             Constant[ColumnStr](ColumnStr(arg.name), verify_type=False)
             for arg in named_args
@@ -221,7 +246,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             'destroy_formulas': [],
             'named_columns': set()
         }
-        
+
         for formula in expression.formulas:
             formula = self.walk(formula)
             if isinstance(formula, Negation):

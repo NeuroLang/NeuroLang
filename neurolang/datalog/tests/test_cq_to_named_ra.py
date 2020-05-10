@@ -28,7 +28,7 @@ def test_translate_set():
     tr = TranslateToNamedRA()
     res = tr.walk(fa)
     assert res == NameColumns(
-        Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
+        R1,
         (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
     )
 
@@ -71,7 +71,7 @@ def test_equality_constant_symbol():
     exp = Conjunction((fb, fa))
 
     fb_trans = NameColumns(
-        Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
+        R1,
         (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
     )
 
@@ -89,7 +89,7 @@ def test_equality_symbols():
     y = S_('y')
     fb = R1(x, y)
     fb_trans = NameColumns(
-        Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
+        R1,
         (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
     )
 
@@ -141,12 +141,12 @@ def test_joins():
     exp = Conjunction((fa, fb))
 
     fa_trans = NameColumns(
-        Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
+        R1,
         (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
     )
 
     fb_trans = NameColumns(
-        Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
+        R1,
         (Constant(ColumnStr('y')), Constant(ColumnStr('z')))
     )
 
@@ -157,7 +157,7 @@ def test_joins():
     R2 = S_('R2')
     fb = R2(x, y)
     fb_trans = NameColumns(
-        Projection(R2, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
+        R2,
         (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
     )
     exp = Conjunction((fa, Negation(fb)))
@@ -195,7 +195,7 @@ def test_selection():
     tr = TranslateToNamedRA()
     res = tr.walk(exp)
     fa_trans = NameColumns(
-        Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
+        R1,
         (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
     )
     assert res == Selection(fa_trans, builtin_condition)
@@ -213,7 +213,7 @@ def test_extended_projection():
     tr = TranslateToNamedRA()
     res = tr.walk(exp)
     fa_trans = NameColumns(
-        Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
+        R1,
         (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
     )
     exp_trans = ExtendedProjection(
@@ -237,7 +237,7 @@ def test_extended_projection_algebraic_expression():
     tr = TranslateToNamedRA()
     res = tr.walk(exp)
     fa_trans = NameColumns(
-        Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
+        R1,
         (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
     )
     assert res.relation_left == fa_trans
@@ -255,7 +255,7 @@ def test_set_destroy():
     res = tr.walk(exp)
 
     exp_result = Destroy(
-        NameColumns(Projection(r1, (C_(0),)), (C_('x'),)),
+        NameColumns(r1, (C_('x'),)),
         x, y
     )
     assert res == exp_result
@@ -270,7 +270,7 @@ def test_set_constant_contains():
     res = tr.walk(exp)
 
     exp_result = Selection(
-        NameColumns(Projection(r1, (C_(0),)), (C_('x'),)),
+        NameColumns(r1, (C_('x'),)),
         C_(contains)(x, C_(0))
     )
     assert res == exp_result
