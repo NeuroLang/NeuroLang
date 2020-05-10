@@ -1,6 +1,5 @@
-from enum import Enum, auto
 from operator import contains, eq, not_
-from typing import AbstractSet, Callable, Tuple, NamedTuple
+from typing import AbstractSet, Callable, Tuple
 
 from ..exceptions import NeuroLangException
 from ..expression_walker import (ExpressionBasicEvaluator,
@@ -20,22 +19,6 @@ CONTAINS = Constant(contains)
 EQ_pattern = Constant[Callable](eq)
 Builtin_pattern = Constant[Callable]
 REBV = ReplaceExpressionsByValues({})
-
-
-class FormulaType(Enum):
-    POSITIVE = auto()
-    NEGATIVE = auto()
-    EQUALITY = auto()
-    EXTENDED_PROJECTION = auto()
-    SELECTION = auto()
-    DESTROY = auto()
-
-
-class Formula(NamedTuple):
-    formula: RelationalAlgebraOperation
-    type: FormulaType
-    required_vars: AbstractSet = set()
-    new_vars: AbstractSet = set()
 
 
 class TranslateToNamedRA(ExpressionBasicEvaluator):

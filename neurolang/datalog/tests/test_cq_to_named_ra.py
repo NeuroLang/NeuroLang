@@ -274,3 +274,42 @@ def test_set_constant_contains():
         C_(contains)(x, C_(0))
     )
     assert res == exp_result
+
+
+def test_only_equality():
+    exp = Conjunction((C_(eq)(S_('x'), C_(3)),))
+
+    res = TranslateToNamedRA().walk(exp)
+
+    exp_result = NamedRelationalAlgebraFrozenSet(('x',), (3,))
+
+    assert isinstance(res, Constant)
+    assert res.value == exp_result
+
+
+def test_border_cases():
+    R1 = S_('R1')
+    x = S_('x')
+
+    tr = TranslateToNamedRA()
+
+    exp = Conjunction((
+        R1(x),
+        C_(eq)(x, x)
+    ))
+    res = tr.walk(exp)
+
+    assert res == NameColumns(
+        R1,
+        (Constant(ColumnStr('x')),)
+    )
+
+    exp = Conjunction((
+        Negation(Negation(R1(x))),
+    ))
+    res = tr.walk(exp)
+
+    assert res == NameColumns(
+        R1,
+        (Constant(ColumnStr('x')),)
+    )
