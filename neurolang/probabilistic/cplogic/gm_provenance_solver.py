@@ -527,3 +527,44 @@ def _choice_tuple_selection(prov_set, chosen_tuple_symbs):
         selection_formula = FunctionApplication(eq, args)
         prov_set = Selection(prov_set, selection_formula)
     return prov_set
+
+
+class ProvenanceExpressionSimplifier(ExpressionWalker):
+    @add_match(
+        RenameColumns(
+            Selection(
+                ...,
+                FunctionApplication(
+                    Constant(operator.eq), (Constant[ColumnStr], Constant),
+                ),
+            ),
+            ...,
+        )
+    )
+    def swap_rename_selection(self, rename):
+        rename_dict = dict(rename.renames)
+        selection = rename.relation
+        selection_col, selection_cst = selection.formula.args
+        new_selection_col = rename_dict.get(selection_col, selection_col)
+        rename_if = lambda c: c if c != selection_col else selection_col
+        new_rename = RenameColumns(
+            selection.relation,
+            tuple(
+                (rename_if(src), rename_if(dst)) for src, dst in rename.renames
+            ),
+        )
+        new_selection = Selection(
+            self.walk(new_rename),
+            FunctionApplication[selection.formula.type](
+                selection.formula.functor, (new_selection_col, selection_cst),
+            ),
+        )
+        return new_selection
+
+    @add_match(RelationalAlgebraOperation)
+    def ra_operation(self, op):
+        return op
+
+    @add_match(ProvenanceAlgebraSet)
+    def provenance_algebra_set(self, prov_set):
+        return prov_set
