@@ -300,7 +300,7 @@ def test_border_cases():
     res = tr.walk(exp)
 
     assert res == NameColumns(
-        R1,
+        Projection(R1, (C_(0),)),
         (Constant(ColumnStr('x')),)
     )
 
@@ -310,6 +310,6 @@ def test_border_cases():
     res = tr.walk(exp)
 
     assert res == NameColumns(
-        R1,
+        Projection(R1, (C_(0),)),
         (Constant(ColumnStr('x')),)
     )
