@@ -1,11 +1,10 @@
-from typing import AbstractSet, Mapping
+from typing import AbstractSet
 
 from ...expression_pattern_matching import add_match
 from ...expression_walker import PatternWalker
 from ...expressions import (
     Constant,
     Definition,
-    Expression,
     ExpressionBlock,
     FunctionApplication,
     Symbol,
@@ -24,8 +23,8 @@ from ..expressions import (
     ProbabilisticPredicate,
 )
 from .grounding import (
-    topological_sort_groundings,
     get_predicate_from_grounded_expression,
+    topological_sort_groundings,
 )
 
 

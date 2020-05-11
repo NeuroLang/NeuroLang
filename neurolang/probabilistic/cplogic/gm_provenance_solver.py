@@ -1,7 +1,5 @@
-import itertools
-import logging
 import operator
-from typing import AbstractSet, Callable
+from typing import Callable
 
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker
@@ -10,21 +8,18 @@ from ...logic.expression_processing import extract_logic_predicates
 from ...relational_algebra import (
     ColumnStr,
     ConcatenateConstantColumn,
-    Difference,
     NaturalJoin,
     Projection,
     RelationalAlgebraOperation,
     RelationalAlgebraSolver,
     RenameColumns,
     Selection,
-    Union,
     str2columnstr_constant,
 )
 from ...relational_algebra_provenance import (
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
 )
-from ...utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from .cplogic_to_gm import (
     AndPlateNode,
     BernoulliPlateNode,
@@ -73,7 +68,7 @@ def rename_columns_for_args_to_match(relation, current_args, desired_args):
     )
 
 
-def build_alway_true_provenance_relation(relation, prob_col):
+def build_always_true_provenance_relation(relation, prob_col):
     # remove the probability column if it is already there
     if prob_col.value in relation.value.columns:
         kept_cols = tuple(
@@ -281,7 +276,9 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         node = operation.valued_node[0]
         relation = node.relation.value
         prov_col = node.probability_column
-        return ProvenanceAlgebraSet(relation, prov_col)
+        prov_set = ProvenanceAlgebraSet(relation, prov_col)
+        prov_set.__debug_expression__ = node.expression
+        return prov_set
 
     @add_match(ProbabilityOperation, is_and_truth_conditional_probability)
     def and_truth_conditional_probability(self, operation):
@@ -329,9 +326,11 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
                 prob_col = cnode.probability_column
             else:
                 prob_col = str2columnstr_constant(Symbol.fresh().name)
-            parent_relation = build_alway_true_provenance_relation(
+            parent_relation = build_always_true_provenance_relation(
                 cnode.relation, prob_col,
             )
+            parent_relation.__debug_expression__ = cnode.expression
+            parent_relation.__debug_alway_true__ = True
             if isinstance(
                 cnode, (NaryChoicePlateNode, NaryChoiceResultPlateNode)
             ):
@@ -390,20 +389,24 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
 
         """
         choice_node = operation.valued_node[0]
-        return ProvenanceAlgebraSet(
+        choice_value = operation.valued_node[1]
+        prov_set = ProvenanceAlgebraSet(
             choice_node.relation.value, choice_node.probability_column,
         )
+        prov_set.__debug_expression__ = choice_node.expression
+        return _choice_tuple_selection(prov_set, choice_value)
 
     @add_match(
         ProbabilityOperation, is_nary_choice_result_conditional_probability,
     )
     def nary_choice_result_truth_conditional_probability(self, operation):
-        result_value = operation.valued_node[1]
         choice_node = operation.condition_valued_nodes[0][0]
         choice_value = operation.condition_valued_nodes[0][1]
-        relation = build_alway_true_provenance_relation(
+        relation = build_always_true_provenance_relation(
             choice_node.relation, choice_node.probability_column,
         )
+        relation.__debug_expression__ = choice_node.expression
+        relation.__debug_alway_true__ = True
         relation = _choice_tuple_selection(relation, choice_value)
         return relation
 
@@ -424,6 +427,9 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         relation = symbolic_sum_term_exp
         for choice_node_symb, tuple_symbols in chosen_tuple_symbs.items():
             relation = UnionOverTuples(relation, tuple_symbols)
+            relation.__debug_expression__ = self.graphical_model.get_node(
+                the_node_symb
+            ).expression
         return relation
 
     def _build_symbolic_marg_sum_term_exp(
@@ -435,9 +441,10 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         cnode_symbs = self.graphical_model.get_parent_node_symbols(node_symb)
         cnodes = [self.graphical_model.get_node(cns) for cns in cnode_symbs]
         valued_cnodes = tuple(
-            (cn, chosen_tuple_symbs.get(cn.node_symbol, TRUE)) for cn in cnodes
+            (cn, self._get_node_value(cn.node_symbol, chosen_tuple_symbs))
+            for cn in cnodes
         )
-        node_value = chosen_tuple_symbs.get(node_symb, TRUE)
+        node_value = self._get_node_value(node_symb, chosen_tuple_symbs)
         node_cpd = ProbabilityOperation((node, node_value), valued_cnodes)
         node_cpd = self.walk(node_cpd)
         relations = [node_cpd]
@@ -462,7 +469,7 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         """
         choice_node_symbs = set()
         visited = set()
-        stack = {start_node_symb}
+        stack = [start_node_symb]
         while stack:
             node_symb = stack.pop()
             if node_symb in visited:
@@ -471,11 +478,22 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
             parent_node_symbs = self.graphical_model.get_parent_node_symbols(
                 node_symb
             )
-            stack |= parent_node_symbs
+            stack += sorted(list(parent_node_symbs), key=lambda s: s.name)
             node = self.graphical_model.get_node(node_symb)
             if isinstance(node, NaryChoicePlateNode):
                 choice_node_symbs.add(node_symb)
         return choice_node_symbs
+
+    def _get_node_value(self, node_symb, chosen_tuple_symbs):
+        node = self.graphical_model.get_node(node_symb)
+        if isinstance(node, NaryChoicePlateNode):
+            return chosen_tuple_symbs[node_symb]
+        elif isinstance(node, NaryChoiceResultPlateNode):
+            choice_node_symb = next(
+                iter(self.graphical_model.get_parent_node_symbols(node_symb))
+            )
+            return chosen_tuple_symbs[choice_node_symb]
+        return TRUE
 
     def _build_chosen_tuple_symbols(self, choice_node_symbs):
         """
@@ -497,7 +515,7 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         raise RuntimeError(f"Cannot solve operation: {op}")
 
 
-def _choice_tuple_selection(prov_relation, chosen_tuple_symbs):
+def _choice_tuple_selection(prov_set, chosen_tuple_symbs):
     for arg, symbol in chosen_tuple_symbs:
         eq = Constant[Callable[[ColumnStr, ColumnStr], bool]](
             operator.eq, auto_infer_type=False, verify_type=False
@@ -507,5 +525,5 @@ def _choice_tuple_selection(prov_relation, chosen_tuple_symbs):
             str2columnstr_constant(symbol.name),
         )
         selection_formula = FunctionApplication(eq, args)
-        prov_relation = Selection(prov_relation, selection_formula)
-    return prov_relation
+        prov_set = Selection(prov_set, selection_formula)
+    return prov_set

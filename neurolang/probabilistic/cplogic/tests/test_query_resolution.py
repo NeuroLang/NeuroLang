@@ -3,11 +3,10 @@ import pytest
 from ....datalog import Fact
 from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Union
-from ....relational_algebra import str2columnstr_constant
+from ....relational_algebra import NaturalJoin, RenameColumns, Selection
 from ....relational_algebra_provenance import ProvenanceAlgebraSet
-from ....utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from .. import testing
-from ..gm_provenance_solver import solve_succ_query
+from ..gm_provenance_solver import UnionOverTuples, solve_succ_query
 from ..program import CPLogicProgram
 
 P = Symbol("P")
@@ -193,6 +192,17 @@ def test_simple_probchoice():
         cpl_program.add_probabilistic_choice_from_tuples(
             pred_symb, pchoice_as_set
         )
+    result_rap_exp, latex = testing.get_succ_query_rap_expression(
+        P(x), cpl_program
+    )
+    assert isinstance(result_rap_exp, UnionOverTuples)
+    assert isinstance(result_rap_exp.relation, NaturalJoin)
+    assert isinstance(result_rap_exp.relation.relation_left, Selection)
+    assert isinstance(result_rap_exp.relation.relation_right, RenameColumns)
+    assert isinstance(
+        result_rap_exp.relation.relation_right.relation, Selection
+    )
+    return
     result = solve_succ_query(P(x), cpl_program)
     expected = testing.make_prov_set([(0.2, "a"), (0.8, "b"),], ("_p_", "x"),)
     assert testing.eq_prov_relations(result, expected)
@@ -210,6 +220,13 @@ def test_mutual_exclusivity():
     for pred_symb, pfact_set in pfact_sets.items():
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
     cpl_program.walk(code)
+    result_rap_exp, latex = testing.get_succ_query_rap_expression(
+        Z(x, y), cpl_program
+    )
+    assert isinstance(result_rap_exp, UnionOverTuples)
+    assert isinstance(result_rap_exp.relation, NaturalJoin)
+    assert isinstance(result_rap_exp.relation.relation_right, RenameColumns)
+    return
     result = solve_succ_query(Z(x, y), cpl_program)
     expected = testing.make_prov_set([], ("_p_", "x", "y"))
     assert testing.eq_prov_relations(result, expected)
