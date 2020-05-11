@@ -154,15 +154,15 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         elif isinstance(select_criteria, RelationalAlgebraStringExpression):
             ix = self._container.eval(select_criteria)
         else:
-            ix = self.newmethod238(select_criteria)
-
+            ix = self._selection_dict(select_criteria)
+        ix = ix.astype(bool)
         new_container = self._container[ix]
 
         output = self._empty_set_same_structure()
         output._container = new_container
         return output
 
-    def newmethod238(self, select_criteria):
+    def _selection_dict(self, select_criteria):
         it = iter(select_criteria.items())
         col, value = next(it)
         ix = self._container[col] == value

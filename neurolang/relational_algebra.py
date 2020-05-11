@@ -223,6 +223,22 @@ class ExtendedProjection(RelationalAlgebraOperation):
             repr(self.relation),
         )
 
+    def __eq__(self, other):
+        if not isinstance(other, ExtendedProjection):
+            return False
+
+        return (
+            self.relation == other.relation and
+            len(self.projection_list) == len(other.projection_list) and
+            all(
+                any(
+                    element_self == element_other
+                    for element_other in other.projection_list
+                )
+                for element_self in self.projection_list
+            )
+        )
+
 
 class ExtendedProjectionListMember(Definition):
     """
@@ -259,6 +275,42 @@ class ExtendedProjectionListMember(Definition):
 
     def __repr__(self):
         return "{} -> {}".format(self.fun_exp, self.dst_column)
+
+
+class Destroy(RelationalAlgebraOperation):
+    """
+    Operation to map a column of a collection of elements into
+    a new column with all collections concatenated
+
+    Attributes
+    ----------
+    relation : Expression[AbstractSet]
+        Relation on which the projections are applied.
+    src_column : Constant[ColumnStr]
+        Column to destroy in the operation.
+
+    dst_column : Constant[ColumnStr]
+        Column to map onto the new set.
+
+    Notes
+    -----
+    The concept of set destruction is formally defined in chapter 20
+    of [1]_.
+
+    .. [1] Abiteboul, S., Hull, R. & Vianu, V. "Foundations of databases". (
+           Addison Wesley, 1995).
+    """
+
+    def __init__(self, relation, src_column, dst_column):
+        self.relation = relation
+        self.src_column = src_column
+        self.dst_column = dst_column
+
+    def __repr__(self):
+        return (
+            f"set_destroy[{self.relation}, "
+            "{self.src_column} -> {src.dst_column}]"
+        )
 
 
 class ConcatenateConstantColumn(RelationalAlgebraOperation):
@@ -417,6 +469,17 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
 
         return self._build_relation_constant(selected_relation)
 
+    @ew.add_match(
+        Selection(..., FunctionApplication)
+    )
+    def selection_general_selection_by_constant(self, selection):
+        relation = self.walk(selection.relation)
+        compiled_formula = self._compile_function_application_to_sql_fun_exp(
+            selection.formula
+        )
+        selected_relation = relation.value.selection(compiled_formula)
+        return self._build_relation_constant(selected_relation)
+
     @ew.add_match(Projection)
     def ra_projection(self, projection):
         relation = self.walk(projection.relation)
@@ -530,12 +593,12 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
             fun_exp = self.walk(member.fun_exp)
             eval_expressions[
                 member.dst_column.value
-            ] = self._compile_extended_projection_fun_exp(fun_exp)
+            ] = self._compile_function_application_to_sql_fun_exp(fun_exp)
         return self._build_relation_constant(
             relation.value.extended_projection(eval_expressions)
         )
 
-    def _compile_extended_projection_fun_exp(self, fun_exp):
+    def _compile_function_application_to_sql_fun_exp(self, fun_exp):
         try:
             return self._saw.walk(fun_exp).value
         except NeuroLangException as e:
@@ -556,6 +619,44 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
             )
         else:
             return arithmetic_op
+
+    @ew.add_match(Destroy)
+    def set_destroy(self, destroy):
+        relation = self.walk(destroy.relation).value
+        src_column = self.walk(destroy.src_column).value
+        dst_column = self.walk(destroy.dst_column).value
+        if src_column not in relation.columns:
+            raise NeuroLangException(
+                f"source column {src_column} not present in "
+                "set's columns"
+            )
+
+        cols = relation.columns
+        set_type = type(relation)
+        if dst_column not in cols:
+            dst_cols = cols + (dst_column,)
+        else:
+            dst_cols = cols
+        result_set = set_type(columns=dst_cols)
+        if len(cols) > 0:
+            row_group_iterator = (t for _, t in relation.groupby(cols))
+        else:
+            row_group_iterator = (relation,)
+        for t in row_group_iterator:
+            destroyed_set = set_type(columns=[dst_column])
+            for row in t:
+                row_set = set_type(
+                    columns=(dst_column,),
+                    iterable=getattr(row, src_column)
+                )
+                destroyed_set = destroyed_set | row_set
+            new_set = (
+                t
+                .projection(*cols)
+                .naturaljoin(destroyed_set)
+            )
+            result_set = result_set | new_set
+        return self._build_relation_constant(result_set)
 
     @ew.add_match(Constant)
     def ra_constant(self, constant):
