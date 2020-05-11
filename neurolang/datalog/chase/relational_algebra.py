@@ -1,9 +1,9 @@
 import operator
 from collections import defaultdict
 from functools import lru_cache
-from typing import AbstractSet, Callable, Sequence
+from typing import AbstractSet, Callable
 
-from ...expressions import Constant, Definition, FunctionApplication, Symbol
+from ...expressions import Constant, FunctionApplication, Symbol
 from ...expression_walker import ReplaceSymbolWalker
 from ...logic.unification import apply_substitution_arguments
 from ...relational_algebra import (ColumnInt, Product, Projection,
@@ -11,9 +11,8 @@ from ...relational_algebra import (ColumnInt, Product, Projection,
                                    RelationalAlgebraSolver, Selection, eq_)
 from ...type_system import Unknown, is_leq_informative
 from ...utils import NamedRelationalAlgebraFrozenSet
-from ..expression_processing import (extract_logic_free_variables,
-                                     extract_logic_predicates)
-from ..expressions import Conjunction, Implication, Negation
+from ..expression_processing import extract_logic_free_variables
+from ..expressions import Conjunction, Implication
 from ..instance import MapInstance
 from ..translate_to_named_ra import TranslateToNamedRA
 from ..wrapped_collections import (WrappedNamedRelationalAlgebraFrozenSet,
