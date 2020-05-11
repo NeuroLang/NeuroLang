@@ -6,6 +6,7 @@ from ..cplogic_to_gm import (
     AndPlateNode,
     BernoulliPlateNode,
     NaryChoicePlateNode,
+    NaryChoiceResultPlateNode,
 )
 from ..program import CPLogicProgram
 
@@ -68,8 +69,11 @@ def test_program_with_probchoice():
     )
     gm = testing.build_gm(cpl_program)
     P_node = gm.get_node(P)
-    assert isinstance(P_node, NaryChoicePlateNode)
-    assert len(gm.get_parent_node_symbols(P)) == 0
+    assert isinstance(P_node, NaryChoiceResultPlateNode)
+    assert len(gm.get_parent_node_symbols(P)) == 1
+    choice_node_symb = next(iter(gm.get_parent_node_symbols(P)))
+    choice_node = gm.get_node(choice_node_symb)
+    assert isinstance(choice_node, NaryChoicePlateNode)
 
 
 def test_program_with_probchoice_and_intensional_rule():
@@ -83,8 +87,11 @@ def test_program_with_probchoice_and_intensional_rule():
     )
     gm = testing.build_gm(cpl_program)
     assert gm.get_parent_node_symbols(Q) == {P, Z}
-    assert len(gm.get_parent_node_symbols(P)) == 0
+    assert len(gm.get_parent_node_symbols(P)) == 1
+    choice_node_symb = next(iter(gm.get_parent_node_symbols(P)))
     Z_node = gm.get_node(Z)
     P_node = gm.get_node(P)
+    choice_node = gm.get_node(choice_node_symb)
     assert isinstance(Z_node, BernoulliPlateNode)
-    assert isinstance(P_node, NaryChoicePlateNode)
+    assert isinstance(P_node, NaryChoiceResultPlateNode)
+    assert isinstance(choice_node, NaryChoicePlateNode)
