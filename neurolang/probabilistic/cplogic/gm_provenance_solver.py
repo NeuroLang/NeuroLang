@@ -561,6 +561,16 @@ class ProvenanceExpressionSimplifier(ExpressionWalker):
         )
         return new_selection
 
+    @add_match(
+        NaturalJoin(Selection, Selection),
+        lambda nj: nj.relation_left.formula == nj.relation_right.formula,
+    )
+    def natural_join_same_selection_formula(self, njoin):
+        left_select = njoin.relation_left
+        right_select = njoin.relation_right
+        relation = NaturalJoin(left_select.relation, right_select.relation)
+        return Selection(relation, left_select.formula)
+
     @add_match(RelationalAlgebraOperation)
     def ra_operation(self, op):
         return op
