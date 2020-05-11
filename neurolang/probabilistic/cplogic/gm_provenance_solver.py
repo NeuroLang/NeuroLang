@@ -335,7 +335,7 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
             if isinstance(
                 cnode, (NaryChoicePlateNode, NaryChoiceResultPlateNode)
             ):
-                parent_relation = _build_choice_multi_selection(
+                parent_relation = _choice_tuple_selection(
                     parent_relation, cnode_value,
                 )
             # ensure the names of the columns match before the natural join.
@@ -404,7 +404,7 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         relation = build_alway_true_provenance_relation(
             choice_node.relation, choice_node.probability_column,
         )
-        relation = _build_choice_multi_selection(relation, choice_value)
+        relation = _choice_tuple_selection(relation, choice_value)
         return relation
 
     @add_match(ProbabilityOperation((PlateNode, TRUE), tuple()))
@@ -497,7 +497,7 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         raise RuntimeError(f"Cannot solve operation: {op}")
 
 
-def _build_choice_multi_selection(prov_relation, chosen_tuple_symbs):
+def _choice_tuple_selection(prov_relation, chosen_tuple_symbs):
     for arg, symbol in chosen_tuple_symbs:
         eq = Constant[Callable[[ColumnStr, ColumnStr], bool]](
             operator.eq, auto_infer_type=False, verify_type=False
