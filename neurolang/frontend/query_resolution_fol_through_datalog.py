@@ -88,7 +88,7 @@ class QueryBuilderFirstOrderThroughDatalog(
         for s in type_predicate_symbols:
             type_ = s.restricted_type
             values = self._get_values_for_type(type_)
-            self.add_tuple_set(values, type_, s.name, add_items=False)
+            self.add_tuple_set(values, type_, s.name)
 
     def _get_values_for_type(self, type_):
         values = set()
@@ -126,9 +126,7 @@ class QueryBuilderFirstOrderThroughDatalog(
             self.type_predicates[type_].add(value)
         return super().add_symbol(value, name)
 
-    def add_tuple_set(
-        self, iterable, type_=Unknown, name=None, add_items=True
-    ):
+    def add_tuple_set(self, iterable, type_=Unknown, name=None):
         items = list(map(self._enforceTuple, map(self._getValue, iterable)))
 
         if isinstance(type_, tuple):
@@ -136,10 +134,7 @@ class QueryBuilderFirstOrderThroughDatalog(
         elif not is_leq_informative(type_, Tuple):
             type_ = Tuple[type_]
 
-        # This may not be the best way of doing this but doing
-        # so I ensure that they are returned by symbols_by_type
-        if add_items:
-            self._add_individual_items_to_symbol_table(items, type_)
+        self._register_values_for_type(items, type_)
 
         st = exp.Symbol[type_]
         symbol = st(name) if name else st.fresh()
@@ -149,7 +144,7 @@ class QueryBuilderFirstOrderThroughDatalog(
 
         return Symbol(self, symbol.name)
 
-    def _add_individual_items_to_symbol_table(self, items, type_):
+    def _register_values_for_type(self, items, type_):
         for row in items:
             self._add_row_to_type_predicates(row, type_)
 
