@@ -1,4 +1,5 @@
 from typing import AbstractSet, Tuple
+from collections import defaultdict
 
 from .. import expressions as exp
 from .. import logic
@@ -54,7 +55,7 @@ class QueryBuilderFirstOrderThroughDatalog(
         if solver is None:
             solver = RegionFrontendFolThroughDatalogSolver()
         super().__init__(solver, logic_programming=True)
-        self.type_predicates = dict()
+        self.type_predicates = defaultdict(set)
         self.chase_class = chase_class
 
     # @profile
@@ -86,11 +87,15 @@ class QueryBuilderFirstOrderThroughDatalog(
     def _populate_type_predicates(self, type_predicate_symbols):
         for s in type_predicate_symbols:
             type_ = s.restricted_type
-            values = set()
-            for t, v in self.type_predicates.items():
-                if issubclass(t, type_):
-                    values |= v
+            values = self._get_values_for_type(type_)
             self.add_tuple_set(values, type_, s.name, add_items=False)
+
+    def _get_values_for_type(self, type_):
+        values = set()
+        for t, v in self.type_predicates.items():
+            if issubclass(t, type_):
+                values |= v
+        return values
 
     def _get_program_from_query(self, query, name=None):
         walker = RestrictVariablesByType(self)
@@ -118,8 +123,6 @@ class QueryBuilderFirstOrderThroughDatalog(
     def add_symbol(self, value, name=None):
         type_ = value.__class__
         if not isinstance(value, Symbol):
-            if type_ not in self.type_predicates:
-                self.type_predicates[type_] = set()
             self.type_predicates[type_].add(value)
         return super().add_symbol(value, name)
 
@@ -153,8 +156,6 @@ class QueryBuilderFirstOrderThroughDatalog(
     def _add_row_to_type_predicates(self, row, type_):
         for e, t in zip(row, type_.__args__):
             if not isinstance(e, Symbol):
-                if t not in self.type_predicates:
-                    self.type_predicates[t] = set()
                 self.type_predicates[t].add(e)
 
     def _getValue(self, x):
