@@ -569,11 +569,11 @@ class ProvenanceExpressionSimplifier(ExpressionWalker):
         ),
     )
     def natural_join_same_maybe_nested_selection_formulas(self, njoin):
-        selection_formulas = []
+        selection_formulas = set()
         left = njoin.relation_left
         right = njoin.relation_right
         while isinstance(left, Selection):
-            selection_formulas.append(left.formula)
+            selection_formulas.add(left.formula)
             left = left.relation
             right = right.relation
         new_njoin = NaturalJoin(left, right)

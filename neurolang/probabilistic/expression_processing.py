@@ -107,9 +107,13 @@ def union_contains_probabilistic_facts(union):
 
 
 def same_maybe_nested_selection_formulas(first, second):
-    while isinstance(first, Selection) and isinstance(second, Selection):
-        if first.formula != second.formula:
-            return False
-        first = first.relation
-        second = second.relation
-    return True
+    first_selections = set()
+    second_selections = set()
+    while isinstance(first, Selection) or isinstance(second, Selection):
+        if isinstance(first, Selection):
+            first_selections.add(first)
+            first = first.relation
+        if isinstance(second, Selection):
+            second_selections.add(second)
+            second = second.relation
+    return first_selections == second_selections
