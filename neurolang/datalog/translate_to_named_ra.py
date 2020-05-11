@@ -128,12 +128,6 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
                 projections += (Constant[ColumnInt](i, verify_type=False),)
                 named_args += (arg,)
 
-        if (
-            len(expression.args) > 0 and
-            len(projections) == len(expression.args)
-        ):
-            projections = None
-
         in_set = self.generate_ra_expression(
             functor,
             selections, selection_columns,
@@ -159,9 +153,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             )
             in_set = Selection(in_set, criterium)
 
-        if projections is not None:
-            in_set = Projection(in_set, projections)
-
+        in_set = Projection(in_set, projections)
         column_names = tuple(
             Constant[ColumnStr](ColumnStr(arg.name), verify_type=False)
             for arg in named_args
@@ -229,7 +221,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             'destroy_formulas': [],
             'named_columns': set()
         }
-
+        
         for formula in expression.formulas:
             formula = self.walk(formula)
             if isinstance(formula, Negation):
