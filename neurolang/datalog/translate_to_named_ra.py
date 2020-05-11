@@ -181,12 +181,9 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
     def translate_conj(self, expression):
         classified_formulas = self.classify_formulas_obtain_names(expression)
 
-        if len(classified_formulas['pos_formulas']) > 0:
-            output = classified_formulas['pos_formulas'][0]
-            for pos_formula in classified_formulas['pos_formulas'][1:]:
-                output = NaturalJoin(output, pos_formula)
-        else:
-            return NamedRelationalAlgebraFrozenSet([])
+        output = TranslateToNamedRA.process_positive_formulas(
+            classified_formulas
+        )
 
         output = TranslateToNamedRA.process_negative_formulas(
             classified_formulas,
@@ -221,7 +218,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             'destroy_formulas': [],
             'named_columns': set()
         }
-        
+
         for formula in expression.formulas:
             formula = self.walk(formula)
             if isinstance(formula, Negation):
@@ -259,6 +256,17 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             classified_formulas['destroy_formulas'].append(formula)
         else:
             classified_formulas['selection_formulas'].append(formula)
+
+    @staticmethod
+    def process_positive_formulas(classified_formulas):
+        if len(classified_formulas['pos_formulas']) == 0:
+            output = NamedRelationalAlgebraFrozenSet([])
+        else:
+            output = classified_formulas['pos_formulas'][0]
+            for pos_formula in classified_formulas['pos_formulas'][1:]:
+                output = NaturalJoin(output, pos_formula)
+
+        return output
 
     @staticmethod
     def process_negative_formulas(classified_formulas, output):
