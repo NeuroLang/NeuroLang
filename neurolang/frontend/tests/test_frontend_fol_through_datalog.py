@@ -1,4 +1,4 @@
-from .. import RegionFrontendFolThroughDatalog
+from .. import RegionFrontendFolThroughDatalog, RegionFrontend
 from ...regions import ExplicitVBR, Region, SphericalVolume
 from ..query_resolution_expressions import Symbol
 from typing import AbstractSet, Tuple
@@ -6,6 +6,8 @@ from unittest.mock import patch
 from unittest import skip
 
 import numpy as np
+from nilearn import datasets
+import nibabel as nib
 
 
 def test_add_set():
@@ -74,9 +76,11 @@ def test_query_regions_from_region_set():
     neurolang.add_tuple_set(regions, ExplicitVBR)
 
     x = neurolang.new_region_symbol(name="x")
-    query_result = neurolang.query(
+
+    query = neurolang.query(
         x, neurolang.symbols.inferior_of(x, neurolang.symbols.reference_region)
-    ).do(name="result_of_test_query")
+    )
+    query_result = query.do(name="result_of_test_query")
 
     assert len(query_result.value) == len(regions)
     assert query_result.value == {(i1,), (i2,), (i3,)}
@@ -300,3 +304,90 @@ def test_isin_2():
     expected = frozenset(set((i,) for i in range(10) if i % 2 == 0))
     assert R.value == expected
 
+
+def test_compare_frontends():
+    nl1 = _init(RegionFrontendFolThroughDatalog)
+    nl2 = _init(RegionFrontend)
+
+    def get1(result):
+        return set(r[0] for r in result)
+
+    def get2(result):
+        return set(r.value for r in result)
+
+    r1 = _query_1(nl1).do()
+    r2 = _query_1(nl2).do()
+    assert get1(r1) == get2(r2)
+
+    r1 = _query_2(nl1).do()
+    r2 = _query_2(nl2).do()
+    assert get1(r1) == get2(r2)
+
+    r1 = _query_3(nl1).do()
+    r2 = _query_3(nl2).do()
+    assert get1(r1) == get2(r2)
+
+    r1 = _query_4(nl1, r1).do()
+    r2 = _query_4(nl2, r2).do()
+    assert get1(r1) == get2(r2)
+
+
+def _init(frontend_class):
+    destrieux_dataset = datasets.fetch_atlas_destrieux_2009()
+    destrieux_map = nib.load(destrieux_dataset["maps"])
+
+    nl = frontend_class()
+    for label_number, name in destrieux_dataset["labels"]:
+        name = name.decode()
+        if not name.startswith("L ") or not (
+            "S_" in name or "Lat_Fis" in name or "Pole" in name
+        ):
+            continue
+
+        # Create a region object
+        region = nl.create_region(destrieux_map, label=label_number)
+
+        # Fine tune the symbol name
+        name = "L_" + name[2:].replace("-", "_")
+        nl.add_region(region, name=name.lower())
+
+    return nl
+
+
+def _query_1(nl):
+    x = nl.new_region_symbol("x")
+    return nl.query(
+        x, nl.symbols.anatomical_anterior_of(x, nl.symbols.l_s_central)
+    )
+
+
+def _query_2(nl):
+    x = nl.new_region_symbol("x")
+    return nl.query(
+        x,
+        nl.symbols.anatomical_anterior_of(x, nl.symbols.l_s_central)
+        & nl.symbols.anatomical_superior_of(x, nl.symbols.l_s_temporal_sup),
+    )
+
+
+def _query_3(nl):
+    x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
+    return nl.query(
+        x,
+        nl.symbols.anatomical_anterior_of(x, nl.symbols.l_s_central)
+        & ~nl.exists(
+            y,
+            nl.symbols.anatomical_anterior_of(y, nl.symbols.l_s_central)
+            & nl.symbols.anatomical_anterior_of(x, y),
+        ),
+    )
+
+
+def _query_4(nl, temporal_lobe):
+    x = nl.new_region_symbol("x")
+    return nl.query(
+        x,
+        nl.symbols.isin(x, temporal_lobe)
+        & ~nl.symbols.anatomical_inferior_of(x, nl.symbols.l_s_temporal_inf),
+    )

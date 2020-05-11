@@ -1,4 +1,4 @@
-from typing import AbstractSet, Tuple, Callable, Any
+from typing import AbstractSet, Tuple
 
 from .. import expressions as exp
 from .. import logic
@@ -40,15 +40,11 @@ class RegionFrontendFolThroughDatalogSolver(
 ):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        isin_symbol = exp.Symbol[Callable[[Any, AbstractSet[Any]], bool]](
-            "isin"
-        )
-        self.symbol_table[isin_symbol] = isin_symbol
 
-    @add_match(exp.FunctionApplication(exp.Symbol("isin"), ...))
-    def replace_isin(self, fa):
-        elem, set_ = fa.args
-        return self.walk(exp.Constant[bool](elem in set_.value))
+        def isin(x, y):
+            return exp.Constant(x) in y
+
+        self.symbol_table[exp.Symbol("isin")] = exp.Constant(isin)
 
 
 class QueryBuilderFirstOrderThroughDatalog(
@@ -58,39 +54,59 @@ class QueryBuilderFirstOrderThroughDatalog(
         if solver is None:
             solver = RegionFrontendFolThroughDatalogSolver()
         super().__init__(solver, logic_programming=True)
-        self.type_predicate_symbols = dict()
+        self.type_predicates = dict()
         self.chase_class = chase_class
 
+    # @profile
     def execute_expression(self, expression, name=None):
         if not isinstance(expression, exp.Query):
             raise NotImplementedError(
                 f"{self.__class__.__name__} can only evaluate Query "
                 f"expressions, {expression.__class__.__name__} given"
             )
-        symbol, program = self._get_program_from_query(expression, name)
-        self.solver.walk(program)
-        self._populate_type_predicates()
 
-        solution = self.chase_class(self.solver).build_chase_solution()
+        symbol, program, type_predicate_symbols = self._get_program_from_query(
+            expression, name
+        )
+        self.solver.walk(program)
+        self._populate_type_predicates(type_predicate_symbols)
+
+        rules = logic.Union(program.expressions)
+        solution = self.chase_class(
+            self.solver, rules=rules
+        ).build_chase_solution()
         solution_set = solution.get(symbol, exp.Constant(set()))
 
+        if symbol in self.symbol_table:
+            self.del_symbol(symbol.name)
         self.symbol_table[symbol] = solution_set
+
         return Symbol(self, symbol.name)
 
-    def _populate_type_predicates(self):
-        for type_, pred_symbol in self.type_predicate_symbols.items():
-            symbols = self.symbol_table.symbols_by_type(type_).values()
-            self.add_tuple_set(symbols, type_, pred_symbol.name)
+    def _populate_type_predicates(self, type_predicate_symbols):
+        for s in type_predicate_symbols:
+            type_ = s.restricted_type
+            values = set()
+            for t, v in self.type_predicates.items():
+                if issubclass(t, type_):
+                    values |= v
+            self.add_tuple_set(values, type_, s.name, add_items=False)
 
     def _get_program_from_query(self, query, name=None):
-        query = RestrictVariablesByType(self).walk(query)
+        walker = RestrictVariablesByType(self)
+        query = walker.walk(query)
+        type_predicate_symbols = walker.type_predicate_symbols
         args = _get_head_symbols(query.head)
         type_ = self._head_type(args)
 
         st = exp.Symbol[type_]
         head_symbol = st(name) if name else st.fresh()
         head = head_symbol(*args)
-        return head_symbol, fol_query_to_datalog_program(head, query.body)
+        return (
+            head_symbol,
+            fol_query_to_datalog_program(head, query.body),
+            type_predicate_symbols,
+        )
 
     def _head_type(self, args):
         if len(args) == 1:
@@ -99,7 +115,17 @@ class QueryBuilderFirstOrderThroughDatalog(
             type_ = Tuple[tuple(map(lambda s: s.type, args))]
         return AbstractSet[type_]
 
-    def add_tuple_set(self, iterable, type_=Unknown, name=None):
+    def add_symbol(self, value, name=None):
+        type_ = value.__class__
+        if not isinstance(value, Symbol):
+            if type_ not in self.type_predicates:
+                self.type_predicates[type_] = set()
+            self.type_predicates[type_].add(value)
+        return super().add_symbol(value, name)
+
+    def add_tuple_set(
+        self, iterable, type_=Unknown, name=None, add_items=True
+    ):
         items = list(map(self._enforceTuple, map(self._getValue, iterable)))
 
         if isinstance(type_, tuple):
@@ -109,7 +135,8 @@ class QueryBuilderFirstOrderThroughDatalog(
 
         # This may not be the best way of doing this but doing
         # so I ensure that they are returned by symbols_by_type
-        self._add_individual_items_to_symbol_table(items, type_)
+        if add_items:
+            self._add_individual_items_to_symbol_table(items, type_)
 
         st = exp.Symbol[type_]
         symbol = st(name) if name else st.fresh()
@@ -121,32 +148,34 @@ class QueryBuilderFirstOrderThroughDatalog(
 
     def _add_individual_items_to_symbol_table(self, items, type_):
         for row in items:
-            self._add_row_to_symbol_table(row, type_)
+            self._add_row_to_type_predicates(row, type_)
 
-    def _add_row_to_symbol_table(self, row, type_):
+    def _add_row_to_type_predicates(self, row, type_):
         for e, t in zip(row, type_.__args__):
             if not isinstance(e, Symbol):
-                s, c = self._create_symbol_and_get_constant(e, t)
-                self.symbol_table[s] = c
+                if t not in self.type_predicates:
+                    self.type_predicates[t] = set()
+                self.type_predicates[t].add(e)
 
     def _getValue(self, x):
+        if isinstance(x, Symbol):
+            x = x.value
         if isinstance(x, exp.Constant):
             x = x.value
         return x
 
     def _enforceTuple(self, x):
-        if not hasattr(x, "__iter__"):
+        try:
+            iter(x)
+        except TypeError:
             x = (x,)
         return tuple(x)
 
-    def type_predicate_for(self, var):
-        type_ = var.type
-        if type_ not in self.type_predicate_symbols:
-            s = exp.Symbol("type_of(" + str(type_) + ")")
-            s = s.cast(AbstractSet[type_])
-            s.is_type_symbol_for = type_
-            self.type_predicate_symbols[type_] = s
-        return self.type_predicate_symbols[type_](var)
+    def type_predicate_symbol(self, type_):
+        s = exp.Symbol("type_of(" + str(type_) + ")")
+        s = s.cast(AbstractSet[type_])
+        s.restricted_type = type_
+        return s
 
     def query(self, head, predicate):
         if isinstance(head, tuple):
@@ -187,6 +216,7 @@ class QueryBuilderFirstOrderThroughDatalog(
 class RestrictVariablesByType(TranslateToLogic, RemoveUniversalPredicates):
     def __init__(self, query_builder):
         self.query_builder = query_builder
+        self.type_predicate_symbols = set()
 
     @add_match(
         exp.Query, lambda q: not _contains_type_restrictions(q.body),
@@ -209,18 +239,21 @@ class RestrictVariablesByType(TranslateToLogic, RemoveUniversalPredicates):
         )
 
     def _type_restrict(self, body, var):
-        pred = self.query_builder.type_predicate_for(var)
-        return logic.Conjunction((pred, body))
+        pred = self.query_builder.type_predicate_symbol(var.type)
+        self.type_predicate_symbols.add(pred)
+        return logic.Conjunction((pred(var), body))
 
 
 def _contains_type_restrictions(body):
-    if isinstance(body, logic.Conjunction):
-        for pred in body.formulas:
-            if isinstance(pred, exp.FunctionApplication) and hasattr(
-                pred.functor, "is_type_symbol_for"
-            ):
-                return True
-    return False
+    return isinstance(body, logic.Conjunction) and any(
+        _is_type_restriction(pred) for pred in body.formulas
+    )
+
+
+def _is_type_restriction(pred):
+    return isinstance(pred, exp.FunctionApplication) and hasattr(
+        pred.functor, "restricted_type"
+    )
 
 
 def _get_head_symbols(head):
