@@ -20,6 +20,7 @@ from ...relational_algebra_provenance import (
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
 )
+from ..expression_processing import same_maybe_nested_selection_formulas
 from .cplogic_to_gm import (
     AndPlateNode,
     BernoulliPlateNode,
@@ -563,13 +564,23 @@ class ProvenanceExpressionSimplifier(ExpressionWalker):
 
     @add_match(
         NaturalJoin(Selection, Selection),
-        lambda nj: nj.relation_left.formula == nj.relation_right.formula,
+        lambda nj: same_maybe_nested_selection_formulas(
+            nj.relation_left, nj.relation_right
+        ),
     )
-    def natural_join_same_selection_formula(self, njoin):
-        left_select = njoin.relation_left
-        right_select = njoin.relation_right
-        relation = NaturalJoin(left_select.relation, right_select.relation)
-        return Selection(relation, left_select.formula)
+    def natural_join_same_maybe_nested_selection_formulas(self, njoin):
+        selection_formulas = []
+        left = njoin.relation_left
+        right = njoin.relation_right
+        while isinstance(left, Selection):
+            selection_formulas.append(left.formula)
+            left = left.relation
+            right = right.relation
+        new_njoin = NaturalJoin(left, right)
+        new_selection = new_njoin
+        for formula in selection_formulas:
+            new_selection = Selection(new_selection, formula)
+        return new_selection
 
     @add_match(RelationalAlgebraOperation)
     def ra_operation(self, op):

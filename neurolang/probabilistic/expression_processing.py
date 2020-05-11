@@ -7,6 +7,7 @@ from ..datalog import WrappedRelationalAlgebraSet
 from ..exceptions import NeuroLangException
 from ..expressions import Constant, Expression, FunctionApplication
 from ..logic import Implication, Union
+from ..relational_algebra import Selection
 from .expressions import ProbabilisticPredicate
 
 
@@ -103,3 +104,12 @@ def add_to_union(union, to_add):
 
 def union_contains_probabilistic_facts(union):
     return any(is_probabilistic_fact(exp) for exp in union.formulas)
+
+
+def same_maybe_nested_selection_formulas(first, second):
+    while isinstance(first, Selection) and isinstance(second, Selection):
+        if first.formula != second.formula:
+            return False
+        first = first.relation
+        second = second.relation
+    return True
