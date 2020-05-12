@@ -1,5 +1,5 @@
 import operator
-from typing import Callable
+from typing import Callable, Tuple
 
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker
@@ -211,7 +211,7 @@ class ProbabilityOperation(Definition):
     def __repr__(self):
         return "P[ {}{} ]".format(
             "{} = {}".format(
-                self.valued_node[0].node_symbol.name, self.valued_node[1].value
+                self.valued_node[0].node_symbol.name, self.valued_node[1]
             ),
             (
                 ""
@@ -223,34 +223,6 @@ class ProbabilityOperation(Definition):
                 )
             ),
         )
-
-
-def is_bernoulli_probability(operation):
-    return (
-        len(operation.condition_valued_nodes) == 0
-        and isinstance(operation.valued_node[0], BernoulliPlateNode)
-        and operation.valued_node[1] == TRUE
-    )
-
-
-def is_and_truth_conditional_probability(operation):
-    return (
-        len(operation.condition_valued_nodes) > 0
-        and isinstance(operation.valued_node[0], AndPlateNode)
-        and operation.valued_node[1] == TRUE
-    )
-
-
-def is_nary_choice_probability(operation):
-    return len(operation.condition_valued_nodes) == 0 and isinstance(
-        operation.valued_node[0], NaryChoicePlateNode
-    )
-
-
-def is_nary_choice_result_conditional_probability(operation):
-    return len(operation.condition_valued_nodes) == 1 and isinstance(
-        operation.valued_node[0], NaryChoiceResultPlateNode
-    )
 
 
 class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
@@ -270,7 +242,7 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
     def __init__(self, graphical_model):
         self.graphical_model = graphical_model
 
-    @add_match(ProbabilityOperation, is_bernoulli_probability)
+    @add_match(ProbabilityOperation((BernoulliPlateNode, TRUE), tuple()))
     def bernoulli_probability(self, operation):
         """
         Construct the provenance algebra set that represents
@@ -285,7 +257,10 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         prov_set.__debug_expression__ = node.expression
         return prov_set
 
-    @add_match(ProbabilityOperation, is_and_truth_conditional_probability)
+    @add_match(
+        ProbabilityOperation((AndPlateNode, TRUE), ...),
+        lambda exp: len(exp.condition_valued_nodes) > 0,
+    )
     def and_truth_conditional_probability(self, operation):
         """
         Construct the provenance expression that calculates
@@ -353,7 +328,7 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
                 result = NaturalJoin(result, parent_relation)
         return result
 
-    @add_match(ProbabilityOperation, is_nary_choice_probability)
+    @add_match(ProbabilityOperation((NaryChoicePlateNode, ...), tuple()))
     def nary_choice_probability(self, operation):
         """
         Construct the provenance relation that represents the truth
@@ -400,7 +375,9 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         return _choice_tuple_selection(prov_set, choice_value)
 
     @add_match(
-        ProbabilityOperation, is_nary_choice_result_conditional_probability,
+        ProbabilityOperation(
+            (NaryChoiceResultPlateNode, ...), ((NaryChoicePlateNode, ...),)
+        )
     )
     def nary_choice_result_truth_conditional_probability(self, operation):
         choice_node = operation.condition_valued_nodes[0][0]
