@@ -511,7 +511,6 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
             result[choice_node_symb] = tuple(
                 (arg, UnionOverTuplesSymbol.fresh()) for arg in args
             )
-            __import__('pdb').set_trace()
         return result
 
     @add_match(ProbabilityOperation)
