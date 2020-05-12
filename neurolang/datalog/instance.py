@@ -47,7 +47,7 @@ class FrozenInstance:
 
     def _set_not_empty(self, v):
         return (
-            (isinstance(v, RelationalAlgebraFrozenSet) and not v.is_null())
+            (isinstance(v, RelationalAlgebraFrozenSet) and not v.is_empty())
             or len(v) > 0
         )
 
@@ -109,7 +109,7 @@ class FrozenInstance:
         new_elements = dict()
         for predicate, tuple_set in self.elements.items():
             new_set = tuple_set - other.elements.get(predicate, set())
-            if not new_set.is_null():
+            if not new_set.is_empty():
                 new_elements[predicate] = new_set
         res = type(self)(new_elements)
         return res
@@ -121,7 +121,7 @@ class FrozenInstance:
         new_elements = dict()
         for predicate in (self.elements.keys() & other.elements.keys()):
             new_set = self.elements[predicate] & other.elements[predicate]
-            if not new_set.is_null():
+            if not new_set.is_empty():
                 new_elements[predicate] = new_set
         res = type(self)(new_elements)
         return res
@@ -243,7 +243,7 @@ class Instance(FrozenInstance):
             return super().__isub__(other)
         for predicate in (self.elements.keys() & other.elements.keys()):
             self.elements[predicate] -= other.elements[predicate]
-            if self.elements[predicate].is_null():
+            if self.elements[predicate].is_empty():
                 self._remove_predicate_symbol(predicate)
         return self
 
@@ -255,7 +255,7 @@ class Instance(FrozenInstance):
             self._remove_predicate_symbol(predicate)
         for predicate in self.elements:
             self.elements[predicate] &= other.elements[predicate]
-            if self.elements[predicate].is_null():
+            if self.elements[predicate].is_empty():
                 self._remove_predicate_symbol(predicate)
         return self
 
@@ -292,7 +292,7 @@ class SetInstance(Instance, FrozenSetInstance, MutableSet):
         functor = value.functor
         value = value.args
         self.elements[functor].discard(value)
-        if self.elements[functor].is_null():
+        if self.elements[functor].is_empty():
             self._remove_predicate_symbol(functor)
 
     def as_set(self):
