@@ -594,6 +594,24 @@ class ProvenanceExpressionSimplifier(ExpressionWalker):
                     prev_formula = formula
         return op
 
+    @add_match(
+        UnionOverTuples(
+            Selection(
+                ...,
+                FunctionApplication(
+                    Constant(operator.eq),
+                    (Constant[ColumnStr], Constant[ColumnStr]),
+                ),
+            ),
+            ...,
+        )
+    )
+    def move_selection_outside_union(self, op):
+        selection = op.relation
+        new_union = UnionOverTuples(selection.relation, op.tuple_symbols)
+        new_union.__debug_expression__ = op.__debug_expression__
+        return Selection(new_union, selection.formula)
+
     @add_match(RelationalAlgebraOperation)
     def ra_operation(self, op):
         new_op = op.apply(*(self.walk(arg) for arg in op.unapply()))
