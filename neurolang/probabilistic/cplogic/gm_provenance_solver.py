@@ -568,6 +568,32 @@ class ProvenanceExpressionSimplifier(ExpressionWalker):
             njoin.relation_right.formula,
         )
 
+    @add_match(Selection(Selection, ...))
+    def merge_selections_with_same_rhs(self, op):
+        formulas_grpby_rhs = dict()
+        while isinstance(op, Selection):
+            rhs = op.formula.args[1]
+            if rhs not in formulas_grpby_rhs:
+                formulas_grpby_rhs[rhs] = set()
+            formulas_grpby_rhs[rhs].add(op.formula)
+            op = op.relation
+        for rhs, formulas in formulas_grpby_rhs.items():
+            formula_it = iter(formulas)
+            prev_formula = next(formula_it)
+            if len(formulas) == 1:
+                op = Selection(op, prev_formula)
+            else:
+                for formula in formula_it:
+                    op = Selection(
+                        op,
+                        FunctionApplication(
+                            Constant(operator.eq),
+                            (prev_formula.args[0], formula.args[0]),
+                        ),
+                    )
+                    prev_formula = formula
+        return op
+
     @add_match(RelationalAlgebraOperation)
     def ra_operation(self, op):
         new_op = op.apply(*(self.walk(arg) for arg in op.unapply()))

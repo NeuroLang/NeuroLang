@@ -91,13 +91,14 @@ class TestRAPToLaTeXTranslator(PatternWalker):
             ["blue", "red", "pink", "teal", "olive", "magenta", "cyan"]
         )
 
-    def pretty_symb(self, name):
-        if not name.startswith("fresh_"):
-            return name
-        if name in self.fresh_symbol_renames:
-            return self.fresh_symbol_renames[name]
+    def prettify(self, exp):
+        exp = exp.value if isinstance(exp, Constant) else exp.name
+        if not exp.startswith("fresh_"):
+            return exp
+        if exp in self.fresh_symbol_renames:
+            return self.fresh_symbol_renames[exp]
         new_name = "s_{{{}}}".format(self.fresh_symbol_rename_count)
-        self.fresh_symbol_renames[name] = new_name
+        self.fresh_symbol_renames[exp] = new_name
         self.fresh_symbol_rename_count += 1
         return new_name
 
@@ -106,9 +107,7 @@ class TestRAPToLaTeXTranslator(PatternWalker):
         inner = self.walk(op.relation)
         inner = "\n".join("  " + x for x in inner.split("\n"))
         rename_args = ",".join(
-            "{} / {}".format(
-                self.pretty_symb(src.value), self.pretty_symb(dst.value)
-            )
+            "{} / {}".format(self.prettify(src), self.prettify(dst))
             for src, dst in op.renames
         )
         return (
@@ -127,8 +126,8 @@ class TestRAPToLaTeXTranslator(PatternWalker):
         return (
             "\\sigma_{"
             + "{} = {}".format(
-                self.pretty_symb(op.formula.args[0].value),
-                self.pretty_symb(op.formula.args[1].name),
+                self.prettify(op.formula.args[0]),
+                self.prettify(op.formula.args[1]),
             )
             + "}"
             + "\n\\left(\n"
@@ -172,9 +171,7 @@ class TestRAPToLaTeXTranslator(PatternWalker):
         return (
             "\\bigcup_{"
             + "({})".format(
-                ",".join(
-                    self.pretty_symb(symb.name) for _, symb in op.tuple_symbols
-                )
+                ",".join(self.prettify(symb) for _, symb in op.tuple_symbols)
             )
             + "\\in \\mathcal{{{}}}}}".format(pred_symb)
             + "\n\\left\\{\n"
