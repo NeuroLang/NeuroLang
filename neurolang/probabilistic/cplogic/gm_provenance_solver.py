@@ -168,6 +168,7 @@ def solve_succ_query(query_predicate, cpl_program):
 class UnionOverTuples(RelationalAlgebraOperation):
     def __init__(self, relation, tuple_symbols):
         self.relation = relation
+        # ( (x, \nu_1), (y, \nu_2) )
         self.tuple_symbols = tuple_symbols
 
 
@@ -335,9 +336,7 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
             )
             parent_relation.__debug_expression__ = cnode.expression
             parent_relation.__debug_alway_true__ = True
-            if isinstance(
-                cnode, (NaryChoicePlateNode, NaryChoiceResultPlateNode)
-            ):
+            if isinstance(cnode, NaryChoiceResultPlateNode):
                 parent_relation = _choice_tuple_selection(
                     parent_relation, cnode_value,
                 )
