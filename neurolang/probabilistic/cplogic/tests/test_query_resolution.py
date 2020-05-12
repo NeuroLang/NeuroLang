@@ -6,7 +6,11 @@ from ....logic import Conjunction, Implication, Union
 from ....relational_algebra import NaturalJoin, RenameColumns, Selection
 from ....relational_algebra_provenance import ProvenanceAlgebraSet
 from .. import testing
-from ..gm_provenance_solver import UnionOverTuples, solve_succ_query
+from ..gm_provenance_solver import (
+    ProvenanceExpressionSimplifier,
+    UnionOverTuples,
+    solve_succ_query,
+)
 from ..program import CPLogicProgram
 
 P = Symbol("P")
@@ -220,9 +224,17 @@ def test_mutual_exclusivity():
     for pred_symb, pfact_set in pfact_sets.items():
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
     cpl_program.walk(code)
+    gm = testing.build_gm(cpl_program)
     result_rap_exp, latex = testing.get_succ_query_rap_expression(
         Z(x, y), cpl_program
     )
+    simplifier = ProvenanceExpressionSimplifier()
+    smpl_exp = simplifier.walk(result_rap_exp)
+    smpl_latex = testing.rap_expression_to_latex(smpl_exp, cpl_program, gm)
+    with open('/tmp/exp.tex', 'w') as f:
+        f.write(latex)
+        f.write('\n\\\\\n')
+        f.write(smpl_latex)
     assert isinstance(result_rap_exp, UnionOverTuples)
     assert isinstance(result_rap_exp.relation, NaturalJoin)
     assert isinstance(result_rap_exp.relation.relation_right, RenameColumns)

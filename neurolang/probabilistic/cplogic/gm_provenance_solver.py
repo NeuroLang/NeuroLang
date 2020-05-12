@@ -20,7 +20,6 @@ from ...relational_algebra_provenance import (
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
 )
-from ..expression_processing import same_maybe_nested_selection_formulas
 from .cplogic_to_gm import (
     AndPlateNode,
     BernoulliPlateNode,
@@ -518,14 +517,8 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
 
 def _choice_tuple_selection(prov_set, chosen_tuple_symbs):
     for arg, symbol in chosen_tuple_symbs:
-        eq = Constant[Callable[[ColumnStr, ColumnStr], bool]](
-            operator.eq, auto_infer_type=False, verify_type=False
-        )
-        args = (
-            str2columnstr_constant(arg.name),
-            str2columnstr_constant(symbol.name),
-        )
-        selection_formula = FunctionApplication(eq, args)
+        args = (str2columnstr_constant(arg.name), symbol)
+        selection_formula = FunctionApplication(Constant(operator.eq), args)
         prov_set = Selection(prov_set, selection_formula)
     return prov_set
 
@@ -536,7 +529,7 @@ class ProvenanceExpressionSimplifier(ExpressionWalker):
             Selection(
                 ...,
                 FunctionApplication(
-                    Constant(operator.eq), (Constant[ColumnStr], Constant),
+                    Constant(operator.eq), (Constant[ColumnStr], Symbol),
                 ),
             ),
             ...,
@@ -544,7 +537,7 @@ class ProvenanceExpressionSimplifier(ExpressionWalker):
     )
     def swap_rename_selection(self, rename):
         rename_dict = dict(rename.renames)
-        selection = rename.relation
+        selection = self.walk(rename.relation)
         selection_col, selection_cst = selection.formula.args
         new_selection_col = rename_dict.get(selection_col, selection_col)
         rename_if = lambda c: c if c != selection_col else selection_col
@@ -560,32 +553,75 @@ class ProvenanceExpressionSimplifier(ExpressionWalker):
                 selection.formula.functor, (new_selection_col, selection_cst),
             ),
         )
-        return new_selection
+        return self.walk(new_selection)
 
     @add_match(
-        NaturalJoin(Selection, Selection),
-        lambda nj: same_maybe_nested_selection_formulas(
-            nj.relation_left, nj.relation_right
+        NaturalJoin,
+        lambda nj: (
+            any_nested_selection(nj.relation_left)
+            or any_nested_selection(nj.relation_right)
         ),
     )
-    def natural_join_same_maybe_nested_selection_formulas(self, njoin):
-        selection_formulas = set()
+    def move_out_natural_join_nested_selections(self, njoin):
         left = njoin.relation_left
+        if not isinstance(left, Selection):
+            left = self.walk(left)
         right = njoin.relation_right
-        while isinstance(left, Selection):
-            selection_formulas.add(left.formula)
-            left = left.relation
-            right = right.relation
-        new_njoin = NaturalJoin(left, right)
-        new_selection = new_njoin
+        if not isinstance(right, Selection):
+            right = self.walk(right)
+        selection_formulas = set()
+        while isinstance(left, Selection) or isinstance(right, Selection):
+            if isinstance(left, Selection):
+                selection_formulas.add(left.formula)
+                left = self.walk(left.relation)
+            if isinstance(right, Selection):
+                selection_formulas.add(right.formula)
+                right = self.walk(right.relation)
+        new_njoin = NaturalJoin(self.walk(left), self.walk(right))
+        new_selection = self.walk(new_njoin)
         for formula in selection_formulas:
             new_selection = Selection(new_selection, formula)
-        return new_selection
+        return self.walk(new_selection)
+
+    @add_match(
+        NaturalJoin,
+        lambda exp: (
+            nested_renames_or_prov_set(exp.relation_left)
+            and nested_renames_or_prov_set(exp.relation_right)
+        ),
+    )
+    def natural_join(self, njoin):
+        return njoin
+
+    @add_match(NaturalJoin)
+    def ra_operation(self, op):
+        new_op = op.apply(*(self.walk(arg) for arg in op.unapply()))
+        return self.walk(new_op)
 
     @add_match(RelationalAlgebraOperation)
     def ra_operation(self, op):
-        return op
+        new_op = op.apply(*(self.walk(arg) for arg in op.unapply()))
+        new_op.__debug_expression__ = getattr(op, "__debug_expression__", None)
+        return new_op
 
     @add_match(ProvenanceAlgebraSet)
     def provenance_algebra_set(self, prov_set):
         return prov_set
+
+
+def nested_renames_or_prov_set(exp):
+    while isinstance(exp, RenameColumns):
+        exp = exp.relation
+    return isinstance(exp, ProvenanceAlgebraSet)
+
+
+def any_nested_selection(exp):
+    if isinstance(exp, ProvenanceAlgebraSet):
+        return False
+    if isinstance(exp, Selection):
+        return True
+    if isinstance(exp, NaturalJoin):
+        return any_nested_selection(exp.relation_left) or any_nested_selection(
+            exp.relation_right
+        )
+    return any_nested_selection(exp.relation)

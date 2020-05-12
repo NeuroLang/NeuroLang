@@ -104,16 +104,3 @@ def add_to_union(union, to_add):
 
 def union_contains_probabilistic_facts(union):
     return any(is_probabilistic_fact(exp) for exp in union.formulas)
-
-
-def same_maybe_nested_selection_formulas(first, second):
-    first_selections = set()
-    second_selections = set()
-    while isinstance(first, Selection) or isinstance(second, Selection):
-        if isinstance(first, Selection):
-            first_selections.add(first)
-            first = first.relation
-        if isinstance(second, Selection):
-            second_selections.add(second)
-            second = second.relation
-    return first_selections == second_selections

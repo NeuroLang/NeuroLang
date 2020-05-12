@@ -128,7 +128,7 @@ class TestRAPToLaTeXTranslator(PatternWalker):
             "\\sigma_{"
             + "{} = {}".format(
                 self.pretty_symb(op.formula.args[0].value),
-                self.pretty_symb(op.formula.args[1].value),
+                self.pretty_symb(op.formula.args[1].name),
             )
             + "}"
             + "\n\\left(\n"
@@ -201,6 +201,4 @@ class TestRAPToLaTeXTranslator(PatternWalker):
 def rap_expression_to_latex(exp, cpl_program, graphical_model):
     walker = TestRAPToLaTeXTranslator(cpl_program, graphical_model)
     latex = walker.walk(exp)
-    with open("/tmp/lol.tex", "w") as f:
-        f.write(latex)
     return latex
