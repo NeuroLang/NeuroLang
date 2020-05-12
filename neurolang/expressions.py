@@ -389,13 +389,13 @@ class Symbol(NonConstant):
             with lock:
                 fresh = f'fresh_{i:08}'
                 i += 1
-            yield Symbol(fresh)
+            yield fresh
 
     @classmethod
     def fresh(cls):
         if not hasattr(Symbol, '_fresh_generator_'):
             Symbol._fresh_generator_ = Symbol._fresh_generator()
-        new_symbol = next(Symbol._fresh_generator_)
+        new_symbol = cls(next(Symbol._fresh_generator_))
         if cls.type is not typing.Any:
             new_symbol = new_symbol.cast(cls.type)
         return new_symbol

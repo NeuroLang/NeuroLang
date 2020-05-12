@@ -5,8 +5,10 @@ from typing import AbstractSet, Callable, Mapping, Sequence, Tuple
 import pytest
 
 from .. import expressions, logic
-from ..expression_walker import (ExpressionBasicEvaluator,
-                                 TypedSymbolTableEvaluator)
+from ..expression_walker import (
+    ExpressionBasicEvaluator,
+    TypedSymbolTableEvaluator,
+)
 from ..expressions import Expression, Unknown, expressions_behave_as_objects
 
 C_ = expressions.Constant
@@ -301,3 +303,11 @@ def test_nested_universals():
     exp = U_(x, U_(y, P(x) & Q(y)))
 
     assert exp._symbols == {Q, P}
+
+
+def test_fresh_symbol_subclass():
+    class TestSymbol(expressions.Symbol):
+        pass
+
+    assert isinstance(TestSymbol.fresh(), TestSymbol)
+    assert isinstance(TestSymbol[int].fresh(), TestSymbol[int])
