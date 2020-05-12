@@ -171,6 +171,10 @@ class UnionOverTuples(RelationalAlgebraOperation):
         self.tuple_symbols = tuple_symbols
 
 
+class UnionOverTuplesSymbol(Symbol):
+    pass
+
+
 def ra_binary_to_nary(op):
     def nary_op(relations):
         it = iter(relations)
@@ -506,8 +510,9 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
             node = self.graphical_model.get_node(choice_node_symb)
             args = get_predicate_from_grounded_expression(node.expression).args
             result[choice_node_symb] = tuple(
-                (arg, Symbol.fresh()) for arg in args
+                (arg, UnionOverTuplesSymbol.fresh()) for arg in args
             )
+            __import__('pdb').set_trace()
         return result
 
     @add_match(ProbabilityOperation)
@@ -550,8 +555,19 @@ class ProvenanceExpressionSimplifier(ExpressionWalker):
         )
         return new_selection
 
-    @add_match(NaturalJoin(Selection, ...))
-    def move_out_natural_join_selection_left(self, njoin):
+    @add_match(
+        NaturalJoin(
+            Selection(
+                ...,
+                FunctionApplication(
+                    Constant(operator.eq),
+                    (Constant[ColumnStr], UnionOverTuplesSymbol),
+                ),
+            ),
+            ...,
+        )
+    )
+    def natural_join_selection_with_union_symbol_rhs_left(self, njoin):
         return Selection(
             self.walk(
                 NaturalJoin(njoin.relation_left.relation, njoin.relation_right)
@@ -559,8 +575,19 @@ class ProvenanceExpressionSimplifier(ExpressionWalker):
             njoin.relation_left.formula,
         )
 
-    @add_match(NaturalJoin(..., Selection))
-    def move_out_natural_join_selection_right(self, njoin):
+    @add_match(
+        NaturalJoin(
+            ...,
+            Selection(
+                ...,
+                FunctionApplication(
+                    Constant(operator.eq),
+                    (Constant[ColumnStr], UnionOverTuplesSymbol),
+                ),
+            ),
+        )
+    )
+    def natural_join_selection_with_union_symbol_rhs_right(self, njoin):
         return Selection(
             self.walk(
                 NaturalJoin(njoin.relation_left, njoin.relation_right.relation)
