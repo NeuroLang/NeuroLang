@@ -176,7 +176,7 @@ class TupleSymbol(Symbol):
     pass
 
 
-class SymbolicTupleEquality(Definition):
+class TupleEqualSymbol(Definition):
     def __init__(self, columns, tuple_symbol):
         self.columns = columns
         self.tuple_symbol = tuple_symbol
@@ -320,7 +320,7 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
             if isinstance(cnode, NaryChoiceResultPlateNode):
                 parent_relation = Selection(
                     parent_relation,
-                    SymbolicTupleEquality(
+                    TupleEqualSymbol(
                         parent_relation.non_provenance_columns, cnode_value,
                     ),
                 )
@@ -383,7 +383,7 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         prov_set.__debug_expression__ = choice_node.expression
         return Selection(
             prov_set,
-            SymbolicTupleEquality(
+            TupleEqualSymbol(
                 prov_set.non_provenance_columns, choice_value
             ),
         )
@@ -403,7 +403,7 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         relation.__debug_alway_true__ = True
         relation = Selection(
             relation,
-            SymbolicTupleEquality(
+            TupleEqualSymbol(
                 relation.non_provenance_columns, choice_value
             ),
         )
@@ -501,7 +501,7 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
 
 
 class SelectionOutPusher(ExpressionWalker):
-    @add_match(RenameColumns(Selection(..., SymbolicTupleEquality), ...))
+    @add_match(RenameColumns(Selection(..., TupleEqualSymbol), ...))
     def swap_rename_selection(self, rename):
         renames = dict(rename.renames)
         new_rename = RenameColumns(rename.relation.relation, rename.renames)
@@ -510,20 +510,20 @@ class SelectionOutPusher(ExpressionWalker):
         )
         new_selection = Selection(
             new_rename,
-            SymbolicTupleEquality(
+            TupleEqualSymbol(
                 new_selection_columns, rename.relation.formula.tuple_symbol
             ),
         )
         return new_selection
 
-    @add_match(NaturalJoin(Selection(..., SymbolicTupleEquality), ...))
+    @add_match(NaturalJoin(Selection(..., TupleEqualSymbol), ...))
     def njoin_left_selection(self, njoin):
         return Selection(
             NaturalJoin(njoin.relation_left.relation, njoin.relation_right),
             njoin.relation_left.formula,
         )
 
-    @add_match(NaturalJoin(..., Selection(..., SymbolicTupleEquality)))
+    @add_match(NaturalJoin(..., Selection(..., TupleEqualSymbol)))
     def njoin_right_selection(self, njoin):
         return Selection(
             NaturalJoin(njoin.relation_right.relation, njoin.relation_left),
@@ -532,7 +532,7 @@ class SelectionOutPusher(ExpressionWalker):
 
     @add_match(
         Selection(
-            Selection(..., SymbolicTupleEquality), SymbolicTupleEquality
+            Selection(..., TupleEqualSymbol), TupleEqualSymbol
         ),
         lambda exp: (
             exp.formula.columns == exp.relation.formula.columns
@@ -554,7 +554,7 @@ class SelectionOutPusher(ExpressionWalker):
 
 class UnionRemover(ExpressionWalker):
     @add_match(
-        UnionOverTuples(Selection(..., SymbolicTupleEquality), ...),
+        UnionOverTuples(Selection(..., TupleEqualSymbol), ...),
         lambda exp: exp.tuple_symbol == exp.relation.formula.tuple_symbol,
     )
     def union_of_selection_same_tuple_symbol(self, union):
@@ -562,7 +562,7 @@ class UnionRemover(ExpressionWalker):
         selection_cols = list()
         while (
             isinstance(op, Selection)
-            and isinstance(op.formula, SymbolicTupleEquality)
+            and isinstance(op.formula, TupleEqualSymbol)
             and op.formula.tuple_symbol == union.tuple_symbol
         ):
             selection_cols.append(op.formula.columns)

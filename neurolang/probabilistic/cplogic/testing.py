@@ -19,7 +19,7 @@ from .gm_provenance_solver import (
     TRUE,
     CPLogicGraphicalModelProvenanceSolver,
     ProbabilityOperation,
-    SymbolicTupleEquality,
+    TupleEqualSymbol,
     TupleSymbol,
     UnionOverTuples,
 )
@@ -130,7 +130,7 @@ class TestRAPToLaTeXTranslator(PatternWalker):
             + "\n\\right)"
         )
 
-    @add_match(Selection(..., SymbolicTupleEquality))
+    @add_match(Selection(..., TupleEqualSymbol))
     def selection_by_tuple_symbol(self, op):
         inner = self.walk(op.relation)
         inner = "\n".join("  " + x for x in inner.split("\n"))

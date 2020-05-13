@@ -3,15 +3,15 @@ import pytest
 from ....datalog import Fact
 from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Union
-from ....relational_algebra import NaturalJoin, RenameColumns
+from ....relational_algebra import NaturalJoin, RenameColumns, Selection
 from ....relational_algebra_provenance import (
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
 )
 from .. import testing
 from ..gm_provenance_solver import (
-    SymbolicTupleEquality,
     SelectionOutPusher,
+    TupleEqualSymbol,
     UnionOverTuples,
     UnionRemover,
     solve_succ_query,
@@ -217,7 +217,7 @@ def test_simple_probchoice():
     assert isinstance(result_rap_exp.relation, NaturalJoin)
     assert isinstance(result_rap_exp.relation.relation_left, Selection)
     assert isinstance(
-        result_rap_exp.relation.relation_left.formula, SymbolicTupleEquality
+        result_rap_exp.relation.relation_left.formula, TupleEqualSymbol
     )
     assert isinstance(result_rap_exp.relation.relation_right, RenameColumns)
     assert isinstance(
@@ -225,7 +225,7 @@ def test_simple_probchoice():
     )
     assert isinstance(
         result_rap_exp.relation.relation_right.relation.formula,
-        SymbolicTupleEquality,
+        TupleEqualSymbol,
     )
     return
     result = solve_succ_query(P(x), cpl_program)
