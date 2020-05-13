@@ -33,15 +33,6 @@ a = Constant("a")
 b = Constant("b")
 
 
-LATEX_TEMPLATE = r"""
-{}
-\\
-{}
-\\
-{}
-"""
-
-
 def test_deterministic():
     """
     We define the program
@@ -210,25 +201,10 @@ def test_simple_probchoice():
         cpl_program.add_probabilistic_choice_from_tuples(
             pred_symb, pchoice_as_set
         )
-    result_rap_exp, latex = testing.get_succ_query_rap_expression(
-        P(x), cpl_program
-    )
-    assert isinstance(result_rap_exp, UnionOverTuples)
-    assert isinstance(result_rap_exp.relation, NaturalJoin)
-    assert isinstance(result_rap_exp.relation.relation_left, Selection)
-    assert isinstance(
-        result_rap_exp.relation.relation_left.formula, TupleEqualSymbol
-    )
-    assert isinstance(result_rap_exp.relation.relation_right, RenameColumns)
-    assert isinstance(
-        result_rap_exp.relation.relation_right.relation, Selection
-    )
-    assert isinstance(
-        result_rap_exp.relation.relation_right.relation.formula,
-        TupleEqualSymbol,
-    )
-    return
-    result = solve_succ_query(P(x), cpl_program)
+    qpred = P(x)
+    exp, result = testing.inspect_resolution(qpred, cpl_program)
+    assert isinstance(exp, RenameColumns)
+    assert isinstance(exp.relation, UnionOverTuples)
     expected = testing.make_prov_set([(0.2, "a"), (0.8, "b"),], ("_p_", "x"),)
     assert testing.eq_prov_relations(result, expected)
 
@@ -245,23 +221,32 @@ def test_mutual_exclusivity():
     for pred_symb, pfact_set in pfact_sets.items():
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
     cpl_program.walk(code)
-    gm = testing.build_gm(cpl_program)
-    result_rap_exp, latex = testing.get_succ_query_rap_expression(
-        Z(x, y), cpl_program
-    )
-    spusher = SelectionOutPusher()
-    sexp = spusher.walk(result_rap_exp)
-    slatex = testing.rap_expression_to_latex(sexp, cpl_program, gm)
-    uremover = UnionRemover()
-    uexp = uremover.walk(sexp)
-    ulatex = testing.rap_expression_to_latex(uexp, cpl_program, gm)
-    with open("/tmp/exp.tex", "w") as f:
-        f.write(LATEX_TEMPLATE.format(latex, slatex, ulatex))
-    assert isinstance(result_rap_exp, UnionOverTuples)
-    assert isinstance(result_rap_exp.relation, NaturalJoin)
-    assert isinstance(result_rap_exp.relation.relation_right, RenameColumns)
-    solver = RelationalAlgebraProvenanceCountingSolver()
-    result = solver.walk(uexp)
+    qpred = Z(x, y)
+    exp, result = testing.inspect_resolution(qpred, cpl_program)
+    assert isinstance(exp, RenameColumns)
+    assert isinstance(exp.relation, UnionOverTuples)
+    expected = testing.make_prov_set([], ("_p_", "x", "y"))
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_multiple_probchoices_mutual_exclusivity():
+    pchoice_as_sets = {
+        P: {(0.2, "a"), (0.8, "b")},
+        Q: {(0.5, "a", "b"), (0.4, "b", "c"), (0.1, "b", "b")},
+    }
+    rule = Implication(Z(x, y), Conjunction((P(x), Q(y, y))))
+    code = Union((rule,))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    cpl_program.walk(code)
+    __import__('pdb').set_trace()
+    qpred = Z(x, y)
+    exp, result = testing.inspect_resolution(qpred, cpl_program)
+    assert isinstance(exp, RenameColumns)
+    assert isinstance(exp.relation, UnionOverTuples)
     expected = testing.make_prov_set([], ("_p_", "x", "y"))
     assert testing.eq_prov_relations(result, expected)
 

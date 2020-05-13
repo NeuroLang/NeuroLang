@@ -13,15 +13,21 @@ from ...relational_algebra import (
     Selection,
     str2columnstr_constant,
 )
-from ...relational_algebra_provenance import ProvenanceAlgebraSet
+from ...relational_algebra_provenance import (
+    ProvenanceAlgebraSet,
+    RelationalAlgebraProvenanceCountingSolver,
+)
 from .cplogic_to_gm import CPLogicGroundingToGraphicalModelTranslator
 from .gm_provenance_solver import (
     TRUE,
     CPLogicGraphicalModelProvenanceSolver,
     ProbabilityOperation,
+    SelectionOutPusher,
     TupleEqualSymbol,
     TupleSymbol,
     UnionOverTuples,
+    UnionRemover,
+    rename_columns_for_args_to_match,
 )
 from .grounding import (
     get_predicate_from_grounded_expression,
@@ -224,3 +230,31 @@ def rap_expression_to_latex(exp, cpl_program, graphical_model):
     walker = TestRAPToLaTeXTranslator(cpl_program, graphical_model)
     latex = walker.walk(exp)
     return latex
+
+
+def inspect_resolution(qpred, cpl_program, tex_out_path="/tmp/inspect.tex"):
+    grounded = ground_cplogic_program(cpl_program)
+    translator = CPLogicGroundingToGraphicalModelTranslator()
+    gm = translator.walk(grounded)
+    qpred_symb = qpred.functor
+    qpred_args = qpred.args
+    solver = CPLogicGraphicalModelProvenanceSolver(gm)
+    query_node = gm.get_node(qpred_symb)
+    exp = solver.walk(ProbabilityOperation((query_node, TRUE), tuple()))
+    result_args = get_predicate_from_grounded_expression(
+        query_node.expression
+    ).args
+    exp = rename_columns_for_args_to_match(exp, result_args, qpred_args)
+    latex = rap_expression_to_latex(exp, cpl_program, gm)
+    gm = build_gm(cpl_program)
+    spusher = SelectionOutPusher()
+    sexp = spusher.walk(exp)
+    slatex = rap_expression_to_latex(sexp, cpl_program, gm)
+    uremover = UnionRemover()
+    uexp = uremover.walk(sexp)
+    ulatex = rap_expression_to_latex(uexp, cpl_program, gm)
+    with open(tex_out_path, "w") as f:
+        f.write("\n\\\\\n".join([latex, slatex, ulatex]) + "\n")
+    solver = RelationalAlgebraProvenanceCountingSolver()
+    result = solver.walk(uexp)
+    return exp, result

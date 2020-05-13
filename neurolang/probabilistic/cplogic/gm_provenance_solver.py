@@ -181,6 +181,14 @@ class TupleEqualSymbol(Definition):
         self.columns = columns
         self.tuple_symbol = tuple_symbol
 
+    def __repr__(self):
+        return (
+            "("
+            + ", ".join(c.value for c in self.columns)
+            + ") = ("
+            + self.tuple_symbol.name
+        )
+
 
 def ra_binary_to_nary(op):
     def nary_op(relations):
@@ -383,9 +391,7 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         prov_set.__debug_expression__ = choice_node.expression
         return Selection(
             prov_set,
-            TupleEqualSymbol(
-                prov_set.non_provenance_columns, choice_value
-            ),
+            TupleEqualSymbol(prov_set.non_provenance_columns, choice_value),
         )
 
     @add_match(
@@ -403,9 +409,7 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         relation.__debug_alway_true__ = True
         relation = Selection(
             relation,
-            TupleEqualSymbol(
-                relation.non_provenance_columns, choice_value
-            ),
+            TupleEqualSymbol(relation.non_provenance_columns, choice_value),
         )
         return relation
 
@@ -428,7 +432,7 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         for choice_node_symb, tupl_symb in chosen_tuple_symbs.items():
             relation = UnionOverTuples(relation, tupl_symb)
             relation.__debug_expression__ = self.graphical_model.get_node(
-                the_node_symb
+                choice_node_symb
             ).expression
         return relation
 
@@ -531,9 +535,7 @@ class SelectionOutPusher(ExpressionWalker):
         )
 
     @add_match(
-        Selection(
-            Selection(..., TupleEqualSymbol), TupleEqualSymbol
-        ),
+        Selection(Selection(..., TupleEqualSymbol), TupleEqualSymbol),
         lambda exp: (
             exp.formula.columns == exp.relation.formula.columns
             and exp.formula.tuple_symbol == exp.relation.formula.tuple_symbol
@@ -541,6 +543,26 @@ class SelectionOutPusher(ExpressionWalker):
     )
     def nested_same_selection(self, op):
         return op.relation
+
+    @add_match(
+        Selection(Selection(..., TupleEqualSymbol), TupleEqualSymbol),
+        lambda exp: (
+            exp.relation.formula.tuple_symbol != exp.formula.tuple_symbol
+        ),
+    )
+    def nested_selections_not_same_tuple_symbol(self, op):
+        return Selection(
+            Selection(op.relation.relation, op.formula), op.relation.formula
+        )
+
+    @add_match(
+        UnionOverTuples(Selection(..., TupleEqualSymbol), ...),
+        lambda exp: exp.relation.formula.tuple_symbol != exp.tuple_symbol,
+    )
+    def union_of_selection_not_same_tuple_symbol(self, op):
+        union = UnionOverTuples(op.relation.relation, op.tuple_symbol)
+        union.__debug_expression__ = getattr(op, "__debug_expression__", None)
+        return Selection(union, op.relation.formula,)
 
     @add_match(RelationalAlgebraOperation)
     def ra_operation(self, op):
