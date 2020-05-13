@@ -69,4 +69,10 @@ PACKAGE_DATA = {
     'neurolang': [pjoin('data', '*')],
     'frontend': [pjoin('neurosynth_data', '*')]
 }
-REQUIRES = ["numpy"]
+
+
+with open('requirements.txt') as requirements:
+    REQUIRES = [
+        r.strip() for r in requirements.readlines()
+        if not r.strip().startswith('#')
+    ]
