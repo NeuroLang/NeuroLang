@@ -35,6 +35,7 @@ from .grounding import (
 )
 
 TRUE = Constant[bool](True, verify_type=False, auto_infer_type=False)
+EQUAL = Constant(operator.eq)
 
 
 def rename_columns_for_args_to_match(relation, current_args, desired_args):
@@ -498,7 +499,7 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
 def _choice_tuple_selection(prov_set, chosen_tuple_symbs):
     for arg, symbol in chosen_tuple_symbs:
         args = (str2columnstr_constant(arg.name), symbol)
-        selection_formula = FunctionApplication(Constant(operator.eq), args)
+        selection_formula = FunctionApplication(EQUAL, args)
         prov_set = Selection(prov_set, selection_formula)
     return prov_set
 
@@ -508,9 +509,7 @@ class ProvenanceExpressionSimplifier(ExpressionWalker):
         RenameColumns(
             Selection(
                 ...,
-                FunctionApplication(
-                    Constant(operator.eq), (Constant[ColumnStr], Symbol),
-                ),
+                FunctionApplication(EQUAL, (Constant[ColumnStr], Symbol),),
             ),
             ...,
         )
@@ -535,8 +534,7 @@ class ProvenanceExpressionSimplifier(ExpressionWalker):
             Selection(
                 ...,
                 FunctionApplication(
-                    Constant(operator.eq),
-                    (Constant[ColumnStr], UnionOverTuplesSymbol),
+                    EQUAL, (Constant[ColumnStr], UnionOverTuplesSymbol),
                 ),
             ),
             ...,
@@ -556,8 +554,7 @@ class ProvenanceExpressionSimplifier(ExpressionWalker):
             Selection(
                 ...,
                 FunctionApplication(
-                    Constant(operator.eq),
-                    (Constant[ColumnStr], UnionOverTuplesSymbol),
+                    EQUAL, (Constant[ColumnStr], UnionOverTuplesSymbol),
                 ),
             ),
         )
@@ -570,49 +567,49 @@ class ProvenanceExpressionSimplifier(ExpressionWalker):
             njoin.relation_right.formula,
         )
 
-    @add_match(Selection(Selection, ...))
-    def merge_selections_with_same_rhs(self, op):
-        formulas_grpby_rhs = dict()
-        while isinstance(op, Selection):
-            rhs = op.formula.args[1]
-            if rhs not in formulas_grpby_rhs:
-                formulas_grpby_rhs[rhs] = set()
-            formulas_grpby_rhs[rhs].add(op.formula)
-            op = op.relation
-        for rhs, formulas in formulas_grpby_rhs.items():
-            formula_it = iter(formulas)
-            prev_formula = next(formula_it)
-            if len(formulas) == 1:
-                op = Selection(op, prev_formula)
-            else:
-                for formula in formula_it:
-                    op = Selection(
-                        op,
-                        FunctionApplication(
-                            Constant(operator.eq),
-                            (prev_formula.args[0], formula.args[0]),
-                        ),
-                    )
-                    prev_formula = formula
-        return op
-
     @add_match(
-        UnionOverTuples(
+        Selection(
             Selection(
                 ...,
                 FunctionApplication(
-                    Constant(operator.eq),
-                    (Constant[ColumnStr], Constant[ColumnStr]),
+                    EQUAL, (Constant[ColumnStr], UnionOverTuplesSymbol),
                 ),
             ),
-            ...,
-        )
+            FunctionApplication(
+                EQUAL, (Constant[ColumnStr], UnionOverTuplesSymbol),
+            ),
+        ),
+        lambda exp: exp.formula.args[0].value
+        > exp.relation.formula.args[0].value,
     )
-    def move_selection_outside_union(self, op):
-        selection = op.relation
-        new_union = UnionOverTuples(selection.relation, op.tuple_symbols)
-        new_union.__debug_expression__ = op.__debug_expression__
-        return Selection(new_union, selection.formula)
+    def ascending_sort_selections_by_name(self, op):
+        return Selection(
+            Selection(op.relation.relation, op.formula,), op.relation.formula,
+        )
+
+    @add_match(
+        Selection(
+            Selection(
+                ...,
+                FunctionApplication(
+                    EQUAL, (Constant[ColumnStr], UnionOverTuplesSymbol),
+                ),
+            ),
+            FunctionApplication(
+                EQUAL, (Constant[ColumnStr], UnionOverTuplesSymbol),
+            ),
+        ),
+        lambda exp: exp.formula == exp.relation.formula,
+    )
+    def merge_selections_same_formula(self, op):
+        return op.relation
+
+    @add_match(
+        Selection(..., FunctionApplication(EQUAL, (..., ...))),
+        lambda exp: exp.formula.args[0] == exp.formula.args[1],
+    )
+    def remove_selection_lhs_equal_rhs(self, selection):
+        return selection.relation
 
     @add_match(RelationalAlgebraOperation)
     def ra_operation(self, op):
