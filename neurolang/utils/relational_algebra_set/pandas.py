@@ -548,13 +548,11 @@ class NamedRelationalAlgebraFrozenSet(
             res = True
         elif len(scont.columns) == 0 and len(ocont.columns) == 0:
             res = len(scont) > 0 and len(ocont) > 0
-        elif scont is not None and ocont is not None:
+        else:
             intersection_dups = scont.merge(
                 ocont, how='outer', indicator=True
             ).iloc[:, -1]
             res = (intersection_dups == 'both').all()
-        else:
-            res = False
         return res
 
     def groupby(self, columns):

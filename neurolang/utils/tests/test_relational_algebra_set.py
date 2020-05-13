@@ -773,3 +773,10 @@ def test_rename_columns(ra_module):
     assert first.rename_columns({"x": "y", "y": "x"}) == second
     with pytest.raises(ValueError, match=r"non-existing columns: {'z'}"):
         first.rename_columns({"z": "w"})
+
+
+def test_compare_relations_duplicate_columns(ra_module):
+    relation = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("x", "x"), [(0, 2), (0, 4)],
+    )
+    assert relation == relation
