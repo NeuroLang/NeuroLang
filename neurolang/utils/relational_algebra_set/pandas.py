@@ -549,10 +549,11 @@ class NamedRelationalAlgebraFrozenSet(
         elif len(scont.columns) == 0 and len(ocont.columns) == 0:
             res = len(scont) > 0 and len(ocont) > 0
         else:
-            intersection_dups = scont.merge(
-                ocont, how='outer', indicator=True
-            ).iloc[:, -1]
-            res = (intersection_dups == 'both').all()
+            # use temporary varibale to remove duplicates from df_a only once
+            tmp = scont.drop_duplicates()
+            res = (
+                len(pd.concat([tmp, ocont]).drop_duplicates()) == len(tmp)
+            )
         return res
 
     def groupby(self, columns):

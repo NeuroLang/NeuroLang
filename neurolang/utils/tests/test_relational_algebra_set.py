@@ -775,6 +775,21 @@ def test_rename_columns(ra_module):
         first.rename_columns({"z": "w"})
 
 
+def test_equality(ra_module):
+    first = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("x", "y"), [(0, 2), (0, 4)],
+    )
+    assert first == first
+    second = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("y", "x"), [(0, 2), (0, 4)],
+    )
+    assert first != second
+    assert second != first
+    third = ra_module.NamedRelationalAlgebraFrozenSet(columns=())
+    assert first != third
+    assert third != first
+    assert third == third
+
 def test_compare_relations_duplicate_columns(ra_module):
     relation = ra_module.NamedRelationalAlgebraFrozenSet(
         ("x", "x"), [(0, 2), (0, 4)],

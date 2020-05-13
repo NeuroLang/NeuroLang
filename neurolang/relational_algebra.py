@@ -632,11 +632,11 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
             )
 
         cols = relation.columns
+        non_src_cols = tuple(c for c in cols if c != src_column)
         set_type = type(relation)
+        dst_cols = non_src_cols
         if dst_column not in cols:
-            dst_cols = cols + (dst_column,)
-        else:
-            dst_cols = cols
+            dst_cols += (dst_column,)
         result_set = set_type(columns=dst_cols)
         if len(cols) > 0:
             row_group_iterator = (t for _, t in relation.groupby(cols))
@@ -650,11 +650,14 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
                     iterable=getattr(row, src_column)
                 )
                 destroyed_set = destroyed_set | row_set
-            new_set = (
-                t
-                .projection(*cols)
-                .naturaljoin(destroyed_set)
-            )
+            if non_src_cols:
+                new_set = (
+                    t
+                    .projection(*non_src_cols)
+                    .naturaljoin(destroyed_set)
+                )
+            else:
+                new_set = destroyed_set
             result_set = result_set | new_set
         return self._build_relation_constant(result_set)
 
