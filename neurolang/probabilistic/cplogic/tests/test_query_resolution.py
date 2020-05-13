@@ -7,8 +7,9 @@ from ....relational_algebra import NaturalJoin, RenameColumns, Selection
 from ....relational_algebra_provenance import ProvenanceAlgebraSet
 from .. import testing
 from ..gm_provenance_solver import (
-    ProvenanceExpressionSimplifier,
+    SelectionOutPusher,
     UnionOverTuples,
+    UnionRemover,
     solve_succ_query,
 )
 from ..program import CPLogicProgram
@@ -26,6 +27,15 @@ y = Symbol("y")
 
 a = Constant("a")
 b = Constant("b")
+
+
+LATEX_TEMPLATE = r"""
+{}
+\\
+{}
+\\
+{}
+"""
 
 
 def test_deterministic():
@@ -228,13 +238,14 @@ def test_mutual_exclusivity():
     result_rap_exp, latex = testing.get_succ_query_rap_expression(
         Z(x, y), cpl_program
     )
-    simplifier = ProvenanceExpressionSimplifier()
-    smpl_exp = simplifier.walk(result_rap_exp)
-    smpl_latex = testing.rap_expression_to_latex(smpl_exp, cpl_program, gm)
-    with open('/tmp/exp.tex', 'w') as f:
-        f.write(latex)
-        f.write('\n\\\\\n')
-        f.write(smpl_latex)
+    spusher = SelectionOutPusher()
+    sexp = spusher.walk(result_rap_exp)
+    slatex = testing.rap_expression_to_latex(sexp, cpl_program, gm)
+    uremover = UnionRemover()
+    uexp = uremover.walk(sexp)
+    ulatex = testing.rap_expression_to_latex(uexp, cpl_program, gm)
+    with open("/tmp/exp.tex", "w") as f:
+        f.write(LATEX_TEMPLATE.format(latex, slatex, ulatex))
     assert isinstance(result_rap_exp, UnionOverTuples)
     assert isinstance(result_rap_exp.relation, NaturalJoin)
     assert isinstance(result_rap_exp.relation.relation_right, RenameColumns)

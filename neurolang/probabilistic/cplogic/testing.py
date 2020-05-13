@@ -2,26 +2,30 @@ import itertools
 
 import numpy as np
 
-from ...expressions import Constant, Symbol
-from ...expression_walker import PatternWalker
 from ...expression_pattern_matching import add_match
+from ...expression_walker import PatternWalker
+from ...expressions import Constant, Symbol
 from ...relational_algebra import (
+    ColumnStr,
     NamedRelationalAlgebraFrozenSet,
-    RenameColumns,
-    Selection,
     NaturalJoin,
+    RenameColumns,
     str2columnstr_constant,
 )
 from ...relational_algebra_provenance import ProvenanceAlgebraSet
 from .cplogic_to_gm import CPLogicGroundingToGraphicalModelTranslator
-from .grounding import get_predicate_from_grounded_expression
 from .gm_provenance_solver import (
     TRUE,
     CPLogicGraphicalModelProvenanceSolver,
     ProbabilityOperation,
+    SelectionByTupleSymbol,
+    TupleSymbol,
     UnionOverTuples,
 )
-from .grounding import ground_cplogic_program
+from .grounding import (
+    get_predicate_from_grounded_expression,
+    ground_cplogic_program,
+)
 
 
 def build_gm(cpl_program):
@@ -92,13 +96,19 @@ class TestRAPToLaTeXTranslator(PatternWalker):
         )
 
     def prettify(self, exp):
-        exp = exp.value if isinstance(exp, Constant) else exp.name
-        if not exp.startswith("fresh_"):
-            return exp
-        if exp in self.fresh_symbol_renames:
-            return self.fresh_symbol_renames[exp]
-        new_name = "s_{{{}}}".format(self.fresh_symbol_rename_count)
-        self.fresh_symbol_renames[exp] = new_name
+        name = exp.value if isinstance(exp, Constant) else exp.name
+        if not name.startswith("fresh_"):
+            return name
+        if name in self.fresh_symbol_renames:
+            return self.fresh_symbol_renames[name]
+        if isinstance(exp, TupleSymbol):
+            prefix = "\\nu"
+        elif isinstance(exp, Constant[ColumnStr]):
+            prefix = "c"
+        else:
+            prefix = "s"
+        new_name = "{}_{{{}}}".format(prefix, self.fresh_symbol_rename_count)
+        self.fresh_symbol_renames[name] = new_name
         self.fresh_symbol_rename_count += 1
         return new_name
 
@@ -119,15 +129,15 @@ class TestRAPToLaTeXTranslator(PatternWalker):
             + "\n\\right)"
         )
 
-    @add_match(Selection)
+    @add_match(SelectionByTupleSymbol)
     def selection(self, op):
         inner = self.walk(op.relation)
         inner = "\n".join("  " + x for x in inner.split("\n"))
         return (
             "\\sigma_{"
-            + "{} = {}".format(
-                self.prettify(op.formula.args[0]),
-                self.prettify(op.formula.args[1]),
+            + "({}) = {}".format(
+                ", ".join(self.prettify(c) for c in op.columns),
+                self.prettify(op.tuple_symbol),
             )
             + "}"
             + "\n\\left(\n"
@@ -170,9 +180,7 @@ class TestRAPToLaTeXTranslator(PatternWalker):
         inner = "\n".join("  " + x for x in inner.split("\n"))
         return (
             "\\bigcup_{"
-            + "({})".format(
-                ",".join(self.prettify(symb) for _, symb in op.tuple_symbols)
-            )
+            + self.prettify(op.tuple_symbol)
             + "\\in \\mathcal{{{}}}}}".format(pred_symb)
             + "\n\\left\\{\n"
             + inner
