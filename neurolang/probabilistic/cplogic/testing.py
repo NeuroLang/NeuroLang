@@ -10,6 +10,7 @@ from ...relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     NaturalJoin,
     RenameColumns,
+    Selection,
     str2columnstr_constant,
 )
 from ...relational_algebra_provenance import ProvenanceAlgebraSet
@@ -18,7 +19,7 @@ from .gm_provenance_solver import (
     TRUE,
     CPLogicGraphicalModelProvenanceSolver,
     ProbabilityOperation,
-    SelectionByTupleSymbol,
+    SymbolicTupleEquality,
     TupleSymbol,
     UnionOverTuples,
 )
@@ -129,15 +130,31 @@ class TestRAPToLaTeXTranslator(PatternWalker):
             + "\n\\right)"
         )
 
-    @add_match(SelectionByTupleSymbol)
-    def selection(self, op):
+    @add_match(Selection(..., SymbolicTupleEquality))
+    def selection_by_tuple_symbol(self, op):
         inner = self.walk(op.relation)
         inner = "\n".join("  " + x for x in inner.split("\n"))
         return (
             "\\sigma_{"
             + "({}) = {}".format(
-                ", ".join(self.prettify(c) for c in op.columns),
-                self.prettify(op.tuple_symbol),
+                ", ".join(self.prettify(c) for c in op.formula.columns),
+                self.prettify(op.formula.tuple_symbol),
+            )
+            + "}"
+            + "\n\\left(\n"
+            + inner
+            + "\n\\right)"
+        )
+
+    @add_match(Selection)
+    def selection(self, op):
+        inner = self.walk(op.relation)
+        inner = "\n".join("  " + x for x in inner.split("\n"))
+        return (
+            "\\sigma_{"
+            + "{} = {}".format(
+                self.prettify(op.formula.args[0]),
+                self.prettify(op.formula.args[1]),
             )
             + "}"
             + "\n\\left(\n"

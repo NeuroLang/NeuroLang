@@ -3,10 +3,14 @@ import pytest
 from ....datalog import Fact
 from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Union
-from ....relational_algebra import NaturalJoin, RenameColumns, Selection
-from ....relational_algebra_provenance import ProvenanceAlgebraSet
+from ....relational_algebra import NaturalJoin, RenameColumns
+from ....relational_algebra_provenance import (
+    ProvenanceAlgebraSet,
+    RelationalAlgebraProvenanceCountingSolver,
+)
 from .. import testing
 from ..gm_provenance_solver import (
+    SymbolicTupleEquality,
     SelectionOutPusher,
     UnionOverTuples,
     UnionRemover,
@@ -212,9 +216,16 @@ def test_simple_probchoice():
     assert isinstance(result_rap_exp, UnionOverTuples)
     assert isinstance(result_rap_exp.relation, NaturalJoin)
     assert isinstance(result_rap_exp.relation.relation_left, Selection)
+    assert isinstance(
+        result_rap_exp.relation.relation_left.formula, SymbolicTupleEquality
+    )
     assert isinstance(result_rap_exp.relation.relation_right, RenameColumns)
     assert isinstance(
         result_rap_exp.relation.relation_right.relation, Selection
+    )
+    assert isinstance(
+        result_rap_exp.relation.relation_right.relation.formula,
+        SymbolicTupleEquality,
     )
     return
     result = solve_succ_query(P(x), cpl_program)
@@ -249,8 +260,8 @@ def test_mutual_exclusivity():
     assert isinstance(result_rap_exp, UnionOverTuples)
     assert isinstance(result_rap_exp.relation, NaturalJoin)
     assert isinstance(result_rap_exp.relation.relation_right, RenameColumns)
-    return
-    result = solve_succ_query(Z(x, y), cpl_program)
+    solver = RelationalAlgebraProvenanceCountingSolver()
+    result = solver.walk(uexp)
     expected = testing.make_prov_set([], ("_p_", "x", "y"))
     assert testing.eq_prov_relations(result, expected)
 

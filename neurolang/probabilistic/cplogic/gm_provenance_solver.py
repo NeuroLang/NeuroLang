@@ -13,6 +13,7 @@ from ...relational_algebra import (
     RelationalAlgebraOperation,
     RelationalAlgebraSolver,
     RenameColumns,
+    Selection,
     str2columnstr_constant,
 )
 from ...relational_algebra_provenance import (
@@ -175,9 +176,8 @@ class TupleSymbol(Symbol):
     pass
 
 
-class SelectionByTupleSymbol(RelationalAlgebraOperation):
-    def __init__(self, relation, columns, tuple_symbol):
-        self.relation = relation
+class SymbolicTupleEquality(Definition):
+    def __init__(self, columns, tuple_symbol):
         self.columns = columns
         self.tuple_symbol = tuple_symbol
 
@@ -318,10 +318,11 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
             parent_relation.__debug_expression__ = cnode.expression
             parent_relation.__debug_alway_true__ = True
             if isinstance(cnode, NaryChoiceResultPlateNode):
-                parent_relation = SelectionByTupleSymbol(
+                parent_relation = Selection(
                     parent_relation,
-                    parent_relation.non_provenance_columns,
-                    cnode_value,
+                    SymbolicTupleEquality(
+                        parent_relation.non_provenance_columns, cnode_value,
+                    ),
                 )
             # ensure the names of the columns match before the natural join.
             # the renaming scheme is based on the antecedent of the
@@ -380,8 +381,11 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
             choice_node.relation.value, choice_node.probability_column,
         )
         prov_set.__debug_expression__ = choice_node.expression
-        return SelectionByTupleSymbol(
-            prov_set, prov_set.non_provenance_columns, choice_value
+        return Selection(
+            prov_set,
+            SymbolicTupleEquality(
+                prov_set.non_provenance_columns, choice_value
+            ),
         )
 
     @add_match(
@@ -397,8 +401,11 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         )
         relation.__debug_expression__ = choice_node.expression
         relation.__debug_alway_true__ = True
-        relation = SelectionByTupleSymbol(
-            relation, relation.non_provenance_columns, choice_value
+        relation = Selection(
+            relation,
+            SymbolicTupleEquality(
+                relation.non_provenance_columns, choice_value
+            ),
         )
         return relation
 
@@ -494,33 +501,46 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
 
 
 class SelectionOutPusher(ExpressionWalker):
-    @add_match(RenameColumns(SelectionByTupleSymbol, ...))
+    @add_match(RenameColumns(Selection(..., SymbolicTupleEquality), ...))
     def swap_rename_selection(self, rename):
         renames = dict(rename.renames)
         new_rename = RenameColumns(rename.relation.relation, rename.renames)
         new_selection_columns = tuple(
-            renames.get(col, col) for col in rename.relation.columns
+            renames.get(col, col) for col in rename.relation.formula.columns
         )
-        new_selection = SelectionByTupleSymbol(
-            new_rename, new_selection_columns, rename.relation.tuple_symbol
+        new_selection = Selection(
+            new_rename,
+            SymbolicTupleEquality(
+                new_selection_columns, rename.relation.formula.tuple_symbol
+            ),
         )
         return new_selection
 
-    @add_match(NaturalJoin(SelectionByTupleSymbol, ...))
+    @add_match(NaturalJoin(Selection(..., SymbolicTupleEquality), ...))
     def njoin_left_selection(self, njoin):
-        return SelectionByTupleSymbol(
+        return Selection(
             NaturalJoin(njoin.relation_left.relation, njoin.relation_right),
-            njoin.relation_left.columns,
-            njoin.relation_left.tuple_symbol,
+            njoin.relation_left.formula,
         )
 
-    @add_match(NaturalJoin(..., SelectionByTupleSymbol))
+    @add_match(NaturalJoin(..., Selection(..., SymbolicTupleEquality)))
     def njoin_right_selection(self, njoin):
-        return SelectionByTupleSymbol(
+        return Selection(
             NaturalJoin(njoin.relation_right.relation, njoin.relation_left),
-            njoin.relation_right.columns,
-            njoin.relation_right.tuple_symbol,
+            njoin.relation_right.formula,
         )
+
+    @add_match(
+        Selection(
+            Selection(..., SymbolicTupleEquality), SymbolicTupleEquality
+        ),
+        lambda exp: (
+            exp.formula.columns == exp.relation.formula.columns
+            and exp.formula.tuple_symbol == exp.relation.formula.tuple_symbol
+        ),
+    )
+    def nested_same_selection(self, op):
+        return op.relation
 
     @add_match(RelationalAlgebraOperation)
     def ra_operation(self, op):
@@ -534,14 +554,25 @@ class SelectionOutPusher(ExpressionWalker):
 
 class UnionRemover(ExpressionWalker):
     @add_match(
-        SelectionByTupleSymbol(SelectionByTupleSymbol, ..., ...),
-        lambda exp: (
-            exp.columns == exp.relation.columns
-            and exp.tuple_symbol == exp.relation.tuple_symbol
-        ),
+        UnionOverTuples(Selection(..., SymbolicTupleEquality), ...),
+        lambda exp: exp.tuple_symbol == exp.relation.formula.tuple_symbol,
     )
-    def nested_same_selection(self, op):
-        return op.relation
+    def union_of_selection_same_tuple_symbol(self, union):
+        op = union.relation
+        selection_cols = list()
+        while (
+            isinstance(op, Selection)
+            and isinstance(op.formula, SymbolicTupleEquality)
+            and op.formula.tuple_symbol == union.tuple_symbol
+        ):
+            selection_cols.append(op.formula.columns)
+            op = op.relation
+        if len(selection_cols) == 1:
+            return self.walk(union.relation.relation)
+        for i in range(1, len(selection_cols)):
+            for c1, c2 in zip(selection_cols[i - 1], selection_cols[i]):
+                op = Selection(op, EQUAL(c1, c2))
+        return self.walk(op)
 
     @add_match(RelationalAlgebraOperation)
     def ra_operation(self, op):
