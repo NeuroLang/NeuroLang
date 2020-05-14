@@ -790,8 +790,8 @@ def test_equality(ra_module):
     assert third != first
     assert third == third
 
-def test_compare_relations_duplicate_columns(ra_module):
-    relation = ra_module.NamedRelationalAlgebraFrozenSet(
-        ("x", "x"), [(0, 2), (0, 4)],
-    )
-    assert relation == relation
+def test_relation_duplicated_columns(ra_module):
+    with pytest.raises(ValueError, match=r".*Duplicated.*: {'x'}"):
+        relation = ra_module.NamedRelationalAlgebraFrozenSet(
+            ("x", "x"), [(0, 2), (0, 4)],
+        )

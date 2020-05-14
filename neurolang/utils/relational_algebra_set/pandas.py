@@ -341,7 +341,8 @@ class NamedRelationalAlgebraFrozenSet(
         if isinstance(columns, NamedRelationalAlgebraFrozenSet):
             iterable = columns
             columns = columns.columns
-
+        # ensure there is no duplicated column
+        self._check_for_duplicated_columns(columns)
         self._columns = tuple(columns)
         self._might_have_duplicates = True
         if iterable is None:
@@ -379,6 +380,20 @@ class NamedRelationalAlgebraFrozenSet(
                 raise ValueError("Relations must have the same arity")
             self._container = other._container.copy(deep=False)
             self._container.columns = self._columns
+
+    @staticmethod
+    def _check_for_duplicated_columns(columns):
+        if len(set(columns)) != len(columns):
+            seen = set()
+            dup_cols = set()
+            for col in columns:
+                if col in seen:
+                    dup_cols.add(col)
+                seen.add(col)
+            raise ValueError(
+                "Duplicated column names are not allowed. "
+                f"Found the following duplicated columns: {dup_cols}"
+            )
 
     @classmethod
     def create_view_from(cls, other):
