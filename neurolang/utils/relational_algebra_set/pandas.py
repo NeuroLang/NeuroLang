@@ -557,18 +557,17 @@ class NamedRelationalAlgebraFrozenSet(
     def __eq__(self, other):
         scont = self._container
         ocont = other._container
-        if len(scont.columns.difference(ocont.columns)) > 0:
+        if len(scont.columns.symmetric_difference(ocont.columns)) > 0:
             res = False
         elif len(scont) == 0 and len(ocont) == 0:
             res = True
         elif len(scont.columns) == 0 and len(ocont.columns) == 0:
             res = len(scont) > 0 and len(ocont) > 0
         else:
-            # use temporary varibale to remove duplicates from df_a only once
-            tmp = scont.drop_duplicates()
-            res = (
-                len(pd.concat([tmp, ocont]).drop_duplicates()) == len(tmp)
-            )
+            intersection_dups = scont.merge(
+                ocont, how='outer', indicator=True
+            ).iloc[:, -1]
+            res = (intersection_dups == 'both').all()
         return res
 
     def groupby(self, columns):
