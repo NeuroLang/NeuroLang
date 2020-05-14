@@ -532,10 +532,15 @@ class NamedRelationalAlgebraFrozenSet(
         )
 
     def rename_columns(self, renames):
-        if not set(renames).issubset(self.columns):
+        srcs, dsts = zip(*renames.items())
+        # prevent duplicated source columns
+        self._check_for_duplicated_columns(srcs)
+        # prevent duplicated destination columns
+        self._check_for_duplicated_columns(dsts)
+        if not set(srcs).issubset(self.columns):
             # get the missing source columns
             # for a more convenient error message
-            not_found_cols = set(c for c in renames if c not in self._columns)
+            not_found_cols = set(c for c in srcs if c not in self._columns)
             raise ValueError(
                 f"Cannot rename non-existing columns: {not_found_cols}"
             )
