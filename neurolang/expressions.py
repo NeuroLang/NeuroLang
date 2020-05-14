@@ -10,8 +10,6 @@ from functools import WRAPPER_ASSIGNMENTS, lru_cache, wraps
 from itertools import chain
 from warnings import warn
 
-import numpy as np
-
 from .exceptions import NeuroLangException
 from .type_system import NeuroLangTypeException, Unknown
 from .type_system import get_args as get_type_args
@@ -391,13 +389,13 @@ class Symbol(NonConstant):
             with lock:
                 fresh = f'fresh_{i:08}'
                 i += 1
-            yield Symbol(fresh)
+            yield fresh
 
     @classmethod
     def fresh(cls):
         if not hasattr(Symbol, '_fresh_generator_'):
             Symbol._fresh_generator_ = Symbol._fresh_generator()
-        new_symbol = next(Symbol._fresh_generator_)
+        new_symbol = cls(next(Symbol._fresh_generator_))
         if cls.type is not typing.Any:
             new_symbol = new_symbol.cast(cls.type)
         return new_symbol

@@ -1,3 +1,4 @@
+import operator
 from typing import AbstractSet, Tuple
 
 import pytest
@@ -9,6 +10,7 @@ from ..relational_algebra import (
     ColumnInt,
     ColumnStr,
     ConcatenateConstantColumn,
+    Destroy,
     EquiJoin,
     ExtendedProjection,
     ExtendedProjectionListMember,
@@ -63,6 +65,16 @@ def test_selection_columns():
     sol = RelationalAlgebraSolver().walk(s).value
 
     assert sol == R1.selection_columns({0: 1})
+
+
+def test_selection_general():
+    gt_ = C_(operator.gt)
+    r1_named = NamedRelationalAlgebraFrozenSet(('x', 'y'), R1)
+    c = C_[AbstractSet[Tuple[int, int]]](r1_named)
+    s = Selection(c, gt_(C_(ColumnStr('x')), C_(5)))
+    sol = RelationalAlgebraSolver().walk(s).value
+
+    assert sol == r1_named.selection(lambda t: t.x > 5)
 
 
 def test_projections():
@@ -637,3 +649,69 @@ def test_rename_column_empty_relation():
         NamedRelationalAlgebraFrozenSet(columns=("z", "y"))
     )
     assert result == expected
+
+
+def test_set_destroy():
+    relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=['x', 'y', 'z'],
+            iterable=[
+                (0, 1, frozenset({3, 4})),
+                (0, 2, frozenset({5})),
+            ]
+        )
+    )
+    expected_relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=['x', 'y', 'z', 'w'],
+            iterable=[
+                (0, 1, frozenset({3, 4}), 3),
+                (0, 1, frozenset({3, 4}), 4),
+                (0, 2, frozenset({5}), 5),
+            ]
+        )
+    )
+
+    destroy = Destroy(
+        relation,
+        Constant(ColumnStr('z')),
+        Constant(ColumnStr('w'))
+    )
+
+    solver = RelationalAlgebraSolver()
+    result = solver.walk(destroy)
+
+    assert result == expected_relation
+
+
+def test_set_destroy_no_grouping():
+    relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=['z'],
+            iterable=[
+                (frozenset({3, 4}),),
+                (frozenset({5}),),
+            ]
+        )
+    )
+    expected_relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=['w'],
+            iterable=[
+                (3,),
+                (4,),
+                (5,),
+            ]
+        )
+    )
+
+    destroy = Destroy(
+        relation,
+        Constant(ColumnStr('z')),
+        Constant(ColumnStr('w'))
+    )
+
+    solver = RelationalAlgebraSolver()
+    result = solver.walk(destroy)
+
+    assert result == expected_relation
