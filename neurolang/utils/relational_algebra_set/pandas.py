@@ -384,12 +384,7 @@ class NamedRelationalAlgebraFrozenSet(
     @staticmethod
     def _check_for_duplicated_columns(columns):
         if len(set(columns)) != len(columns):
-            seen = set()
-            dup_cols = set()
-            for col in columns:
-                if col in seen:
-                    dup_cols.add(col)
-                seen.add(col)
+            dup_cols = set(c for c in columns if columns.count(c) > 1)
             raise ValueError(
                 "Duplicated column names are not allowed. "
                 f"Found the following duplicated columns: {dup_cols}"
