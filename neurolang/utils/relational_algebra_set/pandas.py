@@ -341,7 +341,8 @@ class NamedRelationalAlgebraFrozenSet(
         if isinstance(columns, NamedRelationalAlgebraFrozenSet):
             iterable = columns
             columns = columns.columns
-
+        # ensure there is no duplicated column
+        self._check_for_duplicated_columns(columns)
         self._columns = tuple(columns)
         self._might_have_duplicates = True
         if iterable is None:
@@ -379,6 +380,15 @@ class NamedRelationalAlgebraFrozenSet(
                 raise ValueError("Relations must have the same arity")
             self._container = other._container.copy(deep=False)
             self._container.columns = self._columns
+
+    @staticmethod
+    def _check_for_duplicated_columns(columns):
+        if len(set(columns)) != len(columns):
+            dup_cols = set(c for c in columns if columns.count(c) > 1)
+            raise ValueError(
+                "Duplicated column names are not allowed. "
+                f"Found the following duplicated columns: {dup_cols}"
+            )
 
     @classmethod
     def create_view_from(cls, other):
@@ -542,19 +552,17 @@ class NamedRelationalAlgebraFrozenSet(
     def __eq__(self, other):
         scont = self._container
         ocont = other._container
-        if len(scont.columns.difference(ocont.columns)) > 0:
+        if len(scont.columns.symmetric_difference(ocont.columns)) > 0:
             res = False
         elif len(scont) == 0 and len(ocont) == 0:
             res = True
         elif len(scont.columns) == 0 and len(ocont.columns) == 0:
             res = len(scont) > 0 and len(ocont) > 0
-        elif scont is not None and ocont is not None:
+        else:
             intersection_dups = scont.merge(
                 ocont, how='outer', indicator=True
             ).iloc[:, -1]
             res = (intersection_dups == 'both').all()
-        else:
-            res = False
         return res
 
     def groupby(self, columns):

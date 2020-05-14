@@ -696,11 +696,11 @@ def test_set_destroy_no_grouping():
     )
     expected_relation = Constant[AbstractSet](
         NamedRelationalAlgebraFrozenSet(
-            columns=['w'],
+            columns=['z', 'w'],
             iterable=[
-                (3,),
-                (4,),
-                (5,),
+                (frozenset({3, 4}), 3,),
+                (frozenset({3, 4}), 4,),
+                (frozenset({5}), 5,),
             ]
         )
     )
