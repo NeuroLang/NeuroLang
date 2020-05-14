@@ -550,9 +550,9 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
     def ra_rename_columns(self, rename_columns):
         relation = self.walk(rename_columns.relation)
         new_set = relation.value
-        renames = {
-            src.value: dst.value for src, dst in rename_columns.renames
-        }
+        renames = tuple(
+            (src.value, dst.value) for src, dst in rename_columns.renames
+        )
         new_set = new_set.rename_columns(renames)
         return self._build_relation_constant(new_set)
 

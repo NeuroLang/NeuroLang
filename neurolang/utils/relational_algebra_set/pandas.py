@@ -532,7 +532,7 @@ class NamedRelationalAlgebraFrozenSet(
         )
 
     def rename_columns(self, renames):
-        srcs, dsts = zip(*renames.items())
+        srcs, dsts = zip(*renames)
         # prevent duplicated source columns
         self._check_for_duplicated_columns(srcs)
         # prevent duplicated destination columns
@@ -544,6 +544,7 @@ class NamedRelationalAlgebraFrozenSet(
             raise ValueError(
                 f"Cannot rename non-existing columns: {not_found_cols}"
             )
+        renames = dict(renames)
         new_columns = tuple(
             renames.get(col, col) for col in self._columns
         )
