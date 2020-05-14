@@ -1,6 +1,6 @@
-from ...expressions import Symbol, Constant, FunctionApplication
+from ....expressions import Symbol, Constant, FunctionApplication as Fa
+from ....expression_walker import PatternWalker, add_match
 from ..chart_parser import Grammar, add_rule, ChartParser, _lu
-from ...expression_walker import PatternWalker, add_match
 
 
 S = Symbol("S")
@@ -20,7 +20,7 @@ singular = Constant("singular")
 class TestGrammar(Grammar):
     @add_rule(NP(a), VP(a), root=True)
     def s(self, np, vp):
-        return S(np.args[0])  # this could look better if unified too
+        return S(np.args[0])
 
     @add_rule(V(a), NP(b))
     def vp(self, v, np):
@@ -79,27 +79,27 @@ def test_parse():
 
 
 class TestGrammarWalker(PatternWalker):
-    @add_match(FunctionApplication(FunctionApplication(S, ...), ...))
+    @add_match(Fa(Fa(S, ...), ...))
     def s(self, exp):
         (np, vp) = exp.args
         return self.walk(np) + " " + self.walk(vp)
 
-    @add_match(FunctionApplication(FunctionApplication(NP, ...), ...))
+    @add_match(Fa(Fa(NP, ...), ...))
     def np_proper(self, exp):
         (pn,) = exp.args
         return self.walk(pn)
 
-    @add_match(FunctionApplication(FunctionApplication(VP, ...), ...))
+    @add_match(Fa(Fa(VP, ...), ...))
     def vp(self, exp):
         (v, np) = exp.args
         return self.walk(v) + " " + self.walk(np)
 
-    @add_match(FunctionApplication(FunctionApplication(PN, ...), ...))
+    @add_match(Fa(Fa(PN, ...), ...))
     def pn(self, exp):
         (w,) = exp.args
         return w.value
 
-    @add_match(FunctionApplication(FunctionApplication(V, ...), ...))
+    @add_match(Fa(Fa(V, ...), ...))
     def v(self, exp):
         (w,) = exp.args
         return w.value
@@ -115,22 +115,22 @@ def test_walk_parsed():
 
 
 class TestGrammarWalker2(TestGrammarWalker):
-    @add_match(FunctionApplication(V(singular), ...))
+    @add_match(Fa(V(singular), ...))
     def v_sing(self, exp):
         return "SV"
 
     @add_match(
-        FunctionApplication(FunctionApplication(NP, ...), (..., "and", ...,),)
+        Fa(Fa(NP, ...), (..., "and", ...,),)
     )
     def np_conj(self, exp):
         (pn1, c, pn2) = exp.args
         return self.walk(pn1) + " and " + self.walk(pn2)
 
-    @add_match(FunctionApplication(V(plural), ...))
+    @add_match(Fa(V(plural), ...))
     def v_plur(self, exp):
         return "PV"
 
-    @add_match(FunctionApplication(FunctionApplication(PN, ...), ...))
+    @add_match(Fa(Fa(PN, ...), ...))
     def pn_(self, exp):
         (num,) = exp.functor.args
         return "SN" if num == singular else "PN"
