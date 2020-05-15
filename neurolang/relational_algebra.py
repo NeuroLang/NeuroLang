@@ -554,9 +554,9 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
             raise ValueError("Cannot have duplicated source columns")
         relation = self.walk(rename_columns.relation)
         new_set = relation.value
-        renames = dict(
-            (src.value, dst.value) for src, dst in rename_columns.renames
-        )
+        renames = {
+            src.value: dst.value for src, dst in rename_columns.renames
+        }
         new_set = new_set.rename_columns(renames)
         return self._build_relation_constant(new_set)
 
