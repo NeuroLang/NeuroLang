@@ -765,24 +765,22 @@ def test_rename_columns(ra_module):
     first = ra_module.NamedRelationalAlgebraFrozenSet(
         ("x", "y"), [(0, 2), (0, 4)],
     )
-    assert first.rename_columns((("x", "x"),)) == first
-    assert id(first.rename_columns((("x", "x"),))) != id(first)
+    assert first.rename_columns({"x": "x"}) == first
+    assert id(first.rename_columns({"x": "x"})) != id(first)
     second = ra_module.NamedRelationalAlgebraFrozenSet(
         ("y", "x"), [(0, 2), (0, 4)],
     )
-    assert first.rename_columns((("x", "y"), ("y", "x"))) == second
+    assert first.rename_columns({"x": "y", "y": "x"}) == second
     with pytest.raises(ValueError, match=r"non-existing columns: {'z'}"):
-        first.rename_columns((("z", "w"),))
+        first.rename_columns({"z": "w"})
 
 
 def test_rename_columns_duplicates(ra_module):
     first = ra_module.NamedRelationalAlgebraFrozenSet(
         ("x", "y"), [(0, 2), (0, 4)],
     )
-    with pytest.raises(ValueError, match=r"Duplicated.*{'x'}"):
-        first.rename_columns((("x", "z"), ("x", "w")))
     with pytest.raises(ValueError, match=r"Duplicated.*{'z'}"):
-        first.rename_columns((("x", "z"), ("y", "z")))
+        first.rename_columns({"x": "z", "y": "z"})
 
 
 def test_equality(ra_module):
