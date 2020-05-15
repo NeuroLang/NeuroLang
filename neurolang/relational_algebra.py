@@ -548,6 +548,10 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
 
     @ew.add_match(RenameColumns)
     def ra_rename_columns(self, rename_columns):
+        if len(set(c for c, _ in rename_columns.renames)) < len(
+            rename_columns.renames
+        ):
+            raise ValueError("Cannot have duplicated source columns")
         relation = self.walk(rename_columns.relation)
         new_set = relation.value
         renames = {

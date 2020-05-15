@@ -24,6 +24,7 @@ from ..relational_algebra import (
     RenameColumn,
     RenameColumns,
     Selection,
+    str2columnstr_constant,
     Union,
     eq_,
     _const_relation_type_is_known,
@@ -616,6 +617,15 @@ def test_rename_columns():
     solver = RelationalAlgebraSolver()
     result = solver.walk(rename)
     assert result == expected
+    with pytest.raises(ValueError):
+        rename = RenameColumns(
+            relation,
+            (
+                (str2columnstr_constant("a"), str2columnstr_constant("y")),
+                (str2columnstr_constant("a"), str2columnstr_constant("z")),
+            ),
+        )
+        solver.walk(rename)
 
 
 def test_rename_columns_empty_relation():
