@@ -384,6 +384,7 @@ class NamedRelationalAlgebraFrozenSet(
     @staticmethod
     def _check_for_duplicated_columns(columns):
         if len(set(columns)) != len(columns):
+            columns = list(columns)
             dup_cols = set(c for c in columns if columns.count(c) > 1)
             raise ValueError(
                 "Duplicated column names are not allowed. "
@@ -532,6 +533,8 @@ class NamedRelationalAlgebraFrozenSet(
         )
 
     def rename_columns(self, renames):
+        # prevent duplicated destination columns
+        self._check_for_duplicated_columns(renames.values())
         if not set(renames).issubset(self.columns):
             # get the missing source columns
             # for a more convenient error message

@@ -775,6 +775,14 @@ def test_rename_columns(ra_module):
         first.rename_columns({"z": "w"})
 
 
+def test_rename_columns_duplicates(ra_module):
+    first = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("x", "y"), [(0, 2), (0, 4)],
+    )
+    with pytest.raises(ValueError, match=r"Duplicated.*{'z'}"):
+        first.rename_columns({"x": "z", "y": "z"})
+
+
 def test_equality(ra_module):
     first = ra_module.NamedRelationalAlgebraFrozenSet(
         ("x", "y"), [(0, 2), (0, 4)],
