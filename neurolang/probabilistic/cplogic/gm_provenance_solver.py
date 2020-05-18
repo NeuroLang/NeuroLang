@@ -65,11 +65,10 @@ def rename_columns_for_args_to_match(relation, src_args, dst_args):
         if len(idxs) > 1:
             for idx in idxs[1:]:
                 result = Selection(result, EQUAL(src_cols[idx], dst_col))
-            result = Projection(result, (dst_col,))
     return result
 
 
-def build_always_true_provenance_relation(relation, prob_col):
+def build_always_true_provenance_relation(relation, prob_col=None):
     """
     Construct a provenance set from a relation with probabilities of 1
     for all tuples in the relation.
@@ -92,8 +91,10 @@ def build_always_true_provenance_relation(relation, prob_col):
     ProvenanceAlgebraSet
 
     """
+    if prob_col is None:
+        prob_col = str2columnstr_constant(Symbol.fresh().name)
     # remove the probability column if it is already there
-    if prob_col.value in relation.value.columns:
+    elif prob_col.value in relation.value.columns:
         kept_cols = tuple(
             str2columnstr_constant(col)
             for col in relation.value.columns
@@ -188,8 +189,12 @@ def solve_succ_query(query_predicate, cpl_program):
     result = selection_pusher.walk(result)
     union_remover = UnionRemover()
     result = union_remover.walk(result)
+    result = Projection(
+        result, tuple(str2columnstr_constant(arg.name) for arg in qpred_args)
+    )
     solver = RelationalAlgebraProvenanceCountingSolver()
-    return solver.walk(result)
+    result = solver.walk(result)
+    return result
 
 
 class UnionOverTuples(RelationalAlgebraOperation):
@@ -281,6 +286,16 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
 
     def __init__(self, graphical_model):
         self.graphical_model = graphical_model
+
+    @add_match((ProbabilisticPlateNode, TRUE))
+    def node_always_true(self, tupl):
+        node = tupl[0]
+        prov_set = build_always_true_provenance_relation(
+            node.relation, node.probability_column
+        )
+        prov_set.__debug_expression__ = node.expression
+        prov_set.__debug_alway_true__ = True
+        return prov_set
 
     @add_match(ProbabilityOperation((BernoulliPlateNode, TRUE), tuple()))
     def bernoulli_probability(self, operation):

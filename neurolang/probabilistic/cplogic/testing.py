@@ -78,22 +78,6 @@ def make_prov_set(iterable, columns):
     )
 
 
-def get_succ_query_rap_expression(query_predicate, cpl_program):
-    grounded = ground_cplogic_program(cpl_program)
-    translator = CPLogicGroundingToGraphicalModelTranslator()
-    gm = translator.walk(grounded)
-    qpred_symb = query_predicate.functor
-    solver = CPLogicGraphicalModelProvenanceSolver(gm)
-    query_node = gm.get_node(qpred_symb)
-    marginal_provenance_expression = solver.walk(
-        ProbabilityOperation((query_node, TRUE), tuple())
-    )
-    latex = rap_expression_to_latex(
-        marginal_provenance_expression, cpl_program, gm
-    )
-    return marginal_provenance_expression, latex
-
-
 class TestRAPToLaTeXTranslator(PatternWalker):
     def __init__(self, cpl_program, graphical_model):
         self.cpl_program = cpl_program
@@ -268,8 +252,11 @@ def inspect_resolution(qpred, cpl_program, tex_out_path="/tmp/inspect.tex"):
     ulatex = rap_expression_to_latex(uexp, cpl_program, gm)
     with open(tex_out_path, "w") as f:
         f.write("\n\\\\\n".join([latex, slatex, ulatex]) + "\n")
+    result = Projection(
+        uexp, tuple(str2columnstr_constant(arg.name) for arg in qpred_args)
+    )
     solver = RelationalAlgebraProvenanceCountingSolver()
-    result = solver.walk(uexp)
+    result = solver.walk(result)
     return exp, result
 
 
