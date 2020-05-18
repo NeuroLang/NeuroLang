@@ -8,7 +8,7 @@ _eg = EnglishGrammar(BaseLexicon())
 _cp = ChartParser(_eg)
 
 
-def test_indefinite_verb():
+def test_indefinite_noun_phrase():
     t = _cp.parse("every book has an ending")[0]
     assert t == S(num.singular)(
         NP(num.singular, gen.thing)(
@@ -25,7 +25,7 @@ def test_indefinite_verb():
     )
 
 
-def test_indefinite_verb_2():
+def test_indefinite_noun_phrase_2():
     t = _cp.parse("Jones and a man like the book")[0]
     g = t.args[0].functor.args[1]
     e = S(num.plural)(

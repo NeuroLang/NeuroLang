@@ -1,6 +1,6 @@
 from ...expressions import Expression, Symbol, FunctionApplication as Fa
 from ...expression_walker import add_match, ExpressionWalker
-from .english_grammar import S, V, NP, VP, PN
+from .english_grammar import S, V, NP, VP, PN, DET, N
 
 
 def indent(s, tab="    "):
@@ -75,3 +75,17 @@ class DRSBuilder(ExpressionWalker):
         exp = Symbol(v.args[0].value)(subject, object_)
         self.trace.append(exp)
         return self.walk(DRS((), (exp,)))
+
+    @add_match(
+        Fa(Fa(NP, ...), (
+            Fa(Fa(DET, ...), ...),
+            Fa(Fa(N, ...), ...),
+        )),
+        lambda np: np.args[0].args[0].value in ['a', 'an']
+    )
+    def indefinite_noun_phrase(self, np):
+        (det, n) = np.args
+        x = Symbol.fresh()
+        exp = Symbol(n.args[0].value)(x)
+        self.trace.append(exp)
+        return self.walk(DRS((x,), (x, exp)))
