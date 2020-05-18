@@ -474,9 +474,10 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         node = self.graphical_model.get_node(node_symb)
         expression = node.expression
         if isinstance(node, AndPlateNode):
-            pred_symb_to_args = self._get_implication_pred_symb_to_args(
-                expression
-            )
+            pred_symb_to_args = {
+                pred.functor: pred.args
+                for pred in extract_logic_predicates(expression.antecedent)
+            }
             get_dst_args = pred_symb_to_args.get
         else:
             args = get_predicate_from_grounded_expression(expression).args
@@ -540,13 +541,6 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
             )
             return chosen_tuple_symbs[choice_node_symb]
         return TRUE
-
-    @staticmethod
-    def _get_implication_pred_symb_to_args(implication):
-        return {
-            pred.functor: pred.args
-            for pred in extract_logic_predicates(implication.antecedent)
-        }
 
 
 class ProvenanceExpressionTransformer(ExpressionWalker):
