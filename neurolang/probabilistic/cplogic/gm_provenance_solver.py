@@ -70,6 +70,28 @@ def rename_columns_for_args_to_match(relation, current_args, desired_args):
 
 
 def build_always_true_provenance_relation(relation, prob_col):
+    """
+    Construct a provenance set from a relation with probabilities of 1
+    for all tuples in the relation.
+
+    The provenance column is named after the ``prob_col`` argument. If
+    ``prob_col`` is already in the columns of the relation, it is
+    removed before being re-added.
+
+    Parameters
+    ----------
+    relation : NamedRelationalAlgebraFrozenSet
+        The relation containing the tuples that will be in the
+        resulting provenance set.
+    prob_col : Constant[ColumnStr]
+        Name of the provenance column that will contain constant
+        probabilities of 1.
+
+    Returns
+    -------
+    ProvenanceAlgebraSet
+
+    """
     # remove the probability column if it is already there
     if prob_col.value in relation.value.columns:
         kept_cols = tuple(
@@ -436,6 +458,10 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
             ).expression
         return relation
 
+    @add_match(ProbabilityOperation)
+    def capture_unsolvable_probability_op(self, op):
+        raise RuntimeError(f"Cannot solve operation: {op}")
+
     def _build_symbolic_marg_sum_term_exp(
         self, node_symb, chosen_tuple_symbs, visited
     ):
@@ -498,10 +524,6 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
             )
             return chosen_tuple_symbs[choice_node_symb]
         return TRUE
-
-    @add_match(ProbabilityOperation)
-    def capture_unsolvable_probability_op(self, op):
-        raise RuntimeError(f"Cannot solve operation: {op}")
 
 
 class SelectionOutPusher(ExpressionWalker):

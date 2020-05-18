@@ -242,7 +242,6 @@ def test_multiple_probchoices_mutual_exclusivity():
             pred_symb, pchoice_as_set
         )
     cpl_program.walk(code)
-    __import__('pdb').set_trace()
     qpred = Z(x, y)
     exp, result = testing.inspect_resolution(qpred, cpl_program)
     assert isinstance(exp, RenameColumns)
