@@ -29,7 +29,7 @@ from .cplogic_to_gm import (
     ProbabilisticPlateNode,
 )
 from .grounding import (
-    get_predicate_from_grounded_expression,
+    get_grounded_predicate,
     ground_cplogic_program,
 )
 
@@ -179,9 +179,7 @@ def solve_succ_query(query_predicate, cpl_program):
     marginal_provenance_expression = solver.walk(
         ProbabilityOperation((query_node, TRUE), tuple())
     )
-    result_args = get_predicate_from_grounded_expression(
-        query_node.expression
-    ).args
+    result_args = get_grounded_predicate(query_node.expression).args
     result = rename_columns_for_args_to_match(
         marginal_provenance_expression, result_args, qpred_args
     )
@@ -368,9 +366,7 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         to_join = []
         for antecedent_pred in antecedent_preds:
             cnode = self.graphical_model.get_node(antecedent_pred.functor)
-            src_args = get_predicate_from_grounded_expression(
-                cnode.expression
-            ).args
+            src_args = get_grounded_predicate(cnode.expression).args
             dst_args = antecedent_pred.args
             parent_relation = rename_columns_for_args_to_match(
                 parent_relations[cnode.node_symbol], src_args, dst_args
@@ -486,7 +482,7 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
             }
             get_dst_args = pred_symb_to_args.get
         else:
-            args = get_predicate_from_grounded_expression(expression).args
+            args = get_grounded_predicate(expression).args
             get_dst_args = lambda _: args
         cnode_symbs = self.graphical_model.get_parent_node_symbols(node_symb)
         cnodes = [self.graphical_model.get_node(cns) for cns in cnode_symbs]
@@ -505,9 +501,7 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
                 cnode_symb, chosen_tuple_symbs, visited
             )
             cnode = self.graphical_model.get_node(cnode_symb)
-            src_args = get_predicate_from_grounded_expression(
-                cnode.expression
-            ).args
+            src_args = get_grounded_predicate(cnode.expression).args
             dst_args = get_dst_args(cnode_symb)
             relation = rename_columns_for_args_to_match(
                 relation, src_args, dst_args

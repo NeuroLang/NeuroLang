@@ -158,7 +158,7 @@ def ground_cplogic_program(cpl_program):
     return build_grounding(cpl_program, dl_instance)
 
 
-def get_predicate_from_grounded_expression(expression):
+def get_grounded_predicate(expression):
     if isinstance(expression, FunctionApplication):
         return expression
     elif is_probabilistic_fact(expression):
