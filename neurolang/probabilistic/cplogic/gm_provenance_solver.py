@@ -270,6 +270,12 @@ class ProbabilityOperation(Definition):
         )
 
 
+class NodeValue(Definition):
+    def __init__(self, node, value):
+        self.node = node
+        self.value = value
+
+
 class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
     """
     Solver that constructs an RAP expression that calculates probabilities
@@ -287,14 +293,23 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
     def __init__(self, graphical_model):
         self.graphical_model = graphical_model
 
-    @add_match((ProbabilisticPlateNode, TRUE))
-    def node_always_true(self, tupl):
-        node = tupl[0]
+    @add_match(NodeValue(PlateNode, TRUE))
+    def node_always_true(self, nv):
+        prob_col = getattr(nv.node, "probability_column", None)
         prov_set = build_always_true_provenance_relation(
-            node.relation, node.probability_column
+            nv.node.relation, prob_col
         )
-        prov_set.__debug_expression__ = node.expression
+        prov_set.__debug_expression__ = nv.node.expression
         prov_set.__debug_alway_true__ = True
+        return prov_set
+
+    @add_match(NodeValue(NaryChoiceResultPlateNode, TupleSymbol))
+    def nary_choice_result(self, nv):
+        prov_set = self.walk(NodeValue(nv.node, TRUE))
+        prov_set = Selection(
+            prov_set,
+            TupleEqualSymbol(prov_set.non_provenance_columns, nv.value),
+        )
         return prov_set
 
     @add_match(ProbabilityOperation((BernoulliPlateNode, TRUE), tuple()))
@@ -342,50 +357,26 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         random variables that play a role here are boolean.
 
         """
-        cnode_symb_to_value = {
-            cnode.node_symbol: value
-            for cnode, value in operation.condition_valued_nodes
+        parent_relations = {
+            node.node_symbol: self.walk(NodeValue(node, value))
+            for node, value in operation.condition_valued_nodes
         }
         and_node = operation.valued_node[0]
-        implication = and_node.expression
-        antecedent_preds = extract_logic_predicates(implication.antecedent)
-        result = None
+        antecedent_preds = extract_logic_predicates(
+            and_node.expression.antecedent
+        )
+        to_join = []
         for antecedent_pred in antecedent_preds:
-            cnode_symb = antecedent_pred.functor
-            cnode = self.graphical_model.get_node(cnode_symb)
-            cnode_value = cnode_symb_to_value[cnode_symb]
-            if isinstance(cnode, ProbabilisticPlateNode):
-                prob_col = cnode.probability_column
-            else:
-                prob_col = str2columnstr_constant(Symbol.fresh().name)
-            parent_relation = build_always_true_provenance_relation(
-                cnode.relation, prob_col,
-            )
-            parent_relation.__debug_expression__ = cnode.expression
-            parent_relation.__debug_alway_true__ = True
-            if isinstance(cnode, NaryChoiceResultPlateNode):
-                parent_relation = Selection(
-                    parent_relation,
-                    TupleEqualSymbol(
-                        parent_relation.non_provenance_columns, cnode_value,
-                    ),
-                )
-            # ensure the names of the columns match before the natural join.
-            # the renaming scheme is based on the antecedent of the
-            # intensional rule attached to the AND node for which
-            # we wish to compute the conditional probabilities
+            cnode = self.graphical_model.get_node(antecedent_pred.functor)
             src_args = get_predicate_from_grounded_expression(
                 cnode.expression
             ).args
             dst_args = antecedent_pred.args
             parent_relation = rename_columns_for_args_to_match(
-                parent_relation, src_args, dst_args
+                parent_relations[cnode.node_symbol], src_args, dst_args
             )
-            if result is None:
-                result = parent_relation
-            else:
-                result = NaturalJoin(result, parent_relation)
-        return result
+            to_join.append(parent_relation)
+        return ra_binary_to_nary(NaturalJoin)(to_join)
 
     @add_match(ProbabilityOperation((NaryChoicePlateNode, ...), tuple()))
     def nary_choice_probability(self, operation):
