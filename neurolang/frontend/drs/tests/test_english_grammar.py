@@ -1,7 +1,7 @@
 from ....expressions import Symbol, Constant as _C
 from ....expression_walker import PatternWalker, add_match
 from ..chart_parser import ChartParser
-from ..english_grammar import EnglishGrammar, BaseLexicon, S, NP, PN, VP, V, DET, N, num, gen
+from ..english_grammar import EnglishGrammar, BaseLexicon, S, NP, PN, VP, V, DET, N, num, gen, PRO
 
 
 _eg = EnglishGrammar(BaseLexicon())
@@ -44,6 +44,22 @@ def test_indefinite_noun_phrase_2():
             NP(num.singular, gen.thing)(
                 DET(num.singular)(_C("the")),
                 N(num.singular, gen.thing)(_C("book"))
+            )
+        )
+    )
+    assert t == e
+
+
+def test_pronouns():
+    t = _cp.parse("she owns it")[0]
+    e = S(num.singular)(
+        NP(num.singular, gen.female)(
+            PRO(num.singular, gen.female)(_C("she"))
+        ),
+        VP(num.singular)(
+            V(num.singular)(_C("owns")),
+            NP(num.singular, gen.thing)(
+                PRO(num.singular, gen.thing)(_C("it")),
             )
         )
     )

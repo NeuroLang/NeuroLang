@@ -9,20 +9,21 @@ VP = Symbol("VP")
 V = Symbol("V")
 DET = Symbol("DET")
 N = Symbol("N")
+PRO = Symbol("PRO")
 
-a = Symbol("a")
-b = Symbol("b")
+n = Symbol("n")
+m = Symbol("m")
 g = Symbol("g")
 h = Symbol("h")
 w = Symbol("w")
 
 
-class num():
+class num:
     plural = Constant("plural")
     singular = Constant("singular")
 
 
-class gen():
+class gen:
     female = Constant("female")
     male = Constant("male")
     thing = Constant("thing")
@@ -33,25 +34,29 @@ class EnglishGrammar(Grammar):
         super().__init__()
         self.lexicon = lexicon
 
-    @add_rule(NP(a, g), VP(a), root=True)
+    @add_rule(NP(n, g), VP(n), root=True)
     def s(self, np, vp):
         return S(np.args[0])  # this could look better if unified too
 
-    @add_rule(V(a), NP(b, g))
+    @add_rule(V(n), NP(m, g))
     def vp(self, v, np):
         return VP(v.args[0])
 
-    @add_rule(NP(a, g), Constant("and"), NP(b, h))
+    @add_rule(NP(n, g), Constant("and"), NP(m, h))
     def np_and(self, first, _, second):
         return NP(num.plural, Symbol.fresh())
 
-    @add_rule(PN(a, g))
+    @add_rule(PN(n, g))
     def np_proper(self, pn):
         return NP(pn.args[0], pn.args[1])
 
-    @add_rule(DET(a), N(a, g))
+    @add_rule(DET(n), N(n, g))
     def np_indefinite(self, det, n):
         return NP(n.args[0], n.args[1])
+
+    @add_rule(PRO(n, g))
+    def np_pronoun(self, pro):
+        return NP(pro.args[0], pro.args[1])
 
     @add_rule(w)
     def verb_singular(self, token):
@@ -93,6 +98,16 @@ class EnglishGrammar(Grammar):
         if token.value in ["book", "donkey", "horse", "region", "ending"]:
             return N(num.singular, gen.thing)
 
+    @add_rule(w)
+    def prop(self, token):
+        props = {
+            "he": gen.male,
+            "she": gen.female,
+            "it": gen.thing,
+        }
+        if token.value in props:
+            return PRO(num.singular, props[token.value])
 
-class BaseLexicon():
+
+class BaseLexicon:
     pass
