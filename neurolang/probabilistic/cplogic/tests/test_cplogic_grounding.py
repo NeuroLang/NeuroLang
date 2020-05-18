@@ -8,10 +8,7 @@ from ....exceptions import NeuroLangException
 from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Union
 from ....utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
-from ...expression_processing import (
-    add_to_union,
-    is_probabilistic_fact,
-)
+from ...expression_processing import add_to_union, is_probabilistic_fact
 from ...expressions import (
     Grounding,
     ProbabilisticChoiceGrounding,

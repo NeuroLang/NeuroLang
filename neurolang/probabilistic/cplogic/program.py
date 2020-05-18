@@ -7,12 +7,12 @@ from ...expression_walker import ExpressionWalker, PatternWalker
 from ...expressions import Constant, Symbol
 from ...logic import Implication, Union
 from ..expression_processing import (
-    union_contains_probabilistic_facts,
+    add_to_union,
     build_probabilistic_fact_set,
     check_probabilistic_choice_set_probabilities_sum_to_one,
-    add_to_union,
     group_probabilistic_facts_by_pred_symb,
     is_probabilistic_fact,
+    union_contains_probabilistic_facts,
 )
 
 

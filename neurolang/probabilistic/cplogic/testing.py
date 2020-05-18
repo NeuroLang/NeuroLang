@@ -9,8 +9,8 @@ from ...relational_algebra import (
     ColumnStr,
     NamedRelationalAlgebraFrozenSet,
     NaturalJoin,
-    RenameColumn,
     Projection,
+    RenameColumn,
     Selection,
     str2columnstr_constant,
 )
