@@ -7,7 +7,6 @@ from ..datalog import WrappedRelationalAlgebraSet
 from ..exceptions import NeuroLangException
 from ..expressions import Constant, Expression, FunctionApplication
 from ..logic import Implication, Union
-from ..relational_algebra import Selection
 from .expressions import ProbabilisticPredicate
 
 

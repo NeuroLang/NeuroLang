@@ -9,7 +9,8 @@ from ...relational_algebra import (
     ColumnStr,
     NamedRelationalAlgebraFrozenSet,
     NaturalJoin,
-    RenameColumns,
+    RenameColumn,
+    Projection,
     Selection,
     str2columnstr_constant,
 )
@@ -119,17 +120,28 @@ class TestRAPToLaTeXTranslator(PatternWalker):
         self.fresh_symbol_rename_count += 1
         return new_name
 
-    @add_match(RenameColumns)
-    def rename_columns(self, op):
+    @add_match(Projection)
+    def projection(self, op):
         inner = self.walk(op.relation)
         inner = "\n".join("  " + x for x in inner.split("\n"))
-        rename_args = ",".join(
-            "{} / {}".format(self.prettify(src), self.prettify(dst))
-            for src, dst in op.renames
+        return (
+            "\\pi_{"
+            + ", ".join(self.prettify(c) for c in op.attributes)
+            + "}"
+            + "\n\\left(\n"
+            + inner
+            + "\n\\right)"
         )
+
+    @add_match(RenameColumn)
+    def rename_column(self, op):
+        inner = self.walk(op.relation)
+        inner = "\n".join("  " + x for x in inner.split("\n"))
         return (
             "\\rho_{"
-            + rename_args
+            + self.prettify(op.src)
+            + " / "
+            + self.prettify(op.dst)
             + "}"
             + "\n\\left(\n"
             + inner

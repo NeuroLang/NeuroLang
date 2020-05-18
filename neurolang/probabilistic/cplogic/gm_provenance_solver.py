@@ -1,6 +1,4 @@
 import operator
-from typing import Callable, Tuple
-
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker
 from ...expressions import Constant, Definition, FunctionApplication, Symbol
@@ -12,7 +10,7 @@ from ...relational_algebra import (
     Projection,
     RelationalAlgebraOperation,
     RelationalAlgebraSolver,
-    RenameColumns,
+    RenameColumn,
     Selection,
     str2columnstr_constant,
 )
@@ -38,7 +36,7 @@ TRUE = Constant[bool](True, verify_type=False, auto_infer_type=False)
 EQUAL = Constant(operator.eq)
 
 
-def rename_columns_for_args_to_match(relation, current_args, desired_args):
+def rename_columns_for_args_to_match(relation, src_args, dst_args):
     """
     Rename the columns of a relation so that they match the targeted args.
 
@@ -46,9 +44,9 @@ def rename_columns_for_args_to_match(relation, current_args, desired_args):
     ----------
     relation : ProvenanceAlgebraSet or RelationalAlgebraOperation
         The relation on which the renaming of the columns should happen.
-    current_args : tuple of Symbols
+    src_args : tuple of Symbols
         The predicate's arguments currently matching the columns.
-    desired_args : tuple of Symbols
+    dst_args : tuple of Symbols
         New args that the naming of the columns should match.
 
     Returns
@@ -57,16 +55,17 @@ def rename_columns_for_args_to_match(relation, current_args, desired_args):
         The unsolved nested operations that apply the renaming scheme.
 
     """
-    return RenameColumns(
-        relation,
-        tuple(
-            (
-                str2columnstr_constant(src_arg.name),
-                str2columnstr_constant(dst_arg.name),
-            )
-            for src_arg, dst_arg in zip(current_args, desired_args)
-        ),
-    )
+    src_cols = list(str2columnstr_constant(arg.name) for arg in src_args)
+    dst_cols = list(str2columnstr_constant(arg.name) for arg in dst_args)
+    result = relation
+    for dst_col in set(dst_cols):
+        idxs = [i for i, c in enumerate(dst_cols) if c == dst_col]
+        result = RenameColumn(result, src_cols[idxs[0]], dst_col)
+        if len(idxs) > 1:
+            for idx in idxs[1:]:
+                result = Selection(result, EQUAL(src_cols[idx], dst_col))
+            result = Projection(result, (dst_col,))
+    return result
 
 
 def build_always_true_provenance_relation(relation, prob_col):
@@ -323,21 +322,18 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         random variables that play a role here are boolean.
 
         """
-        and_node = operation.valued_node[0]
-        expression = and_node.expression
-        # map the predicate symbol of each antecedent predicate to the symbols
-        # in its arguments (TODO: handle constant terms in the arguments
-        # instead of assuming all the arguments are quantified variables)
-        pred_symb_to_child_args = {
-            pred.functor: pred.args
-            for pred in extract_logic_predicates(expression.antecedent)
+        cnode_symb_to_value = {
+            cnode.node_symbol: value
+            for cnode, value in operation.condition_valued_nodes
         }
+        and_node = operation.valued_node[0]
+        implication = and_node.expression
+        antecedent_preds = extract_logic_predicates(implication.antecedent)
         result = None
-        for cnode, cnode_value in operation.condition_valued_nodes:
-            parent_args = get_predicate_from_grounded_expression(
-                cnode.expression
-            ).args
-            child_args = pred_symb_to_child_args[cnode.node_symbol]
+        for antecedent_pred in antecedent_preds:
+            cnode_symb = antecedent_pred.functor
+            cnode = self.graphical_model.get_node(cnode_symb)
+            cnode_value = cnode_symb_to_value[cnode_symb]
             if isinstance(cnode, ProbabilisticPlateNode):
                 prob_col = cnode.probability_column
             else:
@@ -358,8 +354,12 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
             # the renaming scheme is based on the antecedent of the
             # intensional rule attached to the AND node for which
             # we wish to compute the conditional probabilities
+            src_args = get_predicate_from_grounded_expression(
+                cnode.expression
+            ).args
+            dst_args = antecedent_pred.args
             parent_relation = rename_columns_for_args_to_match(
-                parent_relation, parent_args, child_args
+                parent_relation, src_args, dst_args
             )
             if result is None:
                 result = parent_relation
@@ -467,7 +467,15 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
     ):
         visited.add(node_symb)
         node = self.graphical_model.get_node(node_symb)
-        args = get_predicate_from_grounded_expression(node.expression).args
+        expression = node.expression
+        if isinstance(node, AndPlateNode):
+            pred_symb_to_args = self._get_implication_pred_symb_to_args(
+                expression
+            )
+            get_dst_args = pred_symb_to_args.get
+        else:
+            args = get_predicate_from_grounded_expression(expression).args
+            get_dst_args = lambda _: args
         cnode_symbs = self.graphical_model.get_parent_node_symbols(node_symb)
         cnodes = [self.graphical_model.get_node(cns) for cns in cnode_symbs]
         valued_cnodes = tuple(
@@ -485,10 +493,13 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
                 cnode_symb, chosen_tuple_symbs, visited
             )
             cnode = self.graphical_model.get_node(cnode_symb)
-            cargs = get_predicate_from_grounded_expression(
+            src_args = get_predicate_from_grounded_expression(
                 cnode.expression
             ).args
-            relation = rename_columns_for_args_to_match(relation, cargs, args)
+            dst_args = get_dst_args(cnode_symb)
+            relation = rename_columns_for_args_to_match(
+                relation, src_args, dst_args
+            )
             relations.append(relation)
         return ra_binary_to_nary(NaturalJoin)(relations)
 
@@ -525,14 +536,29 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
             return chosen_tuple_symbs[choice_node_symb]
         return TRUE
 
+    @staticmethod
+    def _get_implication_pred_symb_to_args(implication):
+        return {
+            pred.functor: pred.args
+            for pred in extract_logic_predicates(implication.antecedent)
+        }
+
 
 class SelectionOutPusher(ExpressionWalker):
-    @add_match(RenameColumns(Selection(..., TupleEqualSymbol), ...))
+    @add_match(
+        RenameColumn(
+            Selection(..., TupleEqualSymbol),
+            Constant[ColumnStr],
+            Constant[ColumnStr],
+        )
+    )
     def swap_rename_selection(self, rename):
-        renames = dict(rename.renames)
-        new_rename = RenameColumns(rename.relation.relation, rename.renames)
+        new_rename = RenameColumn(
+            rename.relation.relation, rename.src, rename.dst
+        )
         new_selection_columns = tuple(
-            renames.get(col, col) for col in rename.relation.formula.columns
+            rename.dst if col == rename.src else col
+            for col in rename.relation.formula.columns
         )
         new_selection = Selection(
             new_rename,
@@ -576,6 +602,25 @@ class SelectionOutPusher(ExpressionWalker):
         return Selection(
             Selection(op.relation.relation, op.formula), op.relation.formula
         )
+
+    @add_match(
+        Selection(
+            Selection(..., TupleEqualSymbol),
+            FunctionApplication(
+                EQUAL, (Constant[ColumnStr], Constant[ColumnStr])
+            ),
+        )
+    )
+    def nested_tuple_selection(self, op):
+        return Selection(
+            Selection(op.relation.relation, op.formula), op.relation.formula
+        )
+
+    @add_match(Projection(Selection(..., TupleEqualSymbol), ...))
+    def tuple_selection_in_projection(self, op):
+        new_proj = Projection(op.relation.relation, op.attributes)
+        formula = op.relation.formula
+        return Selection(new_proj, formula)
 
     @add_match(
         UnionOverTuples(Selection(..., TupleEqualSymbol), ...),

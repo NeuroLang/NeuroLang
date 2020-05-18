@@ -3,19 +3,9 @@ import pytest
 from ....datalog import Fact
 from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Union
-from ....relational_algebra import NaturalJoin, RenameColumns, Selection
-from ....relational_algebra_provenance import (
-    ProvenanceAlgebraSet,
-    RelationalAlgebraProvenanceCountingSolver,
-)
+from ....relational_algebra import RenameColumn
 from .. import testing
-from ..gm_provenance_solver import (
-    SelectionOutPusher,
-    TupleEqualSymbol,
-    UnionOverTuples,
-    UnionRemover,
-    solve_succ_query,
-)
+from ..gm_provenance_solver import UnionOverTuples, solve_succ_query
 from ..program import CPLogicProgram
 
 P = Symbol("P")
@@ -203,7 +193,7 @@ def test_simple_probchoice():
         )
     qpred = P(x)
     exp, result = testing.inspect_resolution(qpred, cpl_program)
-    assert isinstance(exp, RenameColumns)
+    assert isinstance(exp, RenameColumn)
     assert isinstance(exp.relation, UnionOverTuples)
     expected = testing.make_prov_set([(0.2, "a"), (0.8, "b"),], ("_p_", "x"),)
     assert testing.eq_prov_relations(result, expected)
@@ -223,8 +213,9 @@ def test_mutual_exclusivity():
     cpl_program.walk(code)
     qpred = Z(x, y)
     exp, result = testing.inspect_resolution(qpred, cpl_program)
-    assert isinstance(exp, RenameColumns)
-    assert isinstance(exp.relation, UnionOverTuples)
+    assert isinstance(exp, RenameColumn)
+    assert isinstance(exp.relation, RenameColumn)
+    assert isinstance(exp.relation.relation, UnionOverTuples)
     expected = testing.make_prov_set([], ("_p_", "x", "y"))
     assert testing.eq_prov_relations(result, expected)
 
@@ -244,9 +235,12 @@ def test_multiple_probchoices_mutual_exclusivity():
     cpl_program.walk(code)
     qpred = Z(x, y)
     exp, result = testing.inspect_resolution(qpred, cpl_program)
-    assert isinstance(exp, RenameColumns)
-    assert isinstance(exp.relation, UnionOverTuples)
-    expected = testing.make_prov_set([], ("_p_", "x", "y"))
+    assert isinstance(exp, RenameColumn)
+    assert isinstance(exp.relation, RenameColumn)
+    assert isinstance(exp.relation.relation, UnionOverTuples)
+    expected = testing.make_prov_set(
+        [(0.2 * 0.1, "a", "b"), (0.8 * 0.1, "b", "b")], ("_p_", "x", "y")
+    )
     assert testing.eq_prov_relations(result, expected)
 
 
