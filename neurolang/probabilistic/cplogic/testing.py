@@ -1,3 +1,4 @@
+import contextlib
 import itertools
 
 import numpy as np
@@ -270,3 +271,13 @@ def inspect_resolution(qpred, cpl_program, tex_out_path="/tmp/inspect.tex"):
     solver = RelationalAlgebraProvenanceCountingSolver()
     result = solver.walk(uexp)
     return exp, result
+
+
+@contextlib.contextmanager
+def temp_seed(seed):
+    state = np.random.get_state()
+    np.random.seed(seed)
+    try:
+        yield
+    finally:
+        np.random.set_state(state)

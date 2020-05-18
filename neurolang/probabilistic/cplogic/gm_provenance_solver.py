@@ -184,6 +184,10 @@ def solve_succ_query(query_predicate, cpl_program):
     result = rename_columns_for_args_to_match(
         marginal_provenance_expression, result_args, qpred_args
     )
+    selection_pusher = SelectionOutPusher()
+    result = selection_pusher.walk(result)
+    union_remover = UnionRemover()
+    result = union_remover.walk(result)
     solver = RelationalAlgebraProvenanceCountingSolver()
     return solver.walk(result)
 
@@ -545,7 +549,18 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         }
 
 
-class SelectionOutPusher(ExpressionWalker):
+class ProvenanceExpressionTransformer(ExpressionWalker):
+    @add_match(RelationalAlgebraOperation)
+    def ra_operation(self, op):
+        new_op = op.apply(*(self.walk(arg) for arg in op.unapply()))
+        new_op.__debug_expression__ = getattr(op, "__debug_expression__", None)
+        if new_op == op:
+            return new_op
+        else:
+            return self.walk(new_op)
+
+
+class SelectionOutPusher(ProvenanceExpressionTransformer):
     @add_match(
         RenameColumn(
             Selection(..., TupleEqualSymbol),
@@ -632,17 +647,8 @@ class SelectionOutPusher(ExpressionWalker):
         union.__debug_expression__ = getattr(op, "__debug_expression__", None)
         return Selection(union, op.relation.formula,)
 
-    @add_match(RelationalAlgebraOperation)
-    def ra_operation(self, op):
-        new_op = op.apply(*(self.walk(arg) for arg in op.unapply()))
-        new_op.__debug_expression__ = getattr(op, "__debug_expression__", None)
-        if new_op == op:
-            return new_op
-        else:
-            return self.walk(new_op)
 
-
-class UnionRemover(ExpressionWalker):
+class UnionRemover(ProvenanceExpressionTransformer):
     @add_match(
         UnionOverTuples(Selection(..., TupleEqualSymbol), ...),
         lambda exp: exp.tuple_symbol == exp.relation.formula.tuple_symbol,

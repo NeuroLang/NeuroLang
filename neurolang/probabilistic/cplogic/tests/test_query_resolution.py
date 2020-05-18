@@ -1,3 +1,4 @@
+import numpy as np
 import pytest
 
 from ....datalog import Fact
@@ -240,6 +241,30 @@ def test_multiple_probchoices_mutual_exclusivity():
     assert isinstance(exp.relation.relation, UnionOverTuples)
     expected = testing.make_prov_set(
         [(0.2 * 0.1, "a", "b"), (0.8 * 0.1, "b", "b")], ("_p_", "x", "y")
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_large_probabilistic_choice():
+    n = int(10e3)
+    with testing.temp_seed(42):
+        probs = np.random.rand(n)
+    probs = probs / probs.sum()
+    pchoice_as_sets = {P: {(float(prob), i) for i, prob in enumerate(probs)}}
+    pfact_sets = {Q: {(0.5, 0, 0), (0.5, 0, 1)}}
+    code = Union((Implication(Z(x, y), Conjunction((P(x), Q(x, y)))),))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+    cpl_program.walk(code)
+    qpred = Z(x, y)
+    result = solve_succ_query(qpred, cpl_program)
+    expected = testing.make_prov_set(
+        [(0.5 * probs[0], 0, 0), (0.5 * probs[0], 0, 1),], ("_p_", "x", "y")
     )
     assert testing.eq_prov_relations(result, expected)
 
