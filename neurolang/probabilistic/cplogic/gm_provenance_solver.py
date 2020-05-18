@@ -669,12 +669,3 @@ class UnionRemover(ProvenanceExpressionTransformer):
             for c1, c2 in zip(selection_cols[i - 1], selection_cols[i]):
                 op = Selection(op, EQUAL(c1, c2))
         return self.walk(op)
-
-    @add_match(RelationalAlgebraOperation)
-    def ra_operation(self, op):
-        new_op = op.apply(*(self.walk(arg) for arg in op.unapply()))
-        new_op.__debug_expression__ = getattr(op, "__debug_expression__", None)
-        if new_op == op:
-            return new_op
-        else:
-            return self.walk(new_op)
