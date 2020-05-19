@@ -487,10 +487,10 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         cnode_symbs = self.graphical_model.get_parent_node_symbols(node_symb)
         cnodes = [self.graphical_model.get_node(cns) for cns in cnode_symbs]
         valued_cnodes = tuple(
-            (cn, self._get_node_value(cn.node_symbol, chosen_tuple_symbs))
+            (cn, self._node_symbolic_value(cn.node_symbol, chosen_tuple_symbs))
             for cn in cnodes
         )
-        node_value = self._get_node_value(node_symb, chosen_tuple_symbs)
+        node_value = self._node_symbolic_value(node_symb, chosen_tuple_symbs)
         node_cpd = ProbabilityOperation((node, node_value), valued_cnodes)
         node_cpd = self.walk(node_cpd)
         relations = [node_cpd]
@@ -531,7 +531,7 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
                 choice_node_symbs.add(node_symb)
         return choice_node_symbs
 
-    def _get_node_value(self, node_symb, chosen_tuple_symbs):
+    def _node_symbolic_value(self, node_symb, chosen_tuple_symbs):
         node = self.graphical_model.get_node(node_symb)
         if isinstance(node, NaryChoicePlateNode):
             return chosen_tuple_symbs[node_symb]
