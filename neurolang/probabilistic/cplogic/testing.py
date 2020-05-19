@@ -227,7 +227,7 @@ def rap_expression_to_latex(exp, cpl_program, graphical_model):
     return latex
 
 
-def inspect_resolution(qpred, cpl_program, tex_out_path="/tmp/inspect.tex"):
+def inspect_resolution(qpred, cpl_program, tex_out_path=None):
     grounded = ground_cplogic_program(cpl_program)
     translator = CPLogicGroundingToGraphicalModelTranslator()
     gm = translator.walk(grounded)
@@ -238,16 +238,17 @@ def inspect_resolution(qpred, cpl_program, tex_out_path="/tmp/inspect.tex"):
     exp = solver.walk(ProbabilityOperation((query_node, TRUE), tuple()))
     result_args = get_grounded_predicate(query_node.expression).args
     exp = rename_columns_for_args_to_match(exp, result_args, qpred_args)
-    latex = rap_expression_to_latex(exp, cpl_program, gm)
     gm = build_gm(cpl_program)
     spusher = SelectionOutPusher()
     sexp = spusher.walk(exp)
-    slatex = rap_expression_to_latex(sexp, cpl_program, gm)
     uremover = UnionRemover()
     uexp = uremover.walk(sexp)
-    ulatex = rap_expression_to_latex(uexp, cpl_program, gm)
-    with open(tex_out_path, "w") as f:
-        f.write("\n\\\\\n".join([latex, slatex, ulatex]) + "\n")
+    if tex_out_path is not None:
+        latex = rap_expression_to_latex(exp, cpl_program, gm)
+        slatex = rap_expression_to_latex(sexp, cpl_program, gm)
+        ulatex = rap_expression_to_latex(uexp, cpl_program, gm)
+        with open(tex_out_path, "w") as f:
+            f.write("\n\\\\\n".join([latex, slatex, ulatex]) + "\n")
     result = Projection(
         uexp, tuple(str2columnstr_constant(arg.name) for arg in qpred_args)
     )
