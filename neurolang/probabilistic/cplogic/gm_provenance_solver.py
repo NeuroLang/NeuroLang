@@ -465,10 +465,6 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
             ).expression
         return relation
 
-    @add_match(ProbabilityOperation)
-    def capture_unsolvable_probability_op(self, op):
-        raise RuntimeError(f"Cannot solve operation: {op}")
-
     def _build_symbolic_marg_sum_term_exp(
         self, node_symb, chosen_tuple_symbs, visited
     ):
