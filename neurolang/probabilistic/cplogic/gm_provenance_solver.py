@@ -62,9 +62,8 @@ def rename_columns_for_args_to_match(relation, src_args, dst_args):
     for dst_col in set(dst_cols):
         idxs = [i for i, c in enumerate(dst_cols) if c == dst_col]
         result = RenameColumn(result, src_cols[idxs[0]], dst_col)
-        if len(idxs) > 1:
-            for idx in idxs[1:]:
-                result = Selection(result, EQUAL(src_cols[idx], dst_col))
+        for idx in idxs[1:]:
+            result = Selection(result, EQUAL(src_cols[idx], dst_col))
     return result
 
 
@@ -444,6 +443,11 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
 
     @add_match(ProbabilityOperation((PlateNode, TRUE), tuple()))
     def single_node_truth_probability(self, operation):
+        """
+        Calculate the marginal truth probability of any node
+        representing a set of boolean random variables.
+
+        """
         the_node_symb = operation.valued_node[0].node_symbol
         # get symbolic representations of the chosen values of the choice
         # nodes on which the node depends
