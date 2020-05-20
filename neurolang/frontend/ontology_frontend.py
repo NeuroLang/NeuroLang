@@ -41,22 +41,8 @@ from neurolang.datalog.chase import (
 )
 from neurolang.datalog.ontologies_parser import OntologyParser
 from neurolang.datalog.ontologies_rewriter import OntologyRewriter
-from neurolang.probabilistic.probdatalog import (
-    ProbDatalogExistentialTranslator,
-    GDatalogToProbDatalog,
-    ProbDatalogProgram,
-    conjunct_formulas,
-    is_probabilistic_fact,
-    ground_probdatalog_program,
-    probdatalog_to_datalog,
-    build_grounding,
-)
-from neurolang.probabilistic.probdatalog_gm import (
-    TranslateGroundedProbDatalogToGraphicalModel,
-    SuccQuery,
-    QueryGraphicalModelSolver,
-)
 from neurolang.region_solver import RegionSolver
+from .neurosynth_utils import NeuroSynthHandler
 
 
 class Chase(Chase, ChaseNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
@@ -89,11 +75,9 @@ class DatalogRegions(
 
 
 class NeurolangOntologyDL(QueryBuilderDatalog):
-    def __init__(self, paths, load_format="xml", solver=None, ns_path=None):
+    def __init__(self, paths, load_format="xml", solver=None):
         if solver is None:
             solver = RegionFrontendDatalogSolver()
-
-        self.ns_path = ns_path
 
         self.onto = OntologyParser(paths, load_format)
         d_pred, u_constraints = self.onto.parse_ontology()
@@ -102,29 +86,33 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
 
         super().__init__(solver, chase_class=Chase)
 
-    def solve_query(self, symbol_prob):
-        prob_terms, prob_terms_voxels = self.load_neurosynth_database()
+    def solve_query(self, symbol_prob, terms):
+        prob_terms, prob_terms_voxels = self.load_neurosynth_database(terms)
         self.prob_terms = prob_terms
         self.prob_terms_voxels = prob_terms_voxels
 
         eB2 = self.rewrite_database_with_ontology()
         dl = self.load_facts(eB2)
         sol = self.build_chase_solution(dl)
-        dlProb = self.load_probabilistic_facts(sol)
-        result = self.solve_probabilistic_query(dlProb, symbol_prob)
+        # dlProb = self.load_probabilistic_facts(sol)
+        # result = self.solve_probabilistic_query(dlProb, symbol_prob)
 
-        return result
+        return sol
 
-    def load_neurosynth_database(self):
-        prob_terms = pd.read_hdf(self.ns_path, key="terms")
-        prob_terms_voxels = pd.read_hdf(self.ns_path, key="terms_voxels")
+    def load_neurosynth_database(self, terms):
+        nsh = NeuroSynthHandler()
+        data = nsh.ns_study_tfidf_feature_for_terms(terms)
+        ns_data_term_voxel = pd.DataFrame(
+            data, columns=["study", "term", "prob"]
+        )
+        ns_data_term_voxel = ns_data_term_voxel[["prob", "term", "study"]]
+        ns_data_term_voxel = ns_data_term_voxel[ns_data_terms.prob > 0]
 
-        prob_terms = prob_terms[["proba", "index"]]
+        data = nsh.ns_prob_terms(terms)
+        ns_data_term = pd.DataFrame(data, columns=["term", "prob"])
+        ns_data_term = ns_data_term[["prob", "term"]]
 
-        prob_terms_voxels.reset_index(inplace=True)
-        prob_terms_voxels = prob_terms_voxels[["prob", "term", "variable"]]
-
-        return prob_terms, prob_terms_voxels
+        return ns_data_term, ns_data_term_voxel
 
     def rewrite_database_with_ontology(self):
         orw = OntologyRewriter(self.get_expressions(), self.u_constraints)

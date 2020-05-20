@@ -96,6 +96,22 @@ class NeuroSynthHandler(object):
             )
         return result_set
 
+    def ns_prob_terms(self, terms):
+        if self._dataset is None:
+            dataset = self.ns_load_dataset()
+            self._dataset = dataset
+        feature_table = self._dataset.feature_table.data
+        result_set = set()
+        for term in terms:
+            if term not in feature_table.columns:
+                continue
+            prob_term = len(feature_table[feature_table[term] > 0]) / len(
+                feature_table[term]
+            )
+            result_set |= set((term, prob_term))
+
+        return result_set
+
     def ns_load_dataset(self):
 
         if resource_exists(
