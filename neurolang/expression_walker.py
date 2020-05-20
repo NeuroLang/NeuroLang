@@ -241,13 +241,32 @@ class ReplaceExpressionWalker(ExpressionWalker):
     def __init__(self, symbol_replacements):
         self.symbol_replacements = symbol_replacements
 
+    def replace_expression(self, expression):
+        args = expression.unapply()
+        new_args = tuple()
+        changed = False
+        for arg in args:
+            if isinstance(arg, Expression):
+                new_arg = self.walk(arg)
+            elif isinstance(arg, (tuple, list)):
+                new_arg, _ = self.process_iterable_argument(arg)
+            elif arg is Ellipsis:
+                raise NeuroLangException(
+                    "... is not a valid Expression argument"
+                )
+            else:
+                new_arg = arg
+            new_args += (new_arg,)
+
+        return expression.apply(*new_args)
+
     @add_match(Expression)
     def replace_free_variable(self, expression):
         if expression in self.symbol_replacements:
             replacement = self.symbol_replacements[expression]
             return replacement
         else:
-            return self.process_expression(expression)
+            return self.replace_expression(expression)
 
 
 class ReplaceSymbolsByConstants(ExpressionWalker):
