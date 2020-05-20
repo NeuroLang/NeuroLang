@@ -108,7 +108,7 @@ class NeuroSynthHandler(object):
             prob_term = len(feature_table[feature_table[term] > 0]) / len(
                 feature_table[term]
             )
-            result_set |= set((term, prob_term))
+            result_set.add((term, prob_term))
 
         return result_set
 

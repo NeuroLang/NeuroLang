@@ -106,7 +106,7 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
             data, columns=["study", "term", "prob"]
         )
         ns_data_term_voxel = ns_data_term_voxel[["prob", "term", "study"]]
-        ns_data_term_voxel = ns_data_term_voxel[ns_data_terms.prob > 0]
+        ns_data_term_voxel = ns_data_term_voxel[ns_data_term_voxel.prob > 0]
 
         data = nsh.ns_prob_terms(terms)
         ns_data_term = pd.DataFrame(data, columns=["term", "prob"])
