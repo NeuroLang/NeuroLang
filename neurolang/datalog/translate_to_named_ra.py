@@ -24,25 +24,25 @@ REBV = ReplaceExpressionsByValues({})
 
 class ExtractColumnConstants(ExpressionBasicEvaluator):
     @add_match(Constant[Column])
-    def process_constant_column(self, expression):
+    def constant_column(self, expression):
         return set((expression,))
 
     @add_match(Constant)
-    def process_constant(self, expression):
+    def constant(self, expression):
         return set()
 
     @add_match(Symbol)
-    def process_symbo(self, expression):
+    def symbol(self, expression):
         return set()
 
     @add_match(Expression)
-    def process_expression(self, expression):
-        args = list(expression.unapply()[::-1])
+    def expression(self, expression):
+        args = list(reversed(expression.unapply()))
         res = set()
         while len(args) > 0:
             arg = args.pop(-1)
             if isinstance(arg, tuple):
-                args += arg[::-1]
+                args += reversed(arg)
             else:
                 res.update(self.walk(arg))
         return res
@@ -205,7 +205,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         return res
 
     @add_match(Conjunction)
-    def translate_conj(self, expression):
+    def translate_conjunction(self, expression):
         classified_formulas = self.classify_formulas_obtain_names(expression)
 
         output = TranslateToNamedRA.process_positive_formulas(
