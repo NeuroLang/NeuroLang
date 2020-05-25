@@ -79,14 +79,31 @@ class DatalogRegions(
 
 
 class NeurolangOntologyDL(QueryBuilderDatalog):
-    def __init__(self, paths, load_format="xml", solver=None):
+    def __init__(self, paths, load_format="xml", solver=None, ns_terms=None):
         if solver is None:
-            solver = RegionFrontendDatalogSolver()
+            solver = Datalog()
 
-        self.onto = OntologyParser(paths, load_format)
-        d_pred, u_constraints = self.onto.parse_ontology()
-        self.d_pred = d_pred
+        onto = OntologyParser(paths, load_format)
+        d_pred, u_constraints = onto.parse_ontology()
         self.u_constraints = u_constraints
+        solver.add_extensional_predicate_from_tuples(
+            onto.get_triples_symbol(), d_pred[onto.get_triples_symbol()]
+        )
+        solver.add_extensional_predicate_from_tuples(
+            onto.get_pointers_symbol(), d_pred[onto.get_pointers_symbol()]
+        )
+
+        if ns_terms is not None:
+            prob_terms, prob_terms_voxels = self.load_neurosynth_database(
+                ns_terms
+            )
+            solver.add_probfacts_from_tuples(
+                term, set(prob_terms.itertuples(index=False, name=None))
+            )
+            solver.add_probfacts_from_tuples(
+                neurosynth_data,
+                set(prob_terms_voxels.itertuples(index=False, name=None)),
+            )
 
         super().__init__(solver, chase_class=Chase)
 
@@ -139,23 +156,6 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
 
         return deterministic_program, probabilistic_program
 
-    def solve_query(self, symbol_prob, ns_terms=None):
-        self.ns_terms = ns_terms
-        if self.ns_terms is not None:
-            prob_terms, prob_terms_voxels = self.load_neurosynth_database(
-                self.ns_terms
-            )
-            self.prob_terms = prob_terms
-            self.prob_terms_voxels = prob_terms_voxels
-
-        eB2 = self.rewrite_database_with_ontology()
-        dl = self.load_facts(eB2)
-        sol = self.build_chase_solution(dl)
-        # dlProb = self.load_probabilistic_facts(sol)
-        # result = self.solve_probabilistic_query(dlProb, symbol_prob)
-
-        return sol
-
     def load_neurosynth_database(self, terms):
         nsh = NeuroSynthHandler()
         data = nsh.ns_study_tfidf_feature_for_terms(terms)
@@ -171,8 +171,21 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
 
         return ns_data_term, ns_data_term_voxel
 
-    def rewrite_database_with_ontology(self):
-        orw = OntologyRewriter(self.get_expressions(), self.u_constraints)
+    def solve_query(self, symbol_prob, ns_terms=None):
+        self.load_facts()
+        # self.load_probabilistic_facts()
+        det, prob = self.separate_deterministic_probabilistic_code()
+        eB = self.rewrite_database_with_ontology(det)
+
+        sol = self.build_chase_solution(dl, eB)
+
+        # dlProb = self.load_probabilistic_facts(sol)
+        # result = self.solve_probabilistic_query(dlProb, symbol_prob)
+
+        return sol
+
+    def rewrite_database_with_ontology(self, deterministic_program):
+        orw = OntologyRewriter(deterministic_program, self.u_constraints)
         rewrite = orw.Xrewrite()
 
         eB2 = ()
@@ -181,17 +194,7 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
 
         return Union(eB2)
 
-    def load_facts(self, eB2):
-        dl = self.solver
-        dl.add_extensional_predicate_from_tuples(
-            self.onto.get_triples_symbol(),
-            self.d_pred[self.onto.get_triples_symbol()],
-        )
-        dl.add_extensional_predicate_from_tuples(
-            self.onto.get_pointers_symbol(),
-            self.d_pred[self.onto.get_pointers_symbol()],
-        )
-
+    def load_facts(self):
         relation_name = Symbol("relation_name")
         relations_list = self.destrieux_name_to_fma_relations()
         r_name = tuple(
@@ -200,66 +203,40 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
                 for destrieux, fma in relations_list
             ]
         )
-        dl.add_extensional_predicate_from_tuples(
+        self.solver.add_extensional_predicate_from_tuples(
             relation_name, [(a.args[0].value, a.args[1].value) for a in r_name]
         )
 
         destrieux_to_voxels = Symbol("destrieux_to_voxels")
         destrieux_regions = self.destrieux_regions()
-        dl.add_extensional_predicate_from_tuples(
+        self.solver.add_extensional_predicate_from_tuples(
             destrieux_to_voxels, destrieux_regions
         )
 
-        # TODO This code is duplicated in the probabilistic part
         neurosynth_region = Symbol("neurosynth_region")
         file = open("./data/xyz_from_neurosynth.pkl", "rb")
         ret = pickle.load(file)
         file.close()
-        dl.add_extensional_predicate_from_tuples(
+        self.solver.add_extensional_predicate_from_tuples(
             neurosynth_region, [(k, v) for k, v in ret.items()]
         )
 
-        dl.walk(eB2)
+    def build_chase_solution(self):
+        self.solver.walk(eB2)
 
-        return dl
-
-    def build_chase_solution(self, dl):
-        dc = Chase(dl)
+        dc = Chase(self.solver)
         solution_instance = dc.build_chase_solution()
         return solution_instance
 
-    def load_probabilistic_facts(self, solution_instance):
-        dlProb = ProbDatalogProgram()
+    # def load_probabilistic_facts(self, solution_instance):
+    # term = Symbol("term")
+    # neurosynth_data = Symbol("neurosynth_data")
+    # neurosynth_region = Symbol("neurosynth_region")
 
-        # TODO This should be moved out.
-        file = open("./data/xyz_from_neurosynth.pkl", "rb")
-        ret = pickle.load(file)
-        file.close()
-
-        term = Symbol("term")
-        neurosynth_data = Symbol("neurosynth_data")
-        neurosynth_region = Symbol("neurosynth_region")
-
-        for instance in solution_instance.items():
-            dlProb.add_extensional_predicate_from_tuples(
-                instance[0], instance[1].value
-            )
-
-        if self.ns_terms is not None:
-            dlProb.add_probfacts_from_tuples(
-                term, set(self.prob_terms.itertuples(index=False, name=None))
-            )
-            dlProb.add_probfacts_from_tuples(
-                neurosynth_data,
-                set(self.prob_terms_voxels.itertuples(index=False, name=None)),
-            )
-
-        # TODO This should be moved out.
-        dlProb.add_extensional_predicate_from_tuples(
-            neurosynth_region, [(k, v) for k, v in ret.items()]
-        )
-
-        return dlProb
+    #    for instance in solution_instance.items():
+    #        self.solver.add_extensional_predicate_from_tuples(
+    #            instance[0], instance[1].value
+    #        )
 
     # TODO This should be updated to the latest version.
     def solve_probabilistic_query(self, dlProb, symbol):
@@ -281,28 +258,6 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
         result = solver.walk(query)
 
         return result
-
-    # TODO This should be replaced by `separate_deterministic_probabilistic_code`.
-    def get_expressions(self):
-        exp = ()
-        for e in self.current_program:
-            if not str.startswith(
-                e.expression.consequent.functor.name, "probability"
-            ):
-                exp = exp + (e.expression,)
-
-        return Union(exp)
-
-    # TODO This should be replaced by `separate_deterministic_probabilistic_code`.
-    def get_prob_expressions(self):
-        exp = ()
-        for e in self.current_program:
-            if str.startswith(
-                e.expression.consequent.functor.name, "probability"
-            ):
-                exp = exp + (e.expression,)
-
-        return Union(exp)
 
     # TODO This should be moved out.
     def destrieux_name_to_fma_relations(self):
