@@ -43,6 +43,10 @@ from neurolang.datalog.ontologies_parser import OntologyParser
 from neurolang.datalog.ontologies_rewriter import OntologyRewriter
 from neurolang.region_solver import RegionSolver
 from .neurosynth_utils import NeuroSynthHandler
+from neurolang.datalog.expression_processing import (
+    reachable_code,
+    extract_logic_predicates,
+)
 
 
 class Chase(Chase, ChaseNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
@@ -86,10 +90,62 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
 
         super().__init__(solver, chase_class=Chase)
 
-    def solve_query(self, symbol_prob, terms):
-        prob_terms, prob_terms_voxels = self.load_neurosynth_database(terms)
-        self.prob_terms = prob_terms
-        self.prob_terms_voxels = prob_terms_voxels
+    def separate_deterministic_probabilistic_code(
+        self, det_symbols=None, prob_symbols=None
+    ):
+        if det_symbols is None:
+            det_symbols = set()
+        if prob_symbols is None:
+            prob_symbols = set()
+
+        assert len(self.current_program.expression.formulas) == 1
+        query_pred = self.current_program.expression.formulas[0]
+        query_reachable_code = reachable_code(query_pred, self.solver)
+        deterministic_symbols = set(
+            self.solver.extensional_database().keys()
+        ) | set(det_symbols)
+        deterministic_program = list()
+        probabilistic_symbols = set() | set(prob_symbols)
+        probabilistic_program = list()
+        unclassified_code = list(query_reachable_code.formulas)
+        unclassified = 0
+        initial_unclassified_length = len(unclassified_code) + 1
+        while (
+            len(unclassified_code) > 0
+            and unclassified <= initial_unclassified_length
+        ):
+            pred = unclassified_code.pop(0)
+            preds_antecedent = set(
+                p.functor
+                for p in extract_logic_predicates(pred.antecedent)
+                if p.functor != pred.consequent.functor
+            )
+            if not probabilistic_symbols.isdisjoint(preds_antecedent):
+                probabilistic_symbols.add(pred.consequent.functor)
+                probabilistic_program.append(pred)
+                unclassified = 0
+                initial_unclassified_length = len(unclassified_code) + 1
+            elif deterministic_symbols.issuperset(preds_antecedent):
+                deterministic_symbols.add(pred.consequent.functor)
+                deterministic_program.append(pred)
+                unclassified = 0
+                initial_unclassified_length = len(unclassified_code) + 1
+            else:
+                unclassified_code.append(pred)
+                unclassified += 1
+        assert probabilistic_symbols.isdisjoint(deterministic_symbols)
+        assert len(unclassified_code) == 0
+
+        return deterministic_program, probabilistic_program
+
+    def solve_query(self, symbol_prob, ns_terms=None):
+        self.ns_terms = ns_terms
+        if self.ns_terms is not None:
+            prob_terms, prob_terms_voxels = self.load_neurosynth_database(
+                self.ns_terms
+            )
+            self.prob_terms = prob_terms
+            self.prob_terms_voxels = prob_terms_voxels
 
         eB2 = self.rewrite_database_with_ontology()
         dl = self.load_facts(eB2)
@@ -182,13 +238,14 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
                 instance[0], instance[1].value
             )
 
-        dlProb.add_probfacts_from_tuples(
-            term, set(self.prob_terms.itertuples(index=False, name=None))
-        )
-        dlProb.add_probfacts_from_tuples(
-            neurosynth_data,
-            set(self.prob_terms_voxels.itertuples(index=False, name=None)),
-        )
+        if self.ns_terms is not None:
+            dlProb.add_probfacts_from_tuples(
+                term, set(self.prob_terms.itertuples(index=False, name=None))
+            )
+            dlProb.add_probfacts_from_tuples(
+                neurosynth_data,
+                set(self.prob_terms_voxels.itertuples(index=False, name=None)),
+            )
 
         dlProb.add_extensional_predicate_from_tuples(
             neurosynth_region, [(k, v) for k, v in ret.items()]
