@@ -97,13 +97,15 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
             prob_terms, prob_terms_voxels = self.load_neurosynth_database(
                 ns_terms
             )
-            solver.add_probfacts_from_tuples(
-                term, set(prob_terms.itertuples(index=False, name=None))
-            )
-            solver.add_probfacts_from_tuples(
-                neurosynth_data,
-                set(prob_terms_voxels.itertuples(index=False, name=None)),
-            )
+            # TODO add_probfacts not available
+
+            # solver.add_probfacts_from_tuples(
+            #    term, set(prob_terms.itertuples(index=False, name=None))
+            # )
+            # solver.add_probfacts_from_tuples(
+            #    neurosynth_data,
+            #    set(prob_terms_voxels.itertuples(index=False, name=None)),
+            # )
 
         super().__init__(solver, chase_class=Chase)
 
@@ -171,9 +173,8 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
 
         return ns_data_term, ns_data_term_voxel
 
-    def solve_query(self, symbol_prob, ns_terms=None):
+    def solve_query(self, symbol_prob):
         self.load_facts()
-        # self.load_probabilistic_facts()
         det, prob = self.separate_deterministic_probabilistic_code()
         eB = self.rewrite_database_with_ontology(det)
 
@@ -227,16 +228,6 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
         dc = Chase(self.solver)
         solution_instance = dc.build_chase_solution()
         return solution_instance
-
-    # def load_probabilistic_facts(self, solution_instance):
-    # term = Symbol("term")
-    # neurosynth_data = Symbol("neurosynth_data")
-    # neurosynth_region = Symbol("neurosynth_region")
-
-    #    for instance in solution_instance.items():
-    #        self.solver.add_extensional_predicate_from_tuples(
-    #            instance[0], instance[1].value
-    #        )
 
     # TODO This should be updated to the latest version.
     def solve_probabilistic_query(self, dlProb, symbol):
