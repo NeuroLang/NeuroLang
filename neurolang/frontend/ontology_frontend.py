@@ -1,52 +1,39 @@
-from .query_resolution_datalog import QueryBuilderDatalog
-from . import RegionFrontendDatalogSolver
-
-import pandas as pd
-import nibabel as nib
-import numpy as np
 import pickle
 
-from rdflib import OWL, RDFS
-from nilearn import datasets, plotting
-from matplotlib import pyplot as plt
-from scipy import special
-from scipy.stats import norm
+import nibabel as nib
+import pandas as pd
+from nilearn import datasets
 
-from neurolang.datalog import DatalogProgram
-from neurolang.expressions import Symbol, Constant, ExpressionBlock
-from neurolang.logic import Implication, Union
-from neurolang.datalog.constraints_representation import (
-    DatalogConstraintsProgram,
+from ..datalog import DatalogProgram
+from ..datalog.aggregation import (
+    AggregationApplication,
+    Chase,
+    DatalogWithAggregationMixin,
 )
-from neurolang.expression_walker import (
-    ExpressionBasicEvaluator,
-    IdentityWalker,
-)
-from neurolang.datalog.expressions import TranslateToLogic
-from neurolang.datalog.aggregation import DatalogWithAggregationMixin
-from neurolang.frontend.query_resolution import RegionMixin
-from neurolang.datalog.aggregation import AggregationApplication, Chase
-from neurolang.regions import (
-    Region,
-    region_union as region_union_,
-    region_intersection as region_intersection_,
-    ExplicitVBR,
-)
-from neurolang import frontend as fe
-from neurolang.datalog.chase import (
-    ChaseSemiNaive,
+from ..datalog.chase import (
+    ChaseGeneral,
     ChaseNaive,
     ChaseNamedRelationalAlgebraMixin,
-    ChaseGeneral,
+    ChaseSemiNaive,
 )
-from neurolang.datalog.ontologies_parser import OntologyParser
-from neurolang.datalog.ontologies_rewriter import OntologyRewriter
-from neurolang.region_solver import RegionSolver
-from .neurosynth_utils import NeuroSynthHandler
-from neurolang.datalog.expression_processing import (
-    reachable_code,
+from ..datalog.constraints_representation import DatalogConstraintsProgram
+from ..datalog.expression_processing import (
     extract_logic_predicates,
+    reachable_code,
 )
+from ..datalog.expressions import TranslateToLogic
+from ..datalog.ontologies_parser import OntologyParser
+from ..datalog.ontologies_rewriter import OntologyRewriter
+from ..exceptions import NeuroLangFrontendException
+from ..expression_walker import ExpressionBasicEvaluator, IdentityWalker
+from ..expressions import Constant, ExpressionBlock, Symbol
+from ..logic import Implication, Union
+from ..region_solver import RegionSolver
+from ..regions import ExplicitVBR, Region
+from . import RegionFrontendDatalogSolver
+from .neurosynth_utils import NeuroSynthHandler
+from .query_resolution import RegionMixin
+from .query_resolution_datalog import QueryBuilderDatalog
 
 
 class Chase(Chase, ChaseNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
@@ -55,15 +42,6 @@ class Chase(Chase, ChaseNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
 
 class DatalogTranslator(
     TranslateToLogic, IdentityWalker, DatalogWithAggregationMixin
-):
-    pass
-
-
-class Datalog(
-    TranslateToLogic,
-    DatalogWithAggregationMixin,
-    DatalogProgram,
-    ExpressionBasicEvaluator,
 ):
     pass
 
@@ -81,7 +59,7 @@ class DatalogRegions(
 class NeurolangOntologyDL(QueryBuilderDatalog):
     def __init__(self, paths, load_format="xml", solver=None, ns_terms=None):
         if solver is None:
-            solver = Datalog()
+            solver = DatalogRegions()
 
         onto = OntologyParser(paths, load_format)
         d_pred, u_constraints = onto.parse_ontology()
@@ -154,7 +132,8 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
                 unclassified += 1
         assert probabilistic_symbols.isdisjoint(deterministic_symbols)
         self.temp = unclassified_code
-        assert len(unclassified_code) == 0
+        if len(unclassified_code) > 0:
+            raise NeuroLangFrontendException("There are unclassified atoms")
 
         return deterministic_program, probabilistic_program
 
