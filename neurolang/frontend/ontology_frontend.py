@@ -181,21 +181,6 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
         return Union(eB2)
 
     def load_facts(self, eB2):
-        destrieux_to_voxels = Symbol("destrieux_to_voxels")
-        relation_name = Symbol("relation_name")
-
-        # TODO This should be `decompiled` and added to the query
-        with open("./data/regiones.pickle", "rb") as fp:
-            inter_regions = pickle.load(fp)
-
-        relations_list = self.destrieux_name_to_fma_relations()
-        r_name = tuple(
-            [
-                relation_name(Constant(destrieux), Constant(fma))
-                for destrieux, fma in relations_list
-            ]
-        )
-
         dl = self.solver
         dl.add_extensional_predicate_from_tuples(
             self.onto.get_triples_symbol(),
@@ -205,12 +190,31 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
             self.onto.get_pointers_symbol(),
             self.d_pred[self.onto.get_pointers_symbol()],
         )
-        dl.add_extensional_predicate_from_tuples(
-            destrieux_to_voxels,
-            [(ns, ds, region) for ns, ds, region in inter_regions],
+
+        relation_name = Symbol("relation_name")
+        relations_list = self.destrieux_name_to_fma_relations()
+        r_name = tuple(
+            [
+                relation_name(Constant(destrieux), Constant(fma))
+                for destrieux, fma in relations_list
+            ]
         )
         dl.add_extensional_predicate_from_tuples(
             relation_name, [(a.args[0].value, a.args[1].value) for a in r_name]
+        )
+
+        destrieux_to_voxels = Symbol("destrieux_to_voxels")
+        destrieux_regions = self.destrieux_regions()
+        dl.add_extensional_predicate_from_tuples(
+            destrieux_to_voxels, destrieux_regions
+        )
+
+        neurosynth_region = Symbol("neurosynth_region")
+        file = open("./data/xyz_from_neurosynth.pkl", "rb")
+        ret = pickle.load(file)
+        file.close()
+        dl.add_extensional_predicate_from_tuples(
+            neurosynth_region, [(k, v) for k, v in ret.items()]
         )
 
         dl.walk(eB2)
@@ -521,3 +525,23 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
             ("r_s_temporal_sup", "Right superior temporal sulcus"),
             ("r_s_temporal_transverse", "Right transverse temporal sulcus"),
         ]
+
+    # TODO This should be moved out.
+    def destrieux_regions(self):
+        destrieux_dataset = datasets.fetch_atlas_destrieux_2009()
+        destrieux_map = nib.load(destrieux_dataset["maps"])
+
+        destrieux = []
+        for label_number, name in destrieux_dataset["labels"]:
+            if label_number == 0:
+                continue
+            name = name.decode()
+            region = RegionMixin.create_region(
+                destrieux_map, label=label_number
+            )
+            if region is None:
+                continue
+            name = name.replace("-", "_").replace(" ", "_").lower()
+            destrieux.append((name, region))
+
+        return destrieux
