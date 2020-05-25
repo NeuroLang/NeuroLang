@@ -376,12 +376,14 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
                 ),
                 criteria
             )
+            named_columns.add(right_col)
         elif right in named_columns:
             output = Selection(NaturalJoin(
                     output, RenameColumn(output, right_col, left_col)
                 ),
                 criteria
             )
+            named_columns.add(left_col)
         else:
             raise NeuroLangException(
                 f'At least one of the symbols {left} {right} must be '
