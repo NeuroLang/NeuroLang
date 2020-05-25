@@ -1,5 +1,5 @@
 from ...expressions import Symbol, Constant
-from .chart_parser import Grammar, add_rule
+from .chart_parser import Grammar, DictLexicon, add_rule
 
 
 S = Symbol("S")
@@ -11,6 +11,7 @@ DET = Symbol("DET")
 N = Symbol("N")
 PRO = Symbol("PRO")
 
+c = Symbol("c")
 n = Symbol("n")
 m = Symbol("m")
 g = Symbol("g")
@@ -29,85 +30,72 @@ class gen:
     thing = Constant("thing")
 
 
+class case:
+    nom = Constant("nom")
+    notnom = Constant("notnom")
+
+
 class EnglishGrammar(Grammar):
     def __init__(self, lexicon):
-        super().__init__()
-        self.lexicon = lexicon
+        super().__init__(lexicon)
 
-    @add_rule(NP(n, g), VP(n), root=True)
+    @add_rule(NP(n, g, case.nom), VP(n), root=True)
     def s(self, np, vp):
         return S(np.args[0])  # this could look better if unified too
 
-    @add_rule(V(n), NP(m, g))
+    @add_rule(V(n), NP(m, g, case.notnom))
     def vp(self, v, np):
         return VP(v.args[0])
 
-    @add_rule(NP(n, g), Constant("and"), NP(m, h))
+    @add_rule(NP(n, g, c), Constant("and"), NP(m, h, c))
     def np_and(self, first, _, second):
-        return NP(num.plural, Symbol.fresh())
+        return NP(num.plural, Symbol.fresh(), first.args[2])
 
     @add_rule(PN(n, g))
     def np_proper(self, pn):
-        return NP(pn.args[0], pn.args[1])
+        return NP(pn.args[0], pn.args[1], Symbol.fresh())
 
     @add_rule(DET(n), N(n, g))
     def np_indefinite(self, det, n):
-        return NP(n.args[0], n.args[1])
+        return NP(n.args[0], n.args[1], Symbol.fresh())
 
-    @add_rule(PRO(n, g))
+    @add_rule(PRO(n, g, c))
     def np_pronoun(self, pro):
-        return NP(pro.args[0], pro.args[1])
-
-    @add_rule(w)
-    def verb_singular(self, token):
-        if token.value in ["owns", "has", "likes"]:
-            return V(num.singular)
-
-    @add_rule(w)
-    def verb_plural(self, token):
-        if token.value in ["own", "have", "like"]:
-            return V(num.plural)
-
-    @add_rule(w)
-    def proper_name_male(self, token):
-        if token.value in ["Jones", "Smith"]:
-            return PN(num.singular, gen.male)
-
-    @add_rule(w)
-    def proper_name_thing(self, token):
-        if token.value in ["Jones", "Smith", "Ulysses"]:
-            return PN(num.singular, gen.thing)
-
-    @add_rule(w)
-    def determinant(self, token):
-        if token.value in ["a", "an", "every", "the"]:
-            return DET(num.singular)
-
-    @add_rule(w)
-    def noun_female(self, token):
-        if token.value in ["woman", "stockbroker"]:
-            return N(num.singular, gen.female)
-
-    @add_rule(w)
-    def noun_male(self, token):
-        if token.value in ["man", "stockbroker"]:
-            return N(num.singular, gen.male)
-
-    @add_rule(w)
-    def noun_thing(self, token):
-        if token.value in ["book", "donkey", "horse", "region", "ending"]:
-            return N(num.singular, gen.thing)
-
-    @add_rule(w)
-    def prop(self, token):
-        props = {
-            "he": gen.male,
-            "she": gen.female,
-            "it": gen.thing,
-        }
-        if token.value in props:
-            return PRO(num.singular, props[token.value])
+        return NP(pro.args[0], pro.args[1], pro.args[2])
 
 
-class BaseLexicon:
-    pass
+def EnglishBaseLexicon():
+    return DictLexicon({
+            "he": (PRO(num.singular, gen.male, case.nom),),
+            "him": (PRO(num.singular, gen.male, case.notnom),),
+            "she": (PRO(num.singular, gen.female, case.nom),),
+            "her": (PRO(num.singular, gen.female, case.notnom),),
+            "it": (
+                PRO(num.singular, gen.thing, case.nom),
+                PRO(num.singular, gen.thing, case.notnom),
+            ),
+            "owns": (V(num.singular),),
+            "has": (V(num.singular),),
+            "likes": (V(num.singular),),
+            "own": (V(num.plural),),
+            "have": (V(num.plural),),
+            "like": (V(num.plural),),
+            "Jones": (PN(num.singular, gen.male),),
+            "Smith": (PN(num.singular, gen.male),),
+            "Ulysses": (PN(num.singular, gen.thing),),
+            "a": (DET(num.singular),),
+            "an": (DET(num.singular),),
+            "every": (DET(num.singular),),
+            "the": (DET(num.singular),),
+            "woman": (N(num.singular, gen.female),),
+            "stockbroker": (
+                N(num.singular, gen.female),
+                N(num.singular, gen.male)
+            ),
+            "man": (N(num.singular, gen.male),),
+            "book": (N(num.singular, gen.thing),),
+            "donkey": (N(num.singular, gen.thing),),
+            "horse": (N(num.singular, gen.thing),),
+            "region": (N(num.singular, gen.thing),),
+            "ending": (N(num.singular, gen.thing),),
+        })

@@ -1,6 +1,6 @@
 from ....expressions import Symbol, Constant, FunctionApplication as Fa
 from ....expression_walker import PatternWalker, add_match
-from ..chart_parser import Grammar, add_rule, ChartParser, _lu
+from ..chart_parser import Grammar, add_rule, ChartParser, _lu, DictLexicon
 
 
 S = Symbol("S")
@@ -20,11 +20,11 @@ singular = Constant("singular")
 class TestGrammar(Grammar):
     @add_rule(NP(a), VP(a), root=True)
     def s(self, np, vp):
-        return S(np.args[0])
+        return S(a)
 
     @add_rule(V(a), NP(b))
     def vp(self, v, np):
-        return VP(v.args[0])
+        return VP(a)
 
     @add_rule(NP(a), Constant("and"), NP(b))
     def np_and(self, first, _, second):
@@ -32,22 +32,16 @@ class TestGrammar(Grammar):
 
     @add_rule(PN(a))
     def np_proper(self, pn):
-        return NP(pn.args[0])
+        return NP(a)
 
-    @add_rule(w)
-    def verb_singular(self, token):
-        if token.value in ["owns"]:
-            return V(singular)
 
-    @add_rule(w)
-    def verb_plural(self, token):
-        if token.value in ["own"]:
-            return V(plural)
-
-    @add_rule(w)
-    def proper_name(self, token):
-        if token.value in ["Jones", "Smith", "Ulysses"]:
-            return PN(singular)
+test_lexicon = DictLexicon({
+    "owns": (V(singular),),
+    "own": (V(plural),),
+    "Jones": (PN(singular),),
+    "Smith": (PN(singular),),
+    "Ulysses": (PN(singular),),
+})
 
 
 def test_mgu():
@@ -58,7 +52,7 @@ def test_mgu():
 
 
 def test_recognize():
-    g = TestGrammar()
+    g = TestGrammar(test_lexicon)
     cp = ChartParser(g)
     assert cp.recognize("Jones owns Ulysses")
     assert not cp.recognize("Jones own Ulysses")
@@ -66,7 +60,7 @@ def test_recognize():
 
 
 def test_parse():
-    g = TestGrammar()
+    g = TestGrammar(test_lexicon)
     cp = ChartParser(g)
     tree = S(singular)(
         NP(singular)(PN(singular)(Constant("Jones"))),
@@ -106,7 +100,7 @@ class TestGrammarWalker(PatternWalker):
 
 
 def test_walk_parsed():
-    g = TestGrammar()
+    g = TestGrammar(test_lexicon)
     cp = ChartParser(g)
     sentence = "Jones owns Ulysses"
     tree = cp.parse(sentence)[0]
@@ -137,7 +131,7 @@ class TestGrammarWalker2(TestGrammarWalker):
 
 
 def test_walk_parsed_2():
-    g = TestGrammar()
+    g = TestGrammar(test_lexicon)
     cp = ChartParser(g)
     tree = cp.parse("Jones owns Ulysses")[0]
     r = TestGrammarWalker2().walk(tree)

@@ -1,5 +1,5 @@
 from ...logic.unification import most_general_unifier, apply_substitution
-from ...expressions import Symbol, Constant, FunctionApplication
+from ...expressions import Symbol, FunctionApplication, Constant
 from collections import namedtuple
 
 
@@ -16,7 +16,8 @@ def add_rule(*args, root=False):
 
 
 class Grammar:
-    def __init__(self):
+    def __init__(self, lexicon):
+        self.lexicon = lexicon
         self.rules = list(self._get_rules())
 
     def _get_rules(self):
@@ -26,31 +27,58 @@ class Grammar:
                 yield Rule(k, v, v._rule_pattern, v._rule_is_root)
 
 
+class Lexicon:
+    def __init__(self):
+        pass
+
+    def get_meanings(self, word):
+        raise NotImplementedError("")
+
+
+class DictLexicon(Lexicon):
+    """Convenience implementation of lexicon over dict"""
+
+    def __init__(self, d):
+        self.dict = d
+
+    def get_meanings(self, word):
+        if word not in self.dict:
+            return ()
+        return self.dict[word]
+
+
 class ChartParser:
-    Edge = namedtuple("Edge", "head rule completed remaining used_edges")
+    Edge = namedtuple(
+        "Edge", "head rule completed remaining used_edges unification"
+    )
 
     def __init__(self, grammar):
         self.grammar = grammar
 
     def recognize(self, string):
-        tokens = [Constant[str](t) for t in string.split()]
+        tokens = string.split()
         chart = self._fill_chart(tokens)
         return any(e.rule.is_root for e in chart[0][len(tokens)])
 
     def parse(self, string):
-        tokens = [Constant[str](t) for t in string.split()]
+        tokens = string.split()
         chart = self._fill_chart(tokens)
         compl = [
             e
             for e in chart[0][len(tokens)]
             if e.rule.is_root and not e.remaining
         ]
-        return [self._build_tree(e) for e in compl]
+        return [self._build_tree(e.head, e) for e in compl]
 
-    def _build_tree(self, edge):
+    def _build_tree(self, head, edge):
         if edge.used_edges:
-            return edge.head(*map(self._build_tree, edge.used_edges))
-        return edge.head
+            return head(
+                *[
+                    self._build_tree(h, e)
+                    for h, e in zip(edge.completed, edge.used_edges)
+                ]
+            )
+        return head
 
     def _fill_chart(self, tokens):
         chart = [
@@ -73,9 +101,15 @@ class ChartParser:
     #
     def _initialize(self, tokens, chart, agenda):
         for i, t in enumerate(tokens):
-            edge = self.Edge(t, None, [], [], [])
-            chart[i][i + 1].append(edge)
-            agenda.append((edge, i, i + 1))
+            word_edge = self.Edge(Constant[str](t), None, [], [], [], dict())
+            chart[i][i + 1].append(word_edge)
+            agenda.append((word_edge, i, i + 1))
+            for m in self.grammar.lexicon.get_meanings(t):
+                edge = self.Edge(
+                    m, None, [word_edge.head], [], [word_edge], dict()
+                )
+                chart[i][i + 1].append(edge)
+                agenda.append((edge, i, i + 1))
 
     # If the chart contains the complete edge
     #   [A → α • , (i, j)]
@@ -89,7 +123,7 @@ class ChartParser:
             u = _lu.unify(rule.constituents[0], edge.head)
             if u is not None:
                 chart[i][i].append(
-                    self.Edge(None, rule, [], rule.constituents[:], [])
+                    self.Edge(None, rule, [], rule.constituents[:], [], dict())
                 )
 
     # If the chart contains the edges
@@ -113,19 +147,27 @@ class ChartParser:
                 n_completed = e.completed + [u[1]]
                 n_used_edges = e.used_edges + [completed_edge]
                 n_remaining = e.remaining[1:]
+                unif = e.unification.copy()
+                unif.update(u[0])
                 if n_remaining:
                     n_remaining = [
-                        _lu.substitute(r, u[0]) for r in n_remaining
+                        _lu.substitute(r, unif) for r in n_remaining
                     ]
                     new_edge = self.Edge(
-                        e.head, e.rule, n_completed, n_remaining, n_used_edges
+                        e.head,
+                        e.rule,
+                        n_completed,
+                        n_remaining,
+                        n_used_edges,
+                        unif,
                     )
                 else:
                     new_head = e.rule.constructor(*n_completed)
                     if not new_head:
-                        continue
+                        raise Exception("No new head in rule:", e.rule)
+                    new_head = _lu.substitute(new_head, unif)
                     new_edge = self.Edge(
-                        new_head, e.rule, n_completed, [], n_used_edges
+                        new_head, e.rule, n_completed, [], n_used_edges, unif
                     )
                     agenda.append((new_edge, i, k))
                 chart[i][k].append(new_edge)
