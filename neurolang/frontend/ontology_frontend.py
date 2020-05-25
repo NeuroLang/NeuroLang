@@ -98,8 +98,8 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
         if prob_symbols is None:
             prob_symbols = set()
 
-        assert len(self.current_program.expression.formulas) == 1
-        query_pred = self.current_program.expression.formulas[0]
+        assert len(self.current_program) > 0
+        query_pred = self.current_program[0]
         query_reachable_code = reachable_code(query_pred, self.solver)
         deterministic_symbols = set(
             self.solver.extensional_database().keys()
@@ -184,6 +184,7 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
         destrieux_to_voxels = Symbol("destrieux_to_voxels")
         relation_name = Symbol("relation_name")
 
+        # TODO This should be `decompiled` and added to the query
         with open("./data/regiones.pickle", "rb") as fp:
             inter_regions = pickle.load(fp)
 
@@ -217,7 +218,6 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
         return dl
 
     def build_chase_solution(self, dl):
-
         dc = Chase(dl)
         solution_instance = dc.build_chase_solution()
         return solution_instance
@@ -225,6 +225,7 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
     def load_probabilistic_facts(self, solution_instance):
         dlProb = ProbDatalogProgram()
 
+        # TODO This should be moved out.
         file = open("./data/xyz_from_neurosynth.pkl", "rb")
         ret = pickle.load(file)
         file.close()
@@ -247,12 +248,14 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
                 set(self.prob_terms_voxels.itertuples(index=False, name=None)),
             )
 
+        # TODO This should be moved out.
         dlProb.add_extensional_predicate_from_tuples(
             neurosynth_region, [(k, v) for k, v in ret.items()]
         )
 
         return dlProb
 
+    # TODO This should be updated to the latest version.
     def solve_probabilistic_query(self, dlProb, symbol):
         dt2 = DatalogTranslator()
         eb = dt2.walk(self.get_prob_expressions())
@@ -273,6 +276,7 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
 
         return result
 
+    # TODO This should be replaced by `separate_deterministic_probabilistic_code`.
     def get_expressions(self):
         exp = ()
         for e in self.current_program:
@@ -283,6 +287,7 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
 
         return Union(exp)
 
+    # TODO This should be replaced by `separate_deterministic_probabilistic_code`.
     def get_prob_expressions(self):
         exp = ()
         for e in self.current_program:
@@ -293,6 +298,7 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
 
         return Union(exp)
 
+    # TODO This should be moved out.
     def destrieux_name_to_fma_relations(self):
         return [
             ("l_g_and_s_frontomargin", "Left frontomarginal gyrus"),
