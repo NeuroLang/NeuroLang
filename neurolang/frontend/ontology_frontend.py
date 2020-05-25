@@ -99,7 +99,7 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
             prob_symbols = set()
 
         assert len(self.current_program) > 0
-        query_pred = self.current_program[0]
+        query_pred = self.current_program[0].expression
         query_reachable_code = reachable_code(query_pred, self.solver)
         deterministic_symbols = set(
             self.solver.extensional_database().keys()
@@ -134,6 +134,7 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
                 unclassified_code.append(pred)
                 unclassified += 1
         assert probabilistic_symbols.isdisjoint(deterministic_symbols)
+        self.temp = unclassified_code
         assert len(unclassified_code) == 0
 
         return deterministic_program, probabilistic_program
@@ -209,6 +210,7 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
             destrieux_to_voxels, destrieux_regions
         )
 
+        # TODO This code is duplicated in the probabilistic part
         neurosynth_region = Symbol("neurosynth_region")
         file = open("./data/xyz_from_neurosynth.pkl", "rb")
         ret = pickle.load(file)
