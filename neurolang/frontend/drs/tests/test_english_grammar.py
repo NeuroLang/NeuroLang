@@ -1,7 +1,7 @@
 from ....expressions import Symbol, Constant as _C
 from ....expression_walker import PatternWalker, add_match
 from ..chart_parser import ChartParser
-from ..english_grammar import EnglishGrammar, EnglishBaseLexicon, S, NP, PN, VP, V, DET, N, num, gen, PRO, case
+from ..english_grammar import EnglishGrammar, EnglishBaseLexicon, S, NP, PN, VP, V, DET, N, num, gen, PRO, case, VAR
 import pytest
 
 
@@ -70,3 +70,27 @@ def test_pronouns():
 
 def test_pronouns_2():
     assert not _cp.recognize("it owns he")
+
+
+def test_apposition():
+    t = _cp.parse("the man X owns a book Y")[0]
+    e = S(num.singular)(
+        NP(num.singular, gen.male, case.nom)(
+            NP(num.singular, gen.male, case.nom)(
+                DET(num.singular)(_C("the")),
+                N(num.singular, gen.male)(_C("man"))
+            ),
+            VAR()(_C("X"))
+        ),
+        VP(num.singular)(
+            V(num.singular)(_C("owns")),
+            NP(num.singular, gen.thing, case.notnom)(
+                NP(num.singular, gen.thing, case.notnom)(
+                    DET(num.singular)(_C("a")),
+                    N(num.singular, gen.thing)(_C("book"))
+                ),
+                VAR()(_C("Y"))
+            )
+        )
+    )
+    assert t == e

@@ -10,6 +10,7 @@ V = Symbol("V")
 DET = Symbol("DET")
 N = Symbol("N")
 PRO = Symbol("PRO")
+VAR = Symbol("VAR")
 
 c = Symbol("c")
 n = Symbol("n")
@@ -51,6 +52,10 @@ class EnglishGrammar(Grammar):
     def np_and(self, first, _, second):
         return NP(num.plural, Symbol.fresh(), c)
 
+    @add_rule(NP(n, g, c), VAR())
+    def np_apposition(self, np, var):
+        return NP(n, g, c)
+
     @add_rule(PN(n, g))
     def np_proper(self, pn):
         return NP(n, g, Symbol.fresh())
@@ -64,8 +69,9 @@ class EnglishGrammar(Grammar):
         return NP(n, g, c)
 
 
-def EnglishBaseLexicon():
-    return DictLexicon({
+class EnglishBaseLexicon(DictLexicon):
+    def __init__(self):
+        super().__init__({
             "he": (PRO(num.singular, gen.male, case.nom),),
             "him": (PRO(num.singular, gen.male, case.notnom),),
             "she": (PRO(num.singular, gen.female, case.nom),),
@@ -99,3 +105,9 @@ def EnglishBaseLexicon():
             "region": (N(num.singular, gen.thing),),
             "ending": (N(num.singular, gen.thing),),
         })
+
+    def get_meanings(self, word):
+        m = super().get_meanings(word)
+        if word.isupper():
+            m += (VAR(),)
+        return m
