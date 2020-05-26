@@ -131,13 +131,11 @@ class RegionSolver(PatternWalker[Region]):
         self, region_left: Region, region_right: Region
     ) -> Region:
 
-        region_left = self.walk(region_left)
         if not isinstance(region_left, Constant):
             raise ValueError(
                 "Region union can only be evaluated on resolved regions"
             )
 
-        region_right = self.walk(region_right)
         if not isinstance(region_right, Constant):
             raise ValueError(
                 "Region union can only be evaluated on resolved regions"
