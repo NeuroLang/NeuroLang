@@ -131,14 +131,4 @@ class RegionSolver(PatternWalker[Region]):
         self, region_left: Region, region_right: Region
     ) -> Region:
 
-        if not isinstance(region_left, Constant):
-            raise ValueError(
-                "Region union can only be evaluated on resolved regions"
-            )
-
-        if not isinstance(region_right, Constant):
-            raise ValueError(
-                "Region union can only be evaluated on resolved regions"
-            )
-
-        return region_intersection([region_left.value, region_right.value])
+        return region_intersection([region_left, region_right])
