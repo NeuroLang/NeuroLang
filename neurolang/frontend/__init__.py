@@ -1,3 +1,37 @@
+"""
+``neurolang.frontend``
+=====================
+
+This module provides a user-friendly interface with NeuroLang through languages
+with sugar syntax which are translated to intermediate representations and
+compiled by the NeuroLang backend.
+
+The frontend provides functions and spatial operators for loading,
+constructing, transforming and combining brain regions.
+
+Regions can be loaded from atlases such as Destrieux et al. [1]_ or from
+coordinate-based meta-analysis database such as Neurosynth [2]_.
+
+References
+----------
+
+.. [1] Destrieux, Christophe, Bruce Fischl, Anders Dale, and Eric Halgren.
+   “Automatic Parcellation of Human Cortical Gyri and Sulci Using Standard
+   Anatomical Nomenclature.” NeuroImage 53, no. 1 (October 15, 2010): 1–15.
+   https://doi.org/10.1016/j.neuroimage.2010.06.010.
+
+.. [2] Yarkoni, Tal, Russell A Poldrack, Thomas E Nichols, David C Van Essen,
+   and Tor D Wager. “Large-Scale Automated Synthesis of Human Functional
+   Neuroimaging Data.” Nature Methods 8, no. 8 (August 2011): 665–70.
+   https://doi.org/10.1038/nmeth.1635.
+
+Examples
+--------
+
+Examples of how to use the front-end are provided in the ``examples/`` folder
+distributed with the ``neurolang`` package.
+
+"""
 from typing import AbstractSet, Any, Callable
 
 import numpy as np
