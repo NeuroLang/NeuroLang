@@ -2,6 +2,7 @@ from ....expressions import Symbol, Constant as _C
 from ....expression_walker import PatternWalker, add_match
 from ..chart_parser import ChartParser
 from ..english_grammar import EnglishGrammar, EnglishBaseLexicon, S, NP, PN, VP, V, DET, N, num, gen, PRO, case
+import pytest
 
 
 _eg = EnglishGrammar(EnglishBaseLexicon())
@@ -25,7 +26,8 @@ def test_indefinite_noun_phrase():
     )
 
 
-def test_indefinite_noun_phrase_2():
+@pytest.mark.skip(reason="Not priority now")
+def test_nested_variable_unification():
     t = _cp.parse("Jones and a man like the book")[0]
     g = t.args[0].functor.args[1]
     e = S(num.plural)(

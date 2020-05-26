@@ -41,27 +41,27 @@ class EnglishGrammar(Grammar):
 
     @add_rule(NP(n, g, case.nom), VP(n), root=True)
     def s(self, np, vp):
-        return S(np.args[0])  # this could look better if unified too
+        return S(n)
 
     @add_rule(V(n), NP(m, g, case.notnom))
     def vp(self, v, np):
-        return VP(v.args[0])
+        return VP(n)
 
     @add_rule(NP(n, g, c), Constant("and"), NP(m, h, c))
     def np_and(self, first, _, second):
-        return NP(num.plural, Symbol.fresh(), first.args[2])
+        return NP(num.plural, Symbol.fresh(), c)
 
     @add_rule(PN(n, g))
     def np_proper(self, pn):
-        return NP(pn.args[0], pn.args[1], Symbol.fresh())
+        return NP(n, g, Symbol.fresh())
 
     @add_rule(DET(n), N(n, g))
-    def np_indefinite(self, det, n):
-        return NP(n.args[0], n.args[1], Symbol.fresh())
+    def np_indefinite(self, det, noun):
+        return NP(n, g, Symbol.fresh())
 
     @add_rule(PRO(n, g, c))
     def np_pronoun(self, pro):
-        return NP(pro.args[0], pro.args[1], pro.args[2])
+        return NP(n, g, c)
 
 
 def EnglishBaseLexicon():

@@ -68,16 +68,18 @@ class ChartParser:
             for e in chart[0][len(tokens)]
             if e.rule.is_root and not e.remaining
         ]
-        return [self._build_tree(e.head, e) for e in compl]
+        return [self._build_tree(e, e.unification) for e in compl]
 
-    def _build_tree(self, head, edge):
-        if edge.used_edges:
-            return head(
-                *[
-                    self._build_tree(h, e)
-                    for h, e in zip(edge.completed, edge.used_edges)
-                ]
-            )
+    def _build_tree(self, edge, unif):
+        head = _lu.substitute(edge.head, unif)
+        args = ()
+        for ce in edge.used_edges:
+            cu = ce.unification.copy()
+            cu.update(unif)
+            args += (self._build_tree(ce, cu),)
+
+        if args:
+            return head(*args)
         return head
 
     def _fill_chart(self, tokens):

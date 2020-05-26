@@ -1,10 +1,10 @@
 from ....expressions import Symbol, Constant
 from ..drs_builder import DRSBuilder
 from ..chart_parser import ChartParser
-from ..english_grammar import EnglishGrammar, BaseLexicon
+from ..english_grammar import EnglishGrammar, EnglishBaseLexicon
 
 
-_eg = EnglishGrammar(BaseLexicon())
+_eg = EnglishGrammar(EnglishBaseLexicon())
 _cp = ChartParser(_eg)
 
 
