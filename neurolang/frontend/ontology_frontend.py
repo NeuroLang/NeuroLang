@@ -50,7 +50,7 @@ class DatalogRegions(
     TranslateToLogic,
     RegionSolver,
     DatalogWithAggregationMixin,
-    DatalogProgram,
+    DatalogConstraintsProgram,
     ExpressionBasicEvaluator,
 ):
     pass
@@ -63,7 +63,9 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
 
         onto = OntologyParser(paths, load_format)
         d_pred, u_constraints = onto.parse_ontology()
-        self.u_constraints = u_constraints
+
+        solver.walk(u_constraints)
+
         solver.add_extensional_predicate_from_tuples(
             onto.get_triples_symbol(), d_pred[onto.get_triples_symbol()]
         )
@@ -165,7 +167,9 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
         return sol
 
     def rewrite_database_with_ontology(self, deterministic_program):
-        orw = OntologyRewriter(deterministic_program, self.u_constraints)
+        orw = OntologyRewriter(
+            deterministic_program, self.solver.constraints()
+        )
         rewrite = orw.Xrewrite()
 
         eB2 = ()
@@ -174,6 +178,7 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
 
         return Union(eB2)
 
+    # TODO This should be an interface.
     def load_facts(self):
         relation_name = Symbol("relation_name")
         relations_list = self.destrieux_name_to_fma_relations()
@@ -194,7 +199,10 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
         )
 
         neurosynth_region = Symbol("neurosynth_region")
-        file = open("./data/xyz_from_neurosynth.pkl", "rb")
+        file = open(
+            "/Users/gzanitti/Projects/INRIA/ontologies_paper/data/xyz_from_neurosynth.pkl",
+            "rb",
+        )
         ret = pickle.load(file)
         file.close()
         self.solver.add_extensional_predicate_from_tuples(
