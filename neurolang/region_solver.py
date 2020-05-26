@@ -10,54 +10,64 @@ REFINE_OVERLAPPING = True
 
 
 class RegionSolver(PatternWalker[Region]):
-    type_name = 'Region'
+    type_name = "Region"
 
     def __new__(cls, *args, **kwargs):
         cardinal_operations = {
-            'inferior_of': 'I', 'superior_of': 'S',
-            'posterior_of': 'P', 'anterior_of': 'A',
-            'left_of': 'L', 'right_of': 'R',
-            'overlapping': 'O'
+            "inferior_of": "I",
+            "superior_of": "S",
+            "posterior_of": "P",
+            "anterior_of": "A",
+            "left_of": "L",
+            "right_of": "R",
+            "overlapping": "O",
         }
 
         refine_overlapping = kwargs.get(
-            'refine_overlapping',
-            REFINE_OVERLAPPING
+            "refine_overlapping", REFINE_OVERLAPPING
         )
 
-        max_tree_depth_level = kwargs.get(
-            'max_tree_depth_level',
-            None
-        )
+        max_tree_depth_level = kwargs.get("max_tree_depth_level", None)
 
         def build_function(relation, refine_overlapping=False):
             def fun(self, x: Region, y: Region) -> bool:
-                return bool(cardinal_relation(
-                    x, y, relation,
-                    refine_overlapping=refine_overlapping,
-                    stop_at=max_tree_depth_level
-                ))
+                return bool(
+                    cardinal_relation(
+                        x,
+                        y,
+                        relation,
+                        refine_overlapping=refine_overlapping,
+                        stop_at=max_tree_depth_level,
+                    )
+                )
+
             return fun
 
         def anatomical_direction_function(relation, refine_overlapping=False):
-
             def func(self, x: Region, y: Region) -> bool:
 
                 return bool(
                     cardinal_relation(
-                        x, y, relation,
+                        x,
+                        y,
+                        relation,
                         refine_overlapping=refine_overlapping,
-                        stop_at=max_tree_depth_level
-                    ) and not (
+                        stop_at=max_tree_depth_level,
+                    )
+                    and not (
                         cardinal_relation(
-                            x, y, inverse_directions[relation],
+                            x,
+                            y,
+                            inverse_directions[relation],
                             refine_overlapping=refine_overlapping,
-                            stop_at=max_tree_depth_level
-                        ) or
-                        cardinal_relation(
-                            x, y, cardinal_operations['overlapping'],
+                            stop_at=max_tree_depth_level,
+                        )
+                        or cardinal_relation(
+                            x,
+                            y,
+                            cardinal_operations["overlapping"],
                             refine_overlapping=refine_overlapping,
-                            stop_at=max_tree_depth_level
+                            stop_at=max_tree_depth_level,
                         )
                     )
                 )
@@ -66,22 +76,27 @@ class RegionSolver(PatternWalker[Region]):
 
         for key, value in cardinal_operations.items():
             setattr(
-                cls, f'function_{key}',
-                build_function(value, refine_overlapping=refine_overlapping)
+                cls,
+                f"function_{key}",
+                build_function(value, refine_overlapping=refine_overlapping),
             )
 
         anatomical_correct_operations = {
-            k: cardinal_operations[k] for k in (
-                'inferior_of', 'superior_of',
-                'posterior_of', 'anterior_of'
-                )
+            k: cardinal_operations[k]
+            for k in (
+                "inferior_of",
+                "superior_of",
+                "posterior_of",
+                "anterior_of",
+            )
         }
         for key, value in anatomical_correct_operations.items():
             setattr(
-                cls, f'function_anatomical_{key}',
+                cls,
+                f"function_anatomical_{key}",
                 anatomical_direction_function(
                     value, refine_overlapping=refine_overlapping
-                )
+                ),
             )
 
         return PatternWalker.__new__(cls)
@@ -113,17 +128,19 @@ class RegionSolver(PatternWalker[Region]):
         return region_union(new_region_set)
 
     def function_region_intersection(
-        self, region_set: typing.AbstractSet[Region]
+        self, region_left: Region, region_right: Region
     ) -> Region:
 
-        new_region_set = []
-        for region in region_set:
-            region = self.walk(region)
-            if not isinstance(region, Constant):
-                raise ValueError(
-                    "Region union can only be evaluated on resolved regions"
-                )
+        region_left = self.walk(region_left)
+        if not isinstance(region_left, Constant):
+            raise ValueError(
+                "Region union can only be evaluated on resolved regions"
+            )
 
-            new_region_set.append(region.value)
+        region_right = self.walk(region_right)
+        if not isinstance(region_right, Constant):
+            raise ValueError(
+                "Region union can only be evaluated on resolved regions"
+            )
 
-        return region_intersection(new_region_set)
+        return region_intersection([region_left.value, region_right.value])
