@@ -47,6 +47,10 @@ class DictLexicon(Lexicon):
         return self.dict[word]
 
 
+class Chart(list):
+    pass
+
+
 class ChartParser:
     Edge = namedtuple(
         "Edge", "head rule completed remaining used_edges unification"
@@ -83,10 +87,10 @@ class ChartParser:
         return head
 
     def _fill_chart(self, tokens):
-        chart = [
+        chart = Chart([
             [[] for _ in range(len(tokens) + 1)]
             for _ in range(len(tokens) + 1)
-        ]
+        ])
         agenda = []
         self._initialize(tokens, chart, agenda)
         while agenda:
