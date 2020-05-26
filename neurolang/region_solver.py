@@ -1,11 +1,10 @@
-import typing
 import re
+import typing
 
 from .CD_relations import cardinal_relation, inverse_directions
-from .regions import Region, region_union
 from .expression_walker import PatternWalker
 from .expressions import Constant
-
+from .regions import Region, region_intersection, region_union
 
 REFINE_OVERLAPPING = True
 
@@ -112,3 +111,19 @@ class RegionSolver(PatternWalker[Region]):
             new_region_set.append(region.value)
 
         return region_union(new_region_set)
+
+    def function_region_intersection(
+        self, region_set: typing.AbstractSet[Region]
+    ) -> Region:
+
+        new_region_set = []
+        for region in region_set:
+            region = self.walk(region)
+            if not isinstance(region, Constant):
+                raise ValueError(
+                    "Region union can only be evaluated on resolved regions"
+                )
+
+            new_region_set.append(region.value)
+
+        return region_intersection(new_region_set)
