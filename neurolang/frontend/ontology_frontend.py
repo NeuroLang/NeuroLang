@@ -63,9 +63,7 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
 
         onto = OntologyParser(paths, load_format)
         d_pred, u_constraints = onto.parse_ontology()
-
         solver.walk(u_constraints)
-
         solver.add_extensional_predicate_from_tuples(
             onto.get_triples_symbol(), d_pred[onto.get_triples_symbol()]
         )
@@ -78,7 +76,6 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
                 ns_terms
             )
             # TODO add_probfacts not available
-
             # solver.add_probfacts_from_tuples(
             #    term, set(prob_terms.itertuples(index=False, name=None))
             # )
@@ -97,12 +94,21 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
         if prob_symbols is None:
             prob_symbols = set()
 
-        assert len(self.current_program) > 0
+        if len(self.current_program) == 0:
+            raise NeuroLangFrontendException("Your program is empty")
         query_pred = self.current_program[0].expression
         query_reachable_code = reachable_code(query_pred, self.solver)
-        deterministic_symbols = set(
-            self.solver.extensional_database().keys()
-        ) | set(det_symbols)
+        constraints_symbols = set(
+            [
+                ri.consequent.functor
+                for ri in self.solver.constraints().formulas
+            ]
+        )
+        deterministic_symbols = (
+            set(self.solver.extensional_database().keys())
+            | set(det_symbols)
+            | constraints_symbols
+        )
         deterministic_program = list()
         probabilistic_symbols = set() | set(prob_symbols)
         probabilistic_program = list()
@@ -132,12 +138,14 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
             else:
                 unclassified_code.append(pred)
                 unclassified += 1
-        assert probabilistic_symbols.isdisjoint(deterministic_symbols)
-        self.temp = unclassified_code
+        if not probabilistic_symbols.isdisjoint(deterministic_symbols):
+            raise NeuroLangFrontendException(
+                "An atom was defined as both deterministic and probabilistic"
+            )
         if len(unclassified_code) > 0:
             raise NeuroLangFrontendException("There are unclassified atoms")
 
-        return deterministic_program, probabilistic_program
+        return Union(deterministic_program), Union(probabilistic_program)
 
     def load_neurosynth_database(self, terms):
         nsh = NeuroSynthHandler()
@@ -159,7 +167,7 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
         det, prob = self.separate_deterministic_probabilistic_code()
         eB = self.rewrite_database_with_ontology(det)
 
-        sol = self.build_chase_solution(dl, eB)
+        sol = self.build_chase_solution(eB)
 
         # dlProb = self.load_probabilistic_facts(sol)
         # result = self.solve_probabilistic_query(dlProb, symbol_prob)
@@ -178,18 +186,11 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
 
         return Union(eB2)
 
-    # TODO This should be an interface.
+    # TODO Maybe this should be some kind of interface?.
     def load_facts(self):
         relation_name = Symbol("relation_name")
-        relations_list = self.destrieux_name_to_fma_relations()
-        r_name = tuple(
-            [
-                relation_name(Constant(destrieux), Constant(fma))
-                for destrieux, fma in relations_list
-            ]
-        )
         self.solver.add_extensional_predicate_from_tuples(
-            relation_name, [(a.args[0].value, a.args[1].value) for a in r_name]
+            relation_name, self.destrieux_name_to_fma_relations()
         )
 
         destrieux_to_voxels = Symbol("destrieux_to_voxels")
@@ -199,6 +200,8 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
         )
 
         neurosynth_region = Symbol("neurosynth_region")
+        # TODO We should implement a way to download this
+        # data similar to the one provided by NeuroSynth
         file = open(
             "/Users/gzanitti/Projects/INRIA/ontologies_paper/data/xyz_from_neurosynth.pkl",
             "rb",
@@ -209,8 +212,8 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
             neurosynth_region, [(k, v) for k, v in ret.items()]
         )
 
-    def build_chase_solution(self):
-        self.solver.walk(eB2)
+    def build_chase_solution(self, eB):
+        self.solver.walk(eB)
 
         dc = Chase(self.solver)
         solution_instance = dc.build_chase_solution()
