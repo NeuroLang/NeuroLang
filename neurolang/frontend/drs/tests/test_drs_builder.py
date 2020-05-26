@@ -2,6 +2,7 @@ from ....expressions import Symbol, Constant
 from ..drs_builder import DRSBuilder
 from ..chart_parser import ChartParser
 from ..english_grammar import EnglishGrammar, EnglishBaseLexicon
+import pytest
 
 
 _eg = EnglishGrammar(EnglishBaseLexicon())
@@ -26,6 +27,32 @@ def test_simple_expression():
 def test_indefinite_noun_phrase():
     b = DRSBuilder(_eg)
     t = _cp.parse("Jones owns a book")[0]
+    drs = b.walk(t)
+
+    assert len(drs.referents) == 2
+    x = drs.referents[0]
+    y = drs.referents[1]
+    assert len(drs.expressions) == 3
+
+    assert drs.expressions[0] == Symbol("owns")(x, y)
+    assert drs.expressions[1] == Symbol("book")(y)
+    assert drs.expressions[2] == Symbol("Jones")(x)
+
+
+def test_var_noun_phrases():
+    b = DRSBuilder(_eg)
+    t = _cp.parse("X intersects Y")[0]
+    drs = b.walk(t)
+
+    assert len(drs.referents) == 2
+    assert len(drs.expressions) == 1
+    assert drs.expressions[0] == Symbol("intersects")(Symbol("X"), Symbol("Y"))
+
+
+@pytest.mark.skip(reason="")
+def test_apposition_variable_introduction():
+    b = DRSBuilder(_eg)
+    t = _cp.parse("a region X intersects a region Y")[0]
     drs = b.walk(t)
 
     assert len(drs.referents) == 2

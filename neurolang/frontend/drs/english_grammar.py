@@ -87,6 +87,7 @@ class EnglishBaseLexicon(DictLexicon):
             "owns": (V(num.singular),),
             "has": (V(num.singular),),
             "likes": (V(num.singular),),
+            "intersects": (V(num.singular),),
             "own": (V(num.plural),),
             "have": (V(num.plural),),
             "like": (V(num.plural),),
