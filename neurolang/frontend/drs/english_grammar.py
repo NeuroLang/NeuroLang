@@ -60,6 +60,10 @@ class EnglishGrammar(Grammar):
     def np_proper(self, pn):
         return NP(n, g, Symbol.fresh())
 
+    @add_rule(VAR())
+    def np_var(self, var):
+        return NP(Symbol.fresh(), Symbol.fresh(), Symbol.fresh())
+
     @add_rule(DET(n), N(n, g))
     def np_indefinite(self, det, noun):
         return NP(n, g, Symbol.fresh())

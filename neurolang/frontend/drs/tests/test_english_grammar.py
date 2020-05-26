@@ -94,3 +94,22 @@ def test_apposition():
         )
     )
     assert t == e
+
+
+def test_variable_reference():
+    t = _cp.parse("X owns Y")[0]
+    fresh1 = t.args[0].functor.args[1]
+    fresh2 = t.args[1].args[1].functor.args[0]
+    fresh3 = t.args[1].args[1].functor.args[1]
+    e = S(num.singular)(
+        NP(num.singular, fresh1, case.nom)(
+            VAR()(_C("X"))
+        ),
+        VP(num.singular)(
+            V(num.singular)(_C("owns")),
+            NP(fresh2, fresh3, case.notnom)(
+                VAR()(_C("Y"))
+            )
+        )
+    )
+    assert t == e
