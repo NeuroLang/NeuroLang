@@ -49,17 +49,17 @@ def test_var_noun_phrases():
     assert drs.expressions[0] == Symbol("intersects")(Symbol("X"), Symbol("Y"))
 
 
-@pytest.mark.skip(reason="")
 def test_apposition_variable_introduction():
     b = DRSBuilder(_eg)
     t = _cp.parse("a region X intersects a region Y")[0]
     drs = b.walk(t)
-
+    x = Symbol("X")
+    y = Symbol("Y")
     assert len(drs.referents) == 2
-    x = drs.referents[0]
-    y = drs.referents[1]
+    assert x == drs.referents[0]
+    assert y == drs.referents[1]
     assert len(drs.expressions) == 3
 
-    assert drs.expressions[0] == Symbol("owns")(x, y)
-    assert drs.expressions[1] == Symbol("book")(y)
-    assert drs.expressions[2] == Symbol("Jones")(x)
+    assert drs.expressions[0] == Symbol("intersects")(x, y)
+    assert drs.expressions[1] == Symbol("region")(y)
+    assert drs.expressions[2] == Symbol("region")(x)

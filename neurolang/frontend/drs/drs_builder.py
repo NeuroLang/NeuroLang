@@ -1,5 +1,5 @@
 from ...expressions import Expression, Symbol, FunctionApplication as Fa
-from ...expression_walker import add_match, ExpressionWalker
+from ...expression_walker import add_match, ExpressionWalker, ReplaceSymbolWalker
 from .english_grammar import S, V, NP, VP, PN, DET, N, VAR
 
 
@@ -100,3 +100,27 @@ class DRSBuilder(ExpressionWalker):
         v = Symbol(var.args[0].value)
         self.trace.append(v)
         return self.walk(DRS((v,), (v,)))
+
+    @add_match(
+        Fa(Fa(NP, ...), (
+            Fa(Fa(NP, ...), ...),
+            Fa(Fa(VAR, ...), ...),
+        )),
+    )
+    def var_apposition(self, np):
+        (np, var) = np.args
+        np_drs = self.walk(np)
+
+        y = Symbol(var.args[0].value)
+        x = np_drs.expressions[0]
+        rsw = ReplaceSymbolWalker({x: y})
+
+        exps = ()
+        for e in np_drs.expressions:
+            exps += (rsw.walk(e),)
+
+        refs = ()
+        for r in np_drs.referents:
+            refs += (rsw.walk(r),)
+
+        return self.walk(DRS(refs, exps))
