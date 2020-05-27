@@ -1,10 +1,3 @@
-import pickle
-
-import nibabel as nib
-import pandas as pd
-from nilearn import datasets
-
-from ..datalog import DatalogProgram
 from ..datalog.aggregation import (
     AggregationApplication,
     Chase,
@@ -24,26 +17,20 @@ from ..datalog.expression_processing import (
 from ..datalog.expressions import TranslateToLogic
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
-from ..exceptions import NeuroLangFrontendException
-from ..expression_walker import ExpressionBasicEvaluator, IdentityWalker
-from ..expressions import Constant, ExpressionBlock, Symbol
-from ..logic import Implication, Union
+from ..exceptions import (
+    NeuroLangFrontendException,
+    NeuroLangNotImplementedError,
+)
+from ..expression_walker import ExpressionBasicEvaluator
+from ..logic import Union
 from ..region_solver import RegionSolver
-from ..regions import ExplicitVBR, Region
+from ..regions import ExplicitVBR
 from . import RegionFrontendDatalogSolver
-from .neurosynth_utils import NeuroSynthHandler
-from .query_resolution import RegionMixin
 from .query_resolution_datalog import QueryBuilderDatalog
 
 
 class ChaseFrontend(
     Chase, ChaseNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral
-):
-    pass
-
-
-class DatalogTranslator(
-    TranslateToLogic, IdentityWalker, DatalogWithAggregationMixin
 ):
     pass
 
@@ -70,11 +57,11 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
     def load_ontology(self, paths, load_format="xml"):
         onto = OntologyParser(paths, load_format)
         d_pred, u_constraints = onto.parse_ontology()
-        solver.walk(u_constraints)
-        solver.add_extensional_predicate_from_tuples(
+        self.solver.walk(u_constraints)
+        self.solver.add_extensional_predicate_from_tuples(
             onto.get_triples_symbol(), d_pred[onto.get_triples_symbol()]
         )
-        solver.add_extensional_predicate_from_tuples(
+        self.solver.add_extensional_predicate_from_tuples(
             onto.get_pointers_symbol(), d_pred[onto.get_pointers_symbol()]
         )
 
@@ -143,6 +130,10 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
 
     def solve_query(self, symbol_prob):
         det, prob = self.separate_deterministic_probabilistic_code()
+        if len(prob.formulas) > 0:
+            raise NeuroLangNotImplementedError(
+                "The probabilistic solver has not yet been implemented"
+            )
         if self.ontology_loaded:
             eB = self.rewrite_database_with_ontology(det)
             self.solver.walk(eB)
@@ -168,6 +159,7 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
         return Union(eB2)
 
     # TODO This should be updated to the latest version.
+    """
     def solve_probabilistic_query(self, dlProb, symbol):
         dt2 = DatalogTranslator()
         eb = dt2.walk(self.get_prob_expressions())
@@ -187,3 +179,4 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
         result = solver.walk(query)
 
         return result
+        """
