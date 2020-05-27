@@ -3,21 +3,44 @@
 Welcome to neurolang's documentation!
 ====================================
 
-`NeuroLang`
+``neurolang`` is a `Domain-Specific Language (DSL)`_ for programming and
+testing rich cognitive science hypotheses that combine heterogeneous sources of
+data (a.k.a. modalities).
 
-To see how to use it, please refer to the `README file 
-<https://github.com/NeuroLang/neurolang/blob/master/README.md>`_ in the Github repository.
-
-This is an example of documentation of the software, using sphinx_. 
-
-.. _sphinx: http://sphinx-doc.org/
+.. _Domain-Specific Language (DSL): https://en.wikipedia.org/wiki/Domain-specific_language
 
 
-Contents:
+User's Guide
+------------
 
 .. toctree::
    :maxdepth: 2
 
-   theory
+   foreword
+   installation
+   quickstart
    auto_examples/index
-   api
+
+API Reference
+-------------
+
+.. toctree::
+   :maxdepth: 2
+
+   frontend
+   intermediate_representations
+   expressions
+   pattern_matching
+
+
+Additional Notes
+----------------
+
+.. toctree::
+   :maxdepth: 2
+
+   design
+   publications
+   changelog
+   license
+   contributing
