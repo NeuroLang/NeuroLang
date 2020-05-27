@@ -351,3 +351,27 @@ def test_border_cases():
         )
     )
     assert res == expected_res
+
+
+def test_border_case_2():
+    T = Symbol[AbstractSet[int]]('T')
+    A = Symbol[AbstractSet[Tuple[int]]]('A')
+    x = Symbol[int]('x')
+    y = Symbol[int]('y')
+
+    def leq_f(x, y):
+        return x < y
+
+    leq = Constant(leq_f)
+    # leq = Symbol("leq")
+
+    exp = Conjunction((
+        T(x),
+        T(y),
+        A(y),
+        Negation(
+            leq(y, x)
+        )
+    ))
+
+    TranslateToNamedRA().walk(exp)
