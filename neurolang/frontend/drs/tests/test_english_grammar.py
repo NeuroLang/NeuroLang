@@ -1,7 +1,22 @@
 from ....expressions import Symbol, Constant as _C
 from ....expression_walker import PatternWalker, add_match
 from ..chart_parser import ChartParser
-from ..english_grammar import EnglishGrammar, EnglishBaseLexicon, S, NP, PN, VP, V, DET, N, num, gen, PRO, case, VAR
+from ..english_grammar import (
+    EnglishGrammar,
+    EnglishBaseLexicon,
+    S,
+    NP,
+    PN,
+    VP,
+    V,
+    DET,
+    N,
+    num,
+    gen,
+    PRO,
+    case,
+    VAR,
+)
 import pytest
 
 
@@ -14,15 +29,15 @@ def test_indefinite_noun_phrase():
     assert t == S(num.singular)(
         NP(num.singular, gen.thing, case.nom)(
             DET(num.singular)(_C("every")),
-            N(num.singular, gen.thing)(_C("book"))
+            N(num.singular, gen.thing)(_C("book")),
         ),
         VP(num.singular)(
             V(num.singular)(_C("has")),
             NP(num.singular, gen.thing, case.notnom)(
                 DET(num.singular)(_C("an")),
-                N(num.singular, gen.thing)(_C("ending"))
-            )
-        )
+                N(num.singular, gen.thing)(_C("ending")),
+            ),
+        ),
     )
 
 
@@ -38,16 +53,16 @@ def test_nested_variable_unification():
             _C("and"),
             NP(num.singular, gen.male, case.nom)(
                 DET(num.singular)(_C("a")),
-                N(num.singular, gen.male)(_C("man"))
+                N(num.singular, gen.male)(_C("man")),
             ),
         ),
         VP(num.plural)(
             V(num.plural)(_C("like")),
             NP(num.singular, gen.thing, case.notnom)(
                 DET(num.singular)(_C("the")),
-                N(num.singular, gen.thing)(_C("book"))
-            )
-        )
+                N(num.singular, gen.thing)(_C("book")),
+            ),
+        ),
     )
     assert t == e
 
@@ -62,8 +77,8 @@ def test_pronouns():
             V(num.singular)(_C("owns")),
             NP(num.singular, gen.thing, case.notnom)(
                 PRO(num.singular, gen.thing, case.notnom)(_C("it")),
-            )
-        )
+            ),
+        ),
     )
     assert t == e
 
@@ -78,20 +93,20 @@ def test_apposition():
         NP(num.singular, gen.male, case.nom)(
             NP(num.singular, gen.male, case.nom)(
                 DET(num.singular)(_C("the")),
-                N(num.singular, gen.male)(_C("man"))
+                N(num.singular, gen.male)(_C("man")),
             ),
-            VAR()(_C("X"))
+            VAR()(_C("X")),
         ),
         VP(num.singular)(
             V(num.singular)(_C("owns")),
             NP(num.singular, gen.thing, case.notnom)(
                 NP(num.singular, gen.thing, case.notnom)(
                     DET(num.singular)(_C("a")),
-                    N(num.singular, gen.thing)(_C("book"))
+                    N(num.singular, gen.thing)(_C("book")),
                 ),
-                VAR()(_C("Y"))
-            )
-        )
+                VAR()(_C("Y")),
+            ),
+        ),
     )
     assert t == e
 
@@ -102,14 +117,73 @@ def test_variable_reference():
     fresh2 = t.args[1].args[1].functor.args[0]
     fresh3 = t.args[1].args[1].functor.args[1]
     e = S(num.singular)(
-        NP(num.singular, fresh1, case.nom)(
-            VAR()(_C("X"))
-        ),
+        NP(num.singular, fresh1, case.nom)(VAR()(_C("X"))),
         VP(num.singular)(
             V(num.singular)(_C("owns")),
-            NP(fresh2, fresh3, case.notnom)(
-                VAR()(_C("Y"))
-            )
-        )
+            NP(fresh2, fresh3, case.notnom)(VAR()(_C("Y"))),
+        ),
+    )
+    assert t == e
+
+
+def test_implication_if():
+    t = _cp.parse("X intersects Y if Y intersects X")[0]
+    fresh = (
+        t.functor.args[0],
+        t.args[0].args[0].functor.args[1],
+        t.args[0].args[1].args[1].functor.args[0],
+        t.args[0].args[1].args[1].functor.args[1],
+        t.args[2].args[0].functor.args[1],
+        t.args[2].args[1].args[1].functor.args[0],
+        t.args[2].args[1].args[1].functor.args[1],
+    )
+    e = S(fresh[0])(
+        S(num.singular)(
+            NP(num.singular, fresh[1], case.nom)(VAR()(_C("X"))),
+            VP(num.singular)(
+                V(num.singular)(_C("intersects")),
+                NP(fresh[2], fresh[3], case.notnom)(VAR()(_C("Y"))),
+            ),
+        ),
+        _C("if"),
+        S(num.singular)(
+            NP(num.singular, fresh[4], case.nom)(VAR()(_C("Y"))),
+            VP(num.singular)(
+                V(num.singular)(_C("intersects")),
+                NP(fresh[5], fresh[6], case.notnom)(VAR()(_C("X"))),
+            ),
+        ),
+    )
+    assert t == e
+
+
+def test_implication_if_then():
+    t = _cp.parse("if Y intersects X then X intersects Y")[0]
+    fresh = (
+        t.functor.args[0],
+        t.args[1].args[0].functor.args[1],
+        t.args[1].args[1].args[1].functor.args[0],
+        t.args[1].args[1].args[1].functor.args[1],
+        t.args[3].args[0].functor.args[1],
+        t.args[3].args[1].args[1].functor.args[0],
+        t.args[3].args[1].args[1].functor.args[1],
+    )
+    e = S(fresh[0])(
+        _C("if"),
+        S(num.singular)(
+            NP(num.singular, fresh[1], case.nom)(VAR()(_C("Y"))),
+            VP(num.singular)(
+                V(num.singular)(_C("intersects")),
+                NP(fresh[2], fresh[3], case.notnom)(VAR()(_C("X"))),
+            ),
+        ),
+        _C("then"),
+        S(num.singular)(
+            NP(num.singular, fresh[4], case.nom)(VAR()(_C("X"))),
+            VP(num.singular)(
+                V(num.singular)(_C("intersects")),
+                NP(fresh[5], fresh[6], case.notnom)(VAR()(_C("Y"))),
+            ),
+        ),
     )
     assert t == e

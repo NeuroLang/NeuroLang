@@ -44,6 +44,14 @@ class EnglishGrammar(Grammar):
     def s(self, np, vp):
         return S(n)
 
+    @add_rule(S(n), Constant("if"), S(m), root=True)
+    def s_if(self, consecuent, _if, antecedent):
+        return S(n)
+
+    @add_rule(Constant("if"), S(n), Constant("then"), S(m), root=True)
+    def s_if_then(self, _if, antecedent, _then, consecuent):
+        return S(n)
+
     @add_rule(V(n), NP(m, g, case.notnom))
     def vp(self, v, np):
         return VP(n)
