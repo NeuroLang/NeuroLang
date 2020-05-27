@@ -1,4 +1,4 @@
-from operator import contains, eq, gt, mul
+from operator import contains, eq, gt, mul, not_
 from typing import AbstractSet, Tuple
 
 import pytest
@@ -355,23 +355,32 @@ def test_border_cases():
 
 def test_border_case_2():
     T = Symbol[AbstractSet[int]]('T')
-    A = Symbol[AbstractSet[Tuple[int]]]('A')
     x = Symbol[int]('x')
-    y = Symbol[int]('y')
 
-    def leq_f(x, y):
-        return x < y
+    def gtz_f(x):
+        return x > 0
 
-    leq = Constant(leq_f)
-    # leq = Symbol("leq")
+    gtz = Constant(gtz_f)
 
     exp = Conjunction((
         T(x),
-        T(y),
-        A(y),
         Negation(
-            leq(y, x)
+            gtz(x)
         )
     ))
 
-    TranslateToNamedRA().walk(exp)
+    expected_res = Selection(
+        NameColumns(
+            Projection(
+                T,
+                (C_(0),)
+            ),
+            (C_('x'),)
+        ),
+        C_(not_)(
+            gtz(C_('x'))
+        )
+    )
+
+    res = TranslateToNamedRA().walk(exp)
+    assert res == expected_res

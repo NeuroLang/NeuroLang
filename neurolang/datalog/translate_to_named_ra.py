@@ -231,7 +231,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         if isinstance(expression.formula, Negation):
             return self.walk(expression.formula.formula)
 
-        formula = self.walk(expression.formula)
+        formula = expression.formula
         if (
             isinstance(formula, FunctionApplication) and
             isinstance(formula.functor, Constant)
