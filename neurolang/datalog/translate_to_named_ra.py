@@ -223,25 +223,32 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             len(classified_formulas['eq_formulas']) +
             len(classified_formulas['ext_proj_formulas'])
         ) > 0:
-            output = TranslateToNamedRA.process_destroy_formulas(
+            new_output = TranslateToNamedRA.process_destroy_formulas(
                 classified_formulas,
                 output
             )
 
-            output = TranslateToNamedRA.process_equality_formulas(
+            new_output = TranslateToNamedRA.process_equality_formulas(
                 classified_formulas,
-                output
+                new_output
             )
 
-            output = TranslateToNamedRA.process_extended_projection_formulas(
+            new_output = TranslateToNamedRA \
+                .process_extended_projection_formulas(
+                    classified_formulas,
+                    new_output
+                )
+
+            new_output = TranslateToNamedRA.process_selection_formulas(
                 classified_formulas,
-                output
+                new_output
             )
 
-            output = TranslateToNamedRA.process_selection_formulas(
-                classified_formulas,
-                output
-            )
+            if new_output == output:
+                raise NeuroLangException(
+                    f'Could not translate conjunction: {output}'
+                )
+            output = new_output
 
         return output
 
