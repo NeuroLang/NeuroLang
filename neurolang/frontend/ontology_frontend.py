@@ -8,18 +8,18 @@ from ..datalog import DatalogProgram
 from ..datalog.aggregation import (
     AggregationApplication,
     Chase,
-    DatalogWithAggregationMixin
+    DatalogWithAggregationMixin,
 )
 from ..datalog.chase import (
     ChaseGeneral,
     ChaseNaive,
     ChaseNamedRelationalAlgebraMixin,
-    ChaseSemiNaive
+    ChaseSemiNaive,
 )
 from ..datalog.constraints_representation import DatalogConstraintsProgram
 from ..datalog.expression_processing import (
     extract_logic_predicates,
-    reachable_code
+    reachable_code,
 )
 from ..datalog.expressions import TranslateToLogic
 from ..datalog.ontologies_parser import OntologyParser
@@ -59,7 +59,7 @@ class DatalogRegions(
 
 
 class NeurolangOntologyDL(QueryBuilderDatalog):
-    def __init__(self, , solver=None):
+    def __init__(self, solver=None):
         if solver is None:
             solver = DatalogRegions()
 
