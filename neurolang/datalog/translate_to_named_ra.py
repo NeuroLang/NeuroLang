@@ -22,6 +22,44 @@ Builtin_pattern = Constant[Callable]
 REBV = ReplaceExpressionsByValues({})
 
 
+class TranslateToNamedRAException(NeuroLangException):
+    pass
+
+
+class UnrestrictedEquality(TranslateToNamedRAException):
+    def __init__(self, left, right):
+        super().__init__(
+            f'At least one of the symbols {left} {right} must be '
+            'in the free variables of the antecedent'
+        )
+        self.left = left
+        self.right = right
+
+
+class CouldNotTranslateConjunction(TranslateToNamedRAException):
+    def __init__(self, output):
+        super().__init__(
+            f'Could not translate conjunction: {output}'
+        )
+        self.output = output
+
+
+class NegativeFormulaNotSafeRange(TranslateToNamedRAException):
+    def __init__(self, formula):
+        super().__init__(
+            f'Negative predicate {formula} is not safe range'
+        )
+        self.formula = formula
+
+
+class NegativeFormulaNotNamedRelation(TranslateToNamedRAException):
+    def __init__(self, formula):
+        super().__init__(
+            f"Negative formula {formula} is not a named relation"
+        )
+        self.formula = formula
+
+
 class ExtractColumnConstants(ExpressionBasicEvaluator):
     @add_match(Constant[Column])
     def constant_column(self, expression):
@@ -245,9 +283,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             )
 
             if new_output == output:
-                raise NeuroLangException(
-                    f'Could not translate conjunction: {output}'
-                )
+                raise CouldNotTranslateConjunction(output)
             output = new_output
 
         return output
@@ -320,9 +356,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             if named_columns > neg_cols:
                 neg_formula = NaturalJoin(output, neg_formula)
             elif named_columns != neg_cols:
-                raise NeuroLangException(
-                    f'Negative predicate {neg_formula} is not safe range'
-                )
+                raise NegativeFormulaNotSafeRange(neg_formula)
             output = Difference(output, neg_formula)
         return output
 
@@ -333,9 +367,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         elif isinstance(neg_formula, Constant):
             neg_cols = set(neg_formula.value.columns)
         else:
-            raise NeuroLangException(
-                f"Negative formula {neg_formula} is  not a named relation"
-            )
+            raise NegativeFormulaNotNamedRelation(neg_formula)
         return neg_cols
 
     @staticmethod
@@ -392,10 +424,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             )
             named_columns.add(left_col)
         else:
-            raise NeuroLangException(
-                f'At least one of the symbols {left} {right} must be '
-                'in the free variables of the antecedent'
-            )
+            raise UnrestrictedEquality(left, right)
         return output
 
     @staticmethod
