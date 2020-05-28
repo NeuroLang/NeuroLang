@@ -35,7 +35,10 @@ distributed with the ``neurolang`` package.
 from typing import AbstractSet, Any, Callable
 
 import numpy as np
+import nilearn.datasets
+import nibabel
 
+from ..exceptions import NeuroLangException
 from .. import neurolang as nl
 from ..datalog import DatalogProgram
 from ..datalog.aggregation import Chase, DatalogWithAggregationMixin
@@ -53,6 +56,11 @@ __all__ = [
     'NeurolangDL', 'RegionFrontend',
     'QueryBuilderDatalog', 'QueryBuilderFirstOrder'
 ]
+
+
+ATLAS_LOADERS = {
+    "destrieux": nilearn.datasets.fetch_atlas_destrieux_2009,
+}
 
 
 def function_isin(element: Any, set_: AbstractSet) -> bool:
@@ -74,6 +82,14 @@ class RegionFrontendSolver(
     def rewrite_isin(self, expression):
         '''Rewrite `isin` in Datalog syntax'''
         return self.walk(expression.args[1](expression.args[0]))
+
+
+class UnsupportedAtlas(NeuroLangException):
+    pass
+
+
+class SymbolAlreadyExists(NeuroLangException):
+    pass
 
 
 class RegionFrontend(QueryBuilderFirstOrder):
@@ -103,6 +119,18 @@ class RegionFrontend(QueryBuilderFirstOrder):
             res.append(s)
 
         return res
+
+    def load_atlas(self, atlas_name, symbol_name=None):
+        if symbol_name is None:
+            symbol_name = atlas_name
+        if Symbol(symbol_name) in self.symbol_table:
+            raise SymbolAlreadyExists(symbol_name)
+        if atlas_name not in ATLAS_LOADERS:
+            raise UnsupportedAtlas(atlas_name)
+        atlas = ATLAS_LOADERS[atlas_name]()
+        labels = atlas["labels"]
+        image = nibabel.load(atlas["maps"])
+        return self.add_atlas_set(symbol_name, labels, image)
 
 
 class NeurolangDL(QueryBuilderDatalog):
