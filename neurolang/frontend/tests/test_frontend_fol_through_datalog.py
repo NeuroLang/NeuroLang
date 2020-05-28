@@ -26,10 +26,6 @@ def test_add_set():
     assert res.type is AbstractSet[Tuple[str, int]]
     assert res.value == v
 
-    # @skip("Can not evaluate expressions other than query")
-    # exp = neurolang.symbols.isin(next(iter(s)), s)
-    # assert exp.do().value is True
-
 
 def test_add_regions_and_query():
     neurolang = RegionFrontendFolThroughDatalog()
@@ -41,13 +37,6 @@ def test_add_regions_and_query():
     neurolang.add_region(superior, name="superior_region")
     assert neurolang.symbols.inferior_region.value == inferior
     assert neurolang.symbols.superior_region.value == superior
-
-    # @skip("Can not evaluate expressions other than query")
-    # result_symbol = neurolang.symbols.superior_of(superior, inferior).do(
-    #     name="is_superior_test"
-    # )
-    # assert result_symbol.value
-    # assert neurolang.get_symbol("is_superior_test").value
 
     x = neurolang.new_region_symbol(name="x")
     query = neurolang.query(
