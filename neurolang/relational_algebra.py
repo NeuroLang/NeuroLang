@@ -4,6 +4,7 @@ from typing import AbstractSet, Tuple
 from . import expression_walker as ew
 from . import type_system
 from .exceptions import NeuroLangException
+from .expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 from .expressions import (
     Constant,
     Definition,
@@ -619,7 +620,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         ):
             try:
                 return self._saw.walk(fun_exp).value
-            except NeuroLangException as e:
+            except NeuroLangPatternMatchingNoMatch as e:
                 fun, args = self._fa_2_lambda.walk(self._rccsbs.walk(fun_exp))
                 return lambda t: fun(
                     **{arg: getattr(t, arg) for arg in args}
