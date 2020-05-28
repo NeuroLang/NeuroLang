@@ -4,9 +4,10 @@ from typing import AbstractSet, Callable, Tuple
 from ..exceptions import NeuroLangException
 from ..expression_walker import (ExpressionBasicEvaluator,
                                  ReplaceExpressionsByValues, add_match)
-from ..expressions import Constant, FunctionApplication, NonConstant, Symbol
-from ..relational_algebra import (ColumnInt, ColumnStr, Destroy, Difference,
-                                  ExtendedProjection,
+from ..expressions import (Constant, Expression, FunctionApplication,
+                           NonConstant, Symbol)
+from ..relational_algebra import (Column, ColumnInt, ColumnStr, Destroy,
+                                  Difference, ExtendedProjection,
                                   ExtendedProjectionListMember, NameColumns,
                                   NaturalJoin, Projection,
                                   RelationalAlgebraOperation, RenameColumn,
@@ -19,6 +20,70 @@ CONTAINS = Constant(contains)
 EQ_pattern = Constant[Callable](eq)
 Builtin_pattern = Constant[Callable]
 REBV = ReplaceExpressionsByValues({})
+
+
+class TranslateToNamedRAException(NeuroLangException):
+    pass
+
+
+class UnrestrictedEqualityException(TranslateToNamedRAException):
+    def __init__(self, left, right):
+        super().__init__(
+            f'At least one of the symbols {left} {right} must be '
+            'in the free variables of the antecedent'
+        )
+        self.left = left
+        self.right = right
+
+
+class CouldNotTranslateConjunctionException(TranslateToNamedRAException):
+    def __init__(self, output):
+        super().__init__(
+            f'Could not translate conjunction: {output}'
+        )
+        self.output = output
+
+
+class NegativeFormulaNotSafeRangeException(TranslateToNamedRAException):
+    def __init__(self, formula):
+        super().__init__(
+            f'Negative predicate {formula} is not safe range'
+        )
+        self.formula = formula
+
+
+class NegativeFormulaNotNamedRelationException(TranslateToNamedRAException):
+    def __init__(self, formula):
+        super().__init__(
+            f"Negative formula {formula} is not a named relation"
+        )
+        self.formula = formula
+
+
+class ExtractColumnConstants(ExpressionBasicEvaluator):
+    @add_match(Constant[Column])
+    def constant_column(self, expression):
+        return set((expression,))
+
+    @add_match(Constant)
+    def constant(self, expression):
+        return set()
+
+    @add_match(Symbol)
+    def symbol(self, expression):
+        return set()
+
+    @add_match(Expression)
+    def expression(self, expression):
+        args = list(reversed(expression.unapply()))
+        res = set()
+        while len(args) > 0:
+            arg = args.pop(-1)
+            if isinstance(arg, tuple):
+                args += reversed(arg)
+            else:
+                res.update(self.walk(arg))
+        return res
 
 
 class TranslateToNamedRA(ExpressionBasicEvaluator):
@@ -166,7 +231,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         if isinstance(expression.formula, Negation):
             return self.walk(expression.formula.formula)
 
-        formula = self.walk(expression.formula)
+        formula = expression.formula
         if (
             isinstance(formula, FunctionApplication) and
             isinstance(formula.functor, Constant)
@@ -178,7 +243,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         return res
 
     @add_match(Conjunction)
-    def translate_conj(self, expression):
+    def translate_conjunction(self, expression):
         classified_formulas = self.classify_formulas_obtain_names(expression)
 
         output = TranslateToNamedRA.process_positive_formulas(
@@ -190,21 +255,36 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             output
         )
 
-        for destroy in classified_formulas['destroy_formulas']:
-            output = Destroy(output, destroy.args[0], destroy.args[1])
+        while (
+            len(classified_formulas['destroy_formulas']) +
+            len(classified_formulas['selection_formulas']) +
+            len(classified_formulas['eq_formulas']) +
+            len(classified_formulas['ext_proj_formulas'])
+        ) > 0:
+            new_output = TranslateToNamedRA.process_destroy_formulas(
+                classified_formulas,
+                output
+            )
 
-        output = TranslateToNamedRA.process_equality_formulas(
-            classified_formulas,
-            output
-        )
+            new_output = TranslateToNamedRA.process_equality_formulas(
+                classified_formulas,
+                new_output
+            )
 
-        output = TranslateToNamedRA.process_extended_projection_formulas(
-            classified_formulas,
-            output
-        )
+            new_output = TranslateToNamedRA \
+                .process_extended_projection_formulas(
+                    classified_formulas,
+                    new_output
+                )
 
-        for selection in classified_formulas['selection_formulas']:
-            output = Selection(output, selection)
+            new_output = TranslateToNamedRA.process_selection_formulas(
+                classified_formulas,
+                new_output
+            )
+
+            if new_output == output:
+                raise CouldNotTranslateConjunctionException(output)
+            output = new_output
 
         return output
 
@@ -276,9 +356,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             if named_columns > neg_cols:
                 neg_formula = NaturalJoin(output, neg_formula)
             elif named_columns != neg_cols:
-                raise NeuroLangException(
-                    f'Negative predicate {neg_formula} is not safe range'
-                )
+                raise NegativeFormulaNotSafeRangeException(neg_formula)
             output = Difference(output, neg_formula)
         return output
 
@@ -289,56 +367,103 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         elif isinstance(neg_formula, Constant):
             neg_cols = set(neg_formula.value.columns)
         else:
-            raise NeuroLangException(
-                f"Negative formula {neg_formula} is  not a named relation"
-            )
+            raise NegativeFormulaNotNamedRelationException(neg_formula)
         return neg_cols
+
+    @staticmethod
+    def process_destroy_formulas(classified_formulas, output):
+        destroy_to_keep = []
+        named_columns = classified_formulas['named_columns']
+        for destroy in classified_formulas['destroy_formulas']:
+            if destroy.args[0] in named_columns:
+                output = Destroy(output, destroy.args[0], destroy.args[1])
+                named_columns.add(destroy.args[1])
+            else:
+                destroy_to_keep.append(destroy)
+        classified_formulas['destroy_formulas'] = destroy_to_keep
+        return output
 
     @staticmethod
     def process_equality_formulas(classified_formulas, output):
         named_columns = classified_formulas['named_columns']
+        to_keep = []
         for formula in classified_formulas['eq_formulas']:
-            left, right = formula.args
-            left_col = Constant[ColumnStr](
-                ColumnStr(left.name), verify_type=False
+            new_output = TranslateToNamedRA.process_equality_formula(
+                formula, named_columns, output
             )
-            right_col = Constant[ColumnStr](
-                ColumnStr(right.name), verify_type=False
+            if new_output is output:
+                to_keep.append(formula)
+            output = new_output
+        classified_formulas['eq_formulas'] = to_keep
+        return output
+
+    @staticmethod
+    def process_equality_formula(formula, named_columns, output):
+        left, right = formula.args
+        left_col = Constant[ColumnStr](
+            ColumnStr(left.name), verify_type=False
+        )
+        right_col = Constant[ColumnStr](
+            ColumnStr(right.name), verify_type=False
+        )
+        criteria = EQ(left_col, right_col)
+        if left in named_columns and right in named_columns:
+            output = Selection(output, criteria)
+        elif left in named_columns:
+            output = Selection(NaturalJoin(
+                    output, RenameColumn(output, left_col, right_col)
+                ),
+                criteria
             )
-            criteria = EQ(left_col, right_col)
-            if left in named_columns and right in named_columns:
-                output = Selection(output, criteria)
-            elif left in named_columns:
-                output = Selection(NaturalJoin(
-                        output, RenameColumn(output, left_col, right_col)
-                    ),
-                    criteria
-                )
-            elif right in named_columns:
-                output = Selection(NaturalJoin(
-                        output, RenameColumn(output, right_col, left_col)
-                    ),
-                    criteria
-                )
-            else:
-                raise NeuroLangException(
-                    f'At least one of the symbols {left} {right} must be '
-                    'in the free variables of the antecedent'
-                )
+            named_columns.add(right_col)
+        elif right in named_columns:
+            output = Selection(NaturalJoin(
+                    output, RenameColumn(output, right_col, left_col)
+                ),
+                criteria
+            )
+            named_columns.add(left_col)
+        else:
+            raise UnrestrictedEqualityException(left, right)
         return output
 
     @staticmethod
     def process_extended_projection_formulas(classified_formulas, output):
         extended_projections = []
+        to_keep = []
+        named_columns = classified_formulas['named_columns']
+        dst_columns = set()
         for ext_proj in classified_formulas['ext_proj_formulas']:
             dst_column, fun_exp = ext_proj.args
-            extended_projections.append(
-                ExtendedProjectionListMember(fun_exp, dst_column)
-            )
+            cols_for_fun_exp = ExtractColumnConstants().walk(fun_exp)
+            if cols_for_fun_exp.issubset(named_columns):
+                extended_projections.append(
+                    ExtendedProjectionListMember(fun_exp, dst_column)
+                )
+                dst_columns.add(dst_column)
+            else:
+                to_keep.append(ext_proj)
         if len(extended_projections) > 0:
             for column in classified_formulas['named_columns']:
                 extended_projections.append(
                     ExtendedProjectionListMember(column, column)
                 )
             output = ExtendedProjection(output, extended_projections)
+
+        named_columns |= dst_columns
+        classified_formulas['ext_proj_formulas'] = to_keep
+        return output
+
+    @staticmethod
+    def process_selection_formulas(classified_formulas, output):
+        to_keep = []
+        for selection in classified_formulas['selection_formulas']:
+            selection_columns = ExtractColumnConstants().walk(selection)
+            if selection_columns.issubset(
+                classified_formulas['named_columns']
+            ):
+                output = Selection(output, selection)
+            else:
+                to_keep.append(selection)
+        classified_formulas['selection_formulas'] = to_keep
         return output

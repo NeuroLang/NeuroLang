@@ -191,6 +191,8 @@ class Operation(Expression):
             op_repr = '({})'.format(repr(self.operator))
         elif self.operator in self.operator_repr:
             op_repr = self.operator_repr[self.operator]
+        elif isinstance(self.operator, Expression):
+            op_repr = repr(self.operator)
         elif hasattr(self.operator, '__qualname__'):
             op_repr = self.operator.__qualname__
         else:

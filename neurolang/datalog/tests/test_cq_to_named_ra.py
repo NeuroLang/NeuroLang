@@ -1,4 +1,4 @@
-from operator import contains, eq, gt, mul
+from operator import contains, eq, gt, mul, not_
 from typing import AbstractSet, Tuple
 
 import pytest
@@ -290,6 +290,8 @@ def test_only_equality():
 def test_border_cases():
     R1 = S_('R1')
     x = S_('x')
+    y = S_('y')
+    z = S_('z')
 
     tr = TranslateToNamedRA()
 
@@ -313,3 +315,72 @@ def test_border_cases():
         Projection(R1, (C_(0),)),
         (Constant(ColumnStr('x')),)
     )
+
+    tr = TranslateToNamedRA()
+
+    exp = Conjunction((
+        R1(x),
+        C_(eq)(x, y),
+        C_(eq)(z, C_(2) * y)
+    ))
+    res = tr.walk(exp)
+    expected_res = (
+        ExtendedProjection(
+            Selection(
+                NaturalJoin(
+                    NameColumns(
+                        Projection(R1, (C_(0),)),
+                        (C_('x'),)
+                    ),
+                    RenameColumn(
+                        NameColumns(
+                            Projection(R1, (C_(0),)),
+                            (C_('x'),)
+                        ),
+                        C_('x'),
+                        C_('y')
+                    )
+                ),
+                C_(eq)(C_('x'), C_('y'))
+            ),
+            (
+                ExtendedProjectionListMember(C_('x'), C_('x')),
+                ExtendedProjectionListMember(C_('y'), C_('y')),
+                ExtendedProjectionListMember(C_(2) * C_('y'), C_('z')),
+            )
+        )
+    )
+    assert res == expected_res
+
+
+def test_border_case_2():
+    T = Symbol[AbstractSet[int]]('T')
+    x = Symbol[int]('x')
+
+    def gtz_f(x):
+        return x > 0
+
+    gtz = Constant(gtz_f)
+
+    exp = Conjunction((
+        T(x),
+        Negation(
+            gtz(x)
+        )
+    ))
+
+    expected_res = Selection(
+        NameColumns(
+            Projection(
+                T,
+                (C_(0),)
+            ),
+            (C_('x'),)
+        ),
+        C_(not_)(
+            gtz(C_('x'))
+        )
+    )
+
+    res = TranslateToNamedRA().walk(exp)
+    assert res == expected_res
