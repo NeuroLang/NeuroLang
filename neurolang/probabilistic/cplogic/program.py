@@ -19,7 +19,7 @@ from ..expression_processing import (
 )
 
 
-class ForbiddenExpression(NeuroLangException):
+class ForbiddenExpressionException(NeuroLangException):
     pass
 
 
@@ -194,7 +194,7 @@ class CPLogicMixin(PatternWalker):
 
     @add_match(Implication, implication_has_existential_variable_in_antecedent)
     def existential_rule(self, rule):
-        raise ForbiddenExpression(
+        raise ForbiddenExpressionException(
             "CP-Logic programs do not support existential antecedents"
         )
 
