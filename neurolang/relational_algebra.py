@@ -4,6 +4,7 @@ from typing import AbstractSet, Tuple
 from . import expression_walker as ew
 from . import type_system
 from .exceptions import NeuroLangException
+from .expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 from .expressions import (
     Constant,
     Definition,
@@ -336,27 +337,17 @@ class ConcatenateConstantColumn(RelationalAlgebraOperation):
         self.column_value = column_value
 
 
-def arithmetic_operator_string(op):
-    """
-    Get the string representation of an arithmetic operator.
-
-    Parameters
-    ----------
-    op : builting operator
-        Python builtin operator (add, sub, mul or truediv).
-
-    Returns
-    -------
-    str
-        String representation of the operator (e.g. operator.add is "+").
-
-    """
-    return {
-        operator.add: "+",
-        operator.sub: "-",
-        operator.mul: "*",
-        operator.truediv: "/",
-    }[op]
+OPERATOR_STRING = {
+    operator.add: "+",
+    operator.sub: "-",
+    operator.mul: "*",
+    operator.truediv: "/",
+    operator.eq: "==",
+    operator.gt: ">",
+    operator.lt: "<",
+    operator.ge: ">=",
+    operator.le: "<="
+}
 
 
 def is_arithmetic_operation(exp):
@@ -376,7 +367,7 @@ def is_arithmetic_operation(exp):
         isinstance(exp, FunctionApplication)
         and isinstance(exp.functor, Constant)
         and exp.functor.value
-        in {operator.add, operator.sub, operator.mul, operator.truediv}
+        in OPERATOR_STRING
     )
 
 
@@ -394,9 +385,9 @@ class StringArithmeticWalker(ew.PatternWalker):
         return Constant[RelationalAlgebraStringExpression](
             RelationalAlgebraStringExpression(
                 "({} {} {})".format(
-                    str(self.walk(fa.args[0]).value),
-                    arithmetic_operator_string(fa.functor.value),
-                    str(self.walk(fa.args[1]).value),
+                    self.walk(fa.args[0]).value,
+                    OPERATOR_STRING[fa.functor.value],
+                    self.walk(fa.args[1]).value,
                 ),
             ),
             auto_infer_type=False,
@@ -411,9 +402,29 @@ class StringArithmeticWalker(ew.PatternWalker):
             verify_type=False,
         )
 
-    @ew.add_match(Constant)
-    def constant(self, cst):
-        return cst
+    @ew.add_match(Constant[int])
+    def constant_int(self, cst):
+        return Constant[RelationalAlgebraStringExpression](
+            str(cst.value),
+            auto_infer_type=False,
+            verify_type=False,
+        )
+
+    @ew.add_match(Constant[float])
+    def constant_float(self, cst):
+        return Constant[RelationalAlgebraStringExpression](
+            str(cst.value),
+            auto_infer_type=False,
+            verify_type=False,
+        )
+
+    @ew.add_match(Constant[str])
+    def constant_str(self, cst):
+        return Constant[RelationalAlgebraStringExpression](
+            f'"{cst.value}"',
+            auto_infer_type=False,
+            verify_type=False,
+        )
 
 
 class ReplaceConstantColumnStrBySymbol(ew.ExpressionWalker):
@@ -603,13 +614,19 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         )
 
     def _compile_function_application_to_sql_fun_exp(self, fun_exp):
-        try:
-            return self._saw.walk(fun_exp).value
-        except NeuroLangException as e:
-            fun, args = self._fa_2_lambda.walk(self._rccsbs.walk(fun_exp))
-            return lambda t: fun(
-                **{arg: getattr(t, arg) for arg in args}
-            )
+        if (
+            isinstance(fun_exp, FunctionApplication) or
+            isinstance(fun_exp, Constant[Column])
+        ):
+            try:
+                return self._saw.walk(fun_exp).value
+            except NeuroLangPatternMatchingNoMatch as e:
+                fun, args = self._fa_2_lambda.walk(self._rccsbs.walk(fun_exp))
+                return lambda t: fun(
+                    **{arg: getattr(t, arg) for arg in args}
+                )
+        else:
+            return fun_exp.value
 
     @ew.add_match(FunctionApplication, is_arithmetic_operation)
     def prov_arithmetic_operation(self, arithmetic_op):
