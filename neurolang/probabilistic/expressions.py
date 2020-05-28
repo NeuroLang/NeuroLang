@@ -1,4 +1,4 @@
-from ..expressions import Constant, Definition, FunctionApplication, Symbol
+from ..expressions import Definition
 
 
 class ProbabilisticPredicate(Definition):

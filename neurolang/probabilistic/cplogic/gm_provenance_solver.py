@@ -26,7 +26,6 @@ from .cplogic_to_gm import (
     NaryChoicePlateNode,
     NaryChoiceResultPlateNode,
     PlateNode,
-    ProbabilisticPlateNode,
 )
 from .grounding import get_grounded_predicate, ground_cplogic_program
 
