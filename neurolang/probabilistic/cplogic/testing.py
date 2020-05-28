@@ -31,10 +31,7 @@ from .gm_provenance_solver import (
     UnionRemover,
     rename_columns_for_args_to_match,
 )
-from .grounding import (
-    get_grounded_predicate,
-    ground_cplogic_program,
-)
+from .grounding import get_grounded_predicate, ground_cplogic_program
 
 
 def build_gm(cpl_program):

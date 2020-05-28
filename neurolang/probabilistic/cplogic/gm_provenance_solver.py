@@ -28,10 +28,7 @@ from .cplogic_to_gm import (
     PlateNode,
     ProbabilisticPlateNode,
 )
-from .grounding import (
-    get_grounded_predicate,
-    ground_cplogic_program,
-)
+from .grounding import get_grounded_predicate, ground_cplogic_program
 
 TRUE = Constant[bool](True, verify_type=False, auto_infer_type=False)
 EQUAL = Constant(operator.eq)

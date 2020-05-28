@@ -22,10 +22,7 @@ from ..expressions import (
     ProbabilisticChoiceGrounding,
     ProbabilisticPredicate,
 )
-from .grounding import (
-    get_grounded_predicate,
-    topological_sort_groundings,
-)
+from .grounding import get_grounded_predicate, topological_sort_groundings
 
 
 class GraphicalModel(Definition):
