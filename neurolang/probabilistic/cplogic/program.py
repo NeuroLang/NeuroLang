@@ -7,8 +7,8 @@ from ...datalog.expression_processing import (
 from ...exceptions import NeuroLangException
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
-from ...expressions import Constant, Symbol
-from ...logic import Implication, Union
+from ...expressions import Constant, FunctionApplication, Symbol
+from ...logic import Implication, Union, Conjunction
 from ..expression_processing import (
     add_to_union,
     build_probabilistic_fact_set,
@@ -193,10 +193,25 @@ class CPLogicMixin(PatternWalker):
         return expression
 
     @add_match(Implication, implication_has_existential_variable_in_antecedent)
-    def existential_rule(self, rule):
+    def prevent_existential_rule(self, rule):
         raise ForbiddenExpressionException(
             "CP-Logic programs do not support existential antecedents"
         )
+
+    @add_match(
+        Implication(FunctionApplication, ...),
+        lambda exp: (
+            exp.antecedent
+            != Constant[bool](True, auto_infer_type=False, verify_type=False)
+        ),
+    )
+    def prevent_intensional_disjunction(self, rule):
+        pred_symb = rule.consequent.functor
+        if pred_symb in self.symbol_table:
+            raise ForbiddenExpressionException(
+                "CP-Logic programs do not support disjunctions"
+            )
+        return self.statement_intensional(rule)
 
 
 class CPLogicProgram(CPLogicMixin, DatalogProgram, ExpressionWalker):

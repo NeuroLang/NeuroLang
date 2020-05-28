@@ -196,3 +196,12 @@ def test_forbidden_existential():
     cpl.add_probabilistic_choice_from_tuples(P, probchoice_as_tuples_iterable)
     with pytest.raises(ForbiddenExpressionException):
         cpl.walk(existential_rule)
+
+
+def test_forbidden_disjunction():
+    rule_a = Implication(P(x), Q(x))
+    rule_b = Implication(P(y), Z(y))
+    code = Union((rule_a, rule_b))
+    cpl = CPLogicProgram()
+    with pytest.raises(ForbiddenExpressionException):
+        cpl.walk(code)
