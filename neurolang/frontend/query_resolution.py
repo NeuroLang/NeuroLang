@@ -226,6 +226,25 @@ class RegionMixin:
         return region
 
     def add_atlas_set(self, name, atlas_labels, spatial_image):
+        """
+        Add an atlas-based set of regions to the symbol table from a labeled
+        NIfTI image.
+
+        Parameters
+        ----------
+        name : str
+            The name of the symbol that will contain the region set.
+        atlas_labels : list of (int, str) pairs
+            Region label ids in the image and their associated name.
+        spatial_image : Nifti1Image or Nifti2Image
+            Labeled NIfTI image from which the region set is constructed.
+
+        Returns
+        -------
+        set of regions
+            The created regions.
+
+        """
         atlas_set = set()
         for label_number, label_name in atlas_labels:
             region = self.create_region(spatial_image, label=label_number)
