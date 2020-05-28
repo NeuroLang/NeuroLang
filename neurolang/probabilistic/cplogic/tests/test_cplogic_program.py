@@ -3,11 +3,15 @@ import typing
 import pytest
 
 from ....datalog.expressions import Fact
-from ....exceptions import NeuroLangException
+from ....exceptions import ForbiddenExpressionError
 from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Union
+from ...exceptions import (
+    DistributionDoesNotSumToOneError,
+    MalformedProbabilisticTupleError,
+)
 from ...expressions import ProbabilisticPredicate
-from ..program import CPLogicProgram, ForbiddenExpressionException
+from ..program import CPLogicProgram
 
 P = Symbol("P")
 Q = Symbol("Q")
@@ -33,11 +37,6 @@ def test_probfact():
     )
     assert probfact.consequent.probability == Constant[float](0.2)
     assert probfact.consequent.body == P(x)
-
-    with pytest.raises(
-        NeuroLangException, match=r"must be a symbol or constant"
-    ):
-        Implication(ProbabilisticPredicate(0.3, P(x)), Constant[bool](True))
 
 
 def test_deterministic_program():
@@ -134,7 +133,7 @@ def test_add_probfacts_from_tuple():
 def test_add_probfacts_from_tuple_no_probability():
     cpl = CPLogicProgram()
     cpl.walk(Union(tuple()))
-    with pytest.raises(NeuroLangException, match=r"probability"):
+    with pytest.raises(MalformedProbabilisticTupleError):
         cpl.add_probabilistic_facts_from_tuples(
             P, {("hello", "gaston"), ("hello", "antonia"),},
         )
@@ -158,7 +157,7 @@ def test_add_probchoice_from_tuple():
 
 def test_add_probchoice_from_tuple_no_probability():
     cpl = CPLogicProgram()
-    with pytest.raises(NeuroLangException, match=r"probability"):
+    with pytest.raises(MalformedProbabilisticTupleError):
         cpl.add_probabilistic_choice_from_tuples(P, {("a", "b"), ("b", "b")})
 
 
@@ -166,7 +165,7 @@ def test_add_probchoice_from_tuple_twice_same_pred_symb():
     probchoice_as_tuples_iterable = {(1.0, "a", "a")}
     cpl = CPLogicProgram()
     cpl.add_probabilistic_choice_from_tuples(P, probchoice_as_tuples_iterable)
-    with pytest.raises(NeuroLangException):
+    with pytest.raises(ForbiddenExpressionError):
         cpl.add_probabilistic_choice_from_tuples(
             P, probchoice_as_tuples_iterable
         )
@@ -179,7 +178,7 @@ def test_add_probchoice_does_not_sum_to_one():
         (0.1, "b", "b"),
     }
     cpl = CPLogicProgram()
-    with pytest.raises(NeuroLangException, match=r"sum"):
+    with pytest.raises(DistributionDoesNotSumToOneError):
         cpl.add_probabilistic_choice_from_tuples(
             P, probchoice_as_tuples_iterable
         )
@@ -194,7 +193,7 @@ def test_forbidden_existential():
     existential_rule = Implication(Q(x), P(x, y))
     cpl = CPLogicProgram()
     cpl.add_probabilistic_choice_from_tuples(P, probchoice_as_tuples_iterable)
-    with pytest.raises(ForbiddenExpressionException):
+    with pytest.raises(ForbiddenExpressionError):
         cpl.walk(existential_rule)
 
 
@@ -203,5 +202,5 @@ def test_forbidden_disjunction():
     rule_b = Implication(P(y), Z(y))
     code = Union((rule_a, rule_b))
     cpl = CPLogicProgram()
-    with pytest.raises(ForbiddenExpressionException):
+    with pytest.raises(ForbiddenExpressionError):
         cpl.walk(code)

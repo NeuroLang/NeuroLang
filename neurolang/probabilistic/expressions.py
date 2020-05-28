@@ -1,15 +1,8 @@
-from ..exceptions import NeuroLangException
 from ..expressions import Constant, Definition, FunctionApplication, Symbol
 
 
 class ProbabilisticPredicate(Definition):
     def __init__(self, probability, body):
-        if not isinstance(probability, (Constant, Symbol)):
-            raise NeuroLangException(
-                "Probability must be a symbol or constant"
-            )
-        if not isinstance(body, FunctionApplication):
-            raise NeuroLangException("Body must be a function application")
         self.probability = probability
         self.body = body
         self._symbols = body._symbols | self.probability._symbols

@@ -6,7 +6,6 @@ from ...datalog.chase import (
     ChaseNaive,
     ChaseNamedRelationalAlgebraMixin,
 )
-from ...exceptions import NeuroLangException
 from ...expression_walker import ExpressionBasicEvaluator
 from ...expressions import (
     Constant,
@@ -146,12 +145,6 @@ class Chase(ChaseNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
 
 
 def ground_cplogic_program(cpl_program):
-    for disjunction in cpl_program.intensional_database().values():
-        if len(disjunction.formulas) > 1:
-            raise NeuroLangException(
-                "Programs with several rules with the same head predicate "
-                "symbol are not currently supported"
-            )
     dl_program = cplogic_to_datalog(cpl_program)
     chase = Chase(dl_program)
     dl_instance = chase.build_chase_solution()
