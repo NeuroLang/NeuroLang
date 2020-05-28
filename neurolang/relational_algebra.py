@@ -613,13 +613,19 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         )
 
     def _compile_function_application_to_sql_fun_exp(self, fun_exp):
-        try:
-            return self._saw.walk(fun_exp).value
-        except NeuroLangException as e:
-            fun, args = self._fa_2_lambda.walk(self._rccsbs.walk(fun_exp))
-            return lambda t: fun(
-                **{arg: getattr(t, arg) for arg in args}
-            )
+        if (
+            isinstance(fun_exp, FunctionApplication) or
+            isinstance(fun_exp, Constant[Column])
+        ):
+            try:
+                return self._saw.walk(fun_exp).value
+            except NeuroLangException as e:
+                fun, args = self._fa_2_lambda.walk(self._rccsbs.walk(fun_exp))
+                return lambda t: fun(
+                    **{arg: getattr(t, arg) for arg in args}
+                )
+        else:
+            return fun_exp.value
 
     @ew.add_match(FunctionApplication, is_arithmetic_operation)
     def prov_arithmetic_operation(self, arithmetic_op):
