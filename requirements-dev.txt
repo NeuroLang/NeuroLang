@@ -1,8 +1,8 @@
 # In addition to requirements.txt; packages required to develop for the application.
 
 # + requirements.txt
-nilearn
-scikit-learn
+nilearn>=0.6.2
+scikit-learn>=0.23
 codacy-coverage
 pytest
 pytest-benchmark
