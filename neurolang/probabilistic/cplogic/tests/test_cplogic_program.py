@@ -3,7 +3,7 @@ import typing
 import pytest
 
 from ....datalog.expressions import Fact
-from ....exceptions import ForbiddenExpressionError
+from ....exceptions import ForbiddenDisjunctionError, ForbiddenExistentialError
 from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Union
 from ...exceptions import (
@@ -165,7 +165,7 @@ def test_add_probchoice_from_tuple_twice_same_pred_symb():
     probchoice_as_tuples_iterable = {(1.0, "a", "a")}
     cpl = CPLogicProgram()
     cpl.add_probabilistic_choice_from_tuples(P, probchoice_as_tuples_iterable)
-    with pytest.raises(ForbiddenExpressionError):
+    with pytest.raises(ForbiddenDisjunctionError):
         cpl.add_probabilistic_choice_from_tuples(
             P, probchoice_as_tuples_iterable
         )
@@ -193,7 +193,7 @@ def test_forbidden_existential():
     existential_rule = Implication(Q(x), P(x, y))
     cpl = CPLogicProgram()
     cpl.add_probabilistic_choice_from_tuples(P, probchoice_as_tuples_iterable)
-    with pytest.raises(ForbiddenExpressionError):
+    with pytest.raises(ForbiddenExistentialError):
         cpl.walk(existential_rule)
 
 
@@ -202,5 +202,5 @@ def test_forbidden_disjunction():
     rule_b = Implication(P(y), Z(y))
     code = Union((rule_a, rule_b))
     cpl = CPLogicProgram()
-    with pytest.raises(ForbiddenExpressionError):
+    with pytest.raises(ForbiddenDisjunctionError):
         cpl.walk(code)

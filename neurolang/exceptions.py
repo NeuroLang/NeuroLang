@@ -14,3 +14,11 @@ class NeuroLangNotImplementedError(NeuroLangException):
 
 class ForbiddenExpressionError(NeuroLangException):
     pass
+
+
+class ForbiddenDisjunctionError(ForbiddenExpressionError):
+    pass
+
+
+class ForbiddenExistentialError(ForbiddenExpressionError):
+    pass

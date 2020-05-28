@@ -4,7 +4,7 @@ from ...datalog import DatalogProgram
 from ...datalog.expression_processing import (
     implication_has_existential_variable_in_antecedent,
 )
-from ...exceptions import ForbiddenExpressionError
+from ...exceptions import ForbiddenDisjunctionError, ForbiddenExistentialError
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
 from ...expressions import Constant, FunctionApplication, Symbol
@@ -136,7 +136,7 @@ class CPLogicMixin(PatternWalker):
         type_, iterable = self.infer_iterable_type(iterable)
         self._check_iterable_prob_type(type_)
         if symbol in self.symbol_table:
-            raise ForbiddenExpressionError(
+            raise ForbiddenDisjunctionError(
                 "Cannot define multiple probabilistic choices with the same "
                 f"predicate symbol. Predicate symbol was: {symbol}"
             )
@@ -194,7 +194,7 @@ class CPLogicMixin(PatternWalker):
 
     @add_match(Implication, implication_has_existential_variable_in_antecedent)
     def prevent_existential_rule(self, rule):
-        raise ForbiddenExpressionError(
+        raise ForbiddenExistentialError(
             "CP-Logic programs do not support existential antecedents"
         )
 
@@ -208,7 +208,7 @@ class CPLogicMixin(PatternWalker):
     def prevent_intensional_disjunction(self, rule):
         pred_symb = rule.consequent.functor
         if pred_symb in self.symbol_table:
-            raise ForbiddenExpressionError(
+            raise ForbiddenDisjunctionError(
                 "CP-Logic programs do not support disjunctions"
             )
         return self.statement_intensional(rule)
