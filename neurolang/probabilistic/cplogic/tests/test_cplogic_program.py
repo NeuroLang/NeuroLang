@@ -7,7 +7,7 @@ from ....exceptions import NeuroLangException
 from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Union
 from ...expressions import ProbabilisticPredicate
-from ..program import CPLogicProgram
+from ..program import CPLogicProgram, ForbiddenExpression
 
 P = Symbol("P")
 Q = Symbol("Q")
@@ -183,3 +183,16 @@ def test_add_probchoice_does_not_sum_to_one():
         cpl.add_probabilistic_choice_from_tuples(
             P, probchoice_as_tuples_iterable
         )
+
+
+def test_forbidden_existential():
+    probchoice_as_tuples_iterable = {
+        (0.5, "a", "a"),
+        (0.2, "a", "b"),
+        (0.3, "b", "b"),
+    }
+    existential_rule = Implication(Q(x), P(x, y))
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_choice_from_tuples(P, probchoice_as_tuples_iterable)
+    with pytest.raises(ForbiddenExpression):
+        cpl.walk(existential_rule)

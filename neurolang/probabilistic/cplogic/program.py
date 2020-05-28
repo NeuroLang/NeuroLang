@@ -1,6 +1,9 @@
 import typing
 
 from ...datalog import DatalogProgram
+from ...datalog.expression_processing import (
+    implication_has_existential_variable_in_antecedent,
+)
 from ...exceptions import NeuroLangException
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
@@ -14,6 +17,10 @@ from ..expression_processing import (
     is_probabilistic_fact,
     union_contains_probabilistic_facts,
 )
+
+
+class ForbiddenExpression(NeuroLangException):
+    pass
 
 
 class CPLogicMixin(PatternWalker):
@@ -184,6 +191,12 @@ class CPLogicMixin(PatternWalker):
             self.symbol_table[pred_symb], [expression]
         )
         return expression
+
+    @add_match(Implication, implication_has_existential_variable_in_antecedent)
+    def existential_rule(self, rule):
+        raise ForbiddenExpression(
+            "CP-Logic programs do not support existential antecedents"
+        )
 
 
 class CPLogicProgram(CPLogicMixin, DatalogProgram, ExpressionWalker):
