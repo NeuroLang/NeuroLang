@@ -84,11 +84,11 @@ class RegionFrontendSolver(
         return self.walk(expression.args[1](expression.args[0]))
 
 
-class UnsupportedAtlas(NeuroLangException):
+class UnsupportedAtlasException(NeuroLangException):
     pass
 
 
-class SymbolAlreadyExists(NeuroLangException):
+class SymbolAlreadyExistsException(NeuroLangException):
     pass
 
 
@@ -124,9 +124,9 @@ class RegionFrontend(QueryBuilderFirstOrder):
         if symbol_name is None:
             symbol_name = atlas_name
         if Symbol(symbol_name) in self.symbol_table:
-            raise SymbolAlreadyExists(symbol_name)
+            raise SymbolAlreadyExistsException(symbol_name)
         if atlas_name not in ATLAS_LOADERS:
-            raise UnsupportedAtlas(atlas_name)
+            raise UnsupportedAtlasException(atlas_name)
         atlas = ATLAS_LOADERS[atlas_name]()
         labels = atlas["labels"]
         image = nibabel.load(atlas["maps"])

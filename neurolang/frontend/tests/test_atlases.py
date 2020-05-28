@@ -3,7 +3,11 @@ import nilearn.datasets
 import pytest
 
 from ...expressions import Symbol
-from .. import RegionFrontend, SymbolAlreadyExists, UnsupportedAtlas
+from .. import (
+    RegionFrontend,
+    SymbolAlreadyExistsException,
+    UnsupportedAtlasException,
+)
 
 
 def test_add_atlas_set_destrieux():
@@ -21,7 +25,7 @@ def test_load_atlas_destrieux():
     frontend = RegionFrontend()
     frontend.load_atlas("destrieux")
     assert Symbol("destrieux") in frontend.symbol_table
-    with pytest.raises(SymbolAlreadyExists):
+    with pytest.raises(SymbolAlreadyExistsException):
         frontend.load_atlas("destrieux")
     frontend.load_atlas("destrieux", "other_name")
     assert Symbol("other_name") in frontend.symbol_table
@@ -29,5 +33,5 @@ def test_load_atlas_destrieux():
 
 def test_load_unsupported_atlas_exception():
     frontend = RegionFrontend()
-    with pytest.raises(UnsupportedAtlas):
+    with pytest.raises(UnsupportedAtlasException):
         frontend.load_atlas("unknown_atlas")
