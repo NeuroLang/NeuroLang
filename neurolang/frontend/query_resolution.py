@@ -247,6 +247,9 @@ class RegionMixin:
         """
         atlas_set = set()
         for label_number, label_name in atlas_labels:
+            # ensure the label's name is a string
+            if isinstance(label_name, np.bytes_):
+                label_name = label_name.astype(str)
             region = self.create_region(spatial_image, label=label_number)
             if region is None:
                 continue
