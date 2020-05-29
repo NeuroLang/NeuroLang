@@ -26,6 +26,8 @@ from ..relational_algebra_provenance import (
     Union,
 )
 from ..utils import NamedRelationalAlgebraFrozenSet
+from ..probabilistic.cplogic import testing
+
 
 C_ = Constant
 S_ = Symbol

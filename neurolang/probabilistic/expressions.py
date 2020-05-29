@@ -1,15 +1,8 @@
-from ..exceptions import NeuroLangException
-from ..expressions import Constant, Definition, FunctionApplication, Symbol
+from ..expressions import Definition
 
 
 class ProbabilisticPredicate(Definition):
     def __init__(self, probability, body):
-        if not isinstance(probability, (Constant, Symbol)):
-            raise NeuroLangException(
-                "Probability must be a symbol or constant"
-            )
-        if not isinstance(body, FunctionApplication):
-            raise NeuroLangException("Body must be a function application")
         self.probability = probability
         self.body = body
         self._symbols = body._symbols | self.probability._symbols
@@ -37,10 +30,3 @@ class ProbabilisticChoiceGrounding(Grounding):
     choice from the grounding of other choices.
 
     """
-
-
-class GraphicalModel(Definition):
-    def __init__(self, edges, cpd_factories, expressions):
-        self.edges = edges
-        self.cpd_factories = cpd_factories
-        self.expressions = expressions

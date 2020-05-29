@@ -1,18 +1,22 @@
 import typing
 
 from ...datalog import DatalogProgram
-from ...exceptions import NeuroLangException
+from ...datalog.expression_processing import (
+    implication_has_existential_variable_in_antecedent,
+)
+from ...exceptions import ForbiddenDisjunctionError, ForbiddenExistentialError
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
-from ...expressions import Constant, Symbol
+from ...expressions import Constant, FunctionApplication, Symbol
 from ...logic import Implication, Union
+from ..exceptions import MalformedProbabilisticTupleError
 from ..expression_processing import (
-    union_contains_probabilistic_facts,
+    add_to_union,
     build_probabilistic_fact_set,
     check_probabilistic_choice_set_probabilities_sum_to_one,
-    add_to_union,
     group_probabilistic_facts_by_pred_symb,
     is_probabilistic_fact,
+    union_contains_probabilistic_facts,
 )
 
 
@@ -132,7 +136,10 @@ class CPLogicMixin(PatternWalker):
         type_, iterable = self.infer_iterable_type(iterable)
         self._check_iterable_prob_type(type_)
         if symbol in self.symbol_table:
-            raise NeuroLangException("Symbol already used")
+            raise ForbiddenDisjunctionError(
+                "Cannot define multiple probabilistic choices with the same "
+                f"predicate symbol. Predicate symbol was: {symbol}"
+            )
         ra_set = Constant[typing.AbstractSet](
             self.new_set(iterable), auto_infer_type=False, verify_type=False,
         )
@@ -145,7 +152,7 @@ class CPLogicMixin(PatternWalker):
             issubclass(iterable_type.__origin__, typing.Tuple)
             and iterable_type.__args__[0] is float
         ):
-            raise NeuroLangException(
+            raise MalformedProbabilisticTupleError(
                 "Expected tuples to have a probability as their first element"
             )
 
@@ -184,6 +191,27 @@ class CPLogicMixin(PatternWalker):
             self.symbol_table[pred_symb], [expression]
         )
         return expression
+
+    @add_match(Implication, implication_has_existential_variable_in_antecedent)
+    def prevent_existential_rule(self, rule):
+        raise ForbiddenExistentialError(
+            "CP-Logic programs do not support existential antecedents"
+        )
+
+    @add_match(
+        Implication(FunctionApplication, ...),
+        lambda exp: (
+            exp.antecedent
+            != Constant[bool](True, auto_infer_type=False, verify_type=False)
+        ),
+    )
+    def prevent_intensional_disjunction(self, rule):
+        pred_symb = rule.consequent.functor
+        if pred_symb in self.symbol_table:
+            raise ForbiddenDisjunctionError(
+                "CP-Logic programs do not support disjunctions"
+            )
+        return self.statement_intensional(rule)
 
 
 class CPLogicProgram(CPLogicMixin, DatalogProgram, ExpressionWalker):
