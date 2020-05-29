@@ -22,7 +22,7 @@ from ..expressions import (
     ProbabilisticChoiceGrounding,
     ProbabilisticPredicate,
 )
-from .grounding import get_grounded_predicate, topological_sort_groundings
+from .grounding import get_grounding_pred_symb, topological_sort_groundings
 
 
 class GraphicalModel(Definition):
@@ -226,7 +226,7 @@ class CPLogicGroundingToGraphicalModelTranslator(PatternWalker):
 
         """
         expression = grounding.expression
-        node_symbol = get_grounded_predicate(expression).functor
+        node_symbol = get_grounding_pred_symb(expression)
         probability_column = str2columnstr_constant(Symbol.fresh().name)
         relation = ConcatenateConstantColumn(
             grounding.relation, probability_column, Constant[float](1.0)
@@ -267,7 +267,7 @@ class CPLogicGroundingToGraphicalModelTranslator(PatternWalker):
                 ),
             )
         )
-        node_symbol = get_grounded_predicate(expression).functor
+        node_symbol = get_grounding_pred_symb(expression)
         node = NaryChoiceResultPlateNode(node_symbol, expression, relation)
         self.add_plate_node(
             node_symbol, node, parent_node_symbols={choice_node_symb}
@@ -279,7 +279,7 @@ class CPLogicGroundingToGraphicalModelTranslator(PatternWalker):
         Represent a set of probabilistic facts with a Bernoulli node.
         """
         expression = grounding.expression
-        node_symbol = get_grounded_predicate(expression).functor
+        node_symbol = get_grounding_pred_symb(expression)
         probability_column = str2columnstr_constant(
             grounding.expression.consequent.probability.name
         )
@@ -295,7 +295,7 @@ class CPLogicGroundingToGraphicalModelTranslator(PatternWalker):
         Represent a deterministic intensional rule with an AND node.
         """
         expression = grounding.expression
-        node_symbol = get_grounded_predicate(expression).functor
+        node_symbol = get_grounding_pred_symb(expression)
         parent_node_symbols = set(
             predicate.functor
             for predicate in extract_logic_predicates(

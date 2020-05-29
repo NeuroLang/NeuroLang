@@ -27,7 +27,7 @@ from .cplogic_to_gm import (
     NaryChoiceResultPlateNode,
     PlateNode,
 )
-from .grounding import get_grounded_predicate, ground_cplogic_program
+from .grounding import get_grounding_predicate, ground_cplogic_program
 
 TRUE = Constant[bool](True, verify_type=False, auto_infer_type=False)
 EQUAL = Constant(operator.eq)
@@ -174,7 +174,7 @@ def solve_succ_query(query_predicate, cpl_program):
     marginal_provenance_expression = solver.walk(
         ProbabilityOperation((query_node, TRUE), tuple())
     )
-    result_args = get_grounded_predicate(query_node.expression).args
+    result_args = get_grounding_predicate(query_node.expression).args
     result = rename_columns_for_args_to_match(
         marginal_provenance_expression, result_args, qpred_args
     )
@@ -194,6 +194,9 @@ class UnionOverTuples(RelationalAlgebraOperation):
     def __init__(self, relation, tuple_symbol):
         self.relation = relation
         self.tuple_symbol = tuple_symbol
+
+    def __repr__(self):
+        return f"U_{self.tuple_symbol} {{ {self.relation} }}"
 
 
 class TupleSymbol(Symbol):
@@ -361,7 +364,7 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         to_join = []
         for antecedent_pred in antecedent_preds:
             cnode = self.graphical_model.get_node(antecedent_pred.functor)
-            src_args = get_grounded_predicate(cnode.expression).args
+            src_args = get_grounding_predicate(cnode.expression).args
             dst_args = antecedent_pred.args
             parent_relation = rename_columns_for_args_to_match(
                 parent_relations[cnode.node_symbol], src_args, dst_args
@@ -478,7 +481,7 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
             }
             get_dst_args = pred_symb_to_args.get
         else:
-            args = get_grounded_predicate(expression).args
+            args = get_grounding_predicate(expression).args
             get_dst_args = lambda _: args
         cnode_symbs = self.graphical_model.get_parent_node_symbols(node_symb)
         cnodes = [self.graphical_model.get_node(cns) for cns in cnode_symbs]
@@ -497,7 +500,7 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
                 cnode_symb, chosen_tuple_symbs, visited
             )
             cnode = self.graphical_model.get_node(cnode_symb)
-            src_args = get_grounded_predicate(cnode.expression).args
+            src_args = get_grounding_predicate(cnode.expression).args
             dst_args = get_dst_args(cnode_symb)
             relation = rename_columns_for_args_to_match(
                 relation, src_args, dst_args

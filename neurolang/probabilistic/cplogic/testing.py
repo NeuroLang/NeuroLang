@@ -31,7 +31,7 @@ from .gm_provenance_solver import (
     UnionRemover,
     rename_columns_for_args_to_match,
 )
-from .grounding import get_grounded_predicate, ground_cplogic_program
+from .grounding import get_grounding_predicate, ground_cplogic_program
 
 
 def build_gm(cpl_program):
@@ -190,7 +190,7 @@ class TestRAPToLaTeXTranslator(PatternWalker):
 
     @add_match(UnionOverTuples)
     def union_over_tuples(self, op):
-        pred_symb = get_grounded_predicate(
+        pred_symb = get_grounding_predicate(
             op.__debug_expression__
         ).functor.name
         inner = self.walk(op.relation)
@@ -211,7 +211,7 @@ class TestRAPToLaTeXTranslator(PatternWalker):
                 "Cannot convert to LaTeX without expression information "
                 "stored in __debug_expression__ attribute"
             )
-        pred = get_grounded_predicate(prov_set.__debug_expression__)
+        pred = get_grounding_predicate(prov_set.__debug_expression__)
         string = f"\\mathcal{{{pred.functor.name}}}"
         if hasattr(prov_set, "__debug_alway_true__"):
             string += "_1"
@@ -233,7 +233,7 @@ def inspect_resolution(qpred, cpl_program, tex_out_path=None):
     solver = CPLogicGraphicalModelProvenanceSolver(gm)
     query_node = gm.get_node(qpred_symb)
     exp = solver.walk(ProbabilityOperation((query_node, TRUE), tuple()))
-    result_args = get_grounded_predicate(query_node.expression).args
+    result_args = get_grounding_predicate(query_node.expression).args
     exp = rename_columns_for_args_to_match(exp, result_args, qpred_args)
     gm = build_gm(cpl_program)
     spusher = SelectionOutPusher()
