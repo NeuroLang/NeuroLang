@@ -625,12 +625,6 @@ class SelectionOutPusher(ProvenanceExpressionTransformer):
             Selection(op.relation.relation, op.formula), op.relation.formula
         )
 
-    @add_match(Projection(Selection(..., TupleEqualSymbol), ...))
-    def tuple_selection_in_projection(self, op):
-        new_proj = Projection(op.relation.relation, op.attributes)
-        formula = op.relation.formula
-        return Selection(new_proj, formula)
-
     @add_match(
         UnionOverTuples(Selection(..., TupleEqualSymbol), ...),
         lambda exp: exp.relation.formula.tuple_symbol != exp.tuple_symbol,
