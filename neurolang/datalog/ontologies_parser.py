@@ -55,7 +55,9 @@ class OntologyParser:
             + union_of_constraints.formulas
         )
 
-        return extensional_predicate_tuples, union_of_constraints
+        entailment_rules = self.load_entailment_rules()
+
+        return extensional_predicate_tuples, union_of_constraints, entailment_rules
 
     def get_triples_symbol(self):
         return self._triple
