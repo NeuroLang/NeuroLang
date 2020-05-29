@@ -74,7 +74,7 @@ def test_all_values_from():
     test_base_q = Union((Implication(answer(x, y), rdf_type(x, y)),))
 
     onto = OntologyParser(io.StringIO(premise_ontology))
-    predicate_tuples, union_of_constraints = onto.parse_ontology()
+    predicate_tuples, union_of_constraints, _ = onto.parse_ontology()
 
     triples = predicate_tuples[onto.get_triples_symbol()]
     pointers = predicate_tuples[onto.get_pointers_symbol()]
@@ -143,7 +143,7 @@ def test_has_value():
     test_base_q = Union((Implication(answer(x, y), p2(x, y)),))
 
     onto = OntologyParser(io.StringIO(test_case))
-    predicate_tuples, union_of_constraints = onto.parse_ontology()
+    predicate_tuples, union_of_constraints, _ = onto.parse_ontology()
 
     triples = predicate_tuples[onto.get_triples_symbol()]
     pointers = predicate_tuples[onto.get_pointers_symbol()]
@@ -215,7 +215,7 @@ def test_min_cardinality():
     test_base_q = Union((Implication(answer(x, y), p2(x, y)),))
 
     onto = OntologyParser(io.StringIO(test_case))
-    predicate_tuples, union_of_constraints = onto.parse_ontology()
+    predicate_tuples, union_of_constraints, _ = onto.parse_ontology()
 
     triples = predicate_tuples[onto.get_triples_symbol()]
     pointers = predicate_tuples[onto.get_pointers_symbol()]
@@ -282,7 +282,7 @@ def test_max_cardinality():
     test_base_q = Union((Implication(answer(x, y), p2(x, y)),))
 
     onto = OntologyParser(io.StringIO(test_case))
-    predicate_tuples, union_of_constraints = onto.parse_ontology()
+    predicate_tuples, union_of_constraints, _ = onto.parse_ontology()
 
     triples = predicate_tuples[onto.get_triples_symbol()]
     pointers = predicate_tuples[onto.get_pointers_symbol()]
@@ -335,4 +335,4 @@ def test_not_implemented():
     onto = OntologyParser(io.StringIO(test_case))
 
     with pytest.raises(NeuroLangNotImplementedError):
-        predicate_tuples, union_of_constraints = onto.parse_ontology()
+        predicate_tuples, union_of_constraints, _ = onto.parse_ontology()
