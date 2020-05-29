@@ -261,7 +261,7 @@ class ReplaceExpressionWalker(ExpressionWalker):
         for arg in args:
             if isinstance(arg, Expression):
                 new_arg = self.walk(arg)
-            elif isinstance(arg, (tuple, list)):
+            elif isinstance(arg, typing.Iterable):
                 new_arg, _ = self.process_iterable_argument(arg)
             elif arg is Ellipsis:
                 raise NeuroLangException(
