@@ -25,10 +25,7 @@ def test_simple_noisy_or_projection():
     result = solver.walk(projection)
     expected_tuples = [(1 - 0.8 * 0.9, "a"), (0.5, "b")]
     itertuple = collections.namedtuple("tuple", result.value.columns)
-    assert all(
-        itertuple._make(nt) in result.value
-        for nt in expected_tuples
-    )
+    assert all(itertuple._make(nt) in result.value for nt in expected_tuples)
 
 
 def test_noisy_or_projection_and_naturaljoin():

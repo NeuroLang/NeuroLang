@@ -1,12 +1,13 @@
 import collections
-import typing
+from typing import AbstractSet, Iterable
 
 import numpy
 
 from ..datalog import WrappedRelationalAlgebraSet
-from ..exceptions import NeuroLangException
+from ..exceptions import UnexpectedExpressionError
 from ..expressions import Constant, Expression, FunctionApplication
 from ..logic import Implication, Union
+from .exceptions import DistributionDoesNotSumToOneError
 from .expressions import ProbabilisticPredicate
 
 
@@ -64,14 +65,15 @@ def build_probabilistic_fact_set(pred_symb, pfacts):
         )
         for pf in pfacts
     ]
-    return Constant[typing.AbstractSet](WrappedRelationalAlgebraSet(iterable))
+    return Constant[AbstractSet](WrappedRelationalAlgebraSet(iterable))
 
 
 def check_probabilistic_choice_set_probabilities_sum_to_one(ra_set):
     probs_sum = sum(v.value[0].value for v in ra_set.value)
     if not numpy.isclose(probs_sum, 1.0):
-        raise NeuroLangException(
-            "Probabilities of probabilistic choice should sum to 1"
+        raise DistributionDoesNotSumToOneError(
+            "Probability labels of a probabilistic choice should sum to 1. "
+            f"Got {probs_sum} instead."
         )
 
 
@@ -94,11 +96,11 @@ def add_to_union(union, to_add):
     """
     if isinstance(to_add, Union):
         return Union(union.formulas + to_add.formulas)
-    if isinstance(to_add, typing.Iterable):
+    if isinstance(to_add, Iterable):
         if not all(isinstance(item, Expression) for item in to_add):
-            raise NeuroLangException("Expected Expression")
+            raise UnexpectedExpressionError("Expected Expression")
         return Union(union.formulas + tuple(to_add))
-    raise NeuroLangException("Expected Union or Expression iterable")
+    raise UnexpectedExpressionError("Expected Union or Expression iterable")
 
 
 def union_contains_probabilistic_facts(union):
