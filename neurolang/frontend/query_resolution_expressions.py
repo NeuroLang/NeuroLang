@@ -80,9 +80,22 @@ class Expression(object):
         else:
             return object.__repr__(self)
 
+    def __getattr__(self, name):
+        if isinstance(name, Expression):
+            name_ = name.expression
+        else:
+            name_ = nl.Constant[str](name)
+        new_expression = exp.FunctionApplication(
+            nl.Constant(getattr), (self.expression, name_,)
+        )
+        return Operation(
+            self.query_builder, new_expression, self, (name,)
+        )
+
 
 binary_operations = (
-    op.add, op.sub, op.mul, op.ge, op.le, op.gt, op.lt, op.eq
+    op.add, op.sub, op.mul, op.ge, op.le, op.gt, op.lt, op.eq,
+    op.contains
 )
 
 
@@ -99,10 +112,11 @@ def op_bind(op):
             op, auto_infer_type=False
         )
         new_expression = functor(*new_args)
-        return Operation(
+        res = Operation(
             self.query_builder, new_expression, op,
             (self,) + args, infix=len(args) > 0
         )
+        return res
 
     return fun
 
@@ -177,6 +191,8 @@ class Operation(Expression):
             op_repr = '({})'.format(repr(self.operator))
         elif self.operator in self.operator_repr:
             op_repr = self.operator_repr[self.operator]
+        elif isinstance(self.operator, Expression):
+            op_repr = repr(self.operator)
         elif hasattr(self.operator, '__qualname__'):
             op_repr = self.operator.__qualname__
         else:

@@ -16,9 +16,11 @@ from .relational_algebra import (
     RelationalAlgebraOperation,
     RelationalAlgebraSolver,
     RenameColumn,
+    RenameColumns,
     Selection,
     Union,
     eq_,
+    str2columnstr_constant,
 )
 
 
@@ -192,6 +194,25 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             new_prov_col,
         )
 
+    @add_match(RenameColumns)
+    def prov_rename_columns(self, rename_columns):
+        prov_relation = self.walk(rename_columns.relation)
+        new_prov_col = prov_relation.provenance_column
+        prov_col_rename = dict(rename_columns.renames).get(
+            prov_relation.provenance_column, None
+        )
+        if prov_col_rename is not None:
+            new_prov_col = prov_col_rename
+        return ProvenanceAlgebraSet(
+            self.walk(
+                RenameColumns(
+                    Constant[AbstractSet](prov_relation.value),
+                    rename_columns.renames,
+                )
+            ).value,
+            new_prov_col,
+        )
+
     @add_match(ExtendedProjection)
     def prov_extended_projection(self, extended_proj):
         relation = self.walk(extended_proj.relation)
@@ -283,41 +304,35 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
     def prov_union(self, union_op):
         left = self.walk(union_op.relation_left)
         right = self.walk(union_op.relation_right)
-
-        left_cols = set(left.value.columns)
-        left_cols.discard(left.provenance_column.value)
-        right_cols = set(right.value.columns)
-        right_cols.discard(right.provenance_column.value)
-
-        if (
-            len(left_cols.difference(right_cols)) > 0
-            or len(right_cols.difference(left_cols)) > 0
-        ):
+        if left.non_provenance_columns != right.non_provenance_columns:
             raise NeuroLangException(
-                "At the union, both sets must have the same columns"
+                "All non-provenance columns must be the same: {} != {}".format(
+                    left.non_provenance_columns, right.non_provenance_columns,
+                )
             )
-
-        proj_columns = tuple([Constant(ColumnStr(name)) for name in left_cols])
-
-        res1 = ConcatenateConstantColumn(
-            Projection(left, proj_columns),
-            Constant(ColumnStr("__new_col_union__")),
-            Constant[str]("union_temp_value_1"),
+        prov_col = left.provenance_column
+        result_columns = left.non_provenance_columns
+        # move to non-provenance relational algebra
+        np_left = Constant[AbstractSet](left.value)
+        np_right = Constant[AbstractSet](right.value)
+        # make the the provenance columns match
+        np_right = RenameColumn(np_right, right.provenance_column, prov_col)
+        # add a dummy column with different values for each relation
+        # this ensures that all the tuples will be part of the result
+        dummy_col = str2columnstr_constant(Symbol.fresh().name)
+        np_left = ConcatenateConstantColumn(
+            np_left, dummy_col, Constant[int](0)
         )
-        res2 = ConcatenateConstantColumn(
-            Projection(right, proj_columns),
-            Constant(ColumnStr("__new_col_union__")),
-            Constant[str]("union_temp_value_2"),
+        np_right = ConcatenateConstantColumn(
+            np_right, dummy_col, Constant[int](1)
         )
-
-        left = self.walk(res1)
-        right = self.walk(res2)
-
-        new_relation = ProvenanceAlgebraSet(
-            left.value | right.value, union_op.relation_left.provenance_column
-        )
-
-        return self.walk(Projection(new_relation, proj_columns))
+        ra_union_op = Union(np_left, np_right)
+        new_relation = self.walk(ra_union_op)
+        result = ProvenanceAlgebraSet(new_relation.value, prov_col)
+        # provenance projection that removes the dummy column and sums the
+        # provenance of matching tuples
+        result = Projection(result, result_columns)
+        return self.walk(result)
 
     @add_match(Constant[AbstractSet])
     def constant_relation_or_provenance_set(self, relation):

@@ -5,13 +5,16 @@ import pytest
 
 from ..exceptions import NeuroLangException
 from ..expressions import Constant, Symbol
+from ..probabilistic.cplogic import testing
 from ..relational_algebra import (
     ColumnStr,
     NaturalJoin,
     Product,
     RenameColumn,
+    RenameColumns,
     Selection,
     eq_,
+    str2columnstr_constant,
 )
 from ..relational_algebra_provenance import (
     ConcatenateConstantColumn,
@@ -284,6 +287,27 @@ def test_union():
     assert sol == expected
 
 
+def test_union_different_prov_col_names():
+    r1 = testing.make_prov_set([(0.1, "a"), (0.2, "b")], ("_p1_", "x"))
+    r2 = testing.make_prov_set([(0.5, "a"), (0.9, "c")], ("_p2_", "x"))
+    expected = testing.make_prov_set(
+        [(0.6, "a"), (0.2, "b"), (0.9, "c")], ("_whatever_", "x"),
+    )
+    operation = Union(r1, r2)
+    solver = RelationalAlgebraProvenanceCountingSolver()
+    result = solver.walk(operation)
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_union_with_empty_set():
+    r = testing.make_prov_set([(0.1, "a"), (0.2, "b")], ("_p_", "x"))
+    empty = testing.make_prov_set([], ("_p_", "x"))
+    operation = Union(r, empty)
+    solver = RelationalAlgebraProvenanceCountingSolver()
+    result = solver.walk(operation)
+    assert testing.eq_prov_relations(result, r)
+
+
 def test_projection():
     relation = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
@@ -435,3 +459,27 @@ def test_concatenate_column_to_ra_relation():
         )
     )
     assert result == expected
+
+
+def test_rename_columns():
+    prov_relation = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            columns=("_p_", "x", "y"),
+            iterable=[(0.1, "a", 0), (1.0, "b", 44)],
+        ),
+        provenance_column=str2columnstr_constant("_p_"),
+    )
+    rename_columns = RenameColumns(
+        prov_relation,
+        ((str2columnstr_constant("x"), str2columnstr_constant("z")),),
+    )
+    expected = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            columns=("_p_", "z", "y"),
+            iterable=[(0.1, "a", 0), (1.0, "b", 44)],
+        ),
+        provenance_column=str2columnstr_constant("_p_"),
+    )
+    solver = RelationalAlgebraProvenanceCountingSolver()
+    result = solver.walk(rename_columns)
+    assert testing.eq_prov_relations(result, expected)
