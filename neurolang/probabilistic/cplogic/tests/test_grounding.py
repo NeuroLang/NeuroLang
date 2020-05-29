@@ -1,17 +1,12 @@
 import typing
 
 import numpy
-import pytest
 
 from ....datalog import Fact
-from ....exceptions import NeuroLangException
 from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Union
 from ....utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
-from ...expression_processing import (
-    add_to_union,
-    is_probabilistic_fact,
-)
+from ...expression_processing import add_to_union, is_probabilistic_fact
 from ...expressions import (
     Grounding,
     ProbabilisticChoiceGrounding,
@@ -115,11 +110,3 @@ def test_cplogic_grounding_with_pchoice():
     cpl_program.add_probabilistic_choice_from_tuples(P, probchoice_set)
     grounded = ground_cplogic_program(cpl_program)
     assert isinstance(grounded.expressions[0], ProbabilisticChoiceGrounding)
-
-
-def test_unsupported_grounding_program_with_disjunction():
-    code = Union((Implication(Q(x), P(x)), Implication(Q(x), R(x))))
-    cpl_program = CPLogicProgram()
-    cpl_program.walk(code)
-    with pytest.raises(NeuroLangException, match=r"supported"):
-        ground_cplogic_program(cpl_program)

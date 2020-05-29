@@ -1,6 +1,6 @@
 import pytest
 
-from ...exceptions import NeuroLangException
+from ...exceptions import UnexpectedExpressionError
 from ...expressions import Symbol
 from ...logic import Union
 from ..expression_processing import add_to_union
@@ -29,9 +29,7 @@ def test_concatenate_to_union():
 
 def test_concatenate_to_union_not_expression():
     union = Union((P(x),))
-    with pytest.raises(NeuroLangException, match=r"Expected Expression"):
+    with pytest.raises(UnexpectedExpressionError):
         add_to_union(union, ["this_is_not_an_expression"])
-    with pytest.raises(
-        NeuroLangException, match=r"Expected Union or Expression iterable",
-    ):
+    with pytest.raises(UnexpectedExpressionError):
         add_to_union(union, None)
