@@ -57,7 +57,11 @@ class OntologyParser:
 
         entailment_rules = self.load_entailment_rules()
 
-        return extensional_predicate_tuples, union_of_constraints, entailment_rules
+        return (
+            extensional_predicate_tuples,
+            union_of_constraints,
+            entailment_rules,
+        )
 
     def get_triples_symbol(self):
         return self._triple
@@ -130,9 +134,9 @@ class OntologyParser:
         rules_subclasses = self._parse_subclasses()
         rules_disjoint = self._parse_disjoint()
 
-         union_of_rules = Union(
-            rules_subproperties.formulas 
-            + rules_subclasses.formulas 
+        union_of_rules = Union(
+            rules_subproperties.formulas
+            + rules_subclasses.formulas
             + rules_disjoint.formulas
         )
 
