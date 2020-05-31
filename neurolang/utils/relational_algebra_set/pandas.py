@@ -586,19 +586,47 @@ class NamedRelationalAlgebraFrozenSet(
         else:
             groups = self._container.groupby(lambda x: 0)
 
-        if (
-            isinstance(aggregate_function, (tuple, list))
-        ):
-            args = OrderedDict({
-                t[0]: pd.NamedAgg(t[1], t[2])
-                for t in aggregate_function
-            })
-            new_container = groups.agg(**args)
-            new_container.index = pd.RangeIndex(len(new_container))
-        else:
-            new_container = groups.agg(aggregate_function)
-            new_container.reset_index(inplace=True)
+        args = OrderedDict()
+        args_new_column = OrderedDict()
+        if isinstance(aggregate_function, dict):
+            arg_iterable = ((k, None, v) for k, v in aggregate_function.items())
+        elif isinstance(aggregate_function, (tuple, list)):
+            arg_iterable = aggregate_function
 
+        for dst, src, fun in arg_iterable:
+            if dst in group_columns:
+                raise ValueError(
+                    f"Destination column {dst} can't be part of the grouping"
+                )
+            if src is None:
+                if dst in self.columns:
+                    args[dst] = pd.NamedAgg(dst, fun)
+                else:
+                    args_new_column[dst] = fun
+            elif src in self.columns:
+                args[dst] = pd.NamedAgg(src, fun)
+            else:
+                raise ValueError(f"Source column {src} not in columns")
+
+        new_containers = []
+        if len(args) > 0:
+            new_containers = [groups.agg(**args)]
+        if len(args_new_column) > 0:
+            for dst, fun in args_new_column.items():
+                new_col = (
+                    groups
+                    .apply(fun)
+                    .rename(dst)
+                    .to_frame()
+                )
+                new_containers.append(new_col)
+
+        if len(new_containers) == 1:
+            new_container = new_containers[0]
+        else:
+            new_container = pd.concat(new_containers)
+
+        new_container = new_container.reset_index()
         output = self._light_init_same_structure(
             new_container,
             might_have_duplicates=self._might_have_duplicates,
