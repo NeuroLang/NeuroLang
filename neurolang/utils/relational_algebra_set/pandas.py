@@ -620,7 +620,7 @@ class NamedRelationalAlgebraFrozenSet(
         aggs_multi_columns = OrderedDict()
         if isinstance(aggregate_function, dict):
             arg_iterable = (
-                (k, None, v)
+                (k, k if k in self.columns else None, v)
                 for k, v in aggregate_function.items()
             )
         elif isinstance(aggregate_function, (tuple, list)):
