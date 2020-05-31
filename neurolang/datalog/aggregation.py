@@ -181,26 +181,7 @@ class Chase(chase.Chase):
                 aggregation_args = arg.name
                 fun = RelationalAlgebraStringExpression('first')
             elif isinstance(arg, AggregationApplication):
-                fun = self.datalog_program.walk(arg.functor).value
-                if (
-                    len(arg.args) == 1 and
-                    isinstance(arg.args[0], Symbol)
-                ):
-                    aggregation_args = arg.args[0].name
-                else:
-                    aggregation_args = None
-                    arg = self.datalog_program.walk(arg)
-                    fa = FunctionApplication(arg.functor, arg.args)
-                    fun_, arg_names = FA2L.walk(fa)
-                    fun_str = (
-                        "lambda t: fun_(" +
-                        ", ".join(f't.{arg_}' for arg_ in arg_names) +
-                        ")"
-                    )
-                    gs = globals()
-                    ls = locals()
-                    gs['fun_'] = fun
-                    fun = eval(fun_str, gs, ls)
+                aggregation_args, fun = self._obtain_aggregations(arg, fun)
             output_args.append(
                 (
                     Symbol.fresh().name,
@@ -209,6 +190,29 @@ class Chase(chase.Chase):
                 )
             )
         return group_vars, output_args
+
+    def _obtain_aggregations(self, arg, fun):
+        if (
+            len(arg.args) == 1 and
+            isinstance(arg.args[0], Symbol)
+        ):
+            fun = self.datalog_program.walk(arg.functor).value
+            aggregation_args = arg.args[0].name
+        else:
+            aggregation_args = None
+            arg = self.datalog_program.walk(arg)
+            fa = FunctionApplication(arg.functor, arg.args)
+            fun_, arg_names = FA2L.walk(fa)
+            fun_str = (
+                "lambda t: fun_(" +
+                ", ".join(f't.{arg_}' for arg_ in arg_names) +
+                ")"
+            )
+            gs = globals()
+            ls = locals()
+            gs['fun_'] = fun
+            fun = eval(fun_str, gs, ls)
+        return aggregation_args, fun
 
     def eliminate_already_computed(self, consequent, instance, substitutions):
         if is_aggregation_predicate(consequent):
