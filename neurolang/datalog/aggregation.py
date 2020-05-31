@@ -13,13 +13,18 @@ in the set ``Q``.
 from warnings import warn
 
 from ..exceptions import NeuroLangException
-from ..expression_walker import PatternWalker, add_match
+from ..expression_walker import (
+    PatternWalker, add_match, FunctionApplicationToPythonLambda
+)
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..utils.relational_algebra_set import RelationalAlgebraStringExpression
 from . import (Implication, Union, chase,
                is_conjunctive_expression_with_nested_predicates)
 from .basic_representation import UnionOfConjunctiveQueries
 from .expressions import TranslateToLogic
+
+
+FA2L = FunctionApplicationToPythonLambda()
 
 
 class AggregationApplication(FunctionApplication):
@@ -184,9 +189,12 @@ class Chase(chase.Chase):
                     aggregation_args = arg.args[0].name
                 else:
                     aggregation_args = None
+                    arg = self.datalog_program.walk(arg)
+                    fa = FunctionApplication(arg.functor, arg.args)
+                    fun_, arg_names = FA2L.walk(fa)
                     fun_str = (
                         "lambda t: fun_(" +
-                        ", ".join(f't.{arg_.name}' for arg_ in arg.args) +
+                        ", ".join(f't.{arg_}' for arg_ in arg_names) +
                         ")"
                     )
                     gs = globals()
