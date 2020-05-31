@@ -591,7 +591,8 @@ class NamedRelationalAlgebraFrozenSet(
         )
 
         new_containers = []
-        new_containers = [groups.agg(**aggs)]
+        if len(aggs) > 0:
+            new_containers = [groups.agg(**aggs)]
         for dst, fun in aggs_multi_column.items():
             new_col = (
                 groups
@@ -630,13 +631,10 @@ class NamedRelationalAlgebraFrozenSet(
                 raise ValueError(
                     f"Destination column {dst} can't be part of the grouping"
                 )
-            if src is None:
-                if dst in self.columns:
-                    aggs[dst] = pd.NamedAgg(dst, fun)
-                else:
-                    aggs_multi_columns[dst] = fun
-            elif src in self.columns:
+            if src in self.columns:
                 aggs[dst] = pd.NamedAgg(src, fun)
+            elif src is None or all(s in self.columns for s in src):
+                aggs_multi_columns[dst] = fun
             else:
                 raise ValueError(f"Source column {src} not in columns")
 
