@@ -586,18 +586,27 @@ class NamedRelationalAlgebraFrozenSet(
         else:
             groups = self._container.groupby(lambda x: 0)
 
-        if (
-            isinstance(aggregate_function, (tuple, list))
-        ):
-            args = OrderedDict({
-                t[0]: pd.NamedAgg(t[1], t[2])
-                for t in aggregate_function
-            })
-            new_container = groups.agg(**args)
-            new_container.index = pd.RangeIndex(len(new_container))
-        else:
-            new_container = groups.agg(aggregate_function)
-            new_container.reset_index(inplace=True)
+        aggs, aggs_multi_column = self._classify_aggregations(
+            group_columns, aggregate_function
+        )
+
+        new_containers = []
+        if len(aggs) > 0:
+            new_containers.append(groups.agg(**aggs))
+
+        for dst, fun in aggs_multi_column.items():
+            new_col = (
+                groups
+                .apply(fun)
+                .rename(dst)
+                .to_frame()
+            )
+            new_containers.append(new_col)
+
+        new_container = (
+            pd.concat(new_containers)
+            .reset_index()
+        )
 
         output = self._light_init_same_structure(
             new_container,
@@ -605,6 +614,31 @@ class NamedRelationalAlgebraFrozenSet(
             columns=list(new_container.columns)
         )
         return output
+
+    def _classify_aggregations(self, group_columns, aggregate_function):
+        aggs = OrderedDict()
+        aggs_multi_columns = OrderedDict()
+        if isinstance(aggregate_function, dict):
+            arg_iterable = (
+                (k, k if k in self.columns else None, v)
+                for k, v in aggregate_function.items()
+            )
+        elif isinstance(aggregate_function, (tuple, list)):
+            arg_iterable = aggregate_function
+
+        for dst, src, fun in arg_iterable:
+            if dst in group_columns:
+                raise ValueError(
+                    f"Destination column {dst} can't be part of the grouping"
+                )
+            if src in self.columns:
+                aggs[dst] = pd.NamedAgg(src, fun)
+            elif src is None or all(s in self.columns for s in src):
+                aggs_multi_columns[dst] = fun
+            else:
+                raise ValueError(f"Source column {src} not in columns")
+
+        return aggs, aggs_multi_columns
 
     def extended_projection(self, eval_expressions):
         proj_columns = list(eval_expressions.keys())
