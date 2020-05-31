@@ -592,7 +592,8 @@ class NamedRelationalAlgebraFrozenSet(
 
         new_containers = []
         if len(aggs) > 0:
-            new_containers = [groups.agg(**aggs)]
+            new_containers.append(groups.agg(**aggs))
+
         for dst, fun in aggs_multi_column.items():
             new_col = (
                 groups
@@ -602,12 +603,11 @@ class NamedRelationalAlgebraFrozenSet(
             )
             new_containers.append(new_col)
 
-        if len(new_containers) == 1:
-            new_container = new_containers[0]
-        else:
-            new_container = pd.concat(new_containers)
+        new_container = (
+            pd.concat(new_containers)
+            .reset_index()
+        )
 
-        new_container = new_container.reset_index()
         output = self._light_init_same_structure(
             new_container,
             might_have_duplicates=self._might_have_duplicates,
