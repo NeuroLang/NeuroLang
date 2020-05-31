@@ -159,6 +159,7 @@ class Chase(chase.Chase):
         new_tuples = (
             substitutions
             .aggregate(group_vars, output_args)
+            .projection(*(oa[0] for oa in output_args))
             .to_unnamed()
         )
         new_tuples = self.datalog_program.new_set(new_tuples)
@@ -176,7 +177,22 @@ class Chase(chase.Chase):
                 fun = RelationalAlgebraStringExpression('first')
             elif isinstance(arg, AggregationApplication):
                 fun = self.datalog_program.walk(arg.functor).value
-                aggregation_args = arg.args[0].name
+                if (
+                    len(arg.args) == 1 and
+                    isinstance(arg.args[0], Symbol)
+                ):
+                    aggregation_args = arg.args[0].name
+                else:
+                    aggregation_args = None
+                    fun_str = (
+                        "lambda t: fun_(" +
+                        ", ".join(f't.{arg_.name}' for arg_ in arg.args) +
+                        ")"
+                    )
+                    gs = globals()
+                    ls = locals()
+                    gs['fun_'] = fun
+                    fun = eval(fun_str, gs, ls)
             output_args.append(
                 (
                     Symbol.fresh().name,
