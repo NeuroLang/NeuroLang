@@ -710,8 +710,6 @@ def test_aggregate(ra_module):
     new_set = initial_set.aggregate(
        ["x", "y"],
        [
-           # ("x", "x", lambda x: next(iter(x))),
-           # ("y", "y", lambda x: next(iter(x))),
            ("z", "z", lambda x: max(x) - 1),
        ],
     )
