@@ -658,17 +658,6 @@ class SelectionOutPusher(ProvenanceExpressionTransformer):
         union.__debug_expression__ = getattr(op, "__debug_expression__", None)
         return Selection(union, op.relation.formula,)
 
-    @add_match(
-        Projection(Selection(..., TupleEqualSymbol), ...),
-        lambda proj: set(proj.attributes)
-        == set(proj.relation.formula.columns),
-    )
-    def projection_of_selection_same_columns(self, projection):
-        selection = projection.relation
-        new_projection = Projection(selection.relation, projection.attributes)
-        new_selection = Selection(new_projection, selection.formula)
-        return new_selection
-
     @add_match(UnionOverTuples(Projection, ...))
     def union_of_projection(self, union):
         projection = union.relation
@@ -681,9 +670,8 @@ class SelectionOutPusher(ProvenanceExpressionTransformer):
     def selection_in_projection(self, proj):
         select = proj.relation
         new_proj = Projection(select.relation, proj.attributes)
-        new_proj = self.walk(new_proj)
         new_select = Selection(new_proj, select.formula)
-        return self.walk(new_select)
+        return new_select
 
 
 class UnionRemover(ProvenanceExpressionTransformer):
