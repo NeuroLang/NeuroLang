@@ -139,6 +139,36 @@ def test_rules():
         ),
     ))
 
+    res = parser('A(x):-(B(f(x), y), C(3, z), z == 4)')
+    assert res == Union((
+        Implication(
+            A(x),
+            Conjunction((
+                B(f(x), y),
+                C(Constant(3), z), Constant(eq)(z, Constant(4))
+            ))
+        ),
+    ))
+
+    res = parser(
+        '''
+        A(x):-(
+            B(f(x), y),
+            C(3, z),
+            z == 4
+        )
+        '''
+    )
+    assert res == Union((
+        Implication(
+            A(x),
+            Conjunction((
+                B(f(x), y),
+                C(Constant(3), z), Constant(eq)(z, Constant(4))
+            ))
+        ),
+    ))
+
 
 def test_aggregation():
     A = Symbol('A')
@@ -167,6 +197,17 @@ def test_probabilistic_fact():
     ))
 
     res = parser('0.8::A("a b", 3)')
+    assert res == Union((
+        Implication(
+            ProbabilisticPredicate(
+                Constant(0.8),
+                A(Constant("a b"), Constant(3.))
+            ),
+            Constant(True)
+        ),
+    ))
+
+    res = parser('8e-1::A("a b", 3)')
     assert res == Union((
         Implication(
             ProbabilisticPredicate(
