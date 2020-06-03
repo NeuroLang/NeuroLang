@@ -675,21 +675,6 @@ class SelectionOutPusher(ProvenanceExpressionTransformer):
 
 
 class UnionRemover(ProvenanceExpressionTransformer):
-    @add_match(RenameColumn(Projection, ..., ...))
-    def projection_in_rename(self, rename):
-        proj = rename.relation
-        new_rename = RenameColumn(proj.relation, rename.src, rename.dst)
-        new_rename = self.walk(new_rename)
-        new_proj_cols = tuple(
-            col if col != rename.src else rename.dst for col in proj.attributes
-        )
-        new_proj = Projection(new_rename, new_proj_cols)
-        return new_proj
-
-    @add_match(RenameColumn, lambda rename: rename.src == rename.dst)
-    def remove_rename_src_equals_dst(self, rename):
-        return self.walk(rename.relation)
-
     @add_match(
         UnionOverTuples(Selection(..., TupleEqualSymbol), ...),
         lambda exp: exp.tuple_symbol == exp.relation.formula.tuple_symbol,
