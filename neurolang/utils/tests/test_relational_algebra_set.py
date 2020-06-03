@@ -1,9 +1,9 @@
 import pytest
 
-from ..relational_algebra_set import pandas
+from ..relational_algebra_set import pandas, sql
 
 
-@pytest.fixture(ids=['pandas'], params=[(pandas,)])
+@pytest.fixture(ids=['pandas', 'sqlalchemy'], params=[(pandas,), (sql,)])
 def ra_module(request):
     return request.param[0]
 
@@ -30,7 +30,7 @@ def test_relational_algebra_set_semantics(ra_module):
     ras_ = ra_module.RelationalAlgebraSet(a)
     ras__ = set((e,) for e in a)
 
-    assert ras.columns == [0]
+    assert ras.columns == (0,)
 
     assert ras == ras_
     assert ras == ras__

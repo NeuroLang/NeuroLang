@@ -166,6 +166,16 @@ class RelationalAlgebraFrozenSet(
             element = dict(zip(self.columns, (element,)))
         return element
 
+    @classmethod
+    def dee(cls):
+        output = cls()
+        output._len = 1
+        return output
+
+    @classmethod
+    def dum(cls):
+        return cls()
+
     @property
     def columns(self):
         return self._columns
@@ -202,6 +212,15 @@ class RelationalAlgebraFrozenSet(
         elif self.arity == 0 and len(self) > 0:
             yield tuple()
 
+    def fetch_one(self):
+        query = sqlalchemy.sql.select([
+            sqlalchemy.sql.column(str(c))
+            for c in self.columns
+        ], from_obj=self._table, limit=1)
+        conn = self.engine.connect()
+        res = conn.execute(query)
+        return tuple(res.fetchone())
+
     def __len__(self):
         if self._len is None:
             if self._created:
@@ -216,6 +235,9 @@ class RelationalAlgebraFrozenSet(
             else:
                 self._len = 0
         return self._len
+
+    def is_empty(self):
+        return len(self) == 0
 
     def projection(self, *columns):
         if len(columns) == 0 or self.arity == 0:
@@ -480,7 +502,11 @@ class RelationalAlgebraFrozenSet(
 
     def __eq__(self, other):
         if isinstance(other, RelationalAlgebraFrozenSet):
-            if self._name == other._name:
+            if self.is_dee() or other.is_dee():
+                res = self.is_dee() and other.is_dee()
+            elif self.is_dum() or other.is_dum():
+                res = self.is_dum() or other.is_dum()
+            elif self._name == other._name:
                 res = True
             elif not self._equal_sets_structure(other):
                 res = False
