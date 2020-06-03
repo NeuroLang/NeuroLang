@@ -2,7 +2,7 @@ import operator as op
 from itertools import product
 from typing import AbstractSet, Callable, Tuple
 
-from pytest import fixture
+from pytest import fixture, skip
 
 from ... import expression_walker as ew
 from ... import expressions
@@ -344,6 +344,11 @@ def test_chase_set_destroy(chase_class):
 
 
 def test_chase_set_destroy_tuples(chase_class):
+    if not issubclass(chase_class, ChaseNamedRelationalAlgebraMixin):
+        skip(
+            msg="Multiple column destroy only implemented for the RA chase"
+        )
+
     consts = [
         C_(frozenset({(5, 6), (15, 8)})),
         C_(frozenset({(5, 8)})),
