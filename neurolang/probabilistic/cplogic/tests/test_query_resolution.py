@@ -378,3 +378,54 @@ def test_multilevel_existential():
     result = solve_succ_query(qpred, cpl_program)
     expected = testing.make_prov_set([(0.2 * 0.8, "b")], ("_p_", "z"))
     assert testing.eq_prov_relations(result, expected)
+
+
+@pytest.mark.skip("not implemented yet")
+def test_repeated_antecedent_predicate_symbol():
+    """
+    We consider the simple program
+
+        P(a) : 0.4  <-  T
+        P(b) : 0.7  <-  T
+           Q(x, y)  <-  P(x), P(y)
+
+    Possible outcomes are
+
+        { }                     with prob   (1 - 0.4) * (1 - 0.7)
+        { P(a), Q(a, a) }       with prob   0.4 * (1 - 0.7)
+        { P(b), Q(b, b) }       with prob   0.7 * (1 - 0.4)
+        { P(a), P(b),
+          Q(a, a), Q(a, b),     with prob   0.4 * 0.7
+          Q(b, b), Q(b, a) }
+
+    We expected the following provenance set to result from the
+    succ query prob[Q(x, y)]?
+
+        _p_                         | x | y
+        ----------------------------|---|---
+        0.4 * (1 - 0.7) + 0.4 * 0.7 | a | a
+        0.7 * (1 - 0.4) + 0.4 * 0.7 | b | b
+        0.4 * 0.7                   | a | b
+        0.4 * 0.7                   | b | a
+
+    """
+    pfact_sets = {
+        P: {(0.4, "a"), (0.7, "b")},
+    }
+    code = Union((Implication(Q(x, y), Conjunction((P(x), P(y)))),))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+    cpl_program.walk(code)
+    qpred = Q(x, y)
+    result = solve_succ_query(qpred, cpl_program)
+    expected = testing.make_prov_set(
+        [
+            (0.4 * (1 - 0.7) + 0.4 * 0.7, "a", "a"),
+            (0.7 * (1 - 0.4) + 0.4 * 0.7, "b", "b"),
+            (0.4 * 0.7, "a", "b"),
+            (0.4 * 0.7, "b", "a"),
+        ],
+        ("_p_", "x", "y"),
+    )
+    assert testing.eq_prov_relations(result, expected)
