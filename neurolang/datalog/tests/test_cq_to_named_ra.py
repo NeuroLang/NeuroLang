@@ -249,14 +249,32 @@ def test_set_destroy():
     r1 = S_('R1')
     x = S_('x')
     y = S_('y')
-    exp = Conjunction((C_(contains)(x, y), r1(x)))
 
     tr = TranslateToNamedRA()
+
+    exp = Conjunction((C_(contains)(x, y), r1(x)))
     res = tr.walk(exp)
 
     exp_result = Destroy(
         NameColumns(Projection(r1, (C_(0),)), (C_('x'),)),
         x, y
+    )
+    assert res == exp_result
+
+
+def test_set_destroy_multicolumn():
+    r1 = S_('R1')
+    x = S_('x')
+    y = S_('y')
+    z = S_('z')
+
+    tr = TranslateToNamedRA()
+    exp = Conjunction((C_(contains)(x, C_((y, z))), r1(x)))
+    res = tr.walk(exp)
+
+    exp_result = Destroy(
+        NameColumns(Projection(r1, (C_(0),)), (C_('x'),)),
+        x, C_[Tuple[ColumnStr, ColumnStr]]((ColumnStr('y'), ColumnStr('z')))
     )
     assert res == exp_result
 
