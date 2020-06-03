@@ -4,10 +4,16 @@ from typing import AbstractSet, Tuple
 from . import expression_walker as ew
 from . import type_system
 from .exceptions import NeuroLangException
-from .expressions import (Constant, Definition, FunctionApplication, Symbol,
-                          Unknown)
-from .utils import (NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet,
-                    RelationalAlgebraStringExpression)
+from .expression_pattern_matching import NeuroLangPatternMatchingNoMatch
+from .expressions import (
+    Constant,
+    Definition,
+    FunctionApplication,
+    Symbol,
+    Unknown,
+)
+from .utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet
+from .utils.relational_algebra_set import RelationalAlgebraStringExpression
 
 eq_ = Constant(operator.eq)
 
@@ -218,6 +224,22 @@ class ExtendedProjection(RelationalAlgebraOperation):
             repr(self.relation),
         )
 
+    def __eq__(self, other):
+        if not isinstance(other, ExtendedProjection):
+            return False
+
+        return (
+            self.relation == other.relation and
+            len(self.projection_list) == len(other.projection_list) and
+            all(
+                any(
+                    element_self == element_other
+                    for element_other in other.projection_list
+                )
+                for element_self in self.projection_list
+            )
+        )
+
 
 class ExtendedProjectionListMember(Definition):
     """
@@ -256,6 +278,42 @@ class ExtendedProjectionListMember(Definition):
         return "{} -> {}".format(self.fun_exp, self.dst_column)
 
 
+class Destroy(RelationalAlgebraOperation):
+    """
+    Operation to map a column of a collection of elements into
+    a new column with all collections concatenated
+
+    Attributes
+    ----------
+    relation : Expression[AbstractSet]
+        Relation on which the projections are applied.
+    src_column : Constant[ColumnStr]
+        Column to destroy in the operation.
+
+    dst_column : Constant[ColumnStr]
+        Column to map onto the new set.
+
+    Notes
+    -----
+    The concept of set destruction is formally defined in chapter 20
+    of [1]_.
+
+    .. [1] Abiteboul, S., Hull, R. & Vianu, V. "Foundations of databases". (
+           Addison Wesley, 1995).
+    """
+
+    def __init__(self, relation, src_column, dst_column):
+        self.relation = relation
+        self.src_column = src_column
+        self.dst_column = dst_column
+
+    def __repr__(self):
+        return (
+            f"set_destroy[{self.relation}, "
+            "{self.src_column} -> {src.dst_column}]"
+        )
+
+
 class ConcatenateConstantColumn(RelationalAlgebraOperation):
     """
     Add a column with a repeated constant value to a relation.
@@ -279,27 +337,17 @@ class ConcatenateConstantColumn(RelationalAlgebraOperation):
         self.column_value = column_value
 
 
-def arithmetic_operator_string(op):
-    """
-    Get the string representation of an arithmetic operator.
-
-    Parameters
-    ----------
-    op : builting operator
-        Python builtin operator (add, sub, mul or truediv).
-
-    Returns
-    -------
-    str
-        String representation of the operator (e.g. operator.add is "+").
-
-    """
-    return {
-        operator.add: "+",
-        operator.sub: "-",
-        operator.mul: "*",
-        operator.truediv: "/",
-    }[op]
+OPERATOR_STRING = {
+    operator.add: "+",
+    operator.sub: "-",
+    operator.mul: "*",
+    operator.truediv: "/",
+    operator.eq: "==",
+    operator.gt: ">",
+    operator.lt: "<",
+    operator.ge: ">=",
+    operator.le: "<="
+}
 
 
 def is_arithmetic_operation(exp):
@@ -319,7 +367,7 @@ def is_arithmetic_operation(exp):
         isinstance(exp, FunctionApplication)
         and isinstance(exp.functor, Constant)
         and exp.functor.value
-        in {operator.add, operator.sub, operator.mul, operator.truediv}
+        in OPERATOR_STRING
     )
 
 
@@ -332,23 +380,14 @@ class StringArithmeticWalker(ew.PatternWalker):
     length of an other constant relation.
 
     """
-
-    @ew.add_match(FunctionApplication(Constant(len), (Constant[AbstractSet],)))
-    def cardinality_of_other_relation(self, fa):
-        return Constant[RelationalAlgebraStringExpression](
-            str(len(fa.args[0].value)),
-            auto_infer_type=False,
-            verify_type=False,
-        )
-
     @ew.add_match(FunctionApplication, is_arithmetic_operation)
     def arithmetic_operation(self, fa):
         return Constant[RelationalAlgebraStringExpression](
             RelationalAlgebraStringExpression(
                 "({} {} {})".format(
-                    str(self.walk(fa.args[0]).value),
-                    arithmetic_operator_string(fa.functor.value),
-                    str(self.walk(fa.args[1]).value),
+                    self.walk(fa.args[0]).value,
+                    OPERATOR_STRING[fa.functor.value],
+                    self.walk(fa.args[1]).value,
                 ),
             ),
             auto_infer_type=False,
@@ -363,9 +402,39 @@ class StringArithmeticWalker(ew.PatternWalker):
             verify_type=False,
         )
 
+    @ew.add_match(Constant[int])
+    def constant_int(self, cst):
+        return Constant[RelationalAlgebraStringExpression](
+            str(cst.value),
+            auto_infer_type=False,
+            verify_type=False,
+        )
+
+    @ew.add_match(Constant[float])
+    def constant_float(self, cst):
+        return Constant[RelationalAlgebraStringExpression](
+            str(cst.value),
+            auto_infer_type=False,
+            verify_type=False,
+        )
+
+    @ew.add_match(Constant[str])
+    def constant_str(self, cst):
+        return Constant[RelationalAlgebraStringExpression](
+            f'"{cst.value}"',
+            auto_infer_type=False,
+            verify_type=False,
+        )
+
     @ew.add_match(Constant)
     def constant(self, cst):
         return cst
+
+
+class ReplaceConstantColumnStrBySymbol(ew.ExpressionWalker):
+    @ew.add_match(Constant[ColumnStr])
+    def column_str(self, expression):
+        return Symbol[ColumnStr](expression.value)
 
 
 class RelationalAlgebraSolver(ew.ExpressionWalker):
@@ -376,6 +445,10 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
     Relations are expected to be represented
     as objects with the same interface as :obj:`RelationalAlgebraSet`.
     """
+
+    _rccsbs = ReplaceConstantColumnStrBySymbol()
+    _saw = StringArithmeticWalker()
+    _fa_2_lambda = ew.FunctionApplicationToPythonLambda()
 
     def __init__(self, symbol_table=None):
         self.symbol_table = symbol_table
@@ -409,6 +482,17 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
             {col.value: val.value}
         )
 
+        return self._build_relation_constant(selected_relation)
+
+    @ew.add_match(
+        Selection(..., FunctionApplication)
+    )
+    def selection_general_selection_by_constant(self, selection):
+        relation = self.walk(selection.relation)
+        compiled_formula = self._compile_function_application_to_sql_fun_exp(
+            selection.formula
+        )
+        selected_relation = relation.value.selection(compiled_formula)
         return self._build_relation_constant(selected_relation)
 
     @ew.add_match(Projection)
@@ -479,6 +563,10 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
 
     @ew.add_match(RenameColumns)
     def ra_rename_columns(self, rename_columns):
+        if len(set(c for c, _ in rename_columns.renames)) < len(
+            rename_columns.renames
+        ):
+            raise ValueError("Cannot have duplicated source columns")
         relation = self.walk(rename_columns.relation)
         new_set = relation.value
         renames = {
@@ -519,22 +607,80 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
     @ew.add_match(ExtendedProjection)
     def extended_projection(self, proj_op):
         relation = self.walk(proj_op.relation)
-        str_arithmetic_walker = StringArithmeticWalker()
         eval_expressions = {}
         for member in proj_op.projection_list:
+            fun_exp = self.walk(member.fun_exp)
             eval_expressions[
                 member.dst_column.value
-            ] = str_arithmetic_walker.walk(self.walk(member.fun_exp)).value
+            ] = self._compile_function_application_to_sql_fun_exp(fun_exp)
         return self._build_relation_constant(
             relation.value.extended_projection(eval_expressions)
         )
 
+    def _compile_function_application_to_sql_fun_exp(self, fun_exp):
+        if (
+            isinstance(fun_exp, FunctionApplication) or
+            isinstance(fun_exp, Constant[Column])
+        ):
+            try:
+                return self._saw.walk(fun_exp).value
+            except NeuroLangPatternMatchingNoMatch as e:
+                fun, args = self._fa_2_lambda.walk(self._rccsbs.walk(fun_exp))
+                return lambda t: fun(
+                    **{arg: getattr(t, arg) for arg in args}
+                )
+        else:
+            return fun_exp.value
+
     @ew.add_match(FunctionApplication, is_arithmetic_operation)
     def prov_arithmetic_operation(self, arithmetic_op):
-        return FunctionApplication[arithmetic_op.type](
-            arithmetic_op.functor,
-            tuple(self.walk(arg) for arg in arithmetic_op.args),
-        )
+        args = self.walk(arithmetic_op.args)
+        if any(
+            arg_new is not arg_old
+            for arg_new, arg_old in zip(args, arithmetic_op.args)
+        ):
+            return FunctionApplication[arithmetic_op.type](
+                arithmetic_op.functor, args
+            )
+        else:
+            return arithmetic_op
+
+    @ew.add_match(Destroy)
+    def set_destroy(self, destroy):
+        relation = self.walk(destroy.relation).value
+        src_column = self.walk(destroy.src_column).value
+        dst_columns = self.walk(destroy.dst_column).value
+        if src_column not in relation.columns:
+            raise NeuroLangException(
+                f"source column {src_column} not present in "
+                "set's columns"
+            )
+
+        cols = relation.columns
+        set_type = type(relation)
+        if not isinstance(dst_columns, tuple):
+            dst_columns = (dst_columns,)
+        dst_cols = cols + tuple(d for d in dst_columns if d not in cols)
+        result_set = set_type(columns=dst_cols)
+        if len(cols) > 0:
+            row_group_iterator = (t for _, t in relation.groupby(cols))
+        else:
+            row_group_iterator = (relation,)
+        for t in row_group_iterator:
+            destroyed_set = set_type(columns=dst_columns)
+            for row in t:
+                row_set = set_type(
+                    columns=dst_columns,
+                    iterable=getattr(row, src_column)
+                )
+                destroyed_set = destroyed_set | row_set
+            new_set = (
+                t
+                .projection(*cols)
+                .naturaljoin(destroyed_set)
+            )
+            result_set = result_set | new_set
+        return self._build_relation_constant(result_set)
 
     @ew.add_match(Constant)
     def ra_constant(self, constant):
@@ -913,7 +1059,7 @@ def _infer_relation_type(relation):
     Infer the type of the tuples in the relation based on its first tuple. If
     the relation is empty, just return `Abstract[Tuple]`.
     """
-    if relation.is_null() or relation.arity == 0:
+    if relation.is_empty() or relation.arity == 0:
         return AbstractSet[Tuple]
     if hasattr(relation, "row_type"):
         return AbstractSet[relation.row_type]

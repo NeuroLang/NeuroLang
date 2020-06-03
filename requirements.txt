@@ -7,5 +7,4 @@ tatsu
 neurosynth==0.3.7
 matplotlib
 typing_inspect
-sqlalchemy
 rdflib

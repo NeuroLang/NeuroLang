@@ -2,7 +2,7 @@ import operator as op
 from itertools import product
 from typing import AbstractSet, Callable, Tuple
 
-from pytest import fixture
+from pytest import fixture, skip
 
 from ... import expression_walker as ew
 from ... import expressions
@@ -343,6 +343,40 @@ def test_chase_set_destroy(chase_class):
     assert instance_update == res
 
 
+def test_chase_set_destroy_tuples(chase_class):
+    if not issubclass(chase_class, ChaseNamedRelationalAlgebraMixin):
+        skip(
+            msg="Multiple column destroy only implemented for the RA chase"
+        )
+
+    consts = [
+        C_(frozenset({(5, 6), (15, 8)})),
+        C_(frozenset({(5, 8)})),
+        C_(frozenset({(15, 8)})),
+    ]
+
+    datalog_program = Eb_(
+        tuple(Fact(Q(c)) for c in consts) +
+        (
+            Imp_(T(x, y), contains(z, C_(((x, y)))) & Q(z)),
+        )
+    )
+
+    dl = Datalog()
+    dl.walk(datalog_program)
+
+    instance_0 = MapInstance(dl.extensional_database())
+
+    rule = dl.symbol_table['T'].formulas[0]
+    dc = chase_class(dl)
+    instance_update = dc.chase_step(instance_0, rule)
+
+    res = MapInstance({
+        T: C_({(5, 6), (5, 8), (15, 8)}),
+    })
+    assert instance_update == res
+
+
 def test_builtin_equality_add_column(chase_class):
     datalog_program = Eb_((
         Imp_(Q(y), Conjunction((T(x), eq(y, C_(2) * x)))),
@@ -446,10 +480,13 @@ def test_non_recursive_predicate_chase_step(chase_class):
     gt = S_('gt')
 
     datalog_program = DT.walk(Eb_((
-        F_(Q(C_(1), C_(2))), F_(Q(C_(2), C_(3))), F_(Q(C_(8), C_(6))),
+        F_(Q(C_(1), C_(2))),
+        F_(Q(C_(2), C_(3))),
+        F_(Q(C_(8), C_(6))),
         Imp_(T(x, y),
-             Q(x, z) & Q(z, y)), Imp_(S(x, y),
-                                      Q(x, y) & gt(x, y))
+             Q(x, z) & Q(z, y)),
+        Imp_(S(x, y),
+             Q(x, y) & gt(x, y))
     )))
 
     dl = Datalog()

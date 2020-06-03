@@ -19,7 +19,7 @@ class OntologyParser:
         self.namespaces_dic = None
         self.owl_dic = None
         if isinstance(paths, list):
-            self._load_ontology(paths, load_format)
+            self._load_ontology(paths, [load_format])
         else:
             self._load_ontology([paths], [load_format])
 
@@ -55,7 +55,13 @@ class OntologyParser:
             + union_of_constraints.formulas
         )
 
-        return extensional_predicate_tuples, union_of_constraints
+        entailment_rules = self.load_entailment_rules()
+
+        return (
+            extensional_predicate_tuples,
+            union_of_constraints,
+            entailment_rules,
+        )
 
     def get_triples_symbol(self):
         return self._triple
@@ -82,9 +88,9 @@ class OntologyParser:
             (str(x[0]), str(x[1]), str(x[2])) for x in self.get_triples()
         )
 
-        x = Symbol("x")
-        y = Symbol("y")
-        z = Symbol("z")
+        x = Symbol.fresh()
+        y = Symbol.fresh()
+        z = Symbol.fresh()
 
         dom1 = RightImplication(self._triple(x, y, z), self._dom(x))
         dom2 = RightImplication(self._triple(x, y, z), self._dom(y))
@@ -103,8 +109,8 @@ class OntologyParser:
         Function that parse all the properties defined in
         the ontology.
         """
-        x = Symbol("x")
-        z = Symbol("z")
+        x = Symbol.fresh()
+        z = Symbol.fresh()
 
         constraints = ()
         for pred in set(self.graph.predicates()):
@@ -115,18 +121,24 @@ class OntologyParser:
                 RightImplication(self._triple(x, const, z), symbol(x, z)),
             )
 
-        constraints_subproperties = self._parse_subproperties()
-        constraints_subclasses = self._parse_subclasses()
-        constraints_disjoint = self._parse_disjoint()
+        return Union(constraints)
 
-        union_of_constraints = Union(
-            constraints_subproperties.formulas
-            + constraints_subclasses.formulas
-            + constraints_disjoint.formulas
-            + constraints
+    def load_entailment_rules(self):
+        """
+        Method to add the rules proposed by Gottlob et al[1].
+
+        [1] Gottlob, G. & Pieris, A. Beyond SPARQL underOWL 2
+        QL Entailment Regime: Rules to the Rescue.
+        """
+        rules_subproperties = self._parse_subproperties()
+        rules_subclasses = self._parse_subclasses()
+        rules_disjoint = self._parse_disjoint()
+
+        union_of_rules = Union(
+            rules_subproperties.formulas
+            + rules_subclasses.formulas
+            + rules_disjoint.formulas
         )
-
-        return union_of_constraints
 
     def _parse_subproperties(self):
         """
@@ -139,10 +151,10 @@ class OntologyParser:
         rdf_schema_subPropertyOf = Symbol(str(RDFS.subPropertyOf))
         rdf_schema_subPropertyOf2 = Symbol(str(RDFS.subPropertyOf) + "2")
 
-        w = Symbol("w")
-        x = Symbol("x")
-        y = Symbol("y")
-        z = Symbol("z")
+        w = Symbol.fresh()
+        x = Symbol.fresh()
+        y = Symbol.fresh()
+        z = Symbol.fresh()
 
         subProperty = RightImplication(
             rdf_schema_subPropertyOf2(x, y), rdf_schema_subPropertyOf(x, y)
@@ -191,10 +203,10 @@ class OntologyParser:
         """
         rdf_schema_subClassOf = Symbol(str(RDFS.subClassOf))
         rdf_schema_subClassOf2 = Symbol(str(RDFS.subClassOf) + "2")
-        w = Symbol("w")
-        x = Symbol("x")
-        y = Symbol("y")
-        z = Symbol("z")
+        w = Symbol.fresh()
+        x = Symbol.fresh()
+        y = Symbol.fresh()
+        z = Symbol.fresh()
 
         subClass = RightImplication(
             rdf_schema_subClassOf2(x, y), rdf_schema_subClassOf(x, y)
@@ -236,10 +248,10 @@ class OntologyParser:
         [1] Gottlob, G. & Pieris, A. Beyond SPARQL underOWL 2
         QL Entailment Regime: Rules to the Rescue.
         """
-        w = Symbol("w")
-        x = Symbol("x")
-        y = Symbol("y")
-        z = Symbol("z")
+        w = Symbol.fresh()
+        x = Symbol.fresh()
+        y = Symbol.fresh()
+        z = Symbol.fresh()
 
         owl_disjointWith = Symbol(str(OWL.disjointWith))
         rdf_schema_subClassOf = Symbol(str(RDFS.subClassOf))
@@ -335,7 +347,7 @@ class OntologyParser:
         rdf_type = Symbol(str(RDF.type))
         property_symbol = Symbol(parsed_prop)
 
-        x = Symbol("x")
+        x = Symbol.fresh()
 
         constraint = Union(
             (
@@ -468,8 +480,8 @@ class OntologyParser:
 
         property_symbol = Symbol(parsed_prop)
         rdf_type = Symbol(str(RDF.type))
-        x = Symbol("x")
-        y = Symbol("y")
+        x = Symbol.fresh()
+        y = Symbol.fresh()
 
         for value in allValuesFrom:
             constraints = Union(
