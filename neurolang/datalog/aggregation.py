@@ -141,10 +141,6 @@ class DatalogWithAggregationMixin(PatternWalker):
 
 
 class Chase(chase.Chase):
-    @staticmethod
-    def first_element(x):
-        return next(iter(x))
-
     def check_constraints(self, instance_update):
         warn(
             "No check performed. Should implement check for stratified"

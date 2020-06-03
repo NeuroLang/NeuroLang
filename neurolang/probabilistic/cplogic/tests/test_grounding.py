@@ -1,7 +1,6 @@
 import typing
 
 import numpy
-import pytest
 
 from ....datalog import Fact
 from ....expressions import Constant, Symbol

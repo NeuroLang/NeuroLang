@@ -574,11 +574,6 @@ def test_non_recursive_predicate_chase_tree(chase_class):
     instance_1.update(dl.extensional_database())
 
     assert res.instance == MapInstance(dl.extensional_database())
-
-    child_formula, child_node = next(iter(res.children.items()))
-    child_instance = child_node.instance
-    assert child_formula == datalog_program.formulas[-1]
-    q = instance_1[Q]
     assert res.children == {
         datalog_program.formulas[-1]: ChaseNode(instance_1, dict())
     }

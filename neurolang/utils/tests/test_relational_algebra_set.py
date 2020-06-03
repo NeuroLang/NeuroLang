@@ -85,8 +85,6 @@ def test_relational_algebra_ra_projection(ra_module):
     assert all((i % 2, i * 2) for i in range(5))
     assert ras.projection() == ra_module.RelationalAlgebraSet.dee()
 
-    ras_null = ras.projection()
-    assert ras_null.arity == 0 and len(ras_null) > 0
 
 def test_relational_algebra_ra_selection(ra_module):
     a = [(i % 2, i, i * 2) for i in range(5)]
@@ -190,8 +188,8 @@ def test_groupby(ra_module):
     ras_c = ra_module.RelationalAlgebraSet(c)
 
     res = list(ras_a.groupby(0))
-    assert res[0] == ((1,), ras_b)
-    assert res[1] == ((2,), ras_c)
+    assert res[0] == (1, ras_b)
+    assert res[1] == (2, ras_c)
 
 
 def test_relational_algebra_ra_union(ra_module):
@@ -557,17 +555,6 @@ def test_named_relational_algebra_difference(ra_module):
     assert (dee - empty) == dee
     assert (dee - dee) == ra_module.NamedRelationalAlgebraFrozenSet.dum()
 
-    empty = NamedRelationalAlgebraFrozenSet(('x', 'y'), [])
-    unit_empty = NamedRelationalAlgebraFrozenSet(
-        ('x', 'y'), [(0, 1)]
-    ).projection()
-
-    assert (ras_a - empty) == ras_a
-    assert (empty - ras_a) == empty
-    assert (empty - empty) == empty
-    assert (unit_empty - empty) == unit_empty
-    assert (unit_empty - unit_empty) == NamedRelationalAlgebraFrozenSet(())
-
     res = ras_a - ras_b
     assert res == ras_c
 
@@ -579,11 +566,6 @@ def test_named_relational_algebra_difference(ra_module):
 
     res = ras_b_inv - ras_a
     assert len(res) == 0
-
-    res = ras_a - NamedRelationalAlgebraFrozenSet(
-        columns=ras_a.columns, iterable=[]
-    )
-    assert ras_a == res
 
 
 def test_named_groupby(ra_module):
@@ -639,14 +621,6 @@ def test_named_to_unnamed(ra_module):
     ras_b = ra_module.RelationalAlgebraFrozenSet(a)
     assert ras_a.to_unnamed() == ras_b
 
-    ras_zero = NamedRelationalAlgebraFrozenSet(columns=cols, iterable=[])
-    ras_zero_un = ras_zero.to_unnamed()
-    assert ras_zero_un.arity == 2
-    assert len(ras_zero_un) == 0
-
-
-def test_named_ra_set_from_other(ras_class):
-    NamedRelationalAlgebraFrozenSet = ras_class['named']
 
 def test_named_ra_set_from_other(ra_module):
     first = ra_module.NamedRelationalAlgebraFrozenSet(
@@ -702,11 +676,11 @@ def test_named_ra_intersection(ra_module):
     assert empty & first == empty
     assert first & empty & second == empty
 
-    dee = NamedRelationalAlgebraFrozenSet.dum()
-    assert first & dee() == first
+    dee = ra_module.NamedRelationalAlgebraFrozenSet.dee()
+    assert first & dee == first
     assert dee & first == first
 
-    dum = NamedRelationalAlgebraFrozenSet.dum()
+    dum = ra_module.NamedRelationalAlgebraFrozenSet.dum()
     assert first & dum == dum
     assert dum & first == dum
 
@@ -715,10 +689,6 @@ def test_named_ra_intersection(ra_module):
     assert dee & dum == dum
     assert dum & dee == dum
 
-
-def test_aggregate(ras_class):
-    NamedRelationalAlgebraFrozenSet = ras_class['named']
-    operators = ras_class['operators']
 
 def test_aggregate(ra_module):
     initial_set = ra_module.NamedRelationalAlgebraFrozenSet(
@@ -748,18 +718,7 @@ def test_aggregate(ra_module):
     assert expected_sum == new_set
     new_set = initial_set.aggregate(["x", "y"], {"z": "count"})
     assert expected_str == new_set
-    new_set = initial_set.aggregate(
-        ["x", "y"], {"z": lambda x: operators.max(x) - 1}
-    )
-    assert expected_lambda == new_set
-    new_set = initial_set.aggregate(
-        ["x", "y"],
-        [
-            ("x", "x", lambda x: next(iter(x))),
-            ("y", "y", lambda x: next(iter(x))),
-            ("z", "z", lambda x: max(x) - 1)
-        ]
-    )
+    new_set = initial_set.aggregate(["x", "y"], {"z": lambda x: max(x) - 1})
     assert expected_lambda == new_set
     new_set = initial_set.aggregate(
        ["x", "y"],

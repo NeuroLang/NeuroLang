@@ -22,7 +22,3 @@ class ForbiddenDisjunctionError(ForbiddenExpressionError):
 
 class ForbiddenExistentialError(ForbiddenExpressionError):
     pass
-
-
-class NeuroLangNotImplementedError(NeuroLangException):
-    pass

@@ -426,10 +426,6 @@ class StringArithmeticWalker(ew.PatternWalker):
             verify_type=False,
         )
 
-    @ew.add_match(Constant)
-    def constant(self, cst):
-        return cst
-
 
 class ReplaceConstantColumnStrBySymbol(ew.ExpressionWalker):
     @ew.add_match(Constant[ColumnStr])

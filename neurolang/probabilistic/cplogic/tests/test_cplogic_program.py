@@ -54,21 +54,6 @@ def test_deterministic_program():
     }
 
 
-def test_deterministic_program():
-    code = Union(
-        (Implication(Z(x), Conjunction((P(x), Q(x)))), Fact(Q(a)), Fact(P(a)),)
-    )
-    cpl_program = CPLogicProgram()
-    cpl_program.walk(code)
-    assert cpl_program.extensional_database() == {
-        Q: Constant(frozenset({(a,)})),
-        P: Constant(frozenset({(a,)})),
-    }
-    assert cpl_program.intensional_database() == {
-        Z: Union((Implication(Z(x), Conjunction((P(x), Q(x)))),))
-    }
-
-
 def test_cplogic_program():
     cpl = CPLogicProgram()
     code = Union(

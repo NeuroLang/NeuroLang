@@ -27,13 +27,10 @@ class Datalog(
     ExpressionBasicEvaluator
 ):
     def function_sum(self, x: AbstractSet) -> Unknown:
-        return sum(v[0] for v in x)
+        return sum(v for v in x)
 
     def function_sum2(self, x: AbstractSet, y: AbstractSet) -> Unknown:
-        return sum(v[0] + w[0] for v, w in zip(x, y))
-
-    def function_set_create(self, x: AbstractSet) -> Unknown:
-        return frozenset(x)
+        return sum(v + w for v, w in zip(x, y))
 
     def function_set_create(self, x: AbstractSet) -> Unknown:
         return frozenset(x)

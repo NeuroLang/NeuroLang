@@ -173,14 +173,13 @@ def test_intensional_extensional_database():
 
     assert edb.keys() == {'R0', 'Q'}
 
-    Q_res = C_(frozenset((
+    assert edb['Q'] == C_(frozenset((
         C_((C_(1), C_(1))),
         C_((C_(1), C_(2))),
         C_((C_(1), C_(4))),
         C_((C_(2), C_(4))),
     )))
 
-    assert edb['Q'] == Q_res
     assert edb['R0'] == C_(frozenset((
         C_((C_('a'), C_(1), C_(3))),
     )))
