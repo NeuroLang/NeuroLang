@@ -117,19 +117,26 @@ def build_pfact_grounding_from_set(pred_symb, relation):
 def build_grounding(cpl_program, dl_instance):
     groundings = []
     for pred_symb in cpl_program.predicate_symbols:
-        relation = cpl_program.symbol_table[pred_symb]
+        st_item = cpl_program.symbol_table[pred_symb]
         if pred_symb in cpl_program.pfact_pred_symbs:
             groundings.append(
-                build_pfact_grounding_from_set(pred_symb, relation)
+                build_pfact_grounding_from_set(pred_symb, st_item)
             )
         elif pred_symb in cpl_program.pchoice_pred_symbs:
-            groundings.append(build_pchoice_grounding(pred_symb, relation))
-        elif isinstance(relation, Constant[AbstractSet]):
-            groundings.append(build_extensional_grounding(pred_symb, relation))
+            groundings.append(build_pchoice_grounding(pred_symb, st_item))
+        elif isinstance(st_item, Constant[AbstractSet]):
+            groundings.append(build_extensional_grounding(pred_symb, st_item))
         else:
             groundings.append(
                 build_rule_grounding(
-                    pred_symb, relation, dl_instance[pred_symb]
+                    pred_symb,
+                    st_item,
+                    dl_instance.get(
+                        pred_symb,
+                        Constant[AbstractSet](
+                            NamedRelationalAlgebraFrozenSet(columns=[])
+                        ),
+                    ),
                 )
             )
     return ExpressionBlock(groundings)

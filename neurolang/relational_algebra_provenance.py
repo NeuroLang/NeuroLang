@@ -1,8 +1,9 @@
+import operator
 from typing import AbstractSet
 
 from .exceptions import NeuroLangException
 from .expression_walker import ExpressionWalker, add_match
-from .expressions import Constant, FunctionApplication, Symbol
+from .expressions import Constant, Definition, FunctionApplication, Symbol
 from .relational_algebra import (
     Column,
     ColumnStr,
@@ -22,6 +23,44 @@ from .relational_algebra import (
     eq_,
     str2columnstr_constant,
 )
+
+
+class UnionOverTuples(RelationalAlgebraOperation):
+    def __init__(self, relation, tuple_symbol):
+        self.relation = relation
+        self.tuple_symbol = tuple_symbol
+
+    def __repr__(self):
+        return f"U_{self.tuple_symbol} {{ {self.relation} }}"
+
+
+class TupleSymbol(Symbol):
+    pass
+
+
+class TupleEqualSymbol(Definition):
+    def __init__(self, columns, tuple_symbol):
+        self.columns = columns
+        self.tuple_symbol = tuple_symbol
+
+    def __repr__(self):
+        return (
+            "("
+            + ", ".join(c.value for c in self.columns)
+            + ") = "
+            + self.tuple_symbol.name
+        )
+
+
+def ra_binary_to_nary(op):
+    def nary_op(relations):
+        it = iter(relations)
+        result = next(it)
+        for relation in it:
+            result = op(result, relation)
+        return result
+
+    return nary_op
 
 
 class ProvenanceAlgebraSet(Constant):
@@ -44,6 +83,10 @@ class ProvenanceAlgebraSet(Constant):
             )
             for col in sorted(non_prov_cols)
         )
+
+
+class NaturalJoinInverse(NaturalJoin):
+    pass
 
 
 def check_do_not_share_non_prov_col(prov_set_1, prov_set_2):
@@ -79,8 +122,10 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
 
     """
 
-    def __init__(self, symbol_table=None):
+    def __init__(self, symbol_table=None, cpl_program=None, gm=None):
         self.symbol_table = symbol_table
+        self.cpl_program = cpl_program
+        self.gm = gm
 
     @add_match(
         RelationalAlgebraOperation,
@@ -133,7 +178,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             rel_temp = self.walk(relation)
             check_do_not_share_non_prov_col(rel_res, rel_temp)
             rel_res = self._apply_provenance_join_operation(
-                rel_res, rel_temp, Product
+                rel_res, rel_temp, Product, Constant(operator.mul),
             )
         return rel_res
 
@@ -240,13 +285,27 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             new_prov_col,
         )
 
+    @add_match(NaturalJoinInverse)
+    def prov_naturaljoin_inverse(self, naturaljoin):
+        return self._apply_provenance_join_operation(
+            naturaljoin.relation_left,
+            naturaljoin.relation_right,
+            NaturalJoin,
+            Constant(operator.truediv),
+        )
+
     @add_match(NaturalJoin)
     def prov_naturaljoin(self, naturaljoin):
         return self._apply_provenance_join_operation(
-            naturaljoin.relation_left, naturaljoin.relation_right, NaturalJoin,
+            naturaljoin.relation_left,
+            naturaljoin.relation_right,
+            NaturalJoin,
+            Constant(operator.mul),
         )
 
-    def _apply_provenance_join_operation(self, left, right, np_op):
+    def _apply_provenance_join_operation(
+        self, left, right, np_op, prov_binary_op
+    ):
         left = self.walk(left)
         right = self.walk(right)
         res_columns = set(left.value.columns) | (
@@ -289,7 +348,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             tmp_non_prov_result,
             (
                 ExtendedProjectionListMember(
-                    fun_exp=tmp_left_col * tmp_right_col,
+                    fun_exp=prov_binary_op(tmp_left_col, tmp_right_col),
                     dst_column=res_prov_col,
                 ),
             )

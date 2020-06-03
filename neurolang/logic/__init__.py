@@ -2,6 +2,9 @@ from ..exceptions import NeuroLangException
 from ..expressions import Constant, Definition, FunctionApplication, Symbol
 
 
+TRUE = Constant[bool](True, auto_infer_type=False, verify_type=False)
+
+
 class LogicOperator(Definition):
     pass
 

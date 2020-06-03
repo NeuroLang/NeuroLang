@@ -1,8 +1,10 @@
 import operator
+from typing import Tuple
 
 from ...expression_pattern_matching import add_match
-from ...expression_walker import ExpressionWalker
+from ...expression_walker import ExpressionWalker, PatternWalker
 from ...expressions import Constant, Definition, FunctionApplication, Symbol
+from ...logic import Conjunction, Implication, Union
 from ...logic.expression_processing import extract_logic_predicates
 from ...relational_algebra import (
     ColumnStr,
@@ -16,8 +18,13 @@ from ...relational_algebra import (
     str2columnstr_constant,
 )
 from ...relational_algebra_provenance import (
+    NaturalJoinInverse,
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
+    TupleEqualSymbol,
+    TupleSymbol,
+    UnionOverTuples,
+    ra_binary_to_nary,
 )
 from .cplogic_to_gm import (
     AndPlateNode,
@@ -190,42 +197,31 @@ def solve_succ_query(query_predicate, cpl_program):
     return result
 
 
-class UnionOverTuples(RelationalAlgebraOperation):
-    def __init__(self, relation, tuple_symbol):
-        self.relation = relation
-        self.tuple_symbol = tuple_symbol
-
-    def __repr__(self):
-        return f"U_{self.tuple_symbol} {{ {self.relation} }}"
-
-
-class TupleSymbol(Symbol):
-    pass
-
-
-class TupleEqualSymbol(Definition):
-    def __init__(self, columns, tuple_symbol):
-        self.columns = columns
-        self.tuple_symbol = tuple_symbol
-
-    def __repr__(self):
-        return (
-            "("
-            + ", ".join(c.value for c in self.columns)
-            + ") = ("
-            + self.tuple_symbol.name
-        )
+def _make_conjunction_rule(predicates):
+    symbols = set()
+    for pred in predicates:
+        symbols |= set(arg for arg in pred.args if isinstance(arg, Symbol))
+    symbols = tuple(sorted(symbols))
+    csqt_pred_symb = Symbol.fresh()
+    return Implication(
+        csqt_pred_symb(*symbols),
+        Conjunction(
+            tuple(sorted(predicates, key=lambda pred: pred.functor.name))
+        ),
+    )
 
 
-def ra_binary_to_nary(op):
-    def nary_op(relations):
-        it = iter(relations)
-        result = next(it)
-        for relation in it:
-            result = op(result, relation)
-        return result
-
-    return nary_op
+def solve_marg_query(query_predicate, evidence_predicates, cpl_program):
+    joint_rule = _make_conjunction_rule(
+        set(evidence_predicates) | {query_predicate}
+    )
+    evidence_rule = _make_conjunction_rule(evidence_predicates)
+    cpl_program.walk(Union((joint_rule, evidence_rule)))
+    joint_result = solve_succ_query(joint_rule.consequent, cpl_program)
+    evidence_result = solve_succ_query(evidence_rule.consequent, cpl_program)
+    solver = RelationalAlgebraProvenanceCountingSolver()
+    result = NaturalJoinInverse(joint_result, evidence_result)
+    return solver.walk(result)
 
 
 class ProbabilityOperation(Definition):
@@ -272,7 +268,7 @@ class NodeValue(Definition):
         self.value = value
 
 
-class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
+class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
     """
     Solver that constructs an RAP expression that calculates probabilities
     of sets of random variables in a graphical model.
@@ -370,7 +366,8 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
                 parent_relations[cnode.node_symbol], src_args, dst_args
             )
             to_join.append(parent_relation)
-        return ra_binary_to_nary(NaturalJoin)(to_join)
+        relation = ra_binary_to_nary(NaturalJoin)(to_join)
+        return relation
 
     @add_match(ProbabilityOperation((NaryChoicePlateNode, ...), tuple()))
     def nary_choice_probability(self, operation):
@@ -474,6 +471,7 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         visited.add(node_symb)
         node = self.graphical_model.get_node(node_symb)
         expression = node.expression
+        args = get_grounding_predicate(expression).args
         if isinstance(node, AndPlateNode):
             pred_symb_to_args = {
                 pred.functor: pred.args
@@ -481,7 +479,6 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
             }
             get_dst_args = pred_symb_to_args.get
         else:
-            args = get_grounding_predicate(expression).args
             get_dst_args = lambda _: args
         cnode_symbs = self.graphical_model.get_parent_node_symbols(node_symb)
         cnodes = [self.graphical_model.get_node(cns) for cns in cnode_symbs]
@@ -506,7 +503,10 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
                 relation, src_args, dst_args
             )
             relations.append(relation)
-        return ra_binary_to_nary(NaturalJoin)(relations)
+        relation = ra_binary_to_nary(NaturalJoin)(relations)
+        proj_cols = tuple(str2columnstr_constant(arg.name) for arg in args)
+        relation = Projection(relation, proj_cols)
+        return relation
 
     def _get_choice_node_symb_deps(self, start_node_symb):
         """
@@ -542,18 +542,34 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         return TRUE
 
 
-class ProvenanceExpressionTransformer(ExpressionWalker):
+class ProvenanceExpressionTransformer(PatternWalker):
     @add_match(RelationalAlgebraOperation)
     def ra_operation(self, op):
-        new_op = op.apply(*(self.walk(arg) for arg in op.unapply()))
-        new_op.__debug_expression__ = getattr(op, "__debug_expression__", None)
-        if new_op == op:
-            return new_op
-        else:
+        new_args, changed = self._walk_args(op.unapply())
+        if changed:
+            new_op = op.apply(*new_args)
+            new_op.__debug_expression__ = getattr(
+                op, "__debug_expression__", None
+            )
             return self.walk(new_op)
+        else:
+            return op
+
+    def _walk_args(self, args):
+        new_args = tuple()
+        changed = False
+        for arg in args:
+            if isinstance(arg, Tuple):
+                new_arg, new_changed = self._walk_args(arg)
+            else:
+                new_arg = self.walk(arg)
+                new_changed = new_arg is not arg
+            new_args += (new_arg,)
+            changed |= new_changed
+        return new_args, changed
 
 
-class SelectionOutPusher(ProvenanceExpressionTransformer):
+class SelectionOutPusherMixin(PatternWalker):
     @add_match(
         RenameColumn(
             Selection(..., TupleEqualSymbol),
@@ -634,8 +650,23 @@ class SelectionOutPusher(ProvenanceExpressionTransformer):
         union.__debug_expression__ = getattr(op, "__debug_expression__", None)
         return Selection(union, op.relation.formula,)
 
+    @add_match(UnionOverTuples(Projection, ...))
+    def union_of_projection(self, union):
+        projection = union.relation
+        new_union = UnionOverTuples(projection.relation, union.tuple_symbol)
+        new_union.__debug_expression__ = union.__debug_expression__
+        new_projection = Projection(new_union, projection.attributes)
+        return new_projection
 
-class UnionRemover(ProvenanceExpressionTransformer):
+    @add_match(Projection(Selection(..., TupleEqualSymbol), ...))
+    def selection_in_projection(self, proj):
+        select = proj.relation
+        new_proj = Projection(select.relation, proj.attributes)
+        new_select = Selection(new_proj, select.formula)
+        return new_select
+
+
+class UnionRemoverMixin(PatternWalker):
     @add_match(
         UnionOverTuples(Selection(..., TupleEqualSymbol), ...),
         lambda exp: exp.tuple_symbol == exp.relation.formula.tuple_symbol,
@@ -656,3 +687,15 @@ class UnionRemover(ProvenanceExpressionTransformer):
             for c1, c2 in zip(selection_cols[i - 1], selection_cols[i]):
                 op = Selection(op, EQUAL(c1, c2))
         return self.walk(op)
+
+
+class SelectionOutPusher(
+    SelectionOutPusherMixin, ProvenanceExpressionTransformer, ExpressionWalker,
+):
+    pass
+
+
+class UnionRemover(
+    UnionRemoverMixin, ProvenanceExpressionTransformer, ExpressionWalker,
+):
+    pass

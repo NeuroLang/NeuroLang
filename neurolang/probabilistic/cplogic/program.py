@@ -1,14 +1,13 @@
 import typing
 
 from ...datalog import DatalogProgram
-from ...datalog.expression_processing import (
-    implication_has_existential_variable_in_antecedent,
-)
-from ...exceptions import ForbiddenDisjunctionError, ForbiddenExistentialError
+from ...datalog.expressions import Fact
+from ...exceptions import ForbiddenDisjunctionError
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
 from ...expressions import Constant, FunctionApplication, Symbol
-from ...logic import Implication, Union
+from ...logic import TRUE, Conjunction, Implication, Union
+from ...logic.expression_processing import extract_logic_predicates
 from ..exceptions import MalformedProbabilisticTupleError
 from ..expression_processing import (
     add_to_union,
@@ -18,6 +17,45 @@ from ..expression_processing import (
     is_probabilistic_fact,
     union_contains_probabilistic_facts,
 )
+
+
+def is_rule_with_constants(rule):
+    return (
+        isinstance(rule, Implication)
+        and rule.antecedent != TRUE
+        and any(
+            any(isinstance(arg, Constant) for arg in pred.args)
+            for pred in [rule.consequent]
+            + list(extract_logic_predicates(rule.antecedent))
+        )
+    )
+
+
+def remove_constants_from_pred(pred):
+    new_args = list()
+    valued_args = list()
+    for arg in pred.args:
+        new_arg = arg
+        if isinstance(arg, Constant):
+            new_arg = Symbol.fresh()
+            valued_args.append((new_arg, arg))
+        new_args.append(new_arg)
+    new_pred = pred.functor(*new_args)
+    return new_pred, valued_args
+
+
+def remove_constants_from_rule(rule):
+    preds = [rule.consequent] + list(extract_logic_predicates(rule.antecedent))
+    new_preds = list()
+    valued_args = list()
+    for pred in preds:
+        new_pred, new_valued_args = remove_constants_from_pred(pred)
+        new_preds.append(new_pred)
+        valued_args += new_valued_args
+    new_preds.append(Symbol.fresh()(*(x[0] for x in valued_args)))
+    new_rule = Implication(new_preds[0], Conjunction(tuple(new_preds[1:])))
+    fact = Fact(new_preds[-1].functor(*(x[1] for x in valued_args)))
+    return [new_rule, fact]
 
 
 class CPLogicMixin(PatternWalker):
@@ -173,6 +211,21 @@ class CPLogicMixin(PatternWalker):
                 self.walk(list(pfacts)[0])
         self.walk(Union(other_expressions))
 
+    @add_match(
+        Union,
+        lambda exp: any(
+            is_rule_with_constants(formula) for formula in exp.formulas
+        ),
+    )
+    def union_with_rule_with_constant(self, union):
+        new_formulas = []
+        for formula in union.formulas:
+            if is_rule_with_constants(formula):
+                new_formulas += remove_constants_from_rule(formula)
+            else:
+                new_formulas += [formula]
+        return self.walk(Union(tuple(new_formulas)))
+
     def _register_prob_pred_symb_set_symb(self, pred_symb, set_symb):
         if set_symb.name not in self.protected_keywords:
             self.protected_keywords.add(set_symb.name)
@@ -192,18 +245,9 @@ class CPLogicMixin(PatternWalker):
         )
         return expression
 
-    @add_match(Implication, implication_has_existential_variable_in_antecedent)
-    def prevent_existential_rule(self, rule):
-        raise ForbiddenExistentialError(
-            "CP-Logic programs do not support existential antecedents"
-        )
-
     @add_match(
         Implication(FunctionApplication, ...),
-        lambda exp: (
-            exp.antecedent
-            != Constant[bool](True, auto_infer_type=False, verify_type=False)
-        ),
+        lambda exp: exp.antecedent != TRUE,
     )
     def prevent_intensional_disjunction(self, rule):
         pred_symb = rule.consequent.functor
