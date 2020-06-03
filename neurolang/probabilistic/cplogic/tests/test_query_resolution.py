@@ -307,3 +307,31 @@ def test_existential_in_conjunction():
     exp, result = testing.inspect_resolution(Q(x), cpl_program)
     expected = testing.make_prov_set([(0.1, "a"), (0.2, "b")], ("_p_", "x"))
     assert testing.eq_prov_relations(result, expected)
+
+
+def test_existential_alternative_variables():
+    pchoice_as_sets = {
+        P: {(0.8, "a", "b"), (0.1, "c", "d"), (0.1, "d", "e")},
+    }
+    pfact_sets = {
+        Z: {(0.2, "a"), (0.7, "e")},
+    }
+    code = Union(
+        (
+            Fact(R(Constant[str]("a"))),
+            Fact(R(Constant[str]("b"))),
+            Implication(H(x), Conjunction((Z(y), P(y, x)))),
+        )
+    )
+    cpl_program = CPLogicProgram()
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+    cpl_program.walk(code)
+    qpred = H(z)
+    result = solve_succ_query(qpred, cpl_program)
+    expected = testing.make_prov_set([(0.2 * 0.8, "b")], ("_p_", "z"))
+    assert testing.eq_prov_relations(result, expected)
