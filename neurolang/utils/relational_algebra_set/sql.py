@@ -5,6 +5,7 @@ from itertools import chain
 from uuid import uuid4
 
 import pandas as pd
+import numpy as np
 import sqlalchemy
 
 from .. import OrderedSet, relational_algebra_set
@@ -21,7 +22,7 @@ class RelationalAlgebraExpression(str):
 
 
 class RelationalAlgebraFrozenSet(
-    relational_algebra_set.RelationalAlgebraFrozenSet
+    relational_algebra_set.abstract.RelationalAlgebraFrozenSet
  ):
     def __init__(
         self,
@@ -43,6 +44,16 @@ class RelationalAlgebraFrozenSet(
             self._len = 0
             self._columns = tuple()
         self._create_queries()
+
+    @classmethod
+    def create_view_from(cls, other):
+        if not isinstance(other, cls):
+            raise ValueError(
+                "View can only be created from an object of the same class"
+            )
+        output = cls()
+        output._initialize_from_instance_same_class(other)
+        return output
 
     def _create_table_from_iterable(self, iterable, column_names=None):
         if isinstance(iterable, RelationalAlgebraFrozenSet):
@@ -109,19 +120,23 @@ class RelationalAlgebraFrozenSet(
 
     def _initialize_from_instance_same_class(self, other):
         self.engine = other.engine
-        query = CreateView(
-            self._name,
-            sqlalchemy.select(
-                [
-                    c.label(new_c)
-                    for c, new_c in zip(other._sql_columns, self.columns)
-                ],
-                from_obj=other._table
+        self._columns = other.columns
+        if other._created and other.arity > 0:
+            query = CreateView(
+                self._name,
+                sqlalchemy.select(
+                    [
+                        c.label(str(new_c))
+                        for c, new_c in zip(other._sql_columns, self.columns)
+                    ],
+                    from_obj=other._table
+                )
             )
-        )
-        conn = self.engine.connect()
-        conn.execute(query)
-        self._created = True
+            conn = self.engine.connect()
+            conn.execute(query)
+            self._created = True
+        else:
+            self._created = False
         self._arity = len(self.columns)
         self._len = other._len
         self.is_view = True
@@ -220,6 +235,9 @@ class RelationalAlgebraFrozenSet(
         conn = self.engine.connect()
         res = conn.execute(query)
         return tuple(res.fetchone())
+
+    def itervalues(self):
+        raise NotImplementedError()
 
     def __len__(self):
         if self._len is None:
@@ -384,10 +402,12 @@ class RelationalAlgebraFrozenSet(
     def __or__(self, other):
         if not isinstance(other, RelationalAlgebraFrozenSet):
             return super().__sub__(other)
-        if self.arity == 0 and len(self) == 0:
+        if self.is_dee():
             return other
-        if other.arity == 0 and len(other) == 0:
+        if other.is_dee():
             return self
+        if self.is_dum() or other.is_dum():
+            return self.dum()
         if not self._equal_sets_structure(other):
             raise ValueError("Sets do not have the same columns")
 
@@ -537,7 +557,9 @@ class RelationalAlgebraFrozenSet(
 
     def groupby(self, columns):
         if self.arity > 0:
+            single_column = False
             if not isinstance(columns, Iterable):
+                single_column = True
                 columns = (columns,)
 
             sql_columns = tuple(
@@ -554,7 +576,10 @@ class RelationalAlgebraFrozenSet(
             r = conn.execute(query)
             for t in r:
                 g = self.selection(dict(zip(columns, t)))
-                t_out = tuple(t)
+                if single_column:
+                    t_out = t[0]
+                else:
+                    t_out = tuple(t)
                 yield t_out, g
 
     def aggregate(self, group_columns, aggregate_function):
@@ -618,10 +643,21 @@ class RelationalAlgebraFrozenSet(
             self._hash = hash(ts)
         return self._hash
 
+    def as_numpy_array(self):
+        if self.arity > 0 and len(self) > 0:
+            conn = self.engine.connect()
+            res = conn.execute(sqlalchemy.select(
+                self._sql_columns, from_obj=self._table,
+                distinct=True
+            ))
+            return np.array(res.fetchall())
+        else:
+            return np.array([])
+
 
 class NamedRelationalAlgebraFrozenSet(
     RelationalAlgebraFrozenSet,
-    relational_algebra_set.NamedRelationalAlgebraFrozenSet
+    relational_algebra_set.abstract.NamedRelationalAlgebraFrozenSet
 ):
     def __init__(
         self, columns=None, iterable=None, engine=engine
@@ -764,7 +800,7 @@ class NamedRelationalAlgebraFrozenSet(
     def groupby(self, columns):
         if self.arity > 0:
             single_column = False
-            if isinstance(columns, str):
+            if isinstance(columns, (str, int)):
                 single_column = True
                 columns = (columns,)
 
@@ -850,7 +886,8 @@ class NamedRelationalAlgebraFrozenSet(
 
 
 class RelationalAlgebraSet(
-    RelationalAlgebraFrozenSet, relational_algebra_set.RelationalAlgebraSet
+    RelationalAlgebraFrozenSet,
+    relational_algebra_set.abstract.RelationalAlgebraSet
 ):
     def __init__(self, iterable=None, engine=engine):
         if isinstance(iterable, RelationalAlgebraFrozenSet):
@@ -906,6 +943,16 @@ class RelationalAlgebraSet(
 
     def __ior__(self, other):
         if isinstance(other, RelationalAlgebraFrozenSet):
+            if self.is_dee():
+                self._initialize_from_instance_same_class(other)
+                return self
+            elif other.is_dee():
+                return self
+            elif self.is_dum() or other.is_dum():
+                self._initialize_from_instance_same_class(
+                    self.dum()
+                )
+                return self
             query = self.ior_query.format(other=other)
             conn = self.engine.connect()
             conn.execute(query)
