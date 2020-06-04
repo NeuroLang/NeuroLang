@@ -17,8 +17,9 @@ engine = sqlalchemy.create_engine("sqlite:///", echo=False)
 column_operators = sqlalchemy.func
 
 
-class RelationalAlgebraExpression(str):
-    pass
+class RelationalAlgebraStringExpression(str):
+    def __repr__(self):
+        return "{}{{ {} }}".format(self.__class__.__name__, super().__repr__())
 
 
 class RelationalAlgebraFrozenSet(
@@ -58,8 +59,9 @@ class RelationalAlgebraFrozenSet(
     def _create_table_from_iterable(self, iterable, column_names=None):
         if isinstance(iterable, RelationalAlgebraFrozenSet):
             self._name = iterable._name
-            self._columns = iterable._columns
-            self._arity = iterable._arity
+            if iterable.arity > 0 and column_names is None:
+                self._columns = iterable._columns
+                self._arity = iterable._arity
             self._len = iterable._len
             self.parents = iterable.parents + [iterable]
             self._created = iterable._created
@@ -118,9 +120,12 @@ class RelationalAlgebraFrozenSet(
         new_set._create_queries()
         return new_set
 
-    def _initialize_from_instance_same_class(self, other):
+    def _initialize_from_instance_same_class(
+        self, other, override_columns=True
+    ):
         self.engine = other.engine
-        self._columns = other.columns
+        if override_columns:
+            self._columns = other.columns
         if other._created and other.arity > 0:
             query = CreateView(
                 self._name,
@@ -198,9 +203,6 @@ class RelationalAlgebraFrozenSet(
     @property
     def arity(self):
         return self._arity
-
-    def is_null(self):
-        return not self._created or (self.arity == 0 or len(self) == 0)
 
     def __contains__(self, element):
         if self._arity == 0:
@@ -287,13 +289,20 @@ class RelationalAlgebraFrozenSet(
         )
 
     def selection(self, select_criteria):
-        if self.is_null():
-            return type(self)()
-
+        if self.is_empty():
+            return self._empty_set_same_structure()
         new_name = self._new_name()
         query = sqlalchemy.sql.select(['*'], from_obj=self._table)
-        for k, v in select_criteria.items():
-            query.append_whereclause(sqlalchemy.sql.column(str(k)) == v)
+
+        if callable(select_criteria):
+            raise NotImplementedError(
+                "Arbitrary python expressions not allowed"
+            )
+        elif isinstance(select_criteria, RelationalAlgebraStringExpression):
+            query.append_whereclause(sqlalchemy.text(select_criteria))
+        else:
+            for k, v in select_criteria.items():
+                query.append_whereclause(sqlalchemy.sql.column(str(k)) == v)
         query = CreateView(new_name, query)
         conn = self.engine.connect()
         conn.execute(query)
@@ -304,8 +313,8 @@ class RelationalAlgebraFrozenSet(
         return result
 
     def selection_columns(self, select_criteria):
-        if self.is_null():
-            return type(self)()
+        if self.is_empty():
+            return self._empty_set_same_structure()
 
         new_name = self._new_name()
         query = sqlalchemy.sql.select(['*'], from_obj=self._table)
@@ -323,7 +332,10 @@ class RelationalAlgebraFrozenSet(
         return result
 
     def equijoin(self, other, join_indices=None):
-        if self.is_null() or other.is_null():
+        res = self._dee_dum_product(other)
+        if res is not None:
+            return res
+        if self.is_empty() or other.is_empty():
             return type(self)()
 
         if other is self:
@@ -368,10 +380,9 @@ class RelationalAlgebraFrozenSet(
     def __and__(self, other):
         if not isinstance(other, RelationalAlgebraFrozenSet):
             return super().__and__(other)
-        if self.arity == 0 and len(self) == 0:
-            return self
-        if other.arity == 0 and len(other) == 0:
-            return other
+        res = self._dee_dum_product(other)
+        if res is not None:
+            return res
         if not self._equal_sets_structure(other):
             raise ValueError(
                 "Relational algebra set columns should be the same"
@@ -402,12 +413,9 @@ class RelationalAlgebraFrozenSet(
     def __or__(self, other):
         if not isinstance(other, RelationalAlgebraFrozenSet):
             return super().__sub__(other)
-        if self.is_dee():
-            return other
-        if other.is_dee():
-            return self
-        if self.is_dum() or other.is_dum():
-            return self.dum()
+        res = self._dee_dum_sum(other)
+        if res is not None:
+            return res
         if not self._equal_sets_structure(other):
             raise ValueError("Sets do not have the same columns")
 
@@ -436,10 +444,12 @@ class RelationalAlgebraFrozenSet(
     def __sub__(self, other):
         if not isinstance(other, RelationalAlgebraFrozenSet):
             return super().__sub__(other)
-
-        if other.is_null():
-            return self
-
+        if self.is_empty() or other.is_empty():
+            return self.copy()
+        if self.is_dee():
+            if other.is_dee():
+                return self.dum()
+            return self.dee()
         if not self._equal_sets_structure(other):
             raise ValueError("Sets do not have the same columns")
 
@@ -466,6 +476,8 @@ class RelationalAlgebraFrozenSet(
         )
 
     def deepcopy(self):
+        if self.is_dee():
+            return self.dee()
         if len(self) > 0:
             new_name = self._new_name()
             query = sqlalchemy.text(
@@ -490,6 +502,10 @@ class RelationalAlgebraFrozenSet(
         conn.execute(query)
 
     def copy(self):
+        if self.is_dee():
+            return self.dee()
+        elif self.is_dum():
+            return self.dum()
         new_name = self._new_name()
         self._create_view(self._name, new_name),
         return type(self).create_from_table_or_view(
@@ -525,7 +541,7 @@ class RelationalAlgebraFrozenSet(
             if self.is_dee() or other.is_dee():
                 res = self.is_dee() and other.is_dee()
             elif self.is_dum() or other.is_dum():
-                res = self.is_dum() or other.is_dum()
+                res = self.is_dum() and other.is_dum()
             elif self._name == other._name:
                 res = True
             elif not self._equal_sets_structure(other):
@@ -662,10 +678,16 @@ class NamedRelationalAlgebraFrozenSet(
     def __init__(
         self, columns=None, iterable=None, engine=engine
     ):
+        if isinstance(columns, NamedRelationalAlgebraFrozenSet):
+            iterable = columns
+            columns = columns.columns
+ 
         self.engine = engine
         if columns is None:
             columns = tuple()
-        self._columns = columns
+
+        self._check_for_duplicated_columns(columns)
+        self._columns = tuple(columns)
         self._name = self._new_name()
         self.parents = []
         self._created = False
@@ -674,7 +696,9 @@ class NamedRelationalAlgebraFrozenSet(
             isinstance(iterable, RelationalAlgebraFrozenSet) and
             iterable.arity > 0
         ):
-            self._initialize_from_instance_same_class(iterable)
+            self._initialize_from_instance_same_class(
+                iterable, override_columns=False
+            )
         elif iterable is not None:
             self._create_table_from_iterable(
                 iterable, column_names=self.columns
@@ -714,6 +738,9 @@ class NamedRelationalAlgebraFrozenSet(
                 new._len = 1
             return new
 
+        if self.is_dee() or self.is_dum():
+            return self.copy()
+
         new_name = self._new_name()
         query = CreateView(
             new_name,
@@ -747,8 +774,9 @@ class NamedRelationalAlgebraFrozenSet(
                 yield self.named_tuple_type(**t)
 
     def naturaljoin(self, other):
-        if self.is_null() or other.is_null():
-            return type(self)(columns=tuple())
+        res = self._dee_dum_product(other)
+        if res is not None:
+            return res
 
         if other is self:
             other = self.copy()
@@ -852,6 +880,44 @@ class NamedRelationalAlgebraFrozenSet(
             parents=[self],
         )
 
+    def rename_columns(self, renames):
+        # prevent duplicated destination columns
+        self._check_for_duplicated_columns(renames.values())
+        if not set(renames).issubset(self.columns):
+            # get the missing source columns
+            # for a more convenient error message
+            not_found_cols = set(c for c in renames if c not in self.columns)
+            raise ValueError(
+                f"Cannot rename non-existing columns: {not_found_cols}"
+            )
+
+        new_name = self._new_name()
+        columns = []
+        result_columns = []
+        for column in self.columns:
+            col = sqlalchemy.column(str(column))
+            rc = column
+            if column in renames:
+                column_dst = renames[column]
+                col = col.label(str(column_dst))
+                rc = column_dst
+            columns.append(col)
+            result_columns.append(rc)
+
+        query = CreateView(
+            new_name,
+            sqlalchemy.select(columns, from_obj=self._table)
+        )
+        conn = self.engine.connect()
+        conn.execute(query)
+        return type(self).create_from_table_or_view(
+            name=new_name,
+            engine=self.engine,
+            columns=result_columns,
+            is_view=True,
+            parents=[self],
+        )
+
     def extended_projection(self, eval_expressions):
         T = namedtuple('T', self.columns)
         t = T(**{c: sqlalchemy.column(c) for c in self.columns})
@@ -859,7 +925,7 @@ class NamedRelationalAlgebraFrozenSet(
         for k, v in eval_expressions.items():
             if callable(v):
                 v = v(t)
-            elif isinstance(v, RelationalAlgebraExpression):
+            elif isinstance(v, RelationalAlgebraStringExpression):
                 v = sqlalchemy.text(v)
             else:
                 v = sqlalchemy.literal(v)
@@ -884,6 +950,16 @@ class NamedRelationalAlgebraFrozenSet(
             parents=[self],
         )
 
+    @staticmethod
+    def _check_for_duplicated_columns(columns):
+        if len(set(columns)) != len(columns):
+            columns = list(columns)
+            dup_cols = set(c for c in columns if columns.count(c) > 1)
+            raise ValueError(
+                "Duplicated column names are not allowed. "
+                f"Found the following duplicated columns: {dup_cols}"
+            )
+
 
 class RelationalAlgebraSet(
     RelationalAlgebraFrozenSet,
@@ -894,6 +970,11 @@ class RelationalAlgebraSet(
             iterable = iterable.deepcopy()
         super().__init__(iterable=iterable, engine=engine)
         self._generate_mutable_queries()
+
+    def copy(self):
+        res = self.deepcopy()
+        res._generate_mutable_queries()
+        return res
 
     def _generate_mutable_queries(self):
         comma_fields = ', '.join(f'`{i}`' for i in range(self.arity))
@@ -948,10 +1029,12 @@ class RelationalAlgebraSet(
                 return self
             elif other.is_dee():
                 return self
-            elif self.is_dum() or other.is_dum():
-                self._initialize_from_instance_same_class(
-                    self.dum()
-                )
+            elif other.is_empty():
+                return self
+            elif self.is_empty():
+                self._create_table_from_iterable(other)
+                self._create_queries()
+                self._generate_mutable_queries()
                 return self
             query = self.ior_query.format(other=other)
             conn = self.engine.connect()
@@ -962,7 +1045,11 @@ class RelationalAlgebraSet(
             return super().__ior__(other)
 
     def __isub__(self, other):
-        if isinstance(other, RelationalAlgebraSet):
+        if other.is_empty() or self.is_empty():
+            return self
+        if self.is_dee() and other.is_dee():
+            return self.dum()
+        if isinstance(other, RelationalAlgebraFrozenSet):
             query = (
                 self._table
                 .delete()
@@ -985,10 +1072,6 @@ class RelationalAlgebraSet(
             return self
         else:
             return super().__isub__(other)
-
-    def copy(self):
-        res = super().copy()
-        return res
 
     def __del__(self):
         if self._created:

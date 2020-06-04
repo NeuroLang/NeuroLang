@@ -428,7 +428,7 @@ def test_named_relational_algebra_set_semantics_empty(ra_module):
     assert r is not ras
 
     r_unnamed = ra_module.RelationalAlgebraSet([(0, 1)])
-    r = ra_module.NamedRelationalAlgebraFrozenSet(['y', 'x'], r_unnamed)
+    r = ra_module.NamedRelationalAlgebraFrozenSet(columns=['y', 'x'], iterable=r_unnamed)
     assert r == ras
 
 
