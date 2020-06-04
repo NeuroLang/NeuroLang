@@ -572,10 +572,6 @@ class ProvenanceExpressionTransformer(ExpressionWalker):
         else:
             return op
 
-    @add_match(Constant)
-    def constant(self, cst):
-        return cst
-
 
 class SelectionOutPusher(ProvenanceExpressionTransformer):
     @add_match(
