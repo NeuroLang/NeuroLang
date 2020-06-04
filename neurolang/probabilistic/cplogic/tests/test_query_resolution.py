@@ -429,3 +429,74 @@ def test_repeated_antecedent_predicate_symbol():
         ("_p_", "x", "y"),
     )
     assert testing.eq_prov_relations(result, expected)
+
+
+def test_fake_neurosynth():
+    TermInStudy = Symbol("TermInStudy")
+    ActivationReported = Symbol("ActivationReported")
+    SelectedStudy = Symbol("SelectedStudy")
+    TermAssociation = Symbol("TermAssociation")
+    Activation = Symbol("Activation")
+    s = Symbol("s")
+    t = Symbol("t")
+    v = Symbol("v")
+    code = Union(
+        (
+            Implication(
+                TermAssociation(t),
+                Conjunction([TermInStudy(t, s), SelectedStudy(s)]),
+            ),
+            Implication(
+                Activation(v),
+                Conjunction([ActivationReported(v, s), SelectedStudy(s)]),
+            ),
+        )
+    )
+    pfact_sets = {
+        TermInStudy: {
+            (0.001, "memory", "1"),
+            (0.002, "memory", "2"),
+            (0.015, "visual", "2"),
+            (0.004, "memory", "3"),
+            (0.005, "visual", "4"),
+            (0.0001, "memory", "4"),
+            (0.01, "visual", "5"),
+        },
+        ActivationReported: {
+            (1.0, "v1", "1"),
+            (1.0, "v2", "1"),
+            (1.0, "v3", "2"),
+            (1.0, "v1", "3"),
+            (1.0, "v1", "4"),
+        },
+    }
+    pchoice_as_sets = {
+        SelectedStudy: {
+            (0.2, "1"),
+            (0.2, "2"),
+            (0.2, "3"),
+            (0.2, "4"),
+            (0.2, "5"),
+        }
+    }
+    cpl_program = CPLogicProgram()
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+    cpl_program.walk(code)
+    qpred = TermAssociation(t)
+    result = solve_succ_query(qpred, cpl_program)
+    expected = testing.make_prov_set(
+        [
+            (
+                sum(t[0] for t in pfact_sets[TermInStudy] if t[1] == term) / 5,
+                term,
+            )
+            for term in ("memory", "visual")
+        ],
+        ("_p_", "t"),
+    )
+    assert testing.eq_prov_relations(result, expected)
