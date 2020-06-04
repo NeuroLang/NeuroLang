@@ -338,20 +338,20 @@ def test_existential_alternative_variables():
     assert testing.eq_prov_relations(result, expected)
 
 
-@pytest.mark.skip("not implemented yet")
 def test_multilevel_existential():
     pchoice_as_sets = {
         P: {(0.5, "a", "b"), (0.5, "b", "c")},
         R: {(0.1, "a"), (0.4, "b"), (0.5, "c")},
+        Q: {(0.9, "a"), (0.1, "c")},
     }
     pfact_sets = {
         Z: {(0.1, "b"), (0.9, "c")},
     }
     code = Union(
         (
-            Implication(H(x, y), Conjunction((R(x), Z(y), Z(x)))),
+            Implication(H(x, y), Conjunction((R(x), Z(y)))),
             Implication(A(x), Conjunction((H(x, y), P(y, x)))),
-            Implication(B(x), Conjunction((A(x), H(x, y), A(y)))),
+            Implication(B(x), Conjunction((A(x), H(x, y), Q(y)))),
         )
     )
     cpl_program = CPLogicProgram()
@@ -362,21 +362,25 @@ def test_multilevel_existential():
     for pred_symb, pfact_set in pfact_sets.items():
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
     cpl_program.walk(code)
-    qpred = H(y, z)
+    qpred = H(x, y)
     result = solve_succ_query(qpred, cpl_program)
     expected = testing.make_prov_set(
         [
+            (0.1 * 0.1, "a", "b"),
+            (0.1 * 0.9, "a", "c"),
             (0.4 * 0.1, "b", "b"),
-            (0.4 * 0.9 * 0.1, "b", "c"),
-            (0.5 * 0.1 * 0.9, "c", "b"),
+            (0.4 * 0.9, "b", "c"),
+            (0.5 * 0.1, "c", "b"),
             (0.5 * 0.9, "c", "c"),
         ],
-        ("_p_", "y", "z"),
+        ("_p_", "x", "y"),
     )
     assert testing.eq_prov_relations(result, expected)
     qpred = B(z)
     result = solve_succ_query(qpred, cpl_program)
-    expected = testing.make_prov_set([(0.2 * 0.8, "b")], ("_p_", "z"))
+    expected = testing.make_prov_set(
+        [(0.5 * 0.1 * 0.5 * 0.1, "c")], ("_p_", "z"),
+    )
     assert testing.eq_prov_relations(result, expected)
 
 
