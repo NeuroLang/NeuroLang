@@ -573,7 +573,7 @@ class ProvenanceExpressionTransformer(ExpressionWalker):
             return op
 
 
-class SelectionOutPusher(ProvenanceExpressionTransformer):
+class SelectionOutPusherMixin(ExpressionWalker):
     @add_match(
         RenameColumn(
             Selection(..., TupleEqualSymbol),
@@ -670,7 +670,7 @@ class SelectionOutPusher(ProvenanceExpressionTransformer):
         return new_select
 
 
-class UnionRemover(ProvenanceExpressionTransformer):
+class UnionRemoverMixin(ExpressionWalker):
     @add_match(
         UnionOverTuples(Selection(..., TupleEqualSymbol), ...),
         lambda exp: exp.tuple_symbol == exp.relation.formula.tuple_symbol,
@@ -691,3 +691,15 @@ class UnionRemover(ProvenanceExpressionTransformer):
             for c1, c2 in zip(selection_cols[i - 1], selection_cols[i]):
                 op = Selection(op, EQUAL(c1, c2))
         return self.walk(op)
+
+
+class SelectionOutPusher(
+    SelectionOutPusherMixin, ProvenanceExpressionTransformer,
+):
+    pass
+
+
+class UnionRemover(
+    UnionRemoverMixin, ProvenanceExpressionTransformer,
+):
+    pass
