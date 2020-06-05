@@ -290,7 +290,7 @@ class RelationalAlgebraFrozenSet(
 
     def selection(self, select_criteria):
         if self.is_empty():
-            return self._empty_set_same_structure()
+            return type(self)()
         new_name = self._new_name()
         query = sqlalchemy.sql.select(['*'], from_obj=self._table)
 
@@ -314,7 +314,7 @@ class RelationalAlgebraFrozenSet(
 
     def selection_columns(self, select_criteria):
         if self.is_empty():
-            return self._empty_set_same_structure()
+            return type(self)()
 
         new_name = self._new_name()
         query = sqlalchemy.sql.select(['*'], from_obj=self._table)
@@ -931,10 +931,7 @@ class NamedRelationalAlgebraFrozenSet(
                 v = sqlalchemy.literal(v)
             v = sqlalchemy.sql.label(str(k), v)
             result_cols.append(v)
-        result_cols = [
-            c for c in self._sql_columns
-            if c.name not in eval_expressions
-        ] + result_cols
+
         select = sqlalchemy.select(
             result_cols, from_obj=self._table
         )

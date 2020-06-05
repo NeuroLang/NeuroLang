@@ -470,15 +470,26 @@ def test_named_relational_algebra_ra_selection(ra_module):
     )
     assert ras_0 == a_sel
 
+    ras_0 = ras.selection(
+        ra_module.RelationalAlgebraStringExpression("x == 1 and y == 2")
+    )
+    assert ras_0 == a_sel
+
+
+def test_named_relational_algebra_ra_selection_python(ra_module):
+    a = [(i % 2, i, i * 2) for i in range(5)]
+
+    ras = ra_module.NamedRelationalAlgebraFrozenSet(("x", "y", "z"), a)
+
+    a_sel = ra_module.NamedRelationalAlgebraFrozenSet(
+        ras.columns,
+        set((i % 2, i, i * 2) for i in range(5) if i % 2 == 1 and i == 2),
+    )
+
     ras_0 = ras.selection({"x": lambda x: x == 1, "y": lambda y: y == 2})
     assert ras_0 == a_sel
 
     ras_0 = ras.selection(lambda t: t.x == 1 and t.y == 2)
-    assert ras_0 == a_sel
-
-    ras_0 = ras.selection(
-        ra_module.RelationalAlgebraStringExpression("x == 1 and y == 2")
-    )
     assert ras_0 == a_sel
 
 
@@ -700,6 +711,17 @@ def test_aggregate(ra_module):
     expected_str = ra_module.NamedRelationalAlgebraFrozenSet(
         ("x", "y", "z"), [(7, 8, 2)]
     )
+
+    new_set = initial_set.aggregate(["x", "y"], {"z": sum})
+    assert expected_sum == new_set
+    new_set = initial_set.aggregate(["x", "y"], {"z": "count"})
+    assert expected_str == new_set
+
+
+def test_aggregate_python(ra_module):
+    initial_set = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("x", "y", "z"), [(7, 8, 1), (7, 8, 9)]
+    )
     expected_lambda = ra_module.NamedRelationalAlgebraFrozenSet(
         ("x", "y", "z"), [(7, 8, 8)]
     )
@@ -714,10 +736,6 @@ def test_aggregate(ra_module):
         ("x", "y", "qq"), [(7, 8, 13)]
     )
 
-    new_set = initial_set.aggregate(["x", "y"], {"z": sum})
-    assert expected_sum == new_set
-    new_set = initial_set.aggregate(["x", "y"], {"z": "count"})
-    assert expected_str == new_set
     new_set = initial_set.aggregate(["x", "y"], {"z": lambda x: max(x) - 1})
     assert expected_lambda == new_set
     new_set = initial_set.aggregate(
@@ -743,6 +761,34 @@ def test_extended_projection(ra_module):
     initial_set = ra_module.NamedRelationalAlgebraFrozenSet(
         ("x", "y"), [(7, 8), (9, 2)]
     )
+    expected_new_colum_str = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("x", "z",), [(7, "a",), (9, "a",)]
+    )
+    expected_new_colum_int = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("z",), [(1,), (1,)]
+    )
+
+    new_set = initial_set.extended_projection(
+        {"z": "a", "x": ra_module.RelationalAlgebraStringExpression("x")}
+    )
+    assert expected_new_colum_str == new_set
+    new_set = initial_set.extended_projection({"z": 1})
+    assert expected_new_colum_int == new_set
+
+    expected_sum = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("z",), [(15,), (11,)]
+    )
+
+    new_set = initial_set.extended_projection(
+        {"z": ra_module.RelationalAlgebraStringExpression("x+y")}
+    )
+    assert expected_sum == new_set
+
+
+def test_extended_projection_python_functions(ra_module):
+    initial_set = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("x", "y"), [(7, 8), (9, 2)]
+    )
     expected_sum = ra_module.NamedRelationalAlgebraFrozenSet(
         ("z",), [(15,), (11,)]
     )
@@ -752,17 +798,8 @@ def test_extended_projection(ra_module):
     expected_lambda2 = ra_module.NamedRelationalAlgebraFrozenSet(
         ("z", "x"), [(14, 8), (10, 10)]
     )
-    expected_new_colum_str = ra_module.NamedRelationalAlgebraFrozenSet(
-        ("x", "z",), [(7, "a",), (9, "a",)]
-    )
-    expected_new_colum_int = ra_module.NamedRelationalAlgebraFrozenSet(
-        ("z",), [(1,), (1,)]
-    )
+
     new_set = initial_set.extended_projection({"z": sum})
-    assert expected_sum == new_set
-    new_set = initial_set.extended_projection(
-        {"z": ra_module.RelationalAlgebraStringExpression("x+y")}
-    )
     assert expected_sum == new_set
     new_set = initial_set.extended_projection({"z": lambda r: r.x + r.y - 1})
     assert expected_lambda == new_set
@@ -773,12 +810,6 @@ def test_extended_projection(ra_module):
         }
     )
     assert expected_lambda2 == new_set
-    new_set = initial_set.extended_projection(
-        {"z": "a", "x": ra_module.RelationalAlgebraStringExpression("x")}
-    )
-    assert expected_new_colum_str == new_set
-    new_set = initial_set.extended_projection({"z": 1})
-    assert expected_new_colum_int == new_set
 
 
 def test_rename_columns(ra_module):
