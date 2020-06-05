@@ -2,7 +2,7 @@ import operator
 from typing import Tuple
 
 from ...expression_pattern_matching import add_match
-from ...expression_walker import ExpressionWalker
+from ...expression_walker import PatternWalker, ExpressionWalker
 from ...expressions import Constant, Definition, FunctionApplication, Symbol
 from ...logic.expression_processing import extract_logic_predicates
 from ...relational_algebra import (
@@ -273,7 +273,7 @@ class NodeValue(Definition):
         self.value = value
 
 
-class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
+class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
     """
     Solver that constructs an RAP expression that calculates probabilities
     of sets of random variables in a graphical model.
@@ -547,7 +547,7 @@ class CPLogicGraphicalModelProvenanceSolver(ExpressionWalker):
         return TRUE
 
 
-class ProvenanceExpressionTransformer(ExpressionWalker):
+class ProvenanceExpressionTransformer(PatternWalker):
     @add_match(RelationalAlgebraOperation)
     def ra_operation(self, op):
         changed = False
@@ -573,7 +573,7 @@ class ProvenanceExpressionTransformer(ExpressionWalker):
             return op
 
 
-class SelectionOutPusherMixin(ExpressionWalker):
+class SelectionOutPusherMixin(PatternWalker):
     @add_match(
         RenameColumn(
             Selection(..., TupleEqualSymbol),
@@ -670,7 +670,7 @@ class SelectionOutPusherMixin(ExpressionWalker):
         return new_select
 
 
-class UnionRemoverMixin(ExpressionWalker):
+class UnionRemoverMixin(PatternWalker):
     @add_match(
         UnionOverTuples(Selection(..., TupleEqualSymbol), ...),
         lambda exp: exp.tuple_symbol == exp.relation.formula.tuple_symbol,
@@ -694,12 +694,12 @@ class UnionRemoverMixin(ExpressionWalker):
 
 
 class SelectionOutPusher(
-    SelectionOutPusherMixin, ProvenanceExpressionTransformer,
+    SelectionOutPusherMixin, ProvenanceExpressionTransformer, ExpressionWalker
 ):
     pass
 
 
 class UnionRemover(
-    UnionRemoverMixin, ProvenanceExpressionTransformer,
+    UnionRemoverMixin, ProvenanceExpressionTransformer, ExpressionWalker
 ):
     pass
