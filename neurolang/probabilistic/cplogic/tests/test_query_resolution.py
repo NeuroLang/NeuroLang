@@ -349,7 +349,7 @@ def test_multilevel_existential():
         (
             Implication(H(x, y), Conjunction((R(x), Z(y)))),
             Implication(A(x), Conjunction((H(x, y), P(y, x)))),
-            Implication(B(x), Conjunction((A(x), H(x, y), Q(y)))),
+            Implication(B(x), Conjunction((A(x), Q(y)))),
         )
     )
     cpl_program = CPLogicProgram()
@@ -373,10 +373,8 @@ def test_multilevel_existential():
     )
     assert testing.eq_prov_relations(result, expected)
     qpred = B(z)
-    result = solve_succ_query(qpred, cpl_program)
-    expected = testing.make_prov_set(
-        [(0.5 * 0.1 * 0.5 * 0.1, "c")], ("_p_", "z"),
-    )
+    exp, result = testing.inspect_resolution(qpred, cpl_program,)
+    expected = testing.make_prov_set([(0.5 * 0.1 * 0.5, "c")], ("_p_", "z"),)
     assert testing.eq_prov_relations(result, expected)
 
 
