@@ -343,8 +343,6 @@ def test_multilevel_existential():
         P: {(0.5, "a", "b"), (0.5, "b", "c")},
         R: {(0.1, "a"), (0.4, "b"), (0.5, "c")},
         Q: {(0.9, "a"), (0.1, "c")},
-    }
-    pfact_sets = {
         Z: {(0.1, "b"), (0.9, "c")},
     }
     code = Union(
@@ -359,8 +357,6 @@ def test_multilevel_existential():
         cpl_program.add_probabilistic_choice_from_tuples(
             pred_symb, pchoice_as_set
         )
-    for pred_symb, pfact_set in pfact_sets.items():
-        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
     cpl_program.walk(code)
     qpred = H(x, y)
     result = solve_succ_query(qpred, cpl_program)
