@@ -1,6 +1,6 @@
 import types
 from collections import namedtuple
-from collections.abc import Iterable, Set
+from collections.abc import Iterable
 from itertools import chain
 from uuid import uuid4
 
@@ -59,9 +59,9 @@ class RelationalAlgebraFrozenSet(
     def _create_table_from_iterable(self, iterable, column_names=None):
         if isinstance(iterable, RelationalAlgebraFrozenSet):
             self._name = iterable._name
-            if iterable.arity > 0 and column_names is None:
+            if column_names is None:
                 self._columns = iterable._columns
-                self._arity = iterable._arity
+            self._arity = len(self._columns)
             self._len = iterable._len
             self.parents = iterable.parents + [iterable]
             self._created = iterable._created
@@ -175,7 +175,8 @@ class RelationalAlgebraFrozenSet(
             if self.is_view:
                 self.engine.execute(f"drop view {self._name}")
             elif len(self.parents) == 0:
-                self.engine.execute(f"drop table {self._name}")
+                pass
+                #self.engine.execute(f"drop table {self._name}")
 
     def _normalise_element(self, element):
         if isinstance(element, dict):
@@ -611,7 +612,8 @@ class RelationalAlgebraFrozenSet(
                     v = v.__name__
 
                 if callable(v):
-                    f = v
+                    col = sqlalchemy.column(k)
+                    f = v(col)
                 elif isinstance(v, str):
                     f = getattr(sqlalchemy.func, v)
                 else:
@@ -681,7 +683,7 @@ class NamedRelationalAlgebraFrozenSet(
         if isinstance(columns, NamedRelationalAlgebraFrozenSet):
             iterable = columns
             columns = columns.columns
- 
+
         self.engine = engine
         if columns is None:
             columns = tuple()
@@ -772,6 +774,18 @@ class NamedRelationalAlgebraFrozenSet(
             ))
             for t in res:
                 yield self.named_tuple_type(**t)
+
+    def fetch_one(self):
+        if self.named_tuple_type is None:
+            self.named_tuple_type = namedtuple('tuple', self.columns)
+
+        query = sqlalchemy.sql.select([
+            sqlalchemy.sql.column(str(c))
+            for c in self.columns
+        ], from_obj=self._table, limit=1)
+        conn = self.engine.connect()
+        res = conn.execute(query)
+        return self.named_tuple_type(*res.fetchone())
 
     def naturaljoin(self, other):
         res = self._dee_dum_product(other)

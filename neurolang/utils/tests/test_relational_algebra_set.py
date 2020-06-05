@@ -412,6 +412,11 @@ def test_named_relational_algebra_set_semantics_empty(ra_module):
     ras_c = ra_module.NamedRelationalAlgebraFrozenSet(("x", "y"), [(1, 0)])
     assert ras == ras_c
 
+    empty_init = ra_module.NamedRelationalAlgebraFrozenSet(tuple())
+    assert empty_init.is_dum()
+    assert empty_init.arity == 0
+    assert len(empty_init) == 0
+
     dee = ra_module.NamedRelationalAlgebraFrozenSet.dee()
     dum = ra_module.NamedRelationalAlgebraFrozenSet.dum()
 
@@ -428,7 +433,9 @@ def test_named_relational_algebra_set_semantics_empty(ra_module):
     assert r is not ras
 
     r_unnamed = ra_module.RelationalAlgebraSet([(0, 1)])
-    r = ra_module.NamedRelationalAlgebraFrozenSet(columns=['y', 'x'], iterable=r_unnamed)
+    r = ra_module.NamedRelationalAlgebraFrozenSet(
+        columns=['y', 'x'], iterable=r_unnamed
+    )
     assert r == ras
 
 

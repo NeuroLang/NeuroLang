@@ -4,9 +4,10 @@ from typing import AbstractSet, Tuple
 from ..expression_walker import ReplaceExpressionsByValues
 from ..expressions import Constant, FunctionApplication
 from ..type_system import Unknown, get_args
-from ..utils.relational_algebra_set import RelationalAlgebraFrozenSet
 from .wrapped_collections import (WrappedRelationalAlgebraFrozenSet,
-                                  WrappedRelationalAlgebraSet)
+                                  WrappedRelationalAlgebraSet,
+                                  RelationalAlgebraFrozenSet
+                                  )
 
 
 class FrozenInstance:

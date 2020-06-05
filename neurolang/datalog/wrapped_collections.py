@@ -10,7 +10,7 @@ from ..expression_walker import ReplaceExpressionsByValues
 from ..expressions import Constant
 from ..type_system import (Unknown, get_args, infer_type,
                            unify_types)
-from ..utils.relational_algebra_set import (
+from ..utils.relational_algebra_set.sql import (
     NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet,
     RelationalAlgebraSet)
 
@@ -270,9 +270,9 @@ class WrappedNamedRelationalAlgebraFrozenSetMixin(
     def row_type(self):
         if self._row_type is None:
             if (self.arity > 0 and not self.is_empty()):
-                element = super().fetch_one()
+                element = super().fetch_one()._asdict()
                 self._row_type = Tuple[tuple(
-                    Constant(getattr(element, c)).type
+                    Constant(element[c]).type
                     for c in self.columns
                 )]
             else:

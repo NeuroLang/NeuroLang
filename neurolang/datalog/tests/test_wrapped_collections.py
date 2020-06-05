@@ -30,7 +30,9 @@ R3 = WrappedNamedRelationalAlgebraFrozenSet(
 C_ = Constant
 
 
-@mark.xfail(reason="Need to implement type mappings between RA sets and python")
+@mark.xfail(
+    reason="Need to implement type mappings between RA sets and python"
+)
 def test_row_types():
     assert R2.row_type == Tuple[int, int]
     assert R3.columns == ('x', 'y')

@@ -783,7 +783,9 @@ class TypedSymbolTableMixin:
         function_constants = dict()
         for attribute in dir(self):
             if attribute.startswith('function_'):
-                c = Constant(getattr(self, attribute))
+                c = getattr(self, attribute)
+                if not isinstance(c, Constant):
+                    c = Constant(c)
                 function_constants[attribute[len('function_'):]] = c
         return function_constants
 

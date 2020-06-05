@@ -12,8 +12,11 @@ from .expressions import (
     Symbol,
     Unknown,
 )
-from .utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet
-from .utils.relational_algebra_set import RelationalAlgebraStringExpression
+from .utils.relational_algebra_set.sql import (
+    RelationalAlgebraStringExpression,
+    NamedRelationalAlgebraFrozenSet,
+    RelationalAlgebraSet
+)
 
 eq_ = Constant(operator.eq)
 
@@ -366,8 +369,7 @@ def is_arithmetic_operation(exp):
     return (
         isinstance(exp, FunctionApplication)
         and isinstance(exp.functor, Constant)
-        and exp.functor.value
-        in OPERATOR_STRING
+        and exp.functor.value in OPERATOR_STRING
     )
 
 

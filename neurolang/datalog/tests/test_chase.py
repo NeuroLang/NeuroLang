@@ -48,8 +48,7 @@ contains = C_[Callable[[expressions.Unknown, expressions.Unknown], bool]](
 
 
 class Datalog(TranslateToLogic, DatalogProgram, ew.ExpressionBasicEvaluator):
-    def function_gt(self, x: int, y: int) -> bool:
-        return x > y
+    function_gt = C_[Callable[[int, int], bool]](op.gt)
 
 
 chase_configurations = [
@@ -57,12 +56,12 @@ chase_configurations = [
     for step_class, cq_class in product(
         (
             ChaseNaive,
-            ChaseSemiNaive
+#            ChaseSemiNaive
         ),
         (
-            ChaseMGUMixin,
+#            ChaseMGUMixin,
             ChaseNamedRelationalAlgebraMixin,
-            ChaseRelationalAlgebraPlusCeriMixin,
+#            ChaseRelationalAlgebraPlusCeriMixin,
         )
     )
 ]
