@@ -1,10 +1,7 @@
 import typing
 
 from ...datalog import DatalogProgram
-from ...datalog.expression_processing import (
-    implication_has_existential_variable_in_antecedent,
-)
-from ...exceptions import ForbiddenDisjunctionError, ForbiddenExistentialError
+from ...exceptions import ForbiddenDisjunctionError
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
 from ...expressions import Constant, FunctionApplication, Symbol
@@ -191,12 +188,6 @@ class CPLogicMixin(PatternWalker):
             self.symbol_table[pred_symb], [expression]
         )
         return expression
-
-    @add_match(Implication, implication_has_existential_variable_in_antecedent)
-    def prevent_existential_rule(self, rule):
-        raise ForbiddenExistentialError(
-            "CP-Logic programs do not support existential antecedents"
-        )
 
     @add_match(
         Implication(FunctionApplication, ...),

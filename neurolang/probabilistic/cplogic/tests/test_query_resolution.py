@@ -6,7 +6,7 @@ from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Union
 from ....relational_algebra import RenameColumn
 from .. import testing
-from ..gm_provenance_solver import UnionOverTuples, solve_succ_query
+from ..gm_provenance_solver import solve_succ_query
 from ..program import CPLogicProgram
 
 P = Symbol("P")
@@ -19,6 +19,7 @@ B = Symbol("B")
 C = Symbol("C")
 x = Symbol("x")
 y = Symbol("y")
+z = Symbol("z")
 
 a = Constant("a")
 b = Constant("b")
@@ -194,8 +195,6 @@ def test_simple_probchoice():
         )
     qpred = P(x)
     exp, result = testing.inspect_resolution(qpred, cpl_program)
-    assert isinstance(exp, RenameColumn)
-    assert isinstance(exp.relation, UnionOverTuples)
     expected = testing.make_prov_set([(0.2, "a"), (0.8, "b"),], ("_p_", "x"),)
     assert testing.eq_prov_relations(result, expected)
 
@@ -216,7 +215,6 @@ def test_mutual_exclusivity():
     exp, result = testing.inspect_resolution(qpred, cpl_program)
     assert isinstance(exp, RenameColumn)
     assert isinstance(exp.relation, RenameColumn)
-    assert isinstance(exp.relation.relation, UnionOverTuples)
     expected = testing.make_prov_set([], ("_p_", "x", "y"))
     assert testing.eq_prov_relations(result, expected)
 
@@ -238,7 +236,6 @@ def test_multiple_probchoices_mutual_exclusivity():
     exp, result = testing.inspect_resolution(qpred, cpl_program)
     assert isinstance(exp, RenameColumn)
     assert isinstance(exp.relation, RenameColumn)
-    assert isinstance(exp.relation.relation, UnionOverTuples)
     expected = testing.make_prov_set(
         [(0.2 * 0.1, "a", "b"), (0.8 * 0.1, "b", "b")], ("_p_", "x", "y")
     )
@@ -269,7 +266,6 @@ def test_large_probabilistic_choice():
     assert testing.eq_prov_relations(result, expected)
 
 
-@pytest.mark.skip
 def test_simple_existential():
     """
     We define the following program
@@ -292,6 +288,213 @@ def test_simple_existential():
             pred_symb, pchoice_as_set
         )
     cpl_program.walk(code)
-    result = solve_succ_query(Q(x), cpl_program)
+    exp, result = testing.inspect_resolution(Q(x), cpl_program)
     expected = testing.make_prov_set([(1.0, "a")], ("_p_", "x"))
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_existential_in_conjunction():
+    pchoice_as_sets = {
+        P: {(0.2, "a", "b", "c"), (0.4, "b", "b", "c"), (0.4, "b", "a", "c")},
+        Z: {(0.5, "b"), (0.5, "d")},
+    }
+    code = Union((Implication(Q(x), Conjunction((Z(y), P(x, y, z)))),))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    cpl_program.walk(code)
+    exp, result = testing.inspect_resolution(Q(x), cpl_program)
+    expected = testing.make_prov_set([(0.1, "a"), (0.2, "b")], ("_p_", "x"))
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_existential_alternative_variables():
+    pchoice_as_sets = {
+        P: {(0.8, "a", "b"), (0.1, "c", "d"), (0.1, "d", "e")},
+    }
+    pfact_sets = {
+        Z: {(0.2, "a"), (0.7, "e")},
+    }
+    code = Union(
+        (
+            Fact(R(Constant[str]("a"))),
+            Fact(R(Constant[str]("b"))),
+            Implication(H(x), Conjunction((Z(y), P(y, x)))),
+        )
+    )
+    cpl_program = CPLogicProgram()
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+    cpl_program.walk(code)
+    qpred = H(z)
+    result = solve_succ_query(qpred, cpl_program)
+    expected = testing.make_prov_set([(0.2 * 0.8, "b")], ("_p_", "z"))
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_multilevel_existential():
+    pchoice_as_sets = {
+        P: {(0.5, "a", "b"), (0.5, "b", "c")},
+        R: {(0.1, "a"), (0.4, "b"), (0.5, "c")},
+        Q: {(0.9, "a"), (0.1, "c")},
+        Z: {(0.1, "b"), (0.9, "c")},
+    }
+    code = Union(
+        (
+            Implication(H(x, y), Conjunction((R(x), Z(y)))),
+            Implication(A(x), Conjunction((H(x, y), P(y, x)))),
+            Implication(B(x), Conjunction((A(x), Q(y)))),
+        )
+    )
+    cpl_program = CPLogicProgram()
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    cpl_program.walk(code)
+    qpred = H(x, y)
+    result = solve_succ_query(qpred, cpl_program)
+    expected = testing.make_prov_set(
+        [
+            (0.1 * 0.1, "a", "b"),
+            (0.1 * 0.9, "a", "c"),
+            (0.4 * 0.1, "b", "b"),
+            (0.4 * 0.9, "b", "c"),
+            (0.5 * 0.1, "c", "b"),
+            (0.5 * 0.9, "c", "c"),
+        ],
+        ("_p_", "x", "y"),
+    )
+    assert testing.eq_prov_relations(result, expected)
+    qpred = B(z)
+    exp, result = testing.inspect_resolution(qpred, cpl_program,)
+    expected = testing.make_prov_set([(0.5 * 0.1 * 0.5, "c")], ("_p_", "z"),)
+    assert testing.eq_prov_relations(result, expected)
+
+
+@pytest.mark.skip("not implemented yet")
+def test_repeated_antecedent_predicate_symbol():
+    """
+    We consider the simple program
+
+        P(a) : 0.4  <-  T
+        P(b) : 0.7  <-  T
+           Q(x, y)  <-  P(x), P(y)
+
+    Possible outcomes are
+
+        { }                     with prob   (1 - 0.4) * (1 - 0.7)
+        { P(a), Q(a, a) }       with prob   0.4 * (1 - 0.7)
+        { P(b), Q(b, b) }       with prob   0.7 * (1 - 0.4)
+        { P(a), P(b),
+          Q(a, a), Q(a, b),     with prob   0.4 * 0.7
+          Q(b, b), Q(b, a) }
+
+    We expected the following provenance set to result from the
+    succ query prob[Q(x, y)]?
+
+        _p_                         | x | y
+        ----------------------------|---|---
+        0.4 * (1 - 0.7) + 0.4 * 0.7 | a | a
+        0.7 * (1 - 0.4) + 0.4 * 0.7 | b | b
+        0.4 * 0.7                   | a | b
+        0.4 * 0.7                   | b | a
+
+    """
+    pfact_sets = {
+        P: {(0.4, "a"), (0.7, "b")},
+    }
+    code = Union((Implication(Q(x, y), Conjunction((P(x), P(y)))),))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+    cpl_program.walk(code)
+    qpred = Q(x, y)
+    result = solve_succ_query(qpred, cpl_program)
+    expected = testing.make_prov_set(
+        [
+            (0.4 * (1 - 0.7) + 0.4 * 0.7, "a", "a"),
+            (0.7 * (1 - 0.4) + 0.4 * 0.7, "b", "b"),
+            (0.4 * 0.7, "a", "b"),
+            (0.4 * 0.7, "b", "a"),
+        ],
+        ("_p_", "x", "y"),
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_fake_neurosynth():
+    TermInStudy = Symbol("TermInStudy")
+    ActivationReported = Symbol("ActivationReported")
+    SelectedStudy = Symbol("SelectedStudy")
+    TermAssociation = Symbol("TermAssociation")
+    Activation = Symbol("Activation")
+    s = Symbol("s")
+    t = Symbol("t")
+    v = Symbol("v")
+    code = Union(
+        (
+            Implication(
+                TermAssociation(t),
+                Conjunction([TermInStudy(t, s), SelectedStudy(s)]),
+            ),
+            Implication(
+                Activation(v),
+                Conjunction([ActivationReported(v, s), SelectedStudy(s)]),
+            ),
+        )
+    )
+    pfact_sets = {
+        TermInStudy: {
+            (0.001, "memory", "1"),
+            (0.002, "memory", "2"),
+            (0.015, "visual", "2"),
+            (0.004, "memory", "3"),
+            (0.005, "visual", "4"),
+            (0.0001, "memory", "4"),
+            (0.01, "visual", "5"),
+        },
+        ActivationReported: {
+            (1.0, "v1", "1"),
+            (1.0, "v2", "1"),
+            (1.0, "v3", "2"),
+            (1.0, "v1", "3"),
+            (1.0, "v1", "4"),
+        },
+    }
+    pchoice_as_sets = {
+        SelectedStudy: {
+            (0.2, "1"),
+            (0.2, "2"),
+            (0.2, "3"),
+            (0.2, "4"),
+            (0.2, "5"),
+        }
+    }
+    cpl_program = CPLogicProgram()
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+    cpl_program.walk(code)
+    qpred = TermAssociation(t)
+    result = solve_succ_query(qpred, cpl_program)
+    expected = testing.make_prov_set(
+        [
+            (
+                sum(t[0] for t in pfact_sets[TermInStudy] if t[1] == term) / 5,
+                term,
+            )
+            for term in ("memory", "visual")
+        ],
+        ("_p_", "t"),
+    )
     assert testing.eq_prov_relations(result, expected)
