@@ -2,7 +2,7 @@ import operator
 from typing import Tuple
 
 from ...expression_pattern_matching import add_match
-from ...expression_walker import PatternWalker, ExpressionWalker
+from ...expression_walker import ExpressionWalker, PatternWalker
 from ...expressions import Constant, Definition, FunctionApplication, Symbol
 from ...logic.expression_processing import extract_logic_predicates
 from ...relational_algebra import (
@@ -550,19 +550,7 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
 class ProvenanceExpressionTransformer(PatternWalker):
     @add_match(RelationalAlgebraOperation)
     def ra_operation(self, op):
-        changed = False
-        new_args = tuple()
-        for arg in op.unapply():
-            if isinstance(arg, Tuple):
-                new_arg = tuple()
-                for subarg in arg:
-                    new_subarg = self.walk(subarg)
-                    changed |= new_subarg is not subarg
-                    new_arg += (new_subarg,)
-            else:
-                new_arg = self.walk(arg)
-                changed |= new_arg is not arg
-            new_args += (new_arg,)
+        new_args, changed = self._walk_args(op.unapply())
         if changed:
             new_op = op.apply(*new_args)
             new_op.__debug_expression__ = getattr(
@@ -571,6 +559,19 @@ class ProvenanceExpressionTransformer(PatternWalker):
             return self.walk(new_op)
         else:
             return op
+
+    def _walk_args(self, args):
+        new_args = tuple()
+        changed = False
+        for arg in args:
+            if isinstance(arg, Tuple):
+                new_arg, new_changed = self._walk_args(arg)
+            else:
+                new_arg = self.walk(arg)
+                new_changed = new_arg is not arg
+            new_args += (new_arg,)
+            changed |= new_changed
+        return new_args, changed
 
 
 class SelectionOutPusherMixin(PatternWalker):
