@@ -1,6 +1,21 @@
-from ...expressions import Expression, Symbol, FunctionApplication as Fa
-from ...expression_walker import add_match, ExpressionWalker, ReplaceSymbolWalker
+from ...expressions import (
+    Expression,
+    Symbol,
+    FunctionApplication as Fa,
+    Constant as C,
+)
+from ...expression_walker import (
+    add_match,
+    ExpressionWalker,
+    ReplaceSymbolWalker,
+)
 from .english_grammar import S, V, NP, VP, PN, DET, N, VAR
+from ...logic import (
+    Implication,
+    Conjunction,
+    ExistentialPredicate,
+    UniversalPredicate,
+)
 
 
 def indent(s, tab="    "):
@@ -77,11 +92,8 @@ class DRSBuilder(ExpressionWalker):
         return self.walk(DRS((), (exp,)))
 
     @add_match(
-        Fa(Fa(NP, ...), (
-            Fa(Fa(DET, ...), ...),
-            Fa(Fa(N, ...), ...),
-        )),
-        lambda np: np.args[0].args[0].value in ['a', 'an']
+        Fa(Fa(NP, ...), (Fa(Fa(DET, ...), ...), Fa(Fa(N, ...), ...),)),
+        lambda np: np.args[0].args[0].value in ["a", "an"],
     )
     def indefinite_noun_phrase(self, np):
         (det, n) = np.args
@@ -90,11 +102,7 @@ class DRSBuilder(ExpressionWalker):
         self.trace.append(exp)
         return self.walk(DRS((x,), (x, exp)))
 
-    @add_match(
-        Fa(Fa(NP, ...), (
-            Fa(Fa(VAR, ...), ...),
-        )),
-    )
+    @add_match(Fa(Fa(NP, ...), (Fa(Fa(VAR, ...), ...),)),)
     def var_noun_phrase(self, np):
         (var,) = np.args
         v = Symbol(var.args[0].value)
@@ -102,10 +110,7 @@ class DRSBuilder(ExpressionWalker):
         return self.walk(DRS((v,), (v,)))
 
     @add_match(
-        Fa(Fa(NP, ...), (
-            Fa(Fa(NP, ...), ...),
-            Fa(Fa(VAR, ...), ...),
-        )),
+        Fa(Fa(NP, ...), (Fa(Fa(NP, ...), ...), Fa(Fa(VAR, ...), ...),)),
     )
     def var_apposition(self, np):
         (np, var) = np.args
@@ -124,3 +129,40 @@ class DRSBuilder(ExpressionWalker):
             refs += (rsw.walk(r),)
 
         return self.walk(DRS(refs, exps))
+
+    @add_match(
+        Fa(
+            Fa(S, ...),
+            (C("if"), Fa(Fa(S, ...), ...), C("then"), Fa(Fa(S, ...), ...),),
+        ),
+    )
+    def conditional(self, s):
+        (_, ant, _, cons) = s.args
+        return self.walk(DRS((), (Implication(cons, ant),)))
+
+
+class DRS2FOL(ExpressionWalker):
+    @add_match(DRS)
+    def drs(self, drs):
+        exp = Conjunction(tuple(map(self.walk, drs.expressions)))
+        for r in drs.referents:
+            exp = ExistentialPredicate(r, exp)
+        return self.walk(exp)
+
+    @add_match(Conjunction((...,)))
+    def unary_conjunction(self, conj):
+        return self.walk(conj.formulas[0])
+
+    @add_match(Implication(DRS, DRS))
+    def implication(self, impl):
+        drs_ant = impl.antecedent
+        drs_con = impl.consequent
+        drs_con.referents = tuple(
+            set(drs_con.referents) - set(drs_ant.referents)
+        )
+        ant = Conjunction(tuple(map(self.walk, drs_ant.expressions)))
+        con = self.walk(drs_con)
+        exp = Implication(con, ant)
+        for r in drs_ant.referents:
+            exp = UniversalPredicate(r, exp)
+        return self.walk(exp)
