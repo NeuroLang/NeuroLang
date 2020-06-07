@@ -4,6 +4,7 @@ from typing import AbstractSet, Tuple
 from . import expression_walker as ew
 from . import type_system
 from .exceptions import NeuroLangException
+from .expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 from .expressions import (
     Constant,
     Definition,
@@ -336,27 +337,17 @@ class ConcatenateConstantColumn(RelationalAlgebraOperation):
         self.column_value = column_value
 
 
-def arithmetic_operator_string(op):
-    """
-    Get the string representation of an arithmetic operator.
-
-    Parameters
-    ----------
-    op : builting operator
-        Python builtin operator (add, sub, mul or truediv).
-
-    Returns
-    -------
-    str
-        String representation of the operator (e.g. operator.add is "+").
-
-    """
-    return {
-        operator.add: "+",
-        operator.sub: "-",
-        operator.mul: "*",
-        operator.truediv: "/",
-    }[op]
+OPERATOR_STRING = {
+    operator.add: "+",
+    operator.sub: "-",
+    operator.mul: "*",
+    operator.truediv: "/",
+    operator.eq: "==",
+    operator.gt: ">",
+    operator.lt: "<",
+    operator.ge: ">=",
+    operator.le: "<="
+}
 
 
 def is_arithmetic_operation(exp):
@@ -376,7 +367,7 @@ def is_arithmetic_operation(exp):
         isinstance(exp, FunctionApplication)
         and isinstance(exp.functor, Constant)
         and exp.functor.value
-        in {operator.add, operator.sub, operator.mul, operator.truediv}
+        in OPERATOR_STRING
     )
 
 
@@ -394,9 +385,9 @@ class StringArithmeticWalker(ew.PatternWalker):
         return Constant[RelationalAlgebraStringExpression](
             RelationalAlgebraStringExpression(
                 "({} {} {})".format(
-                    str(self.walk(fa.args[0]).value),
-                    arithmetic_operator_string(fa.functor.value),
-                    str(self.walk(fa.args[1]).value),
+                    self.walk(fa.args[0]).value,
+                    OPERATOR_STRING[fa.functor.value],
+                    self.walk(fa.args[1]).value,
                 ),
             ),
             auto_infer_type=False,
@@ -411,9 +402,29 @@ class StringArithmeticWalker(ew.PatternWalker):
             verify_type=False,
         )
 
-    @ew.add_match(Constant)
-    def constant(self, cst):
-        return cst
+    @ew.add_match(Constant[int])
+    def constant_int(self, cst):
+        return Constant[RelationalAlgebraStringExpression](
+            str(cst.value),
+            auto_infer_type=False,
+            verify_type=False,
+        )
+
+    @ew.add_match(Constant[float])
+    def constant_float(self, cst):
+        return Constant[RelationalAlgebraStringExpression](
+            str(cst.value),
+            auto_infer_type=False,
+            verify_type=False,
+        )
+
+    @ew.add_match(Constant[str])
+    def constant_str(self, cst):
+        return Constant[RelationalAlgebraStringExpression](
+            f'"{cst.value}"',
+            auto_infer_type=False,
+            verify_type=False,
+        )
 
 
 class ReplaceConstantColumnStrBySymbol(ew.ExpressionWalker):
@@ -603,13 +614,19 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         )
 
     def _compile_function_application_to_sql_fun_exp(self, fun_exp):
-        try:
-            return self._saw.walk(fun_exp).value
-        except NeuroLangException as e:
-            fun, args = self._fa_2_lambda.walk(self._rccsbs.walk(fun_exp))
-            return lambda t: fun(
-                **{arg: getattr(t, arg) for arg in args}
-            )
+        if (
+            isinstance(fun_exp, FunctionApplication) or
+            isinstance(fun_exp, Constant[Column])
+        ):
+            try:
+                return self._saw.walk(fun_exp).value
+            except NeuroLangPatternMatchingNoMatch as e:
+                fun, args = self._fa_2_lambda.walk(self._rccsbs.walk(fun_exp))
+                return lambda t: fun(
+                    **{arg: getattr(t, arg) for arg in args}
+                )
+        else:
+            return fun_exp.value
 
     @ew.add_match(FunctionApplication, is_arithmetic_operation)
     def prov_arithmetic_operation(self, arithmetic_op):
@@ -628,7 +645,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
     def set_destroy(self, destroy):
         relation = self.walk(destroy.relation).value
         src_column = self.walk(destroy.src_column).value
-        dst_column = self.walk(destroy.dst_column).value
+        dst_columns = self.walk(destroy.dst_column).value
         if src_column not in relation.columns:
             raise NeuroLangException(
                 f"source column {src_column} not present in "
@@ -637,20 +654,19 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
 
         cols = relation.columns
         set_type = type(relation)
-        if dst_column not in cols:
-            dst_cols = cols + (dst_column,)
-        else:
-            dst_cols = cols
+        if not isinstance(dst_columns, tuple):
+            dst_columns = (dst_columns,)
+        dst_cols = cols + tuple(d for d in dst_columns if d not in cols)
         result_set = set_type(columns=dst_cols)
         if len(cols) > 0:
             row_group_iterator = (t for _, t in relation.groupby(cols))
         else:
             row_group_iterator = (relation,)
         for t in row_group_iterator:
-            destroyed_set = set_type(columns=[dst_column])
+            destroyed_set = set_type(columns=dst_columns)
             for row in t:
                 row_set = set_type(
-                    columns=(dst_column,),
+                    columns=dst_columns,
                     iterable=getattr(row, src_column)
                 )
                 destroyed_set = destroyed_set | row_set

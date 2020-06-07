@@ -3,21 +3,41 @@ import typing
 from collections import deque
 from itertools import product, tee
 
-from .expression_pattern_matching import (PatternMatcher,
-                                          add_entry_point_match, add_match)
-from .expressions import (Constant, Expression, FunctionApplication, Lambda,
-                          NeuroLangException, NeuroLangTypeException,
-                          Projection, Statement, Symbol, TypedSymbolTableMixin,
-                          Unknown, is_leq_informative, unify_types)
+from .expression_pattern_matching import (
+    PatternMatcher,
+    add_entry_point_match,
+    add_match,
+)
+from .expressions import (
+    Constant,
+    Expression,
+    FunctionApplication,
+    Lambda,
+    NeuroLangException,
+    NeuroLangTypeException,
+    Projection,
+    Statement,
+    Symbol,
+    TypedSymbolTableMixin,
+    Unknown,
+    is_leq_informative,
+    unify_types,
+)
 from .utils import OrderedSet
 
 __all__ = [
-    'expression_iterator', 'PatternWalker',
-    'EntryPointPatternWalker', 'IdentityWalker',
-    'ExpressionWalker', 'ReplaceSymbolWalker',
-    'ReplaceSymbolsByConstants', 'ReplaceExpressionsByValues',
-    'TypedSymbolTableEvaluator', 'ExpressionBasicEvaluator',
-    'add_match', 'add_entry_point_match'
+    "expression_iterator",
+    "PatternWalker",
+    "EntryPointPatternWalker",
+    "IdentityWalker",
+    "ExpressionWalker",
+    "ReplaceSymbolWalker",
+    "ReplaceSymbolsByConstants",
+    "ReplaceExpressionsByValues",
+    "TypedSymbolTableEvaluator",
+    "ExpressionBasicEvaluator",
+    "add_match",
+    "add_entry_point_match",
 ]
 
 
@@ -55,17 +75,19 @@ def expression_iterator(expression, include_level=False, dfs=True):
             children = expression_iterator_constant(current_element)
         elif isinstance(current_element[1], tuple):
             c = current_element[1]
-            children = product((None, ), c)
+            children = product((None,), c)
         elif isinstance(current_element[1], Expression):
             c = current_element[1].__children__
 
-            children = ((name, getattr(current_element[1], name))
-                        for name in c)
+            children = (
+                (name, getattr(current_element[1], name)) for name in c
+            )
 
         if include_level:
             current_level = current_element[-1] + 1
-            children = [(name, value, current_level)
-                        for name, value in children]
+            children = [
+                (name, value, current_level) for name, value in children
+            ]
 
         children = fix_children_order(dfs, expression, children)
 
@@ -75,11 +97,9 @@ def expression_iterator(expression, include_level=False, dfs=True):
 
 
 def fix_children_order(dfs, expression, children):
-    if (
-        dfs and not (
-            isinstance(expression, Constant) and
-            is_leq_informative(expression.type, typing.AbstractSet)
-        )
+    if dfs and not (
+        isinstance(expression, Constant)
+        and is_leq_informative(expression.type, typing.AbstractSet)
     ):
         try:
             children = reversed(children)
@@ -92,9 +112,9 @@ def fix_children_order(dfs, expression, children):
 def expression_iterator_constant(current_element):
     if is_leq_informative(current_element[1].type, typing.Tuple):
         c = current_element[1].value
-        children = product((None, ), c)
+        children = product((None,), c)
     elif is_leq_informative(current_element[1].type, typing.AbstractSet):
-        children = product((None, ), current_element[1].value)
+        children = product((None,), current_element[1].value)
     else:
         children = []
     return children
@@ -102,7 +122,7 @@ def expression_iterator_constant(current_element):
 
 class PatternWalker(PatternMatcher):
     def walk(self, expression):
-        logging.debug("walking %(expression)s", {'expression': expression})
+        logging.debug("walking %(expression)s", {"expression": expression})
         if isinstance(expression, tuple):
             result = [self.walk(e) for e in expression]
             result = tuple(result)
@@ -115,6 +135,7 @@ class EntryPointPatternWalker(PatternWalker):
     entry point pattern. This is useful to enforce agreement with a global
     grammatical and syntactical construction.
     """
+
     def __new__(cls, *args, **kwargs):
         new_cls = super().__new__(cls, *args, **kwargs)
         if new_cls.__entry_point__ is None:
@@ -123,34 +144,33 @@ class EntryPointPatternWalker(PatternWalker):
         return new_cls
 
     def walk(self, expression):
-        _entry_point_walked = getattr(self, '_entry_point_walked', False)
+        _entry_point_walked = getattr(self, "_entry_point_walked", False)
         try:
             if _entry_point_walked:
                 result = super().walk(expression)
                 return result
-            elif (
-                self.pattern_match(self.__entry_point__.pattern, expression)
-                and (
-                    self.__entry_point__.guard is None or
-                    self.__entry_point__.guard(expression)
-                )
+            elif self.pattern_match(
+                self.__entry_point__.pattern, expression
+            ) and (
+                self.__entry_point__.guard is None
+                or self.__entry_point__.guard(expression)
             ):
                 pattern, guard, action = self.__entry_point__
-                name = '\033[1m\033[91m' + action.__qualname__ + '\033[0m'
-                logging.info('\tENTRY POINT MATCH %(name)s', {'name': name})
-                logging.info('\t\tpattern: %(pattern)s', {'pattern': pattern})
-                logging.info('\t\tguard: %(guard)s', {'guard': guard})
+                name = "\033[1m\033[91m" + action.__qualname__ + "\033[0m"
+                logging.info("\tENTRY POINT MATCH %(name)s", {"name": name})
+                logging.info("\t\tpattern: %(pattern)s", {"pattern": pattern})
+                logging.info("\t\tguard: %(guard)s", {"guard": guard})
                 self._entry_point_walked = True
                 result_expression = action(self, expression)
                 logging.info(
-                    '\t\tresult: %(result_expression)s',
-                    {'result_expression': result_expression}
+                    "\t\tresult: %(result_expression)s",
+                    {"result_expression": result_expression},
                 )
                 self._entry_point_walked = False
                 return result_expression
             else:
                 raise NeuroLangException(
-                    'The first pattern to be walked must be the entry point'
+                    "The first pattern to be walked must be the entry point"
                 )
         except Exception:
             raise
@@ -162,6 +182,7 @@ class IdentityWalker(PatternWalker):
     """Walks through expresssions without doing
     a thing.
     """
+
     @add_match(...)
     def _(self, expression):
         return expression
@@ -170,6 +191,7 @@ class IdentityWalker(PatternWalker):
 class ExpressionWalker(PatternWalker):
     """Walks through an expression and each of its arguments
     """
+
     @add_match(Expression)
     def process_expression(self, expression):
         args = expression.unapply()
@@ -180,15 +202,15 @@ class ExpressionWalker(PatternWalker):
                 new_arg = self.walk(arg)
                 changed |= new_arg is not arg
             elif (
-                isinstance(arg, tuple) and
-                len(arg) > 0 and
-                isinstance(arg[0], Expression)
+                isinstance(arg, tuple)
+                and len(arg) > 0
+                and isinstance(arg[0], Expression)
             ):
                 new_arg, change = self.process_iterable_argument(arg)
                 changed |= change
             elif arg is Ellipsis:
                 raise NeuroLangException(
-                    '... is not a valid Expression argument'
+                    "... is not a valid Expression argument"
                 )
             else:
                 new_arg = arg
@@ -210,7 +232,7 @@ class ExpressionWalker(PatternWalker):
         return new_arg, changed
 
 
-class ChainedWalker():
+class ChainedWalker:
     def __init__(self, *walkers):
         self.walkers = [w() if isinstance(w, type) else w for w in walkers]
 
@@ -241,13 +263,32 @@ class ReplaceExpressionWalker(ExpressionWalker):
     def __init__(self, symbol_replacements):
         self.symbol_replacements = symbol_replacements
 
+    def replace_expression(self, expression):
+        args = expression.unapply()
+        new_args = tuple()
+        changed = False
+        for arg in args:
+            if isinstance(arg, Expression):
+                new_arg = self.walk(arg)
+            elif isinstance(arg, tuple):
+                new_arg, _ = self.process_iterable_argument(arg)
+            elif arg is Ellipsis:
+                raise NeuroLangException(
+                    "... is not a valid Expression argument"
+                )
+            else:
+                new_arg = arg
+            new_args += (new_arg,)
+
+        return expression.apply(*new_args)
+
     @add_match(Expression)
     def replace_free_variable(self, expression):
         if expression in self.symbol_replacements:
             replacement = self.symbol_replacements[expression]
             return replacement
         else:
-            return self.process_expression(expression)
+            return self.replace_expression(expression)
 
 
 class ReplaceSymbolsByConstants(ExpressionWalker):
@@ -274,9 +315,7 @@ class ReplaceSymbolsByConstants(ExpressionWalker):
     @add_match(Constant[typing.Tuple])
     def constant_tuple(self, constant_tuple):
         return constant_tuple.__class__(
-            tuple(
-                self.walk(expression) for expression in constant_tuple.value
-            )
+            tuple(self.walk(expression) for expression in constant_tuple.value)
         )
 
 
@@ -291,29 +330,22 @@ class ReplaceExpressionsByValues(ExpressionWalker):
             return self.walk(new_expression)
         else:
             raise NeuroLangException(
-                f'{symbol} could not be evaluated '
-                'to a constant'
+                f"{symbol} could not be evaluated " "to a constant"
             )
 
     @add_match(Constant[typing.AbstractSet])
     def constant_abstract_set(self, constant_abstract_set):
         value = constant_abstract_set.value
-        if (
-            len(value) > 0 and
-            isinstance(next(iter(value)), (Expression, tuple))
+        if len(value) > 0 and isinstance(
+            next(iter(value)), (Expression, tuple)
         ):
-            value = type(value)(
-                self.walk(expression) for expression in value
-            )
+            value = type(value)(self.walk(expression) for expression in value)
         return value
 
     @add_match(Constant[typing.Tuple])
     def constant_tuple(self, constant_tuple):
         value = constant_tuple.value
-        if (
-            len(value) > 0 and
-            isinstance(value[0], (Expression, tuple))
-        ):
+        if len(value) > 0 and isinstance(value[0], (Expression, tuple)):
             value = constant_tuple.value
             value = type(value)(
                 self.walk(expression) for expression in constant_tuple.value
@@ -325,8 +357,9 @@ class ReplaceExpressionsByValues(ExpressionWalker):
         value = constant_iterable.value
         it1, it2 = tee(value)
         (
-            ReplaceExpressionsByValues
-            ._validate_iterable_for_constant_iterable_case(it1)
+            ReplaceExpressionsByValues._validate_iterable_for_constant_iterable_case(
+                it1
+            )
         )
         if isinstance(value, typing.Generator):
             return it2
@@ -341,7 +374,7 @@ class ReplaceExpressionsByValues(ExpressionWalker):
         )
         if iterable_of_expressions:
             raise NeuroLangException(
-                'Iterable of Expressions needs to be a Tuple or Set'
+                "Iterable of Expressions needs to be a Tuple or Set"
             )
 
     @add_match(Constant)
@@ -358,7 +391,7 @@ class TypedSymbolTableEvaluator(TypedSymbolTableMixin, ExpressionWalker):
             if self.simplify_mode:
                 return symbol
             else:
-                raise ValueError(f'{symbol} not in symbol table')
+                raise ValueError(f"{symbol} not in symbol table")
 
     @add_match(Statement)
     def statement(self, statement):
@@ -376,25 +409,24 @@ class TypedSymbolTableEvaluator(TypedSymbolTableMixin, ExpressionWalker):
 class ExpressionBasicEvaluator(ExpressionWalker):
     @add_match(Projection(Constant(...), Constant(...)))
     def evaluate_projection(self, projection):
-        return (projection.collection.value[int(projection.item.value)])
+        return projection.collection.value[int(projection.item.value)]
 
     @add_match(
         FunctionApplication(Constant(...), ...),
         lambda e: all(
             not isinstance(arg, Expression) or isinstance(arg, Constant)
             for _, arg in expression_iterator(e.args)
-        )
+        ),
     )
     def evaluate_function(self, function_application):
         functor = function_application.functor
         result_type = self.evaluate_function_infer_type(functor)
 
-        symbol_table = getattr(self, 'symbol_table', dict())
+        symbol_table = getattr(self, "symbol_table", dict())
         rebv = ReplaceExpressionsByValues(symbol_table)
         args = rebv.walk(function_application.args)
         kwargs = {
-            k: rebv.walk(v)
-            for k, v in function_application.kwargs.items()
+            k: rebv.walk(v) for k, v in function_application.kwargs.items()
         }
         result = Constant[result_type](functor.value(*args, **kwargs))
         return result
@@ -404,12 +436,12 @@ class ExpressionBasicEvaluator(ExpressionWalker):
         if functor_type is not Unknown:
             if not is_leq_informative(functor_type, typing.Callable):
                 raise NeuroLangTypeException(
-                    f'Function {functor} is not of callable type'
+                    f"Function {functor} is not of callable type"
                 )
             result_type = functor_type.__args__[-1]
         elif not callable(functor.value):
             raise NeuroLangTypeException(
-                f'Function {functor} is not of callable type'
+                f"Function {functor} is not of callable type"
             )
         else:
             result_type = Unknown
@@ -420,19 +452,19 @@ class ExpressionBasicEvaluator(ExpressionWalker):
         lambda_ = function_application.functor
         args = function_application.args
         lambda_args = lambda_.args
-        if (
-            len(args) != len(lambda_args) or not all(
-                is_leq_informative(l.type, a.type)
-                for l, a in zip(lambda_args, args)
-            )
+        if len(args) != len(lambda_args) or not all(
+            is_leq_informative(l.type, a.type)
+            for l, a in zip(lambda_args, args)
         ):
             raise NeuroLangTypeException(
-                f'{args} is not the appropriate '
-                f'argument tuple for {lambda_args}'
+                f"{args} is not the appropriate "
+                f"argument tuple for {lambda_args}"
             )
 
-        if len(lambda_.function_expression._symbols.intersection(lambda_args)
-               ) > 0:
+        if (
+            len(lambda_.function_expression._symbols.intersection(lambda_args))
+            > 0
+        ):
             rsw = ReplaceSymbolWalker(dict(zip(lambda_args, args)))
             return self.walk(rsw.walk(lambda_.function_expression))
         else:
@@ -440,10 +472,11 @@ class ExpressionBasicEvaluator(ExpressionWalker):
 
 
 class FunctionApplicationToPythonLambda(PatternWalker):
-    '''
+    """
     Convert a `FunctionApplication` expression with constant functor
     into a python `lambda` expression where the symbols are the parameters.
-    '''
+    """
+
     @add_match(Constant)
     def constant(self, e):
         return e.value, OrderedSet()
@@ -453,7 +486,7 @@ class FunctionApplicationToPythonLambda(PatternWalker):
         lambda e: all(
             isinstance(a, (Symbol, Constant, FunctionApplication))
             for a in e.args
-        )
+        ),
     )
     def fa(self, e):
         arg_sym = []
@@ -470,8 +503,8 @@ class FunctionApplicationToPythonLambda(PatternWalker):
                 arg_sym.append(n)
                 param_sym |= param_sym_
             else:
-                arg_sym.append(f'{arg.name}')
-                param_sym.add(f'{arg.name}')
+                arg_sym.append(f"{arg.name}")
+                param_sym.add(f"{arg.name}")
 
         fun_sym = Symbol.fresh().name
         arg_dict[fun_sym] = e.functor.value

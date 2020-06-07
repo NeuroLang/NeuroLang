@@ -1,8 +1,9 @@
-import pytest
 import numpy as np
+import pytest
 
-from ...exceptions import NeuroLangException
-from ..distributions import TableDistribution, Distribution
+from ...exceptions import NeuroLangNotImplementedError
+from ..distributions import Distribution, TableDistribution
+from ..exceptions import UncomparableDistributionsError
 
 dog_cat_table = {"cat": 0.2, "dog": 0.8}
 
@@ -28,11 +29,11 @@ jellyfish_dangerosity = {
 
 
 def test_abstract_distribution_class():
-    with pytest.raises(NeuroLangException):
+    with pytest.raises(NeuroLangNotImplementedError):
         _ = Distribution().probability(42)
-    with pytest.raises(NeuroLangException):
+    with pytest.raises(NeuroLangNotImplementedError):
         _ = Distribution().support
-    with pytest.raises(NeuroLangException):
+    with pytest.raises(NeuroLangNotImplementedError):
         _ = Distribution().expectation(lambda x: x)
 
 
@@ -78,6 +79,6 @@ def test_compare_table_distribs():
 
 def test_compare_table_distrib_with_non_table_distrib():
     td = TableDistribution(beach_jellyfish_table)
-    with pytest.raises(NeuroLangException):
+    with pytest.raises(UncomparableDistributionsError):
         if td == Distribution():
             pass

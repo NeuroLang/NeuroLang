@@ -1,4 +1,4 @@
-from operator import contains, eq, gt, mul
+from operator import contains, eq, gt, mul, not_
 from typing import AbstractSet, Tuple
 
 import pytest
@@ -249,14 +249,32 @@ def test_set_destroy():
     r1 = S_('R1')
     x = S_('x')
     y = S_('y')
-    exp = Conjunction((C_(contains)(x, y), r1(x)))
 
     tr = TranslateToNamedRA()
+
+    exp = Conjunction((C_(contains)(x, y), r1(x)))
     res = tr.walk(exp)
 
     exp_result = Destroy(
         NameColumns(Projection(r1, (C_(0),)), (C_('x'),)),
         x, y
+    )
+    assert res == exp_result
+
+
+def test_set_destroy_multicolumn():
+    r1 = S_('R1')
+    x = S_('x')
+    y = S_('y')
+    z = S_('z')
+
+    tr = TranslateToNamedRA()
+    exp = Conjunction((C_(contains)(x, C_((y, z))), r1(x)))
+    res = tr.walk(exp)
+
+    exp_result = Destroy(
+        NameColumns(Projection(r1, (C_(0),)), (C_('x'),)),
+        x, C_[Tuple[ColumnStr, ColumnStr]]((ColumnStr('y'), ColumnStr('z')))
     )
     assert res == exp_result
 
@@ -350,4 +368,37 @@ def test_border_cases():
             )
         )
     )
+    assert res == expected_res
+
+
+def test_border_case_2():
+    T = Symbol[AbstractSet[int]]('T')
+    x = Symbol[int]('x')
+
+    def gtz_f(x):
+        return x > 0
+
+    gtz = Constant(gtz_f)
+
+    exp = Conjunction((
+        T(x),
+        Negation(
+            gtz(x)
+        )
+    ))
+
+    expected_res = Selection(
+        NameColumns(
+            Projection(
+                T,
+                (C_(0),)
+            ),
+            (C_('x'),)
+        ),
+        C_(not_)(
+            gtz(C_('x'))
+        )
+    )
+
+    res = TranslateToNamedRA().walk(exp)
     assert res == expected_res

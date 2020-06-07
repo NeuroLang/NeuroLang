@@ -95,7 +95,6 @@ def test_aggregation_chase_no_grouping():
     assert solution[Q] == res
 
 
-@pytest.mark.skip("Aggregation with 2 args not implemented")
 def test_aggregation_chase_no_grouping_2args():
 
     P = S_('P')  # noqa: N806
