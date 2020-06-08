@@ -541,3 +541,38 @@ def test_marg_query_intensional():
     result = solve_marg_query(Q(x), (Z(b),), cpl_program)
     expected = testing.make_prov_set([(0.2, "a"), (0.8, "b")], ("_p_", "x"))
     assert testing.eq_prov_relations(result, expected)
+
+
+def test_marg_query_shared_variables_between_query_and_evidence_preds():
+    pchoice_as_sets = {P: {(0.2, "a"), (0.5, "b"), (0.3, "c")}}
+    code = Union((Implication(Q(x), P(x)),))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    cpl_program.walk(code)
+    result = solve_marg_query(Q(x), (P(x),), cpl_program)
+    expected = testing.make_prov_set(
+        [(1.0, "a"), (1.0, "b"), (1.0, "c")], ("_p_", "x")
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
+@pytest.mark.skip("multiple causes (disjunctions) not implemented yet")
+def test_john_and_mary_go_shopping():
+    """
+    Example taken from [1]_.
+
+    .. [1] Meert, Wannes, Jan Struyf, and Hendrik Blockeel. “Learning Ground
+       CP-Logic Theories by Leveraging Bayesian Network Learning Techniques,”
+       n.d., 30.
+
+    """
+    bought = Symbol("bought")
+    shops = Symbol("shops")
+    john = Constant("john")
+    mary = Constant("mary")
+    steak = Constant("steak")
+    fish = Constant("fish")
+    spaghetti = Constant("spaghetti")

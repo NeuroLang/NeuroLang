@@ -4,7 +4,7 @@ from typing import Tuple
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
 from ...expressions import Constant, Definition, FunctionApplication, Symbol
-from ...logic import Conjunction, Implication, Union, TRUE
+from ...logic import TRUE, Conjunction, Implication, Union
 from ...logic.expression_processing import extract_logic_predicates
 from ...relational_algebra import (
     ColumnStr,
