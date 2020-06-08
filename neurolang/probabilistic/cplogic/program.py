@@ -79,6 +79,23 @@ def remove_constants_from_rule(rule):
     return [new_rule, fact]
 
 
+class UnconstifierMixin(PatternWalker):
+    @add_match(
+        Union,
+        lambda exp: any(
+            is_rule_with_constants(formula) for formula in exp.formulas
+        ),
+    )
+    def union_with_rule_with_constant(self, union):
+        new_formulas = []
+        for formula in union.formulas:
+            if is_rule_with_constants(formula):
+                new_formulas += remove_constants_from_rule(formula)
+            else:
+                new_formulas += [formula]
+        return self.walk(Union(tuple(new_formulas)))
+
+
 class CPLogicMixin(PatternWalker):
     """
     Datalog extended with probabilistic facts semantics from ProbLog.
@@ -232,21 +249,6 @@ class CPLogicMixin(PatternWalker):
                 self.walk(list(pfacts)[0])
         self.walk(Union(other_expressions))
 
-    @add_match(
-        Union,
-        lambda exp: any(
-            is_rule_with_constants(formula) for formula in exp.formulas
-        ),
-    )
-    def union_with_rule_with_constant(self, union):
-        new_formulas = []
-        for formula in union.formulas:
-            if is_rule_with_constants(formula):
-                new_formulas += remove_constants_from_rule(formula)
-            else:
-                new_formulas += [formula]
-        return self.walk(Union(tuple(new_formulas)))
-
     def _register_prob_pred_symb_set_symb(self, pred_symb, set_symb):
         if set_symb.name not in self.protected_keywords:
             self.protected_keywords.add(set_symb.name)
@@ -279,5 +281,7 @@ class CPLogicMixin(PatternWalker):
         return self.statement_intensional(rule)
 
 
-class CPLogicProgram(CPLogicMixin, DatalogProgram, ExpressionWalker):
+class CPLogicProgram(
+    UnconstifierMixin, CPLogicMixin, DatalogProgram, ExpressionWalker
+):
     pass
