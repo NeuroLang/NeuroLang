@@ -45,6 +45,27 @@ def remove_constants_from_pred(pred):
 
 
 def remove_constants_from_rule(rule):
+    """
+    Transform a rule with constant terms into a rule without constant terms and
+    a fact that restricts the application of the rule such that it remains
+    equivalent to the original rule.
+
+    For example, the rule
+
+        P(x, y, a) :- Q(x), Z(b), R(y, c)
+
+    is transformed into the following rule and fact
+
+        P(x, y, s_1) :- Q(x), Z(s_2), R(y, s_3), s_4(s_1, s_2, s_3)
+        s_4(a, b, c) :- T
+
+    where s_1, s_2, s_3 and s_4 are all fresh symbols.
+
+    This transformation makes it possible to have implementations that work
+    under the assumption that all of the predicates present in intensional
+    rules do not contain any constant term.
+
+    """
     preds = [rule.consequent] + list(extract_logic_predicates(rule.antecedent))
     new_preds = list()
     valued_args = list()
