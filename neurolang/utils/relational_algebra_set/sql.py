@@ -157,11 +157,15 @@ class RelationalAlgebraFrozenSet(
             for c in self.columns
         ]
         self._table = sqlalchemy.sql.table(self._name, *self._sql_columns)
-        self._contains_query = sqlalchemy.text(
-            f"select * from {self._name}"
-            + " where "
-            + " and ".join(f"`{i}` == :t{i}" for i in self.columns)
+        self._contains_query = sqlalchemy.sql.select(
+            self._sql_columns,
+            from_obj=self._table,
+            limit=1
         )
+        for c in self._sql_columns:
+            self._contains_query.append_whereclause(
+                c == sqlalchemy.bindparam(c.name)
+            )
 
     @staticmethod
     def _new_name():
@@ -210,10 +214,9 @@ class RelationalAlgebraFrozenSet(
             return False
         element = self._normalise_element(element)
         conn = self.engine.connect()
-        res = conn.execute(
-            self._contains_query,
-            **{f"t{i}": e for i, e in element.items()}
-        )
+        query = self._contains_query
+        el = {str(k): v for k, v in element.items()}
+        res = conn.execute(query, **el)
         return res.first() is not None
 
     def __iter__(self):
