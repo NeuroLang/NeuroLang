@@ -31,7 +31,7 @@ class UnionOverTuples(RelationalAlgebraOperation):
         self.tuple_symbol = tuple_symbol
 
     def __repr__(self):
-        return f"U_{self.tuple_symbol} {{ {self.relation} }}"
+        return f"U+222A_{self.tuple_symbol} {{ {self.relation} }}"
 
 
 class TupleSymbol(Symbol):
@@ -86,7 +86,12 @@ class ProvenanceAlgebraSet(Constant):
 
 
 class NaturalJoinInverse(NaturalJoin):
-    pass
+    def __repr__(self):
+        return (
+            f"[{self.relation_left}"
+            f"INVERSE \N{JOIN}"
+            f"{self.relation_right}]"
+        )
 
 
 def check_do_not_share_non_prov_col(prov_set_1, prov_set_2):
