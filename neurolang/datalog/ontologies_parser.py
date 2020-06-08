@@ -140,6 +140,8 @@ class OntologyParser:
             + rules_disjoint.formulas
         )
 
+        return union_of_rules
+
     def _parse_subproperties(self):
         """
         Function that parse the relationships between
