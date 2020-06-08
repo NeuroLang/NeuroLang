@@ -122,10 +122,8 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
 
     """
 
-    def __init__(self, symbol_table=None, cpl_program=None, gm=None):
+    def __init__(self, symbol_table=None):
         self.symbol_table = symbol_table
-        self.cpl_program = cpl_program
-        self.gm = gm
 
     @add_match(
         RelationalAlgebraOperation,
