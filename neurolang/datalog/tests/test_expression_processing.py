@@ -1,3 +1,5 @@
+from pytest import raises
+
 from operator import eq
 
 from ...expression_walker import ExpressionBasicEvaluator
@@ -8,6 +10,7 @@ from ..expression_processing import (
     TranslateToDatalogSemantics,
     is_conjunctive_expression,
     is_conjunctive_expression_with_nested_predicates,
+    dependency_matrix,
     stratify, reachable_code, is_linear_rule,
     implication_has_existential_variable_in_antecedent,
     is_ground_predicate,
@@ -15,6 +18,7 @@ from ..expression_processing import (
     extract_logic_predicates,
     conjunct_if_needed,
     conjunct_formulas,
+    SymbolNotFoundException
 )
 
 S_ = Symbol
@@ -236,6 +240,49 @@ def test_reachable():
     reached = reachable_code(code.formulas[-2], datalog)
 
     assert set(reached.formulas) == set(code.formulas[:-1])
+
+
+def test_dependency_matrix():
+    Q = S_('Q')  # noqa: N806
+    R = S_('R')  # noqa: N806
+    S = S_('S')  # noqa: N806
+    T = S_('T')  # noqa: N806
+    x = S_('x')
+    y = S_('y')
+
+    code = DT.walk(B_([
+        Fact(Q(C_(0), C_(1))),
+        Imp_(R(x, y), Q(x, y)),
+        Imp_(R(x, y), T(y, x)),
+        Imp_(S(x), R(x, y) & S(y) &  C_(eq)(x, y)),
+        Imp_(T(x), Q(x, y)),
+    ]))
+
+    datalog = Datalog()
+    datalog.walk(code)
+
+    idb_symbols, dep_matrix = dependency_matrix(datalog)
+
+    assert idb_symbols == (R, S, T)
+    assert dep_matrix == [
+        [0, 0, 1],
+        [1, 1, 0],
+        [0, 0, 0]
+    ]
+
+    code = DT.walk(B_([
+        Fact(Q(C_(0), C_(1))),
+        Imp_(R(x, y), Q(x, y)),
+        Imp_(R(x, y), T(y, x)),
+        Imp_(S(x), R(x, y) & S_('X')(y) & C_(eq)(x, y)),
+        Imp_(T(x), Q(x, y)),
+    ]))
+
+    datalog = Datalog()
+    datalog.walk(code)
+
+    with raises(SymbolNotFoundException):
+        dependency_matrix(datalog)
 
 
 def test_implication_has_existential_variable_in_antecedent():

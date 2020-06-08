@@ -5,11 +5,16 @@ Datalog programs.
 
 from typing import Iterable
 
+from ..exceptions import NeuroLangException
 from ..expression_walker import ExpressionWalker
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import Conjunction, Negation, Quantifier, Union
 from ..logic import expression_processing as elp
 from .expressions import TranslateToLogic
+
+
+class SymbolNotFoundException(NeuroLangException):
+    pass
 
 
 class TranslateToDatalogSemantics(TranslateToLogic, ExpressionWalker):
@@ -170,7 +175,7 @@ def stratify(union, datalog_instance):
     -------
         list of lists of `Implications`, boolean
             Strata and wether it was stratisfiable.
-            If it was not all non-stratified predicates
+            If it was not, all non-stratified predicates
             will be in the last strata.
 
     """
@@ -266,6 +271,67 @@ def reachable_code(query, datalog):
                     to_reach.append(functor)
 
     return Union(reachable_code[::-1])
+
+
+def dependency_matrix(datalog):
+    """Produces the dependecy matrix for a datalog's
+    instance intensional database (IDB).
+
+    Parameters
+    ----------
+    datalog : DatalogProgram
+        datalog instance containing the EDB and IDB.
+
+    Returns
+    -------
+    idb_symbols: list
+        A list of IDB symbols
+        in the dependency matrix.
+    dependency_matrix: list of list of int
+         And the dependency matrix
+        where row is the origin symbol and column is the
+        dependency.
+
+    Raises
+    ------
+    SymbolNotFoundException
+        If there is a predicate in the antecedent of a rule which
+        is not a constant or an extensiona/intensional predicate.
+    """
+
+    idb = datalog.intensional_database()
+    edb = datalog.extensional_database()
+    idb_symbols = tuple(sorted(idb.keys(), key=lambda s: s.name))
+    to_reach = []
+
+    dependency_matrix = [
+        [0] * len(idb_symbols)
+        for _ in range(len(idb_symbols))
+    ]
+
+    for rule_union in idb.values():
+        to_reach += rule_union.formulas
+
+    while to_reach:
+        rule = to_reach.pop()
+        head_functor = rule.consequent.functor
+        ix_head = idb_symbols.index(head_functor)
+        for predicate in extract_logic_predicates(rule.antecedent):
+            functor = predicate.functor
+            if functor in edb:
+                continue
+            elif functor in idb_symbols:
+                ix_functor = idb_symbols.index(functor)
+                dependency_matrix[ix_head][ix_functor] += 1
+            elif (
+                isinstance(functor, Symbol) and
+                functor not in datalog.symbol_table
+            ):
+                raise SymbolNotFoundException(
+                    f'Symbol not found {functor.name}'
+                )
+
+    return idb_symbols, dependency_matrix
 
 
 def conjunct_if_needed(formulas):
