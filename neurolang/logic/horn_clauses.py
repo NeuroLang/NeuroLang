@@ -345,6 +345,10 @@ def _is_restriction(atom):
     if isinstance(atom, FunctionApplication):
         if is_leq_informative(atom.functor.type, Unknown):
             return True
+        elif atom.functor == operator.eq and any(
+            isinstance(a, Constant) for a in atom.args
+        ):
+            return True
         return not is_leq_informative(atom.functor.type, Callable)
     return False
 

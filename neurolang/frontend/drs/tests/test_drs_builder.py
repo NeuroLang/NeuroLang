@@ -20,14 +20,12 @@ def test_simple_expression():
     t = _cp.parse("Jones owns Ulysses")[0]
     drs = b.walk(t)
 
-    assert len(drs.referents) == 2
-    x = drs.referents[0]
-    y = drs.referents[1]
-    assert len(drs.expressions) == 3
+    assert len(drs.referents) == 0
+    assert len(drs.expressions) == 1
 
-    assert drs.expressions[0] == Symbol("owns")(x, y)
-    assert drs.expressions[1] == Symbol("Ulysses")(y)
-    assert drs.expressions[2] == Symbol("Jones")(x)
+    assert drs.expressions[0] == Symbol("owns")(
+        Constant("Jones"), Constant("Ulysses")
+    )
 
 
 def test_indefinite_noun_phrase():
@@ -35,14 +33,12 @@ def test_indefinite_noun_phrase():
     t = _cp.parse("Jones owns a book")[0]
     drs = b.walk(t)
 
-    assert len(drs.referents) == 2
+    assert len(drs.referents) == 1
     x = drs.referents[0]
-    y = drs.referents[1]
-    assert len(drs.expressions) == 3
+    assert len(drs.expressions) == 2
 
-    assert drs.expressions[0] == Symbol("owns")(x, y)
-    assert drs.expressions[1] == Symbol("book")(y)
-    assert drs.expressions[2] == Symbol("Jones")(x)
+    assert drs.expressions[0] == Symbol("owns")(Constant("Jones"), x)
+    assert drs.expressions[1] == Symbol("book")(x)
 
 
 def test_var_noun_phrases():
@@ -83,17 +79,14 @@ def test_conditional():
     con = drs.expressions[0].consequent
     assert len(ant.referents) == 2
     assert set(ant.referents) == {x, y}
-    assert set(ant.expressions) == {
-        Symbol("intersects")(y, x),
-        Symbol("region")(x),
-        Symbol("region")(y),
-    }
+
+    assert Symbol("intersects")(y, x) in set(ant.expressions)
+    assert Symbol("region")(x) in set(ant.expressions)
+    assert Symbol("region")(y) in set(ant.expressions)
 
     assert len(con.referents) == 2
     assert set(con.referents) == {x, y}
-    assert set(con.expressions) == {
-        Symbol("intersects")(x, y),
-    }
+    assert Symbol("intersects")(x, y) in set(con.expressions)
 
 
 def test_translation_1():
@@ -133,3 +126,10 @@ def test_translation_2():
             ),
         ),
     )
+
+
+def test_same_implication():
+    # Check that the next translate to the same:
+    # - Jones likes a book X if X references Odyssey.
+    # - if a book X references Odyssey then Jones likes X.
+    pytest.skip("Incomplete")

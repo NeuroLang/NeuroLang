@@ -18,6 +18,7 @@ m = Symbol("m")
 g = Symbol("g")
 h = Symbol("h")
 w = Symbol("w")
+v = Symbol("v")
 
 
 class num:
@@ -64,7 +65,7 @@ class EnglishGrammar(Grammar):
     def np_apposition(self, np, var):
         return NP(n, g, c)
 
-    @add_rule(PN(n, g))
+    @add_rule(PN(n, g, v))
     def np_proper(self, pn):
         return NP(n, g, Symbol.fresh())
 
@@ -96,12 +97,14 @@ class EnglishBaseLexicon(DictLexicon):
             "has": (V(num.singular),),
             "likes": (V(num.singular),),
             "intersects": (V(num.singular),),
+            "references": (V(num.singular),),
             "own": (V(num.plural),),
             "have": (V(num.plural),),
             "like": (V(num.plural),),
-            "Jones": (PN(num.singular, gen.male),),
-            "Smith": (PN(num.singular, gen.male),),
-            "Ulysses": (PN(num.singular, gen.thing),),
+            "Jones": (PN(num.singular, gen.male, Constant("Jones")),),
+            "Smith": (PN(num.singular, gen.male, Constant("Smith")),),
+            "Ulysses": (PN(num.singular, gen.thing, Constant("Ulysses")),),
+            "Odyssey": (PN(num.singular, gen.thing, Constant("Odyssey")),),
             "a": (DET(num.singular),),
             "an": (DET(num.singular),),
             "every": (DET(num.singular),),

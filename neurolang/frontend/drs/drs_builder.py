@@ -40,7 +40,6 @@ class DRS(Expression):
 class DRSBuilder(ExpressionWalker):
     def __init__(self, grammar):
         self.grammar = grammar
-        self.trace = []
 
     @add_match(
         DRS, lambda drs: any(isinstance(e, DRS) for e in drs.expressions),
@@ -72,23 +71,19 @@ class DRSBuilder(ExpressionWalker):
     @add_match(Fa(Fa(NP, ...), (Fa(Fa(PN, ...), ...),)))
     def proper_names(self, np):
         (pn,) = np.args
-
-        x = Symbol.fresh()
-        exp = Symbol(pn.args[0].value)(x)
-        self.trace.append(exp)
-        return self.walk(DRS((x,), (x, exp)))
+        (_, _, const) = pn.functor.args
+        return self.walk(DRS((), (const,)))
 
     @add_match(
         Fa(
             Fa(S, ...),
-            (Symbol, Fa(Fa(VP, ...), (Fa(Fa(V, ...), ...), Symbol,)),),
+            (..., Fa(Fa(VP, ...), (Fa(Fa(V, ...), ...), ...)),),
         )
     )
     def predicate(self, s):
         (subject, vp) = s.args
         (v, object_) = vp.args
         exp = Symbol(v.args[0].value)(subject, object_)
-        self.trace.append(exp)
         return self.walk(DRS((), (exp,)))
 
     @add_match(
@@ -99,14 +94,12 @@ class DRSBuilder(ExpressionWalker):
         (det, n) = np.args
         x = Symbol.fresh()
         exp = Symbol(n.args[0].value)(x)
-        self.trace.append(exp)
         return self.walk(DRS((x,), (x, exp)))
 
     @add_match(Fa(Fa(NP, ...), (Fa(Fa(VAR, ...), ...),)),)
     def var_noun_phrase(self, np):
         (var,) = np.args
         v = Symbol(var.args[0].value)
-        self.trace.append(v)
         return self.walk(DRS((v,), (v,)))
 
     @add_match(
