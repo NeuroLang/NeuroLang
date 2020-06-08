@@ -129,14 +129,7 @@ def build_grounding(cpl_program, dl_instance):
         else:
             groundings.append(
                 build_rule_grounding(
-                    pred_symb,
-                    st_item,
-                    dl_instance.get(
-                        pred_symb,
-                        Constant[AbstractSet](
-                            NamedRelationalAlgebraFrozenSet(columns=[])
-                        ),
-                    ),
+                    pred_symb, st_item, dl_instance[pred_symb]
                 )
             )
     return ExpressionBlock(groundings)
