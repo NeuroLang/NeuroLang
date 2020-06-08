@@ -99,12 +99,22 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
     @add_match(FunctionApplication(EQ_pattern, (Symbol, Constant)))
     def translate_eq_s_c(self, expression):
         symbol, constant = expression.args
-        return Constant[AbstractSet[Tuple[constant.type]]](
-            NamedRelationalAlgebraFrozenSet(
-                (symbol.name,),
-                [(REBV.walk(constant),)]
+        return self.walk(
+            FunctionApplication(
+                EQ,
+                (
+                    Constant[ColumnStr](symbol.name, verify_type=False),
+                    constant
+                )
             )
         )
+
+        #return Constant[AbstractSet[Tuple[constant.type]]](
+        #    NamedRelationalAlgebraFrozenSet(
+        #        (symbol.name,),
+        #        [(REBV.walk(constant),)]
+        #    )
+        #)
 
     @add_match(FunctionApplication(EQ_pattern, (FunctionApplication, Symbol)))
     def translate_eq_fa_s(self, expression):
@@ -291,7 +301,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
                 new_output
             )
 
-            if new_output == output:
+            if new_output is output:
                 raise CouldNotTranslateConjunctionException(output)
             output = new_output
 
@@ -352,7 +362,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
     @staticmethod
     def process_positive_formulas(classified_formulas):
         if len(classified_formulas['pos_formulas']) == 0:
-            output = NamedRelationalAlgebraFrozenSet([])
+            output = Constant[AbstractSet](NamedRelationalAlgebraFrozenSet([]))
         else:
             output = classified_formulas['pos_formulas'][0]
             for pos_formula in classified_formulas['pos_formulas'][1:]:
@@ -412,6 +422,32 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
     @staticmethod
     def process_equality_formula(formula, named_columns, output):
         left, right = formula.args
+
+        if (
+            isinstance(left, Constant[ColumnStr]) and
+            isinstance(right, Constant) and
+            not isinstance(right, Constant[ColumnStr])
+        ):
+            if (
+                isinstance(output, Constant[AbstractSet])
+                and output.value.is_dum()
+            ):
+                return Constant[AbstractSet[Tuple[right.type]]](
+                    NamedRelationalAlgebraFrozenSet(
+                        (left.value,), [(REBV.walk(right),)]
+                    )
+                )
+            elif left in named_columns:
+                return Selection(
+                    output,
+                    EQ(left, right)
+                )
+            else:
+                return ExtendedProjection(
+                    output,
+                    (ExtendedProjectionListMember(right, left),)
+                )
+
         left_col = Constant[ColumnStr](
             ColumnStr(left.name), verify_type=False
         )

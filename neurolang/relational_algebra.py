@@ -8,6 +8,7 @@ from .expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 from .expressions import (
     Constant,
     Definition,
+    Expression,
     FunctionApplication,
     Symbol,
     Unknown,
@@ -36,8 +37,31 @@ def str2columnstr_constant(name):
     )
 
 
+def get_expression_columns(expression):
+    columns = set()
+    args = list(expression.unapply())
+    while args:
+        arg = args.pop()
+        if isinstance(arg, Constant[Column]):
+            columns.add(arg)
+        elif isinstance(arg, Constant):
+            continue
+        elif isinstance(arg, Expression):
+            args += arg.unapply()
+        elif isinstance(arg, tuple):
+            args += list(arg)
+
+    return columns
+
+
 class RelationalAlgebraOperation(Definition):
-    pass
+    def __init__(self):
+        self._columns = set()
+
+    def columns(self):
+        if not hasattr(self, '_columns'):
+            self._columns = get_expression_columns(self)
+        return self._columns
 
 
 class Selection(RelationalAlgebraOperation):
@@ -1073,3 +1097,58 @@ def _get_const_relation_type(const_relation):
             return const_relation.type
     else:
         return _infer_relation_type(const_relation.value)
+
+
+class RelationalAlgebraPushInSelections(ew.PatternWalker):
+    @ew.add_match(
+        Selection(NaturalJoin, ...),
+        lambda exp: (
+            len(
+                get_expression_columns(exp.formula) &
+                get_expression_columns(exp.relation.relation_right)
+            ) == 0
+        )
+    )
+    def push_selection_in_left(self, expression):
+        return self.walk(
+            NaturalJoin(
+                Selection(
+                    expression.relation.relation_left,
+                    expression.formula
+                ),
+                expression.relation.relation_right
+            )
+        )
+
+    @ew.add_match(
+        Selection(NaturalJoin, ...),
+        lambda exp: (
+            len(
+                get_expression_columns(exp.formula) &
+                get_expression_columns(exp.relation.relation_left)
+            ) == 0
+        )
+    )
+    def push_selection_in_right(self, expression):
+        return self.walk(
+            NaturalJoin(
+                expression.relation.relation_left,
+                Selection(
+                    expression.relation.relation_right,
+                    expression.formula
+                )
+            )
+        )
+
+    @ew.add_match(
+        Selection(Projection, ...),
+        lambda exp: len(
+            set(exp.relation.attributes) &
+            get_expression_columns(exp.formula)
+        ) == 0
+    )
+    def push_selection_in_projection(self, expression):
+        return Projection(
+            Selection(expression.relation.relation, expression.formula),
+            expression.relation.attributes
+        )
