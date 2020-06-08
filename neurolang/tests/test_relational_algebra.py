@@ -138,7 +138,7 @@ def test_union_named():
             (3, "c"),
         ])
     )
-    empty  = C_[AbstractSet](NamedRelationalAlgebraFrozenSet(('x', 'y'), []))
+    empty = C_[AbstractSet](NamedRelationalAlgebraFrozenSet(('x', 'y'), []))
     res = RelationalAlgebraSolver().walk(Union(r1, r2))
     expected = C_[AbstractSet[Tuple[int, str]]](
         NamedRelationalAlgebraFrozenSet(('x', 'y'), [
@@ -719,6 +719,41 @@ def test_set_destroy_no_grouping():
         relation,
         Constant(ColumnStr('z')),
         Constant(ColumnStr('w'))
+    )
+
+    solver = RelationalAlgebraSolver()
+    result = solver.walk(destroy)
+
+    assert result == expected_relation
+
+
+def test_set_destroy_multiple_columns():
+    relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=['x', 'y', 'z'],
+            iterable=[
+                (0, 1, frozenset({(3, 4), (4, 5)})),
+                (0, 2, frozenset({(5, 6)})),
+            ]
+        )
+    )
+    expected_relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=['x', 'y', 'z', 'v', 'w'],
+            iterable=[
+                (0, 1, frozenset({(3, 4), (4, 5)}), 3, 4),
+                (0, 1, frozenset({(3, 4), (4, 5)}), 4, 5),
+                (0, 2, frozenset({(5, 6)}), 5, 6),
+            ]
+        )
+    )
+
+    destroy = Destroy(
+        relation,
+        Constant(ColumnStr('z')),
+        Constant[Tuple[ColumnStr, ColumnStr]](
+            (ColumnStr('v'), ColumnStr('w'))
+        )
     )
 
     solver = RelationalAlgebraSolver()

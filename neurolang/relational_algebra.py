@@ -645,7 +645,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
     def set_destroy(self, destroy):
         relation = self.walk(destroy.relation).value
         src_column = self.walk(destroy.src_column).value
-        dst_column = self.walk(destroy.dst_column).value
+        dst_columns = self.walk(destroy.dst_column).value
         if src_column not in relation.columns:
             raise NeuroLangException(
                 f"source column {src_column} not present in "
@@ -654,20 +654,19 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
 
         cols = relation.columns
         set_type = type(relation)
-        if dst_column not in cols:
-            dst_cols = cols + (dst_column,)
-        else:
-            dst_cols = cols
+        if not isinstance(dst_columns, tuple):
+            dst_columns = (dst_columns,)
+        dst_cols = cols + tuple(d for d in dst_columns if d not in cols)
         result_set = set_type(columns=dst_cols)
         if len(cols) > 0:
             row_group_iterator = (t for _, t in relation.groupby(cols))
         else:
             row_group_iterator = (relation,)
         for t in row_group_iterator:
-            destroyed_set = set_type(columns=[dst_column])
+            destroyed_set = set_type(columns=dst_columns)
             for row in t:
                 row_set = set_type(
-                    columns=(dst_column,),
+                    columns=dst_columns,
                     iterable=getattr(row, src_column)
                 )
                 destroyed_set = destroyed_set | row_set

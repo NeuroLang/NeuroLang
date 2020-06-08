@@ -13,7 +13,7 @@ from ..expression_walker import (
     add_match,
 )
 from ..region_solver import RegionSolver
-from ..regions import ExplicitVBR
+from ..regions import ExplicitVBR, ExplicitVBROverlay
 from ..solver import FirstOrderLogicSolver
 from ..solver_datalog_extensional_db import ExtensionalDatabaseSolver
 from ..utils.data_manipulation import parse_region_label_map

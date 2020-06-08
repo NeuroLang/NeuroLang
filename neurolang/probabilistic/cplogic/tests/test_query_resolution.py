@@ -300,7 +300,7 @@ def test_simple_existential():
             pred_symb, pchoice_as_set
         )
     cpl_program.walk(code)
-    result = solve_succ_query(Q(x), cpl_program)
+    exp, result = testing.inspect_resolution(Q(x), cpl_program)
     expected = testing.make_prov_set([(1.0, "a")], ("_p_", "x"))
     assert testing.eq_prov_relations(result, expected)
 

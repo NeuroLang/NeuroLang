@@ -156,6 +156,15 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
                     ColumnStr(new_arg.name), verify_type=False
                 )
                 changed |= True
+            elif (
+                isinstance(new_arg, Constant[Tuple]) and
+                all(isinstance(v, Symbol) for v in new_arg.value)
+            ):
+                n = len(new_arg.value)
+                new_arg = Constant[Tuple[(ColumnStr,) * n]](tuple(
+                    ColumnStr(v.name) for v in new_arg.value
+                ))
+                changed |= True
             else:
                 changed |= new_arg is not arg
             new_args += (new_arg,)
@@ -331,7 +340,10 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
                 classified_formulas['ext_proj_formulas'].append(formula)
         elif (
             formula.functor == CONTAINS and
-            isinstance(formula.args[1], Constant[ColumnStr])
+            (
+                isinstance(formula.args[1], Constant[ColumnStr]) or
+                isinstance(formula.args[1], Constant[Tuple])
+            )
         ):
             classified_formulas['destroy_formulas'].append(formula)
         else:

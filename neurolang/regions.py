@@ -10,7 +10,7 @@ __all__ = [
     'region_union', 'region_intersection', 'region_difference',
     'region_set_from_masked_data', 'take_principal_regions',
     'Region', 'VolumetricBrainRegion', 'PointSet',
-    'ImplicitVBR', 'ExplicitVBR',
+    'ImplicitVBR', 'ExplicitVBR', 'ExplicitVBROverlay',
     'SphericalVolume', 'PlanarVolume'
 ]
 
