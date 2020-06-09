@@ -9,6 +9,7 @@ from ...expression_walker import ExpressionWalker, PatternWalker
 from ...expressions import Constant, Definition, FunctionApplication, Symbol
 from ...logic import TRUE, Conjunction, Implication, Union
 from ...logic.expression_processing import extract_logic_predicates
+from ...rap_to_latex import preserve_debug_symbols
 from ...relational_algebra import (
     ColumnStr,
     ConcatenateConstantColumn,
@@ -27,7 +28,6 @@ from ...relational_algebra_provenance import (
     TupleEqualSymbol,
     TupleSymbol,
     UnionOverTuples,
-    is_provenance_operation,
     ra_binary_to_nary,
 )
 from .cplogic_to_gm import (
@@ -40,7 +40,6 @@ from .cplogic_to_gm import (
 )
 from .grounding import get_grounding_predicate, ground_cplogic_program
 from .program import remove_constants_from_pred
-from ...rap_to_latex import preserve_debug_symbols
 
 EQUAL = Constant(operator.eq)
 

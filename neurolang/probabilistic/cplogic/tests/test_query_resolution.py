@@ -4,7 +4,6 @@ import pytest
 from ....datalog import Fact
 from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Union
-from ....relational_algebra import RenameColumn
 from .. import testing
 from ..gm_provenance_solver import solve_marg_query, solve_succ_query
 from ..program import CPLogicProgram
