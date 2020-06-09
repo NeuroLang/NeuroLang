@@ -559,7 +559,7 @@ class OntologyParser:
             else:
                 values.append(node_triples[0])
 
-        while list_node != RDF.nil:
+        while list_node != RDF.nil and list_node is not None:
             list_iter = self.graph.triples((list_node, None, None))
             values.append(self._get_list_first_value(list_iter))
             list_node = self._get_list_rest_value(list_iter)
