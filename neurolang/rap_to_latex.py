@@ -22,7 +22,7 @@ from .relational_algebra_provenance import (
 )
 
 
-class TestRAPToLaTeXTranslator(PatternWalker):
+class RAPToLaTeX(PatternWalker):
     def __init__(self, cpl_program, graphical_model):
         self.cpl_program = cpl_program
         self.graphical_model = graphical_model
@@ -200,14 +200,8 @@ class TestRAPToLaTeXTranslator(PatternWalker):
         return string
 
 
-def rap_expression_to_latex(exp, cpl_program, graphical_model):
-    walker = TestRAPToLaTeXTranslator(cpl_program, graphical_model)
-    latex = walker.walk(exp)
-    return latex
-
-
 HEADER = r"""\documentclass[10pt]{article}
-\usepackage[margin=0.5in, landscape]{geometry}
+\usepackage[paperwidth=100cm,paperheight=20cm, margin=0.5in]{geometry}
 \usepackage[usenames]{color} %used for font color
 \usepackage{amssymb} %maths
 \usepackage{amsmath} %maths
@@ -238,28 +232,34 @@ def already_latexed(exp):
 
 
 class RAPLaTeXWriter(PatternWalker):
-    def __init__(self, cpl_program, gm, latex=None):
-        self.cpl_program = cpl_program
-        self.gm = gm
+    def __init__(self, cpl_program=None, gm=None, latex=None, translator=None):
         self.latex = [] if latex is None else latex
+        if translator is None:
+            assert cpl_program is not None
+            assert gm is not None
+            self.translator = RAPToLaTeX(cpl_program, gm)
+        else:
+            self.translator = translator
 
     @add_match(
         RelationalAlgebraOperation,
         lambda exp: is_provenance_operation(exp) and not already_latexed(exp),
     )
     def no_latex_op(self, op):
+        op_latex = self.translator.walk(op)
+        op.__latexed__ = True
+        result = self.walk(op)
+        result.__debug_expression__ = getattr(
+            op, "__debug_expression__", None
+        )
         for walker_cls in self.__class__.__mro__:
             if "LaTeX" not in walker_cls.__name__:
                 walker_name = walker_cls.__name__
                 break
-        op_latex = rap_expression_to_latex(op, self.cpl_program, self.gm)
-        op.__latexed__ = True
-        result = self.walk(op)
         self.latex.append(f"\\texttt{{{walker_name}}}")
         self.latex.append(op_latex)
-        self.latex.append(
-            " = " + rap_expression_to_latex(result, self.cpl_program, self.gm)
-        )
+        self.latex.append("\\rightarrow " + self.translator.walk(result))
+        save_latex(self.latex, "/tmp/lol.tex")
         result.__latexed__ = True
         return result
 

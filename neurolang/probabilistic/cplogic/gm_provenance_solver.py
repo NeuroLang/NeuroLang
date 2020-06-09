@@ -1,6 +1,8 @@
 import operator
+import collections
 from typing import Tuple
 
+from ...datalog.expression_processing import conjunct_formulas
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
 from ...expressions import Constant, Definition, FunctionApplication, Symbol
@@ -24,6 +26,7 @@ from ...relational_algebra_provenance import (
     TupleEqualSymbol,
     TupleSymbol,
     UnionOverTuples,
+    is_provenance_operation,
     ra_binary_to_nary,
 )
 from .cplogic_to_gm import (
@@ -35,8 +38,38 @@ from .cplogic_to_gm import (
     PlateNode,
 )
 from .grounding import get_grounding_predicate, ground_cplogic_program
+from .program import remove_constants_from_rule
 
 EQUAL = Constant(operator.eq)
+
+
+def walk_args(walker, args):
+    new_args = tuple()
+    changed = False
+    for arg in args:
+        new_arg = walker.walk(arg)
+        new_args += (new_arg,)
+        changed |= new_arg is not arg
+    return new_args, changed
+
+
+def rewalk_op_if_changed(func):
+    def func_wrapper(self, op):
+        print(func.__name__, id(op), type(op))
+        new_op = func(self, op)
+        if not isinstance(new_op, RelationalAlgebraOperation) or new_op is op:
+            return op
+        new_op.__debug_expression__ = getattr(op, "__debug_expression__", None)
+        new_args, changed = walk_args(self, new_op.unapply())
+        if changed:
+            new_op = new_op.apply(*new_args)
+            new_op.__debug_expression__ = getattr(
+                op, "__debug_expression__", None
+            )
+            return self.walk(new_op)
+        return new_op
+
+    return func_wrapper
 
 
 def rename_columns_for_args_to_match(relation, src_args, dst_args):
@@ -196,30 +229,69 @@ def solve_succ_query(query_predicate, cpl_program):
     return result
 
 
-def _make_conjunction_rule(predicates):
+def make_conjunction_rule(conjunction):
+    if isinstance(conjunction, FunctionApplication):
+        # enforce expression to be a conjunction
+        conjunction = Conjunction((conjunction,))
     symbols = set()
-    for pred in predicates:
+    for pred in conjunction.formulas:
         symbols |= set(arg for arg in pred.args if isinstance(arg, Symbol))
     symbols = tuple(sorted(symbols))
     csqt_pred_symb = Symbol.fresh()
-    return Implication(
-        csqt_pred_symb(*symbols),
-        Conjunction(
-            tuple(sorted(predicates, key=lambda pred: pred.functor.name))
-        ),
-    )
+    return Implication(csqt_pred_symb(*symbols), conjunction,)
 
 
-def solve_marg_query(query_predicate, evidence_predicates, cpl_program):
-    joint_rule = _make_conjunction_rule(
-        set(evidence_predicates) | {query_predicate}
+def solve_marg_query(query_predicate, evidence, cpl_program):
+    """
+    Calculate the result of a MARG probabilistic query.
+
+    The MARG(Q | e) task is defined in [1]_. It calculates the conditional
+    probability of a set of query predicates Q given some evidence e.
+
+    .. [1] De Raedt, Luc, and Angelika Kimmig. “Probabilistic (Logic)
+       Programming Concepts.” Machine Learning 100, no. 1 (July 1, 2015): 5–47.
+       https://doi.org/10.1007/s10994-015-5494-z.
+
+    Parameters
+    ----------
+    query_predicate : logic predicate
+        Predicate q in query MARG[ q | e ]
+    evidence : logic predicate or conjunction of logic predicates
+        Evidence on which the query predicate is conditioned.
+
+    """
+    joint_rule = make_conjunction_rule(
+        conjunct_formulas(query_predicate, evidence)
     )
-    evidence_rule = _make_conjunction_rule(evidence_predicates)
-    cpl_program.walk(Union((joint_rule, evidence_rule)))
-    joint_result = solve_succ_query(joint_rule.consequent, cpl_program)
-    evidence_result = solve_succ_query(evidence_rule.consequent, cpl_program)
+    evidence_rule = make_conjunction_rule(evidence)
+    no_const_joint_formulas = remove_constants_from_rule(joint_rule)
+    no_const_evidence_formulas = remove_constants_from_rule(evidence_rule)
+    query_code = Union(
+        tuple(no_const_joint_formulas + no_const_evidence_formulas)
+    )
+    cpl_program.walk(query_code)
+    # from .testing import inspect_resolution
+
+    # inspect_resolution(
+    # no_const_joint_formulas[0].consequent,
+    # cpl_program,
+    # tex_out_path="/tmp/lol.tex",
+    # )
+    __import__("pdb").set_trace()
+    joint_result = solve_succ_query(
+        no_const_joint_formulas[0].consequent, cpl_program
+    )
+    evidence_result = solve_succ_query(
+        no_const_evidence_formulas[0].consequent, cpl_program
+    )
     solver = RelationalAlgebraProvenanceCountingSolver()
     result = NaturalJoinInverse(joint_result, evidence_result)
+    proj_cols = tuple(
+        str2columnstr_constant(arg.name)
+        for arg in query_predicate.args
+        if isinstance(arg, Symbol)
+    )
+    result = Projection(result, proj_cols)
     return solver.walk(result)
 
 
@@ -576,6 +648,7 @@ class SelectionOutPusherMixin(PatternWalker):
             Constant[ColumnStr],
         )
     )
+    @rewalk_op_if_changed
     def swap_rename_selection(self, rename):
         new_rename = RenameColumn(
             rename.relation.relation, rename.src, rename.dst
@@ -593,6 +666,7 @@ class SelectionOutPusherMixin(PatternWalker):
         return new_selection
 
     @add_match(NaturalJoin(Selection(..., TupleEqualSymbol), ...))
+    @rewalk_op_if_changed
     def njoin_left_selection(self, njoin):
         return Selection(
             NaturalJoin(njoin.relation_left.relation, njoin.relation_right),
@@ -600,6 +674,7 @@ class SelectionOutPusherMixin(PatternWalker):
         )
 
     @add_match(NaturalJoin(..., Selection(..., TupleEqualSymbol)))
+    @rewalk_op_if_changed
     def njoin_right_selection(self, njoin):
         return Selection(
             NaturalJoin(njoin.relation_right.relation, njoin.relation_left),
@@ -613,19 +688,18 @@ class SelectionOutPusherMixin(PatternWalker):
             and exp.formula.tuple_symbol == exp.relation.formula.tuple_symbol
         ),
     )
+    @rewalk_op_if_changed
     def nested_same_selection(self, op):
         return op.relation
 
     @add_match(
-        Selection(Selection(..., TupleEqualSymbol), TupleEqualSymbol),
-        lambda exp: (
-            exp.relation.formula.tuple_symbol != exp.formula.tuple_symbol
-        ),
+        RenameColumn(..., Constant[ColumnStr], Constant[ColumnStr]),
+        lambda rename: is_provenance_operation(rename)
+        and rename.src == rename.dst,
     )
-    def nested_selections_not_same_tuple_symbol(self, op):
-        return Selection(
-            Selection(op.relation.relation, op.formula), op.relation.formula
-        )
+    @rewalk_op_if_changed
+    def rename_src_equals_dst(self, op):
+        return op.relation
 
     @add_match(
         Selection(
@@ -635,6 +709,7 @@ class SelectionOutPusherMixin(PatternWalker):
             ),
         )
     )
+    @rewalk_op_if_changed
     def nested_tuple_selection(self, op):
         return Selection(
             Selection(op.relation.relation, op.formula), op.relation.formula
@@ -644,20 +719,25 @@ class SelectionOutPusherMixin(PatternWalker):
         UnionOverTuples(Selection(..., TupleEqualSymbol), ...),
         lambda exp: exp.relation.formula.tuple_symbol != exp.tuple_symbol,
     )
+    @rewalk_op_if_changed
     def union_of_selection_not_same_tuple_symbol(self, op):
         union = UnionOverTuples(op.relation.relation, op.tuple_symbol)
         union.__debug_expression__ = getattr(op, "__debug_expression__", None)
         return Selection(union, op.relation.formula,)
 
     @add_match(UnionOverTuples(Projection, ...))
+    @rewalk_op_if_changed
     def union_of_projection(self, union):
         projection = union.relation
         new_union = UnionOverTuples(projection.relation, union.tuple_symbol)
-        new_union.__debug_expression__ = union.__debug_expression__
+        new_union.__debug_expression__ = getattr(
+            union, "__debug_expression__", None
+        )
         new_projection = Projection(new_union, projection.attributes)
         return new_projection
 
     @add_match(Projection(Selection(..., TupleEqualSymbol), ...))
+    @rewalk_op_if_changed
     def selection_in_projection(self, proj):
         select = proj.relation
         new_proj = Projection(select.relation, proj.attributes)
@@ -666,35 +746,40 @@ class SelectionOutPusherMixin(PatternWalker):
 
 
 class UnionRemoverMixin(PatternWalker):
-    @add_match(
-        UnionOverTuples(Selection(..., TupleEqualSymbol), ...),
-        lambda exp: exp.tuple_symbol == exp.relation.formula.tuple_symbol,
-    )
-    def union_of_selection_same_tuple_symbol(self, union):
-        op = union.relation
-        selection_cols = list()
-        while (
+    @add_match(UnionOverTuples)
+    @rewalk_op_if_changed
+    def remove_unions_and_selections_by_tuple(self, op):
+        unions_grpd_by_tupl_symb = collections.defaultdict(list)
+        selects_grpd_by_tupl_symb = collections.defaultdict(list)
+        while isinstance(op, UnionOverTuples) or (
             isinstance(op, Selection)
             and isinstance(op.formula, TupleEqualSymbol)
-            and op.formula.tuple_symbol == union.tuple_symbol
         ):
-            selection_cols.append(op.formula.columns)
+            if isinstance(op, UnionOverTuples):
+                unions_grpd_by_tupl_symb[op.tuple_symbol].append(op)
+            else:
+                selects_grpd_by_tupl_symb[op.formula.tuple_symbol].append(op)
             op = op.relation
-        if len(selection_cols) == 1:
-            return self.walk(union.relation.relation)
-        for i in range(1, len(selection_cols)):
-            for c1, c2 in zip(selection_cols[i - 1], selection_cols[i]):
-                op = Selection(op, EQUAL(c1, c2))
-        return self.walk(op)
+        for tsymb in unions_grpd_by_tupl_symb:
+            if tsymb not in selects_grpd_by_tupl_symb:
+                raise RuntimeError("Could not solve expression")
+            selects = selects_grpd_by_tupl_symb[tsymb]
+            formula_it = iter(s.formula for s in selects)
+            prev_formula = next(formula_it)
+            for formula in formula_it:
+                for c1, c2 in zip(prev_formula.columns, formula.columns):
+                    op = Selection(op, EQUAL(c1, c2))
+                prev_formula = formula
+        return op
 
 
 class SelectionOutPusher(
-    SelectionOutPusherMixin, ProvenanceExpressionTransformer, ExpressionWalker,
+    SelectionOutPusherMixin, ExpressionWalker,
 ):
     pass
 
 
 class UnionRemover(
-    UnionRemoverMixin, ProvenanceExpressionTransformer, ExpressionWalker,
+    UnionRemoverMixin, ExpressionWalker,
 ):
     pass

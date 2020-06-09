@@ -521,7 +521,7 @@ def test_simple_marg_query():
         P, {(0.7, "a"), (0.8, "b")}
     )
     cpl_program.add_probabilistic_facts_from_tuples(Q, {(0.8, "b")})
-    result = solve_marg_query(P(x), (Q(b),), cpl_program)
+    result = solve_marg_query(P(x), Q(b), cpl_program)
     expected = testing.make_prov_set([(0.7, "a"), (0.8, "b")], ("_p_", "x"))
     assert testing.eq_prov_relations(result, expected)
 
@@ -538,7 +538,7 @@ def test_marg_query_intensional():
     for pred_symb, pfact_set in pfact_sets.items():
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
     cpl_program.walk(code)
-    result = solve_marg_query(Q(x), (Z(b),), cpl_program)
+    result = solve_marg_query(Q(x), Z(b), cpl_program)
     expected = testing.make_prov_set([(0.2, "a"), (0.8, "b")], ("_p_", "x"))
     assert testing.eq_prov_relations(result, expected)
 
@@ -552,10 +552,29 @@ def test_marg_query_shared_variables_between_query_and_evidence_preds():
             pred_symb, pchoice_as_set
         )
     cpl_program.walk(code)
-    result = solve_marg_query(Q(x), (P(x),), cpl_program)
+    result = solve_marg_query(Q(x), P(x), cpl_program)
     expected = testing.make_prov_set(
         [(1.0, "a"), (1.0, "b"), (1.0, "c")], ("_p_", "x")
     )
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_marg_query_multiple_evidence_predicates():
+    pchoice_as_sets = {
+        P: {(0.2, "a"), (0.8, "b")},
+        Q: {(0.5, "a"), (0.5, "b")},
+    }
+    code = Union((Implication(Z(x), Conjunction((P(x), Q(x)))),))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    cpl_program.walk(code)
+    query_pred = Z(x)
+    evidence = Conjunction((P(a), Q(b)))
+    result = solve_marg_query(query_pred, evidence, cpl_program)
+    expected = testing.make_prov_set([], ("_p_", "x"))
     assert testing.eq_prov_relations(result, expected)
 
 

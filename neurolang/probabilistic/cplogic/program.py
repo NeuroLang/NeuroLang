@@ -66,6 +66,8 @@ def remove_constants_from_rule(rule):
     rules do not contain any constant term.
 
     """
+    if not is_rule_with_constants(rule):
+        return [rule]
     preds = [rule.consequent] + list(extract_logic_predicates(rule.antecedent))
     new_preds = list()
     valued_args = list()

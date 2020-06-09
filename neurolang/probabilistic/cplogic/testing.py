@@ -3,7 +3,12 @@ import contextlib
 import numpy as np
 
 from ...expressions import Constant, Symbol
-from ...rap_to_latex import LaTeXReinitialiser, RAPLaTeXWriter, save_latex
+from ...rap_to_latex import (
+    LaTeXReinitialiser,
+    RAPLaTeXWriter,
+    RAPToLaTeX,
+    save_latex,
+)
 from ...relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     Projection,
@@ -36,11 +41,9 @@ class LaTeXUnionRemover(RAPLaTeXWriter, UnionRemover):
 class LaTeXRAPSolver(
     RAPLaTeXWriter, RelationalAlgebraProvenanceCountingSolver
 ):
-    def __init__(self, cpl_program, gm, latex=None):
+    def __init__(self, *args, **kwargs):
         self.symbol_table = {}
-        self.cpl_program = cpl_program
-        self.gm = gm
-        self.latex = latex if latex else []
+        super().__init__(*args, **kwargs)
 
 
 def build_gm(cpl_program):
@@ -96,16 +99,17 @@ def inspect_resolution(qpred, cpl_program, tex_out_path=None):
     exp = rename_columns_for_args_to_match(exp, result_args, qpred_args)
     gm = build_gm(cpl_program)
     reinitialiser = LaTeXReinitialiser()
-    spusher = LaTeXSelectionOutPusher(cpl_program, gm)
+    latex_translator = RAPToLaTeX(cpl_program, gm)
+    spusher = LaTeXSelectionOutPusher(translator=latex_translator)
     latex = spusher.latex
     sexp = reinitialiser.walk(spusher.walk(exp))
-    uremover = LaTeXUnionRemover(cpl_program, gm, latex)
+    uremover = LaTeXUnionRemover(translator=latex_translator, latex=latex)
     latex = uremover.latex
     uexp = reinitialiser.walk(uremover.walk(sexp))
     result = Projection(
         uexp, tuple(str2columnstr_constant(arg.name) for arg in qpred_args)
     )
-    solver = LaTeXRAPSolver(cpl_program, gm, latex)
+    solver = LaTeXRAPSolver(translator=latex_translator, latex=latex)
     result = solver.walk(result)
     latex = solver.latex
     if tex_out_path is not None:
