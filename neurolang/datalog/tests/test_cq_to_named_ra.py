@@ -377,6 +377,7 @@ def test_border_cases():
 def test_border_case_2():
     T = Symbol[AbstractSet[int]]('T')
     x = Symbol[int]('x')
+    y = Symbol[int]('y')
 
     def gtz_f(x):
         return x > 0
@@ -396,12 +397,58 @@ def test_border_case_2():
                 T,
                 (C_(0),)
             ),
-            (C_('x'),)
+            (C_(ColumnStr('x')),)
         ),
         C_(not_)(
-            gtz(C_('x'))
+            gtz(C_(ColumnStr('x')))
         )
     )
 
     res = TranslateToNamedRA().walk(exp)
+    assert res == expected_res
+
+    exp = Conjunction((
+        T(x),
+        Negation(
+            C_(eq)(x, C_(3))
+        )
+    ))
+
+    res = TranslateToNamedRA().walk(exp)
+
+    expected_res = Selection(
+        NameColumns(
+            Projection(
+                T,
+                (C_(0),)
+            ),
+            (C_(ColumnStr('x')),)
+        ),
+        C_(not_)(
+            C_(eq)(C_(ColumnStr('x')), C_(3))
+        )
+    )
+    assert res == expected_res
+
+    exp = Conjunction((
+        T(x, y),
+        Negation(
+            C_(eq)(x, y)
+        )
+    ))
+
+    res = TranslateToNamedRA().walk(exp)
+
+    expected_res = Selection(
+        NameColumns(
+            Projection(
+                T,
+                (C_(0), C_(1))
+            ),
+            (C_('x'), C_('y'))
+        ),
+        C_(not_)(
+            C_(eq)(C_(ColumnStr('x')), C_(ColumnStr('y')))
+        )
+    )
     assert res == expected_res
