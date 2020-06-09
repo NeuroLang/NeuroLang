@@ -1,5 +1,8 @@
 import operator as op
-from contextlib import nullcontext
+try:
+    from contextlib import nullcontext
+except ImportError:
+    from contextlib import suppress as nullcontext
 from itertools import product
 from typing import AbstractSet, Callable, Tuple
 
