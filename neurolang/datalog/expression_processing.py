@@ -337,6 +337,21 @@ def dependency_matrix(datalog):
     return idb_symbols, dependency_matrix
 
 
+def program_has_loops(program_representation):
+    if not isinstance(program_representation, np.ndarray):
+        _, program_representation = dependency_matrix(program_representation)
+    reachable = program_representation
+    for _ in range(len(program_representation)):
+        if any(np.diag(reachable)):
+            return True
+        else:
+            reachable = np.dot(
+               reachable.T, program_representation
+            ).T
+
+    return False
+
+
 def conjunct_if_needed(formulas):
     """Only conjunct the given list of formulas if there is more than one."""
     if len(formulas) == 1:

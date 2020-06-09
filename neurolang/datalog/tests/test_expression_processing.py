@@ -20,6 +20,7 @@ from ..expression_processing import (
     extract_logic_predicates,
     conjunct_if_needed,
     conjunct_formulas,
+    program_has_loops,
     SymbolNotFoundException
 )
 
@@ -287,6 +288,41 @@ def test_dependency_matrix():
 
     with raises(SymbolNotFoundException):
         dependency_matrix(datalog)
+
+
+def test_program_has_loops():
+    Q = S_('Q')  # noqa: N806
+    R = S_('R')  # noqa: N806
+    S = S_('S')  # noqa: N806
+    T = S_('T')  # noqa: N806
+    x = S_('x')
+    y = S_('y')
+
+    code = DT.walk(B_([
+        Fact(Q(C_(0), C_(1))),
+        Imp_(R(x, y), Q(x, y) & S(x)),
+        Imp_(R(x, y), T(y, x)),
+        Imp_(S(x), R(x, y) & C_(eq)(x, y)),
+        Imp_(T(x, y), Q(x, y)),
+    ]))
+
+    datalog = Datalog()
+    datalog.walk(code)
+
+    assert program_has_loops(datalog)
+
+    code = DT.walk(B_([
+        Fact(Q(C_(0), C_(1))),
+        Imp_(R(x, y), Q(x, y)),
+        Imp_(R(x, x), T(x, x)),
+        Imp_(S(x), R(x, y) & C_(eq)(x, y)),
+        Imp_(T(x), Q(x, x))
+    ]))
+
+    datalog = Datalog()
+    datalog.walk(code)
+
+    assert not program_has_loops(datalog)
 
 
 def test_implication_has_existential_variable_in_antecedent():
