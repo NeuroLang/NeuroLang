@@ -57,12 +57,12 @@ def test_equality_constant_symbol():
 
     fa = C_(eq)(x, a)
     tr = TranslateToNamedRA()
-    res = tr.walk(fa)
+    res = tr.walk(Conjunction((fa,)))
     assert res == expected_result
 
     fa = C_(eq)(a, x)
     tr = TranslateToNamedRA()
-    res = tr.walk(fa)
+    res = tr.walk(Conjunction((fa,)))
     assert res == expected_result
 
     y = S_('y')
@@ -70,13 +70,16 @@ def test_equality_constant_symbol():
 
     exp = Conjunction((fb, fa))
 
-    fb_trans = NameColumns(
-        Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
-        (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
+    expected_result = Selection(
+        NameColumns(
+            Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
+            (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
+        ),
+        C_(eq)(C_(ColumnStr('x')), a)
     )
 
     res = tr.walk(exp)
-    assert res == NaturalJoin(fb_trans, expected_result)
+    assert res == expected_result
 
 
 def test_equality_symbols():
@@ -240,9 +243,9 @@ def test_extended_projection_algebraic_expression():
         Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
         (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
     )
-    assert res.relation_left == fa_trans
-    assert len(res.relation_right.value)
-    assert ({'y': 6} in res.relation_right.value)
+    assert res == Selection(
+        fa_trans, Constant(eq)(Constant(ColumnStr('y')), Constant(6))
+    )
 
 
 def test_set_destroy():
@@ -374,6 +377,7 @@ def test_border_cases():
 def test_border_case_2():
     T = Symbol[AbstractSet[int]]('T')
     x = Symbol[int]('x')
+    y = Symbol[int]('y')
 
     def gtz_f(x):
         return x > 0
@@ -393,12 +397,58 @@ def test_border_case_2():
                 T,
                 (C_(0),)
             ),
-            (C_('x'),)
+            (C_(ColumnStr('x')),)
         ),
         C_(not_)(
-            gtz(C_('x'))
+            gtz(C_(ColumnStr('x')))
         )
     )
 
     res = TranslateToNamedRA().walk(exp)
+    assert res == expected_res
+
+    exp = Conjunction((
+        T(x),
+        Negation(
+            C_(eq)(x, C_(3))
+        )
+    ))
+
+    res = TranslateToNamedRA().walk(exp)
+
+    expected_res = Selection(
+        NameColumns(
+            Projection(
+                T,
+                (C_(0),)
+            ),
+            (C_(ColumnStr('x')),)
+        ),
+        C_(not_)(
+            C_(eq)(C_(ColumnStr('x')), C_(3))
+        )
+    )
+    assert res == expected_res
+
+    exp = Conjunction((
+        T(x, y),
+        Negation(
+            C_(eq)(x, y)
+        )
+    ))
+
+    res = TranslateToNamedRA().walk(exp)
+
+    expected_res = Selection(
+        NameColumns(
+            Projection(
+                T,
+                (C_(0), C_(1))
+            ),
+            (C_('x'), C_('y'))
+        ),
+        C_(not_)(
+            C_(eq)(C_(ColumnStr('x')), C_(ColumnStr('y')))
+        )
+    )
     assert res == expected_res
