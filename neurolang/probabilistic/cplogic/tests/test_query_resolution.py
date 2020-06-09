@@ -222,9 +222,7 @@ def test_mutual_exclusivity():
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
     cpl_program.walk(code)
     qpred = Z(x, y)
-    exp, result = testing.inspect_resolution(qpred, cpl_program)
-    assert isinstance(exp, RenameColumn)
-    assert isinstance(exp.relation, RenameColumn)
+    result = solve_succ_query(qpred, cpl_program)
     expected = testing.make_prov_set([], ("_p_", "x", "y"))
     assert testing.eq_prov_relations(result, expected)
 
@@ -243,11 +241,7 @@ def test_multiple_probchoices_mutual_exclusivity():
         )
     cpl_program.walk(code)
     qpred = Z(x, y)
-    exp, result = testing.inspect_resolution(
-        qpred, cpl_program, tex_out_path="/tmp/out.tex"
-    )
-    assert isinstance(exp, RenameColumn)
-    assert isinstance(exp.relation, RenameColumn)
+    result = solve_succ_query(qpred, cpl_program)
     expected = testing.make_prov_set(
         [(0.2 * 0.1, "a", "b"), (0.8 * 0.1, "b", "b")], ("_p_", "x", "y")
     )
@@ -300,7 +294,7 @@ def test_simple_existential():
             pred_symb, pchoice_as_set
         )
     cpl_program.walk(code)
-    exp, result = testing.inspect_resolution(Q(x), cpl_program)
+    result = solve_succ_query(Q(x), cpl_program)
     expected = testing.make_prov_set([(1.0, "a")], ("_p_", "x"))
     assert testing.eq_prov_relations(result, expected)
 
@@ -428,8 +422,7 @@ def test_repeated_antecedent_predicate_symbol():
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
     cpl_program.walk(code)
     qpred = Q(x, y)
-    # result = ve_succ_query(qpred, cpl_program)
-    exp, result = testing.inspect_resolution(qpred, cpl_program)
+    result = solve_succ_query(qpred, cpl_program)
     expected = testing.make_prov_set(
         [
             (0.4 * (1 - 0.7) + 0.4 * 0.7, "a", "a"),

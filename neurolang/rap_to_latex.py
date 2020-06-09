@@ -22,6 +22,14 @@ from .relational_algebra_provenance import (
 )
 
 
+def preserve_debug_symbols(prev, new):
+    attrs = ["__debug_expression__", "__debug_alway_true__"]
+    for attr in attrs:
+        if hasattr(prev, attr):
+            setattr(new, attr, getattr(prev, attr))
+    return new
+
+
 class RAPToLaTeX(PatternWalker):
     def __init__(self, cpl_program, graphical_model):
         self.cpl_program = cpl_program
@@ -249,9 +257,8 @@ class RAPLaTeXWriter(PatternWalker):
         op_latex = self.translator.walk(op)
         op.__latexed__ = True
         result = self.walk(op)
-        result.__debug_expression__ = getattr(
-            op, "__debug_expression__", None
-        )
+        result = preserve_debug_symbols(op, result)
+        result.__latexed__ = True
         for walker_cls in self.__class__.__mro__:
             if "LaTeX" not in walker_cls.__name__:
                 walker_name = walker_cls.__name__
@@ -260,8 +267,7 @@ class RAPLaTeXWriter(PatternWalker):
         self.latex.append(op_latex)
         self.latex.append("\\rightarrow " + self.translator.walk(result))
         save_latex(self.latex, "/tmp/lol.tex")
-        result.__latexed__ = True
-        return result
+        return self.walk(result)
 
 
 class LaTeXReinitialiser(ExpressionWalker):
@@ -271,4 +277,6 @@ class LaTeXReinitialiser(ExpressionWalker):
     )
     def remove_tag(self, op):
         op.__latexed__ = False
-        return self.walk(op)
+        new_op = self.walk(op)
+        preserve_debug_symbols(op, new_op)
+        return new_op
