@@ -84,13 +84,6 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             )
         )
 
-        #return Constant[AbstractSet[Tuple[constant.type]]](
-        #    NamedRelationalAlgebraFrozenSet(
-        #        (symbol.name,),
-        #        [(REBV.walk(constant),)]
-        #    )
-        #)
-
     @add_match(FunctionApplication(EQ_pattern, (FunctionApplication, Symbol)))
     def translate_eq_fa_s(self, expression):
         return self.walk(EQ(*expression.args[::-1]))
