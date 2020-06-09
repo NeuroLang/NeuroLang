@@ -19,6 +19,10 @@ class SymbolNotFoundException(NeuroLangException):
     pass
 
 
+class RuleNotFoundException(NeuroLangException):
+    pass
+
+
 class TranslateToDatalogSemantics(TranslateToLogic, ExpressionWalker):
     pass
 
@@ -275,7 +279,7 @@ def reachable_code(query, datalog):
     return Union(reachable_code[::-1])
 
 
-def dependency_matrix(datalog):
+def dependency_matrix(datalog, rules=None):
     """Produces the dependecy matrix for a datalog's
     instance intensional database (IDB).
 
@@ -283,6 +287,9 @@ def dependency_matrix(datalog):
     ----------
     datalog : DatalogProgram
         datalog instance containing the EDB and IDB.
+    rules : None or Union of rules
+        an optional subset of rules from the datalog
+        program's IDB.
 
     Returns
     -------
@@ -302,18 +309,31 @@ def dependency_matrix(datalog):
         is not a constant or an extensiona/intensional predicate.
     """
 
-    idb = datalog.intensional_database()
+    if rules is None:
+        idb = datalog.intensional_database()
+        to_reach = []
+        for rule_union in idb.values():
+            to_reach += rule_union.formulas
+        idb_symbols = idb.keys()
+    else:
+        to_reach = list(rules.formulas)
+        idb_symbols = set()
+        for rule in to_reach:
+            functor = rule.consequent.functor
+            if rule not in datalog.intensional_database()[functor].formulas:
+                raise RuleNotFoundException(
+                    f"Rule {rule} not contained in the datalog "
+                    "instance."
+                )
+            idb_symbols.add(functor)
+
+    idb_symbols = tuple(sorted(idb_symbols, key=lambda s: s.name))
     edb = datalog.extensional_database()
-    idb_symbols = tuple(sorted(idb.keys(), key=lambda s: s.name))
-    to_reach = []
 
     dependency_matrix = np.zeros(
         (len(idb_symbols), len(idb_symbols)),
         dtype=int
     )
-
-    for rule_union in idb.values():
-        to_reach += rule_union.formulas
 
     while to_reach:
         rule = to_reach.pop()
@@ -328,7 +348,10 @@ def dependency_matrix(datalog):
                 dependency_matrix[ix_head, ix_functor] += 1
             elif (
                 isinstance(functor, Symbol) and
-                functor not in datalog.symbol_table
+                (
+                    functor not in datalog.symbol_table or
+                    functor in datalog.intensional_database()
+                )
             ):
                 raise SymbolNotFoundException(
                     f'Symbol not found {functor.name}'
@@ -346,8 +369,8 @@ def program_has_loops(program_representation):
             return True
         else:
             reachable = np.dot(
-               reachable.T, program_representation
-            ).T
+               reachable, program_representation
+            )
 
     return False
 

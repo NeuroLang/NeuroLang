@@ -6,7 +6,10 @@ import numpy as np
 
 from ...expression_walker import ExpressionBasicEvaluator
 from ...expressions import Constant, ExpressionBlock, Symbol
-from ...logic import ExistentialPredicate, Implication, Negation, Conjunction
+from ...logic import (
+    ExistentialPredicate, Implication,
+    Negation, Conjunction, Union
+)
 from .. import DatalogProgram, Fact
 from ..expression_processing import (
     TranslateToDatalogSemantics,
@@ -257,7 +260,7 @@ def test_dependency_matrix():
         Fact(Q(C_(0), C_(1))),
         Imp_(R(x, y), Q(x, y)),
         Imp_(R(x, y), T(y, x)),
-        Imp_(S(x), R(x, y) & S(y) &  C_(eq)(x, y)),
+        Imp_(S(x), R(x, y) & S(y) & C_(eq)(x, y)),
         Imp_(T(x), Q(x, y)),
     ]))
 
@@ -274,6 +277,18 @@ def test_dependency_matrix():
             [0, 0, 0]
         ]
     ))
+
+    rules = Union(
+        datalog.intensional_database()[R].formulas +
+        datalog.intensional_database()[T].formulas
+    )
+
+    idb_symbols_2, dep_matrix_2 = dependency_matrix(
+       datalog, rules=rules
+    )
+
+    assert idb_symbols_2 == (R, T)
+    assert np.array_equiv(dep_matrix[(0, 2), :][:, (0, 2)], dep_matrix_2)
 
     code = DT.walk(B_([
         Fact(Q(C_(0), C_(1))),
