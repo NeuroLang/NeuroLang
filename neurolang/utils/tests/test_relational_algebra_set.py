@@ -1,6 +1,6 @@
 import pytest
 
-from ..relational_algebra_set import pandas
+from ..relational_algebra_set import RelationalAlgebraStringExpression, pandas
 
 
 @pytest.fixture(ids=['pandas'], params=[(pandas,)])
@@ -811,3 +811,15 @@ def test_relation_duplicated_columns(ra_module):
         ra_module.NamedRelationalAlgebraFrozenSet(
             ("x", "x"), [(0, 2), (0, 4)],
         )
+
+
+def test_extended_projection_ra_string_expression_empty_relation(ra_module):
+    # reported in GH387
+    relation = ra_module.NamedRelationalAlgebraFrozenSet(
+        columns=["x", "y"], iterable=[],
+    )
+    eval_expressions = {"z": RelationalAlgebraStringExpression("(x / y)")}
+    expected = ra_module.NamedRelationalAlgebraFrozenSet(
+        columns=["z"], iterable=[],
+    )
+    assert relation.extended_projection(eval_expressions) == expected

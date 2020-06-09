@@ -642,6 +642,10 @@ class NamedRelationalAlgebraFrozenSet(
 
     def extended_projection(self, eval_expressions):
         proj_columns = list(eval_expressions.keys())
+        if self.is_empty():
+            return NamedRelationalAlgebraFrozenSet(
+                columns=proj_columns, iterable=[],
+            )
         new_container = self._container.copy()
         for dst_column, operation in eval_expressions.items():
             if isinstance(operation, RelationalAlgebraStringExpression):
