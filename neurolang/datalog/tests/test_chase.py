@@ -1,15 +1,17 @@
 import operator as op
+from contextlib import nullcontext
 from itertools import product
 from typing import AbstractSet, Callable, Tuple
 
-from pytest import fixture, skip
+from pytest import fixture, skip, raises
 
 from ... import expression_walker as ew
 from ... import expressions
 from ..basic_representation import DatalogProgram
 from ..chase import (ChaseGeneral, ChaseMGUMixin, ChaseNaive,
                      ChaseNamedRelationalAlgebraMixin, ChaseNode,
-                     ChaseRelationalAlgebraPlusCeriMixin, ChaseSemiNaive)
+                     ChaseNonRecursive, ChaseRelationalAlgebraPlusCeriMixin,
+                     ChaseSemiNaive, NeuroLangProgramHasLoopsException)
 from ..expressions import (Conjunction, Fact, Implication, TranslateToLogic,
                            Union)
 from ..instance import MapInstance
@@ -56,6 +58,7 @@ chase_configurations = [
     (step_class, cq_class)
     for step_class, cq_class in product(
         (
+            ChaseNonRecursive,
             ChaseNaive,
             ChaseSemiNaive
         ),
@@ -677,19 +680,26 @@ def test_recursive_predicate_chase_solution(chase_class):
     dl.walk(datalog_program)
 
     dc = chase_class(dl)
-    solution_instance = dc.build_chase_solution()
 
-    final_instance = MapInstance({
-        Q: C_({
-            C_((C_(1), C_(2))),
-            C_((C_(2), C_(3))),
-        }),
-        T: C_({C_((C_(1), C_(2))),
-               C_((C_(2), C_(3))),
-               C_((C_(1), C_(3)))})
-    })
+    if issubclass(chase_class, ChaseNonRecursive):
+        context = raises(NeuroLangProgramHasLoopsException)
+    else:
+        context = nullcontext()
 
-    assert solution_instance == final_instance
+    with context:
+        solution_instance = dc.build_chase_solution()
+
+        final_instance = MapInstance({
+            Q: C_({
+                C_((C_(1), C_(2))),
+                C_((C_(2), C_(3))),
+            }),
+            T: C_({C_((C_(1), C_(2))),
+                C_((C_(2), C_(3))),
+                C_((C_(1), C_(3)))})
+        })
+
+        assert solution_instance == final_instance
 
 
 def test_another_recursive_chase(chase_class):
@@ -725,5 +735,11 @@ def test_another_recursive_chase(chase_class):
     dl.walk(code)
     dl.walk(edb)
 
-    solution = chase_class(dl).build_chase_solution()
-    assert solution['q'].value == {C_((e, )) for e in (b, c, d)}
+    if issubclass(chase_class, ChaseNonRecursive):
+        context = raises(NeuroLangProgramHasLoopsException)
+    else:
+        context = nullcontext()
+
+    with context:
+        solution = chase_class(dl).build_chase_solution()
+        assert solution['q'].value == {C_((e, )) for e in (b, c, d)}

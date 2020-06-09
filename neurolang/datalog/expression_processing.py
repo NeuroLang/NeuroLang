@@ -316,7 +316,10 @@ def dependency_matrix(datalog, rules=None):
             to_reach += rule_union.formulas
         idb_symbols = idb.keys()
     else:
-        to_reach = list(rules.formulas)
+        if isinstance(rules, Union):
+            to_reach = list(rules.formulas)
+        else:
+            to_reach = list(rules)
         idb_symbols = set()
         for rule in to_reach:
             functor = rule.consequent.functor
