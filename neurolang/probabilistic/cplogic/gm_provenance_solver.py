@@ -258,6 +258,8 @@ def solve_marg_query(query_predicate, evidence, cpl_program):
     joint_conjunction = conjunct_formulas(query_predicate, evidence)
     joint_qpred = add_query_to_program(joint_conjunction, cpl_program)
     evidence_qpred = add_query_to_program(evidence, cpl_program)
+    from .testing import inspect_resolution
+    inspect_resolution(joint_qpred, cpl_program, "/tmp/lol.tex")
     joint_result = solve_succ_query(joint_qpred, cpl_program)
     joint_cols = tuple(
         str2columnstr_constant(arg.name)
@@ -625,6 +627,57 @@ class ProvenanceExpressionTransformer(PatternWalker):
 
 class SelectionOutPusherMixin(PatternWalker):
     @add_match(
+        Selection(Selection(..., TupleEqualSymbol), TupleEqualSymbol),
+        lambda select: select.formula.tuple_symbol.name
+        > select.relation.formula.tuple_symbol.name,
+    )
+    def sort_nested_selection_by_tuple_symbol(self, select):
+        new_nested_select = Selection(select.relation.relation, select.formula)
+        new_select = Selection(new_nested_select, select.relation.formula)
+        return new_select
+
+    @add_match(
+        UnionOverTuples(UnionOverTuples, ...),
+        lambda union: union.tuple_symbol.name
+        > union.relation.tuple_symbol.name,
+    )
+    def sort_nested_union_over_tuples(self, union):
+        nested_union = union.relation
+        new_nested_union = UnionOverTuples(
+            nested_union.relation, union.tuple_symbol
+        )
+        new_nested_union = preserve_debug_symbols(union, new_nested_union)
+        new_union = UnionOverTuples(
+            new_nested_union, nested_union.tuple_symbol
+        )
+        new_union = preserve_debug_symbols(nested_union, new_union)
+        return new_union
+
+    @add_match(
+        UnionOverTuples(Selection(..., TupleEqualSymbol), ...),
+        lambda union: union.tuple_symbol.name
+        > union.relation.formula.tuple_symbol.name,
+    )
+    def sort_union_of_selection(self, union):
+        select = union.relation
+        new_union = UnionOverTuples(select.relation, union.tuple_symbol)
+        new_union = preserve_debug_symbols(union, new_union)
+        new_select = Selection(new_union, select.formula)
+        return new_select
+
+    @add_match(
+        Selection(UnionOverTuples, TupleEqualSymbol),
+        lambda select: select.formula.tuple_symbol.name
+        > select.relation.tuple_symbol.name,
+    )
+    def sort_selection_of_union(self, select):
+        union = select.relation
+        new_select = Selection(union.relation, select.tuple_symbol)
+        new_union = UnionOverTuples(new_select, union.formula)
+        new_union = preserve_debug_symbols(union, new_union)
+        return new_union
+
+    @add_match(
         RenameColumn(
             Selection(..., TupleEqualSymbol),
             Constant[ColumnStr],
@@ -662,16 +715,6 @@ class SelectionOutPusherMixin(PatternWalker):
         )
 
     @add_match(
-        Selection(Selection(..., TupleEqualSymbol), TupleEqualSymbol),
-        lambda exp: (
-            exp.formula.columns == exp.relation.formula.columns
-            and exp.formula.tuple_symbol == exp.relation.formula.tuple_symbol
-        ),
-    )
-    def nested_same_selection(self, op):
-        return op.relation
-
-    @add_match(
         Selection(
             Selection(..., TupleEqualSymbol),
             FunctionApplication(
@@ -683,15 +726,6 @@ class SelectionOutPusherMixin(PatternWalker):
         return Selection(
             Selection(op.relation.relation, op.formula), op.relation.formula
         )
-
-    @add_match(
-        UnionOverTuples(Selection(..., TupleEqualSymbol), ...),
-        lambda exp: exp.relation.formula.tuple_symbol != exp.tuple_symbol,
-    )
-    def union_of_selection_not_same_tuple_symbol(self, op):
-        union = UnionOverTuples(op.relation.relation, op.tuple_symbol)
-        union = preserve_debug_symbols(op, union)
-        return Selection(union, op.relation.formula,)
 
     @add_match(UnionOverTuples(Projection, ...))
     def union_of_projection(self, union):
@@ -710,30 +744,27 @@ class SelectionOutPusherMixin(PatternWalker):
 
 
 class UnionRemoverMixin(PatternWalker):
-    @add_match(UnionOverTuples)
-    def remove_unions_and_selections_by_tuple(self, op):
-        unions_grpd_by_tupl_symb = collections.defaultdict(list)
-        selects_grpd_by_tupl_symb = collections.defaultdict(list)
-        while isinstance(op, UnionOverTuples) or (
+    @add_match(
+        UnionOverTuples(Selection(..., TupleEqualSymbol), ...),
+        lambda exp: exp.tuple_symbol == exp.relation.formula.tuple_symbol,
+    )
+    def union_of_selection_same_tuple_symbol(self, union):
+        op = union.relation
+        selection_cols = list()
+        while (
             isinstance(op, Selection)
             and isinstance(op.formula, TupleEqualSymbol)
+            and op.formula.tuple_symbol == union.tuple_symbol
         ):
-            if isinstance(op, UnionOverTuples):
-                unions_grpd_by_tupl_symb[op.tuple_symbol].append(op)
-            else:
-                selects_grpd_by_tupl_symb[op.formula.tuple_symbol].append(op)
+            selection_cols.append(op.formula.columns)
             op = op.relation
-        for tsymb in unions_grpd_by_tupl_symb:
-            if tsymb not in selects_grpd_by_tupl_symb:
-                raise RuntimeError("Could not solve expression")
-            selects = selects_grpd_by_tupl_symb[tsymb]
-            formula_it = iter(s.formula for s in selects)
-            prev_formula = next(formula_it)
-            for formula in formula_it:
-                for c1, c2 in zip(prev_formula.columns, formula.columns):
+        if len(selection_cols) == 1:
+            return self.walk(union.relation.relation)
+        for i in range(1, len(selection_cols)):
+            for c1, c2 in zip(selection_cols[i - 1], selection_cols[i]):
+                if c1 != c2:
                     op = Selection(op, EQUAL(c1, c2))
-                prev_formula = formula
-        return op
+        return self.walk(op)
 
 
 class SelectionOutPusher(
