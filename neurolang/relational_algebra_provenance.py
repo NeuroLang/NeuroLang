@@ -31,7 +31,7 @@ class UnionOverTuples(RelationalAlgebraOperation):
         self.tuple_symbol = tuple_symbol
 
     def __repr__(self):
-        return f"U+222A_{self.tuple_symbol} {{ {self.relation} }}"
+        return f"\u222A_{self.tuple_symbol} {{ {self.relation} }}"
 
 
 class TupleSymbol(Symbol):
