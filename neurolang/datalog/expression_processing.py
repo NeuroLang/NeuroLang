@@ -5,6 +5,8 @@ Datalog programs.
 
 from typing import Iterable
 
+import numpy as np
+
 from ..exceptions import NeuroLangException
 from ..expression_walker import ExpressionWalker
 from ..expressions import Constant, FunctionApplication, Symbol
@@ -287,10 +289,11 @@ def dependency_matrix(datalog):
     idb_symbols: list
         A list of IDB symbols
         in the dependency matrix.
-    dependency_matrix: list of list of int
-         And the dependency matrix
+    dependency_matrix: ndarray
+        The dependency matrix
         where row is the origin symbol and column is the
-        dependency.
+        dependency. It is the adjacency matrix of the
+        graph where each node is a predicate of the IDB.
 
     Raises
     ------
@@ -304,10 +307,10 @@ def dependency_matrix(datalog):
     idb_symbols = tuple(sorted(idb.keys(), key=lambda s: s.name))
     to_reach = []
 
-    dependency_matrix = [
-        [0] * len(idb_symbols)
-        for _ in range(len(idb_symbols))
-    ]
+    dependency_matrix = np.zeros(
+        (len(idb_symbols), len(idb_symbols)),
+        dtype=int
+    )
 
     for rule_union in idb.values():
         to_reach += rule_union.formulas
@@ -322,7 +325,7 @@ def dependency_matrix(datalog):
                 continue
             elif functor in idb_symbols:
                 ix_functor = idb_symbols.index(functor)
-                dependency_matrix[ix_head][ix_functor] += 1
+                dependency_matrix[ix_head, ix_functor] += 1
             elif (
                 isinstance(functor, Symbol) and
                 functor not in datalog.symbol_table

@@ -2,6 +2,8 @@ from pytest import raises
 
 from operator import eq
 
+import numpy as np
+
 from ...expression_walker import ExpressionBasicEvaluator
 from ...expressions import Constant, ExpressionBlock, Symbol
 from ...logic import ExistentialPredicate, Implication, Negation, Conjunction
@@ -264,11 +266,13 @@ def test_dependency_matrix():
     idb_symbols, dep_matrix = dependency_matrix(datalog)
 
     assert idb_symbols == (R, S, T)
-    assert dep_matrix == [
-        [0, 0, 1],
-        [1, 1, 0],
-        [0, 0, 0]
-    ]
+    assert np.array_equiv(dep_matrix, np.array(
+        [
+            [0, 0, 1],
+            [1, 1, 0],
+            [0, 0, 0]
+        ]
+    ))
 
     code = DT.walk(B_([
         Fact(Q(C_(0), C_(1))),
