@@ -105,3 +105,13 @@ def add_to_union(union, to_add):
 
 def union_contains_probabilistic_facts(union):
     return any(is_probabilistic_fact(exp) for exp in union.formulas)
+
+
+def rule_has_duplicated_antecedent_predicate_symbol(rule):
+    seen_pred_symbs = set()
+    for pred in rule.antecedent.formulas:
+        pred_symb = pred.functor
+        if pred_symb in seen_pred_symbs:
+            return True
+        seen_pred_symbs.add(pred_symb)
+    return False

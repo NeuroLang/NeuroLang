@@ -3,7 +3,10 @@ import typing
 import pytest
 
 from ....datalog.expressions import Fact
-from ....exceptions import ForbiddenDisjunctionError
+from ....exceptions import (
+    ForbiddenDisjunctionError,
+    ForbiddenDuplicatedAntecedentPredicateSymbol,
+)
 from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Union
 from ...exceptions import (
@@ -191,3 +194,10 @@ def test_forbidden_disjunction():
     cpl = CPLogicProgram()
     with pytest.raises(ForbiddenDisjunctionError):
         cpl.walk(code)
+
+
+def test_forbidden_duplicated_antecedent_predicate_symbol():
+    rule = Implication(Q(x, y), Conjunction((P(x), P(y))))
+    cpl = CPLogicProgram()
+    with pytest.raises(ForbiddenDuplicatedAntecedentPredicateSymbol):
+        cpl.walk(rule)

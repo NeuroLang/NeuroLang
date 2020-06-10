@@ -80,13 +80,13 @@ def test_deterministic_conjunction_varying_arity():
         (
             Fact(Q(a, b)),
             Fact(P(a)),
-            Fact(P(b)),
-            Implication(Z(x, y), Conjunction((Q(x, y), P(x), P(y)))),
+            Fact(Z(b)),
+            Implication(R(x, y), Conjunction((Q(x, y), P(x), Z(y)))),
         )
     )
     cpl_program = CPLogicProgram()
     cpl_program.walk(code)
-    query_pred = Z(x, y)
+    query_pred = R(x, y)
     result = solve_succ_query(query_pred, cpl_program)
     expected = testing.make_prov_set([(1.0, "a", "b")], ("_p_", "x", "y"))
     assert testing.eq_prov_relations(result, expected)
@@ -228,7 +228,13 @@ def test_simple_probchoice():
 def test_mutual_exclusivity():
     pchoice_as_sets = {P: {(0.2, "a"), (0.8, "b")}}
     pfact_sets = {Q: {(0.5, "a", "b")}}
-    code = Union((Implication(Z(x, y), Conjunction((P(x), P(y), Q(x, y)))),))
+    code = Union(
+        (
+            Implication(H(x, y), Conjunction((P(x), Q(x, y)))),
+            Implication(R(x, y), Conjunction((P(y), Q(x, y)))),
+            Implication(Z(x, y), Conjunction((H(x, y), R(x, y)))),
+        )
+    )
     cpl_program = CPLogicProgram()
     for pred_symb, pchoice_as_set in pchoice_as_sets.items():
         cpl_program.add_probabilistic_choice_from_tuples(
