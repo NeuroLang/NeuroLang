@@ -1,4 +1,3 @@
-import collections
 import operator
 from typing import Tuple
 
@@ -258,8 +257,6 @@ def solve_marg_query(query_predicate, evidence, cpl_program):
     joint_conjunction = conjunct_formulas(query_predicate, evidence)
     joint_qpred = add_query_to_program(joint_conjunction, cpl_program)
     evidence_qpred = add_query_to_program(evidence, cpl_program)
-    from .testing import inspect_resolution
-    inspect_resolution(joint_qpred, cpl_program, "/tmp/lol.tex")
     joint_result = solve_succ_query(joint_qpred, cpl_program)
     joint_cols = tuple(
         str2columnstr_constant(arg.name)
@@ -634,7 +631,7 @@ class SelectionOutPusherMixin(PatternWalker):
     def sort_nested_selection_by_tuple_symbol(self, select):
         new_nested_select = Selection(select.relation.relation, select.formula)
         new_select = Selection(new_nested_select, select.relation.formula)
-        return new_select
+        return self.walk(new_select)
 
     @add_match(
         UnionOverTuples(UnionOverTuples, ...),
@@ -651,7 +648,7 @@ class SelectionOutPusherMixin(PatternWalker):
             new_nested_union, nested_union.tuple_symbol
         )
         new_union = preserve_debug_symbols(nested_union, new_union)
-        return new_union
+        return self.walk(new_union)
 
     @add_match(
         UnionOverTuples(Selection(..., TupleEqualSymbol), ...),
@@ -663,7 +660,7 @@ class SelectionOutPusherMixin(PatternWalker):
         new_union = UnionOverTuples(select.relation, union.tuple_symbol)
         new_union = preserve_debug_symbols(union, new_union)
         new_select = Selection(new_union, select.formula)
-        return new_select
+        return self.walk(new_select)
 
     @add_match(
         Selection(UnionOverTuples, TupleEqualSymbol),
@@ -672,10 +669,10 @@ class SelectionOutPusherMixin(PatternWalker):
     )
     def sort_selection_of_union(self, select):
         union = select.relation
-        new_select = Selection(union.relation, select.tuple_symbol)
-        new_union = UnionOverTuples(new_select, union.formula)
+        new_select = Selection(union.relation, select.formula)
+        new_union = UnionOverTuples(new_select, union.tuple_symbol)
         new_union = preserve_debug_symbols(union, new_union)
-        return new_union
+        return self.walk(new_union)
 
     @add_match(
         RenameColumn(
@@ -698,7 +695,7 @@ class SelectionOutPusherMixin(PatternWalker):
                 new_selection_columns, rename.relation.formula.tuple_symbol
             ),
         )
-        return new_selection
+        return self.walk(new_selection)
 
     @add_match(NaturalJoin(Selection(..., TupleEqualSymbol), ...))
     def njoin_left_selection(self, njoin):
@@ -768,7 +765,7 @@ class UnionRemoverMixin(PatternWalker):
 
 
 class SelectionOutPusher(
-    SelectionOutPusherMixin, ProvenanceExpressionTransformer, ExpressionWalker,
+    SelectionOutPusherMixin, ExpressionWalker,
 ):
     pass
 

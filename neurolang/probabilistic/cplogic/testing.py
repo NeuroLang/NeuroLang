@@ -99,7 +99,7 @@ def inspect_resolution(qpred, cpl_program, tex_out_path=None):
     exp = rename_columns_for_args_to_match(exp, result_args, qpred_args)
     gm = build_gm(cpl_program)
     reinitialiser = LaTeXReinitialiser()
-    latex_translator = RAPToLaTeX(cpl_program, gm)
+    latex_translator = RAPToLaTeX()
     spusher = LaTeXSelectionOutPusher(translator=latex_translator)
     latex = spusher.latex
     sexp = reinitialiser.walk(spusher.walk(exp))

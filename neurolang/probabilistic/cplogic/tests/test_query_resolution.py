@@ -1,11 +1,28 @@
+import itertools
+import random
+
 import numpy as np
 import pytest
 
 from ....datalog import Fact
 from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Union
+from ....relational_algebra import (
+    NamedRelationalAlgebraFrozenSet,
+    Selection,
+    str2columnstr_constant,
+)
+from ....relational_algebra_provenance import (
+    ProvenanceAlgebraSet,
+    TupleEqualSymbol,
+    UnionOverTuples,
+)
 from .. import testing
-from ..gm_provenance_solver import solve_marg_query, solve_succ_query
+from ..gm_provenance_solver import (
+    SelectionOutPusher,
+    solve_marg_query,
+    solve_succ_query,
+)
 from ..program import CPLogicProgram
 
 P = Symbol("P")
@@ -587,3 +604,52 @@ def test_john_and_mary_go_shopping():
     steak = Constant("steak")
     fish = Constant("fish")
     spaghetti = Constant("spaghetti")
+
+
+def _get_tuple_symbol_from_op(op):
+    if isinstance(op, UnionOverTuples):
+        return op.tuple_symbol
+    else:
+        return op.formula.tuple_symbol
+
+
+def _assert_lexicographically_sorted_tuple_symbols(relation):
+    parent_tsymb = None
+    while isinstance(relation, (UnionOverTuples, Selection)):
+        tsymb = _get_tuple_symbol_from_op(relation)
+        if parent_tsymb is not None:
+            assert parent_tsymb.name < tsymb.name
+        relation = relation.relation
+        parent_tsymb = tsymb
+
+
+def test_union_over_tuples_selection_by_tuple_symbol_sorting():
+    """
+    This tests many combinations of unions and selections.
+    """
+    solver = SelectionOutPusher()
+    random.seed(42)
+    tuple_symbols = [Symbol.fresh() for i in range(6)]
+    random.shuffle(tuple_symbols)
+    op_classes = (UnionOverTuples, Selection)
+    for opc in itertools.product(op_classes, repeat=6):
+        exp = ProvenanceAlgebraSet(
+            NamedRelationalAlgebraFrozenSet(iterable=[], columns=["x", "y"]),
+            str2columnstr_constant("x"),
+        )
+        for op_cls, tsymb in zip(opc, tuple_symbols):
+            if op_cls is UnionOverTuples:
+                exp = UnionOverTuples(exp, tsymb)
+            else:
+                exp = Selection(
+                    exp,
+                    TupleEqualSymbol(
+                        (
+                            str2columnstr_constant("x"),
+                            str2columnstr_constant("y"),
+                        ),
+                        tsymb,
+                    ),
+                )
+        walked_exp = solver.walk(exp)
+        _assert_lexicographically_sorted_tuple_symbols(walked_exp)

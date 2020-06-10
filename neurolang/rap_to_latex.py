@@ -31,9 +31,7 @@ def preserve_debug_symbols(prev, new):
 
 
 class RAPToLaTeX(PatternWalker):
-    def __init__(self, cpl_program, graphical_model):
-        self.cpl_program = cpl_program
-        self.graphical_model = graphical_model
+    def __init__(self):
         self.fresh_symbol_renames = dict()
         self.fresh_symbol_rename_count = 1
         self.colors = itertools.cycle(
@@ -157,13 +155,18 @@ class RAPToLaTeX(PatternWalker):
 
     @add_match(UnionOverTuples)
     def union_over_tuples(self, op):
-        pred_symb = get_grounding_predicate(op.__debug_expression__).functor
+        if hasattr(op, "__debug_expression__"):
+            set_name = self.prettify_pred_symb(
+                get_grounding_predicate(op.__debug_expression__).functor.name
+            )
+        else:
+            set_name = "?"
         inner = self.walk(op.relation)
         inner = "\n".join("  " + x for x in inner.split("\n"))
         return (
             "\\bigcup_{"
             + self.prettify(op.tuple_symbol)
-            + "\\in {}}}".format(self.prettify_pred_symb(pred_symb.name))
+            + "\\in {}}}".format(set_name)
             + "\n\\left\\{\n"
             + inner
             + "\n\\right\\}"
@@ -240,12 +243,10 @@ def already_latexed(exp):
 
 
 class RAPLaTeXWriter(PatternWalker):
-    def __init__(self, cpl_program=None, gm=None, latex=None, translator=None):
+    def __init__(self, latex=None, translator=None):
         self.latex = [] if latex is None else latex
         if translator is None:
-            assert cpl_program is not None
-            assert gm is not None
-            self.translator = RAPToLaTeX(cpl_program, gm)
+            self.translator = RAPToLaTeX()
         else:
             self.translator = translator
 
