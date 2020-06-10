@@ -63,8 +63,10 @@ class QueryBuilderBase:
     def environment(self):
         old_dynamic_mode = self._symbols_proxy._dynamic_mode
         self._symbols_proxy._dynamic_mode = True
-        yield self._symbols_proxy
-        self._symbols_proxy._dynamic_mode = old_dynamic_mode
+        try:
+            yield self._symbols_proxy
+        finally:
+            self._symbols_proxy._dynamic_mode = old_dynamic_mode
 
     @property
     @contextmanager
@@ -72,9 +74,11 @@ class QueryBuilderBase:
         old_dynamic_mode = self._symbols_proxy._dynamic_mode
         self._symbols_proxy._dynamic_mode = True
         self.solver.push_scope()
-        yield self._symbols_proxy
-        self.solver.pop_scope()
-        self._symbols_proxy._dynamic_mode = old_dynamic_mode
+        try:
+            yield self._symbols_proxy
+        finally:
+            self.solver.pop_scope()
+            self._symbols_proxy._dynamic_mode = old_dynamic_mode
 
     def new_symbol(self, type_=Unknown, name=None):
         if isinstance(type_, (tuple, list)):
