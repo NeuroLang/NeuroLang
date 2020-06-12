@@ -1,3 +1,4 @@
+import collections
 import operator
 from typing import Tuple
 
@@ -568,7 +569,12 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
         Retrieve the symbols of choice nodes a given node depends on.
 
         """
-        choice_node_symbs = set()
+        return set(
+            self._get_node_symb_deps(start_node_symb, NaryChoicePlateNode)
+        )
+
+    def _get_node_symb_deps(self, start_node_symb, node_cls):
+        matching_node_symbs = collections.defaultdict(int)
         visited = set()
         stack = [start_node_symb]
         while stack:
@@ -581,9 +587,9 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
             )
             stack += sorted(list(parent_node_symbs), key=lambda s: s.name)
             node = self.graphical_model.get_node(node_symb)
-            if isinstance(node, NaryChoicePlateNode):
-                choice_node_symbs.add(node_symb)
-        return choice_node_symbs
+            if isinstance(node, node_cls):
+                matching_node_symbs[node_symb] += 1
+        return dict(matching_node_symbs)
 
     def _node_symbolic_value(self, node_symb, chosen_tuple_symbs):
         node = self.graphical_model.get_node(node_symb)

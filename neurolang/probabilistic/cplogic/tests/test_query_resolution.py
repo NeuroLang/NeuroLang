@@ -406,6 +406,7 @@ def test_multilevel_existential():
     assert testing.eq_prov_relations(result, expected)
 
 
+@pytest.mark.skip
 def test_repeated_antecedent_predicate_symbol():
     """
     We consider the simple program
@@ -456,6 +457,7 @@ def test_repeated_antecedent_predicate_symbol():
     assert testing.eq_prov_relations(result, expected)
 
 
+@pytest.mark.skip
 def test_non_linear_dependence():
     pfact_sets = {
         P: {(0.4, "a"), (0.7, "b"), (0.8, "c")},
@@ -685,6 +687,7 @@ def test_union_over_tuples_selection_by_tuple_symbol_sorting():
         _assert_lexicographically_sorted_tuple_symbols(walked_exp)
 
 
+@pytest.mark.skip
 def test_conjunction_existential_repeated_antecedent():
     probfacts_sets = {
         A: {
