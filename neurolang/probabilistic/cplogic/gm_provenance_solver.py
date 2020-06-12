@@ -18,9 +18,11 @@ from ...relational_algebra import (
     RelationalAlgebraOperation,
     RelationalAlgebraSolver,
     RenameColumn,
+    RenameColumns,
     Selection,
-    str2columnstr_constant,
 )
+from ...relational_algebra import Union as RAUnion
+from ...relational_algebra import str2columnstr_constant
 from ...relational_algebra_provenance import (
     NaturalJoinInverse,
     ProvenanceAlgebraSet,
@@ -28,6 +30,7 @@ from ...relational_algebra_provenance import (
     TupleEqualSymbol,
     TupleSymbol,
     UnionOverTuples,
+    TheOperation,
     ra_binary_to_nary,
 )
 from .cplogic_to_gm import (
@@ -74,6 +77,14 @@ def rename_columns_for_args_to_match(relation, src_args, dst_args):
     return result
 
 
+def rename_columns_to_fresh(prov_set):
+    cols = prov_set.non_provenance_columns
+    new_cols = tuple(
+        str2columnstr_constant(Symbol.fresh().name) for _ in range(len(cols))
+    )
+    return RenameColumns(prov_set, tuple(zip(cols, new_cols))), new_cols
+
+
 def build_always_true_provenance_relation(relation, prob_col=None):
     """
     Construct a provenance set from a relation with probabilities of 1
@@ -116,6 +127,19 @@ def build_always_true_provenance_relation(relation, prob_col=None):
     )
     relation = RelationalAlgebraSolver().walk(relation)
     return ProvenanceAlgebraSet(relation.value, prob_col)
+
+
+def quadratic_bernoulli(p):
+    p1 = build_always_true_provenance_relation(p.relation, p.provenance_column)
+    cols = p.non_provenance_columns
+    new_cols = tuple(str2columnstr_constant(Symbol.fresh().name) for _ in cols)
+    renames = tuple(zip(cols, new_cols))
+    left = NaturalJoin(RenameColumns(p, renames), p1)
+    right = NaturalJoin(RenameColumns(p1, renames), p1)
+    for old, new in renames:
+        left = Selection(left, Constant(operator.ne)(old, new))
+        right = Selection(right, Constant(operator.eq)(old, new))
+    return RAUnion(left, right)
 
 
 def solve_succ_query(query_predicate, cpl_program):
@@ -505,8 +529,13 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
         # nodes on which the node depends
         chosen_tuple_symbs = {
             node_symb: TupleSymbol.fresh()
-            for node_symb in self._get_choice_node_symb_deps(the_node_symb)
+            for node_symb in self._get_node_symb_deps(
+                the_node_symb, NaryChoicePlateNode
+            )
         }
+        bernoulli_node_deps = self._get_node_symb_deps(
+            the_node_symb, BernoulliPlateNode
+        )
         # keep track of which nodes have been visited, to prevent their
         # CPD terms from occurring multiple times in the sum's term
         visited = set()
@@ -519,6 +548,9 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
             relation.__debug_expression__ = self.graphical_model.get_node(
                 choice_node_symb
             ).expression
+        for bernoulli_node_symb, count in bernoulli_node_deps.items():
+            for _ in range(count):
+                relation = TheOperation(relation, bernoulli_node_symb)
         return relation
 
     def _build_symbolic_marg_sum_term_exp(
@@ -563,15 +595,6 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
         proj_cols = tuple(str2columnstr_constant(arg.name) for arg in args)
         relation = Projection(relation, proj_cols)
         return relation
-
-    def _get_choice_node_symb_deps(self, start_node_symb):
-        """
-        Retrieve the symbols of choice nodes a given node depends on.
-
-        """
-        return set(
-            self._get_node_symb_deps(start_node_symb, NaryChoicePlateNode)
-        )
 
     def _get_node_symb_deps(self, start_node_symb, node_cls):
         matching_node_symbs = collections.defaultdict(int)
@@ -745,6 +768,16 @@ class SelectionOutPusherMixin(PatternWalker):
         new_select = Selection(new_proj, select.formula)
         return new_select
 
+    @add_match(
+        TheOperation(TheOperation, ...),
+        lambda to: to.symbol.name > to.relation.symbol.name,
+    )
+    def sort_the_operations(self, op):
+        nested_op = op.relation
+        new_nested_op = TheOperation(nested_op.relation, op.symbol)
+        new_op = TheOperation(new_nested_op, nested_op.symbol)
+        return self.walk(new_op)
+
 
 class UnionRemoverMixin(PatternWalker):
     @add_match(
@@ -768,6 +801,16 @@ class UnionRemoverMixin(PatternWalker):
                 if c1 != c2:
                     op = Selection(op, EQUAL(c1, c2))
         return self.walk(op)
+
+    @add_match(TheOperation)
+    def the_operation(self, the_op):
+        count = 0
+        op = the_op
+        while isinstance(op, TheOperation) and op.symbol == the_op.symbol:
+            count += 1
+            op = op.relation
+        if count == 1:
+            return self.walk(op)
 
 
 class SelectionOutPusher(
