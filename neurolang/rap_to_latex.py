@@ -197,7 +197,9 @@ class RAPToLaTeX(PatternWalker):
         for _, tupl in prov_set.value._container[
             [prov_set.provenance_column.value] + [c.value for c in np_cols]
         ].iterrows():
-            table += " & ".join(str(x) for x in tupl) + "\\\\\n"
+            table += (
+                " & ".join(r"\texttt{{{}}}".format(x) for x in tupl) + "\\\\\n"
+            )
         table += "\\end{array}"
         return table
 
@@ -243,12 +245,13 @@ def already_latexed(exp):
 
 
 class RAPLaTeXWriter(PatternWalker):
-    def __init__(self, latex=None, translator=None):
+    def __init__(self, latex=None, translator=None, intermediate=False):
         self.latex = [] if latex is None else latex
         if translator is None:
             self.translator = RAPToLaTeX()
         else:
             self.translator = translator
+        self.intermediate = intermediate
 
     @add_match(
         RelationalAlgebraOperation,
@@ -266,6 +269,10 @@ class RAPLaTeXWriter(PatternWalker):
                 break
         self.latex.append(f"\\texttt{{{walker_name}}}")
         self.latex.append(op_latex)
+        if self.intermediate:
+            intermediate = op.apply(*(self.walk(arg) for arg in op.unapply()))
+            intermediate_latex = self.translator.walk(intermediate)
+            self.latex.append(intermediate_latex)
         self.latex.append("\\rightarrow " + self.translator.walk(result))
         save_latex(self.latex, "/tmp/lol.tex")
         return self.walk(result)

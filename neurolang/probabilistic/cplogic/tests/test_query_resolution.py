@@ -406,7 +406,6 @@ def test_multilevel_existential():
     assert testing.eq_prov_relations(result, expected)
 
 
-@pytest.mark.skip("not implemented yet")
 def test_repeated_antecedent_predicate_symbol():
     """
     We consider the simple program
@@ -452,6 +451,31 @@ def test_repeated_antecedent_predicate_symbol():
             (0.4 * 0.7, "a", "b"),
             (0.4 * 0.7, "b", "a"),
         ],
+        ("_p_", "x", "y"),
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_non_linear_dependence():
+    pfact_sets = {
+        P: {(0.4, "a"), (0.7, "b"), (0.8, "c")},
+        H: {(1.0, "c"), (1.0, "d")},
+    }
+    code = Union(
+        (
+            Implication(Q(x), P(x)),
+            Implication(Z(x), Conjunction((P(x), H(x)))),
+            Implication(R(x, y), Conjunction((Q(x), Z(y)))),
+        )
+    )
+    cpl_program = CPLogicProgram()
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+    cpl_program.walk(code)
+    qpred = R(x, y)
+    result = solve_succ_query(qpred, cpl_program)
+    expected = testing.make_prov_set(
+        [(0.4 * 0.8, "a", "c"), (0.7 * 0.8, "b", "c"), (0.8, "a", "c"),],
         ("_p_", "x", "y"),
     )
     assert testing.eq_prov_relations(result, expected)
@@ -659,3 +683,44 @@ def test_union_over_tuples_selection_by_tuple_symbol_sorting():
                 )
         walked_exp = solver.walk(exp)
         _assert_lexicographically_sorted_tuple_symbols(walked_exp)
+
+
+def test_conjunction_existential_repeated_antecedent():
+    probfacts_sets = {
+        A: {
+            (0.1, "insula", "s1"),
+            (0.2, "auditory", "s1"),
+            (0.5, "insula", "s2"),
+            (0.01, "auditory", "s2"),
+        },
+    }
+    pchoice_as_sets = {
+        B: {(0.5, "s1"), (0.5, "s2"),},
+    }
+    code = Union(
+        (
+            Implication(C(x), Conjunction((A(x, y), B(y)))),
+            Implication(Q(x, y), Conjunction((C(x), C(y)))),
+        )
+    )
+    cpl_program = CPLogicProgram()
+    for pred_symb, pfact_set in probfacts_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    cpl_program.walk(code)
+    query_pred = Q(x, y)
+    result = solve_succ_query(query_pred, cpl_program)
+    testing.inspect_resolution(query_pred, cpl_program, "/tmp/lol.tex")
+    expected = testing.make_prov_set(
+        [
+            ((0.1 + 0.5) / 2, "insula", "insula"),
+            ((0.2 + 0.01) / 2, "auditory", "auditory"),
+            ((0.1 * 0.2 + 0.2 * 0.01) / 2, "insula", "auditory"),
+            ((0.1 * 0.2 + 0.2 * 0.01) / 2, "auditory", "insula"),
+        ],
+        ("_p_", "x", "y"),
+    )
+    assert testing.eq_prov_relations(result, expected)

@@ -2,10 +2,7 @@ import typing
 
 from ...datalog import DatalogProgram
 from ...datalog.expressions import Fact
-from ...exceptions import (
-    ForbiddenDisjunctionError,
-    ForbiddenDuplicatedAntecedentPredicateSymbol,
-)
+from ...exceptions import ForbiddenDisjunctionError
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
 from ...expressions import Constant, FunctionApplication, Symbol
@@ -273,16 +270,6 @@ class CPLogicMixin(PatternWalker):
             self.symbol_table[pred_symb], [expression]
         )
         return expression
-
-    @add_match(
-        Implication(FunctionApplication, Conjunction),
-        rule_has_duplicated_antecedent_predicate_symbol,
-    )
-    def prevent_duplicated_antecedent_predicate_symbol(self, rule):
-        raise ForbiddenDuplicatedAntecedentPredicateSymbol(
-            "CP-Logic programs do not support rules with duplicated "
-            "antecedent predicate symbol, yet!"
-        )
 
     @add_match(
         Implication(FunctionApplication, ...),

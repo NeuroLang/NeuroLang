@@ -43,7 +43,7 @@ class LaTeXRAPSolver(
 ):
     def __init__(self, *args, **kwargs):
         self.symbol_table = {}
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, intermediate=True, **kwargs)
 
 
 def build_gm(cpl_program):
