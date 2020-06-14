@@ -78,14 +78,6 @@ def rename_columns_for_args_to_match(relation, src_args, dst_args):
     return result
 
 
-def rename_columns_to_fresh(prov_set):
-    cols = prov_set.non_provenance_columns
-    new_cols = tuple(
-        str2columnstr_constant(Symbol.fresh().name) for _ in range(len(cols))
-    )
-    return RenameColumns(prov_set, tuple(zip(cols, new_cols))), new_cols
-
-
 def build_always_true_provenance_relation(relation, prob_col=None):
     """
     Construct a provenance set from a relation with probabilities of 1
@@ -130,12 +122,12 @@ def build_always_true_provenance_relation(relation, prob_col=None):
     return ProvenanceAlgebraSet(relation.value, prob_col)
 
 
-def quadratic_bernoulli(p):
+def quadratic_bernoulli(p, cols, new_cols):
     p1 = build_always_true_provenance_relation(
         Constant[AbstractSet](p.value), p.provenance_column
     )
-    cols = p.non_provenance_columns
-    new_cols = tuple(str2columnstr_constant(Symbol.fresh().name) for _ in cols)
+    p1 = RenameColumns(p1, tuple(zip(p1.non_provenance_columns, cols)))
+    p = RenameColumns(p, tuple(zip(p.non_provenance_columns, cols)))
     renames = tuple(zip(cols, new_cols))
     left = NaturalJoin(RenameColumns(p, renames), p1)
     right = NaturalJoin(RenameColumns(p1, renames), p1)
@@ -285,7 +277,10 @@ def solve_marg_query(query_predicate, evidence, cpl_program):
     joint_conjunction = conjunct_formulas(query_predicate, evidence)
     joint_qpred = add_query_to_program(joint_conjunction, cpl_program)
     evidence_qpred = add_query_to_program(evidence, cpl_program)
+    # from .testing import inspect_resolution
+    # inspect_resolution(joint_qpred, cpl_program, "/tmp/lol.tex")
     joint_result = solve_succ_query(joint_qpred, cpl_program)
+    __import__('pdb').set_trace()
     joint_cols = tuple(
         str2columnstr_constant(arg.name)
         for arg in query_predicate.args
@@ -532,18 +527,14 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
         # nodes on which the node depends
         chosen_tuple_symbs = {
             node_symb: TupleSymbol.fresh()
-            for node_symb in self._get_node_symb_deps(
-                the_node_symb, NaryChoicePlateNode
-            )
+            for node_symb in self._get_choice_node_symb_deps(the_node_symb)
         }
-        bernoulli_node_deps = self._get_node_symb_deps(
-            the_node_symb, BernoulliPlateNode
-        )
+        bernoulli_deps = self._get_bernoulli_deps(the_node_symb)
         # keep track of which nodes have been visited, to prevent their
         # CPD terms from occurring multiple times in the sum's term
         visited = set()
         symbolic_sum_term_exp = self._build_symbolic_marg_sum_term_exp(
-            the_node_symb, chosen_tuple_symbs, bernoulli_node_deps, visited
+            the_node_symb, chosen_tuple_symbs, bernoulli_deps, visited
         )
         relation = symbolic_sum_term_exp
         for choice_node_symb, tupl_symb in chosen_tuple_symbs.items():
@@ -554,7 +545,7 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
         return relation
 
     def _build_symbolic_marg_sum_term_exp(
-        self, node_symb, chosen_tuple_symbs, bernoulli_node_deps, visited
+        self, node_symb, chosen_tuple_symbs, bernoulli_deps, visited
     ):
         visited.add(node_symb)
         node = self.graphical_model.get_node(node_symb)
@@ -577,49 +568,60 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
         node_value = self._node_symbolic_value(node_symb, chosen_tuple_symbs)
         node_cpd = ProbabilityOperation((node, node_value), valued_cnodes)
         relation = self.walk(node_cpd)
-        if node_symb in bernoulli_node_deps:
-            for _ in range(bernoulli_node_deps[node_symb]):
-                relation = TheOperation(relation, node_symb)
+        if node_symb in bernoulli_deps:
+            for args in bernoulli_deps[node_symb]:
+                columns = tuple(
+                    str2columnstr_constant(arg.name) for arg in args
+                )
+                relation = TheOperation(relation, node_symb, columns)
         relations = [relation]
         for cnode_symb in cnode_symbs:
             if cnode_symb in visited:
                 continue
             relation = self._build_symbolic_marg_sum_term_exp(
-                cnode_symb, chosen_tuple_symbs, bernoulli_node_deps, visited
+                cnode_symb, chosen_tuple_symbs, bernoulli_deps, visited
             )
             cnode = self.graphical_model.get_node(cnode_symb)
             src_args = get_grounding_predicate(cnode.expression).args
             dst_args = get_dst_args(cnode_symb)
-            relation = rename_columns_for_args_to_match(
-                relation, src_args, dst_args
-            )
+            if not isinstance(cnode, BernoulliPlateNode):
+                relation = rename_columns_for_args_to_match(
+                    relation, src_args, dst_args
+                )
             relations.append(relation)
         relation = ra_binary_to_nary(NaturalJoin)(relations)
-        proj_cols = tuple(str2columnstr_constant(arg.name) for arg in args)
+        if node_symb in bernoulli_deps:
+            proj_cols = set()
+            for bernoulli_args in bernoulli_deps[node_symb]:
+                proj_cols |= set(
+                    str2columnstr_constant(arg.name) for arg in bernoulli_args
+                )
+            proj_cols = tuple(proj_cols)
+        else:
+            proj_cols = tuple(str2columnstr_constant(arg.name) for arg in args)
         relation = Projection(relation, proj_cols)
         return relation
 
-    def _get_node_symb_deps(self, start_node_symb, node_cls):
-        matching_node_symbs = collections.defaultdict(int)
+    def _get_choice_node_symb_deps(self, start_node_symb):
+        """
+        Retrieve the symbols of choice nodes a given node depends on.
+        """
+        choice_node_symbs = set()
         visited = set()
-        stack = [(start_node_symb, 1)]
+        stack = [start_node_symb]
         while stack:
-            node_symb, count = stack.pop()
+            node_symb = stack.pop()
             if node_symb in visited:
                 continue
             visited.add(node_symb)
-            node = self.graphical_model.get_node(node_symb)
-            stack += list(
-                collections.Counter(
-                    pred.functor
-                    for pred in extract_logic_predicates(
-                        node.expression.antecedent
-                    )
-                ).items()
+            parent_node_symbs = self.graphical_model.get_parent_node_symbols(
+                node_symb
             )
-            if isinstance(node, node_cls):
-                matching_node_symbs[node_symb] += count
-        return dict(matching_node_symbs)
+            stack += sorted(list(parent_node_symbs), key=lambda s: s.name)
+            node = self.graphical_model.get_node(node_symb)
+            if isinstance(node, NaryChoicePlateNode):
+                choice_node_symbs.add(node_symb)
+        return choice_node_symbs
 
     def _node_symbolic_value(self, node_symb, chosen_tuple_symbs):
         node = self.graphical_model.get_node(node_symb)
@@ -631,6 +633,32 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
             )
             return chosen_tuple_symbs[choice_node_symb]
         return TRUE
+
+    def _get_bernoulli_deps(self, node_symb):
+        node = self.graphical_model.get_node(node_symb)
+        if not isinstance(node, (AndPlateNode, BernoulliPlateNode)):
+            return dict()
+        apreds = extract_logic_predicates(node.expression.antecedent)
+        deps = collections.defaultdict(set)
+        for apred in apreds:
+            apred_symb = apred.functor
+            cnode = self.graphical_model.get_node(apred_symb)
+            if isinstance(cnode, BernoulliPlateNode):
+                deps[apred_symb].add(apred.args)
+            renames = {
+                x: y
+                for x, y in zip(
+                    get_grounding_predicate(cnode.expression).args, apred.args,
+                )
+            }
+            for symbol, child_deps in self._get_bernoulli_deps(
+                apred_symb
+            ).items():
+                deps[symbol] |= set(
+                    tuple(renames.get(x, x) for x in child_dep)
+                    for child_dep in child_deps
+                )
+        return deps
 
 
 class ProvenanceExpressionTransformer(PatternWalker):
@@ -776,13 +804,15 @@ class SelectionOutPusherMixin(PatternWalker):
         return new_select
 
     @add_match(
-        TheOperation(TheOperation, ...),
+        TheOperation(TheOperation, ..., ...),
         lambda to: to.symbol.name > to.relation.symbol.name,
     )
     def sort_the_operations(self, op):
         nested_op = op.relation
-        new_nested_op = TheOperation(nested_op.relation, op.symbol)
-        new_op = TheOperation(new_nested_op, nested_op.symbol)
+        new_nested_op = TheOperation(nested_op.relation, op.symbol, op.columns)
+        new_op = TheOperation(
+            new_nested_op, nested_op.symbol, nested_op.columns
+        )
         return self.walk(new_op)
 
 
@@ -809,19 +839,27 @@ class UnionRemoverMixin(PatternWalker):
                     op = Selection(op, EQUAL(c1, c2))
         return self.walk(op)
 
-    @add_match(TheOperation)
+    @add_match(
+        TheOperation(TheOperation(ProvenanceAlgebraSet, ..., ...), ..., ...)
+    )
     def the_operation(self, the_op):
-        count = 0
-        op = the_op
-        while isinstance(op, TheOperation) and op.symbol == the_op.symbol:
-            count += 1
-            op = op.relation
-        if count == 1:
-            return self.walk(op)
-        elif count == 2:
-            return NaturalJoin(self.walk(op), quadratic_bernoulli(op))
-        else:
-            raise NotImplementedError()
+        second = the_op.relation
+        prov_set = the_op.relation.relation
+        relation = NaturalJoin(
+            RenameColumns(
+                prov_set,
+                tuple(zip(prov_set.non_provenance_columns, the_op.columns)),
+            ),
+            quadratic_bernoulli(prov_set, the_op.columns, second.columns),
+        )
+        return relation
+
+    @add_match(TheOperation(ProvenanceAlgebraSet, ..., ...))
+    def unary_the_operation(self, op):
+        return RenameColumns(
+            op.relation,
+            tuple(zip(op.relation.non_provenance_columns, op.columns)),
+        )
 
 
 class SelectionOutPusher(

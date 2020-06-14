@@ -7,14 +7,18 @@ from .expressions import Constant
 from .probabilistic.cplogic.grounding import get_grounding_predicate
 from .relational_algebra import (
     ColumnStr,
+    Difference,
     NaturalJoin,
     Projection,
     RelationalAlgebraOperation,
     RenameColumn,
+    RenameColumns,
     Selection,
+    Union,
 )
 from .relational_algebra_provenance import (
     ProvenanceAlgebraSet,
+    TheOperation,
     TupleEqualSymbol,
     TupleSymbol,
     UnionOverTuples,
@@ -170,6 +174,68 @@ class RAPToLaTeX(PatternWalker):
             + "\n\\left\\{\n"
             + inner
             + "\n\\right\\}"
+        )
+
+    @add_match(TheOperation)
+    def the_operation(self, op):
+        inner = self.walk(op.relation)
+        inner = "\n".join("  " + x for x in inner.split("\n"))
+        return (
+            "\\mathcal{{\\psi}}_{{{}, {}}}".format(
+                self.prettify_pred_symb(op.symbol.name),
+                "(" + ", ".join(self.prettify(c) for c in op.columns) + ")",
+            )
+            + "\n\\left\\{\n"
+            + inner
+            + "\n\\right\\}"
+        )
+
+    @add_match(Union)
+    def union(self, op):
+        inner_left = self.walk(op.relation_left)
+        inner_left = "\n".join("  " + x for x in inner_left.split("\n"))
+        inner_right = self.walk(op.relation_right)
+        inner_right = "\n".join("  " + x for x in inner_right.split("\n"))
+        return (
+            "\\left(\n"
+            + inner_left
+            + "\\right)\n"
+            + "\\cup\n"
+            + "\\left(\n"
+            + inner_right
+            + "\\right)"
+        )
+
+    @add_match(Difference)
+    def difference(self, op):
+        inner_left = self.walk(op.relation_left)
+        inner_left = "\n".join("  " + x for x in inner_left.split("\n"))
+        inner_right = self.walk(op.relation_right)
+        inner_right = "\n".join("  " + x for x in inner_right.split("\n"))
+        return (
+            "\\left(\n"
+            + inner_left
+            + "\\right)\n"
+            + "-\n"
+            + "\\left(\n"
+            + inner_right
+            + "\\right)"
+        )
+
+    @add_match(RenameColumns)
+    def rename_columns(self, op):
+        inner = self.walk(op.relation)
+        inner = "\n".join("  " + x for x in inner.split("\n"))
+        return (
+            "\\rho_{\n"
+            + "\n".join(
+                "{} / {}".format(self.prettify(src), self.prettify(dst))
+                for src, dst in op.renames
+            )
+            + "}\n"
+            + "\\left(\n"
+            + inner
+            + "\\right)"
         )
 
     @add_match(ProvenanceAlgebraSet)

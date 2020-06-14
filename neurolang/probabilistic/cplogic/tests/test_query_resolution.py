@@ -581,7 +581,7 @@ def test_marg_query_intensional():
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
     cpl_program.walk(code)
     result = solve_marg_query(Q(x), Z(b), cpl_program)
-    expected = testing.make_prov_set([(0.2, "a"), (0.8, "b")], ("_p_", "x"))
+    expected = testing.make_prov_set([(0.2, "a"), (0.6, "b")], ("_p_", "x"))
     assert testing.eq_prov_relations(result, expected)
 
 
@@ -717,7 +717,6 @@ def test_conjunction_existential_repeated_antecedent():
     cpl_program.walk(code)
     query_pred = Q(x, y)
     result = solve_succ_query(query_pred, cpl_program)
-    testing.inspect_resolution(query_pred, cpl_program, "/tmp/lol.tex")
     expected = testing.make_prov_set(
         [
             ((0.1 + 0.5) / 2, "insula", "insula"),

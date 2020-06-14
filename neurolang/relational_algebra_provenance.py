@@ -36,12 +36,13 @@ class UnionOverTuples(RelationalAlgebraOperation):
 
 
 class TheOperation(RelationalAlgebraOperation):
-    def __init__(self, relation, symbol):
+    def __init__(self, relation, symbol, columns):
         self.relation = relation
         self.symbol = symbol
+        self.columns = columns
 
     def __repr__(self):
-        return f"{self.__clas__.__name__}[{self.symbol}]( {self.relation} )"
+        return f"{self.__class__.__name__}[{self.symbol}]( {self.relation} )"
 
 
 class TupleSymbol(Symbol):
