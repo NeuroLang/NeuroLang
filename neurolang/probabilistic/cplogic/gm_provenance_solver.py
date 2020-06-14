@@ -1,6 +1,6 @@
 import collections
 import operator
-from typing import Tuple
+from typing import AbstractSet, Tuple
 
 from ...datalog.expression_processing import conjunct_formulas
 from ...datalog.expressions import Fact
@@ -13,6 +13,7 @@ from ...rap_to_latex import preserve_debug_symbols
 from ...relational_algebra import (
     ColumnStr,
     ConcatenateConstantColumn,
+    Difference,
     NaturalJoin,
     Projection,
     RelationalAlgebraOperation,
@@ -27,10 +28,10 @@ from ...relational_algebra_provenance import (
     NaturalJoinInverse,
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
+    TheOperation,
     TupleEqualSymbol,
     TupleSymbol,
     UnionOverTuples,
-    TheOperation,
     ra_binary_to_nary,
 )
 from .cplogic_to_gm import (
@@ -130,15 +131,17 @@ def build_always_true_provenance_relation(relation, prob_col=None):
 
 
 def quadratic_bernoulli(p):
-    p1 = build_always_true_provenance_relation(p.relation, p.provenance_column)
+    p1 = build_always_true_provenance_relation(
+        Constant[AbstractSet](p.value), p.provenance_column
+    )
     cols = p.non_provenance_columns
     new_cols = tuple(str2columnstr_constant(Symbol.fresh().name) for _ in cols)
     renames = tuple(zip(cols, new_cols))
     left = NaturalJoin(RenameColumns(p, renames), p1)
     right = NaturalJoin(RenameColumns(p1, renames), p1)
     for old, new in renames:
-        left = Selection(left, Constant(operator.ne)(old, new))
-        right = Selection(right, Constant(operator.eq)(old, new))
+        left = Difference(left, Selection(left, EQUAL(old, new)))
+        right = Selection(right, EQUAL(old, new))
     return RAUnion(left, right)
 
 
@@ -540,7 +543,7 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
         # CPD terms from occurring multiple times in the sum's term
         visited = set()
         symbolic_sum_term_exp = self._build_symbolic_marg_sum_term_exp(
-            the_node_symb, chosen_tuple_symbs, visited
+            the_node_symb, chosen_tuple_symbs, bernoulli_node_deps, visited
         )
         relation = symbolic_sum_term_exp
         for choice_node_symb, tupl_symb in chosen_tuple_symbs.items():
@@ -548,13 +551,10 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
             relation.__debug_expression__ = self.graphical_model.get_node(
                 choice_node_symb
             ).expression
-        for bernoulli_node_symb, count in bernoulli_node_deps.items():
-            for _ in range(count):
-                relation = TheOperation(relation, bernoulli_node_symb)
         return relation
 
     def _build_symbolic_marg_sum_term_exp(
-        self, node_symb, chosen_tuple_symbs, visited
+        self, node_symb, chosen_tuple_symbs, bernoulli_node_deps, visited
     ):
         visited.add(node_symb)
         node = self.graphical_model.get_node(node_symb)
@@ -576,13 +576,16 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
         )
         node_value = self._node_symbolic_value(node_symb, chosen_tuple_symbs)
         node_cpd = ProbabilityOperation((node, node_value), valued_cnodes)
-        node_cpd = self.walk(node_cpd)
-        relations = [node_cpd]
+        relation = self.walk(node_cpd)
+        if node_symb in bernoulli_node_deps:
+            for _ in range(bernoulli_node_deps[node_symb]):
+                relation = TheOperation(relation, node_symb)
+        relations = [relation]
         for cnode_symb in cnode_symbs:
             if cnode_symb in visited:
                 continue
             relation = self._build_symbolic_marg_sum_term_exp(
-                cnode_symb, chosen_tuple_symbs, visited
+                cnode_symb, chosen_tuple_symbs, bernoulli_node_deps, visited
             )
             cnode = self.graphical_model.get_node(cnode_symb)
             src_args = get_grounding_predicate(cnode.expression).args
@@ -599,19 +602,23 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
     def _get_node_symb_deps(self, start_node_symb, node_cls):
         matching_node_symbs = collections.defaultdict(int)
         visited = set()
-        stack = [start_node_symb]
+        stack = [(start_node_symb, 1)]
         while stack:
-            node_symb = stack.pop()
+            node_symb, count = stack.pop()
             if node_symb in visited:
                 continue
             visited.add(node_symb)
-            parent_node_symbs = self.graphical_model.get_parent_node_symbols(
-                node_symb
-            )
-            stack += sorted(list(parent_node_symbs), key=lambda s: s.name)
             node = self.graphical_model.get_node(node_symb)
+            stack += list(
+                collections.Counter(
+                    pred.functor
+                    for pred in extract_logic_predicates(
+                        node.expression.antecedent
+                    )
+                ).items()
+            )
             if isinstance(node, node_cls):
-                matching_node_symbs[node_symb] += 1
+                matching_node_symbs[node_symb] += count
         return dict(matching_node_symbs)
 
     def _node_symbolic_value(self, node_symb, chosen_tuple_symbs):
@@ -811,6 +818,10 @@ class UnionRemoverMixin(PatternWalker):
             op = op.relation
         if count == 1:
             return self.walk(op)
+        elif count == 2:
+            return NaturalJoin(self.walk(op), quadratic_bernoulli(op))
+        else:
+            raise NotImplementedError()
 
 
 class SelectionOutPusher(

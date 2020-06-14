@@ -720,7 +720,7 @@ class NamedRelationalAlgebraFrozenSet(
         res = self._dee_dum_sum(other)
         if res is not None:
             return res
-        elif self.columns != other.columns:
+        elif set(self.columns).symmetric_difference(set(other.columns)):
             raise ValueError(
                 "Union defined only for sets with the same columns"
             )

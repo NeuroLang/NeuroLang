@@ -8,6 +8,7 @@ from .relational_algebra import (
     Column,
     ColumnStr,
     ConcatenateConstantColumn,
+    Difference,
     EquiJoin,
     ExtendedProjection,
     ExtendedProjectionListMember,
@@ -165,6 +166,22 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
                 )
             ).value,
             relation.provenance_column,
+        )
+
+    @add_match(Difference)
+    def difference(self, diff):
+        left = self.walk(diff.relation_left)
+        right = self.walk(diff.relation_right)
+        rel_left = Projection(
+            Constant[AbstractSet](left.value), left.non_provenance_columns
+        )
+        rel_right = Projection(
+            Constant[AbstractSet](right.value), right.non_provenance_columns
+        )
+        relation = Difference(rel_left, rel_right)
+        relation = NaturalJoin(relation, Constant[AbstractSet](left.value))
+        return ProvenanceAlgebraSet(
+            self.walk(relation).value, left.provenance_column
         )
 
     @add_match(

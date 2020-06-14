@@ -13,6 +13,7 @@ from ....relational_algebra import (
     str2columnstr_constant,
 )
 from ....relational_algebra_provenance import (
+    RelationalAlgebraProvenanceCountingSolver,
     ProvenanceAlgebraSet,
     TupleEqualSymbol,
     UnionOverTuples,
@@ -22,6 +23,7 @@ from ..gm_provenance_solver import (
     SelectionOutPusher,
     solve_marg_query,
     solve_succ_query,
+    quadratic_bernoulli,
 )
 from ..program import CPLogicProgram
 
@@ -406,7 +408,6 @@ def test_multilevel_existential():
     assert testing.eq_prov_relations(result, expected)
 
 
-@pytest.mark.skip
 def test_repeated_antecedent_predicate_symbol():
     """
     We consider the simple program
@@ -725,5 +726,20 @@ def test_conjunction_existential_repeated_antecedent():
             ((0.1 * 0.2 + 0.2 * 0.01) / 2, "auditory", "insula"),
         ],
         ("_p_", "x", "y"),
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_quadratic_bernoulli():
+    p = testing.make_prov_set([(0.4, "a"), (0.7, "b")], ("_p_", "x"))
+    p2 = quadratic_bernoulli(p)
+    solver = RelationalAlgebraProvenanceCountingSolver()
+    result = solver.walk(p2)
+    last_fresh = "fresh_{:08}".format(
+        int(Symbol.fresh().name.split("_")[-1]) - 2
+    )
+    expected = testing.make_prov_set(
+        [(1.0, "a", "a"), (1.0, "b", "b"), (0.7, "a", "b"), (0.4, "b", "a"),],
+        ("_p_", "x", last_fresh),
     )
     assert testing.eq_prov_relations(result, expected)
