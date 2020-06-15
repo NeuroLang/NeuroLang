@@ -122,21 +122,6 @@ def build_always_true_provenance_relation(relation, prob_col=None):
     return ProvenanceAlgebraSet(relation.value, prob_col)
 
 
-def quadratic_bernoulli(p, cols, new_cols):
-    p1 = build_always_true_provenance_relation(
-        Constant[AbstractSet](p.value), p.provenance_column
-    )
-    p1 = RenameColumns(p1, tuple(zip(p1.non_provenance_columns, cols)))
-    p = RenameColumns(p, tuple(zip(p.non_provenance_columns, cols)))
-    renames = tuple(zip(cols, new_cols))
-    left = NaturalJoin(RenameColumns(p, renames), p1)
-    right = NaturalJoin(RenameColumns(p1, renames), p1)
-    for old, new in renames:
-        left = Difference(left, Selection(left, EQUAL(old, new)))
-        right = Selection(right, EQUAL(old, new))
-    return RAUnion(left, right)
-
-
 def solve_succ_query(query_predicate, cpl_program):
     """
     Obtain the solution of a SUCC query on a CP-Logic program.
@@ -280,7 +265,6 @@ def solve_marg_query(query_predicate, evidence, cpl_program):
     # from .testing import inspect_resolution
     # inspect_resolution(joint_qpred, cpl_program, "/tmp/lol.tex")
     joint_result = solve_succ_query(joint_qpred, cpl_program)
-    __import__('pdb').set_trace()
     joint_cols = tuple(
         str2columnstr_constant(arg.name)
         for arg in query_predicate.args
@@ -842,16 +826,25 @@ class UnionRemoverMixin(PatternWalker):
     @add_match(
         TheOperation(TheOperation(ProvenanceAlgebraSet, ..., ...), ..., ...)
     )
-    def the_operation(self, the_op):
-        second = the_op.relation
-        prov_set = the_op.relation.relation
-        relation = NaturalJoin(
-            RenameColumns(
-                prov_set,
-                tuple(zip(prov_set.non_provenance_columns, the_op.columns)),
-            ),
-            quadratic_bernoulli(prov_set, the_op.columns, second.columns),
+    def quadratic_the_operation(self, the_op):
+        p = the_op.relation.relation
+        p1 = build_always_true_provenance_relation(
+            Constant[AbstractSet](p.value), p.provenance_column
         )
+        p = RenameColumns(
+            p, tuple(zip(p.non_provenance_columns, the_op.columns))
+        )
+        p1 = RenameColumns(
+            p1, tuple(zip(p1.non_provenance_columns, the_op.columns))
+        )
+        renames = tuple(zip(the_op.columns, the_op.relation.columns))
+        left = NaturalJoin(RenameColumns(p, renames), p1,)
+        right = NaturalJoin(RenameColumns(p1, renames), p1)
+        for old, new in renames:
+            left = Difference(left, Selection(left, EQUAL(old, new)))
+            right = Selection(right, EQUAL(old, new))
+        p2 = RAUnion(left, right)
+        relation = NaturalJoin(p, p2)
         return relation
 
     @add_match(TheOperation(ProvenanceAlgebraSet, ..., ...))
