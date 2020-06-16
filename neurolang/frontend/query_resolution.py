@@ -35,7 +35,7 @@ class QueryBuilderBase:
         if isinstance(symbol_name, Expression):
             symbol_name = symbol_name.expression.name
         if symbol_name not in self.symbol_table:
-            raise ValueError('')
+            raise ValueError(f'Symbol {symbol_name} not defined')
         return Symbol(self, symbol_name)
 
     def __getitem__(self, symbol_name):
@@ -410,6 +410,14 @@ class QuerySymbolsProxy:
 
     def __contains__(self, symbol):
         return symbol in self._query_builder.symbol_table
+
+    def __iter__(self):
+        return iter(
+            sorted(set(
+                s.name for s in
+                self._query_builder.symbol_table
+            ))
+        )
 
     def __len__(self):
         return len(self._query_builder.symbol_table)

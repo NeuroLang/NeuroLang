@@ -368,6 +368,24 @@ def test_neurolange_dl_get_param_names():
     assert neurolang.predicate_parameter_names('q') == ('0', '1')
     assert neurolang.predicate_parameter_names(q) == ('0', '1')
     assert neurolang.predicate_parameter_names(r) == ('x',)
+    assert neurolang.symbols[r].predicate_parameter_names == ('x',)
+    assert r[x].help() is not None
+
+
+def test_neurolang_dl_datalog_code_list_symbols():
+    neurolang = frontend.NeurolangDL()
+    original_symbols = set(neurolang.symbols)
+    neurolang.execute_datalog_program('''
+    A(4, 5)
+    A(5, 6)
+    A(6, 5)
+    B(x,y) :- A(x, y)
+    B(x,y) :- B(x, z),A(z, y)
+    C(x) :- B(x, y), y == 5
+    D("x")
+    ''')
+
+    assert set(neurolang.symbols) == {'A', 'B', 'C', 'D'} | original_symbols
 
 
 def test_neurolang_dl_datalog_code():
