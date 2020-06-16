@@ -8,6 +8,7 @@ from .. import neurolang as nl
 from ..expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 from ..expression_walker import (ExpressionWalker, ReplaceExpressionsByValues,
                                  add_match)
+from ..type_system import is_leq_informative
 from ..utils import RelationalAlgebraFrozenSet
 
 
@@ -91,6 +92,22 @@ class Expression(object):
         return Operation(
             self.query_builder, new_expression, self, (name,)
         )
+
+    def help(self):
+        expression = self.expression
+        if isinstance(expression, nl.Constant):
+            if is_leq_informative(expression.type, Callable):
+                return help(expression.value)
+            elif is_leq_informative(expression.type, AbstractSet):
+                return "Set of tuples"
+            else:
+                return "Constant value"
+        elif isinstance(expression, nl.FunctionApplication):
+            return "Evaluation of function to parameters"
+        elif isinstance(expression, nl.Symbol):
+            return "Unlinked symbol"
+        else:
+            return "Help not defined yet"
 
 
 binary_operations = (
@@ -339,6 +356,10 @@ class Symbol(Expression):
                 return self._rsbv.walk(constant)
             except NeuroLangPatternMatchingNoMatch:
                 raise ValueError("Expression doesn't have a python value")
+
+    @property
+    def parameter_names(self):
+        return self.query_builder.parameter_names(self)
 
 
 class Query(Expression):
