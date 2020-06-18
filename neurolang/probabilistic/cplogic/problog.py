@@ -25,12 +25,13 @@ def nl_pred_to_pl_pred(pred):
 def pl_preds_to_prov_set(pl_preds, columns):
     tuples = set()
     for pl_pred, prob in pl_preds.items():
-        tupl = (prob,) + tuple(pl_pred.args)
-        tuples.add(tupl)
+        if prob > 0:
+            tupl = (prob,) + tuple(arg.value for arg in pl_pred.args)
+            tuples.add(tupl)
     prob_col = str2columnstr_constant(Symbol.fresh().name)
     return ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
-            columns=(prob_col,) + tuple(c.value for c in columns),
+            columns=(prob_col.value,) + tuple(c.value for c in columns),
             iterable=tuples,
         ),
         prob_col,
