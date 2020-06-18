@@ -36,10 +36,11 @@ class UnionOverTuples(RelationalAlgebraOperation):
 
 
 class TheOperation(RelationalAlgebraOperation):
-    def __init__(self, relation, symbol, columns):
+    def __init__(self, relation, symbol, columns, existential_columns):
         self.relation = relation
         self.symbol = symbol
         self.columns = columns
+        self.existential_columns = existential_columns
 
     def __repr__(self):
         return f"{self.__class__.__name__}[{self.symbol}]( {self.relation} )"
@@ -148,13 +149,8 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
     def non_provenance_operation(self, operation):
         return RelationalAlgebraSolver(self.symbol_table).walk(operation)
 
-    @add_match(
-        Selection(
-            ...,
-            FunctionApplication(eq_, (Constant[Column], Constant[Column])),
-        )
-    )
-    def selection_between_columns(self, selection):
+    @add_match(Selection)
+    def selection(self, selection):
         relation = self.walk(selection.relation)
         if any(
             col == relation.provenance_column for col in selection.formula.args

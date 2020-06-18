@@ -34,6 +34,8 @@ H = Symbol("H")
 A = Symbol("A")
 B = Symbol("B")
 C = Symbol("C")
+J = Symbol("J")
+E = Symbol("E")
 x = Symbol("x")
 y = Symbol("y")
 z = Symbol("z")
@@ -569,8 +571,13 @@ def test_simple_marg_query():
 
 def test_marg_query_intensional():
     pchoice_as_sets = {P: {(0.2, "a", "b"), (0.4, "b", "c"), (0.4, "b", "b")}}
-    pfact_sets = {Z: {(0.5, "b"), (0.5, "c")}}
-    code = Union((Implication(Q(x), Conjunction((P(x, y), Z(y)))),))
+    pfact_sets = {Z: {(0.5, "b"), (0.25, "c")}, E: {(1.0, "b")}}
+    code = Union(
+        (
+            # Implication(Q(x), Conjunction((P(x, y), Z(y)))),
+            Implication(J(x), Conjunction((P(x, y), Z(y), Z(z), E(z)))),
+        )
+    )
     cpl_program = CPLogicProgram()
     for pred_symb, pchoice_as_set in pchoice_as_sets.items():
         cpl_program.add_probabilistic_choice_from_tuples(
@@ -579,6 +586,13 @@ def test_marg_query_intensional():
     for pred_symb, pfact_set in pfact_sets.items():
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
     cpl_program.walk(code)
+    # result = solve_succ_query(Q(x), cpl_program)
+    # expected = testing.make_prov_set([(0.1, "a"), (0.4, "b")], ("_p_", "x"))
+    # assert testing.eq_prov_relations(result, expected)
+    result = solve_succ_query(J(x), cpl_program)
+    expected = testing.make_prov_set([(0.1, "a"), (0.3, "b")], ("_p_", "x"))
+    __import__("pdb").set_trace()
+    assert testing.eq_prov_relations(result, expected)
     result = solve_marg_query(Q(x), Z(b), cpl_program)
     expected = testing.make_prov_set([(0.2, "a"), (0.6, "b")], ("_p_", "x"))
     assert testing.eq_prov_relations(result, expected)
@@ -687,7 +701,6 @@ def test_union_over_tuples_selection_by_tuple_symbol_sorting():
         _assert_lexicographically_sorted_tuple_symbols(walked_exp)
 
 
-@pytest.mark.skip
 def test_conjunction_existential_repeated_antecedent():
     probfacts_sets = {
         A: {
@@ -725,4 +738,104 @@ def test_conjunction_existential_repeated_antecedent():
         ],
         ("_p_", "x", "y"),
     )
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_repeated_antecedent_predicate_symbol_with_existential_equiprobable():
+    pfact_sets = {
+        P: {(0.5, "a"), (0.5, "b"), (0.5, "c")},
+    }
+    pchoice_as_sets = {
+        Z: {
+            (1 / len(list(itertools.product(*([["a", "b", "c"]] * 2)))),)
+            + tuple(tupl)
+            for tupl in itertools.product(*([["a", "b", "c"]] * 2))
+        }
+    }
+    code = Union((Implication(Q(x), Conjunction((P(x), P(y), Z(x, y)))),))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    cpl_program.walk(code)
+    qpred = Q(x)
+    result = solve_succ_query(qpred, cpl_program)
+    expected = testing.make_prov_set(
+        [
+            (1 / 9 * 0.5 ** 3 * 8, "a"),
+            (1 / 9 * 0.5 ** 3 * 8, "b"),
+            (1 / 9 * 0.5 ** 3 * 8, "c"),
+        ],
+        ("_p_", "x"),
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_repeated_antecedent_pred_symb_existential_not_equiprobable():
+    pfact_sets = {
+        P: {(0.3, "a"), (0.7, "b"), (0.9, "c")},
+    }
+    pchoice_as_sets = {
+        Z: {
+            (float(np.prod([t[0] for t in tupl])),)
+            + tuple(t[1] for t in tupl)
+            for tupl in itertools.product(*([list(pfact_sets[P])] * 3))
+            if tuple(sorted(t[1] for t in tupl)) == tuple(t[1] for t in tupl)
+        }
+    }
+    code = Union((Implication(Q(x), Conjunction((P(x), P(y), Z(x, y)))),))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    cpl_program.walk(code)
+    qpred = Q(x)
+    result = solve_succ_query(qpred, cpl_program)
+    __import__("pdb").set_trace()
+    expected = testing.make_prov_set(
+        [
+            (1 / 4 * 0.3 * 0.7 * 0.2 * 8, "a"),
+            (1 / 4 * 0.3 * 0.5 * 0.2 * 8, "b"),
+            (1 / 4 * 0.3 * 0.5 * 0.2 * 8, "b"),
+        ],
+        ("_p_", "x"),
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_more_complex_existential_duplicated_antecedent():
+    pfact_sets = {
+        Q: {(0.5, "a", "b"), (0.5, "a", "c")},
+        P: {(0.2, "a"), (0.3, "b")},
+    }
+    code = Union((Implication(Z(x), Conjunction((P(x), P(y), Q(x, y)))),))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+    cpl_program.walk(code)
+    qpred = Z(x)
+    result = solve_succ_query(qpred, cpl_program)
+    expected = testing.make_prov_set([(0.5 * 0.2 * 0.3, "a")], ("_p_", "x"),)
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_more_complex_existential():
+    pfact_sets = {
+        Q: {(0.5, "a", "b"), (0.5, "a", "c")},
+        P: {(0.2, "a"), (0.3, "b")},
+    }
+    code = Union((Implication(Z(x), Conjunction((P(y), Q(x, y)))),))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+    cpl_program.walk(code)
+    qpred = Z(x)
+    result = solve_succ_query(qpred, cpl_program)
+    expected = testing.make_prov_set([(0.15, "a")], ("_p_", "x"),)
     assert testing.eq_prov_relations(result, expected)

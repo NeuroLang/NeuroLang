@@ -13,7 +13,7 @@ from ...rap_to_latex import preserve_debug_symbols
 from ...relational_algebra import (
     ColumnStr,
     ConcatenateConstantColumn,
-    Difference,
+    NamedRelationalAlgebraFrozenSet,
     NaturalJoin,
     Projection,
     RelationalAlgebraOperation,
@@ -46,6 +46,7 @@ from .grounding import get_grounding_predicate, ground_cplogic_program
 from .program import remove_constants_from_pred
 
 EQUAL = Constant(operator.eq)
+NE = Constant(operator.ne)
 
 
 def rename_columns_for_args_to_match(relation, src_args, dst_args):
@@ -262,8 +263,6 @@ def solve_marg_query(query_predicate, evidence, cpl_program):
     joint_conjunction = conjunct_formulas(query_predicate, evidence)
     joint_qpred = add_query_to_program(joint_conjunction, cpl_program)
     evidence_qpred = add_query_to_program(evidence, cpl_program)
-    # from .testing import inspect_resolution
-    # inspect_resolution(joint_qpred, cpl_program, "/tmp/lol.tex")
     joint_result = solve_succ_query(joint_qpred, cpl_program)
     joint_cols = tuple(
         str2columnstr_constant(arg.name)
@@ -553,11 +552,19 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
         node_cpd = ProbabilityOperation((node, node_value), valued_cnodes)
         relation = self.walk(node_cpd)
         if node_symb in bernoulli_deps:
-            for args in bernoulli_deps[node_symb]:
+            for bernoulli_args in bernoulli_deps[node_symb]:
                 columns = tuple(
-                    str2columnstr_constant(arg.name) for arg in args
+                    str2columnstr_constant(arg.name)
+                    for arg, _ in bernoulli_args
                 )
-                relation = TheOperation(relation, node_symb, columns)
+                existential_columns = tuple(
+                    str2columnstr_constant(arg.name)
+                    for arg, equantified in bernoulli_args
+                    if equantified
+                )
+                relation = TheOperation(
+                    relation, node_symb, columns, existential_columns
+                )
         relations = [relation]
         for cnode_symb in cnode_symbs:
             if cnode_symb in visited:
@@ -578,7 +585,8 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
             proj_cols = set()
             for bernoulli_args in bernoulli_deps[node_symb]:
                 proj_cols |= set(
-                    str2columnstr_constant(arg.name) for arg in bernoulli_args
+                    str2columnstr_constant(arg.name)
+                    for arg, _ in bernoulli_args
                 )
             proj_cols = tuple(proj_cols)
         else:
@@ -628,7 +636,12 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
             apred_symb = apred.functor
             cnode = self.graphical_model.get_node(apred_symb)
             if isinstance(cnode, BernoulliPlateNode):
-                deps[apred_symb].add(apred.args)
+                deps[apred_symb].add(
+                    tuple(
+                        (arg, arg not in node.expression.consequent.args)
+                        for arg in apred.args
+                    )
+                )
             renames = {
                 x: y
                 for x, y in zip(
@@ -639,7 +652,10 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
                 apred_symb
             ).items():
                 deps[symbol] |= set(
-                    tuple(renames.get(x, x) for x in child_dep)
+                    tuple(
+                        (renames.get(x, x), existential or x not in renames)
+                        for x, existential in child_dep
+                    )
                     for child_dep in child_deps
                 )
         return deps
@@ -793,9 +809,14 @@ class SelectionOutPusherMixin(PatternWalker):
     )
     def sort_the_operations(self, op):
         nested_op = op.relation
-        new_nested_op = TheOperation(nested_op.relation, op.symbol, op.columns)
+        new_nested_op = TheOperation(
+            nested_op.relation, op.symbol, op.columns, op.existential_columns
+        )
         new_op = TheOperation(
-            new_nested_op, nested_op.symbol, nested_op.columns
+            new_nested_op,
+            nested_op.symbol,
+            nested_op.columns,
+            nested_op.existential_columns,
         )
         return self.walk(new_op)
 
@@ -824,7 +845,9 @@ class UnionRemoverMixin(PatternWalker):
         return self.walk(op)
 
     @add_match(
-        TheOperation(TheOperation(ProvenanceAlgebraSet, ..., ...), ..., ...)
+        TheOperation(
+            TheOperation(ProvenanceAlgebraSet, ..., ..., ...), ..., ..., ...
+        )
     )
     def quadratic_the_operation(self, the_op):
         p = the_op.relation.relation
@@ -838,10 +861,19 @@ class UnionRemoverMixin(PatternWalker):
             p1, tuple(zip(p1.non_provenance_columns, the_op.columns))
         )
         renames = tuple(zip(the_op.columns, the_op.relation.columns))
+        fresh_prov_col = str2columnstr_constant(Symbol.fresh().name)
+        left = ProvenanceAlgebraSet(
+            Constant[AbstractSet](
+                NamedRelationalAlgebraFrozenSet(
+                    iterable=[], columns=(fresh_prov_col,)
+                )
+            ),
+            provenance_column=fresh_prov_col,
+        )
         left = NaturalJoin(RenameColumns(p, renames), p1,)
         right = NaturalJoin(RenameColumns(p1, renames), p1)
         for old, new in renames:
-            left = Difference(left, Selection(left, EQUAL(old, new)))
+            left = Selection(left, NE(old, new))
             right = Selection(right, EQUAL(old, new))
         p2 = RAUnion(left, right)
         relation = NaturalJoin(p, p2)
