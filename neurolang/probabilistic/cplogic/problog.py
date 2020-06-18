@@ -18,10 +18,17 @@ def nl_pred_to_pl_pred(pred):
     return pred_symb(*args)
 
 
+def pl_pred_from_tuple(pred_symb, tupl):
+    probability = problog.logic.Constant(tupl[0])
+    args = (problog.logic.Constant(arg) for arg in tupl[1:])
+    return problog.logic.Term(pred_symb, *args, p=probability)
+
+
 def add_facts_to_problog(pred_symb, relation, pl):
     pred_symb = pred_symb.name
     for tupl in relation.value.itervalues():
-        fact = problog.logic.Term(pred_symb, *tupl)
+        args = (problog.logic.Constant(arg) for arg in tupl)
+        fact = problog.logic.Term(pred_symb, *args)
         pl += fact
 
 
@@ -29,14 +36,14 @@ def add_probchoice_to_problog(pred_symb, relation, pl):
     pred_symb = pred_symb.name
     heads = []
     for tupl in relation.value.itervalues():
-        heads.append(problog.logic.Term(pred_symb, *tupl[1:], p=tupl[0]))
+        heads.append(pl_pred_from_tuple(pred_symb, tupl))
     pl += problog.logic.Or.from_list(heads)
 
 
 def add_probfacts_to_problog(pred_symb, relation, pl):
     pred_symb = pred_symb.name
     for tupl in relation.value.itervalues():
-        pl += problog.logic.Term(pred_symb, *tupl[1:], p=tupl[0])
+        pl += pl_pred_from_tuple(pred_symb, tupl)
 
 
 def add_rule_to_problog(rule, pl):
