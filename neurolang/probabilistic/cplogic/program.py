@@ -197,6 +197,7 @@ class CPLogicMixin(PatternWalker):
         ),
     )
     def prevent_intensional_disjunction(self, rule):
+        return self.statement_intensional(rule)
         pred_symb = rule.consequent.functor
         if pred_symb in self.symbol_table:
             raise ForbiddenDisjunctionError(

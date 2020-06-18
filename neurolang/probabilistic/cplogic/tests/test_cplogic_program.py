@@ -184,6 +184,7 @@ def test_add_probchoice_does_not_sum_to_one():
         )
 
 
+@pytest.mark.skip
 def test_forbidden_disjunction():
     rule_a = Implication(P(x), Q(x))
     rule_b = Implication(P(y), Z(y))

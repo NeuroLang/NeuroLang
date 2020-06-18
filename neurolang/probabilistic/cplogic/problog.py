@@ -1,5 +1,3 @@
-import collections
-
 import problog.core
 import problog.logic
 import problog.program
@@ -11,9 +9,6 @@ from ...relational_algebra import (
     str2columnstr_constant,
 )
 from ...relational_algebra_provenance import ProvenanceAlgebraSet
-from ..expression_processing import is_probabilistic_fact
-from ..expressions import ProbabilisticChoiceGrounding
-from .grounding import get_grounding_pred_symb, ground_cplogic_program
 
 
 def nl_pred_to_pl_pred(pred):
@@ -92,7 +87,8 @@ def cplogic_to_problog(cpl):
     for pred_symb in cpl.pchoice_pred_symbs:
         add_probchoice_to_problog(pred_symb, cpl.symbol_table[pred_symb], pl)
     for union in cpl.intensional_database().values():
-        add_rule_to_problog(union.formulas[0], pl)
+        for rule in union.formulas:
+            add_rule_to_problog(rule, pl)
     return pl
 
 

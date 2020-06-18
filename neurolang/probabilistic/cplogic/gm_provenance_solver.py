@@ -20,6 +20,7 @@ from ...relational_algebra_provenance import (
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
 )
+from . import problog
 from .cplogic_to_gm import (
     AndPlateNode,
     BernoulliPlateNode,
@@ -29,7 +30,6 @@ from .cplogic_to_gm import (
     PlateNode,
 )
 from .grounding import get_grounding_predicate, ground_cplogic_program
-from . import problog
 
 TRUE = Constant[bool](True, verify_type=False, auto_infer_type=False)
 EQUAL = Constant(operator.eq)

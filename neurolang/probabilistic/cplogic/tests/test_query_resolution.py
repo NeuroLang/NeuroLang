@@ -499,3 +499,22 @@ def test_fake_neurosynth():
         ("_p_", "t"),
     )
     assert testing.eq_prov_relations(result, expected)
+
+
+def test_disjunctive_program():
+    pfact_sets = {
+        P: {(0.8, "a"), (0.4, "b")},
+        Q: {(0.1, "a"), (0.2, "c"),},
+    }
+    code = Union((Implication(Z(x), P(x)), Implication(Z(x), Q(x)),))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+    cpl_program.walk(code)
+    qpred = Z(x)
+    result = solve_succ_query(qpred, cpl_program)
+    expected = testing.make_prov_set(
+        [(1 - (1 - 0.8) * (1 - 0.1), "a"), (0.4, "b"), (0.2, "c"),],
+        columns=("_p_", "x"),
+    )
+    assert testing.eq_prov_relations(result, expected)
