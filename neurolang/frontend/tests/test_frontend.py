@@ -365,11 +365,19 @@ def test_neurolange_dl_get_param_names():
     q = neurolang.add_tuple_set(dataset, name='q')
     r[x] = q(x, x)
 
+    @neurolang.add_symbol
+    def test_fun(x: int) -> int:
+        """
+            HELP TEST
+        """
+        return 0
+
     assert neurolang.predicate_parameter_names('q') == ('0', '1')
     assert neurolang.predicate_parameter_names(q) == ('0', '1')
     assert neurolang.predicate_parameter_names(r) == ('x',)
     assert neurolang.symbols[r].predicate_parameter_names == ('x',)
     assert r[x].help() is not None
+    assert neurolang.symbols['test_fun'].help().strip() == "HELP TEST"
 
 
 def test_neurolang_dl_datalog_code_list_symbols():
