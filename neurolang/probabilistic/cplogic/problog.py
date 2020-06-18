@@ -1,7 +1,16 @@
+import collections
+
+import problog.core
 import problog.logic
 import problog.program
+import problog.sdd_formula
 
-from ...expressions import Constant, FunctionApplication
+from ...expressions import Constant, FunctionApplication, Symbol
+from ...relational_algebra import (
+    NamedRelationalAlgebraFrozenSet,
+    str2columnstr_constant,
+)
+from ...relational_algebra_provenance import ProvenanceAlgebraSet
 from ..expression_processing import is_probabilistic_fact
 from ..expressions import ProbabilisticChoiceGrounding
 from .grounding import get_grounding_pred_symb, ground_cplogic_program
@@ -16,6 +25,21 @@ def nl_pred_to_pl_pred(pred):
         for arg in pred.args
     )
     return pred_symb(*args)
+
+
+def pl_preds_to_prov_set(pl_preds, columns):
+    tuples = set()
+    for pl_pred, prob in pl_preds.items():
+        tupl = (prob,) + tuple(pl_pred.args)
+        tuples.add(tupl)
+    prob_col = str2columnstr_constant(Symbol.fresh().name)
+    return ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            columns=(prob_col,) + tuple(c.value for c in columns),
+            iterable=tuples,
+        ),
+        prob_col,
+    )
 
 
 def pl_pred_from_tuple(pred_symb, tupl):
@@ -61,7 +85,7 @@ def add_rule_to_problog(rule, pl):
 
 def cplogic_to_problog(cpl):
     pl = problog.program.SimpleProgram()
-    for pred_symb, relation in cpl.extensional_database():
+    for pred_symb, relation in cpl.extensional_database().items():
         add_facts_to_problog(pred_symb, relation, pl)
     for pred_symb in cpl.pfact_pred_symbs:
         add_probfacts_to_problog(pred_symb, cpl.symbol_table[pred_symb], pl)
@@ -70,3 +94,17 @@ def cplogic_to_problog(cpl):
     for union in cpl.intensional_database().values():
         add_rule_to_problog(union.formulas[0], pl)
     return pl
+
+
+def solve_succ_query(query_pred, cpl):
+    pl = cplogic_to_problog(cpl)
+    query = problog.logic.Term("query")
+    pl += query(nl_pred_to_pl_pred(query_pred))
+    res = problog.core.ProbLog.convert(pl, problog.sdd_formula.SDD).evaluate()
+    columns = tuple(
+        str2columnstr_constant(arg.name)
+        if isinstance(arg, Symbol)
+        else str2columnstr_constant(Symbol.fresh().name)
+        for arg in query_pred.args
+    )
+    return pl_preds_to_prov_set(res, columns)

@@ -29,6 +29,7 @@ from .cplogic_to_gm import (
     PlateNode,
 )
 from .grounding import get_grounding_predicate, ground_cplogic_program
+from . import problog
 
 TRUE = Constant[bool](True, verify_type=False, auto_infer_type=False)
 EQUAL = Constant(operator.eq)
@@ -165,6 +166,7 @@ def solve_succ_query(query_predicate, cpl_program):
     n.d., 30.
 
     """
+    return problog.solve_succ_query(query_predicate, cpl_program)
     grounded = ground_cplogic_program(cpl_program)
     translator = CPLogicGroundingToGraphicalModelTranslator()
     gm = translator.walk(grounded)
