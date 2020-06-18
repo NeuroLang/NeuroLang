@@ -2,9 +2,9 @@ import problog.core
 import problog.logic
 import problog.sdd_formula
 
-from ....expressions import Symbol, Constant
-from ..program import CPLogicProgram
+from ....expressions import Constant, Symbol
 from ..problog import cplogic_to_problog
+from ..program import CPLogicProgram
 
 P = Symbol("P")
 
