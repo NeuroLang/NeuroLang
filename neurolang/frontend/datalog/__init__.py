@@ -25,12 +25,7 @@ GRAMMAR = u"""
     rule = head implication body ;
     constraint = body right_implication head ;
     head = head_predicate ;
-    body = conjunctive_clause ;
-    conjunctive_clause = 
-        '(' [ newline ] 
-            @:( [ newline ] conjunction [ newline ] ).{ predicate } 
-        [ newline ] ')'
-        | ( conjunction ).{ predicate } ;
+    body = ( conjunction ).{ predicate } ;
 
     conjunction = ',' | '&' | '\N{LOGICAL AND}' ;
     implication = ':-' | '\N{LEFTWARDS ARROW}' ;
@@ -83,16 +78,9 @@ GRAMMAR = u"""
           | "'" /[a-zA-Z0-9 ]*/ "'" ;
 
     number = float | integer ;
-
-    integer_basic = [ '+' | '-' ] /[0-9]+/ ;
-    float_basic = [ '+' | '-' ] /[0-9]*/'.'/[0-9]+/
-                | >integer_basic'.'/[0-9]*/ ;
-
-    integer = integer_basic ;
-    float = >float_basic
-          | >float_basic'e'>integer_basic
-          | >integer_basic'e'>integer_basic ;
-
+    integer = [ '+' | '-' ] /[0-9]+/ ;
+    float = [ '+' | '-' ] /[0-9]*/'.'/[0-9]+/
+          | [ '+' | '-' ] /[0-9]+/'.'/[0-9]*/ ;
     logical_constant = TRUE | FALSE ;
     TRUE = 'True' | '\u22A4' ;
     FALSE = 'False' | '\u22A5' ;
@@ -166,12 +154,7 @@ class DatalogSemantics:
         return Implication(ast[0], ast[2])
 
     def body(self, ast):
-        return ast
-
-    def conjunctive_clause(self, ast):
-        if isinstance(ast, Conjunction):
-            return ast
-        return Conjunction(tuple(ast))
+        return Conjunction(ast)
 
     def head_predicate(self, ast):
         if not isinstance(ast, Expression):
