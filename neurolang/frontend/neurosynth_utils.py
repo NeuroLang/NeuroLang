@@ -49,41 +49,32 @@ class NeuroSynthHandler(object):
         if image_type is None:
             image_type = f"association-test_z_FDR_{q}"
 
-        if self._dataset is None:
-            dataset = self.ns_load_dataset()
-            self._dataset = dataset
         if not isinstance(terms, str) and isinstance(
             terms, collections.Iterable
         ):
-            studies_ids = self._dataset.get_studies(
+            studies_ids = self.dataset.get_studies(
                 features=terms, frequency_threshold=frequency_threshold
             )
         else:
-            studies_ids = self._dataset.get_studies(
+            studies_ids = self.dataset.get_studies(
                 expression=terms, frequency_threshold=frequency_threshold
             )
-        ma = ns.meta.MetaAnalysis(self._dataset, studies_ids, q=q, prior=prior)
+        ma = ns.meta.MetaAnalysis(self.dataset, studies_ids, q=q, prior=prior)
         data = ma.images[image_type]
-        masked_data = self._dataset.masker.unmask(data)
-        affine = self._dataset.masker.get_header().get_sform()
-        dim = self._dataset.masker.dims
+        masked_data = self.dataset.masker.unmask(data)
+        affine = self.dataset.masker.get_header().get_sform()
+        dim = self.dataset.masker.dims
         region_set = region_set_from_masked_data(masked_data, affine, dim)
         return region_set
 
     def ns_study_id_set_from_term(self, terms, frequency_threshold=0.05):
-        if self._dataset is None:
-            dataset = self.ns_load_dataset()
-            self._dataset = dataset
-        study_ids = self._dataset.get_studies(
+        study_ids = self.dataset.get_studies(
             features=terms, frequency_threshold=frequency_threshold
         )
         return set(StudyID(study_id) for study_id in study_ids)
 
     def ns_study_tfidf_feature_for_terms(self, terms):
-        if self._dataset is None:
-            dataset = self.ns_load_dataset()
-            self._dataset = dataset
-        feature_table = self._dataset.feature_table.data
+        feature_table = self.dataset.feature_table.data
         result_set = set()
         for term in terms:
             if term not in feature_table.columns:
@@ -115,6 +106,22 @@ class NeuroSynthHandler(object):
 
         return dataset
 
+    def ns_load_tfidfs(self):
+        """
+        Load a 3-columns pandas DataFrame containing (in order) the PMID of the
+        study, the reported term and the tf-idf feature value.
+
+        Only the positive tf-idf features are loaded.
+
+        """
+        features = self.dataset.feature_table.data
+        return features.melt(
+            id_vars=features.columns[0],
+            var_name="term",
+            value_vars=features.columns[1:],
+            value_name="tfidf",
+        ).query("tfidf > 0")
+
     @staticmethod
     def download_ns_dataset(path):
         if not os.path.exists(path):
@@ -124,3 +131,9 @@ class NeuroSynthHandler(object):
         dataset.add_features(os.path.join(path, "features.txt"))
         dataset.save(os.path.join(path, "dataset.pkl"))
         return dataset
+
+    @property
+    def dataset(self):
+        if self._dataset is None:
+            self._dataset = self.ns_load_dataset()
+        return self._dataset
