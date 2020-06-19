@@ -2,6 +2,8 @@ import collections
 import logging
 import os
 
+import numpy as np
+import pandas as pd
 from pkg_resources import resource_exists, resource_filename
 
 from ..regions import region_set_from_masked_data
@@ -106,21 +108,42 @@ class NeuroSynthHandler(object):
 
         return dataset
 
-    def ns_load_tfidfs(self):
+    def ns_load_term_study_associations(self, threshold=1e-3):
         """
-        Load a 3-columns pandas DataFrame containing (in order) the PMID of the
-        study, the reported term and the tf-idf feature value.
-
-        Only the positive tf-idf features are loaded.
+        Load a 2d numpy array containing association between terms and studies
+        based on thresholded tf-idf features in the database.
 
         """
         features = self.dataset.feature_table.data
-        return features.melt(
-            id_vars=features.columns[0],
-            var_name="term",
-            value_vars=features.columns[1:],
-            value_name="tfidf",
-        ).query("tfidf > 0")
+        terms = features.columns
+        features["pmid"] = features.index
+        return (
+            features.melt(
+                id_vars="pmid",
+                var_name="term",
+                value_vars=terms,
+                value_name="tfidf",
+            )
+            .query(f"tfidf > {threshold}")[["pmid", "term"]]
+            .values
+        )
+
+    def ns_load_reported_activations(self):
+        """
+        Load a 2d numpy array containing each reported activation in the
+        database.
+
+        """
+        image_table = self.dataset.image_table
+        vox_ids, study_ids_ix = image_table.data.nonzero()
+        study_ids = image_table.ids[study_ids_ix]
+        study_id_vox_id = np.transpose([study_ids, vox_ids])
+        return study_id_vox_id
+
+    def ns_load_all_study_ids(self):
+        return np.expand_dims(
+            self.dataset.feature_table.data.index.values, axis=1
+        )
 
     @staticmethod
     def download_ns_dataset(path):
