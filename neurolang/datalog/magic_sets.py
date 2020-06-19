@@ -237,7 +237,7 @@ def adorn_code(query, datalog):
     Magic Sets technique.
 
     :param query Implication: query to solve
-    :param datalog DatalogBasic: processed datalog program.
+    :param datalog DatalogProgram: processed datalog program.
 
     Returns
     -------

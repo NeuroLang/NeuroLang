@@ -1,4 +1,4 @@
-from .. import RegionFrontendFolThroughDatalog, RegionFrontend
+from .. import RegionFrontendFolThroughDatalog
 from ...regions import ExplicitVBR, Region, SphericalVolume
 from ..query_resolution_expressions import Symbol
 from typing import AbstractSet, Tuple
@@ -295,7 +295,7 @@ def test_isin_2():
 @skip("fails to import nilearn in the CI")
 def test_compare_frontends():
     nl1 = _init(RegionFrontendFolThroughDatalog)
-    nl2 = _init(RegionFrontend)
+    # nl2 = _init(RegionFrontend)
 
     def get1(result):
         return set(r[0] for r in result)

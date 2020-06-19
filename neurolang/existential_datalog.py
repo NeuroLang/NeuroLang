@@ -2,7 +2,8 @@ from .expression_pattern_matching import add_match
 from .expressions import (Constant, FunctionApplication, Lambda,
                           NeuroLangException, Symbol)
 from .logic import ExistentialPredicate, Implication, Union
-from .solver_datalog_naive import DatalogBasic, SolverNonRecursiveDatalogNaive
+from .datalog import DatalogProgram
+
 
 __all__ = [
     'Implication',
@@ -11,7 +12,7 @@ __all__ = [
 ]
 
 
-class ExistentialDatalog(DatalogBasic):
+class ExistentialDatalog(DatalogProgram):
     def existential_intensional_database(self):
         return {
             k: v
@@ -71,24 +72,6 @@ class ExistentialDatalog(DatalogBasic):
         unions += (expression, )
         self.symbol_table[consequent_name] = Union(unions)
         return expression
-
-
-class SolverNonRecursiveExistentialDatalog(
-    SolverNonRecursiveDatalogNaive, ExistentialDatalog
-):
-    @add_match(
-        FunctionApplication(Implication(ExistentialPredicate, ...), ...)
-    )
-    def existential_consequent_implication_resolution(self, expression):
-        consequent_body, _ = (
-            parse_implication_with_existential_consequent(expression.functor)
-        )
-        return self.walk(
-            FunctionApplication(
-                Lambda(consequent_body.args, expression.functor.antecedent),
-                expression.args
-            )
-        )
 
 
 def parse_implication_with_existential_consequent(expression):
