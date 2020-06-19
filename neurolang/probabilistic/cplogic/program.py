@@ -266,11 +266,13 @@ class CPLogicMixin(PatternWalker):
         )
         return expression
 
-    @add_match(Implication, is_rule_with_builtin)
-    def rule_with_builtin(self, rule):
-        raise ForbiddenBuiltinError(
-            "CP-Logic program do not currently support built-ins."
-        )
+    @add_match(Implication, lambda rule: rule.antecedent != TRUE)
+    def prevent_rule_with_builtin(self, rule):
+        if is_rule_with_builtin(rule, self.builtins()):
+            raise ForbiddenBuiltinError(
+                "CP-Logic program do not currently support built-ins."
+            )
+        return self.statement_intensional(rule)
 
 
 class CPLogicProgram(

@@ -403,8 +403,9 @@ def is_ground_predicate(predicate):
     return all(isinstance(arg, Constant) for arg in predicate.args)
 
 
-def is_rule_with_builtin(rule):
+def is_rule_with_builtin(rule, known_builtins=None):
+    known_builtins = set() if known_builtins is None else set(known_builtins)
     return any(
-        isinstance(pred.functor, Constant)
+        isinstance(pred.functor, Constant) or pred.functor in known_builtins
         for pred in extract_logic_predicates(rule.antecedent)
     )
