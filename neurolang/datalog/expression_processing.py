@@ -401,3 +401,10 @@ def conjunct_formulas(f1, f2):
 def is_ground_predicate(predicate):
     """Whether all the predicate's terms are all constant."""
     return all(isinstance(arg, Constant) for arg in predicate.args)
+
+
+def is_rule_with_builtin(rule):
+    return any(
+        isinstance(pred.functor, Constant)
+        for pred in extract_logic_predicates(rule.antecedent)
+    )

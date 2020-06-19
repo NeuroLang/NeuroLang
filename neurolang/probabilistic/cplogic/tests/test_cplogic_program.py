@@ -1,9 +1,10 @@
+import operator
 import typing
 
 import pytest
 
 from ....datalog.expressions import Fact
-from ....exceptions import ForbiddenDisjunctionError
+from ....exceptions import ForbiddenBuiltinError, ForbiddenDisjunctionError
 from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Union
 from ...exceptions import (
@@ -182,3 +183,12 @@ def test_add_probchoice_does_not_sum_to_one():
         cpl.add_probabilistic_choice_from_tuples(
             P, probchoice_as_tuples_iterable
         )
+
+
+def test_prevented_builtins():
+    rule_with_builtin = Implication(
+        P(x), Conjunction((Q(x), Constant(operator.eq)(a, b)))
+    )
+    cpl = CPLogicProgram()
+    with pytest.raises(ForbiddenBuiltinError):
+        cpl.walk(rule_with_builtin)

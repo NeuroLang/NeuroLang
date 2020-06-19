@@ -1,8 +1,9 @@
 import typing
 
 from ...datalog import DatalogProgram
+from ...datalog.expression_processing import is_rule_with_builtin
 from ...datalog.expressions import Fact
-from ...exceptions import ForbiddenDisjunctionError
+from ...exceptions import ForbiddenBuiltinError, ForbiddenDisjunctionError
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
 from ...expressions import Constant, Symbol
@@ -264,6 +265,12 @@ class CPLogicMixin(PatternWalker):
             self.symbol_table[pred_symb], [expression]
         )
         return expression
+
+    @add_match(Implication, is_rule_with_builtin)
+    def rule_with_builtin(self, rule):
+        raise ForbiddenBuiltinError(
+            "CP-Logic program do not currently support built-ins."
+        )
 
 
 class CPLogicProgram(
