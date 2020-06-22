@@ -17,6 +17,12 @@ from .problog_solver import (
 )
 
 
+def _name_ra_set(ra_set):
+    columns = tuple(Symbol.fresh().name for _ in range(ra_set.value.arity))
+    relation = NamedRelationalAlgebraFrozenSet(columns, ra_set.value)
+    return Constant[AbstractSet](relation)
+
+
 def solve_succ_all(cpl, solver_name="problog"):
     if solver_name == "problog":
         query_preds = (
@@ -33,24 +39,13 @@ def solve_succ_all(cpl, solver_name="problog"):
         nl_solution = pl_solution_to_nl_solution(pl_solution, query_preds)
         for pred_symb in cpl.extensional_database():
             nl_solution[pred_symb] = build_always_true_provenance_relation(
-                Constant[AbstractSet](
-                    NamedRelationalAlgebraFrozenSet(
-                        iterable=cpl.symbol_table[pred_symb].value,
-                        columns=tuple(
-                            Symbol.fresh().name
-                            for _ in range(
-                                cpl.symbol_table[pred_symb].value.arity
-                            )
-                        ),
-                    )
-                )
+                _name_ra_set(cpl.symbol_table[pred_symb])
             )
         for pred_symb in cpl.pfact_pred_symbs | cpl.pchoice_pred_symbs:
+            ra_set = _name_ra_set(cpl.symbol_table[pred_symb])
+            prob_col = ra_set.value.columns[0]
             nl_solution[pred_symb] = ProvenanceAlgebraSet(
-                cpl.symbol_table[pred_symb].value,
-                str2columnstr_constant(
-                    cpl.symbol_table[pred_symb].value.columns[0],
-                ),
+                ra_set.value, str2columnstr_constant(prob_col)
             )
     else:
         raise NotImplementedError()

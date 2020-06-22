@@ -24,7 +24,7 @@ from ...relational_algebra_provenance import (
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
 )
-from . import problog
+from . import problog_solver
 from .cplogic_to_gm import (
     AndPlateNode,
     BernoulliPlateNode,
@@ -171,7 +171,7 @@ def solve_succ_query(query_predicate, cpl_program):
     n.d., 30.
 
     """
-    return problog.solve_succ_query(query_predicate, cpl_program)
+    return problog_solver.solve_succ_query(query_predicate, cpl_program)
     grounded = ground_cplogic_program(cpl_program)
     translator = CPLogicGroundingToGraphicalModelTranslator()
     gm = translator.walk(grounded)
