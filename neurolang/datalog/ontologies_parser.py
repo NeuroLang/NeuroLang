@@ -257,7 +257,7 @@ class OntologyParser:
 
         warnings.warn(
             f"""The restriction maxCardinality has not
-            been parsed for {parsed_restrictions}. Not implemented yet"""
+            been parsed for {restricted_node}. Not implemented yet"""
         )
 
         return Union(())
@@ -303,7 +303,7 @@ class OntologyParser:
 
         warnings.warn(
             f"""The restriction someValuesFrom has not
-            been parsed for {parsed_restrictions}. Not implemented yet"""
+            been parsed for {restricted_node}. Not implemented yet"""
         )
 
         return Union(())
