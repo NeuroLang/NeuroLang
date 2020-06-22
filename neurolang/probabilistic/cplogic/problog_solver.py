@@ -1,3 +1,5 @@
+import collections
+
 import problog.core
 import problog.logic
 import problog.program
@@ -36,6 +38,26 @@ def pl_preds_to_prov_set(pl_preds, columns):
         ),
         prob_col,
     )
+
+
+def pl_solution_to_nl_solution(pl_solution, query_preds):
+    pred_symb_to_tuples = collections.defaultdict(set)
+    for pl_pred, prob in pl_solution.items():
+        tupl = (prob,) + tuple(arg.value for arg in pl_pred.args)
+        pred_symb = Symbol(pl_pred.value)
+        pred_symb_to_tuples[pred_symb].add(tupl)
+    prob_col = str2columnstr_constant(Symbol.fresh().name)
+    return {
+        qpred.functor: ProvenanceAlgebraSet(
+            NamedRelationalAlgebraFrozenSet(
+                columns=(prob_col.value,)
+                + tuple(arg.name for arg in qpred.args),
+                iterable=pred_symb_to_tuples[qpred.functor],
+            ),
+            prob_col,
+        )
+        for qpred in query_preds
+    }
 
 
 def pl_pred_from_tuple(pred_symb, tupl):

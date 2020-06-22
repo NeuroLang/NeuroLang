@@ -26,3 +26,7 @@ class ForbiddenExistentialError(ForbiddenExpressionError):
 
 class ForbiddenBuiltinError(ForbiddenExpressionError):
     pass
+
+
+class NeuroLangFrontendException(NeuroLangException):
+    pass
