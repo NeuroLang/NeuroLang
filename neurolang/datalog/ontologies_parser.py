@@ -29,6 +29,7 @@ class OntologyParser:
 
         self.parsed_restrictions = [
             OWL.allValuesFrom,
+            OWL.someValuesFrom,
             OWL.hasValue,
             OWL.minCardinality,
             OWL.maxCardinality,
@@ -227,7 +228,7 @@ class OntologyParser:
 
         warnings.warn(
             f"""The restriction minCardinality has not
-            been parsed for {restricted_node}"""
+            been parsed for {restricted_node}. Not implemented yet"""
         )
 
         return Union(())
@@ -256,7 +257,7 @@ class OntologyParser:
 
         warnings.warn(
             f"""The restriction maxCardinality has not
-            been parsed for {parsed_restrictions}"""
+            been parsed for {parsed_restrictions}. Not implemented yet"""
         )
 
         return Union(())
@@ -289,7 +290,20 @@ class OntologyParser:
 
         warnings.warn(
             f"""The restriction cardinality has not
-            been parsed for {restricted_node}"""
+            been parsed for {restricted_node}. Not implemented yet"""
+        )
+
+        return Union(())
+
+    def _process_someValuesFrom(self, cut_graph):
+
+        parsed_prop, restricted_node, value = self._parse_restriction_nodes(
+            cut_graph
+        )
+
+        warnings.warn(
+            f"""The restriction someValuesFrom has not
+            been parsed for {parsed_restrictions}. Not implemented yet"""
         )
 
         return Union(())
