@@ -4,6 +4,10 @@ class NeuroLangException(Exception):
     pass
 
 
+class NeuroLangFrontendException(NeuroLangException):
+    pass
+
+
 class UnexpectedExpressionError(NeuroLangException):
     pass
 
