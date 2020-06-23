@@ -108,13 +108,16 @@ class NeuroSynthHandler(object):
 
         return dataset
 
-    def ns_load_term_study_associations(self, threshold=1e-3):
+    def ns_load_term_study_associations(self, threshold=1e-3, study_ids=None):
         """
         Load a 2d numpy array containing association between terms and studies
         based on thresholded tf-idf features in the database.
 
         """
         features = self.dataset.feature_table.data
+        if study_ids is not None:
+            study_ids = np.array(list(study_ids)).flatten().astype(int)
+            features = features.loc[study_ids]
         terms = features.columns
         features["pmid"] = features.index
         return (

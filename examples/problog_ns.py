@@ -81,14 +81,16 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
     ):
         cpl = CPLogicProgram()
         for pred_symb, ra_set in deterministic_solution.items():
-            cpl.add_extensional_predicate_from_tuples(pred_symb, ra_set.value)
+            cpl.add_extensional_predicate_from_tuples(
+                pred_symb, ra_set.value.unwrap()
+            )
         for pred_symb in self.solver.pfact_pred_symbs:
             cpl.add_probabilistic_facts_from_tuples(
-                pred_symb, self.solver.symbol_table[pred_symb].value
+                pred_symb, self.solver.symbol_table[pred_symb].value.unwrap()
             )
         for pred_symb in self.solver.pchoice_pred_symbs:
             cpl.add_probabilistic_choice_from_tuples(
-                pred_symb, self.solver.symbol_table[pred_symb].value
+                pred_symb, self.solver.symbol_table[pred_symb].value.unwrap()
             )
         cpl.walk(probabilistic_idb)
         return cpl
@@ -160,37 +162,49 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
 nl = ProbabilisticFrontend()
 
 # loading neurosynth data into the program
-# nsh = NeuroSynthHandler()
-# ns_term_in_study = nl.add_tuple_set(
-# nsh.ns_load_term_study_associations(threshold=1e-3),
-# name="ns_term_in_study",
-# )
-# ns_activation = nl.add_tuple_set(
-# nsh.ns_load_reported_activations(), name="ns_activation"
-# )
-# selected_study = nl.add_uniform_probabilistic_choice_over_set(
-# nsh.ns_load_all_study_ids(), name="selected_study"
-# )
+nsh = NeuroSynthHandler()
+study_ids = nsh.ns_load_all_study_ids()
+sampled_study_ids = set(
+    (int(study_id),)
+    for study_id in study_ids[
+        np.random.randint(low=0, high=len(study_ids), size=10)
+    ].flatten()
+)
 ns_term_in_study = nl.add_tuple_set(
-    {
-        ("insula", "59895"),
-        ("brain", "34984"),
-        ("auditory", "34984"),
-        ("brain", "59895"),
-    },
+    nsh.ns_load_term_study_associations(
+        threshold=1e-3, study_ids=sampled_study_ids
+    ),
     name="ns_term_in_study",
 )
 ns_activation = nl.add_tuple_set(
-    {("59895", 455), ("59895", 222), ("34984", 455),}, name="ns_activation"
+    nsh.ns_load_reported_activations(), name="ns_activation"
 )
 selected_study = nl.add_uniform_probabilistic_choice_over_set(
-    {("59895",), ("34984",)}, name="selected_study"
+    sampled_study_ids, name="selected_study"
 )
 with nl.scope as e:
     e.term_association[e.term] = (
-        ns_term_in_study[e.term, e.study_id] & selected_study[e.study_id]
+        ns_term_in_study[e.study_id, e.term] & selected_study[e.study_id]
     )
     e.activation[e.voxel_id] = (
         ns_activation[e.study_id, e.voxel_id] & selected_study[e.study_id]
     )
     res = nl.solve_all()
+
+
+if False:
+    ns_term_in_study = nl.add_tuple_set(
+        {
+            ("insula", "59895"),
+            ("brain", "34984"),
+            ("auditory", "34984"),
+            ("brain", "59895"),
+        },
+        name="ns_term_in_study",
+    )
+    ns_activation = nl.add_tuple_set(
+        {("59895", 455), ("59895", 222), ("34984", 455),}, name="ns_activation"
+    )
+    selected_study = nl.add_uniform_probabilistic_choice_over_set(
+        {("59895",), ("34984",)}, name="selected_study"
+    )
