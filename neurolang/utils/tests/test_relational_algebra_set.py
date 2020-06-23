@@ -1,6 +1,6 @@
 import pytest
 
-from ..relational_algebra_set import pandas
+from ..relational_algebra_set import RelationalAlgebraStringExpression, pandas
 
 
 @pytest.fixture(ids=['pandas'], params=[(pandas,)])
@@ -697,6 +697,9 @@ def test_aggregate(ra_module):
     expected_op2 = ra_module.NamedRelationalAlgebraFrozenSet(
         ("w", "x", "y", "z"), [(2, 7, 8, 8)]
     )
+    expected_op3 = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("x", "y", "qq"), [(7, 8, 13)]
+    )
 
     new_set = initial_set.aggregate(["x", "y"], {"z": sum})
     assert expected_sum == new_set
@@ -705,18 +708,22 @@ def test_aggregate(ra_module):
     new_set = initial_set.aggregate(["x", "y"], {"z": lambda x: max(x) - 1})
     assert expected_lambda == new_set
     new_set = initial_set.aggregate(
-        ["x", "y"],
-        [
-            ("x", "x", lambda x: next(iter(x))),
-            ("y", "y", lambda x: next(iter(x))),
-            ("z", "z", lambda x: max(x) - 1),
-        ],
+       ["x", "y"],
+       [
+           ("z", "z", lambda x: max(x) - 1),
+       ],
     )
     assert expected_lambda == new_set
     new_set = initial_set2.aggregate(
         ["x", "y"], {"z": lambda x: max(x) - 1, "w": "count"}
     )
     assert expected_op2 == new_set
+
+    new_set = initial_set2.aggregate(
+        ["x", "y"], {'qq': lambda t: sum(t.w + t.z)}
+    )
+
+    assert new_set == expected_op3
 
 
 def test_extended_projection(ra_module):
@@ -798,8 +805,21 @@ def test_equality(ra_module):
     assert third != first
     assert third == third
 
+
 def test_relation_duplicated_columns(ra_module):
     with pytest.raises(ValueError, match=r".*Duplicated.*: {'x'}"):
-        relation = ra_module.NamedRelationalAlgebraFrozenSet(
+        ra_module.NamedRelationalAlgebraFrozenSet(
             ("x", "x"), [(0, 2), (0, 4)],
         )
+
+
+def test_extended_projection_ra_string_expression_empty_relation(ra_module):
+    # reported in GH387
+    relation = ra_module.NamedRelationalAlgebraFrozenSet(
+        columns=["x", "y"], iterable=[],
+    )
+    eval_expressions = {"z": RelationalAlgebraStringExpression("(x / y)")}
+    expected = ra_module.NamedRelationalAlgebraFrozenSet(
+        columns=["z"], iterable=[],
+    )
+    assert relation.extended_projection(eval_expressions) == expected

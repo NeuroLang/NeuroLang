@@ -4,12 +4,9 @@ from ..expression_walker import (
     add_match,
 )
 from ..expressions import Symbol
-from ..logic import (
-    Constant,
-    Implication,
-    NaryLogicOperator,
-)
+from ..logic import Constant, Implication, NaryLogicOperator
 from ..logic.expression_processing import ExtractFreeVariablesWalker
+from ..logic.transformations import CollapseConjunctions
 from ..logic.unification import apply_substitution, most_general_unifier
 from .ontologies_parser import RightImplication
 
@@ -204,7 +201,7 @@ class OntologyRewriter:
         ) and self._not_in_existential(q, S, sigma)
 
     def _is_factorizable(self, S, pos):
-        return any(most_general_unifier(term, S[0]) for term in S) or pos
+        return all(most_general_unifier(term, S[0]) for term in S) or pos
 
     def _unifies(self, S, sigma):
         return all(most_general_unifier(term, sigma) for term in S)
@@ -268,6 +265,7 @@ class OntologyRewriter:
         replace = dict({S: sigma_ant})
         rsw = ReplaceExpressionWalker(replace)
         sigma_ant = rsw.walk(q.antecedent)
+        sigma_ant = CollapseConjunctions().walk(sigma_ant)
 
         q_cons = apply_substitution(q.consequent, qS[0])
 

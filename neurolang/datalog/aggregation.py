@@ -13,13 +13,19 @@ in the set ``Q``.
 from warnings import warn
 
 from ..exceptions import NeuroLangException
-from ..expression_walker import PatternWalker, add_match
+from ..expression_walker import (
+    PatternWalker, add_match,
+    FunctionApplicationToPythonLambda, ReplaceSymbolsByConstants
+)
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..utils.relational_algebra_set import RelationalAlgebraStringExpression
 from . import (Implication, Union, chase,
                is_conjunctive_expression_with_nested_predicates)
 from .basic_representation import UnionOfConjunctiveQueries
 from .expressions import TranslateToLogic
+
+
+FA2L = FunctionApplicationToPythonLambda()
 
 
 class AggregationApplication(FunctionApplication):
@@ -159,6 +165,7 @@ class Chase(chase.Chase):
         new_tuples = (
             substitutions
             .aggregate(group_vars, output_args)
+            .projection(*(oa[0] for oa in output_args))
             .to_unnamed()
         )
         new_tuples = self.datalog_program.new_set(new_tuples)
@@ -175,8 +182,7 @@ class Chase(chase.Chase):
                 aggregation_args = arg.name
                 fun = RelationalAlgebraStringExpression('first')
             elif isinstance(arg, AggregationApplication):
-                fun = self.datalog_program.walk(arg.functor).value
-                aggregation_args = arg.args[0].name
+                aggregation_args, fun = self._obtain_aggregations(arg)
             output_args.append(
                 (
                     Symbol.fresh().name,
@@ -185,6 +191,30 @@ class Chase(chase.Chase):
                 )
             )
         return group_vars, output_args
+
+    def _obtain_aggregations(self, arg):
+        if (
+            len(arg.args) == 1 and
+            isinstance(arg.args[0], Symbol)
+        ):
+            fun = self.datalog_program.walk(arg.functor).value
+            aggregation_args = arg.args[0].name
+        else:
+            aggregation_args = None
+            fa = ReplaceSymbolsByConstants(
+                self.datalog_program.symbol_table
+            ).walk(FunctionApplication(*arg.unapply()))
+            fun_, arg_names = FA2L.walk(fa)
+            fun_str = (
+                "lambda t: fun_(" +
+                ", ".join(f't.{arg_}' for arg_ in arg_names) +
+                ")"
+            )
+            gs = globals()
+            ls = locals()
+            gs['fun_'] = fun_
+            fun = eval(fun_str, gs, ls)
+        return aggregation_args, fun
 
     def eliminate_already_computed(self, consequent, instance, substitutions):
         if is_aggregation_predicate(consequent):
