@@ -53,7 +53,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         ).build_chase_solution()
         if probabilistic_idb.formulas:
             cpl = self._make_probabilistic_program_from_deterministic_solution(
-                deterministic_solution
+                deterministic_solution, probabilistic_idb,
             )
             return solve_succ_all(cpl, solver_name=self.probabilistic_solver)
         return deterministic_solution
@@ -77,7 +77,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         return FrontEndSymbol(self, name)
 
     def _make_probabilistic_program_from_deterministic_solution(
-        self, deterministic_solution
+        self, deterministic_solution, probabilistic_idb,
     ):
         cpl = CPLogicProgram()
         for pred_symb, ra_set in deterministic_solution.items():
@@ -90,6 +90,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             cpl.add_probabilistic_choice_from_tuples(
                 pred_symb, self.solver.symbol_table[pred_symb].value
             )
+        cpl.walk(probabilistic_idb)
         return cpl
 
     def _separate_deterministic_probabilistic_code(
@@ -172,10 +173,10 @@ nl = ProbabilisticFrontend()
 # )
 ns_term_in_study = nl.add_tuple_set(
     {
-        ("59895", "insula"),
-        ("34984", "brain"),
-        ("34984", "auditory"),
-        ("59895", "brain"),
+        ("insula", "59895"),
+        ("brain", "34984"),
+        ("auditory", "34984"),
+        ("brain", "59895"),
     },
     name="ns_term_in_study",
 )
@@ -193,5 +194,3 @@ with nl.scope as e:
         ns_activation[e.study_id, e.voxel_id] & selected_study[e.study_id]
     )
     res = nl.solve_all()
-
-    print(res)

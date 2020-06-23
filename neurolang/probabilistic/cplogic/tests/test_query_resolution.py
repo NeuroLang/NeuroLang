@@ -591,6 +591,7 @@ def test_solve_succ_all():
     cpl.add_extensional_predicate_from_tuples(P, {("a", "b"), ("b", "c")})
     cpl.add_probabilistic_facts_from_tuples(Q, {(0.2, "a"), (0.9, "b")})
     cpl.add_probabilistic_choice_from_tuples(H, {(0.5, "a"), (0.5, "c")})
+    cpl.walk(Implication(Z(x), Conjunction((H(x), Q(x)))))
     result = solve_succ_all(cpl, solver_name="problog")
     assert P in result
     assert testing.eq_prov_relations(
@@ -607,5 +608,21 @@ def test_solve_succ_all():
             [(0.2, "a"), (0.9, "b")],
             ("_p_",)
             + tuple(c.value for c in result[Q].non_provenance_columns),
+        ),
+    )
+    assert testing.eq_prov_relations(
+        result[H],
+        testing.make_prov_set(
+            [(0.5, "a"), (0.5, "c")],
+            ("_p_",)
+            + tuple(c.value for c in result[H].non_provenance_columns),
+        ),
+    )
+    assert testing.eq_prov_relations(
+        result[Z],
+        testing.make_prov_set(
+            [(0.1, "a"),],
+            ("_p_",)
+            + tuple(c.value for c in result[Z].non_provenance_columns),
         ),
     )

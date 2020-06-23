@@ -25,7 +25,7 @@ def _name_ra_set(ra_set):
 
 def solve_succ_all(cpl, solver_name="problog"):
     if solver_name == "problog":
-        query_preds = (
+        query_preds = list(
             union.formulas[0].consequent
             for union in cpl.intensional_database().values()
         )
