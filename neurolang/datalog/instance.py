@@ -143,6 +143,8 @@ class FrozenInstance:
         else:
             return super().__eq__(other)
 
+    def __repr__(self):
+        return repr(self.elements)
 
 class FrozenMapInstance(FrozenInstance, Mapping):
     def _set_to_constant(self, set_, type_=Unknown):

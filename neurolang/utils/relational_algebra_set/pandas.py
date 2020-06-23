@@ -94,12 +94,12 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             values = {}
         else:
             self._drop_duplicates_if_needed()
-            values = self._container.values
+            values = self.itervalues()
         for v in values:
             yield tuple(v)
 
     def fetch_one(self):
-        return tuple(next(iter(self._container.values)))
+        return next(self._container.itertuples(name=None, index=False))
 
     def __len__(self):
         if self._container is None:
@@ -322,7 +322,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         if self.is_empty():
             return iter([])
         else:
-            return iter(self._container.values)
+            return iter(self._container.itertuples(name=None, index=False))
 
     def __hash__(self):
         self._drop_duplicates_if_needed()
