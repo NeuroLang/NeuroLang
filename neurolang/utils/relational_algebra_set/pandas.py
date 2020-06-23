@@ -24,8 +24,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
 
     def _drop_duplicates_if_needed(self):
         if self._might_have_duplicates:
-                self._container = self._drop_duplicates(self._container)
-                self._might_have_duplicates = False
+            self._container = self._drop_duplicates(self._container)
+            self._might_have_duplicates = False
 
     @classmethod
     def create_view_from(cls, other):
@@ -92,6 +92,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     def __iter__(self):
         if self.is_empty():
             values = {}
+        elif self.is_dee():
+            values = {tuple()}
         else:
             self._drop_duplicates_if_needed()
             values = self.itervalues()
@@ -99,6 +101,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             yield tuple(v)
 
     def fetch_one(self):
+        if self.is_dee():
+            return tuple()
         return next(self._container.itertuples(name=None, index=False))
 
     def __len__(self):
@@ -669,10 +673,14 @@ class NamedRelationalAlgebraFrozenSet(
 
     def __iter__(self):
         self._drop_duplicates_if_needed()
+        if self.is_dee():
+            return iter([tuple()])
         container = self._container[list(self.columns)]
         return container.itertuples(index=False, name="tuple")
 
     def fetch_one(self):
+        if self.is_dee():
+            return tuple()
         container = self._container[list(self.columns)]
         return next(container.itertuples(index=False, name="tuple"))
 
