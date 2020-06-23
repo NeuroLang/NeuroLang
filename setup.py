@@ -7,6 +7,12 @@ ver_file = os.path.join('neurolang', 'version.py')
 with open(ver_file) as f:
     exec(f.read())
 
+with open('requirements.txt') as requirements:
+    REQUIRES += [
+        r.strip() for r in requirements.readlines()
+        if not r.strip().startswith('#')
+    ]
+
 opts = dict(name=NAME,
             maintainer=MAINTAINER,
             maintainer_email=MAINTAINER_EMAIL,
