@@ -12,13 +12,18 @@ from ...type_system import (NeuroLangTypeException, Unknown, get_args,
                             is_leq_informative, unify_types)
 from ...utils import OrderedSet
 from ..expression_processing import (extract_logic_free_variables,
-                                     extract_logic_predicates, is_linear_rule)
+                                     extract_logic_predicates, is_linear_rule,
+                                     dependency_matrix, program_has_loops)
 from ..instance import MapInstance
 
 ChaseNode = namedtuple('ChaseNode', 'instance children')
 
 
 class NeuroLangNonLinearProgramException(NeuroLangException):
+    pass
+
+
+class NeuroLangProgramHasLoopsException(NeuroLangException):
     pass
 
 
@@ -400,6 +405,47 @@ class ChaseGeneral():
 
     def eliminate_already_computed(self, consequent, instance, substitutions):
         return substitutions
+
+
+class ChaseNonRecursive:
+    """Chase class for non-recursive programs.
+    """
+    def build_chase_solution(self):
+        instance = MapInstance()
+        instance_update = MapInstance(
+            self.datalog_program.extensional_database()
+        )
+        self.check_constraints(instance_update)
+        rules_to_compute = list(self.rules)
+        rules_seen = set()
+        while rules_to_compute:
+            rule = rules_to_compute.pop(0)
+            functor = rule.consequent.functor
+            functor_ix = self._dependency_matrix_symbols.index(functor)
+            if any(
+                self._dependency_matrix_symbols[dep_index] not in rules_seen
+                for dep_index in
+                self._dependency_matrix[functor_ix].nonzero()[0]
+            ):
+                rules_to_compute.append(rule)
+                continue
+            rules_seen.add(functor)
+            instance_update |= self.chase_step(
+                instance, rule, restriction_instance=instance_update
+            )
+
+        return instance_update
+
+    def check_constraints(self, instance_update):
+        super().check_constraints(instance_update)
+        self._dependency_matrix_symbols, self._dependency_matrix = \
+            dependency_matrix(
+                self.datalog_program, rules=self.rules
+            )
+        if program_has_loops(self._dependency_matrix):
+            raise NeuroLangProgramHasLoopsException(
+                "Use a different resolution algorithm"
+            )
 
 
 class ChaseNaive:

@@ -35,7 +35,7 @@ class QueryBuilderBase:
         if isinstance(symbol_name, Expression):
             symbol_name = symbol_name.expression.name
         if symbol_name not in self.symbol_table:
-            raise ValueError('')
+            raise ValueError(f'Symbol {symbol_name} not defined')
         return Symbol(self, symbol_name)
 
     def __getitem__(self, symbol_name):
@@ -63,8 +63,10 @@ class QueryBuilderBase:
     def environment(self):
         old_dynamic_mode = self._symbols_proxy._dynamic_mode
         self._symbols_proxy._dynamic_mode = True
-        yield self._symbols_proxy
-        self._symbols_proxy._dynamic_mode = old_dynamic_mode
+        try:
+            yield self._symbols_proxy
+        finally:
+            self._symbols_proxy._dynamic_mode = old_dynamic_mode
 
     @property
     @contextmanager
@@ -72,9 +74,11 @@ class QueryBuilderBase:
         old_dynamic_mode = self._symbols_proxy._dynamic_mode
         self._symbols_proxy._dynamic_mode = True
         self.solver.push_scope()
-        yield self._symbols_proxy
-        self.solver.pop_scope()
-        self._symbols_proxy._dynamic_mode = old_dynamic_mode
+        try:
+            yield self._symbols_proxy
+        finally:
+            self.solver.pop_scope()
+            self._symbols_proxy._dynamic_mode = old_dynamic_mode
 
     def new_symbol(self, type_=Unknown, name=None):
         if isinstance(type_, (tuple, list)):
@@ -406,6 +410,14 @@ class QuerySymbolsProxy:
 
     def __contains__(self, symbol):
         return symbol in self._query_builder.symbol_table
+
+    def __iter__(self):
+        return iter(
+            sorted(set(
+                s.name for s in
+                self._query_builder.symbol_table
+            ))
+        )
 
     def __len__(self):
         return len(self._query_builder.symbol_table)
