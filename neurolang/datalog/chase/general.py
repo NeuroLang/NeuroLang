@@ -2,7 +2,6 @@ from collections import namedtuple
 from itertools import chain, tee
 import logging
 from operator import contains, eq
-import time
 from typing import Iterable, Tuple
 
 from ...exceptions import NeuroLangException
@@ -12,7 +11,7 @@ from ...logic.unification import (apply_substitution,
                                   compose_substitutions)
 from ...type_system import (NeuroLangTypeException, Unknown, get_args,
                             is_leq_informative, unify_types)
-from ...utils import OrderedSet
+from ...utils import OrderedSet, log_performance
 from ..expression_processing import (extract_logic_free_variables,
                                      extract_logic_predicates, is_linear_rule,
                                      dependency_matrix, program_has_loops)
@@ -437,13 +436,10 @@ class ChaseNonRecursive:
                 continue
             rules_seen.add(functor)
 
-            start_time = time.perf_counter()
-            LOG.info('Evaluating rule %s', rule)
-            instance_update |= self.chase_step(
-                instance, rule, restriction_instance=instance_update
-            )
-            end_time = time.perf_counter()
-            LOG.info('\t%2.2f', end_time - start_time)
+            with log_performance(LOG, 'Evaluating rule %s', (rule,)):
+                instance_update |= self.chase_step(
+                    instance, rule, restriction_instance=instance_update
+                )
 
         return instance_update
 
@@ -473,13 +469,10 @@ class ChaseNaive:
             instance |= instance_update
             new_update = MapInstance()
             for rule in self.rules:
-                start_time = time.perf_counter()
-                LOG.info('Evaluating rule %s', rule)
-                upd = self.chase_step(
-                    instance, rule, restriction_instance=instance_update
-                )
-                end_time = time.perf_counter()
-                LOG.info('\t%2.2f', end_time - start_time)
+                with log_performance(LOG, 'Evaluating rule %s', (rule,)):
+                    upd = self.chase_step(
+                        instance, rule, restriction_instance=instance_update
+                    )
                 new_update |= upd
             instance_update = new_update
 
@@ -502,13 +495,10 @@ class ChaseSemiNaive:
             instance_update = MapInstance()
             continue_chase = False
             for rule in self.rules:
-                start_time = time.perf_counter()
-                LOG.info('Evaluating rule %s', rule)
-                instance_update = self.per_rule_update(
-                    rule, instance, instance_update
-                )
-                end_time = time.perf_counter()
-                LOG.info('\t%2.2f', end_time - start_time)
+                with log_performance(LOG, 'Evaluating rule %s', (rule,)):
+                    instance_update = self.per_rule_update(
+                        rule, instance, instance_update
+                    )
                 continue_chase |= len(instance_update) > 0
 
         return instance
