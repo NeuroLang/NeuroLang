@@ -67,36 +67,30 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
 
         self.ontology_loaded = True
 
-    def separate_deterministic_probabilistic_code(
-        self, det_symbols=None, prob_symbols=None
+    def _separate_deterministic_probabilistic_code(
+        self, query_pred=None, det_symbols=None, prob_symbols=None
     ):
         if det_symbols is None:
             det_symbols = set()
         if prob_symbols is None:
             prob_symbols = set()
-
-        if len(self.current_program) == 0:
-            raise NeuroLangFrontendException("Your program is empty")
-
-        unclassified_code = []
-        for p in self.current_program:
-            unclassified_code.append(p.expression)
-        # query_pred = self.current_program[0].expression
-        # query_reachable_code = reachable_code(query_pred, self.solver)
-        constraints_symbols = set(
-            [
-                ri.consequent.functor
-                for ri in self.solver.constraints().formulas
-            ]
-        )
+        if query_pred is None:
+            query_reachable_code = self._union_of_idb()
+        else:
+            query_reachable_code = reachable_code(query_pred, self.solver)
         deterministic_symbols = (
             set(self.solver.extensional_database().keys())
             | set(det_symbols)
-            | constraints_symbols
+            | set(self.solver.builtins().keys())
         )
         deterministic_program = list()
-        probabilistic_symbols = set() | set(prob_symbols)
+        probabilistic_symbols = (
+            self.solver.pfact_pred_symbs
+            | self.solver.pchoice_pred_symbs
+            | set(prob_symbols)
+        )
         probabilistic_program = list()
+        unclassified_code = list(query_reachable_code.formulas)
         unclassified = 0
         initial_unclassified_length = len(unclassified_code) + 1
         while (
@@ -126,24 +120,12 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
             raise NeuroLangFrontendException(
                 "An atom was defined as both deterministic and probabilistic"
             )
-        print(unclassified_code)
         if len(unclassified_code) > 0:
             raise NeuroLangFrontendException("There are unclassified atoms")
-
         return Union(deterministic_program), Union(probabilistic_program)
 
     def solve_query(self):
-        # det, prob = self.separate_deterministic_probabilistic_code()
-        # if len(prob.formulas) > 0:
-        #    raise NeuroLangNotImplementedError(
-        #        "The probabilistic solver has not yet been implemented"
-        #    )
-
-        det = list()
-        for p in self.current_program:
-            det.append(p.expression)
-
-        det = Union(det)
+        det, prob = self.separate_deterministic_probabilistic_code()
 
         if self.ontology_loaded:
             eB = self.rewrite_database_with_ontology(det)
