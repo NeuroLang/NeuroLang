@@ -190,21 +190,3 @@ with nl.scope as e:
         ns_activation[e.study_id, e.voxel_id] & selected_study[e.study_id]
     )
     res = nl.solve_all()
-
-
-if False:
-    ns_term_in_study = nl.add_tuple_set(
-        {
-            ("insula", "59895"),
-            ("brain", "34984"),
-            ("auditory", "34984"),
-            ("brain", "59895"),
-        },
-        name="ns_term_in_study",
-    )
-    ns_activation = nl.add_tuple_set(
-        {("59895", 455), ("59895", 222), ("34984", 455),}, name="ns_activation"
-    )
-    selected_study = nl.add_uniform_probabilistic_choice_over_set(
-        {("59895",), ("34984",)}, name="selected_study"
-    )
