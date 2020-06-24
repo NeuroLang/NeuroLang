@@ -125,7 +125,7 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
         return Union(deterministic_program), Union(probabilistic_program)
 
     def solve_query(self):
-        det, prob = self.separate_deterministic_probabilistic_code()
+        det, prob = self._separate_deterministic_probabilistic_code()
 
         if self.ontology_loaded:
             eB = self.rewrite_database_with_ontology(det)
