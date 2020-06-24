@@ -804,7 +804,7 @@ class SelectionOutPusherMixin(PatternWalker):
         return new_select
 
     @add_match(
-        TheOperation(TheOperation, ..., ...),
+        TheOperation(TheOperation, ..., ..., ...),
         lambda to: to.symbol.name > to.relation.symbol.name,
     )
     def sort_the_operations(self, op):
@@ -879,7 +879,7 @@ class UnionRemoverMixin(PatternWalker):
         relation = NaturalJoin(p, p2)
         return relation
 
-    @add_match(TheOperation(ProvenanceAlgebraSet, ..., ...))
+    @add_match(TheOperation(ProvenanceAlgebraSet, ..., ..., ...))
     def unary_the_operation(self, op):
         return RenameColumns(
             op.relation,

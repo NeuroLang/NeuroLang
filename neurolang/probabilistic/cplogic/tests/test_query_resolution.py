@@ -13,8 +13,8 @@ from ....relational_algebra import (
     str2columnstr_constant,
 )
 from ....relational_algebra_provenance import (
-    RelationalAlgebraProvenanceCountingSolver,
     ProvenanceAlgebraSet,
+    RelationalAlgebraProvenanceCountingSolver,
     TupleEqualSymbol,
     UnionOverTuples,
 )
@@ -780,8 +780,7 @@ def test_repeated_antecedent_pred_symb_existential_not_equiprobable():
     }
     pchoice_as_sets = {
         Z: {
-            (float(np.prod([t[0] for t in tupl])),)
-            + tuple(t[1] for t in tupl)
+            (float(np.prod([t[0] for t in tupl])),) + tuple(t[1] for t in tupl)
             for tupl in itertools.product(*([list(pfact_sets[P])] * 3))
             if tuple(sorted(t[1] for t in tupl)) == tuple(t[1] for t in tupl)
         }

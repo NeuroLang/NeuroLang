@@ -7,7 +7,7 @@ from typing import Iterable
 
 import numpy as np
 
-from ..exceptions import NeuroLangException
+from ..exceptions import NeuroLangException, ForbiddenExpressionError
 from ..expression_walker import ExpressionWalker
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import Conjunction, Negation, Quantifier, Union
