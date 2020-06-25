@@ -24,7 +24,11 @@ class ForbiddenExistentialError(ForbiddenExpressionError):
     pass
 
 
+class RelationalAlgebraError(NeuroLangException):
+    pass
+
+
 class RelationalAlgebraNotImplementedError(
-    NeuroLangException, NotImplementedError
+    RelationalAlgebraError, NotImplementedError
 ):
     pass
