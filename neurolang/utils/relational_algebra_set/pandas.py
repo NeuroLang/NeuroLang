@@ -621,6 +621,9 @@ class NamedRelationalAlgebraFrozenSet(
         return output
 
     def _keep_column_types(self, new_container, skip=None):
+        if self.is_empty():
+            return
+
         if skip is None:
             skip = {}
         for col in new_container.columns:
