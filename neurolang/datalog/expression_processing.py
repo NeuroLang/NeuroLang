@@ -422,15 +422,9 @@ def get_rule_for_predicate(predicate, idb):
 def freshen_predicate_free_variables(pred, free_variables, substitutions):
     new_args = tuple()
     for arg in pred.args:
-        if arg in free_variables:
-            if arg in substitutions:
-                new_arg = substitutions[arg]
-            else:
-                new_arg = Symbol.fresh()
-                substitutions[arg] = new_arg
-            new_args += (new_arg,)
-        else:
-            new_args += (arg,)
+        if arg in free_variables and arg not in substitutions:
+            substitutions[arg] = Symbol.fresh()
+        new_args += (substitutions.get(arg, arg),)
     new_pred = FunctionApplication[pred.type](pred.functor, new_args)
     return new_pred
 
