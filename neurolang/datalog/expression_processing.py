@@ -7,20 +7,18 @@ from typing import Iterable
 
 import numpy as np
 
-from ..exceptions import NeuroLangException
+from ..exceptions import (
+    ForbiddenDisjunctionError,
+    ForbiddenExpressionError,
+    RuleNotFoundError,
+    SymbolNotFoundError,
+    UnsupportedProgramError,
+)
 from ..expression_walker import ExpressionWalker
 from ..expressions import Constant, FunctionApplication, Symbol
-from ..logic import Conjunction, Negation, Quantifier, Union
+from ..logic import Conjunction, Implication, Negation, Quantifier, Union
 from ..logic import expression_processing as elp
 from .expressions import TranslateToLogic
-
-
-class SymbolNotFoundException(NeuroLangException):
-    pass
-
-
-class RuleNotFoundException(NeuroLangException):
-    pass
 
 
 class TranslateToDatalogSemantics(TranslateToLogic, ExpressionWalker):
@@ -28,10 +26,10 @@ class TranslateToDatalogSemantics(TranslateToLogic, ExpressionWalker):
 
 
 def implication_has_existential_variable_in_antecedent(implication):
-    '''
+    """
     Whether an implication has at least one existential variable in its
     antecedent.
-    '''
+    """
     c_free_vars = set(extract_logic_free_variables(implication.consequent))
     a_free_vars = set(extract_logic_free_variables(implication.antecedent))
     return a_free_vars > c_free_vars
@@ -44,11 +42,15 @@ def is_conjunctive_expression(expression):
         formulas = [expression]
 
     return all(
-        expression == Constant(True) or expression == Constant(False) or (
-            isinstance(expression, FunctionApplication) and not any(
+        expression == Constant(True)
+        or expression == Constant(False)
+        or (
+            isinstance(expression, FunctionApplication)
+            and not any(
                 isinstance(arg, FunctionApplication) for arg in expression.args
             )
-        ) for expression in formulas
+        )
+        for expression in formulas
     )
 
 
@@ -62,8 +64,7 @@ def is_conjunctive_expression_with_nested_predicates(expression):
             pass
         elif isinstance(exp, FunctionApplication):
             stack += [
-                arg for arg in exp.args
-                if isinstance(arg, FunctionApplication)
+                arg for arg in exp.args if isinstance(arg, FunctionApplication)
             ]
         elif isinstance(exp, Conjunction):
             stack += exp.formulas
@@ -90,14 +91,17 @@ def is_linear_rule(rule):
 
     """
     predicates = extract_logic_predicates(rule.antecedent)
-    return sum(
-        int(
-            (predicate.formula.functor == rule.consequent.functor)
-            if isinstance(predicate, Negation)
-            else predicate.functor == rule.consequent.functor
+    return (
+        sum(
+            int(
+                (predicate.formula.functor == rule.consequent.functor)
+                if isinstance(predicate, Negation)
+                else predicate.functor == rule.consequent.functor
+            )
+            for predicate in predicates
         )
-        for predicate in predicates
-    ) < 2
+        < 2
+    )
 
 
 def all_body_preds_in_set(implication, predicate_set):
@@ -304,7 +308,7 @@ def dependency_matrix(datalog, rules=None):
 
     Raises
     ------
-    SymbolNotFoundException
+    SymbolNotFoundError
         If there is a predicate in the antecedent of a rule which
         is not a constant or an extensiona/intensional predicate.
     """
@@ -324,9 +328,8 @@ def dependency_matrix(datalog, rules=None):
         for rule in to_reach:
             functor = rule.consequent.functor
             if rule not in datalog.intensional_database()[functor].formulas:
-                raise RuleNotFoundException(
-                    f"Rule {rule} not contained in the datalog "
-                    "instance."
+                raise RuleNotFoundError(
+                    f"Rule {rule} not contained in the datalog " "instance."
                 )
             idb_symbols.add(functor)
 
@@ -334,8 +337,7 @@ def dependency_matrix(datalog, rules=None):
     edb = datalog.extensional_database()
 
     dependency_matrix = np.zeros(
-        (len(idb_symbols), len(idb_symbols)),
-        dtype=int
+        (len(idb_symbols), len(idb_symbols)), dtype=int
     )
 
     while to_reach:
@@ -349,16 +351,11 @@ def dependency_matrix(datalog, rules=None):
             elif functor in idb_symbols:
                 ix_functor = idb_symbols.index(functor)
                 dependency_matrix[ix_head, ix_functor] += 1
-            elif (
-                isinstance(functor, Symbol) and
-                (
-                    functor not in datalog.symbol_table or
-                    functor in datalog.intensional_database()
-                )
+            elif isinstance(functor, Symbol) and (
+                functor not in datalog.symbol_table
+                or functor in datalog.intensional_database()
             ):
-                raise SymbolNotFoundException(
-                    f'Symbol not found {functor.name}'
-                )
+                raise SymbolNotFoundError(f"Symbol not found {functor.name}")
 
     return idb_symbols, dependency_matrix
 
@@ -371,9 +368,7 @@ def program_has_loops(program_representation):
         if any(np.diag(reachable)):
             return True
         else:
-            reachable = np.dot(
-               reachable, program_representation
-            )
+            reachable = np.dot(reachable, program_representation)
 
     return False
 
@@ -391,9 +386,9 @@ def conjunct_formulas(f1, f2):
     if isinstance(f1, Conjunction) and isinstance(f2, Conjunction):
         return Conjunction(tuple(f1.formulas) + tuple(f2.formulas))
     elif isinstance(f1, Conjunction):
-        return Conjunction(tuple(f1.formulas) + (f2, ))
+        return Conjunction(tuple(f1.formulas) + (f2,))
     elif isinstance(f2, Conjunction):
-        return Conjunction((f1, ) + tuple(f2.formulas))
+        return Conjunction((f1,) + tuple(f2.formulas))
     else:
         return Conjunction((f1, f2))
 
@@ -401,3 +396,104 @@ def conjunct_formulas(f1, f2):
 def is_ground_predicate(predicate):
     """Whether all the predicate's terms are all constant."""
     return all(isinstance(arg, Constant) for arg in predicate.args)
+
+
+def enforce_conjunction(expression):
+    if isinstance(expression, Conjunction):
+        return expression
+    elif isinstance(expression, FunctionApplication):
+        return Conjunction((expression,))
+    raise ForbiddenExpressionError(
+        "Cannot conjunct expression of type {}".format(type(expression))
+    )
+
+
+def get_rule_for_predicate(predicate, idb):
+    if predicate.functor not in idb:
+        return None
+    expression = idb[predicate.functor]
+    if isinstance(expression, Implication):
+        return expression
+    elif isinstance(expression, Union) and len(expression.formulas) == 1:
+        return expression.formulas[0]
+    raise ForbiddenDisjunctionError()
+
+
+def freshen_predicate_free_variables(pred, free_variables, substitutions):
+    new_args = tuple()
+    for arg in pred.args:
+        if arg in free_variables and arg not in substitutions:
+            substitutions[arg] = Symbol.fresh()
+        new_args += (substitutions.get(arg, arg),)
+    new_pred = FunctionApplication[pred.type](pred.functor, new_args)
+    return new_pred
+
+
+def freshen_conjunction_free_variables(
+    conjunction, free_variables, substitutions=None
+):
+    new_preds = []
+    substitutions = substitutions if substitutions is not None else dict()
+    for pred in conjunction.formulas:
+        new_pred = freshen_predicate_free_variables(
+            pred, free_variables, substitutions
+        )
+        new_preds.append(new_pred)
+    return Conjunction(tuple(new_preds))
+
+
+def rename_args_to_match(conjunction, src_predicate, dst_predicate):
+    renames = {
+        src: dst
+        for src, dst in zip(src_predicate.args, dst_predicate.args)
+        if src != dst
+    }
+    new_preds = []
+    for pred in conjunction.formulas:
+        new_args = tuple(renames.get(arg, arg) for arg in pred.args)
+        new_pred = FunctionApplication[pred.type](pred.functor, new_args)
+        new_preds.append(new_pred)
+    return Conjunction(tuple(new_preds))
+
+
+def flatten_query(query, program):
+    """
+    Construct the conjunction corresponding to a query on a program.
+
+    TODO: currently this only handles programs without conjunctions.
+
+    Parameters
+    ----------
+    query : predicate or conjunction of predicates
+        The query for which the conjunction is constructed.
+    program : a program with an intensional database
+        Program with logical rules that will be used to construct the
+        conjunction corresponding to the given query.
+
+    Returns
+    -------
+    conjunction of predicates
+
+    """
+    if not hasattr(program, "intensional_database"):
+        raise UnsupportedProgramError(
+            "Only program with an intensional database are supported"
+        )
+    idb = program.intensional_database()
+    query = enforce_conjunction(query)
+    conj_query = Conjunction(tuple())
+    substitutions = dict()
+    for predicate in query.formulas:
+        rule = get_rule_for_predicate(predicate, idb)
+        if rule is None:
+            formula = predicate
+        else:
+            formula = enforce_conjunction(rule.antecedent)
+            free_variables = extract_logic_free_variables(rule)
+            formula = freshen_conjunction_free_variables(
+                formula, free_variables, substitutions
+            )
+            formula = flatten_query(formula, program)
+            formula = rename_args_to_match(formula, rule.consequent, predicate)
+        conj_query = conjunct_formulas(conj_query, formula)
+    return conj_query
