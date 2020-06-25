@@ -64,9 +64,10 @@ def flatten_query(query, idb):
         if rule is None:
             formula = predicate
         else:
+            formula = enforce_conjunction(rule.antecedent)
             free_variables = extract_logic_free_variables(rule)
-            formula = flatten_query(rule.antecedent, idb)
             formula = freshen_free_variables(formula, free_variables)
+            formula = flatten_query(formula, idb)
             formula = rename_to_match(formula, rule.consequent, predicate)
         conj_query = conjunct_formulas(conj_query, formula)
     return conj_query
