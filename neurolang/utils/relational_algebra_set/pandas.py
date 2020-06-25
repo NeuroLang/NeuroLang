@@ -626,7 +626,10 @@ class NamedRelationalAlgebraFrozenSet(
         for col in new_container.columns:
             if col in skip:
                 continue
-            if new_container[col].dtype != self._container[col].dtype:
+            if (
+                col in self._container.columns and
+                new_container[col].dtype != self._container[col].dtype
+            ):
                 new_container[col] = new_container[col].astype(
                     self._container[col].dtype
                 )
