@@ -222,7 +222,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             proj_list_member.dst_column == relation.provenance_column
             for proj_list_member in extended_proj.projection_list
         ):
-            new_prov_col = (str2columnstr_constant(Symbol.fresh().name))
+            new_prov_col = str2columnstr_constant(Symbol.fresh().name)
         else:
             new_prov_col = relation.provenance_column
         relation = self.walk(
@@ -349,11 +349,11 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
         rap_left = expression.relation_left
         rap_right = expression.relation_right
         rap_right_r = self._build_relation_constant(rap_right.relations)
-        rap_right_pc = (str2columnstr_constant(rap_right.provenance_column))
+        rap_right_pc = str2columnstr_constant(rap_right.provenance_column)
 
         cols_to_keep = [
             ExtendedProjectionListMember(
-                (str2columnstr_constant(c)), (str2columnstr_constant(c))
+                str2columnstr_constant(c), str2columnstr_constant(c)
             )
             for c in (rap_left.relations.columns + rap_right.relations.columns)
             if c not in (
@@ -363,13 +363,13 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
         ]
 
         if rap_left.provenance_column == rap_right.provenance_column:
-            rap_right_pc = (str2columnstr_constant(Symbol.fresh().name))
+            rap_right_pc = str2columnstr_constant(Symbol.fresh().name)
             rap_right_r = RenameColumn(
                 rap_right_r,
-                (str2columnstr_constant(rap_right.provenance_column)),
+                str2columnstr_constant(rap_right.provenance_column),
                 rap_right_pc
             )
-        new_pc = (str2columnstr_constant(Symbol.fresh().name))
+        new_pc = str2columnstr_constant(Symbol.fresh().name)
         operation = ExtendedProjection(
             NaturalJoin(
                 self._build_relation_constant(rap_left.relations),
@@ -377,7 +377,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
             ),
             cols_to_keep + [
                 ExtendedProjectionListMember(
-                    (str2columnstr_constant(rap_left.provenance_column)) *
+                    str2columnstr_constant(rap_left.provenance_column) *
                     rap_right_pc,
                     new_pc
                 )
@@ -456,7 +456,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
             )
 
         columns_to_keep = tuple(
-            (str2columnstr_constant(c)) for c in relation_left.value.columns
+            str2columnstr_constant(c) for c in relation_left.value.columns
             if c != prov_column_left
         )
 
@@ -490,10 +490,18 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
     )
     def resolve_operations(self, ra_operation):
         args = ra_operation.unapply()
-        new_args = tuple(
-            self.walk(arg) for arg in args
-        )
-        return self.walk(ra_operation.apply(*new_args))
+        new_args = tuple()
+        updated = False
+        for arg in args:
+            new_arg = self.walk(arg)
+            if new_arg is not arg:
+                updated = True
+            new_args += (new_arg,)
+
+        if updated:
+            ra_operation = self.walk(ra_operation.apply(*new_args))
+
+        return ra_operation
 
     # Raise Exception for non-implemented RAP operations
     @add_match(
