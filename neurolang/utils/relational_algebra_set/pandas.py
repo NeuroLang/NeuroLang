@@ -608,7 +608,10 @@ class NamedRelationalAlgebraFrozenSet(
             .reset_index()
         )
 
-        self._keep_column_types(new_container, aggs)
+        self._keep_column_types(
+            new_container, set(aggs) |
+            set(aggs_multi_column)
+        )
 
         output = self._light_init_same_structure(
             new_container,
@@ -618,12 +621,18 @@ class NamedRelationalAlgebraFrozenSet(
         return output
 
     def _keep_column_types(self, new_container, skip=None):
+        if self.is_empty():
+            return
+
         if skip is None:
             skip = {}
         for col in new_container.columns:
             if col in skip:
                 continue
-            if new_container[col].dtype != self._container[col].dtype:
+            if (
+                col in self._container.columns and
+                new_container[col].dtype != self._container[col].dtype
+            ):
                 new_container[col] = new_container[col].astype(
                     self._container[col].dtype
                 )
