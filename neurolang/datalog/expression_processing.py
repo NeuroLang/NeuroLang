@@ -419,22 +419,31 @@ def get_rule_for_predicate(predicate, idb):
     raise ForbiddenDisjunctionError()
 
 
-def freshen_free_variables(conjunction, free_variables, substitutions=None):
+def freshen_predicate_free_variables(pred, free_variables, substitutions):
+    new_args = tuple()
+    for arg in pred.args:
+        if arg in free_variables:
+            if arg in substitutions:
+                new_arg = substitutions[arg]
+            else:
+                new_arg = Symbol.fresh()
+                substitutions[arg] = new_arg
+            new_args += (new_arg,)
+        else:
+            new_args += (arg,)
+    new_pred = FunctionApplication[pred.type](pred.functor, new_args)
+    return new_pred
+
+
+def freshen_conjunction_free_variables(
+    conjunction, free_variables, substitutions=None
+):
     new_preds = []
     substitutions = substitutions if substitutions is not None else dict()
     for pred in conjunction.formulas:
-        new_args = tuple()
-        for arg in pred.args:
-            if arg in free_variables:
-                if arg in substitutions:
-                    new_arg = substitutions[arg]
-                else:
-                    new_arg = Symbol.fresh()
-                    substitutions[arg] = new_arg
-                new_args += (new_arg,)
-            else:
-                new_args += (arg,)
-        new_pred = FunctionApplication[pred.type](pred.functor, new_args)
+        new_pred = freshen_predicate_free_variables(
+            pred, free_variables, substitutions
+        )
         new_preds.append(new_pred)
     return Conjunction(tuple(new_preds))
 
@@ -487,7 +496,7 @@ def flatten_query(query, program):
         else:
             formula = enforce_conjunction(rule.antecedent)
             free_variables = extract_logic_free_variables(rule)
-            formula = freshen_free_variables(
+            formula = freshen_conjunction_free_variables(
                 formula, free_variables, substitutions
             )
             formula = flatten_query(formula, program)
