@@ -46,14 +46,12 @@ def rename_to_match(conjunction, src_predicate, dst_predicate):
         for src, dst in zip(src_predicate.args, dst_predicate.args)
         if src != dst
     }
-    return Conjunction(
-        tuple(
-            FunctionApplication[pred.type](
-                pred.functor, tuple(renames.get(arg, arg) for arg in pred.args)
-            )
-            for pred in conjunction.formulas
-        )
-    )
+    new_preds = []
+    for pred in conjunction.formulas:
+        new_args = tuple(renames.get(arg, arg) for arg in pred.args)
+        new_pred = FunctionApplication[pred.type](pred.functor, new_args)
+        new_preds.append(new_pred)
+    return Conjunction(tuple(new_preds))
 
 
 def flatten_query(query, idb):
