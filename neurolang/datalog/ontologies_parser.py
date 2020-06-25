@@ -134,7 +134,7 @@ class OntologyParser:
                 union_of_constraints = Union(
                     union_of_constraints.formulas + constraints.formulas
                 )
-            except AttributeError:
+            except AttributeError as err:
                 raise NeuroLangNotImplementedError(
                     f"""Ontology parser doesn\'t handle
                     restrictions of type {res_type}"""
@@ -185,17 +185,14 @@ class OntologyParser:
             cut_graph
         )
 
-        subClassOf = Symbol(str(RDFS.subClassOf))
+        rdfs_type = Constant(str(RDF.type))
         property_symbol = Symbol(str(parsed_prop))
-
         x = Symbol.fresh()
 
         constraint = Union(
             (
                 RightImplication(
-                    self._triple(
-                        x, subClassOf, Constant(str(restricted_node))
-                    ),
+                    self._triple(x, rdfs_type, Constant(str(restricted_node))),
                     property_symbol(x, Constant(str(value))),
                 ),
             )
@@ -321,7 +318,7 @@ class OntologyParser:
 
         constraints = Union(())
         property_symbol = Symbol(str(parsed_prop))
-        subClassOf = Constant(str(RDFS.subClassOf))
+        rdfs_type = Constant(str(RDF.type))
         y = Symbol.fresh()
 
         for value in nodes_someValuesFrom:
@@ -330,12 +327,9 @@ class OntologyParser:
                 + (
                     RightImplication(
                         self._triple(
-                            y, subClassOf, Constant(str(restricted_node))
+                            y, rdfs_type, Constant(str(restricted_node))
                         ),
-                        property_symbol(
-                            Constant(str(restricted_node)),
-                            Constant(str(value)),
-                        ),
+                        property_symbol(y, Constant(str(value))),
                     ),
                 )
             )
@@ -367,21 +361,25 @@ class OntologyParser:
         constraints = Union(())
 
         property_symbol = Symbol(str(parsed_prop))
-        subClassOf = Constant(str(RDFS.subClassOf))
+        rdf_type = Constant(str(RDF.type))
+        rdf_symbol = Symbol(str(RDF.type))
         y = Symbol.fresh()
+        x = Symbol.fresh()
 
         for value in allValuesFrom:
             constraints = Union(
                 constraints.formulas
                 + (
                     RightImplication(
-                        self._triple(
-                            y, subClassOf, Constant(str(restricted_node))
+                        Conjunction(
+                            (
+                                self._triple(
+                                    y, rdf_type, Constant(str(restricted_node))
+                                ),
+                                property_symbol(y, x),
+                            )
                         ),
-                        property_symbol(
-                            Constant(str(restricted_node)),
-                            Constant(str(value)),
-                        ),
+                        rdf_symbol(x, Constant(str(value))),
                     ),
                 )
             )
@@ -408,10 +406,10 @@ class OntologyParser:
         value : URIRef
             The value of the property
         """
-        restricted_node = cut_graph[0][0]
         restricted_node = list(
-            self.graph.triples((None, None, restricted_node))
+            self.graph.triples((None, None, cut_graph[0][0]))
         )[0][0]
+
         for triple in cut_graph:
             if OWL.onProperty == triple[1]:
                 parsed_property = triple[2]
