@@ -10,6 +10,7 @@ Z = Symbol("Z")
 Q = Symbol("Q")
 x = Symbol("x")
 y = Symbol("y")
+z = Symbol("z")
 
 
 class TestDatalogProgram(DatalogProgram, ExpressionWalker):
@@ -45,3 +46,34 @@ def test_flatten_query_multiple_preds():
     assert len(result.formulas) == 2
     assert P(x) in result.formulas
     assert Z(y) in result.formulas
+
+
+def test_existential():
+    code = Union(
+        (
+            Implication(P(x), Conjunction((Z(x, y), Z(y, x)))),
+            Implication(Q(x), Conjunction((P(x), P(y), R(z)))),
+        )
+    )
+    program = TestDatalogProgram()
+    program.walk(code)
+    query = Q(z)
+    result = flatten_query(query, program)
+    assert any(
+        formula.functor == R and formula.args[0] != z
+        for formula in result.formulas
+    )
+    assert any(
+        formula.functor == Z
+        and formula.args[0] == z
+        and "fresh" in formula.args[1].name
+        for formula in result.formulas
+    )
+    match = next(
+        formula for formula in result.formulas
+        if formula.functor == Z
+        and "fresh" in formula.args[0].name
+        and "fresh" in formula.args[1].name
+    )
+    expected = match.functor(*reversed(match.args))
+    assert expected in result.formulas
