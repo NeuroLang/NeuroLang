@@ -4,6 +4,7 @@ from operator import eq
 
 import numpy as np
 
+from ...exceptions import SymbolNotFoundError
 from ...expression_walker import ExpressionBasicEvaluator
 from ...expressions import Constant, ExpressionBlock, Symbol
 from ...logic import (
@@ -24,7 +25,6 @@ from ..expression_processing import (
     conjunct_if_needed,
     conjunct_formulas,
     program_has_loops,
-    SymbolNotFoundException
 )
 
 S_ = Symbol
@@ -301,7 +301,7 @@ def test_dependency_matrix():
     datalog = Datalog()
     datalog.walk(code)
 
-    with raises(SymbolNotFoundException):
+    with raises(SymbolNotFoundError):
         dependency_matrix(datalog)
 
 

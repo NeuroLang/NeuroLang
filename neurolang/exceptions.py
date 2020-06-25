@@ -32,3 +32,11 @@ class RelationalAlgebraNotImplementedError(
     RelationalAlgebraError, NotImplementedError
 ):
     pass
+
+
+class SymbolNotFoundError(NeuroLangException):
+    pass
+
+
+class RuleNotFoundError(NeuroLangException):
+    pass

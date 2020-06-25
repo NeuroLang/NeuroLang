@@ -7,20 +7,17 @@ from typing import Iterable
 
 import numpy as np
 
-from ..exceptions import NeuroLangException
+from ..exceptions import (
+    ForbiddenDisjunctionError,
+    ForbiddenExpressionError,
+    RuleNotFoundError,
+    SymbolNotFoundError,
+)
 from ..expression_walker import ExpressionWalker
 from ..expressions import Constant, FunctionApplication, Symbol
-from ..logic import Conjunction, Negation, Quantifier, Union
+from ..logic import Conjunction, Implication, Negation, Quantifier, Union
 from ..logic import expression_processing as elp
 from .expressions import TranslateToLogic
-
-
-class SymbolNotFoundException(NeuroLangException):
-    pass
-
-
-class RuleNotFoundException(NeuroLangException):
-    pass
 
 
 class TranslateToDatalogSemantics(TranslateToLogic, ExpressionWalker):
@@ -304,7 +301,7 @@ def dependency_matrix(datalog, rules=None):
 
     Raises
     ------
-    SymbolNotFoundException
+    SymbolNotFoundError
         If there is a predicate in the antecedent of a rule which
         is not a constant or an extensiona/intensional predicate.
     """
@@ -324,7 +321,7 @@ def dependency_matrix(datalog, rules=None):
         for rule in to_reach:
             functor = rule.consequent.functor
             if rule not in datalog.intensional_database()[functor].formulas:
-                raise RuleNotFoundException(
+                raise RuleNotFoundError(
                     f"Rule {rule} not contained in the datalog "
                     "instance."
                 )
@@ -356,7 +353,7 @@ def dependency_matrix(datalog, rules=None):
                     functor in datalog.intensional_database()
                 )
             ):
-                raise SymbolNotFoundException(
+                raise SymbolNotFoundError(
                     f'Symbol not found {functor.name}'
                 )
 
@@ -401,3 +398,67 @@ def conjunct_formulas(f1, f2):
 def is_ground_predicate(predicate):
     """Whether all the predicate's terms are all constant."""
     return all(isinstance(arg, Constant) for arg in predicate.args)
+
+
+def enforce_conjunction(expression):
+    if isinstance(expression, Conjunction):
+        return expression
+    elif isinstance(expression, FunctionApplication):
+        return Conjunction((expression,))
+    raise ForbiddenExpressionError(
+        "Cannot conjunct expression of type {}".format(type(expression))
+    )
+
+
+def get_rule_for_predicate(predicate, idb):
+    if predicate.functor not in idb:
+        return None
+    expression = idb[predicate.functor]
+    if isinstance(expression, Implication):
+        return expression
+    elif isinstance(expression, Union) and len(expression.formulas) == 1:
+        return expression.formulas[0]
+    raise ForbiddenDisjunctionError()
+
+
+def freshen_free_variables(conjunction, free_variables):
+    new_preds = []
+    for pred in conjunction.formulas:
+        new_args = tuple(
+            Symbol.fresh() if arg in free_variables else arg
+            for arg in pred.args
+        )
+        new_pred = FunctionApplication[pred.type](pred.functor, new_args)
+        new_preds.append(new_pred)
+    return Conjunction(tuple(new_preds))
+
+
+def rename_args_to_match(conjunction, src_predicate, dst_predicate):
+    renames = {
+        src: dst
+        for src, dst in zip(src_predicate.args, dst_predicate.args)
+        if src != dst
+    }
+    new_preds = []
+    for pred in conjunction.formulas:
+        new_args = tuple(renames.get(arg, arg) for arg in pred.args)
+        new_pred = FunctionApplication[pred.type](pred.functor, new_args)
+        new_preds.append(new_pred)
+    return Conjunction(tuple(new_preds))
+
+
+def flatten_query(query, idb):
+    query = enforce_conjunction(query)
+    conj_query = Conjunction(tuple())
+    for predicate in query.formulas:
+        rule = get_rule_for_predicate(predicate, idb)
+        if rule is None:
+            formula = predicate
+        else:
+            formula = enforce_conjunction(rule.antecedent)
+            free_variables = extract_logic_free_variables(rule)
+            formula = freshen_free_variables(formula, free_variables)
+            formula = flatten_query(formula, idb)
+            formula = rename_args_to_match(formula, rule.consequent, predicate)
+        conj_query = conjunct_formulas(conj_query, formula)
+    return conj_query
