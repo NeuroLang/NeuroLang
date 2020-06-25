@@ -30,3 +30,14 @@ def test_flatten_with_renaming():
     assert any(
         pred.functor == P and pred.args[0] != x for pred in result.formulas
     )
+
+
+def test_flatten_query_multiple_preds():
+    cpl = CPLogicProgram()
+    cpl.add_extensional_predicate_from_tuples(P, {("a",), ("b",)})
+    cpl.add_probabilistic_choice_from_tuples(Z, {(0.4, "a",), (0.6, "b",)})
+    query = Conjunction((P(x), Z(y)))
+    result = flatten_query(query, cpl.intensional_database())
+    assert len(result.formulas) == 2
+    assert P(x) in result.formulas
+    assert Z(y) in result.formulas
