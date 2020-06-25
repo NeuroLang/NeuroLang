@@ -69,4 +69,4 @@ PACKAGE_DATA = {
     'neurolang': [pjoin('data', '*')],
     'frontend': [pjoin('neurosynth_data', '*')]
 }
-REQUIRES = []
+REQUIRES = ["numpy"]
