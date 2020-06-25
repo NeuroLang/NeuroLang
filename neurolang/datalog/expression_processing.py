@@ -449,6 +449,24 @@ def rename_args_to_match(conjunction, src_predicate, dst_predicate):
 
 
 def flatten_query(query, program):
+    """
+    Construct the conjunction corresponding to a query on a program.
+
+    TODO: currently this only handles programs without conjunctions.
+
+    Parameters
+    ----------
+    query : predicate or conjunction of predicates
+        The query for which the conjunction is constructed.
+    program : a program with an intensional database
+        Program with logical rules that will be used to construct the
+        conjunction corresponding to the given query.
+
+    Returns
+    -------
+    conjunction of predicates
+
+    """
     if not hasattr(program, "intensional_database"):
         raise UnsupportedProgramError(
             "Only program with an intensional database are supported"
