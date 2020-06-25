@@ -22,3 +22,13 @@ class ForbiddenDisjunctionError(ForbiddenExpressionError):
 
 class ForbiddenExistentialError(ForbiddenExpressionError):
     pass
+
+
+class RelationalAlgebraError(NeuroLangException):
+    pass
+
+
+class RelationalAlgebraNotImplementedError(
+    RelationalAlgebraError, NotImplementedError
+):
+    pass
