@@ -24,8 +24,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
 
     def _drop_duplicates_if_needed(self):
         if self._might_have_duplicates:
-                self._container = self._drop_duplicates(self._container)
-                self._might_have_duplicates = False
+            self._container = self._drop_duplicates(self._container)
+            self._might_have_duplicates = False
 
     @classmethod
     def create_view_from(cls, other):
