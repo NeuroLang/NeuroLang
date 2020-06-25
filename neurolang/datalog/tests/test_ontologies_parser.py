@@ -36,20 +36,20 @@ def test_all_values_from():
         xml:base="http://www.w3.org/2002/03owlt/allValuesFrom/premises001" >
         <owl:Ontology/>
         <owl:Class rdf:ID="r">
-        <rdfs:subClassOf>
-            <owl:Restriction>
-                <owl:onProperty rdf:resource="#p"/>
-                <owl:allValuesFrom rdf:resource="#c"/>
-            </owl:Restriction>
-        </rdfs:subClassOf>
+            <rdfs:subClassOf>
+                <owl:Restriction>
+                    <owl:onProperty rdf:resource="#p"/>
+                    <owl:allValuesFrom rdf:resource="#c"/>
+                </owl:Restriction>
+            </rdfs:subClassOf>
         </owl:Class>
         <owl:ObjectProperty rdf:ID="p"/>
         <owl:Class rdf:ID="c"/>
         <first:r rdf:ID="i">
-        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Thing"/>
-        <first:p>
-            <owl:Thing rdf:ID="o" />
-        </first:p>
+            <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#Thing"/>
+            <first:p>
+                <owl:Thing rdf:ID="o" />
+            </first:p>
         </first:r>
     </rdf:RDF>
     """
@@ -67,11 +67,11 @@ def test_all_values_from():
     </rdf:RDF>  
     """
 
-    rdf_type = Symbol(str(RDF.type))
+    p = Symbol("http://www.w3.org/2002/03owlt/allValuesFrom/premises001#p")
     answer = Symbol("answer")
     x = Symbol("x")
     y = Symbol("y")
-    test_base_q = Union((Implication(answer(x, y), rdf_type(x, y)),))
+    test_base_q = Union((Implication(answer(x, y), p(x, y)),))
 
     onto = OntologyParser(io.StringIO(premise_ontology))
     predicate_tuples, union_of_constraints = onto.parse_ontology()
