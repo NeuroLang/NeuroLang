@@ -481,7 +481,7 @@ def flatten_query(query, program):
         )
     idb = program.intensional_database()
     query = enforce_conjunction(query)
-    conj_query = Conjunction(tuple())
+    conj_predicates = set()
     substitutions = dict()
     for predicate in query.formulas:
         rule = get_rule_for_predicate(predicate, idb)
@@ -495,5 +495,5 @@ def flatten_query(query, program):
             )
             formula = flatten_query(formula, program)
             formula = rename_args_to_match(formula, rule.consequent, predicate)
-        conj_query = conjunct_formulas(conj_query, formula)
-    return conj_query
+        conj_predicates |= set(enforce_conjunction(formula).formulas)
+    return Conjunction(tuple(conj_predicates))
