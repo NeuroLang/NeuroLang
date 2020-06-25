@@ -321,7 +321,7 @@ class OntologyParser:
 
         constraints = Union(())
         property_symbol = Symbol(str(parsed_prop))
-        subClassOf = Symbol(str(RDFS.subClassOf))
+        subClassOf = Constant(str(RDFS.subClassOf))
         y = Symbol.fresh()
 
         for value in nodes_someValuesFrom:
@@ -329,14 +329,8 @@ class OntologyParser:
                 constraints.formulas
                 + (
                     RightImplication(
-                        Conjunction(
-                            (
-                                self._triple(
-                                    y,
-                                    subClassOf,
-                                    Constant(str(restricted_node)),
-                                ),
-                            )
+                        self._triple(
+                            y, subClassOf, Constant(str(restricted_node))
                         ),
                         property_symbol(
                             Constant(str(restricted_node)),
@@ -373,7 +367,7 @@ class OntologyParser:
         constraints = Union(())
 
         property_symbol = Symbol(str(parsed_prop))
-        subClassOf = Symbol(str(RDFS.subClassOf))
+        subClassOf = Constant(str(RDFS.subClassOf))
         y = Symbol.fresh()
 
         for value in allValuesFrom:
@@ -381,14 +375,8 @@ class OntologyParser:
                 constraints.formulas
                 + (
                     RightImplication(
-                        Conjunction(
-                            (
-                                self._triple(
-                                    y,
-                                    subClassOf,
-                                    Constant(str(restricted_node)),
-                                ),
-                            )
+                        self._triple(
+                            y, subClassOf, Constant(str(restricted_node))
                         ),
                         property_symbol(
                             Constant(str(restricted_node)),
