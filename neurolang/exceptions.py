@@ -41,5 +41,6 @@ class SymbolNotFoundError(NeuroLangException):
 class RuleNotFoundError(NeuroLangException):
     pass
 
+
 class UnsupportedProgramError(NeuroLangException):
     pass
