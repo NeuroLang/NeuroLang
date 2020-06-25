@@ -604,7 +604,7 @@ class NamedRelationalAlgebraFrozenSet(
             new_containers.append(new_col)
 
         new_container = (
-            pd.concat(new_containers)
+            pd.concat(new_containers, axis=1)
             .reset_index()
         )
 
