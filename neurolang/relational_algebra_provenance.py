@@ -13,6 +13,7 @@ from .relational_algebra import (
     ExtendedProjection,
     ExtendedProjectionListMember,
     NaturalJoin,
+    NameColumns,
     Product,
     Projection,
     RelationalAlgebraOperation,
@@ -415,6 +416,17 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
         ne = RenameColumns(
             self._build_relation_constant(expression.relation.relations),
             expression.renames
+        )
+        return ProvenanceAlgebraSet(
+            self.walk(ne).value,
+            expression.relation.provenance_column
+        )
+
+    @add_match(NameColumns(ProvenanceAlgebraSet, ...))
+    def name_columns_rap(self, expression):
+        ne = NameColumns(
+            self._build_relation_constant(expression.relation.relations),
+            expression.column_names
         )
         return ProvenanceAlgebraSet(
             self.walk(ne).value,
