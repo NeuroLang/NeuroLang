@@ -220,7 +220,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             proj_list_member.dst_column == relation.provenance_column
             for proj_list_member in extended_proj.projection_list
         ):
-            new_prov_col = Constant(ColumnStr(Symbol.fresh().name))
+            new_prov_col = (str2columnstr_constant(Symbol.fresh().name))
         else:
             new_prov_col = relation.provenance_column
         relation = self.walk(
@@ -252,7 +252,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
         res_columns = set(left.value.columns) | (
             set(right.value.columns) - {right.provenance_column.value}
         )
-        res_columns = tuple(Constant(ColumnStr(col)) for col in res_columns)
+        res_columns = tuple(str2columnstr_constant(col) for col in res_columns)
         res_prov_col = left.provenance_column
         # provenance columns are temporarily renamed for executing the
         # non-provenance operation on the relations
@@ -337,3 +337,163 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
     @add_match(Constant[AbstractSet])
     def constant_relation_or_provenance_set(self, relation):
         return relation
+
+
+class RelationalAlgebraProvenanceExpressionSemringSolver(
+    RelationalAlgebraSolver
+):
+    @add_match(NaturalJoin(ProvenanceAlgebraSet, ProvenanceAlgebraSet))
+    def natural_join_rap(self, expression):
+        rap_left = expression.relation_left
+        rap_right = expression.relation_right
+        rap_right_r = self._build_relation_constant(rap_right.relations)
+        rap_right_pc = (str2columnstr_constant(rap_right.provenance_column))
+
+        cols_to_keep = [
+            ExtendedProjectionListMember(
+                (str2columnstr_constant(c)), (str2columnstr_constant(c))
+            )
+            for c in (rap_left.relations.columns + rap_right.relations.columns)
+            if c not in (
+                rap_left.provenance_column,
+                rap_right.provenance_column,
+            )
+        ]
+
+        if rap_left.provenance_column == rap_right.provenance_column:
+            rap_right_pc = (str2columnstr_constant(Symbol.fresh().name))
+            rap_right_r = RenameColumn(
+                rap_right_r,
+                (str2columnstr_constant(rap_right.provenance_column)),
+                rap_right_pc
+            )
+        new_pc = (str2columnstr_constant(Symbol.fresh().name))
+        operation = ExtendedProjection(
+            NaturalJoin(
+                self._build_relation_constant(rap_left.relations),
+                rap_right_r
+            ),
+            cols_to_keep + [
+                ExtendedProjectionListMember(
+                    (str2columnstr_constant(rap_left.provenance_column)) *
+                    rap_right_pc,
+                    new_pc
+                )
+            ]
+        )
+        return ProvenanceAlgebraSet(
+            self.walk(operation).value,
+            new_pc.value
+        )
+
+    @add_match(Projection(ProvenanceAlgebraSet, ...))
+    def projection_rap(self, projection):
+        cols = tuple(v.value for v in projection.attributes)
+        projected_relation = projection.relation.relations.aggregate(
+            cols, {projection.relation.provenance_column: sum}
+        )
+        return ProvenanceAlgebraSet(
+            projected_relation,
+            projection.relation.provenance_column
+        )
+
+    @add_match(RenameColumn(ProvenanceAlgebraSet, ..., ...))
+    def rename_column_rap(self, expression):
+        ne = RenameColumn(
+            self._build_relation_constant(expression.relation.relations),
+            expression.src, expression.dst
+        )
+        return ProvenanceAlgebraSet(
+            self.walk(ne).value,
+            expression.relation.provenance_column
+        )
+
+    @add_match(RenameColumns(ProvenanceAlgebraSet, ...))
+    def rename_columns_rap(self, expression):
+        ne = RenameColumns(
+            self._build_relation_constant(expression.relation.relations),
+            expression.renames
+        )
+        return ProvenanceAlgebraSet(
+            self.walk(ne).value,
+            expression.relation.provenance_column
+        )
+
+    @add_match(Selection(ProvenanceAlgebraSet, ...))
+    def selection_rap(self, selection):
+        ne = Selection(
+            self._build_relation_constant(selection.relation.relations),
+            selection.formula
+        )
+        return ProvenanceAlgebraSet(
+            self.walk(ne).value,
+            selection.relation.provenance_column
+        )
+
+    @add_match(Union(ProvenanceAlgebraSet, ProvenanceAlgebraSet))
+    def union_rap(self, union):
+        prov_column_left = (
+            str2columnstr_constant(union.relation_left.provenance_column)
+        )
+        prov_column_right = (
+            str2columnstr_constant(union.relation_right.provenance_column)
+        )
+
+        relation_left = self._build_relation_constant(
+            union.relation_left.relations
+        )
+        relation_right = self._build_relation_constant(
+            union.relation_right.relations
+        )
+
+        if prov_column_left != prov_column_right:
+            relation_right = RenameColumn(
+                relation_right,
+                prov_column_right,
+                prov_column_left
+            )
+
+        ra_union = self.walk(Union(relation_left, relation_right))
+        columns_to_keep = tuple(
+            (str2columnstr_constant(c)) for c in relation_left.value.columns
+            if c != prov_column_left
+        )
+        rap_projection = Projection(
+            ProvenanceAlgebraSet(
+                ra_union.value,
+                prov_column_left.value
+            ),
+            columns_to_keep
+        )
+
+        return self.walk(rap_projection)
+
+    # Walk the arguments for every nested RA operation before solving it again
+    # either through RAP or through RA
+    @add_match(
+        RelationalAlgebraOperation,
+        lambda x: any(
+            isinstance(arg, RelationalAlgebraOperation)
+            for arg in x.unapply()
+        )
+    )
+    def resolve_operations(self, ra_operation):
+        args = ra_operation.unapply()
+        new_args = tuple(
+            self.walk(arg) for arg in args
+        )
+        return self.walk(ra_operation.apply(*new_args))
+
+    # Raise Exception for non-implemented RAP operations
+    @add_match(
+        RelationalAlgebraOperation,
+        lambda x: any(
+            isinstance(arg, ProvenanceAlgebraSet)
+            for arg in x.unapply()
+        )
+    )
+    def rap_not_implemented(self, ra_operation):
+        raise NotImplementedError(
+            f"Relationa Algebra with Provenance "
+            f"operation {type(ra_operation)} not implemented"
+        )
