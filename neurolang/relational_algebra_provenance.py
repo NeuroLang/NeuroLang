@@ -1,6 +1,8 @@
 from typing import AbstractSet
 
-from .exceptions import NeuroLangException
+from .exceptions import (
+    NeuroLangException, RelationalAlgebraNotImplementedError
+)
 from .expression_walker import ExpressionWalker, add_match
 from .expressions import Constant, FunctionApplication, Symbol
 from .relational_algebra import (
@@ -493,7 +495,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
         )
     )
     def rap_not_implemented(self, ra_operation):
-        raise NotImplementedError(
-            f"Relationa Algebra with Provenance "
+        raise RelationalAlgebraNotImplementedError(
+            f"Relational Algebra with Provenance "
             f"operation {type(ra_operation)} not implemented"
         )
