@@ -29,9 +29,7 @@ from . import RegionFrontendDatalogSolver
 from .query_resolution_datalog import QueryBuilderDatalog
 
 
-class ChaseFrontend(
-    Chase, ChaseNaive, ChaseNamedRelationalAlgebraMixin, ChaseGeneral
-):
+class ChaseFrontend(Chase, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
     pass
 
 
@@ -56,9 +54,8 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
 
     def load_ontology(self, paths, load_format="xml"):
         onto = OntologyParser(paths, load_format)
-        d_pred, u_constraints, entailment_rules = onto.parse_ontology()
+        d_pred, u_constraints = onto.parse_ontology()
         self.solver.walk(u_constraints)
-        self.solver.walk(entailment_rules)
         self.solver.add_extensional_predicate_from_tuples(
             onto.get_triples_symbol(), d_pred[onto.get_triples_symbol()]
         )
@@ -68,31 +65,28 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
 
         self.ontology_loaded = True
 
-    def separate_deterministic_probabilistic_code(
-        self, det_symbols=None, prob_symbols=None
+    def _separate_deterministic_probabilistic_code(
+        self, query_pred=None, det_symbols=None, prob_symbols=None
     ):
         if det_symbols is None:
             det_symbols = set()
         if prob_symbols is None:
             prob_symbols = set()
-
-        if len(self.current_program) == 0:
-            raise NeuroLangFrontendException("Your program is empty")
-        query_pred = self.current_program[0].expression
-        query_reachable_code = reachable_code(query_pred, self.solver)
-        constraints_symbols = set(
-            [
-                ri.consequent.functor
-                for ri in self.solver.constraints().formulas
-            ]
-        )
+        if query_pred is None:
+            query_reachable_code = self._union_of_idb()
+        else:
+            query_reachable_code = reachable_code(query_pred, self.solver)
         deterministic_symbols = (
             set(self.solver.extensional_database().keys())
             | set(det_symbols)
-            | constraints_symbols
+            | set(self.solver.builtins().keys())
         )
         deterministic_program = list()
-        probabilistic_symbols = set() | set(prob_symbols)
+        probabilistic_symbols = (
+            self.solver.pfact_pred_symbs
+            | self.solver.pchoice_pred_symbs
+            | set(prob_symbols)
+        )
         probabilistic_program = list()
         unclassified_code = list(query_reachable_code.formulas)
         unclassified = 0
@@ -126,15 +120,17 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
             )
         if len(unclassified_code) > 0:
             raise NeuroLangFrontendException("There are unclassified atoms")
-
         return Union(deterministic_program), Union(probabilistic_program)
 
-    def solve_query(self, symbol_prob):
-        det, prob = self.separate_deterministic_probabilistic_code()
-        if len(prob.formulas) > 0:
-            raise NeuroLangNotImplementedError(
-                "The probabilistic solver has not yet been implemented"
-            )
+    def solve_query(self):
+        # det, prob = self._separate_deterministic_probabilistic_code()
+
+        det = []
+        for p in self.current_program:
+            det.append(p.expression)
+
+        det = Union(det)
+
         if self.ontology_loaded:
             eB = self.rewrite_database_with_ontology(det)
             self.solver.walk(eB)
