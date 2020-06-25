@@ -32,3 +32,7 @@ class RelationalAlgebraNotImplementedError(
     RelationalAlgebraError, NotImplementedError
 ):
     pass
+
+
+class NeuroLangFrontendException(NeuroLangException):
+    pass
