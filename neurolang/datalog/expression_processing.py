@@ -12,6 +12,7 @@ from ..exceptions import (
     ForbiddenExpressionError,
     RuleNotFoundError,
     SymbolNotFoundError,
+    UnsupportedProgramError,
 )
 from ..expression_walker import ExpressionWalker
 from ..expressions import Constant, FunctionApplication, Symbol
@@ -447,7 +448,12 @@ def rename_args_to_match(conjunction, src_predicate, dst_predicate):
     return Conjunction(tuple(new_preds))
 
 
-def flatten_query(query, idb):
+def flatten_query(query, program):
+    if not hasattr(program, "intensional_database"):
+        raise UnsupportedProgramError(
+            "Only program with an intensional database are supported"
+        )
+    idb = program.intensional_database()
     query = enforce_conjunction(query)
     conj_query = Conjunction(tuple())
     for predicate in query.formulas:
@@ -458,7 +464,7 @@ def flatten_query(query, idb):
             formula = enforce_conjunction(rule.antecedent)
             free_variables = extract_logic_free_variables(rule)
             formula = freshen_free_variables(formula, free_variables)
-            formula = flatten_query(formula, idb)
+            formula = flatten_query(formula, program)
             formula = rename_args_to_match(formula, rule.consequent, predicate)
         conj_query = conjunct_formulas(conj_query, formula)
     return conj_query
