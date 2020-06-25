@@ -608,7 +608,10 @@ class NamedRelationalAlgebraFrozenSet(
             .reset_index()
         )
 
-        self._keep_column_types(new_container, aggs)
+        self._keep_column_types(
+            new_container, set(aggs) |
+            set(aggs_multi_column)
+        )
 
         output = self._light_init_same_structure(
             new_container,
