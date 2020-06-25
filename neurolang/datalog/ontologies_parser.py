@@ -227,7 +227,7 @@ class OntologyParser:
 
         warnings.warn(
             f"""The restriction minCardinality has not
-            been parsed for {restricted_node}"""
+            been parsed for {restricted_node}. Not implemented yet."""
         )
 
         return Union(())
@@ -256,7 +256,7 @@ class OntologyParser:
 
         warnings.warn(
             f"""The restriction maxCardinality has not
-            been parsed for {parsed_restrictions}"""
+            been parsed for {parsed_restrictions}. Not implemented yet."""
         )
 
         return Union(())
@@ -289,7 +289,7 @@ class OntologyParser:
 
         warnings.warn(
             f"""The restriction cardinality has not
-            been parsed for {restricted_node}"""
+            been parsed for {restricted_node}. Not implemented yet."""
         )
 
         return Union(())
@@ -297,12 +297,12 @@ class OntologyParser:
     def _process_someValuesFrom(self, cut_graph):
         """
         It defines a class of individuals x for which there is at least one y
-        (either an instance of the class description or value of the data 
+        (either an instance of the class description or value of the data
         range) such that the pair (x,y) is an instance of P. This does not
         exclude that there are other instances (x,y') of P for which y' does
         not belong to the class description or data range.
 
-        The following example defines a class of individuals which have at 
+        The following example defines a class of individuals which have at
         least one parent who is a physician:
 
         <owl:Restriction>
