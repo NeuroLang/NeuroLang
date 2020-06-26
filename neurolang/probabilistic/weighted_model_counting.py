@@ -212,6 +212,9 @@ def solve_succ_query(query_predicate, cpl_program):
 
     symbol_table = dict()
     for predicate_symbol, facts in cpl_program.probabilistic_facts().items():
+        if predicate_symbol not in query_predicate._symbols:
+            continue
+
         fresh_symbol = Symbol.fresh()
         symbol_table[predicate_symbol] = ProbabilisticFactSet(
             fresh_symbol,
