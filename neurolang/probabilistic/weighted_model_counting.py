@@ -14,6 +14,7 @@ from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import ExpressionWalker, add_match
 from ..expressions import (Constant, ExpressionBlock, FunctionApplication,
                            Symbol)
+from ..logic import Implication
 from ..relational_algebra import (ColumnInt, ExtendedProjection,
                                   ExtendedProjectionListMember, NameColumns,
                                   Projection, RelationalAlgebraOperation,
@@ -228,15 +229,21 @@ def solve_succ_query(query_predicate, cpl_program):
 
         SUCC[ P(x) ]
     """
-    query_antecedent = flatten_query(query_predicate.antecedent, cpl_program)
-    ra_query = TranslateToNamedRA().walk(query_antecedent)
-    ra_query = Projection(
-        ra_query,
-        tuple(
-            str2columnstr_constant(s.name)
-            for s in query_predicate.consequent.args
+    if isinstance(query_predicate, Implication):
+        query_antecedent = flatten_query(
+            query_predicate.antecedent, cpl_program
         )
-    )
+        ra_query = TranslateToNamedRA().walk(query_antecedent)
+        ra_query = Projection(
+            ra_query,
+            tuple(
+                str2columnstr_constant(s.name)
+                for s in query_predicate.consequent.args
+            )
+        )
+    else:
+        query_predicate = flatten_query(query_predicate, cpl_program)
+        ra_query = TranslateToNamedRA().walk(query_predicate)   
 
     ra_query = RAQueryOptimiser().walk(ra_query)
 
