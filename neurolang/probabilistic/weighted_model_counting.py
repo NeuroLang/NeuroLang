@@ -88,11 +88,52 @@ class ProbabilisticFactSet(RelationalAlgebraOperation):
         self.probability_column = probability_column
 
 
+class ProbabilisticChoiceSet(RelationalAlgebraOperation):
+    def __init__(self, relation, probability_column):
+        self.relation = relation
+        self.probability_column = probability_column
+
+
+class DeterministicFactSet(RelationalAlgebraOperation):
+    def __init__(self, relation):
+        self.relation = relation
+
+
 class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.translated_probfact_sets = dict()
         self.tagged_sets = []
+
+    @add_match(DeterministicFactSet(Symbol))
+    def deterministic_fact_set(self, deterministic_set):
+        relation_symbol = deterministic_set.relation
+        if relation_symbol in self.translated_probfact_sets:
+            return self.translated_probfact_sets[relation_symbol]
+
+        relation = self.walk(relation_symbol)
+        tagged_relation, rap_column = self._add_tag_column(relation)
+
+        self.tagged_sets.append(self.walk(
+            ExtendedProjection(
+                tagged_relation,
+                [
+                    ExtendedProjectionListMember(
+                        rap_column, str2columnstr_constant('id')
+                    ),
+                    ExtendedProjectionListMember(
+                        Constant[float](1.), str2columnstr_constant('prob')
+                    )
+                ]
+            )
+        ))
+
+        prov_set = self._generate_provenance_set(
+            tagged_relation, Constant[int](-1), rap_column
+        )
+
+        self.translated_probfact_sets[relation_symbol] = prov_set
+        return prov_set
 
     @add_match(ProbabilisticFactSet(Symbol, Constant))
     def probabilistic_fact_set(self, prob_fact_set):
@@ -243,21 +284,11 @@ def solve_succ_query(query_predicate, cpl_program):
         )
     else:
         query_predicate = flatten_query(query_predicate, cpl_program)
-        ra_query = TranslateToNamedRA().walk(query_predicate)   
+        ra_query = TranslateToNamedRA().walk(query_predicate)
 
     ra_query = RAQueryOptimiser().walk(ra_query)
 
-    symbol_table = dict()
-    for predicate_symbol, facts in cpl_program.probabilistic_facts().items():
-        if predicate_symbol not in query_predicate._symbols:
-            continue
-
-        fresh_symbol = Symbol.fresh()
-        symbol_table[predicate_symbol] = ProbabilisticFactSet(
-            fresh_symbol,
-            Constant[ColumnInt](ColumnInt(0))
-        )
-        symbol_table[fresh_symbol] = facts
+    symbol_table = _generate_symbol_table(cpl_program, query_predicate)
 
     solver = WMCSemiRingSolver(symbol_table)
     prob_set_result = solver.walk(ra_query)
@@ -270,7 +301,46 @@ def solve_succ_query(query_predicate, cpl_program):
         prob_set_program, prob_set_result
     )
 
-    return res
+    return ProvenanceAlgebraSet(
+        res, str2columnstr_constant('prob')
+    )
+
+
+def _generate_symbol_table(cpl_program, query_predicate):
+    symbol_table = dict()
+    for predicate_symbol, facts in cpl_program.probabilistic_facts().items():
+        if predicate_symbol not in query_predicate._symbols:
+            continue
+
+        fresh_symbol = Symbol.fresh()
+        symbol_table[predicate_symbol] = ProbabilisticFactSet(
+            fresh_symbol,
+            Constant[ColumnInt](ColumnInt(0))
+        )
+        symbol_table[fresh_symbol] = facts
+
+    for predicate_symbol, facts in cpl_program.probabilistic_choices().items():
+        if predicate_symbol not in query_predicate._symbols:
+            continue
+
+        fresh_symbol = Symbol.fresh()
+        symbol_table[predicate_symbol] = ProbabilisticChoiceSet(
+            fresh_symbol,
+            Constant[ColumnInt](ColumnInt(0))
+        )
+        symbol_table[fresh_symbol] = facts
+
+    for predicate_symbol, facts in cpl_program.extensional_database().items():
+        if predicate_symbol not in query_predicate._symbols:
+            continue
+
+        fresh_symbol = Symbol.fresh()
+        symbol_table[predicate_symbol] = DeterministicFactSet(
+            fresh_symbol
+        )
+        symbol_table[fresh_symbol] = facts
+
+    return symbol_table
 
 
 def sdd_compilation(prob_set_result):
