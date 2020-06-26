@@ -1,15 +1,8 @@
-import operator as op
-
 import numpy as np
 import pandas as pd
-from neurolang import expression_walker as ew
-from neurolang import expressions, logic
-from neurolang import relational_algebra as ras
-from neurolang import relational_algebra_provenance as rap
-from neurolang.probabilistic import weighted_model_counting
-from neurolang.probabilistic.cplogic.program import CPLogicProgram
-from neurolang.utils.relational_algebra_set import pandas as ra
-from pysdd import sdd
+from ... import expressions, logic
+from .. import weighted_model_counting
+from ..cplogic.program import CPLogicProgram
 
 
 def test_one():

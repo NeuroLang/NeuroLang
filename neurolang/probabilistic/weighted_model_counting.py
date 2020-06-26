@@ -9,11 +9,12 @@ import numpy as np
 import pandas as pd
 from pysdd import sdd
 
+from ..datalog.expression_processing import flatten_query
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import ExpressionWalker, add_match
 from ..expressions import (Constant, ExpressionBlock, FunctionApplication,
                            Symbol)
-from ..relational_algebra import (ColumnInt, ColumnStr, ExtendedProjection,
+from ..relational_algebra import (ColumnInt, ExtendedProjection,
                                   ExtendedProjectionListMember, NameColumns,
                                   Projection, RelationalAlgebraOperation,
                                   RelationalAlgebraStringExpression,
@@ -206,7 +207,7 @@ def solve_succ_query(query_predicate, cpl_program):
 
         SUCC[ P(x) ]
     """
-    # query_predicate = flatten_query(query_predicate, cpl_program)
+    query_predicate = flatten_query(query_predicate, cpl_program)
     ra_query = TranslateToNamedRA().walk(query_predicate)
 
     symbol_table = dict()
