@@ -34,5 +34,9 @@ class RelationalAlgebraNotImplementedError(
     pass
 
 
+class ForbiddenBuiltinError(ForbiddenExpressionError):
+    pass
+
+
 class NeuroLangFrontendException(NeuroLangException):
     pass
