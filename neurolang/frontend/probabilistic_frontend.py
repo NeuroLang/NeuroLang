@@ -2,6 +2,7 @@ from uuid import uuid1
 
 import pandas as pd
 
+from ..datalog.aggregation import Chase
 from ..datalog.constraints_representation import DatalogConstraintsProgram
 from ..datalog.expression_processing import (
     extract_logic_predicates,
@@ -10,13 +11,13 @@ from ..datalog.expression_processing import (
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
 from ..exceptions import NeuroLangFrontendException
+from ..expression_walker import ExpressionBasicEvaluator
 from ..expressions import Symbol
 from ..logic import Union
 from ..probabilistic.cplogic import solve_succ_all
 from ..probabilistic.cplogic.program import CPLogicMixin, CPLogicProgram
 from ..region_solver import RegionSolver
-from .datalog.expression_walker import ExpressionBasicEvaluator
-from .frontend import QueryBuilderDatalog
+from . import QueryBuilderDatalog
 from .query_resolution_expressions import Symbol as FrontEndSymbol
 
 
@@ -128,10 +129,19 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             query_reachable_code = self._union_of_idb()
         else:
             query_reachable_code = reachable_code(query_pred, self.solver)
+
+        constraints_symbols = set(
+            [
+                ri.consequent.functor
+                for ri in self.solver.constraints().formulas
+            ]
+        )
+
         deterministic_symbols = (
             set(self.solver.extensional_database().keys())
             | set(det_symbols)
             | set(self.solver.builtins().keys())
+            | constraints_symbols
         )
         deterministic_program = list()
         probabilistic_symbols = (
@@ -172,6 +182,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             )
         if len(unclassified_code) > 0:
             raise NeuroLangFrontendException("There are unclassified atoms")
+
         return Union(deterministic_program), Union(probabilistic_program)
 
     def _union_of_idb(self):
