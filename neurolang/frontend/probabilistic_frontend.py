@@ -1,56 +1,39 @@
-from ..datalog.aggregation import (
-    AggregationApplication,
-    Chase,
-    DatalogWithAggregationMixin,
-)
-from ..datalog.chase import (
-    ChaseGeneral,
-    ChaseNaive,
-    ChaseNamedRelationalAlgebraMixin,
-    ChaseSemiNaive,
-)
+from uuid import uuid1
+
+import pandas as pd
+
 from ..datalog.constraints_representation import DatalogConstraintsProgram
 from ..datalog.expression_processing import (
     extract_logic_predicates,
     reachable_code,
 )
-from ..datalog.expressions import TranslateToLogic
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
-from ..exceptions import (
-    NeuroLangFrontendException,
-    NeuroLangNotImplementedError,
-)
-from ..expression_walker import ExpressionBasicEvaluator
+from ..exceptions import NeuroLangFrontendException
+from ..expressions import Symbol
 from ..logic import Union
+from ..probabilistic.cplogic import solve_succ_all
+from ..probabilistic.cplogic.program import CPLogicMixin, CPLogicProgram
 from ..region_solver import RegionSolver
-from ..regions import ExplicitVBR
-from . import RegionFrontendDatalogSolver
-from .query_resolution_datalog import QueryBuilderDatalog
+from .datalog.expression_walker import ExpressionBasicEvaluator
+from .frontend import QueryBuilderDatalog
+from .query_resolution_expressions import Symbol as FrontEndSymbol
 
 
-class ChaseFrontend(Chase, ChaseNamedRelationalAlgebraMixin, ChaseGeneral):
-    pass
-
-
-class DatalogRegions(
-    TranslateToLogic,
+class RegionFrontendCPLogicSolver(
     RegionSolver,
-    DatalogWithAggregationMixin,
+    CPLogicMixin,
     DatalogConstraintsProgram,
     ExpressionBasicEvaluator,
 ):
     pass
 
 
-class NeurolangOntologyDL(QueryBuilderDatalog):
-    def __init__(self, solver=None):
-        if solver is None:
-            solver = DatalogRegions()
-
+class ProbabilisticFrontend(QueryBuilderDatalog):
+    def __init__(self, probabilistic_solver="problog"):
+        super().__init__(RegionFrontendCPLogicSolver(), chase_class=Chase)
+        self.probabilistic_solver = probabilistic_solver
         self.ontology_loaded = False
-
-        super().__init__(solver, chase_class=ChaseFrontend)
 
     def load_ontology(self, paths, load_format="xml"):
         onto = OntologyParser(paths, load_format)
@@ -64,6 +47,75 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
         )
 
         self.ontology_loaded = True
+
+    def solve_all(self):
+        (
+            deterministic_idb,
+            probabilistic_idb,
+        ) = self._separate_deterministic_probabilistic_code()
+
+        if self.ontology_loaded:
+            eB = self._rewrite_database_with_ontology(deterministic_idb)
+            self.solver.walk(eB)
+
+        deterministic_solution = self.chase_class(
+            self.solver
+        ).build_chase_solution()
+        if probabilistic_idb.formulas:
+            cpl = self._make_probabilistic_program_from_deterministic_solution(
+                deterministic_solution, probabilistic_idb
+            )
+            return solve_succ_all(cpl, solver_name=self.probabilistic_solver)
+        return deterministic_solution
+
+    def _rewrite_database_with_ontology(self, deterministic_program):
+        orw = OntologyRewriter(
+            deterministic_program, self.solver.constraints()
+        )
+        rewrite = orw.Xrewrite()
+
+        eB2 = ()
+        for imp in rewrite:
+            eB2 += (imp[0],)
+
+        return Union(eB2)
+
+    def add_uniform_probabilistic_choice_over_set(self, iterable, name=None):
+        if name is None:
+            name = str(uuid1())
+        probability = 1 / len(iterable)
+        if isinstance(iterable, pd.DataFrame):
+            columns = iterable.columns
+            prob_col = Symbol.fresh().name
+            new_columns = (prob_col,) + tuple(columns)
+            iterable = iterable.copy()
+            iterable[prob_col] = probability
+            iterable = iterable[new_columns]
+        else:
+            iterable = [(probability,) + tuple(tupl) for tupl in iterable]
+        self.solver.add_probabilistic_choice_from_tuples(
+            Symbol(name), iterable
+        )
+        return FrontEndSymbol(self, name)
+
+    def _make_probabilistic_program_from_deterministic_solution(
+        self, deterministic_solution, probabilistic_idb
+    ):
+        cpl = CPLogicProgram()
+        for pred_symb, ra_set in deterministic_solution.items():
+            cpl.add_extensional_predicate_from_tuples(
+                pred_symb, ra_set.value.unwrap()
+            )
+        for pred_symb in self.solver.pfact_pred_symbs:
+            cpl.add_probabilistic_facts_from_tuples(
+                pred_symb, self.solver.symbol_table[pred_symb].value.unwrap()
+            )
+        for pred_symb in self.solver.pchoice_pred_symbs:
+            cpl.add_probabilistic_choice_from_tuples(
+                pred_symb, self.solver.symbol_table[pred_symb].value.unwrap()
+            )
+        cpl.walk(probabilistic_idb)
+        return cpl
 
     def _separate_deterministic_probabilistic_code(
         self, query_pred=None, det_symbols=None, prob_symbols=None
@@ -122,58 +174,8 @@ class NeurolangOntologyDL(QueryBuilderDatalog):
             raise NeuroLangFrontendException("There are unclassified atoms")
         return Union(deterministic_program), Union(probabilistic_program)
 
-    def solve_query(self):
-        # det, prob = self._separate_deterministic_probabilistic_code()
-
-        det = []
-        for p in self.current_program:
-            det.append(p.expression)
-
-        det = Union(det)
-
-        if self.ontology_loaded:
-            eB = self.rewrite_database_with_ontology(det)
-            self.solver.walk(eB)
-
-        dc = self.chase_class(self.solver)
-        solution_instance = dc.build_chase_solution()
-
-        # dlProb = self.load_probabilistic_facts(sol)
-        # result = self.solve_probabilistic_query(dlProb, symbol_prob)
-
-        return solution_instance
-
-    def rewrite_database_with_ontology(self, deterministic_program):
-        orw = OntologyRewriter(
-            deterministic_program, self.solver.constraints()
-        )
-        rewrite = orw.Xrewrite()
-
-        eB2 = ()
-        for imp in rewrite:
-            eB2 += (imp[0],)
-
-        return Union(eB2)
-
-    # TODO This should be updated to the latest version.
-    """
-    def solve_probabilistic_query(self, dlProb, symbol):
-        dt2 = DatalogTranslator()
-        eb = dt2.walk(self.get_prob_expressions())
-        dlProb.walk(eb)
-
-        z = Symbol.fresh()
-
-        dl_program = probdatalog_to_datalog(dlProb, datalog=DatalogRegions)
-        dc = Chase(dl_program)
-        solution_instance = dc.build_chase_solution()
-        grounded = build_grounding(dlProb, solution_instance)
-
-        gm = TranslateGroundedProbDatalogToGraphicalModel().walk(grounded)
-        sym = symbol.expression.formulas[0].consequent.function
-        query = SuccQuery(sym(z))
-        solver = QueryGraphicalModelSolver(gm)
-        result = solver.walk(query)
-
-        return result
-        """
+    def _union_of_idb(self):
+        formulas = tuple()
+        for union in self.solver.intensional_database().values():
+            formulas += union.formulas
+        return Union(formulas)
