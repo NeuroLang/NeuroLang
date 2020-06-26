@@ -424,9 +424,15 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
 
     @add_match(NameColumns(ProvenanceAlgebraSet, ...))
     def name_columns_rap(self, expression):
-        ne = NameColumns(
-            self._build_relation_constant(expression.relation.relations),
-            expression.column_names
+        relation = self._build_relation_constant(expression.relation.relations)
+        ne = RenameColumns(
+            relation,
+            tuple(
+                (Constant(src), dst)
+                for src, dst in zip(
+                    relation.value.columns, expression.column_names
+                )
+            )
         )
         return ProvenanceAlgebraSet(
             self.walk(ne).value,
@@ -490,30 +496,6 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
         )
 
         return self.walk(rap_projection)
-
-    # Walk the arguments for every nested RA operation before solving it again
-    # either through RAP or through RA
-    @add_match(
-        RelationalAlgebraOperation,
-        lambda x: any(
-            isinstance(arg, RelationalAlgebraOperation)
-            for arg in x.unapply()
-        )
-    )
-    def resolve_operations(self, ra_operation):
-        args = ra_operation.unapply()
-        new_args = tuple()
-        updated = False
-        for arg in args:
-            new_arg = self.walk(arg)
-            if new_arg is not arg:
-                updated = True
-            new_args += (new_arg,)
-
-        if updated:
-            ra_operation = self.walk(ra_operation.apply(*new_args))
-
-        return ra_operation
 
     # Raise Exception for non-implemented RAP operations
     @add_match(

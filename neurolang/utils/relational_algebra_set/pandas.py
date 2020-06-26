@@ -129,6 +129,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         res.setflags(write=False)
         return res
 
+    def as_pandas_dataframe(self):
+        return self._container
+
     def _empty_set_same_structure(self):
         return type(self)()
 
@@ -603,10 +606,10 @@ class NamedRelationalAlgebraFrozenSet(
             )
             new_containers.append(new_col)
 
-        new_container = (
-            pd.concat(new_containers)
-            .reset_index()
-        )
+        new_container = pd.concat(new_containers)
+
+        if len(group_columns) > 0:
+            new_container = new_container.reset_index()
 
         self._keep_column_types(
             new_container, set(aggs) |

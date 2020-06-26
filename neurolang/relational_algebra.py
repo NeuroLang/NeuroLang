@@ -475,12 +475,12 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
 
     @ew.add_match(
         Selection(
-            ..., FunctionApplication(eq_, (Constant[Column], Constant[Column]))
+            Constant, FunctionApplication(eq_, (Constant[Column], Constant[Column]))
         )
     )
     def selection_between_columns(self, selection):
         col1, col2 = selection.formula.args
-        selected_relation = self.walk(
+        selected_relation = (
             selection.relation
         ).value.selection_columns({col1.value: col2.value})
 
@@ -494,35 +494,41 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         return Constant[relation_type](relation, verify_type=False)
 
     @ew.add_match(
-        Selection(..., FunctionApplication(eq_, (Constant[Column], ...)))
+        Selection(Constant, FunctionApplication(eq_, (Constant[Column], ...)))
     )
     def selection_by_constant(self, selection):
         col, val = selection.formula.args
-        selected_relation = self.walk(selection.relation).value.selection(
+        selected_relation = selection.relation.value.selection(
             {col.value: val.value}
         )
 
         return self._build_relation_constant(selected_relation)
 
     @ew.add_match(
-        Selection(..., FunctionApplication)
+        Selection(Constant, FunctionApplication)
     )
     def selection_general_selection_by_constant(self, selection):
-        relation = self.walk(selection.relation)
+        relation = selection.relation
         compiled_formula = self._compile_function_application_to_sql_fun_exp(
             selection.formula
         )
         selected_relation = relation.value.selection(compiled_formula)
         return self._build_relation_constant(selected_relation)
 
-    @ew.add_match(Projection)
+    @ew.add_match(Projection(Constant, ...))
     def ra_projection(self, projection):
-        relation = self.walk(projection.relation)
+        relation = projection.relation
         cols = tuple(v.value for v in projection.attributes)
         projected_relation = relation.value.projection(*cols)
         return self._build_relation_constant(projected_relation)
 
-    @ew.add_match(Product)
+    @ew.add_match(
+        Product,
+        lambda product: all(
+            isinstance(relation, Constant)
+            for relation in product.relations
+        )
+    )
     def ra_product(self, product):
         if len(product.relations) == 0:
             return Constant[AbstractSet](RelationalAlgebraSet(set()))
@@ -532,38 +538,38 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
             res = res.cross_product(self.walk(relation).value)
         return self._build_relation_constant(res)
 
-    @ew.add_match(EquiJoin)
+    @ew.add_match(EquiJoin(Constant, ..., Constant, ...))
     def ra_equijoin(self, equijoin):
-        left = self.walk(equijoin.relation_left).value
+        left = equijoin.relation_left.value
         columns_left = (c.value for c in equijoin.columns_left)
-        right = self.walk(equijoin.relation_right).value
+        right = equijoin.relation_right.value
         columns_right = (c.value for c in equijoin.columns_right)
         res = left.equijoin(right, list(zip(columns_left, columns_right)))
 
         return self._build_relation_constant(res)
 
-    @ew.add_match(NaturalJoin)
+    @ew.add_match(NaturalJoin(Constant, Constant))
     def ra_naturaljoin(self, naturaljoin):
-        left = self.walk(naturaljoin.relation_left).value
-        right = self.walk(naturaljoin.relation_right).value
+        left = naturaljoin.relation_left.value
+        right = naturaljoin.relation_right.value
         res = left.naturaljoin(right)
         return self._build_relation_constant(res)
 
-    @ew.add_match(Difference)
+    @ew.add_match(Difference(Constant, Constant))
     def ra_difference(self, difference):
         return self._type_preserving_binary_operation(difference)
 
-    @ew.add_match(Union)
+    @ew.add_match(Union(Constant, Constant))
     def ra_union(self, union):
         return self._type_preserving_binary_operation(union)
 
-    @ew.add_match(Intersection)
+    @ew.add_match(Intersection(Constant, Constant))
     def ra_intersection(self, intersection):
         return self._type_preserving_binary_operation(intersection)
 
-    @ew.add_match(NameColumns)
+    @ew.add_match(NameColumns(Constant, ...))
     def ra_name_columns(self, name_columns):
-        relation = self.walk(name_columns.relation)
+        relation = name_columns.relation
         relation_set = relation.value
         column_names = tuple(
             self.walk(column_name).value
@@ -572,22 +578,22 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         new_set = NamedRelationalAlgebraFrozenSet(column_names, relation_set)
         return self._build_relation_constant(new_set)
 
-    @ew.add_match(RenameColumn)
+    @ew.add_match(RenameColumn(Constant, ..., ...))
     def ra_rename_column(self, rename_column):
-        relation = self.walk(rename_column.relation)
+        relation = rename_column.relation
         src = rename_column.src.value
         dst = rename_column.dst.value
         new_set = relation.value
         new_set = new_set.rename_column(src, dst)
         return self._build_relation_constant(new_set)
 
-    @ew.add_match(RenameColumns)
+    @ew.add_match(RenameColumns(Constant, ...))
     def ra_rename_columns(self, rename_columns):
         if len(set(c for c, _ in rename_columns.renames)) < len(
             rename_columns.renames
         ):
             raise ValueError("Cannot have duplicated source columns")
-        relation = self.walk(rename_columns.relation)
+        relation = rename_columns.relation
         new_set = relation.value
         renames = {
             src.value: dst.value for src, dst in rename_columns.renames
@@ -595,9 +601,9 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         new_set = new_set.rename_columns(renames)
         return self._build_relation_constant(new_set)
 
-    @ew.add_match(ConcatenateConstantColumn)
+    @ew.add_match(ConcatenateConstantColumn(Constant, ..., ...))
     def concatenate_constant_column(self, concat_op):
-        relation = self.walk(concat_op.relation)
+        relation = concat_op.relation
         new_column = concat_op.column_name
         new_column_value = concat_op.column_value
         if new_column.value in relation.value.columns:
@@ -624,9 +630,9 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         )
         return self.walk(ExtendedProjection(relation, ext_proj_list_members))
 
-    @ew.add_match(ExtendedProjection)
+    @ew.add_match(ExtendedProjection(Constant, ...))
     def extended_projection(self, proj_op):
-        relation = self.walk(proj_op.relation)
+        relation = proj_op.relation
         eval_expressions = {}
         for member in proj_op.projection_list:
             fun_exp = self.walk(member.fun_exp)
@@ -665,9 +671,9 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         else:
             return arithmetic_op
 
-    @ew.add_match(Destroy)
+    @ew.add_match(Destroy(Constant, ..., ...))
     def set_destroy(self, destroy):
-        relation = self.walk(destroy.relation).value
+        relation = destroy.relation.value
         src_column = self.walk(destroy.src_column).value
         dst_columns = self.walk(destroy.dst_column).value
         if src_column not in relation.columns:
