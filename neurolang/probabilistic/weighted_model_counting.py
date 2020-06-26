@@ -100,7 +100,7 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
             return self.translated_probfact_sets[relation_symbol]
 
         relation = self.walk(relation_symbol)
-        res, rap_column = self._add_tag_column(relation)
+        tagged_relation, rap_column = self._add_tag_column(relation)
 
         columns_for_tagged_set = (
             rap_column,
@@ -111,7 +111,7 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
 
         self.tagged_sets.append(self.walk(
             RenameColumns(
-                Projection(res, columns_for_tagged_set),
+                Projection(tagged_relation, columns_for_tagged_set),
                 (
                     (columns_for_tagged_set[0], str2columnstr_constant('id')),
                     (columns_for_tagged_set[1], str2columnstr_constant('prob'))
@@ -119,15 +119,30 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
             )
         ))
 
+        prov_set = self._generate_provenance_set(
+            tagged_relation, prob_fact_set.probability_column, rap_column
+        )
+
+        self.translated_probfact_sets[relation_symbol] = prov_set
+        return prov_set
+
+    def _generate_provenance_set(
+        self, tagged_relation,
+        prob_column, rap_column
+    ):
         out_columns = tuple(
             Constant[ColumnInt](ColumnInt(c))
-            for c in relation.value.columns
-            if int(c) != prob_fact_set.probability_column.value
+            for c in tagged_relation.value.columns
+            if (
+                c != rap_column and
+                int(c) != prob_column.value
+            )
+
         ) + (rap_column,)
 
         prov_set = (
             RenameColumns(
-                Projection(res, out_columns),
+                Projection(tagged_relation, out_columns),
                 tuple(
                     (c, Constant[ColumnInt](ColumnInt(i)))
                     for i, c in enumerate(out_columns[:-1])
@@ -138,8 +153,6 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
             self.walk(prov_set).value,
             rap_column.value
         )
-
-        self.translated_probfact_sets[relation_symbol] = prov_set
         return prov_set
 
     def _add_tag_column(self, relation):
