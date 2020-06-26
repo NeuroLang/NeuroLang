@@ -308,31 +308,3 @@ def test_max_cardinality():
     solution_instance = dc.build_chase_solution()
 
     resp = list(solution_instance["answer"].value.unwrapped_iter())
-
-
-def test_not_implemented():
-
-    test_case = """
-    <rdf:RDF
-    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-    xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
-    xmlns:owl="http://www.w3.org/2002/07/owl#"
-    xmlns:first="http://www.w3.org/2002/03owlt/someValuesFrom/premises001#"
-    xml:base="http://www.w3.org/2002/03owlt/someValuesFrom/premises001" >
-        <owl:Class rdf:ID="r">
-        <rdfs:subClassOf>
-            <owl:Restriction>
-                <owl:onProperty rdf:resource="#p"/>
-                <owl:someValuesFrom rdf:resource="#c"/>
-            </owl:Restriction>
-        </rdfs:subClassOf>
-        </owl:Class>
-        <owl:ObjectProperty rdf:ID="p"/>
-        <owl:Class rdf:ID="c"/>
-        <first:r rdf:ID="i"/>
-    </rdf:RDF>
-    """
-    onto = OntologyParser(io.StringIO(test_case))
-
-    with pytest.raises(NeuroLangNotImplementedError):
-        predicate_tuples, union_of_constraints = onto.parse_ontology()
