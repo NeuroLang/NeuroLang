@@ -17,6 +17,7 @@ from ..expressions import (Constant, ExpressionBlock, FunctionApplication,
 from ..relational_algebra import (ColumnInt, ExtendedProjection,
                                   ExtendedProjectionListMember, NameColumns,
                                   Projection, RelationalAlgebraOperation,
+                                  RelationalAlgebraPushInSelections,
                                   RelationalAlgebraStringExpression,
                                   RenameColumns, str2columnstr_constant)
 from ..relational_algebra_provenance import (
@@ -199,6 +200,13 @@ def generate_weights(symbol_probs, literals_to_symbols, extras=0):
     return probs
 
 
+class RAQueryOptimiser(
+    RelationalAlgebraPushInSelections,
+    ExpressionWalker
+):
+    pass
+
+
 def solve_succ_query(query_predicate, cpl_program):
     """
     Obtain the solution of a SUCC query on a CP-Logic program.
@@ -207,8 +215,17 @@ def solve_succ_query(query_predicate, cpl_program):
 
         SUCC[ P(x) ]
     """
-    query_predicate = flatten_query(query_predicate, cpl_program)
-    ra_query = TranslateToNamedRA().walk(query_predicate)
+    query_antecedent = flatten_query(query_predicate.antecedent, cpl_program)
+    ra_query = TranslateToNamedRA().walk(query_antecedent)
+    ra_query = Projection(
+        ra_query,
+        tuple(
+            str2columnstr_constant(s.name)
+            for s in query_predicate.consequent.args
+        )
+    )
+
+    ra_query = RAQueryOptimiser().walk(ra_query)
 
     symbol_table = dict()
     for predicate_symbol, facts in cpl_program.probabilistic_facts().items():
