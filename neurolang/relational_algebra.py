@@ -14,7 +14,10 @@ from .expressions import (
     Unknown,
 )
 from .utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet
-from .utils.relational_algebra_set import RelationalAlgebraStringExpression
+from .utils.relational_algebra_set import (
+    RelationalAlgebraColumnInt, RelationalAlgebraColumnStr,
+    RelationalAlgebraStringExpression
+)
 
 eq_ = Constant(operator.eq)
 
@@ -644,17 +647,18 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         )
 
     def _compile_function_application_to_sql_fun_exp(self, fun_exp):
-        if (
-            isinstance(fun_exp, FunctionApplication) or
-            isinstance(fun_exp, Constant[Column])
-        ):
+        if isinstance(fun_exp, FunctionApplication):
             try:
                 return self._saw.walk(fun_exp).value
-            except NeuroLangPatternMatchingNoMatch as e:
+            except NeuroLangPatternMatchingNoMatch:
                 fun, args = self._fa_2_lambda.walk(self._rccsbs.walk(fun_exp))
                 return lambda t: fun(
                     **{arg: getattr(t, arg) for arg in args}
                 )
+        elif isinstance(fun_exp, Constant[ColumnInt]):
+            return RelationalAlgebraColumnInt(fun_exp.value)
+        elif isinstance(fun_exp, Constant[ColumnStr]):
+            return RelationalAlgebraColumnStr(fun_exp.value)
         else:
             return fun_exp.value
 
