@@ -12,6 +12,18 @@ class RelationalAlgebraStringExpression(str):
         return "{}{{ {} }}".format(self.__class__.__name__, super().__repr__())
 
 
+class RelationalAlgebraColumn:
+    pass
+
+
+class RelationalAlgebraColumnInt(int, RelationalAlgebraColumn):
+    pass
+
+
+class RelationalAlgebraColumnStr(str, RelationalAlgebraColumn):
+    pass
+
+
 class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     def __init__(self, iterable=None):
         self._container = None
@@ -679,6 +691,8 @@ class NamedRelationalAlgebraFrozenSet(
                         "{}={}".format(str(dst_column), str(operation)),
                         engine='python'
                     )
+            elif isinstance(operation, RelationalAlgebraColumn):
+                new_container[dst_column] = new_container[operation]
             elif callable(operation):
                 new_container[dst_column] = new_container.apply(
                     operation, axis=1
