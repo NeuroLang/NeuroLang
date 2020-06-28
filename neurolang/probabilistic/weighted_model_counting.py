@@ -11,10 +11,13 @@ from pysdd import sdd
 
 from ..datalog.expression_processing import flatten_query
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
-from ..expression_walker import ExpressionWalker, add_match
+from ..expression_walker import ExpressionWalker, add_match, PatternWalker
 from ..expressions import (Constant, ExpressionBlock, FunctionApplication,
                            Symbol)
 from ..logic import Implication
+from ..utils.relational_algebra_set import (
+    RelationalAlgebraColumnStr, RelationalAlgebraColumnInt
+)
 from ..relational_algebra import (ColumnInt, ExtendedProjection,
                                   ExtendedProjectionListMember, NameColumns,
                                   Projection, RelationalAlgebraOperation,
@@ -27,7 +30,7 @@ from ..relational_algebra_provenance import (
 LOG = logging.getLogger(__name__)
 
 
-class SemiRingRAPToSDD(ExpressionWalker):
+class SemiRingRAPToSDD(PatternWalker):
     def __init__(self, var_count, symbols_to_literals=None):
         self._init_manager(var_count)
         if symbols_to_literals is None:
@@ -70,6 +73,22 @@ class SemiRingRAPToSDD(ExpressionWalker):
         for arg in args[1:]:
             exp = exp | arg
         return exp
+
+    @add_match(FunctionApplication(Constant(op.neg), ...))
+    def neg(self, expression):
+        arg = self.walk(expression.args[0])
+        return ~arg
+
+    @add_match(FunctionApplication(Constant(op.eq), ...))
+    def eq(self, expression):
+        args = self.walk(expression.args)
+        return args[0].equiv(args[1])
+
+    @add_match(FunctionApplication(Constant(op.or_), ...))
+    def or_(self, expression):
+        args = self.walk(expression.args)
+        ret = args[0].condition(args[1])
+        return ret
 
     @add_match(ExpressionBlock)
     def expression_block(self, expression):
@@ -144,6 +163,40 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
         relation = self.walk(relation_symbol)
         tagged_relation, rap_column = self._add_tag_column(relation)
 
+        self._generate_tag_probability_set(
+            rap_column, prob_fact_set, tagged_relation
+        )
+
+        prov_set = self._generate_provenance_set(
+            tagged_relation, prob_fact_set.probability_column, rap_column
+        )
+
+        self.translated_probfact_sets[relation_symbol] = prov_set
+        return prov_set
+
+    @add_match(ProbabilisticChoiceSet(Symbol, Constant))
+    def probabilistic_choice_set(self, prob_fact_set):
+        relation_symbol = prob_fact_set.relation
+        if relation_symbol in self.translated_probfact_sets:
+            return self.translated_probfact_sets[relation_symbol]
+
+        relation = self.walk(relation_symbol)
+        tagged_relation, rap_column = self._add_tag_column(relation)
+
+        self._generate_choice_tag_probability_set(
+            rap_column, prob_fact_set, tagged_relation
+        )
+
+        prov_set = self._generate_choice_provenance_set(
+            tagged_relation, prob_fact_set.probability_column, rap_column
+        )
+
+        self.translated_probfact_sets[relation_symbol] = prov_set
+        return prov_set
+
+    def _generate_tag_probability_set(
+        self, rap_column, prob_fact_set, tagged_relation
+    ):
         columns_for_tagged_set = (
             rap_column,
             Constant[ColumnInt](ColumnInt(
@@ -152,21 +205,49 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
         )
 
         self.tagged_sets.append(self.walk(
-            RenameColumns(
-                Projection(tagged_relation, columns_for_tagged_set),
-                (
-                    (columns_for_tagged_set[0], str2columnstr_constant('id')),
-                    (columns_for_tagged_set[1], str2columnstr_constant('prob'))
-                )
+            ExtendedProjection(
+                tagged_relation,
+                [
+                    ExtendedProjectionListMember(
+                        rap_column, str2columnstr_constant('id')
+                    ),
+                    ExtendedProjectionListMember(
+                        columns_for_tagged_set[1],
+                        str2columnstr_constant('prob')
+                    ),
+                ]
             )
         ))
 
-        prov_set = self._generate_provenance_set(
-            tagged_relation, prob_fact_set.probability_column, rap_column
+    def _generate_choice_tag_probability_set(
+        self, rap_column, prob_fact_set, tagged_relation
+    ):
+        columns_for_tagged_set = (
+            rap_column,
+            Constant[ColumnInt](ColumnInt(
+                prob_fact_set.probability_column.value
+            ))
         )
 
-        self.translated_probfact_sets[relation_symbol] = prov_set
-        return prov_set
+        self.tagged_sets.append(self.walk(
+            ExtendedProjection(
+                tagged_relation,
+                [
+                    ExtendedProjectionListMember(
+                        rap_column, str2columnstr_constant('id')
+                    ),
+                    ExtendedProjectionListMember(
+                        columns_for_tagged_set[1],
+                        str2columnstr_constant('prob')
+                    ),
+                    ExtendedProjectionListMember(
+                        Constant[float](1.),
+                        str2columnstr_constant('nprob')
+                    ),
+
+                ]
+            )
+        ))
 
     def _generate_provenance_set(
         self, tagged_relation,
@@ -191,6 +272,51 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
                 )
             )
         )
+        prov_set = ProvenanceAlgebraSet(
+            self.walk(prov_set).value,
+            rap_column.value
+        )
+        return prov_set
+
+    def _generate_choice_provenance_set(
+        self, tagged_relation,
+        prob_column, rap_column
+    ):
+        out_columns = tuple(
+            Constant[ColumnInt](ColumnInt(c))
+            for c in tagged_relation.value.columns
+            if (
+                c != rap_column and
+                int(c) != prob_column.value
+            )
+        )
+
+        symbols = tagged_relation.value.as_pandas_dataframe()[rap_column.value]
+
+        def get_mutually_exclusive_formula_(v):
+            ret = v * (-(symbols[symbols != v].sum()))
+            return ret
+
+        get_mutually_exclusive_formula = Constant(
+            get_mutually_exclusive_formula_
+        )
+
+        prov_set = ExtendedProjection(
+            tagged_relation,
+            tuple(
+                ExtendedProjectionListMember(
+                    c,
+                    Constant[ColumnInt](ColumnInt(i))
+                )
+                for i, c in enumerate(out_columns)
+            ) + (
+                ExtendedProjectionListMember(
+                    get_mutually_exclusive_formula(rap_column),
+                    rap_column
+                ),
+            )
+        )
+
         prov_set = ProvenanceAlgebraSet(
             self.walk(prov_set).value,
             rap_column.value
@@ -247,11 +373,10 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
 
 
 def generate_weights(symbol_probs, literals_to_symbols, extras=0):
-    probs = np.array([
-        float(symbol_probs.loc[literals_to_symbols[l].name])
-        for l in range(1, len(literals_to_symbols) + 1)
-    ])
-    probs = np.r_[1 - probs[::-1], [0] * extras, [1] * extras, probs]
+    ixs = pd.Series(literals_to_symbols)
+    probs = symbol_probs.loc[ixs, 'prob'].values
+    nprobs = symbol_probs.loc[ixs, 'nprob'].values
+    probs = np.r_[nprobs[::-1], [0] * extras, [1] * extras, probs]
     return probs
 
 
@@ -363,10 +488,13 @@ def perform_wmc(
     solver, sdd_compiler, sdd_program,
     prob_set_program, prob_set_result
 ):
-    ids_with_probs = pd.concat([
-        ts.value.as_pandas_dataframe()
-        for ts in solver.tagged_sets
-    ], axis=0).set_index('id')
+    ids_with_probs = []
+    for ts in solver.tagged_sets:
+        ts = ts.value.as_pandas_dataframe()
+        if 'nprob' not in ts:
+            ts = ts.eval('nprob = 1 - prob')
+        ids_with_probs.append(ts)
+    ids_with_probs = pd.concat(ids_with_probs, axis=0).set_index('id')
 
     weights = generate_weights(
         ids_with_probs,

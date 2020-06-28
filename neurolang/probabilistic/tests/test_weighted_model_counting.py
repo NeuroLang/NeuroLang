@@ -4,6 +4,7 @@ import numpy as np
 
 from ...datalog import Fact
 from ...expressions import Constant, Symbol
+from ...relational_algebra import RenameColumn
 from ...logic import Conjunction, Implication, Union
 from ..cplogic import testing
 from ..cplogic.program import CPLogicProgram
@@ -196,7 +197,7 @@ def test_simple_probchoice():
             pred_symb, pchoice_as_set
         )
     qpred = P(x)
-    exp, result = testing.inspect_resolution(qpred, cpl_program)
+    result = solve_succ_query(qpred, cpl_program)
     expected = testing.make_prov_set([(0.2, "a"), (0.8, "b"),], ("_p_", "x"),)
     assert testing.eq_prov_relations(result, expected)
 
