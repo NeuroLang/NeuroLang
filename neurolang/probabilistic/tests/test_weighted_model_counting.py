@@ -246,7 +246,7 @@ def test_multiple_probchoices_mutual_exclusivity():
 
 
 def test_large_probabilistic_choice():
-    n = int(10e3)
+    n = int(100)
     with testing.temp_seed(42):
         probs = np.random.rand(n)
     probs = probs / probs.sum()
@@ -337,7 +337,7 @@ def test_existential_alternative_variables():
     cpl_program.walk(code)
     qpred = H(z)
     result = solve_succ_query(qpred, cpl_program)
-    expected = testing.make_prov_set([(0.2 * 0.8, "b")], ("_p_", "z"))
+    expected = testing.make_prov_set([(0.2 * 0.8, "b")], ("prob", "z"))
     assert testing.eq_prov_relations(result, expected)
 
 
@@ -376,7 +376,7 @@ def test_multilevel_existential():
     )
     assert testing.eq_prov_relations(result, expected)
     qpred = B(z)
-    exp, result = testing.inspect_resolution(qpred, cpl_program,)
+    result = solve_succ_query(qpred, cpl_program,)
     expected = testing.make_prov_set([(0.5 * 0.1 * 0.5, "c")], ("_p_", "z"),)
     assert testing.eq_prov_relations(result, expected)
 

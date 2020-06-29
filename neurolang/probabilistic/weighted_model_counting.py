@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from pysdd import sdd
 
-from ..datalog.expression_processing import flatten_query
+from ..datalog.expression_processing import flatten_query, extract_logic_predicates
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import ExpressionWalker, add_match, PatternWalker
 from ..expressions import (Constant, ExpressionBlock, FunctionApplication,
@@ -405,11 +405,24 @@ def solve_succ_query(query_predicate, cpl_program):
             tuple(
                 str2columnstr_constant(s.name)
                 for s in query_predicate.consequent.args
+                if isinstance(s, Symbol)
             )
         )
     else:
+        query_predicate_orig = query_predicate
         query_predicate = flatten_query(query_predicate, cpl_program)
         ra_query = TranslateToNamedRA().walk(query_predicate)
+        ra_query = Projection(
+            ra_query,
+            tuple(
+                str2columnstr_constant(s.name)
+                for s in query_predicate_orig._symbols
+                if s not in (
+                    p.functor for p in
+                    extract_logic_predicates(query_predicate_orig)
+                )
+            )
+        )
 
     ra_query = RAQueryOptimiser().walk(ra_query)
 
