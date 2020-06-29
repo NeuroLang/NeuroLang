@@ -292,9 +292,14 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
         )
 
         symbols = tagged_relation.value.as_pandas_dataframe()[rap_column.value]
+        add = Constant(op.add)
+        all_ = FunctionApplication(
+            add,
+            tuple(symbols.values)
+        )
 
         def get_mutually_exclusive_formula_(v):
-            ret = v * (-(symbols[symbols != v].sum()))
+            ret = (v * (-(all_ | -v)))
             return ret
 
         get_mutually_exclusive_formula = Constant(
