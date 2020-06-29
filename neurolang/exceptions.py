@@ -24,6 +24,14 @@ class ForbiddenExistentialError(ForbiddenExpressionError):
     pass
 
 
+class ForbiddenBuiltinError(ForbiddenExpressionError):
+    pass
+
+
+class NeuroLangFrontendException(NeuroLangException):
+    pass
+
+
 class RelationalAlgebraError(NeuroLangException):
     pass
 
@@ -39,4 +47,16 @@ class ForbiddenBuiltinError(ForbiddenExpressionError):
 
 
 class NeuroLangFrontendException(NeuroLangException):
+    pass
+
+
+class SymbolNotFoundError(NeuroLangException):
+    pass
+
+
+class RuleNotFoundError(NeuroLangException):
+    pass
+
+
+class UnsupportedProgramError(NeuroLangException):
     pass
