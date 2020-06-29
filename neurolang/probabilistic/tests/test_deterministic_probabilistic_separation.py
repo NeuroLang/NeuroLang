@@ -41,7 +41,35 @@ class ProbabilisticOntologySolver(
 
 def test_deterministic_code():
     det_solver = DeterministicSolver()
-    pass
+    answer1 = Symbol("answer1")
+    answer2 = Symbol("answer2")
+    x = Symbol("x")
+    y = Symbol("y")
+    det1 = Symbol("det1")
+    det2 = Symbol("det2")
+    det3 = Symbol("det3")
+
+    d1 = [(1,), (2,), (3,), (4,), (5,)]
+    d2 = [(2, "a"), (3, "b"), (4, "d"), (5, "c"), (7, "z")]
+    d3 = [("a",), ("b",), ("c",)]
+
+    det_solver.add_extensional_predicate_from_tuples(det1, d1)
+    det_solver.add_extensional_predicate_from_tuples(det2, d2)
+    det_solver.add_extensional_predicate_from_tuples(det3, d3)
+
+    test_q1 = Union(
+        (Implication(answer1(y), Conjunction((det2(x, y), det1(x)))),)
+    )
+    test_q2 = Union(
+        (Implication(answer2(x), Conjunction((answer1(x), det3(x)))),)
+    )
+
+    det_solver.walk(test_q1)
+    det_solver.walk(test_q2)
+    det, prob = separate_deterministic_probabilistic_code(det_solver)
+
+    assert len(prob.formulas) == 0
+    assert len(det.formulas) == 2
 
 
 def test_probabilistic_code():
