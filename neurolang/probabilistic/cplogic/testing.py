@@ -63,7 +63,10 @@ def eq_prov_relations(pas1, pas2):
     joined = x1.naturaljoin(x2)
     probs = list(joined.projection(*(c1, c2)))
     for p1, p2 in probs:
-        if not np.isclose(p1, p2):
+        if isinstance(p1, float) and isinstance(p2, float):
+            if not np.isclose(p1, p2):
+                return False
+        elif p1 != p2:
             return False
     return True
 
