@@ -9,15 +9,13 @@ import numpy as np
 import pandas as pd
 from pysdd import sdd
 
-from ..datalog.expression_processing import flatten_query, extract_logic_predicates
+from ..datalog.expression_processing import (extract_logic_predicates,
+                                             flatten_query)
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
-from ..expression_walker import ExpressionWalker, add_match, PatternWalker
+from ..expression_walker import ExpressionWalker, PatternWalker, add_match
 from ..expressions import (Constant, ExpressionBlock, FunctionApplication,
-                           Symbol)
+                           Symbol, sure_is_not_pattern)
 from ..logic import Implication
-from ..utils.relational_algebra_set import (
-    RelationalAlgebraColumnStr, RelationalAlgebraColumnInt
-)
 from ..relational_algebra import (ColumnInt, ExtendedProjection,
                                   ExtendedProjectionListMember, NameColumns,
                                   Projection, RelationalAlgebraOperation,
@@ -26,6 +24,8 @@ from ..relational_algebra import (ColumnInt, ExtendedProjection,
                                   RenameColumns, str2columnstr_constant)
 from ..relational_algebra_provenance import (
     ProvenanceAlgebraSet, RelationalAlgebraProvenanceExpressionSemringSolver)
+from ..utils.relational_algebra_set import (RelationalAlgebraColumnInt,
+                                            RelationalAlgebraColumnStr)
 
 LOG = logging.getLogger(__name__)
 
@@ -293,13 +293,15 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
 
         symbols = tagged_relation.value.as_pandas_dataframe()[rap_column.value]
         add = Constant(op.add)
-        all_ = FunctionApplication(
-            add,
-            tuple(symbols.values)
-        )
+        with sure_is_not_pattern():
+            all_ = FunctionApplication(
+                add,
+                tuple(symbols.values)
+            )
 
         def get_mutually_exclusive_formula_(v):
-            ret = (v * (-(all_ | -v)))
+            with sure_is_not_pattern():
+                ret = (v * (-(all_ | -v)))
             return ret
 
         get_mutually_exclusive_formula = Constant(
