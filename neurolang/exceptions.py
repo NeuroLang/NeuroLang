@@ -30,3 +30,25 @@ class ForbiddenBuiltinError(ForbiddenExpressionError):
 
 class NeuroLangFrontendException(NeuroLangException):
     pass
+
+
+class RelationalAlgebraError(NeuroLangException):
+    pass
+
+
+class RelationalAlgebraNotImplementedError(
+    RelationalAlgebraError, NotImplementedError
+):
+    pass
+
+
+class SymbolNotFoundError(NeuroLangException):
+    pass
+
+
+class RuleNotFoundError(NeuroLangException):
+    pass
+
+
+class UnsupportedProgramError(NeuroLangException):
+    pass
