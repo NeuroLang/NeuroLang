@@ -130,3 +130,9 @@ def test_create_from_array():
 
     assert len(r1) == 2
     assert {(1, 0), (0, 1)} == r1.unwrap()
+
+
+def test_type_inference():
+    items = {(0.2, 1), (0.8, 42)}
+    r = WrappedRelationalAlgebraSet(items)
+    assert r.row_type == Tuple[float, int]
