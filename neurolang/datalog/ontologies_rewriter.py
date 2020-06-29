@@ -115,22 +115,18 @@ class OntologyRewriter:
     def _get_factorizable(self, sigma, q):
         factorizable = []
         for free_var in sigma[1]._list:
-            existential_position = self._get_position_existential(
-                sigma[0].consequent, free_var
-            )
+            pos = self._get_position_existential(sigma[0].consequent, free_var)
             S = self._get_term(q, sigma[0].consequent)
             if (
                 S
-                and self._is_factorizable(S, existential_position)
-                and self._var_same_position(
-                    existential_position, free_var, q, S
-                )
+                and self._is_factorizable(S, pos)
+                and self._var_same_position(pos, q, S)
             ):
                 factorizable.append(S)
 
         return sum(factorizable, [])
 
-    def _var_same_position(self, pos, free_var, q, S):
+    def _var_same_position(self, pos, q, S):
         eq_vars = self._equivalent_var(pos, S)
         for var in eq_vars:
             if self._free_var_other_term(var, q, S):
