@@ -11,5 +11,5 @@ def test_integer_addition_semiring():
     op = NaturalJoin(r1, r2)
     solver = RelationalAlgebraProvenanceExpressionSemringSolver()
     result = solver.walk(op)
-    expected = testing.make_prov_set([(7, "a")], ("_p_", "x"))
+    expected = testing.make_prov_set([(10, "a")], ("_p_", "x"))
     assert testing.eq_prov_relations(result, expected)
