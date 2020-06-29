@@ -68,8 +68,8 @@ def test_deterministic_code():
     det_solver.walk(test_q2)
     det, prob = separate_deterministic_probabilistic_code(det_solver)
 
-    assert len(prob.formulas) == 0
     assert len(det.formulas) == 2
+    assert len(prob.formulas) == 0
 
 
 def test_probabilistic_code():
