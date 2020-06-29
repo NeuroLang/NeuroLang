@@ -12,6 +12,18 @@ class RelationalAlgebraStringExpression(str):
         return "{}{{ {} }}".format(self.__class__.__name__, super().__repr__())
 
 
+class RelationalAlgebraColumn:
+    pass
+
+
+class RelationalAlgebraColumnInt(int, RelationalAlgebraColumn):
+    pass
+
+
+class RelationalAlgebraColumnStr(str, RelationalAlgebraColumn):
+    pass
+
+
 class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     def __init__(self, iterable=None):
         self._container = None
@@ -128,6 +140,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         res = self._container.values.view()
         res.setflags(write=False)
         return res
+
+    def as_pandas_dataframe(self):
+        return self._container
 
     def _empty_set_same_structure(self):
         return type(self)()
@@ -603,10 +618,10 @@ class NamedRelationalAlgebraFrozenSet(
             )
             new_containers.append(new_col)
 
-        new_container = (
-            pd.concat(new_containers, axis=1)
-            .reset_index()
-        )
+        new_container = pd.concat(new_containers, axis=1)
+
+        if len(group_columns) > 0:
+            new_container = new_container.reset_index()
 
         self._keep_column_types(
             new_container, set(aggs) |
@@ -676,6 +691,8 @@ class NamedRelationalAlgebraFrozenSet(
                         "{}={}".format(str(dst_column), str(operation)),
                         engine='python'
                     )
+            elif isinstance(operation, RelationalAlgebraColumn):
+                new_container[dst_column] = new_container[operation]
             elif callable(operation):
                 new_container[dst_column] = new_container.apply(
                     operation, axis=1

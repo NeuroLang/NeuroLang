@@ -767,6 +767,22 @@ def test_extended_projection(ra_module):
     new_set = initial_set.extended_projection({"z": 1})
     assert expected_new_colum_int == new_set
 
+    new_set = initial_set.extended_projection(
+        {"x": ra_module.RelationalAlgebraColumnStr("x")}
+    )
+    assert initial_set.projection("x") == new_set
+
+    base_set = ra_module.NamedRelationalAlgebraFrozenSet(
+        (1, 2), [(7, 8), (9, 2)]
+    )
+
+    new_set = base_set.extended_projection({
+        "x": ra_module.RelationalAlgebraColumnInt(1),
+        "y": ra_module.RelationalAlgebraColumnInt(2) 
+    })
+
+    assert initial_set == new_set
+
 
 def test_rename_columns(ra_module):
     first = ra_module.NamedRelationalAlgebraFrozenSet(
