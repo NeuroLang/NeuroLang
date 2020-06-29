@@ -4,6 +4,7 @@ from typing import AbstractSet
 import numpy as np
 import pandas as pd
 
+from ..neurosynth_utils import NeuroSynthHandler
 from ..probabilistic_frontend import ProbabilisticFrontend
 
 
@@ -20,13 +21,48 @@ def test_add_probabilistic_set():
 
 
 def test_deterministic_query():
+    nl = ProbabilisticFrontend()
+    d1 = [(1,), (2,), (3,), (4,), (5,)]
+    data1 = nl.add_tuple_set(d1, name="data1")
 
-    pass
+    d2 = [(2, "a"), (3, "b"), (4, "d"), (5, "c"), (7, "z")]
+    data2 = nl.add_tuple_set(d2, name="data2")
+
+    with nl.scope as e:
+        e.query1[e.y] = data1[e.x] & data2[e.x, e.y]
+        res = nl.solve_all()
+
+    assert "query1" in res.keys()
+    q1 = res["query1"].value._container.values
+    assert len(q1) == 4
+    for elem in q1:
+        assert elem[0] in ["a", "b", "c", "d"]
 
 
 def test_probabilistic_query():
+    nl = ProbabilisticFrontend()
+    d1 = [(1,), (2,), (3,), (4,), (5,)]
+    data1 = nl.add_uniform_probabilistic_choice_over_set(d1, name="data1")
 
-    pass
+    d2 = [(2, "a"), (3, "b"), (4, "d"), (5, "c"), (7, "z")]
+    data2 = nl.add_uniform_probabilistic_choice_over_set(d2, name="data2")
+
+    d3 = [("a",), ("b",), ("c",)]
+    data3 = nl.add_uniform_probabilistic_choice_over_set(d3, name="data3")
+
+    with nl.scope as e:
+        e.query1[e.y] = data1[e.x] & data2[e.x, e.y]
+        e.query2[e.y] = e.query1[e.y] & data3[e.y]
+        res = nl.solve_all()
+
+    assert "query1" in res.keys()
+    assert "query2" in res.keys()
+    assert len(res["query1"].value.columns) == 2
+    assert len(res["query2"].value.columns) == 2
+    q2 = res["query2"].value._container.values
+    assert len(q2) == 3
+    for elem in q2:
+        assert elem[1] in ["a", "b", "c"]
 
 
 def test_mixed_queries():
