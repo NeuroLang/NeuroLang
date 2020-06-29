@@ -14,14 +14,13 @@ from ...relational_algebra_provenance import ProvenanceAlgebraSet
 
 
 def nl_pred_to_pl_pred(pred):
-    pred_symb = problog.logic.Term(pred.functor.name)
     args = (
         problog.logic.Constant(arg.value)
         if isinstance(arg, Constant)
         else problog.logic.Var(arg.name)
         for arg in pred.args
     )
-    return pred_symb(*args)
+    return problog.logic.Term(pred.functor.name, *args)
 
 
 def pl_preds_to_prov_set(pl_preds, columns):
@@ -68,6 +67,8 @@ def pl_pred_from_tuple(pred_symb, tupl):
 
 def add_facts_to_problog(pred_symb, relation, pl):
     pred_symb = pred_symb.name
+    if relation.is_dee():
+        pl += problog.logic.Term(pred_symb)
     for tupl in relation:
         args = (problog.logic.Constant(arg) for arg in tupl)
         fact = problog.logic.Term(pred_symb, *args)
