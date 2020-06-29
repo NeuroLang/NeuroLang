@@ -149,8 +149,15 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
     def non_provenance_operation(self, operation):
         return RelationalAlgebraSolver(self.symbol_table).walk(operation)
 
-    @add_match(Selection)
-    def selection(self, selection):
+    @add_match(
+        Selection(
+            ...,
+            FunctionApplication(
+                ..., (Constant[ColumnStr], Constant[ColumnStr])
+            ),
+        )
+    )
+    def selection_by_columns(self, selection):
         relation = self.walk(selection.relation)
         if any(
             col == relation.provenance_column for col in selection.formula.args

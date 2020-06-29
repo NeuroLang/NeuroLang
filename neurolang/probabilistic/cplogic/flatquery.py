@@ -86,11 +86,18 @@ def grounding_to_provset(grounding, dst_pred):
     return prov_set
 
 
-def get_probchoice_variable_equalities(conj_query, pchoice_pred_symbs):
-    grouped_pchoice_preds = collections.defaultdict(list)
-    for pred in conj_query.formulas:
-        if pred.functor in pchoice_pred_symbs:
-            grouped_pchoice_preds[pred.functor].append(pred)
+def group_preds_by_pred_symb(predicates, filter_out_set=frozenset()):
+    grouped = collections.defaultdict(set)
+    for pred in predicates:
+        if pred not in filter_out_set:
+            grouped[pred.functor].append(pred)
+    return dict(grouped)
+
+
+def get_probchoice_variable_equalities(predicates, pchoice_pred_symbs):
+    grouped_pchoice_preds = group_preds_by_pred_symb(
+        predicates, pchoice_pred_symbs
+    )
     eq_set = set()
     for predicates in grouped_pchoice_preds.values():
         arity = len(predicates[0].args)
@@ -100,6 +107,12 @@ def get_probchoice_variable_equalities(conj_query, pchoice_pred_symbs):
                 y = predicates[pred_idx].args[var_idx]
                 eq_set.add((x, y))
     return eq_set
+
+
+def solve_probfact_polynomial_dependencies(predicates, pfact_pred_symbs):
+    grouped_pfact_preds = group_preds_by_pred_symb(
+        predicates, pfact_pred_symbs
+    )
 
 
 def solve_succ_query(query, cpl):

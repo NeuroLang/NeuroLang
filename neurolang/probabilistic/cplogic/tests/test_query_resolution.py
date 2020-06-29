@@ -591,7 +591,6 @@ def test_marg_query_intensional():
     # assert testing.eq_prov_relations(result, expected)
     result = solve_succ_query(J(x), cpl_program)
     expected = testing.make_prov_set([(0.1, "a"), (0.3, "b")], ("_p_", "x"))
-    __import__("pdb").set_trace()
     assert testing.eq_prov_relations(result, expected)
     result = solve_marg_query(Q(x), Z(b), cpl_program)
     expected = testing.make_prov_set([(0.2, "a"), (0.6, "b")], ("_p_", "x"))
@@ -796,7 +795,6 @@ def test_repeated_antecedent_pred_symb_existential_not_equiprobable():
     cpl_program.walk(code)
     qpred = Q(x)
     result = solve_succ_query(qpred, cpl_program)
-    __import__("pdb").set_trace()
     expected = testing.make_prov_set(
         [
             (1 / 4 * 0.3 * 0.7 * 0.2 * 8, "a"),
