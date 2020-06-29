@@ -358,11 +358,10 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
             )
             for c in (rap_left.relations.columns + rap_right.relations.columns)
             if c not in (
-                rap_left.provenance_column,
-                rap_right.provenance_column,
+                rap_left.provenance_column.value,
+                rap_right.provenance_column.value,
             )
         ]
-
         if rap_left.provenance_column == rap_right.provenance_column:
             rap_right_pc = str2columnstr_constant(Symbol.fresh().name)
             rap_right_r = RenameColumn(
