@@ -367,7 +367,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
             rap_right_pc = str2columnstr_constant(Symbol.fresh().name)
             rap_right_r = RenameColumn(
                 rap_right_r,
-                str2columnstr_constant(rap_right.provenance_column),
+                rap_right.provenance_column,
                 rap_right_pc
             )
         new_pc = str2columnstr_constant(Symbol.fresh().name)
@@ -378,16 +378,13 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
             ),
             cols_to_keep + [
                 ExtendedProjectionListMember(
-                    str2columnstr_constant(rap_left.provenance_column) *
+                    rap_left.provenance_column *
                     rap_right_pc,
                     new_pc
                 )
             ]
         )
-        return ProvenanceAlgebraSet(
-            self.walk(operation).value,
-            new_pc.value
-        )
+        return ProvenanceAlgebraSet(self.walk(operation).value, new_pc)
 
     @add_match(Projection(ProvenanceAlgebraSet, ...))
     def projection_rap(self, projection):
