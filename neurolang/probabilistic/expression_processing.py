@@ -126,10 +126,12 @@ def separate_deterministic_probabilistic_code(
     else:
         query_reachable_code = reachable_code(query_pred, solver)
 
-    if solver.constraints():
+    if hasattr(solver, "constraints"):
         constraints_symbols = set(
             [ri.consequent.functor for ri in solver.constraints().formulas]
         )
+    else:
+        constraints_symbols = set()
 
     deterministic_symbols = (
         set(solver.extensional_database().keys())

@@ -46,7 +46,41 @@ def test_deterministic_code():
 
 def test_probabilistic_code():
     prob_solver = ProbabilisticSolver()
-    pass
+    answer1 = Symbol("answer1")
+    answer2 = Symbol("answer2")
+    x = Symbol("x")
+    y = Symbol("y")
+    prob1 = Symbol("prob1")
+    prob2 = Symbol("prob2")
+    prob3 = Symbol("prob3")
+
+    d1 = [(1,), (2,), (3,), (4,), (5,)]
+    d2 = [(2, "a"), (3, "b"), (4, "d"), (5, "c"), (7, "z")]
+    d3 = [("a",), ("b",), ("c",)]
+
+    p_d1 = 1 / len(d1)
+    p_d2 = 1 / len(d2)
+    p_d3 = 1 / len(d3)
+    iterable_d1 = [(p_d1,) + tupl for tupl in d1]
+    iterable_d2 = [(p_d2,) + tupl for tupl in d2]
+    iterable_d3 = [(p_d3,) + tupl for tupl in d3]
+    prob_solver.add_probabilistic_choice_from_tuples(prob1, iterable_d1)
+    prob_solver.add_probabilistic_choice_from_tuples(prob2, iterable_d2)
+    prob_solver.add_probabilistic_choice_from_tuples(prob3, iterable_d3)
+
+    test_q1 = Union(
+        (Implication(answer1(y), Conjunction((prob2(x, y), prob1(x)))),)
+    )
+    test_q2 = Union(
+        (Implication(answer2(x), Conjunction((answer1(x), prob3(x)))),)
+    )
+
+    prob_solver.walk(test_q1)
+    prob_solver.walk(test_q2)
+    det, prob = separate_deterministic_probabilistic_code(prob_solver)
+
+    assert len(prob.formulas) == 2
+    assert len(det.formulas) == 0
 
 
 def test_deterministic_constraints_code():
@@ -106,7 +140,7 @@ def test_deterministic_constraints_code():
     assert len(det.formulas) == 1
 
 
-def test_probabilistic_constraints_code():
+def test_mixed_code():
     prob_onto_solver = ProbabilisticOntologySolver()
     test_case = """
     <rdf:RDF
@@ -171,6 +205,5 @@ def test_probabilistic_constraints_code():
     prob_onto_solver.walk(test_base_q2)
     det, prob = separate_deterministic_probabilistic_code(prob_onto_solver)
 
-    a = 1
     assert len(prob.formulas) == 1
     assert len(det.formulas) == 1
