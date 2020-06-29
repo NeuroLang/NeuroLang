@@ -501,13 +501,7 @@ def perform_wmc(
     solver, sdd_compiler, sdd_program,
     prob_set_program, prob_set_result
 ):
-    ids_with_probs = []
-    for ts in solver.tagged_sets:
-        ts = ts.value.as_pandas_dataframe()
-        if 'nprob' not in ts:
-            ts = ts.eval('nprob = 1 - prob')
-        ids_with_probs.append(ts)
-    ids_with_probs = pd.concat(ids_with_probs, axis=0).set_index('id')
+    ids_with_probs = generate_probability_table(solver)
 
     weights = generate_weights(
         ids_with_probs,
@@ -531,3 +525,14 @@ def perform_wmc(
         )
     )
     return res
+
+
+def generate_probability_table(solver):
+    ids_with_probs = []
+    for ts in solver.tagged_sets:
+        ts = ts.value.as_pandas_dataframe()
+        if 'nprob' not in ts:
+            ts = ts.eval('nprob = 1 - prob')
+        ids_with_probs.append(ts)
+    ids_with_probs = pd.concat(ids_with_probs, axis=0).set_index('id')
+    return ids_with_probs
