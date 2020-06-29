@@ -478,7 +478,10 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
 
     @ew.add_match(
         Selection(
-            Constant, FunctionApplication(eq_, (Constant[Column], Constant[Column]))
+            Constant, FunctionApplication(
+                eq_,
+                (Constant[Column], Constant[Column])
+            )
         )
     )
     def selection_between_columns(self, selection):
