@@ -17,8 +17,6 @@ from ..expression_processing import (
     union_contains_probabilistic_facts,
 )
 
-TRUE = Constant[bool](True, verify_type=False, auto_infer_type=False)
-
 
 class CPLogicMixin(PatternWalker):
     """
