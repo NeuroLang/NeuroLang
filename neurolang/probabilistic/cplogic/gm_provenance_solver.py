@@ -738,16 +738,18 @@ def solve_marg_query(query_predicate, evidence, cpl_program):
     if isinstance(evidence, FunctionApplication):
         evidence = Conjunction((evidence,))
     joint_conjunction = conjunct_formulas(query_predicate, evidence)
+    cpl_program.push_scope()
     joint_qpred = add_query_to_program(joint_conjunction, cpl_program)
     evidence_qpred = add_query_to_program(evidence, cpl_program)
     joint_result = solve_succ_query(joint_qpred, cpl_program)
+    evidence_result = solve_succ_query(evidence_qpred, cpl_program)
+    cpl_program.pop_scope()
     joint_cols = tuple(
         str2columnstr_constant(arg.name)
         for arg in query_predicate.args
         if isinstance(arg, Symbol)
     )
     joint_result = Projection(joint_result, joint_cols)
-    evidence_result = solve_succ_query(evidence_qpred, cpl_program)
     evidence_cols = set()
     for formula in evidence.formulas:
         evidence_cols |= set(
