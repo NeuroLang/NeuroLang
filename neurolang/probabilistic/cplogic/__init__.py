@@ -2,8 +2,7 @@ from typing import AbstractSet
 
 import problog
 
-from ...expressions import Constant, FunctionApplication, Symbol
-from ...logic import Implication
+from ...expressions import Constant, Symbol
 from ...relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     str2columnstr_constant,
