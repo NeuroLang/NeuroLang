@@ -3,7 +3,7 @@ import problog.logic
 import problog.sdd_formula
 
 from ....expressions import Symbol
-from ..problog_solver import cplogic_to_problog
+from ..problog import cplogic_to_problog
 from ..program import CPLogicProgram
 
 P = Symbol("P")
