@@ -44,3 +44,7 @@ class RuleNotFoundError(NeuroLangException):
 
 class UnsupportedProgramError(NeuroLangException):
     pass
+
+
+class ForbiddenBuiltinError(ForbiddenExpressionError):
+    pass
