@@ -104,18 +104,14 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     def __iter__(self):
         if self.is_empty():
             values = {}
-        elif self.is_dee():
-            values = {tuple()}
         else:
             self._drop_duplicates_if_needed()
-            values = self.itervalues()
+            values = self._container.values
         for v in values:
-            yield v
+            yield tuple(v)
 
     def fetch_one(self):
-        if self.is_dee():
-            return tuple()
-        return next(self._container.itertuples(name=None, index=False))
+        return tuple(next(iter(self._container.values)))
 
     def __len__(self):
         if self._container is None:
@@ -341,7 +337,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         if self.is_empty():
             return iter([])
         else:
-            return iter(self._container.itertuples(name=None, index=False))
+            return iter(self._container.values)
 
     def __hash__(self):
         self._drop_duplicates_if_needed()
@@ -713,14 +709,10 @@ class NamedRelationalAlgebraFrozenSet(
 
     def __iter__(self):
         self._drop_duplicates_if_needed()
-        if self.is_dee():
-            return iter([tuple()])
         container = self._container[list(self.columns)]
         return container.itertuples(index=False, name="tuple")
 
     def fetch_one(self):
-        if self.is_dee():
-            return tuple()
         container = self._container[list(self.columns)]
         return next(container.itertuples(index=False, name="tuple"))
 
