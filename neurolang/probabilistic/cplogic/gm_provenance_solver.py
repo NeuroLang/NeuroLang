@@ -2,11 +2,10 @@ import operator
 from typing import Tuple
 
 from ...datalog.expression_processing import conjunct_formulas
-from ...datalog.expressions import Fact
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
 from ...expressions import Constant, Definition, FunctionApplication, Symbol
-from ...logic import Conjunction, Implication, Union
+from ...logic import Conjunction, Implication
 from ...logic.expression_processing import extract_logic_predicates
 from ...relational_algebra import (
     ColumnStr,
@@ -34,7 +33,6 @@ from .cplogic_to_gm import (
     PlateNode,
 )
 from .grounding import get_grounding_predicate, ground_cplogic_program
-from .program import remove_constants_from_pred
 
 TRUE = Constant[bool](True, verify_type=False, auto_infer_type=False)
 EQUAL = Constant(operator.eq)
@@ -727,22 +725,12 @@ def make_conjunction_rule(conjunction):
 
 def add_query_to_program(query, program):
     assert isinstance(query, Conjunction)
-    antecedent_preds = list()
-    valued_args = list()
-    csqt_args = set()
+    args = set()
     for pred in query.formulas:
-        pred, new_valued_args = remove_constants_from_pred(pred)
-        antecedent_preds.append(pred)
-        valued_args += new_valued_args
-        csqt_args |= set(pred.args)
-    const_preserving_pred = Symbol.fresh()(*(arg for arg, _ in valued_args))
-    antecedent_preds.append(const_preserving_pred)
-    csqt_pred = Symbol.fresh()(*sorted(csqt_args, key=lambda s: s.name))
-    fact = Fact(
-        const_preserving_pred.functor(*(value for _, value in valued_args))
-    )
-    rule = Implication(csqt_pred, Conjunction(antecedent_preds))
-    program.walk(Union((fact, rule)))
+        args |= set(arg for arg in pred.args if isinstance(arg, Symbol))
+    csqt_pred = Symbol.fresh()(*args)
+    rule = Implication(csqt_pred, query)
+    program.walk(rule)
     return csqt_pred
 
 
