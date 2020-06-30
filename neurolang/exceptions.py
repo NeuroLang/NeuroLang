@@ -24,14 +24,6 @@ class ForbiddenExistentialError(ForbiddenExpressionError):
     pass
 
 
-class ForbiddenBuiltinError(ForbiddenExpressionError):
-    pass
-
-
-class NeuroLangFrontendException(NeuroLangException):
-    pass
-
-
 class RelationalAlgebraError(NeuroLangException):
     pass
 
