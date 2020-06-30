@@ -20,14 +20,13 @@ from ..relational_algebra_provenance import (
     ConcatenateConstantColumn,
     ExtendedProjection,
     ExtendedProjectionListMember,
+    NaturalJoinInverse,
     Projection,
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
     Union,
 )
 from ..utils import NamedRelationalAlgebraFrozenSet
-from ..probabilistic.cplogic import testing
-
 
 C_ = Constant
 S_ = Symbol
@@ -484,4 +483,29 @@ def test_rename_columns():
     )
     solver = RelationalAlgebraProvenanceCountingSolver()
     result = solver.walk(rename_columns)
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_njoin_inverse():
+    r1 = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            columns=("_p_", "x"), iterable=[(1.0, "a"), (0.5, "b")],
+        ),
+        str2columnstr_constant("_p_"),
+    )
+    r2 = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            columns=("_p_", "x"), iterable=[(0.5, "b")],
+        ),
+        str2columnstr_constant("_p_"),
+    )
+    expected = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            columns=("_p_", "x"), iterable=[(1.0, "b")],
+        ),
+        str2columnstr_constant("_p_"),
+    )
+    op = NaturalJoinInverse(r1, r2)
+    solver = RelationalAlgebraProvenanceCountingSolver()
+    result = solver.walk(op)
     assert testing.eq_prov_relations(result, expected)
