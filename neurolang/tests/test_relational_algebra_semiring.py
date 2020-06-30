@@ -1,17 +1,31 @@
 from ..probabilistic.cplogic import testing
-from ..relational_algebra import NaturalJoin
+from ..relational_algebra import (
+    NamedRelationalAlgebraFrozenSet,
+    NaturalJoin,
+    str2columnstr_constant,
+)
 from ..relational_algebra_provenance import (
+    ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceExpressionSemringSolver,
 )
 
 
 def test_integer_addition_semiring():
-    r1 = testing.make_prov_set([(2, "a"), (3, "b"),], ("_p_", "x"))
-    r2 = testing.make_prov_set([(5, "a"), (10, "c"),], ("_p_", "x"))
+    r1 = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(("_p_", "x"), [(2, "a"), (3, "b")]),
+        str2columnstr_constant("_p_"),
+    )
+    r2 = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(("_p_", "x"), [(5, "a"), (10, "c")]),
+        str2columnstr_constant("_p_"),
+    )
     op = NaturalJoin(r1, r2)
     solver = RelationalAlgebraProvenanceExpressionSemringSolver()
     result = solver.walk(op)
-    expected = testing.make_prov_set([(10, "a")], ("_p_", "x"))
+    expected = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(("_p_", "x"), [(10, "a")]),
+        str2columnstr_constant("_p_"),
+    )
     assert testing.eq_prov_relations(result, expected)
 
 
@@ -24,18 +38,27 @@ class SetType(frozenset):
 
 
 def test_set_type_semiring():
-    r1 = testing.make_prov_set(
-        [(SetType({"a", "b"}), "hello"), (SetType({"c", "a"}), "bonjour")],
-        ("_p_", "x"),
+    r1 = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            ("_p_", "x"),
+            [(SetType({"a", "b"}), "hello"), (SetType({"c", "a"}), "bonjour")],
+        ),
+        str2columnstr_constant("_p_"),
     )
-    r2 = testing.make_prov_set(
-        [(SetType({"c"}), "hello"), (SetType({"c", "a"}), "zoo")],
-        ("_p_", "x"),
+    r2 = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            ("_p_", "x"),
+            [(SetType({"c"}), "hello"), (SetType({"c", "a"}), "zoo")],
+        ),
+        str2columnstr_constant("_p_"),
     )
     op = NaturalJoin(r1, r2)
     solver = RelationalAlgebraProvenanceExpressionSemringSolver()
     result = solver.walk(op)
-    expected = testing.make_prov_set(
-        [(SetType({"a", "b", "c"}), "hello")], ("_p_", "x")
+    expected = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            ("_p_", "x"), [(SetType({"a", "b", "c"}), "hello")]
+        ),
+        str2columnstr_constant("_p_"),
     )
     assert testing.eq_prov_relations(result, expected)
