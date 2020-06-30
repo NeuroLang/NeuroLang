@@ -6,7 +6,7 @@ from ...exceptions import ForbiddenBuiltinError, ForbiddenDisjunctionError
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
 from ...expressions import Constant, Symbol
-from ...logic import Implication, Union
+from ...logic import TRUE, Implication, Union
 from ..exceptions import MalformedProbabilisticTupleError
 from ..expression_processing import (
     add_to_union,
@@ -190,11 +190,7 @@ class CPLogicMixin(PatternWalker):
         )
         return expression
 
-    @add_match(
-        Implication,
-        lambda rule: rule.antecedent
-        != Constant[bool](True, auto_infer_type=False, verify_type=False),
-    )
+    @add_match(Implication, lambda rule: rule.antecedent != TRUE)
     def prevent_rule_with_builtin(self, rule):
         if is_rule_with_builtin(rule, self.builtins()):
             raise ForbiddenBuiltinError(
