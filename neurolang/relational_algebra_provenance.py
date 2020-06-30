@@ -1,7 +1,7 @@
 import operator
 from typing import AbstractSet
 
-from .exceptions import NeuroLangException
+from .exceptions import RelationalAlgebraError
 from .expression_walker import ExpressionWalker, add_match
 from .expressions import Constant, FunctionApplication, Symbol
 from .relational_algebra import (
@@ -52,7 +52,7 @@ def check_do_not_share_non_prov_col(prov_set_1, prov_set_2):
         prov_set_2.non_provenance_columns
     )
     if len(shared_columns) > 0:
-        raise NeuroLangException(
+        raise RelationalAlgebraError(
             "Provenance sets should not share non-provenance columns. "
             "Shared columns found: {}".format(
                 ", ".join(repr(col) for col in shared_columns)
@@ -110,7 +110,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
         if any(
             col == relation.provenance_column for col in selection.formula.args
         ):
-            raise NeuroLangException("Cannot select on provenance column")
+            raise RelationalAlgebraError("Cannot select on provenance column")
         return ProvenanceAlgebraSet(
             self.walk(
                 Selection(
@@ -126,7 +126,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
     def selection_by_constant(self, selection):
         relation = self.walk(selection.relation)
         if selection.formula.args[0] == relation.provenance_column:
-            raise NeuroLangException("Cannot select on provenance column")
+            raise RelationalAlgebraError("Cannot select on provenance column")
         return ProvenanceAlgebraSet(
             self.walk(
                 Selection(
@@ -230,7 +230,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             proj_list_member.dst_column == relation.provenance_column
             for proj_list_member in extended_proj.projection_list
         ):
-            new_prov_col = Constant(ColumnStr(Symbol.fresh().name))
+            new_prov_col = str2columnstr_constant(Symbol.fresh().name)
         else:
             new_prov_col = relation.provenance_column
         relation = self.walk(
@@ -276,7 +276,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
         res_columns = set(left.value.columns) | (
             set(right.value.columns) - {right.provenance_column.value}
         )
-        res_columns = tuple(Constant(ColumnStr(col)) for col in res_columns)
+        res_columns = tuple(str2columnstr_constant(col) for col in res_columns)
         res_prov_col = left.provenance_column
         # provenance columns are temporarily renamed for executing the
         # non-provenance operation on the relations
@@ -306,7 +306,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
         elif np_op is NaturalJoin:
             tmp_non_prov_result = np_op(*tmp_np_op_args)
         else:
-            raise NeuroLangException(
+            raise RelationalAlgebraError(
                 "Cannot apply non-provenance operation: {}".format(np_op)
             )
         result = ExtendedProjection(
@@ -329,7 +329,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
         left = self.walk(union_op.relation_left)
         right = self.walk(union_op.relation_right)
         if left.non_provenance_columns != right.non_provenance_columns:
-            raise NeuroLangException(
+            raise RelationalAlgebraError(
                 "All non-provenance columns must be the same: {} != {}".format(
                     left.non_provenance_columns, right.non_provenance_columns,
                 )

@@ -570,6 +570,32 @@ def test_extended_projection_lambda_function():
     assert result == expected
 
 
+def test_extended_projection_numeric_named_columns():
+    relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=(1, "y"), iterable=[(50, 100), (20, 80),]
+        )
+    )
+    extended_proj_op = ExtendedProjection(
+        relation,
+        (
+            ExtendedProjectionListMember(
+                Constant(ColumnInt(1)),
+                Constant(ColumnStr("pomme_de_terre"))
+            ),
+        )
+    )
+    expected = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=("pomme_de_terre",),
+            iterable=[(50,), (20,)]
+        )
+    )
+    solver = RelationalAlgebraSolver()
+    result = solver.walk(extended_proj_op)
+    assert result == expected
+
+
 def test_extended_projection_other_relation_length():
     r1 = Constant[AbstractSet](
         NamedRelationalAlgebraFrozenSet(
