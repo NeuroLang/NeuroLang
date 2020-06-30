@@ -1,9 +1,11 @@
 import operator
 from typing import Tuple
 
+from ...datalog.expression_processing import conjunct_formulas
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
 from ...expressions import Constant, Definition, FunctionApplication, Symbol
+from ...logic import Conjunction, Implication
 from ...logic.expression_processing import extract_logic_predicates
 from ...relational_algebra import (
     ColumnStr,
@@ -17,9 +19,11 @@ from ...relational_algebra import (
     str2columnstr_constant,
 )
 from ...relational_algebra_provenance import (
+    NaturalJoinInverse,
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
 )
+from . import problog
 from .cplogic_to_gm import (
     AndPlateNode,
     BernoulliPlateNode,
@@ -165,6 +169,7 @@ def solve_succ_query(query_predicate, cpl_program):
     n.d., 30.
 
     """
+    return problog.solve_succ_query(query_predicate, cpl_program)
     grounded = ground_cplogic_program(cpl_program)
     translator = CPLogicGroundingToGraphicalModelTranslator()
     gm = translator.walk(grounded)
@@ -704,3 +709,56 @@ class UnionRemover(
     UnionRemoverMixin, ProvenanceExpressionTransformer, ExpressionWalker
 ):
     pass
+
+
+def make_conjunction_rule(conjunction):
+    if isinstance(conjunction, FunctionApplication):
+        # enforce expression to be a conjunction
+        conjunction = Conjunction((conjunction,))
+    symbols = set()
+    for pred in conjunction.formulas:
+        symbols |= set(arg for arg in pred.args if isinstance(arg, Symbol))
+    symbols = tuple(sorted(symbols))
+    csqt_pred_symb = Symbol.fresh()
+    return Implication(csqt_pred_symb(*symbols), conjunction,)
+
+
+def add_query_to_program(query, program):
+    assert isinstance(query, Conjunction)
+    args = set()
+    for pred in query.formulas:
+        args |= set(arg for arg in pred.args if isinstance(arg, Symbol))
+    csqt_pred = Symbol.fresh()(*args)
+    rule = Implication(csqt_pred, query)
+    program.walk(rule)
+    return csqt_pred
+
+
+def solve_marg_query(query_predicate, evidence, cpl_program):
+    if isinstance(evidence, FunctionApplication):
+        evidence = Conjunction((evidence,))
+    joint_conjunction = conjunct_formulas(query_predicate, evidence)
+    cpl_program.push_scope()
+    joint_qpred = add_query_to_program(joint_conjunction, cpl_program)
+    evidence_qpred = add_query_to_program(evidence, cpl_program)
+    joint_result = solve_succ_query(joint_qpred, cpl_program)
+    evidence_result = solve_succ_query(evidence_qpred, cpl_program)
+    cpl_program.pop_scope()
+    joint_cols = tuple(
+        str2columnstr_constant(arg.name)
+        for arg in query_predicate.args
+        if isinstance(arg, Symbol)
+    )
+    joint_result = Projection(joint_result, joint_cols)
+    evidence_cols = set()
+    for formula in evidence.formulas:
+        evidence_cols |= set(
+            str2columnstr_constant(arg.name)
+            for arg in formula.args
+            if isinstance(arg, Symbol)
+        )
+    evidence_cols = tuple(sorted(evidence_cols, key=lambda c: c.value))
+    evidence_result = Projection(evidence_result, evidence_cols)
+    result = NaturalJoinInverse(joint_result, evidence_result)
+    solver = RelationalAlgebraProvenanceCountingSolver()
+    return solver.walk(result)
