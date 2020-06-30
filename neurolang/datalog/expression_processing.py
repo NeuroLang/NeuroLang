@@ -500,7 +500,8 @@ def flatten_query(query, program):
 
 
 def is_rule_with_builtin(rule, known_builtins=None):
-    known_builtins = set() if known_builtins is None else set(known_builtins)
+    if known_builtins is None:
+        known_builtins = set()
     return any(
         isinstance(pred.functor, Constant) or pred.functor in known_builtins
         for pred in extract_logic_predicates(rule.antecedent)
