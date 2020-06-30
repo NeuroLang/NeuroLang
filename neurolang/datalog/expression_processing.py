@@ -497,3 +497,12 @@ def flatten_query(query, program):
             formula = rename_args_to_match(formula, rule.consequent, predicate)
         conj_query = conjunct_formulas(conj_query, formula)
     return conj_query
+
+
+def is_rule_with_builtin(rule, known_builtins=None):
+    if known_builtins is None:
+        known_builtins = set()
+    return any(
+        isinstance(pred.functor, Constant) or pred.functor in known_builtins
+        for pred in extract_logic_predicates(rule.antecedent)
+    )
