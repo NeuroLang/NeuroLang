@@ -6,7 +6,7 @@ from ...exceptions import ForbiddenBuiltinError, ForbiddenDisjunctionError
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
 from ...expressions import Constant, Symbol
-from ...logic import Implication, Union
+from ...logic import TRUE, Implication, Union
 from ..exceptions import MalformedProbabilisticTupleError
 from ..expression_processing import (
     add_to_union,
