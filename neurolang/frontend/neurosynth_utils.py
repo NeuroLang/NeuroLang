@@ -148,6 +148,36 @@ class NeuroSynthHandler(object):
             self.dataset.feature_table.data.index.values, axis=1
         )
 
+    def ns_prob_term_in_study(self, terms):
+        """
+        Given a set of terms, returns the probability of that term of been relevant in the studies.
+        Defined as: P(term_relevant) = cant(term_relevant) /  cant(all_terms)
+
+        """
+        res = []
+        for term in terms:
+            data = nsh.ns_study_tfidf_feature_for_terms([term])
+            df = pd.DataFrame(data, columns=["study", "term", "tfidf"])
+            res.append([len(df[df.tfidf > 0]) / len(df), term])
+
+        return pd.DataFrame(res, columns=["probability", "term"])
+
+    def ns_prob_voxel_activated(self):
+        """
+        Returns the probability of all voxels being activated 
+
+        """
+        data = nsh.ns_load_reported_activations()
+        df = pd.DataFrame(data, columns=["study", "voxel"])
+        gby = df.groupby("voxel").count()
+        prob_voxel = gby.study / len(df.study.unique())
+        return prob_voxel.reset_index(name="probability")[
+            ["probability", "voxel"]
+        ]
+
+    def ns_prob_document(self):
+        return 1 / len(self.ns_load_all_study_ids())
+
     @staticmethod
     def download_ns_dataset(path):
         if not os.path.exists(path):
