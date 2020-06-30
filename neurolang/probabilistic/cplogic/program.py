@@ -2,13 +2,11 @@ import typing
 
 from ...datalog import DatalogProgram
 from ...datalog.expression_processing import is_rule_with_builtin
-from ...datalog.expressions import Fact
 from ...exceptions import ForbiddenBuiltinError, ForbiddenDisjunctionError
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
 from ...expressions import Constant, Symbol
-from ...logic import Conjunction, Implication, Union
-from ...logic.expression_processing import extract_logic_predicates
+from ...logic import TRUE, Implication, Union
 from ..exceptions import MalformedProbabilisticTupleError
 from ..expression_processing import (
     add_to_union,
