@@ -12,7 +12,7 @@ from ....datalog.chase import (
     ChaseMGUMixin,
     ChaseNaive,
 )
-from ..translate_to_dl import translate_to_dl
+from ..translate_to_dl import TranslateToDatalog
 
 
 intersects = Symbol("intersects")
@@ -28,7 +28,10 @@ Odyssey = Constant("Odyssey")
 
 
 def test_translate_to_dl():
-    program = translate_to_dl("if Y intersects X then X intersects Y")
+    ttdl = TranslateToDatalog()
+    program = ttdl.translate_sentence(
+        "if Y intersects X then X intersects Y"
+    )
 
     assert program == ExpressionBlock(
         (Implication(intersects(x, y), intersects(y, x)),)
@@ -36,7 +39,8 @@ def test_translate_to_dl():
 
 
 def test_translate_to_dl_2():
-    program = translate_to_dl(
+    ttdl = TranslateToDatalog()
+    program = ttdl.translate_sentence(
         "if a region Y intersects a region X then X intersects Y"
     )
 
@@ -75,7 +79,8 @@ def test_solver_integration():
       `Does Jones like Ulysses`
     """
 
-    program = translate_to_dl(
+    ttdl = TranslateToDatalog()
+    program = ttdl.translate_block(
         """
         if a book X references Odyssey then Jones likes X.
         Ulysses references Odyssey.

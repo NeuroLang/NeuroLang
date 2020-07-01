@@ -20,40 +20,42 @@ import operator
 _equals = Constant(operator.eq)
 
 
-def translate_to_dl(string):
-    grammar = EnglishGrammar(EnglishBaseLexicon())
-    parser = ChartParser(grammar)
-    builder = DRSBuilder(grammar)
-    into_fol = DRS2FOL()
+class TranslateToDatalog:
+    def __init__(self):
+        self.grammar = EnglishGrammar(EnglishBaseLexicon())
+        self.parser = ChartParser(self.grammar)
+        self.builder = DRSBuilder(self.grammar)
+        self.into_fol = DRS2FOL()
 
-    program = ExpressionBlock(())
+    def translate_block(self, string):
+        program = ExpressionBlock(())
 
-    for sentence in string.split("."):
-        sentence = sentence.strip()
-        if not sentence:
-            continue
-        t = parser.parse(sentence)[0]
+        for sentence in string.split("."):
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+            exp_block = self.translate_sentence(sentence)
+            program = ExpressionBlock(
+                program.expressions + exp_block.expressions
+            )
 
-        drs = builder.walk(t)
-        exp = into_fol.walk(drs)
+        return program
+
+    def translate_sentence(self, sentence):
+        t = self.parser.parse(sentence)[0]
+
+        drs = self.builder.walk(t)
+        exp = self.into_fol.walk(drs)
 
         intensional_rule = _as_intensional_rule(exp)
         if intensional_rule:
-            program = ExpressionBlock(
-                program.expressions + intensional_rule.expressions
-            )
-            continue
+            return ExpressionBlock(intensional_rule.expressions)
 
         fact = _as_fact(exp)
         if fact:
-            program = ExpressionBlock(
-                program.expressions + fact.expressions
-            )
-            continue
+            return ExpressionBlock(fact.expressions)
 
         raise Exception(f"Unsupported expression: {repr(exp)}")
-
-    return program
 
 
 def _as_intensional_rule(exp):
