@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from typing import AbstractSet, Callable, Tuple, List
+from typing import AbstractSet, Callable, Tuple, List, Iterable
 from uuid import uuid1
 
 import numpy as np
@@ -311,6 +311,41 @@ class NeuroSynthMixin:
         result_set = self.neurosynth_db.ns_study_tfidf_feature_for_terms(terms)
         return self.add_tuple_set(
             result_set, type_=Tuple[StudyID, str, TfIDf], name=name
+        )
+
+    def load_neurosynth_study_ids(self, name: str = None):
+        if not hasattr(self, 'neurosynth_db'):
+            self.neurosynth_db = NeuroSynthHandler()
+        if not name:
+            name = str(uuid1())
+        result_set = self.neurosynth_db.ns_study_ids()
+        return self.add_tuple_set(result_set, type_=Tuple[StudyID], name=name)
+
+    def load_neurosynth_reported_activations(self, name: str = None):
+        if not hasattr(self, "neurosynth_db"):
+            self.neurosynth_db = NeuroSynthHandler()
+        if not name:
+            name = str(uuid1())
+        result_set = self.neurosynth_db.ns_reported_activations()
+        return self.add_tuple_set(
+            result_set, type_=Tuple[StudyID, int], name=name
+        )
+
+    def load_neurosynth_term_study_associations(
+        self,
+        name: str = None,
+        threshold: float = 1e-3,
+        study_ids: Iterable[StudyID] = None,
+    ):
+        if not hasattr(self, "neurosynth_db"):
+            self.neurosynth_db = NeuroSynthHandler()
+        if not name:
+            name = str(uuid1())
+        result_set = self.neurosynth_db.ns_term_study_associations(
+            threshold=threshold, study_ids=study_ids
+        )
+        return self.add_tuple_set(
+            result_set, type_=Tuple[StudyID, str], name=name
         )
 
 

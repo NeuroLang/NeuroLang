@@ -69,7 +69,7 @@ class NeuroSynthHandler(object):
 
         return dataset
 
-    def ns_load_term_study_associations(self, threshold=1e-3, study_ids=None):
+    def ns_term_study_associations(self, threshold=1e-3, study_ids=None):
         """
         Load a 2d numpy array containing association between terms and studies
         based on thresholded tf-idf features in the database.
@@ -92,7 +92,7 @@ class NeuroSynthHandler(object):
             .values
         )
 
-    def ns_load_reported_activations(self):
+    def ns_reported_activations(self):
         """
         Load a 2d numpy array containing each reported activation in the
         database.
@@ -104,7 +104,7 @@ class NeuroSynthHandler(object):
         study_id_vox_id = np.transpose([study_ids, vox_ids])
         return study_id_vox_id
 
-    def ns_load_all_study_ids(self):
+    def ns_study_ids(self):
         return np.expand_dims(
             self.dataset.feature_table.data.index.values, axis=1
         )
