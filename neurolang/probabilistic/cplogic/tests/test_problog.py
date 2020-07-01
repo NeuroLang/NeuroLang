@@ -2,7 +2,8 @@ import problog.core
 import problog.logic
 import problog.sdd_formula
 
-from ....expressions import Symbol
+from ....datalog.expressions import Fact
+from ....expressions import Constant, Symbol
 from ..problog import cplogic_to_problog
 from ..program import CPLogicProgram
 
@@ -24,3 +25,9 @@ def test_convert_cpl_to_pl():
         problog.logic.Term("P")(problog.logic.Constant("b")): 1.0,
     }
     assert res == expected
+
+
+def test_zero_arity():
+    cpl_program = CPLogicProgram()
+    cpl_program.walk(Fact(P()))
+    cplogic_to_problog(cpl_program)
