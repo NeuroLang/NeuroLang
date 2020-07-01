@@ -30,45 +30,6 @@ class NeuroSynthHandler(object):
     def __init__(self, ns_dataset=None):
         self._dataset = ns_dataset
 
-    def ns_region_set_from_term(
-        self,
-        terms,
-        frequency_threshold=0.05,
-        q=0.01,
-        prior=0.5,
-        image_type=None,
-    ):
-        """
-        Method that allows to obtain the activations related to
-        a series of terms. The terms can be entered in the following formats:
-
-        String: All expressions allowed in neurosynth. It can be
-        a term, a simple logical expression, for example: (reward* | pain*).
-
-        Iterable: A list of terms that will be calculated as a disjunction.
-        This case does not support logical expressions.
-        """
-        if image_type is None:
-            image_type = f"association-test_z_FDR_{q}"
-
-        if not isinstance(terms, str) and isinstance(
-            terms, collections.Iterable
-        ):
-            studies_ids = self.dataset.get_studies(
-                features=terms, frequency_threshold=frequency_threshold
-            )
-        else:
-            studies_ids = self.dataset.get_studies(
-                expression=terms, frequency_threshold=frequency_threshold
-            )
-        ma = ns.meta.MetaAnalysis(self.dataset, studies_ids, q=q, prior=prior)
-        data = ma.images[image_type]
-        masked_data = self.dataset.masker.unmask(data)
-        affine = self.dataset.masker.get_header().get_sform()
-        dim = self.dataset.masker.dims
-        region_set = region_set_from_masked_data(masked_data, affine, dim)
-        return region_set
-
     def ns_study_id_set_from_term(self, terms, frequency_threshold=0.05):
         study_ids = self.dataset.get_studies(
             features=terms, frequency_threshold=frequency_threshold
