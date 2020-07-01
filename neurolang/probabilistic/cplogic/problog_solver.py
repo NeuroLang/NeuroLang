@@ -67,9 +67,9 @@ def pl_pred_from_tuple(pred_symb, tupl):
 
 def add_facts_to_problog(pred_symb, relation, pl):
     pred_symb = pred_symb.name
-    if relation.is_dee():
+    if relation.value.is_dee():
         pl += problog.logic.Term(pred_symb)
-    for tupl in relation:
+    for tupl in relation.value.itervalues():
         args = (problog.logic.Constant(arg) for arg in tupl)
         fact = problog.logic.Term(pred_symb, *args)
         pl += fact
