@@ -1,3 +1,4 @@
+import operator as op
 from typing import AbstractSet
 
 from .exceptions import (
@@ -25,6 +26,9 @@ from .relational_algebra import (
     eq_,
     str2columnstr_constant,
 )
+
+
+ADD = Constant(op.add)
 
 
 class ProvenanceAlgebraSet(Constant):
@@ -392,13 +396,27 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
     @add_match(Projection(ProvenanceAlgebraSet, ...))
     def projection_rap(self, projection):
         cols = tuple(v.value for v in projection.attributes)
+
         projected_relation = projection.relation.relations.aggregate(
-            cols, {projection.relation.provenance_column: sum}
+            cols,
+            {
+                projection.relation.provenance_column:
+                self._semiring_agg_sum
+            }
         )
         return ProvenanceAlgebraSet(
             projected_relation,
             projection.relation.provenance_column
         )
+
+    @staticmethod
+    def _semiring_agg_sum(x):
+        args = tuple(x)
+        if len(args) == 1:
+            r = args[0]
+        else:
+            r = ADD(*args)
+        return r
 
     @add_match(RenameColumn(ProvenanceAlgebraSet, ..., ...))
     def rename_column_rap(self, expression):
