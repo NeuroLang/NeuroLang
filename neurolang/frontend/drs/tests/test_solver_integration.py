@@ -29,9 +29,7 @@ Odyssey = Constant("Odyssey")
 
 def test_translate_to_dl():
     ttdl = TranslateToDatalog()
-    program = ttdl.translate_sentence(
-        "if Y intersects X then X intersects Y"
-    )
+    program = ttdl.translate_sentence("if Y intersects X then X intersects Y")
 
     assert program == ExpressionBlock(
         (Implication(intersects(x, y), intersects(y, x)),)

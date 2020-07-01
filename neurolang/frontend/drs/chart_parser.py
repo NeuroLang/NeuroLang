@@ -61,15 +61,15 @@ class ChartParser:
 
     def recognize(self, string):
         tokens = string.split()
-        chart = self._fill_chart(tokens)
-        return any(e.rule.is_root for e in chart[0][len(tokens)])
+        self._fill_chart(tokens)
+        return any(e.rule.is_root for e in self.chart[0][len(tokens)])
 
     def parse(self, string):
         tokens = string.split()
-        chart = self._fill_chart(tokens)
+        self._fill_chart(tokens)
         compl = [
             e
-            for e in chart[0][len(tokens)]
+            for e in self.chart[0][len(tokens)]
             if e.rule.is_root and not e.remaining
         ]
         return [self._build_tree(e, e.unification) for e in compl]
@@ -87,35 +87,33 @@ class ChartParser:
         return head
 
     def _fill_chart(self, tokens):
-        chart = Chart([
-            [[] for _ in range(len(tokens) + 1)]
-            for _ in range(len(tokens) + 1)
-        ])
-        agenda = []
-        self._initialize(tokens, chart, agenda)
-        while agenda:
-            agenda.sort(key=lambda e: (-e[1], -e[2]))
-            edge, i, j = agenda.pop()
+        self._initialize(tokens)
+        while self.agenda:
+            self.agenda.sort(key=lambda e: (-e[1], -e[2]))
+            edge, i, j = self.agenda.pop()
 
-            self._predict(edge, i, j, chart, agenda)
-            self._complete(edge, i, j, chart, agenda)
-
-        return chart
+            self._predict(edge, i, j)
+            self._complete(edge, i, j)
 
     # For every word wi add the edge
     #   [wi →  • , (i, i+1)]
     #
-    def _initialize(self, tokens, chart, agenda):
+    def _initialize(self, tokens):
+        self.agenda = []
+        self.chart = Chart([
+            [[] for _ in range(len(tokens) + 1)]
+            for _ in range(len(tokens) + 1)
+        ])
         for i, t in enumerate(tokens):
             word_edge = self.Edge(Constant[str](t), None, [], [], [], dict())
-            chart[i][i + 1].append(word_edge)
-            agenda.append((word_edge, i, i + 1))
+            self.chart[i][i + 1].append(word_edge)
+            self.agenda.append((word_edge, i, i + 1))
             for m in self.grammar.lexicon.get_meanings(t):
                 edge = self.Edge(
                     m, None, [word_edge.head], [], [word_edge], dict()
                 )
-                chart[i][i + 1].append(edge)
-                agenda.append((edge, i, i + 1))
+                self.chart[i][i + 1].append(edge)
+                self.agenda.append((edge, i, i + 1))
 
     # If the chart contains the complete edge
     #   [A → α • , (i, j)]
@@ -124,11 +122,11 @@ class ChartParser:
     # then add the self-loop edge
     #   [B →  • A β , (i, i)]
     #
-    def _predict(self, edge, i, j, chart, agenda):
+    def _predict(self, edge, i, j):
         for rule in self.grammar.rules:
             u = _lu.unify(rule.constituents[0], edge.head)
             if u is not None:
-                chart[i][i].append(
+                self.chart[i][i].append(
                     self.Edge(None, rule, [], rule.constituents[:], [], dict())
                 )
 
@@ -140,9 +138,9 @@ class ChartParser:
     # where α, β, and γ are (possibly empty) sequences
     # of terminals or non-terminals
     #
-    def _complete(self, completed_edge, j, k, chart, agenda):
+    def _complete(self, completed_edge, j, k):
         for i in range(j + 1):
-            for e in chart[i][j]:
+            for e in self.chart[i][j]:
                 if not e.remaining:
                     continue
                 u = _lu.unify(e.remaining[0], completed_edge.head)
@@ -175,8 +173,8 @@ class ChartParser:
                     new_edge = self.Edge(
                         new_head, e.rule, n_completed, [], n_used_edges, unif
                     )
-                    agenda.append((new_edge, i, k))
-                chart[i][k].append(new_edge)
+                    self.agenda.append((new_edge, i, k))
+                self.chart[i][k].append(new_edge)
 
 
 class _lu:

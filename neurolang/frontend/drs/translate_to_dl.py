@@ -95,7 +95,7 @@ def _strip_universal_quantifiers(exp):
         ucv += (exp.head,)
         exp = exp.body
 
-    return (ucv, exp)
+    return ucv, exp
 
 
 def _constrain_using_head_constants(head, body, ucv):
