@@ -272,7 +272,7 @@ class RegionMixin:
 
 class NeuroSynthMixin:
     def load_neurosynth_term_study_ids(
-        self, term: str, name: str = None, frequency_threshold: float = 0.05
+        self, term, name=None, frequency_threshold=0.05
     ):
         if not hasattr(self, 'neurosynth_db'):
             self.neurosynth_db = NeuroSynthHandler()
@@ -283,9 +283,7 @@ class NeuroSynthMixin:
         )
         return self.add_tuple_set(study_set, type_=Tuple[StudyID], name=name)
 
-    def load_neurosynth_study_tfidf_feature_for_terms(
-        self, terms: List[str], name: str = None,
-    ):
+    def load_neurosynth_study_tfidf_feature_for_terms(self, terms, name=None):
         if not hasattr(self, 'neurosynth_db'):
             self.neurosynth_db = NeuroSynthHandler()
         if not name:
@@ -295,7 +293,7 @@ class NeuroSynthMixin:
             result_set, type_=Tuple[StudyID, str, TfIDf], name=name
         )
 
-    def load_neurosynth_study_ids(self, name: str = None):
+    def load_neurosynth_study_ids(self, name=None):
         if not hasattr(self, 'neurosynth_db'):
             self.neurosynth_db = NeuroSynthHandler()
         if not name:
@@ -303,7 +301,7 @@ class NeuroSynthMixin:
         result_set = self.neurosynth_db.ns_study_ids()
         return self.add_tuple_set(result_set, type_=Tuple[StudyID], name=name)
 
-    def load_neurosynth_reported_activations(self, name: str = None):
+    def load_neurosynth_reported_activations(self, name=None):
         if not hasattr(self, "neurosynth_db"):
             self.neurosynth_db = NeuroSynthHandler()
         if not name:
@@ -314,10 +312,7 @@ class NeuroSynthMixin:
         )
 
     def load_neurosynth_term_study_associations(
-        self,
-        name: str = None,
-        threshold: float = 1e-3,
-        study_ids: Iterable[StudyID] = None,
+        self, name=None, threshold=1e-3, study_ids=None,
     ):
         if not hasattr(self, "neurosynth_db"):
             self.neurosynth_db = NeuroSynthHandler()
