@@ -5,7 +5,7 @@ from ....datalog import Fact
 from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Union
 from ....relational_algebra import RenameColumn
-from .. import testing
+from .. import solve_succ_all, testing
 from ..gm_provenance_solver import solve_marg_query, solve_succ_query
 from ..program import CPLogicProgram
 
@@ -583,3 +583,45 @@ def test_marg_query_multiple_evidence_predicates():
     result = solve_marg_query(query_pred, evidence, cpl_program)
     expected = testing.make_prov_set([], ("_p_", "x"))
     assert testing.eq_prov_relations(result, expected)
+
+
+def test_solve_succ_all():
+    cpl = CPLogicProgram()
+    cpl.add_extensional_predicate_from_tuples(P, {("a", "b"), ("b", "c")})
+    cpl.add_probabilistic_facts_from_tuples(Q, {(0.2, "a"), (0.9, "b")})
+    cpl.add_probabilistic_choice_from_tuples(H, {(0.5, "a"), (0.5, "c")})
+    cpl.walk(Implication(Z(x), Conjunction((H(x), Q(x)))))
+    result = solve_succ_all(cpl, solver_name="problog")
+    assert P in result
+    assert testing.eq_prov_relations(
+        result[P],
+        testing.make_prov_set(
+            [(1.0, "a", "b"), (1.0, "b", "c")],
+            ("_p_",)
+            + tuple(c.value for c in result[P].non_provenance_columns),
+        ),
+    )
+    assert testing.eq_prov_relations(
+        result[Q],
+        testing.make_prov_set(
+            [(0.2, "a"), (0.9, "b")],
+            ("_p_",)
+            + tuple(c.value for c in result[Q].non_provenance_columns),
+        ),
+    )
+    assert testing.eq_prov_relations(
+        result[H],
+        testing.make_prov_set(
+            [(0.5, "a"), (0.5, "c")],
+            ("_p_",)
+            + tuple(c.value for c in result[H].non_provenance_columns),
+        ),
+    )
+    assert testing.eq_prov_relations(
+        result[Z],
+        testing.make_prov_set(
+            [(0.1, "a"),],
+            ("_p_",)
+            + tuple(c.value for c in result[Z].non_provenance_columns),
+        ),
+    )
