@@ -47,52 +47,77 @@ class TranslateToDatalog:
         drs = self.builder.walk(t)
         exp = self.into_fol.walk(drs)
 
-        intensional_rule = _as_intensional_rule(exp)
-        if intensional_rule:
-            return ExpressionBlock(intensional_rule.expressions)
+        try:
+            return _as_intensional_rule(exp)
+        except TranslateToDatalogError:
+            pass
 
-        fact = _as_fact(exp)
-        if fact:
-            return ExpressionBlock(fact.expressions)
+        try:
+            return _as_fact(exp)
+        except TranslateToDatalogError:
+            pass
 
         raise Exception(f"Unsupported expression: {repr(exp)}")
 
 
+class TranslateToDatalogError(Exception):
+    pass
+
+
 def _as_intensional_rule(exp):
+    ucv, exp = _strip_universal_quantifiers(exp)
+
+    if not isinstance(exp, Implication):
+        raise TranslateToDatalogError("A Datalog rule must be an implication")
+
+    head = exp.consequent
+    body = exp.antecedent
+
+    if not isinstance(head, FunctionApplication):
+        raise TranslateToDatalogError(
+            "The head of a Datalog rule must be a function application"
+        )
+
+    head, body, ucv = _constrain_using_head_constants(head, body, ucv)
+
+    if any(a not in ucv for a in head.args):
+        raise TranslateToDatalogError(
+            "All rule head arguments must be universally quantified"
+        )
+
+    return fol_query_to_datalog_program(head, body)
+
+
+def _strip_universal_quantifiers(exp):
     ucv = ()
 
     while isinstance(exp, UniversalPredicate):
         ucv += (exp.head,)
         exp = exp.body
 
-    if not isinstance(exp, Implication):
-        return None
+    return (ucv, exp)
 
-    con = exp.consequent
-    ant = exp.antecedent
 
-    if not isinstance(con, FunctionApplication):
-        return None
-
+def _constrain_using_head_constants(head, body, ucv):
     args = ()
 
-    for a in con.args:
+    for a in head.args:
         if isinstance(a, Constant):
             s = Symbol.fresh()
-            ant = Conjunction((ant, _equals(s, a)))
+            body = Conjunction((body, _equals(s, a)))
+            ucv += (s,)
             args += (s,)
-        elif a in ucv:
-            args += (a,)
         else:
-            return None
+            args += (a,)
 
-    con = con.functor(*args)
-
-    return fol_query_to_datalog_program(con, ant)
+    head = head.functor(*args)
+    return head, body, ucv
 
 
 def _as_fact(exp):
     if not isinstance(exp, FunctionApplication):
-        return None
+        raise TranslateToDatalogError(
+            "A fact must be a single function application"
+        )
 
     return ExpressionBlock((Fact(exp),))
