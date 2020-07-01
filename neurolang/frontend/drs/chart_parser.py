@@ -130,6 +130,12 @@ class ChartParser:
                     self.Edge(None, rule, [], rule.constituents[:], [], dict())
                 )
 
+    def _complete(self, completed_edge, j, k):
+        for i in range(j + 1):
+            for e in self.chart[i][j]:
+                new_edge = self._complete_edge(e, completed_edge)
+                self._add_completed_edge_to_chart(new_edge, i, k)
+
     # If the chart contains the edges
     #   [A → α • B β , (i, j)]
     #   [B → γ • , (j, k)]
@@ -138,43 +144,47 @@ class ChartParser:
     # where α, β, and γ are (possibly empty) sequences
     # of terminals or non-terminals
     #
-    def _complete(self, completed_edge, j, k):
-        for i in range(j + 1):
-            for e in self.chart[i][j]:
-                if not e.remaining:
-                    continue
-                u = _lu.unify(e.remaining[0], completed_edge.head)
-                if not u:
-                    continue
-                # here completed could have the references
-                #   to the involved edges
-                n_completed = e.completed + [u[1]]
-                n_used_edges = e.used_edges + [completed_edge]
-                n_remaining = e.remaining[1:]
-                unif = e.unification.copy()
-                unif.update(u[0])
-                if n_remaining:
-                    n_remaining = [
-                        _lu.substitute(r, unif) for r in n_remaining
-                    ]
-                    new_edge = self.Edge(
-                        e.head,
-                        e.rule,
-                        n_completed,
-                        n_remaining,
-                        n_used_edges,
-                        unif,
-                    )
-                else:
-                    new_head = e.rule.constructor(*n_completed)
-                    if not new_head:
-                        raise Exception("No new head in rule:", e.rule)
-                    new_head = _lu.substitute(new_head, unif)
-                    new_edge = self.Edge(
-                        new_head, e.rule, n_completed, [], n_used_edges, unif
-                    )
-                    self.agenda.append((new_edge, i, k))
-                self.chart[i][k].append(new_edge)
+    def _complete_edge(self, edge_a, edge_b):
+        if not edge_a.remaining:
+            return
+        u = _lu.unify(edge_a.remaining[0], edge_b.head)
+        if not u:
+            return
+        # here completed could have the references
+        #   to the involved edges
+        n_completed = edge_a.completed + [u[1]]
+        n_used_edges = edge_a.used_edges + [edge_b]
+        n_remaining = edge_a.remaining[1:]
+        unif = edge_a.unification.copy()
+        unif.update(u[0])
+        if n_remaining:
+            n_remaining = [
+                _lu.substitute(r, unif) for r in n_remaining
+            ]
+            return self.Edge(
+                edge_a.head,
+                edge_a.rule,
+                n_completed,
+                n_remaining,
+                n_used_edges,
+                unif,
+            )
+        else:
+            new_head = edge_a.rule.constructor(*n_completed)
+            if not new_head:
+                raise Exception("No new head in rule:", edge_a.rule)
+            new_head = _lu.substitute(new_head, unif)
+            return self.Edge(
+                new_head, edge_a.rule, n_completed, [], n_used_edges, unif
+            )
+
+    def _add_completed_edge_to_chart(self, new_edge, i, k):
+        if not new_edge:
+            return
+        if not new_edge.remaining:
+            self.agenda.append((new_edge, i, k))
+        self.chart[i][k].append(new_edge)
+
 
 
 class _lu:
