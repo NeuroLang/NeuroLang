@@ -100,10 +100,12 @@ class ChartParser:
     #
     def _initialize(self, tokens):
         self.agenda = []
-        self.chart = Chart([
-            [[] for _ in range(len(tokens) + 1)]
-            for _ in range(len(tokens) + 1)
-        ])
+        self.chart = Chart(
+            [
+                [[] for _ in range(len(tokens) + 1)]
+                for _ in range(len(tokens) + 1)
+            ]
+        )
         for i, t in enumerate(tokens):
             word_edge = self.Edge(Constant[str](t), None, [], [], [], dict())
             self.chart[i][i + 1].append(word_edge)
@@ -130,12 +132,6 @@ class ChartParser:
                     self.Edge(None, rule, [], rule.constituents[:], [], dict())
                 )
 
-    def _complete(self, completed_edge, j, k):
-        for i in range(j + 1):
-            for e in self.chart[i][j]:
-                new_edge = self._complete_edge(e, completed_edge)
-                self._add_completed_edge_to_chart(new_edge, i, k)
-
     # If the chart contains the edges
     #   [A → α • B β , (i, j)]
     #   [B → γ • , (j, k)]
@@ -144,12 +140,21 @@ class ChartParser:
     # where α, β, and γ are (possibly empty) sequences
     # of terminals or non-terminals
     #
-    def _complete_edge(self, edge_a, edge_b):
-        if not edge_a.remaining:
-            return
-        u = _lu.unify(edge_a.remaining[0], edge_b.head)
-        if not u:
-            return
+    def _complete(self, completed_edge, j, k):
+        for i, e in self._candidate_edges(j, k):
+            u = _lu.unify(e.remaining[0], completed_edge.head)
+            if not u:
+                continue
+            new_edge = self._complete_edge(e, completed_edge, u)
+            self._add_completed_edge_to_chart(new_edge, i, k)
+
+    def _candidate_edges(self, j, k):
+        for i in range(j + 1):
+            for e in self.chart[i][j]:
+                if not e.remaining:
+                    yield i, e
+
+    def _complete_edge(self, edge_a, edge_b, u):
         # here completed could have the references
         #   to the involved edges
         n_completed = edge_a.completed + [u[1]]
@@ -158,9 +163,7 @@ class ChartParser:
         unif = edge_a.unification.copy()
         unif.update(u[0])
         if n_remaining:
-            n_remaining = [
-                _lu.substitute(r, unif) for r in n_remaining
-            ]
+            n_remaining = [_lu.substitute(r, unif) for r in n_remaining]
             return self.Edge(
                 edge_a.head,
                 edge_a.rule,
@@ -184,7 +187,6 @@ class ChartParser:
         if not new_edge.remaining:
             self.agenda.append((new_edge, i, k))
         self.chart[i][k].append(new_edge)
-
 
 
 class _lu:
