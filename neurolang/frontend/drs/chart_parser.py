@@ -151,7 +151,7 @@ class ChartParser:
     def _candidate_edges(self, j, k):
         for i in range(j + 1):
             for e in self.chart[i][j]:
-                if not e.remaining:
+                if e.remaining:
                     yield i, e
 
     def _complete_edge(self, edge_a, edge_b, u):
