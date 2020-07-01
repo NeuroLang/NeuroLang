@@ -4,6 +4,7 @@ import os
 
 import numpy as np
 import pandas as pd
+from nilearn.datasets import utils
 from pkg_resources import resource_exists, resource_filename
 
 from ..regions import region_set_from_masked_data
@@ -127,7 +128,7 @@ class NeuroSynthHandler(object):
                 value_vars=terms,
                 value_name="tfidf",
             )
-            .query(f"tfidf > {threshold}")[["pmid", "term"]]
+            .query(f"tfidf > {threshold}")[["tfidf", "pmid", "term"]]
             .values
         )
 
@@ -148,44 +149,29 @@ class NeuroSynthHandler(object):
             self.dataset.feature_table.data.index.values, axis=1
         )
 
-    def ns_prob_term_in_study(self, terms):
-        """
-        Given a set of terms, returns the probability of that term of been relevant in the studies.
-        Defined as: P(term_relevant) = cant(term_relevant) /  cant(all_terms)
-
-        """
-        res = []
-        for term in terms:
-            data = nsh.ns_study_tfidf_feature_for_terms([term])
-            df = pd.DataFrame(data, columns=["study", "term", "tfidf"])
-            res.append([len(df[df.tfidf > 0]) / len(df), term])
-
-        return pd.DataFrame(res, columns=["probability", "term"])
-
-    def ns_prob_voxel_activated(self):
-        """
-        Returns the probability of all voxels being activated 
-
-        """
-        data = nsh.ns_load_reported_activations()
-        df = pd.DataFrame(data, columns=["study", "voxel"])
-        gby = df.groupby("voxel").count()
-        prob_voxel = gby.study / len(df.study.unique())
-        return prob_voxel.reset_index(name="probability")[
-            ["probability", "voxel"]
-        ]
-
-    def ns_prob_document(self):
-        return 1 / len(self.ns_load_all_study_ids())
-
     @staticmethod
-    def download_ns_dataset(path):
-        if not os.path.exists(path):
-            os.makedirs(path)
-        ns.dataset.download(path=path, unpack=True)
-        dataset = ns.Dataset(os.path.join(path, "database.txt"))
-        dataset.add_features(os.path.join(path, "features.txt"))
+    def download_ns_dataset():
+        d_neurosynth = utils._get_dataset_dir(
+            "neurosynth", data_dir="neurolang_data"
+        )
+
+        f_neurosynth = utils._fetch_files(
+            d_neurosynth,
+            [
+                (
+                    f,
+                    "https://github.com/neurosynth/neurosynth-data/raw/master/current_data.tar.gz",
+                    {"uncompress": True},
+                )
+                for f in ("database.txt", "features.txt")
+            ],
+            verbose=True,
+        )
+
+        dataset = ns.Dataset(f_neurosynth[0])
+        dataset.add_features(f_neurosynth[1])
         dataset.save(os.path.join(path, "dataset.pkl"))
+
         return dataset
 
     @property
