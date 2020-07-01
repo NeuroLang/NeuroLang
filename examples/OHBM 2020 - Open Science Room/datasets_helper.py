@@ -16,6 +16,7 @@ def ns_prob_joint_term_study(nsh, term):
     df = pd.DataFrame(studies_term, columns=["study", "term", "prob"])
     p_doc = 1 / len(nsh.ns_load_all_study_ids())
     df["prob"] = df["prob"] * p_doc
+    df = df.astype({"prob": float, "study": int})
     return df[df.prob > 0][["prob", "term", "study"]]
 
 
@@ -28,38 +29,39 @@ def ns_prob_joint_voxel_study(nsh):
     return df[["prob", "voxel", "study"]]
 
 
-def load_auditory_datasets(nl):
+def load_auditory_datasets(nl, n=200):
 
-    # Load ontology
     d_onto = utils._get_dataset_dir("ontologies", data_dir="neurolang_data")
-
     if not os.path.exists(d_onto + "/neurofma_fma3.0.owl"):
         print("Downloading FMA ontology")
         url = "http://data.bioontology.org/ontologies/NeuroFMA/submissions/1/download?apikey=8b5b7825-538d-40e0-9e9e-5ab9274a9aeb"
         urllib.request.urlretrieve(url, d_onto + "/neurofma_fma3.0.owl")
         print("Dataset created in neurolang_data/ontologies")
 
-    # Load Neurosynth
-    print("Loading NeuroSynth dataset")
     nsh = fe.neurosynth_utils.NeuroSynthHandler()
 
+    sample_studies = nsh.ns_load_all_study_ids()[:n]
+    sample_studies = pd.DataFrame(sample_studies)
     nl.add_uniform_probabilistic_choice_over_set(
-        nsh.ns_load_all_study_ids(), name="p_study"
+        list(sample_studies.itertuples(name=None, index=False)), name="p_study"
     )
 
+    df = ns_prob_joint_term_study(nsh, ["auditory"])
     nl.add_probabilistic_facts_from_tuples(
-        [
-            (p, t, s)
-            for p, t, s in ns_prob_joint_term_study(nsh, ["auditory"]).values
-        ],
+        df[df.study.isin(sample_studies[0])].itertuples(
+            name=None, index=False
+        ),
         name="p_term_study",
     )
+
+    df = ns_prob_joint_voxel_study(nsh)
     nl.add_probabilistic_facts_from_tuples(
-        [(p, v, s) for p, v, s in ns_prob_joint_voxel_study(nsh).values],
+        df[df.study.isin(sample_studies[0])].itertuples(
+            name=None, index=False
+        ),
         name="p_voxel_study",
     )
 
-    nsh = fe.neurosynth_utils.NeuroSynthHandler()
     ns_ds = nsh.ns_load_dataset()
     it = ns_ds.image_table
 
@@ -68,20 +70,8 @@ def load_auditory_datasets(nl):
     vox_id_MNI = np.c_[
         masked_[nnz].astype(int),
         nib.affines.apply_affine(it.masker.volume.affine, np.transpose(nnz)),
-        [
-            fe.ExplicitVBR(
-                [v],
-                affine_matrix=it.masker.volume.affine,
-                image_dim=it.masker.volume.shape,
-            )
-            for v in zip(*nnz)
-        ],
     ]
 
-    ns_vox_id_MNI = nl.add_tuple_set(vox_id_MNI, name="ns_vox_id_MNI")
-
-    # Load Destrieux
-    print("Loading Destrieux atlas")
     dd = datasets.fetch_atlas_destrieux_2009()
     destrieux_to_ns_mni = image.resample_to_img(
         dd["maps"], it.masker.volume, interpolation="nearest"
@@ -93,10 +83,6 @@ def load_auditory_datasets(nl):
     for v in zip(*dd_unmaskes):
         region = dd_data[v[0]][v[1]][v[2]]
         xyz_to_dd_region.append((v, region))
-
-    xyz_to_ns_region = []
-    for n, _, _, _, region in vox_id_MNI:
-        xyz_to_ns_region.append((tuple(region.voxels[0]), n))
 
     dd_labels = []
     for n, name in dd["labels"]:
@@ -110,14 +96,12 @@ def load_auditory_datasets(nl):
             )
         )
 
-    # Deterministic facts
-
     xyz_ns = nl.add_tuple_set(
-        [(xyz[0], xyz[1], xyz[2], id_) for xyz, id_ in xyz_to_ns_region],
+        [(x, y, z, int(id_)) for id_, x, y, z in vox_id_MNI],
         name="xyz_neurosynth",
     )
     xyz_dd = nl.add_tuple_set(
-        [(xyz[0], xyz[1], xyz[2], id_) for xyz, id_ in xyz_to_dd_region],
+        [(xyz[0], xyz[1], xyz[2], int(id_)) for xyz, id_ in xyz_to_dd_region],
         name="xyz_destrieux",
     )
     dd_label = nl.add_tuple_set(dd_labels, name="destrieux_labels")

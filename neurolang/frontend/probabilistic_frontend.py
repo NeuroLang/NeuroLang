@@ -14,6 +14,7 @@ from ..probabilistic.cplogic.program import CPLogicMixin, CPLogicProgram
 from ..probabilistic.expression_processing import (
     separate_deterministic_probabilistic_code,
 )
+from ..probabilistic.weighted_model_counting import solve_succ_query
 from ..region_solver import RegionSolver
 from . import QueryBuilderDatalog
 from .query_resolution_expressions import Symbol as FrontEndSymbol
@@ -65,6 +66,26 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
                 deterministic_solution, probabilistic_idb
             )
             return solve_succ_all(cpl, solver_name=self.probabilistic_solver)
+        return deterministic_solution
+
+    def solve_query(self, query_pred):
+        (
+            deterministic_idb,
+            probabilistic_idb,
+        ) = separate_deterministic_probabilistic_code(self.solver)
+
+        if self.ontology_loaded:
+            eB = self._rewrite_database_with_ontology(deterministic_idb)
+            self.solver.walk(eB)
+
+        deterministic_solution = self.chase_class(
+            self.solver
+        ).build_chase_solution()
+        if probabilistic_idb.formulas:
+            cpl = self._make_probabilistic_program_from_deterministic_solution(
+                deterministic_solution, probabilistic_idb
+            )
+            return solve_succ_query(query_pred.expression, cpl)
         return deterministic_solution
 
     def _rewrite_database_with_ontology(self, deterministic_program):
