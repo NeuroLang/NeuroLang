@@ -271,24 +271,6 @@ class RegionMixin:
 
 
 class NeuroSynthMixin:
-    def load_neurosynth_term_regions(
-        self, term: str, n_components=None, name=None, q=0.01
-    ):
-        if not hasattr(self, 'neurosynth_db'):
-            self.neurosynth_db = NeuroSynthHandler()
-        if not name:
-            name = str(uuid1())
-        region_set = self.neurosynth_db.ns_region_set_from_term(term, q)
-        if n_components:
-            region_set = take_principal_regions(region_set, n_components)
-
-        region_set = ((t,) for t in region_set)
-        return self.add_tuple_set(
-            region_set,
-            type_=Tuple[ExplicitVBR],
-            name=name
-        )
-
     def load_neurosynth_term_study_ids(
         self, term: str, name: str = None, frequency_threshold: float = 0.05
     ):
