@@ -1,6 +1,7 @@
 from typing import Tuple
 
 import numpy as np
+import pandas as pd
 from pytest import mark
 
 from ..expressions import Constant
@@ -136,3 +137,14 @@ def test_type_inference():
     items = {(0.2, 1), (0.8, 42)}
     r = WrappedRelationalAlgebraSet(items)
     assert r.row_type == Tuple[float, int]
+
+
+def test_construct_from_dataframe():
+    iterable = pd.DataFrame(
+        {
+            "field_1": [1, 2, 3],
+            "field_2": ["a", "b", "c"],
+        }
+    )
+    r = WrappedRelationalAlgebraSet(iterable)
+    assert r.row_type == Tuple[int, str]
