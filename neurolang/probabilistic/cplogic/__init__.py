@@ -8,8 +8,8 @@ from ...relational_algebra import (
     RelationalAlgebraSolver,
     RenameColumn,
     Selection,
-    str2columnstr_constant,
     eq_,
+    str2columnstr_constant,
 )
 from ...relational_algebra_provenance import ProvenanceAlgebraSet
 

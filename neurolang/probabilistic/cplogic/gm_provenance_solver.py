@@ -9,11 +9,9 @@ from ...logic import Conjunction, Implication
 from ...logic.expression_processing import extract_logic_predicates
 from ...relational_algebra import (
     ColumnStr,
-    ConcatenateConstantColumn,
     NaturalJoin,
     Projection,
     RelationalAlgebraOperation,
-    RelationalAlgebraSolver,
     RenameColumn,
     Selection,
     str2columnstr_constant,
