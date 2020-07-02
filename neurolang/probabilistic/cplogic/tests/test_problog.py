@@ -5,7 +5,7 @@ import problog.sdd_formula
 from ....datalog.expressions import Fact
 from ....expressions import Constant, Symbol
 from ....logic import Implication
-from ..problog import cplogic_to_problog
+from ..problog_solver import cplogic_to_problog
 from ..program import CPLogicProgram
 
 P = Symbol("P")
