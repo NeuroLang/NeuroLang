@@ -1,4 +1,4 @@
-from typing import Iterable
+from typing import AbstractSet, Iterable, Tuple
 from uuid import uuid1
 
 import nibabel as nib
@@ -15,7 +15,7 @@ from neurolang.datalog.expression_processing import (
 )
 from neurolang.exceptions import NeuroLangFrontendException
 from neurolang.expression_walker import ExpressionBasicEvaluator
-from neurolang.expressions import Symbol
+from neurolang.expressions import Constant, Symbol, Unknown
 from neurolang.frontend import QueryBuilderDatalog, RegionFrontendDatalogSolver
 from neurolang.frontend.neurosynth_utils import NeuroSynthHandler
 from neurolang.frontend.query_resolution_expressions import (
@@ -30,6 +30,14 @@ from neurolang.probabilistic.cplogic.program import (
     CPLogicProgram,
 )
 from neurolang.region_solver import RegionSolver
+from neurolang.relational_algebra import (
+    ConcatenateConstantColumn,
+    NameColumns,
+    Projection,
+    RelationalAlgebraSet,
+    RelationalAlgebraSolver,
+    str2columnstr_constant,
+)
 
 
 class RegionFrontendCPLogicSolver(
@@ -60,22 +68,35 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             return self.probabilistic_solver(cpl)
         return deterministic_solution
 
-    def add_uniform_probabilistic_choice_over_set(self, iterable, name=None):
+    def add_uniform_probabilistic_choice_over_set(
+        self, iterable, type_=Unknown, name=None
+    ):
         if name is None:
             name = str(uuid1())
-        probability = 1 / len(iterable)
-        if isinstance(iterable, pd.DataFrame):
-            columns = iterable.columns
-            prob_col = Symbol.fresh().name
-            new_columns = (prob_col,) + tuple(columns)
-            iterable = iterable.copy()
-            iterable[prob_col] = probability
-            iterable = iterable[new_columns]
-        else:
-            iterable = [(probability,) + tuple(tupl) for tupl in iterable]
-        self.solver.add_probabilistic_choice_from_tuples(
-            Symbol(name), iterable
+        if isinstance(type_, tuple):
+            type_ = Tuple[type_]
+        symbol = Symbol[AbstractSet[type_]](name)
+        ra_set = Constant[AbstractSet[type_]](
+            RelationalAlgebraSet(iterable),
+            auto_infer_type=False,
+            verify_type=False,
         )
+        columns = tuple(
+            str2columnstr_constant(Symbol.fresh().name)
+            for _ in range(ra_set.value.arity)
+        )
+        ra_set = NameColumns(ra_set, columns)
+        prob_col = str2columnstr_constant(Symbol.fresh().name)
+        probability = Constant[float](
+            1 / len(iterable), auto_infer_type=False, verify_type=False
+        )
+        ra_set = ConcatenateConstantColumn(ra_set, prob_col, probability)
+        # ensure probability column is first
+        # TODO: this does not respect column-order invariance of RA relations
+        ra_set = Projection(ra_set, (prob_col,) + columns)
+        solver = RelationalAlgebraSolver()
+        ra_set = solver.walk(ra_set)
+        self.solver.add_probabilistic_choice_from_tuples(symbol, ra_set.value)
         return FrontEndSymbol(self, name)
 
     def _make_probabilistic_program_from_deterministic_solution(
@@ -168,7 +189,7 @@ ns_term_in_study = nl.load_neurosynth_term_study_associations(
 )
 ns_activation = nl.load_neurosynth_reported_activations(name="ns_activation")
 selected_study = nl.add_uniform_probabilistic_choice_over_set(
-    nl[ns_study_id], name="selected_study"
+    ns_study_id.expression.value, name="selected_study"
 )
 with nl.scope as e:
     e.term_association[e.term] = (

@@ -305,7 +305,9 @@ class NeuroSynthMixin:
         study_set = self.neurosynth_db.ns_study_id_set_from_term(
             term, frequency_threshold
         )
-        return self.add_tuple_set(study_set, type_=Tuple[StudyID], name=name)
+        return self.add_tuple_set(
+            study_set.values, type_=Tuple[StudyID], name=name
+        )
 
     def load_neurosynth_study_tfidf_feature_for_terms(self, terms, name=None):
         """
@@ -333,7 +335,7 @@ class NeuroSynthMixin:
             name = str(uuid1())
         result_set = self.neurosynth_db.ns_study_tfidf_feature_for_terms(terms)
         return self.add_tuple_set(
-            result_set, type_=Tuple[StudyID, str, TfIDf], name=name
+            result_set.values, type_=Tuple[StudyID, str, TfIDf], name=name
         )
 
     def load_neurosynth_study_ids(self, name=None):
@@ -357,7 +359,9 @@ class NeuroSynthMixin:
         if not name:
             name = str(uuid1())
         result_set = self.neurosynth_db.ns_study_ids()
-        return self.add_tuple_set(result_set, type_=Tuple[StudyID], name=name)
+        return self.add_tuple_set(
+            result_set, type_=Tuple[StudyID], name=name
+        )
 
     def load_neurosynth_reported_activations(self, name=None):
         """
@@ -382,7 +386,7 @@ class NeuroSynthMixin:
             name = str(uuid1())
         result_set = self.neurosynth_db.ns_reported_activations()
         return self.add_tuple_set(
-            result_set, type_=Tuple[StudyID, int], name=name
+            result_set.values, type_=Tuple[StudyID, int], name=name
         )
 
     def load_neurosynth_term_study_associations(
