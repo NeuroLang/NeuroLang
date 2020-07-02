@@ -106,22 +106,79 @@ with nl.environment as e:
         e.region_voxels[e.id_voxel, e.x, e.y, e.z]
     )
     
-    result = nl.solve_query(e.probability_voxel[e.x, e.y, e.z])
+    nl_results = nl.solve_query(e.probability_voxel[e.x, e.y, e.z])
     
-    #result = nl.solve_query(e.probability_voxel[agg_create_region(e.x, e.y, e.z)])
-    
-    #e.probability_voxel[agg_create_region(e.x, e.y, e.z)] = (
+    #e.probability_voxel[nl.symbols.agg_create_region(e.x, e.y, e.z)] = (
     #    e.p_act[e.id_voxel, e.term, e.id_study] &
     #    e.region_voxels[e.id_voxel, e.x, e.y, e.z]
     #)
     
-    #result = nl.solve_query(e.probability_voxel[agg_create_region(e.x, e.y, e.z)])
+    #e.final[e.region] = e.probability_voxel[e.region]
     
+    #nl_results = nl.solve_query(e.final[e.region])
+
 
 # -
 
+prob_img_nl = datasets_helper.parse_results(nl_results)
+plotting.plot_stat_map(
+    prob_img_nl, 
+    title='Tag "auditory" (Neurolang)', 
+    cmap='PuBuGn',
+    display_mode='x',
+    cut_coords=np.linspace(-63, 63, 5),
+)
+
+plotting.plot_stat_map(
+    prob_img_nl, title='Tag "auditory" (Neurolang)', 
+    cmap='PuBuGn',
+    display_mode='y',
+    cut_coords=np.linspace(-30, 5, 5),
+)
+
+with nl.environment as e:
+    
+    e.p_act[e.id_voxel, e.term, e.id_study] = (
+        e.p_voxel_study[e.id_voxel, e.id_study] & 
+        e.p_term_study[e.term,  e.id_study] & 
+        e.p_study[e.id_study]
+    )
+    
+    e.probability_voxel[e.x, e.y, e.z] = (
+        e.p_act[e.id_voxel, e.term, e.id_study] &
+        e.region_voxels[e.id_voxel, e.x, e.y, e.z]
+    )
+    
+    ns_results = nl.solve_query(e.probability_voxel[e.x, e.y, e.z])
+
+prob_img_ns = datasets_helper.parse_results(ns_results)
+plotting.plot_stat_map(
+    prob_img_ns, 
+    title='Tag "auditory" (NeuroSynth)', 
+    cmap='PuBu',
+    display_mode='x',
+    cut_coords=np.linspace(-63, 63, 5),
+)
+
+plotting.plot_stat_map(
+    prob_img_ns, 
+    title='Tag "auditory" (Neurosynth)', 
+    cmap='PuBu',
+    display_mode='y',
+    cut_coords=np.linspace(-30, 5, 5),
+)
+
+
+
+
+
+
+
+
+
 #prob_terms, prob_voxels, prob_terms_voxels = stats_helper.load_neurosynth_database()
 prob_img = stats_helper.parse_neurolang_result(result, prob_terms)
+
 
 plotting.plot_stat_map(
     prob_img, 
