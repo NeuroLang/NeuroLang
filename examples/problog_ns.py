@@ -22,7 +22,9 @@ from neurolang.frontend.query_resolution_expressions import (
     Symbol as FrontEndSymbol,
 )
 from neurolang.logic import Implication, Union
-from neurolang.probabilistic.cplogic import solve_succ_all
+from neurolang.probabilistic.cplogic.problog_solver import (
+    solve_succ_all as problog_solve_succ_all,
+)
 from neurolang.probabilistic.cplogic.program import (
     CPLogicMixin,
     CPLogicProgram,
@@ -37,7 +39,7 @@ class RegionFrontendCPLogicSolver(
 
 
 class ProbabilisticFrontend(QueryBuilderDatalog):
-    def __init__(self, probabilistic_solver="problog"):
+    def __init__(self, probabilistic_solver=problog_solve_succ_all):
         super().__init__(
             RegionFrontendCPLogicSolver(), chase_class=Chase,
         )
@@ -55,7 +57,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             cpl = self._make_probabilistic_program_from_deterministic_solution(
                 deterministic_solution, probabilistic_idb,
             )
-            return solve_succ_all(cpl, solver_name=self.probabilistic_solver)
+            return self.probabilistic_solver(cpl)
         return deterministic_solution
 
     def add_uniform_probabilistic_choice_over_set(self, iterable, name=None):
@@ -160,27 +162,13 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
 
 
 nl = ProbabilisticFrontend()
-
-# loading neurosynth data into the program
-nsh = NeuroSynthHandler()
-study_ids = nsh.ns_load_all_study_ids()
-sampled_study_ids = set(
-    (int(study_id),)
-    for study_id in study_ids[
-        np.random.randint(low=0, high=len(study_ids), size=10)
-    ].flatten()
+ns_study_id = nl.load_neurosynth_study_ids(name="ns_study_id")
+ns_term_in_study = nl.load_neurosynth_term_study_associations(
+    name="ns_term_in_study"
 )
-ns_term_in_study = nl.add_tuple_set(
-    nsh.ns_load_term_study_associations(
-        threshold=1e-3, study_ids=sampled_study_ids
-    ),
-    name="ns_term_in_study",
-)
-ns_activation = nl.add_tuple_set(
-    nsh.ns_load_reported_activations(), name="ns_activation"
-)
+ns_activation = nl.load_neurosynth_reported_activations(name="ns_activation")
 selected_study = nl.add_uniform_probabilistic_choice_over_set(
-    sampled_study_ids, name="selected_study"
+    nl[ns_study_id], name="selected_study"
 )
 with nl.scope as e:
     e.term_association[e.term] = (
