@@ -104,11 +104,7 @@ class NeuroSynthHandler(object):
         study_ids = (
             pd.Series(image_table.ids).apply(StudyID).iloc[study_ids_ix]
         )
-        study_id_vox_id = pd.DataFrame(
-            np.transpose([study_ids, vox_ids]),
-            columns=["study_id", "voxel_id"],
-        )
-        return study_id_vox_id
+        return np.transpose([study_ids, vox_ids])
 
     def ns_study_ids(self):
         return np.expand_dims(

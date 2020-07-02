@@ -386,7 +386,7 @@ class NeuroSynthMixin:
             name = str(uuid1())
         result_set = self.neurosynth_db.ns_reported_activations()
         return self.add_tuple_set(
-            result_set.values, type_=Tuple[StudyID, int], name=name
+            result_set, type_=Tuple[StudyID, int], name=name
         )
 
     def load_neurosynth_term_study_associations(
