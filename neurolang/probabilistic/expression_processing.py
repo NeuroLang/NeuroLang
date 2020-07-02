@@ -163,10 +163,9 @@ def separate_deterministic_probabilistic_code(
             p.functor
             for p in extract_logic_predicates(pred.antecedent)
             if p.functor != pred.consequent.functor
+            and not is_builtin(p, solver.builtins().keys())
         )
-        preds_antecedent = [
-            p for p in preds_antecedent if not isinstance(p, Constant)
-        ]
+
         if not probabilistic_symbols.isdisjoint(preds_antecedent):
             probabilistic_symbols.add(pred.consequent.functor)
             probabilistic_program.append(pred)
@@ -188,3 +187,10 @@ def separate_deterministic_probabilistic_code(
         raise NeuroLangFrontendException("There are unclassified atoms")
 
     return Union(deterministic_program), Union(probabilistic_program)
+
+
+def is_builtin(pred, known_builtins=None):
+    if known_builtins is None:
+        known_builtins = set()
+
+    return isinstance(pred.functor, Constant) or pred.functor in known_builtins

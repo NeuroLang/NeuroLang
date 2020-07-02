@@ -6,7 +6,7 @@ from ...datalog.constraints_representation import DatalogConstraintsProgram
 from ...datalog.expressions import Implication
 from ...datalog.ontologies_parser import OntologyParser
 from ...expression_walker import ExpressionBasicEvaluator
-from ...expressions import Symbol
+from ...expressions import Constant, Symbol
 from ...logic import Conjunction, Union
 from ...region_solver import RegionSolver
 from ..cplogic.program import CPLogicMixin
