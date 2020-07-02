@@ -1,4 +1,5 @@
 import io
+import operator
 
 from ...datalog.basic_representation import DatalogProgram
 from ...datalog.constraints_representation import DatalogConstraintsProgram
@@ -37,6 +38,35 @@ class ProbabilisticOntologySolver(
     ExpressionBasicEvaluator,
 ):
     pass
+
+
+def test_builtin():
+    answer1 = Symbol("answer1")
+    equals = Constant(operator.eq)
+    y = Symbol("y")
+    x = Symbol("x")
+    sym1 = Symbol("sym1")
+    sym2 = Symbol("sym2")
+
+    prob_solver = ProbabilisticSolver()
+    s1 = [(1,), (2,), (3,), (4,), (5,)]
+    s2 = [(1,), (2,), (3,)]
+    prob_solver.add_extensional_predicate_from_tuples(sym1, s1)
+    prob_solver.add_extensional_predicate_from_tuples(sym2, s2)
+
+    test_q1 = Union(
+        (
+            Implication(
+                answer1(y), Conjunction((sym1(y), sym2(x), equals(y, x)))
+            ),
+        )
+    )
+    prob_solver.walk(test_q1)
+
+    det, prob = separate_deterministic_probabilistic_code(prob_solver)
+
+    assert len(det.formulas) == 1
+    assert len(prob.formulas) == 0
 
 
 def test_deterministic_code():
