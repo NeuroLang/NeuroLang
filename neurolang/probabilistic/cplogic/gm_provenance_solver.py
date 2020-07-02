@@ -9,11 +9,9 @@ from ...logic import Conjunction, Implication
 from ...logic.expression_processing import extract_logic_predicates
 from ...relational_algebra import (
     ColumnStr,
-    ConcatenateConstantColumn,
     NaturalJoin,
     Projection,
     RelationalAlgebraOperation,
-    RelationalAlgebraSolver,
     RenameColumn,
     Selection,
     str2columnstr_constant,
@@ -23,7 +21,10 @@ from ...relational_algebra_provenance import (
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
 )
-from . import problog
+from . import (
+    build_always_true_provenance_relation,
+    rename_columns_for_args_to_match,
+)
 from .cplogic_to_gm import (
     AndPlateNode,
     BernoulliPlateNode,
@@ -33,83 +34,10 @@ from .cplogic_to_gm import (
     PlateNode,
 )
 from .grounding import get_grounding_predicate, ground_cplogic_program
+from .problog_solver import solve_succ_query as problog_solve_succ_query
 
 TRUE = Constant[bool](True, verify_type=False, auto_infer_type=False)
 EQUAL = Constant(operator.eq)
-
-
-def rename_columns_for_args_to_match(relation, src_args, dst_args):
-    """
-    Rename the columns of a relation so that they match the targeted args.
-
-    Parameters
-    ----------
-    relation : ProvenanceAlgebraSet or RelationalAlgebraOperation
-        The relation on which the renaming of the columns should happen.
-    src_args : tuple of Symbols
-        The predicate's arguments currently matching the columns.
-    dst_args : tuple of Symbols
-        New args that the naming of the columns should match.
-
-    Returns
-    -------
-    RelationalAlgebraOperation
-        The unsolved nested operations that apply the renaming scheme.
-
-    """
-    src_cols = list(str2columnstr_constant(arg.name) for arg in src_args)
-    dst_cols = list(str2columnstr_constant(arg.name) for arg in dst_args)
-    result = relation
-    for dst_col in set(dst_cols):
-        idxs = [i for i, c in enumerate(dst_cols) if c == dst_col]
-        result = RenameColumn(result, src_cols[idxs[0]], dst_col)
-        for idx in idxs[1:]:
-            result = Selection(result, EQUAL(src_cols[idx], dst_col))
-    return result
-
-
-def build_always_true_provenance_relation(relation, prob_col=None):
-    """
-    Construct a provenance set from a relation with probabilities of 1
-    for all tuples in the relation.
-
-    The provenance column is named after the ``prob_col`` argument. If
-    ``prob_col`` is already in the columns of the relation, it is
-    removed before being re-added.
-
-    Parameters
-    ----------
-    relation : NamedRelationalAlgebraFrozenSet
-        The relation containing the tuples that will be in the
-        resulting provenance set.
-    prob_col : Constant[ColumnStr]
-        Name of the provenance column that will contain constant
-        probabilities of 1.
-
-    Returns
-    -------
-    ProvenanceAlgebraSet
-
-    """
-    if prob_col is None:
-        prob_col = str2columnstr_constant(Symbol.fresh().name)
-    # remove the probability column if it is already there
-    elif prob_col.value in relation.value.columns:
-        kept_cols = tuple(
-            str2columnstr_constant(col)
-            for col in relation.value.columns
-            if col != prob_col.value
-        )
-        relation = Projection(relation, kept_cols)
-    # add a new probability column with name `prob_col` and ones everywhere
-    cst_one_probability = Constant[float](
-        1.0, auto_infer_type=False, verify_type=False
-    )
-    relation = ConcatenateConstantColumn(
-        relation, prob_col, cst_one_probability
-    )
-    relation = RelationalAlgebraSolver().walk(relation)
-    return ProvenanceAlgebraSet(relation.value, prob_col)
 
 
 def solve_succ_query(query_predicate, cpl_program):
@@ -169,7 +97,7 @@ def solve_succ_query(query_predicate, cpl_program):
     n.d., 30.
 
     """
-    return problog.solve_succ_query(query_predicate, cpl_program)
+    return problog_solve_succ_query(query_predicate, cpl_program)
     grounded = ground_cplogic_program(cpl_program)
     translator = CPLogicGroundingToGraphicalModelTranslator()
     gm = translator.walk(grounded)
