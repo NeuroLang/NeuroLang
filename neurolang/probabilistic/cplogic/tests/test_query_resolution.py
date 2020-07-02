@@ -5,7 +5,7 @@ from ....datalog import Fact
 from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Union
 from ....relational_algebra import RenameColumn
-from .. import solve_succ_all, testing
+from .. import testing
 from ..gm_provenance_solver import solve_marg_query, solve_succ_query
 from ..problog_solver import solve_succ_all as problog_solve_succ_all
 from ..program import CPLogicProgram
