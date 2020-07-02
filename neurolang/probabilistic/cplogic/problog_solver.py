@@ -11,6 +11,7 @@ from ...relational_algebra import (
     str2columnstr_constant,
 )
 from ...relational_algebra_provenance import ProvenanceAlgebraSet
+from . import build_always_true_provenance_relation, fresh_name_relation
 
 
 def nl_pred_to_pl_pred(pred):
@@ -133,3 +134,29 @@ def solve_succ_query(query_pred, cpl):
         for arg in query_pred.args
     )
     return pl_preds_to_prov_set(res, columns)
+
+
+def solve_succ_all(cpl):
+    query_preds = list(
+        union.formulas[0].consequent
+        for union in cpl.intensional_database().values()
+    )
+    pl = cplogic_to_problog(cpl)
+    query_pl_term = problog.logic.Term("query")
+    for nl_qpred in query_preds:
+        pl += query_pl_term(nl_pred_to_pl_pred(nl_qpred))
+    pl_solution = problog.core.ProbLog.convert(
+        pl, problog.sdd_formula.SDD
+    ).evaluate()
+    nl_solution = pl_solution_to_nl_solution(pl_solution, query_preds)
+    for pred_symb in cpl.extensional_database():
+        nl_solution[pred_symb] = build_always_true_provenance_relation(
+            fresh_name_relation(cpl.symbol_table[pred_symb])
+        )
+    for pred_symb in cpl.pfact_pred_symbs | cpl.pchoice_pred_symbs:
+        ra_set = fresh_name_relation(cpl.symbol_table[pred_symb])
+        prob_col = ra_set.value.columns[0]
+        nl_solution[pred_symb] = ProvenanceAlgebraSet(
+            ra_set.value, str2columnstr_constant(prob_col)
+        )
+    return nl_solution
