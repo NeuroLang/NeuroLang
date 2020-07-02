@@ -164,6 +164,9 @@ def separate_deterministic_probabilistic_code(
             for p in extract_logic_predicates(pred.antecedent)
             if p.functor != pred.consequent.functor
         )
+        preds_antecedent = [
+            p for p in preds_antecedent if not isinstance(p, Constant)
+        ]
         if not probabilistic_symbols.isdisjoint(preds_antecedent):
             probabilistic_symbols.add(pred.consequent.functor)
             probabilistic_program.append(pred)
