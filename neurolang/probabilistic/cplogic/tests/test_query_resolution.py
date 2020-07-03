@@ -41,7 +41,7 @@ def test_deterministic():
         1.0 | b
 
     """
-    code = Union((Fact(Q(a)), Fact(Q(b)), Implication(P(x), Q(x))))
+    code = Union((Fact(Q(a)), Fact(Q(b)), Implication(P(x), Q(x)),))
     cpl_program = CPLogicProgram()
     cpl_program.walk(code)
     query_pred = P(x)
@@ -147,7 +147,7 @@ def test_multi_level_conjunction():
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
     result = solve_succ_query(H(x, y), cpl_program)
     expected = testing.make_prov_set(
-        [(0.2 * 0.9 * 0.1, "a", "a"), (0.2 * 0.9 * 0.5, "a", "b")],
+        [(0.2 * 0.9 * 0.1, "a", "a"), (0.2 * 0.9 * 0.5, "a", "b"),],
         ("_p_", "x", "y"),
     )
     assert testing.eq_prov_relations(result, expected)
@@ -196,7 +196,7 @@ def test_simple_probchoice():
         )
     qpred = P(x)
     exp, result = testing.inspect_resolution(qpred, cpl_program)
-    expected = testing.make_prov_set([(0.2, "a"), (0.8, "b")], ("_p_", "x"))
+    expected = testing.make_prov_set([(0.2, "a"), (0.8, "b"),], ("_p_", "x"),)
     assert testing.eq_prov_relations(result, expected)
 
 
@@ -263,7 +263,7 @@ def test_large_probabilistic_choice():
     qpred = Z(x, y)
     result = solve_succ_query(qpred, cpl_program)
     expected = testing.make_prov_set(
-        [(0.5 * probs[0], 0, 0), (0.5 * probs[0], 0, 1)], ("_p_", "x", "y")
+        [(0.5 * probs[0], 0, 0), (0.5 * probs[0], 0, 1),], ("_p_", "x", "y")
     )
     assert testing.eq_prov_relations(result, expected)
 
@@ -313,8 +313,12 @@ def test_existential_in_conjunction():
 
 
 def test_existential_alternative_variables():
-    pchoice_as_sets = {P: {(0.8, "a", "b"), (0.1, "c", "d"), (0.1, "d", "e")}}
-    pfact_sets = {Z: {(0.2, "a"), (0.7, "e")}}
+    pchoice_as_sets = {
+        P: {(0.8, "a", "b"), (0.1, "c", "d"), (0.1, "d", "e")},
+    }
+    pfact_sets = {
+        Z: {(0.2, "a"), (0.7, "e")},
+    }
     code = Union(
         (
             Fact(R(Constant[str]("a"))),
@@ -371,8 +375,8 @@ def test_multilevel_existential():
     )
     assert testing.eq_prov_relations(result, expected)
     qpred = B(z)
-    exp, result = testing.inspect_resolution(qpred, cpl_program)
-    expected = testing.make_prov_set([(0.5 * 0.1 * 0.5, "c")], ("_p_", "z"))
+    exp, result = testing.inspect_resolution(qpred, cpl_program,)
+    expected = testing.make_prov_set([(0.5 * 0.1 * 0.5, "c")], ("_p_", "z"),)
     assert testing.eq_prov_relations(result, expected)
 
 
@@ -405,7 +409,9 @@ def test_repeated_antecedent_predicate_symbol():
         0.4 * 0.7                   | b | a
 
     """
-    pfact_sets = {P: {(0.4, "a"), (0.7, "b")}}
+    pfact_sets = {
+        P: {(0.4, "a"), (0.7, "b")},
+    }
     code = Union((Implication(Q(x, y), Conjunction((P(x), P(y)))),))
     cpl_program = CPLogicProgram()
     for pred_symb, pfact_set in pfact_sets.items():
@@ -497,8 +503,11 @@ def test_fake_neurosynth():
 
 
 def test_disjunctive_program():
-    pfact_sets = {P: {(0.8, "a"), (0.4, "b")}, Q: {(0.1, "a"), (0.2, "c")}}
-    code = Union((Implication(Z(x), P(x)), Implication(Z(x), Q(x))))
+    pfact_sets = {
+        P: {(0.8, "a"), (0.4, "b")},
+        Q: {(0.1, "a"), (0.2, "c"),},
+    }
+    code = Union((Implication(Z(x), P(x)), Implication(Z(x), Q(x)),))
     cpl_program = CPLogicProgram()
     for pred_symb, pfact_set in pfact_sets.items():
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
@@ -506,7 +515,7 @@ def test_disjunctive_program():
     qpred = Z(x)
     result = solve_succ_query(qpred, cpl_program)
     expected = testing.make_prov_set(
-        [(1 - (1 - 0.8) * (1 - 0.1), "a"), (0.4, "b"), (0.2, "c")],
+        [(1 - (1 - 0.8) * (1 - 0.1), "a"), (0.4, "b"), (0.2, "c"),],
         columns=("_p_", "x"),
     )
     assert testing.eq_prov_relations(result, expected)
@@ -612,7 +621,7 @@ def test_solve_succ_all():
     assert testing.eq_prov_relations(
         result[Z],
         testing.make_prov_set(
-            [(0.1, "a")],
+            [(0.1, "a"),],
             ("_p_",)
             + tuple(c.value for c in result[Z].non_provenance_columns),
         ),
