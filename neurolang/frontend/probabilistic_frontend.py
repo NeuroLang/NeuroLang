@@ -6,7 +6,7 @@ from ..datalog.constraints_representation import DatalogConstraintsProgram
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
 from ..expression_walker import ExpressionBasicEvaluator
-from ..expressions import Constant, Symbol, Unknown
+from ..expressions import Symbol, Unknown
 from ..logic import Union
 from ..probabilistic.cplogic.problog_solver import (
     solve_succ_all as problog_solve_succ_all,
@@ -17,12 +17,8 @@ from ..probabilistic.expression_processing import (
 )
 from ..region_solver import RegionSolver
 from ..relational_algebra import (
-    ConcatenateConstantColumn,
-    NameColumns,
-    Projection,
-    RelationalAlgebraSet,
-    RelationalAlgebraSolver,
-    str2columnstr_constant,
+    NamedRelationalAlgebraFrozenSet,
+    RelationalAlgebraStringExpression,
 )
 from . import QueryBuilderDatalog
 from .query_resolution_expressions import Symbol as FrontEndSymbol
@@ -100,25 +96,19 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         if isinstance(type_, tuple):
             type_ = Tuple[type_]
         symbol = Symbol[AbstractSet[type_]](name)
-        ra_set = Constant[AbstractSet[type_]](
-            RelationalAlgebraSet(iterable),
-            auto_infer_type=False,
-            verify_type=False,
-        )
-        columns = tuple(
-            str2columnstr_constant(Symbol.fresh().name)
-            for _ in range(ra_set.value.arity)
-        )
-        ra_set = NameColumns(ra_set, columns)
-        prob_col = str2columnstr_constant(Symbol.fresh().name)
-        probability = Constant[float](
-            1 / len(iterable), auto_infer_type=False, verify_type=False
-        )
-        ra_set = ConcatenateConstantColumn(ra_set, prob_col, probability)
-        ra_set = Projection(ra_set, (prob_col,) + columns)
-        solver = RelationalAlgebraSolver()
-        ra_set = solver.walk(ra_set)
-        self.solver.add_probabilistic_choice_from_tuples(symbol, ra_set.value)
+        arity = len(next(iter(iterable)))
+        columns = tuple(Symbol.fresh().name for _ in range(arity))
+        ra_set = NamedRelationalAlgebraFrozenSet(columns, iterable)
+        projections = {
+            c: RelationalAlgebraStringExpression(c) for c in columns
+        }
+        prob_col = Symbol.fresh().name
+        probability = 1 / len(iterable)
+        projections.update({prob_col: probability})
+        ra_set = ra_set.extended_projection(projections)
+        projection_columns = (prob_col,) + columns
+        ra_set = ra_set.projection(*projection_columns)
+        self.solver.add_probabilistic_choice_from_tuples(symbol, ra_set)
         return FrontEndSymbol(self, name)
 
     def _make_probabilistic_program_from_deterministic_solution(
