@@ -137,7 +137,7 @@ class CPLogicMixin(PatternWalker):
                 "Cannot define multiple probabilistic choices with the same "
                 f"predicate symbol. Predicate symbol was: {symbol}"
             )
-        ra_set = Constant[typing.AbstractSet](
+        ra_set = Constant[typing.AbstractSet[type_]](
             self.new_set(iterable), auto_infer_type=False, verify_type=False
         )
         check_probabilistic_choice_set_probabilities_sum_to_one(ra_set)
