@@ -1,3 +1,4 @@
+import collections
 from typing import AbstractSet, Tuple
 from uuid import uuid1
 
@@ -99,15 +100,13 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         arity = len(next(iter(iterable)))
         columns = tuple(Symbol.fresh().name for _ in range(arity))
         ra_set = NamedRelationalAlgebraFrozenSet(columns, iterable)
-        projections = {
-            c: RelationalAlgebraStringExpression(c) for c in columns
-        }
         prob_col = Symbol.fresh().name
         probability = 1 / len(iterable)
-        projections.update({prob_col: probability})
+        projections = collections.OrderedDict()
+        projections[prob_col] = probability
+        for col in columns:
+            projections[col] = RelationalAlgebraStringExpression(col)
         ra_set = ra_set.extended_projection(projections)
-        projection_columns = (prob_col,) + columns
-        ra_set = ra_set.projection(*projection_columns)
         self.solver.add_probabilistic_choice_from_tuples(symbol, ra_set)
         return FrontEndSymbol(self, name)
 
