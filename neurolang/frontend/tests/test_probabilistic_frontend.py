@@ -15,6 +15,13 @@ def test_add_uniform_probabilistic_choice_set():
     assert res.type is AbstractSet[Tuple[float, int]]
     assert res.value == frozenset((1 / len(prob), a) for a in range(10))
 
+    d = [("a",), ("b",), ("c",), ("d",)]
+    data = nl.add_uniform_probabilistic_choice_over_set(d, name="data")
+    res_d = nl[data]
+
+    assert data.type is AbstractSet[Tuple[float, str]]
+    assert res_d.type is AbstractSet[Tuple[float, str]]
+
 
 def test_deterministic_query():
     nl = ProbabilisticFrontend()
@@ -73,8 +80,8 @@ def test_mixed_queries():
     data3 = nl.add_uniform_probabilistic_choice_over_set(d3, name="data3")
 
     with nl.scope as e:
-        e.query1[e.y] = data1[e.x] & data2[e.x, e.y]
-        e.query2[e.y] = e.query1[e.y] & data3[e.y]
+        e.query1[e.x, e.y] = data1[e.x] & data2[e.x, e.y]
+        e.query2[e.y] = e.query1[e.x, e.y] & data3[e.y]
         res = nl.solve_all()
 
     assert "query1" in res.keys()
