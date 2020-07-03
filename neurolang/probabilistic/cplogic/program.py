@@ -1,11 +1,12 @@
 import typing
 
 from ...datalog import DatalogProgram
-from ...exceptions import ForbiddenDisjunctionError
+from ...datalog.expression_processing import is_rule_with_builtin
+from ...exceptions import ForbiddenBuiltinError, ForbiddenDisjunctionError
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
-from ...expressions import Constant, FunctionApplication, Symbol
-from ...logic import Implication, Union
+from ...expressions import Constant, Symbol
+from ...logic import TRUE, Implication, Union
 from ..exceptions import MalformedProbabilisticTupleError
 from ..expression_processing import (
     add_to_union,
@@ -189,18 +190,11 @@ class CPLogicMixin(PatternWalker):
         )
         return expression
 
-    @add_match(
-        Implication(FunctionApplication, ...),
-        lambda exp: (
-            exp.antecedent
-            != Constant[bool](True, auto_infer_type=False, verify_type=False)
-        ),
-    )
-    def prevent_intensional_disjunction(self, rule):
-        pred_symb = rule.consequent.functor
-        if pred_symb in self.symbol_table:
-            raise ForbiddenDisjunctionError(
-                "CP-Logic programs do not support disjunctions"
+    @add_match(Implication, lambda rule: rule.antecedent != TRUE)
+    def prevent_rule_with_builtin(self, rule):
+        if is_rule_with_builtin(rule, self.builtins()):
+            raise ForbiddenBuiltinError(
+                "CP-Logic program do not currently support built-ins."
             )
         return self.statement_intensional(rule)
 

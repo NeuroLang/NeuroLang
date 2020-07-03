@@ -1,6 +1,7 @@
+import operator
 from typing import AbstractSet
 
-from .exceptions import NeuroLangException
+from .exceptions import RelationalAlgebraError
 from .expression_walker import ExpressionWalker, add_match
 from .expressions import Constant, FunctionApplication, Symbol
 from .relational_algebra import (
@@ -51,7 +52,7 @@ def check_do_not_share_non_prov_col(prov_set_1, prov_set_2):
         prov_set_2.non_provenance_columns
     )
     if len(shared_columns) > 0:
-        raise NeuroLangException(
+        raise RelationalAlgebraError(
             "Provenance sets should not share non-provenance columns. "
             "Shared columns found: {}".format(
                 ", ".join(repr(col) for col in shared_columns)
@@ -70,6 +71,15 @@ def is_provenance_operation(operation):
         elif isinstance(stack_element, RelationalAlgebraOperation):
             stack += list(stack_element.unapply())
     return False
+
+
+class NaturalJoinInverse(NaturalJoin):
+    def __repr__(self):
+        return (
+            f"[{self.relation_left}"
+            f"INVERSE \N{JOIN}"
+            f"{self.relation_right}]"
+        )
 
 
 class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
@@ -100,7 +110,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
         if any(
             col == relation.provenance_column for col in selection.formula.args
         ):
-            raise NeuroLangException("Cannot select on provenance column")
+            raise RelationalAlgebraError("Cannot select on provenance column")
         return ProvenanceAlgebraSet(
             self.walk(
                 Selection(
@@ -116,7 +126,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
     def selection_by_constant(self, selection):
         relation = self.walk(selection.relation)
         if selection.formula.args[0] == relation.provenance_column:
-            raise NeuroLangException("Cannot select on provenance column")
+            raise RelationalAlgebraError("Cannot select on provenance column")
         return ProvenanceAlgebraSet(
             self.walk(
                 Selection(
@@ -133,7 +143,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             rel_temp = self.walk(relation)
             check_do_not_share_non_prov_col(rel_res, rel_temp)
             rel_res = self._apply_provenance_join_operation(
-                rel_res, rel_temp, Product
+                rel_res, rel_temp, Product, Constant(operator.mul),
             )
         return rel_res
 
@@ -220,7 +230,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             proj_list_member.dst_column == relation.provenance_column
             for proj_list_member in extended_proj.projection_list
         ):
-            new_prov_col = Constant(ColumnStr(Symbol.fresh().name))
+            new_prov_col = str2columnstr_constant(Symbol.fresh().name)
         else:
             new_prov_col = relation.provenance_column
         relation = self.walk(
@@ -240,19 +250,33 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             new_prov_col,
         )
 
+    @add_match(NaturalJoinInverse)
+    def prov_naturaljoin_inverse(self, naturaljoin):
+        return self._apply_provenance_join_operation(
+            naturaljoin.relation_left,
+            naturaljoin.relation_right,
+            NaturalJoin,
+            Constant(operator.truediv),
+        )
+
     @add_match(NaturalJoin)
     def prov_naturaljoin(self, naturaljoin):
         return self._apply_provenance_join_operation(
-            naturaljoin.relation_left, naturaljoin.relation_right, NaturalJoin,
+            naturaljoin.relation_left,
+            naturaljoin.relation_right,
+            NaturalJoin,
+            Constant(operator.mul),
         )
 
-    def _apply_provenance_join_operation(self, left, right, np_op):
+    def _apply_provenance_join_operation(
+        self, left, right, np_op, prov_binary_op
+    ):
         left = self.walk(left)
         right = self.walk(right)
         res_columns = set(left.value.columns) | (
             set(right.value.columns) - {right.provenance_column.value}
         )
-        res_columns = tuple(Constant(ColumnStr(col)) for col in res_columns)
+        res_columns = tuple(str2columnstr_constant(col) for col in res_columns)
         res_prov_col = left.provenance_column
         # provenance columns are temporarily renamed for executing the
         # non-provenance operation on the relations
@@ -282,14 +306,14 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
         elif np_op is NaturalJoin:
             tmp_non_prov_result = np_op(*tmp_np_op_args)
         else:
-            raise NeuroLangException(
+            raise RelationalAlgebraError(
                 "Cannot apply non-provenance operation: {}".format(np_op)
             )
         result = ExtendedProjection(
             tmp_non_prov_result,
             (
                 ExtendedProjectionListMember(
-                    fun_exp=tmp_left_col * tmp_right_col,
+                    fun_exp=prov_binary_op(tmp_left_col, tmp_right_col),
                     dst_column=res_prov_col,
                 ),
             )
@@ -305,7 +329,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
         left = self.walk(union_op.relation_left)
         right = self.walk(union_op.relation_right)
         if left.non_provenance_columns != right.non_provenance_columns:
-            raise NeuroLangException(
+            raise RelationalAlgebraError(
                 "All non-provenance columns must be the same: {} != {}".format(
                     left.non_provenance_columns, right.non_provenance_columns,
                 )

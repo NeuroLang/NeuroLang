@@ -1,9 +1,10 @@
+import operator
 import typing
 
 import pytest
 
 from ....datalog.expressions import Fact
-from ....exceptions import ForbiddenDisjunctionError
+from ....exceptions import ForbiddenBuiltinError, ForbiddenDisjunctionError
 from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Union
 from ...exceptions import (
@@ -184,10 +185,10 @@ def test_add_probchoice_does_not_sum_to_one():
         )
 
 
-def test_forbidden_disjunction():
-    rule_a = Implication(P(x), Q(x))
-    rule_b = Implication(P(y), Z(y))
-    code = Union((rule_a, rule_b))
+def test_prevented_builtins():
+    rule_with_builtin = Implication(
+        P(x), Conjunction((Q(x), Constant(operator.eq)(a, b)))
+    )
     cpl = CPLogicProgram()
-    with pytest.raises(ForbiddenDisjunctionError):
-        cpl.walk(code)
+    with pytest.raises(ForbiddenBuiltinError):
+        cpl.walk(rule_with_builtin)

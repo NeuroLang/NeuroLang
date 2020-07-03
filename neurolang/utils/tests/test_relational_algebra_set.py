@@ -62,6 +62,19 @@ def test_relational_algebra_set_semantics(ra_module):
     assert r is not ras
 
 
+def test_iter_and_fetch_one(ra_module):
+    a = [(i, i * j) for i in (1, 2) for j in (2, 3, 4)]
+
+    ras_a = ra_module.RelationalAlgebraSet(a)
+    res = list(iter(ras_a))
+    assert res == a
+    assert ras_a.fetch_one() in res
+
+    res_dee = ra_module.RelationalAlgebraSet.dee()
+    assert list(iter(res_dee)) == [tuple()]
+    assert res_dee.fetch_one() == tuple()
+
+
 def test_as_numpy_array(ra_module):
     a = set((i % 2, i, i * 2) for i in range(5))
     ras = ra_module.RelationalAlgebraSet(a)
@@ -588,7 +601,7 @@ def test_named_groupby(ra_module):
     assert list(empty.groupby("x")) == []
 
 
-def test_named_iter_and_fecth_one(ra_module):
+def test_named_iter_and_fetch_one(ra_module):
     a = [(i, i * j) for i in (1, 2) for j in (2, 3, 4)]
 
     cols = ("y", "x")
@@ -597,6 +610,10 @@ def test_named_iter_and_fecth_one(ra_module):
     res = list(iter(ras_a))
     assert res == a
     assert ras_a.fetch_one() in res
+
+    res_dee = ra_module.NamedRelationalAlgebraFrozenSet.dee()
+    assert list(iter(res_dee)) == [tuple()]
+    assert res_dee.fetch_one() == tuple()
 
 
 def test_rename_column(ra_module):
@@ -766,6 +783,22 @@ def test_extended_projection(ra_module):
     assert expected_new_colum_str == new_set
     new_set = initial_set.extended_projection({"z": 1})
     assert expected_new_colum_int == new_set
+
+    new_set = initial_set.extended_projection(
+        {"x": ra_module.RelationalAlgebraColumnStr("x")}
+    )
+    assert initial_set.projection("x") == new_set
+
+    base_set = ra_module.NamedRelationalAlgebraFrozenSet(
+        (1, 2), [(7, 8), (9, 2)]
+    )
+
+    new_set = base_set.extended_projection({
+        "x": ra_module.RelationalAlgebraColumnInt(1),
+        "y": ra_module.RelationalAlgebraColumnInt(2) 
+    })
+
+    assert initial_set == new_set
 
 
 def test_rename_columns(ra_module):
