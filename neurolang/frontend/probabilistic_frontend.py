@@ -21,6 +21,7 @@ from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraStringExpression,
 )
+from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from . import QueryBuilderDatalog
 from .query_resolution_expressions import Symbol as FrontEndSymbol
 
@@ -67,15 +68,25 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             eB = self._rewrite_database_with_ontology(deterministic_idb)
             deterministic_idb = Union(deterministic_idb.formulas + eB.formulas)
 
-        deterministic_solution = self.chase_class(
+        solution = self.chase_class(
             self.solver, rules=deterministic_idb
         ).build_chase_solution()
         if probabilistic_idb.formulas:
             cpl = self._make_probabilistic_program_from_deterministic_solution(
-                deterministic_solution, probabilistic_idb
+                solution, probabilistic_idb
             )
-            return self.probabilistic_solver(cpl)
-        return deterministic_solution
+            solution = self.probabilistic_solver(cpl)
+        solution_sets = dict()
+        for pred_symb, relation in solution.items():
+            if isinstance(relation, ProvenanceAlgebraSet):
+                proj_cols = (relation.provenance_column.value,) + tuple(
+                    c.value for c in relation.non_provenance_columns
+                )
+                ra_set = relation.value.projection(*proj_cols)
+            else:
+                ra_set = relation.value
+            solution_sets[pred_symb.name] = ra_set
+        return solution_sets
 
     def _rewrite_database_with_ontology(self, deterministic_program):
         orw = OntologyRewriter(

@@ -29,7 +29,7 @@ def test_deterministic_query():
         res = nl.solve_all()
 
     assert "query1" in res.keys()
-    q1 = res["query1"].value._container.values
+    q1 = res["query1"]._container.values
     assert len(q1) == 4
     for elem in q1:
         assert elem[0] in ["a", "b", "c", "d"]
@@ -53,9 +53,9 @@ def test_probabilistic_query():
 
     assert "query1" in res.keys()
     assert "query2" in res.keys()
-    assert len(res["query1"].value.columns) == 2
-    assert len(res["query2"].value.columns) == 2
-    q2 = res["query2"].value._container.values
+    assert len(res["query1"].columns) == 2
+    assert len(res["query2"].columns) == 2
+    q2 = res["query2"]._container.values
     assert len(q2) == 3
     for elem in q2:
         assert elem[1] in ["a", "b", "c"]
@@ -79,8 +79,8 @@ def test_mixed_queries():
 
     assert "query1" in res.keys()
     assert "query2" in res.keys()
-    assert len(res["query2"].value.columns) == 2
-    q2 = res["query2"].value._container.values
+    assert len(res["query2"].columns) == 2
+    q2 = res["query2"]._container.values
     assert len(q2) == 4
     for elem in q2:
         assert elem[0] == 0.25
@@ -128,7 +128,7 @@ def test_ontology_query():
         e.answer[e.x, e.y] = p2[e.x, e.y]
         solution_instance = nl.solve_all()
 
-    resp = list(solution_instance["answer"].value.unwrapped_iter())
+    resp = list(solution_instance["answer"].unwrapped_iter())
     assert (
         "http://www.w3.org/2002/03owlt/hasValue/premises001#i",
         "true",
