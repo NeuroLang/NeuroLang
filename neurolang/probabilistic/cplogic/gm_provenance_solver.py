@@ -348,7 +348,7 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
         choice_node = operation.valued_node[0]
         choice_value = operation.valued_node[1]
         prov_set = ProvenanceAlgebraSet(
-            choice_node.relation.value, choice_node.probability_column
+            choice_node.relation.value, choice_node.probability_column,
         )
         prov_set.__debug_expression__ = choice_node.expression
         return Selection(
@@ -365,7 +365,7 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
         choice_node = operation.condition_valued_nodes[0][0]
         choice_value = operation.condition_valued_nodes[0][1]
         relation = build_always_true_provenance_relation(
-            choice_node.relation, choice_node.probability_column
+            choice_node.relation, choice_node.probability_column,
         )
         relation.__debug_expression__ = choice_node.expression
         relation.__debug_alway_true__ = True
@@ -586,7 +586,7 @@ class SelectionOutPusherMixin(PatternWalker):
     def union_of_selection_not_same_tuple_symbol(self, op):
         union = UnionOverTuples(op.relation.relation, op.tuple_symbol)
         union.__debug_expression__ = getattr(op, "__debug_expression__", None)
-        return Selection(union, op.relation.formula)
+        return Selection(union, op.relation.formula,)
 
     @add_match(UnionOverTuples(Projection, ...))
     def union_of_projection(self, union):
@@ -648,7 +648,7 @@ def make_conjunction_rule(conjunction):
         symbols |= set(arg for arg in pred.args if isinstance(arg, Symbol))
     symbols = tuple(sorted(symbols))
     csqt_pred_symb = Symbol.fresh()
-    return Implication(csqt_pred_symb(*symbols), conjunction)
+    return Implication(csqt_pred_symb(*symbols), conjunction,)
 
 
 def add_query_to_program(query, program):
