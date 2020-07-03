@@ -47,9 +47,11 @@ class RegionFrontendCPLogicSolver(
 
 
 class ProbabilisticFrontend(QueryBuilderDatalog):
-    def __init__(self, probabilistic_solver=problog_solve_succ_all):
+    def __init__(
+        self, chase_class=Chase, probabilistic_solver=problog_solve_succ_all
+    ):
         super().__init__(
-            RegionFrontendCPLogicSolver(), chase_class=Chase,
+            RegionFrontendCPLogicSolver(), chase_class=chase_class,
         )
         self.probabilistic_solver = probabilistic_solver
 
