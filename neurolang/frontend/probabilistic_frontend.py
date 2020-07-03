@@ -9,7 +9,7 @@ from ..datalog.ontologies_rewriter import OntologyRewriter
 from ..expression_walker import ExpressionBasicEvaluator
 from ..expressions import Symbol
 from ..logic import Union
-from ..probabilistic.cplogic import solve_succ_all
+from ..probabilistic.cplogic.problog_solver import solve_succ_all
 from ..probabilistic.cplogic.program import CPLogicMixin, CPLogicProgram
 from ..probabilistic.expression_processing import (
     separate_deterministic_probabilistic_code,
