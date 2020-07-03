@@ -141,14 +141,9 @@ def separate_deterministic_probabilistic_code(
     )
     deterministic_program = list()
 
-    if hasattr(solver, "pchoice_pred_symbs"):
-        probabilistic_symbols = (
-            solver.pfact_pred_symbs
-            | solver.pchoice_pred_symbs
-            | set(prob_symbols)
-        )
-    else:
-        probabilistic_symbols = set(prob_symbols)
+    probabilistic_symbols = (
+        solver.pfact_pred_symbs | solver.pchoice_pred_symbs | set(prob_symbols)
+    )
 
     probabilistic_program = list()
     unclassified_code = list(query_reachable_code.formulas)
@@ -163,7 +158,7 @@ def separate_deterministic_probabilistic_code(
             p.functor
             for p in extract_logic_predicates(pred.antecedent)
             if p.functor != pred.consequent.functor
-            and not is_builtin(p, solver.builtins().keys())
+            and not is_builtin(p, solver.builtins())
         )
 
         if not probabilistic_symbols.isdisjoint(preds_antecedent):
