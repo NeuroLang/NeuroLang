@@ -294,7 +294,7 @@ class RegionMixin:
 
 class NeuroSynthMixin:
     """
-    Make the frontend interface with Neurosynth using a NeuroSynthHandler
+    Interfacing with the Neurosynth CBMA database at the frontend level.
     """
     def load_neurosynth_term_study_ids(
         self, term, name=None, frequency_threshold=0.05
