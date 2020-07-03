@@ -141,14 +141,14 @@ class ChartParser:
     # of terminals or non-terminals
     #
     def _complete(self, completed_edge, j, k):
-        for i, e in self._candidate_edges(j, k):
+        for i, e in self._uncompleted_edges_ending_at(j):
             u = _lu.unify(e.remaining[0], completed_edge.head)
             if not u:
                 continue
             new_edge = self._complete_edge(e, completed_edge, u)
             self._add_completed_edge_to_chart(new_edge, i, k)
 
-    def _candidate_edges(self, j, k):
+    def _uncompleted_edges_ending_at(self, j):
         for i in range(j + 1):
             for e in self.chart[i][j]:
                 if e.remaining:
