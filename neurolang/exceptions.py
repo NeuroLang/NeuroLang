@@ -56,3 +56,7 @@ class UnsupportedProgramError(NeuroLangException):
 
 class ForbiddenBuiltinError(ForbiddenExpressionError):
     pass
+
+
+class NeuroLangFrontendException(NeuroLangException):
+    pass

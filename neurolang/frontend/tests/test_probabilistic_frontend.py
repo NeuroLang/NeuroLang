@@ -1,10 +1,6 @@
 import io
 from typing import AbstractSet
 
-import numpy as np
-import pandas as pd
-
-from ..neurosynth_utils import NeuroSynthHandler
 from ..probabilistic_frontend import ProbabilisticFrontend
 
 

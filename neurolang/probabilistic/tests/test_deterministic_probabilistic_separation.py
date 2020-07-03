@@ -1,8 +1,6 @@
 import io
 import operator
 
-import pytest
-
 from ...datalog.basic_representation import DatalogProgram
 from ...datalog.constraints_representation import DatalogConstraintsProgram
 from ...datalog.expressions import Implication
@@ -30,7 +28,6 @@ class ProbabilisticOntologySolver(
     pass
 
 
-@pytest.mark.skip
 def test_builtin():
     answer1 = Symbol("answer1")
     equals = Constant(operator.eq)

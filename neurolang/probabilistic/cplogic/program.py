@@ -2,13 +2,11 @@ import typing
 
 from ...datalog import DatalogProgram
 from ...datalog.expression_processing import is_rule_with_builtin
-from ...datalog.expressions import Fact
 from ...exceptions import ForbiddenBuiltinError, ForbiddenDisjunctionError
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
 from ...expressions import Constant, Symbol
-from ...logic import Conjunction, Implication, Union
-from ...logic.expression_processing import extract_logic_predicates
+from ...logic import TRUE, Implication, Union
 from ..exceptions import MalformedProbabilisticTupleError
 from ..expression_processing import (
     add_to_union,
@@ -18,80 +16,6 @@ from ..expression_processing import (
     is_probabilistic_fact,
     union_contains_probabilistic_facts,
 )
-
-TRUE = Constant[bool](True, verify_type=False, auto_infer_type=False)
-
-
-def is_rule_with_constants(rule):
-    return (
-        isinstance(rule, Implication)
-        and rule.antecedent != TRUE
-        and any(
-            any(isinstance(arg, Constant) for arg in pred.args)
-            for pred in [rule.consequent]
-            + list(extract_logic_predicates(rule.antecedent))
-        )
-    )
-
-
-def remove_constants_from_pred(pred):
-    new_args = list()
-    valued_args = list()
-    for arg in pred.args:
-        new_arg = arg
-        if isinstance(arg, Constant):
-            new_arg = Symbol.fresh()
-            valued_args.append((new_arg, arg))
-        new_args.append(new_arg)
-    new_pred = pred.functor(*new_args)
-    return new_pred, valued_args
-
-
-def remove_constants_from_rule(rule):
-    """
-    Transform a rule with constant terms into a rule without constant terms and
-    a fact that restricts the application of the rule such that it remains
-    equivalent to the original rule.
-    For example, the rule
-        P(x, y, a) :- Q(x), Z(b), R(y, c)
-    is transformed into the following rule and fact
-        P(x, y, s_1) :- Q(x), Z(s_2), R(y, s_3), s_4(s_1, s_2, s_3)
-        s_4(a, b, c) :- T
-    where s_1, s_2, s_3 and s_4 are all fresh symbols.
-    This transformation makes it possible to have implementations that work
-    under the assumption that all of the predicates present in intensional
-    rules do not contain any constant term.
-    """
-    if not is_rule_with_constants(rule):
-        return [rule]
-    preds = [rule.consequent] + list(extract_logic_predicates(rule.antecedent))
-    new_preds = list()
-    valued_args = list()
-    for pred in preds:
-        new_pred, new_valued_args = remove_constants_from_pred(pred)
-        new_preds.append(new_pred)
-        valued_args += new_valued_args
-    new_preds.append(Symbol.fresh()(*(x[0] for x in valued_args)))
-    new_rule = Implication(new_preds[0], Conjunction(tuple(new_preds[1:])))
-    fact = Fact(new_preds[-1].functor(*(x[1] for x in valued_args)))
-    return [new_rule, fact]
-
-
-class UnconstifierMixin(PatternWalker):
-    @add_match(
-        Union,
-        lambda exp: any(
-            is_rule_with_constants(formula) for formula in exp.formulas
-        ),
-    )
-    def union_with_rule_with_constant(self, union):
-        new_formulas = []
-        for formula in union.formulas:
-            if is_rule_with_constants(formula):
-                new_formulas += remove_constants_from_rule(formula)
-            else:
-                new_formulas += [formula]
-        return self.walk(Union(tuple(new_formulas)))
 
 
 class CPLogicMixin(PatternWalker):
@@ -131,14 +55,6 @@ class CPLogicMixin(PatternWalker):
             k: v
             for k, v in self.symbol_table.items()
             if k in self.pfact_pred_symbs
-        }
-
-    def probabilistic_choices(self):
-        """Return probabilistic choices of the symbol table."""
-        return {
-            k: v
-            for k, v in self.symbol_table.items()
-            if k in self.pchoice_pred_symbs
         }
 
     def _get_pred_symbs(self, set_symb):
@@ -274,16 +190,6 @@ class CPLogicMixin(PatternWalker):
         )
         return expression
 
-    @add_match(Implication, lambda rule: rule.antecedent != TRUE)
-    def prevent_rule_with_builtin(self, rule):
-        if is_rule_with_builtin(rule, self.builtins()):
-            raise ForbiddenBuiltinError(
-                "CP-Logic program do not currently support built-ins."
-            )
-        return self.statement_intensional(rule)
 
-
-class CPLogicProgram(
-    UnconstifierMixin, CPLogicMixin, DatalogProgram, ExpressionWalker
-):
+class CPLogicProgram(CPLogicMixin, DatalogProgram, ExpressionWalker):
     pass
