@@ -1,18 +1,18 @@
 import io
-from typing import AbstractSet
+from typing import AbstractSet, Tuple
 
 from ..probabilistic_frontend import ProbabilisticFrontend
 
 
-def test_add_probabilistic_set():
+def test_add_uniform_probabilistic_choice_set():
     nl = ProbabilisticFrontend()
 
     prob = [(a,) for a in range(10)]
     prob_set = nl.add_uniform_probabilistic_choice_over_set(prob, "prob")
     res = nl[prob_set]
 
-    assert prob_set.type is AbstractSet
-    assert res.type is AbstractSet
+    assert prob_set.type is AbstractSet[Tuple[float, int]]
+    assert res.type is AbstractSet[Tuple[float, int]]
     assert res.value == frozenset((1 / len(prob), a) for a in range(10))
 
 
