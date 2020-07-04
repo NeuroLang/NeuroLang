@@ -36,7 +36,7 @@ def test_deterministic_query():
         res = nl.solve_all()
 
     assert "query1" in res.keys()
-    q1 = res["query1"]._container.values
+    q1 = res["query1"].as_pandas_dataframe().values
     assert len(q1) == 4
     for elem in q1:
         assert elem[0] in ["a", "b", "c", "d"]
@@ -62,7 +62,7 @@ def test_probabilistic_query():
     assert "query2" in res.keys()
     assert len(res["query1"].columns) == 2
     assert len(res["query2"].columns) == 2
-    q2 = res["query2"]._container.values
+    q2 = res["query2"].as_pandas_dataframe().values
     assert len(q2) == 3
     for elem in q2:
         assert elem[1] in ["a", "b", "c"]
@@ -87,7 +87,7 @@ def test_mixed_queries():
     assert "query1" in res.keys()
     assert "query2" in res.keys()
     assert len(res["query2"].columns) == 2
-    q2 = res["query2"]._container.values
+    q2 = res["query2"].as_pandas_dataframe().values
     assert len(q2) == 4
     for elem in q2:
         assert elem[0] == 0.25
