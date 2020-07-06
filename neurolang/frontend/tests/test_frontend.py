@@ -365,11 +365,19 @@ def test_neurolange_dl_get_param_names():
     q = neurolang.add_tuple_set(dataset, name='q')
     r[x] = q(x, x)
 
+    @neurolang.add_symbol
+    def test_fun(x: int) -> int:
+        """
+            HELP TEST
+        """
+        return 0
+
     assert neurolang.predicate_parameter_names('q') == ('0', '1')
     assert neurolang.predicate_parameter_names(q) == ('0', '1')
     assert neurolang.predicate_parameter_names(r) == ('x',)
     assert neurolang.symbols[r].predicate_parameter_names == ('x',)
     assert r[x].help() is not None
+    assert neurolang.symbols['test_fun'].help().strip() == "HELP TEST"
 
 
 def test_neurolang_dl_datalog_code_list_symbols():
@@ -553,25 +561,6 @@ def test_quantifier_expressions():
         neurolang.symbols.overlapping(x, neurolang.symbols.reference_region)
     )
     assert res.do().value
-
-
-@patch(
-    'neurolang.frontend.neurosynth_utils.'
-    'NeuroSynthHandler.ns_region_set_from_term'
-)
-def test_neurosynth_region(mock_ns_regions):
-    mock_ns_regions.return_value = {
-        ExplicitVBR(np.array([[1, 0, 0], [1, 1, 0]]), np.eye(4))
-    }
-    neurolang = frontend.RegionFrontend()
-    s = neurolang.load_neurosynth_term_regions(
-        'gambling', 10, 'gambling_regions'
-    )
-    res = neurolang[s]
-    mock_ns_regions.assert_called()
-
-    assert res.type is AbstractSet[Tuple[ExplicitVBR]]
-    assert res.value == frozenset((t,) for t in mock_ns_regions.return_value)
 
 
 def test_translate_expression_to_fronted_expression():

@@ -97,7 +97,7 @@ class Expression(object):
         expression = self.expression
         if isinstance(expression, nl.Constant):
             if is_leq_informative(expression.type, Callable):
-                return help(expression.value)
+                return expression.value.__doc__
             elif is_leq_informative(expression.type, AbstractSet):
                 return "Set of tuples"
             else:
