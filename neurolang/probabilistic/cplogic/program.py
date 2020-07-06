@@ -1,12 +1,11 @@
 import typing
 
 from ...datalog import DatalogProgram
-from ...datalog.expression_processing import is_rule_with_builtin
-from ...exceptions import ForbiddenBuiltinError, ForbiddenDisjunctionError
+from ...exceptions import ForbiddenDisjunctionError
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
 from ...expressions import Constant, Symbol
-from ...logic import TRUE, Implication, Union
+from ...logic import Implication, Union
 from ..exceptions import MalformedProbabilisticTupleError
 from ..expression_processing import (
     add_to_union,
@@ -101,7 +100,7 @@ class CPLogicMixin(PatternWalker):
         type_, iterable = self.infer_iterable_type(iterable)
         self._check_iterable_prob_type(type_)
         constant = Constant[typing.AbstractSet[type_]](
-            self.new_set(iterable), auto_infer_type=False, verify_type=False,
+            self.new_set(iterable), auto_infer_type=False, verify_type=False
         )
         symbol = symbol.cast(constant.type)
         self.symbol_table[symbol] = constant
@@ -138,8 +137,8 @@ class CPLogicMixin(PatternWalker):
                 "Cannot define multiple probabilistic choices with the same "
                 f"predicate symbol. Predicate symbol was: {symbol}"
             )
-        ra_set = Constant[typing.AbstractSet](
-            self.new_set(iterable), auto_infer_type=False, verify_type=False,
+        ra_set = Constant[typing.AbstractSet[type_]](
+            self.new_set(iterable), auto_infer_type=False, verify_type=False
         )
         check_probabilistic_choice_set_probabilities_sum_to_one(ra_set)
         self.symbol_table[symbol] = ra_set
@@ -189,14 +188,6 @@ class CPLogicMixin(PatternWalker):
             self.symbol_table[pred_symb], [expression]
         )
         return expression
-
-    @add_match(Implication, lambda rule: rule.antecedent != TRUE)
-    def prevent_rule_with_builtin(self, rule):
-        if is_rule_with_builtin(rule, self.builtins()):
-            raise ForbiddenBuiltinError(
-                "CP-Logic program do not currently support built-ins."
-            )
-        return self.statement_intensional(rule)
 
 
 class CPLogicProgram(CPLogicMixin, DatalogProgram, ExpressionWalker):

@@ -38,6 +38,14 @@ class RelationalAlgebraNotImplementedError(
     pass
 
 
+class ForbiddenBuiltinError(ForbiddenExpressionError):
+    pass
+
+
+class NeuroLangFrontendException(NeuroLangException):
+    pass
+
+
 class SymbolNotFoundError(NeuroLangException):
     pass
 
@@ -47,8 +55,4 @@ class RuleNotFoundError(NeuroLangException):
 
 
 class UnsupportedProgramError(NeuroLangException):
-    pass
-
-
-class ForbiddenBuiltinError(ForbiddenExpressionError):
     pass
