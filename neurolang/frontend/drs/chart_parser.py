@@ -62,7 +62,9 @@ class Tokenizer:
             self.matches.append(
                 (
                     re.compile(f"^{q}.+?{q}\\s"),
-                    lambda span: Quote(Constant[str](q), Constant[str](span)),
+                    lambda span, q=q: Quote(
+                        Constant(q), Constant[str](span[1:-1])
+                    ),
                 )
             )
         self.matches.append(
@@ -81,8 +83,9 @@ class Tokenizer:
         for r, on_match in self.matches:
             m = r.match(text)
             if m:
-                span = text[: m.end()].strip()
-                rem = text[m.end() :].lstrip()
+                e = m.end()
+                span = text[:e].strip()
+                rem = text[e:].lstrip()
                 return on_match(span), rem
 
         raise Exception(f"Couldnt match token at: {text}")
