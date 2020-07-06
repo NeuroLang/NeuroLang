@@ -398,14 +398,6 @@ def is_ground_predicate(predicate):
     return all(isinstance(arg, Constant) for arg in predicate.args)
 
 
-def is_rule_with_builtin(rule, known_builtins=None):
-    known_builtins = set() if known_builtins is None else set(known_builtins)
-    return any(
-        isinstance(pred.functor, Constant) or pred.functor in known_builtins
-        for pred in extract_logic_predicates(rule.antecedent)
-    )
-
-
 def enforce_conjunction(expression):
     if isinstance(expression, Conjunction):
         return expression
@@ -505,3 +497,12 @@ def flatten_query(query, program):
             formula = rename_args_to_match(formula, rule.consequent, predicate)
         conj_query = conjunct_formulas(conj_query, formula)
     return conj_query
+
+
+def is_rule_with_builtin(rule, known_builtins=None):
+    if known_builtins is None:
+        known_builtins = set()
+    return any(
+        isinstance(pred.functor, Constant) or pred.functor in known_builtins
+        for pred in extract_logic_predicates(rule.antecedent)
+    )

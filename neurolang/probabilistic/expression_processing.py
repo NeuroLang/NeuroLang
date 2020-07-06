@@ -112,7 +112,7 @@ def union_contains_probabilistic_facts(union):
 
 
 def separate_deterministic_probabilistic_code(
-    solver, query_pred=None, det_symbols=None, prob_symbols=None
+    program, query_pred=None, det_symbols=None, prob_symbols=None
 ):
     if det_symbols is None:
         det_symbols = set()
@@ -120,35 +120,32 @@ def separate_deterministic_probabilistic_code(
         prob_symbols = set()
     if query_pred is None:
         formulas = tuple()
-        for union in solver.intensional_database().values():
+        for union in program.intensional_database().values():
             formulas += union.formulas
         query_reachable_code = Union(formulas)
     else:
-        query_reachable_code = reachable_code(query_pred, solver)
+        query_reachable_code = reachable_code(query_pred, program)
 
-    if hasattr(solver, "constraints"):
+    if hasattr(program, "constraints"):
         constraints_symbols = set(
-            [ri.consequent.functor for ri in solver.constraints().formulas]
+            [ri.consequent.functor for ri in program.constraints().formulas]
         )
     else:
         constraints_symbols = set()
 
     deterministic_symbols = (
-        set(solver.extensional_database().keys())
+        set(program.extensional_database().keys())
         | set(det_symbols)
-        | set(solver.builtins().keys())
+        | set(program.builtins().keys())
         | constraints_symbols
     )
     deterministic_program = list()
 
-    if hasattr(solver, "pchoice_pred_symbs"):
-        probabilistic_symbols = (
-            solver.pfact_pred_symbs
-            | solver.pchoice_pred_symbs
-            | set(prob_symbols)
-        )
-    else:
-        probabilistic_symbols = set(prob_symbols)
+    probabilistic_symbols = (
+        program.pfact_pred_symbs
+        | program.pchoice_pred_symbs
+        | set(prob_symbols)
+    )
 
     probabilistic_program = list()
     unclassified_code = list(query_reachable_code.formulas)
@@ -163,7 +160,9 @@ def separate_deterministic_probabilistic_code(
             p.functor
             for p in extract_logic_predicates(pred.antecedent)
             if p.functor != pred.consequent.functor
+            and not is_builtin(p, program.builtins())
         )
+
         if not probabilistic_symbols.isdisjoint(preds_antecedent):
             probabilistic_symbols.add(pred.consequent.functor)
             probabilistic_program.append(pred)
@@ -185,3 +184,10 @@ def separate_deterministic_probabilistic_code(
         raise NeuroLangFrontendException("There are unclassified atoms")
 
     return Union(deterministic_program), Union(probabilistic_program)
+
+
+def is_builtin(pred, known_builtins=None):
+    if known_builtins is None:
+        known_builtins = set()
+
+    return isinstance(pred.functor, Constant) or pred.functor in known_builtins

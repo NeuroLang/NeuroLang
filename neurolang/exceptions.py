@@ -4,6 +4,10 @@ class NeuroLangException(Exception):
     pass
 
 
+class NeuroLangFrontendException(NeuroLangException):
+    pass
+
+
 class UnexpectedExpressionError(NeuroLangException):
     pass
 
@@ -21,14 +25,6 @@ class ForbiddenDisjunctionError(ForbiddenExpressionError):
 
 
 class ForbiddenExistentialError(ForbiddenExpressionError):
-    pass
-
-
-class ForbiddenBuiltinError(ForbiddenExpressionError):
-    pass
-
-
-class NeuroLangFrontendException(NeuroLangException):
     pass
 
 

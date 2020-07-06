@@ -31,45 +31,6 @@ class NeuroSynthHandler(object):
     def __init__(self, ns_dataset=None):
         self._dataset = ns_dataset
 
-    def ns_region_set_from_term(
-        self,
-        terms,
-        frequency_threshold=0.05,
-        q=0.01,
-        prior=0.5,
-        image_type=None,
-    ):
-        """
-        Method that allows to obtain the activations related to
-        a series of terms. The terms can be entered in the following formats:
-
-        String: All expressions allowed in neurosynth. It can be
-        a term, a simple logical expression, for example: (reward* | pain*).
-
-        Iterable: A list of terms that will be calculated as a disjunction.
-        This case does not support logical expressions.
-        """
-        if image_type is None:
-            image_type = f"association-test_z_FDR_{q}"
-
-        if not isinstance(terms, str) and isinstance(
-            terms, collections.Iterable
-        ):
-            studies_ids = self.dataset.get_studies(
-                features=terms, frequency_threshold=frequency_threshold
-            )
-        else:
-            studies_ids = self.dataset.get_studies(
-                expression=terms, frequency_threshold=frequency_threshold
-            )
-        ma = ns.meta.MetaAnalysis(self.dataset, studies_ids, q=q, prior=prior)
-        data = ma.images[image_type]
-        masked_data = self.dataset.masker.unmask(data)
-        affine = self.dataset.masker.get_header().get_sform()
-        dim = self.dataset.masker.dims
-        region_set = region_set_from_masked_data(masked_data, affine, dim)
-        return region_set
-
     def ns_study_id_set_from_term(self, terms, frequency_threshold=0.05):
         study_ids = self.dataset.get_studies(
             features=terms, frequency_threshold=frequency_threshold
@@ -109,18 +70,19 @@ class NeuroSynthHandler(object):
 
         return dataset
 
-    def ns_load_term_study_associations(self, threshold=1e-3, study_ids=None):
+    def ns_term_study_associations(self, threshold=1e-3, study_ids=None):
         """
         Load a 2d numpy array containing association between terms and studies
         based on thresholded tf-idf features in the database.
 
         """
         features = self.dataset.feature_table.data
-        if study_ids is not None:
-            study_ids = np.array(list(study_ids)).flatten().astype(int)
-            features = features.loc[study_ids]
         terms = features.columns
-        features["pmid"] = features.index
+        if study_ids is None:
+            study_ids = features.index.to_series().apply(StudyID)
+        study_ids_as_int = study_ids.apply(int)
+        features = features.loc[study_ids_as_int]
+        features["pmid"] = study_ids
         return (
             features.melt(
                 id_vars="pmid",
@@ -132,7 +94,7 @@ class NeuroSynthHandler(object):
             .values
         )
 
-    def ns_load_reported_activations(self):
+    def ns_reported_activations(self):
         """
         Load a 2d numpy array containing each reported activation in the
         database.
@@ -140,13 +102,14 @@ class NeuroSynthHandler(object):
         """
         image_table = self.dataset.image_table
         vox_ids, study_ids_ix = image_table.data.nonzero()
-        study_ids = image_table.ids[study_ids_ix]
-        study_id_vox_id = np.transpose([study_ids, vox_ids])
-        return study_id_vox_id
+        study_ids = (
+            pd.Series(image_table.ids).apply(StudyID).iloc[study_ids_ix]
+        )
+        return np.transpose([study_ids, vox_ids])
 
-    def ns_load_all_study_ids(self):
+    def ns_study_ids(self):
         return np.expand_dims(
-            self.dataset.feature_table.data.index.values, axis=1
+            self.dataset.feature_table.data.index.astype(StudyID), axis=1
         )
 
     @staticmethod

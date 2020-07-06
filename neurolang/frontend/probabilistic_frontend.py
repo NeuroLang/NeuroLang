@@ -1,21 +1,28 @@
+import collections
+from typing import AbstractSet, Tuple
 from uuid import uuid1
-
-import pandas as pd
 
 from ..datalog.aggregation import Chase
 from ..datalog.constraints_representation import DatalogConstraintsProgram
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
 from ..expression_walker import ExpressionBasicEvaluator
-from ..expressions import Symbol
+from ..expressions import Symbol, Unknown
 from ..logic import Union
-from ..probabilistic.cplogic import solve_succ_all
+from ..probabilistic.cplogic.problog_solver import (
+    solve_succ_all as problog_solve_succ_all,
+)
 from ..probabilistic.cplogic.program import CPLogicMixin, CPLogicProgram
 from ..probabilistic.expression_processing import (
     separate_deterministic_probabilistic_code,
 )
 from ..probabilistic.weighted_model_counting import solve_succ_query
 from ..region_solver import RegionSolver
+from ..relational_algebra import (
+    NamedRelationalAlgebraFrozenSet,
+    RelationalAlgebraStringExpression,
+)
+from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from . import QueryBuilderDatalog
 from .query_resolution_expressions import Symbol as FrontEndSymbol
 
@@ -30,8 +37,12 @@ class RegionFrontendCPLogicSolver(
 
 
 class ProbabilisticFrontend(QueryBuilderDatalog):
-    def __init__(self, probabilistic_solver="problog"):
-        super().__init__(RegionFrontendCPLogicSolver(), chase_class=Chase)
+    def __init__(
+        self, chase_class=Chase, probabilistic_solver=problog_solve_succ_all
+    ):
+        super().__init__(
+            RegionFrontendCPLogicSolver(), chase_class=chase_class
+        )
         self.probabilistic_solver = probabilistic_solver
         self.ontology_loaded = False
 
@@ -56,17 +67,27 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
 
         if self.ontology_loaded:
             eB = self._rewrite_database_with_ontology(deterministic_idb)
-            self.solver.walk(eB)
+            deterministic_idb = Union(deterministic_idb.formulas + eB.formulas)
 
-        deterministic_solution = self.chase_class(
-            self.solver
+        solution = self.chase_class(
+            self.solver, rules=deterministic_idb
         ).build_chase_solution()
         if probabilistic_idb.formulas:
             cpl = self._make_probabilistic_program_from_deterministic_solution(
-                deterministic_solution, probabilistic_idb
+                solution, probabilistic_idb
             )
-            return solve_succ_all(cpl, solver_name=self.probabilistic_solver)
-        return deterministic_solution
+            solution = self.probabilistic_solver(cpl)
+        solution_sets = dict()
+        for pred_symb, relation in solution.items():
+            if isinstance(relation, ProvenanceAlgebraSet):
+                proj_cols = (relation.provenance_column.value,) + tuple(
+                    c.value for c in relation.non_provenance_columns
+                )
+                ra_set = relation.value.projection(*proj_cols)
+            else:
+                ra_set = relation.value
+            solution_sets[pred_symb.name] = ra_set
+        return solution_sets
 
     def solve_query(self, query_pred):
         (
@@ -94,28 +115,31 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         )
         rewrite = orw.Xrewrite()
 
-        eB2 = ()
+        eB = ()
         for imp in rewrite:
-            eB2 += (imp[0],)
+            eB += (imp[0],)
 
-        return Union(eB2)
+        return Union(eB)
 
-    def add_uniform_probabilistic_choice_over_set(self, iterable, name=None):
+    def add_uniform_probabilistic_choice_over_set(
+        self, iterable, type_=Unknown, name=None
+    ):
         if name is None:
             name = str(uuid1())
+        if isinstance(type_, tuple):
+            type_ = Tuple[type_]
+        symbol = Symbol[AbstractSet[type_]](name)
+        arity = len(next(iter(iterable)))
+        columns = tuple(Symbol.fresh().name for _ in range(arity))
+        ra_set = NamedRelationalAlgebraFrozenSet(columns, iterable)
+        prob_col = Symbol.fresh().name
         probability = 1 / len(iterable)
-        if isinstance(iterable, pd.DataFrame):
-            columns = iterable.columns
-            prob_col = Symbol.fresh().name
-            new_columns = (prob_col,) + tuple(columns)
-            iterable = iterable.copy()
-            iterable[prob_col] = probability
-            iterable = iterable[new_columns]
-        else:
-            iterable = [(probability,) + tuple(tupl) for tupl in iterable]
-        self.solver.add_probabilistic_choice_from_tuples(
-            Symbol(name), iterable
-        )
+        projections = collections.OrderedDict()
+        projections[prob_col] = probability
+        for col in columns:
+            projections[col] = RelationalAlgebraStringExpression(col)
+        ra_set = ra_set.extended_projection(projections)
+        self.solver.add_probabilistic_choice_from_tuples(symbol, ra_set)
         return FrontEndSymbol(self, name)
 
     def add_probabilistic_facts_from_tuples(self, iterable, name=None):

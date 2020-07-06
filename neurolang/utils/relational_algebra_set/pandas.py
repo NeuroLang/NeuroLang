@@ -110,7 +110,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             self._drop_duplicates_if_needed()
             values = self.itervalues()
         for v in values:
-            yield v
+            yield tuple(v)
 
     def fetch_one(self):
         if self.is_dee():

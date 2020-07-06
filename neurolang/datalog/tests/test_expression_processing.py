@@ -1,6 +1,7 @@
 from pytest import raises
 
 from operator import eq
+import typing
 
 import numpy as np
 
@@ -25,6 +26,7 @@ from ..expression_processing import (
     conjunct_if_needed,
     conjunct_formulas,
     program_has_loops,
+    is_rule_with_builtin,
 )
 
 S_ = Symbol
@@ -382,3 +384,24 @@ def test_conjunct_formulas():
         (P(x), Q(x, x), Q(x, y), Q(y, y))
     )
     assert conjunct_formulas(P(x), Q(x)) == Conjunction((P(x), Q(x)))
+
+
+
+def test_is_rule_with_builtin():
+    P = Symbol("P")
+    Q = Symbol("Q")
+    x = Symbol("x")
+    y = Symbol("y")
+    some_builtin = Constant(eq)
+    rule = Implication(P(x), Conjunction((some_builtin(x, y), Q(x), Q(y))))
+    assert is_rule_with_builtin(rule)
+    rule = Implication(Q(x), P(x))
+    assert not is_rule_with_builtin(rule)
+    dl = Datalog()
+    some_builtin = Symbol[typing.Callable[[int, int], str]]("some_builtin")
+    my_builtin_fun = lambda u, v: str(u + v)
+    dl.symbol_table[some_builtin] = Constant[typing.Callable[[int, int], str]](
+        my_builtin_fun, auto_infer_type=False, verify_type=False,
+    )
+    rule = Implication(Q(x), some_builtin(x, y))
+    assert is_rule_with_builtin(rule, known_builtins=dl.builtins())

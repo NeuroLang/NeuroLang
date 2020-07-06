@@ -2,19 +2,16 @@ import operator
 from typing import Tuple
 
 from ...datalog.expression_processing import conjunct_formulas
-from ...datalog.expressions import Fact
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
 from ...expressions import Constant, Definition, FunctionApplication, Symbol
-from ...logic import Conjunction, Implication, Union
+from ...logic import Conjunction, Implication
 from ...logic.expression_processing import extract_logic_predicates
 from ...relational_algebra import (
     ColumnStr,
-    ConcatenateConstantColumn,
     NaturalJoin,
     Projection,
     RelationalAlgebraOperation,
-    RelationalAlgebraSolver,
     RenameColumn,
     Selection,
     str2columnstr_constant,
@@ -24,7 +21,10 @@ from ...relational_algebra_provenance import (
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
 )
-from . import problog_solver
+from . import (
+    build_always_true_provenance_relation,
+    rename_columns_for_args_to_match,
+)
 from .cplogic_to_gm import (
     AndPlateNode,
     BernoulliPlateNode,
@@ -34,84 +34,10 @@ from .cplogic_to_gm import (
     PlateNode,
 )
 from .grounding import get_grounding_predicate, ground_cplogic_program
-from .program import remove_constants_from_pred
+from .problog_solver import solve_succ_query as problog_solve_succ_query
 
 TRUE = Constant[bool](True, verify_type=False, auto_infer_type=False)
 EQUAL = Constant(operator.eq)
-
-
-def rename_columns_for_args_to_match(relation, src_args, dst_args):
-    """
-    Rename the columns of a relation so that they match the targeted args.
-
-    Parameters
-    ----------
-    relation : ProvenanceAlgebraSet or RelationalAlgebraOperation
-        The relation on which the renaming of the columns should happen.
-    src_args : tuple of Symbols
-        The predicate's arguments currently matching the columns.
-    dst_args : tuple of Symbols
-        New args that the naming of the columns should match.
-
-    Returns
-    -------
-    RelationalAlgebraOperation
-        The unsolved nested operations that apply the renaming scheme.
-
-    """
-    src_cols = list(str2columnstr_constant(arg.name) for arg in src_args)
-    dst_cols = list(str2columnstr_constant(arg.name) for arg in dst_args)
-    result = relation
-    for dst_col in set(dst_cols):
-        idxs = [i for i, c in enumerate(dst_cols) if c == dst_col]
-        result = RenameColumn(result, src_cols[idxs[0]], dst_col)
-        for idx in idxs[1:]:
-            result = Selection(result, EQUAL(src_cols[idx], dst_col))
-    return result
-
-
-def build_always_true_provenance_relation(relation, prob_col=None):
-    """
-    Construct a provenance set from a relation with probabilities of 1
-    for all tuples in the relation.
-
-    The provenance column is named after the ``prob_col`` argument. If
-    ``prob_col`` is already in the columns of the relation, it is
-    removed before being re-added.
-
-    Parameters
-    ----------
-    relation : NamedRelationalAlgebraFrozenSet
-        The relation containing the tuples that will be in the
-        resulting provenance set.
-    prob_col : Constant[ColumnStr]
-        Name of the provenance column that will contain constant
-        probabilities of 1.
-
-    Returns
-    -------
-    ProvenanceAlgebraSet
-
-    """
-    if prob_col is None:
-        prob_col = str2columnstr_constant(Symbol.fresh().name)
-    # remove the probability column if it is already there
-    elif prob_col.value in relation.value.columns:
-        kept_cols = tuple(
-            str2columnstr_constant(col)
-            for col in relation.value.columns
-            if col != prob_col.value
-        )
-        relation = Projection(relation, kept_cols)
-    # add a new probability column with name `prob_col` and ones everywhere
-    cst_one_probability = Constant[float](
-        1.0, auto_infer_type=False, verify_type=False
-    )
-    relation = ConcatenateConstantColumn(
-        relation, prob_col, cst_one_probability
-    )
-    relation = RelationalAlgebraSolver().walk(relation)
-    return ProvenanceAlgebraSet(relation.value, prob_col)
 
 
 def solve_succ_query(query_predicate, cpl_program):
@@ -171,7 +97,7 @@ def solve_succ_query(query_predicate, cpl_program):
     n.d., 30.
 
     """
-    return problog_solver.solve_succ_query(query_predicate, cpl_program)
+    return problog_solve_succ_query(query_predicate, cpl_program)
     grounded = ground_cplogic_program(cpl_program)
     translator = CPLogicGroundingToGraphicalModelTranslator()
     gm = translator.walk(grounded)
@@ -727,22 +653,12 @@ def make_conjunction_rule(conjunction):
 
 def add_query_to_program(query, program):
     assert isinstance(query, Conjunction)
-    antecedent_preds = list()
-    valued_args = list()
-    csqt_args = set()
+    args = set()
     for pred in query.formulas:
-        pred, new_valued_args = remove_constants_from_pred(pred)
-        antecedent_preds.append(pred)
-        valued_args += new_valued_args
-        csqt_args |= set(pred.args)
-    const_preserving_pred = Symbol.fresh()(*(arg for arg, _ in valued_args))
-    antecedent_preds.append(const_preserving_pred)
-    csqt_pred = Symbol.fresh()(*sorted(csqt_args, key=lambda s: s.name))
-    fact = Fact(
-        const_preserving_pred.functor(*(value for _, value in valued_args))
-    )
-    rule = Implication(csqt_pred, Conjunction(antecedent_preds))
-    program.walk(Union((fact, rule)))
+        args |= set(arg for arg in pred.args if isinstance(arg, Symbol))
+    csqt_pred = Symbol.fresh()(*args)
+    rule = Implication(csqt_pred, query)
+    program.walk(rule)
     return csqt_pred
 
 
@@ -750,16 +666,18 @@ def solve_marg_query(query_predicate, evidence, cpl_program):
     if isinstance(evidence, FunctionApplication):
         evidence = Conjunction((evidence,))
     joint_conjunction = conjunct_formulas(query_predicate, evidence)
+    cpl_program.push_scope()
     joint_qpred = add_query_to_program(joint_conjunction, cpl_program)
     evidence_qpred = add_query_to_program(evidence, cpl_program)
     joint_result = solve_succ_query(joint_qpred, cpl_program)
+    evidence_result = solve_succ_query(evidence_qpred, cpl_program)
+    cpl_program.pop_scope()
     joint_cols = tuple(
         str2columnstr_constant(arg.name)
         for arg in query_predicate.args
         if isinstance(arg, Symbol)
     )
     joint_result = Projection(joint_result, joint_cols)
-    evidence_result = solve_succ_query(evidence_qpred, cpl_program)
     evidence_cols = set()
     for formula in evidence.formulas:
         evidence_cols |= set(

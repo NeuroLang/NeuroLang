@@ -1,7 +1,4 @@
-import pytest
-
 from ....datalog import Fact
-from ....exceptions import ForbiddenDisjunctionError
 from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Union
 from .. import testing
@@ -17,7 +14,6 @@ P = Symbol("P")
 Q = Symbol("Q")
 Z = Symbol("Z")
 x = Symbol("x")
-y = Symbol("y")
 a = Constant("a")
 b = Constant("b")
 
@@ -99,19 +95,3 @@ def test_program_with_probchoice_and_intensional_rule():
     assert isinstance(Z_node, BernoulliPlateNode)
     assert isinstance(P_node, NaryChoiceResultPlateNode)
     assert isinstance(choice_node, NaryChoicePlateNode)
-
-
-def test_forbidden_disjunction():
-    rule_a = Implication(P(x), Q(x))
-    rule_b = Implication(P(y), Z(y))
-    code = Union((rule_a, rule_b))
-    cpl = CPLogicProgram()
-    pfact_sets = {
-        Q: {(1.0, "a"), (0.5, "b")},
-        Z: {(0.2, "z")},
-    }
-    for pred_symb, pfact_set in pfact_sets.items():
-        cpl.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
-    cpl.walk(code)
-    with pytest.raises(ForbiddenDisjunctionError):
-        testing.build_gm(cpl)

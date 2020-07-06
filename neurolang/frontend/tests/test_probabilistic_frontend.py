@@ -1,23 +1,26 @@
 import io
-from typing import AbstractSet
+from typing import AbstractSet, Tuple
 
-import numpy as np
-import pandas as pd
-
-from ..neurosynth_utils import NeuroSynthHandler
 from ..probabilistic_frontend import ProbabilisticFrontend
 
 
-def test_add_probabilistic_set():
+def test_add_uniform_probabilistic_choice_set():
     nl = ProbabilisticFrontend()
 
     prob = [(a,) for a in range(10)]
     prob_set = nl.add_uniform_probabilistic_choice_over_set(prob, "prob")
     res = nl[prob_set]
 
-    assert prob_set.type is AbstractSet
-    assert res.type is AbstractSet
+    assert prob_set.type is AbstractSet[Tuple[float, int]]
+    assert res.type is AbstractSet[Tuple[float, int]]
     assert res.value == frozenset((1 / len(prob), a) for a in range(10))
+
+    d = [("a",), ("b",), ("c",), ("d",)]
+    data = nl.add_uniform_probabilistic_choice_over_set(d, name="data")
+    res_d = nl[data]
+
+    assert data.type is AbstractSet[Tuple[float, str]]
+    assert res_d.type is AbstractSet[Tuple[float, str]]
 
 
 def test_deterministic_query():
@@ -33,7 +36,7 @@ def test_deterministic_query():
         res = nl.solve_all()
 
     assert "query1" in res.keys()
-    q1 = res["query1"].value._container.values
+    q1 = res["query1"].as_pandas_dataframe().values
     assert len(q1) == 4
     for elem in q1:
         assert elem[0] in ["a", "b", "c", "d"]
@@ -57,9 +60,9 @@ def test_probabilistic_query():
 
     assert "query1" in res.keys()
     assert "query2" in res.keys()
-    assert len(res["query1"].value.columns) == 2
-    assert len(res["query2"].value.columns) == 2
-    q2 = res["query2"].value._container.values
+    assert len(res["query1"].columns) == 2
+    assert len(res["query2"].columns) == 2
+    q2 = res["query2"].as_pandas_dataframe().values
     assert len(q2) == 3
     for elem in q2:
         assert elem[1] in ["a", "b", "c"]
@@ -77,14 +80,14 @@ def test_mixed_queries():
     data3 = nl.add_uniform_probabilistic_choice_over_set(d3, name="data3")
 
     with nl.scope as e:
-        e.query1[e.y] = data1[e.x] & data2[e.x, e.y]
-        e.query2[e.y] = e.query1[e.y] & data3[e.y]
+        e.query1[e.x, e.y] = data1[e.x] & data2[e.x, e.y]
+        e.query2[e.y] = e.query1[e.x, e.y] & data3[e.y]
         res = nl.solve_all()
 
     assert "query1" in res.keys()
     assert "query2" in res.keys()
-    assert len(res["query2"].value.columns) == 2
-    q2 = res["query2"].value._container.values
+    assert len(res["query2"].columns) == 2
+    q2 = res["query2"].as_pandas_dataframe().values
     assert len(q2) == 4
     for elem in q2:
         assert elem[0] == 0.25
@@ -132,7 +135,7 @@ def test_ontology_query():
         e.answer[e.x, e.y] = p2[e.x, e.y]
         solution_instance = nl.solve_all()
 
-    resp = list(solution_instance["answer"].value.unwrapped_iter())
+    resp = list(solution_instance["answer"].unwrapped_iter())
     assert (
         "http://www.w3.org/2002/03owlt/hasValue/premises001#i",
         "true",

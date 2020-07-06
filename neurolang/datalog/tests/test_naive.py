@@ -318,10 +318,7 @@ def test_extensional_database():
     )))
 
 
-@pytest.mark.xfail(
-    reason="The naive solver can't handle recursion",
-    raises=RecursionError
-)
+@pytest.mark.skip
 def test_intensional_recursive():
     Q = S_('Q')  # noqa: N806
     R = S_('R')  # noqa: N806
