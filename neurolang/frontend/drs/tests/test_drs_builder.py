@@ -84,8 +84,7 @@ def test_conditional():
     assert Symbol("region")(x) in set(ant.expressions)
     assert Symbol("region")(y) in set(ant.expressions)
 
-    assert len(con.referents) == 2
-    assert set(con.referents) == {x, y}
+    assert len(con.referents) == 0
     assert Symbol("intersects")(x, y) in set(con.expressions)
 
 
@@ -133,3 +132,22 @@ def test_same_implication():
     # - Jones likes a book X if X references Odyssey.
     # - if a book X references Odyssey then Jones likes X.
     pytest.skip("Incomplete")
+
+
+def test_quoted_predicate():
+    b = DRSBuilder(_eg)
+    t = _cp.parse("if `intersects(Y, X)` then X intersects Y")[0]
+    drs = b.walk(t)
+
+    x = Symbol("X")
+    y = Symbol("Y")
+
+    assert len(drs.expressions) == 1
+    assert isinstance(drs.expressions[0], Implication)
+    ant = drs.expressions[0].antecedent
+    con = drs.expressions[0].consequent
+    assert len(ant.referents) == 2
+    assert set(ant.referents) == {x, y}
+    assert Symbol("intersects")(y, x) in set(ant.expressions)
+    assert len(con.referents) == 0
+    assert Symbol("intersects")(x, y) in set(con.expressions)

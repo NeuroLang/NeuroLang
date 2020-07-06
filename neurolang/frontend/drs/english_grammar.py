@@ -130,8 +130,6 @@ class EnglishBaseLexicon(DictLexicon):
 
     def get_meanings(self, token):
         m = super().get_meanings(token)
-        if isinstance(token, Constant):
-            word = token.value
-        if word.isupper():
+        if isinstance(token, Constant) and token.value.isupper():
             m += (VAR(),)
         return m
