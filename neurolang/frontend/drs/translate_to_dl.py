@@ -48,6 +48,11 @@ class TranslateToDatalog:
         exp = self.into_fol.walk(drs)
 
         try:
+            return _as_intensional_rules(exp)
+        except TranslateToDatalogError:
+            pass
+
+        try:
             return _as_intensional_rule(exp)
         except TranslateToDatalogError:
             pass
@@ -62,6 +67,36 @@ class TranslateToDatalog:
 
 class TranslateToDatalogError(Exception):
     pass
+
+
+def _as_intensional_rules(exp):
+    ucv, exp = _strip_universal_quantifiers(exp)
+
+    if not isinstance(exp, Implication):
+        raise TranslateToDatalogError("A Datalog rule must be an implication")
+
+    head = exp.consequent
+    body = exp.antecedent
+
+    if not isinstance(head, Conjunction):
+        raise TranslateToDatalogError(
+            "The head of a Datalog rule with conjunctive head"
+            + " must be a conjunction"
+        )
+
+    f = Symbol.fresh()(*ucv)
+
+    block = _as_intensional_rule(
+        _add_universal_quantifiers(Implication(f, body), ucv)
+    )
+
+    for arg in head.formulas:
+        b = _as_intensional_rule(
+            _add_universal_quantifiers(Implication(arg, f), ucv)
+        )
+        block.expressions += b.expressions
+
+    return block
 
 
 def _as_intensional_rule(exp):
@@ -96,6 +131,14 @@ def _strip_universal_quantifiers(exp):
         exp = exp.body
 
     return ucv, exp
+
+
+def _add_universal_quantifiers(exp, ucv):
+    ucv = list(ucv)
+    while ucv:
+        v = ucv.pop()
+        exp = UniversalPredicate(v, exp)
+    return exp
 
 
 def _constrain_using_head_constants(head, body, ucv):
