@@ -65,7 +65,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         ) = separate_deterministic_probabilistic_code(self.solver)
 
         if self.ontology_loaded:
-            eB = self._rewrite_database_with_ontology(deterministic_idb)
+            eB = self._rewrite_program_with_ontology(deterministic_idb)
             deterministic_idb = Union(deterministic_idb.formulas + eB.formulas)
 
         solution = self.chase_class(
@@ -88,7 +88,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             solution_sets[pred_symb.name] = ra_set
         return solution_sets
 
-    def _rewrite_database_with_ontology(self, deterministic_program):
+    def _rewrite_program_with_ontology(self, deterministic_program):
         orw = OntologyRewriter(
             deterministic_program, self.solver.constraints()
         )
