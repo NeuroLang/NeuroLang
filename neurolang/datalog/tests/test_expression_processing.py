@@ -1,13 +1,23 @@
-from operator import eq
+from pytest import raises
 
+from operator import eq
+import typing
+
+import numpy as np
+
+from ...exceptions import SymbolNotFoundError
 from ...expression_walker import ExpressionBasicEvaluator
 from ...expressions import Constant, ExpressionBlock, Symbol
-from ...logic import ExistentialPredicate, Implication, Negation, Conjunction
+from ...logic import (
+    ExistentialPredicate, Implication,
+    Negation, Conjunction, Union
+)
 from .. import DatalogProgram, Fact
 from ..expression_processing import (
     TranslateToDatalogSemantics,
     is_conjunctive_expression,
     is_conjunctive_expression_with_nested_predicates,
+    dependency_matrix,
     stratify, reachable_code, is_linear_rule,
     implication_has_existential_variable_in_antecedent,
     is_ground_predicate,
@@ -15,6 +25,8 @@ from ..expression_processing import (
     extract_logic_predicates,
     conjunct_if_needed,
     conjunct_formulas,
+    program_has_loops,
+    is_rule_with_builtin,
 )
 
 S_ = Symbol
@@ -238,6 +250,98 @@ def test_reachable():
     assert set(reached.formulas) == set(code.formulas[:-1])
 
 
+def test_dependency_matrix():
+    Q = S_('Q')  # noqa: N806
+    R = S_('R')  # noqa: N806
+    S = S_('S')  # noqa: N806
+    T = S_('T')  # noqa: N806
+    x = S_('x')
+    y = S_('y')
+
+    code = DT.walk(B_([
+        Fact(Q(C_(0), C_(1))),
+        Imp_(R(x, y), Q(x, y)),
+        Imp_(R(x, y), T(y, x)),
+        Imp_(S(x), R(x, y) & S(y) & C_(eq)(x, y)),
+        Imp_(T(x), Q(x, y)),
+    ]))
+
+    datalog = Datalog()
+    datalog.walk(code)
+
+    idb_symbols, dep_matrix = dependency_matrix(datalog)
+
+    assert idb_symbols == (R, S, T)
+    assert np.array_equiv(dep_matrix, np.array(
+        [
+            [0, 0, 1],
+            [1, 1, 0],
+            [0, 0, 0]
+        ]
+    ))
+
+    rules = Union(
+        datalog.intensional_database()[R].formulas +
+        datalog.intensional_database()[T].formulas
+    )
+
+    idb_symbols_2, dep_matrix_2 = dependency_matrix(
+       datalog, rules=rules
+    )
+
+    assert idb_symbols_2 == (R, T)
+    assert np.array_equiv(dep_matrix[(0, 2), :][:, (0, 2)], dep_matrix_2)
+
+    code = DT.walk(B_([
+        Fact(Q(C_(0), C_(1))),
+        Imp_(R(x, y), Q(x, y)),
+        Imp_(R(x, y), T(y, x)),
+        Imp_(S(x), R(x, y) & S_('X')(y) & C_(eq)(x, y)),
+        Imp_(T(x), Q(x, y)),
+    ]))
+
+    datalog = Datalog()
+    datalog.walk(code)
+
+    with raises(SymbolNotFoundError):
+        dependency_matrix(datalog)
+
+
+def test_program_has_loops():
+    Q = S_('Q')  # noqa: N806
+    R = S_('R')  # noqa: N806
+    S = S_('S')  # noqa: N806
+    T = S_('T')  # noqa: N806
+    x = S_('x')
+    y = S_('y')
+
+    code = DT.walk(B_([
+        Fact(Q(C_(0), C_(1))),
+        Imp_(R(x, y), Q(x, y) & S(x)),
+        Imp_(R(x, y), T(y, x)),
+        Imp_(S(x), R(x, y) & C_(eq)(x, y)),
+        Imp_(T(x, y), Q(x, y)),
+    ]))
+
+    datalog = Datalog()
+    datalog.walk(code)
+
+    assert program_has_loops(datalog)
+
+    code = DT.walk(B_([
+        Fact(Q(C_(0), C_(1))),
+        Imp_(R(x, y), Q(x, y)),
+        Imp_(R(x, x), T(x, x)),
+        Imp_(S(x), R(x, y) & C_(eq)(x, y)),
+        Imp_(T(x), Q(x, x))
+    ]))
+
+    datalog = Datalog()
+    datalog.walk(code)
+
+    assert not program_has_loops(datalog)
+
+
 def test_implication_has_existential_variable_in_antecedent():
     Q = S_('Q')
     R = S_('R')
@@ -280,3 +384,24 @@ def test_conjunct_formulas():
         (P(x), Q(x, x), Q(x, y), Q(y, y))
     )
     assert conjunct_formulas(P(x), Q(x)) == Conjunction((P(x), Q(x)))
+
+
+
+def test_is_rule_with_builtin():
+    P = Symbol("P")
+    Q = Symbol("Q")
+    x = Symbol("x")
+    y = Symbol("y")
+    some_builtin = Constant(eq)
+    rule = Implication(P(x), Conjunction((some_builtin(x, y), Q(x), Q(y))))
+    assert is_rule_with_builtin(rule)
+    rule = Implication(Q(x), P(x))
+    assert not is_rule_with_builtin(rule)
+    dl = Datalog()
+    some_builtin = Symbol[typing.Callable[[int, int], str]]("some_builtin")
+    my_builtin_fun = lambda u, v: str(u + v)
+    dl.symbol_table[some_builtin] = Constant[typing.Callable[[int, int], str]](
+        my_builtin_fun, auto_infer_type=False, verify_type=False,
+    )
+    rule = Implication(Q(x), some_builtin(x, y))
+    assert is_rule_with_builtin(rule, known_builtins=dl.builtins())

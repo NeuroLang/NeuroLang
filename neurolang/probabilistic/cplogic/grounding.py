@@ -6,6 +6,7 @@ from ...datalog.chase import (
     ChaseNaive,
     ChaseNamedRelationalAlgebraMixin,
 )
+from ...exceptions import ForbiddenDisjunctionError
 from ...expression_walker import ExpressionBasicEvaluator
 from ...expressions import Constant, ExpressionBlock, Symbol
 from ...logic import Implication
@@ -43,6 +44,10 @@ def cplogic_to_datalog(cpl_program):
     dl = Datalog()
     for pred_symb in cpl_program.predicate_symbols:
         if pred_symb in cpl_program.intensional_database():
+            if len(cpl_program.symbol_table[pred_symb].formulas) > 1:
+                raise ForbiddenDisjunctionError(
+                    "CP-Logic programs do not support disjunctions"
+                )
             for formula in cpl_program.symbol_table[pred_symb].formulas:
                 dl.walk(formula)
         else:
