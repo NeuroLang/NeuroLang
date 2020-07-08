@@ -42,7 +42,7 @@ def test_probfact():
 
 def test_deterministic_program():
     code = Union(
-        (Implication(Z(x), Conjunction((P(x), Q(x)))), Fact(Q(a)), Fact(P(a)),)
+        (Implication(Z(x), Conjunction((P(x), Q(x)))), Fact(Q(a)), Fact(P(a)))
     )
     cpl_program = CPLogicProgram()
     cpl_program.walk(code)
@@ -121,7 +121,7 @@ def test_add_probfacts_from_tuple():
     cpl = CPLogicProgram()
     cpl.walk(Union(tuple()))
     cpl.add_probabilistic_facts_from_tuples(
-        P, {(0.3, "hello", "gaston"), (0.7, "hello", "antonia"),},
+        P, {(0.3, "hello", "gaston"), (0.7, "hello", "antonia")}
     )
     assert P in cpl.pfact_pred_symbs
     assert (
@@ -136,7 +136,7 @@ def test_add_probfacts_from_tuple_no_probability():
     cpl.walk(Union(tuple()))
     with pytest.raises(MalformedProbabilisticTupleError):
         cpl.add_probabilistic_facts_from_tuples(
-            P, {("hello", "gaston"), ("hello", "antonia"),},
+            P, {("hello", "gaston"), ("hello", "antonia")}
         )
 
 
@@ -183,12 +183,3 @@ def test_add_probchoice_does_not_sum_to_one():
         cpl.add_probabilistic_choice_from_tuples(
             P, probchoice_as_tuples_iterable
         )
-
-
-def test_prevented_builtins():
-    rule_with_builtin = Implication(
-        P(x), Conjunction((Q(x), Constant(operator.eq)(a, b)))
-    )
-    cpl = CPLogicProgram()
-    with pytest.raises(ForbiddenBuiltinError):
-        cpl.walk(rule_with_builtin)
