@@ -22,9 +22,8 @@ _equals = Constant(operator.eq)
 
 class TranslateToDatalog:
     def __init__(self):
-        self.grammar = EnglishGrammar(EnglishBaseLexicon())
-        self.parser = ChartParser(self.grammar)
-        self.builder = DRSBuilder(self.grammar)
+        self.parser = ChartParser(EnglishGrammar, EnglishBaseLexicon())
+        self.builder = DRSBuilder(EnglishGrammar)
         self.into_fol = DRS2FOL()
 
     def translate_block(self, string):

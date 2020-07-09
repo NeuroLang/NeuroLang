@@ -11,8 +11,8 @@ from ..english_grammar import EnglishGrammar, EnglishBaseLexicon
 import pytest
 
 
-_eg = EnglishGrammar(EnglishBaseLexicon())
-_cp = ChartParser(_eg)
+_eg = EnglishGrammar
+_cp = ChartParser(_eg, EnglishBaseLexicon())
 
 
 def test_simple_expression():
