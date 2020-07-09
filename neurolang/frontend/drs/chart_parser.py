@@ -36,7 +36,11 @@ class Grammar(Expression):
         self.rules = rules
 
     def __repr__(self):
-        return "Grammar {\n" + "\n".join("  " + repr(c) for c in self.rules) + "\n}"
+        return (
+            "Grammar {\n"
+            + "\n".join("  " + repr(c) for c in self.rules)
+            + "\n}"
+        )
 
 
 class Lexicon:
@@ -63,6 +67,21 @@ class Chart(list):
     pass
 
 
+class AmbiguousSentenceException(Exception):
+    def __init__(self, sentence, interpretations):
+        self.sentence = sentence
+        self.interpretations = interpretations
+        super().__init__(
+            f"The sentence '{sentence}' has multiple interpretations"
+        )
+
+
+class CouldNotParseException(Exception):
+    def __init__(self, sentence):
+        self.sentence = sentence
+        super().__init__(f"The sentence '{sentence}' is not valid")
+
+
 class ChartParser:
     Edge = namedtuple(
         "Edge", "head rule completed remaining used_edges unification"
@@ -85,7 +104,13 @@ class ChartParser:
             for e in self.chart[0][len(tokens)]
             if e.rule.is_root and not e.remaining
         ]
-        return [self._build_tree(e, e.unification) for e in compl]
+        results = [self._build_tree(e, e.unification) for e in compl]
+        if len(results) == 0:
+            raise CouldNotParseException(string)
+        if len(results) > 1:
+            raise AmbiguousSentenceException(string, results)
+
+        return results
 
     def _build_tree(self, edge, unif):
         head = _lu.substitute(edge.head, unif)
@@ -104,7 +129,6 @@ class ChartParser:
         while self.agenda:
             self.agenda.sort(key=lambda e: (-e[1], -e[2]))
             edge, i, j = self.agenda.pop()
-
             self._predict(edge, i, j)
             self._complete(edge, i, j)
 
@@ -139,10 +163,10 @@ class ChartParser:
     #
     def _predict(self, edge, i, j):
         for rule in self.grammar.rules:
-            if _lu.unify(rule.constituents[0], edge.head):
-                self.chart[i][i].append(
-                    self._create_edge_for_rule(rule)
-                )
+            if _lu.unify(rule.constituents[0], edge.head) and not any(
+                rule == e.rule for e in self.chart[i][i]
+            ):
+                self.chart[i][i].append(self._create_edge_for_rule(rule))
 
     def _create_edge_for_rule(self, rule):
         fv = extract_logic_free_variables(rule.head)
@@ -150,7 +174,7 @@ class ChartParser:
             fv |= extract_logic_free_variables(c)
         rsw = ReplaceSymbolWalker({v: Symbol.fresh() for v in fv})
         nr = rsw.walk(rule)
-        return self.Edge(None, nr, [], nr.constituents, [], dict())
+        return self.Edge(nr.head, rule, [], nr.constituents, [], dict())
 
     # If the chart contains the edges
     #   [A → α • B β , (i, j)]
@@ -193,7 +217,7 @@ class ChartParser:
                 unif,
             )
         else:
-            new_head = self._construct_head(edge_a.rule, unif)
+            new_head = _lu.substitute(edge_a.head, unif)
             return self.Edge(
                 new_head, edge_a.rule, n_completed, [], n_used_edges, unif
             )
@@ -204,11 +228,6 @@ class ChartParser:
         if not new_edge.remaining:
             self.agenda.append((new_edge, i, k))
         self.chart[i][k].append(new_edge)
-
-    def _construct_head(self, rule, unif):
-        head = rule.head
-        new_head = _lu.substitute(head, unif)
-        return new_head
 
 
 class _lu:
