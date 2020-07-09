@@ -187,3 +187,8 @@ def test_implication_if_then():
         ),
     )
     assert t == e
+
+
+def test_sentence_conjunction():
+    assert _cp.recognize("Jones owns Ulysses and Smith likes Ulysses")
+    # assert _cp.recognize("Jones owns Ulysses, Smith owns Ulysses, and Smith owns Ulysses")

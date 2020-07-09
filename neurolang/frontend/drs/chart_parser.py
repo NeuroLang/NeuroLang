@@ -67,7 +67,10 @@ class Chart(list):
     pass
 
 
-class AmbiguousSentenceException(Exception):
+class ParseException(Exception):
+    pass
+
+class AmbiguousSentenceException(ParseException):
     def __init__(self, sentence, interpretations):
         self.sentence = sentence
         self.interpretations = interpretations
@@ -76,7 +79,7 @@ class AmbiguousSentenceException(Exception):
         )
 
 
-class CouldNotParseException(Exception):
+class CouldNotParseException(ParseException):
     def __init__(self, sentence):
         self.sentence = sentence
         super().__init__(f"The sentence '{sentence}' is not valid")
@@ -92,9 +95,11 @@ class ChartParser:
         self.lexicon = lexicon
 
     def recognize(self, string):
-        tokens = string.split()
-        self._fill_chart(tokens)
-        return any(e.rule.is_root for e in self.chart[0][len(tokens)])
+        try:
+            self.parse(string)
+        except ParseException:
+            return False
+        return True
 
     def parse(self, string):
         tokens = string.split()

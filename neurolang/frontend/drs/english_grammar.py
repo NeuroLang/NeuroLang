@@ -3,6 +3,7 @@ from .chart_parser import Grammar, DictLexicon, Rule, RootRule
 
 
 S = Symbol("S")
+SL = Symbol("SL")
 NP = Symbol("NP")
 PN = Symbol("PN")
 VP = Symbol("VP")
@@ -19,6 +20,9 @@ g = Symbol("g")
 h = Symbol("h")
 w = Symbol("w")
 v = Symbol("v")
+_x = Symbol("_x")
+_y = Symbol("_y")
+_z = Symbol("_z")
 
 
 class num:
@@ -37,6 +41,8 @@ class case:
     notnom = Constant("notnom")
 
 
+
+
 EnglishGrammar = Grammar(
     (
         RootRule(S(n), (NP(n, g, case.nom), VP(n))),
@@ -44,14 +50,19 @@ EnglishGrammar = Grammar(
         RootRule(S(n), (Constant("if"), S(n), Constant("then"), S(m))),
         Rule(VP(n), (V(n), NP(m, g, case.notnom))),
         Rule(
-            NP(num.plural, Symbol.fresh(), c),
+            NP(num.plural, _x, c),
             (NP(n, g, c), Constant("and"), NP(m, h, c)),
         ),
         Rule(NP(n, g, c), (NP(n, g, c), VAR())),
-        Rule(NP(n, g, Symbol.fresh()), (PN(n, g, v),)),
-        Rule(NP(Symbol.fresh(), Symbol.fresh(), Symbol.fresh()), (VAR(),)),
-        Rule(NP(n, g, Symbol.fresh()), (DET(n), N(n, g))),
+        Rule(NP(n, g, _x), (PN(n, g, v),)),
+        Rule(NP(_x, _y, _z), (VAR(),)),
+        Rule(NP(n, g, _x), (DET(n), N(n, g))),
         Rule(NP(n, g, c), (PRO(n, g, c),)),
+
+        Rule(SL(), (S(n),)),
+        Rule(SL(), (SL(), Constant(","), S(),)),
+        RootRule(S(_x), (SL(), Constant(","), Constant("and"), S(_y),)),
+        RootRule(S(_x), (S(_y), Constant("and"), S(_z),)),
     )
 )
 
