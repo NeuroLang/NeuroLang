@@ -156,6 +156,7 @@ def separate_deterministic_probabilistic_code(
         and unclassified <= initial_unclassified_length
     ):
         pred = unclassified_code.pop(0)
+        initial_unclassified_length = len(unclassified_code)
         preds_antecedent = set(
             p.functor
             for p in extract_logic_predicates(pred.antecedent)
@@ -167,12 +168,10 @@ def separate_deterministic_probabilistic_code(
             probabilistic_symbols.add(pred.consequent.functor)
             probabilistic_program.append(pred)
             unclassified = 0
-            initial_unclassified_length = len(unclassified_code) + 1
         elif deterministic_symbols.issuperset(preds_antecedent):
             deterministic_symbols.add(pred.consequent.functor)
             deterministic_program.append(pred)
             unclassified = 0
-            initial_unclassified_length = len(unclassified_code) + 1
         else:
             unclassified_code.append(pred)
             unclassified += 1
