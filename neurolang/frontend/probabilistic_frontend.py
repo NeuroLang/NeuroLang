@@ -46,14 +46,16 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         self.ontology_loaded = False
 
     def load_ontology(self, paths, load_format="xml"):
-        onto = OntologyParser(paths, load_format)
-        d_pred, u_constraints = onto.parse_ontology()
+        self.onto = OntologyParser(paths, load_format)
+        d_pred, u_constraints = self.onto.parse_ontology()
         self.solver.walk(u_constraints)
         self.solver.add_extensional_predicate_from_tuples(
-            onto.get_triples_symbol(), d_pred[onto.get_triples_symbol()]
+            self.onto.get_triples_symbol(),
+            d_pred[self.onto.get_triples_symbol()],
         )
         self.solver.add_extensional_predicate_from_tuples(
-            onto.get_pointers_symbol(), d_pred[onto.get_pointers_symbol()]
+            self.onto.get_pointers_symbol(),
+            d_pred[self.onto.get_pointers_symbol()],
         )
 
         self.ontology_loaded = True
@@ -151,3 +153,9 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         self.solver.add_extensional_predicate_from_tuples(
             Symbol(name), iterable
         )
+
+    def get_ontology_triples_symbol(self):
+        if self.ontology_loaded:
+            return self.onto.get_triples_symbol()
+        else:
+            return None
