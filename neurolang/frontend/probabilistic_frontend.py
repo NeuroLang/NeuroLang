@@ -139,3 +139,15 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             )
         cpl.walk(probabilistic_idb)
         return cpl
+
+    def add_probabilistic_facts_from_tuples(self, iterable, name=None):
+        if name is None:
+            name = str(uuid1())
+        self.solver.add_probabilistic_facts_from_tuples(Symbol(name), iterable)
+
+    def add_extensional_predicate_from_tuples(self, iterable, name=None):
+        if name is None:
+            name = str(uuid1())
+        self.solver.add_extensional_predicate_from_tuples(
+            Symbol(name), iterable
+        )
