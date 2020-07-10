@@ -10,7 +10,7 @@ from ...expression_walker import (
     ReplaceSymbolWalker,
 )
 from .chart_parser import Quote
-from .english_grammar import S, V, NP, VP, PN, DET, N, VAR
+from .english_grammar import S, V, NP, VP, PN, DET, N, VAR, SL
 from ...logic import (
     Implication,
     Conjunction,
@@ -51,7 +51,7 @@ class DRSBuilder(ExpressionWalker):
         exps = ()
         for e in drs.expressions:
             if isinstance(e, DRS):
-                refs += e.referents
+                refs += tuple(r for r in e.referents if r not in refs)
                 exps += e.expressions
             else:
                 exps += (e,)
@@ -150,6 +150,15 @@ class DRSBuilder(ExpressionWalker):
             set(drs_con.referents) - set(drs_ant.referents)
         )
         return self.walk(Implication(drs_con, drs_ant))
+
+    @add_match(
+        Fa(Fa(S, ...), (Fa(Fa(S, ...), ...), C("and"), Fa(Fa(S, ...), ...),),),
+    )
+    def simple_and(self, s):
+        (a, _, b) = s.args
+        a = self.walk(a)
+        b = self.walk(b)
+        return self.walk(DRS((), (a, b,)))
 
 
 r = re.compile(r"^(\w+)\((\w+(,\s\w+)*)\)$")
