@@ -163,12 +163,46 @@ def test_conjunction_1():
     z = Symbol("Z")
 
     assert exp == ExistentialPredicate(
-        z, ExistentialPredicate(
-            y, ExistentialPredicate(
-                x, Conjunction((
-                    Symbol("owns")(x, y),
-                    Symbol("references")(y, z),
-                ))
-            )
-        )
+        z,
+        ExistentialPredicate(
+            y,
+            ExistentialPredicate(
+                x,
+                Conjunction(
+                    (Symbol("owns")(x, y), Symbol("references")(y, z),)
+                ),
+            ),
+        ),
+    )
+
+
+def test_conjunction_2():
+    b = DRSBuilder(_eg)
+    t = _cp.parse(
+        "a man X owns a book Y, Y references a book Z, and X likes Z"
+    )[0]
+    drs = b.walk(t)
+    exp = DRS2FOL().walk(drs)
+    x = Symbol("X")
+    y = Symbol("Y")
+    z = Symbol("Z")
+
+    assert exp == ExistentialPredicate(
+        z,
+        ExistentialPredicate(
+            y,
+            ExistentialPredicate(
+                x,
+                Conjunction(
+                    (
+                        Symbol("owns")(x, y),
+                        Symbol("book")(y),
+                        Symbol("man")(x),
+                        Symbol("references")(y, z),
+                        Symbol("book")(z),
+                        Symbol("likes")(x, z),
+                    )
+                ),
+            ),
+        ),
     )

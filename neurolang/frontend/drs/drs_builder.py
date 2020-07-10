@@ -160,6 +160,42 @@ class DRSBuilder(ExpressionWalker):
         b = self.walk(b)
         return self.walk(DRS((), (a, b,)))
 
+    @add_match(
+        Fa(
+            Fa(S, ...),
+            (Fa(Fa(SL, ...), ...), C(","), C("and"), Fa(Fa(S, ...), ...),),
+        ),
+    )
+    def comma_and(self, s):
+        (sl, _, _, s) = s.args
+        sl = self.walk(sl)
+        s = self.walk(s)
+        return self.walk(DRS((), sl + (s,)))
+
+    @add_match(
+        Fa(
+            Fa(SL, ...),
+            (Fa(Fa(S, ...), ...),),
+        ),
+    )
+    def single_sentence_list(self, sl):
+        (s,) = sl.args
+        return (self.walk(s),)
+
+    @add_match(
+        Fa(
+            Fa(SL, ...),
+            (Fa(Fa(SL, ...), ...), C(","), Fa(Fa(S, ...), ...)),
+        ),
+    )
+    def sentence_list(self, sl):
+        (sl, _, s) = sl.args
+        sl = self.walk(sl)
+        s = self.walk(s)
+        return sl + (s,)
+
+
+
 
 r = re.compile(r"^(\w+)\((\w+(,\s\w+)*)\)$")
 
