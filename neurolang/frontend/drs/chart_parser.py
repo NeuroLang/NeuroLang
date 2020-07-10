@@ -97,19 +97,30 @@ class Tokenizer:
         self.matches = []
         for q in quotes:
             self.matches.append(
-                (
-                    re.compile(f"^{q}.+?{q}\\s"),
-                    lambda span, q=q: Quote(
-                        Constant(q), Constant[str](span[1:-1])
-                    ),
-                )
+                (re.compile(f"^{q}.+?{q}"), self.yield_quote(q))
             )
+
         self.matches.append(
-            (re.compile("^\\w+?\\s"), lambda span: Constant[str](span),)
+            (re.compile("^\\w+?\\b"), self.yield_word,)
+        )
+        self.matches.append(
+            (re.compile("^,\\s"), self.yield_comma,)
         )
 
+    def yield_quote(self, q):
+        def foo(span):
+            return Quote(Constant(q), Constant[str](span[1:-1]))
+
+        return foo
+
+    def yield_word(self, span):
+        return Constant[str](span)
+
+    def yield_comma(self, span):
+        return Constant[str](",")
+
     def tokenize(self, string):
-        rem = string.strip() + " "
+        rem = string.strip()
         tokens = []
         while rem:
             t, rem = self.next_token(rem)

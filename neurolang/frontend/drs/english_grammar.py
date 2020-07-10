@@ -41,8 +41,6 @@ class case:
     notnom = Constant("notnom")
 
 
-
-
 EnglishGrammar = Grammar(
     (
         RootRule(S(n), (NP(n, g, case.nom), VP(n))),
@@ -50,21 +48,18 @@ EnglishGrammar = Grammar(
         RootRule(S(n), (Constant("if"), S(n), Constant("then"), S(m))),
         Rule(VP(n), (V(n), NP(m, g, case.notnom))),
         Rule(
-            NP(num.plural, _x, c),
-            (NP(n, g, c), Constant("and"), NP(m, h, c)),
+            NP(num.plural, _x, c), (NP(n, g, c), Constant("and"), NP(m, h, c)),
         ),
         Rule(NP(n, g, c), (NP(n, g, c), VAR())),
         Rule(NP(n, g, _x), (PN(n, g, v),)),
         Rule(NP(_x, _y, _z), (VAR(),)),
         Rule(NP(n, g, _x), (DET(n), N(n, g))),
         Rule(NP(n, g, c), (PRO(n, g, c),)),
-
         Rule(SL(), (S(n),)),
-        Rule(SL(), (SL(), Constant(","), S(),)),
+        Rule(SL(), (SL(), Constant(","), S(_y),)),
         RootRule(S(_x), (SL(), Constant(","), Constant("and"), S(_y),)),
         RootRule(S(_x), (S(_y), Constant("and"), S(_z),)),
-
-        Rule(S(n), (Quote(Constant("`"), v),))
+        Rule(S(n), (Quote(Constant("`"), v),)),
     )
 )
 
@@ -85,6 +80,9 @@ class EnglishBaseLexicon(DictLexicon):
                 "has": (V(num.singular),),
                 "likes": (V(num.singular),),
                 "intersects": (V(num.singular),),
+                "provides": (V(num.singular),),
+                "affects": (V(num.singular),),
+                "affect": (V(num.plural),),
                 "references": (V(num.singular),),
                 "own": (V(num.plural),),
                 "have": (V(num.plural),),
@@ -97,6 +95,7 @@ class EnglishBaseLexicon(DictLexicon):
                 "an": (DET(num.singular),),
                 "every": (DET(num.singular),),
                 "the": (DET(num.singular),),
+                "that": (DET(num.singular),),
                 "woman": (N(num.singular, gen.female),),
                 "stockbroker": (
                     N(num.singular, gen.female),
@@ -107,6 +106,7 @@ class EnglishBaseLexicon(DictLexicon):
                 "donkey": (N(num.singular, gen.thing),),
                 "horse": (N(num.singular, gen.thing),),
                 "region": (N(num.singular, gen.thing),),
+                "function": (N(num.singular, gen.thing),),
                 "ending": (N(num.singular, gen.thing),),
             }
         )
