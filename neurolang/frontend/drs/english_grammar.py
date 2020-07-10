@@ -1,5 +1,5 @@
 from ...expressions import Symbol, Constant
-from .chart_parser import Grammar, DictLexicon, Rule, RootRule
+from .chart_parser import Grammar, DictLexicon, Rule, RootRule, Quote
 
 
 S = Symbol("S")
@@ -63,6 +63,8 @@ EnglishGrammar = Grammar(
         Rule(SL(), (SL(), Constant(","), S(),)),
         RootRule(S(_x), (SL(), Constant(","), Constant("and"), S(_y),)),
         RootRule(S(_x), (S(_y), Constant("and"), S(_z),)),
+
+        Rule(S(n), (Quote(Constant("`"), v),))
     )
 )
 
@@ -109,8 +111,8 @@ class EnglishBaseLexicon(DictLexicon):
             }
         )
 
-    def get_meanings(self, word):
-        m = super().get_meanings(word)
-        if word.isupper():
+    def get_meanings(self, token):
+        m = super().get_meanings(token)
+        if isinstance(token, Constant) and token.value.isupper():
             m += (VAR(),)
         return m

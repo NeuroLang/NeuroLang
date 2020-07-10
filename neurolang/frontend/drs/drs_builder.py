@@ -9,6 +9,7 @@ from ...expression_walker import (
     ExpressionWalker,
     ReplaceSymbolWalker,
 )
+from .chart_parser import Quote
 from .english_grammar import S, V, NP, VP, PN, DET, N, VAR
 from ...logic import (
     Implication,
@@ -16,6 +17,7 @@ from ...logic import (
     ExistentialPredicate,
     UniversalPredicate,
 )
+import re
 
 
 def indent(s, tab="    "):
@@ -75,10 +77,7 @@ class DRSBuilder(ExpressionWalker):
         return self.walk(DRS((), (const,)))
 
     @add_match(
-        Fa(
-            Fa(S, ...),
-            (..., Fa(Fa(VP, ...), (Fa(Fa(V, ...), ...), ...)),),
-        )
+        Fa(Fa(S, ...), (..., Fa(Fa(VP, ...), (Fa(Fa(V, ...), ...), ...)),),)
     )
     def predicate(self, s):
         (subject, vp) = s.args
@@ -133,6 +132,38 @@ class DRSBuilder(ExpressionWalker):
         (_, ant, _, cons) = s.args
         return self.walk(DRS((), (Implication(cons, ant),)))
 
+    @add_match(Fa(Fa(S, ...), (Fa(Quote, (C("`"), ...)),),),)
+    def quoted_predicate(self, s):
+        exp = _parse_predicate(s.args[0].args[1].value)
+        return self.walk(DRS(exp.args, (exp,)))
+
+    @add_match(
+        Implication(DRS, DRS),
+        lambda impl: (
+            set(impl.antecedent.referents) & set(impl.consequent.referents)
+        ),
+    )
+    def implication(self, impl):
+        drs_ant = impl.antecedent
+        drs_con = impl.consequent
+        drs_con.referents = tuple(
+            set(drs_con.referents) - set(drs_ant.referents)
+        )
+        return self.walk(Implication(drs_con, drs_ant))
+
+
+r = re.compile(r"^(\w+)\((\w+(,\s\w+)*)\)$")
+
+
+def _parse_predicate(string):
+    # This could totally use the datalog parser
+    m = r.match(string)
+    if not m:
+        raise Exception(f"Quoted predicate is not valid datalog: {string}")
+    functor = Symbol(m.group(1))
+    args = map(Symbol, map(str.strip, m.group(2).split(",")))
+    return functor(*args)
+
 
 class DRS2FOL(ExpressionWalker):
     @add_match(DRS)
@@ -150,9 +181,6 @@ class DRS2FOL(ExpressionWalker):
     def implication(self, impl):
         drs_ant = impl.antecedent
         drs_con = impl.consequent
-        drs_con.referents = tuple(
-            set(drs_con.referents) - set(drs_ant.referents)
-        )
         ant = Conjunction(tuple(map(self.walk, drs_ant.expressions)))
         con = self.walk(drs_con)
         exp = Implication(con, ant)

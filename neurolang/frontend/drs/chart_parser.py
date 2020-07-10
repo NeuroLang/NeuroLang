@@ -3,6 +3,10 @@ from ...logic.expression_processing import extract_logic_free_variables
 from ...expressions import Symbol, Constant, Expression
 from ...expression_walker import ReplaceSymbolWalker
 from collections import namedtuple
+import re
+
+
+Quote = Symbol("Quote")
 
 
 class Rule(Expression):
@@ -57,18 +61,16 @@ class DictLexicon(Lexicon):
     def __init__(self, d):
         self.dict = d
 
-    def get_meanings(self, word):
-        if word not in self.dict:
-            return ()
-        return self.dict[word]
-
-
-class Chart(list):
-    pass
+    def get_meanings(self, token):
+        if isinstance(token, Constant):
+            if token.value in self.dict:
+                return self.dict[token.value]
+        return ()
 
 
 class ParseException(Exception):
     pass
+
 
 class AmbiguousSentenceException(ParseException):
     def __init__(self, sentence, interpretations):
@@ -85,6 +87,51 @@ class CouldNotParseException(ParseException):
         super().__init__(f"The sentence '{sentence}' is not valid")
 
 
+class TokenizeException(ParseException):
+    pass
+
+
+class Tokenizer:
+    def __init__(self, grammar, quotes=["`", '"']):
+        self.grammar = grammar
+        self.matches = []
+        for q in quotes:
+            self.matches.append(
+                (
+                    re.compile(f"^{q}.+?{q}\\s"),
+                    lambda span, q=q: Quote(
+                        Constant(q), Constant[str](span[1:-1])
+                    ),
+                )
+            )
+        self.matches.append(
+            (re.compile("^\\w+?\\s"), lambda span: Constant[str](span),)
+        )
+
+    def tokenize(self, string):
+        rem = string.strip() + " "
+        tokens = []
+        while rem:
+            t, rem = self.next_token(rem)
+            tokens.append(t)
+        return tokens
+
+    def next_token(self, text):
+        for r, on_match in self.matches:
+            m = r.match(text)
+            if m:
+                e = m.end()
+                span = text[:e].strip()
+                rem = text[e:].lstrip()
+                return on_match(span), rem
+
+        raise TokenizeException(f"Couldnt match token at: {text}")
+
+
+class Chart(list):
+    pass
+
+
 class ChartParser:
     Edge = namedtuple(
         "Edge", "head rule completed remaining used_edges unification"
@@ -93,6 +140,7 @@ class ChartParser:
     def __init__(self, grammar, lexicon):
         self.grammar = grammar
         self.lexicon = lexicon
+        self.tokenizer = Tokenizer(grammar)
 
     def recognize(self, string):
         try:
@@ -102,7 +150,7 @@ class ChartParser:
         return True
 
     def parse(self, string):
-        tokens = string.split()
+        tokens = self.tokenizer.tokenize(string)
         self._fill_chart(tokens)
         compl = [
             e
@@ -149,7 +197,7 @@ class ChartParser:
             ]
         )
         for i, t in enumerate(tokens):
-            word_edge = self.Edge(Constant[str](t), None, [], [], [], dict())
+            word_edge = self.Edge(t, None, [], [], [], dict())
             self.chart[i][i + 1].append(word_edge)
             self.agenda.append((word_edge, i, i + 1))
             for m in self.lexicon.get_meanings(t):
