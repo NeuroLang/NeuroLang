@@ -65,6 +65,44 @@ class TranslateToDatalog:
         raise Exception(f"Unsupported expression: {repr(exp)}")
 
 
+from neurolang.expression_walker import ExpressionWalker, add_rule
+from neurolang.logic.expression_processing import (
+    CollapseConjunctions,
+    extract_logic_free_variables,
+)
+
+
+class DistributeUniversalQuantifiers(ExpressionWalker):
+    @add_rule(UniversalPredicate(..., Conjunction))
+    def distribute_universal_quantifier(self, uq):
+        return Conjunction(
+            tuple(map(self._apply_quantifier, uq.head, uq.body.formulas))
+        )
+
+    def _apply_quantifier(self, var, exp):
+        fv = extract_logic_free_variables(exp)
+        if var in fv:
+            exp = UniversalPredicate(var, exp)
+        return exp
+
+
+class DistributeImplicationsWithConjunctiveHeads(ExpressionWalker):
+    @add_rule(Implication(Conjunction, ...))
+    def distribute_implication_with_conjunctive_head(self, impl):
+        return Conjunction(tuple(
+            Implication(h, impl.antecedent) for h in impl.consequent.formulas
+        ))
+
+
+class IntoConjunctionsOfExpressions(
+    DistributeImplicationsWithConjunctiveHeads,
+    DistributeUniversalQuantifiers,
+    CollapseConjunctions,
+    ExpressionWalker,
+):
+    pass
+
+
 class TranslateToDatalogError(Exception):
     pass
 
