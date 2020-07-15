@@ -1,9 +1,10 @@
+import operator
 import typing
 
 import pytest
 
 from ....datalog.expressions import Fact
-from ....exceptions import ForbiddenDisjunctionError
+from ....exceptions import ForbiddenBuiltinError, ForbiddenDisjunctionError
 from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Union
 from ...exceptions import (
@@ -41,7 +42,7 @@ def test_probfact():
 
 def test_deterministic_program():
     code = Union(
-        (Implication(Z(x), Conjunction((P(x), Q(x)))), Fact(Q(a)), Fact(P(a)),)
+        (Implication(Z(x), Conjunction((P(x), Q(x)))), Fact(Q(a)), Fact(P(a)))
     )
     cpl_program = CPLogicProgram()
     cpl_program.walk(code)
@@ -120,7 +121,7 @@ def test_add_probfacts_from_tuple():
     cpl = CPLogicProgram()
     cpl.walk(Union(tuple()))
     cpl.add_probabilistic_facts_from_tuples(
-        P, {(0.3, "hello", "gaston"), (0.7, "hello", "antonia"),},
+        P, {(0.3, "hello", "gaston"), (0.7, "hello", "antonia")}
     )
     assert P in cpl.pfact_pred_symbs
     assert (
@@ -135,7 +136,7 @@ def test_add_probfacts_from_tuple_no_probability():
     cpl.walk(Union(tuple()))
     with pytest.raises(MalformedProbabilisticTupleError):
         cpl.add_probabilistic_facts_from_tuples(
-            P, {("hello", "gaston"), ("hello", "antonia"),},
+            P, {("hello", "gaston"), ("hello", "antonia")}
         )
 
 
@@ -182,12 +183,3 @@ def test_add_probchoice_does_not_sum_to_one():
         cpl.add_probabilistic_choice_from_tuples(
             P, probchoice_as_tuples_iterable
         )
-
-
-def test_forbidden_disjunction():
-    rule_a = Implication(P(x), Q(x))
-    rule_b = Implication(P(y), Z(y))
-    code = Union((rule_a, rule_b))
-    cpl = CPLogicProgram()
-    with pytest.raises(ForbiddenDisjunctionError):
-        cpl.walk(code)
