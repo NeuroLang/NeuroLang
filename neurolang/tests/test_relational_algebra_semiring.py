@@ -190,12 +190,12 @@ def test_selection():
 
 def test_union():
     r1 = ProvenanceAlgebraSet(
-        NamedRelationalAlgebraFrozenSet(("_p_", "x"), [(2, "a"), (3, "b")]),
-        str2columnstr_constant("_p_"),
+        NamedRelationalAlgebraFrozenSet(("_p1_", "x"), [(2, "a"), (3, "b")]),
+        str2columnstr_constant("_p1_"),
     )
     r2 = ProvenanceAlgebraSet(
-        NamedRelationalAlgebraFrozenSet(("_p_", "x"), [(5, "b"), (10, "c")]),
-        str2columnstr_constant("_p_"),
+        NamedRelationalAlgebraFrozenSet(("_p2_", "x"), [(5, "b"), (10, "c")]),
+        str2columnstr_constant("_p2_"),
     )
     op = Union(r1, r2)
     solver = RelationalAlgebraProvenanceExpressionSemringSolver()
