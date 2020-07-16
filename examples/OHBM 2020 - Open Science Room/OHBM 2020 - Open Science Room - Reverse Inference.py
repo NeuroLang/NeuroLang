@@ -49,6 +49,10 @@ def agg_create_region(x: Iterable, y: Iterable, z: Iterable) -> fe.ExplicitVBR:
     voxels = nib.affines.apply_affine(np.linalg.inv(mni_t1.affine), np.c_[x, y, z])
     return fe.ExplicitVBR(voxels, mni_t1.affine, image_dim=mni_t1.shape)
 
+@nl.add_symbol
+def first_word(name: str) -> str:
+    return name.split(" ")[0]
+
 with nl.environment as e:    
     e.fma_related_region[e.subregion_name, e.fma_uri] = (
         label(e.xfma_entity_name, e.fma_uri) & 
@@ -83,13 +87,13 @@ with nl.environment as e:
         e.p_study[e.id_study]
     )
     
-    e.probability_voxel[e.x, e.y, e.z] = (
+    e.probability_voxel[e.id_voxel, e.x, e.y, e.z] = (
         e.p_act[e.id_voxel, e.term, e.id_study] &
         e.region_voxels[e.id_voxel, e.x, e.y, e.z]
     )
     
-    nl_results = nl.solve_all()
-    #nl_results = nl.solve_query(e.probability_voxel[e.x, e.y, e.z])
+    #nl_results = nl.solve_all()
+    nl_results = nl.solve_query(e.probability_voxel[e.id_voxel, e.x, e.y, e.z])
     
     #e.probability_voxel[nl.symbols.agg_create_region(e.x, e.y, e.z)] = (
     #    e.p_act[e.id_voxel, e.term, e.id_study] &
@@ -100,63 +104,63 @@ with nl.environment as e:
     
     #nl_results = nl.solve_query(e.final[e.region])
 
-t = nl_results['probability_voxel'].value._container.values
+t = nl_results.value._container.values
+f = [(float(prob), id_voxel, x, y, z) for z, id_voxel, x, y, prob in t]
+p_act_aud = nl.add_probabilistic_facts_from_tuples(tuple(f), name='p_act_aud');
 
-t = res['probability_voxel'].value._container.values
-f = [(voxid, x, y, z, term, prob) for voxid, x, y, z, term, prob in t if prob > 0.1]
-p_act_given_term = nl.add_tuple_set(tuple(f), name='p_act_given_term');
-
-prob_img_nl = datasets_helper.parse_results(nl_results)
+'''prob_img_nl = datasets_helper.parse_results(nl_results)
 plotting.plot_stat_map(
     prob_img_nl, 
     title='Tag "auditory" (Neurolang)', 
     cmap='PuBuGn',
     display_mode='x',
     cut_coords=np.linspace(-63, 63, 5),
-)
+)'''
 
-plotting.plot_stat_map(
+'''plotting.plot_stat_map(
     prob_img_nl, title='Tag "auditory" (Neurolang)', 
     cmap='PuBuGn',
     display_mode='y',
     cut_coords=np.linspace(-30, 5, 5),
-)
+)'''
 
-with nl.environment as e:
-    
-    e.p_act[e.id_voxel, e.term, e.id_study] = (
-        e.p_voxel_study[e.id_voxel, e.id_study] & 
-        e.p_term_study[e.term,  e.id_study] & 
-        e.p_study[e.id_study]
+# +
+from rdflib import RDF
+
+part_of = nl.new_symbol(name='http://www.obofoundry.org/ro/ro.owl#part_of')
+
+triples = nl.symbol_table[nl.get_ontology_triples_symbol().name]
+a = triples.value.as_numpy_array()
+t = [('Auditory', str(RDF.type), 'http://www.cognitiveatlas.org/ontology/cogat.owl#CAO_00148')]
+
+t = np.concatenate((a, t))
+nl.add_extensional_predicate_from_tuples(t, name=nl.get_ontology_triples_symbol().name)
+# -
+
+with nl.scope as e:
+    e.pre_part[e.x, e.y] = part_of[e.x, e.y]
+
+    e.perception_terms[e.short_name] = (
+        e.pre_part["Auditory", e.y] & 
+        subclass_of[e.z, e.y] & 
+        label(e.z, e.term) &
+        (e.short_name == nl.symbols.first_word(e.term))
     )
     
-    e.probability_voxel[e.x, e.y, e.z] = (
-        e.p_act[e.id_voxel, e.term, e.id_study] &
-        e.region_voxels[e.id_voxel, e.x, e.y, e.z]
+    e.p_term_given_act[e.term, e.voxid] = (
+        e.ns_reported_activations[e.study, e.voxid] &
+        e.perception_terms[e.term] & 
+        e.ns_term_study_associations[e.study, e.term]
     )
     
-    ns_results = nl.solve_query(e.probability_voxel[e.x, e.y, e.z])
+    e.p_term_g_aud_voxels[e.term] = (
+        e.p_term_given_act[e.term, e.voxid] &
+        e.p_act[e.voxid, e.x, e.y, e.z]
+    )
+    
+    nl_reverse = nl.solve_query(e.p_term_g_aud_voxels[e.term])
 
-prob_img_ns = datasets_helper.parse_results(ns_results)
-plotting.plot_stat_map(
-    prob_img_ns, 
-    title='Tag "auditory" (NeuroSynth)', 
-    cmap='PuBu',
-    display_mode='x',
-    cut_coords=np.linspace(-63, 63, 5),
-)
-
-plotting.plot_stat_map(
-    prob_img_ns, 
-    title='Tag "auditory" (Neurosynth)', 
-    cmap='PuBu',
-    display_mode='y',
-    cut_coords=np.linspace(-30, 5, 5),
-)
-
-
-
-
+nl_reverse
 
 
 
@@ -359,5 +363,37 @@ with nl.scope as e:
 
 
 list(res['ans2'].unwrapped_iter())
+
+from neurolang import frontend as fe
+nsh = fe.neurosynth_utils.NeuroSynthHandler()
+data = nsh.ns_term_study_associations()
+
+data
+
+import pandas as pd
+df = pd.DataFrame(data, columns=['prob', 'study', 'term'])
+df = df.astype({"prob": float, "study": int})
+
+df[df.study.isin(sample_studies[0])]
+
+sample_studies
+
+list(df[df.study.isin(sample_studies[0])].itertuples(
+            name=None, index=False
+        ))
+
+# +
+sample_studies = nsh.ns_study_ids()
+sample_studies = pd.DataFrame(sample_studies)
+
+nl.add_probabilistic_facts_from_tuples(
+        df[df.study.isin(sample_studies)].itertuples(
+            name=None, index=False
+        ),
+        name="ns_reported_activations",
+    )
+# -
+
+nsh.ns_reported_activations()
 
 

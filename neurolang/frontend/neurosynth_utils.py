@@ -133,7 +133,7 @@ class NeuroSynthHandler(object):
 
         dataset = ns.Dataset(f_neurosynth[0])
         dataset.add_features(f_neurosynth[1])
-        dataset.save(os.path.join(path, "dataset.pkl"))
+        dataset.save(os.path.join(d_neurosynth, "dataset.pkl"))
 
         return dataset
 

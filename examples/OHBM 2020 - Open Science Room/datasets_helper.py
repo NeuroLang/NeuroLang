@@ -28,6 +28,7 @@ def ns_prob_joint_voxel_study(nsh):
     df["prob"] = p_doc
     df = df.astype({"prob": float, "voxel": int, "study": int})
     return df[["prob", "voxel", "study"]]
+    
 
 
 def load_auditory_datasets(nl, n=200):
@@ -415,4 +416,30 @@ def load_reverse_inference_dataset(nl, n=100):
         urllib.request.urlretrieve(url, d_onto + "/cogat.xrdf")
         print("Dataset created in neurolang_data/ontologies")
 
-    load_auditory_datasets(nl, n=200)
+    load_auditory_datasets(nl, n)
+
+    
+
+    nsh = fe.neurosynth_utils.NeuroSynthHandler()
+
+    sample_studies = nsh.ns_study_ids()[:n]
+    sample_studies = pd.DataFrame(sample_studies)
+
+    ns_reported_activations = nsh.ns_reported_activations()
+    df = pd.DataFrame(ns_reported_activations, columns=['study', 'voxel'])
+    df = df.astype({"voxel": int, "study": int})
+    nl.add_tuple_set(
+        df[df.study.isin(sample_studies[0])].itertuples(
+            name=None, index=False
+        ),
+        name="ns_reported_activations",
+    )
+    ns_term_study_associations = nsh.ns_term_study_associations()
+    df = pd.DataFrame(ns_term_study_associations, columns=['prob', 'study', 'term'])
+    df = df.astype({"prob": float, "study": int})
+    nl.add_probabilistic_facts_from_tuples(
+        df[df.study.isin(sample_studies[0])].itertuples(
+            name=None, index=False
+        ),
+        name="ns_term_study_associations",
+    )
