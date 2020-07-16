@@ -12,6 +12,18 @@ class RelationalAlgebraStringExpression(str):
         return "{}{{ {} }}".format(self.__class__.__name__, super().__repr__())
 
 
+class RelationalAlgebraColumn:
+    pass
+
+
+class RelationalAlgebraColumnInt(int, RelationalAlgebraColumn):
+    pass
+
+
+class RelationalAlgebraColumnStr(str, RelationalAlgebraColumn):
+    pass
+
+
 class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     def __init__(self, iterable=None):
         self._container = None
@@ -92,14 +104,18 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     def __iter__(self):
         if self.is_empty():
             values = {}
+        elif self.is_dee():
+            values = {tuple()}
         else:
             self._drop_duplicates_if_needed()
-            values = self._container.values
+            values = self.itervalues()
         for v in values:
             yield tuple(v)
 
     def fetch_one(self):
-        return tuple(next(iter(self._container.values)))
+        if self.is_dee():
+            return tuple()
+        return next(self._container.itertuples(name=None, index=False))
 
     def __len__(self):
         if self._container is None:
@@ -128,6 +144,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         res = self._container.values.view()
         res.setflags(write=False)
         return res
+
+    def as_pandas_dataframe(self):
+        return self._container
 
     def _empty_set_same_structure(self):
         return type(self)()
@@ -322,7 +341,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         if self.is_empty():
             return iter([])
         else:
-            return iter(self._container.values)
+            return iter(self._container.itertuples(name=None, index=False))
 
     def __hash__(self):
         self._drop_duplicates_if_needed()
@@ -603,10 +622,10 @@ class NamedRelationalAlgebraFrozenSet(
             )
             new_containers.append(new_col)
 
-        new_container = (
-            pd.concat(new_containers, axis=1)
-            .reset_index()
-        )
+        new_container = pd.concat(new_containers, axis=1)
+
+        if len(group_columns) > 0:
+            new_container = new_container.reset_index()
 
         self._keep_column_types(
             new_container, set(aggs) |
@@ -676,6 +695,8 @@ class NamedRelationalAlgebraFrozenSet(
                         "{}={}".format(str(dst_column), str(operation)),
                         engine='python'
                     )
+            elif isinstance(operation, RelationalAlgebraColumn):
+                new_container[dst_column] = new_container[operation]
             elif callable(operation):
                 new_container[dst_column] = new_container.apply(
                     operation, axis=1
@@ -692,10 +713,14 @@ class NamedRelationalAlgebraFrozenSet(
 
     def __iter__(self):
         self._drop_duplicates_if_needed()
+        if self.is_dee():
+            return iter([tuple()])
         container = self._container[list(self.columns)]
         return container.itertuples(index=False, name="tuple")
 
     def fetch_one(self):
+        if self.is_dee():
+            return tuple()
         container = self._container[list(self.columns)]
         return next(container.itertuples(index=False, name="tuple"))
 

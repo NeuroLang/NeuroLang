@@ -563,25 +563,6 @@ def test_quantifier_expressions():
     assert res.do().value
 
 
-@patch(
-    'neurolang.frontend.neurosynth_utils.'
-    'NeuroSynthHandler.ns_region_set_from_term'
-)
-def test_neurosynth_region(mock_ns_regions):
-    mock_ns_regions.return_value = {
-        ExplicitVBR(np.array([[1, 0, 0], [1, 1, 0]]), np.eye(4))
-    }
-    neurolang = frontend.RegionFrontend()
-    s = neurolang.load_neurosynth_term_regions(
-        'gambling', 10, 'gambling_regions'
-    )
-    res = neurolang[s]
-    mock_ns_regions.assert_called()
-
-    assert res.type is AbstractSet[Tuple[ExplicitVBR]]
-    assert res.value == frozenset((t,) for t in mock_ns_regions.return_value)
-
-
 def test_translate_expression_to_fronted_expression():
     qr = frontend.NeurolangDL()
     tr = qre.TranslateExpressionToFrontEndExpression(qr)
