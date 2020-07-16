@@ -62,3 +62,55 @@ def test_set_type_semiring():
         str2columnstr_constant("_p_"),
     )
     assert testing.eq_prov_relations(result, expected)
+
+
+class StringTestType:
+    def __init__(self, value):
+        self.value = value
+
+    def __add__(self, other):
+        return StringTestType(self.value + other.value)
+
+    def __mul__(self, other):
+        return StringTestType(self.value * len(other.value))
+
+    def __eq__(self, other):
+        return self.value == other.value
+
+    def __hash__(self):
+        return hash(self.value)
+
+
+def test_string_semiring():
+    r1 = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            ("_p_", "word"),
+            [
+                (StringTestType("walter"), "say"),
+                (StringTestType("white"), "my"),
+                (StringTestType("heisenberg"), "name"),
+            ],
+        ),
+        str2columnstr_constant("_p_"),
+    )
+    r2 = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            ("_p_", "word"),
+            [(StringTestType("he"), "my"), (StringTestType("the"), "name")],
+        ),
+        str2columnstr_constant("_p_"),
+    )
+    op = NaturalJoin(r1, r2)
+    solver = RelationalAlgebraProvenanceExpressionSemringSolver()
+    result = solver.walk(op)
+    expected = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            ("_p_", "word"),
+            [
+                (StringTestType("white" * 2), "my"),
+                (StringTestType("heisenberg" * 3), "name"),
+            ],
+        ),
+        str2columnstr_constant("_p_"),
+    )
+    assert testing.eq_prov_relations(result, expected)
