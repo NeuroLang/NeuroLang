@@ -11,12 +11,6 @@ from nilearn.datasets import utils
 from neurolang import frontend as fe
 from neurolang.regions import region_union
 
-<<<<<<< HEAD
-=======
->>>>>>> OHBM_release
-
-
-
 
 def ns_prob_joint_term_study(nsh, term=None):
     studies_term = nsh.ns_study_tfidf_feature_for_terms(terms=term)
