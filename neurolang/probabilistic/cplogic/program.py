@@ -4,7 +4,7 @@ from ...datalog import DatalogProgram
 from ...exceptions import ForbiddenDisjunctionError
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
-from ...expressions import Constant, Symbol
+from ...expressions import Constant, FunctionApplication, Symbol
 from ...logic import Implication, Union
 from ..exceptions import MalformedProbabilisticTupleError
 from ..expression_processing import (
@@ -15,6 +15,15 @@ from ..expression_processing import (
     is_probabilistic_fact,
     union_contains_probabilistic_facts,
 )
+from ..expressions import PROB
+from ...datalog.basic_representation import UnionOfConjunctiveQueries
+
+
+def is_within_language_succ_query(implication):
+    return any(
+        isinstance(arg, FunctionApplication) and arg.functor == PROB
+        for arg in implication.consequent.args
+    )
 
 
 class CPLogicMixin(PatternWalker):
@@ -188,6 +197,17 @@ class CPLogicMixin(PatternWalker):
             self.symbol_table[pred_symb], [expression]
         )
         return expression
+
+    @add_match(Implication, is_within_language_succ_query)
+    def within_language_succ_query(self, implication):
+        pred_symb = implication.consequent.functor.cast(
+            UnionOfConjunctiveQueries
+        )
+        if pred_symb in self.symbol_table:
+            raise ForbiddenDisjunctionError(
+                "Disjunctive within-language queries are not allowed"
+            )
+        self.symbol_table[pred_symb] = implication
 
 
 class CPLogicProgram(CPLogicMixin, DatalogProgram, ExpressionWalker):

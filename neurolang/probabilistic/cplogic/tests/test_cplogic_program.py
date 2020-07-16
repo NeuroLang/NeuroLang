@@ -11,7 +11,7 @@ from ...exceptions import (
     DistributionDoesNotSumToOneError,
     MalformedProbabilisticTupleError,
 )
-from ...expressions import ProbabilisticPredicate
+from ...expressions import PROB, ProbabilisticPredicate
 from ..program import CPLogicProgram
 
 P = Symbol("P")
@@ -183,3 +183,10 @@ def test_add_probchoice_does_not_sum_to_one():
         cpl.add_probabilistic_choice_from_tuples(
             P, probchoice_as_tuples_iterable
         )
+
+
+def test_within_language_succ_query():
+    rule = Implication(P(x, y, PROB(x, y)), Conjunction((Q(x), Z(y, z))))
+    cpl = CPLogicProgram()
+    cpl.walk(rule)
+    assert P in cpl.intensional_database()
