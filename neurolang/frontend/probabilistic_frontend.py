@@ -9,18 +9,17 @@ from ..datalog.ontologies_rewriter import OntologyRewriter
 from ..expression_walker import ExpressionBasicEvaluator
 from ..expressions import Symbol, Unknown
 from ..logic import Union
-from ..probabilistic.cplogic.problog_solver import (
-    solve_succ_all as problog_solve_succ_all,
-)
+from ..probabilistic.cplogic.problog_solver import \
+    solve_succ_all as problog_solve_succ_all
 from ..probabilistic.cplogic.program import CPLogicMixin, CPLogicProgram
 from ..probabilistic.expression_processing import (
-    separate_deterministic_probabilistic_code,
+    separate_deterministic_probabilistic_code
 )
 from ..probabilistic.weighted_model_counting import solve_succ_query
 from ..region_solver import RegionSolver
 from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
-    RelationalAlgebraStringExpression,
+    RelationalAlgebraStringExpression
 )
 from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from . import QueryBuilderDatalog
@@ -47,14 +46,16 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         self.ontology_loaded = False
 
     def load_ontology(self, paths, load_format="xml"):
-        onto = OntologyParser(paths, load_format)
-        d_pred, u_constraints = onto.parse_ontology()
+        self.onto = OntologyParser(paths, load_format)
+        d_pred, u_constraints = self.onto.parse_ontology()
         self.solver.walk(u_constraints)
         self.solver.add_extensional_predicate_from_tuples(
-            onto.get_triples_symbol(), d_pred[onto.get_triples_symbol()]
+            self.onto.get_triples_symbol(),
+            d_pred[self.onto.get_triples_symbol()],
         )
         self.solver.add_extensional_predicate_from_tuples(
-            onto.get_pointers_symbol(), d_pred[onto.get_pointers_symbol()]
+            self.onto.get_pointers_symbol(),
+            d_pred[self.onto.get_pointers_symbol()],
         )
 
         self.ontology_loaded = True
@@ -66,7 +67,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         ) = separate_deterministic_probabilistic_code(self.solver)
 
         if self.ontology_loaded:
-            eB = self._rewrite_database_with_ontology(deterministic_idb)
+            eB = self._rewrite_program_with_ontology(deterministic_idb)
             deterministic_idb = Union(deterministic_idb.formulas + eB.formulas)
 
         solution = self.chase_class(
@@ -165,3 +166,21 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             )
         cpl.walk(probabilistic_idb)
         return cpl
+
+    def add_probabilistic_facts_from_tuples(self, iterable, name=None):
+        if name is None:
+            name = str(uuid1())
+        self.solver.add_probabilistic_facts_from_tuples(Symbol(name), iterable)
+
+    def add_extensional_predicate_from_tuples(self, iterable, name=None):
+        if name is None:
+            name = str(uuid1())
+        self.solver.add_extensional_predicate_from_tuples(
+            Symbol(name), iterable
+        )
+
+    def get_ontology_triples_symbol(self):
+        if self.ontology_loaded:
+            return self.onto.get_triples_symbol()
+        else:
+            return None

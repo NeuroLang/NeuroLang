@@ -29,7 +29,6 @@ class OntologyRewriter:
         G. Gottlob, G. Orsi, and A. Pieris,
         “Query Rewriting and Optimization for Ontological Databases,”
         ACM Transactions on Database Systems, vol. 39, May 2014."""
-        rename_count = 0
         Q_rew = set({})
         for t in self.query.formulas:
             Q_rew.add((t, "r", "u"))
@@ -44,7 +43,7 @@ class OntologyRewriter:
                     continue
                 q0 = q[0]
                 for sigma in sigma_free_vars:
-                    Q_rew = self.rewriting_step(q0, sigma, rename_count, Q_rew)
+                    Q_rew = self.rewriting_step(q0, sigma, Q_rew)
                     Q_rew = self.factorization_step(q0, sigma, Q_rew)
 
                 Q_rew.remove(q)
@@ -62,12 +61,11 @@ class OntologyRewriter:
 
         return sigma_free_vars
 
-    def rewriting_step(self, q0, sigma, rename_count, Q_rew):
+    def rewriting_step(self, q0, sigma, Q_rew):
         body_q = q0.antecedent
         S_applicable = self._get_applicable(sigma, body_q)
         for S in S_applicable:
-            rename_count += 1
-            sigma_i = self._rename(sigma[0], rename_count)
+            sigma_i = self._rename(sigma[0])
             qS = most_general_unifier(sigma_i.consequent, S)
             if qS:
                 new_q0 = self._combine_rewriting(q0, qS, S, sigma_i.antecedent)
@@ -232,26 +230,25 @@ class OntologyRewriter:
             count = sum(a == term for term in q.args)
         return count > 1
 
-    def _rename(self, sigma, index):
+    def _rename(self, sigma):
         renamed = set({})
-        a, renamed = self._replace(sigma.antecedent, index, renamed)
-        b, renamed = self._replace(sigma.consequent, index, renamed)
+        a, renamed = self._replace(sigma.antecedent, renamed)
+        b, renamed = self._replace(sigma.consequent, renamed)
         sus = {**a, **b}
         sigma = ReplaceSymbolWalker(sus).walk(sigma)
 
         return sigma
 
-    def _replace(self, sigma, index, renamed):
+    def _replace(self, sigma, renamed):
         new_args = {}
         if isinstance(sigma, NaryLogicOperator):
             for app in sigma.formulas:
-                new_arg, renamed = self._replace(app, index, renamed)
+                new_arg, renamed = self._replace(app, renamed)
                 new_args = {**new_args, **new_arg}
         else:
             for arg in sigma.args:
                 if arg not in renamed and isinstance(arg, Symbol):
                     temp = arg.fresh()
-                    temp.name = arg.name + str(index)
                     new_args[arg] = temp
                 renamed.add(arg)
         return new_args, renamed

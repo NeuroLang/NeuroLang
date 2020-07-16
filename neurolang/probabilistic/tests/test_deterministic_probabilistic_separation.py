@@ -14,16 +14,13 @@ from ..expression_processing import separate_deterministic_probabilistic_code
 
 
 class ProbabilisticSolver(
-    RegionSolver, CPLogicMixin, DatalogProgram, ExpressionBasicEvaluator
+    CPLogicMixin, DatalogProgram, ExpressionBasicEvaluator
 ):
     pass
 
 
 class ProbabilisticOntologySolver(
-    RegionSolver,
-    CPLogicMixin,
-    DatalogConstraintsProgram,
-    ExpressionBasicEvaluator,
+    CPLogicMixin, DatalogConstraintsProgram, ExpressionBasicEvaluator
 ):
     pass
 

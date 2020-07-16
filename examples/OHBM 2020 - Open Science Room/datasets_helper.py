@@ -11,20 +11,26 @@ from nilearn.datasets import utils
 from neurolang import frontend as fe
 from neurolang.regions import region_union
 
+<<<<<<< HEAD
+=======
+>>>>>>> OHBM_release
+
+
+
 
 def ns_prob_joint_term_study(nsh, term=None):
     studies_term = nsh.ns_study_tfidf_feature_for_terms(terms=term)
     df = pd.DataFrame(studies_term, columns=["study", "term", "prob"])
-    p_doc = 1 / len(nsh.ns_load_all_study_ids())
+    p_doc = 1 / len(nsh.ns_study_ids())
     df["prob"] = df["prob"] * p_doc
     df = df.astype({"prob": float, "study": int})
     return df[df.prob > 0][["prob", "term", "study"]]
 
 
 def ns_prob_joint_voxel_study(nsh):
-    data = nsh.ns_load_reported_activations()
+    data = nsh.ns_reported_activations()
     df = pd.DataFrame(data, columns=["study", "voxel"])
-    p_doc = 1 / len(nsh.ns_load_all_study_ids())
+    p_doc = 1 / len(nsh.ns_study_ids())
     df["prob"] = p_doc
     df = df.astype({"prob": float, "voxel": int, "study": int})
     return df[["prob", "voxel", "study"]]
@@ -41,7 +47,7 @@ def load_auditory_datasets(nl, n=200):
 
     nsh = fe.neurosynth_utils.NeuroSynthHandler()
 
-    sample_studies = nsh.ns_load_all_study_ids()[:n]
+    sample_studies = nsh.ns_study_ids()[:n]
     sample_studies = pd.DataFrame(sample_studies)
     nl.add_uniform_probabilistic_choice_over_set(
         list(sample_studies.itertuples(name=None, index=False)), name="p_study"
@@ -365,7 +371,7 @@ def load_pain_datasets(nl, n=100):
 
     nsh = fe.neurosynth_utils.NeuroSynthHandler()
 
-    sample_studies = nsh.ns_load_all_study_ids()[:n]
+    sample_studies = nsh.ns_study_ids()[:n]
     sample_studies = pd.DataFrame(sample_studies)
     nl.add_uniform_probabilistic_choice_over_set(
         list(sample_studies.itertuples(name=None, index=False)), name="p_study"
@@ -373,8 +379,7 @@ def load_pain_datasets(nl, n=100):
 
     # df = ns_prob_joint_term_study(nsh)
     df = pd.DataFrame(
-        nsh.ns_load_term_study_associations(),
-        columns=["prob", "study", "term"],
+        nsh.ns_term_study_associations(), columns=["prob", "study", "term"]
     )
     nl.add_probabilistic_facts_from_tuples(
         df[df.study.isin(sample_studies[0])].itertuples(
@@ -405,3 +410,15 @@ def load_pain_datasets(nl, n=100):
         [(x, y, z, int(id_)) for id_, x, y, z in vox_id_MNI],
         name="xyz_neurosynth",
     )
+
+
+def load_reverse_inference_dataset(nl, n=100):
+
+    d_onto = utils._get_dataset_dir("ontologies", data_dir="neurolang_data")
+    if not os.path.exists(d_onto + "/cogat.xrdf"):
+        print("Downloading CogAt ontology")
+        url = "http://data.bioontology.org/ontologies/COGAT/download?apikey=8b5b7825-538d-40e0-9e9e-5ab9274a9aeb&download_format=rdf"
+        urllib.request.urlretrieve(url, d_onto + "/cogat.xrdf")
+        print("Dataset created in neurolang_data/ontologies")
+
+    load_auditory_datasets(nl, n=200)
