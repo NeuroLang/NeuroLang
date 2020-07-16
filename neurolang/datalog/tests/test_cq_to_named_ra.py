@@ -16,7 +16,7 @@ from ...relational_algebra import (
     NaturalJoin,
     Projection,
     RenameColumn,
-    Selection,
+    Selection
 )
 from ...utils import NamedRelationalAlgebraFrozenSet
 from ..expressions import Conjunction, Negation
@@ -28,16 +28,16 @@ F_ = FunctionApplication
 
 
 def test_translate_set():
-    x = S_("x")
-    y = S_("y")
-    R1 = S_("R1")
+    x = S_('x')
+    y = S_('y')
+    R1 = S_('R1')
     fa = R1(x, y)
 
     tr = TranslateToNamedRA()
     res = tr.walk(fa)
     assert res == NameColumns(
         Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
-        (Constant(ColumnStr("x")), Constant(ColumnStr("y"))),
+        (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
     )
 
     fa = R1(C_(1), y)
@@ -46,20 +46,22 @@ def test_translate_set():
     res = tr.walk(fa)
     assert res == NameColumns(
         Projection(
-            Selection(R1, C_(eq)(C_(ColumnInt(0)), C_(1))), (C_(ColumnInt(1)),)
+            Selection(R1, C_(eq)(C_(ColumnInt(0)), C_(1))),
+            (C_(ColumnInt(1)),)
         ),
-        (Constant(ColumnStr("y")),),
+        (Constant(ColumnStr('y')),)
     )
 
 
 def test_equality_constant_symbol():
-    x = S_("x")
-    a = C_("a")
-    R1 = S_("R1")
+    x = S_('x')
+    a = C_('a')
+    R1 = S_('R1')
 
-    expected_result = C_[AbstractSet[Tuple[str]]](
-        NamedRelationalAlgebraFrozenSet(("x",), {"a"})
-    )
+    expected_result = \
+        C_[AbstractSet[Tuple[str]]](
+            NamedRelationalAlgebraFrozenSet(('x',), {'a'})
+        )
 
     fa = C_(eq)(x, a)
     tr = TranslateToNamedRA()
@@ -71,7 +73,7 @@ def test_equality_constant_symbol():
     res = tr.walk(Conjunction((fa,)))
     assert res == expected_result
 
-    y = S_("y")
+    y = S_('y')
     fb = R1(x, y)
 
     exp = Conjunction((fb, fa))
@@ -79,9 +81,9 @@ def test_equality_constant_symbol():
     expected_result = Selection(
         NameColumns(
             Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
-            (Constant(ColumnStr("x")), Constant(ColumnStr("y"))),
+            (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
         ),
-        C_(eq)(C_(ColumnStr("x")), a),
+        C_(eq)(C_(ColumnStr('x')), a)
     )
 
     res = tr.walk(exp)
@@ -89,23 +91,24 @@ def test_equality_constant_symbol():
 
 
 def test_equality_symbols():
-    x = S_("x")
-    y = S_("y")
-    z = S_("z")
-    w = S_("w")
-    R1 = S_("R1")
+    x = S_('x')
+    y = S_('y')
+    z = S_('z')
+    w = S_('w')
+    R1 = S_('R1')
 
-    y = S_("y")
+    y = S_('y')
     fb = R1(x, y)
     fb_trans = NameColumns(
         Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
-        (Constant(ColumnStr("x")), Constant(ColumnStr("y"))),
+        (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
     )
 
     exp = Conjunction((fb, C_(eq)(x, y)))
 
     expected_result = Selection(
-        fb_trans, C_(eq)(C_(ColumnStr("x")), C_(ColumnStr("y")))
+        fb_trans,
+        C_(eq)(C_(ColumnStr('x')), C_(ColumnStr('y')))
     )
 
     tr = TranslateToNamedRA()
@@ -115,13 +118,9 @@ def test_equality_symbols():
     exp = Conjunction((fb, C_(eq)(x, z)))
 
     expected_result = Selection(
-        NaturalJoin(
-            fb_trans,
-            RenameColumn(
-                fb_trans, Constant(ColumnStr("x")), Constant(ColumnStr("z"))
-            ),
-        ),
-        C_(eq)(C_(ColumnStr("x")), C_(ColumnStr("z"))),
+        NaturalJoin(fb_trans, RenameColumn(fb_trans, Constant(ColumnStr('x')),
+                                           Constant(ColumnStr('z')))),
+        C_(eq)(C_(ColumnStr('x')), C_(ColumnStr('z')))
     )
 
     res = tr.walk(exp)
@@ -130,13 +129,9 @@ def test_equality_symbols():
     exp = Conjunction((fb, C_(eq)(z, x)))
 
     expected_result = Selection(
-        NaturalJoin(
-            fb_trans,
-            RenameColumn(
-                fb_trans, Constant(ColumnStr("x")), Constant(ColumnStr("z"))
-            ),
-        ),
-        C_(eq)(C_(ColumnStr("z")), C_(ColumnStr("x"))),
+        NaturalJoin(fb_trans, RenameColumn(fb_trans, Constant(ColumnStr('x')),
+                                           Constant(ColumnStr('z')))),
+        C_(eq)(C_(ColumnStr('z')), C_(ColumnStr('x')))
     )
 
     res = tr.walk(exp)
@@ -148,33 +143,33 @@ def test_equality_symbols():
 
 
 def test_joins():
-    x = S_("x")
-    y = S_("y")
-    z = S_("z")
-    R1 = S_("R1")
+    x = S_('x')
+    y = S_('y')
+    z = S_('z')
+    R1 = S_('R1')
     fa = R1(x, y)
     fb = R1(y, z)
     exp = Conjunction((fa, fb))
 
     fa_trans = NameColumns(
         Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
-        (Constant(ColumnStr("x")), Constant(ColumnStr("y"))),
+        (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
     )
 
     fb_trans = NameColumns(
         Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
-        (Constant(ColumnStr("y")), Constant(ColumnStr("z"))),
+        (Constant(ColumnStr('y')), Constant(ColumnStr('z')))
     )
 
     tr = TranslateToNamedRA()
     res = tr.walk(exp)
     assert res == NaturalJoin(fa_trans, fb_trans)
 
-    R2 = S_("R2")
+    R2 = S_('R2')
     fb = R2(x, y)
     fb_trans = NameColumns(
         Projection(R2, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
-        (Constant(ColumnStr("x")), Constant(ColumnStr("y"))),
+        (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
     )
     exp = Conjunction((fa, Negation(fb)))
 
@@ -186,9 +181,10 @@ def test_joins():
     fb = R2(y, C_(0))
     fb_trans = NameColumns(
         Projection(
-            Selection(R2, C_(eq)(C_(ColumnInt(1)), C_(0))), (C_(ColumnInt(0)),)
+            Selection(R2, C_(eq)(C_(ColumnInt(1)), C_(0))),
+            (C_(ColumnInt(0)),)
         ),
-        (Constant(ColumnStr("y")),),
+        (Constant(ColumnStr('y')),)
     )
 
     exp = Conjunction((fa, Negation(fb)))
@@ -200,9 +196,9 @@ def test_joins():
 
 
 def test_selection():
-    x = S_("x")
-    y = S_("y")
-    R1 = S_("R1")
+    x = S_('x')
+    y = S_('y')
+    R1 = S_('R1')
     fa = R1(x, y)
     builtin_condition = C_(gt)(x, C_(3))
     exp = Conjunction((fa, builtin_condition))
@@ -211,16 +207,16 @@ def test_selection():
     res = tr.walk(exp)
     fa_trans = NameColumns(
         Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
-        (Constant(ColumnStr("x")), Constant(ColumnStr("y"))),
+        (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
     )
     assert res == Selection(fa_trans, builtin_condition)
 
 
 def test_extended_projection():
-    x = S_("x")
-    y = S_("y")
-    z = S_("z")
-    R1 = S_("R1")
+    x = S_('x')
+    y = S_('y')
+    z = S_('z')
+    R1 = S_('R1')
     fa = R1(x, y)
     builtin_condition = C_(eq)(C_(mul)(x, C_(3)), z)
     exp = Conjunction((fa, builtin_condition))
@@ -229,18 +225,16 @@ def test_extended_projection():
     res = tr.walk(exp)
     fa_trans = NameColumns(
         Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
-        (Constant(ColumnStr("x")), Constant(ColumnStr("y"))),
+        (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
     )
     exp_trans = ExtendedProjection(
-        fa_trans,
-        [
+        fa_trans, [
             ExtendedProjectionListMember(*builtin_condition.args),
             ExtendedProjectionListMember(x, x),
-            ExtendedProjectionListMember(y, y),
-        ],
+            ExtendedProjectionListMember(y, y)
+        ]
     )
     assert res == exp_trans
-
 
 def test_extended_projection_2():
     u = S_("u")
@@ -289,9 +283,9 @@ def test_extended_projection_2():
 
 
 def test_extended_projection_algebraic_expression():
-    x = S_("x")
-    y = S_("y")
-    R1 = S_("R1")
+    x = S_('x')
+    y = S_('y')
+    R1 = S_('R1')
     fa = R1(x, y)
     builtin_condition = C_(eq)(C_(mul)(C_(2), C_(3)), y)
     exp = Conjunction((fa, builtin_condition))
@@ -300,17 +294,17 @@ def test_extended_projection_algebraic_expression():
     res = tr.walk(exp)
     fa_trans = NameColumns(
         Projection(R1, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
-        (Constant(ColumnStr("x")), Constant(ColumnStr("y"))),
+        (Constant(ColumnStr('x')), Constant(ColumnStr('y')))
     )
     assert res == Selection(
-        fa_trans, Constant(eq)(Constant(ColumnStr("y")), Constant(6))
+        fa_trans, Constant(eq)(Constant(ColumnStr('y')), Constant(6))
     )
 
 
 def test_set_destroy():
-    r1 = S_("R1")
-    x = S_("x")
-    y = S_("y")
+    r1 = S_('R1')
+    x = S_('x')
+    y = S_('y')
 
     tr = TranslateToNamedRA()
 
@@ -318,138 +312,196 @@ def test_set_destroy():
     res = tr.walk(exp)
 
     exp_result = Destroy(
-        NameColumns(Projection(r1, (C_(0),)), (C_("x"),)), x, y
+        NameColumns(Projection(r1, (C_(0),)), (C_('x'),)),
+        x, y
     )
     assert res == exp_result
 
 
 def test_set_destroy_multicolumn():
-    r1 = S_("R1")
-    x = S_("x")
-    y = S_("y")
-    z = S_("z")
+    r1 = S_('R1')
+    x = S_('x')
+    y = S_('y')
+    z = S_('z')
 
     tr = TranslateToNamedRA()
     exp = Conjunction((C_(contains)(x, C_((y, z))), r1(x)))
     res = tr.walk(exp)
 
     exp_result = Destroy(
-        NameColumns(Projection(r1, (C_(0),)), (C_("x"),)),
-        x,
-        C_[Tuple[ColumnStr, ColumnStr]]((ColumnStr("y"), ColumnStr("z"))),
+        NameColumns(Projection(r1, (C_(0),)), (C_('x'),)),
+        x, C_[Tuple[ColumnStr, ColumnStr]]((ColumnStr('y'), ColumnStr('z')))
     )
     assert res == exp_result
 
 
 def test_set_constant_contains():
-    r1 = S_("R1")
-    x = S_("x")
+    r1 = S_('R1')
+    x = S_('x')
     exp = Conjunction((C_(contains)(x, C_(0)), r1(x)))
 
     tr = TranslateToNamedRA()
     res = tr.walk(exp)
 
     exp_result = Selection(
-        NameColumns(Projection(r1, (C_(0),)), (C_("x"),)),
-        C_(contains)(x, C_(0)),
+        NameColumns(Projection(r1, (C_(0),)), (C_('x'),)),
+        C_(contains)(x, C_(0))
     )
     assert res == exp_result
 
 
 def test_only_equality():
-    exp = Conjunction((C_(eq)(S_("x"), C_(3)),))
+    exp = Conjunction((C_(eq)(S_('x'), C_(3)),))
 
     res = TranslateToNamedRA().walk(exp)
 
-    exp_result = NamedRelationalAlgebraFrozenSet(("x",), (3,))
+    exp_result = NamedRelationalAlgebraFrozenSet(('x',), (3,))
 
     assert isinstance(res, Constant)
     assert res.value == exp_result
 
 
 def test_border_cases():
-    R1 = S_("R1")
-    x = S_("x")
-    y = S_("y")
-    z = S_("z")
+    R1 = S_('R1')
+    x = S_('x')
+    y = S_('y')
+    z = S_('z')
 
     tr = TranslateToNamedRA()
 
-    exp = Conjunction((R1(x), C_(eq)(x, x)))
+    exp = Conjunction((
+        R1(x),
+        C_(eq)(x, x)
+    ))
     res = tr.walk(exp)
 
     assert res == NameColumns(
-        Projection(R1, (C_(0),)), (Constant(ColumnStr("x")),)
+        Projection(R1, (C_(0),)),
+        (Constant(ColumnStr('x')),)
     )
 
-    exp = Conjunction((Negation(Negation(R1(x))),))
+    exp = Conjunction((
+        Negation(Negation(R1(x))),
+    ))
     res = tr.walk(exp)
 
     assert res == NameColumns(
-        Projection(R1, (C_(0),)), (Constant(ColumnStr("x")),)
+        Projection(R1, (C_(0),)),
+        (Constant(ColumnStr('x')),)
     )
 
     tr = TranslateToNamedRA()
 
-    exp = Conjunction((R1(x), C_(eq)(x, y), C_(eq)(z, C_(2) * y)))
+    exp = Conjunction((
+        R1(x),
+        C_(eq)(x, y),
+        C_(eq)(z, C_(2) * y)
+    ))
     res = tr.walk(exp)
-    expected_res = ExtendedProjection(
-        Selection(
-            NaturalJoin(
-                NameColumns(Projection(R1, (C_(0),)), (C_("x"),)),
-                RenameColumn(
-                    NameColumns(Projection(R1, (C_(0),)), (C_("x"),)),
-                    C_("x"),
-                    C_("y"),
+    expected_res = (
+        ExtendedProjection(
+            Selection(
+                NaturalJoin(
+                    NameColumns(
+                        Projection(R1, (C_(0),)),
+                        (C_('x'),)
+                    ),
+                    RenameColumn(
+                        NameColumns(
+                            Projection(R1, (C_(0),)),
+                            (C_('x'),)
+                        ),
+                        C_('x'),
+                        C_('y')
+                    )
                 ),
+                C_(eq)(C_('x'), C_('y'))
             ),
-            C_(eq)(C_("x"), C_("y")),
-        ),
-        (
-            ExtendedProjectionListMember(C_("x"), C_("x")),
-            ExtendedProjectionListMember(C_("y"), C_("y")),
-            ExtendedProjectionListMember(C_(2) * C_("y"), C_("z")),
-        ),
+            (
+                ExtendedProjectionListMember(C_('x'), C_('x')),
+                ExtendedProjectionListMember(C_('y'), C_('y')),
+                ExtendedProjectionListMember(C_(2) * C_('y'), C_('z')),
+            )
+        )
     )
     assert res == expected_res
 
 
 def test_border_case_2():
-    T = Symbol[AbstractSet[int]]("T")
-    x = Symbol[int]("x")
-    y = Symbol[int]("y")
+    T = Symbol[AbstractSet[int]]('T')
+    x = Symbol[int]('x')
+    y = Symbol[int]('y')
 
     def gtz_f(x):
         return x > 0
 
     gtz = Constant(gtz_f)
 
-    exp = Conjunction((T(x), Negation(gtz(x))))
+    exp = Conjunction((
+        T(x),
+        Negation(
+            gtz(x)
+        )
+    ))
 
     expected_res = Selection(
-        NameColumns(Projection(T, (C_(0),)), (C_(ColumnStr("x")),)),
-        C_(not_)(gtz(C_(ColumnStr("x")))),
+        NameColumns(
+            Projection(
+                T,
+                (C_(0),)
+            ),
+            (C_(ColumnStr('x')),)
+        ),
+        C_(not_)(
+            gtz(C_(ColumnStr('x')))
+        )
     )
 
     res = TranslateToNamedRA().walk(exp)
     assert res == expected_res
 
-    exp = Conjunction((T(x), Negation(C_(eq)(x, C_(3)))))
+    exp = Conjunction((
+        T(x),
+        Negation(
+            C_(eq)(x, C_(3))
+        )
+    ))
 
     res = TranslateToNamedRA().walk(exp)
 
     expected_res = Selection(
-        NameColumns(Projection(T, (C_(0),)), (C_(ColumnStr("x")),)),
-        C_(not_)(C_(eq)(C_(ColumnStr("x")), C_(3))),
+        NameColumns(
+            Projection(
+                T,
+                (C_(0),)
+            ),
+            (C_(ColumnStr('x')),)
+        ),
+        C_(not_)(
+            C_(eq)(C_(ColumnStr('x')), C_(3))
+        )
     )
     assert res == expected_res
 
-    exp = Conjunction((T(x, y), Negation(C_(eq)(x, y))))
+    exp = Conjunction((
+        T(x, y),
+        Negation(
+            C_(eq)(x, y)
+        )
+    ))
 
     res = TranslateToNamedRA().walk(exp)
 
     expected_res = Selection(
-        NameColumns(Projection(T, (C_(0), C_(1))), (C_("x"), C_("y"))),
-        C_(not_)(C_(eq)(C_(ColumnStr("x")), C_(ColumnStr("y")))),
+        NameColumns(
+            Projection(
+                T,
+                (C_(0), C_(1))
+            ),
+            (C_('x'), C_('y'))
+        ),
+        C_(not_)(
+            C_(eq)(C_(ColumnStr('x')), C_(ColumnStr('y')))
+        )
     )
     assert res == expected_res
