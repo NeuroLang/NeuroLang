@@ -1,9 +1,12 @@
+import operator
+
 from ..probabilistic.cplogic import testing
 from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     NaturalJoin,
     Projection,
     str2columnstr_constant,
+    RenameColumn,
 )
 from ..relational_algebra_provenance import (
     ProvenanceAlgebraSet,
@@ -131,6 +134,29 @@ def test_multiple_columns():
     expected = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
             ("_p_", "x"), [(63, "a"), (101, "b"),],
+        ),
+        str2columnstr_constant("_p_"),
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_renaming():
+    r = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            ("_p_", "x", "y"),
+            [(42, "a", "b"), (21, "a", "z"), (12, "b", "y"), (89, "b", "h"),],
+        ),
+        str2columnstr_constant("_p_"),
+    )
+    op = RenameColumn(
+        r, str2columnstr_constant("x"), str2columnstr_constant("z"),
+    )
+    solver = RelationalAlgebraProvenanceExpressionSemringSolver()
+    result = solver.walk(op)
+    expected = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            ("_p_", "z", "y"),
+            [(42, "a", "b"), (21, "a", "z"), (12, "b", "y"), (89, "b", "h"),],
         ),
         str2columnstr_constant("_p_"),
     )
