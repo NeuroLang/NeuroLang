@@ -413,7 +413,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
     def projection_rap(self, projection):
         cols = tuple(v.value for v in projection.attributes)
         projected_relation = projection.relation.relations.aggregate(
-            cols, {projection.relation.provenance_column: sum}
+            cols, {projection.relation.provenance_column.value: sum}
         )
         return ProvenanceAlgebraSet(
             projected_relation,
@@ -472,13 +472,8 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
 
     @add_match(Union(ProvenanceAlgebraSet, ProvenanceAlgebraSet))
     def union_rap(self, union):
-        prov_column_left = (
-            str2columnstr_constant(union.relation_left.provenance_column)
-        )
-        prov_column_right = (
-            str2columnstr_constant(union.relation_right.provenance_column)
-        )
-
+        prov_column_left = union.relation_left.provenance_column
+        prov_column_right = union.relation_right.provenance_column
         relation_left = self._build_relation_constant(
             union.relation_left.relations
         )

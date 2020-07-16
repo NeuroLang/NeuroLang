@@ -2,6 +2,7 @@ from ..probabilistic.cplogic import testing
 from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     NaturalJoin,
+    Projection,
     str2columnstr_constant,
 )
 from ..relational_algebra_provenance import (
@@ -110,6 +111,26 @@ def test_string_semiring():
                 (StringTestType("white" * 2), "my"),
                 (StringTestType("heisenberg" * 3), "name"),
             ],
+        ),
+        str2columnstr_constant("_p_"),
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_multiple_columns():
+    r = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            ("_p_", "x", "y"),
+            [(42, "a", "b"), (21, "a", "z"), (12, "b", "y"), (89, "b", "h"),],
+        ),
+        str2columnstr_constant("_p_"),
+    )
+    op = Projection(r, (str2columnstr_constant("x"),))
+    solver = RelationalAlgebraProvenanceExpressionSemringSolver()
+    result = solver.walk(op)
+    expected = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            ("_p_", "x"), [(63, "a"), (101, "b"),],
         ),
         str2columnstr_constant("_p_"),
     )
