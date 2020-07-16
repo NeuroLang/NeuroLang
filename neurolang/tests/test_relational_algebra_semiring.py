@@ -1,12 +1,15 @@
 import operator
 
+from ..expressions import Constant
 from ..probabilistic.cplogic import testing
 from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     NaturalJoin,
     Projection,
-    str2columnstr_constant,
     RenameColumn,
+    Selection,
+    Union,
+    str2columnstr_constant,
 )
 from ..relational_algebra_provenance import (
     ProvenanceAlgebraSet,
@@ -157,6 +160,49 @@ def test_renaming():
         NamedRelationalAlgebraFrozenSet(
             ("_p_", "z", "y"),
             [(42, "a", "b"), (21, "a", "z"), (12, "b", "y"), (89, "b", "h"),],
+        ),
+        str2columnstr_constant("_p_"),
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_selection():
+    r = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            ("_p_", "x", "y"),
+            [(42, "a", "b"), (21, "a", "z"), (12, "b", "y"), (89, "b", "h"),],
+        ),
+        str2columnstr_constant("_p_"),
+    )
+    op = Selection(
+        r, Constant(operator.eq)(str2columnstr_constant("x"), Constant("a"))
+    )
+    solver = RelationalAlgebraProvenanceExpressionSemringSolver()
+    result = solver.walk(op)
+    expected = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            ("_p_", "x", "y"), [(42, "a", "b"), (21, "a", "z")],
+        ),
+        str2columnstr_constant("_p_"),
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_union():
+    r1 = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(("_p_", "x"), [(2, "a"), (3, "b")]),
+        str2columnstr_constant("_p_"),
+    )
+    r2 = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(("_p_", "x"), [(5, "b"), (10, "c")]),
+        str2columnstr_constant("_p_"),
+    )
+    op = Union(r1, r2)
+    solver = RelationalAlgebraProvenanceExpressionSemringSolver()
+    result = solver.walk(op)
+    expected = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            ("_p_", "x"), [(2, "a"), (8, "b"), (10, "c")]
         ),
         str2columnstr_constant("_p_"),
     )

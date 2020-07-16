@@ -488,10 +488,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
                 prov_column_left
             )
 
-        columns_to_keep = tuple(
-            str2columnstr_constant(c) for c in relation_left.value.columns
-            if c != prov_column_left
-        )
+        columns_to_keep = tuple(union.relation_left.non_provenance_columns)
 
         dummy_col = str2columnstr_constant(Symbol.fresh().name)
         relation_left = ConcatenateConstantColumn(
@@ -505,7 +502,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
         rap_projection = Projection(
             ProvenanceAlgebraSet(
                 ra_union.value,
-                prov_column_left.value
+                prov_column_left
             ),
             columns_to_keep
         )
