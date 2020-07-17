@@ -372,10 +372,10 @@ def load_pain_datasets(nl, n=100):
         list(sample_studies.itertuples(name=None, index=False)), name="p_study"
     )
 
-    # df = ns_prob_joint_term_study(nsh)
     df = pd.DataFrame(
         nsh.ns_term_study_associations(), columns=["prob", "study", "term"]
     )
+    df = df.astype({"prob": float, "study": int})
     nl.add_probabilistic_facts_from_tuples(
         df[df.study.isin(sample_studies[0])].itertuples(
             name=None, index=False
