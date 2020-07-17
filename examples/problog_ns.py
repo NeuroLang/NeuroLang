@@ -1,3 +1,13 @@
+# -*- coding: utf-8 -*-
+r"""
+Neurosynth's Coordinate-Based Meta-Analysis database encoded in NeuroLang
+=========================================================================
+
+Raw Neurosynth data (term-to-study associations and reported voxel activations)
+are represented within the program. Queries can then be run to produce forward
+inference brain maps.
+
+"""
 from neurolang.frontend.probabilistic_frontend import ProbabilisticFrontend
 
 nl = ProbabilisticFrontend()
