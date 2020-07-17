@@ -3,6 +3,7 @@ import operator
 from ..expressions import Constant
 from ..probabilistic.cplogic import testing
 from ..relational_algebra import (
+    ColumnStr,
     NamedRelationalAlgebraFrozenSet,
     NaturalJoin,
     Projection,
@@ -10,7 +11,6 @@ from ..relational_algebra import (
     Selection,
     Union,
     str2columnstr_constant,
-    ColumnStr,
 )
 from ..relational_algebra_provenance import (
     ProvenanceAlgebraSet,
