@@ -81,9 +81,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         solution_sets = dict()
         for pred_symb, relation in solution.items():
             if isinstance(relation, ProvenanceAlgebraSet):
-                proj_cols = (relation.provenance_column.value,) + tuple(
-                    c.value for c in relation.non_provenance_columns
-                )
+                proj_cols = relation.value.columns
                 ra_set = relation.value.projection(*proj_cols)
             else:
                 ra_set = relation.value
