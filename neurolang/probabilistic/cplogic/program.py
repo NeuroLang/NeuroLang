@@ -1,6 +1,7 @@
 import typing
 
 from ...datalog import DatalogProgram
+from ...datalog.basic_representation import UnionOfConjunctiveQueries
 from ...exceptions import ForbiddenDisjunctionError
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
@@ -13,17 +14,9 @@ from ..expression_processing import (
     check_probabilistic_choice_set_probabilities_sum_to_one,
     group_probabilistic_facts_by_pred_symb,
     is_probabilistic_fact,
+    is_within_language_succ_query,
     union_contains_probabilistic_facts,
 )
-from ..expressions import PROB
-from ...datalog.basic_representation import UnionOfConjunctiveQueries
-
-
-def is_within_language_succ_query(implication):
-    return any(
-        isinstance(arg, FunctionApplication) and arg.functor == PROB
-        for arg in implication.consequent.args
-    )
 
 
 class CPLogicMixin(PatternWalker):

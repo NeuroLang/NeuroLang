@@ -140,3 +140,19 @@ def test_ontology_query():
         "http://www.w3.org/2002/03owlt/hasValue/premises001#i",
         "true",
     ) in resp
+
+
+def test_simple_within_language_succ_query():
+    nl = ProbabilisticFrontend()
+    P = nl.add_uniform_probabilistic_choice_over_set(
+        [("a",), ("b",), ("c",)], name="P"
+    )
+    Q = nl.add_uniform_probabilistic_choice_over_set(
+        [("a",), ("d",), ("e",)], name="Q"
+    )
+    with nl.scope as e:
+        e.Z[e.x, e.PROB[e.x]] = P[e.x] & Q[e.x]
+        res = nl.solve_all()
+    assert "Z" in res.keys()
+    df = res["Z"].as_pandas_dataframe().values
+    assert len(df) == 1

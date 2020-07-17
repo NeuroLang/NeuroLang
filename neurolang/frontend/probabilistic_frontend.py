@@ -16,6 +16,7 @@ from ..probabilistic.cplogic.program import CPLogicMixin, CPLogicProgram
 from ..probabilistic.expression_processing import (
     separate_deterministic_probabilistic_code,
 )
+from ..probabilistic.expressions import PROB
 from ..region_solver import RegionSolver
 from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
@@ -44,6 +45,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         )
         self.probabilistic_solver = probabilistic_solver
         self.ontology_loaded = False
+        self.PROB = PROB
 
     def load_ontology(self, paths, load_format="xml"):
         onto = OntologyParser(paths, load_format)
