@@ -28,8 +28,6 @@
 
 # #### Let's begin
 
-# %load_ext snakeviz
-
 # +
 import warnings
 warnings.filterwarnings('ignore')
@@ -175,43 +173,6 @@ plotting.plot_stat_map(
 
 
 
-
-#prob_terms, prob_voxels, prob_terms_voxels = stats_helper.load_neurosynth_database()
-prob_img = stats_helper.parse_neurolang_result(result, prob_terms)
-
-
-plotting.plot_stat_map(
-    prob_img, 
-    title='Tag "auditory" (Neurolang)', 
-    cmap='PuBuGn',
-    display_mode='x',
-    cut_coords=np.linspace(-63, 63, 5),
-)
-
-plotting.plot_stat_map(
-    prob_img, title='Tag "auditory" (Neurolang)', 
-    cmap='PuBuGn',
-    display_mode='y',
-    cut_coords=np.linspace(-30, 5, 5),
-)
-
-# Now let's see the same result obtained directly from the NeuroSynth database.
-
-prob_img_ns = stats_helper.parse_neurosynth_result(prob_terms_voxels)
-
-plotting.plot_stat_map(
-    prob_img_ns, title='Tag "auditory" (Neurosynth)', 
-    cmap='PuBu',
-    display_mode='x',
-    cut_coords=np.linspace(-63, 63, 5),
-)
-
-plotting.plot_stat_map(
-    prob_img_ns, title='Tag "auditory" (Neurosynth)', 
-    cmap='PuBu',
-    display_mode='y',
-    cut_coords=np.linspace(-30, 5, 5),
-)
 
 # Now we can analyze the results by plotting the p-values obtained. Let's start with the NeuroLang results.
 
