@@ -30,10 +30,10 @@ def pl_preds_to_prov_set(pl_preds, columns):
         if prob > 0:
             tupl = (prob,) + tuple(arg.value for arg in pl_pred.args)
             tuples.add(tupl)
-    prob_col = str2columnstr_constant(Symbol.fresh().name)
+    prob_col = Symbol.fresh().name
     return ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
-            columns=(prob_col.value,) + tuple(c.value for c in columns),
+            columns=(prob_col,) + tuple(c.value for c in columns),
             iterable=tuples,
         ),
         prob_col,
@@ -108,11 +108,11 @@ def pl_solution_to_nl_solution(pl_solution, query_preds):
         tupl = (prob,) + tuple(arg.value for arg in pl_pred.args)
         pred_symb = Symbol(pl_pred.functor)
         pred_symb_to_tuples[pred_symb].add(tupl)
-    prob_col = str2columnstr_constant(Symbol.fresh().name)
+    prob_col = Symbol.fresh().name
     return {
         qpred.functor: ProvenanceAlgebraSet(
             NamedRelationalAlgebraFrozenSet(
-                columns=(prob_col.value,)
+                columns=(prob_col,)
                 + tuple(arg.name for arg in qpred.args),
                 iterable=pred_symb_to_tuples[qpred.functor],
             ),
@@ -157,6 +157,6 @@ def solve_succ_all(cpl):
         ra_set = fresh_name_relation(cpl.symbol_table[pred_symb])
         prob_col = ra_set.value.columns[0]
         nl_solution[pred_symb] = ProvenanceAlgebraSet(
-            ra_set.value, str2columnstr_constant(prob_col)
+            ra_set.value, prob_col
         )
     return nl_solution
