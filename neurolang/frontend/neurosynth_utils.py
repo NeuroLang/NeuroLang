@@ -76,11 +76,12 @@ class NeuroSynthHandler(object):
 
         """
         features = self.dataset.feature_table.data
-        if study_ids is not None:
-            study_ids = np.array(list(study_ids)).flatten().astype(int)
-            features = features.loc[study_ids]
         terms = features.columns
-        features["pmid"] = features.index
+        if study_ids is None:
+            study_ids = features.index.to_series().apply(StudyID)
+        study_ids_as_int = study_ids.apply(int)
+        features = features.loc[study_ids_as_int]
+        features["pmid"] = study_ids
         return (
             features.melt(
                 id_vars="pmid",
@@ -100,9 +101,10 @@ class NeuroSynthHandler(object):
         """
         image_table = self.dataset.image_table
         vox_ids, study_ids_ix = image_table.data.nonzero()
-        study_ids = image_table.ids[study_ids_ix]
-        study_id_vox_id = np.transpose([study_ids, vox_ids])
-        return study_id_vox_id
+        study_ids = (
+            pd.Series(image_table.ids).apply(StudyID).iloc[study_ids_ix]
+        )
+        return np.transpose([study_ids, vox_ids])
 
     def ns_study_ids(self):
         return np.expand_dims(
