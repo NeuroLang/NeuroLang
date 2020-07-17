@@ -16,7 +16,7 @@ from ..expression_walker import ExpressionWalker, PatternWalker, add_match
 from ..expressions import (Constant, ExpressionBlock, FunctionApplication,
                            Symbol, sure_is_not_pattern)
 from ..logic import Implication
-from ..relational_algebra import (ColumnInt, ExtendedProjection,
+from ..relational_algebra import (ColumnInt, ColumnStr, ExtendedProjection,
                                   ExtendedProjectionListMember, NameColumns,
                                   Projection, RelationalAlgebraOperation,
                                   RelationalAlgebraPushInSelections,
@@ -441,13 +441,13 @@ def solve_succ_query(query_predicate, cpl_program):
     sdd_compiler, sdd_program, prob_set_program = \
         sdd_compilation(prob_set_result)
 
-    res = perform_wmc(
+    res, provenance_column = perform_wmc(
         solver, sdd_compiler, sdd_program,
         prob_set_program, prob_set_result
     )
 
     return ProvenanceAlgebraSet(
-        res, str2columnstr_constant('prob')
+        res, ColumnStr(provenance_column)
     )
 
 
@@ -521,6 +521,10 @@ def perform_wmc(
         wmc.set_literal_weights_from_array(np.log(weights))
         probs[prob_set_program.expressions[i]] = np.exp(wmc.propagate())
 
+    provenance_column = 'prob'
+    while provenance_column in prob_set_result.value.columns:
+        provenance_column += '_'
+
     res = prob_set_result.value.extended_projection(
         dict(
             [
@@ -528,10 +532,13 @@ def perform_wmc(
                 for c in prob_set_result.value.columns
                 if c != prob_set_result.provenance_column
             ] +
-            [('prob', lambda x: probs[x[prob_set_result.provenance_column]])]
+            [(
+                provenance_column,
+                lambda x: probs[x[prob_set_result.provenance_column]]
+            )]
         )
     )
-    return res
+    return res, provenance_column
 
 
 def generate_probability_table(solver):
