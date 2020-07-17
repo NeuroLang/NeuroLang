@@ -123,13 +123,14 @@ def create_region(x, y, z, it):
 
 
 def parse_results(results):
+    results = results.value.as_pandas_dataframe()[['x', 'y', 'z', 'prob']]
     nsh = fe.neurosynth_utils.NeuroSynthHandler()
     ns_ds = nsh.ns_load_dataset()
     it = ns_ds.image_table
 
     regions = []
     vox_prob = []
-    for x, y, z, p in results.value:
+    for x, y, z, p in results.values:
         r_overlay = create_region(x, y, z, it)
         vox_prob.append((r_overlay.voxels, p))
         regions.append(r_overlay)
@@ -351,7 +352,7 @@ def destrieux_name_to_fma_relations():
     ]
 
 
-def load_pain_datasets(nl, n=100):
+def load_pain_datasets(nl, n=50):
     d_onto = utils._get_dataset_dir("ontologies", data_dir="neurolang_data")
 
     if not os.path.exists(d_onto + "/IOBC_1_4_0.xrdf"):
@@ -372,10 +373,11 @@ def load_pain_datasets(nl, n=100):
         list(sample_studies.itertuples(name=None, index=False)), name="p_study"
     )
 
-    df = pd.DataFrame(
-        nsh.ns_term_study_associations(), columns=["prob", "study", "term"]
-    )
-    df = df.astype({"prob": float, "study": int})
+    #df = pd.DataFrame(
+    #    nsh.ns_term_study_associations(), columns=["prob", "study", "term"]
+    #)
+    #df = df.astype({"prob": float, "study": int})
+    df = ns_prob_joint_term_study(nsh, term=['pain', 'nociception', 'acoustic', 'noxious'])
     nl.add_probabilistic_facts_from_tuples(
         df[df.study.isin(sample_studies[0])].itertuples(
             name=None, index=False
@@ -407,7 +409,7 @@ def load_pain_datasets(nl, n=100):
     )
 
 
-def load_reverse_inference_dataset(nl, n=100):
+def load_reverse_inference_dataset(nl, n=50):
 
     d_onto = utils._get_dataset_dir("ontologies", data_dir="neurolang_data")
     if not os.path.exists(d_onto + "/cogat.xrdf"):
@@ -417,8 +419,6 @@ def load_reverse_inference_dataset(nl, n=100):
         print("Dataset created in neurolang_data/ontologies")
 
     load_auditory_datasets(nl, n)
-
-    
 
     nsh = fe.neurosynth_utils.NeuroSynthHandler()
 

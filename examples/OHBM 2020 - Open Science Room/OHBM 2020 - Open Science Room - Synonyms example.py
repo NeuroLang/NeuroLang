@@ -74,6 +74,7 @@ with nl.environment as e:
         (e.short_name == nl.symbols.first_word(e.alternative_names)) & 
         e.related_biostimulation_terms(e.alternative_names)
     )
+    
 # -
 
 # The fact of having obtained the synonyms of the term `pain` directly from the ontology, allows us to avoid having to declare each of the terms to be evaluated and to be able to obtain this information directly from `e.synonyms(e.term)` without the need to know it beforehand.
@@ -81,7 +82,7 @@ with nl.environment as e:
 with nl.scope as e:    
     e.p_act[e.id_voxel, e.term, e.id_study] = (
         e.p_voxel_study[e.id_voxel, e.id_study] & 
-        e.p_term_study[e.study,  e.term] & 
+        e.p_term_study[e.term, e.study] & 
         e.p_study[e.id_study]
     )
     
@@ -95,7 +96,7 @@ with nl.scope as e:
         e.xyz_neurosynth[e.x, e.y, e.z, e.id_voxel]
     )
     
-    nl_results = nl.solve_query(e.act_term[e.term, e.id_voxel])
+    nl_results = nl.solve_query(e.xyz_given_term[e.x, e.y, e.z])
 
 
 
