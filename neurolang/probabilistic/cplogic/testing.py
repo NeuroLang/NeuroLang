@@ -74,7 +74,7 @@ def eq_prov_relations(pas1, pas2):
 def make_prov_set(iterable, columns):
     return ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(columns, iterable),
-        columns[0],
+        ColumnStr(columns[0]),
     )
 
 

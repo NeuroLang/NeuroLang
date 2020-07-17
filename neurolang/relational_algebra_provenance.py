@@ -32,7 +32,7 @@ class ProvenanceAlgebraSet(Constant):
     def __init__(self, relations, provenance_column):
         self.relations = relations
         self.provenance_column = provenance_column
-        if not isinstance(provenance_column, str):
+        if not isinstance(provenance_column, ColumnStr):
             raise RuntimeError()
 
     @property
@@ -416,7 +416,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
                 )
             ]
         )
-        return ProvenanceAlgebraSet(self.walk(operation).value, new_pc)
+        return ProvenanceAlgebraSet(self.walk(operation).value, new_pc.value)
 
     @add_match(Projection(ProvenanceAlgebraSet, ...))
     def projection_rap(self, projection):
@@ -497,7 +497,10 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
                 str2columnstr_constant(prov_column_left),
             )
 
-        columns_to_keep = tuple(union.relation_left.non_provenance_columns)
+        columns_to_keep = tuple(
+            str2columnstr_constant(c) for c in
+            union.relation_left.non_provenance_columns
+        )
 
         dummy_col = str2columnstr_constant(Symbol.fresh().name)
         relation_left = ConcatenateConstantColumn(

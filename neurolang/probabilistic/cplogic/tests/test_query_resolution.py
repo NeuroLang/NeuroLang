@@ -598,31 +598,26 @@ def test_solve_succ_all():
         result[P],
         testing.make_prov_set(
             [(1.0, "a", "b"), (1.0, "b", "c")],
-            ("_p_",)
-            + tuple(c.value for c in result[P].non_provenance_columns),
+            ("_p_",) + result[P].non_provenance_columns,
         ),
     )
     assert testing.eq_prov_relations(
         result[Q],
         testing.make_prov_set(
             [(0.2, "a"), (0.9, "b")],
-            ("_p_",)
-            + tuple(c.value for c in result[Q].non_provenance_columns),
+            ("_p_",) + result[Q].non_provenance_columns,
         ),
     )
     assert testing.eq_prov_relations(
         result[H],
         testing.make_prov_set(
             [(0.5, "a"), (0.5, "c")],
-            ("_p_",)
-            + tuple(c.value for c in result[H].non_provenance_columns),
+            ("_p_",) + result[H].non_provenance_columns,
         ),
     )
     assert testing.eq_prov_relations(
         result[Z],
         testing.make_prov_set(
-            [(0.1, "a"),],
-            ("_p_",)
-            + tuple(c.value for c in result[Z].non_provenance_columns),
+            [(0.1, "a"),], ("_p_",) + result[Z].non_provenance_columns,
         ),
     )
