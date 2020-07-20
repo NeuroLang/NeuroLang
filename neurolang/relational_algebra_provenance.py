@@ -5,7 +5,7 @@ from .exceptions import (
     RelationalAlgebraError, RelationalAlgebraNotImplementedError
 )
 from .expression_walker import ExpressionWalker, add_match
-from .expressions import Constant, FunctionApplication, Symbol
+from .expressions import Constant, Expression, FunctionApplication, Symbol
 from .relational_algebra import (
     Column,
     ColumnStr,
@@ -28,12 +28,15 @@ from .relational_algebra import (
 )
 
 
+ADD = Constant(operator.add)
+
+
 class ProvenanceAlgebraSet(Constant):
     def __init__(self, relations, provenance_column):
         self.relations = relations
         self.provenance_column = provenance_column
         if not isinstance(provenance_column, ColumnStr):
-            raise RuntimeError()
+            raise ValueError("Provenance column needs to be of ColumnStr type")
 
     @property
     def value(self):
@@ -421,13 +424,29 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
     @add_match(Projection(ProvenanceAlgebraSet, ...))
     def projection_rap(self, projection):
         cols = tuple(v.value for v in projection.attributes)
+
         projected_relation = projection.relation.relations.aggregate(
-            cols, {projection.relation.provenance_column: sum}
+            cols,
+            {
+                projection.relation.provenance_column:
+                self._semiring_agg_sum
+            }
         )
         return ProvenanceAlgebraSet(
             projected_relation,
             projection.relation.provenance_column
         )
+
+    @staticmethod
+    def _semiring_agg_sum(x):
+        args = tuple(x)
+        if len(args) == 1:
+            r = args[0]
+        if isinstance(args[0], Expression):
+            r = ADD(*args)
+        else:
+            r = sum(args)
+        return r
 
     @add_match(RenameColumn(ProvenanceAlgebraSet, ..., ...))
     def rename_column_rap(self, expression):
