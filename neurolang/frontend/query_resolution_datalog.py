@@ -7,6 +7,7 @@ from .. import expressions as exp
 from ..datalog import aggregation
 from ..datalog.expression_processing import (TranslateToDatalogSemantics,
                                              reachable_code)
+from ..probabilistic.expression_processing import is_within_language_succ_query
 from ..type_system import Unknown
 from ..utils import RelationalAlgebraFrozenSet
 from .datalog import parser as datalog_parser
@@ -44,8 +45,21 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             antecedent.expression.value is True
         ):
             expression = datalog.Fact(consequent.expression)
+        elif is_within_language_succ_query(
+            datalog.Implication(consequent.expression, antecedent.expression)
+        ):
+            expression = self._assign_within_language_succ_query(
+                consequent, antecedent
+            )
         else:
             expression = self._assign_intensional_rule(consequent, antecedent)
+        self.solver.walk(expression)
+        return expression
+
+    def _assign_within_language_succ_query(self, consequent, antecedent):
+        expression = datalog.Implication(
+            consequent.expression, antecedent.expression
+        )
         self.solver.walk(expression)
         return expression
 

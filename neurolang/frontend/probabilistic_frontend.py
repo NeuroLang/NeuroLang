@@ -8,15 +8,15 @@ from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
 from ..expression_walker import ExpressionBasicEvaluator
 from ..expressions import Symbol, Unknown
-from ..logic import Union
+from ..logic import Implication, Union
 from ..probabilistic.cplogic.problog_solver import (
     solve_succ_all as problog_solve_succ_all,
 )
 from ..probabilistic.cplogic.program import CPLogicMixin, CPLogicProgram
 from ..probabilistic.expression_processing import (
+    is_within_language_succ_query,
     separate_deterministic_probabilistic_code,
 )
-from ..probabilistic.expressions import PROB
 from ..region_solver import RegionSolver
 from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
@@ -45,7 +45,6 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         )
         self.probabilistic_solver = probabilistic_solver
         self.ontology_loaded = False
-        self.PROB = PROB
 
     def load_ontology(self, paths, load_format="xml"):
         onto = OntologyParser(paths, load_format)
@@ -139,3 +138,18 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             )
         cpl.walk(probabilistic_idb)
         return cpl
+
+    def assign(self, consequent, antecedent):
+        if is_within_language_succ_query(
+            Implication(consequent.expression, antecedent.expression)
+        ):
+            expression = self._assign_within_language_succ_query(
+                consequent, antecedent
+            )
+            self.solver.walk(expression)
+            return expression
+        else:
+            return super().assign(consequent, antecedent)
+
+    def _assign_within_language_succ_query(self, consequent, antecedent):
+        return Implication(consequent.expression, antecedent.expression)
