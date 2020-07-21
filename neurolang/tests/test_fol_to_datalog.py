@@ -1182,3 +1182,21 @@ def test_fol2datalog_mixin_complex_formula():
     assert solution_instance["T"].value == {(1,), (4,)}
     assert solution_instance["R"].value == {(4, 5), (2, 6)}
     assert solution_instance["G"].value == {(1,), (4,), (6,)}
+
+
+def test_fol2datalog_unsafe_disjunction():
+    x = Symbol("x")
+    y = Symbol("y")
+    G = Symbol("G")
+    T = Symbol("T")
+    V = Symbol("V")
+
+    dl = Datalog2()
+    with pytest.raises(NeuroLangException):
+        dl.walk(
+            ExpressionBlock(
+                (
+                    Implication(G(x), Disjunction((V(y), T(x)))),
+                )
+            )
+        )
