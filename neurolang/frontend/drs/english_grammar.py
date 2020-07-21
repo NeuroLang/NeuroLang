@@ -11,6 +11,7 @@ DET = Symbol("DET")
 N = Symbol("N")
 PRO = Symbol("PRO")
 VAR = Symbol("VAR")
+LIT = Symbol("LIT")
 
 c = Symbol("c")
 n = Symbol("n")
@@ -84,6 +85,15 @@ class EnglishGrammar(Grammar):
     @add_rule(Quote(Constant("`"), v))
     def s_quot(self, quot):
         return S(n)
+
+    @add_rule(Quote(Constant("\""), v))
+    def quot_string_lit(self, quot):
+        _q, content = quot.args
+        return LIT(content)
+
+    @add_rule(LIT(v))
+    def np_lit(self, lit):
+        return NP(Symbol.fresh(), Symbol.fresh(), Symbol.fresh())
 
 
 class EnglishBaseLexicon(DictLexicon):
