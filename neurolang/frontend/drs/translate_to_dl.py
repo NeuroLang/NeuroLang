@@ -15,6 +15,12 @@ from .drs_builder import DRSBuilder, DRS2FOL
 from .chart_parser import ChartParser
 from .english_grammar import EnglishGrammar, EnglishBaseLexicon
 import operator
+from ...expression_walker import ExpressionWalker
+from ...logic.transformations import (
+    CollapseConjunctions,
+    DistributeUniversalQuantifiers,
+    DistributeImplicationsWithConjunctiveHeads,
+)
 
 
 _equals = Constant(operator.eq)
@@ -34,10 +40,7 @@ class TranslateToDatalog:
             sentence = sentence.strip()
             if not sentence:
                 continue
-            exp_block = self.translate_sentence(sentence)
-            program = ExpressionBlock(
-                program.expressions + exp_block.expressions
-            )
+            program += self.translate_sentence(sentence)
 
         return program
 
@@ -46,12 +49,15 @@ class TranslateToDatalog:
 
         drs = self.builder.walk(t)
         exp = self.into_fol.walk(drs)
+        exp = IntoConjunctionOfSentences().walk(exp)
 
-        try:
-            return _as_intensional_rules(exp)
-        except TranslateToDatalogError:
-            pass
+        lsentences = exp.formulas if isinstance(exp, Conjunction) else (exp,)
+        program = ExpressionBlock(())
+        for block in map(self.translate_logical_sentence, lsentences):
+            program += block
+        return program
 
+    def translate_logical_sentence(self, exp):
         try:
             return _as_intensional_rule(exp)
         except TranslateToDatalogError:
@@ -62,39 +68,10 @@ class TranslateToDatalog:
         except TranslateToDatalogError:
             pass
 
-        raise Exception(f"Unsupported expression: {repr(exp)}")
+        raise TranslateToDatalogError(f"Unsupported expression: {repr(exp)}")
 
 
-from neurolang.expression_walker import ExpressionWalker, add_rule
-from neurolang.logic.expression_processing import (
-    CollapseConjunctions,
-    extract_logic_free_variables,
-)
-
-
-class DistributeUniversalQuantifiers(ExpressionWalker):
-    @add_rule(UniversalPredicate(..., Conjunction))
-    def distribute_universal_quantifier(self, uq):
-        return Conjunction(
-            tuple(map(self._apply_quantifier, uq.head, uq.body.formulas))
-        )
-
-    def _apply_quantifier(self, var, exp):
-        fv = extract_logic_free_variables(exp)
-        if var in fv:
-            exp = UniversalPredicate(var, exp)
-        return exp
-
-
-class DistributeImplicationsWithConjunctiveHeads(ExpressionWalker):
-    @add_rule(Implication(Conjunction, ...))
-    def distribute_implication_with_conjunctive_head(self, impl):
-        return Conjunction(tuple(
-            Implication(h, impl.antecedent) for h in impl.consequent.formulas
-        ))
-
-
-class IntoConjunctionsOfExpressions(
+class IntoConjunctionOfSentences(
     DistributeImplicationsWithConjunctiveHeads,
     DistributeUniversalQuantifiers,
     CollapseConjunctions,
@@ -105,36 +82,6 @@ class IntoConjunctionsOfExpressions(
 
 class TranslateToDatalogError(Exception):
     pass
-
-
-def _as_intensional_rules(exp):
-    ucv, exp = _strip_universal_quantifiers(exp)
-
-    if not isinstance(exp, Implication):
-        raise TranslateToDatalogError("A Datalog rule must be an implication")
-
-    head = exp.consequent
-    body = exp.antecedent
-
-    if not isinstance(head, Conjunction):
-        raise TranslateToDatalogError(
-            "The head of a Datalog rule with conjunctive head"
-            + " must be a conjunction"
-        )
-
-    f = Symbol.fresh()(*ucv)
-
-    block = _as_intensional_rule(
-        _add_universal_quantifiers(Implication(f, body), ucv)
-    )
-
-    for arg in head.formulas:
-        b = _as_intensional_rule(
-            _add_universal_quantifiers(Implication(arg, f), ucv)
-        )
-        block.expressions += b.expressions
-
-    return block
 
 
 def _as_intensional_rule(exp):
