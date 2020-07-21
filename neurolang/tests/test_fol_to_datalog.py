@@ -1077,8 +1077,7 @@ class Datalog2(
     DatalogProgramNegation,
     ExpressionBasicEvaluator,
 ):
-    def function_gt(self, x: int, y: int) -> bool:
-        return x > y
+    pass
 
 
 def test_fol2datalog_mixin_trivial_case():
