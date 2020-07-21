@@ -161,3 +161,20 @@ def test_simple_within_language_succ_query():
     assert len(df) == 1
     assert tuple(df.values[0])[0] == "a"
     assert np.isclose(tuple(df.values[0])[1], 1 / 9)
+
+
+def test_within_language_succ_query():
+    nl = ProbabilisticFrontend()
+    P = nl.add_uniform_probabilistic_choice_over_set(
+        [("a", "b",), ("b", "c",), ("b", "d",)], name="P"
+    )
+    Q = nl.add_uniform_probabilistic_choice_over_set(
+        [("a",), ("b",)], name="Q"
+    )
+    with nl.scope as e:
+        e.Z[e.x, getattr(e, PROB.name)[e.x]] = P[e.x, e.y] & Q[e.x]
+        res = nl.solve_all()
+    assert "Z" in res.keys()
+    df = res["Z"].as_pandas_dataframe()
+    assert np.isclose(df.loc[df["x"] == "b"].iloc[0][1], 2 / 3 / 2)
+    assert np.isclose(df.loc[df["x"] == "a"].iloc[0][1], 1 / 3 / 2)
