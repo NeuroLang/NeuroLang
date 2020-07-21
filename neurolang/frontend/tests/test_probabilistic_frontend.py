@@ -1,6 +1,8 @@
 import io
 from typing import AbstractSet, Tuple
 
+import numpy as np
+
 from ...probabilistic.expressions import PROB
 from ..probabilistic_frontend import ProbabilisticFrontend
 
@@ -155,5 +157,7 @@ def test_simple_within_language_succ_query():
         e.Z[e.x, getattr(e, PROB.name)[e.x]] = P[e.x] & Q[e.x]
         res = nl.solve_all()
     assert "Z" in res.keys()
-    df = res["Z"].as_pandas_dataframe().values
+    df = res["Z"].as_pandas_dataframe()
     assert len(df) == 1
+    assert tuple(df.values[0])[0] == "a"
+    assert np.isclose(tuple(df.values[0])[1], 1 / 9)
