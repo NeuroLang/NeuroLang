@@ -72,7 +72,11 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         solution = self.chase_class(
             self.solver, rules=deterministic_idb
         ).build_chase_solution()
-        if probabilistic_idb.formulas:
+        if (
+            self.solver.pfact_pred_symbs
+            or self.solver.pchoice_pred_symbs
+            or probabilistic_idb.formulas
+        ):
             cpl = self._make_probabilistic_program_from_deterministic_solution(
                 solution, probabilistic_idb
             )
@@ -136,6 +140,11 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             cpl.add_probabilistic_choice_from_tuples(
                 pred_symb, self.solver.symbol_table[pred_symb].value.unwrap()
             )
+        for pred_symb, union in self.solver.intensional_database().items():
+            if len(union.formulas) == 1 and is_within_language_succ_query(
+                union.formulas[0]
+            ):
+                cpl.walk(union.formulas[0])
         cpl.walk(probabilistic_idb)
         return cpl
 

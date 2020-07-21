@@ -5,7 +5,7 @@ from ...datalog.basic_representation import UnionOfConjunctiveQueries
 from ...exceptions import ForbiddenDisjunctionError
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
-from ...expressions import Constant, FunctionApplication, Symbol
+from ...expressions import Constant, Symbol
 from ...logic import Implication, Union
 from ..exceptions import MalformedProbabilisticTupleError
 from ..expression_processing import (
