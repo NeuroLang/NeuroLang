@@ -1154,23 +1154,16 @@ def test_fol2datalog_mixin_complex_formula():
                 Fact(V(Constant(3))),
                 Fact(R(Constant(4), Constant(5))),
                 Fact(R(Constant(2), Constant(6))),
-
                 Implication(
                     G(x),
                     Disjunction(
                         (
                             T(x),
                             ExistentialPredicate(
-                                y,
-                                Conjunction(
-                                    (
-                                        V(y),
-                                        R(y, x),
-                                    )
-                                )
-                            )
+                                y, Conjunction((V(y), R(y, x),))
+                            ),
                         )
-                    )
+                    ),
                 ),
             )
         )
@@ -1194,9 +1187,31 @@ def test_fol2datalog_unsafe_disjunction():
     dl = Datalog2()
     with pytest.raises(NeuroLangException):
         dl.walk(
+            ExpressionBlock((Implication(G(x), Disjunction((V(y), T(x)))),))
+        )
+
+
+def test_fol2datalog_unsafe_complex_formula():
+    x = Symbol("x")
+    y = Symbol("y")
+    G = Symbol("G")
+    T = Symbol("T")
+    R = Symbol("R")
+
+    dl = Datalog2()
+    with pytest.raises(NeuroLangException):
+        dl.walk(
             ExpressionBlock(
                 (
-                    Implication(G(x), Disjunction((V(y), T(x)))),
+                    Implication(
+                        G(x),
+                        Disjunction(
+                            (
+                                T(x),
+                                UniversalPredicate(y, Conjunction((R(y, x),))),
+                            )
+                        ),
+                    ),
                 )
             )
         )
