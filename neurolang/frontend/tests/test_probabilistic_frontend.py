@@ -154,7 +154,7 @@ def test_simple_within_language_succ_query():
         [("a",), ("d",), ("e",)], name="Q"
     )
     with nl.scope as e:
-        e.Z[e.x, getattr(e, PROB.name)[e.x]] = P[e.x] & Q[e.x]
+        e.Z[e.x, e.PROB[e.x]] = P[e.x] & Q[e.x]
         res = nl.solve_all()
     assert "Z" in res.keys()
     df = res["Z"].as_pandas_dataframe()
@@ -172,7 +172,7 @@ def test_within_language_succ_query():
         [("a",), ("b",)], name="Q"
     )
     with nl.scope as e:
-        e.Z[e.x, getattr(e, PROB.name)[e.x]] = P[e.x, e.y] & Q[e.x]
+        e.Z[e.x, e.PROB[e.x]] = P[e.x, e.y] & Q[e.x]
         res = nl.solve_all()
     assert "Z" in res.keys()
     df = res["Z"].as_pandas_dataframe()

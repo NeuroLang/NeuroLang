@@ -32,6 +32,7 @@ class CPLogicMixin(PatternWalker):
 
     pfact_pred_symb_set_symb = Symbol("__pfact_pred_symb_set_symb__")
     pchoice_pred_symb_set_symb = Symbol("__pchoice_pred_symb_set_symb__")
+    protected_keywords = {"PROB"}
 
     @property
     def predicate_symbols(self):

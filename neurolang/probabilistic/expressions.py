@@ -1,6 +1,8 @@
-from ..expressions import Definition, Symbol
+import typing
 
-PROB = Symbol.fresh()
+from ..expressions import Definition, Symbol, Constant
+
+PROB = Symbol("PROB")
 
 
 class ProbabilisticPredicate(Definition):

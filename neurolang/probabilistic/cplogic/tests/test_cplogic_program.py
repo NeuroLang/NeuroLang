@@ -3,7 +3,7 @@ import typing
 import pytest
 
 from ....datalog.expressions import Fact
-from ....exceptions import ForbiddenDisjunctionError
+from ....exceptions import ForbiddenDisjunctionError, ProtectedKeywordError
 from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Union
 from ...exceptions import (
@@ -189,3 +189,9 @@ def test_within_language_succ_query():
     cpl = CPLogicProgram()
     cpl.walk(rule)
     assert P in cpl.intensional_database()
+
+
+def test_prob_protected_keyword():
+    cpl = CPLogicProgram()
+    with pytest.raises(ProtectedKeywordError):
+        cpl.walk(Implication(PROB(x), Z(x)))
