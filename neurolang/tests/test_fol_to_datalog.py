@@ -41,10 +41,11 @@ from ..logic.horn_clauses import (
     NeuroLangTranslateToHornClauseException,
     translate_horn_clauses_to_datalog,
     fol_query_to_datalog_program,
+    Fol2DatalogMixin,
 )
 from ..datalog.negation import DatalogProgramNegation
 from ..expression_walker import ExpressionBasicEvaluator
-from ..datalog.expressions import TranslateToLogic
+from ..datalog.expressions import TranslateToLogic, Fact
 from ..datalog.chase import Chase as Chase_
 from ..datalog.chase.negation import NegativeFactConstraints
 
@@ -1068,3 +1069,116 @@ def test_safe_range_queries_in_datalog_solver_3():
     solution_instance = dc.build_chase_solution()
 
     assert solution_instance["Ans"].value == {("Hitchcock",)}
+
+
+class Datalog2(
+    TranslateToLogic,
+    Fol2DatalogMixin,
+    DatalogProgramNegation,
+    ExpressionBasicEvaluator,
+):
+    def function_gt(self, x: int, y: int) -> bool:
+        return x > y
+
+
+def test_fol2datalog_mixin_trivial_case():
+    x = Symbol("x")
+    G = Symbol("G")
+    T = Symbol("T")
+    V = Symbol("V")
+
+    dl = Datalog2()
+    dl.walk(
+        ExpressionBlock(
+            (
+                Fact(T(Constant(1))),
+                Fact(T(Constant(4))),
+                Fact(V(Constant(1))),
+                Fact(V(Constant(2))),
+                Fact(V(Constant(3))),
+                Implication(G(x), Conjunction((V(x), Negation(T(x))))),
+            )
+        )
+    )
+    dc = Chase(dl)
+    solution_instance = dc.build_chase_solution()
+
+    assert solution_instance["V"].value == {(1,), (2,), (3,)}
+    assert solution_instance["T"].value == {(1,), (4,)}
+    assert solution_instance["G"].value == {(2,), (3,)}
+
+
+def test_fol2datalog_mixin_disjunction():
+    x = Symbol("x")
+    G = Symbol("G")
+    T = Symbol("T")
+    V = Symbol("V")
+
+    dl = Datalog2()
+    dl.walk(
+        ExpressionBlock(
+            (
+                Fact(T(Constant(1))),
+                Fact(T(Constant(4))),
+                Fact(V(Constant(1))),
+                Fact(V(Constant(2))),
+                Fact(V(Constant(3))),
+                Implication(G(x), Disjunction((V(x), T(x)))),
+            )
+        )
+    )
+    dc = Chase(dl)
+    solution_instance = dc.build_chase_solution()
+
+    assert solution_instance["V"].value == {(1,), (2,), (3,)}
+    assert solution_instance["T"].value == {(1,), (4,)}
+    assert solution_instance["G"].value == {(1,), (2,), (3,), (4,)}
+
+
+def test_fol2datalog_mixin_complex_formula():
+    x = Symbol("x")
+    y = Symbol("y")
+    G = Symbol("G")
+    T = Symbol("T")
+    R = Symbol("R")
+    V = Symbol("V")
+
+    dl = Datalog2()
+    dl.walk(
+        ExpressionBlock(
+            (
+                Fact(T(Constant(1))),
+                Fact(T(Constant(4))),
+                Fact(V(Constant(1))),
+                Fact(V(Constant(2))),
+                Fact(V(Constant(3))),
+                Fact(R(Constant(4), Constant(5))),
+                Fact(R(Constant(2), Constant(6))),
+
+                Implication(
+                    G(x),
+                    Disjunction(
+                        (
+                            T(x),
+                            ExistentialPredicate(
+                                y,
+                                Conjunction(
+                                    (
+                                        V(y),
+                                        R(y, x),
+                                    )
+                                )
+                            )
+                        )
+                    )
+                ),
+            )
+        )
+    )
+    dc = Chase(dl)
+    solution_instance = dc.build_chase_solution()
+
+    assert solution_instance["V"].value == {(1,), (2,), (3,)}
+    assert solution_instance["T"].value == {(1,), (4,)}
+    assert solution_instance["R"].value == {(4, 5), (2, 6)}
+    assert solution_instance["G"].value == {(1,), (4,), (6,)}
