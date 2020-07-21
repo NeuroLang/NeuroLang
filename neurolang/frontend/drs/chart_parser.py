@@ -101,7 +101,7 @@ class Tokenizer:
             )
 
         self.matches.append(
-            (re.compile("^\\w+?\\b"), self.yield_word,)
+            (re.compile("^[\\w\\-]+?\\b"), self.yield_word,)
         )
         self.matches.append(
             (re.compile("^,\\s"), self.yield_comma,)

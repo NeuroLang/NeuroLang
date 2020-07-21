@@ -93,3 +93,38 @@ def test_solver_integration():
     solution = dc.build_chase_solution()
 
     assert (Jones, Ulysses) in solution[likes].value
+
+
+def test_conjunctions():
+    symptom1 = Constant("symptom1")
+    symptom2 = Constant("symptom2")
+    Covid19 = Constant("Covid19")
+    m = Constant("m")
+    cough = Symbol("cough")
+    fever = Symbol("fever")
+    has = Symbol("has")
+    likely_has = Symbol("likely_has")
+    wears = Symbol("wears")
+    mask = Symbol("mask")
+
+    ttdl = TranslateToDatalog()
+    program = ttdl.translate_block(
+        """
+        if a man X has a fever, X has a cough, and X wears
+        a mask then X likely_has Covid19.
+        """
+    )
+    dl = Datalog()
+    dl.add_extensional_predicate_from_tuples(fever, {(symptom1,)})
+    dl.add_extensional_predicate_from_tuples(cough, {(symptom2,)})
+    dl.add_extensional_predicate_from_tuples(
+        has, {(Jones, symptom1,), (Jones, symptom2)}
+    )
+    dl.add_extensional_predicate_from_tuples(mask, {(m,)})
+    dl.add_extensional_predicate_from_tuples(wears, {(Jones, m,)})
+    dl.walk(program)
+
+    dc = Chase(dl)
+    solution = dc.build_chase_solution()
+
+    assert (Jones, Covid19) in solution[likely_has].value
