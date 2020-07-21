@@ -6,10 +6,8 @@ import problog.logic
 import problog.program
 import problog.sdd_formula
 
-from ...expression_walker import IdentityWalker
 from ...expressions import Constant, FunctionApplication, Symbol
 from ...logic import Implication
-from ...logic.expression_processing import TranslateToLogic
 from ...relational_algebra import (
     ColumnStr,
     NamedRelationalAlgebraFrozenSet,
@@ -19,10 +17,6 @@ from ...relational_algebra_provenance import ProvenanceAlgebraSet
 from ..expression_processing import is_within_language_succ_query
 from ..expressions import PROB
 from . import build_always_true_provenance_relation, fresh_name_relation
-
-
-class Translator(TranslateToLogic, IdentityWalker):
-    pass
 
 
 def nl_pred_to_pl_pred(pred):
@@ -102,9 +96,7 @@ def within_language_succ_query_to_intensional_rule(rule):
             if isinstance(arg, (Constant, Symbol))
         )
     )
-    translator = Translator()
-    rule = Implication(csqt_without_prob, rule.antecedent)
-    return translator.walk(rule)
+    return Implication(csqt_without_prob, rule.antecedent)
 
 
 def cplogic_to_problog(cpl):

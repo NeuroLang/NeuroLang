@@ -210,6 +210,7 @@ class CPLogicMixin(PatternWalker):
                 "Disjunctive within-language queries are not allowed"
             )
         self.symbol_table[pred_symb] = Union((implication,))
+        return implication
 
 
 class CPLogicProgram(CPLogicMixin, DatalogProgram, ExpressionWalker):

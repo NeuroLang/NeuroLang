@@ -141,11 +141,6 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
                 pred_symb, self.solver.symbol_table[pred_symb].value.unwrap()
             )
         cpl.walk(probabilistic_idb)
-        for (
-            pred_symb,
-            query,
-        ) in self.solver.within_language_succ_queries().items():
-            cpl.walk(query)
         return cpl
 
     def assign(self, consequent, antecedent):
@@ -161,4 +156,10 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             return super().assign(consequent, antecedent)
 
     def _assign_within_language_succ_query(self, consequent, antecedent):
-        return Implication(consequent.expression, antecedent.expression)
+        consequent = self.translate_expression_to_datalog.walk(
+            consequent.expression
+        )
+        antecedent = self.translate_expression_to_datalog.walk(
+            antecedent.expression
+        )
+        return Implication(consequent, antecedent)
