@@ -140,12 +140,12 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             cpl.add_probabilistic_choice_from_tuples(
                 pred_symb, self.solver.symbol_table[pred_symb].value.unwrap()
             )
-        for pred_symb, union in self.solver.intensional_database().items():
-            if len(union.formulas) == 1 and is_within_language_succ_query(
-                union.formulas[0]
-            ):
-                cpl.walk(union.formulas[0])
         cpl.walk(probabilistic_idb)
+        for (
+            pred_symb,
+            query,
+        ) in self.solver.within_language_succ_queries().items():
+            cpl.walk(query)
         return cpl
 
     def assign(self, consequent, antecedent):

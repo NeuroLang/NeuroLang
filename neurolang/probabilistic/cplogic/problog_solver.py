@@ -199,11 +199,8 @@ def solve_succ_all(cpl):
         ra_set = fresh_name_relation(cpl.symbol_table[pred_symb])
         prob_col = ColumnStr(ra_set.value.columns[0])
         nl_solution[pred_symb] = ProvenanceAlgebraSet(ra_set.value, prob_col)
-    for pred_symb, union in cpl.intensional_database().items():
-        if len(union.formulas) == 1 and is_within_language_succ_query(
-            union.formulas[0]
-        ):
-            nl_solution[pred_symb] = construct_within_language_succ_result(
-                nl_solution[pred_symb], union.formulas[0],
-            )
+    for pred_symb, rule in cpl.within_language_succ_queries().items():
+        nl_solution[pred_symb] = construct_within_language_succ_result(
+            nl_solution[pred_symb], rule,
+        )
     return nl_solution

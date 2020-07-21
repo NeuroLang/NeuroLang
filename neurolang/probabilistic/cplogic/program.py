@@ -50,6 +50,14 @@ class CPLogicMixin(PatternWalker):
     def pchoice_pred_symbs(self):
         return self._get_pred_symbs(self.pchoice_pred_symb_set_symb)
 
+    def within_language_succ_queries(self):
+        return {
+            pred_symb: union.formulas[0]
+            for pred_symb, union in self.intensional_database().items()
+            if len(union.formulas) == 1
+            and is_within_language_succ_query(union.formulas[0])
+        }
+
     def probabilistic_facts(self):
         """Return probabilistic facts of the symbol table."""
         return {
