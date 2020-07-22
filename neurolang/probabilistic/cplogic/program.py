@@ -216,7 +216,7 @@ class CPLogicMixin(PatternWalker):
 
     @staticmethod
     def _validate_within_language_succ_query(implication):
-        csqt_free_vars = set(
+        csqt_vars = set(
             arg
             for arg in implication.consequent.args
             if isinstance(arg, Symbol)
@@ -229,11 +229,11 @@ class CPLogicMixin(PatternWalker):
                 if not isinstance(arg, Symbol)
             )
             raise ForbiddenExpressionError(
-                "All terms in PROB(...) should be free variables. "
-                "Found these variables: {}".format(", ".join(bad_vars))
+                "All terms in PROB(...) should be variables. "
+                "Found these terms: {}".format(", ".join(bad_vars))
             )
-        prob_free_vars = set(prob_term.args)
-        if csqt_free_vars != prob_free_vars:
+        prob_vars = set(prob_term.args)
+        if csqt_vars != prob_vars:
             raise ForbiddenExpressionError(
                 "Variables of the set-based query and variables in the "
                 "PROB(...) term should be the same variables"
