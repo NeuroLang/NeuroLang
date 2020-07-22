@@ -4,7 +4,7 @@ from ....expressions import (
     ExpressionBlock,
 )
 from ....expression_walker import ExpressionBasicEvaluator
-from ....logic import Implication, Conjunction
+from ....logic import Implication, Conjunction, UniversalPredicate
 from ....datalog.basic_representation import DatalogProgram
 from ....datalog.expressions import TranslateToLogic
 from ....datalog.chase import (
@@ -12,7 +12,7 @@ from ....datalog.chase import (
     ChaseMGUMixin,
     ChaseNaive,
 )
-from ..translate_to_dl import TranslateToDatalog
+from ..translate_to_dl import TranslateToDatalog, IntoConjunctionOfSentences
 
 
 intersects = Symbol("intersects")
@@ -51,6 +51,40 @@ def test_translate_to_dl_2():
         )
     )
     assert program == expected
+
+
+def test_distribute_implication_conjunctive_head():
+    x = Symbol("x")
+    y = Symbol("y")
+    A = Symbol("A")
+    B = Symbol("B")
+    C = Symbol("C")
+
+    exp = IntoConjunctionOfSentences().walk(
+        UniversalPredicate(
+            x,
+            UniversalPredicate(
+                y, Implication(Conjunction((B(x), C(y),)), A(x, y),)
+            ),
+        )
+    )
+
+    assert exp == Conjunction(
+        (
+            UniversalPredicate(
+                x,
+                UniversalPredicate(
+                    y, Implication(B(x), A(x, y))
+                ),
+            ),
+            UniversalPredicate(
+                x,
+                UniversalPredicate(
+                    y, Implication(C(y), A(x, y))
+                ),
+            )
+        )
+    )
 
 
 class Datalog(TranslateToLogic, DatalogProgram, ExpressionBasicEvaluator):

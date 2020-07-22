@@ -11,7 +11,9 @@ from . import (
     ExistentialPredicate,
     Quantifier,
 )
+from ..logic.expression_processing import ExtractFreeVariablesWalker
 from ..expression_walker import (
+    ExpressionWalker,
     add_match,
     PatternWalker,
     ChainedWalker,
@@ -292,7 +294,7 @@ class DistributeDisjunctions(LogicExpressionWalker):
         )
 
 
-class CollapseDisjunctions(LogicExpressionWalker):
+class CollapseDisjunctions(ExpressionWalker):
     @add_match(
         Disjunction,
         lambda e: any(isinstance(f, Disjunction) for f in e.formulas),
@@ -307,7 +309,7 @@ class CollapseDisjunctions(LogicExpressionWalker):
         return self.walk(Disjunction(tuple(new_arg)))
 
 
-class CollapseConjunctions(LogicExpressionWalker):
+class CollapseConjunctions(ExpressionWalker):
     @add_match(
         Conjunction,
         lambda e: any(isinstance(f, Conjunction) for f in e.formulas),
@@ -350,3 +352,41 @@ def convert_to_pnf_with_cnf_matrix(expression):
         CollapseConjunctions,
     )
     return walker.walk(expression)
+
+
+class ExtractFOLFreeVariables(ExtractFreeVariablesWalker):
+    @add_match(Implication)
+    def extract_variables_s(self, exp):
+        return self.walk(exp.consequent) | self.walk(exp.antecedent)
+
+
+class DistributeUniversalQuantifiers(ExpressionWalker):
+    @add_match(UniversalPredicate(..., Conjunction))
+    def distribute_universal_quantifier(self, uq):
+        return self.walk(
+            Conjunction(
+                tuple(map(self._apply_quantifier(uq.head), uq.body.formulas))
+            )
+        )
+
+    def _apply_quantifier(self, var):
+        def foo(exp):
+            fv = ExtractFOLFreeVariables().walk(exp)
+            if var in fv:
+                exp = UniversalPredicate(var, exp)
+            return exp
+
+        return foo
+
+
+class DistributeImplicationsWithConjunctiveHeads(ExpressionWalker):
+    @add_match(Implication(Conjunction, ...))
+    def distribute_implication_with_conjunctive_head(self, impl):
+        return self.walk(
+            Conjunction(
+                tuple(
+                    Implication(h, impl.antecedent)
+                    for h in impl.consequent.formulas
+                )
+            )
+        )

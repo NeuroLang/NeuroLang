@@ -15,6 +15,12 @@ from .drs_builder import DRSBuilder, DRS2FOL
 from .chart_parser import ChartParser
 from .english_grammar import EnglishGrammar, EnglishBaseLexicon
 import operator
+from ...expression_walker import ExpressionWalker
+from ...logic.transformations import (
+    CollapseConjunctions,
+    DistributeUniversalQuantifiers,
+    DistributeImplicationsWithConjunctiveHeads,
+)
 
 
 _equals = Constant(operator.eq)
@@ -33,10 +39,7 @@ class TranslateToDatalog:
             sentence = sentence.strip()
             if not sentence:
                 continue
-            exp_block = self.translate_sentence(sentence)
-            program = ExpressionBlock(
-                program.expressions + exp_block.expressions
-            )
+            program += self.translate_sentence(sentence)
 
         return program
 
@@ -45,7 +48,15 @@ class TranslateToDatalog:
 
         drs = self.builder.walk(t)
         exp = self.into_fol.walk(drs)
+        exp = IntoConjunctionOfSentences().walk(exp)
 
+        lsentences = exp.formulas if isinstance(exp, Conjunction) else (exp,)
+        program = ExpressionBlock(())
+        for block in map(self.translate_logical_sentence, lsentences):
+            program += block
+        return program
+
+    def translate_logical_sentence(self, exp):
         try:
             return _as_intensional_rule(exp)
         except TranslateToDatalogError:
@@ -56,7 +67,16 @@ class TranslateToDatalog:
         except TranslateToDatalogError:
             pass
 
-        raise Exception(f"Unsupported expression: {repr(exp)}")
+        raise TranslateToDatalogError(f"Unsupported expression: {repr(exp)}")
+
+
+class IntoConjunctionOfSentences(
+    DistributeImplicationsWithConjunctiveHeads,
+    DistributeUniversalQuantifiers,
+    CollapseConjunctions,
+    ExpressionWalker,
+):
+    pass
 
 
 class TranslateToDatalogError(Exception):
@@ -95,6 +115,14 @@ def _strip_universal_quantifiers(exp):
         exp = exp.body
 
     return ucv, exp
+
+
+def _add_universal_quantifiers(exp, ucv):
+    ucv = list(ucv)
+    while ucv:
+        v = ucv.pop()
+        exp = UniversalPredicate(v, exp)
+    return exp
 
 
 def _constrain_using_head_constants(head, body, ucv):
