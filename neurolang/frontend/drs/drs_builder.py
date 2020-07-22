@@ -10,7 +10,7 @@ from ...expression_walker import (
     ReplaceSymbolWalker,
 )
 from .chart_parser import Quote
-from .english_grammar import S, V, NP, VP, PN, DET, N, VAR, SL
+from .english_grammar import S, V, NP, VP, PN, DET, N, VAR, SL, LIT
 from ...logic import (
     Implication,
     Conjunction,
@@ -194,7 +194,11 @@ class DRSBuilder(ExpressionWalker):
         s = self.walk(s)
         return sl + (s,)
 
-
+    @add_match(Fa(Fa(NP, ...), (Fa(Fa(LIT, ...), ...),)),)
+    def lit_noun_phrase(self, np):
+        (lit,) = np.args
+        (const,) = lit.functor.args
+        return self.walk(DRS((), (const,)))
 
 
 r = re.compile(r"^(\w+)\((\w+(,\s\w+)*)\)$")

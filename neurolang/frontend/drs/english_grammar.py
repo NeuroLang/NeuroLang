@@ -12,6 +12,7 @@ DET = Symbol("DET")
 N = Symbol("N")
 PRO = Symbol("PRO")
 VAR = Symbol("VAR")
+LIT = Symbol("LIT")
 
 c = Symbol("c")
 n = Symbol("n")
@@ -60,6 +61,8 @@ EnglishGrammar = Grammar(
         RootRule(S(_x), (SL(), Constant(","), Constant("and"), S(_y),)),
         RootRule(S(_x), (S(_y), Constant("and"), S(_z),)),
         Rule(S(n), (Quote(Constant("`"), v),)),
+        Rule(LIT(v), (Quote(Constant("\""), v),)),
+        Rule(NP(_x, _y, _z), (LIT(v),)),
     )
 )
 
