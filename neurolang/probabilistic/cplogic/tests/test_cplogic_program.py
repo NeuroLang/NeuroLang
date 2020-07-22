@@ -3,7 +3,11 @@ import typing
 import pytest
 
 from ....datalog.expressions import Fact
-from ....exceptions import ForbiddenDisjunctionError, ProtectedKeywordError
+from ....exceptions import (
+    ForbiddenDisjunctionError,
+    ForbiddenExpressionError,
+    ProtectedKeywordError,
+)
 from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Union
 from ...exceptions import (
@@ -195,3 +199,27 @@ def test_prob_protected_keyword():
     cpl = CPLogicProgram()
     with pytest.raises(ProtectedKeywordError):
         cpl.walk(Implication(PROB(x), Z(x)))
+
+
+def test_within_language_succ_query_no_disjunction():
+    q1 = Implication(P(x, PROB(x)), Conjunction((Z(x), Q(x))))
+    q2 = Implication(P(x, PROB(x)), Conjunction((Z(x), Y(y))))
+    cpl = CPLogicProgram()
+    cpl.walk(q1)
+    with pytest.raises(ForbiddenDisjunctionError):
+        cpl.walk(q2)
+
+
+def test_within_language_succ_query_invalid():
+    q = Implication(P(x, y, PROB(x)), Conjunction((Z(x), Q(y))))
+    cpl = CPLogicProgram()
+    with pytest.raises(ForbiddenExpressionError):
+        cpl.walk(q)
+    q = Implication(P(x, PROB(x, y)), Conjunction((Z(x), Q(y))))
+    cpl = CPLogicProgram()
+    with pytest.raises(ForbiddenExpressionError):
+        cpl.walk(q)
+    q = Implication(P(x, PROB(a, x)), Conjunction((Z(x), Q(y))))
+    cpl = CPLogicProgram()
+    with pytest.raises(ForbiddenExpressionError):
+        cpl.walk(q)

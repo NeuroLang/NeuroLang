@@ -2,7 +2,7 @@ import typing
 
 from ...datalog import DatalogProgram
 from ...datalog.basic_representation import UnionOfConjunctiveQueries
-from ...exceptions import ForbiddenDisjunctionError
+from ...exceptions import ForbiddenDisjunctionError, ForbiddenExpressionError
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
 from ...expressions import Constant, Symbol
@@ -12,6 +12,7 @@ from ..expression_processing import (
     add_to_union,
     build_probabilistic_fact_set,
     check_probabilistic_choice_set_probabilities_sum_to_one,
+    get_within_language_succ_query_prob_term,
     group_probabilistic_facts_by_pred_symb,
     is_probabilistic_fact,
     is_within_language_succ_query,
@@ -202,6 +203,7 @@ class CPLogicMixin(PatternWalker):
 
     @add_match(Implication, is_within_language_succ_query)
     def within_language_succ_query(self, implication):
+        self._validate_within_language_succ_query(implication)
         pred_symb = implication.consequent.functor.cast(
             UnionOfConjunctiveQueries
         )
@@ -211,6 +213,31 @@ class CPLogicMixin(PatternWalker):
             )
         self.symbol_table[pred_symb] = Union((implication,))
         return implication
+
+    @staticmethod
+    def _validate_within_language_succ_query(implication):
+        csqt_free_vars = set(
+            arg
+            for arg in implication.consequent.args
+            if isinstance(arg, Symbol)
+        )
+        prob_term = get_within_language_succ_query_prob_term(implication)
+        if not all(isinstance(arg, Symbol) for arg in prob_term.args):
+            bad_vars = (
+                repr(arg)
+                for arg in prob_term.args
+                if not isinstance(arg, Symbol)
+            )
+            raise ForbiddenExpressionError(
+                "All terms in PROB(...) should be free variables. "
+                "Found these variables: {}".format(", ".join(bad_vars))
+            )
+        prob_free_vars = set(prob_term.args)
+        if csqt_free_vars != prob_free_vars:
+            raise ForbiddenExpressionError(
+                "Variables of the set-based query and variables in the "
+                "PROB(...) term should be the same variables"
+            )
 
 
 class CPLogicProgram(CPLogicMixin, DatalogProgram, ExpressionWalker):

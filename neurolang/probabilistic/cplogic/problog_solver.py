@@ -169,7 +169,7 @@ def get_query_preds(cpl):
         for rule in union.formulas:
             if is_within_language_succ_query(rule):
                 rule = within_language_succ_query_to_intensional_rule(rule)
-            query_preds.append(rule.consequent)
+                query_preds.append(rule.consequent)
     return query_preds
 
 

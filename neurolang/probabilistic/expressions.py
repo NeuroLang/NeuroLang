@@ -1,6 +1,4 @@
-import typing
-
-from ..expressions import Definition, Symbol, Constant
+from ..expressions import Definition, Symbol
 
 PROB = Symbol("PROB")
 

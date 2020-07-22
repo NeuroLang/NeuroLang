@@ -197,3 +197,11 @@ def is_within_language_succ_query(implication):
         isinstance(arg, FunctionApplication) and arg.functor == PROB
         for arg in implication.consequent.args
     )
+
+
+def get_within_language_succ_query_prob_term(implication):
+    return next(
+        arg
+        for arg in implication.consequent.args
+        if isinstance(arg, FunctionApplication) and arg.functor == PROB
+    )
