@@ -599,7 +599,7 @@ def test_solve_succ_all():
     )
     result = problog_solve_succ_all(cpl)
     assert set(result.keys()) == {Z}
-    assert len(result[Z]) == 1
-    res = next(iter(result[Z]))
+    assert len(result[Z].value) == 1
+    res = next(iter(result[Z].value))
     assert res[0] == "a"
     assert np.isclose(res[1], 0.1)

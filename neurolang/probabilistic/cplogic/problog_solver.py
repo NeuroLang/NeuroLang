@@ -1,4 +1,5 @@
 import collections
+from typing import AbstractSet
 
 import problog.core
 import problog.logic
@@ -158,7 +159,7 @@ def construct_within_language_succ_result(provset, rule):
             proj_cols.append(arg.name)
         elif isinstance(arg, ProbabilisticQuery) and arg.functor == PROB:
             proj_cols.append(provset.provenance_column)
-    return provset.value.projection(*proj_cols)
+    return Constant[AbstractSet](provset.value.projection(*proj_cols))
 
 
 def get_query_preds(cpl):

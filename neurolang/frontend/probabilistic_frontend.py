@@ -84,12 +84,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             solution = self.probabilistic_solver(cpl)
         solution_sets = dict()
         for pred_symb, relation in solution.items():
-            if isinstance(relation, ProvenanceAlgebraSet):
-                proj_cols = relation.value.columns
-                ra_set = relation.value.projection(*proj_cols)
-            else:
-                ra_set = relation.value
-            solution_sets[pred_symb.name] = ra_set
+            solution_sets[pred_symb.name] = relation.value
         return solution_sets
 
     def _rewrite_program_with_ontology(self, deterministic_program):
