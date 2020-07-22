@@ -45,12 +45,6 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             antecedent.expression.value is True
         ):
             expression = datalog.Fact(consequent.expression)
-        elif is_within_language_succ_query(
-            datalog.Implication(consequent.expression, antecedent.expression)
-        ):
-            expression = self._assign_within_language_succ_query(
-                consequent, antecedent
-            )
         else:
             expression = self._assign_intensional_rule(consequent, antecedent)
         self.solver.walk(expression)

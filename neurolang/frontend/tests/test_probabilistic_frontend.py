@@ -57,8 +57,8 @@ def test_probabilistic_query():
     data3 = nl.add_uniform_probabilistic_choice_over_set(d3, name="data3")
 
     with nl.scope as e:
-        e.query1[e.y] = data1[e.x] & data2[e.x, e.y]
-        e.query2[e.y] = e.query1[e.y] & data3[e.y]
+        e.query1[e.y, e.PROB[e.y]] = data1[e.x] & data2[e.x, e.y]
+        e.query2[e.y, e.PROB[e.y]] = e.query1[e.y] & data3[e.y]
         res = nl.solve_all()
 
     assert "query1" in res.keys()
@@ -68,7 +68,8 @@ def test_probabilistic_query():
     q2 = res["query2"].as_pandas_dataframe().values
     assert len(q2) == 3
     for elem in q2:
-        assert elem[1] in ["a", "b", "c"]
+        assert elem[0] in ["a", "b", "c"]
+        assert np.isclose(elem[1], 1 / 3 / 5 / 5)
 
 
 def test_mixed_queries():
@@ -83,8 +84,9 @@ def test_mixed_queries():
     data3 = nl.add_uniform_probabilistic_choice_over_set(d3, name="data3")
 
     with nl.scope as e:
-        e.query1[e.x, e.y] = data1[e.x] & data2[e.x, e.y]
-        e.query2[e.y] = e.query1[e.x, e.y] & data3[e.y]
+        e.tmp[e.x, e.y] = data1[e.x] & data2[e.x, e.y]
+        e.query1[e.x, e.y, e.PROB[e.x, e.y]] = e.tmp[e.x, e.y]
+        e.query2[e.y, e.PROB[e.y]] = e.tmp[e.x, e.y] & data3[e.y]
         res = nl.solve_all()
 
     assert "query1" in res.keys()
@@ -93,8 +95,8 @@ def test_mixed_queries():
     q2 = res["query2"].as_pandas_dataframe().values
     assert len(q2) == 4
     for elem in q2:
-        assert elem[0] == 0.25
-        assert elem[1] in ["a", "b", "c", "d"]
+        assert elem[1] == 0.25
+        assert elem[0] in ["a", "b", "c", "d"]
 
 
 def test_ontology_query():

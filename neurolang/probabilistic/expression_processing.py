@@ -164,7 +164,9 @@ def separate_deterministic_probabilistic_code(
             and not is_builtin(p, program.builtins())
         )
 
-        if not probabilistic_symbols.isdisjoint(preds_antecedent):
+        if is_within_language_succ_query(
+            pred
+        ) or not probabilistic_symbols.isdisjoint(preds_antecedent):
             probabilistic_symbols.add(pred.consequent.functor)
             probabilistic_program.append(pred)
             unclassified = 0
