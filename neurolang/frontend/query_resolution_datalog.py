@@ -50,13 +50,6 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         self.solver.walk(expression)
         return expression
 
-    def _assign_within_language_succ_query(self, consequent, antecedent):
-        expression = datalog.Implication(
-            consequent.expression, antecedent.expression
-        )
-        self.solver.walk(expression)
-        return expression
-
     def _assign_intensional_rule(self, consequent, antecedent):
         new_args = tuple()
         changed = False

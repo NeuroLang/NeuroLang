@@ -12,7 +12,7 @@ from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
 from ..expressions import Constant, Expression, FunctionApplication
 from ..logic import Implication, Union
 from .exceptions import DistributionDoesNotSumToOneError
-from .expressions import PROB, ProbabilisticPredicate
+from .expressions import PROB, ProbabilisticPredicate, ProbabilisticQuery
 
 
 def is_probabilistic_fact(expression):
@@ -195,15 +195,16 @@ def is_builtin(pred, known_builtins=None):
 
 
 def is_within_language_succ_query(implication):
-    return any(
-        isinstance(arg, FunctionApplication) and arg.functor == PROB
-        for arg in implication.consequent.args
-    )
+    try:
+        get_within_language_succ_query_prob_term(implication)
+        return True
+    except StopIteration:
+        return False
 
 
 def get_within_language_succ_query_prob_term(implication):
     return next(
         arg
         for arg in implication.consequent.args
-        if isinstance(arg, FunctionApplication) and arg.functor == PROB
+        if isinstance(arg, ProbabilisticQuery) and arg.functor == PROB
     )

@@ -1,4 +1,4 @@
-from ..expressions import Definition, Symbol
+from ..expressions import Definition, FunctionApplication, Symbol
 
 PROB = Symbol("PROB")
 
@@ -32,3 +32,7 @@ class ProbabilisticChoiceGrounding(Grounding):
     choice from the grounding of other choices.
 
     """
+
+
+class ProbabilisticQuery(FunctionApplication):
+    pass

@@ -14,7 +14,7 @@ from ...exceptions import (
     DistributionDoesNotSumToOneError,
     MalformedProbabilisticTupleError,
 )
-from ...expressions import PROB, ProbabilisticPredicate
+from ...expressions import PROB, ProbabilisticPredicate, ProbabilisticQuery
 from ..program import CPLogicProgram
 
 P = Symbol("P")
@@ -189,7 +189,9 @@ def test_add_probchoice_does_not_sum_to_one():
 
 
 def test_within_language_succ_query():
-    rule = Implication(P(x, y, PROB(x, y)), Conjunction((Q(x), Z(y, z))))
+    rule = Implication(
+        P(x, y, ProbabilisticQuery(PROB, (x, y))), Conjunction((Q(x), Z(y, z)))
+    )
     cpl = CPLogicProgram()
     cpl.walk(rule)
     assert P in cpl.intensional_database()
@@ -202,8 +204,12 @@ def test_prob_protected_keyword():
 
 
 def test_within_language_succ_query_no_disjunction():
-    q1 = Implication(P(x, PROB(x)), Conjunction((Z(x), Q(x))))
-    q2 = Implication(P(x, PROB(x)), Conjunction((Z(x), Y(y))))
+    q1 = Implication(
+        P(x, ProbabilisticQuery(PROB, (x,))), Conjunction((Z(x), Q(x)))
+    )
+    q2 = Implication(
+        P(x, ProbabilisticQuery(PROB, (x,))), Conjunction((Z(x), Y(y)))
+    )
     cpl = CPLogicProgram()
     cpl.walk(q1)
     with pytest.raises(ForbiddenDisjunctionError):
@@ -211,15 +217,21 @@ def test_within_language_succ_query_no_disjunction():
 
 
 def test_within_language_succ_query_invalid():
-    q = Implication(P(x, y, PROB(x)), Conjunction((Z(x), Q(y))))
+    q = Implication(
+        P(x, y, ProbabilisticQuery(PROB, (x,))), Conjunction((Z(x), Q(y)))
+    )
     cpl = CPLogicProgram()
     with pytest.raises(ForbiddenExpressionError):
         cpl.walk(q)
-    q = Implication(P(x, PROB(x, y)), Conjunction((Z(x), Q(y))))
+    q = Implication(
+        P(x, ProbabilisticQuery(PROB, (x, y))), Conjunction((Z(x), Q(y)))
+    )
     cpl = CPLogicProgram()
     with pytest.raises(ForbiddenExpressionError):
         cpl.walk(q)
-    q = Implication(P(x, PROB(a, x)), Conjunction((Z(x), Q(y))))
+    q = Implication(
+        P(x, ProbabilisticQuery(PROB, (a, x))), Conjunction((Z(x), Q(y)))
+    )
     cpl = CPLogicProgram()
     with pytest.raises(ForbiddenExpressionError):
         cpl.walk(q)
