@@ -5,11 +5,19 @@ import pytest
 
 from ...exceptions import NeuroLangException
 from ...expressions import Constant, FunctionApplication, Symbol
-from ...relational_algebra import (ColumnInt, ColumnStr, Destroy, Difference,
-                                   ExtendedProjection,
-                                   ExtendedProjectionListMember, NameColumns,
-                                   NaturalJoin, Projection, RenameColumn,
-                                   Selection)
+from ...relational_algebra import (
+    ColumnInt,
+    ColumnStr,
+    Destroy,
+    Difference,
+    ExtendedProjection,
+    ExtendedProjectionListMember,
+    NameColumns,
+    NaturalJoin,
+    Projection,
+    RenameColumn,
+    Selection
+)
 from ...utils import NamedRelationalAlgebraFrozenSet
 from ..expressions import Conjunction, Negation
 from ..translate_to_named_ra import TranslateToNamedRA
@@ -225,6 +233,51 @@ def test_extended_projection():
             ExtendedProjectionListMember(x, x),
             ExtendedProjectionListMember(y, y)
         ]
+    )
+    assert res == exp_trans
+
+def test_extended_projection_2():
+    u = S_("u")
+    v = S_("v")
+    w = S_("w")
+    x = S_("x")
+    y = S_("y")
+    z = S_("z")
+    R1 = S_("R1")
+    fa = R1(x, y, v, u)
+    builtin_condition_1 = C_(eq)(C_(mul)(x, C_(3)), z)
+    builtin_condition_2 = C_(eq)(C_(mul)(v, C_(2)), w)
+    exp = Conjunction((fa, builtin_condition_1, builtin_condition_2))
+
+    tr = TranslateToNamedRA()
+    res = tr.walk(exp)
+    fa_trans = NameColumns(
+        Projection(
+            R1,
+            (
+                C_(ColumnInt(0)),
+                C_(ColumnInt(1)),
+                C_(ColumnInt(2)),
+                C_(ColumnInt(3)),
+            ),
+        ),
+        (
+            Constant(ColumnStr("x")),
+            Constant(ColumnStr("y")),
+            Constant(ColumnStr("v")),
+            Constant(ColumnStr("u")),
+        ),
+    )
+    exp_trans = ExtendedProjection(
+        fa_trans,
+        [
+            ExtendedProjectionListMember(*builtin_condition_1.args),
+            ExtendedProjectionListMember(*builtin_condition_2.args),
+            ExtendedProjectionListMember(x, x),
+            ExtendedProjectionListMember(y, y),
+            ExtendedProjectionListMember(u, u),
+            ExtendedProjectionListMember(v, v),
+        ],
     )
     assert res == exp_trans
 

@@ -64,7 +64,6 @@ def sure_is_not_pattern_():
 
     with _lock:
         _sure_is_not_pattern[thread_id] = True
-    print("In")
     yield
     with _lock:
         del _sure_is_not_pattern[thread_id]

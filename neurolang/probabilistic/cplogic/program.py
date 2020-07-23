@@ -56,6 +56,14 @@ class CPLogicMixin(PatternWalker):
             if k in self.pfact_pred_symbs
         }
 
+    def probabilistic_choices(self):
+        """Return probabilistic choices of the symbol table."""
+        return {
+            k: v
+            for k, v in self.symbol_table.items()
+            if k in self.pchoice_pred_symbs
+        }
+
     def _get_pred_symbs(self, set_symb):
         return self.symbol_table.get(
             set_symb, Constant[typing.AbstractSet](set())
