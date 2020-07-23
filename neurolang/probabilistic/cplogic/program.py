@@ -5,8 +5,9 @@ from ...datalog.basic_representation import UnionOfConjunctiveQueries
 from ...exceptions import ForbiddenDisjunctionError, ForbiddenExpressionError
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
-from ...expressions import Constant, Symbol
+from ...expressions import Constant, FunctionApplication, Symbol
 from ...logic import Implication, Union
+from ...type_system import get_generic_type
 from ..exceptions import MalformedProbabilisticTupleError
 from ..expression_processing import (
     add_to_union,
@@ -18,6 +19,33 @@ from ..expression_processing import (
     is_within_language_succ_query,
     union_contains_probabilistic_facts,
 )
+from ..expressions import PROB, ProbabilisticQuery
+
+
+def is_succ_probabilistic_query_wannabe(expression):
+    return (
+        isinstance(expression, FunctionApplication)
+        and get_generic_type(type(expression)) is FunctionApplication
+        and expression.functor == PROB
+    )
+
+
+class TranslateProbabilisticQueryMixin(PatternWalker):
+    @add_match(
+        Implication,
+        lambda implication: any(
+            is_succ_probabilistic_query_wannabe(arg)
+            for arg in implication.consequent.args
+        ),
+    )
+    def succ_query(self, implication):
+        csqt_args = tuple()
+        for arg in implication.consequent.args:
+            if is_succ_probabilistic_query_wannabe(arg):
+                arg = ProbabilisticQuery(*arg.unapply())
+            csqt_args += (arg,)
+        consequent = implication.consequent.functor(*csqt_args)
+        return self.walk(Implication(consequent, implication.antecedent))
 
 
 class CPLogicMixin(PatternWalker):

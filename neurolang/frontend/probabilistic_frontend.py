@@ -2,7 +2,11 @@ import collections
 from typing import AbstractSet, Tuple
 from uuid import uuid1
 
-from ..datalog.aggregation import AggregationApplication, Chase
+from ..datalog.aggregation import (
+    AggregationApplication,
+    Chase,
+    TranslateToLogicWithAggregation,
+)
 from ..datalog.constraints_representation import DatalogConstraintsProgram
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
@@ -12,7 +16,11 @@ from ..logic import Implication, Union
 from ..probabilistic.cplogic.problog_solver import (
     solve_succ_all as problog_solve_succ_all,
 )
-from ..probabilistic.cplogic.program import CPLogicMixin, CPLogicProgram
+from ..probabilistic.cplogic.program import (
+    CPLogicMixin,
+    CPLogicProgram,
+    TranslateProbabilisticQueryMixin,
+)
 from ..probabilistic.expression_processing import (
     is_within_language_succ_query,
     separate_deterministic_probabilistic_code,
@@ -29,6 +37,8 @@ from .query_resolution_expressions import Symbol as FrontEndSymbol
 
 
 class RegionFrontendCPLogicSolver(
+    TranslateProbabilisticQueryMixin,
+    TranslateToLogicWithAggregation,
     RegionSolver,
     CPLogicMixin,
     DatalogConstraintsProgram,
@@ -138,30 +148,3 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             )
         cpl.walk(probabilistic_idb)
         return cpl
-
-    def _assign_intensional_rule(self, consequent, antecedent):
-        new_args = tuple()
-        changed = False
-        consequent_expression = self.translate_expression_to_datalog.walk(
-            consequent.expression
-        )
-
-        for arg in consequent_expression.args:
-            if isinstance(arg, FunctionApplication):
-                if arg.functor == PROB:
-                    arg = ProbabilisticQuery(arg.functor, arg.args)
-                else:
-                    arg = AggregationApplication(arg.functor, arg.args)
-                changed = True
-            new_args += (arg,)
-
-        if changed:
-            consequent_expression = FunctionApplication(
-                consequent.expression.functor, new_args
-            )
-
-        expression = Implication(
-            consequent_expression,
-            self.translate_expression_to_datalog.walk(antecedent.expression),
-        )
-        return expression

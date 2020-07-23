@@ -461,3 +461,10 @@ def get_args(type_):
     else:
         raise ValueError(f"Not {type_} is not a generic type")
     return ret
+
+
+def get_generic_type(typ):
+    if is_parameterized(typ) or is_parametrical(typ):
+        return typ.__generic_class__
+    else:
+        return typ
