@@ -1,10 +1,9 @@
-import operator
 import typing
 
 import pytest
 
 from ....datalog.expressions import Fact
-from ....exceptions import ForbiddenBuiltinError, ForbiddenDisjunctionError
+from ....exceptions import ForbiddenDisjunctionError
 from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Union
 from ...exceptions import (

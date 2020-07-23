@@ -225,7 +225,10 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
 
     @add_match(NodeValue(PlateNode, TRUE))
     def node_always_true(self, nv):
-        prob_col = getattr(nv.node, "probability_column", None)
+        if hasattr(nv.node, "probability_column"):
+            prob_col = nv.node.probability_column.value
+        else:
+            prob_col = None
         prov_set = build_always_true_provenance_relation(
             nv.node.relation, prob_col
         )
@@ -238,7 +241,13 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
         prov_set = self.walk(NodeValue(nv.node, TRUE))
         prov_set = Selection(
             prov_set,
-            TupleEqualSymbol(prov_set.non_provenance_columns, nv.value),
+            TupleEqualSymbol(
+                tuple(
+                    str2columnstr_constant(c)
+                    for c in prov_set.non_provenance_columns
+                ),
+                nv.value,
+            ),
         )
         return prov_set
 
@@ -252,7 +261,7 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
         """
         node = operation.valued_node[0]
         relation = node.relation.value
-        prov_col = node.probability_column
+        prov_col = node.probability_column.value
         prov_set = ProvenanceAlgebraSet(relation, prov_col)
         prov_set.__debug_expression__ = node.expression
         return prov_set
@@ -348,12 +357,18 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
         choice_node = operation.valued_node[0]
         choice_value = operation.valued_node[1]
         prov_set = ProvenanceAlgebraSet(
-            choice_node.relation.value, choice_node.probability_column,
+            choice_node.relation.value, choice_node.probability_column.value,
         )
         prov_set.__debug_expression__ = choice_node.expression
         return Selection(
             prov_set,
-            TupleEqualSymbol(prov_set.non_provenance_columns, choice_value),
+            TupleEqualSymbol(
+                tuple(
+                    str2columnstr_constant(c)
+                    for c in prov_set.non_provenance_columns
+                ),
+                choice_value,
+            ),
         )
 
     @add_match(
@@ -365,13 +380,19 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
         choice_node = operation.condition_valued_nodes[0][0]
         choice_value = operation.condition_valued_nodes[0][1]
         relation = build_always_true_provenance_relation(
-            choice_node.relation, choice_node.probability_column,
+            choice_node.relation, choice_node.probability_column.value,
         )
         relation.__debug_expression__ = choice_node.expression
         relation.__debug_alway_true__ = True
         relation = Selection(
             relation,
-            TupleEqualSymbol(relation.non_provenance_columns, choice_value),
+            TupleEqualSymbol(
+                tuple(
+                    str2columnstr_constant(c)
+                    for c in relation.non_provenance_columns
+                ),
+                choice_value,
+            ),
         )
         return relation
 

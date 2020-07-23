@@ -289,7 +289,11 @@ class ChaseNamedRelationalAlgebraMixin:
             lambda: Constant[AbstractSet](WrappedRelationalAlgebraSet())
         )
         symbol_table.update(instance)
-        symbol_table.update(restriction_instance)
+        for k, v in restriction_instance.items():
+            if k in symbol_table:
+                s = symbol_table[k]
+                v = v.apply(s.value | v.value)
+            symbol_table[k] = v
         predicates = tuple(rule_predicates_iterator)
 
         if len(predicates) == 0:
