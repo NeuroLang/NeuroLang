@@ -198,13 +198,17 @@ def is_within_language_succ_query(implication):
     try:
         get_within_language_succ_query_prob_term(implication)
         return True
-    except StopIteration:
+    except ValueError:
         return False
 
 
 def get_within_language_succ_query_prob_term(implication):
-    return next(
-        arg
-        for arg in implication.consequent.args
-        if isinstance(arg, ProbabilisticQuery) and arg.functor == PROB
-    )
+    try:
+        prob_term = next(
+            arg
+            for arg in implication.consequent.args
+            if isinstance(arg, ProbabilisticQuery) and arg.functor == PROB
+        )
+        return prob_term
+    except StopIteration:
+        raise ValueError("Expression does not have a SUCC probabilstic term")
