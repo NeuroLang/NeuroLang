@@ -1,12 +1,8 @@
 import operator as op
-try:
-    from contextlib import nullcontext
-except ImportError:
-    from contextlib import suppress as nullcontext
 from itertools import product
 from typing import AbstractSet, Callable, Tuple
 
-from pytest import fixture, skip, raises
+from pytest import fixture, raises, skip
 
 from ... import expression_walker as ew
 from ... import expressions
@@ -14,10 +10,18 @@ from ..basic_representation import DatalogProgram
 from ..chase import (ChaseGeneral, ChaseMGUMixin, ChaseNaive,
                      ChaseNamedRelationalAlgebraMixin, ChaseNode,
                      ChaseNonRecursive, ChaseRelationalAlgebraPlusCeriMixin,
-                     ChaseSemiNaive, NeuroLangProgramHasLoopsException)
+                     ChaseSemiNaive, NeuroLangNonLinearProgramException,
+                     NeuroLangProgramHasLoopsException)
 from ..expressions import (Conjunction, Fact, Implication, TranslateToLogic,
                            Union)
 from ..instance import MapInstance
+
+try:
+    from contextlib import nullcontext
+except ImportError:
+    from contextlib import suppress as nullcontext
+
+
 
 C_ = expressions.Constant
 S_ = expressions.Symbol
@@ -746,3 +750,37 @@ def test_another_recursive_chase(chase_class):
     with context:
         solution = chase_class(dl).build_chase_solution()
         assert solution['q'].value == {C_((e, )) for e in (b, c, d)}
+
+
+def test_transitive_closure(chase_class):
+    x = S_('X')
+    y = S_('Y')
+    z = S_('Z')
+    edge = S_('edge')
+    reaches = S_('reaches')
+
+    dl = Datalog()
+    dl.add_extensional_predicate_from_tuples(edge, {(1, 2), (2, 3), (3, 4)})
+
+    code = Eb_([
+        Imp_(reaches(x, y), edge(x, y)),
+        Imp_(reaches(x, y), reaches(x, z) & reaches(z, y))
+    ])
+
+    dl.walk(code)
+
+    if issubclass(chase_class, ChaseNonRecursive):
+        context = raises(NeuroLangProgramHasLoopsException)
+    elif issubclass(chase_class, ChaseSemiNaive):
+        context = raises(NeuroLangNonLinearProgramException)
+    else:
+        context = nullcontext()
+
+    with context:
+        solution = chase_class(dl).build_chase_solution()
+        assert solution[reaches].value == {
+            C_((i, j))
+            for i in range(1, 5)
+            for j in range(i, 5)
+            if i != j
+        }
