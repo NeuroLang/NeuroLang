@@ -2,17 +2,13 @@ import collections
 from typing import AbstractSet, Tuple
 from uuid import uuid1
 
-from ..datalog.aggregation import (
-    AggregationApplication,
-    Chase,
-    TranslateToLogicWithAggregation,
-)
+from ..datalog.aggregation import Chase, TranslateToLogicWithAggregation
 from ..datalog.constraints_representation import DatalogConstraintsProgram
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
 from ..expression_walker import ExpressionBasicEvaluator
-from ..expressions import FunctionApplication, Symbol, Unknown
-from ..logic import Implication, Union
+from ..expressions import Symbol, Unknown
+from ..logic import Union
 from ..probabilistic.cplogic.problog_solver import (
     solve_succ_all as problog_solve_succ_all,
 )
@@ -22,16 +18,13 @@ from ..probabilistic.cplogic.program import (
     TranslateProbabilisticQueryMixin,
 )
 from ..probabilistic.expression_processing import (
-    is_within_language_succ_query,
     separate_deterministic_probabilistic_code,
 )
-from ..probabilistic.expressions import PROB, ProbabilisticQuery
 from ..region_solver import RegionSolver
 from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraStringExpression,
 )
-from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from . import QueryBuilderDatalog
 from .query_resolution_expressions import Symbol as FrontEndSymbol
 
