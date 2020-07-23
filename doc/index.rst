@@ -24,6 +24,8 @@ User's Guide
 API Reference
 -------------
 
+The full API reference is available here :doc:`gen_api/modules`
+
 .. toctree::
    :maxdepth: 2
 
