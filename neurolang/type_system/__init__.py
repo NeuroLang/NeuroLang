@@ -464,7 +464,4 @@ def get_args(type_):
 
 
 def get_generic_type(typ):
-    if is_parameterized(typ) or is_parametrical(typ):
-        return typ.__generic_class__
-    else:
-        return typ
+    return getattr(typ, "__generic_class__", typ)
