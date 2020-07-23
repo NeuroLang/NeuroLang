@@ -145,7 +145,33 @@ def test_conjunctions():
     solution = dc.build_chase_solution()
 
     for a, b in product((1, 2, 3, 4), (1, 2, 3, 4)):
-        # TODO: Check why the edges between 1 and 4 are not present
-        if a == b or (a, b) in ((1, 4), (4, 1)):
+        if a == b:
             continue
         assert (Constant(a), Constant(b)) in solution[reaches].value
+
+
+def test_conjunctions_2():
+    edge = Symbol("edge")
+    tainted = Symbol("tainted")
+    has = Symbol("has")
+    program = TranslateToDatalog().translate_block(
+        """
+        if `edge(X, Y)` then X reaches Y.
+        if X reaches Y then Y reaches X.
+        if X reaches Y and X has "label" then Y has "label".
+        if `tainted(X)` then X has "label".
+        """
+    )
+    dl = Datalog()
+    dl.add_extensional_predicate_from_tuples(
+        edge, {("A", "B"), ("B", "C"), ("C", "D"), ("F", "G")}
+    )
+    dl.add_extensional_predicate_from_tuples(
+        tainted, {("A",)}
+    )
+    dl.walk(program)
+    dc = Chase(dl)
+    solution = dc.build_chase_solution()
+
+    for x in ("A", "B", "C", "D"):
+        assert (Constant(x), Constant("label")) in solution[has].value
