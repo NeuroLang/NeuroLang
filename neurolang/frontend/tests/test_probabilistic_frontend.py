@@ -3,7 +3,6 @@ from typing import AbstractSet, Tuple
 
 import numpy as np
 
-from ...probabilistic.expressions import PROB
 from ..probabilistic_frontend import ProbabilisticFrontend
 
 
