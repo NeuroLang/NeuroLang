@@ -1190,6 +1190,45 @@ def test_fol2datalog_unsafe_disjunction():
         )
 
 
+def test_fol2datalog_safe_universal_usage():
+    x = Symbol("x")
+    y = Symbol("y")
+    G = Symbol("G")
+    T = Symbol("T")
+    R = Symbol("R")
+    V = Symbol("V")
+
+    dl = Datalog2()
+    dl.walk(
+        ExpressionBlock(
+            (
+                Fact(V(Constant(1))),
+                Fact(V(Constant(2))),
+                Fact(V(Constant(3))),
+                Fact(T(Constant(1))),
+                Fact(T(Constant(4))),
+                Fact(R(Constant(2), Constant(1))),
+                Fact(R(Constant(2), Constant(4))),
+                Implication(
+                    G(x),
+                    Conjunction(
+                        (
+                            V(x),
+                            UniversalPredicate(
+                                y, Implication(R(x, y), T(y))
+                            ),
+                        )
+                    ),
+                ),
+            )
+        )
+    )
+    dc = Chase(dl)
+    solution_instance = dc.build_chase_solution()
+
+    assert solution_instance["G"].value == {(2,)}
+
+
 def test_fol2datalog_unsafe_complex_formula():
     x = Symbol("x")
     y = Symbol("y")
