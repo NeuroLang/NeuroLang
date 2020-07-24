@@ -152,26 +152,56 @@ def test_conjunctions():
 
 def test_conjunctions_2():
     edge = Symbol("edge")
-    tainted = Symbol("tainted")
+    start = Symbol("start")
     has = Symbol("has")
     program = TranslateToDatalog().translate_block(
         """
         if `edge(X, Y)` then X reaches Y.
         if X reaches Y then Y reaches X.
         if X reaches Y and X has "label" then Y has "label".
-        if `tainted(X)` then X has "label".
+        if `start(X)` then X has "label".
         """
     )
     dl = Datalog()
     dl.add_extensional_predicate_from_tuples(
         edge, {("A", "B"), ("B", "C"), ("C", "D"), ("F", "G")}
     )
-    dl.add_extensional_predicate_from_tuples(
-        tainted, {("A",)}
-    )
+    dl.add_extensional_predicate_from_tuples(start, {("A",)})
     dl.walk(program)
     dc = Chase(dl)
     solution = dc.build_chase_solution()
 
     for x in ("A", "B", "C", "D"):
         assert (Constant(x), Constant("label")) in solution[has].value
+
+
+def test_conjunction_3():
+    edge = Symbol("edge")
+    has = Symbol("has")
+    program = TranslateToDatalog().translate_block(
+        """
+        if `edge(X, Y)` then X reaches Y.
+        if X reaches Y and Y reaches Z then X reaches Z.
+        if X reaches X then X has "cycle".
+        """
+    )
+    dl = Datalog()
+    dl.add_extensional_predicate_from_tuples(
+        edge,
+        {
+            ("A", "B"),
+            ("B", "C"),
+            ("C", "D"),
+            ("D", "E"),
+            ("E", "B"),
+            ("E", "F"),
+        },
+    )
+    dl.walk(program)
+    dc = Chase(dl)
+    solution = dc.build_chase_solution()
+
+    for x in ("B", "C", "D", "E"):
+        assert (Constant(x), Constant("cycle")) in solution[has].value
+    for x in ("A", "F"):
+        assert (Constant(x), Constant("cycle")) not in solution[has].value
