@@ -42,6 +42,7 @@ from ..logic.horn_clauses import (
     translate_horn_clauses_to_datalog,
     fol_query_to_datalog_program,
     Fol2DatalogMixin,
+    Fol2DatalogTranslationException,
 )
 from ..datalog.negation import DatalogProgramNegation
 from ..expression_walker import ExpressionBasicEvaluator
@@ -1184,7 +1185,7 @@ def test_fol2datalog_unsafe_disjunction():
     V = Symbol("V")
 
     dl = Datalog2()
-    with pytest.raises(NeuroLangException):
+    with pytest.raises(Fol2DatalogTranslationException):
         dl.walk(
             ExpressionBlock((Implication(G(x), Disjunction((V(y), T(x)))),))
         )
@@ -1214,9 +1215,7 @@ def test_fol2datalog_safe_universal_usage():
                     Conjunction(
                         (
                             V(x),
-                            UniversalPredicate(
-                                y, Implication(R(x, y), T(y))
-                            ),
+                            UniversalPredicate(y, Implication(R(x, y), T(y))),
                         )
                     ),
                 ),
@@ -1237,7 +1236,7 @@ def test_fol2datalog_unsafe_complex_formula():
     R = Symbol("R")
 
     dl = Datalog2()
-    with pytest.raises(NeuroLangException):
+    with pytest.raises(Fol2DatalogTranslationException):
         dl.walk(
             ExpressionBlock(
                 (

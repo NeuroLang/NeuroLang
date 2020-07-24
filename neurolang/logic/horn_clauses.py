@@ -450,10 +450,17 @@ def fol_query_to_datalog_program(head, exp):
     return program
 
 
+class Fol2DatalogTranslationException(NeuroLangException):
+    pass
+
+
 class Fol2DatalogMixin(LogicExpressionWalker):
     @add_match(
         Implication, lambda imp: not is_conjunctive_negation(imp.antecedent)
     )
     def translate_implication(self, imp):
-        program = fol_query_to_datalog_program(imp.consequent, imp.antecedent)
+        try:
+            program = fol_query_to_datalog_program(imp.consequent, imp.antecedent)
+        except NeuroLangException as e:
+            raise Fol2DatalogTranslationException from e
         return self.walk(program)
