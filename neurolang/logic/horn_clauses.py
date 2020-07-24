@@ -460,7 +460,9 @@ class Fol2DatalogMixin(LogicExpressionWalker):
     )
     def translate_implication(self, imp):
         try:
-            program = fol_query_to_datalog_program(imp.consequent, imp.antecedent)
+            program = fol_query_to_datalog_program(
+                imp.consequent, imp.antecedent
+            )
         except NeuroLangException as e:
             raise Fol2DatalogTranslationException from e
         return self.walk(program)
