@@ -211,4 +211,4 @@ def get_within_language_succ_query_prob_term(implication):
         )
         return prob_term
     except StopIteration:
-        raise ValueError("Expression does not have a SUCC probabilstic term")
+        raise ValueError("Expression does not have a SUCC probabilistic term")
