@@ -135,7 +135,8 @@ class DRSBuilder(ExpressionWalker):
     @add_match(Fa(Fa(S, ...), (Fa(Quote, (C("`"), ...)),),),)
     def quoted_predicate(self, s):
         exp = _parse_predicate(s.args[0].args[1].value)
-        return self.walk(DRS(exp.args, (exp,)))
+        refs = [a for a in exp.args if isinstance(a, Symbol)]
+        return self.walk(DRS(refs, (exp,)))
 
     @add_match(
         Implication(DRS, DRS),

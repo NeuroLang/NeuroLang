@@ -166,7 +166,7 @@ class ChartParser:
         compl = [
             e
             for e in self.chart[0][len(tokens)]
-            if e.rule.is_root and not e.remaining
+            if e.rule and e.rule.is_root and not e.remaining
         ]
         results = [self._build_tree(e, e.unification) for e in compl]
         if len(results) == 0:

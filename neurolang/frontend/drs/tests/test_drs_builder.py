@@ -207,6 +207,7 @@ def test_conjunction_2():
         ),
     )
 
+
 def test_quoted_string_literal():
     b = DRSBuilder(_eg)
     t = _cp.parse('"Ulysses" references "Odyssey"')[0]
@@ -217,3 +218,17 @@ def test_quoted_string_literal():
     assert len(drs.referents) == 0
     assert len(drs.expressions) == 1
     assert Symbol("references")(u, o) in set(drs.expressions)
+
+
+def test_quoted_string_lit_in_quoted_datalog():
+    b = DRSBuilder(_eg)
+    t = _cp.parse('`references(X, "Ulysses", "Odyssey")`')[0]
+    drs = b.walk(t)
+    x = Symbol("X")
+    o = Constant("Odyssey")
+    u = Constant("Ulysses")
+
+    assert len(drs.referents) == 1
+    assert x in drs.referents
+    assert len(drs.expressions) == 1
+    assert Symbol("references")(x, u, o) in set(drs.expressions)
