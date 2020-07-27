@@ -201,7 +201,7 @@ class DRSBuilder(ExpressionWalker):
         return self.walk(DRS((), (const,)))
 
 
-r = re.compile(r"^(\w+)\((\w+(,\s\w+)*)\)$")
+r = re.compile(r'^(\w+)\(((\w+|"\w+")(,\s?(\w+|"\w+"))*)\)$')
 
 
 def _parse_predicate(string):
@@ -210,8 +210,14 @@ def _parse_predicate(string):
     if not m:
         raise Exception(f"Quoted predicate is not valid datalog: {string}")
     functor = Symbol(m.group(1))
-    args = map(Symbol, map(str.strip, m.group(2).split(",")))
+    args = map(_parse_argument, map(str.strip, m.group(2).split(",")))
     return functor(*args)
+
+
+def _parse_argument(s):
+    if s[0] == '"':
+        return C(s.strip('"'))
+    return Symbol(s)
 
 
 class DRS2FOL(ExpressionWalker):
