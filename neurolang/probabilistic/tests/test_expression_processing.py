@@ -56,3 +56,18 @@ def test_get_probchoice_variable_equalities():
         predicates, pchoice_pred_symbs
     )
     assert equalities == {(y, z)}
+    predicates = {P(x), P(y)}
+    equalities = get_probchoice_variable_equalities(
+        predicates, pchoice_pred_symbs
+    )
+    assert equalities == {(x, y)}
+    predicates = {P(x)}
+    equalities = get_probchoice_variable_equalities(
+        predicates, pchoice_pred_symbs
+    )
+    assert equalities == set()
+    predicates = {P(x), P(y), P(z)}
+    equalities = get_probchoice_variable_equalities(
+        predicates, pchoice_pred_symbs
+    )
+    assert equalities == {(x, y), (x, z)}
