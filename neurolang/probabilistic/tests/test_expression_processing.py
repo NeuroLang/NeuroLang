@@ -70,4 +70,7 @@ def test_get_probchoice_variable_equalities():
     equalities = get_probchoice_variable_equalities(
         predicates, pchoice_pred_symbs
     )
-    assert equalities == {(x, y), (x, z)}
+    assert equalities in [
+        {(x, y), (x, z)},
+        {(x, y), (y, z)},
+    ]
