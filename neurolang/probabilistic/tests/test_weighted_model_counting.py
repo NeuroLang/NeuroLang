@@ -283,7 +283,9 @@ def test_simple_existential():
         - Pr[Q(a)] = 1.0
 
     """
-    pchoice_as_sets = {P: {(0.2, "a", "a"), (0.8, "a", "b")}}
+    pchoice_as_sets = {
+        P: {(0.2, "a", "a"), (0.7, "a", "b"), (0.1, "c", "c")}
+    }
     code = Union((Implication(Q(x), P(x, y)),))
     cpl_program = CPLogicProgram()
     for pred_symb, pchoice_as_set in pchoice_as_sets.items():
@@ -292,7 +294,10 @@ def test_simple_existential():
         )
     cpl_program.walk(code)
     exp, result = testing.inspect_resolution(Q(x), cpl_program)
-    expected = testing.make_prov_set([(1.0, "a")], ("_p_", "x"))
+    expected = testing.make_prov_set(
+        [(0.9, "a"), (.1, "c")], 
+        ("_p_", "x")
+    )
     assert testing.eq_prov_relations(result, expected)
 
 
@@ -353,6 +358,7 @@ def test_multilevel_existential():
             Implication(H(x, y), Conjunction((R(x), Z(y)))),
             Implication(A(x), Conjunction((H(x, y), P(y, x)))),
             Implication(B(x), Conjunction((A(x), Q(y)))),
+            Implication(C(x), H(x, y))
         )
     )
     cpl_program = CPLogicProgram()
@@ -375,6 +381,19 @@ def test_multilevel_existential():
         ("_p_", "x", "y"),
     )
     assert testing.eq_prov_relations(result, expected)
+
+    qpred = C(z)
+    result = solve_succ_query(qpred, cpl_program,)
+    expected = testing.make_prov_set(
+        [
+            (.1, "a"),
+            (.4, "b"),
+            (.5, "c"),
+        ],
+        ("_p_", "z"),
+    )
+    assert testing.eq_prov_relations(result, expected)
+
     qpred = B(z)
     result = solve_succ_query(qpred, cpl_program,)
     expected = testing.make_prov_set([(0.5 * 0.1 * 0.5, "c")], ("_p_", "z"),)
