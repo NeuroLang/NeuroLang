@@ -2,7 +2,7 @@ import collections
 from typing import AbstractSet, Tuple
 from uuid import uuid1
 
-from ..datalog.aggregation import Chase
+from ..datalog.aggregation import Chase, TranslateToLogicWithAggregation
 from ..datalog.constraints_representation import DatalogConstraintsProgram
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
@@ -12,7 +12,11 @@ from ..logic import Union
 from ..probabilistic.cplogic.problog_solver import (
     solve_succ_all as problog_solve_succ_all,
 )
-from ..probabilistic.cplogic.program import CPLogicMixin, CPLogicProgram
+from ..probabilistic.cplogic.program import (
+    CPLogicMixin,
+    CPLogicProgram,
+    TranslateProbabilisticQueryMixin,
+)
 from ..probabilistic.expression_processing import (
     separate_deterministic_probabilistic_code,
 )
@@ -21,12 +25,13 @@ from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraStringExpression,
 )
-from ..relational_algebra_provenance import ProvenanceAlgebraSet
 from . import QueryBuilderDatalog
 from .query_resolution_expressions import Symbol as FrontEndSymbol
 
 
 class RegionFrontendCPLogicSolver(
+    TranslateProbabilisticQueryMixin,
+    TranslateToLogicWithAggregation,
     RegionSolver,
     CPLogicMixin,
     DatalogConstraintsProgram,
@@ -71,19 +76,18 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         solution = self.chase_class(
             self.solver, rules=deterministic_idb
         ).build_chase_solution()
-        if probabilistic_idb.formulas:
+        if (
+            self.solver.pfact_pred_symbs
+            or self.solver.pchoice_pred_symbs
+            or probabilistic_idb.formulas
+        ):
             cpl = self._make_probabilistic_program_from_deterministic_solution(
                 solution, probabilistic_idb
             )
             solution = self.probabilistic_solver(cpl)
         solution_sets = dict()
         for pred_symb, relation in solution.items():
-            if isinstance(relation, ProvenanceAlgebraSet):
-                proj_cols = relation.value.columns
-                ra_set = relation.value.projection(*proj_cols)
-            else:
-                ra_set = relation.value
-            solution_sets[pred_symb.name] = ra_set
+            solution_sets[pred_symb.name] = relation.value
         return solution_sets
 
     def _rewrite_program_with_ontology(self, deterministic_program):

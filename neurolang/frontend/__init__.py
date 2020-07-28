@@ -4,7 +4,11 @@ import numpy as np
 
 from .. import neurolang as nl
 from ..datalog import DatalogProgram
-from ..datalog.aggregation import Chase, DatalogWithAggregationMixin
+from ..datalog.aggregation import (
+    Chase,
+    DatalogWithAggregationMixin,
+    TranslateToLogicWithAggregation,
+)
 from ..expression_walker import (
     ExpressionBasicEvaluator,
 )
@@ -55,6 +59,7 @@ class NeurolangDL(QueryBuilderDatalog):
 
 
 class RegionFrontendDatalogSolver(
+    TranslateToLogicWithAggregation,
     RegionSolver,
     DatalogWithAggregationMixin,
     DatalogProgram,

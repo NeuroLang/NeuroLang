@@ -1,6 +1,8 @@
 import io
 from typing import AbstractSet, Tuple
 
+import numpy as np
+
 from ..probabilistic_frontend import ProbabilisticFrontend
 
 
@@ -54,8 +56,8 @@ def test_probabilistic_query():
     data3 = nl.add_uniform_probabilistic_choice_over_set(d3, name="data3")
 
     with nl.scope as e:
-        e.query1[e.y] = data1[e.x] & data2[e.x, e.y]
-        e.query2[e.y] = e.query1[e.y] & data3[e.y]
+        e.query1[e.y, e.PROB[e.y]] = data1[e.x] & data2[e.x, e.y]
+        e.query2[e.y, e.PROB[e.y]] = e.query1[e.y] & data3[e.y]
         res = nl.solve_all()
 
     assert "query1" in res.keys()
@@ -65,7 +67,8 @@ def test_probabilistic_query():
     q2 = res["query2"].as_pandas_dataframe().values
     assert len(q2) == 3
     for elem in q2:
-        assert elem[1] in ["a", "b", "c"]
+        assert elem[0] in ["a", "b", "c"]
+        assert np.isclose(elem[1], 1 / 3 / 5 / 5)
 
 
 def test_mixed_queries():
@@ -80,8 +83,9 @@ def test_mixed_queries():
     data3 = nl.add_uniform_probabilistic_choice_over_set(d3, name="data3")
 
     with nl.scope as e:
-        e.query1[e.x, e.y] = data1[e.x] & data2[e.x, e.y]
-        e.query2[e.y] = e.query1[e.x, e.y] & data3[e.y]
+        e.tmp[e.x, e.y] = data1[e.x] & data2[e.x, e.y]
+        e.query1[e.x, e.y, e.PROB[e.x, e.y]] = e.tmp[e.x, e.y]
+        e.query2[e.y, e.PROB[e.y]] = e.tmp[e.x, e.y] & data3[e.y]
         res = nl.solve_all()
 
     assert "query1" in res.keys()
@@ -90,8 +94,8 @@ def test_mixed_queries():
     q2 = res["query2"].as_pandas_dataframe().values
     assert len(q2) == 4
     for elem in q2:
-        assert elem[0] == 0.25
-        assert elem[1] in ["a", "b", "c", "d"]
+        assert elem[1] == 0.25
+        assert elem[0] in ["a", "b", "c", "d"]
 
 
 def test_ontology_query():
@@ -140,3 +144,38 @@ def test_ontology_query():
         "http://www.w3.org/2002/03owlt/hasValue/premises001#i",
         "true",
     ) in resp
+
+
+def test_simple_within_language_succ_query():
+    nl = ProbabilisticFrontend()
+    P = nl.add_uniform_probabilistic_choice_over_set(
+        [("a",), ("b",), ("c",)], name="P"
+    )
+    Q = nl.add_uniform_probabilistic_choice_over_set(
+        [("a",), ("d",), ("e",)], name="Q"
+    )
+    with nl.scope as e:
+        e.Z[e.x, e.PROB[e.x]] = P[e.x] & Q[e.x]
+        res = nl.solve_all()
+    assert "Z" in res.keys()
+    df = res["Z"].as_pandas_dataframe()
+    assert len(df) == 1
+    assert tuple(df.values[0])[0] == "a"
+    assert np.isclose(tuple(df.values[0])[1], 1 / 9)
+
+
+def test_within_language_succ_query():
+    nl = ProbabilisticFrontend()
+    P = nl.add_uniform_probabilistic_choice_over_set(
+        [("a", "b",), ("b", "c",), ("b", "d",)], name="P"
+    )
+    Q = nl.add_uniform_probabilistic_choice_over_set(
+        [("a",), ("b",)], name="Q"
+    )
+    with nl.scope as e:
+        e.Z[e.x, e.PROB[e.x]] = P[e.x, e.y] & Q[e.x]
+        res = nl.solve_all()
+    assert "Z" in res.keys()
+    df = res["Z"].as_pandas_dataframe()
+    assert np.isclose(df.loc[df["x"] == "b"].iloc[0][1], 2 / 3 / 2)
+    assert np.isclose(df.loc[df["x"] == "a"].iloc[0][1], 1 / 3 / 2)

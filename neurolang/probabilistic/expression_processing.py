@@ -12,7 +12,7 @@ from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
 from ..expressions import Constant, Expression, FunctionApplication
 from ..logic import Implication, Union
 from .exceptions import DistributionDoesNotSumToOneError
-from .expressions import ProbabilisticPredicate
+from .expressions import PROB, ProbabilisticPredicate, ProbabilisticQuery
 
 
 def is_probabilistic_fact(expression):
@@ -164,7 +164,9 @@ def separate_deterministic_probabilistic_code(
             and not is_builtin(p, program.builtins())
         )
 
-        if not probabilistic_symbols.isdisjoint(preds_antecedent):
+        if is_within_language_succ_query(
+            pred
+        ) or not probabilistic_symbols.isdisjoint(preds_antecedent):
             probabilistic_symbols.add(pred.consequent.functor)
             probabilistic_program.append(pred)
             unclassified = 0
@@ -190,3 +192,23 @@ def is_builtin(pred, known_builtins=None):
         known_builtins = set()
 
     return isinstance(pred.functor, Constant) or pred.functor in known_builtins
+
+
+def is_within_language_succ_query(implication):
+    try:
+        get_within_language_succ_query_prob_term(implication)
+        return True
+    except ValueError:
+        return False
+
+
+def get_within_language_succ_query_prob_term(implication):
+    try:
+        prob_term = next(
+            arg
+            for arg in implication.consequent.args
+            if isinstance(arg, ProbabilisticQuery) and arg.functor == PROB
+        )
+        return prob_term
+    except StopIteration:
+        raise ValueError("Expression does not have a SUCC probabilistic term")
