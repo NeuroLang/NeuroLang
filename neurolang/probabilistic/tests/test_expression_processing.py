@@ -3,7 +3,10 @@ import pytest
 from ...exceptions import UnexpectedExpressionError
 from ...expressions import Symbol
 from ...logic import Union
-from ..expression_processing import add_to_union
+from ..expression_processing import (
+    add_to_union,
+    get_probchoice_variable_equalities,
+)
 
 P = Symbol("P")
 Q = Symbol("Q")
@@ -33,3 +36,23 @@ def test_concatenate_to_union_not_expression():
         add_to_union(union, ["this_is_not_an_expression"])
     with pytest.raises(UnexpectedExpressionError):
         add_to_union(union, None)
+
+
+def test_get_probchoice_variable_equalities():
+    pchoice_pred_symbs = {P, Q}
+    predicates = {P(x, y), Q(y)}
+    assert (
+        get_probchoice_variable_equalities(predicates, pchoice_pred_symbs)
+        == set()
+    )
+    predicates = {P(x, y, z), P(y, y, z), Q(z)}
+    equalities = get_probchoice_variable_equalities(
+        predicates, pchoice_pred_symbs
+    )
+    assert equalities == {(x, y)}
+    assert get_probchoice_variable_equalities(set(), set()) == set()
+    predicates = {P(x, y, z), P(x, z, y), Q(z)}
+    equalities = get_probchoice_variable_equalities(
+        predicates, pchoice_pred_symbs
+    )
+    assert equalities == {(y, z)}

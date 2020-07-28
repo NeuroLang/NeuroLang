@@ -212,3 +212,56 @@ def get_within_language_succ_query_prob_term(implication):
         return prob_term
     except StopIteration:
         raise ValueError("Expression does not have a SUCC probabilistic term")
+
+
+def group_preds_by_pred_symb(predicates, filter_out_set=frozenset()):
+    grouped = collections.defaultdict(set)
+    for pred in predicates:
+        if pred not in filter_out_set:
+            grouped[pred.functor].add(pred)
+    return dict(grouped)
+
+
+def get_probchoice_variable_equalities(predicates, pchoice_pred_symbs):
+    """
+    Infer variable equalities from repeated probabilistic choice predicates.
+
+    Parameters
+    ----------
+    predicates : iterable of predicates
+        Predicates that are part of a conjunction.
+    pchoice_pred_symbs : iterable of predicate symbols
+        Predicate symbols associated with probabilistic choices.
+
+    Returns
+    -------
+    set of pairs of symbol variables
+        Each pair in the set represents the equality between two variables.
+
+    Notes
+    -----
+    A probabilistic choice encodes mutually exclusive random events. Let `P` be
+    the predicate symbol of a probabilistic choice. The conjunction `P(x),
+    P(y)` can only be true if `x == y`.
+
+    """
+    grouped_pchoice_preds = group_preds_by_pred_symb(
+        predicates, pchoice_pred_symbs
+    )
+    eq_set = set()
+    for predicates in grouped_pchoice_preds.values():
+        predicates = list(predicates)
+        arity = len(predicates[0].args)
+        for var_idx in range(arity):
+            for pred_idx in range(1, len(predicates)):
+                x = predicates[pred_idx - 1].args[var_idx]
+                y = predicates[pred_idx].args[var_idx]
+                if x == y:
+                    continue
+                eq_set.add(
+                    (
+                        min(x, y, key=lambda symb: symb.name),
+                        max(x, y, key=lambda symb: symb.name),
+                    )
+                )
+    return eq_set
