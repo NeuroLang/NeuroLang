@@ -1,20 +1,15 @@
 from contextlib import contextmanager
-from typing import AbstractSet, Callable, Tuple, List, Iterable
+from typing import AbstractSet, Callable, Tuple
 from uuid import uuid1
 
 import numpy as np
 
 from .. import expressions as exp
-from .. import logic
 from ..region_solver import Region
-from ..regions import (ExplicitVBR, ImplicitVBR, SphericalVolume,
-                       take_principal_regions)
+from ..regions import ExplicitVBR, ImplicitVBR, SphericalVolume
 from ..type_system import Unknown, is_leq_informative
 from .neurosynth_utils import NeuroSynthHandler, StudyID, TfIDf
-from .query_resolution_expressions import (All, Exists, Expression, Query,
-                                           Symbol)
-
-__all__ = ['QueryBuilderFirstOrder']
+from .query_resolution_expressions import Expression, Symbol
 
 
 class QueryBuilderBase:
