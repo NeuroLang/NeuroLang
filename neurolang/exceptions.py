@@ -52,3 +52,7 @@ class RuleNotFoundError(NeuroLangException):
 
 class UnsupportedProgramError(NeuroLangException):
     pass
+
+
+class ProtectedKeywordError(NeuroLangException):
+    pass
