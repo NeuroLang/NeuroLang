@@ -214,10 +214,10 @@ def get_within_language_succ_query_prob_term(implication):
         raise ValueError("Expression does not have a SUCC probabilistic term")
 
 
-def group_preds_by_pred_symb(predicates, filter_out_set=frozenset()):
+def group_preds_by_pred_symb(predicates, filter_set=frozenset()):
     grouped = collections.defaultdict(set)
     for pred in predicates:
-        if pred not in filter_out_set:
+        if pred.functor in filter_set:
             grouped[pred.functor].add(pred)
     return dict(grouped)
 
