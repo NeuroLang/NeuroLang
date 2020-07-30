@@ -255,6 +255,7 @@ def get_probchoice_variable_equalities(predicates, pchoice_pred_symbs):
     -------
     set of pairs of symbol variables
         Each pair in the set represents the equality between two variables.
+        Variables within the pair are sorted lexicographical order.
 
     Notes
     -----
