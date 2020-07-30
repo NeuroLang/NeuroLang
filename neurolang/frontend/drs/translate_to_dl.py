@@ -26,37 +26,46 @@ from ...logic.transformations import (
 _equals = Constant(operator.eq)
 
 
-class TranslateToDatalog:
-    def __init__(self):
-        self.parser = ChartParser(EnglishGrammar, EnglishBaseLexicon())
-        self.builder = DRSBuilder(EnglishGrammar)
-        self.into_fol = DRS2FOL()
+def cnl_initialized(method):
+    def new_method(self, *args, **kwargs):
+        if not hasattr(self, "_lexicon"):
+            self._initialize_cnl()
+        return method(self, *args, **kwargs)
 
-    def translate_block(self, string):
-        program = ExpressionBlock(())
+    return new_method
 
-        for sentence in string.split("."):
+
+class CnlFrontendMixin:
+    def _initialize_cnl(self):
+        self._lexicon = EnglishBaseLexicon()
+        self._grammar = EnglishGrammar
+        self._parser = ChartParser(self._grammar, self._lexicon)
+        self._drs_builder = DRSBuilder(self._grammar)
+        self._into_fol = DRS2FOL()
+        self._into_cos = IntoConjunctionOfSentences()
+
+    @cnl_initialized
+    def execute_cnl_code(self, code):
+        for sentence in code.split("."):
             sentence = sentence.strip()
             if not sentence:
                 continue
-            program += self.translate_sentence(sentence)
+            self.execute_cnl_sentence(sentence)
 
-        return program
-
-    def translate_sentence(self, sentence):
-        t = self.parser.parse(sentence)[0]
-
-        drs = self.builder.walk(t)
-        exp = self.into_fol.walk(drs)
-        exp = IntoConjunctionOfSentences().walk(exp)
-
+    def execute_cnl_sentence(self, sentence):
+        t = self._parser.parse(sentence)[0]
+        drs = self._drs_builder.walk(t)
+        exp = self._into_fol.walk(drs)
+        exp = self._into_cos.walk(exp)
         lsentences = exp.formulas if isinstance(exp, Conjunction) else (exp,)
-        program = ExpressionBlock(())
-        for block in map(self.translate_logical_sentence, lsentences):
-            program += block
-        return program
+        for s in lsentences:
+            self.execute_fol_sentence(s)
 
-    def translate_logical_sentence(self, exp):
+    def execute_fol_sentence(self, exp):
+        program = self._translate_logical_sentence(exp)
+        self.solver.walk(program)
+
+    def _translate_logical_sentence(self, exp):
         try:
             return _as_intensional_rule(exp)
         except TranslateToDatalogError:

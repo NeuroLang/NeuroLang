@@ -1,10 +1,9 @@
 from ....expressions import (
     Symbol,
     Constant,
-    ExpressionBlock,
 )
 from ....expression_walker import ExpressionBasicEvaluator
-from ....logic import Implication, Conjunction, UniversalPredicate
+from ....logic import Implication, Conjunction, UniversalPredicate, Union
 from ....datalog.basic_representation import DatalogProgram
 from ....datalog.expressions import TranslateToLogic
 from ....datalog.chase import (
@@ -12,16 +11,12 @@ from ....datalog.chase import (
     ChaseMGUMixin,
     ChaseNaive,
 )
-from ..translate_to_dl import TranslateToDatalog, IntoConjunctionOfSentences
+from ..translate_to_dl import CnlFrontendMixin, IntoConjunctionOfSentences
+from ... import QueryBuilderDatalog
 
 from itertools import product
 
 
-intersects = Symbol("intersects")
-region = Symbol("region")
-book = Symbol("book")
-likes = Symbol("likes")
-references = Symbol("references")
 x = Symbol("X")
 y = Symbol("Y")
 Jones = Constant("Jones")
@@ -29,22 +24,35 @@ Ulysses = Constant("Ulysses")
 Odyssey = Constant("Odyssey")
 
 
-def test_translate_to_dl():
-    ttdl = TranslateToDatalog()
-    program = ttdl.translate_sentence("if Y intersects X then X intersects Y")
+class Datalog(TranslateToLogic, DatalogProgram, ExpressionBasicEvaluator):
+    pass
 
-    assert program == ExpressionBlock(
-        (Implication(intersects(x, y), intersects(y, x)),)
-    )
+
+class Chase(ChaseNaive, ChaseMGUMixin, ChaseGeneral):
+    pass
+
+
+class NeurolangCNL(CnlFrontendMixin, QueryBuilderDatalog):
+    def __init__(self, solver=None):
+        super().__init__(Datalog(), chase_class=Chase)
+
+
+def test_translate_to_dl():
+    intersects = Symbol("intersects")
+    nl = NeurolangCNL()
+    nl.execute_cnl_code("if Y intersects X then X intersects Y")
+    expected = Union((Implication(intersects(x, y), intersects(y, x)),))
+    assert nl.solver.symbol_table["intersects"] == expected
 
 
 def test_translate_to_dl_2():
-    ttdl = TranslateToDatalog()
-    program = ttdl.translate_sentence(
+    region = Symbol("region")
+    intersects = Symbol("intersects")
+    nl = NeurolangCNL()
+    nl.execute_cnl_code(
         "if a region Y intersects a region X then X intersects Y"
     )
-
-    expected = ExpressionBlock(
+    expected = Union(
         (
             Implication(
                 intersects(x, y),
@@ -52,7 +60,7 @@ def test_translate_to_dl_2():
             ),
         )
     )
-    assert program == expected
+    assert nl.solver.symbol_table["intersects"] == expected
 
 
 def test_distribute_implication_conjunctive_head():
@@ -83,78 +91,40 @@ def test_distribute_implication_conjunctive_head():
     )
 
 
-class Datalog(TranslateToLogic, DatalogProgram, ExpressionBasicEvaluator):
-    pass
-
-
-class Chase(ChaseNaive, ChaseMGUMixin, ChaseGeneral):
-    pass
-
-
 def test_solver_integration():
-    """
-    Given an extensional base having the predicates:
-      `likes(x, y), book(x), references(x, y)`
-
-    And the facts:
-      `book(Odyssey), book(Ulysses)`
-
-    Adding the next sentences to the base:
-      `Jones likes a book if it references Odyssey.`
-      `Ulysses references Odyssey.`
-
-    Should answer:
-      `Does Jones like Ulysses`
-    """
-
-    ttdl = TranslateToDatalog()
-    program = ttdl.translate_block(
+    nl = NeurolangCNL()
+    nl.execute_cnl_code(
         """
         if a book X references Odyssey then Jones likes X.
         Ulysses references Odyssey.
         """
     )
-
-    dl = Datalog()
-    dl.add_extensional_predicate_from_tuples(book, {(Odyssey,), (Ulysses,)})
-    dl.walk(program)
-
-    dc = Chase(dl)
-    solution = dc.build_chase_solution()
-
-    assert (Jones, Ulysses) in solution[likes].value
+    nl.add_tuple_set({(Odyssey,), (Ulysses,)}, name="book")
+    res = nl.solve_all()
+    assert (Jones, Ulysses) in res["likes"].unwrap()
 
 
 def test_conjunctions():
-    reaches = Symbol("reaches")
-    edge = Symbol("edge")
-
-    ttdl = TranslateToDatalog()
-    program = ttdl.translate_block(
+    nl = NeurolangCNL()
+    nl.execute_cnl_code(
         """
         if `edge(X, Y)` then X reaches Y.
         if X reaches Y then Y reaches X.
         if A reaches B and B reaches C then A reaches C.
         """
     )
-    dl = Datalog()
-    dl.add_extensional_predicate_from_tuples(edge, {(1, 2), (2, 3), (3, 4)})
-    dl.walk(program)
-
-    dc = Chase(dl)
-    solution = dc.build_chase_solution()
+    nl.add_tuple_set({(1, 2), (2, 3), (3, 4)}, name="edge")
+    res = nl.solve_all()
 
     for a, b in product((1, 2, 3, 4), (1, 2, 3, 4)):
         if a == b:
             continue
-        assert (Constant(a), Constant(b)) in solution[reaches].value
+        assert (Constant(a), Constant(b)) in res["reaches"].unwrap()
 
 
 def test_conjunctions_2():
-    edge = Symbol("edge")
-    start = Symbol("start")
-    has = Symbol("has")
-    program = TranslateToDatalog().translate_block(
+    nl = NeurolangCNL()
+    nl.execute_cnl_code(
         """
         if `edge(X, Y)` then X reaches Y.
         if X reaches Y then Y reaches X.
@@ -162,32 +132,29 @@ def test_conjunctions_2():
         if `start(X)` then X has "label".
         """
     )
-    dl = Datalog()
-    dl.add_extensional_predicate_from_tuples(
-        edge, {("A", "B"), ("B", "C"), ("C", "D"), ("F", "G")}
+    nl.add_tuple_set(
+        {("A", "B"), ("B", "C"), ("C", "D"), ("F", "G")}, name="edge"
     )
-    dl.add_extensional_predicate_from_tuples(start, {("A",)})
-    dl.walk(program)
-    dc = Chase(dl)
-    solution = dc.build_chase_solution()
+    nl.add_tuple_set({("A",)}, name="start")
+    res = nl.solve_all()
 
     for x in ("A", "B", "C", "D"):
-        assert (Constant(x), Constant("label")) in solution[has].value
+        assert (Constant(x), Constant("label")) in res["has"].unwrap()
 
 
 def test_conjunction_3():
     edge = Symbol("edge")
     has = Symbol("has")
-    program = TranslateToDatalog().translate_block(
+
+    nl = NeurolangCNL()
+    nl.execute_cnl_code(
         """
         if `edge(X, Y)` then X reaches Y.
         if X reaches Y and Y reaches Z then X reaches Z.
         if X reaches X then X has "cycle".
         """
     )
-    dl = Datalog()
-    dl.add_extensional_predicate_from_tuples(
-        edge,
+    nl.add_tuple_set(
         {
             ("A", "B"),
             ("B", "C"),
@@ -196,12 +163,11 @@ def test_conjunction_3():
             ("E", "B"),
             ("E", "F"),
         },
+        name=edge,
     )
-    dl.walk(program)
-    dc = Chase(dl)
-    solution = dc.build_chase_solution()
+    res = nl.solve_all()
 
     for x in ("B", "C", "D", "E"):
-        assert (Constant(x), Constant("cycle")) in solution[has].value
+        assert (Constant(x), Constant("cycle")) in res[has].unwrap()
     for x in ("A", "F"):
-        assert (Constant(x), Constant("cycle")) not in solution[has].value
+        assert (Constant(x), Constant("cycle")) not in res[has].unwrap()
