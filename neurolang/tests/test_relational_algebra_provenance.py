@@ -20,14 +20,13 @@ from ..relational_algebra_provenance import (
     ConcatenateConstantColumn,
     ExtendedProjection,
     ExtendedProjectionListMember,
+    NaturalJoinInverse,
     Projection,
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
     Union,
 )
 from ..utils import NamedRelationalAlgebraFrozenSet
-from ..probabilistic.cplogic import testing
-
 
 C_ = Constant
 S_ = Symbol
@@ -36,7 +35,7 @@ R1 = NamedRelationalAlgebraFrozenSet(
     columns=("col1", "col2", "__provenance__"),
     iterable=[(i, i * 2, i) for i in range(10)],
 )
-provenance_set_r1 = ProvenanceAlgebraSet(R1, C_(ColumnStr("__provenance__")))
+provenance_set_r1 = ProvenanceAlgebraSet(R1, ColumnStr("__provenance__"))
 
 
 def test_selection():
@@ -80,7 +79,7 @@ def test_provenance_rename():
 
     sol = RelationalAlgebraProvenanceCountingSolver().walk(s)
 
-    assert sol.provenance_column == C_(ColumnStr("renamed"))
+    assert sol.provenance_column == "renamed"
     sol = sol.value
     assert sol == R1.rename_column("__provenance__", "renamed")
     assert "renamed" in sol.columns
@@ -92,13 +91,13 @@ def test_naturaljoin():
         columns=("col1", "__provenance__"),
         iterable=[(i * 2, i) for i in range(10)],
     )
-    pset_r1 = ProvenanceAlgebraSet(RA1, C_(ColumnStr("__provenance__")))
+    pset_r1 = ProvenanceAlgebraSet(RA1, ColumnStr("__provenance__"))
 
     RA2 = NamedRelationalAlgebraFrozenSet(
         columns=("col1", "colA", "__provenance__"),
         iterable=[(i % 5, i * 3, i) for i in range(20)],
     )
-    pset_r2 = ProvenanceAlgebraSet(RA2, C_(ColumnStr("__provenance__")))
+    pset_r2 = ProvenanceAlgebraSet(RA2, ColumnStr("__provenance__"))
 
     s = NaturalJoin(pset_r1, pset_r2)
     sol = RelationalAlgebraProvenanceCountingSolver().walk(s)
@@ -129,7 +128,7 @@ def test_naturaljoin():
     RnjR = R1cpR2.naturaljoin(R1njR2)
 
     res = ExtendedProjection(
-        ProvenanceAlgebraSet(RnjR, C_(ColumnStr("__provenance__1"))),
+        ProvenanceAlgebraSet(RnjR, ColumnStr("__provenance__1")),
         tuple(
             [
                 ExtendedProjectionListMember(
@@ -153,18 +152,18 @@ def test_naturaljoin_provenance_name():
         columns=("col1", "__provenance__1"),
         iterable=[(i * 2, i) for i in range(10)],
     )
-    pset_r1 = ProvenanceAlgebraSet(RA1, C_(ColumnStr("__provenance__1")))
+    pset_r1 = ProvenanceAlgebraSet(RA1, ColumnStr("__provenance__1"))
 
     RA2 = NamedRelationalAlgebraFrozenSet(
         columns=("col1", "colA", "__provenance__2"),
         iterable=[(i % 5, i * 3, i) for i in range(20)],
     )
-    pset_r2 = ProvenanceAlgebraSet(RA2, C_(ColumnStr("__provenance__2")))
+    pset_r2 = ProvenanceAlgebraSet(RA2, ColumnStr("__provenance__2"))
 
     s = NaturalJoin(pset_r1, pset_r2)
     sol = RelationalAlgebraProvenanceCountingSolver().walk(s)
 
-    assert sol.provenance_column == C_(ColumnStr("__provenance__1"))
+    assert sol.provenance_column == "__provenance__1"
     assert "__provenance__1" in sol.value.columns
     assert "__provenance__2" not in sol.value.columns
 
@@ -174,13 +173,13 @@ def test_product():
         columns=("col1", "__provenance__"),
         iterable=[(i * 2, i) for i in range(10)],
     )
-    pset_r1 = ProvenanceAlgebraSet(RA1, C_(ColumnStr("__provenance__")))
+    pset_r1 = ProvenanceAlgebraSet(RA1, ColumnStr("__provenance__"))
 
     RA2 = NamedRelationalAlgebraFrozenSet(
         columns=("colA", "__provenance__"),
         iterable=[(i * 3, i) for i in range(20)],
     )
-    pset_r2 = ProvenanceAlgebraSet(RA2, C_(ColumnStr("__provenance__")))
+    pset_r2 = ProvenanceAlgebraSet(RA2, ColumnStr("__provenance__"))
 
     s = Product((pset_r1, pset_r2))
     sol = RelationalAlgebraProvenanceCountingSolver().walk(s).value
@@ -210,7 +209,7 @@ def test_product():
     R1cpR2 = R1.cross_product(R2)
     RnjR = R1cpR2.naturaljoin(R1njR2)
     res = ExtendedProjection(
-        ProvenanceAlgebraSet(RnjR, C_(ColumnStr("__provenance__1"))),
+        ProvenanceAlgebraSet(RnjR, ColumnStr("__provenance__1")),
         tuple(
             [
                 ExtendedProjectionListMember(
@@ -234,18 +233,18 @@ def test_product_provenance_name():
         columns=("col1", "__provenance__1"),
         iterable=[(i * 2, i) for i in range(10)],
     )
-    pset_r1 = ProvenanceAlgebraSet(RA1, C_(ColumnStr("__provenance__1")))
+    pset_r1 = ProvenanceAlgebraSet(RA1, ColumnStr("__provenance__1"))
 
     RA2 = NamedRelationalAlgebraFrozenSet(
         columns=("col2", "colA", "__provenance__2"),
         iterable=[(i % 5, i * 3, i) for i in range(20)],
     )
-    pset_r2 = ProvenanceAlgebraSet(RA2, C_(ColumnStr("__provenance__2")))
+    pset_r2 = ProvenanceAlgebraSet(RA2, ColumnStr("__provenance__2"))
 
     s = Product((pset_r1, pset_r2))
     sol = RelationalAlgebraProvenanceCountingSolver().walk(s)
 
-    assert sol.provenance_column == C_(ColumnStr("__provenance__1"))
+    assert sol.provenance_column == "__provenance__1"
     assert "__provenance__1" in sol.value.columns
     assert "__provenance__2" not in sol.value.columns
 
@@ -262,7 +261,7 @@ def test_union():
             ],
             columns=["x", "y", "__provenance__"],
         ),
-        C_(ColumnStr("__provenance__")),
+        ColumnStr("__provenance__"),
     )
     relation2 = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
@@ -275,7 +274,7 @@ def test_union():
             ],
             columns=["x", "y", "__provenance__"],
         ),
-        C_(ColumnStr("__provenance__")),
+        ColumnStr("__provenance__"),
     )
 
     expected = NamedRelationalAlgebraFrozenSet(
@@ -322,14 +321,14 @@ def test_projection():
             ],
             columns=["x", "y", "__provenance__"],
         ),
-        C_(ColumnStr("__provenance__")),
+        ColumnStr("__provenance__"),
     )
     expected = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
             iterable=[("a", "b", 1), ("b", "a", 3), ("c", "a", 3)],
             columns=["x", "y", "__provenance__"],
         ),
-        C_(ColumnStr("__provenance__")),
+        ColumnStr("__provenance__"),
     )
     sum_agg_op = Projection(
         relation, tuple([Constant(ColumnStr("x")), Constant(ColumnStr("y"))]),
@@ -360,7 +359,7 @@ def test_extended_projection():
             iterable=[(5, 1, 1), (6, 2, 2), (7, 3, 2), (1, 3, 1), (2, 1, 1)],
             columns=["x", "y", "__provenance__"],
         ),
-        C_(ColumnStr("__provenance__")),
+        ColumnStr("__provenance__"),
     )
 
     expected = ProvenanceAlgebraSet(
@@ -368,7 +367,7 @@ def test_extended_projection():
             iterable=[(6, 1), (8, 2), (10, 2), (4, 1), (3, 1),],
             columns=["sum", "__provenance__"],
         ),
-        C_(ColumnStr("__provenance__")),
+        ColumnStr("__provenance__"),
     )
 
     res = ExtendedProjection(
@@ -399,7 +398,7 @@ def test_provenance_projection():
             ],
             columns=["myprov", "x", "y"],
         ),
-        Constant(ColumnStr("myprov")),
+        ColumnStr("myprov"),
     )
     projection = Projection(relation, (Constant(ColumnStr("x")),))
     solver = RelationalAlgebraProvenanceCountingSolver()
@@ -409,7 +408,7 @@ def test_provenance_projection():
         for tupl in result.value:
             if tupl.x == exp_x:
                 assert np.isclose(
-                    exp_prob, getattr(tupl, result.provenance_column.value)
+                    exp_prob, getattr(tupl, result.provenance_column)
                 )
 
 
@@ -424,22 +423,19 @@ def test_provenance_product_with_shared_non_prov_col_should_fail():
             ],
             columns=["myprov", "x", "y"],
         ),
-        Constant(ColumnStr("myprov")),
+        ColumnStr("myprov"),
     )
     r2 = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
             iterable=[(0.2, "a", 42), (0.5, "b", 84)],
             columns=["myprov", "x", "z"],
         ),
-        Constant(ColumnStr("myprov")),
+        ColumnStr("myprov"),
     )
     product = Product((r1, r2))
     solver = RelationalAlgebraProvenanceCountingSolver()
     with pytest.raises(
-        NeuroLangException,
-        match=r"Shared columns found: {}".format(
-            repr(Constant(ColumnStr("x")))
-        ),
+        NeuroLangException, match="Shared columns found: 'x'",
     ):
         solver.walk(product)
 
@@ -469,7 +465,7 @@ def test_rename_columns():
             columns=("_p_", "x", "y"),
             iterable=[(0.1, "a", 0), (1.0, "b", 44)],
         ),
-        provenance_column=str2columnstr_constant("_p_"),
+        provenance_column=ColumnStr("_p_"),
     )
     rename_columns = RenameColumns(
         prov_relation,
@@ -480,8 +476,33 @@ def test_rename_columns():
             columns=("_p_", "z", "y"),
             iterable=[(0.1, "a", 0), (1.0, "b", 44)],
         ),
-        provenance_column=str2columnstr_constant("_p_"),
+        provenance_column=ColumnStr("_p_"),
     )
     solver = RelationalAlgebraProvenanceCountingSolver()
     result = solver.walk(rename_columns)
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_njoin_inverse():
+    r1 = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            columns=("_p_", "x"), iterable=[(1.0, "a"), (0.5, "b")],
+        ),
+        ColumnStr("_p_"),
+    )
+    r2 = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            columns=("_p_", "x"), iterable=[(0.5, "b")],
+        ),
+        ColumnStr("_p_"),
+    )
+    expected = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            columns=("_p_", "x"), iterable=[(1.0, "b")],
+        ),
+        ColumnStr("_p_"),
+    )
+    op = NaturalJoinInverse(r1, r2)
+    solver = RelationalAlgebraProvenanceCountingSolver()
+    result = solver.walk(op)
     assert testing.eq_prov_relations(result, expected)
