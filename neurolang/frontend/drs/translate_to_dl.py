@@ -13,7 +13,7 @@ from ...logic import (
 from ...logic.horn_clauses import fol_query_to_datalog_program
 from .drs_builder import DRSBuilder, DRS2FOL
 from .chart_parser import ChartParser
-from .english_grammar import EnglishGrammar, EnglishBaseLexicon
+from .english_grammar import EnglishGrammar, DatalogLexicon
 import operator
 from ...expression_walker import ExpressionWalker
 from ...logic.transformations import (
@@ -37,7 +37,7 @@ def cnl_initialized(method):
 
 class CnlFrontendMixin:
     def _initialize_cnl(self):
-        self._lexicon = EnglishBaseLexicon()
+        self._lexicon = DatalogLexicon(self)
         self._grammar = EnglishGrammar
         self._parser = ChartParser(self._grammar, self._lexicon)
         self._drs_builder = DRSBuilder(self._grammar)

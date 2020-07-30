@@ -171,3 +171,47 @@ def test_conjunction_3():
         assert (Constant(x), Constant("cycle")) in res[has].unwrap()
     for x in ("A", "F"):
         assert (Constant(x), Constant("cycle")) not in res[has].unwrap()
+
+
+def test_define_a_verb():
+    nl = NeurolangCNL()
+    nl.this_is_it = None
+    nl.execute_cnl_code(
+        """
+        `singular_verb("activates")`.
+        if `edge(X, Y)` then X activates Y.
+        if X activates Y then Y activates X.
+        if A activates B and B activates C then A activates C.
+        """
+    )
+    nl.add_tuple_set({(1, 2), (2, 3), (3, 4)}, name="edge")
+    res = nl.solve_all()
+    for a, b in product((1, 2, 3, 4), (1, 2, 3, 4)):
+        if a == b:
+            continue
+        assert (Constant(a), Constant(b)) in res["activates"].unwrap()
+
+
+def test_define_synonyms():
+    nl = NeurolangCNL()
+    nl.this_is_it = None
+    nl.execute_cnl_code(
+        """
+        `singular_verb("activates")`.
+        `singular_verb("actuates")`.
+        `singular_verb("triggers")`.
+        if X triggers Y then X activates Y.
+        if X activates Y then X actuates Y.
+        if X actuates Y then X triggers Y.
+
+        if `edge(X, Y)` then X triggers Y.
+        if X actuates Y then Y activates X.
+        if A triggers B and B activates C then A actuates C.
+        """
+    )
+    nl.add_tuple_set({(1, 2), (2, 3), (3, 4)}, name="edge")
+    res = nl.solve_all()
+    for a, b in product((1, 2, 3, 4), (1, 2, 3, 4)):
+        if a == b:
+            continue
+        assert (Constant(a), Constant(b)) in res["activates"].unwrap()

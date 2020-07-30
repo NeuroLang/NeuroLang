@@ -61,7 +61,7 @@ EnglishGrammar = Grammar(
         RootRule(S(_x), (SL(), Constant(","), Constant("and"), S(_y),)),
         RootRule(S(_x), (S(_y), Constant("and"), S(_z),)),
         RootRule(S(n), (Quote(Constant("`"), v),)),
-        Rule(LIT(v), (Quote(Constant("\""), v),)),
+        Rule(LIT(v), (Quote(Constant('"'), v),)),
         Rule(NP(_x, _y, _z), (LIT(v),)),
     )
 )
@@ -126,4 +126,28 @@ class EnglishBaseLexicon(DictLexicon):
         m = super().get_meanings(token)
         if isinstance(token, Constant) and token.value.isupper():
             m += (VAR(),)
+        return m
+
+
+class DatalogLexicon(EnglishBaseLexicon):
+    def __init__(self, nl):
+        super().__init__()
+        self.nl = nl
+        self.initialize()
+
+    def initialize(self):
+        with self.nl.environment as e:
+            e.verb[e.w, e.n] = e.singular_verb[e.w] & (e.n == num.singular)
+
+    def get_meanings(self, token):
+        m = super().get_meanings(token)
+
+        if isinstance(token, Constant):
+            n = self.nl.new_symbol(name="n")
+            verb = self.nl.new_symbol(name="verb")
+            sol = self.nl.query((n,), verb(token, n))
+
+            for (n,) in sol:
+                m += (V(Constant(n)),)
+
         return m
