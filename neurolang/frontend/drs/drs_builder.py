@@ -21,11 +21,6 @@ from .english_grammar import (
     VAR,
     SL,
     LIT,
-    S_PRED,
-    S_IF,
-    S_CODE,
-    S_COORD,
-    S_NOT_IF,
 )
 from ...logic import (
     Implication,
@@ -86,16 +81,6 @@ class DRSBuilder(ExpressionWalker):
         exps = (Fa(fa.functor, args),) + tuple(drs.expressions[1:])
         return self.walk(DRS(drs.referents, exps))
 
-    @add_match(Fa(Fa(S, ...), (...,)))
-    def root_sentence(self, s):
-        (s_,) = s.args
-        return self.walk(DRS((), (s_,)))
-
-    @add_match(Fa(Fa(S_NOT_IF, ...), (...,)))
-    def not_if_sentence(self, s):
-        (s_,) = s.args
-        return self.walk(DRS((), (s_,)))
-
     @add_match(Fa(Fa(NP, ...), (Fa(Fa(PN, ...), ...),)))
     def proper_names(self, np):
         (pn,) = np.args
@@ -103,10 +88,7 @@ class DRSBuilder(ExpressionWalker):
         return self.walk(DRS((), (const,)))
 
     @add_match(
-        Fa(
-            Fa(S_PRED, ...),
-            (..., Fa(Fa(VP, ...), (Fa(Fa(V, ...), ...), ...)),),
-        )
+        Fa(Fa(S, ...), (..., Fa(Fa(VP, ...), (Fa(Fa(V, ...), ...), ...)),),)
     )
     def predicate(self, s):
         (subject, vp) = s.args
@@ -151,12 +133,12 @@ class DRSBuilder(ExpressionWalker):
 
         return self.walk(DRS(refs, exps))
 
-    @add_match(Fa(Fa(S_IF, ...), (C("if"), ..., C("then"), ...),),)
+    @add_match(Fa(Fa(S, ...), (C("if"), ..., C("then"), ...),),)
     def conditional(self, s):
         (_, ant, _, cons) = s.args
         return self.walk(DRS((), (Implication(cons, ant),)))
 
-    @add_match(Fa(Fa(S_CODE, ...), ...))
+    @add_match(Fa(Fa(S, ...), (Fa(Quote, (C("`"), ...)),)))
     def quoted_predicate(self, s):
         exp = _parse_predicate(s.args[0].args[1].value)
         refs = [a for a in exp.args if isinstance(a, Symbol)]
@@ -176,14 +158,14 @@ class DRSBuilder(ExpressionWalker):
         )
         return self.walk(Implication(drs_con, drs_ant))
 
-    @add_match(Fa(Fa(S_COORD, ...), (..., C("and"), ...)),)
+    @add_match(Fa(Fa(S, ...), (..., C("and"), ...)),)
     def simple_and(self, s):
         (a, _, b) = s.args
         a = self.walk(a)
         b = self.walk(b)
         return self.walk(DRS((), (a, b,)))
 
-    @add_match(Fa(Fa(S_COORD, ...), (..., C(","), C("and"), ...),),)
+    @add_match(Fa(Fa(S, ...), (..., C(","), C("and"), ...),),)
     def comma_and(self, s):
         (sl, _, _, s) = s.args
         sl = self.walk(sl)

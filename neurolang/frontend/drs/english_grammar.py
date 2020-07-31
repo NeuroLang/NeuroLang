@@ -3,12 +3,6 @@ from .chart_parser import Grammar, DictLexicon, Rule, RootRule, Quote
 
 
 S = Symbol("S")
-S_NOT_IF = Symbol("S_NOT_IF")
-S_PRED = Symbol("S_PRED")
-S_IF = Symbol("S_IF")
-S_COORD = Symbol("S_COORD")
-S_CODE = Symbol("S_CODE")
-
 SL = Symbol("SL")
 NP = Symbol("NP")
 PN = Symbol("PN")
@@ -32,6 +26,11 @@ _y = Symbol("_y")
 _z = Symbol("_z")
 
 
+class stype:
+    if_ = Constant("if_")
+    notif = Constant("notif")
+
+
 class num:
     plural = Constant("plural")
     singular = Constant("singular")
@@ -50,14 +49,12 @@ class case:
 
 EnglishGrammar = Grammar(
     (
-        RootRule(S(n), (S_IF(n),)),
-        RootRule(S(n), (S_NOT_IF(n),)),
-        Rule(S_NOT_IF(n), (S_PRED(n),)),
-        Rule(S_NOT_IF(n), (S_CODE(n),)),
-        Rule(S_NOT_IF(n), (S_COORD(n),)),
-        Rule(S_PRED(n), (NP(n, g, case.nom), VP(n))),
-        Rule(S_IF(n), (S(n), Constant("if"), S(m))),
-        Rule(S_IF(n), (Constant("if"), S(n), Constant("then"), S(m))),
+        RootRule(S(n, stype.notif), (NP(n, g, case.nom), VP(n))),
+        RootRule(S(n, stype.if_), (S(n, _x), Constant("if"), S(m, _y))),
+        RootRule(
+            S(n, stype.if_),
+            (Constant("if"), S(n, _x), Constant("then"), S(m, _y)),
+        ),
         Rule(VP(n), (V(n), NP(m, g, case.notnom))),
         Rule(
             NP(num.plural, _x, c), (NP(n, g, c), Constant("and"), NP(m, h, c)),
@@ -67,13 +64,17 @@ EnglishGrammar = Grammar(
         Rule(NP(_x, _y, _z), (VAR(),)),
         Rule(NP(n, g, _x), (DET(n), N(n, g))),
         Rule(NP(n, g, c), (PRO(n, g, c),)),
-        Rule(SL(), (S_NOT_IF(n),)),
-        Rule(SL(), (SL(), Constant(","), S_NOT_IF(_y),)),
-        Rule(
-            S_COORD(_x), (SL(), Constant(","), Constant("and"), S_NOT_IF(_y),)
+        Rule(SL(), (S(n, stype.notif),)),
+        Rule(SL(), (SL(), Constant(","), S(_y, stype.notif),)),
+        RootRule(
+            S(_x, stype.notif),
+            (SL(), Constant(","), Constant("and"), S(_y, stype.notif),),
         ),
-        Rule(S_COORD(_x), (S_NOT_IF(_y), Constant("and"), S_NOT_IF(_z),)),
-        Rule(S_CODE(n), (Quote(Constant("`"), v),)),
+        RootRule(
+            S(_x, stype.notif),
+            (S(_y, stype.notif), Constant("and"), S(_z, stype.notif),),
+        ),
+        RootRule(S(n, stype.notif), (Quote(Constant("`"), v),)),
         Rule(LIT(v), (Quote(Constant('"'), v),)),
         Rule(NP(_x, _y, _z), (LIT(v),)),
     )
