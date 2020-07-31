@@ -295,7 +295,7 @@ def test_simple_existential():
     cpl_program.walk(code)
     exp, result = testing.inspect_resolution(Q(x), cpl_program)
     expected = testing.make_prov_set(
-        [(0.9, "a"), (.1, "c")], 
+        [(0.9, "a"), (.1, "c")],
         ("_p_", "x")
     )
     assert testing.eq_prov_relations(result, expected)
@@ -518,5 +518,25 @@ def test_fake_neurosynth():
             for term in ("memory", "visual")
         ],
         ("_p_", "t"),
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_conjunct_pfact_equantified_pchoice():
+    pfact_sets = {P: {(0.8, "a", "s1"), (0.6, "a", "s2"), (0.1, "b", "s2")}}
+    pchoice_as_sets = {Z: {(0.6, "s1"), (0.4, "s2")}}
+    code = Union((Implication(Q(x), Conjunction((P(x, y), Z(y)))),))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+    cpl_program.walk(code)
+    qpred = Q(x)
+    result = solve_succ_query(qpred, cpl_program)
+    expected = testing.make_prov_set(
+        [(0.6 * 0.8 + 0.4 * 0.6, "a",), (0.1 * 0.4, "b"),], ("_p_", "x"),
     )
     assert testing.eq_prov_relations(result, expected)
