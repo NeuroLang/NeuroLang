@@ -10,7 +10,7 @@ from ...expression_walker import (
     ReplaceSymbolWalker,
 )
 from .chart_parser import Quote
-from .english_grammar import S, V, NP, VP, PN, DET, N, VAR, SL, LIT
+from .english_grammar import S, V, NP, VP, PN, DET, N, VAR, SL, LIT, S_PRED, S_IF, S_CODE, S_COORD
 from ...logic import (
     Implication,
     Conjunction,
@@ -70,14 +70,19 @@ class DRSBuilder(ExpressionWalker):
         exps = (Fa(fa.functor, args),) + tuple(drs.expressions[1:])
         return self.walk(DRS(drs.referents, exps))
 
+    @add_match(Fa(Fa(S, ...), (...,)))
+    def proper_names(self, s):
+        (s_,) = s.args
+        return self.walk(DRS((), (s_,)))
+
     @add_match(Fa(Fa(NP, ...), (Fa(Fa(PN, ...), ...),)))
-    def proper_names(self, np):
+    def root_s(self, np):
         (pn,) = np.args
         (_, _, const) = pn.functor.args
         return self.walk(DRS((), (const,)))
 
     @add_match(
-        Fa(Fa(S, ...), (..., Fa(Fa(VP, ...), (Fa(Fa(V, ...), ...), ...)),),)
+        Fa(Fa(S_PRED, ...), (..., Fa(Fa(VP, ...), (Fa(Fa(V, ...), ...), ...)),),)
     )
     def predicate(self, s):
         (subject, vp) = s.args
@@ -124,15 +129,15 @@ class DRSBuilder(ExpressionWalker):
 
     @add_match(
         Fa(
-            Fa(S, ...),
-            (C("if"), Fa(Fa(S, ...), ...), C("then"), Fa(Fa(S, ...), ...),),
+            Fa(S_IF, ...),
+            (C("if"), ..., C("then"), ...),
         ),
     )
     def conditional(self, s):
         (_, ant, _, cons) = s.args
         return self.walk(DRS((), (Implication(cons, ant),)))
 
-    @add_match(Fa(Fa(S, ...), (Fa(Quote, (C("`"), ...)),),),)
+    @add_match(Fa(Fa(S_CODE, ...), ...))
     def quoted_predicate(self, s):
         exp = _parse_predicate(s.args[0].args[1].value)
         refs = [a for a in exp.args if isinstance(a, Symbol)]
@@ -153,7 +158,7 @@ class DRSBuilder(ExpressionWalker):
         return self.walk(Implication(drs_con, drs_ant))
 
     @add_match(
-        Fa(Fa(S, ...), (Fa(Fa(S, ...), ...), C("and"), Fa(Fa(S, ...), ...),),),
+        Fa(Fa(S_COORD, ...), (..., C("and"), ...)),
     )
     def simple_and(self, s):
         (a, _, b) = s.args
@@ -163,8 +168,8 @@ class DRSBuilder(ExpressionWalker):
 
     @add_match(
         Fa(
-            Fa(S, ...),
-            (Fa(Fa(SL, ...), ...), C(","), C("and"), Fa(Fa(S, ...), ...),),
+            Fa(S_COORD, ...),
+            (..., C(","), C("and"), ...),
         ),
     )
     def comma_and(self, s):
@@ -176,7 +181,7 @@ class DRSBuilder(ExpressionWalker):
     @add_match(
         Fa(
             Fa(SL, ...),
-            (Fa(Fa(S, ...), ...),),
+            (...,),
         ),
     )
     def single_sentence_list(self, sl):
@@ -186,7 +191,7 @@ class DRSBuilder(ExpressionWalker):
     @add_match(
         Fa(
             Fa(SL, ...),
-            (Fa(Fa(SL, ...), ...), C(","), Fa(Fa(S, ...), ...)),
+            (Fa(Fa(SL, ...), ...), C(","), ...),
         ),
     )
     def sentence_list(self, sl):
