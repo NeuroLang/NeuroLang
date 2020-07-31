@@ -3,6 +3,7 @@ from .chart_parser import Grammar, DictLexicon, Rule, RootRule, Quote
 
 
 S = Symbol("S")
+S_NOT_IF = Symbol("S_NOT_IF")
 S_PRED = Symbol("S_PRED")
 S_IF = Symbol("S_IF")
 S_COORD = Symbol("S_COORD")
@@ -50,10 +51,10 @@ class case:
 EnglishGrammar = Grammar(
     (
         RootRule(S(n), (S_IF(n),)),
-        RootRule(S(n), (S_PRED(n),)),
-        RootRule(S(n), (S_CODE(n),)),
-        RootRule(S(n), (S_COORD(n),)),
-
+        RootRule(S(n), (S_NOT_IF(n),)),
+        Rule(S_NOT_IF(n), (S_PRED(n),)),
+        Rule(S_NOT_IF(n), (S_CODE(n),)),
+        Rule(S_NOT_IF(n), (S_COORD(n),)),
         Rule(S_PRED(n), (NP(n, g, case.nom), VP(n))),
         Rule(S_IF(n), (S(n), Constant("if"), S(m))),
         Rule(S_IF(n), (Constant("if"), S(n), Constant("then"), S(m))),
@@ -66,10 +67,12 @@ EnglishGrammar = Grammar(
         Rule(NP(_x, _y, _z), (VAR(),)),
         Rule(NP(n, g, _x), (DET(n), N(n, g))),
         Rule(NP(n, g, c), (PRO(n, g, c),)),
-        Rule(SL(), (S(n),)),
-        Rule(SL(), (SL(), Constant(","), S(_y),)),
-        Rule(S_COORD(_x), (SL(), Constant(","), Constant("and"), S(_y),)),
-        Rule(S_COORD(_x), (S(_y), Constant("and"), S(_z),)),
+        Rule(SL(), (S_NOT_IF(n),)),
+        Rule(SL(), (SL(), Constant(","), S_NOT_IF(_y),)),
+        Rule(
+            S_COORD(_x), (SL(), Constant(","), Constant("and"), S_NOT_IF(_y),)
+        ),
+        Rule(S_COORD(_x), (S_NOT_IF(_y), Constant("and"), S_NOT_IF(_z),)),
         Rule(S_CODE(n), (Quote(Constant("`"), v),)),
         Rule(LIT(v), (Quote(Constant('"'), v),)),
         Rule(NP(_x, _y, _z), (LIT(v),)),
@@ -95,6 +98,7 @@ class EnglishBaseLexicon(DictLexicon):
                 "likes": (V(num.singular),),
                 "wears": (V(num.singular),),
                 "intersects": (V(num.singular),),
+                "contains": (V(num.singular),),
                 "provides": (V(num.singular),),
                 "affects": (V(num.singular),),
                 "references": (V(num.singular),),

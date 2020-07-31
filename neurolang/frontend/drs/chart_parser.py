@@ -100,12 +100,8 @@ class Tokenizer:
                 (re.compile(f"^{q}.+?{q}"), self.yield_quote(q))
             )
 
-        self.matches.append(
-            (re.compile("^[\\w\\-]+?\\b"), self.yield_word,)
-        )
-        self.matches.append(
-            (re.compile("^,\\s"), self.yield_comma,)
-        )
+        self.matches.append((re.compile("^[\\w\\-]+?\\b"), self.yield_word,))
+        self.matches.append((re.compile("^,\\s"), self.yield_comma,))
 
     def yield_quote(self, q):
         def foo(span):

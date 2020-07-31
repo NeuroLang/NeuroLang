@@ -84,3 +84,21 @@ def test_sentence_conjunction():
         Ulysses then the region Y affects that function
         """
     )
+
+
+def test_ands_in_implications():
+    _cp.parse(
+        """
+        if Y contains Z and X contains Z
+        then X intersects Y and Y intersects X
+        """
+    )
+
+
+def test_disallow_implication_in_ands():
+    assert not _cp.recognize(
+        """
+        if Y intersects Z then Z intersects Y and
+        if X contains Y then Y intersects X
+        """
+    )

@@ -10,7 +10,23 @@ from ...expression_walker import (
     ReplaceSymbolWalker,
 )
 from .chart_parser import Quote
-from .english_grammar import S, V, NP, VP, PN, DET, N, VAR, SL, LIT, S_PRED, S_IF, S_CODE, S_COORD
+from .english_grammar import (
+    S,
+    V,
+    NP,
+    VP,
+    PN,
+    DET,
+    N,
+    VAR,
+    SL,
+    LIT,
+    S_PRED,
+    S_IF,
+    S_CODE,
+    S_COORD,
+    S_NOT_IF,
+)
 from ...logic import (
     Implication,
     Conjunction,
@@ -71,18 +87,26 @@ class DRSBuilder(ExpressionWalker):
         return self.walk(DRS(drs.referents, exps))
 
     @add_match(Fa(Fa(S, ...), (...,)))
-    def proper_names(self, s):
+    def root_sentence(self, s):
+        (s_,) = s.args
+        return self.walk(DRS((), (s_,)))
+
+    @add_match(Fa(Fa(S_NOT_IF, ...), (...,)))
+    def not_if_sentence(self, s):
         (s_,) = s.args
         return self.walk(DRS((), (s_,)))
 
     @add_match(Fa(Fa(NP, ...), (Fa(Fa(PN, ...), ...),)))
-    def root_s(self, np):
+    def proper_names(self, np):
         (pn,) = np.args
         (_, _, const) = pn.functor.args
         return self.walk(DRS((), (const,)))
 
     @add_match(
-        Fa(Fa(S_PRED, ...), (..., Fa(Fa(VP, ...), (Fa(Fa(V, ...), ...), ...)),),)
+        Fa(
+            Fa(S_PRED, ...),
+            (..., Fa(Fa(VP, ...), (Fa(Fa(V, ...), ...), ...)),),
+        )
     )
     def predicate(self, s):
         (subject, vp) = s.args
@@ -127,12 +151,7 @@ class DRSBuilder(ExpressionWalker):
 
         return self.walk(DRS(refs, exps))
 
-    @add_match(
-        Fa(
-            Fa(S_IF, ...),
-            (C("if"), ..., C("then"), ...),
-        ),
-    )
+    @add_match(Fa(Fa(S_IF, ...), (C("if"), ..., C("then"), ...),),)
     def conditional(self, s):
         (_, ant, _, cons) = s.args
         return self.walk(DRS((), (Implication(cons, ant),)))
@@ -157,43 +176,26 @@ class DRSBuilder(ExpressionWalker):
         )
         return self.walk(Implication(drs_con, drs_ant))
 
-    @add_match(
-        Fa(Fa(S_COORD, ...), (..., C("and"), ...)),
-    )
+    @add_match(Fa(Fa(S_COORD, ...), (..., C("and"), ...)),)
     def simple_and(self, s):
         (a, _, b) = s.args
         a = self.walk(a)
         b = self.walk(b)
         return self.walk(DRS((), (a, b,)))
 
-    @add_match(
-        Fa(
-            Fa(S_COORD, ...),
-            (..., C(","), C("and"), ...),
-        ),
-    )
+    @add_match(Fa(Fa(S_COORD, ...), (..., C(","), C("and"), ...),),)
     def comma_and(self, s):
         (sl, _, _, s) = s.args
         sl = self.walk(sl)
         s = self.walk(s)
         return self.walk(DRS((), sl + (s,)))
 
-    @add_match(
-        Fa(
-            Fa(SL, ...),
-            (...,),
-        ),
-    )
+    @add_match(Fa(Fa(SL, ...), (...,),),)
     def single_sentence_list(self, sl):
         (s,) = sl.args
         return (self.walk(s),)
 
-    @add_match(
-        Fa(
-            Fa(SL, ...),
-            (Fa(Fa(SL, ...), ...), C(","), ...),
-        ),
-    )
+    @add_match(Fa(Fa(SL, ...), (Fa(Fa(SL, ...), ...), C(","), ...),),)
     def sentence_list(self, sl):
         (sl, _, s) = sl.args
         sl = self.walk(sl)
