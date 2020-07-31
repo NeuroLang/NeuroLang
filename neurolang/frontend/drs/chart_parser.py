@@ -54,8 +54,11 @@ class Chart(list):
     pass
 
 
+CODE_QUOTE = '`'
+STRING_QUOTE = '"'
+
 class Tokenizer:
-    def __init__(self, grammar, quotes=["`", '"']):
+    def __init__(self, grammar, quotes=[CODE_QUOTE, STRING_QUOTE]):
         self.grammar = grammar
         self.matches = []
         for q in quotes:
