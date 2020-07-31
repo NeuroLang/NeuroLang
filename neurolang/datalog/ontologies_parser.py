@@ -226,7 +226,7 @@ class OntologyParser:
         )
 
         warnings.warn(
-            f"""The restriction minCardinality cannot be 
+            f"""The restriction minCardinality cannot be
             parsed for {restricted_node}."""
         )
 
@@ -255,7 +255,7 @@ class OntologyParser:
         )
 
         warnings.warn(
-            f"""The restriction maxCardinality cannot be 
+            f"""The restriction maxCardinality cannot be
             parsed for {restricted_node}"""
         )
 
@@ -288,7 +288,7 @@ class OntologyParser:
         )
 
         warnings.warn(
-            f"""The restriction cardinality cannot be 
+            f"""The restriction cardinality cannot be
             parsed for {restricted_node}"""
         )
 
