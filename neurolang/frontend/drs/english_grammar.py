@@ -1,5 +1,5 @@
 from ...expressions import Symbol, Constant
-from .chart_parser import Grammar, DictLexicon, add_rule, Quote, CODE_QUOTE
+from .chart_parser import Grammar, DictLexicon, add_rule, Quote, CODE_QUOTE, STRING_QUOTE
 
 
 S = Symbol("S")
@@ -82,11 +82,7 @@ class EnglishGrammar(Grammar):
     def np_pronoun(self, pro):
         return NP(n, g, c)
 
-    @add_rule(Quote(Constant("`"), v))
-    def s_quot(self, quot):
-        return S(n)
-
-    @add_rule(Quote(Constant("\""), v))
+    @add_rule(Quote(Constant(STRING_QUOTE), v))
     def quot_string_lit(self, quot):
         _q, content = quot.args
         return LIT(content)
