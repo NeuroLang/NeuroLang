@@ -164,6 +164,45 @@ def test_aggregation_chase_single_grouping():
     assert solution[Q] == res
 
 
+def test_aggregation_chase_single_grouping_muliple_columns():
+    dl = Datalog()
+
+    P = S_('P')  # noqa: N806
+    Q = S_('Q')  # noqa: N806
+    R = S_('R')  # noqa: N806
+    x = S_('x')
+    y = S_('y')
+    z = S_('z')
+
+    edb = [
+        F_(P(C_(i), C_(i * j), C_(0)))
+        for i in range(3)
+        for j in range(3)
+    ]
+
+    code = Eb_(edb + [
+        Imp_(Q(x, Fa_(S_('sum2'), (y, z))), P(x, y, z)),
+    ])
+
+    dl.walk(code)
+
+    chase = Chase(dl)
+
+    solution = chase.build_chase_solution()
+
+    dl.add_extensional_predicate_from_tuples(
+        R,
+        {
+            (0, 0),
+            (1, 3),
+            (2, 6)
+        }
+    )
+    res = dl.extensional_database()['R']
+
+    assert solution[Q] == res
+
+
 def test_aggregation_set_creation():
     dl = Datalog()
     P = S_('P')
