@@ -1,5 +1,12 @@
 from ...expressions import Symbol, Constant
-from .chart_parser import Grammar, DictLexicon, add_rule, Quote, CODE_QUOTE
+from .chart_parser import (
+    Grammar,
+    DictLexicon,
+    add_rule,
+    Quote,
+    CODE_QUOTE,
+    STRING_QUOTE,
+)
 
 
 S = Symbol("S")
@@ -11,6 +18,7 @@ DET = Symbol("DET")
 N = Symbol("N")
 PRO = Symbol("PRO")
 VAR = Symbol("VAR")
+LIT = Symbol("LIT")
 
 c = Symbol("c")
 n = Symbol("n")
@@ -80,6 +88,15 @@ class EnglishGrammar(Grammar):
     @add_rule(PRO(n, g, c))
     def np_pronoun(self, pro):
         return NP(n, g, c)
+
+    @add_rule(Quote(Constant(STRING_QUOTE), v))
+    def quot_string_lit(self, quot):
+        _q, content = quot.args
+        return LIT(content)
+
+    @add_rule(LIT(v))
+    def np_lit(self, lit):
+        return NP(Symbol.fresh(), Symbol.fresh(), Symbol.fresh())
 
     @add_rule(Quote(Constant(CODE_QUOTE), v))
     def s_quot(self, quot):

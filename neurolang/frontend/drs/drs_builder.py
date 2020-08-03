@@ -10,7 +10,7 @@ from ...expression_walker import (
     ReplaceSymbolWalker,
 )
 from .chart_parser import Quote, CODE_QUOTE
-from .english_grammar import S, V, NP, VP, PN, DET, N, VAR
+from .english_grammar import S, V, NP, VP, PN, DET, N, VAR, LIT
 from ...logic import (
     Implication,
     Conjunction,
@@ -150,6 +150,12 @@ class DRSBuilder(ExpressionWalker):
             set(drs_con.referents) - set(drs_ant.referents)
         )
         return self.walk(Implication(drs_con, drs_ant))
+
+    @add_match(Fa(Fa(NP, ...), (Fa(Fa(LIT, ...), ...),)),)
+    def lit_noun_phrase(self, np):
+        (lit,) = np.args
+        (const,) = lit.functor.args
+        return self.walk(DRS((), (const,)))
 
 
 r = re.compile(r"^(\w+)\((\w+(,\s\w+)*)\)$")
