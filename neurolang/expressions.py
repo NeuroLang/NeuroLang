@@ -27,6 +27,7 @@ __all__ = [
 _lock = threading.RLock()
 
 _expressions_behave_as_python_objects = dict()
+_sure_is_not_pattern = dict()
 
 
 @contextmanager
@@ -40,6 +41,32 @@ def expressions_behave_as_objects():
     yield
     with _lock:
         del _expressions_behave_as_python_objects[thread_id]
+
+
+@contextmanager
+def sure_is_not_pattern():
+    global _lock
+    global _sure_is_not_pattern
+    thread_id = threading.get_ident()
+
+    with _lock:
+        _sure_is_not_pattern[thread_id] = True
+    yield
+    with _lock:
+        del _sure_is_not_pattern[thread_id]
+
+
+@contextmanager
+def sure_is_not_pattern_():
+    global _lock
+    global _sure_is_not_pattern
+    thread_id = threading.get_ident()
+
+    with _lock:
+        _sure_is_not_pattern[thread_id] = True
+    yield
+    with _lock:
+        del _sure_is_not_pattern[thread_id]
 
 
 def type_validation_value(value, type_):
@@ -176,19 +203,27 @@ class ExpressionMeta(ParametricTypeClassMeta):
 
         @wraps(orig_init)
         def new_init(self, *args, **kwargs):
-            generic_pattern_match = True
-            for arg in args:
-                if (
-                    _check_expression_is_pattern(arg) or
-                    (
-                        isinstance(arg, (tuple, list)) and
-                        any(
-                            _check_expression_is_pattern(a)
-                            for a in arg
+            global _sure_is_not_pattern
+            thread_id = threading.get_ident()
+
+            if (
+                thread_id not in _sure_is_not_pattern
+            ):
+                generic_pattern_match = True
+                for arg in args:
+                    if (
+                        _check_expression_is_pattern(arg) or
+                        (
+                            isinstance(arg, (tuple, list)) and
+                            any(
+                                _check_expression_is_pattern(a)
+                                for a in arg
+                            )
                         )
-                    )
-                ):
-                    break
+                    ):
+                        break
+                else:
+                    generic_pattern_match = False
             else:
                 generic_pattern_match = False
 

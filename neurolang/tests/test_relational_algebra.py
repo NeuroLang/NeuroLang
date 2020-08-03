@@ -6,6 +6,7 @@ import pytest
 from ..datalog.basic_representation import WrappedRelationalAlgebraSet
 from ..exceptions import NeuroLangException
 from ..expressions import Constant, Symbol
+from ..expression_walker import ExpressionWalker
 from ..relational_algebra import (
     ColumnInt,
     ColumnStr,
@@ -21,6 +22,7 @@ from ..relational_algebra import (
     Projection,
     RelationalAlgebraOptimiser,
     RelationalAlgebraSolver,
+    RelationalAlgebraPushInSelections,
     RenameColumn,
     RenameColumns,
     Selection,
@@ -568,6 +570,32 @@ def test_extended_projection_lambda_function():
     assert result == expected
 
 
+def test_extended_projection_numeric_named_columns():
+    relation = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=(1, "y"), iterable=[(50, 100), (20, 80),]
+        )
+    )
+    extended_proj_op = ExtendedProjection(
+        relation,
+        (
+            ExtendedProjectionListMember(
+                Constant(ColumnInt(1)),
+                Constant(ColumnStr("pomme_de_terre"))
+            ),
+        )
+    )
+    expected = Constant[AbstractSet](
+        NamedRelationalAlgebraFrozenSet(
+            columns=("pomme_de_terre",),
+            iterable=[(50,), (20,)]
+        )
+    )
+    solver = RelationalAlgebraSolver()
+    result = solver.walk(extended_proj_op)
+    assert result == expected
+
+
 def test_extended_projection_other_relation_length():
     r1 = Constant[AbstractSet](
         NamedRelationalAlgebraFrozenSet(
@@ -760,3 +788,53 @@ def test_set_destroy_multiple_columns():
     result = solver.walk(destroy)
 
     assert result == expected_relation
+
+
+def test_columns():
+    r1 = Symbol('r1')
+    r2 = Symbol('r2')
+    a = Constant[ColumnStr](ColumnStr('a'))
+    b = Constant[ColumnInt](ColumnInt(0))
+
+    nj = NaturalJoin(r1, r2)
+    assert len(nj.columns()) == 0
+
+    rc = RenameColumn(r1, a, b)
+    assert rc.columns() == set((a, b))
+
+    assert NaturalJoin(rc, r2).columns() == set((a, b))
+
+
+def test_push_in_optimiser():
+    class Opt(RelationalAlgebraPushInSelections, ExpressionWalker):
+        pass
+
+    opt = Opt()
+
+    r1 = Symbol('r1')
+    r2 = Symbol('r2')
+    a = Constant[ColumnStr](ColumnStr('a'))
+    b = Constant[ColumnStr](ColumnStr('b'))
+    op = Symbol('op')
+
+    exp1 = NaturalJoin(r1, r2)
+    assert opt.walk(exp1) is exp1
+
+    formula = op(a)
+    exp2 = Selection(NaturalJoin(RenameColumn(r1, b, a), r2), formula)
+    res = opt.walk(exp2)
+    exp_res = NaturalJoin(Selection(
+        RenameColumn(r1, b, a), formula),
+        r2
+    )
+    assert res == exp_res
+
+    exp3 = Selection(NaturalJoin(r2, RenameColumn(r1, b, a)), formula)
+    res = opt.walk(exp3)
+    exp_res = NaturalJoin(
+        r2,
+        Selection(
+            RenameColumn(r1, b, a), formula
+        )
+    )
+    assert res == exp_res

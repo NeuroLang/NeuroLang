@@ -1,11 +1,14 @@
 from ...logic.unification import most_general_unifier, apply_substitution
-from ...expressions import Symbol, FunctionApplication, Constant
+from ...expressions import Symbol, Constant
 from collections import namedtuple
 import re
 
 
 Quote = Symbol("Quote")
 Rule = namedtuple("Rule", "name constructor constituents is_root")
+
+CODE_QUOTE = '`'
+STRING_QUOTE = '"'
 
 
 def add_rule(*args, root=False):
@@ -55,7 +58,7 @@ class Chart(list):
 
 
 class Tokenizer:
-    def __init__(self, grammar, quotes=["`", '"']):
+    def __init__(self, grammar, quotes=[CODE_QUOTE, STRING_QUOTE]):
         self.grammar = grammar
         self.matches = []
         for q in quotes:

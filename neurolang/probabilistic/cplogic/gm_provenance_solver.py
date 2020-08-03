@@ -1,24 +1,29 @@
 import operator
 from typing import Tuple
 
+from ...datalog.expression_processing import conjunct_formulas
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
 from ...expressions import Constant, Definition, FunctionApplication, Symbol
+from ...logic import Conjunction, Implication
 from ...logic.expression_processing import extract_logic_predicates
 from ...relational_algebra import (
     ColumnStr,
-    ConcatenateConstantColumn,
     NaturalJoin,
     Projection,
     RelationalAlgebraOperation,
-    RelationalAlgebraSolver,
     RenameColumn,
     Selection,
     str2columnstr_constant,
 )
 from ...relational_algebra_provenance import (
+    NaturalJoinInverse,
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
+)
+from . import (
+    build_always_true_provenance_relation,
+    rename_columns_for_args_to_match,
 )
 from .cplogic_to_gm import (
     AndPlateNode,
@@ -29,83 +34,10 @@ from .cplogic_to_gm import (
     PlateNode,
 )
 from .grounding import get_grounding_predicate, ground_cplogic_program
+from .problog_solver import solve_succ_query as problog_solve_succ_query
 
 TRUE = Constant[bool](True, verify_type=False, auto_infer_type=False)
 EQUAL = Constant(operator.eq)
-
-
-def rename_columns_for_args_to_match(relation, src_args, dst_args):
-    """
-    Rename the columns of a relation so that they match the targeted args.
-
-    Parameters
-    ----------
-    relation : ProvenanceAlgebraSet or RelationalAlgebraOperation
-        The relation on which the renaming of the columns should happen.
-    src_args : tuple of Symbols
-        The predicate's arguments currently matching the columns.
-    dst_args : tuple of Symbols
-        New args that the naming of the columns should match.
-
-    Returns
-    -------
-    RelationalAlgebraOperation
-        The unsolved nested operations that apply the renaming scheme.
-
-    """
-    src_cols = list(str2columnstr_constant(arg.name) for arg in src_args)
-    dst_cols = list(str2columnstr_constant(arg.name) for arg in dst_args)
-    result = relation
-    for dst_col in set(dst_cols):
-        idxs = [i for i, c in enumerate(dst_cols) if c == dst_col]
-        result = RenameColumn(result, src_cols[idxs[0]], dst_col)
-        for idx in idxs[1:]:
-            result = Selection(result, EQUAL(src_cols[idx], dst_col))
-    return result
-
-
-def build_always_true_provenance_relation(relation, prob_col=None):
-    """
-    Construct a provenance set from a relation with probabilities of 1
-    for all tuples in the relation.
-
-    The provenance column is named after the ``prob_col`` argument. If
-    ``prob_col`` is already in the columns of the relation, it is
-    removed before being re-added.
-
-    Parameters
-    ----------
-    relation : NamedRelationalAlgebraFrozenSet
-        The relation containing the tuples that will be in the
-        resulting provenance set.
-    prob_col : Constant[ColumnStr]
-        Name of the provenance column that will contain constant
-        probabilities of 1.
-
-    Returns
-    -------
-    ProvenanceAlgebraSet
-
-    """
-    if prob_col is None:
-        prob_col = str2columnstr_constant(Symbol.fresh().name)
-    # remove the probability column if it is already there
-    elif prob_col.value in relation.value.columns:
-        kept_cols = tuple(
-            str2columnstr_constant(col)
-            for col in relation.value.columns
-            if col != prob_col.value
-        )
-        relation = Projection(relation, kept_cols)
-    # add a new probability column with name `prob_col` and ones everywhere
-    cst_one_probability = Constant[float](
-        1.0, auto_infer_type=False, verify_type=False
-    )
-    relation = ConcatenateConstantColumn(
-        relation, prob_col, cst_one_probability
-    )
-    relation = RelationalAlgebraSolver().walk(relation)
-    return ProvenanceAlgebraSet(relation.value, prob_col)
 
 
 def solve_succ_query(query_predicate, cpl_program):
@@ -165,6 +97,7 @@ def solve_succ_query(query_predicate, cpl_program):
     n.d., 30.
 
     """
+    return problog_solve_succ_query(query_predicate, cpl_program)
     grounded = ground_cplogic_program(cpl_program)
     translator = CPLogicGroundingToGraphicalModelTranslator()
     gm = translator.walk(grounded)
@@ -292,7 +225,10 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
 
     @add_match(NodeValue(PlateNode, TRUE))
     def node_always_true(self, nv):
-        prob_col = getattr(nv.node, "probability_column", None)
+        if hasattr(nv.node, "probability_column"):
+            prob_col = nv.node.probability_column.value
+        else:
+            prob_col = None
         prov_set = build_always_true_provenance_relation(
             nv.node.relation, prob_col
         )
@@ -305,7 +241,13 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
         prov_set = self.walk(NodeValue(nv.node, TRUE))
         prov_set = Selection(
             prov_set,
-            TupleEqualSymbol(prov_set.non_provenance_columns, nv.value),
+            TupleEqualSymbol(
+                tuple(
+                    str2columnstr_constant(c)
+                    for c in prov_set.non_provenance_columns
+                ),
+                nv.value,
+            ),
         )
         return prov_set
 
@@ -319,7 +261,7 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
         """
         node = operation.valued_node[0]
         relation = node.relation.value
-        prov_col = node.probability_column
+        prov_col = node.probability_column.value
         prov_set = ProvenanceAlgebraSet(relation, prov_col)
         prov_set.__debug_expression__ = node.expression
         return prov_set
@@ -415,12 +357,18 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
         choice_node = operation.valued_node[0]
         choice_value = operation.valued_node[1]
         prov_set = ProvenanceAlgebraSet(
-            choice_node.relation.value, choice_node.probability_column,
+            choice_node.relation.value, choice_node.probability_column.value,
         )
         prov_set.__debug_expression__ = choice_node.expression
         return Selection(
             prov_set,
-            TupleEqualSymbol(prov_set.non_provenance_columns, choice_value),
+            TupleEqualSymbol(
+                tuple(
+                    str2columnstr_constant(c)
+                    for c in prov_set.non_provenance_columns
+                ),
+                choice_value,
+            ),
         )
 
     @add_match(
@@ -432,13 +380,19 @@ class CPLogicGraphicalModelProvenanceSolver(PatternWalker):
         choice_node = operation.condition_valued_nodes[0][0]
         choice_value = operation.condition_valued_nodes[0][1]
         relation = build_always_true_provenance_relation(
-            choice_node.relation, choice_node.probability_column,
+            choice_node.relation, choice_node.probability_column.value,
         )
         relation.__debug_expression__ = choice_node.expression
         relation.__debug_alway_true__ = True
         relation = Selection(
             relation,
-            TupleEqualSymbol(relation.non_provenance_columns, choice_value),
+            TupleEqualSymbol(
+                tuple(
+                    str2columnstr_constant(c)
+                    for c in relation.non_provenance_columns
+                ),
+                choice_value,
+            ),
         )
         return relation
 
@@ -704,3 +658,56 @@ class UnionRemover(
     UnionRemoverMixin, ProvenanceExpressionTransformer, ExpressionWalker
 ):
     pass
+
+
+def make_conjunction_rule(conjunction):
+    if isinstance(conjunction, FunctionApplication):
+        # enforce expression to be a conjunction
+        conjunction = Conjunction((conjunction,))
+    symbols = set()
+    for pred in conjunction.formulas:
+        symbols |= set(arg for arg in pred.args if isinstance(arg, Symbol))
+    symbols = tuple(sorted(symbols))
+    csqt_pred_symb = Symbol.fresh()
+    return Implication(csqt_pred_symb(*symbols), conjunction,)
+
+
+def add_query_to_program(query, program):
+    assert isinstance(query, Conjunction)
+    args = set()
+    for pred in query.formulas:
+        args |= set(arg for arg in pred.args if isinstance(arg, Symbol))
+    csqt_pred = Symbol.fresh()(*args)
+    rule = Implication(csqt_pred, query)
+    program.walk(rule)
+    return csqt_pred
+
+
+def solve_marg_query(query_predicate, evidence, cpl_program):
+    if isinstance(evidence, FunctionApplication):
+        evidence = Conjunction((evidence,))
+    joint_conjunction = conjunct_formulas(query_predicate, evidence)
+    cpl_program.push_scope()
+    joint_qpred = add_query_to_program(joint_conjunction, cpl_program)
+    evidence_qpred = add_query_to_program(evidence, cpl_program)
+    joint_result = solve_succ_query(joint_qpred, cpl_program)
+    evidence_result = solve_succ_query(evidence_qpred, cpl_program)
+    cpl_program.pop_scope()
+    joint_cols = tuple(
+        str2columnstr_constant(arg.name)
+        for arg in query_predicate.args
+        if isinstance(arg, Symbol)
+    )
+    joint_result = Projection(joint_result, joint_cols)
+    evidence_cols = set()
+    for formula in evidence.formulas:
+        evidence_cols |= set(
+            str2columnstr_constant(arg.name)
+            for arg in formula.args
+            if isinstance(arg, Symbol)
+        )
+    evidence_cols = tuple(sorted(evidence_cols, key=lambda c: c.value))
+    evidence_result = Projection(evidence_result, evidence_cols)
+    result = NaturalJoinInverse(joint_result, evidence_result)
+    solver = RelationalAlgebraProvenanceCountingSolver()
+    return solver.walk(result)

@@ -1,5 +1,6 @@
 from collections import namedtuple
 from itertools import chain, tee
+import logging
 from operator import contains, eq
 from typing import Iterable, Tuple
 
@@ -10,15 +11,24 @@ from ...logic.unification import (apply_substitution,
                                   compose_substitutions)
 from ...type_system import (NeuroLangTypeException, Unknown, get_args,
                             is_leq_informative, unify_types)
-from ...utils import OrderedSet
+from ...utils import OrderedSet, log_performance
 from ..expression_processing import (extract_logic_free_variables,
-                                     extract_logic_predicates, is_linear_rule)
+                                     extract_logic_predicates, is_linear_rule,
+                                     dependency_matrix, program_has_loops)
 from ..instance import MapInstance
+
+
+LOG = logging.getLogger(__name__)
+
 
 ChaseNode = namedtuple('ChaseNode', 'instance children')
 
 
 class NeuroLangNonLinearProgramException(NeuroLangException):
+    pass
+
+
+class NeuroLangProgramHasLoopsException(NeuroLangException):
     pass
 
 
@@ -402,12 +412,56 @@ class ChaseGeneral():
         return substitutions
 
 
+class ChaseNonRecursive:
+    """Chase class for non-recursive programs.
+    """
+    def build_chase_solution(self):
+        instance = MapInstance()
+        instance_update = MapInstance(
+            self.datalog_program.extensional_database()
+        )
+        self.check_constraints(instance_update)
+        rules_to_compute = list(self.rules)
+        rules_seen = set()
+        while rules_to_compute:
+            rule = rules_to_compute.pop(0)
+            functor = rule.consequent.functor
+            functor_ix = self._dependency_matrix_symbols.index(functor)
+            if any(
+                self._dependency_matrix_symbols[dep_index] not in rules_seen
+                for dep_index in
+                self._dependency_matrix[functor_ix].nonzero()[0]
+            ):
+                rules_to_compute.append(rule)
+                continue
+            rules_seen.add(functor)
+
+            with log_performance(LOG, 'Evaluating rule %s', (rule,)):
+                instance_update |= self.chase_step(
+                    instance, rule, restriction_instance=instance_update
+                )
+
+        return instance_update
+
+    def check_constraints(self, instance_update):
+        super().check_constraints(instance_update)
+        self._dependency_matrix_symbols, self._dependency_matrix = \
+            dependency_matrix(
+                self.datalog_program, rules=self.rules
+            )
+        if program_has_loops(self._dependency_matrix):
+            raise NeuroLangProgramHasLoopsException(
+                "Use a different resolution algorithm"
+            )
+
+
 class ChaseNaive:
     """Chase implementation using the naive algorithm.
     """
 
     def build_chase_solution(self):
         instance = MapInstance()
+        empty = MapInstance()
         instance_update = MapInstance(
             self.datalog_program.extensional_database()
         )
@@ -416,9 +470,11 @@ class ChaseNaive:
             instance |= instance_update
             new_update = MapInstance()
             for rule in self.rules:
-                upd = self.chase_step(
-                    instance, rule, restriction_instance=instance_update
-                )
+                with log_performance(LOG, 'Evaluating rule %s', (rule,)):
+                    upd = self.chase_step(
+                        instance | instance_update, rule,
+                        restriction_instance=empty
+                    )
                 new_update |= upd
             instance_update = new_update
 
@@ -441,9 +497,10 @@ class ChaseSemiNaive:
             instance_update = MapInstance()
             continue_chase = False
             for rule in self.rules:
-                instance_update = self.per_rule_update(
-                    rule, instance, instance_update
-                )
+                with log_performance(LOG, 'Evaluating rule %s', (rule,)):
+                    instance_update = self.per_rule_update(
+                        rule, instance, instance_update
+                    )
                 continue_chase |= len(instance_update) > 0
 
         return instance

@@ -3,14 +3,18 @@ import typing
 import pytest
 
 from ....datalog.expressions import Fact
-from ....exceptions import ForbiddenDisjunctionError
+from ....exceptions import (
+    ForbiddenDisjunctionError,
+    ForbiddenExpressionError,
+    ProtectedKeywordError,
+)
 from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Union
 from ...exceptions import (
     DistributionDoesNotSumToOneError,
     MalformedProbabilisticTupleError,
 )
-from ...expressions import ProbabilisticPredicate
+from ...expressions import PROB, ProbabilisticPredicate, ProbabilisticQuery
 from ..program import CPLogicProgram
 
 P = Symbol("P")
@@ -41,7 +45,7 @@ def test_probfact():
 
 def test_deterministic_program():
     code = Union(
-        (Implication(Z(x), Conjunction((P(x), Q(x)))), Fact(Q(a)), Fact(P(a)),)
+        (Implication(Z(x), Conjunction((P(x), Q(x)))), Fact(Q(a)), Fact(P(a)))
     )
     cpl_program = CPLogicProgram()
     cpl_program.walk(code)
@@ -120,7 +124,7 @@ def test_add_probfacts_from_tuple():
     cpl = CPLogicProgram()
     cpl.walk(Union(tuple()))
     cpl.add_probabilistic_facts_from_tuples(
-        P, {(0.3, "hello", "gaston"), (0.7, "hello", "antonia"),},
+        P, {(0.3, "hello", "gaston"), (0.7, "hello", "antonia")}
     )
     assert P in cpl.pfact_pred_symbs
     assert (
@@ -135,7 +139,7 @@ def test_add_probfacts_from_tuple_no_probability():
     cpl.walk(Union(tuple()))
     with pytest.raises(MalformedProbabilisticTupleError):
         cpl.add_probabilistic_facts_from_tuples(
-            P, {("hello", "gaston"), ("hello", "antonia"),},
+            P, {("hello", "gaston"), ("hello", "antonia")}
         )
 
 
@@ -184,10 +188,50 @@ def test_add_probchoice_does_not_sum_to_one():
         )
 
 
-def test_forbidden_disjunction():
-    rule_a = Implication(P(x), Q(x))
-    rule_b = Implication(P(y), Z(y))
-    code = Union((rule_a, rule_b))
+def test_within_language_succ_query():
+    rule = Implication(
+        P(x, y, ProbabilisticQuery(PROB, (x, y))), Conjunction((Q(x), Z(y, z)))
+    )
     cpl = CPLogicProgram()
+    cpl.walk(rule)
+    assert P in cpl.intensional_database()
+
+
+def test_prob_protected_keyword():
+    cpl = CPLogicProgram()
+    with pytest.raises(ProtectedKeywordError):
+        cpl.walk(Implication(PROB(x), Z(x)))
+
+
+def test_within_language_succ_query_no_disjunction():
+    q1 = Implication(
+        P(x, ProbabilisticQuery(PROB, (x,))), Conjunction((Z(x), Q(x)))
+    )
+    q2 = Implication(
+        P(x, ProbabilisticQuery(PROB, (x,))), Conjunction((Z(x), Y(y)))
+    )
+    cpl = CPLogicProgram()
+    cpl.walk(q1)
     with pytest.raises(ForbiddenDisjunctionError):
-        cpl.walk(code)
+        cpl.walk(q2)
+
+
+def test_within_language_succ_query_invalid():
+    q = Implication(
+        P(x, y, ProbabilisticQuery(PROB, (x,))), Conjunction((Z(x), Q(y)))
+    )
+    cpl = CPLogicProgram()
+    with pytest.raises(ForbiddenExpressionError):
+        cpl.walk(q)
+    q = Implication(
+        P(x, ProbabilisticQuery(PROB, (x, y))), Conjunction((Z(x), Q(y)))
+    )
+    cpl = CPLogicProgram()
+    with pytest.raises(ForbiddenExpressionError):
+        cpl.walk(q)
+    q = Implication(
+        P(x, ProbabilisticQuery(PROB, (a, x))), Conjunction((Z(x), Q(y)))
+    )
+    cpl = CPLogicProgram()
+    with pytest.raises(ForbiddenExpressionError):
+        cpl.walk(q)

@@ -1,8 +1,10 @@
 import typing
 
 import numpy
+import pytest
 
 from ....datalog import Fact
+from ....exceptions import ForbiddenDisjunctionError
 from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Union
 from ....utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
@@ -20,6 +22,7 @@ Q = Symbol("Q")
 R = Symbol("R")
 Z = Symbol("Z")
 x = Symbol("x")
+y = Symbol("y")
 p = Symbol("p")
 a = Constant("a")
 b = Constant("b")
@@ -110,3 +113,19 @@ def test_cplogic_grounding_with_pchoice():
     cpl_program.add_probabilistic_choice_from_tuples(P, probchoice_set)
     grounded = ground_cplogic_program(cpl_program)
     assert isinstance(grounded.expressions[0], ProbabilisticChoiceGrounding)
+
+
+def test_forbidden_disjunction():
+    rule_a = Implication(P(x), Q(x))
+    rule_b = Implication(P(y), Z(y))
+    code = Union((rule_a, rule_b))
+    cpl = CPLogicProgram()
+    pfact_sets = {
+        Q: {(1.0, "a"), (0.5, "b")},
+        Z: {(0.2, "z")},
+    }
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+    cpl.walk(code)
+    with pytest.raises(ForbiddenDisjunctionError):
+        ground_cplogic_program(cpl)
