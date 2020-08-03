@@ -170,7 +170,7 @@ class ChartParser:
         if len(results) > 1:
             raise AmbiguousSentenceException(string, results)
 
-        return results
+        return results[0]
 
     def _build_tree(self, edge, unif):
         head = _lu.substitute(edge.head, unif)

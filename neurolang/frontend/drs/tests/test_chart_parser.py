@@ -67,7 +67,7 @@ def test_parse():
             NP(singular)(PN(singular)(Constant("Ulysses"))),
         ),
     )
-    assert tree == cp.parse("Jones owns Ulysses")[0]
+    assert tree == cp.parse("Jones owns Ulysses")
 
 
 class TestGrammarWalker(PatternWalker):
@@ -100,7 +100,7 @@ class TestGrammarWalker(PatternWalker):
 def test_walk_parsed():
     cp = ChartParser(TestGrammar, test_lexicon)
     sentence = "Jones owns Ulysses"
-    tree = cp.parse(sentence)[0]
+    tree = cp.parse(sentence)
     r = TestGrammarWalker().walk(tree)
     assert sentence == r
 
@@ -127,10 +127,10 @@ class TestGrammarWalker2(TestGrammarWalker):
 
 def test_walk_parsed_2():
     cp = ChartParser(TestGrammar, test_lexicon)
-    tree = cp.parse("Jones owns Ulysses")[0]
+    tree = cp.parse("Jones owns Ulysses")
     r = TestGrammarWalker2().walk(tree)
     assert "SN SV SN" == r
 
-    tree = cp.parse("Jones and Smith own Ulysses")[0]
+    tree = cp.parse("Jones and Smith own Ulysses")
     r = TestGrammarWalker2().walk(tree)
     assert "SN and SN PV SN"

@@ -17,7 +17,7 @@ _cp = ChartParser(_eg, EnglishBaseLexicon())
 
 def test_simple_expression():
     b = DRSBuilder(_eg)
-    t = _cp.parse("Jones owns Ulysses")[0]
+    t = _cp.parse("Jones owns Ulysses")
     drs = b.walk(t)
 
     assert len(drs.referents) == 0
@@ -30,7 +30,7 @@ def test_simple_expression():
 
 def test_indefinite_noun_phrase():
     b = DRSBuilder(_eg)
-    t = _cp.parse("Jones owns a book")[0]
+    t = _cp.parse("Jones owns a book")
     drs = b.walk(t)
 
     assert len(drs.referents) == 1
@@ -43,7 +43,7 @@ def test_indefinite_noun_phrase():
 
 def test_var_noun_phrases():
     b = DRSBuilder(_eg)
-    t = _cp.parse("X intersects Y")[0]
+    t = _cp.parse("X intersects Y")
     drs = b.walk(t)
 
     assert len(drs.referents) == 2
@@ -53,7 +53,7 @@ def test_var_noun_phrases():
 
 def test_apposition_variable_introduction():
     b = DRSBuilder(_eg)
-    t = _cp.parse("a region X intersects a region Y")[0]
+    t = _cp.parse("a region X intersects a region Y")
     drs = b.walk(t)
     x = Symbol("X")
     y = Symbol("Y")
@@ -69,7 +69,7 @@ def test_apposition_variable_introduction():
 
 def test_conditional():
     b = DRSBuilder(_eg)
-    t = _cp.parse("if a region Y intersects a region X then X intersects Y")[0]
+    t = _cp.parse("if a region Y intersects a region X then X intersects Y")
     drs = b.walk(t)
     x = Symbol("X")
     y = Symbol("Y")
@@ -90,7 +90,7 @@ def test_conditional():
 
 def test_translation_1():
     b = DRSBuilder(_eg)
-    t = _cp.parse("X intersects Y")[0]
+    t = _cp.parse("X intersects Y")
     drs = b.walk(t)
     exp = DRS2FOL().walk(drs)
     x = Symbol("X")
@@ -103,7 +103,7 @@ def test_translation_1():
 
 def test_translation_2():
     b = DRSBuilder(_eg)
-    t = _cp.parse("if a region Y intersects a region X then X intersects Y")[0]
+    t = _cp.parse("if a region Y intersects a region X then X intersects Y")
     drs = b.walk(t)
     exp = DRS2FOL().walk(drs)
     x = Symbol("X")
@@ -136,7 +136,7 @@ def test_same_implication():
 
 def test_quoted_predicate():
     b = DRSBuilder(_eg)
-    t = _cp.parse("if `intersects(Y, X)` then X intersects Y")[0]
+    t = _cp.parse("if `intersects(Y, X)` then X intersects Y")
     drs = b.walk(t)
 
     x = Symbol("X")
@@ -155,7 +155,7 @@ def test_quoted_predicate():
 
 def test_conjunction_1():
     b = DRSBuilder(_eg)
-    t = _cp.parse("X owns Y and Y references Z")[0]
+    t = _cp.parse("X owns Y and Y references Z")
     drs = b.walk(t)
     exp = DRS2FOL().walk(drs)
     x = Symbol("X")
@@ -180,7 +180,7 @@ def test_conjunction_2():
     b = DRSBuilder(_eg)
     t = _cp.parse(
         "a man X owns a book Y, Y references a book Z, and X likes Z"
-    )[0]
+    )
     drs = b.walk(t)
     exp = DRS2FOL().walk(drs)
     x = Symbol("X")
@@ -210,7 +210,7 @@ def test_conjunction_2():
 
 def test_quoted_string_literal():
     b = DRSBuilder(_eg)
-    t = _cp.parse('"Ulysses" references "Odyssey"')[0]
+    t = _cp.parse('"Ulysses" references "Odyssey"')
     drs = b.walk(t)
     o = Constant("Odyssey")
     u = Constant("Ulysses")
@@ -222,7 +222,7 @@ def test_quoted_string_literal():
 
 def test_quoted_string_lit_in_quoted_datalog():
     b = DRSBuilder(_eg)
-    t = _cp.parse('`references(X, "Ulysses", "Odyssey")`')[0]
+    t = _cp.parse('`references(X, "Ulysses", "Odyssey")`')
     drs = b.walk(t)
     x = Symbol("X")
     o = Constant("Odyssey")

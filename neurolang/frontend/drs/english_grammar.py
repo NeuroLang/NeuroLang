@@ -1,5 +1,6 @@
-from ...expressions import Symbol, Constant
+from ...expressions import Symbol, Constant, FunctionApplication as Fa
 from .chart_parser import Grammar, DictLexicon, Rule, RootRule, Quote
+from ...expression_walker import PatternWalker, add_match
 
 
 S = Symbol("S")
@@ -13,6 +14,7 @@ N = Symbol("N")
 PRO = Symbol("PRO")
 VAR = Symbol("VAR")
 LIT = Symbol("LIT")
+UNK = Symbol("UNK")
 
 c = Symbol("c")
 n = Symbol("n")
@@ -56,6 +58,7 @@ EnglishGrammar = Grammar(
             (Constant("if"), S(n, _x), Constant("then"), S(m, _y)),
         ),
         Rule(VP(n), (V(n), NP(m, g, case.notnom))),
+        Rule(V(n), (UNK(),)),
         Rule(
             NP(num.plural, _x, c), (NP(n, g, c), Constant("and"), NP(m, h, c)),
         ),
@@ -79,6 +82,29 @@ EnglishGrammar = Grammar(
         Rule(NP(_x, _y, _z), (LIT(v),)),
     )
 )
+
+
+class UnknownWordsInSentence(PatternWalker):
+    @add_match(Constant)
+    def constant(self, _):
+        return set()
+
+    @add_match(Quote)
+    def quote(self, _):
+        return set()
+
+    @add_match(Fa(Fa(V, ...), (Fa(Fa(UNK, ...), ...),)))
+    def unknown_verb(self, v):
+        (unk,) = v.args
+        verb = unk.args[0].value
+        return {(V, verb)}
+
+    @add_match(Fa)
+    def node(self, fa):
+        uwords = set()
+        for a in fa.args:
+            uwords |= self.walk(a)
+        return uwords
 
 
 class EnglishBaseLexicon(DictLexicon):
@@ -165,4 +191,12 @@ class DatalogLexicon(EnglishBaseLexicon):
             for (n,) in sol:
                 m += (V(Constant(n)),)
 
+        return m
+
+
+class UnknownWordLexicon(DatalogLexicon):
+    def get_meanings(self, token):
+        m = super().get_meanings(token)
+        if len(m) == 0:
+            m += (UNK(),)
         return m

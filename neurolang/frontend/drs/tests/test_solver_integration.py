@@ -215,3 +215,22 @@ def test_define_synonyms():
         if a == b:
             continue
         assert (Constant(a), Constant(b)) in res["activates"].unwrap()
+
+
+def test_guess_verb():
+    nl = NeurolangCNL()
+    nl.debug = True
+    nl.this_is_it = None
+    nl.execute_cnl_code(
+        """
+        if `edge(X, Y)` then X activates Y.
+        if X activates Y then Y activates X.
+        if A activates B and B activates C then A activates C.
+        """
+    )
+    nl.add_tuple_set({(1, 2), (2, 3), (3, 4)}, name="edge")
+    res = nl.solve_all()
+    for a, b in product((1, 2, 3, 4), (1, 2, 3, 4)):
+        if a == b:
+            continue
+        assert (Constant(a), Constant(b)) in res["activates"].unwrap()

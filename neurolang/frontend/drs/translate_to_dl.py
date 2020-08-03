@@ -13,7 +13,12 @@ from ...logic import (
 from ...logic.horn_clauses import fol_query_to_datalog_program
 from .drs_builder import DRSBuilder, DRS2FOL
 from .chart_parser import ChartParser
-from .english_grammar import EnglishGrammar, DatalogLexicon
+from .english_grammar import (
+    EnglishGrammar,
+    UnknownWordLexicon,
+    V,
+    UnknownWordsInSentence,
+)
 import operator
 from ...expression_walker import ExpressionWalker
 from ...logic.transformations import (
@@ -37,12 +42,13 @@ def cnl_initialized(method):
 
 class CnlFrontendMixin:
     def _initialize_cnl(self):
-        self._lexicon = DatalogLexicon(self)
+        self._lexicon = UnknownWordLexicon(self)
         self._grammar = EnglishGrammar
         self._parser = ChartParser(self._grammar, self._lexicon)
         self._drs_builder = DRSBuilder(self._grammar)
         self._into_fol = DRS2FOL()
         self._into_cos = IntoConjunctionOfSentences()
+        self._uwis = UnknownWordsInSentence()
 
     @cnl_initialized
     def execute_cnl_code(self, code):
@@ -52,8 +58,22 @@ class CnlFrontendMixin:
                 continue
             self.execute_cnl_sentence(sentence)
 
+    def _parse_sentence(self, sentence):
+        t = self._parser.parse(sentence)
+        if hasattr(self, "debug"):
+            self._uwis.debug = True
+            __import__("pdb").set_trace()
+        uw = self._uwis.walk(t)
+        if uw:
+            for pos, word in uw:
+                if pos == V:
+                    self.add_tuple_set((word,), name="singular_verb")
+            t = self._parser.parse(sentence)
+
+        return t
+
     def execute_cnl_sentence(self, sentence):
-        t = self._parser.parse(sentence)[0]
+        t = self._parse_sentence(sentence)
         drs = self._drs_builder.walk(t)
         exp = self._into_fol.walk(drs)
         exp = self._into_cos.walk(exp)
