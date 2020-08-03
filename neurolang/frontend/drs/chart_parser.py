@@ -1,5 +1,5 @@
 from ...logic.unification import most_general_unifier, apply_substitution
-from ...expressions import Symbol, FunctionApplication, Constant
+from ...expressions import Symbol, Constant
 from collections import namedtuple
 import re
 
