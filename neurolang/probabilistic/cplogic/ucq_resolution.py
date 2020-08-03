@@ -24,6 +24,7 @@ from ...relational_algebra import (
 from ...relational_algebra_provenance import (
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
+    RelationalAlgebraProvenanceExpressionSemringSolver,
 )
 from ..expression_processing import (
     get_probchoice_variable_equalities,
@@ -120,20 +121,14 @@ def build_label_provset_from_probset(probset, pred_symb):
     # add label column with fresh symbols for each tuple
     label_col = str2columnstr_constant(Symbol.fresh().name)
     probset = add_fresh_symbol_column(probset, label_col)
-    label_to_prob = dict(
-        probset.value.projection(label_col.value, probset.provenance_column)
-    )
-    provset = Projection(
+    without_prob = Projection(
         Constant[typing.AbstractSet](probset.value),
-        probset.non_provenance_columns + (label_col,),
+        probset.non_provenance_columns,
     )
-    return (
-        ProvenanceAlgebraSet(
-            RelationalAlgebraProvenanceCountingSolver().walk(provset),
-            label_col,
-        ),
-        label_to_prob,
+    without_prob = RelationalAlgebraProvenanceCountingSolver().walk(
+        without_prob
     )
+    return ProvenanceAlgebraSet(without_prob, label_col)
 
 
 def build_self_join_relation(predicates, probset):
