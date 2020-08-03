@@ -1165,3 +1165,14 @@ class RelationalAlgebraPushInSelections(ew.PatternWalker):
             Selection(expression.relation.relation, expression.formula),
             expression.relation.attributes
         )
+
+
+def ra_binary_to_nary(op):
+    def nary_op(relations):
+        it = iter(relations)
+        result = next(it)
+        for relation in it:
+            result = op(result, relation)
+        return result
+
+    return nary_op

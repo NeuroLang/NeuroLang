@@ -496,7 +496,7 @@ def flatten_query(query, program):
             formula = flatten_query(formula, program)
             formula = rename_args_to_match(formula, rule.consequent, predicate)
         conj_query = conjunct_formulas(conj_query, formula)
-    return conj_query
+    return Conjunction(tuple(set(pred for pred in conj_query.formulas)))
 
 
 def is_rule_with_builtin(rule, known_builtins=None):

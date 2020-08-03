@@ -7,7 +7,8 @@ from ....logic import Conjunction, Implication, Union
 from ....relational_algebra import RenameColumn
 from ...expressions import PROB, ProbabilisticQuery
 from .. import testing
-from ..gm_provenance_solver import solve_marg_query, solve_succ_query
+from ..ucq_resolution import solve_succ_query
+from ..gm_provenance_solver import solve_marg_query
 from ..problog_solver import solve_succ_all as problog_solve_succ_all
 from ..program import CPLogicProgram
 
@@ -503,6 +504,7 @@ def test_fake_neurosynth():
     assert testing.eq_prov_relations(result, expected)
 
 
+@pytest.mark.skip
 def test_disjunctive_program():
     pfact_sets = {
         P: {(0.8, "a"), (0.4, "b")},
@@ -603,3 +605,28 @@ def test_solve_succ_all():
     res = next(iter(result[Z].value))
     assert res[0] == "a"
     assert np.isclose(res[1], 0.1)
+
+
+def test_non_linear_dependence():
+    pfact_sets = {
+        P: {(0.4, "a"), (0.7, "b"), (0.8, "c")},
+        H: {(1.0, "c"), (1.0, "d")},
+    }
+    code = Union(
+        (
+            Implication(Q(x), P(x)),
+            Implication(Z(x), Conjunction((P(x), H(x)))),
+            Implication(R(x, y), Conjunction((Q(x), Z(y)))),
+        )
+    )
+    cpl_program = CPLogicProgram()
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+    cpl_program.walk(code)
+    qpred = R(x, y)
+    result = solve_succ_query(qpred, cpl_program)
+    expected = testing.make_prov_set(
+        [(0.4 * 0.8, "a", "c"), (0.7 * 0.8, "b", "c"), (0.8, "a", "c"),],
+        ("_p_", "x", "y"),
+    )
+    assert testing.eq_prov_relations(result, expected)
