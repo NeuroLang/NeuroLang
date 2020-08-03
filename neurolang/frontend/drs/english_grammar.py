@@ -1,5 +1,12 @@
 from ...expressions import Symbol, Constant
-from .chart_parser import Grammar, DictLexicon, add_rule, Quote, CODE_QUOTE, STRING_QUOTE
+from .chart_parser import (
+    Grammar,
+    DictLexicon,
+    add_rule,
+    Quote,
+    CODE_QUOTE,
+    STRING_QUOTE,
+)
 
 
 S = Symbol("S")
