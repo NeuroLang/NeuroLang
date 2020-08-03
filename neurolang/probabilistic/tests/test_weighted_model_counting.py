@@ -246,7 +246,7 @@ def test_multiple_probchoices_mutual_exclusivity():
 
 
 def test_large_probabilistic_choice():
-    n = int(1000)
+    n = int(10000)
     with testing.temp_seed(42):
         probs = np.random.rand(n)
     probs = probs / probs.sum()
@@ -523,7 +523,7 @@ def test_fake_neurosynth():
 
 
 def test_conjunct_pfact_equantified_pchoice():
-    pfact_sets = {P: {(0.8, "a", "s1"), (0.6, "a", "s2"), (0.1, "b", "s2")}}
+    pfact_sets = {P: {(0.8, "a", "s1"), (0.5, "a", "s2"), (0.1, "b", "s2")}}
     pchoice_as_sets = {Z: {(0.6, "s1"), (0.4, "s2")}}
     code = Union((Implication(Q(x), Conjunction((P(x, y), Z(y)))),))
     cpl_program = CPLogicProgram()
@@ -537,6 +537,6 @@ def test_conjunct_pfact_equantified_pchoice():
     qpred = Q(x)
     result = solve_succ_query(qpred, cpl_program)
     expected = testing.make_prov_set(
-        [(0.6 * 0.8 + 0.4 * 0.6, "a",), (0.1 * 0.4, "b"),], ("_p_", "x"),
+        [(0.6 * 0.8 + 0.4 * 0.5, "a",), (0.1 * 0.4, "b"),], ("_p_", "x"),
     )
     assert testing.eq_prov_relations(result, expected)

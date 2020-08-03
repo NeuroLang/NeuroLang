@@ -25,8 +25,11 @@ from ..relational_algebra import (ColumnInt, ColumnStr, ExtendedProjection,
 from ..relational_algebra_provenance import (
     ProvenanceAlgebraSet, RelationalAlgebraProvenanceExpressionSemringSolver)
 from .expression_processing import get_probchoice_variable_equalities
+from ..expression_walker import SuccintRepr
 
 LOG = logging.getLogger(__name__)
+
+SR = SuccintRepr()
 
 
 class SemiRingRAPToSDD(PatternWalker):
@@ -175,7 +178,7 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
 
     @add_match(ProbabilisticChoiceSet(Symbol, Constant))
     def probabilistic_choice_set(self, prob_fact_set):
-        return self.probabilistic_fact_set(prob_fact_set)
+        # return self.probabilistic_fact_set(prob_fact_set)
         relation_symbol = prob_fact_set.relation
         if relation_symbol in self.translated_probfact_sets:
             return self.translated_probfact_sets[relation_symbol]
@@ -183,7 +186,7 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
         relation = self.walk(relation_symbol)
         tagged_relation, rap_column = self._add_tag_column(relation)
 
-        self._generate_tag_probability_set(
+        self._generate_choice_tag_probability_set(
             rap_column, prob_fact_set, tagged_relation
         )
 
@@ -215,6 +218,36 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
                         columns_for_tagged_set[1],
                         str2columnstr_constant('prob')
                     ),
+                ]
+            )
+        ))
+
+    def _generate_choice_tag_probability_set(
+        self, rap_column, prob_fact_set, tagged_relation
+    ):
+        columns_for_tagged_set = (
+            rap_column,
+            Constant[ColumnInt](ColumnInt(
+                prob_fact_set.probability_column.value
+            ))
+        )
+
+        self.tagged_sets.append(self.walk(
+            ExtendedProjection(
+                tagged_relation,
+                [
+                    ExtendedProjectionListMember(
+                        rap_column, str2columnstr_constant('id')
+                    ),
+                    ExtendedProjectionListMember(
+                        columns_for_tagged_set[1],
+                        str2columnstr_constant('prob')
+                    ),
+                    ExtendedProjectionListMember(
+                        Constant[float](1.),
+                        str2columnstr_constant('nprob')
+                    ),
+
                 ]
             )
         ))
@@ -261,17 +294,17 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
             )
         )
 
-        #symbols = tagged_relation.value.as_pandas_dataframe()[rap_column.value]
-        #add = Constant(op.add)
-        #with sure_is_not_pattern():
-        #    all_ = FunctionApplication(
-        #        add,
-        #        tuple(symbols.values)
-        #    )
+        symbols = tagged_relation.value.as_pandas_dataframe()[rap_column.value]
+        add = Constant(op.add)
+        with sure_is_not_pattern():
+            all_ = FunctionApplication(
+                add,
+                tuple(symbols.values)
+            )
 
         def get_mutually_exclusive_formula_(v):
             with sure_is_not_pattern():
-                ret = v  # (v * (-(all_ | -v)))
+                ret = (v * (-(all_ | -v)))
             return ret
 
         get_mutually_exclusive_formula = Constant(
@@ -493,7 +526,8 @@ def perform_wmc(
     for i, sdd_exp in enumerate(sdd_program):
         wmc = sdd_exp.wmc(log_mode=True)
         wmc.set_literal_weights_from_array(np.log(weights))
-        probs[prob_set_program.expressions[i]] = np.exp(wmc.propagate())
+        prob = np.exp(wmc.propagate())
+        probs[prob_set_program.expressions[i]] = prob
 
     provenance_column = 'prob'
     while provenance_column in prob_set_result.value.columns:
