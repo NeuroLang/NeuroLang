@@ -360,7 +360,7 @@ class ExtractFOLFreeVariables(ExtractFreeVariablesWalker):
         return self.walk(exp.consequent) | self.walk(exp.antecedent)
 
 
-class DistributeUniversalQuantifiers(ExpressionWalker):
+class DistributeUniversalQuantifiers(PatternWalker):
     @add_match(UniversalPredicate(..., Conjunction))
     def distribute_universal_quantifier(self, uq):
         return self.walk(
@@ -379,7 +379,7 @@ class DistributeUniversalQuantifiers(ExpressionWalker):
         return foo
 
 
-class DistributeImplicationsWithConjunctiveHeads(ExpressionWalker):
+class DistributeImplicationsWithConjunctiveHeads(PatternWalker):
     @add_match(Implication(Conjunction, ...))
     def distribute_implication_with_conjunctive_head(self, impl):
         return self.walk(

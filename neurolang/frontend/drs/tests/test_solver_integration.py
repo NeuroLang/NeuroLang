@@ -12,7 +12,7 @@ from ....datalog.chase import (
     ChaseMGUMixin,
     ChaseNaive,
 )
-from ..translate_to_dl import TranslateToDatalog, IntoConjunctionOfSentences
+from ..translate_to_dl import TranslateToDatalog, TransformIntoConjunctionOfSentences
 
 
 intersects = Symbol("intersects")
@@ -60,7 +60,7 @@ def test_distribute_implication_conjunctive_head():
     B = Symbol("B")
     C = Symbol("C")
 
-    exp = IntoConjunctionOfSentences().walk(
+    exp = TransformIntoConjunctionOfSentences().walk(
         UniversalPredicate(
             x,
             UniversalPredicate(
