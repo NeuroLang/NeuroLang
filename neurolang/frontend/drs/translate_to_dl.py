@@ -40,7 +40,10 @@ class TranslateToDatalog:
             sentence = sentence.strip()
             if not sentence:
                 continue
-            program += self.translate_sentence(sentence)
+            program = ExpressionBlock(
+                program.expressions
+                + self.translate_sentence(sentence).expressions
+            )
 
         return program
 
@@ -54,7 +57,7 @@ class TranslateToDatalog:
         lsentences = exp.formulas if isinstance(exp, Conjunction) else (exp,)
         program = ExpressionBlock(())
         for block in map(self.translate_logical_sentence, lsentences):
-            program += block
+            program = ExpressionBlock(program.expressions + block.expressions)
         return program
 
     def translate_logical_sentence(self, exp):
