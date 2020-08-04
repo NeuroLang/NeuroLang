@@ -35,3 +35,31 @@ def test_simple_mul():
     assert len(result) == 1
     result = next(iter(result))
     assert result[0] == frozenset([frozenset([Symbol("a"), Symbol("b")])])
+
+
+def test_nested_ops():
+    relation = NamedRelationalAlgebraFrozenSet(
+        ("_p_", "x"),
+        [
+            (
+                Constant(operator.mul)(
+                    Constant(operator.add)(Symbol("a"), Symbol("b")),
+                    Symbol("c"),
+                ),
+                "neurolang",
+            )
+        ],
+    )
+    provset = ProvenanceAlgebraSet(relation, ColumnStr("_p_"))
+    compiler = WhySemiringCompiler()
+    result = compiler.walk(provset)
+    result = result.relations.projection(result.provenance_column)
+    assert len(result) == 1
+    assert (
+        frozenset(
+            [
+                frozenset({Symbol("a"), Symbol("c")}),
+                frozenset({Symbol("b"), Symbol("c")}),
+            ]
+        ),
+    ) in result
