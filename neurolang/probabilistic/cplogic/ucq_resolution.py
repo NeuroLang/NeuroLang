@@ -108,7 +108,7 @@ def add_fresh_symbol_column(relation, dst_col):
     ] + [
         ExtendedProjectionListMember(
             FunctionApplication(
-                Constant[typing.Callable](Symbol.fresh), tuple()
+                Constant[typing.Callable](lambda _: Symbol.fresh()), tuple(),
             ),
             dst_col,
         )
@@ -131,7 +131,7 @@ def build_label_provset_from_probset(probset, pred_symb):
     return ProvenanceAlgebraSet(without_prob, label_col)
 
 
-def build_self_join_relation(predicates, probset):
+def solve_probfact_self_joins(predicates, probset):
     pred_symb = next(iter(predicates)).functor
     provset, label_to_prob = build_label_provset_from_probset(
         probset, pred_symb
