@@ -52,7 +52,7 @@ class TranslateToDatalog:
 
         drs = self.builder.walk(t)
         exp = self.into_fol.walk(drs)
-        exp = TransformIntoConjunctionOfSentences().walk(exp)
+        exp = PullConjunctionsUp().walk(exp)
 
         lsentences = exp.formulas if isinstance(exp, Conjunction) else (exp,)
         program = ExpressionBlock(())
@@ -74,7 +74,7 @@ class TranslateToDatalog:
         raise TranslateToDatalogError(f"Unsupported expression: {repr(exp)}")
 
 
-class TransformIntoConjunctionOfSentences(
+class PullConjunctionsUp(
     DistributeImplicationsWithConjunctiveHeads,
     DistributeUniversalQuantifiers,
     CollapseConjunctions,
