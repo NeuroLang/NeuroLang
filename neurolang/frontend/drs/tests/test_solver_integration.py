@@ -12,7 +12,10 @@ from ....datalog.chase import (
     ChaseMGUMixin,
     ChaseNaive,
 )
-from ..translate_to_dl import TranslateToDatalog, PullConjunctionsUp
+from ..translate_to_dl import (
+    TranslateToDatalog,
+    TransformIntoConjunctionOfDatalogSentences,
+)
 
 
 intersects = Symbol("intersects")
@@ -60,7 +63,7 @@ def test_distribute_implication_conjunctive_head():
     B = Symbol("B")
     C = Symbol("C")
 
-    exp = PullConjunctionsUp().walk(
+    exp = TransformIntoConjunctionOfDatalogSentences().walk(
         UniversalPredicate(
             x,
             UniversalPredicate(
@@ -72,17 +75,11 @@ def test_distribute_implication_conjunctive_head():
     assert exp == Conjunction(
         (
             UniversalPredicate(
-                x,
-                UniversalPredicate(
-                    y, Implication(B(x), A(x, y))
-                ),
+                x, UniversalPredicate(y, Implication(B(x), A(x, y))),
             ),
             UniversalPredicate(
-                x,
-                UniversalPredicate(
-                    y, Implication(C(y), A(x, y))
-                ),
-            )
+                x, UniversalPredicate(y, Implication(C(y), A(x, y))),
+            ),
         )
     )
 
