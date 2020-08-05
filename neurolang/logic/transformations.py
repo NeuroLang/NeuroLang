@@ -294,7 +294,7 @@ class DistributeDisjunctions(LogicExpressionWalker):
         )
 
 
-class CollapseDisjunctions(ExpressionWalker):
+class CollapseDisjunctions(PatternWalker):
     @add_match(
         Disjunction,
         lambda e: any(isinstance(f, Disjunction) for f in e.formulas),
@@ -309,7 +309,7 @@ class CollapseDisjunctions(ExpressionWalker):
         return self.walk(Disjunction(tuple(new_arg)))
 
 
-class CollapseConjunctions(ExpressionWalker):
+class CollapseConjunctions(PatternWalker):
     @add_match(
         Conjunction,
         lambda e: any(isinstance(f, Conjunction) for f in e.formulas),

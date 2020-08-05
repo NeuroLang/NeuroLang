@@ -1,7 +1,7 @@
 from rdflib import OWL, RDF, RDFS
 
 from ... import expression_walker as ew
-from ...expression_walker import ReplaceExpressionWalker
+from ...expression_walker import ReplaceExpressionWalker, expression_walker_from
 from ...expressions import Constant, ExpressionBlock, Symbol
 from ...logic import (
     Conjunction,
@@ -246,9 +246,9 @@ def test_infinite_walker():
     replace = dict({S: sigma_ant})
     rsw = ReplaceExpressionWalker(replace)
     sigma_rep = rsw.walk(q_ant)
-    sigma_rep = CollapseConjunctions().walk(sigma_rep)
+    sigma_rep = expression_walker_from(CollapseConjunctions).walk(sigma_rep)
 
     expected = Conjunction((sigma_ant, rest(y, x1), rest(x, y1), reg(x)))
-    expected = CollapseConjunctions().walk(expected)
+    expected = expression_walker_from(CollapseConjunctions).walk(expected)
 
     assert sigma_rep == expected
