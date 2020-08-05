@@ -175,7 +175,6 @@ def test_conjunction_3():
 
 def test_define_a_verb():
     nl = NeurolangCNL()
-    nl.this_is_it = None
     nl.execute_cnl_code(
         """
         `singular_verb("activates")`.
@@ -194,7 +193,6 @@ def test_define_a_verb():
 
 def test_define_synonyms():
     nl = NeurolangCNL()
-    nl.this_is_it = None
     nl.execute_cnl_code(
         """
         `singular_verb("activates")`.
@@ -219,8 +217,6 @@ def test_define_synonyms():
 
 def test_guess_verb():
     nl = NeurolangCNL()
-    nl.debug = True
-    nl.this_is_it = None
     nl.execute_cnl_code(
         """
         if `edge(X, Y)` then X activates Y.

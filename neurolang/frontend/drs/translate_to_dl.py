@@ -60,9 +60,6 @@ class CnlFrontendMixin:
 
     def _parse_sentence(self, sentence):
         t = self._parser.parse(sentence)
-        if hasattr(self, "debug"):
-            self._uwis.debug = True
-            __import__("pdb").set_trace()
         uw = self._uwis.walk(t)
         if uw:
             for pos, word in uw:
