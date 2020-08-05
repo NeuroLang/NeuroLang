@@ -80,6 +80,13 @@ class TransformIntoConjunctionOfDatalogSentences(
     CollapseConjunctions,
     ExpressionWalker,
 ):
+    """
+    A datalog-sentence in this case is a logical sentence which can be
+    interpreted as datalog. The only 2 types of sentences supported are facts
+    and rules. This rewrite allows to use conjunctions in a more flexible way,
+    allowing to use them between facts and in implication heads, because then
+    they will be properly distributed.
+    """
     pass
 
 
