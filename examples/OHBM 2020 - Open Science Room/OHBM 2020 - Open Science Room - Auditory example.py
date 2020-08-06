@@ -28,6 +28,8 @@
 
 # #### Let's begin
 
+# %load_ext snakeviz
+
 # +
 import warnings
 warnings.filterwarnings('ignore')
@@ -78,7 +80,7 @@ with nl.environment as e:
     )
 
 # +
-# # %%snakeviz
+# %%snakeviz
 
 with nl.environment as e:
     e.region_voxels[e.id_neurosynth, e.x, e.y, e.z] = (
