@@ -232,28 +232,9 @@ class ExpressionWalker(PatternWalker):
         return new_arg, changed
 
 
-def expression_walker_from(*walkers):
-    """
-    Creates a new walker mixing the given walkers in order while
-    inhereting from expression walker.
-    """
-    walkers = tuple(walkers) + (ExpressionWalker,)
-    name = "+".join(w.__name__ for w in walkers)
-    return type(name, walkers, {})()
-
-
 class ChainedWalker:
     def __init__(self, *walkers):
-        self.walkers = [self._instantiate(w) for w in walkers]
-
-    def _instantiate(self, walker):
-        if isinstance(walker, type):
-            if issubclass(walker, ExpressionWalker):
-                return walker()
-            if issubclass(walker, PatternWalker):
-                return expression_walker_from(walker)
-        else:
-            walker
+        self.walkers = [w() if isinstance(w, type) else w for w in walkers]
 
     def walk(self, expression):
         for walker in self.walkers:

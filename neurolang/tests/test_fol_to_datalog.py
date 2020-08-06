@@ -45,10 +45,7 @@ from ..logic.horn_clauses import (
     Fol2DatalogTranslationException,
 )
 from ..datalog.negation import DatalogProgramNegation
-from ..expression_walker import (
-    ExpressionBasicEvaluator,
-    expression_walker_from,
-)
+from ..expression_walker import ExpressionBasicEvaluator
 from ..datalog.expressions import TranslateToLogic, Fact
 from ..datalog.chase import Chase as Chase_
 from ..datalog.chase.negation import NegativeFactConstraints
@@ -349,7 +346,7 @@ def test_collapse_disjunctions():
             Disjunction((P, Disjunction((R, S)))),
         )
     )
-    res = expression_walker_from(CollapseDisjunctions).walk(exp)
+    res = CollapseDisjunctions().walk(exp)
     assert res == Conjunction(
         (Disjunction((P, Q, S)), Disjunction((P, R, S)),)
     )
@@ -361,7 +358,7 @@ def test_collapse_conjunctions():
     R = Symbol("R")
     S = Symbol("S")
     exp = Conjunction((Conjunction((P, Conjunction((Q, R)))), S))
-    res = expression_walker_from(CollapseConjunctions).walk(exp)
+    res = CollapseConjunctions().walk(exp)
     assert res == Conjunction((P, Q, R, S))
 
 

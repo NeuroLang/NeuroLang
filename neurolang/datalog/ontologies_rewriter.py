@@ -1,7 +1,6 @@
 from ..expression_walker import (
     ReplaceExpressionWalker,
     ReplaceSymbolWalker,
-    expression_walker_from,
     add_match,
 )
 from ..expressions import Symbol
@@ -262,9 +261,7 @@ class OntologyRewriter:
         replace = dict({S: sigma_ant})
         rsw = ReplaceExpressionWalker(replace)
         sigma_ant = rsw.walk(q.antecedent)
-        sigma_ant = expression_walker_from(CollapseConjunctions).walk(
-            sigma_ant
-        )
+        sigma_ant = CollapseConjunctions().walk(sigma_ant)
 
         q_cons = apply_substitution(q.consequent, qS[0])
 
