@@ -66,7 +66,7 @@ class NeuroSynthHandler(object):
                 f"Downloading neurosynth database"
                 f" and features in path: {path}"
             )
-            dataset = self.download_ns_dataset(path)
+            dataset = self.download_ns_dataset()
 
         return dataset
 
