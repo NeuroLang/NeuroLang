@@ -99,7 +99,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         ) = separate_deterministic_probabilistic_code(self.solver)
 
         if self.ontology_loaded:
-            eB = self._rewrite_database_with_ontology(deterministic_idb)
+            eB = self._rewrite_program_with_ontology(deterministic_idb)
             self.solver.walk(eB)
 
         deterministic_solution = self.chase_class(
