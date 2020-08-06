@@ -294,7 +294,7 @@ class DistributeDisjunctions(LogicExpressionWalker):
         )
 
 
-class CollapseDisjunctions(ExpressionWalker):
+class CollapseDisjunctionsMixin(PatternWalker):
     @add_match(
         Disjunction,
         lambda e: any(isinstance(f, Disjunction) for f in e.formulas),
@@ -309,7 +309,11 @@ class CollapseDisjunctions(ExpressionWalker):
         return self.walk(Disjunction(tuple(new_arg)))
 
 
-class CollapseConjunctions(ExpressionWalker):
+class CollapseDisjunctions(CollapseDisjunctionsMixin, ExpressionWalker):
+    pass
+
+
+class CollapseConjunctionsMixin(PatternWalker):
     @add_match(
         Conjunction,
         lambda e: any(isinstance(f, Conjunction) for f in e.formulas),
@@ -322,6 +326,10 @@ class CollapseConjunctions(ExpressionWalker):
             else:
                 new_arg.append(f)
         return self.walk(Conjunction(tuple(new_arg)))
+
+
+class CollapseConjunctions(CollapseConjunctionsMixin, ExpressionWalker):
+    pass
 
 
 class RemoveUniversalPredicates(LogicExpressionWalker):
