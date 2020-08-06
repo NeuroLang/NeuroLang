@@ -112,7 +112,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             return solve_succ_query(query_pred.expression, cpl)
         return deterministic_solution
 
-    def _rewrite_database_with_ontology(self, deterministic_program):
+    def _rewrite_program_with_ontology(self, deterministic_program):
         orw = OntologyRewriter(
             deterministic_program, self.solver.constraints()
         )
@@ -168,11 +168,6 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             )
         cpl.walk(probabilistic_idb)
         return cpl
-
-    def add_probabilistic_facts_from_tuples(self, iterable, name=None):
-        if name is None:
-            name = str(uuid1())
-        self.solver.add_probabilistic_facts_from_tuples(Symbol(name), iterable)
 
     def add_extensional_predicate_from_tuples(self, iterable, name=None):
         if name is None:
