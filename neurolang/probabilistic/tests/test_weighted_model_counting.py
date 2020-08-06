@@ -246,7 +246,7 @@ def test_multiple_probchoices_mutual_exclusivity():
 
 
 def test_large_probabilistic_choice():
-    n = int(100000)
+    n = int(10000)
     with testing.temp_seed(42):
         probs = np.random.rand(n)
     probs = probs / probs.sum()
