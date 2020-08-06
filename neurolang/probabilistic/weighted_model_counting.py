@@ -187,6 +187,37 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
             return self.translated_probfact_sets[relation_symbol]
 
         relation = self.walk(relation_symbol)
+        df, prov_column = self._generate_tag_choice_set(relation, prob_column)
+
+        prov_set = self._generate_choice_provenance_set(
+            relation, prob_column, df, prov_column
+        )
+
+        self.translated_probfact_sets[relation_symbol] = prov_set
+        return prov_set
+
+    def _generate_choice_provenance_set(
+        elf, relation, prob_column, df, prov_column
+    ):
+        out_columns = tuple(
+            c
+            for c in relation.value.columns
+            if int(c) != prob_column
+        )
+        prov_set = df[list(out_columns)]
+        prov_column_name = Symbol.fresh().name
+        prov_set[prov_column_name] = prov_column
+        renamed_out_columns = tuple(
+            range(len(out_columns))
+        ) + (prov_column_name,)
+        prov_set.columns = renamed_out_columns
+        prov_set = NamedRelationalAlgebraFrozenSet(
+            renamed_out_columns, prov_set
+        )
+        prov_set = ProvenanceAlgebraSet(prov_set, ColumnStr(prov_column_name))
+        return prov_set
+
+    def _generate_tag_choice_set(self, relation, prob_column):
         previous = None
         previous_probability = 0
         df = relation.value.as_pandas_dataframe()
@@ -218,26 +249,7 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
             NamedRelationalAlgebraFrozenSet(('id', 'prob'), tag_set)
         )
         self.tagged_sets.append(tag_set)
-
-        out_columns = tuple(
-            c
-            for c in relation.value.columns
-            if int(c) != prob_column
-        )
-        prov_set = df[list(out_columns)]
-        prov_column_name = Symbol.fresh().name
-        prov_set[prov_column_name] = prov_column
-        renamed_out_columns = tuple(
-            range(len(out_columns))
-        ) + (prov_column_name,)
-        prov_set.columns = renamed_out_columns
-        prov_set = NamedRelationalAlgebraFrozenSet(
-            renamed_out_columns, prov_set
-        )
-        prov_set = ProvenanceAlgebraSet(prov_set, ColumnStr(prov_column_name))
-
-        self.translated_probfact_sets[relation_symbol] = prov_set
-        return prov_set
+        return df, prov_column
 
     def _generate_tag_probability_set(
         self, rap_column, prob_fact_set, tagged_relation

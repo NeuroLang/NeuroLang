@@ -400,7 +400,6 @@ def test_multilevel_existential():
     assert testing.eq_prov_relations(result, expected)
 
 
-@pytest.mark.skip("not implemented yet")
 def test_repeated_antecedent_predicate_symbol():
     """
     We consider the simple program
