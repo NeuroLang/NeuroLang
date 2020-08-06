@@ -3,6 +3,9 @@
     compilation.
 """
 import logging
+
+from numpy.lib.shape_base import column_stack
+from neurolang.utils.relational_algebra_set.pandas import NamedRelationalAlgebraFrozenSet
 import operator as op
 
 import numpy as np
@@ -178,21 +181,60 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
 
     @add_match(ProbabilisticChoiceSet(Symbol, Constant))
     def probabilistic_choice_set(self, prob_fact_set):
-        # return self.probabilistic_fact_set(prob_fact_set)
         relation_symbol = prob_fact_set.relation
+        prob_column = prob_fact_set.probability_column.value
         if relation_symbol in self.translated_probfact_sets:
             return self.translated_probfact_sets[relation_symbol]
 
         relation = self.walk(relation_symbol)
-        tagged_relation, rap_column = self._add_tag_column(relation)
+        previous = None
+        previous_probability = 0
+        df = relation.value.as_pandas_dataframe()
+        prov_column = []
+        tag_set = []
+        probabilities = []
+        mul = Constant(op.mul)
+        for i, probability in (
+            enumerate(df.iloc[:, prob_column])
+        ):
+            symbol = Symbol.fresh()
+            if i == 0:
+                prov_column.append(symbol)
+                previous = (-symbol,)
+            else:
+                args = (symbol,) + previous
+                with sure_is_not_pattern():
+                    mul_expr = FunctionApplication(
+                        mul, args, validate_arguments=False
+                    )
+                prov_column.append(mul_expr)
+                previous = (-symbol,) + previous
 
-        self._generate_choice_tag_probability_set(
-            rap_column, prob_fact_set, tagged_relation
-        )
+            probabilities.append(probability / (1 - previous_probability))
+            tag_set.append((symbol, probability / (1 - previous_probability)))
+            previous_probability += probability
 
-        prov_set = self._generate_choice_provenance_set(
-            tagged_relation, prob_fact_set.probability_column, rap_column
+        tag_set = self._build_relation_constant(
+            NamedRelationalAlgebraFrozenSet(('id', 'prob'), tag_set)
         )
+        self.tagged_sets.append(tag_set)
+
+        out_columns = tuple(
+            c
+            for c in relation.value.columns
+            if int(c) != prob_column
+        )
+        prov_set = df[list(out_columns)]
+        prov_column_name = Symbol.fresh().name
+        prov_set[prov_column_name] = prov_column
+        renamed_out_columns = tuple(
+            range(len(out_columns))
+        ) + (prov_column_name,)
+        prov_set.columns = renamed_out_columns
+        prov_set = NamedRelationalAlgebraFrozenSet(
+            renamed_out_columns, prov_set
+        )
+        prov_set = ProvenanceAlgebraSet(prov_set, ColumnStr(prov_column_name))
 
         self.translated_probfact_sets[relation_symbol] = prov_set
         return prov_set
@@ -222,36 +264,6 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
             )
         ))
 
-    def _generate_choice_tag_probability_set(
-        self, rap_column, prob_fact_set, tagged_relation
-    ):
-        columns_for_tagged_set = (
-            rap_column,
-            Constant[ColumnInt](ColumnInt(
-                prob_fact_set.probability_column.value
-            ))
-        )
-
-        self.tagged_sets.append(self.walk(
-            ExtendedProjection(
-                tagged_relation,
-                [
-                    ExtendedProjectionListMember(
-                        rap_column, str2columnstr_constant('id')
-                    ),
-                    ExtendedProjectionListMember(
-                        columns_for_tagged_set[1],
-                        str2columnstr_constant('prob')
-                    ),
-                    ExtendedProjectionListMember(
-                        Constant[float](1.),
-                        str2columnstr_constant('nprob')
-                    ),
-
-                ]
-            )
-        ))
-
     def _generate_provenance_set(
         self, tagged_relation,
         prob_column, rap_column
@@ -275,58 +287,6 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
                 )
             )
         )
-        prov_set = ProvenanceAlgebraSet(
-            self.walk(prov_set).value,
-            rap_column.value
-        )
-        return prov_set
-
-    def _generate_choice_provenance_set(
-        self, tagged_relation,
-        prob_column, rap_column
-    ):
-        out_columns = tuple(
-            Constant[ColumnInt](ColumnInt(c))
-            for c in tagged_relation.value.columns
-            if (
-                c != rap_column and
-                int(c) != prob_column.value
-            )
-        )
-
-        symbols = tagged_relation.value.as_pandas_dataframe()[rap_column.value]
-        add = Constant(op.add)
-        with sure_is_not_pattern():
-            all_ = FunctionApplication(
-                add,
-                tuple(symbols.values)
-            )
-
-        def get_mutually_exclusive_formula_(v):
-            with sure_is_not_pattern():
-                ret = (v * (-(all_ | -v)))
-            return ret
-
-        get_mutually_exclusive_formula = Constant(
-            get_mutually_exclusive_formula_
-        )
-
-        prov_set = ExtendedProjection(
-            tagged_relation,
-            tuple(
-                ExtendedProjectionListMember(
-                    c,
-                    Constant[ColumnInt](ColumnInt(i))
-                )
-                for i, c in enumerate(out_columns)
-            ) + (
-                ExtendedProjectionListMember(
-                    get_mutually_exclusive_formula(rap_column),
-                    rap_column
-                ),
-            )
-        )
-
         prov_set = ProvenanceAlgebraSet(
             self.walk(prov_set).value,
             rap_column.value
@@ -524,9 +484,9 @@ def perform_wmc(
 
     probs = dict()
     for i, sdd_exp in enumerate(sdd_program):
-        wmc = sdd_exp.wmc(log_mode=True)
-        wmc.set_literal_weights_from_array(np.log(weights))
-        prob = np.exp(wmc.propagate())
+        wmc = sdd_exp.wmc(log_mode=False)
+        wmc.set_literal_weights_from_array(weights)
+        prob = wmc.propagate()
         probs[prob_set_program.expressions[i]] = prob
 
     provenance_column = 'prob'
