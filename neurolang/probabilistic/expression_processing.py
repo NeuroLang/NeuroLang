@@ -214,10 +214,28 @@ def get_within_language_succ_query_prob_term(implication):
         raise ValueError("Expression does not have a SUCC probabilistic term")
 
 
-def group_preds_by_pred_symb(predicates, filter_set=frozenset()):
+def group_preds_by_pred_symb(predicates, filter_set=None):
+    """
+    Group predicates by their predicate symbol.
+
+    An optional filter set of predicate symbols can be passed to only return
+    the ones in the set.
+
+    Parameters
+    ----------
+    predicates : iterable of predicates
+        Predicates that should be grouped.
+    filter_set : set of predicate symbols (optional)
+        Predicate symbols to consider.
+
+    Returns
+    -------
+    dict of predicate symbol to set of predicates
+
+    """
     grouped = collections.defaultdict(set)
     for pred in predicates:
-        if pred.functor in filter_set:
+        if filter_set is not None and pred.functor in filter_set:
             grouped[pred.functor].add(pred)
     return dict(grouped)
 
@@ -237,6 +255,7 @@ def get_probchoice_variable_equalities(predicates, pchoice_pred_symbs):
     -------
     set of pairs of symbol variables
         Each pair in the set represents the equality between two variables.
+        Variables within the pair are sorted in lexicographical order.
 
     Notes
     -----
