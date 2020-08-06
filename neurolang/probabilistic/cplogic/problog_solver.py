@@ -1,4 +1,5 @@
 import collections
+from typing import AbstractSet
 
 import problog.core
 import problog.logic
@@ -6,12 +7,15 @@ import problog.program
 import problog.sdd_formula
 
 from ...expressions import Constant, FunctionApplication, Symbol
+from ...logic import Implication
 from ...relational_algebra import (
+    ColumnStr,
     NamedRelationalAlgebraFrozenSet,
     str2columnstr_constant,
 )
 from ...relational_algebra_provenance import ProvenanceAlgebraSet
-from . import build_always_true_provenance_relation, fresh_name_relation
+from ..expression_processing import is_within_language_succ_query
+from ..expressions import PROB, ProbabilisticQuery
 
 
 def nl_pred_to_pl_pred(pred):
@@ -30,10 +34,10 @@ def pl_preds_to_prov_set(pl_preds, columns):
         if prob > 0:
             tupl = (prob,) + tuple(arg.value for arg in pl_pred.args)
             tuples.add(tupl)
-    prob_col = str2columnstr_constant(Symbol.fresh().name)
+    prob_col = ColumnStr(Symbol.fresh().name)
     return ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
-            columns=(prob_col.value,) + tuple(c.value for c in columns),
+            columns=(prob_col,) + tuple(c.value for c in columns),
             iterable=tuples,
         ),
         prob_col,
@@ -83,6 +87,17 @@ def add_rule_to_problog(rule, pl):
     pl += pl_rule
 
 
+def within_language_succ_query_to_intensional_rule(rule):
+    csqt_without_prob = rule.consequent.functor(
+        *(
+            arg
+            for arg in rule.consequent.args
+            if isinstance(arg, (Constant, Symbol))
+        )
+    )
+    return Implication(csqt_without_prob, rule.antecedent)
+
+
 def cplogic_to_problog(cpl):
     pl = problog.program.SimpleProgram()
     for pred_symb, relation in cpl.extensional_database().items():
@@ -93,6 +108,8 @@ def cplogic_to_problog(cpl):
         add_probchoice_to_problog(pred_symb, cpl.symbol_table[pred_symb], pl)
     for union in cpl.intensional_database().values():
         for rule in union.formulas:
+            if is_within_language_succ_query(rule):
+                rule = within_language_succ_query_to_intensional_rule(rule)
             add_rule_to_problog(rule, pl)
     return pl
 
@@ -108,12 +125,11 @@ def pl_solution_to_nl_solution(pl_solution, query_preds):
         tupl = (prob,) + tuple(arg.value for arg in pl_pred.args)
         pred_symb = Symbol(pl_pred.functor)
         pred_symb_to_tuples[pred_symb].add(tupl)
-    prob_col = str2columnstr_constant(Symbol.fresh().name)
+    prob_col = ColumnStr(Symbol.fresh().name)
     return {
         qpred.functor: ProvenanceAlgebraSet(
             NamedRelationalAlgebraFrozenSet(
-                columns=(prob_col.value,)
-                + tuple(arg.name for arg in qpred.args),
+                columns=(prob_col,) + tuple(arg.name for arg in qpred.args),
                 iterable=pred_symb_to_tuples[qpred.functor],
             ),
             prob_col,
@@ -136,11 +152,28 @@ def solve_succ_query(query_pred, cpl):
     return pl_preds_to_prov_set(res, columns)
 
 
+def construct_within_language_succ_result(provset, rule):
+    proj_cols = list()
+    for arg in rule.consequent.args:
+        if isinstance(arg, Symbol):
+            proj_cols.append(arg.name)
+        elif isinstance(arg, ProbabilisticQuery) and arg.functor == PROB:
+            proj_cols.append(provset.provenance_column)
+    return Constant[AbstractSet](provset.value.projection(*proj_cols))
+
+
+def get_query_preds(cpl):
+    query_preds = list()
+    for union in cpl.intensional_database().values():
+        for rule in union.formulas:
+            if is_within_language_succ_query(rule):
+                rule = within_language_succ_query_to_intensional_rule(rule)
+                query_preds.append(rule.consequent)
+    return query_preds
+
+
 def solve_succ_all(cpl):
-    query_preds = list(
-        union.formulas[0].consequent
-        for union in cpl.intensional_database().values()
-    )
+    query_preds = get_query_preds(cpl)
     pl = cplogic_to_problog(cpl)
     query_pl_term = problog.logic.Term("query")
     for nl_qpred in query_preds:
@@ -149,14 +182,8 @@ def solve_succ_all(cpl):
         pl, problog.sdd_formula.SDD
     ).evaluate()
     nl_solution = pl_solution_to_nl_solution(pl_solution, query_preds)
-    for pred_symb in cpl.extensional_database():
-        nl_solution[pred_symb] = build_always_true_provenance_relation(
-            fresh_name_relation(cpl.symbol_table[pred_symb])
-        )
-    for pred_symb in cpl.pfact_pred_symbs | cpl.pchoice_pred_symbs:
-        ra_set = fresh_name_relation(cpl.symbol_table[pred_symb])
-        prob_col = ra_set.value.columns[0]
-        nl_solution[pred_symb] = ProvenanceAlgebraSet(
-            ra_set.value, str2columnstr_constant(prob_col)
+    for pred_symb, rule in cpl.within_language_succ_queries().items():
+        nl_solution[pred_symb] = construct_within_language_succ_result(
+            nl_solution[pred_symb], rule,
         )
     return nl_solution

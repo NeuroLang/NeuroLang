@@ -246,7 +246,11 @@ def test_multiple_probchoices_mutual_exclusivity():
 
 
 def test_large_probabilistic_choice():
+<<<<<<< HEAD
     n = int(1000)
+=======
+    n = int(10000)
+>>>>>>> demian/lifted_choice_sdd
     with testing.temp_seed(42):
         probs = np.random.rand(n)
     probs = probs / probs.sum()
@@ -283,7 +287,13 @@ def test_simple_existential():
         - Pr[Q(a)] = 1.0
 
     """
+<<<<<<< HEAD
     pchoice_as_sets = {P: {(0.2, "a", "a"), (0.8, "a", "b")}}
+=======
+    pchoice_as_sets = {
+        P: {(0.2, "a", "a"), (0.7, "a", "b"), (0.1, "c", "c")}
+    }
+>>>>>>> demian/lifted_choice_sdd
     code = Union((Implication(Q(x), P(x, y)),))
     cpl_program = CPLogicProgram()
     for pred_symb, pchoice_as_set in pchoice_as_sets.items():
@@ -292,7 +302,14 @@ def test_simple_existential():
         )
     cpl_program.walk(code)
     exp, result = testing.inspect_resolution(Q(x), cpl_program)
+<<<<<<< HEAD
     expected = testing.make_prov_set([(1.0, "a")], ("_p_", "x"))
+=======
+    expected = testing.make_prov_set(
+        [(0.9, "a"), (.1, "c")],
+        ("_p_", "x")
+    )
+>>>>>>> demian/lifted_choice_sdd
     assert testing.eq_prov_relations(result, expected)
 
 
@@ -353,6 +370,10 @@ def test_multilevel_existential():
             Implication(H(x, y), Conjunction((R(x), Z(y)))),
             Implication(A(x), Conjunction((H(x, y), P(y, x)))),
             Implication(B(x), Conjunction((A(x), Q(y)))),
+<<<<<<< HEAD
+=======
+            Implication(C(x), H(x, y))
+>>>>>>> demian/lifted_choice_sdd
         )
     )
     cpl_program = CPLogicProgram()
@@ -375,13 +396,32 @@ def test_multilevel_existential():
         ("_p_", "x", "y"),
     )
     assert testing.eq_prov_relations(result, expected)
+<<<<<<< HEAD
+=======
+
+    qpred = C(z)
+    result = solve_succ_query(qpred, cpl_program,)
+    expected = testing.make_prov_set(
+        [
+            (.1, "a"),
+            (.4, "b"),
+            (.5, "c"),
+        ],
+        ("_p_", "z"),
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+>>>>>>> demian/lifted_choice_sdd
     qpred = B(z)
     result = solve_succ_query(qpred, cpl_program,)
     expected = testing.make_prov_set([(0.5 * 0.1 * 0.5, "c")], ("_p_", "z"),)
     assert testing.eq_prov_relations(result, expected)
 
 
+<<<<<<< HEAD
 @pytest.mark.skip("not implemented yet")
+=======
+>>>>>>> demian/lifted_choice_sdd
 def test_repeated_antecedent_predicate_symbol():
     """
     We consider the simple program
@@ -500,4 +540,28 @@ def test_fake_neurosynth():
         ],
         ("_p_", "t"),
     )
+<<<<<<< HEAD
     assert testing.eq_prov_relations(result, expected)
+=======
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_conjunct_pfact_equantified_pchoice():
+    pfact_sets = {P: {(0.8, "a", "s1"), (0.5, "a", "s2"), (0.1, "b", "s2")}}
+    pchoice_as_sets = {Z: {(0.6, "s1"), (0.4, "s2")}}
+    code = Union((Implication(Q(x), Conjunction((P(x, y), Z(y)))),))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+    cpl_program.walk(code)
+    qpred = Q(x)
+    result = solve_succ_query(qpred, cpl_program)
+    expected = testing.make_prov_set(
+        [(0.6 * 0.8 + 0.4 * 0.5, "a",), (0.1 * 0.4, "b"),], ("_p_", "x"),
+    )
+    assert testing.eq_prov_relations(result, expected)
+>>>>>>> demian/lifted_choice_sdd
