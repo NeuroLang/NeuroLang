@@ -9,20 +9,13 @@ from ..datalog.ontologies_rewriter import OntologyRewriter
 from ..expression_walker import ExpressionBasicEvaluator
 from ..expressions import Symbol, Unknown
 from ..logic import Union
-<<<<<<< HEAD
 from ..probabilistic.cplogic.problog_solver import \
     solve_succ_all as problog_solve_succ_all
-from ..probabilistic.cplogic.program import CPLogicMixin, CPLogicProgram
-=======
-from ..probabilistic.cplogic.problog_solver import (
-    solve_succ_all as problog_solve_succ_all,
-)
 from ..probabilistic.cplogic.program import (
     CPLogicMixin,
     CPLogicProgram,
-    TranslateProbabilisticQueryMixin,
+    TranslateProbabilisticQueryMixin
 )
->>>>>>> demian/lifted_choice_sdd
 from ..probabilistic.expression_processing import (
     separate_deterministic_probabilistic_code
 )

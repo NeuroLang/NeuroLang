@@ -2,23 +2,17 @@ import typing
 
 import pytest
 
-<<<<<<< HEAD
-from ....datalog.expressions import ExpressionBlock, Fact
-from ....exceptions import ForbiddenBuiltinError, ForbiddenDisjunctionError
-from ....expressions import Constant, FunctionApplication, Symbol
-=======
 from ....datalog.expressions import Fact
 from ....exceptions import (
     ForbiddenDisjunctionError,
     ForbiddenExpressionError,
-    ProtectedKeywordError,
+    ProtectedKeywordError
 )
 from ....expressions import Constant, Symbol
->>>>>>> demian/lifted_choice_sdd
 from ....logic import Conjunction, Implication, Union
 from ...exceptions import (
     DistributionDoesNotSumToOneError,
-    MalformedProbabilisticTupleError,
+    MalformedProbabilisticTupleError
 )
 from ...expressions import PROB, ProbabilisticPredicate, ProbabilisticQuery
 from ..program import CPLogicProgram

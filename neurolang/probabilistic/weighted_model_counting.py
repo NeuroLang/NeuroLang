@@ -3,53 +3,59 @@
     compilation.
 """
 import logging
-<<<<<<< HEAD
-=======
-
-from numpy.lib.shape_base import column_stack
-from neurolang.utils.relational_algebra_set.pandas import NamedRelationalAlgebraFrozenSet
->>>>>>> demian/lifted_choice_sdd
 import operator as op
 
 import numpy as np
 import pandas as pd
+from numpy.lib.shape_base import column_stack
 from pysdd import sdd
 
-from ..datalog.expression_processing import (extract_logic_predicates,
-                                             flatten_query)
+from neurolang.utils.relational_algebra_set.pandas import (
+    NamedRelationalAlgebraFrozenSet
+)
+
+from ..datalog.expression_processing import (
+    extract_logic_predicates,
+    flatten_query
+)
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
-from ..expression_walker import ExpressionWalker, PatternWalker, add_match
-from ..expressions import (Constant, ExpressionBlock, FunctionApplication,
-                           Symbol, sure_is_not_pattern)
-<<<<<<< HEAD
-from ..logic import Implication
-from ..relational_algebra import (ColumnInt, ExtendedProjection,
-=======
+from ..expression_walker import (
+    ExpressionWalker,
+    PatternWalker,
+    SuccintRepr,
+    add_match
+)
+from ..expressions import (
+    Constant,
+    ExpressionBlock,
+    FunctionApplication,
+    Symbol,
+    sure_is_not_pattern
+)
 from ..logic import Conjunction, Implication
-from ..relational_algebra import (ColumnInt, ColumnStr, ExtendedProjection,
->>>>>>> demian/lifted_choice_sdd
-                                  ExtendedProjectionListMember, NameColumns,
-                                  Projection, RelationalAlgebraOperation,
-                                  RelationalAlgebraPushInSelections,
-                                  RelationalAlgebraStringExpression,
-                                  RenameColumns, str2columnstr_constant)
+from ..relational_algebra import (
+    ColumnInt,
+    ColumnStr,
+    ExtendedProjection,
+    ExtendedProjectionListMember,
+    NameColumns,
+    Projection,
+    RelationalAlgebraOperation,
+    RelationalAlgebraPushInSelections,
+    RelationalAlgebraStringExpression,
+    RenameColumns,
+    str2columnstr_constant
+)
 from ..relational_algebra_provenance import (
-    ProvenanceAlgebraSet, RelationalAlgebraProvenanceExpressionSemringSolver)
-<<<<<<< HEAD
-from ..utils.relational_algebra_set import (RelationalAlgebraColumnInt,
-                                            RelationalAlgebraColumnStr)
-
-LOG = logging.getLogger(__name__)
-
-=======
+    ProvenanceAlgebraSet,
+    RelationalAlgebraProvenanceExpressionSemringSolver
+)
 from .expression_processing import get_probchoice_variable_equalities
-from ..expression_walker import SuccintRepr
 
 LOG = logging.getLogger(__name__)
 
 SR = SuccintRepr()
 
->>>>>>> demian/lifted_choice_sdd
 
 class SemiRingRAPToSDD(PatternWalker):
     def __init__(self, var_count, symbols_to_literals=None):
@@ -198,62 +204,20 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
     @add_match(ProbabilisticChoiceSet(Symbol, Constant))
     def probabilistic_choice_set(self, prob_fact_set):
         relation_symbol = prob_fact_set.relation
-<<<<<<< HEAD
-=======
         prob_column = prob_fact_set.probability_column.value
->>>>>>> demian/lifted_choice_sdd
         if relation_symbol in self.translated_probfact_sets:
             return self.translated_probfact_sets[relation_symbol]
 
         relation = self.walk(relation_symbol)
-<<<<<<< HEAD
-        tagged_relation, rap_column = self._add_tag_column(relation)
-
-        self._generate_choice_tag_probability_set(
-            rap_column, prob_fact_set, tagged_relation
-        )
-
-        prov_set = self._generate_choice_provenance_set(
-            tagged_relation, prob_fact_set.probability_column, rap_column
-=======
         df, prov_column = self._generate_tag_choice_set(relation, prob_column)
 
         prov_set = self._generate_choice_provenance_set(
             relation, prob_column, df, prov_column
->>>>>>> demian/lifted_choice_sdd
         )
 
         self.translated_probfact_sets[relation_symbol] = prov_set
         return prov_set
 
-<<<<<<< HEAD
-    def _generate_tag_probability_set(
-        self, rap_column, prob_fact_set, tagged_relation
-    ):
-        columns_for_tagged_set = (
-            rap_column,
-            Constant[ColumnInt](ColumnInt(
-                prob_fact_set.probability_column.value
-            ))
-        )
-
-        self.tagged_sets.append(self.walk(
-            ExtendedProjection(
-                tagged_relation,
-                [
-                    ExtendedProjectionListMember(
-                        rap_column, str2columnstr_constant('id')
-                    ),
-                    ExtendedProjectionListMember(
-                        columns_for_tagged_set[1],
-                        str2columnstr_constant('prob')
-                    ),
-                ]
-            )
-        ))
-
-    def _generate_choice_tag_probability_set(
-=======
     def _generate_choice_provenance_set(
         elf, relation, prob_column, df, prov_column
     ):
@@ -310,7 +274,6 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
         return df, prov_column
 
     def _generate_tag_probability_set(
->>>>>>> demian/lifted_choice_sdd
         self, rap_column, prob_fact_set, tagged_relation
     ):
         columns_for_tagged_set = (
@@ -331,14 +294,6 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
                         columns_for_tagged_set[1],
                         str2columnstr_constant('prob')
                     ),
-<<<<<<< HEAD
-                    ExtendedProjectionListMember(
-                        Constant[float](1.),
-                        str2columnstr_constant('nprob')
-                    ),
-
-=======
->>>>>>> demian/lifted_choice_sdd
                 ]
             )
         ))
@@ -372,61 +327,6 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
         )
         return prov_set
 
-<<<<<<< HEAD
-    def _generate_choice_provenance_set(
-        self, tagged_relation,
-        prob_column, rap_column
-    ):
-        out_columns = tuple(
-            Constant[ColumnInt](ColumnInt(c))
-            for c in tagged_relation.value.columns
-            if (
-                c != rap_column and
-                int(c) != prob_column.value
-            )
-        )
-
-        symbols = tagged_relation.value.as_pandas_dataframe()[rap_column.value]
-        add = Constant(op.add)
-        with sure_is_not_pattern():
-            all_ = FunctionApplication(
-                add,
-                tuple(symbols.values)
-            )
-
-        def get_mutually_exclusive_formula_(v):
-            with sure_is_not_pattern():
-                ret = (v * (-(all_ | -v)))
-            return ret
-
-        get_mutually_exclusive_formula = Constant(
-            get_mutually_exclusive_formula_
-        )
-
-        prov_set = ExtendedProjection(
-            tagged_relation,
-            tuple(
-                ExtendedProjectionListMember(
-                    c,
-                    Constant[ColumnInt](ColumnInt(i))
-                )
-                for i, c in enumerate(out_columns)
-            ) + (
-                ExtendedProjectionListMember(
-                    get_mutually_exclusive_formula(rap_column),
-                    rap_column
-                ),
-            )
-        )
-
-        prov_set = ProvenanceAlgebraSet(
-            self.walk(prov_set).value,
-            rap_column.value
-        )
-        return prov_set
-
-=======
->>>>>>> demian/lifted_choice_sdd
     def _add_tag_column(self, relation):
         new_columns = tuple(
             str2columnstr_constant(str(i))
@@ -500,39 +400,6 @@ def solve_succ_query(query_predicate, cpl_program):
         SUCC[ P(x) ]
     """
     if isinstance(query_predicate, Implication):
-<<<<<<< HEAD
-        query_antecedent = flatten_query(
-            query_predicate.antecedent, cpl_program
-        )
-        ra_query = TranslateToNamedRA().walk(query_antecedent)
-        ra_query = Projection(
-            ra_query,
-            tuple(
-                str2columnstr_constant(s.name)
-                for s in query_predicate.consequent.args
-                if isinstance(s, Symbol)
-            )
-        )
-    else:
-        query_predicate_orig = query_predicate
-        query_predicate = flatten_query(query_predicate, cpl_program)
-        ra_query = TranslateToNamedRA().walk(query_predicate)
-        ra_query = Projection(
-            ra_query,
-            tuple(
-                str2columnstr_constant(s.name)
-                for s in query_predicate_orig._symbols
-                if s not in (
-                    p.functor for p in
-                    extract_logic_predicates(query_predicate_orig)
-                )
-            )
-        )
-
-    ra_query = RAQueryOptimiser().walk(ra_query)
-
-    symbol_table = _generate_symbol_table(cpl_program, query_predicate)
-=======
         conjunctive_query = query_predicate.antecedent
         variables_to_project = tuple(
             str2columnstr_constant(s.name)
@@ -568,7 +435,6 @@ def solve_succ_query(query_predicate, cpl_program):
     ra_query = RAQueryOptimiser().walk(ra_query)
 
     symbol_table = _generate_symbol_table(cpl_program, flat_query)
->>>>>>> demian/lifted_choice_sdd
 
     solver = WMCSemiRingSolver(symbol_table)
     prob_set_result = solver.walk(ra_query)
@@ -576,21 +442,13 @@ def solve_succ_query(query_predicate, cpl_program):
     sdd_compiler, sdd_program, prob_set_program = \
         sdd_compilation(prob_set_result)
 
-<<<<<<< HEAD
-    res = perform_wmc(
-=======
     res, provenance_column = perform_wmc(
->>>>>>> demian/lifted_choice_sdd
         solver, sdd_compiler, sdd_program,
         prob_set_program, prob_set_result
     )
 
     return ProvenanceAlgebraSet(
-<<<<<<< HEAD
-        res, str2columnstr_constant('prob')
-=======
         res, ColumnStr(provenance_column)
->>>>>>> demian/lifted_choice_sdd
     )
 
 
@@ -660,11 +518,6 @@ def perform_wmc(
 
     probs = dict()
     for i, sdd_exp in enumerate(sdd_program):
-<<<<<<< HEAD
-        wmc = sdd_exp.wmc(log_mode=True)
-        wmc.set_literal_weights_from_array(np.log(weights))
-        probs[prob_set_program.expressions[i]] = np.exp(wmc.propagate())
-=======
         wmc = sdd_exp.wmc(log_mode=False)
         wmc.set_literal_weights_from_array(weights)
         prob = wmc.propagate()
@@ -673,7 +526,6 @@ def perform_wmc(
     provenance_column = 'prob'
     while provenance_column in prob_set_result.value.columns:
         provenance_column += '_'
->>>>>>> demian/lifted_choice_sdd
 
     res = prob_set_result.value.extended_projection(
         dict(
@@ -682,12 +534,6 @@ def perform_wmc(
                 for c in prob_set_result.value.columns
                 if c != prob_set_result.provenance_column
             ] +
-<<<<<<< HEAD
-            [('prob', lambda x: probs[x[prob_set_result.provenance_column]])]
-        )
-    )
-    return res
-=======
             [(
                 provenance_column,
                 lambda x: probs[x[prob_set_result.provenance_column]]
@@ -695,7 +541,6 @@ def perform_wmc(
         )
     )
     return res, provenance_column
->>>>>>> demian/lifted_choice_sdd
 
 
 def generate_probability_table(solver):
