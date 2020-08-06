@@ -52,21 +52,10 @@ class NeuroSynthHandler(object):
         return result_set
 
     def ns_load_dataset(self):
-
-        if resource_exists(
-            "neurolang.frontend", "neurosynth_data/dataset.pkl"
-        ):
-            file = resource_filename(
-                "neurolang.frontend", "neurosynth_data/dataset.pkl"
-            )
-            dataset = ns.Dataset.load(file)
-        else:
-            path = resource_filename("neurolang.frontend", "neurosynth_data")
-            logging.info(
-                f"Downloading neurosynth database"
-                f" and features in path: {path}"
-            )
-            dataset = self.download_ns_dataset()
+        logging.info(
+            "Downloading neurosynth database"
+        )
+        dataset = self.download_ns_dataset()
 
         return dataset
 
