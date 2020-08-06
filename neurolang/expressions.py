@@ -592,12 +592,24 @@ class Lambda(Definition):
 
 class FunctionApplication(Definition):
     def __init__(
-        self, functor, args, kwargs=None, validate_arguments=True
+        self, functor, args, kwargs=None, validate_arguments=True,
     ):
         self.functor = functor
         self.args = args
         self.kwargs = kwargs
 
+        self._verify_and_set_type()
+
+        if self.kwargs is None:
+            self.kwargs = dict()
+
+        if self.args is None:
+            self.args = tuple()
+        elif validate_arguments:
+            self._validate_arguments()
+        self.__symbols = None
+
+    def _verify_and_set_type(self):
         if self.type in (Unknown, typing.Any):
             if self.functor.type in (Unknown, typing.Any):
                 pass
@@ -617,21 +629,14 @@ class FunctionApplication(Definition):
                     "Functor return type not unifiable with application type"
                 )
 
-        if self.kwargs is None:
-            self.kwargs = dict()
-
-        if self.args is None:
-            self.args = tuple()
-        elif validate_arguments:
-            if not (
-                isinstance(self.args, tuple) and
-                all(isinstance(a, Expression) for a in self.args)
-            ):
-                raise ValueError(
-                    'args parameter must be a tuple of expressions'
-                )
-
-        self._symbols = None
+    def _validate_arguments(self):
+        if not (
+            isinstance(self.args, tuple) and
+            all(isinstance(a, Expression) for a in self.args)
+        ):
+            raise ValueError(
+                'args parameter must be a tuple of expressions'
+            )
 
     @property
     def _symbols(self):

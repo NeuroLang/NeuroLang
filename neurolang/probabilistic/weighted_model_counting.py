@@ -4,8 +4,6 @@
 """
 import logging
 
-from numpy.lib.shape_base import column_stack
-from neurolang.utils.relational_algebra_set.pandas import NamedRelationalAlgebraFrozenSet
 import operator as op
 
 import numpy as np
@@ -27,12 +25,15 @@ from ..relational_algebra import (ColumnInt, ColumnStr, ExtendedProjection,
                                   RenameColumns, str2columnstr_constant)
 from ..relational_algebra_provenance import (
     ProvenanceAlgebraSet, RelationalAlgebraProvenanceExpressionSemringSolver)
+from ..utils.relational_algebra_set.pandas import (
+    NamedRelationalAlgebraFrozenSet
+)
 from .expression_processing import get_probchoice_variable_equalities
-from ..expression_walker import SuccintRepr
 
 LOG = logging.getLogger(__name__)
 
-SR = SuccintRepr()
+MUL = Constant(op.mul)
+NEG = Constant(op.neg)
 
 
 class SemiRingRAPToSDD(PatternWalker):
@@ -218,38 +219,43 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
         return prov_set
 
     def _generate_tag_choice_set(self, relation, prob_column):
-        previous = None
+        previous = tuple()
         previous_probability = 0
         df = relation.value.as_pandas_dataframe()
         prov_column = []
         tag_set = []
-        probabilities = []
-        mul = Constant(op.mul)
-        for i, probability in (
-            enumerate(df.iloc[:, prob_column])
-        ):
-            symbol = Symbol.fresh()
-            if i == 0:
-                prov_column.append(symbol)
-                previous = (-symbol,)
-            else:
-                args = (symbol,) + previous
-                with sure_is_not_pattern():
-                    mul_expr = FunctionApplication(
-                        mul, args, validate_arguments=False
-                    )
-                prov_column.append(mul_expr)
-                previous = (-symbol,) + previous
+        with sure_is_not_pattern():
+            for probability in df.iloc[:, prob_column]:
+                tag_expression, symbol, previous = \
+                    self._generate_tag_choice_expression(previous)
 
-            probabilities.append(probability / (1 - previous_probability))
-            tag_set.append((symbol, probability / (1 - previous_probability)))
-            previous_probability += probability
+                adjusted_probability = probability / (1 - previous_probability)
+                previous_probability += probability
+
+                prov_column.append(tag_expression)
+                tag_set.append((symbol, adjusted_probability))
 
         tag_set = self._build_relation_constant(
             NamedRelationalAlgebraFrozenSet(('id', 'prob'), tag_set)
         )
         self.tagged_sets.append(tag_set)
         return df, prov_column
+
+    def _generate_tag_choice_expression(self, previous):
+        symbol = Symbol.fresh()
+        neg_symbol = FunctionApplication(
+            NEG, (symbol,), validate_arguments=False
+        )
+        if len(previous) == 0:
+            tag_expression = symbol
+            previous = (neg_symbol,)
+        else:
+            args = (symbol,) + previous
+            tag_expression = FunctionApplication(
+                MUL, args, validate_arguments=False
+            )
+        previous = (neg_symbol,) + previous
+        return tag_expression, symbol, previous
 
     def _generate_tag_probability_set(
         self, rap_column, prob_fact_set, tagged_relation
