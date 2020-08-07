@@ -5,11 +5,15 @@ from ....expressions import (
 from ....expression_walker import ExpressionBasicEvaluator
 from ....logic import Implication, Conjunction, UniversalPredicate, Union
 from ....datalog.basic_representation import DatalogProgram
+from ....datalog.negation import DatalogProgramNegation
 from ....datalog.expressions import TranslateToLogic
 from ....datalog.chase import (
     ChaseGeneral,
     ChaseMGUMixin,
     ChaseNaive,
+)
+from ....datalog.chase.negation import (
+    DatalogChaseNegation,
 )
 from ... import QueryBuilderDatalog
 from ..translate_to_dl import (
@@ -31,7 +35,9 @@ class Datalog(TranslateToLogic, DatalogProgram, ExpressionBasicEvaluator):
     pass
 
 
-class Chase(ChaseNaive, ChaseMGUMixin, ChaseGeneral):
+class Chase(
+    ChaseNaive, ChaseMGUMixin, ChaseGeneral,
+):
     pass
 
 
@@ -233,3 +239,31 @@ def test_guess_verb():
         if a == b:
             continue
         assert (Constant(a), Constant(b)) in res["activates"].unwrap()
+
+
+class DatalogNeg(
+    TranslateToLogic, DatalogProgramNegation, ExpressionBasicEvaluator
+):
+    pass
+
+
+class NeurolangNegCNL(CnlFrontendMixin, QueryBuilderDatalog):
+    def __init__(self, solver=None):
+        super().__init__(DatalogNeg(), chase_class=DatalogChaseNegation)
+
+
+def test_sentence_negation():
+    nl = NeurolangNegCNL()
+    nl.execute_cnl_code(
+        """
+        if `pair(X, Y)` then X accompanies Y and Y accompanies X.  if
+        `number(X)` and is not the case that X accompanies "3" then `sol(X)`.
+        """
+    )
+    nl.add_tuple_set({("1", "2"), ("3", "4"), ("5", "6")}, name="pair")
+    nl.add_tuple_set(
+        {("1",), ("2",), ("3",), ("4",), ("5",), ("6",)}, name="number"
+    )
+    res = nl.solve_all()
+    for n in ("1", "2", "3", "5", "6"):
+        assert (Constant(n),) in res["sol"].unwrap()
