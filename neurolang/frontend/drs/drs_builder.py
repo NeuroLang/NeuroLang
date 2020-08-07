@@ -9,7 +9,7 @@ from ...expression_walker import (
     ExpressionWalker,
     ReplaceSymbolWalker,
 )
-from .chart_parser import Quote
+from .chart_parser import Quote, CODE_QUOTE
 from .english_grammar import (
     S,
     V,
@@ -174,7 +174,7 @@ class DRSBuilder(DRSBuilderBase):
         (_, ant, _, cons) = s.args
         return self.walk(DRS(set(), (Implication(cons, ant),)))
 
-    @add_match(Fa(Fa(S, ...), (Fa(Quote, (C("`"), ...)),)))
+    @add_match(Fa(Fa(S, ...), (Fa(Quote, (C(CODE_QUOTE), ...)),),),)
     def quoted_predicate(self, s):
         print("quoted_predicate")
         exp = _parse_predicate(s.args[0].args[1].value)

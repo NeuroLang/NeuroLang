@@ -7,6 +7,7 @@ from .. import expressions as exp
 from ..datalog import aggregation
 from ..datalog.expression_processing import (TranslateToDatalogSemantics,
                                              reachable_code)
+from ..probabilistic.expression_processing import is_within_language_succ_query
 from ..type_system import Unknown
 from ..utils import RelationalAlgebraFrozenSet
 from .datalog import parser as datalog_parser
@@ -39,42 +40,15 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         return cp
 
     def assign(self, consequent, antecedent):
-        if (
-            isinstance(antecedent.expression, exp.Constant) and
-            antecedent.expression.value is True
-        ):
-            expression = datalog.Fact(consequent.expression)
-        else:
-            expression = self._assign_intensional_rule(consequent, antecedent)
-        self.solver.walk(expression)
-        return expression
-
-    def _assign_intensional_rule(self, consequent, antecedent):
-        new_args = tuple()
-        changed = False
-        consequent_expression = self.translate_expression_to_datalog.walk(
+        consequent = self.translate_expression_to_datalog.walk(
             consequent.expression
         )
-
-        for arg in consequent_expression.args:
-            if isinstance(arg, exp.FunctionApplication):
-                arg = aggregation.AggregationApplication(
-                    arg.functor, arg.args
-                )
-                changed = True
-            new_args += (arg,)
-
-        if changed:
-            consequent_expression = exp.FunctionApplication(
-                consequent.expression.functor,
-                new_args
-            )
-
-        expression = datalog.Implication(
-            consequent_expression,
-            self.translate_expression_to_datalog.walk(antecedent.expression)
+        antecedent = self.translate_expression_to_datalog.walk(
+            antecedent.expression
         )
-        return expression
+        rule = datalog.Implication(consequent, antecedent)
+        self.solver.walk(rule)
+        return rule
 
     def execute_datalog_program(self, code):
         """Execute a datalog program in classical syntax

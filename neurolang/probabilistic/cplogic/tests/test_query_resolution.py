@@ -5,6 +5,7 @@ from ....datalog import Fact
 from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Union
 from ....relational_algebra import RenameColumn
+from ...expressions import PROB, ProbabilisticQuery
 from .. import testing
 from ..gm_provenance_solver import solve_marg_query, solve_succ_query
 from ..problog_solver import solve_succ_all as problog_solve_succ_all
@@ -591,33 +592,14 @@ def test_solve_succ_all():
     cpl.add_extensional_predicate_from_tuples(P, {("a", "b"), ("b", "c")})
     cpl.add_probabilistic_facts_from_tuples(Q, {(0.2, "a"), (0.9, "b")})
     cpl.add_probabilistic_choice_from_tuples(H, {(0.5, "a"), (0.5, "c")})
-    cpl.walk(Implication(Z(x), Conjunction((H(x), Q(x)))))
+    cpl.walk(
+        Implication(
+            Z(x, ProbabilisticQuery(PROB, (x,))), Conjunction((H(x), Q(x)))
+        )
+    )
     result = problog_solve_succ_all(cpl)
-    assert P in result
-    assert testing.eq_prov_relations(
-        result[P],
-        testing.make_prov_set(
-            [(1.0, "a", "b"), (1.0, "b", "c")],
-            ("_p_",) + result[P].non_provenance_columns,
-        ),
-    )
-    assert testing.eq_prov_relations(
-        result[Q],
-        testing.make_prov_set(
-            [(0.2, "a"), (0.9, "b")],
-            ("_p_",) + result[Q].non_provenance_columns,
-        ),
-    )
-    assert testing.eq_prov_relations(
-        result[H],
-        testing.make_prov_set(
-            [(0.5, "a"), (0.5, "c")],
-            ("_p_",) + result[H].non_provenance_columns,
-        ),
-    )
-    assert testing.eq_prov_relations(
-        result[Z],
-        testing.make_prov_set(
-            [(0.1, "a"),], ("_p_",) + result[Z].non_provenance_columns,
-        ),
-    )
+    assert set(result.keys()) == {Z}
+    assert len(result[Z].value) == 1
+    res = next(iter(result[Z].value))
+    assert res[0] == "a"
+    assert np.isclose(res[1], 0.1)
