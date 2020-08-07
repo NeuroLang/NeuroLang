@@ -207,6 +207,7 @@ def test_conjunction_2():
         ),
     )
 
+
 def test_quoted_string_literal():
     b = DRSBuilder(_eg)
     t = _cp.parse('"Ulysses" references "Odyssey"')[0]

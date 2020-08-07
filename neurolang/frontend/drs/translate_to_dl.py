@@ -39,7 +39,10 @@ class TranslateToDatalog:
             sentence = sentence.strip()
             if not sentence:
                 continue
-            program += self.translate_sentence(sentence)
+            program = ExpressionBlock(
+                program.expressions
+                + self.translate_sentence(sentence).expressions
+            )
 
         return program
 
@@ -48,12 +51,12 @@ class TranslateToDatalog:
 
         drs = self.builder.walk(t)
         exp = self.into_fol.walk(drs)
-        exp = IntoConjunctionOfSentences().walk(exp)
+        exp = TransformIntoConjunctionOfDatalogSentences().walk(exp)
 
         lsentences = exp.formulas if isinstance(exp, Conjunction) else (exp,)
         program = ExpressionBlock(())
         for block in map(self.translate_logical_sentence, lsentences):
-            program += block
+            program = ExpressionBlock(program.expressions + block.expressions)
         return program
 
     def translate_logical_sentence(self, exp):
@@ -70,12 +73,19 @@ class TranslateToDatalog:
         raise TranslateToDatalogError(f"Unsupported expression: {repr(exp)}")
 
 
-class IntoConjunctionOfSentences(
+class TransformIntoConjunctionOfDatalogSentences(
     DistributeImplicationsWithConjunctiveHeads,
     DistributeUniversalQuantifiers,
     CollapseConjunctions,
     ExpressionWalker,
 ):
+    """
+    A datalog-sentence in this case is a logical sentence which can be
+    interpreted as datalog. The only 2 types of sentences supported are facts
+    and rules. This rewrite allows to use conjunctions in a more flexible way,
+    allowing to use them between facts and in implication heads, because then
+    they will be properly distributed.
+    """
     pass
 
 

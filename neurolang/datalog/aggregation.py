@@ -14,16 +14,22 @@ from warnings import warn
 
 from ..exceptions import NeuroLangException
 from ..expression_walker import (
-    PatternWalker, add_match,
-    FunctionApplicationToPythonLambda, ReplaceSymbolsByConstants
+    FunctionApplicationToPythonLambda,
+    PatternWalker,
+    ReplaceSymbolsByConstants,
+    add_match,
 )
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
+from ..type_system import get_generic_type
 from ..utils.relational_algebra_set import RelationalAlgebraStringExpression
-from . import (Implication, Union, chase,
-               is_conjunctive_expression_with_nested_predicates)
+from . import (
+    Implication,
+    Union,
+    chase,
+    is_conjunctive_expression_with_nested_predicates,
+)
 from .basic_representation import UnionOfConjunctiveQueries
 from .expressions import TranslateToLogic
-
 
 FA2L = FunctionApplicationToPythonLambda()
 
@@ -57,8 +63,8 @@ class TranslateToLogicWithAggregation(TranslateToLogic):
     @add_match(
         Implication(FunctionApplication(Symbol, ...), Expression),
         lambda rule: any(
-            isinstance(arg, FunctionApplication) and
-            not isinstance(arg, AggregationApplication)
+            isinstance(arg, FunctionApplication)
+            and get_generic_type(type(arg)) is FunctionApplication
             for arg in rule.consequent.args
         )
     )
@@ -66,8 +72,8 @@ class TranslateToLogicWithAggregation(TranslateToLogic):
         consequent_arguments = tuple()
         for arg in rule.consequent.args:
             if (
-                isinstance(arg, FunctionApplication) and
-                not isinstance(arg, AggregationApplication)
+                isinstance(arg, FunctionApplication)
+                and get_generic_type(type(arg)) is FunctionApplication
             ):
                 arg = AggregationApplication(*arg.unapply())
             consequent_arguments += (arg,)
