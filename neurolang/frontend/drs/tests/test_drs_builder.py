@@ -34,7 +34,7 @@ def test_indefinite_noun_phrase():
     drs = b.walk(t)
 
     assert len(drs.referents) == 1
-    x = drs.referents[0]
+    x = list(drs.referents)[0]
     assert len(drs.expressions) == 2
 
     assert drs.expressions[0] == Symbol("owns")(Constant("Jones"), x)
@@ -58,8 +58,8 @@ def test_apposition_variable_introduction():
     x = Symbol("X")
     y = Symbol("Y")
     assert len(drs.referents) == 2
-    assert x == drs.referents[0]
-    assert y == drs.referents[1]
+    assert x in drs.referents
+    assert y in drs.referents
     assert len(drs.expressions) == 3
 
     assert drs.expressions[0] == Symbol("intersects")(x, y)
@@ -110,9 +110,9 @@ def test_translation_2():
     y = Symbol("Y")
 
     assert exp == UniversalPredicate(
-        x,
+        y,
         UniversalPredicate(
-            y,
+            x,
             Implication(
                 Symbol("intersects")(x, y),
                 Conjunction(
