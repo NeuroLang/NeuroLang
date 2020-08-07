@@ -102,3 +102,27 @@ def test_disallow_implication_in_ands():
         if X contains Y then Y intersects X
         """
     )
+
+
+def test_verb_negation():
+    _cp.parse(
+        """
+        Smith does not own Ulysses
+        """
+    )
+
+
+def test_sentence_negation():
+    _cp.parse(
+        """
+        is not the case that Smith owns Ulysses
+        """
+    )
+
+
+def test_plural_verb_negation():
+    _cp.parse(
+        """
+        Jones and Smith do not like Ulysses
+        """
+    )

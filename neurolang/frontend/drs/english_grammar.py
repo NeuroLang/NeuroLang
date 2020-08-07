@@ -15,6 +15,7 @@ PRO = Symbol("PRO")
 VAR = Symbol("VAR")
 LIT = Symbol("LIT")
 UNK = Symbol("UNK")
+AUX = Symbol("AUX")
 
 c = Symbol("c")
 n = Symbol("n")
@@ -80,6 +81,28 @@ EnglishGrammar = Grammar(
         RootRule(S(n, stype.notif), (Quote(Constant("`"), v),)),
         Rule(LIT(v), (Quote(Constant('"'), v),)),
         Rule(NP(_x, _y, _z), (LIT(v),)),
+        RootRule(
+            S(n, stype.notif),
+            (
+                Constant("is"),
+                Constant("not"),
+                Constant("the"),
+                Constant("case"),
+                Constant("that"),
+                S(n, stype.notif),
+            ),
+        ),
+        Rule(
+            VP(n),
+            (
+                AUX(n),
+                Constant("not"),
+                V(num.plural),
+                NP(m, g, case.notnom),
+            ),
+        ),
+        Rule(AUX(num.singular), (Constant("does"),)),
+        Rule(AUX(num.plural), (Constant("do"),)),
     )
 )
 
