@@ -34,6 +34,7 @@ from . import (
 from typing import Callable
 from ..type_system import is_leq_informative, Unknown
 from ..datalog.expressions import Fact
+from ..datalog.negation import is_conjunctive_negation
 from ..exceptions import NeuroLangException
 from ..expressions import ExpressionBlock
 from ..expression_walker import (
@@ -278,7 +279,7 @@ def convert_srnf_to_horn_clauses(head, expression):
         raise NeuroLangTranslateToHornClauseException(
             "Expression is not safe range: {}".format(expression)
         )
-    if set(head.args) != range_restricted_variables(expression):
+    if not set(head.args) <= range_restricted_variables(expression):
         raise NeuroLangTranslateToHornClauseException(
             "Variables in head ({}) must be present in body ({})".format(
                 head, expression
@@ -451,3 +452,21 @@ def fol_query_to_datalog_program(head, exp):
     horn_clauses = convert_srnf_to_horn_clauses(head, exp)
     program = translate_horn_clauses_to_datalog(horn_clauses)
     return program
+
+
+class Fol2DatalogTranslationException(NeuroLangException):
+    pass
+
+
+class Fol2DatalogMixin(LogicExpressionWalker):
+    @add_match(
+        Implication, lambda imp: not is_conjunctive_negation(imp.antecedent)
+    )
+    def translate_implication(self, imp):
+        try:
+            program = fol_query_to_datalog_program(
+                imp.consequent, imp.antecedent
+            )
+        except NeuroLangException as e:
+            raise Fol2DatalogTranslationException from e
+        return self.walk(program)

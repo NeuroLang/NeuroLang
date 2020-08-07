@@ -1,5 +1,13 @@
 from ...expressions import Symbol, Constant
-from .chart_parser import Grammar, DictLexicon, Rule, RootRule
+from .chart_parser import (
+    Grammar,
+    DictLexicon,
+    Rule,
+    RootRule,
+    Quote,
+    CODE_QUOTE,
+    STRING_QUOTE,
+)
 
 
 S = Symbol("S")
@@ -11,6 +19,7 @@ DET = Symbol("DET")
 N = Symbol("N")
 PRO = Symbol("PRO")
 VAR = Symbol("VAR")
+LIT = Symbol("LIT")
 
 c = Symbol("c")
 n = Symbol("n")
@@ -52,54 +61,55 @@ EnglishGrammar = Grammar(
         Rule(NP(Symbol.fresh(), Symbol.fresh(), Symbol.fresh()), (VAR(),)),
         Rule(NP(n, g, Symbol.fresh()), (DET(n), N(n, g))),
         Rule(NP(n, g, c), (PRO(n, g, c),)),
+        Rule(S(n), (Quote(Constant("`"), v),)),
+        Rule(LIT(v), (Quote(Constant('"'), v),)),
+        Rule(NP(Symbol.fresh(), Symbol.fresh(), Symbol.fresh()), (LIT(v),)),
     )
 )
 
 
 class EnglishBaseLexicon(DictLexicon):
     def __init__(self):
-        super().__init__(
-            {
-                "he": (PRO(num.singular, gen.male, case.nom),),
-                "him": (PRO(num.singular, gen.male, case.notnom),),
-                "she": (PRO(num.singular, gen.female, case.nom),),
-                "her": (PRO(num.singular, gen.female, case.notnom),),
-                "it": (
-                    PRO(num.singular, gen.thing, case.nom),
-                    PRO(num.singular, gen.thing, case.notnom),
-                ),
-                "owns": (V(num.singular),),
-                "has": (V(num.singular),),
-                "likes": (V(num.singular),),
-                "intersects": (V(num.singular),),
-                "references": (V(num.singular),),
-                "own": (V(num.plural),),
-                "have": (V(num.plural),),
-                "like": (V(num.plural),),
-                "Jones": (PN(num.singular, gen.male, Constant("Jones")),),
-                "Smith": (PN(num.singular, gen.male, Constant("Smith")),),
-                "Ulysses": (PN(num.singular, gen.thing, Constant("Ulysses")),),
-                "Odyssey": (PN(num.singular, gen.thing, Constant("Odyssey")),),
-                "a": (DET(num.singular),),
-                "an": (DET(num.singular),),
-                "every": (DET(num.singular),),
-                "the": (DET(num.singular),),
-                "woman": (N(num.singular, gen.female),),
-                "stockbroker": (
-                    N(num.singular, gen.female),
-                    N(num.singular, gen.male),
-                ),
-                "man": (N(num.singular, gen.male),),
-                "book": (N(num.singular, gen.thing),),
-                "donkey": (N(num.singular, gen.thing),),
-                "horse": (N(num.singular, gen.thing),),
-                "region": (N(num.singular, gen.thing),),
-                "ending": (N(num.singular, gen.thing),),
-            }
-        )
+        super().__init__(FIXED_VOCABULARY)
 
-    def get_meanings(self, word):
-        m = super().get_meanings(word)
-        if word.isupper():
+    def get_meanings(self, token):
+        m = super().get_meanings(token)
+        if isinstance(token, Constant) and token.value.isupper():
             m += (VAR(),)
         return m
+
+
+FIXED_VOCABULARY = {
+    "he": (PRO(num.singular, gen.male, case.nom),),
+    "him": (PRO(num.singular, gen.male, case.notnom),),
+    "she": (PRO(num.singular, gen.female, case.nom),),
+    "her": (PRO(num.singular, gen.female, case.notnom),),
+    "it": (
+        PRO(num.singular, gen.thing, case.nom),
+        PRO(num.singular, gen.thing, case.notnom),
+    ),
+    "owns": (V(num.singular),),
+    "has": (V(num.singular),),
+    "likes": (V(num.singular),),
+    "intersects": (V(num.singular),),
+    "references": (V(num.singular),),
+    "own": (V(num.plural),),
+    "have": (V(num.plural),),
+    "like": (V(num.plural),),
+    "Jones": (PN(num.singular, gen.male, Constant("Jones")),),
+    "Smith": (PN(num.singular, gen.male, Constant("Smith")),),
+    "Ulysses": (PN(num.singular, gen.thing, Constant("Ulysses")),),
+    "Odyssey": (PN(num.singular, gen.thing, Constant("Odyssey")),),
+    "a": (DET(num.singular),),
+    "an": (DET(num.singular),),
+    "every": (DET(num.singular),),
+    "the": (DET(num.singular),),
+    "woman": (N(num.singular, gen.female),),
+    "stockbroker": (N(num.singular, gen.female), N(num.singular, gen.male),),
+    "man": (N(num.singular, gen.male),),
+    "book": (N(num.singular, gen.thing),),
+    "donkey": (N(num.singular, gen.thing),),
+    "horse": (N(num.singular, gen.thing),),
+    "region": (N(num.singular, gen.thing),),
+    "ending": (N(num.singular, gen.thing),),
+}

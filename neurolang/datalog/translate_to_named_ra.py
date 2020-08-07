@@ -2,17 +2,28 @@ from operator import contains, eq, not_
 from typing import AbstractSet, Callable, Tuple
 
 from ..exceptions import NeuroLangException
-from ..expression_walker import (ExpressionBasicEvaluator,
-                                 ReplaceExpressionsByValues, add_match)
-from ..expressions import (Constant, FunctionApplication, Symbol)
-from ..relational_algebra import (Column, ColumnInt, ColumnStr, Destroy,
-                                  Difference, ExtendedProjection,
-                                  ExtendedProjectionListMember, NameColumns,
-                                  NaturalJoin, Projection,
-                                  RelationalAlgebraOperation, RenameColumn,
-                                  Selection,
-                                  get_expression_columns
-                                  )
+from ..expression_walker import (
+    ExpressionBasicEvaluator,
+    ReplaceExpressionsByValues,
+    add_match
+)
+from ..expressions import Constant, FunctionApplication, Symbol
+from ..relational_algebra import (
+    Column,
+    ColumnInt,
+    ColumnStr,
+    Destroy,
+    Difference,
+    ExtendedProjection,
+    ExtendedProjectionListMember,
+    NameColumns,
+    NaturalJoin,
+    Projection,
+    RelationalAlgebraOperation,
+    RenameColumn,
+    Selection,
+    get_expression_columns
+)
 from ..utils import NamedRelationalAlgebraFrozenSet
 from .expressions import Conjunction, Negation
 
@@ -466,23 +477,20 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
     def process_equality_formulas_as_extended_projections(
         classified_formulas, output
     ):
-        named_columns = classified_formulas['named_columns']
-        to_keep = []
-        for formula in classified_formulas['eq_formulas']:
+        named_columns = classified_formulas["named_columns"]
+        extended_projections = tuple(
+            ExtendedProjectionListMember(c, c) for c in named_columns
+        )
+        for formula in classified_formulas["eq_formulas"]:
             left, right = formula.args
-            extended_projections = tuple(
-                ExtendedProjectionListMember(c, c)
-                for c in named_columns
-            ) + (ExtendedProjectionListMember(right, left),)
-
-            new_output = ExtendedProjection(
-                output, extended_projections
+            extended_projections += (
+                ExtendedProjectionListMember(right, left),
             )
-            if new_output is output:
-                to_keep.append(formula)
-            output = new_output
-        classified_formulas['eq_formulas'] = to_keep
-        return output
+            named_columns.add(left)
+
+        new_output = ExtendedProjection(output, extended_projections)
+        classified_formulas["eq_formulas"] = []
+        return new_output
 
     @staticmethod
     def process_extended_projection_formulas(classified_formulas, output):

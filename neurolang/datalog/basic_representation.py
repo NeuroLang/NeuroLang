@@ -11,6 +11,7 @@ from typing import AbstractSet, Any, Callable, Tuple
 from warnings import warn
 
 from ..expression_walker import PatternWalker, add_match
+from ..exceptions import ProtectedKeywordError
 from ..expressions import (Constant, Expression, FunctionApplication,
                            NeuroLangException, Symbol, TypedSymbolTableMixin,
                            is_leq_informative)
@@ -81,7 +82,7 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
     def fact(self, expression):
         fact = expression.fact
         if fact.functor.name in self.protected_keywords:
-            raise NeuroLangException(
+            raise ProtectedKeywordError(
                 f'symbol {self.constant_set_name} is protected'
             )
 
@@ -172,9 +173,9 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
         return disj
 
     def _validate_implication_syntax(self, consequent, antecedent):
-        if consequent.functor in self.protected_keywords:
-            raise NeuroLangException(
-                f'symbol {self.constant_set_name} is protected'
+        if consequent.functor.name in self.protected_keywords:
+            raise ProtectedKeywordError(
+                f'symbol {consequent.functor} is protected'
             )
 
         if any(
