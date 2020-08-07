@@ -1,5 +1,13 @@
 from ...expressions import Symbol, Constant
-from .chart_parser import Grammar, DictLexicon, Rule, RootRule, Quote
+from .chart_parser import (
+    Grammar,
+    DictLexicon,
+    Rule,
+    RootRule,
+    Quote,
+    CODE_QUOTE,
+    STRING_QUOTE,
+)
 
 
 S = Symbol("S")
@@ -74,8 +82,8 @@ EnglishGrammar = Grammar(
             S(_x, stype.notif),
             (S(_y, stype.notif), Constant("and"), S(_z, stype.notif),),
         ),
-        RootRule(S(n, stype.notif), (Quote(Constant("`"), v),)),
-        Rule(LIT(v), (Quote(Constant('"'), v),)),
+        RootRule(S(n, stype.notif), (Quote(Constant(CODE_QUOTE), v),)),
+        Rule(LIT(v), (Quote(Constant(STRING_QUOTE), v),)),
         Rule(NP(_x, _y, _z), (LIT(v),)),
     )
 )
@@ -83,59 +91,7 @@ EnglishGrammar = Grammar(
 
 class EnglishBaseLexicon(DictLexicon):
     def __init__(self):
-        super().__init__(
-            {
-                "he": (PRO(num.singular, gen.male, case.nom),),
-                "him": (PRO(num.singular, gen.male, case.notnom),),
-                "she": (PRO(num.singular, gen.female, case.nom),),
-                "her": (PRO(num.singular, gen.female, case.notnom),),
-                "it": (
-                    PRO(num.singular, gen.thing, case.nom),
-                    PRO(num.singular, gen.thing, case.notnom),
-                ),
-                "owns": (V(num.singular),),
-                "has": (V(num.singular),),
-                "likely_has": (V(num.singular),),
-                "likes": (V(num.singular),),
-                "wears": (V(num.singular),),
-                "intersects": (V(num.singular),),
-                "contains": (V(num.singular),),
-                "provides": (V(num.singular),),
-                "affects": (V(num.singular),),
-                "references": (V(num.singular),),
-                "reaches": (V(num.singular),),
-                "affect": (V(num.plural),),
-                "own": (V(num.plural),),
-                "have": (V(num.plural),),
-                "like": (V(num.plural),),
-                "Covid19": (PN(num.singular, gen.thing, Constant("Covid19")),),
-                "Jones": (PN(num.singular, gen.male, Constant("Jones")),),
-                "Smith": (PN(num.singular, gen.male, Constant("Smith")),),
-                "Ulysses": (PN(num.singular, gen.thing, Constant("Ulysses")),),
-                "Odyssey": (PN(num.singular, gen.thing, Constant("Odyssey")),),
-                "a": (DET(num.singular),),
-                "an": (DET(num.singular),),
-                "every": (DET(num.singular),),
-                "the": (DET(num.singular),),
-                "that": (DET(num.singular),),
-                "woman": (N(num.singular, gen.female),),
-                "stockbroker": (
-                    N(num.singular, gen.female),
-                    N(num.singular, gen.male),
-                ),
-                "man": (N(num.singular, gen.male),),
-                "book": (N(num.singular, gen.thing),),
-                "fever": (N(num.singular, gen.thing),),
-                "cough": (N(num.singular, gen.thing),),
-                "disease": (N(num.singular, gen.thing),),
-                "mask": (N(num.singular, gen.thing),),
-                "donkey": (N(num.singular, gen.thing),),
-                "horse": (N(num.singular, gen.thing),),
-                "region": (N(num.singular, gen.thing),),
-                "function": (N(num.singular, gen.thing),),
-                "ending": (N(num.singular, gen.thing),),
-            }
-        )
+        super().__init__(FIXED_VOCABULARY)
 
     def get_meanings(self, token):
         m = super().get_meanings(token)
@@ -166,3 +122,46 @@ class DatalogLexicon(EnglishBaseLexicon):
                 m += (V(Constant(n)),)
 
         return m
+
+
+FIXED_VOCABULARY = {
+    "he": (PRO(num.singular, gen.male, case.nom),),
+    "him": (PRO(num.singular, gen.male, case.notnom),),
+    "she": (PRO(num.singular, gen.female, case.nom),),
+    "her": (PRO(num.singular, gen.female, case.notnom),),
+    "it": (
+        PRO(num.singular, gen.thing, case.nom),
+        PRO(num.singular, gen.thing, case.notnom),
+    ),
+    "owns": (V(num.singular),),
+    "has": (V(num.singular),),
+    "likes": (V(num.singular),),
+    "intersects": (V(num.singular),),
+    "references": (V(num.singular),),
+    "provides": (V(num.singular),),
+    "contains": (V(num.singular),),
+    "affects": (V(num.singular),),
+    "reaches": (V(num.singular),),
+    "affect": (V(num.plural),),
+    "own": (V(num.plural),),
+    "have": (V(num.plural),),
+    "like": (V(num.plural),),
+    "Jones": (PN(num.singular, gen.male, Constant("Jones")),),
+    "Smith": (PN(num.singular, gen.male, Constant("Smith")),),
+    "Ulysses": (PN(num.singular, gen.thing, Constant("Ulysses")),),
+    "Odyssey": (PN(num.singular, gen.thing, Constant("Odyssey")),),
+    "a": (DET(num.singular),),
+    "an": (DET(num.singular),),
+    "every": (DET(num.singular),),
+    "the": (DET(num.singular),),
+    "that": (DET(num.singular),),
+    "woman": (N(num.singular, gen.female),),
+    "stockbroker": (N(num.singular, gen.female), N(num.singular, gen.male),),
+    "man": (N(num.singular, gen.male),),
+    "book": (N(num.singular, gen.thing),),
+    "donkey": (N(num.singular, gen.thing),),
+    "horse": (N(num.singular, gen.thing),),
+    "region": (N(num.singular, gen.thing),),
+    "ending": (N(num.singular, gen.thing),),
+    "function": (N(num.singular, gen.thing),),
+}

@@ -1,20 +1,15 @@
 from contextlib import contextmanager
-from typing import AbstractSet, Callable, Tuple, List, Iterable
+from typing import AbstractSet, Callable, Tuple
 from uuid import uuid1
 
 import numpy as np
 
 from .. import expressions as exp
-from .. import logic
 from ..region_solver import Region
-from ..regions import (ExplicitVBR, ImplicitVBR, SphericalVolume,
-                       take_principal_regions)
+from ..regions import ExplicitVBR, ImplicitVBR, SphericalVolume
 from ..type_system import Unknown, is_leq_informative
 from .neurosynth_utils import NeuroSynthHandler, StudyID, TfIDf
-from .query_resolution_expressions import (All, Exists, Expression, Query,
-                                           Symbol)
-
-__all__ = ['QueryBuilderFirstOrder']
+from .query_resolution_expressions import Expression, Symbol
 
 
 class QueryBuilderBase:
@@ -426,61 +421,6 @@ class NeuroSynthMixin:
         )
         return self.add_tuple_set(
             result_set, type_=Tuple[StudyID, str], name=name
-        )
-
-
-class QueryBuilderFirstOrder(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
-    def __init__(self, solver, logic_programming=False):
-        super().__init__(
-            solver, logic_programming=logic_programming
-        )
-
-    def execute_expression(self, expression, name=None):
-        if name is None:
-            name = str(uuid1())
-
-        result = self.solver.walk(expression)
-        self.symbol_table[exp.Symbol[result.type](
-            name
-        )] = result
-        return Symbol(self, name)
-
-    def query(self, head, predicate):
-
-        if isinstance(head, tuple):
-            symbols = ()
-            for e in head:
-                symbols += (e.expression,)
-            head = exp.Constant(symbols)
-        else:
-            head = head.expression
-        return Query(
-            self,
-            exp.Query[AbstractSet[head.type]](
-                head,
-                predicate.expression
-            ),
-            head, predicate
-        )
-
-    def exists(self, symbol, predicate):
-        return Exists(
-            self,
-            logic.ExistentialPredicate[bool](
-                symbol.expression,
-                predicate.expression
-            ),
-            symbol, predicate
-        )
-
-    def all(self, symbol, predicate):
-        return All(
-            self,
-            logic.UniversalPredicate[bool](
-                symbol.expression,
-                predicate.expression
-            ),
-            symbol, predicate
         )
 
 
