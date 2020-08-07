@@ -7,6 +7,8 @@ import re
 
 
 Quote = Symbol("Quote")
+CODE_QUOTE = "`"
+STRING_QUOTE = '"'
 
 
 class Rule(Expression):
@@ -92,7 +94,7 @@ class TokenizeException(ParseException):
 
 
 class Tokenizer:
-    def __init__(self, grammar, quotes=["`", '"']):
+    def __init__(self, grammar, quotes=[CODE_QUOTE, STRING_QUOTE]):
         self.grammar = grammar
         self.matches = []
         for q in quotes:

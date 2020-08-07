@@ -47,7 +47,7 @@ class CnlFrontendMixin:
         self._parser = ChartParser(self._grammar, self._lexicon)
         self._drs_builder = DRSBuilder(self._grammar)
         self._into_fol = DRS2FOL()
-        self._into_cos = IntoConjunctionOfSentences()
+        self._into_cos = TransformIntoConjunctionOfDatalogSentences()
         self._uwis = UnknownWordsInSentence()
 
     @cnl_initialized
@@ -96,12 +96,19 @@ class CnlFrontendMixin:
         raise TranslateToDatalogError(f"Unsupported expression: {repr(exp)}")
 
 
-class IntoConjunctionOfSentences(
+class TransformIntoConjunctionOfDatalogSentences(
     DistributeImplicationsWithConjunctiveHeads,
     DistributeUniversalQuantifiers,
     CollapseConjunctions,
     ExpressionWalker,
 ):
+    """
+    A datalog-sentence in this case is a logical sentence which can be
+    interpreted as datalog. The only 2 types of sentences supported are facts
+    and rules. This rewrite allows to use conjunctions in a more flexible way,
+    allowing to use them between facts and in implication heads, because then
+    they will be properly distributed.
+    """
     pass
 
 

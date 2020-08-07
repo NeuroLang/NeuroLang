@@ -11,8 +11,11 @@ from ....datalog.chase import (
     ChaseMGUMixin,
     ChaseNaive,
 )
-from ..translate_to_dl import CnlFrontendMixin, IntoConjunctionOfSentences
 from ... import QueryBuilderDatalog
+from ..translate_to_dl import (
+    CnlFrontendMixin,
+    TransformIntoConjunctionOfDatalogSentences,
+)
 
 from itertools import product
 
@@ -70,7 +73,7 @@ def test_distribute_implication_conjunctive_head():
     B = Symbol("B")
     C = Symbol("C")
 
-    exp = IntoConjunctionOfSentences().walk(
+    exp = TransformIntoConjunctionOfDatalogSentences().walk(
         UniversalPredicate(
             x,
             UniversalPredicate(
