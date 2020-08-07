@@ -139,7 +139,7 @@ class DatalogChaseNegationGeneral(
                         predicate.formula,
                         functor
                     ))
-                else:
+                elif functor in instance:
                     negative_predicates.append((
                         predicate.formula,
                         instance[functor].value
