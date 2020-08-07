@@ -61,8 +61,8 @@ EnglishGrammar = Grammar(
         Rule(NP(Symbol.fresh(), Symbol.fresh(), Symbol.fresh()), (VAR(),)),
         Rule(NP(n, g, Symbol.fresh()), (DET(n), N(n, g))),
         Rule(NP(n, g, c), (PRO(n, g, c),)),
-        Rule(S(n), (Quote(Constant("`"), v),)),
-        Rule(LIT(v), (Quote(Constant('"'), v),)),
+        Rule(S(n), (Quote(Constant(CODE_QUOTE), v),)),
+        Rule(LIT(v), (Quote(Constant(STRING_QUOTE), v),)),
         Rule(NP(Symbol.fresh(), Symbol.fresh(), Symbol.fresh()), (LIT(v),)),
     )
 )
