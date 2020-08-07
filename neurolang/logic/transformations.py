@@ -294,7 +294,7 @@ class DistributeDisjunctions(LogicExpressionWalker):
         )
 
 
-class CollapseDisjunctions(ExpressionWalker):
+class CollapseDisjunctionsMixin(PatternWalker):
     @add_match(
         Disjunction,
         lambda e: any(isinstance(f, Disjunction) for f in e.formulas),
@@ -309,7 +309,11 @@ class CollapseDisjunctions(ExpressionWalker):
         return self.walk(Disjunction(tuple(new_arg)))
 
 
-class CollapseConjunctions(ExpressionWalker):
+class CollapseDisjunctions(CollapseDisjunctionsMixin, ExpressionWalker):
+    pass
+
+
+class CollapseConjunctionsMixin(PatternWalker):
     @add_match(
         Conjunction,
         lambda e: any(isinstance(f, Conjunction) for f in e.formulas),
@@ -322,6 +326,10 @@ class CollapseConjunctions(ExpressionWalker):
             else:
                 new_arg.append(f)
         return self.walk(Conjunction(tuple(new_arg)))
+
+
+class CollapseConjunctions(CollapseConjunctionsMixin, ExpressionWalker):
+    pass
 
 
 class RemoveUniversalPredicates(LogicExpressionWalker):
@@ -360,7 +368,7 @@ class ExtractFOLFreeVariables(ExtractFreeVariablesWalker):
         return self.walk(exp.consequent) | self.walk(exp.antecedent)
 
 
-class DistributeUniversalQuantifiers(ExpressionWalker):
+class DistributeUniversalQuantifiers(PatternWalker):
     @add_match(UniversalPredicate(..., Conjunction))
     def distribute_universal_quantifier(self, uq):
         return self.walk(
@@ -379,7 +387,7 @@ class DistributeUniversalQuantifiers(ExpressionWalker):
         return foo
 
 
-class DistributeImplicationsWithConjunctiveHeads(ExpressionWalker):
+class DistributeImplicationsWithConjunctiveHeads(PatternWalker):
     @add_match(Implication(Conjunction, ...))
     def distribute_implication_with_conjunctive_head(self, impl):
         return self.walk(
