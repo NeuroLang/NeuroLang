@@ -11,10 +11,9 @@ from neurolang.frontend import query_resolution
 from ... import expressions as exp
 from ...datalog import DatalogProgram, Fact, Implication
 from ...expression_walker import ExpressionBasicEvaluator
-from ...regions import ExplicitVBR, Region, SphericalVolume
+from ...regions import ExplicitVBR, SphericalVolume
 from ...type_system import Unknown
 from .. import query_resolution_expressions as qre
-from ..query_resolution_expressions import Symbol
 
 
 def test_symbol_management():
@@ -102,14 +101,14 @@ def test_symbol_environment():
 
 
 def test_add_set():
-    neurolang = frontend.RegionFrontend()
+    neurolang = frontend.NeurolangDL()
 
     s = neurolang.add_tuple_set(range(10), int)
     res = neurolang[s]
 
     assert s.type is AbstractSet[int]
     assert res.type is AbstractSet[int]
-    assert res.value == frozenset(range(10))
+    assert res.value == frozenset((i,) for i in range(10))
 
     v = frozenset(zip(('a', 'b', 'c'), range(3)))
     s = neurolang.add_tuple_set(v, (str, int))
@@ -118,9 +117,6 @@ def test_add_set():
     assert s.type is AbstractSet[Tuple[str, int]]
     assert res.type is AbstractSet[Tuple[str, int]]
     assert res.value == v
-
-    exp = neurolang.symbols.isin(next(iter(s)), s)
-    assert exp.do().value is True
 
 
 def test_add_set_neurolangdl():
@@ -142,65 +138,32 @@ def test_add_set_neurolangdl():
     assert res.value == v
 
 
-def test_add_regions_and_query():
-    neurolang = frontend.RegionFrontend()
-
-    inferior = Region((0, 0, 0), (1, 1, 1))
-    superior = Region((0, 0, 4), (1, 1, 5))
-
-    neurolang.add_region(inferior, name='inferior_region')
-    neurolang.add_region(superior, name='superior_region')
-    assert neurolang.symbols.inferior_region.value == inferior
-    assert neurolang.symbols.superior_region.value == superior
-
-    result_symbol = neurolang.symbols.superior_of(
-        superior, inferior
-    ).do(name='is_superior_test')
-    assert result_symbol.value
-    assert neurolang.get_symbol('is_superior_test').value
-
-    x = neurolang.new_region_symbol(name='x')
-    query = neurolang.query(
-        x, neurolang.symbols.superior_of(x, neurolang.symbols.inferior_region)
-    )
-    query_result = query.do(name='result_of_test_query')
-
-    assert isinstance(query_result, Symbol)
-    assert isinstance(query_result.value, frozenset)
-    assert len(query_result.value) == 1
-    assert superior == next(iter(query_result.value))
-
-
 def test_query_regions_from_region_set():
-    neurolang = frontend.RegionFrontend()
+    neurolang = frontend.NeurolangDL()
 
     central = ExplicitVBR(np.array([[0, 0, 5], [1, 1, 8]]), np.eye(4))
-    neurolang.add_region(central, name='reference_region')
 
     i1 = ExplicitVBR(np.array([[0, 0, 2], [1, 1, 3]]), np.eye(4))
     i2 = ExplicitVBR(np.array([[0, 0, -1], [1, 1, 2]]), np.eye(4))
     i3 = ExplicitVBR(np.array([[0, 0, -10], [1, 1, -5]]), np.eye(4))
-    regions = {i1, i2, i3}
-    neurolang.add_tuple_set(regions, ExplicitVBR)
+    regions_ = {(i1,), (i2,), (i3,)}
+    regions = neurolang.add_tuple_set(regions_)
 
     x = neurolang.new_region_symbol(name='x')
     query_result = neurolang.query(
-        x,
-        neurolang.symbols.inferior_of(x, neurolang.symbols.reference_region)
-    ).do(name='result_of_test_query')
+        (x,),
+        regions(x) &
+        neurolang.symbols.inferior_of(x, central)
+    )
 
-    assert len(query_result.value) == len(regions)
-    assert query_result.value == {i1, i2, i3}
+    assert len(query_result) == len(regions)
+    assert query_result == {(i1,), (i2,), (i3,)}
 
 
 def test_query_new_predicate():
-    neurolang = frontend.RegionFrontend()
+    neurolang = frontend.NeurolangDL()
 
     central = ExplicitVBR(np.array([[0, 0, 5], [1, 1, 8]]), np.eye(4))
-    reference_symbol = neurolang.add_region(
-        central, name='reference_region'
-    )
-
     inferior_posterior = ExplicitVBR(
         np.array([[0, -10, -10], [1, -5, -5]]), np.eye(4)
     )
@@ -212,9 +175,10 @@ def test_query_new_predicate():
         np.array([[0, 2, 2], [1, 5, 3]]), np.eye(4)
     )
 
-    regions = {inferior_posterior, inferior_central, inferior_anterior}
-
-    neurolang.add_tuple_set(regions, ExplicitVBR)
+    regions_ = {
+        (inferior_posterior,), (inferior_central,), (inferior_anterior,)
+    }
+    regions = neurolang.add_tuple_set(regions_)
 
     def posterior_and_inferior(y, z):
         return (
@@ -223,10 +187,12 @@ def test_query_new_predicate():
         )
 
     x = neurolang.new_region_symbol(name='x')
-    query = neurolang.query(x, posterior_and_inferior(x, reference_symbol))
-    query_result = query.do(name='result_of_test_query')
-    assert len(query_result.value) == 1
-    assert next(iter(query_result.value)) == inferior_posterior
+    query_result = neurolang.query(
+        (x,),
+        regions(x) & posterior_and_inferior(x, central)
+    )
+    assert len(query_result) == 1
+    assert next(iter(query_result)) == (inferior_posterior,)
 
 
 @pytest.mark.skip()
@@ -483,84 +449,24 @@ def test_neurolang_dl_set_destroy():
     assert set(q) == {(0,), (1,), (2,)}
 
 
-def test_multiple_symbols_query():
-    neurolang = frontend.RegionFrontend()
-    r1 = ExplicitVBR(np.array([[0, 0, 5], [1, 1, 10]]), np.eye(4))
-    r2 = ExplicitVBR(np.array([[0, 0, -10], [1, 1, -5]]), np.eye(4))
-    neurolang.add_region(r1, name='r1')
-    neurolang.add_region(r2, name='r2')
-
-    central = ExplicitVBR(np.array([[0, 0, 1], [1, 1, 1]]), np.eye(4))
-    neurolang.add_region(central, name='reference_region')
-
-    x = neurolang.new_region_symbol(name='x')
-    y = neurolang.new_region_symbol(name='y')
-    pred = (
-        neurolang.symbols.superior_of(x, neurolang.symbols.reference_region) &
-        neurolang.symbols.inferior_of(y, neurolang.symbols.reference_region)
+@pytest.mark.skip
+@patch(
+    'neurolang.frontend.neurosynth_utils.'
+    'NeuroSynthHandler.ns_region_set_from_term'
+)
+def test_neurosynth_region(mock_ns_regions):
+    mock_ns_regions.return_value = {
+        ExplicitVBR(np.array([[1, 0, 0], [1, 1, 0]]), np.eye(4))
+    }
+    neurolang = frontend.NeurolangDL()
+    s = neurolang.load_neurosynth_term_regions(
+        'gambling', 10, 'gambling_regions'
     )
+    res = neurolang[s]
+    mock_ns_regions.assert_called()
 
-    res = neurolang.query((x, y), pred).do()
-    assert res.value == frozenset({(r1, r2)})
-
-
-def test_tuple_symbol_multiple_types_query():
-    neurolang = frontend.RegionFrontend()
-    r1 = ExplicitVBR(np.array([[0, 0, 5], [1, 1, 10]]), np.eye(4))
-    r2 = ExplicitVBR(np.array([[0, 0, -10], [1, 1, -5]]), np.eye(4))
-    neurolang.add_region(r1, name='r1')
-    neurolang.add_region(r2, name='r2')
-
-    central = ExplicitVBR(np.array([[0, 0, 1], [1, 1, 1]]), np.eye(4))
-    neurolang.add_region(central, name='reference_region')
-
-    x = neurolang.new_region_symbol(name='x')
-    z = neurolang.new_symbol(int, name='max_value')
-
-    def norm_of_width(a: int, b: Region) -> bool:
-        return bool(np.linalg.norm(b.width) < a)
-
-    neurolang.add_tuple_set(range(10), int)
-
-    neurolang.add_symbol(norm_of_width, 'norm_of_width_gt')
-
-    pred = (
-        neurolang.symbols.superior_of(x, neurolang.symbols.reference_region) &
-        neurolang.symbols.norm_of_width_gt(
-            z, neurolang.symbols.reference_region
-        )
-    )
-
-    res = neurolang.query((x, z), pred).do()
-    assert res.value != frozenset()
-
-
-def test_quantifier_expressions():
-
-    neurolang = frontend.RegionFrontend()
-
-    i1 = ExplicitVBR(np.array([[0, 0, 2]]), np.eye(4))
-    i2 = ExplicitVBR(np.array([[0, 0, 6]]), np.eye(4))
-    i3 = ExplicitVBR(np.array([[0, 0, 10]]), np.eye(4))
-    i4 = ExplicitVBR(np.array([[0, 0, 13], [0, 0, 15]]), np.eye(4))
-    regions = {i1, i2, i3, i4}
-    neurolang.add_tuple_set(regions, ExplicitVBR)
-
-    central = ExplicitVBR(np.array([[0, 0, 15], [1, 1, 20]]), np.eye(4))
-    neurolang.add_region(central, name='reference_region')
-
-    x = neurolang.new_region_symbol(name='x')
-    res = neurolang.all(
-        x,
-        ~neurolang.symbols.superior_of(x, neurolang.symbols.reference_region)
-    )
-    assert res.do().value
-
-    res = neurolang.exists(
-        x,
-        neurolang.symbols.overlapping(x, neurolang.symbols.reference_region)
-    )
-    assert res.do().value
+    assert res.type is AbstractSet[Tuple[ExplicitVBR]]
+    assert res.value == frozenset((t,) for t in mock_ns_regions.return_value)
 
 
 def test_translate_expression_to_fronted_expression():

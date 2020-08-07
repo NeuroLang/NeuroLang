@@ -461,3 +461,7 @@ def get_args(type_):
     else:
         raise ValueError(f"Not {type_} is not a generic type")
     return ret
+
+
+def get_generic_type(typ):
+    return getattr(typ, "__generic_class__", typ)
