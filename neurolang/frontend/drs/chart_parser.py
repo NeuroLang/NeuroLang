@@ -1,9 +1,14 @@
 from ...logic.unification import most_general_unifier, apply_substitution
-from ...expressions import Symbol, Constant, Expression
 from ...logic.expression_processing import extract_logic_free_variables
+from ...expressions import Symbol, Constant, Expression
 from ...expression_walker import ReplaceSymbolWalker
 from collections import namedtuple
 import re
+
+
+Quote = Symbol("Quote")
+CODE_QUOTE = '`'
+STRING_QUOTE = '"'
 
 
 class Rule(Expression):
@@ -44,12 +49,6 @@ class Grammar(Expression):
         )
 
 
-Quote = Symbol("Quote")
-
-CODE_QUOTE = "`"
-STRING_QUOTE = '"'
-
-
 class Lexicon:
     def __init__(self):
         pass
@@ -71,7 +70,26 @@ class DictLexicon(Lexicon):
         return ()
 
 
-class Chart(list):
+class ParseException(Exception):
+    pass
+
+
+class AmbiguousSentenceException(ParseException):
+    def __init__(self, sentence, interpretations):
+        self.sentence = sentence
+        self.interpretations = interpretations
+        super().__init__(
+            f"The sentence '{sentence}' has multiple interpretations"
+        )
+
+
+class CouldNotParseException(ParseException):
+    def __init__(self, sentence):
+        self.sentence = sentence
+        super().__init__(f"The sentence '{sentence}' is not valid")
+
+
+class TokenizeException(ParseException):
     pass
 
 
@@ -81,19 +99,24 @@ class Tokenizer:
         self.matches = []
         for q in quotes:
             self.matches.append(
-                (
-                    re.compile(f"^{q}.+?{q}\\s"),
-                    lambda span, q=q: Quote(
-                        Constant(q), Constant[str](span[1:-1])
-                    ),
-                )
+                (re.compile(f"^{q}.+?{q}"), self.yield_quote(q))
             )
+
         self.matches.append(
-            (re.compile("^\\w+?\\s"), lambda span: Constant[str](span),)
+            (re.compile("^[\\w\\-]+?\\b"), self.yield_word,)
         )
 
+    def yield_quote(self, q):
+        def foo(span):
+            return Quote(Constant(q), Constant[str](span[1:-1]))
+
+        return foo
+
+    def yield_word(self, span):
+        return Constant[str](span)
+
     def tokenize(self, string):
-        rem = string.strip() + " "
+        rem = string.strip()
         tokens = []
         while rem:
             t, rem = self.next_token(rem)
@@ -109,7 +132,11 @@ class Tokenizer:
                 rem = text[e:].lstrip()
                 return on_match(span), rem
 
-        raise Exception(f"Couldnt match token at: {text}")
+        raise TokenizeException(f"Couldnt match token at: {text}")
+
+
+class Chart(list):
+    pass
 
 
 class ChartParser:
@@ -123,9 +150,11 @@ class ChartParser:
         self.tokenizer = Tokenizer(grammar)
 
     def recognize(self, string):
-        tokens = self.tokenizer.tokenize(string)
-        self._fill_chart(tokens)
-        return any(e.rule.is_root for e in self.chart[0][len(tokens)])
+        try:
+            self.parse(string)
+        except ParseException:
+            return False
+        return True
 
     def parse(self, string):
         tokens = self.tokenizer.tokenize(string)
@@ -135,7 +164,13 @@ class ChartParser:
             for e in self.chart[0][len(tokens)]
             if e.rule.is_root and not e.remaining
         ]
-        return [self._build_tree(e, e.unification) for e in compl]
+        results = [self._build_tree(e, e.unification) for e in compl]
+        if len(results) == 0:
+            raise CouldNotParseException(string)
+        if len(results) > 1:
+            raise AmbiguousSentenceException(string, results)
+
+        return results
 
     def _build_tree(self, edge, unif):
         head = _lu.substitute(edge.head, unif)
@@ -154,7 +189,6 @@ class ChartParser:
         while self.agenda:
             self.agenda.sort(key=lambda e: (-e[1], -e[2]))
             edge, i, j = self.agenda.pop()
-
             self._predict(edge, i, j)
             self._complete(edge, i, j)
 
@@ -189,7 +223,9 @@ class ChartParser:
     #
     def _predict(self, edge, i, j):
         for rule in self.grammar.rules:
-            if _lu.unify(rule.constituents[0], edge.head):
+            if _lu.unify(rule.constituents[0], edge.head) and not any(
+                rule == e.rule for e in self.chart[i][i]
+            ):
                 self.chart[i][i].append(self._create_edge_for_rule(rule))
 
     def _create_edge_for_rule(self, rule):
@@ -198,7 +234,7 @@ class ChartParser:
             fv |= extract_logic_free_variables(c)
         rsw = ReplaceSymbolWalker({v: Symbol.fresh() for v in fv})
         nr = rsw.walk(rule)
-        return self.Edge(None, nr, [], nr.constituents, [], dict())
+        return self.Edge(nr.head, rule, [], nr.constituents, [], dict())
 
     # If the chart contains the edges
     #   [A → α • B β , (i, j)]
@@ -241,10 +277,7 @@ class ChartParser:
                 unif,
             )
         else:
-            new_head = edge_a.rule.constructor(*n_completed)
-            if not new_head:
-                raise Exception("No new head in rule:", edge_a.rule)
-            new_head = _lu.substitute(new_head, unif)
+            new_head = _lu.substitute(edge_a.head, unif)
             return self.Edge(
                 new_head, edge_a.rule, n_completed, [], n_used_edges, unif
             )
@@ -255,11 +288,6 @@ class ChartParser:
         if not new_edge.remaining:
             self.agenda.append((new_edge, i, k))
         self.chart[i][k].append(new_edge)
-
-    def _construct_head(self, rule, unif):
-        head = rule.head
-        new_head = _lu.substitute(head, unif)
-        return new_head
 
 
 class _lu:
