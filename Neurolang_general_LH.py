@@ -4,83 +4,31 @@
 # In[1]:
 
 
-import os
-import random
-
 import numpy as np
-from numpy import linalg
 import pandas as pd
 import nibabel as nib
-from joblib import Parallel, delayed
 
 from neurolang import frontend as fe
+from neurolang.logic.horn_clauses import Fol2DatalogMixin
 from neurolang import regions
-import neurolang.regions
+from nilearn import datasets
+from statistics import mode
 
 
 # In[2]:
 
 
-nl = fe.RegionFrontend()
+def create_frontend():
+    class Solver(Fol2DatalogMixin, fe.RegionFrontendDatalogSolver):
+        pass
+
+    return fe.NeurolangDL(Solver())
 
 
 # In[4]:
 
 
-subject_ids = [
-    "105923",
-    "111514",
-    "133019",
-    "140117",
-    "153732",
-    "154532",
-    "156334",
-    "166438",
-    "175540",
-    "177746",
-    "179245",
-    "187547",
-    "189349",
-    "191841",
-    "205119",
-    "212823",
-    "214524",
-    "221319",
-    "223929",
-    "255639",
-    "293748",
-    "352132",
-    "352738",
-    "358144",
-    "406836",
-    "433839",
-    "512835",
-    "555348",
-    "559053",
-    "568963",
-    "581450",
-    "599671",
-    "601127",
-    "660951",
-    "662551",
-    "665254",
-    "679770",
-    "680957",
-    "706040",
-    "707749",
-    "715950",
-    "735148",
-    "783462",
-    "814649",
-    "825048",
-    "872764",
-    "877168",
-    "891667",
-    "898176",
-    "912447",
-    "917255",
-    "990366",
-]
+subject_ids = ["105923", "111514"]
 
 
 # In[6]:
