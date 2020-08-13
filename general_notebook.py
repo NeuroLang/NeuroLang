@@ -85,104 +85,67 @@ def voxel_relations_using_interval_algebra(
 def making_dominant_sets_relative_to_primary(
     info_dict, primary_sulcus, s, labels, nl, axis
 ):
-    if info_dict[s]["primaries"][primary_sulcus] is not np.nan:
-        x = nl.new_region_symbol("x")
-        ps = info_dict[s]["primaries"][primary_sulcus]
 
-        __import__("pdb").set_trace()
+    ps = info_dict[s]["primaries"][primary_sulcus]
 
-        res = nl.query(
-            (x,),
-            (
-                nl.symbols.region(x)
-                & (
-                    nl.symbols.anterior_of(x, ps)
-                    | nl.symbols.posterior_of(x, ps)
-                    | nl.symbols.superior_of(x, ps)
-                    | nl.symbols.inferior_of(x, ps)
-                )
-            ),
-        )
+    if ps is np.nan:
+        # TODO: What implies that this is nan
+        raise Exception(f"{s} primaries {primary_sulcus} is np.nan")
 
-        anterior = set()
-        posterior = set()
-        during_y = set()
-        superior = set()
-        inferior = set()
-        during_z = set()
-        medial = set()
-        lateral = set()
-        during_x = set()
+    x = nl.new_region_symbol("x")
+    res = nl.query(
+        (x,),
+        (
+            nl.symbols.region(x)
+            & (
+                nl.symbols.anterior_of(x, ps)
+                | nl.symbols.posterior_of(x, ps)
+                | nl.symbols.superior_of(x, ps)
+                | nl.symbols.inferior_of(x, ps)
+            )
+        ),
+    )
 
-        for r in res:
-            if r.symbol_name.startswith("L_"):
-                if r.symbol_name in info_dict[s]["destrieux_sulci"].keys():
-                    sulcus_relativity = voxel_relations_using_interval_algebra(
-                        info_dict[s]["primaries"][primary_sulcus]
-                        .value.to_xyz()
-                        .T[axis],
-                        info_dict[s]["destrieux_sulci"][r.symbol_name].T[axis],
-                        length=0.1,
-                    )
-                    relations = []
-                    relations.append(
-                        labels[np.argmax(np.array(sulcus_relativity))]
-                    )
-                    if mode(relations) == "anterior":
-                        anterior.add(nl.symbols[r.symbol_name])
-                    elif mode(relations) == "posterior":
-                        posterior.add(nl.symbols[r.symbol_name])
-                    elif mode(relations) == "during_y":
-                        during_y.add(nl.symbols[r.symbol_name])
-                    elif mode(relations) == "superior":
-                        superior.add(nl.symbols[r.symbol_name])
-                    elif mode(relations) == "inferior":
-                        inferior.add(nl.symbols[r.symbol_name])
-                    elif mode(relations) == "during_z":
-                        during_z.add(nl.symbols[r.symbol_name])
-                    elif mode(relations) == "medial":
-                        medial.add(nl.symbols[r.symbol_name])
-                    elif mode(relations) == "lateral":
-                        lateral.add(nl.symbols[r.symbol_name])
-                    elif mode(relations) == "during_x":
-                        during_x.add(nl.symbols[r.symbol_name])
-                    else:
-                        continue
-                else:
-                    pass
+    # TODO: Maybe this name is not correct
+    relation_dicts = {
+        "anterior": set(),
+        "posterior": set(),
+        "during_y": set(),
+        "superior": set(),
+        "inferior": set(),
+        "during_z": set(),
+        "medial": set(),
+        "lateral": set(),
+        "during_x": set(),
+    }
 
-            if axis == 1:
-                anterior_dominant = nl.add_region_set(
-                    anterior, name=f"{primary_sulcus}_anterior_dominant"
-                )
-                posterior_dominant = nl.add_region_set(
-                    posterior, name=f"{primary_sulcus}_posterior_dominant"
-                )
-                during_y_dominant = nl.add_region_set(
-                    during_y, name=f"{primary_sulcus}_during_y_dominant"
-                )
-            elif axis == 2:
-                superior_dominant = nl.add_region_set(
-                    superior, name=f"{primary_sulcus}_superior_dominant"
-                )
-                inferior_dominant = nl.add_region_set(
-                    inferior, name=f"{primary_sulcus}_inferior_dominant"
-                )
-                during_z_dominant = nl.add_region_set(
-                    during_z, name=f"{primary_sulcus}_during_z_dominant"
-                )
-            elif axis == 0:
-                medial_dominant = nl.add_region_set(
-                    medial, name=f"{primary_sulcus}_medial_dominant"
-                )
-                lateral_dominant = nl.add_region_set(
-                    lateral, name=f"{primary_sulcus}_lateral_dominant"
-                )
-                during_x_dominant = nl.add_region_set(
-                    during_x, name=f"{primary_sulcus}_during_x_dominant"
-                )
-    else:
-        pass
+
+    for (r,) in res:
+        if r in info_dict[s]["destrieux_sulci"].values():
+            sulcus_relativity = voxel_relations_using_interval_algebra(
+                # TODO: Here I'm using the r itself
+                #   instead of looking for it in the
+                #   dict, also I added a `to_xyz()`
+                ps.value.to_xyz().T[axis], r.to_xyz().T[axis], length=0.1,
+            )
+            relations = []
+            relations.append(labels[np.argmax(np.array(sulcus_relativity))])
+            m = mode(relations)
+            if m in relation_dicts:
+                relation_dicts[m].add(r)
+        else:
+            # TODO: Is possible that this happens?
+            raise Exception("Region is not in the destrieux sulci dict")
+
+    if axis == 1:
+        for rel in ("anterior", "posterior", "during_y"):
+            nl.add_tuple_set(relation_dicts[rel], name=f"{primary_sulcus}_{rel}_dominant")
+    elif axis == 2:
+        for rel in ("superior", "inferior", "during_z"):
+            nl.add_tuple_set(relation_dicts[rel], name=f"{primary_sulcus}_{rel}_dominant")
+    elif axis == 0:
+        for rel in ("medial", "lateral", "during_x"):
+            nl.add_tuple_set(relation_dicts[rel], name=f"{primary_sulcus}_{rel}_dominant")
 
 
 # In[15]:
@@ -356,6 +319,9 @@ def process_NL(subject_folds, subject_info, nl):
             making_dominant_sets_relative_to_primary(
                 subject_info, sulcus, s, labels, nl, axis
             )
+
+    __import__("pdb").set_trace()
+
 
     Found_sulci = set()
     found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
