@@ -56,9 +56,6 @@ def voxel_relations_using_interval_algebra(
     before = set()
     during = set()
     after = set()
-    Anterior_of = set()
-    Posterior_of = set()
-    During = set()
     J_minus = min(ys_target_sulcus)
     J_plus = max(ys_target_sulcus) + length
 
