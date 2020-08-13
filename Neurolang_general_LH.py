@@ -235,7 +235,7 @@ def process_sulci(s, nl):
 
         destrieux_affines[name_fixed] = region
         nl.add_region(region, name=name_fixed)
-        renamed_destrieux[name_fixed] = nl.symbols[name_fixed].value()
+        renamed_destrieux[name_fixed] = nl.symbols[name_fixed].value
         spatial_images_destrieux[name_fixed] = nl.symbols[
             name_fixed
         ].value.spatial_image()
@@ -1451,7 +1451,7 @@ def Q_intralimbic(nl):
 
 
 def process_subjects(s):
-    nl = fe.RegionFrontend()
+    nl = create_frontend()
     d1, dNL = process_sulci(s, nl)
     d2 = process_NL(dNL, d1, nl)
     return d1, d2
