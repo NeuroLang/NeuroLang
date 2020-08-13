@@ -337,80 +337,47 @@ def process_NL(subject_folds, subject_info, nl):
 
     planes = make_planes_from_Callosal(subject_info, s, "Callosal_sulcus")
 
-    cs_x_relations = making_dominant_sets_relative_to_primary(
-        subject_info, "Central_sulcus", s, x_labels, nl, axis=0
-    )
-    cs_y_relations = making_dominant_sets_relative_to_primary(
-        subject_info, "Central_sulcus", s, y_labels, nl, axis=1
-    )
-    cs_z_relations = making_dominant_sets_relative_to_primary(
-        subject_info, "Central_sulcus", s, z_labels, nl, axis=2
-    )
-
-    lf_x_relations = making_dominant_sets_relative_to_primary(
-        subject_info, "Lateral_fissure", s, x_labels, nl, axis=0
-    )
-    lf_y_relations = making_dominant_sets_relative_to_primary(
-        subject_info, "Lateral_fissure", s, y_labels, nl, axis=1
-    )
-    lf_z_relations = making_dominant_sets_relative_to_primary(
-        subject_info, "Lateral_fissure", s, z_labels, nl, axis=2
-    )
-
-    pos_x_relations = making_dominant_sets_relative_to_primary(
-        subject_info, "Parieto_occipital_sulcus", s, x_labels, nl, axis=0
-    )
-    pos_y_relations = making_dominant_sets_relative_to_primary(
-        subject_info, "Parieto_occipital_sulcus", s, y_labels, nl, axis=1
-    )
-    pos_z_relations = making_dominant_sets_relative_to_primary(
-        subject_info, "Parieto_occipital_sulcus", s, z_labels, nl, axis=2
-    )
-
-    call_x_relations = making_dominant_sets_relative_to_primary(
-        subject_info, "Callosal_sulcus", s, x_labels, nl, axis=0
-    )
-    call_y_relations = making_dominant_sets_relative_to_primary(
-        subject_info, "Callosal_sulcus", s, y_labels, nl, axis=1
-    )
-    call_z_relations = making_dominant_sets_relative_to_primary(
-        subject_info, "Callosal_sulcus", s, z_labels, nl, axis=2
-    )
-
-    calc_x_relations = making_dominant_sets_relative_to_primary(
-        subject_info, "Calcarine_sulcus", s, x_labels, nl, axis=0
-    )
-    calc_y_relations = making_dominant_sets_relative_to_primary(
-        subject_info, "Calcarine_sulcus", s, y_labels, nl, axis=1
-    )
-    calc_z_relations = making_dominant_sets_relative_to_primary(
-        subject_info, "Calcarine_sulcus", s, z_labels, nl, axis=2
-    )
-
-    ahrlf_x_relations = making_dominant_sets_relative_to_primary(
-        subject_info, "Anterior_horizontal_ramus_LF", s, x_labels, nl, axis=0
-    )
-    ahrlf_y_relations = making_dominant_sets_relative_to_primary(
-        subject_info, "Anterior_horizontal_ramus_LF", s, y_labels, nl, axis=1
-    )
-    ahrlf_z_relations = making_dominant_sets_relative_to_primary(
-        subject_info, "Anterior_horizontal_ramus_LF", s, z_labels, nl, axis=2
-    )
-
-    avrlf_x_relations = making_dominant_sets_relative_to_primary(
-        subject_info, "Anterior_vertical_ramus_LF", s, x_labels, nl, axis=0
-    )
-    avrlf_y_relations = making_dominant_sets_relative_to_primary(
-        subject_info, "Anterior_vertical_ramus_LF", s, y_labels, nl, axis=1
-    )
-    avrlf_z_relations = making_dominant_sets_relative_to_primary(
-        subject_info, "Anterior_vertical_ramus_LF", s, z_labels, nl, axis=2
-    )
+    for sulcus in (
+        "Central_sulcus",
+        "Lateral_fissure",
+        "Parieto_occipital_sulcus",
+        "Callosal_sulcus",
+        "Calcarine_sulcus",
+        "Anterior_horizontal_ramus_LF",
+        "Anterior_vertical_ramus_LF",
+    ):
+        for labels, axis in ((x_labels, 0), (y_labels, 1), (z_labels, 2)):
+            making_dominant_sets_relative_to_primary(
+                subject_info, sulcus, s, labels, nl, axis
+            )
 
     Found_sulci = set()
     found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
 
-    #      'Q_inferior_temporal'
+    Queries = [
+        Q_inferior_temporal,
+    ]
+
+    for name, query in Queries:
+        res = query(nl)
+        if len(res) == 0:
+            d_queries.append(
+                {"subject": s, "query": name, "sulcus": "No sulcus found"}
+            )
+        else:
+            for r in res:
+                Found_sulci.add(r)
+                nl.add_region_set(Found_sulci, name="found_sulci")
+                d_queries.append(
+                    {"subject": s, "query": name, "sulcus": r.symbol_name}
+                )
+
+    df_d_queries_s = pd.DataFrame(d_queries)
+    df_d_queries_s.to_csv(f"NeuroLang_queries_LH")
+    return d_queries
+
+
+def Q_inferior_temporal(nl):
     x = nl.new_region_symbol("x")
     y = nl.new_region_symbol("y")
     query1 = nl.query(
@@ -432,30 +399,12 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {
-                "subject": s,
-                "query": "Q_inferior_temporal",
-                "sulcus": "No sulcus found",
-            }
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {
-                    "subject": s,
-                    "query": "Q_inferior_temporal",
-                    "sulcus": r.symbol_name,
-                }
-            )
 
-    #  'Q_precentral',
+def Q_precentral(nl):
     x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
     query1 = nl.query(
         x,
         (
@@ -488,30 +437,12 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {
-                "subject": s,
-                "query": "Q_precentral",
-                "sulcus": "No sulcus found",
-            }
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {
-                    "subject": s,
-                    "query": "Q_precentral",
-                    "sulcus": r.symbol_name,
-                }
-            )
 
-    #  'Q_superior_frontal',
+def Q_superior_frontal(nl):
     x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
     query1 = nl.query(
         x,
         (
@@ -532,30 +463,12 @@ def process_NL(subject_folds, subject_info, nl):
             y, (q1(y) & (x != y) & nl.symbols.is_more_superior_than(y, x))
         ),
     )
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {
-                "subject": s,
-                "query": "Q_superior_frontal",
-                "sulcus": "No sulcus found",
-            }
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {
-                    "subject": s,
-                    "query": "Q_superior_frontal",
-                    "sulcus": r.symbol_name,
-                }
-            )
 
-    #  'Q_occipitotemporal',
+def Q_occipitotemporal(nl):
     x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
     query1 = nl.query(
         x,
         (
@@ -581,30 +494,12 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {
-                "subject": s,
-                "query": "Q_occipitotemporal",
-                "sulcus": "No sulcus found",
-            }
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {
-                    "subject": s,
-                    "query": "Q_occipitotemporal",
-                    "sulcus": r.symbol_name,
-                }
-            )
 
-    #  'Q_superior_temporal',
+def Q_superior_temporal(nl):
     x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
     query1 = nl.query(
         x,
         (
@@ -625,30 +520,12 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {
-                "subject": s,
-                "query": "Q_superior_temporal",
-                "sulcus": "No sulcus found",
-            }
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {
-                    "subject": s,
-                    "query": "Q_superior_temporal",
-                    "sulcus": r.symbol_name,
-                }
-            )
 
-    #  'Q_subparietal',
+def Q_subparietal(nl):
     x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
     query1 = nl.query(
         x,
         (
@@ -676,30 +553,12 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {
-                "subject": s,
-                "query": "Q_subparietal",
-                "sulcus": "No sulcus found",
-            }
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {
-                    "subject": s,
-                    "query": "Q_subparietal",
-                    "sulcus": r.symbol_name,
-                }
-            )
 
-    #  'Q_jensen',
+def Q_jensen(nl):
     x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
     query1 = nl.query(
         x,
         (
@@ -723,22 +582,12 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {"subject": s, "query": "Q_jensen", "sulcus": "No sulcus found"}
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {"subject": s, "query": "Q_jensen", "sulcus": r.symbol_name}
-            )
 
-    #  'Q_olfactory',
+def Q_olfactory(nl):
     x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
     query1 = nl.query(
         x,
         (
@@ -759,30 +608,12 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {
-                "subject": s,
-                "query": "Q_superior_rostral",
-                "sulcus": "No sulcus found",
-            }
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {
-                    "subject": s,
-                    "query": "Q_superior_rostral",
-                    "sulcus": r.symbol_name,
-                }
-            )
 
-    #  'Q_intraparietal',
+def Q_intraparietal(nl):
     x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
     query1 = nl.query(
         x,
         (
@@ -808,65 +639,39 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {
-                "subject": s,
-                "query": "Q_intraparietal",
-                "sulcus": "No sulcus found",
-            }
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {
-                    "subject": s,
-                    "query": "Q_intraparietal",
-                    "sulcus": r.symbol_name,
-                }
-            )
 
-    # #  'Q_lateral_occipital',
-    #     x = nl.new_region_symbol('x')
-    #     query1 = nl.query(
-    #         x, (nl.symbols.anatomical_posterior_of(x, nl.symbols.L_Lat_Fis_post)
-    #             & nl.symbols.anatomical_inferior_of(x, nl.symbols.L_Lat_Fis_post)
-    #             & ~nl.symbols.isin(x, nl.symbols.found_sulci)
-    #             & ~nl.symbols.isin(x, nl.symbols.primary_sulci)))
-
-    #     q1 = query1.do()
-
-    #     query2 = nl.query(
-    #         x,
-    #         q1(x)
-    #         & ~nl.exists(y, (q1(y) &
-    #                          (x != y) & nl.symbols.is_more_lateral_than(y, x))))
-
-    #     q2 = query2.do()
-
-    #     if len(q2) == 0:
-    #         d_queries.append({
-    #             'subject': s,
-    #             'query': 'Q_lateral_occipital',
-    #             'sulcus': 'No sulcus found'
-    #         })
-    #     else:
-    #         for r in q2:
-    #             Found_sulci.add(r)
-    #             found_sulci = nl.add_region_set(Found_sulci,
-    #                                             name='found_sulci')
-    #             d_queries.append({
-    #                 'subject': s,
-    #                 'query': 'Q_lateral_occipital',
-    #                 'sulcus': r.symbol_name
-    #             })
-
-    #  'Q_inferior_frontal',
+#  'Commented',
+def Q_lateral_occipital(nl):
     x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
+    query1 = nl.query(
+        x,
+        (
+            nl.symbols.anatomical_posterior_of(x, nl.symbols.L_Lat_Fis_post)
+            & nl.symbols.anatomical_inferior_of(x, nl.symbols.L_Lat_Fis_post)
+            & ~nl.symbols.isin(x, nl.symbols.found_sulci)
+            & ~nl.symbols.isin(x, nl.symbols.primary_sulci)
+        ),
+    )
+
+    q1 = query1.do()
+
+    query2 = nl.query(
+        x,
+        q1(x)
+        & ~nl.exists(
+            y, (q1(y) & (x != y) & nl.symbols.is_more_lateral_than(y, x))
+        ),
+    )
+
+    return query2.do()
+
+
+def Q_inferior_frontal(nl):
+    x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
     query1 = nl.query(
         x,
         (
@@ -899,30 +704,12 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {
-                "subject": s,
-                "query": "Q_middle_frontal",
-                "sulcus": "No sulcus found",
-            }
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {
-                    "subject": s,
-                    "query": "Q_middle_frontal",
-                    "sulcus": r.symbol_name,
-                }
-            )
 
-    #  'Q_collateral',
+def Q_collateral(nl):
     x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
     query1 = nl.query(
         x,
         (
@@ -941,30 +728,12 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {
-                "subject": s,
-                "query": "Q_collateral",
-                "sulcus": "No sulcus found",
-            }
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {
-                    "subject": s,
-                    "query": "Q_collateral",
-                    "sulcus": r.symbol_name,
-                }
-            )
 
-    #  'Q_postcentral',
+def Q_postcentral(nl):
     x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
     query1 = nl.query(
         x,
         (
@@ -987,30 +756,12 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {
-                "subject": s,
-                "query": "Q_postcentral",
-                "sulcus": "No sulcus found",
-            }
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {
-                    "subject": s,
-                    "query": "Q_postcentral",
-                    "sulcus": r.symbol_name,
-                }
-            )
 
-    #  'Q_anterior_occipital'
+def Q_anterior_occipital(nl):
     x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
     query1 = nl.query(
         x,
         (
@@ -1032,30 +783,12 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {
-                "subject": s,
-                "query": "Q_anterior_occipital",
-                "sulcus": "No sulcus found",
-            }
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {
-                    "subject": s,
-                    "query": "Q_anterior_occipital",
-                    "sulcus": r.symbol_name,
-                }
-            )
 
-    #  'Q_callosomarginal',
+def Q_callosomarginal(nl):
     x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
     query1 = nl.query(
         x,
         (
@@ -1076,30 +809,12 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {
-                "subject": s,
-                "query": "Q_callosomarginal",
-                "sulcus": "No sulcus found",
-            }
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {
-                    "subject": s,
-                    "query": "Q_callosomarginal",
-                    "sulcus": r.symbol_name,
-                }
-            )
 
-    #  'Q_middle_frontal',
+def Q_middle_frontal(nl):
     x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
     query1 = nl.query(
         x,
         (
@@ -1124,29 +839,12 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
-    if len(q2) == 0:
-        d_queries.append(
-            {
-                "subject": s,
-                "query": "Q_inferior_frontal",
-                "sulcus": "No sulcus found",
-            }
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {
-                    "subject": s,
-                    "query": "Q_inferior_frontal",
-                    "sulcus": r.symbol_name,
-                }
-            )
+    return query2.do()
 
-    #  'Q_olfactory',
+
+def Q_olfactory(nl):
     x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
     query1 = nl.query(
         x,
         (
@@ -1169,22 +867,12 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {"subject": s, "query": "Q_olfactory", "sulcus": "No sulcus found"}
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {"subject": s, "query": "Q_olfactory", "sulcus": r.symbol_name}
-            )
 
-    #  'Q_orbital_H_shaped',
+def Q_orbital_H_shaped(nl):
     x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
     query1 = nl.query(
         x,
         (
@@ -1208,64 +896,39 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {
-                "subject": s,
-                "query": "Q_orbital_H_shaped",
-                "sulcus": "No sulcus found",
-            }
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {
-                    "subject": s,
-                    "query": "Q_orbital_H_shaped",
-                    "sulcus": r.symbol_name,
-                }
-            )
 
-    # #  'Q_superior_occipital',
-    #     query1 = nl.query(
-    #         x, (nl.symbols.anatomical_posterior_of(x, nl.symbols.L_Lat_Fis_post)
-    #             & nl.symbols.anatomical_superior_of(x, nl.symbols.L_S_calcarine)
-    #             & ~nl.symbols.isin(x, nl.symbols.found_sulci)
-    #             & ~nl.symbols.isin(x, nl.symbols.primary_sulci)))
-
-    #     q1 = query1.do()
-
-    #     query2 = nl.query(
-    #         x,
-    #         q1(x)
-    #         & ~nl.exists(y, (q1(y) &
-    #                          (x != y) & nl.symbols.is_more_posterior_than(y, x))))
-
-    #     q2 = query2.do()
-
-    #     if len(q2) == 0:
-    #         d_queries.append({
-    #             'subject': s,
-    #             'query': 'Q_superior_occipital',
-    #             'sulcus': 'No sulcus found'
-    #         })
-    #     else:
-    #         for r in q2:
-    #             Found_sulci.add(r)
-    #             found_sulci = nl.add_region_set(Found_sulci,
-    #                                             name='found_sulci')
-    #             d_queries.append({
-    #                 'subject': s,
-    #                 'query': 'Q_superior_occipital',
-    #                 'sulcus': r.symbol_name
-    #             })
-
-    #  'Q_intralingual',
+# Commented
+def Q_superior_occipital(nl):
     x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
+    query1 = nl.query(
+        x,
+        (
+            nl.symbols.anatomical_posterior_of(x, nl.symbols.L_Lat_Fis_post)
+            & nl.symbols.anatomical_superior_of(x, nl.symbols.L_S_calcarine)
+            & ~nl.symbols.isin(x, nl.symbols.found_sulci)
+            & ~nl.symbols.isin(x, nl.symbols.primary_sulci)
+        ),
+    )
+
+    q1 = query1.do()
+
+    query2 = nl.query(
+        x,
+        q1(x)
+        & ~nl.exists(
+            y, (q1(y) & (x != y) & nl.symbols.is_more_posterior_than(y, x))
+        ),
+    )
+
+    return query2.do()
+
+
+def Q_intralingual(nl):
+    x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
     query1 = nl.query(
         x,
         (
@@ -1288,32 +951,15 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {
-                "subject": s,
-                "query": "Q_intralingual",
-                "sulcus": "No sulcus found",
-            }
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {
-                    "subject": s,
-                    "query": "Q_intralingual",
-                    "sulcus": r.symbol_name,
-                }
-            )
 
-    #   Non-Destrieux corresponding sulci
+#   Non-Destrieux corresponding sulci
 
-    #  'Q_cingulate',
+
+def Q_cingulate(nl):
     x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
     query1 = nl.query(
         x,
         (
@@ -1345,22 +991,12 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {"subject": s, "query": "Q_cingulate", "sulcus": "No sulcus found"}
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {"subject": s, "query": "Q_cingulate", "sulcus": r.symbol_name}
-            )
 
-    #  'Q_paracingulate',
+def Q_paracingulate(nl):
     x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
     query1 = nl.query(
         x,
         (
@@ -1381,29 +1017,10 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {
-                "subject": s,
-                "query": "Q_paracingulate",
-                "sulcus": "No sulcus found",
-            }
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {
-                    "subject": s,
-                    "query": "Q_paracingulate",
-                    "sulcus": r.symbol_name,
-                }
-            )
 
-    #  'Q_inferior_occipital',
+def Q_inferior_occipital(nl):
     x = nl.new_region_symbol("x")
     query1 = nl.query(
         x,
@@ -1428,30 +1045,12 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {
-                "subject": s,
-                "query": "Q_inferior_occipital",
-                "sulcus": "No sulcus found",
-            }
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {
-                    "subject": s,
-                    "query": "Q_inferior_occipital",
-                    "sulcus": r.symbol_name,
-                }
-            )
 
-    #  'Q_anterior_parolfactory',
+def Q_anterior_parolfactory(nl):
     x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
     query1 = nl.query(
         x,
         (
@@ -1472,30 +1071,12 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {
-                "subject": s,
-                "query": "Q_anterior_parolfactory",
-                "sulcus": "No sulcus found",
-            }
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {
-                    "subject": s,
-                    "query": "Q_anterior_parolfactory",
-                    "sulcus": r.symbol_name,
-                }
-            )
 
-    #  'Q_lunate',
+def Q_lunate(nl):
     x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
     query1 = nl.query(
         x,
         (
@@ -1517,22 +1098,12 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {"subject": s, "query": "Q_lunate", "sulcus": "No sulcus found"}
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {"subject": s, "query": "Q_lunate", "sulcus": r.symbol_name}
-            )
 
-    #  'Q_cuneal',
+def Q_cuneal(nl):
     x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
     query1 = nl.query(
         x,
         (
@@ -1553,22 +1124,12 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {"subject": s, "query": "Q_cuneal", "sulcus": "No sulcus found"}
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {"subject": s, "query": "Q_cuneal", "sulcus": r.symbol_name}
-            )
 
-    #  'Q_frontomarginal',
+def Q_frontomarginal(nl):
     x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
     query1 = nl.query(
         x,
         (
@@ -1597,30 +1158,12 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {
-                "subject": s,
-                "query": "Q_frontomarginal",
-                "sulcus": "No sulcus found",
-            }
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {
-                    "subject": s,
-                    "query": "Q_frontomarginal",
-                    "sulcus": r.symbol_name,
-                }
-            )
 
-    #  'Q_hippocampal',
+def Q_hippocampal(nl):
     x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
     query1 = nl.query(
         x,
         (
@@ -1644,30 +1187,12 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {
-                "subject": s,
-                "query": "Q_hippocampal",
-                "sulcus": "No sulcus found",
-            }
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {
-                    "subject": s,
-                    "query": "Q_hippocampal",
-                    "sulcus": r.symbol_name,
-                }
-            )
 
-    #  'Q_superior_parietal',
+def Q_superior_parietal(nl):
     x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
     query1 = nl.query(
         x,
         (
@@ -1688,30 +1213,12 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {
-                "subject": s,
-                "query": "Q_superior_parietal",
-                "sulcus": "No sulcus found",
-            }
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {
-                    "subject": s,
-                    "query": "Q_superior_parietal",
-                    "sulcus": r.symbol_name,
-                }
-            )
 
-    #  'Q_rhinal'
+def Q_rhinal(nl):
     x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
     query1 = nl.query(
         x,
         (
@@ -1733,22 +1240,12 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {"subject": s, "query": "Q_rhinal", "sulcus": "No sulcus found"}
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {"subject": s, "query": "Q_rhinal", "sulcus": r.symbol_name}
-            )
 
-    #  'Q_temporopolar',
+def Q_temporopolar(nl):
     x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
     query1 = nl.query(
         x,
         (
@@ -1770,30 +1267,12 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {
-                "subject": s,
-                "query": "Q_temporopolar",
-                "sulcus": "No sulcus found",
-            }
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {
-                    "subject": s,
-                    "query": "Q_temporopolar",
-                    "sulcus": r.symbol_name,
-                }
-            )
 
-    #  'Q_retrocalcarine',
+def Q_retrocalcarine(nl):
     x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
     query1 = nl.query(
         x,
         (
@@ -1816,30 +1295,12 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {
-                "subject": s,
-                "query": "Q_retrocalcarine",
-                "sulcus": "No sulcus found",
-            }
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {
-                    "subject": s,
-                    "query": "Q_retrocalcarine",
-                    "sulcus": r.symbol_name,
-                }
-            )
 
-    #  'Q_paracentral',
+def Q_paracentral(nl):
     x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
     query1 = nl.query(
         x,
         (
@@ -1859,30 +1320,12 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {
-                "subject": s,
-                "query": "Q_paracentral",
-                "sulcus": "No sulcus found",
-            }
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {
-                    "subject": s,
-                    "query": "Q_paracentral",
-                    "sulcus": r.symbol_name,
-                }
-            )
 
-    #  'Q_angular',
+def Q_angular(nl):
     x = nl.new_region_symbol("x")
+    y = nl.new_region_symbol("y")
     query1 = nl.query(
         x,
         (
@@ -1909,21 +1352,10 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {"subject": s, "query": "Q_angular", "sulcus": "No sulcus found"}
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {"subject": s, "query": "Q_angular", "sulcus": r.symbol_name}
-            )
 
-    #  'Q_inferior_rostral',
+def Q_inferior_rostral(nl):
     x = nl.new_region_symbol("x")
     query1 = nl.query(
         x,
@@ -1948,29 +1380,10 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
+    return query2.do()
 
-    if len(q2) == 0:
-        d_queries.append(
-            {
-                "subject": s,
-                "query": "Q_inferior_rostral",
-                "sulcus": "No sulcus found",
-            }
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {
-                    "subject": s,
-                    "query": "Q_inferior_rostral",
-                    "sulcus": r.symbol_name,
-                }
-            )
 
-    #  'Q_intralimbic'
+def Q_intralimbic(nl):
     x = nl.new_region_symbol("x")
     query1 = nl.query(
         x,
@@ -1995,31 +1408,7 @@ def process_NL(subject_folds, subject_info, nl):
         ),
     )
 
-    q2 = query2.do()
-
-    if len(q2) == 0:
-        d_queries.append(
-            {
-                "subject": s,
-                "query": "Q_intralimbic",
-                "sulcus": "No sulcus found",
-            }
-        )
-    else:
-        for r in q2:
-            Found_sulci.add(r)
-            found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
-            d_queries.append(
-                {
-                    "subject": s,
-                    "query": "Q_intralimbic",
-                    "sulcus": r.symbol_name,
-                }
-            )
-
-    df_d_queries_s = pd.DataFrame(d_queries)
-    df_d_queries_s.to_csv(f"NeuroLang_queries_LH")
-    return d_queries
+    return query2.do()
 
 
 # In[17]:
@@ -2042,9 +1431,9 @@ results = [process_subjects(i) for i in subject_ids]
 
 
 infos = []
-for y in subject_ids:
-    i = subject_ids.index(y)
-    infos.append(results[i][0][y])
+for sid in subject_ids:
+    i = subject_ids.index(sid)
+    infos.append(results[i][0][sid])
 df_infos = pd.DataFrame(data=infos, index=subject_ids)
 df_infos.to_pickle("NeuroLang_queries_info_LH")
 
