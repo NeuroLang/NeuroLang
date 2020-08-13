@@ -34,7 +34,7 @@ subject_ids = ["105923", "111514"]
 # In[6]:
 
 
-subj_files_path = "/home/amachlou/git/neurolang/examples/running_on_100/"
+subj_files_path = "./"
 
 
 # In[8]:
@@ -88,25 +88,22 @@ def making_dominant_sets_relative_to_primary(
 ):
     if info_dict[s]["primaries"][primary_sulcus] is not np.nan:
         x = nl.new_region_symbol("x")
-        q = nl.query(
-            x,
+        ps = info_dict[s]["primaries"][primary_sulcus]
+
+        __import__("pdb").set_trace()
+
+        res = nl.query(
+            (x,),
             (
-                nl.symbols.anterior_of(
-                    x, info_dict[s]["primaries"][primary_sulcus]
-                )
-                | nl.symbols.posterior_of(
-                    x, info_dict[s]["primaries"][primary_sulcus]
-                )
-                | nl.symbols.superior_of(
-                    x, info_dict[s]["primaries"][primary_sulcus]
-                )
-                | nl.symbols.inferior_of(
-                    x, info_dict[s]["primaries"][primary_sulcus]
+                nl.symbols.region(x)
+                & (
+                    nl.symbols.anterior_of(x, ps)
+                    | nl.symbols.posterior_of(x, ps)
+                    | nl.symbols.superior_of(x, ps)
+                    | nl.symbols.inferior_of(x, ps)
                 )
             ),
         )
-
-        res = q.do()
 
         anterior = set()
         posterior = set()
@@ -243,6 +240,14 @@ def process_sulci(s, nl):
             name_fixed
         ].value.spatial_image()
 
+    nl.add_tuple_set(
+        [
+            (v.value,)
+            for k, v in nl.symbol_table.symbols_by_type(regions.Region).items()
+        ],
+        name="region",
+    )
+
     d1[s]["destrieux_sulci"] = renamed_destrieux
     d1[s]["destrieux_affines"] = destrieux_affines
     d1[s]["destrieux_spatial_images"] = spatial_images_destrieux
@@ -320,7 +325,9 @@ def process_sulci(s, nl):
         is_more_superior_than_, name="is_more_superior_than"
     )
 
-    return d1, (renamed_destrieux, s)
+    subject_info = d1
+    subject_folds = (renamed_destrieux, s)
+    return subject_info, subject_folds
 
 
 # In[16]:
@@ -333,9 +340,9 @@ def process_NL(subject_folds, subject_info, nl):
     names_of_primary_sulci = list(subject_info[s]["primaries"].keys())
     for prim in names_of_primary_sulci:
         Primary_Sulci.add(subject_info[s]["primaries"][prim])
-    primary_sulci = nl.add_region_set(Primary_Sulci, name="primary_sulci")
-
-    planes = make_planes_from_Callosal(subject_info, s, "Callosal_sulcus")
+    primary_sulci = nl.add_tuple_set(
+        [(v.value,) for v in Primary_Sulci], name="primary_sulci"
+    )
 
     for sulcus in (
         "Central_sulcus",
@@ -981,6 +988,35 @@ def Q_cingulate(nl):
         ),
     )
 
+    cnlqA = """
+        X where
+        X is_anterior_of L_S_pericallosal, 
+        X is_superior_of L_S_pericallosal, 
+        X is_in Callosal_sulcus_during_x_dominant,
+        is not the case that X is_in Callosal_sulcus_posterior_dominant,
+        is not the case that X is_in found_sulci, and
+        is not the case that X is_in primary_sulci.
+        """
+
+    cnlqB = """
+        X where
+        X is_anterior_of L_S_pericallosal, 
+        X is_superior_of L_S_pericallosal, 
+        X is_in Callosal_sulcus_medial_dominant,
+        is not the case that X is_in Callosal_sulcus_posterior_dominant,
+        is not the case that X is_in found_sulci, and
+        is not the case that X is_in primary_sulci.
+        """
+
+    cnlq = cnlqA or cnlqB
+
+    cnlq2 = """
+        X where
+        X is_anterior_of L_S_pericallosal, 
+        X is_superior_of L_S_pericallosal, 
+        X is_in Callosal_sulcus_during_x_dominant or Callosal_sulcus_medial_dominant, and
+        is not the case that X is_in Callosal_sulcus_posterior_dominant, found_sulci, or primary_sulci.
+        """
     q1 = query1.do()
 
     query2 = nl.query(
