@@ -48,27 +48,6 @@ z_labels = ["superior", "during_z", "inferior"]
 # In[10]:
 
 
-# This function is not used in this notebook
-
-# def make_planes_from_Callosal(primaries_dict, subject, limiting_sulcus):
-#     limiter = primaries_dict[subject]['primaries'][limiting_sulcus]
-#     if limiter is not np.nan:
-#         x = max((limiter.value.to_xyz().T[0]), key=abs)
-#         oxplane = regions.PlanarVolume((x, 0, 0), (1, 0, 0), limit=100)
-#         ox_plane_vbr = oxplane.to_explicit_vbr(destrieux_map.affine, destrieux_map.shape)
-#         nl.add_region(ox_plane_vbr, name='medial_from_call')
-
-#         z = np.min((limiter.value.to_xyz().T[2]))
-#         oxplane = regions.PlanarVolume((0, 0, z), (0, 0, 1), limit=100)
-#         ox_plane_vbr = oxplane.to_explicit_vbr(destrieux_map.affine, destrieux_map.shape)
-#         nl.add_region(ox_plane_vbr, name='ventral_from_call')
-#     else:
-#         pass
-
-
-# In[11]:
-
-
 def voxel_relations_using_interval_algebra(
     ys_origin_sulcus, ys_target_sulcus, length
 ):
@@ -208,75 +187,6 @@ def making_dominant_sets_relative_to_primary(
                 )
     else:
         pass
-
-
-# In[13]:
-
-
-# This function is not used in this notebook
-
-# def making_dominant_set_for_planes(plane, labels, s, subject_manual_sulci, axis):
-
-#     x = nl.new_region_symbol('x')
-#     q = nl.query(
-#     x,
-#         (
-#         nl.symbols.right_of(x, nl.symbols[plane]) |
-#         nl.symbols.left_of(x, nl.symbols[plane]) |
-#         nl.symbols.superior_of(x, nl.symbols[plane]) |
-#         nl.symbols.inferior_of(x, nl.symbols[plane])
-#         )
-#     )
-
-#     res = q.do()
-
-#     superior=set()
-#     inferior=set()
-#     during_z=set()
-#     medial=set()
-#     lateral=set()
-#     during_x=set()
-
-#     for r in res:
-#         if r.symbol_name.startswith('L_'):
-#              if r.symbol_name in subject_manual_sulci[s]['destrieux_sulci'].keys():
-#                 sulcus_relativity = voxel_relations_using_interval_algebra(nl.symbols[plane].value.to_xyz().T[axis],
-#                                                   subject_manual_sulci[s]['destrieux_sulci'][r.symbol_name].T[axis],
-#                                                   length=.1)
-#                 relations = []
-#                 relations_second_largest = []
-#                 R = np.argsort(-np.array(sulcus_relativity))
-#                 relations_second_largest.append(labels[R[1]])
-#                 relations.append(labels[np.argmax(np.array(sulcus_relativity))])
-#                 if mode(relations)=='superior':
-#                     superior.add(nl.symbols[r.symbol_name])
-#                 elif mode(relations)=='inferior':
-#                     inferior.add(nl.symbols[r.symbol_name])
-#                 elif mode(relations)=='during_z':
-#                     if mode(relations_second_largest)=='superior':
-#                         superior.add(nl.symbols[r.symbol_name])
-#                     elif mode(relations_second_largest)=='inferior':
-#                         inferior.add(nl.symbols[r.symbol_name])
-#                 elif mode(relations)=='medial':
-#                     medial.add(nl.symbols[r.symbol_name])
-#                 elif mode(relations)=='lateral':
-#                     lateral.add(nl.symbols[r.symbol_name])
-#                 elif mode(relations)=='during_x':
-#                     if mode(relations_second_largest)=='medial':
-#                         medial.add(nl.symbols[r.symbol_name])
-#                     elif mode(relations_second_largest)=='lateral':
-#                         lateral.add(nl.symbols[r.symbol_name])
-#                 else:
-#                     continue
-#         else:
-#             pass
-
-#         if axis==2:
-#             superior_dominant = nl.add_region_set(superior, name='superior_sulci')
-#             inferior_dominant = nl.add_region_set(inferior, name='ventral_sulci')
-#         elif axis==0:
-#             medial_dominant = nl.add_region_set(medial, name='medial_sulci')
-#             lateral_dominant = nl.add_region_set(lateral, name='lateral_sulci')
 
 
 # In[15]:
