@@ -582,24 +582,19 @@ def Q_intralingual(nl):
 def Q_cingulate(nl):
     x = nl.new_region_symbol("x")
     y = nl.new_region_symbol("y")
-    query1 = nl.query(
-        x,
+    ans = nl.new_symbol()
+    nl.query(
+        ans(x),
         (
             nl.symbols.anterior_of(x, nl.symbols.L_S_pericallosal)
             & nl.symbols.superior_of(x, nl.symbols.L_S_pericallosal)
             & (
-                nl.symbols.isin(
-                    x, nl.symbols.Callosal_sulcus_during_x_dominant
-                )
-                | nl.symbols.isin(
-                    x, nl.symbols.Callosal_sulcus_medial_dominant
-                )
+                    nl.symbols.Callosal_sulcus_during_x_dominant_contains(x) |
+                    nl.symbols.Callosal_sulcus_medial_dominant_contains(x)
             )
-            & ~nl.symbols.isin(
-                x, nl.symbols.Callosal_sulcus_posterior_dominant
-            )
-            & ~nl.symbols.isin(x, nl.symbols.found_sulci)
-            & ~nl.symbols.isin(x, nl.symbols.primary_sulci)
+            & ~nl.symbols.Callosal_sulcus_posterior_dominant_contains(x)
+            & ~nl.symbols.found_sulci(x)
+            & ~nl.symbols.primary_sulci(x)
         ),
     )
 
@@ -632,17 +627,14 @@ def Q_cingulate(nl):
         X is_in Callosal_sulcus_during_x_dominant or Callosal_sulcus_medial_dominant, and
         is not the case that X is_in Callosal_sulcus_posterior_dominant, found_sulci, or primary_sulci.
         """
-    q1 = query1.do()
 
-    query2 = nl.query(
-        x,
-        q1(x)
+    return nl.query(
+        (x,),
+        ans(x)
         & ~nl.exists(
-            y, (q1(y) & (x != y) & nl.symbols.is_more_anterior_than(y, x))
+            y, (ans(y) & (x != y) & nl.symbols.is_more_anterior_than(y, x))
         ),
     )
-
-    return query2.do()
 
 
 def Q_paracingulate(nl):

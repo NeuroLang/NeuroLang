@@ -30,21 +30,21 @@ def create_frontend():
 # In[4]:
 
 
-subject_ids = ["105923", "111514"]
+SUBJECT_IDS = ["105923", "111514"]
 
 
 # In[6]:
 
 
-subj_files_path = "./"
+SUBJ_FILES_PATH = "./"
 
 
 # In[8]:
 
 
-x_labels = ["medial", "during_x", "lateral"]
-y_labels = ["anterior", "during_y", "posterior"]
-z_labels = ["superior", "during_z", "inferior"]
+X_LABELS = ["medial", "during_x", "lateral"]
+Y_LABELS = ["anterior", "during_y", "posterior"]
+Z_LABELS = ["superior", "during_z", "inferior"]
 
 
 # In[10]:
@@ -89,7 +89,7 @@ def making_dominant_sets_relative_to_primary(
     ps = info_dict[s]["primaries"][primary_sulcus]
 
     if ps is np.nan:
-        # TODO: What implies that this is nan
+        # TODO: What implies that this is nan?
         raise Exception(f"{s} primaries {primary_sulcus} is np.nan")
 
     x = nl.new_region_symbol("x")
@@ -107,18 +107,7 @@ def making_dominant_sets_relative_to_primary(
     )
 
     # TODO: Maybe this name is not correct
-    relation_dicts = {
-        "anterior": set(),
-        "posterior": set(),
-        "during_y": set(),
-        "superior": set(),
-        "inferior": set(),
-        "during_z": set(),
-        "medial": set(),
-        "lateral": set(),
-        "during_x": set(),
-    }
-
+    relation_dicts = {k: set() for k in (X_LABELS + Y_LABELS + Z_LABELS)}
 
     for (r,) in res:
         if r in info_dict[s]["destrieux_sulci"].values():
@@ -126,26 +115,41 @@ def making_dominant_sets_relative_to_primary(
                 # TODO: Here I'm using the r itself
                 #   instead of looking for it in the
                 #   dict, also I added a `to_xyz()`
-                ps.value.to_xyz().T[axis], r.to_xyz().T[axis], length=0.1,
+                ps.value.to_xyz().T[axis],
+                r.to_xyz().T[axis],
+                length=0.1,
             )
             relations = []
             relations.append(labels[np.argmax(np.array(sulcus_relativity))])
             m = mode(relations)
             if m in relation_dicts:
                 relation_dicts[m].add(r)
+            else:
+                # TODO: Is possible that this happens?
+                raise Exception("mode(relations) is not in the relation_dicts")
         else:
             # TODO: Is possible that this happens?
             raise Exception("Region is not in the destrieux sulci dict")
 
     if axis == 1:
-        for rel in ("anterior", "posterior", "during_y"):
-            nl.add_tuple_set(relation_dicts[rel], name=f"{primary_sulcus}_{rel}_dominant")
+        # TODO: `rel` does not sounds like a good name too.
+        for rel in Y_LABELS:
+            nl.add_tuple_set(
+                relation_dicts[rel],
+                name=f"{primary_sulcus}_{rel}_dominant_contains",
+            )
     elif axis == 2:
-        for rel in ("superior", "inferior", "during_z"):
-            nl.add_tuple_set(relation_dicts[rel], name=f"{primary_sulcus}_{rel}_dominant")
+        for rel in Z_LABELS:
+            nl.add_tuple_set(
+                relation_dicts[rel],
+                name=f"{primary_sulcus}_{rel}_dominant_contains",
+            )
     elif axis == 0:
-        for rel in ("medial", "lateral", "during_x"):
-            nl.add_tuple_set(relation_dicts[rel], name=f"{primary_sulcus}_{rel}_dominant")
+        for rel in X_LABELS:
+            nl.add_tuple_set(
+                relation_dicts[rel],
+                name=f"{primary_sulcus}_{rel}_dominant_contains",
+            )
 
 
 # In[15]:
@@ -164,11 +168,11 @@ def process_sulci(s, nl):
     destrieux_dataset = datasets.fetch_atlas_destrieux_2009()
     destrieux_map = nib.load(destrieux_dataset["maps"])
 
-    surface = nib.load(subj_files_path + f"{s}.L.pial.32k_fs_LR.surf.gii")
+    surface = nib.load(SUBJ_FILES_PATH + f"{s}.L.pial.32k_fs_LR.surf.gii")
     destrieux_dataset = datasets.fetch_atlas_destrieux_2009(surface)
     destrieux_map = nib.load(destrieux_dataset["maps"])
     subject_destrieux_overlay = nib.load(
-        subj_files_path + f"{s}.L.aparc.a2009s.32k_fs_LR.label.gii"
+        SUBJ_FILES_PATH + f"{s}.L.aparc.a2009s.32k_fs_LR.label.gii"
     )
 
     renamed_destrieux = {}
@@ -315,19 +319,18 @@ def process_NL(subject_folds, subject_info, nl):
         "Anterior_horizontal_ramus_LF",
         "Anterior_vertical_ramus_LF",
     ):
-        for labels, axis in ((x_labels, 0), (y_labels, 1), (z_labels, 2)):
+        for labels, axis in ((X_LABELS, 0), (Y_LABELS, 1), (Z_LABELS, 2)):
             making_dominant_sets_relative_to_primary(
                 subject_info, sulcus, s, labels, nl, axis
             )
 
     __import__("pdb").set_trace()
 
-
     Found_sulci = set()
     found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
 
     Queries = [
-        queries.Q_inferior_temporal,
+        queries.Q_cingulate,
     ]
 
     for q in Queries:
@@ -370,17 +373,17 @@ def process_subjects(s):
 # In[18]:
 
 
-results = [process_subjects(i) for i in subject_ids]
+results = [process_subjects(i) for i in SUBJECT_IDS]
 
 
 # In[21]:
 
 
 infos = []
-for sid in subject_ids:
-    i = subject_ids.index(sid)
+for sid in SUBJECT_IDS:
+    i = SUBJECT_IDS.index(sid)
     infos.append(results[i][0][sid])
-df_infos = pd.DataFrame(data=infos, index=subject_ids)
+df_infos = pd.DataFrame(data=infos, index=SUBJECT_IDS)
 df_infos.to_pickle("NeuroLang_queries_info_LH")
 
 
