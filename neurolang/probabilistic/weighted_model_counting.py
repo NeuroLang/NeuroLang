@@ -221,9 +221,9 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
         return prov_set
 
     @add_match(ProbabilisticChoiceSet(Symbol, Constant))
-    def probabilistic_choice_set(self, prob_fact_set):
-        relation_symbol = prob_fact_set.relation
-        prob_column = prob_fact_set.probability_column.value
+    def probabilistic_choice_set(self, prob_choice_set):
+        relation_symbol = prob_choice_set.relation
+        prob_column = prob_choice_set.probability_column.value
         if relation_symbol in self.translated_probfact_sets:
             return self.translated_probfact_sets[relation_symbol]
 
