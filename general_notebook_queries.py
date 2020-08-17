@@ -1,4 +1,3 @@
-
 def Q_inferior_temporal(nl):
     x = nl.new_region_symbol("x")
     y = nl.new_region_symbol("y")
@@ -589,8 +588,8 @@ def Q_cingulate(nl):
             nl.symbols.anterior_of(x, nl.symbols.L_S_pericallosal)
             & nl.symbols.superior_of(x, nl.symbols.L_S_pericallosal)
             & (
-                    nl.symbols.Callosal_sulcus_during_x_dominant_contains(x) |
-                    nl.symbols.Callosal_sulcus_medial_dominant_contains(x)
+                nl.symbols.Callosal_sulcus_during_x_dominant_contains(x)
+                | nl.symbols.Callosal_sulcus_medial_dominant_contains(x)
             )
             & ~nl.symbols.Callosal_sulcus_posterior_dominant_contains(x)
             & ~nl.symbols.found_sulci(x)
@@ -628,13 +627,13 @@ def Q_cingulate(nl):
         is not the case that X is_in Callosal_sulcus_posterior_dominant, found_sulci, or primary_sulci.
         """
 
-    return nl.query(
-        (x,),
-        ans(x)
-        & ~nl.exists(
-            y, (ans(y) & (x != y) & nl.symbols.is_more_anterior_than(y, x))
-        ),
+    another_one_more_anterior = nl.new_symbol()
+    nl.query(
+        another_one_more_anterior(x, y),
+        ans(x) & ans(y) & (x != y) & nl.symbols.is_more_anterior_than(y, x),
     )
+
+    return nl.query((x,), ans(x) & ~another_one_more_anterior(x, y),)
 
 
 def Q_paracingulate(nl):
@@ -1055,4 +1054,3 @@ def Q_intralimbic(nl):
     )
 
     return query2.do()
-

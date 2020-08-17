@@ -12,19 +12,61 @@ from neurolang import frontend as fe
 from neurolang.logic.horn_clauses import Fol2DatalogMixin
 from neurolang import regions
 from nilearn import datasets
-from statistics import mode
+
+# TODO: Fix this in a way that it works well in both 3.7 and 3.8
+try:
+    from statistics import multimode
+except ImportError:
+    from statistics import mode
+
+    def multimode(data):
+        return [mode(data)]
+
+
+from neurolang.datalog.chase.negation import DatalogChaseNegation
+from neurolang.datalog.negation import DatalogProgramNegationMixin
+from neurolang.expression_walker import (
+    ExpressionWalker,
+    PatternWalker,
+    IdentityWalker,
+)
+from neurolang.datalog.expression_processing import TranslateToLogic
+from neurolang.region_solver import RegionSolver
+
 
 import general_notebook_queries as queries
+
+from neurolang.utils.printing import pprint, prepr
+
+
+def pfwrite(x, file_name="pfwrite.txt"):
+    pprint(x)
+    with open(file_name, "w") as f:
+        f.write(prepr(x))
+        print("written to", file_name)
 
 
 # In[2]:
 
 
 def create_frontend():
-    class Solver(Fol2DatalogMixin, fe.RegionFrontendDatalogSolver):
+    class Program(
+        Fol2DatalogMixin,
+        DatalogProgramNegationMixin,
+        fe.RegionFrontendDatalogSolver,
+    ):
         pass
 
-    return fe.NeurolangDL(Solver())
+    class Chase(DatalogChaseNegation):
+        pass
+
+    class NeurolangFrontend(fe.QueryBuilderDatalog):
+        def __init__(self):
+            super().__init__(
+                Program(), chase_class=Chase,
+            )
+
+    return NeurolangFrontend()
 
 
 # In[4]:
@@ -106,33 +148,19 @@ def making_dominant_sets_relative_to_primary(
         ),
     )
 
-    # TODO: Maybe this name is not correct
     relation_dicts = {k: set() for k in (X_LABELS + Y_LABELS + Z_LABELS)}
 
     for (r,) in res:
-        if r in info_dict[s]["destrieux_sulci"].values():
-            sulcus_relativity = voxel_relations_using_interval_algebra(
-                # TODO: Here I'm using the r itself
-                #   instead of looking for it in the
-                #   dict, also I added a `to_xyz()`
-                ps.value.to_xyz().T[axis],
-                r.to_xyz().T[axis],
-                length=0.1,
-            )
-            relations = []
-            relations.append(labels[np.argmax(np.array(sulcus_relativity))])
-            m = mode(relations)
-            if m in relation_dicts:
-                relation_dicts[m].add(r)
-            else:
-                # TODO: Is possible that this happens?
-                raise Exception("mode(relations) is not in the relation_dicts")
-        else:
-            # TODO: Is possible that this happens?
-            raise Exception("Region is not in the destrieux sulci dict")
+        sulcus_relativity = voxel_relations_using_interval_algebra(
+            ps.value.to_xyz().T[axis], r.to_xyz().T[axis], length=0.1,
+        )
+        relations = []
+        relations.append(labels[np.argmax(np.array(sulcus_relativity))])
+        modes = multimode(relations)
+        for m in modes:
+            relation_dicts[m].add(r)
 
     if axis == 1:
-        # TODO: `rel` does not sounds like a good name too.
         for rel in Y_LABELS:
             nl.add_tuple_set(
                 relation_dicts[rel],
@@ -324,10 +352,8 @@ def process_NL(subject_folds, subject_info, nl):
                 subject_info, sulcus, s, labels, nl, axis
             )
 
-    __import__("pdb").set_trace()
-
     Found_sulci = set()
-    found_sulci = nl.add_region_set(Found_sulci, name="found_sulci")
+    found_sulci = nl.add_tuple_set(Found_sulci, name="found_sulci")
 
     Queries = [
         queries.Q_cingulate,
@@ -346,12 +372,20 @@ def process_NL(subject_folds, subject_info, nl):
         else:
             for r in res:
                 Found_sulci.add(r)
+                name = None
+                for k, v in renamed_destrieux.items():
+                    if v == r[0]:
+                        name = k
+                        break
+                else:
+                    raise Exception("No name for region")
                 nl.add_region_set(Found_sulci, name="found_sulci")
                 d_queries.append(
                     {
                         "subject": s,
                         "query": q.__name__,
-                        "sulcus": r.symbol_name,
+                        "sulcus": name,
+                        "region": r[0],
                     }
                 )
 
