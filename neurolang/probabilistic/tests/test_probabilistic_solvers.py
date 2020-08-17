@@ -400,7 +400,7 @@ def test_multilevel_existential(solver):
     assert testing.eq_prov_relations(result, expected)
 
     qpred = C(z)
-    result = solver.solve_succ_query(qpred, cpl_program,)
+    result = solver.solve_succ_query(qpred, cpl_program)
     expected = testing.make_prov_set(
         [
             (.1, "a"),
