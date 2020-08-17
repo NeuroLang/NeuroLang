@@ -50,10 +50,13 @@ def sure_is_not_pattern():
     thread_id = threading.get_ident()
 
     with _lock:
-        _sure_is_not_pattern[thread_id] = True
+        n = _sure_is_not_pattern.get(thread_id, 0)
+        _sure_is_not_pattern[thread_id] = n + 1
     yield
     with _lock:
-        del _sure_is_not_pattern[thread_id]
+        _sure_is_not_pattern[thread_id] -= 1
+        if _sure_is_not_pattern[thread_id] == 0:
+            del _sure_is_not_pattern[thread_id]
 
 
 @contextmanager
@@ -592,13 +595,14 @@ class Lambda(Definition):
 
 class FunctionApplication(Definition):
     def __init__(
-        self, functor, args, kwargs=None, validate_arguments=True,
+        self, functor, args, kwargs=None, validate_arguments=False, verify_type=True
     ):
         self.functor = functor
         self.args = args
         self.kwargs = kwargs
 
-        self._verify_and_set_type()
+        if verify_type:
+            self._verify_and_set_type()
 
         if self.kwargs is None:
             self.kwargs = dict()
@@ -616,18 +620,16 @@ class FunctionApplication(Definition):
             elif isinstance(self.functor.type, typing.Callable):
                 self.type = self.functor.type.__args__[-1]
             else:
-                raise NeuroLangTypeException("Functor is not an expression")
-        else:
-            if not (
-                self.functor.type in (Unknown, typing.Any)
-                or is_leq_informative(
-                    self.functor.type.__args__[-1],
-                    self.type
-                )
-            ):
-                raise NeuroLangTypeException(
-                    "Functor return type not unifiable with application type"
-                )
+                if not (
+                    self.functor.type in (Unknown, typing.Any)
+                    or is_leq_informative(
+                        self.functor.type.__args__[-1],
+                        self.type
+                    )
+                ):
+                    raise NeuroLangTypeException(
+                        "Functor return type not unifiable with application type"
+                    )
 
     def _validate_arguments(self):
         if not (
