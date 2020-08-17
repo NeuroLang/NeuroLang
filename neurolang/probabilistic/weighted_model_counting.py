@@ -681,23 +681,9 @@ def solve_succ_query_boolean_diagram(query_predicate, cpl_program):
         SUCC[ P(x) ]
     """
     with log_performance(LOG, 'Preparing query'):
-        if isinstance(query_predicate, Implication):
-            conjunctive_query = query_predicate.antecedent
-            variables_to_project = tuple(
-                str2columnstr_constant(s.name)
-                for s in query_predicate.consequent.args
-                if isinstance(s, Symbol)
-            )
-        else:
-            conjunctive_query = query_predicate
-            variables_to_project = tuple(
-                str2columnstr_constant(s.name)
-                for s in query_predicate._symbols
-                if s not in (
-                    p.functor for p in
-                    extract_logic_predicates(query_predicate)
-                )
-            )
+        conjunctive_query, variables_to_project = prepare_initial_query(
+            query_predicate
+        )
 
         flat_query = flatten_query(conjunctive_query, cpl_program)
 
@@ -750,23 +736,9 @@ def solve_succ_query_sdd_direct(
         SUCC[ P(x) ]
     """
     with log_performance(LOG, 'Preparing query'):
-        if isinstance(query_predicate, Implication):
-            conjunctive_query = query_predicate.antecedent
-            variables_to_project = tuple(
-                str2columnstr_constant(s.name)
-                for s in query_predicate.consequent.args
-                if isinstance(s, Symbol)
-            )
-        else:
-            conjunctive_query = query_predicate
-            variables_to_project = tuple(
-                str2columnstr_constant(s.name)
-                for s in query_predicate._symbols
-                if s not in (
-                    p.functor for p in
-                    extract_logic_predicates(query_predicate)
-                )
-            )
+        conjunctive_query, variables_to_project = prepare_initial_query(
+            query_predicate
+        )
 
         flat_query = flatten_query(conjunctive_query, cpl_program)
 
@@ -844,6 +816,27 @@ def solve_succ_query_sdd_direct(
         ),
         prob_set_result.provenance_column
     )
+
+
+def prepare_initial_query(query_predicate):
+    if isinstance(query_predicate, Implication):
+        conjunctive_query = query_predicate.antecedent
+        variables_to_project = tuple(
+            str2columnstr_constant(s.name)
+            for s in query_predicate.consequent.args
+            if isinstance(s, Symbol)
+        )
+    else:
+        conjunctive_query = query_predicate
+        variables_to_project = tuple(
+            str2columnstr_constant(s.name)
+            for s in query_predicate._symbols
+            if s not in (
+                p.functor for p in
+                extract_logic_predicates(query_predicate)
+            )
+        )
+    return conjunctive_query, variables_to_project
 
 
 def model_count_and_per_row_probability(model, solver, initial_var_count, n):
