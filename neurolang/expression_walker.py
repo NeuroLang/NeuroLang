@@ -515,24 +515,3 @@ class FunctionApplicationToPythonLambda(PatternWalker):
         ls = locals()
         gs.update(arg_dict)
         return eval(str_eval, gs, ls), param_sym
-
-
-class SuccintRepr(ExpressionWalker):
-    @add_match(Constant)
-    def constant(self, expression):
-        value = expression.value
-        if callable(value) and not isinstance(value, Expression):
-            value_str = value.__qualname__
-        else:
-            value_str = repr(value)
-        return repr(value_str)
-
-    @add_match(Symbol)
-    def symbol(self, expression):
-        return f'`{expression.name}``'
-
-    @add_match(FunctionApplication)
-    def function_application(self, expression):
-        functor = f'{self.walk(expression.functor)}'
-        args = ', '.join(self.walk(arg) for arg in expression.args)
-        return f'{functor}({args})'
