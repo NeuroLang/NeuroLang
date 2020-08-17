@@ -5,7 +5,10 @@ from typing import AbstractSet, Iterable
 import numpy
 
 from ..datalog import WrappedRelationalAlgebraSet
-from ..datalog.expression_processing import extract_logic_predicates, reachable_code
+from ..datalog.expression_processing import (
+    extract_logic_predicates,
+    reachable_code
+)
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
 from ..expressions import Constant, Expression, FunctionApplication
 from ..logic import Conjunction, Implication, Union

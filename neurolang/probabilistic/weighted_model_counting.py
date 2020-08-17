@@ -16,7 +16,6 @@ from pysdd import sdd
 from ..datalog.expression_processing import (
     extract_logic_predicates,
     flatten_query,
-    lift_optimization_for_choice_predicates
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import (
@@ -51,6 +50,7 @@ from ..utils.relational_algebra_set.pandas import (
     NamedRelationalAlgebraFrozenSet
 )
 
+from .expression_processing import lift_optimization_for_choice_predicates
 
 LOG = logging.getLogger(__name__)
 
@@ -760,53 +760,13 @@ def solve_succ_query_sdd_direct(
 
     df = prob_set_result.relations.as_pandas_dataframe()
     if per_row_model:
-        probabilities = np.empty(df.shape[0])
-        new_rows = []
-        with log_performance(LOG, "Minimize manager"):
-            new_rows = df[prob_set_result.provenance_column]
-            solver.manager.minimize()
-        with log_performance(LOG, "Model Count"):
-            weights = solver.wmc_weights()
-            for i, row in enumerate(new_rows):
-                tt = [row]
-                nm = solver.manager.copy(tt)
-                tt[0].ref()
-                nm.minimize()
-                wmc = row.wmc(log_mode=False)
-                wmc.set_literal_weights_from_array(weights)
-                probabilities[i] = wmc.propagate()
+        probabilities = sdd_solver_per_individual_row(
+            solver, df[prob_set_result.provenance_column]
+        )
     else:
-        with log_performance(LOG, "Build global SAT problem"):
-            rows, exclusive_clause, initial_var_count = \
-                build_global_sdd_model_rows(
-                    solver,
-                    df[prob_set_result.provenance_column]
-                )
-
-            while len(rows) > 1:
-                new_rows = []
-                node_sizes = 0
-                nodes_processed = 0
-                solver.manager.minimize()
-                for i in range(0, len(rows) - 1, 2):
-                    node_sizes += rows[i].size() + rows[i + 1].size()
-                    nodes_processed += 2
-                    new_rows.append(rows[i].conjoin(rows[i + 1]))
-                    rows[i].deref()
-                    rows[i + 1].deref()
-                    new_rows[-1].ref()
-                new_rows += rows[i + 2:]
-                rows = new_rows
-                print(f"Average node size {node_sizes / nodes_processed}")
-            model = rows[0].conjoin(exclusive_clause)
-        with log_performance(LOG, "Minimize manager"):
-            model.ref()
-            solver.manager.minimize()
-
-        with log_performance(LOG, "Model count"):
-            probabilities = model_count_and_per_row_probability(
-                model, solver, initial_var_count, df.shape[0]
-            )
+        probabilities = sdd_solver_global_model(
+            solver, df[prob_set_result.provenance_column]
+        )
 
     df[prob_set_result.provenance_column] = probabilities
     return ProvenanceAlgebraSet(
@@ -816,6 +776,59 @@ def solve_succ_query_sdd_direct(
         ),
         prob_set_result.provenance_column
     )
+
+
+def sdd_solver_global_model(solver, set_probabilities):
+    with log_performance(LOG, "Build global SAT problem"):
+        rows, exclusive_clause, initial_var_count = \
+            build_global_sdd_model_rows(
+                solver,
+                set_probabilities
+            )
+
+        while len(rows) > 1:
+            new_rows = []
+            node_sizes = 0
+            nodes_processed = 0
+            solver.manager.minimize()
+            for i in range(0, len(rows) - 1, 2):
+                node_sizes += rows[i].size() + rows[i + 1].size()
+                nodes_processed += 2
+                new_rows.append(rows[i].conjoin(rows[i + 1]))
+                rows[i].deref()
+                rows[i + 1].deref()
+                new_rows[-1].ref()
+            new_rows += rows[i + 2:]
+            rows = new_rows
+        model = rows[0].conjoin(exclusive_clause)
+    with log_performance(LOG, "Minimize manager"):
+        model.ref()
+        solver.manager.minimize()
+
+    with log_performance(LOG, "Model count"):
+        probabilities = model_count_and_per_row_probability(
+            model, solver, initial_var_count, set_probabilities.shape[0]
+        )
+    return probabilities
+
+
+def sdd_solver_per_individual_row(solver, set_probabilities):
+    probabilities = np.empty(set_probabilities.shape[0])
+    new_rows = []
+    with log_performance(LOG, "Minimize manager"):
+        new_rows = set_probabilities
+        solver.manager.minimize()
+    with log_performance(LOG, "Model Count"):
+        weights = solver.wmc_weights()
+        for i, row in enumerate(new_rows):
+            tt = [row]
+            nm = solver.manager.copy(tt)
+            tt[0].ref()
+            nm.minimize()
+            wmc = row.wmc(log_mode=False)
+            wmc.set_literal_weights_from_array(weights)
+            probabilities[i] = wmc.propagate()
+    return probabilities
 
 
 def prepare_initial_query(query_predicate):
