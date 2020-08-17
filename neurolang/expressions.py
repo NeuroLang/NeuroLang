@@ -595,7 +595,8 @@ class Lambda(Definition):
 
 class FunctionApplication(Definition):
     def __init__(
-        self, functor, args, kwargs=None, validate_arguments=False, verify_type=True
+        self, functor, args,
+        kwargs=None, validate_arguments=False, verify_type=True
     ):
         self.functor = functor
         self.args = args
@@ -628,7 +629,8 @@ class FunctionApplication(Definition):
                     )
                 ):
                     raise NeuroLangTypeException(
-                        "Functor return type not unifiable with application type"
+                        "Functor return type not unifiable "
+                        "with application type"
                     )
 
     def _validate_arguments(self):
