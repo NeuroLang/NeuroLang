@@ -24,7 +24,7 @@ from collections import defaultdict
 
 from ..datalog.expression_processing import flatten_query
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
-from ..expression_walker import ExpressionWalker, add_match, SuccintRepr
+from ..expression_walker import ExpressionWalker, add_match
 from ..expressions import Constant, Symbol
 from ..logic import Conjunction, Implication
 from ..logic.expression_processing import extract_logic_predicates
@@ -246,7 +246,7 @@ def solve_succ_query(query_predicate, cpl_program):
         if not is_hierarchical(flat_query_probabilistic_section):
             LOG.info(
                 'Query with conjunctions %s not hierarchical',
-                SuccintRepr.walk(flat_query.formulas)
+                flat_query.formulas
             )
             raise NotHierarchicalQueryException(
                 "Query not hierarchical, algorithm can't be applied"
