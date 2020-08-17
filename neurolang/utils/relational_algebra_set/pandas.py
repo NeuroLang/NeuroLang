@@ -373,6 +373,9 @@ class NamedRelationalAlgebraFrozenSet(
         elif isinstance(iterable, RelationalAlgebraFrozenSet):
             self._initialize_from_unnamed_ra_set(iterable)
             self._might_have_duplicates = iterable._might_have_duplicates
+        elif isinstance(iterable, pd.DataFrame):
+            self._container = iterable.copy()
+            self._container.columns = self._columns
         else:
             self._container = pd.DataFrame(
                 iterable, columns=self._columns
