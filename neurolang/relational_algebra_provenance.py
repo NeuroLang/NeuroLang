@@ -6,7 +6,13 @@ from .exceptions import (
     RelationalAlgebraNotImplementedError
 )
 from .expression_walker import ExpressionWalker, add_match
-from .expressions import Constant, Expression, FunctionApplication, Symbol, sure_is_not_pattern
+from .expressions import (
+    Constant,
+    Expression,
+    FunctionApplication,
+    Symbol,
+    sure_is_not_pattern
+)
 from .relational_algebra import (
     Column,
     ColumnStr,
@@ -424,7 +430,10 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
         )
 
         with sure_is_not_pattern():
-            res = ProvenanceAlgebraSet(self.walk(operation).value, new_pc.value)
+            res = ProvenanceAlgebraSet(
+                self.walk(operation).value,
+                new_pc.value
+            )
         return res
 
     def _semiring_mul(self, left, right):

@@ -1,16 +1,14 @@
 import collections
+import operator as op
 from typing import AbstractSet, Iterable
 
 import numpy
 
 from ..datalog import WrappedRelationalAlgebraSet
-from ..datalog.expression_processing import (
-    extract_logic_predicates,
-    reachable_code,
-)
+from ..datalog.expression_processing import extract_logic_predicates, reachable_code
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
 from ..expressions import Constant, Expression, FunctionApplication
-from ..logic import Implication, Union
+from ..logic import Conjunction, Implication, Union
 from .exceptions import DistributionDoesNotSumToOneError
 from .expressions import PROB, ProbabilisticPredicate, ProbabilisticQuery
 
@@ -284,3 +282,36 @@ def get_probchoice_variable_equalities(predicates, pchoice_pred_symbs):
                     )
                 )
     return eq_set
+
+
+def lift_optimization_for_choice_predicates(query, program):
+    """Replace multiple instances of choice predicates by
+    single instances enforncing the definition that the probability
+    that two different grounded choice predicates are mutually exclusive.
+
+    Parameters
+    ----------
+    query : predicate or conjunction of predicates
+        The query for which the conjunction is constructed.
+    program : a program with a probabilistic database.
+        Program with logical rules that will be used to construct the
+        conjunction corresponding to the given query.
+
+    Returns
+    -------
+    Conjunctive query
+        conjunctive query rewritten for choice predicate implementation.
+
+    """
+    if len(program.pchoice_pred_symbs) > 0:
+        eq = Constant(op.eq)
+        added_equalities = []
+        for x, y in get_probchoice_variable_equalities(
+            query.formulas, program.pchoice_pred_symbs
+        ):
+            added_equalities.append(eq(x, y))
+        if len(added_equalities) > 0:
+            query = Conjunction(
+                query.formulas + tuple(added_equalities)
+            )
+    return query

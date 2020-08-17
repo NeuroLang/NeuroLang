@@ -15,7 +15,8 @@ from pysdd import sdd
 
 from ..datalog.expression_processing import (
     extract_logic_predicates,
-    flatten_query
+    flatten_query,
+    lift_optimization_for_choice_predicates
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import (
@@ -30,7 +31,7 @@ from ..expressions import (
     Symbol,
     sure_is_not_pattern
 )
-from ..logic import Conjunction, Implication
+from ..logic import Implication
 from ..relational_algebra import (
     ColumnInt,
     ColumnStr,
@@ -49,7 +50,6 @@ from ..relational_algebra_provenance import (
 from ..utils.relational_algebra_set.pandas import (
     NamedRelationalAlgebraFrozenSet
 )
-from .expression_processing import get_probchoice_variable_equalities
 
 
 LOG = logging.getLogger(__name__)
@@ -241,7 +241,7 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
         return prov_set
 
     def _generate_choice_provenance_set(
-        elf, relation, prob_column, df, prov_column
+        self, relation, prob_column, df, prov_column
     ):
         out_columns = tuple(
             c
@@ -703,16 +703,9 @@ def solve_succ_query_boolean_diagram(query_predicate, cpl_program):
 
     with log_performance(LOG, "Translation and lifted optimisation"):
         if len(cpl_program.pchoice_pred_symbs) > 0:
-            eq = Constant(op.eq)
-            added_equalities = []
-            for x, y in get_probchoice_variable_equalities(
-                flat_query.formulas, cpl_program.pchoice_pred_symbs
-            ):
-                added_equalities.append(eq(x, y))
-            if len(added_equalities) > 0:
-                flat_query = Conjunction(
-                    flat_query.formulas + tuple(added_equalities)
-                )
+            flat_query = lift_optimization_for_choice_predicates(
+                flat_query, cpl_program
+            )
 
         ra_query = TranslateToNamedRA().walk(flat_query)
         ra_query = Projection(ra_query, variables_to_project)
@@ -779,16 +772,9 @@ def solve_succ_query_sdd_direct(
 
     with log_performance(LOG, "Translation and lifted optimisation"):
         if len(cpl_program.pchoice_pred_symbs) > 0:
-            eq = Constant(op.eq)
-            added_equalities = []
-            for x, y in get_probchoice_variable_equalities(
-                flat_query.formulas, cpl_program.pchoice_pred_symbs
-            ):
-                added_equalities.append(eq(x, y))
-            if len(added_equalities) > 0:
-                flat_query = Conjunction(
-                    flat_query.formulas + tuple(added_equalities)
-                )
+            flat_query = lift_optimization_for_choice_predicates(
+                flat_query, cpl_program
+            )
 
         ra_query = TranslateToNamedRA().walk(flat_query)
         ra_query = Projection(ra_query, variables_to_project)
