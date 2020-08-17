@@ -458,7 +458,7 @@ class Fol2DatalogTranslationException(NeuroLangException):
     pass
 
 
-class Fol2DatalogMixin(LogicExpressionWalker):
+class Fol2DatalogMixin(PatternWalker):
     @add_match(
         Implication, lambda imp: not is_conjunctive_negation(imp.antecedent)
     )
