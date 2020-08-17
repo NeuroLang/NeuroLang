@@ -243,6 +243,7 @@ def test_multiple_probchoices_mutual_exclusivity():
     assert testing.eq_prov_relations(result, expected)
 
 
+@pytest.mark.slow
 def test_large_probabilistic_choice():
     n = int(10000)
     with testing.temp_seed(42):

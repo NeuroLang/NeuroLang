@@ -279,7 +279,7 @@ def convert_srnf_to_horn_clauses(head, expression):
         raise NeuroLangTranslateToHornClauseException(
             "Expression is not safe range: {}".format(expression)
         )
-    if set(head.args) != range_restricted_variables(expression):
+    if not set(head.args) <= range_restricted_variables(expression):
         raise NeuroLangTranslateToHornClauseException(
             "Variables in head ({}) must be present in body ({})".format(
                 head, expression

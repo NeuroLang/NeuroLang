@@ -1,9 +1,14 @@
 from ...logic.unification import most_general_unifier, apply_substitution
-from ...expressions import Symbol, FunctionApplication, Constant
+from ...expressions import Symbol, Constant
 from collections import namedtuple
+import re
 
 
+Quote = Symbol("Quote")
 Rule = namedtuple("Rule", "name constructor constituents is_root")
+
+CODE_QUOTE = '`'
+STRING_QUOTE = '"'
 
 
 def add_rule(*args, root=False):
@@ -41,14 +46,52 @@ class DictLexicon(Lexicon):
     def __init__(self, d):
         self.dict = d
 
-    def get_meanings(self, word):
-        if word not in self.dict:
-            return ()
-        return self.dict[word]
+    def get_meanings(self, token):
+        if isinstance(token, Constant):
+            if token.value in self.dict:
+                return self.dict[token.value]
+        return ()
 
 
 class Chart(list):
     pass
+
+
+class Tokenizer:
+    def __init__(self, grammar, quotes=[CODE_QUOTE, STRING_QUOTE]):
+        self.grammar = grammar
+        self.matches = []
+        for q in quotes:
+            self.matches.append(
+                (
+                    re.compile(f"^{q}.+?{q}\\s"),
+                    lambda span, q=q: Quote(
+                        Constant(q), Constant[str](span[1:-1])
+                    ),
+                )
+            )
+        self.matches.append(
+            (re.compile("^\\w+?\\s"), lambda span: Constant[str](span),)
+        )
+
+    def tokenize(self, string):
+        rem = string.strip() + " "
+        tokens = []
+        while rem:
+            t, rem = self.next_token(rem)
+            tokens.append(t)
+        return tokens
+
+    def next_token(self, text):
+        for r, on_match in self.matches:
+            m = r.match(text)
+            if m:
+                e = m.end()
+                span = text[:e].strip()
+                rem = text[e:].lstrip()
+                return on_match(span), rem
+
+        raise Exception(f"Couldnt match token at: {text}")
 
 
 class ChartParser:
@@ -58,14 +101,15 @@ class ChartParser:
 
     def __init__(self, grammar):
         self.grammar = grammar
+        self.tokenizer = Tokenizer(grammar)
 
     def recognize(self, string):
-        tokens = string.split()
+        tokens = self.tokenizer.tokenize(string)
         self._fill_chart(tokens)
         return any(e.rule.is_root for e in self.chart[0][len(tokens)])
 
     def parse(self, string):
-        tokens = string.split()
+        tokens = self.tokenizer.tokenize(string)
         self._fill_chart(tokens)
         compl = [
             e
@@ -107,7 +151,7 @@ class ChartParser:
             ]
         )
         for i, t in enumerate(tokens):
-            word_edge = self.Edge(Constant[str](t), None, [], [], [], dict())
+            word_edge = self.Edge(t, None, [], [], [], dict())
             self.chart[i][i + 1].append(word_edge)
             self.agenda.append((word_edge, i, i + 1))
             for m in self.grammar.lexicon.get_meanings(t):
