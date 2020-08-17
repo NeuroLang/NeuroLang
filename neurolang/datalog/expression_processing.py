@@ -276,7 +276,11 @@ def reachable_code(query, datalog):
             seen_rules.add(rule)
             reachable_code.append(rule)
             for predicate in extract_logic_predicates(rule.antecedent):
-                functor = predicate.functor
+                functor = (
+                    predicate.formula.functor
+                    if isinstance(predicate, Negation)
+                    else predicate.functor
+                )
                 if functor not in reached and functor in idb:
                     to_reach.append(functor)
 
