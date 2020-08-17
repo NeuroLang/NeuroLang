@@ -69,6 +69,10 @@ def is_hierarchical(query):
     for predicate in predicates:
         functor = predicate.functor
         if functor in seen_predicate_functor:
+            LOG.info(
+                "Not hierarchical self join on variables %s",
+                functor
+            )
             return False
         seen_predicate_functor.add(functor)
         for variable in predicate.args:
