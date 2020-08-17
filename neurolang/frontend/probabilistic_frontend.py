@@ -19,7 +19,11 @@ from ..probabilistic.cplogic.program import (
 from ..probabilistic.expression_processing import (
     separate_deterministic_probabilistic_code
 )
-from ..probabilistic.weighted_model_counting import solve_succ_query
+from ..probabilistic import (
+    dichotomy_theorem_based_solver,
+    weighted_model_counting
+)
+from ..probabilistic.exceptions import NotHierarchicalQueryException
 from ..region_solver import RegionSolver
 from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
@@ -109,7 +113,15 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             cpl = self._make_probabilistic_program_from_deterministic_solution(
                 deterministic_solution, probabilistic_idb
             )
-            return solve_succ_query(query_pred.expression, cpl)
+            try:
+                res = dichotomy_theorem_based_solver.solve_succ_query(
+                    query_pred.expression, cpl
+                )
+            except NotHierarchicalQueryException:
+                res = weighted_model_counting.solve_succ_query(
+                    query_pred.expression, cpl
+                )
+            return res
         return deterministic_solution
 
     def _rewrite_program_with_ontology(self, deterministic_program):
