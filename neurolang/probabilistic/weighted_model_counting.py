@@ -241,7 +241,7 @@ class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
         return prov_set
 
     def _generate_choice_provenance_set(
-        elf, relation, prob_column, df, prov_column
+        self, relation, prob_column, df, prov_column
     ):
         out_columns = tuple(
             c
