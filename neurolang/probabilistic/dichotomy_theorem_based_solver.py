@@ -46,12 +46,13 @@ from ..relational_algebra_provenance import (
 from ..utils import log_performance
 from .exceptions import NotHierarchicalQueryException
 from .expression_processing import lift_optimization_for_choice_predicates
-from .weighted_model_counting import (
+from .probabilistic_ra_utils import (
     DeterministicFactSet,
     ProbabilisticChoiceSet,
     ProbabilisticFactSet,
-    _generate_symbol_table
+    generate_probabilistic_symbol_table_for_query
 )
+
 
 LOG = logging.getLogger(__name__)
 
@@ -197,7 +198,7 @@ class ProbSemiringSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
 
     @add_match(ProbabilisticChoiceSet(Symbol, ...))
     def probabilistic_choice_set(self, prob_choice_set):
-        return self.probabilistic_fact_set(prob_fact_set)
+        return self.probabilistic_fact_set(prob_choice_set)
 
     @add_match(ProbabilisticFactSet)
     def probabilistic_fact_set_invalid(self, prob_fact_set):
@@ -274,7 +275,9 @@ def solve_succ_query(query_predicate, cpl_program):
         ra_query = RAQueryOptimiser().walk(ra_query)
 
     with log_performance(LOG, "Run RAP query"):
-        symbol_table = _generate_symbol_table(cpl_program, flat_query)
+        symbol_table = generate_probabilistic_symbol_table_for_query(
+            cpl_program, flat_query
+        )
 
         solver = ProbSemiringSolver(symbol_table)
         prob_set_result = solver.walk(ra_query)

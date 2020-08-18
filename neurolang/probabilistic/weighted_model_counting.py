@@ -35,7 +35,6 @@ from ..relational_algebra import (
     ExtendedProjectionListMember,
     NameColumns,
     Projection,
-    RelationalAlgebraOperation,
     RelationalAlgebraPushInSelections,
     RelationalAlgebraStringExpression,
     RenameColumns,
@@ -49,6 +48,13 @@ from ..utils.relational_algebra_set.pandas import (
 from ..utils import log_performance
 
 from .expression_processing import lift_optimization_for_choice_predicates
+from .probabilistic_ra_utils import (
+    DeterministicFactSet,
+    ProbabilisticChoiceSet,
+    ProbabilisticFactSet,
+    generate_probabilistic_symbol_table_for_query
+)
+
 
 LOG = logging.getLogger(__name__)
 
@@ -143,23 +149,6 @@ class SemiRingRAPToSDD(PatternWalker):
         for s in res:
             s.ref()
         return res
-
-
-class ProbabilisticFactSet(RelationalAlgebraOperation):
-    def __init__(self, relation, probability_column):
-        self.relation = relation
-        self.probability_column = probability_column
-
-
-class ProbabilisticChoiceSet(RelationalAlgebraOperation):
-    def __init__(self, relation, probability_column):
-        self.relation = relation
-        self.probability_column = probability_column
-
-
-class DeterministicFactSet(RelationalAlgebraOperation):
-    def __init__(self, relation):
-        self.relation = relation
 
 
 class WMCSemiRingSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
@@ -696,7 +685,9 @@ def solve_succ_query_boolean_diagram(query_predicate, cpl_program):
         ra_query = RAQueryOptimiser().walk(ra_query)
 
     with log_performance(LOG, "Run RAP query"):
-        symbol_table = _generate_symbol_table(cpl_program, flat_query)
+        symbol_table = generate_probabilistic_symbol_table_for_query(
+            cpl_program, flat_query
+        )
 
         solver = WMCSemiRingSolver(symbol_table)
         prob_set_result = solver.walk(ra_query)
@@ -752,7 +743,9 @@ def solve_succ_query_sdd_direct(
         print(ra_query)
 
     with log_performance(LOG, "Run RAP query"):
-        symbol_table = _generate_symbol_table(cpl_program, flat_query)
+        symbol_table = generate_probabilistic_symbol_table_for_query(
+            cpl_program, flat_query
+        )
         solver = SDDWMCSemiRingSolver(symbol_table)
         prob_set_result = solver.walk(ra_query)
 
@@ -894,41 +887,7 @@ def build_global_sdd_model_rows(solver, literal_probabilities):
     return rows, exclusive_clause, initial_var_count
 
 
-def _generate_symbol_table(cpl_program, query_predicate):
-    symbol_table = dict()
-    for predicate_symbol, facts in cpl_program.probabilistic_facts().items():
-        if predicate_symbol not in query_predicate._symbols:
-            continue
 
-        fresh_symbol = Symbol.fresh()
-        symbol_table[predicate_symbol] = ProbabilisticFactSet(
-            fresh_symbol,
-            Constant[ColumnInt](ColumnInt(0))
-        )
-        symbol_table[fresh_symbol] = facts
-
-    for predicate_symbol, facts in cpl_program.probabilistic_choices().items():
-        if predicate_symbol not in query_predicate._symbols:
-            continue
-
-        fresh_symbol = Symbol.fresh()
-        symbol_table[predicate_symbol] = ProbabilisticChoiceSet(
-            fresh_symbol,
-            Constant[ColumnInt](ColumnInt(0))
-        )
-        symbol_table[fresh_symbol] = facts
-
-    for predicate_symbol, facts in cpl_program.extensional_database().items():
-        if predicate_symbol not in query_predicate._symbols:
-            continue
-
-        fresh_symbol = Symbol.fresh()
-        symbol_table[predicate_symbol] = DeterministicFactSet(
-            fresh_symbol
-        )
-        symbol_table[fresh_symbol] = facts
-
-    return symbol_table
 
 
 def sdd_compilation(prob_set_result):
