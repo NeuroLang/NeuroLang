@@ -3,10 +3,6 @@
     compilation.
 """
 import logging
-
-from neurolang.exceptions import NeuroLangException
-from neurolang.utils import log_performance
-
 import operator as op
 
 import numpy as np
@@ -23,6 +19,7 @@ from ..expression_walker import (
     PatternWalker,
     add_match
 )
+from ..exceptions import NeuroLangException
 from ..expressions import (
     Constant,
     ExpressionBlock,
@@ -49,6 +46,7 @@ from ..relational_algebra_provenance import (
 from ..utils.relational_algebra_set.pandas import (
     NamedRelationalAlgebraFrozenSet
 )
+from ..utils import log_performance
 
 from .expression_processing import lift_optimization_for_choice_predicates
 
