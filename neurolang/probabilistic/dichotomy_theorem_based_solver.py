@@ -63,22 +63,13 @@ def is_hierarchical_without_self_joins(query):
     if forall x, y one of the following holds:
     at(x) ⊆ at(y) or at(x) ⊇ at(y) or at(x) ∩ at(y) = ∅.
     '''
-    predicates = extract_logic_predicates(query)
-    seen_predicate_functor = set()
-    atom_set = defaultdict(set)
-    for predicate in predicates:
-        functor = predicate.functor
-        if functor in seen_predicate_functor:
-            LOG.info(
-                "Not hierarchical self join on variables %s",
-                functor
-            )
-            return False
-        seen_predicate_functor.add(functor)
-        for variable in predicate.args:
-            if not isinstance(variable, Symbol):
-                continue
-            atom_set[variable].add(functor)
+
+    has_self_joins, atom_set = extract_atom_sets_and_detect_self_joins(
+        query
+    )
+
+    if not has_self_joins:
+        return False
 
     variables = list(atom_set)
     for i, v in enumerate(variables):
@@ -97,6 +88,27 @@ def is_hierarchical_without_self_joins(query):
                 return False
 
     return True
+
+
+def extract_atom_sets_and_detect_self_joins(query):
+    has_self_joins = False
+    predicates = extract_logic_predicates(query)
+    seen_predicate_functor = set()
+    atom_set = defaultdict(set)
+    for predicate in predicates:
+        functor = predicate.functor
+        if functor in seen_predicate_functor:
+            LOG.info(
+                "Not hierarchical self join on variables %s",
+                functor
+            )
+            has_self_joins = True
+        seen_predicate_functor.add(functor)
+        for variable in predicate.args:
+            if not isinstance(variable, Symbol):
+                continue
+            atom_set[variable].add(functor)
+    return has_self_joins, atom_set
 
 
 class ProbSemiringSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
@@ -247,7 +259,9 @@ def solve_succ_query(query_predicate, cpl_program):
         )
         flat_query = Conjunction(tuple(flat_query_formulas))
 
-        if not is_hierarchical_without_self_joins(flat_query_probabilistic_section):
+        if not is_hierarchical_without_self_joins(
+            flat_query_probabilistic_section
+        ):
             LOG.info(
                 'Query with conjunctions %s not hierarchical',
                 flat_query.formulas
