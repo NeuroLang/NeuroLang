@@ -11,7 +11,7 @@ y = Symbol('y')
 z = Symbol('z')
 
 
-def test_hierarchical():
+def test_hierarchical_without_self_joins():
     q1 = Conjunction((Q(x), R(y), T(x)))
     q2 = Conjunction((Q(x),))
     q3 = Conjunction((Q(x), R(x, y)))
@@ -23,7 +23,7 @@ def test_hierarchical():
     assert is_hierarchical_without_self_joins(q4)
 
 
-def test_not_hierarchical():
+def test_not_hierarchical_without_self_joins():
     q1 = Conjunction((Q(x), T(x, y), R(y)))
     q2 = Conjunction((Q(x), Q(y), T(x, y)))
 
