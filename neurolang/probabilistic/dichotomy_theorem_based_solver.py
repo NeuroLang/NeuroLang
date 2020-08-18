@@ -127,7 +127,6 @@ class ProbSemiringSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
                     ProbabilisticChoiceSet
                 )
             )
-            # and (len(exp.attributes) == len(exp.relation.relation.columns))
         )
     )
     def eliminate_superfluous_projection(self, expression):
