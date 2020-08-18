@@ -196,7 +196,7 @@ class ProbSemiringSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
         return self.translated_probfact_sets[relation_symbol]
 
     @add_match(ProbabilisticChoiceSet(Symbol, ...))
-    def probabilistic_choice_set(self, prob_fact_set):
+    def probabilistic_choice_set(self, prob_choice_set):
         return self.probabilistic_fact_set(prob_fact_set)
 
     @add_match(ProbabilisticFactSet)
