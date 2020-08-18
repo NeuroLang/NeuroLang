@@ -282,16 +282,20 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
     @staticmethod
     def infer_iterable_type(iterable):
         type_ = Unknown
-        if not isinstance(iterable, Collection):
-            iterable_, iterable__ = tee(iterable)
-            iterable = iterable__
-        else:
-            iterable_ = iterable
-
-        for first in iterable_:
-            if isinstance(first, Expression):
-                type_ = first.type
-            else:
+        if hasattr(iterable, 'fetch_one'):
+            first = iterable.fetch_one()
+            if len(first) > 0:
                 type_ = infer_type(first)
-            break
+        else:
+            if not isinstance(iterable, Collection):
+                iterable_, iterable__ = tee(iterable)
+                iterable = iterable__
+            else:
+                iterable_ = iterable
+            for first in iterable_:
+                if isinstance(first, Expression):
+                    type_ = first.type
+                else:
+                    type_ = infer_type(first)
+                break
         return type_, iterable
