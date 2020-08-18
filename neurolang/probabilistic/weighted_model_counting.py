@@ -7,7 +7,6 @@ import operator as op
 
 import numpy as np
 import pandas as pd
-from numpy.lib.shape_base import column_stack
 from pysdd import sdd
 
 from neurolang.exceptions import NeuroLangException

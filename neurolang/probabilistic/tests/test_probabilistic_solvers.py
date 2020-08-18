@@ -15,6 +15,7 @@ try:
 except ImportError:
     from contextlib import suppress as nullcontext
 
+
 P = Symbol("P")
 Q = Symbol("Q")
 R = Symbol("R")
