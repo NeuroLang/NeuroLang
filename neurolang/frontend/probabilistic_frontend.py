@@ -16,10 +16,10 @@ from ..probabilistic.cplogic.program import (
     CPLogicProgram,
     TranslateProbabilisticQueryMixin
 )
+from ..probabilistic.dichotomy_theorem_based_solver import solve_succ_query
 from ..probabilistic.expression_processing import (
     separate_deterministic_probabilistic_code
 )
-from ..probabilistic.weighted_model_counting import solve_succ_query
 from ..region_solver import RegionSolver
 from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,

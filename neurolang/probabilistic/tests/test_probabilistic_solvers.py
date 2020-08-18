@@ -5,9 +5,15 @@ from ...datalog import Fact
 from ...expressions import Constant, Symbol
 from ...logic import Conjunction, Implication, Union
 from ...relational_algebra import RenameColumn
+from .. import dichotomy_theorem_based_solver, weighted_model_counting
 from ..cplogic import testing
 from ..cplogic.program import CPLogicProgram
-from ..weighted_model_counting import solve_succ_query
+from ..exceptions import NotHierarchicalQueryException
+
+try:
+    from contextlib import nullcontext
+except ImportError:
+    from contextlib import suppress as nullcontext
 
 P = Symbol("P")
 Q = Symbol("Q")
@@ -25,7 +31,17 @@ a = Constant("a")
 b = Constant("b")
 
 
-def test_deterministic():
+@pytest.fixture(
+    params=((weighted_model_counting, dichotomy_theorem_based_solver)),
+    ids=[
+        'SDD-WMC', 'dichotomy-Safe query'
+    ]
+)
+def solver(request):
+    return request.param
+
+
+def test_deterministic(solver):
     """
     We define the program
 
@@ -44,12 +60,12 @@ def test_deterministic():
     cpl_program = CPLogicProgram()
     cpl_program.walk(code)
     query_pred = P(x)
-    result = solve_succ_query(query_pred, cpl_program)
+    result = solver.solve_succ_query(query_pred, cpl_program)
     expected = testing.make_prov_set([(1.0, "a"), (1.0, "b")], ("_p_", "x"))
     assert testing.eq_prov_relations(result, expected)
 
 
-def test_deterministic_conjunction_varying_arity():
+def test_deterministic_conjunction_varying_arity(solver):
     code = Union(
         (
             Fact(Q(a, b)),
@@ -61,12 +77,12 @@ def test_deterministic_conjunction_varying_arity():
     cpl_program = CPLogicProgram()
     cpl_program.walk(code)
     query_pred = Z(x, y)
-    result = solve_succ_query(query_pred, cpl_program)
+    result = solver.solve_succ_query(query_pred, cpl_program)
     expected = testing.make_prov_set([(1.0, "a", "b")], ("_p_", "x", "y"))
     assert testing.eq_prov_relations(result, expected)
 
 
-def test_simple_bernoulli():
+def test_simple_bernoulli(solver):
     """
     We define the program
 
@@ -88,12 +104,12 @@ def test_simple_bernoulli():
     cpl_program.add_probabilistic_facts_from_tuples(
         P, {(0.7, "a"), (0.8, "b")}
     )
-    result = solve_succ_query(P(x), cpl_program)
+    result = solver.solve_succ_query(P(x), cpl_program)
     expected = testing.make_prov_set([(0.7, "a"), (0.8, "b")], ("_p_", "x"))
     assert testing.eq_prov_relations(result, expected)
 
 
-def test_bernoulli_conjunction():
+def test_bernoulli_conjunction(solver):
     code = Union((Implication(Z(x), Conjunction((P(x), Q(x), R(x)))),))
     probfacts_sets = {
         P: {(1.0, "a"), (0.5, "b")},
@@ -104,13 +120,13 @@ def test_bernoulli_conjunction():
     cpl_program.walk(code)
     for pred_symb, pfact_set in probfacts_sets.items():
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
-    result = solve_succ_query(Z(x), cpl_program)
+    result = solver.solve_succ_query(Z(x), cpl_program)
 
     expected = testing.make_prov_set([(0.9 * 0.9 * 0.5, "b")], ("_p_", "x"))
     assert testing.eq_prov_relations(result, expected)
 
 
-def test_multi_level_conjunction():
+def test_multi_level_conjunction(solver):
     """
     We consider the program
 
@@ -145,7 +161,7 @@ def test_multi_level_conjunction():
     cpl_program.walk(code)
     for pred_symb, pfact_set in probfacts_sets.items():
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
-    result = solve_succ_query(H(x, y), cpl_program)
+    result = solver.solve_succ_query(H(x, y), cpl_program)
     expected = testing.make_prov_set(
         [(0.2 * 0.9 * 0.1, "a", "a"), (0.2 * 0.9 * 0.5, "a", "b"),],
         ("_p_", "x", "y"),
@@ -153,7 +169,7 @@ def test_multi_level_conjunction():
     assert testing.eq_prov_relations(result, expected)
 
 
-def test_intertwined_conjunctions_and_probfacts():
+def test_intertwined_conjunctions_and_probfacts(solver):
     """
     We consider the program
 
@@ -182,12 +198,12 @@ def test_intertwined_conjunctions_and_probfacts():
     cpl.walk(cpl_code)
     cpl.add_probabilistic_facts_from_tuples(P, {(0.8, "a")})
     cpl.add_probabilistic_facts_from_tuples(C, {(0.5, "a"), (0.9, "b")})
-    result = solve_succ_query(Z(y), cpl)
+    result = solver.solve_succ_query(Z(y), cpl)
     expected = testing.make_prov_set([(0.8 * 0.5, "a")], ("_p_", "y"))
     assert testing.eq_prov_relations(result, expected)
 
 
-def test_simple_probchoice():
+def test_simple_probchoice(solver):
     pchoice_as_sets = {P: {(0.2, "a"), (0.8, "b")}}
     cpl_program = CPLogicProgram()
     for pred_symb, pchoice_as_set in pchoice_as_sets.items():
@@ -195,12 +211,12 @@ def test_simple_probchoice():
             pred_symb, pchoice_as_set
         )
     qpred = P(x)
-    result = solve_succ_query(qpred, cpl_program)
+    result = solver.solve_succ_query(qpred, cpl_program)
     expected = testing.make_prov_set([(0.2, "a"), (0.8, "b"),], ("_p_", "x"),)
     assert testing.eq_prov_relations(result, expected)
 
 
-def test_mutual_exclusivity():
+def test_mutual_exclusivity(solver):
     pchoice_as_sets = {P: {(0.2, "a"), (0.8, "b")}}
     pfact_sets = {Q: {(0.5, "a", "b")}}
     code = Union((Implication(Z(x, y), Conjunction((P(x), P(y), Q(x, y)))),))
@@ -220,7 +236,7 @@ def test_mutual_exclusivity():
     assert testing.eq_prov_relations(result, expected)
 
 
-def test_multiple_probchoices_mutual_exclusivity():
+def test_multiple_probchoices_mutual_exclusivity(solver):
     pchoice_as_sets = {
         P: {(0.2, "a"), (0.8, "b")},
         Q: {(0.5, "a", "b"), (0.4, "b", "c"), (0.1, "b", "b")},
@@ -243,7 +259,8 @@ def test_multiple_probchoices_mutual_exclusivity():
     assert testing.eq_prov_relations(result, expected)
 
 
-def test_large_probabilistic_choice():
+@pytest.mark.slow
+def test_large_probabilistic_choice(solver):
     n = int(10000)
     with testing.temp_seed(42):
         probs = np.random.rand(n)
@@ -260,14 +277,14 @@ def test_large_probabilistic_choice():
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
     cpl_program.walk(code)
     qpred = Z(x, y)
-    result = solve_succ_query(qpred, cpl_program)
+    result = solver.solve_succ_query(qpred, cpl_program)
     expected = testing.make_prov_set(
         [(0.5 * probs[0], 0, 0), (0.5 * probs[0], 0, 1),], ("_p_", "x", "y")
     )
     assert testing.eq_prov_relations(result, expected)
 
 
-def test_simple_existential():
+def test_simple_existential(solver):
     """
     We define the following program
 
@@ -299,7 +316,7 @@ def test_simple_existential():
     assert testing.eq_prov_relations(result, expected)
 
 
-def test_existential_in_conjunction():
+def test_existential_in_conjunction(solver):
     pchoice_as_sets = {
         P: {(0.2, "a", "b", "c"), (0.4, "b", "b", "c"), (0.4, "b", "a", "c")},
         Z: {(0.5, "b"), (0.5, "d")},
@@ -316,7 +333,7 @@ def test_existential_in_conjunction():
     assert testing.eq_prov_relations(result, expected)
 
 
-def test_existential_alternative_variables():
+def test_existential_alternative_variables(solver):
     pchoice_as_sets = {
         P: {(0.8, "a", "b"), (0.1, "c", "d"), (0.1, "d", "e")},
     }
@@ -339,12 +356,13 @@ def test_existential_alternative_variables():
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
     cpl_program.walk(code)
     qpred = H(z)
-    result = solve_succ_query(qpred, cpl_program)
+
+    result = solver.solve_succ_query(qpred, cpl_program)
     expected = testing.make_prov_set([(0.2 * 0.8, "b")], ("prob", "z"))
     assert testing.eq_prov_relations(result, expected)
 
 
-def test_multilevel_existential():
+def test_multilevel_existential(solver):
     pchoice_as_sets = {
         P: {(0.5, "a", "b"), (0.5, "b", "c")},
         R: {(0.1, "a"), (0.4, "b"), (0.5, "c")},
@@ -366,7 +384,7 @@ def test_multilevel_existential():
         )
     cpl_program.walk(code)
     qpred = H(x, y)
-    result = solve_succ_query(qpred, cpl_program)
+    result = solver.solve_succ_query(qpred, cpl_program)
     expected = testing.make_prov_set(
         [
             (0.1 * 0.1, "a", "b"),
@@ -381,7 +399,7 @@ def test_multilevel_existential():
     assert testing.eq_prov_relations(result, expected)
 
     qpred = C(z)
-    result = solve_succ_query(qpred, cpl_program,)
+    result = solver.solve_succ_query(qpred, cpl_program)
     expected = testing.make_prov_set(
         [
             (.1, "a"),
@@ -393,12 +411,19 @@ def test_multilevel_existential():
     assert testing.eq_prov_relations(result, expected)
 
     qpred = B(z)
-    result = solve_succ_query(qpred, cpl_program,)
-    expected = testing.make_prov_set([(0.5 * 0.1 * 0.5, "c")], ("_p_", "z"),)
-    assert testing.eq_prov_relations(result, expected)
+
+    if solver is dichotomy_theorem_based_solver:
+        context = pytest.raises(NotHierarchicalQueryException)
+    else:
+        context = nullcontext()
+
+    with context:
+        result = solver.solve_succ_query(qpred, cpl_program,)
+        expected = testing.make_prov_set([(0.5 * 0.1 * 0.5, "c")], ("_p_", "z"),)
+        assert testing.eq_prov_relations(result, expected)
 
 
-def test_repeated_antecedent_predicate_symbol():
+def test_repeated_antecedent_predicate_symbol(solver):
     """
     We consider the simple program
 
@@ -435,20 +460,27 @@ def test_repeated_antecedent_predicate_symbol():
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
     cpl_program.walk(code)
     qpred = Q(x, y)
-    result = solve_succ_query(qpred, cpl_program)
-    expected = testing.make_prov_set(
-        [
-            (0.4 * (1 - 0.7) + 0.4 * 0.7, "a", "a"),
-            (0.7 * (1 - 0.4) + 0.4 * 0.7, "b", "b"),
-            (0.4 * 0.7, "a", "b"),
-            (0.4 * 0.7, "b", "a"),
-        ],
-        ("_p_", "x", "y"),
-    )
-    assert testing.eq_prov_relations(result, expected)
+
+    if solver is dichotomy_theorem_based_solver:
+        context = pytest.raises(NotHierarchicalQueryException)
+    else:
+        context = nullcontext()
+
+    with context:
+        result = solver.solve_succ_query(qpred, cpl_program)
+        expected = testing.make_prov_set(
+            [
+                (0.4 * (1 - 0.7) + 0.4 * 0.7, "a", "a"),
+                (0.7 * (1 - 0.4) + 0.4 * 0.7, "b", "b"),
+                (0.4 * 0.7, "a", "b"),
+                (0.4 * 0.7, "b", "a"),
+            ],
+            ("_p_", "x", "y"),
+        )
+        assert testing.eq_prov_relations(result, expected)
 
 
-def test_fake_neurosynth():
+def test_fake_neurosynth(solver):
     TermInStudy = Symbol("TermInStudy")
     ActivationReported = Symbol("ActivationReported")
     SelectedStudy = Symbol("SelectedStudy")
@@ -505,7 +537,7 @@ def test_fake_neurosynth():
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
     cpl_program.walk(code)
     qpred = TermAssociation(t)
-    result = solve_succ_query(qpred, cpl_program)
+    result = solver.solve_succ_query(qpred, cpl_program)
     expected = testing.make_prov_set(
         [
             (
@@ -519,7 +551,7 @@ def test_fake_neurosynth():
     assert testing.eq_prov_relations(result, expected)
 
 
-def test_conjunct_pfact_equantified_pchoice():
+def test_conjunct_pfact_equantified_pchoice(solver):
     pfact_sets = {P: {(0.8, "a", "s1"), (0.5, "a", "s2"), (0.1, "b", "s2")}}
     pchoice_as_sets = {Z: {(0.6, "s1"), (0.4, "s2")}}
     code = Union((Implication(Q(x), Conjunction((P(x, y), Z(y)))),))
@@ -532,7 +564,7 @@ def test_conjunct_pfact_equantified_pchoice():
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
     cpl_program.walk(code)
     qpred = Q(x)
-    result = solve_succ_query(qpred, cpl_program)
+    result = solver.solve_succ_query(qpred, cpl_program)
     expected = testing.make_prov_set(
         [(0.6 * 0.8 + 0.4 * 0.5, "a",), (0.1 * 0.4, "b"),], ("_p_", "x"),
     )

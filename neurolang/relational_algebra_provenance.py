@@ -6,7 +6,13 @@ from .exceptions import (
     RelationalAlgebraNotImplementedError
 )
 from .expression_walker import ExpressionWalker, add_match
-from .expressions import Constant, Expression, FunctionApplication, Symbol
+from .expressions import (
+    Constant,
+    Expression,
+    FunctionApplication,
+    Symbol,
+    sure_is_not_pattern
+)
 from .relational_algebra import (
     Column,
     ColumnStr,
@@ -29,6 +35,7 @@ from .relational_algebra import (
 )
 
 ADD = Constant(operator.add)
+MUL = Constant(operator.mul)
 
 
 class ProvenanceAlgebraSet(Constant):
@@ -146,7 +153,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             rel_temp = self.walk(relation)
             check_do_not_share_non_prov_col(rel_res, rel_temp)
             rel_res = self._apply_provenance_join_operation(
-                rel_res, rel_temp, Product, Constant(operator.mul),
+                rel_res, rel_temp, Product, MUL,
             )
         return rel_res
 
@@ -272,7 +279,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             naturaljoin.relation_left,
             naturaljoin.relation_right,
             NaturalJoin,
-            Constant(operator.mul),
+            MUL,
         )
 
     def _apply_provenance_join_operation(
@@ -413,25 +420,42 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
             ),
             cols_to_keep + [
                 ExtendedProjectionListMember(
-                    str2columnstr_constant(rap_left.provenance_column) *
-                    rap_right_pc,
+                    self._semiring_mul(
+                        str2columnstr_constant(rap_left.provenance_column),
+                        rap_right_pc
+                    ),
                     new_pc
                 )
             ]
         )
-        return ProvenanceAlgebraSet(self.walk(operation).value, new_pc.value)
+
+        with sure_is_not_pattern():
+            res = ProvenanceAlgebraSet(
+                self.walk(operation).value,
+                new_pc.value
+            )
+        return res
+
+    def _semiring_mul(self, left, right):
+        return left * right
 
     @add_match(Projection(ProvenanceAlgebraSet, ...))
     def projection_rap(self, projection):
         cols = tuple(v.value for v in projection.attributes)
+        if cols == tuple(
+            c for c in projection.relation.relations.columns
+            if c != projection.relation.provenance_column
+        ):
+            return projection.relation
 
-        projected_relation = projection.relation.relations.aggregate(
-            cols,
-            {
-                projection.relation.provenance_column:
-                self._semiring_agg_sum
-            }
-        )
+        with sure_is_not_pattern():
+            projected_relation = projection.relation.relations.aggregate(
+                cols,
+                {
+                    projection.relation.provenance_column:
+                    self._semiring_agg_sum
+                }
+            )
         return ProvenanceAlgebraSet(
             projected_relation,
             projection.relation.provenance_column
@@ -443,7 +467,9 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
         if len(args) == 1:
             r = args[0]
         if isinstance(args[0], Expression):
-            r = ADD(*args)
+            r = FunctionApplication(
+                ADD, args, validate_arguments=False, verify_type=False
+            )
         else:
             r = sum(args)
         return r
@@ -473,12 +499,16 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
     @add_match(NameColumns(ProvenanceAlgebraSet, ...))
     def name_columns_rap(self, expression):
         relation = self._build_relation_constant(expression.relation.relations)
+        columns_to_name = tuple(
+            c for c in relation.value.columns
+            if c != expression.relation.provenance_column
+        )
         ne = RenameColumns(
             relation,
             tuple(
                 (Constant(src), dst)
                 for src, dst in zip(
-                    relation.value.columns, expression.column_names
+                    columns_to_name, expression.column_names
                 )
             )
         )
@@ -529,7 +559,8 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
             relation_right, dummy_col, Constant[int](1)
         )
 
-        ra_union = self.walk(Union(relation_left, relation_right))
+        with sure_is_not_pattern():
+            ra_union = self.walk(Union(relation_left, relation_right))
         rap_projection = Projection(
             ProvenanceAlgebraSet(
                 ra_union.value,
@@ -538,7 +569,10 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
             columns_to_keep
         )
 
-        return self.walk(rap_projection)
+        with sure_is_not_pattern():
+            res = self.walk(rap_projection)
+
+        return res
 
     # Raise Exception for non-implemented RAP operations
     @add_match(

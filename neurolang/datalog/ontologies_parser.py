@@ -222,13 +222,13 @@ class OntologyParser:
         instances of the class must have a value for the property.
         """
 
-        parsed_prop, restricted_node, value = self._parse_restriction_nodes(
+        _, restricted_node, _ = self._parse_restriction_nodes(
             cut_graph
         )
 
         warnings.warn(
-            f"""The restriction minCardinality has not
-            been parsed for {restricted_node}. Not implemented yet."""
+            f"""The restriction minCardinality cannot be
+            parsed for {restricted_node}."""
         )
 
         return Union(())
@@ -251,13 +251,13 @@ class OntologyParser:
         </owl:Restriction>
         """
 
-        parsed_prop, restricted_node, value = self._parse_restriction_nodes(
+        _, restricted_node, _ = self._parse_restriction_nodes(
             cut_graph
         )
 
         warnings.warn(
-            f"""The restriction maxCardinality has not
-            been parsed for {restricted_node}. Not implemented yet."""
+            f"""The restriction maxCardinality cannot be
+            parsed for {restricted_node}"""
         )
 
         return Union(())
@@ -284,13 +284,13 @@ class OntologyParser:
             </owl:cardinality>
         </owl:Restriction>
         """
-        parsed_prop, restricted_node, value = self._parse_restriction_nodes(
+        _, restricted_node, _ = self._parse_restriction_nodes(
             cut_graph
         )
 
         warnings.warn(
-            f"""The restriction cardinality has not
-            been parsed for {restricted_node}. Not implemented yet."""
+            f"""The restriction cardinality cannot be
+            parsed for {restricted_node}"""
         )
 
         return Union(())
