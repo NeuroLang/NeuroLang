@@ -7,7 +7,7 @@ sets.
 """
 
 from itertools import tee
-from typing import AbstractSet, Any, Callable, Tuple
+from typing import AbstractSet, Any, Callable, Tuple, Collection
 from warnings import warn
 
 from ..expression_walker import PatternWalker, add_match
@@ -283,12 +283,14 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
     def infer_iterable_type(iterable):
         type_ = Unknown
         try:
-            iterable_, iterable = tee(iterable)
+            iterable_, iterable__ = tee(iterable)
             first = next(iterable_)
             if isinstance(first, Expression):
                 type_ = first.type
             else:
                 type_ = infer_type(first)
+            if not isinstance(iterable, Collection):
+                iterable = iterable__
         except StopIteration:
             pass
         return type_, iterable
