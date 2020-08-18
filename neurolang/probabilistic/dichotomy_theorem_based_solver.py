@@ -56,7 +56,7 @@ from .weighted_model_counting import (
 LOG = logging.getLogger(__name__)
 
 
-def is_hierarchical(query):
+def is_hierarchical_without_self_joins(query):
     '''
     Let Q be first-order formula. For each variable x denote at(x) the
     set of atoms that contain the variable x. We say that Q is hierarchical
@@ -247,7 +247,7 @@ def solve_succ_query(query_predicate, cpl_program):
         )
         flat_query = Conjunction(tuple(flat_query_formulas))
 
-        if not is_hierarchical(flat_query_probabilistic_section):
+        if not is_hierarchical_without_self_joins(flat_query_probabilistic_section):
             LOG.info(
                 'Query with conjunctions %s not hierarchical',
                 flat_query.formulas
