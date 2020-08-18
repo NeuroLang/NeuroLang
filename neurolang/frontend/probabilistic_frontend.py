@@ -9,6 +9,10 @@ from ..datalog.ontologies_rewriter import OntologyRewriter
 from ..expression_walker import ExpressionBasicEvaluator
 from ..expressions import Symbol, Unknown
 from ..logic import Union
+from ..probabilistic import (
+    dichotomy_theorem_based_solver,
+    weighted_model_counting
+)
 from ..probabilistic.cplogic.problog_solver import \
     solve_succ_all as problog_solve_succ_all
 from ..probabilistic.cplogic.program import (
@@ -16,14 +20,11 @@ from ..probabilistic.cplogic.program import (
     CPLogicProgram,
     TranslateProbabilisticQueryMixin
 )
+from ..probabilistic.dichotomy_theorem_based_solver import solve_succ_query
+from ..probabilistic.exceptions import NotHierarchicalQueryException
 from ..probabilistic.expression_processing import (
     separate_deterministic_probabilistic_code
 )
-from ..probabilistic import (
-    dichotomy_theorem_based_solver,
-    weighted_model_counting
-)
-from ..probabilistic.exceptions import NotHierarchicalQueryException
 from ..region_solver import RegionSolver
 from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,

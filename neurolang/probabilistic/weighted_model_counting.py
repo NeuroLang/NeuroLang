@@ -9,9 +9,12 @@ import numpy as np
 import pandas as pd
 from pysdd import sdd
 
+from neurolang.exceptions import NeuroLangException
+from neurolang.utils import log_performance
+
 from ..datalog.expression_processing import (
     extract_logic_predicates,
-    flatten_query,
+    flatten_query
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import (
@@ -42,7 +45,9 @@ from ..relational_algebra import (
     str2columnstr_constant
 )
 from ..relational_algebra_provenance import (
-    ProvenanceAlgebraSet, RelationalAlgebraProvenanceExpressionSemringSolver)
+    ProvenanceAlgebraSet,
+    RelationalAlgebraProvenanceExpressionSemringSolver
+)
 from ..utils.relational_algebra_set.pandas import (
     NamedRelationalAlgebraFrozenSet
 )
