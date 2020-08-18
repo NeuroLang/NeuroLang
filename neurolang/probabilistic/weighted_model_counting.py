@@ -887,9 +887,6 @@ def build_global_sdd_model_rows(solver, literal_probabilities):
     return rows, exclusive_clause, initial_var_count
 
 
-
-
-
 def sdd_compilation(prob_set_result):
     prob_set_program = ExpressionBlock(
         tuple(
