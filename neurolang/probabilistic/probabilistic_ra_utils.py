@@ -1,3 +1,4 @@
+from neurolang.probabilistic.expression_processing import is_probabilistic_fact
 from ..expressions import Constant, Symbol
 from ..relational_algebra import RelationalAlgebraOperation, ColumnInt
 
@@ -43,36 +44,34 @@ def generate_probabilistic_symbol_table_for_query(
         relational algebra representations as values
     """
     symbol_table = dict()
-    for predicate_symbol, facts in cpl_program.probabilistic_facts().items():
-        if predicate_symbol not in query_predicate._symbols:
-            continue
+    classify_and_wrap_symbols(
+        cpl_program.probabilistic_facts(), query_predicate,
+        symbol_table, ProbabilisticFactSet
+    )
 
-        fresh_symbol = Symbol.fresh()
-        symbol_table[predicate_symbol] = ProbabilisticFactSet(
-            fresh_symbol,
-            Constant[ColumnInt](ColumnInt(0))
-        )
-        symbol_table[fresh_symbol] = facts
+    classify_and_wrap_symbols(
+        cpl_program.probabilistic_choices(), query_predicate,
+        symbol_table, ProbabilisticChoiceSet
+    )
 
-    for predicate_symbol, facts in cpl_program.probabilistic_choices().items():
-        if predicate_symbol not in query_predicate._symbols:
-            continue
-
-        fresh_symbol = Symbol.fresh()
-        symbol_table[predicate_symbol] = ProbabilisticChoiceSet(
-            fresh_symbol,
-            Constant[ColumnInt](ColumnInt(0))
-        )
-        symbol_table[fresh_symbol] = facts
-
-    for predicate_symbol, facts in cpl_program.extensional_database().items():
-        if predicate_symbol not in query_predicate._symbols:
-            continue
-
-        fresh_symbol = Symbol.fresh()
-        symbol_table[predicate_symbol] = DeterministicFactSet(
-            fresh_symbol
-        )
-        symbol_table[fresh_symbol] = facts
+    classify_and_wrap_symbols(
+        cpl_program.extensional_database(), query_predicate,
+        symbol_table, lambda s, _: DeterministicFactSet(s)
+    )
 
     return symbol_table
+
+
+def classify_and_wrap_symbols(
+    ra_set_dict, query_predicate, symbol_table, wrapper
+):
+    for predicate_symbol, facts in ra_set_dict.items():
+        if predicate_symbol not in query_predicate._symbols:
+            continue
+
+        fresh_symbol = Symbol.fresh()
+        symbol_table[predicate_symbol] = wrapper(
+            fresh_symbol,
+            Constant[ColumnInt](ColumnInt(0))
+        )
+        symbol_table[fresh_symbol] = facts
