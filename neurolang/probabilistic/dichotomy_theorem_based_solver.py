@@ -46,39 +46,31 @@ from ..relational_algebra_provenance import (
 from ..utils import log_performance
 from .exceptions import NotHierarchicalQueryException
 from .expression_processing import lift_optimization_for_choice_predicates
-from .weighted_model_counting import (
+from .probabilistic_ra_utils import (
     DeterministicFactSet,
     ProbabilisticChoiceSet,
     ProbabilisticFactSet,
-    _generate_symbol_table
+    generate_probabilistic_symbol_table_for_query
 )
+
 
 LOG = logging.getLogger(__name__)
 
 
-def is_hierarchical(query):
+def is_hierarchical_without_self_joins(query):
     '''
     Let Q be first-order formula. For each variable x denote at(x) the
     set of atoms that contain the variable x. We say that Q is hierarchical
     if forall x, y one of the following holds:
     at(x) ⊆ at(y) or at(x) ⊇ at(y) or at(x) ∩ at(y) = ∅.
     '''
-    predicates = extract_logic_predicates(query)
-    seen_predicate_functor = set()
-    atom_set = defaultdict(set)
-    for predicate in predicates:
-        functor = predicate.functor
-        if functor in seen_predicate_functor:
-            LOG.info(
-                "Not hierarchical self join on variables %s",
-                functor
-            )
-            return False
-        seen_predicate_functor.add(functor)
-        for variable in predicate.args:
-            if not isinstance(variable, Symbol):
-                continue
-            atom_set[variable].add(functor)
+
+    has_self_joins, atom_set = extract_atom_sets_and_detect_self_joins(
+        query
+    )
+
+    if has_self_joins:
+        return False
 
     variables = list(atom_set)
     for i, v in enumerate(variables):
@@ -99,6 +91,27 @@ def is_hierarchical(query):
     return True
 
 
+def extract_atom_sets_and_detect_self_joins(query):
+    has_self_joins = False
+    predicates = extract_logic_predicates(query)
+    seen_predicate_functor = set()
+    atom_set = defaultdict(set)
+    for predicate in predicates:
+        functor = predicate.functor
+        if functor in seen_predicate_functor:
+            LOG.info(
+                "Not hierarchical self join on variables %s",
+                functor
+            )
+            has_self_joins = True
+        seen_predicate_functor.add(functor)
+        for variable in predicate.args:
+            if not isinstance(variable, Symbol):
+                continue
+            atom_set[variable].add(functor)
+    return has_self_joins, atom_set
+
+
 class ProbSemiringSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -115,7 +128,6 @@ class ProbSemiringSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
                     ProbabilisticChoiceSet
                 )
             )
-            # and (len(exp.attributes) == len(exp.relation.relation.columns))
         )
     )
     def eliminate_superfluous_projection(self, expression):
@@ -185,8 +197,8 @@ class ProbSemiringSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
         return self.translated_probfact_sets[relation_symbol]
 
     @add_match(ProbabilisticChoiceSet(Symbol, ...))
-    def probabilistic_choice_set(self, prob_fact_set):
-        return self.probabilistic_fact_set(prob_fact_set)
+    def probabilistic_choice_set(self, prob_choice_set):
+        return self.probabilistic_fact_set(prob_choice_set)
 
     @add_match(ProbabilisticFactSet)
     def probabilistic_fact_set_invalid(self, prob_fact_set):
@@ -247,7 +259,9 @@ def solve_succ_query(query_predicate, cpl_program):
         )
         flat_query = Conjunction(tuple(flat_query_formulas))
 
-        if not is_hierarchical(flat_query_probabilistic_section):
+        if not is_hierarchical_without_self_joins(
+            flat_query_probabilistic_section
+        ):
             LOG.info(
                 'Query with conjunctions %s not hierarchical',
                 flat_query.formulas
@@ -261,7 +275,9 @@ def solve_succ_query(query_predicate, cpl_program):
         ra_query = RAQueryOptimiser().walk(ra_query)
 
     with log_performance(LOG, "Run RAP query"):
-        symbol_table = _generate_symbol_table(cpl_program, flat_query)
+        symbol_table = generate_probabilistic_symbol_table_for_query(
+            cpl_program, flat_query
+        )
 
         solver = ProbSemiringSolver(symbol_table)
         prob_set_result = solver.walk(ra_query)
