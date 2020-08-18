@@ -68,7 +68,7 @@ def is_hierarchical_without_self_joins(query):
         query
     )
 
-    if not has_self_joins:
+    if has_self_joins:
         return False
 
     variables = list(atom_set)
