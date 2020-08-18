@@ -31,6 +31,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         if iterable is not None:
             if isinstance(iterable, RelationalAlgebraFrozenSet):
                 self._container = iterable._container
+            elif isinstance(iterable, pd.DataFrame):
+                self._container = iterable.copy()
             else:
                 self._container = pd.DataFrame(iterable)
 
