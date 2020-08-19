@@ -11,7 +11,7 @@ from .expressions import (
     Expression,
     FunctionApplication,
     Symbol,
-    Unknown,
+    Unknown, sure_is_not_pattern,
 )
 from .utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet
 from .utils.relational_algebra_set import (
@@ -645,15 +645,16 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
             eval_expressions[
                 member.dst_column.value
             ] = self._compile_function_application_to_sql_fun_exp(fun_exp)
-        return self._build_relation_constant(
-            relation.value.extended_projection(eval_expressions)
-        )
+        with sure_is_not_pattern():
+            result = relation.value.extended_projection(eval_expressions)
+        return self._build_relation_constant(result)
 
     def _compile_function_application_to_sql_fun_exp(self, fun_exp):
         if isinstance(fun_exp, FunctionApplication):
             try:
                 return self._saw.walk(fun_exp).value
             except NeuroLangPatternMatchingNoMatch:
+                print(fun_exp)
                 fun, args = self._fa_2_lambda.walk(self._rccsbs.walk(fun_exp))
                 return lambda t: fun(
                     **{arg: getattr(t, arg) for arg in args}
@@ -1110,6 +1111,18 @@ def _get_const_relation_type(const_relation):
             return const_relation.type
     else:
         return _infer_relation_type(const_relation.value)
+
+
+class EliminateTrivialProjections(ew.PatternWalker):
+    @ew.add_match(Projection(Constant, ...))
+    def eliminate_trivial_projection(self, expression):
+        if (
+            tuple(c.value for c in expression.attributes) ==
+            tuple(c for c in expression.relation.value.columns)
+        ):
+            return expression.relation
+        else:
+            return expression
 
 
 class RelationalAlgebraPushInSelections(ew.PatternWalker):
