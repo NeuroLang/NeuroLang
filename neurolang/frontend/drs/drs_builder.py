@@ -58,7 +58,6 @@ class DRSBuilderBase(ExpressionWalker):
 
     @add_match(DRS)
     def walk_drs(self, drs):
-        print("walk_drs")
         old = set(self.accessible_referents)
         self.accessible_referents |= drs.referents
 
@@ -100,7 +99,6 @@ class DRSBuilderBase(ExpressionWalker):
 
     @add_match(Implication)
     def implication(self, impl):
-        print("implication")
         drs_ant = self.walk(impl.antecedent)
         old = set(self.accessible_referents)
         self.accessible_referents |= drs_ant.referents
@@ -124,7 +122,6 @@ class DRSBuilder(DRSBuilderBase):
     def predicate(self, s):
         (subject, vp) = s.args
         (v, object_) = vp.args
-        print("predicate", v.args[0].value)
         exp = Symbol(v.args[0].value)(subject, object_)
         return self.walk(DRS(set(), (exp,)))
 
@@ -142,7 +139,6 @@ class DRSBuilder(DRSBuilderBase):
     def var_noun_phrase(self, np):
         (var,) = np.args
         v = Symbol(var.args[0].value)
-        print("var_noun_phrase", v.name)
         refs = {v} - self.accessible_referents
         return self.walk(DRS(refs, (v,)))
 
@@ -170,13 +166,11 @@ class DRSBuilder(DRSBuilderBase):
 
     @add_match(Fa(Fa(S, ...), (C("if"), ..., C("then"), ...),),)
     def conditional(self, s):
-        print("conditional")
         (_, ant, _, cons) = s.args
         return self.walk(DRS(set(), (Implication(cons, ant),)))
 
     @add_match(Fa(Fa(S, ...), (Fa(Quote, (C(CODE_QUOTE), ...)),),),)
     def quoted_predicate(self, s):
-        print("quoted_predicate")
         exp = _parse_predicate(s.args[0].args[1].value)
         refs = set(a for a in exp.args if isinstance(a, Symbol))
         refs -= self.accessible_referents
@@ -184,7 +178,6 @@ class DRSBuilder(DRSBuilderBase):
 
     @add_match(Fa(Fa(S, ...), (..., C("and"), ...)),)
     def simple_and(self, s):
-        print("simple_and")
         (a, _, b) = s.args
         return self.walk(DRS(set(), (self.walk(a), b,)))
 
@@ -211,7 +204,6 @@ class DRSBuilder(DRSBuilderBase):
     def lit_noun_phrase(self, np):
         (lit,) = np.args
         (const,) = lit.functor.args
-        print("lit_noun_phrase", const)
         return self.walk(DRS(set(), (const,)))
 
     @add_match(
@@ -221,7 +213,6 @@ class DRSBuilder(DRSBuilderBase):
         ),
     )
     def sentence_negation(self, s):
-        print("sentence_negation")
         (_, _, _, _, _, inner_s) = s.args
         drs = self.walk(inner_s)
         return self.walk(DRS(set(), (Negation(drs),)))
