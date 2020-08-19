@@ -50,7 +50,7 @@ class WrappedRelationalAlgebraSetBaseMixin:
     def _set_row_type(self, iterable, row_type, verify_row_type):
         if row_type is not Unknown:
             if verify_row_type:
-                raise NotImplemented()
+                raise NotImplementedError()
             self._row_type = row_type
         elif isinstance(iterable, WrappedRelationalAlgebraSetBaseMixin):
             self._row_type = iterable._row_type

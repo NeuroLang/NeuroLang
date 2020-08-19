@@ -1,4 +1,5 @@
 import collections
+import operator as op
 from typing import AbstractSet, Iterable
 
 import numpy
@@ -6,11 +7,11 @@ import numpy
 from ..datalog import WrappedRelationalAlgebraSet
 from ..datalog.expression_processing import (
     extract_logic_predicates,
-    reachable_code,
+    reachable_code
 )
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
 from ..expressions import Constant, Expression, FunctionApplication
-from ..logic import Implication, Union
+from ..logic import Conjunction, Implication, Union
 from .exceptions import DistributionDoesNotSumToOneError
 from .expressions import PROB, ProbabilisticPredicate, ProbabilisticQuery
 
@@ -212,3 +213,108 @@ def get_within_language_succ_query_prob_term(implication):
         return prob_term
     except StopIteration:
         raise ValueError("Expression does not have a SUCC probabilistic term")
+
+
+def group_preds_by_pred_symb(predicates, filter_set=None):
+    """
+    Group predicates by their predicate symbol.
+
+    An optional filter set of predicate symbols can be passed to only return
+    the ones in the set.
+
+    Parameters
+    ----------
+    predicates : iterable of predicates
+        Predicates that should be grouped.
+    filter_set : set of predicate symbols (optional)
+        Predicate symbols to consider.
+
+    Returns
+    -------
+    dict of predicate symbol to set of predicates
+
+    """
+    grouped = collections.defaultdict(set)
+    for pred in predicates:
+        if filter_set is not None and pred.functor in filter_set:
+            grouped[pred.functor].add(pred)
+    return dict(grouped)
+
+
+def get_probchoice_variable_equalities(predicates, pchoice_pred_symbs):
+    """
+    Infer variable equalities from repeated probabilistic choice predicates.
+
+    Parameters
+    ----------
+    predicates : iterable of predicates
+        Predicates that are part of a conjunction.
+    pchoice_pred_symbs : iterable of predicate symbols
+        Predicate symbols associated with probabilistic choices.
+
+    Returns
+    -------
+    set of pairs of symbol variables
+        Each pair in the set represents the equality between two variables.
+        Variables within the pair are sorted in lexicographical order.
+
+    Notes
+    -----
+    A probabilistic choice encodes mutually exclusive random events. Let `P` be
+    the predicate symbol of a probabilistic choice. The conjunction `P(x),
+    P(y)` can only be true if `x == y`.
+
+    """
+    grouped_pchoice_preds = group_preds_by_pred_symb(
+        predicates, pchoice_pred_symbs
+    )
+    eq_set = set()
+    for predicates in grouped_pchoice_preds.values():
+        predicates = list(predicates)
+        arity = len(predicates[0].args)
+        for var_idx in range(arity):
+            for pred_idx in range(1, len(predicates)):
+                x = predicates[pred_idx - 1].args[var_idx]
+                y = predicates[pred_idx].args[var_idx]
+                if x == y:
+                    continue
+                eq_set.add(
+                    (
+                        min(x, y, key=lambda symb: symb.name),
+                        max(x, y, key=lambda symb: symb.name),
+                    )
+                )
+    return eq_set
+
+
+def lift_optimization_for_choice_predicates(query, program):
+    """Replace multiple instances of choice predicates by
+    single instances enforncing the definition that the probability
+    that two different grounded choice predicates are mutually exclusive.
+
+    Parameters
+    ----------
+    query : predicate or conjunction of predicates
+        The query for which the conjunction is constructed.
+    program : a program with a probabilistic database.
+        Program with logical rules that will be used to construct the
+        conjunction corresponding to the given query.
+
+    Returns
+    -------
+    Conjunctive query
+        conjunctive query rewritten for choice predicate implementation.
+
+    """
+    if len(program.pchoice_pred_symbs) > 0:
+        eq = Constant(op.eq)
+        added_equalities = []
+        for x, y in get_probchoice_variable_equalities(
+            query.formulas, program.pchoice_pred_symbs
+        ):
+            added_equalities.append(eq(x, y))
+        if len(added_equalities) > 0:
+            query = Conjunction(
+                query.formulas + tuple(added_equalities)
+            )
+    return query
