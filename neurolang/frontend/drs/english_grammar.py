@@ -1,8 +1,10 @@
-from ...expressions import Symbol, Constant
+from ...expressions import Symbol, Constant, FunctionApplication as Fa
+from ...expression_walker import PatternWalker, add_match
 from .chart_parser import (
     Grammar,
     DictLexicon,
-    add_rule,
+    Rule,
+    RootRule,
     Quote,
     CODE_QUOTE,
     STRING_QUOTE,
@@ -10,6 +12,7 @@ from .chart_parser import (
 
 
 S = Symbol("S")
+SL = Symbol("SL")
 NP = Symbol("NP")
 PN = Symbol("PN")
 VP = Symbol("VP")
@@ -19,6 +22,8 @@ N = Symbol("N")
 PRO = Symbol("PRO")
 VAR = Symbol("VAR")
 LIT = Symbol("LIT")
+UNK = Symbol("UNK")
+AUX = Symbol("AUX")
 
 c = Symbol("c")
 n = Symbol("n")
@@ -27,6 +32,14 @@ g = Symbol("g")
 h = Symbol("h")
 w = Symbol("w")
 v = Symbol("v")
+_x = Symbol("_x")
+_y = Symbol("_y")
+_z = Symbol("_z")
+
+
+class stype:
+    if_ = Constant("if_")
+    notif = Constant("notif")
 
 
 class num:
@@ -45,62 +58,84 @@ class case:
     notnom = Constant("notnom")
 
 
-class EnglishGrammar(Grammar):
-    def __init__(self, lexicon):
-        super().__init__(lexicon)
+EnglishGrammar = Grammar(
+    (
+        RootRule(S(n, stype.notif), (NP(n, g, case.nom), VP(n))),
+        RootRule(S(n, stype.if_), (S(n, _x), Constant("if"), S(m, _y))),
+        RootRule(
+            S(n, stype.if_),
+            (Constant("if"), S(n, _x), Constant("then"), S(m, _y)),
+        ),
+        Rule(VP(n), (V(n), NP(m, g, case.notnom))),
+        Rule(V(n), (UNK(),)),
+        Rule(
+            NP(num.plural, _x, c), (NP(n, g, c), Constant("and"), NP(m, h, c)),
+        ),
+        Rule(NP(n, g, c), (NP(n, g, c), VAR())),
+        Rule(NP(n, g, _x), (PN(n, g, v),)),
+        Rule(NP(_x, _y, _z), (VAR(),)),
+        Rule(NP(n, g, _x), (DET(n), N(n, g))),
+        Rule(NP(n, g, c), (PRO(n, g, c),)),
+        Rule(SL(), (S(n, stype.notif),)),
+        Rule(SL(), (SL(), Constant(","), S(_y, stype.notif),)),
+        RootRule(
+            S(_x, stype.notif),
+            (SL(), Constant(","), Constant("and"), S(_y, stype.notif),),
+        ),
+        RootRule(
+            S(_x, stype.notif),
+            (S(_y, stype.notif), Constant("and"), S(_z, stype.notif),),
+        ),
+        RootRule(S(n, stype.notif), (Quote(Constant(CODE_QUOTE), v),)),
+        Rule(LIT(v), (Quote(Constant(STRING_QUOTE), v),)),
+        Rule(NP(_x, _y, _z), (LIT(v),)),
+        RootRule(
+            S(n, stype.notif),
+            (
+                Constant("is"),
+                Constant("not"),
+                Constant("the"),
+                Constant("case"),
+                Constant("that"),
+                S(n, stype.notif),
+            ),
+        ),
+        Rule(
+            VP(n),
+            (
+                AUX(n),
+                Constant("not"),
+                V(num.plural),
+                NP(m, g, case.notnom),
+            ),
+        ),
+        Rule(AUX(num.singular), (Constant("does"),)),
+        Rule(AUX(num.plural), (Constant("do"),)),
+    )
+)
 
-    @add_rule(NP(n, g, case.nom), VP(n), root=True)
-    def s(self, np, vp):
-        return S(n)
 
-    @add_rule(S(n), Constant("if"), S(m), root=True)
-    def s_if(self, consecuent, _if, antecedent):
-        return S(n)
+class UnknownWordsInSentence(PatternWalker):
+    @add_match(Constant)
+    def constant(self, _):
+        return set()
 
-    @add_rule(Constant("if"), S(n), Constant("then"), S(m), root=True)
-    def s_if_then(self, _if, antecedent, _then, consecuent):
-        return S(n)
+    @add_match(Quote)
+    def quote(self, _):
+        return set()
 
-    @add_rule(V(n), NP(m, g, case.notnom))
-    def vp(self, v, np):
-        return VP(n)
+    @add_match(Fa(Fa(V, ...), (Fa(Fa(UNK, ...), ...),)))
+    def unknown_verb(self, v):
+        (unk,) = v.args
+        verb = unk.args[0].value
+        return {(V, verb)}
 
-    @add_rule(NP(n, g, c), Constant("and"), NP(m, h, c))
-    def np_and(self, first, _, second):
-        return NP(num.plural, Symbol.fresh(), c)
-
-    @add_rule(NP(n, g, c), VAR())
-    def np_apposition(self, np, var):
-        return NP(n, g, c)
-
-    @add_rule(PN(n, g, v))
-    def np_proper(self, pn):
-        return NP(n, g, Symbol.fresh())
-
-    @add_rule(VAR())
-    def np_var(self, var):
-        return NP(Symbol.fresh(), Symbol.fresh(), Symbol.fresh())
-
-    @add_rule(DET(n), N(n, g))
-    def np_indefinite(self, det, noun):
-        return NP(n, g, Symbol.fresh())
-
-    @add_rule(PRO(n, g, c))
-    def np_pronoun(self, pro):
-        return NP(n, g, c)
-
-    @add_rule(Quote(Constant(STRING_QUOTE), v))
-    def quot_string_lit(self, quot):
-        _q, content = quot.args
-        return LIT(content)
-
-    @add_rule(LIT(v))
-    def np_lit(self, lit):
-        return NP(Symbol.fresh(), Symbol.fresh(), Symbol.fresh())
-
-    @add_rule(Quote(Constant(CODE_QUOTE), v))
-    def s_quot(self, quot):
-        return S(n)
+    @add_match(Fa)
+    def node(self, fa):
+        uwords = set()
+        for a in fa.args:
+            uwords |= self.walk(a)
+        return uwords
 
 
 class EnglishBaseLexicon(DictLexicon):
@@ -111,6 +146,38 @@ class EnglishBaseLexicon(DictLexicon):
         m = super().get_meanings(token)
         if isinstance(token, Constant) and token.value.isupper():
             m += (VAR(),)
+        return m
+
+
+class DatalogLexicon(EnglishBaseLexicon):
+    def __init__(self, nl):
+        super().__init__()
+        self.nl = nl
+        self.initialize()
+
+    def initialize(self):
+        with self.nl.environment as e:
+            e.verb[e.w, e.n] = e.singular_verb[e.w] & (e.n == num.singular)
+
+    def get_meanings(self, token):
+        m = super().get_meanings(token)
+
+        if isinstance(token, Constant):
+            n = self.nl.new_symbol(name="n")
+            verb = self.nl.new_symbol(name="verb")
+            sol = self.nl.query((n,), verb(token, n))
+
+            for (n,) in sol:
+                m += (V(Constant(n)),)
+
+        return m
+
+
+class UnknownWordLexicon(DatalogLexicon):
+    def get_meanings(self, token):
+        m = super().get_meanings(token)
+        if len(m) == 0:
+            m += (UNK(),)
         return m
 
 
@@ -128,6 +195,11 @@ FIXED_VOCABULARY = {
     "likes": (V(num.singular),),
     "intersects": (V(num.singular),),
     "references": (V(num.singular),),
+    "provides": (V(num.singular),),
+    "contains": (V(num.singular),),
+    "affects": (V(num.singular),),
+    "reaches": (V(num.singular),),
+    "affect": (V(num.plural),),
     "own": (V(num.plural),),
     "have": (V(num.plural),),
     "like": (V(num.plural),),
@@ -139,6 +211,7 @@ FIXED_VOCABULARY = {
     "an": (DET(num.singular),),
     "every": (DET(num.singular),),
     "the": (DET(num.singular),),
+    "that": (DET(num.singular),),
     "woman": (N(num.singular, gen.female),),
     "stockbroker": (N(num.singular, gen.female), N(num.singular, gen.male),),
     "man": (N(num.singular, gen.male),),
@@ -147,4 +220,5 @@ FIXED_VOCABULARY = {
     "horse": (N(num.singular, gen.thing),),
     "region": (N(num.singular, gen.thing),),
     "ending": (N(num.singular, gen.thing),),
+    "function": (N(num.singular, gen.thing),),
 }

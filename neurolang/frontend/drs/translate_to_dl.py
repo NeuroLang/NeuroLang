@@ -13,7 +13,12 @@ from ...logic import (
 from ...logic.horn_clauses import fol_query_to_datalog_program
 from .drs_builder import DRSBuilder, DRS2FOL
 from .chart_parser import ChartParser
-from .english_grammar import EnglishGrammar, EnglishBaseLexicon
+from .english_grammar import (
+    EnglishGrammar,
+    UnknownWordLexicon,
+    V,
+    UnknownWordsInSentence,
+)
 import operator
 from ...expression_walker import ExpressionWalker
 from ...logic.transformations import (
@@ -26,41 +31,58 @@ from ...logic.transformations import (
 _equals = Constant(operator.eq)
 
 
-class TranslateToDatalog:
-    def __init__(self):
-        self.grammar = EnglishGrammar(EnglishBaseLexicon())
-        self.parser = ChartParser(self.grammar)
-        self.builder = DRSBuilder(self.grammar)
-        self.into_fol = DRS2FOL()
+def cnl_initialized(method):
+    def new_method(self, *args, **kwargs):
+        if not hasattr(self, "_lexicon"):
+            self._initialize_cnl()
+        return method(self, *args, **kwargs)
 
-    def translate_block(self, string):
-        program = ExpressionBlock(())
+    return new_method
 
-        for sentence in string.split("."):
+
+class CnlFrontendMixin:
+    def _initialize_cnl(self):
+        self._lexicon = UnknownWordLexicon(self)
+        self._grammar = EnglishGrammar
+        self._parser = ChartParser(self._grammar, self._lexicon)
+        self._drs_builder = DRSBuilder(self._grammar)
+        self._into_fol = DRS2FOL()
+        self._into_cos = TransformIntoConjunctionOfDatalogSentences()
+        self._uwis = UnknownWordsInSentence()
+
+    @cnl_initialized
+    def execute_cnl_code(self, code):
+        for sentence in code.split("."):
             sentence = sentence.strip()
             if not sentence:
                 continue
-            program = ExpressionBlock(
-                program.expressions
-                + self.translate_sentence(sentence).expressions
-            )
+            self.execute_cnl_sentence(sentence)
 
-        return program
+    def _parse_sentence(self, sentence):
+        t = self._parser.parse(sentence)
+        uw = self._uwis.walk(t)
+        if uw:
+            for pos, word in uw:
+                if pos == V:
+                    self.add_tuple_set((word,), name="singular_verb")
+            t = self._parser.parse(sentence)
 
-    def translate_sentence(self, sentence):
-        t = self.parser.parse(sentence)[0]
+        return t
 
-        drs = self.builder.walk(t)
-        exp = self.into_fol.walk(drs)
-        exp = TransformIntoConjunctionOfDatalogSentences().walk(exp)
-
+    def execute_cnl_sentence(self, sentence):
+        t = self._parse_sentence(sentence)
+        drs = self._drs_builder.walk(t)
+        exp = self._into_fol.walk(drs)
+        exp = self._into_cos.walk(exp)
         lsentences = exp.formulas if isinstance(exp, Conjunction) else (exp,)
-        program = ExpressionBlock(())
-        for block in map(self.translate_logical_sentence, lsentences):
-            program = ExpressionBlock(program.expressions + block.expressions)
-        return program
+        for s in lsentences:
+            self.execute_fol_sentence(s)
 
-    def translate_logical_sentence(self, exp):
+    def execute_fol_sentence(self, exp):
+        program = self._translate_logical_sentence(exp)
+        self.solver.walk(program)
+
+    def _translate_logical_sentence(self, exp):
         try:
             return _as_intensional_rule(exp)
         except TranslateToDatalogError:
@@ -126,6 +148,14 @@ def _strip_universal_quantifiers(exp):
         exp = exp.body
 
     return ucv, exp
+
+
+def _add_universal_quantifiers(exp, ucv):
+    ucv = list(ucv)
+    while ucv:
+        v = ucv.pop()
+        exp = UniversalPredicate(v, exp)
+    return exp
 
 
 def _constrain_using_head_constants(head, body, ucv):

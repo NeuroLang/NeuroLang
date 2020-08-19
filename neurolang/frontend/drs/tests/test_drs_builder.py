@@ -11,13 +11,13 @@ from ..english_grammar import EnglishGrammar, EnglishBaseLexicon
 import pytest
 
 
-_eg = EnglishGrammar(EnglishBaseLexicon())
-_cp = ChartParser(_eg)
+_eg = EnglishGrammar
+_cp = ChartParser(_eg, EnglishBaseLexicon())
 
 
 def test_simple_expression():
     b = DRSBuilder(_eg)
-    t = _cp.parse("Jones owns Ulysses")[0]
+    t = _cp.parse("Jones owns Ulysses")
     drs = b.walk(t)
 
     assert len(drs.referents) == 0
@@ -30,11 +30,11 @@ def test_simple_expression():
 
 def test_indefinite_noun_phrase():
     b = DRSBuilder(_eg)
-    t = _cp.parse("Jones owns a book")[0]
+    t = _cp.parse("Jones owns a book")
     drs = b.walk(t)
 
     assert len(drs.referents) == 1
-    x = drs.referents[0]
+    x = list(drs.referents)[0]
     assert len(drs.expressions) == 2
 
     assert drs.expressions[0] == Symbol("owns")(Constant("Jones"), x)
@@ -43,7 +43,7 @@ def test_indefinite_noun_phrase():
 
 def test_var_noun_phrases():
     b = DRSBuilder(_eg)
-    t = _cp.parse("X intersects Y")[0]
+    t = _cp.parse("X intersects Y")
     drs = b.walk(t)
 
     assert len(drs.referents) == 2
@@ -53,13 +53,13 @@ def test_var_noun_phrases():
 
 def test_apposition_variable_introduction():
     b = DRSBuilder(_eg)
-    t = _cp.parse("a region X intersects a region Y")[0]
+    t = _cp.parse("a region X intersects a region Y")
     drs = b.walk(t)
     x = Symbol("X")
     y = Symbol("Y")
     assert len(drs.referents) == 2
-    assert x == drs.referents[0]
-    assert y == drs.referents[1]
+    assert x in drs.referents
+    assert y in drs.referents
     assert len(drs.expressions) == 3
 
     assert drs.expressions[0] == Symbol("intersects")(x, y)
@@ -69,7 +69,7 @@ def test_apposition_variable_introduction():
 
 def test_conditional():
     b = DRSBuilder(_eg)
-    t = _cp.parse("if a region Y intersects a region X then X intersects Y")[0]
+    t = _cp.parse("if a region Y intersects a region X then X intersects Y")
     drs = b.walk(t)
     x = Symbol("X")
     y = Symbol("Y")
@@ -90,7 +90,7 @@ def test_conditional():
 
 def test_translation_1():
     b = DRSBuilder(_eg)
-    t = _cp.parse("X intersects Y")[0]
+    t = _cp.parse("X intersects Y")
     drs = b.walk(t)
     exp = DRS2FOL().walk(drs)
     x = Symbol("X")
@@ -103,16 +103,16 @@ def test_translation_1():
 
 def test_translation_2():
     b = DRSBuilder(_eg)
-    t = _cp.parse("if a region Y intersects a region X then X intersects Y")[0]
+    t = _cp.parse("if a region Y intersects a region X then X intersects Y")
     drs = b.walk(t)
     exp = DRS2FOL().walk(drs)
     x = Symbol("X")
     y = Symbol("Y")
 
     assert exp == UniversalPredicate(
-        x,
+        y,
         UniversalPredicate(
-            y,
+            x,
             Implication(
                 Symbol("intersects")(x, y),
                 Conjunction(
@@ -136,7 +136,7 @@ def test_same_implication():
 
 def test_quoted_predicate():
     b = DRSBuilder(_eg)
-    t = _cp.parse("if `intersects(Y, X)` then X intersects Y")[0]
+    t = _cp.parse("if `intersects(Y, X)` then X intersects Y")
     drs = b.walk(t)
 
     x = Symbol("X")
@@ -153,9 +153,64 @@ def test_quoted_predicate():
     assert Symbol("intersects")(x, y) in set(con.expressions)
 
 
+def test_conjunction_1():
+    b = DRSBuilder(_eg)
+    t = _cp.parse("X owns Y and Y references Z")
+    drs = b.walk(t)
+    exp = DRS2FOL().walk(drs)
+    x = Symbol("X")
+    y = Symbol("Y")
+    z = Symbol("Z")
+
+    assert exp == ExistentialPredicate(
+        z,
+        ExistentialPredicate(
+            y,
+            ExistentialPredicate(
+                x,
+                Conjunction(
+                    (Symbol("owns")(x, y), Symbol("references")(y, z),)
+                ),
+            ),
+        ),
+    )
+
+
+def test_conjunction_2():
+    b = DRSBuilder(_eg)
+    t = _cp.parse(
+        "a man X owns a book Y, Y references a book Z, and X likes Z"
+    )
+    drs = b.walk(t)
+    exp = DRS2FOL().walk(drs)
+    x = Symbol("X")
+    y = Symbol("Y")
+    z = Symbol("Z")
+
+    assert exp == ExistentialPredicate(
+        z,
+        ExistentialPredicate(
+            y,
+            ExistentialPredicate(
+                x,
+                Conjunction(
+                    (
+                        Symbol("owns")(x, y),
+                        Symbol("book")(y),
+                        Symbol("man")(x),
+                        Symbol("references")(y, z),
+                        Symbol("book")(z),
+                        Symbol("likes")(x, z),
+                    )
+                ),
+            ),
+        ),
+    )
+
+
 def test_quoted_string_literal():
     b = DRSBuilder(_eg)
-    t = _cp.parse('"Ulysses" references "Odyssey"')[0]
+    t = _cp.parse('"Ulysses" references "Odyssey"')
     drs = b.walk(t)
     o = Constant("Odyssey")
     u = Constant("Ulysses")
@@ -163,3 +218,17 @@ def test_quoted_string_literal():
     assert len(drs.referents) == 0
     assert len(drs.expressions) == 1
     assert Symbol("references")(u, o) in set(drs.expressions)
+
+
+def test_quoted_string_lit_in_quoted_datalog():
+    b = DRSBuilder(_eg)
+    t = _cp.parse('`references(X, "Ulysses", "Odyssey")`')
+    drs = b.walk(t)
+    x = Symbol("X")
+    o = Constant("Odyssey")
+    u = Constant("Ulysses")
+
+    assert len(drs.referents) == 1
+    assert x in drs.referents
+    assert len(drs.expressions) == 1
+    assert Symbol("references")(x, u, o) in set(drs.expressions)

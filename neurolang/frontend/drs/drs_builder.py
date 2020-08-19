@@ -10,8 +10,20 @@ from ...expression_walker import (
     ReplaceSymbolWalker,
 )
 from .chart_parser import Quote, CODE_QUOTE
-from .english_grammar import S, V, NP, VP, PN, DET, N, VAR, LIT
+from .english_grammar import (
+    S,
+    V,
+    NP,
+    VP,
+    PN,
+    DET,
+    N,
+    VAR,
+    SL,
+    LIT,
+)
 from ...logic import (
+    Negation,
     Implication,
     Conjunction,
     ExistentialPredicate,
@@ -39,23 +51,38 @@ class DRS(Expression):
         )
 
 
-class DRSBuilder(ExpressionWalker):
+class DRSBuilderBase(ExpressionWalker):
     def __init__(self, grammar):
         self.grammar = grammar
+        self.accessible_referents = set()
 
-    @add_match(
-        DRS, lambda drs: any(isinstance(e, DRS) for e in drs.expressions),
-    )
-    def join_drs(self, drs):
-        refs = drs.referents
-        exps = ()
+    @add_match(DRS)
+    def walk_drs(self, drs):
+        old = set(self.accessible_referents)
+        self.accessible_referents |= drs.referents
+
+        changed = False
+        refs = set(drs.referents)
+        exps = tuple()
+
         for e in drs.expressions:
-            if isinstance(e, DRS):
-                refs += e.referents
-                exps += e.expressions
-            else:
+            if changed:
                 exps += (e,)
-        return self.walk(DRS(refs, exps))
+            elif isinstance(e, DRS):
+                refs |= set(r for r in e.referents if r not in refs)
+                exps += e.expressions
+                changed = True
+            else:
+                new_e = self.walk(e)
+                changed |= new_e is not e
+                exps += (new_e,)
+
+        self.accessible_referents = old
+
+        if changed:
+            return self.walk(DRS(refs, exps))
+        else:
+            return drs
 
     @add_match(Fa, lambda fa: any(isinstance(e, DRS) for e in fa.args))
     def float_drs(self, fa):
@@ -70,11 +97,24 @@ class DRSBuilder(ExpressionWalker):
         exps = (Fa(fa.functor, args),) + tuple(drs.expressions[1:])
         return self.walk(DRS(drs.referents, exps))
 
+    @add_match(Implication)
+    def implication(self, impl):
+        drs_ant = self.walk(impl.antecedent)
+        old = set(self.accessible_referents)
+        self.accessible_referents |= drs_ant.referents
+        drs_con = self.walk(impl.consequent)
+        self.accessible_referents = old
+        if drs_ant is not impl.antecedent or drs_con is not impl.consequent:
+            return Implication(drs_con, drs_ant)
+        return impl
+
+
+class DRSBuilder(DRSBuilderBase):
     @add_match(Fa(Fa(NP, ...), (Fa(Fa(PN, ...), ...),)))
     def proper_names(self, np):
         (pn,) = np.args
         (_, _, const) = pn.functor.args
-        return self.walk(DRS((), (const,)))
+        return self.walk(DRS(set(), (const,)))
 
     @add_match(
         Fa(Fa(S, ...), (..., Fa(Fa(VP, ...), (Fa(Fa(V, ...), ...), ...)),),)
@@ -83,7 +123,7 @@ class DRSBuilder(ExpressionWalker):
         (subject, vp) = s.args
         (v, object_) = vp.args
         exp = Symbol(v.args[0].value)(subject, object_)
-        return self.walk(DRS((), (exp,)))
+        return self.walk(DRS(set(), (exp,)))
 
     @add_match(
         Fa(Fa(NP, ...), (Fa(Fa(DET, ...), ...), Fa(Fa(N, ...), ...),)),
@@ -93,13 +133,14 @@ class DRSBuilder(ExpressionWalker):
         (det, n) = np.args
         x = Symbol.fresh()
         exp = Symbol(n.args[0].value)(x)
-        return self.walk(DRS((x,), (x, exp)))
+        return self.walk(DRS({x}, (x, exp)))
 
     @add_match(Fa(Fa(NP, ...), (Fa(Fa(VAR, ...), ...),)),)
     def var_noun_phrase(self, np):
         (var,) = np.args
         v = Symbol(var.args[0].value)
-        return self.walk(DRS((v,), (v,)))
+        refs = {v} - self.accessible_referents
+        return self.walk(DRS(refs, (v,)))
 
     @add_match(
         Fa(Fa(NP, ...), (Fa(Fa(NP, ...), ...), Fa(Fa(VAR, ...), ...),)),
@@ -116,49 +157,68 @@ class DRSBuilder(ExpressionWalker):
         for e in np_drs.expressions:
             exps += (rsw.walk(e),)
 
-        refs = ()
+        refs = set()
         for r in np_drs.referents:
-            refs += (rsw.walk(r),)
+            refs |= {rsw.walk(r)}
 
+        refs -= self.accessible_referents
         return self.walk(DRS(refs, exps))
 
-    @add_match(
-        Fa(
-            Fa(S, ...),
-            (C("if"), Fa(Fa(S, ...), ...), C("then"), Fa(Fa(S, ...), ...),),
-        ),
-    )
+    @add_match(Fa(Fa(S, ...), (C("if"), ..., C("then"), ...),),)
     def conditional(self, s):
         (_, ant, _, cons) = s.args
-        return self.walk(DRS((), (Implication(cons, ant),)))
+        return self.walk(DRS(set(), (Implication(cons, ant),)))
 
     @add_match(Fa(Fa(S, ...), (Fa(Quote, (C(CODE_QUOTE), ...)),),),)
     def quoted_predicate(self, s):
         exp = _parse_predicate(s.args[0].args[1].value)
-        return self.walk(DRS(exp.args, (exp,)))
+        refs = set(a for a in exp.args if isinstance(a, Symbol))
+        refs -= self.accessible_referents
+        return self.walk(DRS(refs, (exp,)))
 
-    @add_match(
-        Implication(DRS, DRS),
-        lambda impl: (
-            set(impl.antecedent.referents) & set(impl.consequent.referents)
-        ),
-    )
-    def implication(self, impl):
-        drs_ant = impl.antecedent
-        drs_con = impl.consequent
-        drs_con.referents = tuple(
-            set(drs_con.referents) - set(drs_ant.referents)
-        )
-        return self.walk(Implication(drs_con, drs_ant))
+    @add_match(Fa(Fa(S, ...), (..., C("and"), ...)),)
+    def simple_and(self, s):
+        (a, _, b) = s.args
+        return self.walk(DRS(set(), (self.walk(a), b,)))
+
+    @add_match(Fa(Fa(S, ...), (..., C(","), C("and"), ...),),)
+    def comma_and(self, s):
+        (sl, _, _, s) = s.args
+        sl = self.walk(sl)
+        s = self.walk(s)
+        return self.walk(DRS(set(), sl + (s,)))
+
+    @add_match(Fa(Fa(SL, ...), (...,),),)
+    def single_sentence_list(self, sl):
+        (s,) = sl.args
+        return (self.walk(s),)
+
+    @add_match(Fa(Fa(SL, ...), (Fa(Fa(SL, ...), ...), C(","), ...),),)
+    def sentence_list(self, sl):
+        (sl, _, s) = sl.args
+        sl = self.walk(sl)
+        s = self.walk(s)
+        return sl + (s,)
 
     @add_match(Fa(Fa(NP, ...), (Fa(Fa(LIT, ...), ...),)),)
     def lit_noun_phrase(self, np):
         (lit,) = np.args
         (const,) = lit.functor.args
-        return self.walk(DRS((), (const,)))
+        return self.walk(DRS(set(), (const,)))
+
+    @add_match(
+        Fa(
+            Fa(S, ...),
+            (C("is"), C("not"), C("the"), C("case"), C("that"), ...),
+        ),
+    )
+    def sentence_negation(self, s):
+        (_, _, _, _, _, inner_s) = s.args
+        drs = self.walk(inner_s)
+        return self.walk(DRS(set(), (Negation(drs),)))
 
 
-r = re.compile(r"^(\w+)\((\w+(,\s\w+)*)\)$")
+r = re.compile(r'^(\w+)\(((\w+|"\w+")(,\s?(\w+|"\w+"))*)\)$')
 
 
 def _parse_predicate(string):
@@ -167,15 +227,21 @@ def _parse_predicate(string):
     if not m:
         raise Exception(f"Quoted predicate is not valid datalog: {string}")
     functor = Symbol(m.group(1))
-    args = map(Symbol, map(str.strip, m.group(2).split(",")))
+    args = map(_parse_argument, map(str.strip, m.group(2).split(",")))
     return functor(*args)
+
+
+def _parse_argument(s):
+    if s[0] == '"':
+        return C(s.strip('"'))
+    return Symbol(s)
 
 
 class DRS2FOL(ExpressionWalker):
     @add_match(DRS)
     def drs(self, drs):
         exp = Conjunction(tuple(map(self.walk, drs.expressions)))
-        for r in drs.referents:
+        for r in sorted(drs.referents, key=lambda s: s.name):
             exp = ExistentialPredicate(r, exp)
         return self.walk(exp)
 
@@ -190,6 +256,6 @@ class DRS2FOL(ExpressionWalker):
         ant = Conjunction(tuple(map(self.walk, drs_ant.expressions)))
         con = self.walk(drs_con)
         exp = Implication(con, ant)
-        for r in drs_ant.referents:
+        for r in sorted(drs_ant.referents, key=lambda s: s.name):
             exp = UniversalPredicate(r, exp)
         return self.walk(exp)

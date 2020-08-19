@@ -1,6 +1,13 @@
 from ....expressions import Symbol, Constant, FunctionApplication as Fa
 from ....expression_walker import PatternWalker, add_match
-from ..chart_parser import Grammar, add_rule, ChartParser, _lu, DictLexicon
+from ..chart_parser import (
+    Grammar,
+    Rule,
+    RootRule,
+    ChartParser,
+    _lu,
+    DictLexicon,
+)
 
 
 S = Symbol("S")
@@ -17,31 +24,24 @@ plural = Constant("plural")
 singular = Constant("singular")
 
 
-class TestGrammar(Grammar):
-    @add_rule(NP(a), VP(a), root=True)
-    def s(self, np, vp):
-        return S(a)
+TestGrammar = Grammar(
+    (
+        RootRule(S(a), (NP(a), VP(a))),
+        Rule(VP(a), (V(a), NP(b))),
+        Rule(NP(plural), (NP(a), Constant("and"), NP(b))),
+        Rule(NP(a), (PN(a),)),
+    )
+)
 
-    @add_rule(V(a), NP(b))
-    def vp(self, v, np):
-        return VP(a)
-
-    @add_rule(NP(a), Constant("and"), NP(b))
-    def np_and(self, first, _, second):
-        return NP(plural)
-
-    @add_rule(PN(a))
-    def np_proper(self, pn):
-        return NP(a)
-
-
-test_lexicon = DictLexicon({
-    "owns": (V(singular),),
-    "own": (V(plural),),
-    "Jones": (PN(singular),),
-    "Smith": (PN(singular),),
-    "Ulysses": (PN(singular),),
-})
+test_lexicon = DictLexicon(
+    {
+        "owns": (V(singular),),
+        "own": (V(plural),),
+        "Jones": (PN(singular),),
+        "Smith": (PN(singular),),
+        "Ulysses": (PN(singular),),
+    }
+)
 
 
 def test_mgu():
@@ -52,16 +52,14 @@ def test_mgu():
 
 
 def test_recognize():
-    g = TestGrammar(test_lexicon)
-    cp = ChartParser(g)
+    cp = ChartParser(TestGrammar, test_lexicon)
     assert cp.recognize("Jones owns Ulysses")
     assert not cp.recognize("Jones own Ulysses")
     assert cp.recognize("Jones and Smith own Ulysses")
 
 
 def test_parse():
-    g = TestGrammar(test_lexicon)
-    cp = ChartParser(g)
+    cp = ChartParser(TestGrammar, test_lexicon)
     tree = S(singular)(
         NP(singular)(PN(singular)(Constant("Jones"))),
         VP(singular)(
@@ -69,7 +67,7 @@ def test_parse():
             NP(singular)(PN(singular)(Constant("Ulysses"))),
         ),
     )
-    assert tree == cp.parse("Jones owns Ulysses")[0]
+    assert tree == cp.parse("Jones owns Ulysses")
 
 
 class TestGrammarWalker(PatternWalker):
@@ -100,10 +98,9 @@ class TestGrammarWalker(PatternWalker):
 
 
 def test_walk_parsed():
-    g = TestGrammar(test_lexicon)
-    cp = ChartParser(g)
+    cp = ChartParser(TestGrammar, test_lexicon)
     sentence = "Jones owns Ulysses"
-    tree = cp.parse(sentence)[0]
+    tree = cp.parse(sentence)
     r = TestGrammarWalker().walk(tree)
     assert sentence == r
 
@@ -113,9 +110,7 @@ class TestGrammarWalker2(TestGrammarWalker):
     def v_sing(self, exp):
         return "SV"
 
-    @add_match(
-        Fa(Fa(NP, ...), (..., "and", ...,),)
-    )
+    @add_match(Fa(Fa(NP, ...), (..., "and", ...,),))
     def np_conj(self, exp):
         (pn1, c, pn2) = exp.args
         return self.walk(pn1) + " and " + self.walk(pn2)
@@ -131,12 +126,11 @@ class TestGrammarWalker2(TestGrammarWalker):
 
 
 def test_walk_parsed_2():
-    g = TestGrammar(test_lexicon)
-    cp = ChartParser(g)
-    tree = cp.parse("Jones owns Ulysses")[0]
+    cp = ChartParser(TestGrammar, test_lexicon)
+    tree = cp.parse("Jones owns Ulysses")
     r = TestGrammarWalker2().walk(tree)
     assert "SN SV SN" == r
 
-    tree = cp.parse("Jones and Smith own Ulysses")[0]
+    tree = cp.parse("Jones and Smith own Ulysses")
     r = TestGrammarWalker2().walk(tree)
     assert "SN and SN PV SN"
