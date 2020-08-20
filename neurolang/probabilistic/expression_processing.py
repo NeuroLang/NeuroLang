@@ -7,7 +7,7 @@ import numpy
 from ..datalog import WrappedRelationalAlgebraSet
 from ..datalog.expression_processing import (
     extract_logic_predicates,
-    reachable_code
+    reachable_code,
 )
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
 from ..expressions import Constant, Expression, FunctionApplication
@@ -314,7 +314,36 @@ def lift_optimization_for_choice_predicates(query, program):
         ):
             added_equalities.append(eq(x, y))
         if len(added_equalities) > 0:
-            query = Conjunction(
-                query.formulas + tuple(added_equalities)
-            )
+            query = Conjunction(query.formulas + tuple(added_equalities))
     return query
+
+
+def shatter_query(query, program):
+    """
+    Remove constants occurring in a given query, possibly removing self-joins.
+
+    If there is a self-join, the self-joined relation is split into multiple
+    relations. These relations are added in-place to the program and the
+    returned equivalent query makes use of these relations.
+
+    Parameters
+    ----------
+    query : conjunctive query (can be a single predicate)
+        A query that contains constants.
+    program : probabilistic program
+        Program containing probabilistic relations associated with the query.
+
+    Returns
+    -------
+    Conjunctive query
+        An equivalent conjunctive query without constants.
+
+    Notes
+    -----
+
+    TODO: handle queries like Q = R(a, y), R(x, b) (see example 4.2 in [1]_)
+
+    .. [1] Van den Broeck, G., and Suciu, D. (2017). Query Processing on
+       Probabilistic Data: A Survey. FNT in Databases 7, 197–341.
+
+    """
