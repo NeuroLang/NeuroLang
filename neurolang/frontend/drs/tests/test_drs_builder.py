@@ -67,6 +67,27 @@ def test_apposition_variable_introduction():
     assert drs.expressions[2] == Symbol("region")(x)
 
 
+def test_inverse_conditional():
+    b = DRSBuilder(_eg)
+    t = _cp.parse("X intersects Y if a region Y intersects a region X")
+    drs = b.walk(t)
+    x = Symbol("X")
+    y = Symbol("Y")
+    assert len(drs.expressions) == 1
+    assert isinstance(drs.expressions[0], Implication)
+    ant = drs.expressions[0].antecedent
+    con = drs.expressions[0].consequent
+    assert len(ant.referents) == 2
+    assert set(ant.referents) == {x, y}
+
+    assert Symbol("intersects")(y, x) in set(ant.expressions)
+    assert Symbol("region")(x) in set(ant.expressions)
+    assert Symbol("region")(y) in set(ant.expressions)
+
+    assert len(con.referents) == 0
+    assert Symbol("intersects")(x, y) in set(con.expressions)
+
+
 def test_conditional():
     b = DRSBuilder(_eg)
     t = _cp.parse("if a region Y intersects a region X then X intersects Y")

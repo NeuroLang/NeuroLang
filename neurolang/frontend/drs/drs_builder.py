@@ -22,6 +22,7 @@ from .english_grammar import (
     SL,
     LIT,
 )
+from .exceptions import ParseDatalogPredicateException
 from ...logic import (
     Negation,
     Implication,
@@ -169,6 +170,11 @@ class DRSBuilder(DRSBuilderBase):
         (_, ant, _, cons) = s.args
         return self.walk(DRS(set(), (Implication(cons, ant),)))
 
+    @add_match(Fa(Fa(S, ...), (..., C("if"), ...),),)
+    def inverse_conditional(self, s):
+        (cons, _, ant) = s.args
+        return self.walk(DRS(set(), (Implication(cons, ant),)))
+
     @add_match(Fa(Fa(S, ...), (Fa(Quote, (C(CODE_QUOTE), ...)),),),)
     def quoted_predicate(self, s):
         exp = _parse_predicate(s.args[0].args[1].value)
@@ -223,7 +229,9 @@ def _parse_predicate(string):
     # This could totally use the datalog parser
     m = r.match(string)
     if not m:
-        raise Exception(f"Quoted predicate is not valid datalog: {string}")
+        raise ParseDatalogPredicateException(
+            f"Quoted predicate is not valid datalog: {string}"
+        )
     functor = Symbol(m.group(1))
     args = map(_parse_argument, map(str.strip, m.group(2).split(",")))
     return functor(*args)

@@ -12,9 +12,7 @@ from ....datalog.chase import (
     ChaseMGUMixin,
     ChaseNaive,
 )
-from ....datalog.chase.negation import (
-    DatalogChaseNegation,
-)
+from ....datalog.chase.negation import DatalogChaseNegation
 from ... import QueryBuilderDatalog
 from ..translate_to_dl import (
     CnlFrontendMixin,
@@ -279,3 +277,16 @@ def test_multiple_inferred_words():
     nl.add_tuple_set({("a", "b")}, name="affects_in_some_way")
     res = nl.solve_all()
     assert (Constant("b"), Constant("a"),) in res["reacts_somehow_to"].unwrap()
+
+
+def test_inverse_conditional():
+    nl = NeurolangCNL()
+    nl.execute_cnl_code(
+        """
+        Jones likes X if a book X references Odyssey.
+        Ulysses references Odyssey.
+        """
+    )
+    nl.add_tuple_set({(Odyssey,), (Ulysses,)}, name="book")
+    res = nl.solve_all()
+    assert (Jones, Ulysses) in res["likes"].unwrap()
