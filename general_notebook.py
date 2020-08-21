@@ -25,25 +25,24 @@ except ImportError:
 
 from neurolang.datalog.chase.negation import DatalogChaseNegation
 from neurolang.datalog.negation import DatalogProgramNegationMixin
-from neurolang.expression_walker import (
-    ExpressionWalker,
-    PatternWalker,
-    IdentityWalker,
-)
-from neurolang.datalog.expression_processing import TranslateToLogic
-from neurolang.region_solver import RegionSolver
+from neurolang.frontend.drs.translate_to_dl import CnlFrontendMixin
 
 
 import general_notebook_queries as queries
 
-from neurolang.utils.printing import pprint, prepr
+# Debug code
+try:
+    from neurolang.utils.printing import pprint, prepr
+
+    def pfwrite(x, file_name="pfwrite.txt"):
+        pprint(x)
+        with open(file_name, "w") as f:
+            f.write(prepr(x))
+            print("written to", file_name)
 
 
-def pfwrite(x, file_name="pfwrite.txt"):
-    pprint(x)
-    with open(file_name, "w") as f:
-        f.write(prepr(x))
-        print("written to", file_name)
+except ImportError:
+    pass
 
 
 # In[2]:
@@ -60,7 +59,7 @@ def create_frontend():
     class Chase(DatalogChaseNegation):
         pass
 
-    class NeurolangFrontend(fe.QueryBuilderDatalog):
+    class NeurolangFrontend(CnlFrontendMixin, fe.QueryBuilderDatalog):
         def __init__(self):
             super().__init__(
                 Program(), chase_class=Chase,
@@ -242,6 +241,10 @@ def process_sulci(s, nl):
         name="region",
     )
 
+    nl.add_tuple_set(
+        [(v, k) for k, v in renamed_destrieux.items()], name="is_named",
+    )
+
     d1[s]["destrieux_sulci"] = renamed_destrieux
     d1[s]["destrieux_affines"] = destrieux_affines
     d1[s]["destrieux_spatial_images"] = spatial_images_destrieux
@@ -356,11 +359,12 @@ def process_NL(subject_folds, subject_info, nl):
     found_sulci = nl.add_tuple_set(Found_sulci, name="found_sulci")
 
     Queries = [
-        queries.Q_cingulate,
+        queries.Q_cingulate_cnl,
     ]
 
     for q in Queries:
         res = q(nl)
+        __import__("pudb").set_trace()
         if len(res) == 0:
             d_queries.append(
                 {
@@ -379,13 +383,13 @@ def process_NL(subject_folds, subject_info, nl):
                         break
                 else:
                     raise Exception("No name for region")
-                nl.add_region_set(Found_sulci, name="found_sulci")
+                nl.add_tuple_set(Found_sulci, name="found_sulci")
                 d_queries.append(
                     {
                         "subject": s,
                         "query": q.__name__,
                         "sulcus": name,
-                        "region": r[0],
+                        # "region": r[0],
                     }
                 )
 
@@ -406,19 +410,12 @@ def process_subjects(s):
 
 # In[18]:
 
-
-results = [process_subjects(i) for i in SUBJECT_IDS]
-
-
-# In[21]:
-
-
-infos = []
-for sid in SUBJECT_IDS:
-    i = SUBJECT_IDS.index(sid)
-    infos.append(results[i][0][sid])
-df_infos = pd.DataFrame(data=infos, index=SUBJECT_IDS)
-df_infos.to_pickle("NeuroLang_queries_info_LH")
-
-
-# In[ ]:
+if __name__ == "__main__":
+    results = [process_subjects(i) for i in SUBJECT_IDS]
+    __import__("pudb").set_trace()
+    infos = []
+    for sid in SUBJECT_IDS:
+        i = SUBJECT_IDS.index(sid)
+        infos.append(results[i][0][sid])
+    df_infos = pd.DataFrame(data=infos, index=SUBJECT_IDS)
+    df_infos.to_pickle("NeuroLang_queries_info_LH")

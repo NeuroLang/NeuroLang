@@ -578,10 +578,93 @@ def Q_intralingual(nl):
 #   Non-Destrieux corresponding sulci
 
 
-def Q_cingulate(nl):
+def Q_cingulate_cnl(nl):
+    nl.execute_cnl_code(
+        """
+        if `region(X)`,
+           P is_named "L_S_pericallosal",
+           X anterior_of P,
+           X superior_of P,
+           `Callosal_sulcus_during_x_dominant_contains(X)`,
+           is not the case that
+              `Callosal_sulcus_posterior_dominant_contains(X)`,
+           is not the case that `found_sulci(X)`, and
+           is not the case that `primary_sulci(X)`
+        then `cingulate_candidate(X)`.
+
+        if `region(X)`,
+           P is_named "L_S_pericallosal",
+           X anterior_of P,
+           X superior_of P,
+           `Callosal_sulcus_medial_dominant_contains(X)`,
+           is not the case that
+              `Callosal_sulcus_posterior_dominant_contains(X)`,
+           is not the case that `found_sulci(X)`, and
+           is not the case that `primary_sulci(X)`
+        then `cingulate_candidate(X)`.
+
+        if `cingulate_candidate(X)`,
+           `cingulate_candidate(Y)`,
+           X is_different_than Y, and
+           Y is_more_anterior_than X
+        then Y is_another_one_more_anterior_than X.
+
+        if `cingulate_candidate(X)` and
+           is not the case that Y is_another_one_more_anterior_than X
+        then `ans(X)`.
+        """
+    )
+
+    # _cnlq2 = """
+    #     X where
+    #     X is_anterior_of L_S_pericallosal,
+    #     X is_superior_of L_S_pericallosal,
+    #     X is_in Callosal_sulcus_during_x_dominant
+    #          or Callosal_sulcus_medial_dominant, and
+    #     is not the case that X is_in Callosal_sulcus_posterior_dominant,
+    #                                  found_sulci, or primary_sulci.
+    #     """
+
+    x = nl.new_region_symbol("x")
+    ans = nl.new_symbol(name="ans")
+    return nl.query((x,), ans(x))
+
+
+def Q_compare_cnl(nl):
+    nl.execute_cnl_code(
+        """
+        if X is_named "L_S_pericallosal"
+        then `ans(X)`.
+        """
+        # """
+        # if `region(X)`,
+        #    P is_named "L_S_pericallosal", and
+        #    X is_anterior_of P
+        # then `ans(X)`.
+        # """
+    )
+    x = nl.new_region_symbol("x")
+    ans = nl.new_symbol(name="ans")
+    return nl.query((x,), ans(x))
+
+
+def Q_compare_datalog(nl):
+    x = nl.new_region_symbol("x")
+    p = nl.new_region_symbol("p")
+    region = nl.new_symbol(name="region")
+    is_named = nl.new_symbol(name="is_named")
+    is_anterior_of = nl.new_symbol(name="is_anterior_of")
+    return nl.query(
+        (x,),
+        # region(x) & is_named(p, "L_S_pericallosal") & is_anterior_of(x, p),
+        is_named(x, "L_S_pericallosal")
+    )
+
+
+def Q_cingulate_datalog(nl):
     x = nl.new_region_symbol("x")
     y = nl.new_region_symbol("y")
-    ans = nl.new_symbol()
+    ans = nl.new_symbol(name="ans")
     nl.query(
         ans(x),
         (
@@ -597,37 +680,7 @@ def Q_cingulate(nl):
         ),
     )
 
-    cnlqA = """
-        X where
-        X is_anterior_of L_S_pericallosal, 
-        X is_superior_of L_S_pericallosal, 
-        X is_in Callosal_sulcus_during_x_dominant,
-        is not the case that X is_in Callosal_sulcus_posterior_dominant,
-        is not the case that X is_in found_sulci, and
-        is not the case that X is_in primary_sulci.
-        """
-
-    cnlqB = """
-        X where
-        X is_anterior_of L_S_pericallosal, 
-        X is_superior_of L_S_pericallosal, 
-        X is_in Callosal_sulcus_medial_dominant,
-        is not the case that X is_in Callosal_sulcus_posterior_dominant,
-        is not the case that X is_in found_sulci, and
-        is not the case that X is_in primary_sulci.
-        """
-
-    _cnlq = cnlqA or cnlqB
-
-    _cnlq2 = """
-        X where
-        X is_anterior_of L_S_pericallosal,
-        X is_superior_of L_S_pericallosal,
-        X is_in Callosal_sulcus_during_x_dominant or Callosal_sulcus_medial_dominant, and
-        is not the case that X is_in Callosal_sulcus_posterior_dominant, found_sulci, or primary_sulci.
-        """
-
-    another_one_more_anterior = nl.new_symbol()
+    another_one_more_anterior = nl.new_symbol(name="another_one_more_anterior")
     nl.query(
         another_one_more_anterior(x, y),
         ans(x) & ans(y) & (x != y) & nl.symbols.is_more_anterior_than(y, x),
