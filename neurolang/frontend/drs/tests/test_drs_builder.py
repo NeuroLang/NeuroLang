@@ -232,3 +232,17 @@ def test_quoted_string_lit_in_quoted_datalog():
     assert x in drs.referents
     assert len(drs.expressions) == 1
     assert Symbol("references")(x, u, o) in set(drs.expressions)
+
+
+def test_right_conjunction_scope():
+    b = DRSBuilder(_eg)
+    t = _cp.parse('`foo(X)`, `bar(X)`, and `zap(X)`')
+    drs = b.walk(t)
+    x = Symbol("X")
+
+    assert len(drs.referents) == 1
+    assert x in drs.referents
+    assert len(drs.expressions) == 3
+    assert Symbol("foo")(x) in set(drs.expressions)
+    assert Symbol("bar")(x) in set(drs.expressions)
+    assert Symbol("zap")(x) in set(drs.expressions)

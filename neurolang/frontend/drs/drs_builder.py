@@ -185,19 +185,17 @@ class DRSBuilder(DRSBuilderBase):
     def comma_and(self, s):
         (sl, _, _, s) = s.args
         sl = self.walk(sl)
-        s = self.walk(s)
         return self.walk(DRS(set(), sl + (s,)))
 
     @add_match(Fa(Fa(SL, ...), (...,),),)
     def single_sentence_list(self, sl):
         (s,) = sl.args
-        return (self.walk(s),)
+        return (s,)
 
     @add_match(Fa(Fa(SL, ...), (Fa(Fa(SL, ...), ...), C(","), ...),),)
     def sentence_list(self, sl):
         (sl, _, s) = sl.args
         sl = self.walk(sl)
-        s = self.walk(s)
         return sl + (s,)
 
     @add_match(Fa(Fa(NP, ...), (Fa(Fa(LIT, ...), ...),)),)

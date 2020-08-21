@@ -64,7 +64,11 @@ class CnlFrontendMixin:
         if uw:
             for pos, word in uw:
                 if pos == V:
-                    self.add_tuple_set((word,), name="singular_verb")
+                    v = self.new_symbol()
+                    singular_verb = self.new_symbol(name="singular_verb")
+                    singular_verbs = self.query((v,), singular_verb(v))
+                    new_verbs = {(word,)} | set(singular_verbs)
+                    self.add_tuple_set(new_verbs, name="singular_verb")
             t = self._parser.parse(sentence)
 
         return t
@@ -109,6 +113,7 @@ class TransformIntoConjunctionOfDatalogSentences(
     allowing to use them between facts and in implication heads, because then
     they will be properly distributed.
     """
+
     pass
 
 
