@@ -2,19 +2,26 @@ from ...logic.unification import most_general_unifier, apply_substitution
 from ...logic.expression_processing import extract_logic_free_variables
 from ...expressions import Symbol, Constant, Expression
 from ...expression_walker import ReplaceSymbolWalker
+from .exceptions import (
+    ParseException,
+    AmbiguousSentenceException,
+    CouldNotParseException,
+    TokenizeException,
+    GrammarException,
+)
 from collections import namedtuple
 import re
 
 
 Quote = Symbol("Quote")
-CODE_QUOTE = '`'
+CODE_QUOTE = "`"
 STRING_QUOTE = '"'
 
 
 class Rule(Expression):
     def __init__(self, head, constituents):
         if not isinstance(constituents, tuple):
-            raise Exception("constituents must be a tuple of expressions")
+            raise GrammarException("constituents must be a tuple of expressions")
         self.head = head
         self.constituents = constituents
         self.is_root = False
@@ -38,7 +45,7 @@ class Grammar(Expression):
         if not isinstance(rules, tuple) or any(
             not isinstance(r, Rule) for r in rules
         ):
-            raise Exception("rules must be a tuple of Rule instances")
+            raise GrammarException("rules must be a tuple of Rule instances")
         self.rules = rules
 
     def __repr__(self):
@@ -70,29 +77,6 @@ class DictLexicon(Lexicon):
         return ()
 
 
-class ParseException(Exception):
-    pass
-
-
-class AmbiguousSentenceException(ParseException):
-    def __init__(self, sentence, interpretations):
-        self.sentence = sentence
-        self.interpretations = interpretations
-        super().__init__(
-            f"The sentence '{sentence}' has multiple interpretations"
-        )
-
-
-class CouldNotParseException(ParseException):
-    def __init__(self, sentence):
-        self.sentence = sentence
-        super().__init__(f"The sentence '{sentence}' is not valid")
-
-
-class TokenizeException(ParseException):
-    pass
-
-
 class Tokenizer:
     def __init__(self, grammar, quotes=[CODE_QUOTE, STRING_QUOTE]):
         self.grammar = grammar
@@ -102,9 +86,7 @@ class Tokenizer:
                 (re.compile(f"^{q}.+?{q}"), self.yield_quote(q))
             )
 
-        self.matches.append(
-            (re.compile("^[\\w\\-]+?\\b"), self.yield_word,)
-        )
+        self.matches.append((re.compile("^[\\w\\-]+?\\b"), self.yield_word,))
 
     def yield_quote(self, q):
         def foo(span):
