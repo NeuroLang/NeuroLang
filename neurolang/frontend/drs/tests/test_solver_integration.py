@@ -267,3 +267,15 @@ def test_sentence_negation():
     res = nl.solve_all()
     for n in ("1", "2", "3", "5", "6"):
         assert (Constant(n),) in res["sol"].unwrap()
+
+
+def test_multiple_inferred_words():
+    nl = NeurolangNegCNL()
+    nl.execute_cnl_code(
+        """
+        if X affects_in_some_way Y then Y reacts_somehow_to X.
+        """
+    )
+    nl.add_tuple_set({("a", "b")}, name="affects_in_some_way")
+    res = nl.solve_all()
+    assert (Constant("b"), Constant("a"),) in res["reacts_somehow_to"].unwrap()
