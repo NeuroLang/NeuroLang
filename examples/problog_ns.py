@@ -1,3 +1,8 @@
+"""
+Probabilistic Frontend
+======================
+"""
+
 from neurolang.frontend.probabilistic_frontend import ProbabilisticFrontend
 
 nl = ProbabilisticFrontend()
