@@ -11,6 +11,7 @@ from ...expression_walker import (
 )
 from .chart_parser import Quote, CODE_QUOTE
 from .english_grammar import S, V, NP, VP, PN, DET, N, VAR, SL, LIT
+from .exceptions import ParseDatalogPredicateException
 from ...logic import (
     Implication,
     Conjunction,
@@ -209,7 +210,9 @@ def _parse_predicate(string):
     # This could totally use the datalog parser
     m = r.match(string)
     if not m:
-        raise Exception(f"Quoted predicate is not valid datalog: {string}")
+        raise ParseDatalogPredicateException(
+            f"Quoted predicate is not valid datalog: {string}"
+        )
     functor = Symbol(m.group(1))
     args = map(_parse_argument, map(str.strip, m.group(2).split(",")))
     return functor(*args)
