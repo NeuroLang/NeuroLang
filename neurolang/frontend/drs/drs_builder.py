@@ -165,12 +165,12 @@ class DRSBuilder(DRSBuilderBase):
         return self.walk(DRS(refs, exps))
 
     @add_match(Fa(Fa(S, ...), (C("if"), ..., C("then"), ...),),)
-    def inverse_conditional(self, s):
+    def conditional(self, s):
         (_, ant, _, cons) = s.args
         return self.walk(DRS(set(), (Implication(cons, ant),)))
 
     @add_match(Fa(Fa(S, ...), (..., C("if"), ...),),)
-    def conditional(self, s):
+    def inverse_conditional(self, s):
         (cons, _, ant) = s.args
         return self.walk(DRS(set(), (Implication(cons, ant),)))
 
