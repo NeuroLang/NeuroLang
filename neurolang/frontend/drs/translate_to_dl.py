@@ -71,7 +71,9 @@ class TranslateToDatalog:
         except TranslateToDatalogException:
             pass
 
-        raise TranslateToDatalogException(f"Unsupported expression: {repr(exp)}")
+        raise TranslateToDatalogException(
+            f"Unsupported expression: {repr(exp)}"
+        )
 
 
 class TransformIntoConjunctionOfDatalogSentences(
@@ -87,6 +89,7 @@ class TransformIntoConjunctionOfDatalogSentences(
     allowing to use them between facts and in implication heads, because then
     they will be properly distributed.
     """
+
     pass
 
 
@@ -94,7 +97,9 @@ def _as_intensional_rule(exp):
     ucv, exp = _strip_universal_quantifiers(exp)
 
     if not isinstance(exp, Implication):
-        raise TranslateToDatalogException("A Datalog rule must be an implication")
+        raise TranslateToDatalogException(
+            "A Datalog rule must be an implication"
+        )
 
     head = exp.consequent
     body = exp.antecedent

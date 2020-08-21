@@ -21,7 +21,9 @@ STRING_QUOTE = '"'
 class Rule(Expression):
     def __init__(self, head, constituents):
         if not isinstance(constituents, tuple):
-            raise GrammarException("constituents must be a tuple of expressions")
+            raise GrammarException(
+                "constituents must be a tuple of expressions"
+            )
         self.head = head
         self.constituents = constituents
         self.is_root = False

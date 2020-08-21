@@ -78,10 +78,7 @@ class DRSBuilder(ExpressionWalker):
         return self.walk(DRS((), (const,)))
 
     @add_match(
-        Fa(
-            Fa(S, ...),
-            (..., Fa(Fa(VP, ...), (Fa(Fa(V, ...), ...), ...)),),
-        )
+        Fa(Fa(S, ...), (..., Fa(Fa(VP, ...), (Fa(Fa(V, ...), ...), ...)),),)
     )
     def predicate(self, s):
         (subject, vp) = s.args
@@ -169,7 +166,9 @@ def _parse_predicate(string):
     # This could totally use the datalog parser
     m = r.match(string)
     if not m:
-        raise ParseDatalogPredicateException(f"Quoted predicate is not valid datalog: {string}")
+        raise ParseDatalogPredicateException(
+            f"Quoted predicate is not valid datalog: {string}"
+        )
     functor = Symbol(m.group(1))
     args = map(Symbol, map(str.strip, m.group(2).split(",")))
     return functor(*args)
