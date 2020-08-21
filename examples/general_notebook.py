@@ -1,8 +1,9 @@
-#!/usr/bin/env python
-# coding: utf-8
+"""
+Per subject processing of the general notebook
+==============================================
 
-# In[1]:
-
+TODO: This needs a description
+"""
 
 import numpy as np
 import pandas as pd
@@ -30,22 +31,10 @@ from neurolang.frontend.drs.translate_to_dl import CnlFrontendMixin
 
 import general_notebook_queries as queries
 
-# Debug code
-try:
-    from neurolang.utils.printing import pprint, prepr
 
-    def pfwrite(x, file_name="pfwrite.txt"):
-        pprint(x)
-        with open(file_name, "w") as f:
-            f.write(prepr(x))
-            print("written to", file_name)
-
-
-except ImportError:
-    pass
-
-
-# In[2]:
+###############################################################################
+# Helper to create a frontend with the desired configuration
+#
 
 
 def create_frontend():
@@ -68,27 +57,21 @@ def create_frontend():
     return NeurolangFrontend()
 
 
-# In[4]:
+###############################################################################
+# Constant definitions
+#
 
-
-SUBJECT_IDS = ["105923", "111514"]
-
-
-# In[6]:
-
-
-SUBJ_FILES_PATH = "./"
-
-
-# In[8]:
-
+SUBJ_FILES_PATH = "./general_notebook_subjects/"
 
 X_LABELS = ["medial", "during_x", "lateral"]
 Y_LABELS = ["anterior", "during_y", "posterior"]
 Z_LABELS = ["superior", "during_z", "inferior"]
 
 
-# In[10]:
+###############################################################################
+# Function to compare the relations between the bounding boxes
+# of two sulcus
+#
 
 
 def voxel_relations_using_interval_algebra(
@@ -120,7 +103,9 @@ def voxel_relations_using_interval_algebra(
     return values
 
 
-# In[12]:
+###############################################################################
+# Function to create a predicate for the dominant sets
+#
 
 
 def making_dominant_sets_relative_to_primary(
@@ -179,7 +164,9 @@ def making_dominant_sets_relative_to_primary(
             )
 
 
-# In[15]:
+###############################################################################
+# Load and process the sulci of a subject
+#
 
 
 def process_sulci(s, nl):
@@ -268,9 +255,7 @@ def process_sulci(s, nl):
             > np.abs(np.average(y.to_xyz().T[0]))
         )
 
-    is_more_lateral_than = nl.add_symbol(
-        is_more_lateral_than_, name="is_more_lateral_than"
-    )
+    nl.add_symbol(is_more_lateral_than_, name="is_more_lateral_than")
 
     def is_more_medial_than_(x: regions.Region, y: regions.Region) -> bool:
         return bool(
@@ -278,9 +263,7 @@ def process_sulci(s, nl):
             < np.abs(np.average(y.to_xyz().T[0]))
         )
 
-    is_more_medial_than = nl.add_symbol(
-        is_more_medial_than_, name="is_more_medial_than"
-    )
+    nl.add_symbol(is_more_medial_than_, name="is_more_medial_than")
 
     def is_more_anterior_than_(x: regions.Region, y: regions.Region) -> bool:
         return bool(
@@ -288,9 +271,7 @@ def process_sulci(s, nl):
             < np.abs(np.average(y.to_xyz().T[1]))
         )
 
-    is_more_anterior_than = nl.add_symbol(
-        is_more_anterior_than_, name="is_more_anterior_than"
-    )
+    nl.add_symbol(is_more_anterior_than_, name="is_more_anterior_than")
 
     def is_more_posterior_than_(x: regions.Region, y: regions.Region) -> bool:
         return bool(
@@ -298,9 +279,7 @@ def process_sulci(s, nl):
             > np.abs(np.average(x.to_xyz().T[1]))
         )
 
-    is_more_posterior_than = nl.add_symbol(
-        is_more_posterior_than_, name="is_more_posterior_than"
-    )
+    nl.add_symbol(is_more_posterior_than_, name="is_more_posterior_than")
 
     def is_more_inferior_than_(x: regions.Region, y: regions.Region) -> bool:
         return bool(
@@ -308,9 +287,7 @@ def process_sulci(s, nl):
             < np.abs(np.average(y.to_xyz().T[2]))
         )
 
-    is_more_inferior_than = nl.add_symbol(
-        is_more_inferior_than_, name="is_more_inferior_than"
-    )
+    nl.add_symbol(is_more_inferior_than_, name="is_more_inferior_than")
 
     def is_more_superior_than_(x: regions.Region, y: regions.Region) -> bool:
         return bool(
@@ -318,16 +295,16 @@ def process_sulci(s, nl):
             > np.abs(np.average(y.to_xyz().T[2]))
         )
 
-    is_more_superior_than = nl.add_symbol(
-        is_more_superior_than_, name="is_more_superior_than"
-    )
+    nl.add_symbol(is_more_superior_than_, name="is_more_superior_than")
 
     subject_info = d1
     subject_folds = (renamed_destrieux, s)
     return subject_info, subject_folds
 
 
-# In[16]:
+###############################################################################
+# Process the given sulci with the defined queries
+#
 
 
 def process_NL(subject_folds, subject_info, nl):
@@ -337,9 +314,7 @@ def process_NL(subject_folds, subject_info, nl):
     names_of_primary_sulci = list(subject_info[s]["primaries"].keys())
     for prim in names_of_primary_sulci:
         Primary_Sulci.add(subject_info[s]["primaries"][prim])
-    primary_sulci = nl.add_tuple_set(
-        [(v.value,) for v in Primary_Sulci], name="primary_sulci"
-    )
+    nl.add_tuple_set([(v.value,) for v in Primary_Sulci], name="primary_sulci")
 
     for sulcus in (
         "Central_sulcus",
@@ -356,7 +331,7 @@ def process_NL(subject_folds, subject_info, nl):
             )
 
     Found_sulci = set()
-    found_sulci = nl.add_tuple_set(Found_sulci, name="found_sulci")
+    nl.add_tuple_set(Found_sulci, name="found_sulci")
 
     Queries = [
         queries.Q_cingulate_cnl,
@@ -364,7 +339,6 @@ def process_NL(subject_folds, subject_info, nl):
 
     for q in Queries:
         res = q(nl)
-        __import__("pudb").set_trace()
         if len(res) == 0:
             d_queries.append(
                 {
@@ -398,24 +372,13 @@ def process_NL(subject_folds, subject_info, nl):
     return d_queries
 
 
-# In[17]:
+###############################################################################
+# Process a subject loading its sulci and then running the queries
+#
 
 
-def process_subjects(s):
+def process_subject(s):
     nl = create_frontend()
     d1, dNL = process_sulci(s, nl)
     d2 = process_NL(dNL, d1, nl)
     return d1, d2
-
-
-# In[18]:
-
-if __name__ == "__main__":
-    results = [process_subjects(i) for i in SUBJECT_IDS]
-    __import__("pudb").set_trace()
-    infos = []
-    for sid in SUBJECT_IDS:
-        i = SUBJECT_IDS.index(sid)
-        infos.append(results[i][0][sid])
-    df_infos = pd.DataFrame(data=infos, index=SUBJECT_IDS)
-    df_infos.to_pickle("NeuroLang_queries_info_LH")

@@ -1,3 +1,11 @@
+"""
+Queries for the general notebook
+================================
+"""
+
+# TODO: Pending to translate all of them
+
+
 def Q_inferior_temporal(nl):
     x = nl.new_region_symbol("x")
     y = nl.new_region_symbol("y")
@@ -657,7 +665,7 @@ def Q_compare_datalog(nl):
     return nl.query(
         (x,),
         # region(x) & is_named(p, "L_S_pericallosal") & is_anterior_of(x, p),
-        is_named(x, "L_S_pericallosal")
+        is_named(x, "L_S_pericallosal"),
     )
 
 
