@@ -11,6 +11,8 @@ from ..datalog.expression_processing import (
     reachable_code,
 )
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
+from ..expression_pattern_matching import add_match
+from ..expression_walker import ExpressionWalker
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..logic import Conjunction, Implication, Union
 from .exceptions import DistributionDoesNotSumToOneError
@@ -365,7 +367,62 @@ def is_easily_shatterable(predicates):
     return True
 
 
-def shatter_probfacts(query, program):
+class Shatter(FunctionApplication):
+    pass
+
+
+class QueryEasyShatteringTagger(ExpressionWalker):
+    def __init__(self, program):
+        self.program = program
+
+    @add_match(FunctionApplication, lambda fa: not isinstance(fa, Shatter))
+    def predicate(self, predicate):
+        if predicate.functor in self.program.pfact_pred_symbs:
+            return Shatter(*predicate.unapply())
+        return FunctionApplication[predicate.type](
+            *(self.walk(arg) for arg in predicate.unapply())
+        )
+
+
+class EasyQueryShatterer(ExpressionWalker):
+    def __init__(self, program):
+        self.program = program
+
+    @add_match(Shatter)
+    def easy_shatter_probfact(self, shatter):
+        const_idxs = list(
+            i
+            for i, arg in enumerate(shatter.args)
+            if isinstance(arg, Constant)
+        )
+        if const_idxs:
+            new_relation = self.program.symbol_table[shatter.functor].value
+            new_relation = new_relation.selection(
+                {
+                    new_relation.columns[i + 1]: shatter.args[i].value
+                    for i in const_idxs
+                }
+            )
+            proj_cols = (0,) + tuple(
+                i + 1
+                for i, arg in enumerate(shatter.args)
+                if not isinstance(arg, Constant)
+            )
+            new_relation = new_relation.projection(*proj_cols)
+            new_pred_symb = Symbol.fresh()
+            self.program.add_probabilistic_facts_from_tuples(
+                new_pred_symb, new_relation
+            )
+            non_const_args = (
+                arg for arg in shatter.args if not isinstance(arg, Constant)
+            )
+            new_predicate = new_pred_symb(*non_const_args)
+            return new_predicate
+        else:
+            return shatter
+
+
+def shatter_easy_probfacts(query, program):
     """
     Remove constants occurring in a given query, possibly removing self-joins.
 
@@ -402,38 +459,13 @@ def shatter_probfacts(query, program):
             raise UnexpectedExpressionError(
                 f"Cannot easily shatter {pred_symb}-predicates"
             )
-    new_predicates = list()
-    for predicate in iter_conjunctive_query_predicates(query):
-        pred_symb = predicate.functor
-        if pred_symb not in program.pfact_pred_symbs:
-            new_predicates.append(predicate)
-            continue
-        const_idxs = list(
-            i
-            for i, arg in enumerate(predicate.args)
-            if isinstance(arg, Constant)
-        )
-        if const_idxs:
-            new_relation = program.symbol_table[pred_symb].value
-            new_relation = new_relation.selection({
-                new_relation.columns[i + 1]: predicate.args[i].value
-                for i in const_idxs
-            })
-            proj_cols = (0,) + tuple(
-                i + 1
-                for i, arg in enumerate(predicate.args)
-                if not isinstance(arg, Constant)
-            )
-            new_relation = new_relation.projection(*proj_cols)
-            new_pred_symb = Symbol.fresh()
-            program.add_probabilistic_facts_from_tuples(
-                new_pred_symb, new_relation
-            )
-            non_const_args = (
-                arg for arg in predicate.args if not isinstance(arg, Constant)
-            )
-            new_predicate = new_pred_symb(*non_const_args)
-            new_predicates.append(new_predicate)
-        else:
-            new_predicates.append(predicate)
-    return conjunct_if_needed(tuple(set(new_predicates)))
+    tagger = QueryEasyShatteringTagger(program)
+    tagged_query = tagger.walk(query)
+    shatterer = EasyQueryShatterer(program)
+    shattered_query = shatterer.walk(tagged_query)
+    if isinstance(shattered_query, Shatter) or (
+        isinstance(shattered_query, Conjunction)
+        and any(isinstance(formula, Shatter) for formula in shattered_query)
+    ):
+        raise UnexpectedExpressionError("Cannot easily shatter query")
+    return shattered_query

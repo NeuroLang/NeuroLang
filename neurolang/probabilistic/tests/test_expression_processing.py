@@ -8,7 +8,7 @@ from ..expression_processing import (
     add_to_union,
     get_probchoice_variable_equalities,
     group_preds_by_pred_symb,
-    shatter_probfacts,
+    shatter_easy_probfacts,
 )
 
 P = Symbol("P")
@@ -93,14 +93,14 @@ def test_group_preds_by_pred_symb():
 
 def test_query_shattering_single_predicate():
     query = P(x, y)
-    shattered = shatter_probfacts(query, CPLogicProgram())
+    shattered = shatter_easy_probfacts(query, CPLogicProgram())
     assert shattered == query
     query = P(a, x)
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
         P, [(0.2, "a", "b"), (1.0, "a", "c"), (0.7, "b", "b")]
     )
-    shattered = shatter_probfacts(query, cpl)
+    shattered = shatter_easy_probfacts(query, cpl)
     assert isinstance(shattered, FunctionApplication)
     assert shattered.functor.name.startswith("fresh_")
     assert shattered.args == (x,)
@@ -114,7 +114,7 @@ def test_query_shattering_self_join():
     cpl.add_probabilistic_facts_from_tuples(
         P, [(0.2, "a", "b"), (1.0, "a", "c"), (0.7, "b", "b")]
     )
-    shattered = shatter_probfacts(query, CPLogicProgram())
+    shattered = shatter_easy_probfacts(query, CPLogicProgram())
     assert isinstance(shattered, Conjunction)
 
 
@@ -125,13 +125,13 @@ def test_query_shattering_not_easy():
     )
     with pytest.raises(UnexpectedExpressionError):
         query = Conjunction((P(x), P(y)))
-        shatter_probfacts(query, cpl)
+        shatter_easy_probfacts(query, cpl)
     with pytest.raises(UnexpectedExpressionError):
         query = Conjunction((P(a, x), P(a, y)))
-        shatter_probfacts(query, cpl)
+        shatter_easy_probfacts(query, cpl)
     with pytest.raises(UnexpectedExpressionError):
         query = Conjunction((P(a, x), P(y, a)))
-        shatter_probfacts(query, cpl)
+        shatter_easy_probfacts(query, cpl)
     with pytest.raises(UnexpectedExpressionError):
         query = Conjunction((P(a), P(x)))
-        shatter_probfacts(query, cpl)
+        shatter_easy_probfacts(query, cpl)
