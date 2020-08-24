@@ -415,10 +415,10 @@ def shatter_probfacts(query, program):
         )
         if const_idxs:
             new_relation = program.symbol_table[pred_symb].value
-            for i in const_idxs:
-                column = new_relation.columns[i + 1]
-                constant = predicate.args[i].value
-                new_relation = new_relation.selection({column: constant})
+            new_relation = new_relation.selection({
+                new_relation.columns[i + 1]: predicate.args[i].value
+                for i in const_idxs
+            })
             proj_cols = (0,) + tuple(
                 i + 1
                 for i, arg in enumerate(predicate.args)
