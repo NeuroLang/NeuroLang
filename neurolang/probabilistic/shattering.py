@@ -1,3 +1,5 @@
+import collections
+
 from ..exceptions import UnexpectedExpressionError
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionWalker, PatternWalker
@@ -9,7 +11,41 @@ from .expression_processing import (
 )
 
 
-def is_easily_shatterable(predicates):
+def group_terms_by_index(predicates):
+    idx_to_terms = collections.defaultdict(list)
+    for predicate in predicates:
+        for idx, term in enumerate(predicate.args):
+            idx_to_terms[idx].append(term)
+    return idx_to_terms
+
+
+def has_repeated_constant(list_of_terms):
+    return any(
+        count > 1
+        for term, count in collections.Counter(list_of_terms).items()
+        if isinstance(term, Constant)
+    )
+
+
+def has_both_symbol_and_constant(list_of_terms):
+    has_symbol = False
+    has_constant = False
+    for term in list_of_terms:
+        has_symbol |= isinstance(term, Symbol)
+        has_constant |= isinstance(term, Constant)
+        if has_symbol and has_constant:
+            return True
+    return False
+
+
+def has_multiple_symbols(list_of_terms):
+    return (
+        len(set(term for term in list_of_terms if isinstance(term, Symbol)))
+        > 1
+    )
+
+
+def is_easily_shatterable_self_join(predicates):
     """
     Examples
     --------
@@ -22,23 +58,13 @@ def is_easily_shatterable(predicates):
         - P(a), P(x)
 
     """
-    idx_to_const = dict()
-    idx_to_symb = dict()
-    for predicate in predicates:
-        for idx, arg in enumerate(predicate.args):
-            if isinstance(arg, Constant):
-                if idx in idx_to_symb or (
-                    idx in idx_to_const and idx_to_const[idx] == arg
-                ):
-                    return False
-                idx_to_const[idx] = arg
-            elif isinstance(arg, Symbol):
-                if idx in idx_to_const or (
-                    idx in idx_to_symb and idx_to_symb[idx] != arg
-                ):
-                    return False
-                idx_to_symb[idx] = arg
-    return True
+    idx_to_terms = group_terms_by_index(predicates)
+    return not any(
+        has_repeated_constant(terms)
+        or has_both_symbol_and_constant(terms)
+        or has_multiple_symbols(terms)
+        for terms in idx_to_terms.values()
+    )
 
 
 class Shatter(FunctionApplication):
@@ -142,7 +168,7 @@ def shatter_easy_probfacts(query, program):
         program.pfact_pred_symbs,
     )
     for pred_symb, predicates in grouped_pfact_preds.items():
-        if not is_easily_shatterable(predicates):
+        if not is_easily_shatterable_self_join(predicates):
             raise UnexpectedExpressionError(
                 f"Cannot easily shatter {pred_symb}-predicates"
             )
