@@ -6,11 +6,12 @@ import numpy
 
 from ..datalog import WrappedRelationalAlgebraSet
 from ..datalog.expression_processing import (
+    conjunct_if_needed,
     extract_logic_predicates,
     reachable_code,
 )
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
-from ..expressions import Constant, Expression, FunctionApplication
+from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..logic import Conjunction, Implication, Union
 from .exceptions import DistributionDoesNotSumToOneError
 from .expressions import PROB, ProbabilisticPredicate, ProbabilisticQuery
@@ -318,7 +319,53 @@ def lift_optimization_for_choice_predicates(query, program):
     return query
 
 
-def shatter_query(query, program):
+def iter_conjunctive_query_predicates(query):
+    if isinstance(query, FunctionApplication):
+        yield query
+    elif isinstance(query, Conjunction):
+        for predicate in query.formulas:
+            yield predicate
+    else:
+        raise UnexpectedExpressionError(
+            "Expected a predicate or conjunction of predicates, got {}".format(
+                type(query)
+            )
+        )
+
+
+def is_easily_shatterable(predicates):
+    """
+    Examples
+    --------
+    The following conjunctive queries can be shattered easily:
+        - P(a, x), P(b, x)
+    The following conjunctive queries cannot be shattered easily:
+        - P(x), P(y)
+        - P(a, x), P(a, y)
+        - P(a, x), P(y, b)
+        - P(a), P(x)
+
+    """
+    idx_to_const = dict()
+    idx_to_symb = dict()
+    for predicate in predicates:
+        for idx, arg in enumerate(predicate.args):
+            if isinstance(arg, Constant):
+                if idx in idx_to_symb or (
+                    idx in idx_to_const and idx_to_const[idx] == arg
+                ):
+                    return False
+                idx_to_const[idx] = arg
+            elif isinstance(arg, Symbol):
+                if idx in idx_to_const or (
+                    idx in idx_to_symb and idx_to_symb[idx] != arg
+                ):
+                    return False
+                idx_to_symb[idx] = arg
+    return True
+
+
+def shatter_probfacts(query, program):
     """
     Remove constants occurring in a given query, possibly removing self-joins.
 
@@ -340,10 +387,53 @@ def shatter_query(query, program):
 
     Notes
     -----
-
     TODO: handle queries like Q = R(a, y), R(x, b) (see example 4.2 in [1]_)
 
     .. [1] Van den Broeck, G., and Suciu, D. (2017). Query Processing on
        Probabilistic Data: A Survey. FNT in Databases 7, 197–341.
 
     """
+    grouped_pfact_preds = group_preds_by_pred_symb(
+        list(iter_conjunctive_query_predicates(query)),
+        program.pfact_pred_symbs,
+    )
+    for pred_symb, predicates in grouped_pfact_preds.items():
+        if not is_easily_shatterable(predicates):
+            raise UnexpectedExpressionError(
+                f"Cannot easily shatter {pred_symb}-predicates"
+            )
+    new_predicates = list()
+    for predicate in iter_conjunctive_query_predicates(query):
+        pred_symb = predicate.functor
+        if pred_symb not in program.pfact_pred_symbs:
+            new_predicates.append(predicate)
+            continue
+        const_idxs = list(
+            i
+            for i, arg in enumerate(predicate.args)
+            if isinstance(arg, Constant)
+        )
+        if const_idxs:
+            new_relation = program.symbol_table[pred_symb].value
+            for i in const_idxs:
+                column = new_relation.columns[i + 1]
+                constant = predicate.args[i].value
+                new_relation = new_relation.selection({column: constant})
+            proj_cols = (0,) + tuple(
+                i + 1
+                for i, arg in enumerate(predicate.args)
+                if not isinstance(arg, Constant)
+            )
+            new_relation = new_relation.projection(*proj_cols)
+            new_pred_symb = Symbol.fresh()
+            program.add_probabilistic_facts_from_tuples(
+                new_pred_symb, new_relation
+            )
+            non_const_args = (
+                arg for arg in predicate.args if not isinstance(arg, Constant)
+            )
+            new_predicate = new_pred_symb(*non_const_args)
+            new_predicates.append(new_predicate)
+        else:
+            new_predicates.append(predicate)
+    return conjunct_if_needed(tuple(set(new_predicates)))
