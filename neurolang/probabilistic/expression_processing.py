@@ -12,7 +12,7 @@ from ..datalog.expression_processing import (
 )
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
 from ..expression_pattern_matching import add_match
-from ..expression_walker import ExpressionWalker
+from ..expression_walker import PatternWalker
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..logic import Conjunction, Implication, Union
 from .exceptions import DistributionDoesNotSumToOneError
@@ -371,24 +371,32 @@ class Shatter(FunctionApplication):
     pass
 
 
-class QueryEasyShatteringTagger(ExpressionWalker):
+class ShatterProbfact(Shatter):
+    pass
+
+
+class QueryEasyShatteringTagger(PatternWalker):
     def __init__(self, program):
         self.program = program
 
     @add_match(FunctionApplication, lambda fa: not isinstance(fa, Shatter))
     def predicate(self, predicate):
         if predicate.functor in self.program.pfact_pred_symbs:
-            return Shatter(*predicate.unapply())
-        return FunctionApplication[predicate.type](
-            *(self.walk(arg) for arg in predicate.unapply())
+            return ShatterProbfact(*predicate.unapply())
+        return predicate
+
+    @add_match(Conjunction)
+    def conjunction(self, conjunction):
+        return Conjunction(
+            (self.walk(formula) for formula in conjunction.formulas)
         )
 
 
-class EasyQueryShatterer(ExpressionWalker):
+class EasyQueryShatterer(PatternWalker):
     def __init__(self, program):
         self.program = program
 
-    @add_match(Shatter)
+    @add_match(ShatterProbfact)
     def easy_shatter_probfact(self, shatter):
         const_idxs = list(
             i
@@ -420,6 +428,16 @@ class EasyQueryShatterer(ExpressionWalker):
             return new_predicate
         else:
             return shatter
+
+    @add_match(FunctionApplication)
+    def function_application(self, function_application):
+        return function_application
+
+    @add_match(Conjunction)
+    def conjunction(self, conjunction):
+        return Conjunction(
+            (self.walk(formula) for formula in conjunction.formulas)
+        )
 
 
 def shatter_easy_probfacts(query, program):
@@ -465,7 +483,10 @@ def shatter_easy_probfacts(query, program):
     shattered_query = shatterer.walk(tagged_query)
     if isinstance(shattered_query, Shatter) or (
         isinstance(shattered_query, Conjunction)
-        and any(isinstance(formula, Shatter) for formula in shattered_query)
+        and any(
+            isinstance(formula, Shatter)
+            for formula in shattered_query.formulas
+        )
     ):
         raise UnexpectedExpressionError("Cannot easily shatter query")
     return shattered_query
