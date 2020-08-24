@@ -2,7 +2,8 @@ from ...expressions import Symbol, Constant
 from .chart_parser import (
     Grammar,
     DictLexicon,
-    add_rule,
+    Rule,
+    RootRule,
     Quote,
     CODE_QUOTE,
     STRING_QUOTE,
@@ -45,62 +46,26 @@ class case:
     notnom = Constant("notnom")
 
 
-class EnglishGrammar(Grammar):
-    def __init__(self, lexicon):
-        super().__init__(lexicon)
-
-    @add_rule(NP(n, g, case.nom), VP(n), root=True)
-    def s(self, np, vp):
-        return S(n)
-
-    @add_rule(S(n), Constant("if"), S(m), root=True)
-    def s_if(self, consecuent, _if, antecedent):
-        return S(n)
-
-    @add_rule(Constant("if"), S(n), Constant("then"), S(m), root=True)
-    def s_if_then(self, _if, antecedent, _then, consecuent):
-        return S(n)
-
-    @add_rule(V(n), NP(m, g, case.notnom))
-    def vp(self, v, np):
-        return VP(n)
-
-    @add_rule(NP(n, g, c), Constant("and"), NP(m, h, c))
-    def np_and(self, first, _, second):
-        return NP(num.plural, Symbol.fresh(), c)
-
-    @add_rule(NP(n, g, c), VAR())
-    def np_apposition(self, np, var):
-        return NP(n, g, c)
-
-    @add_rule(PN(n, g, v))
-    def np_proper(self, pn):
-        return NP(n, g, Symbol.fresh())
-
-    @add_rule(VAR())
-    def np_var(self, var):
-        return NP(Symbol.fresh(), Symbol.fresh(), Symbol.fresh())
-
-    @add_rule(DET(n), N(n, g))
-    def np_indefinite(self, det, noun):
-        return NP(n, g, Symbol.fresh())
-
-    @add_rule(PRO(n, g, c))
-    def np_pronoun(self, pro):
-        return NP(n, g, c)
-
-    @add_rule(Quote(Constant(STRING_QUOTE), v))
-    def quot_string_lit(self, quot):
-        _q, content = quot.args
-        return LIT(content)
-
-    @add_rule(LIT(v))
-    def np_lit(self, lit):
-        return NP(Symbol.fresh(), Symbol.fresh(), Symbol.fresh())
-
-    @add_rule(Quote(Constant(CODE_QUOTE), v))
-    def s_quot(self, quot):
-        return S(n)
+EnglishGrammar = Grammar(
+    (
+        RootRule(S(n), (NP(n, g, case.nom), VP(n))),
+        RootRule(S(n), (S(n), Constant("if"), S(m))),
+        RootRule(S(n), (Constant("if"), S(n), Constant("then"), S(m))),
+        Rule(VP(n), (V(n), NP(m, g, case.notnom))),
+        Rule(
+            NP(num.plural, Symbol.fresh(), c),
+            (NP(n, g, c), Constant("and"), NP(m, h, c)),
+        ),
+        Rule(NP(n, g, c), (NP(n, g, c), VAR())),
+        Rule(NP(n, g, Symbol.fresh()), (PN(n, g, v),)),
+        Rule(NP(Symbol.fresh(), Symbol.fresh(), Symbol.fresh()), (VAR(),)),
+        Rule(NP(n, g, Symbol.fresh()), (DET(n), N(n, g))),
+        Rule(NP(n, g, c), (PRO(n, g, c),)),
+        Rule(S(n), (Quote(Constant(CODE_QUOTE), v),)),
+        Rule(LIT(v), (Quote(Constant(STRING_QUOTE), v),)),
+        Rule(NP(Symbol.fresh(), Symbol.fresh(), Symbol.fresh()), (LIT(v),)),
+    )
+)
 
 
 class EnglishBaseLexicon(DictLexicon):

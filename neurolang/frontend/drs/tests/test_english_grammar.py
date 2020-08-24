@@ -20,8 +20,8 @@ from ..english_grammar import (
 import pytest
 
 
-_eg = EnglishGrammar(EnglishBaseLexicon())
-_cp = ChartParser(_eg)
+_eg = EnglishGrammar
+_cp = ChartParser(_eg, EnglishBaseLexicon())
 
 
 def test_indefinite_noun_phrase():
