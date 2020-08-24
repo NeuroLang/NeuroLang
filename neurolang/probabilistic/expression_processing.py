@@ -12,7 +12,7 @@ from ..datalog.expression_processing import (
 )
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
 from ..expression_pattern_matching import add_match
-from ..expression_walker import PatternWalker
+from ..expression_walker import PatternWalker, ExpressionWalker
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..logic import Conjunction, Implication, Union
 from .exceptions import DistributionDoesNotSumToOneError
@@ -392,7 +392,7 @@ class QueryEasyShatteringTagger(PatternWalker):
         )
 
 
-class EasyQueryShatterer(PatternWalker):
+class EasyQueryShatterer(ExpressionWalker):
     def __init__(self, program):
         self.program = program
 
@@ -428,16 +428,6 @@ class EasyQueryShatterer(PatternWalker):
             return new_predicate
         else:
             return shatter
-
-    @add_match(FunctionApplication)
-    def function_application(self, function_application):
-        return function_application
-
-    @add_match(Conjunction)
-    def conjunction(self, conjunction):
-        return Conjunction(
-            (self.walk(formula) for formula in conjunction.formulas)
-        )
 
 
 def shatter_easy_probfacts(query, program):
