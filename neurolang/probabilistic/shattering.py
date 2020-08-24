@@ -1,4 +1,5 @@
 import collections
+from typing import AbstractSet
 
 from ..exceptions import UnexpectedExpressionError
 from ..expression_pattern_matching import add_match
@@ -8,6 +9,12 @@ from ..logic import Conjunction
 from .expression_processing import (
     group_preds_by_pred_symb,
     iter_conjunctive_query_predicates,
+)
+from .probabilistic_ra_utils import (
+    DeterministicFactSet,
+    ProbabilisticChoiceSet,
+    ProbabilisticFactSet,
+    generate_probabilistic_symbol_table_for_query,
 )
 
 
@@ -71,27 +78,26 @@ class Shatter(FunctionApplication):
     pass
 
 
-class ShatterProbfact(Shatter):
-    pass
-
-
 class QueryEasyShatteringTagger(PatternWalker):
-    def __init__(self, program):
-        self.program = program
-
-    @add_match(FunctionApplication)
-    def shatter_probfact_predicates(self, predicate):
-        if predicate.functor not in self.program.pfact_pred_symbs:
-            return predicate
+    @add_match(FunctionApplication(ProbabilisticFactSet, ...))
+    def shatter_probfact_predicates(self, function_application):
         const_idxs = list(
             i
-            for i, arg in enumerate(predicate.args)
+            for i, arg in enumerate(function_application.args)
             if isinstance(arg, Constant)
         )
         if const_idxs:
-            return ShatterProbfact(*predicate.unapply())
+            return Shatter(*function_application.unapply())
         else:
-            return predicate
+            return function_application
+
+    @add_match(FunctionApplication(DeterministicFactSet, ...))
+    def pass_on_deterministic_fact_sets(self, function_application):
+        return function_application
+
+    @add_match(FunctionApplication(ProbabilisticFactSet, ...))
+    def pass_on_probabilistic_fact_sets(self, function_application):
+        return function_application
 
     @add_match(Conjunction)
     def conjunction(self, conjunction):
@@ -101,17 +107,17 @@ class QueryEasyShatteringTagger(PatternWalker):
 
 
 class EasyQueryShatterer(ExpressionWalker):
-    def __init__(self, program):
-        self.program = program
+    def __init__(self, symbol_table):
+        self.symbol_table = symbol_table
 
-    @add_match(ShatterProbfact)
+    @add_match(Shatter(ProbabilisticFactSet, ...))
     def easy_shatter_probfact(self, shatter):
         const_idxs = list(
             i
             for i, arg in enumerate(shatter.args)
             if isinstance(arg, Constant)
         )
-        new_relation = self.program.symbol_table[shatter.functor].value
+        new_relation = self.symbol_table[shatter.functor.relation].value
         new_relation = new_relation.selection(
             {
                 new_relation.columns[i + 1]: shatter.args[i].value
@@ -125,17 +131,49 @@ class EasyQueryShatterer(ExpressionWalker):
         )
         new_relation = new_relation.projection(*proj_cols)
         new_pred_symb = Symbol.fresh()
-        self.program.add_probabilistic_facts_from_tuples(
-            new_pred_symb, new_relation
-        )
+        self.symbol_table[new_pred_symb] = Constant[AbstractSet](new_relation)
         non_const_args = (
             arg for arg in shatter.args if not isinstance(arg, Constant)
         )
         new_predicate = new_pred_symb(*non_const_args)
         return new_predicate
 
+    @add_match(FunctionApplication(ProbabilisticChoiceSet, ...))
+    def wrapped_probabilistic_choice_set(self, wrapped):
+        return self._wrapped_representation_to_predicate(wrapped)
 
-def shatter_easy_probfacts(query, program):
+    @add_match(FunctionApplication(DeterministicFactSet, ...))
+    def wrapped_deterministic_fact_set(self, wrapped):
+        return self._wrapped_representation_to_predicate(wrapped)
+
+    @add_match(FunctionApplication(ProbabilisticFactSet, ...))
+    def wrapped_probabilistic_fact_set(self, wrapped):
+        return self._wrapped_representation_to_predicate(wrapped)
+
+    def _wrapped_representation_to_predicate(self, wrapped):
+        pred_symb = self._reverse_search_predicate_symbol(
+            wrapped.functor.relation
+        )
+        return pred_symb(*wrapped.args)
+
+    def _reverse_search_predicate_symbol(self, relation):
+        for pred_symb, wrapped in self.symbol_table.items():
+            if wrapped.relation == relation:
+                return Symbol(pred_symb.name)
+        raise ValueError("No predicate symbol attached to the given relation")
+
+
+def query_to_wrapped_set_representation(query, symbol_table):
+    new_predicates = list()
+    for predicate in iter_conjunctive_query_predicates(query):
+        new_predicate = FunctionApplication(
+            symbol_table[predicate.functor], predicate.args
+        )
+        new_predicates.append(new_predicate)
+    return Conjunction(tuple(new_predicates))
+
+
+def shatter_easy_probfacts(query, symbol_table):
     """
     Remove constants occurring in a given query, possibly removing self-joins.
 
@@ -163,18 +201,23 @@ def shatter_easy_probfacts(query, program):
        Probabilistic Data: A Survey. FNT in Databases 7, 197–341.
 
     """
+    ws_query = query_to_wrapped_set_representation(query, symbol_table)
+    pfact_pred_symbs = set(
+        pred_symb
+        for pred_symb, wrapped_set in symbol_table.items()
+        if isinstance(wrapped_set, ProbabilisticFactSet)
+    )
     grouped_pfact_preds = group_preds_by_pred_symb(
-        list(iter_conjunctive_query_predicates(query)),
-        program.pfact_pred_symbs,
+        list(iter_conjunctive_query_predicates(query)), pfact_pred_symbs
     )
     for pred_symb, predicates in grouped_pfact_preds.items():
         if not is_easily_shatterable_self_join(predicates):
             raise UnexpectedExpressionError(
                 f"Cannot easily shatter {pred_symb}-predicates"
             )
-    tagger = QueryEasyShatteringTagger(program)
-    tagged_query = tagger.walk(query)
-    shatterer = EasyQueryShatterer(program)
+    tagger = QueryEasyShatteringTagger()
+    tagged_query = tagger.walk(ws_query)
+    shatterer = EasyQueryShatterer(symbol_table)
     shattered_query = shatterer.walk(tagged_query)
     if isinstance(shattered_query, Shatter) or (
         isinstance(shattered_query, Conjunction)

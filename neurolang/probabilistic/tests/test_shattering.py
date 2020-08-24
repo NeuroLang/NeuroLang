@@ -4,6 +4,9 @@ from ...exceptions import UnexpectedExpressionError
 from ...expressions import Constant, FunctionApplication, Symbol
 from ...logic import Conjunction
 from ..cplogic.program import CPLogicProgram
+from ..probabilistic_ra_utils import (
+    generate_probabilistic_symbol_table_for_query,
+)
 from ..shattering import shatter_easy_probfacts
 
 P = Symbol("P")
@@ -17,19 +20,25 @@ b = Constant("b")
 
 def test_query_shattering_single_predicate():
     query = P(x, y)
-    shattered = shatter_easy_probfacts(query, CPLogicProgram())
-    assert shattered == query
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        P, [(0.2, "a", "b"), (1.0, "a", "c"), (0.7, "b", "b")]
+    )
+    symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
+    shattered = shatter_easy_probfacts(query, symbol_table)
+    assert shattered == Conjunction((query,))
     query = P(a, x)
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
         P, [(0.2, "a", "b"), (1.0, "a", "c"), (0.7, "b", "b")]
     )
-    shattered = shatter_easy_probfacts(query, cpl)
-    assert isinstance(shattered, FunctionApplication)
-    assert shattered.functor.name.startswith("fresh_")
-    assert shattered.args == (x,)
-    assert shattered.functor in cpl.symbol_table
-    assert shattered.functor in cpl.pfact_pred_symbs
+    symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
+    shattered = shatter_easy_probfacts(query, symbol_table)
+    assert isinstance(shattered, Conjunction)
+    assert len(shattered.formulas) == 1
+    assert shattered.formulas[0].functor.name.startswith("fresh_")
+    assert shattered.formulas[0].args == (x,)
+    assert shattered.formulas[0].functor in symbol_table
 
 
 def test_query_shattering_self_join():
@@ -38,7 +47,8 @@ def test_query_shattering_self_join():
     cpl.add_probabilistic_facts_from_tuples(
         P, [(0.2, "a", "b"), (1.0, "a", "c"), (0.7, "b", "b")]
     )
-    shattered = shatter_easy_probfacts(query, CPLogicProgram())
+    symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
+    shattered = shatter_easy_probfacts(query, symbol_table)
     assert isinstance(shattered, Conjunction)
 
 
@@ -49,13 +59,25 @@ def test_query_shattering_not_easy():
     )
     with pytest.raises(UnexpectedExpressionError):
         query = Conjunction((P(x), P(y)))
-        shatter_easy_probfacts(query, cpl)
+        symbol_table = generate_probabilistic_symbol_table_for_query(
+            cpl, query
+        )
+        shatter_easy_probfacts(query, symbol_table)
     with pytest.raises(UnexpectedExpressionError):
         query = Conjunction((P(a, x), P(a, y)))
-        shatter_easy_probfacts(query, cpl)
+        symbol_table = generate_probabilistic_symbol_table_for_query(
+            cpl, query
+        )
+        shatter_easy_probfacts(query, symbol_table)
     with pytest.raises(UnexpectedExpressionError):
         query = Conjunction((P(a, x), P(y, a)))
-        shatter_easy_probfacts(query, cpl)
+        symbol_table = generate_probabilistic_symbol_table_for_query(
+            cpl, query
+        )
+        shatter_easy_probfacts(query, symbol_table)
     with pytest.raises(UnexpectedExpressionError):
         query = Conjunction((P(a), P(x)))
-        shatter_easy_probfacts(query, cpl)
+        symbol_table = generate_probabilistic_symbol_table_for_query(
+            cpl, query
+        )
+        shatter_easy_probfacts(query, symbol_table)
