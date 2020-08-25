@@ -98,30 +98,53 @@ with nl.scope as e:
     
     nl_results = nl.solve_query(e.xyz_given_term[e.x, e.y, e.z])
 
-
-
-
+result_data = nl_results.value.as_pandas_dataframe()
+prob_column = result_data.drop(['x', 'y', 'z'], axis=1).columns[0]
+result_data = result_data.rename(columns={f'{prob_column}': "prob"})
+result_data.head()
 
 # +
-result_data = result.value.to_numpy()
-prob_terms = aux.load_neurosynth_pain_prob_terms()
+#result_data = result.value.to_numpy()
+#prob_terms = aux.load_neurosynth_pain_prob_terms()
 
-prob_img = nib.spatialimages.SpatialImage(
-    np.zeros(result_data[0][1].image_dim, dtype=float),
-    affine=result_data[0][1].affine
+import nibabel as nib
+from neurolang.regions import region_union
+import neurolang.frontend as fe
+
+def create_region(x, y, z, it):
+    voxels = nib.affines.apply_affine(
+        np.linalg.inv(it.affine), np.c_[x, y, z]
+    )
+    return fe.ExplicitVBR(voxels, it.affine, image_dim=it.shape)
+
+nsh = fe.neurosynth_utils.NeuroSynthHandler()
+ns_ds = nsh.ns_load_dataset()
+it = ns_ds.image_table
+
+regions = []
+vox_prob = []
+for x, y, z, p in result_data.values:
+    r_overlay = create_region(x, y, z, it.masker.volume)
+    vox_prob.append((r_overlay.voxels, p))
+    regions.append(r_overlay)
+
+regions = region_union(regions)
+
+prob_img_nl = nib.spatialimages.SpatialImage(
+    np.zeros(regions.image_dim, dtype=float), affine=it.masker.volume.affine
 )
+for v, p in vox_prob:
+    prob_img_nl.dataobj[tuple(v.T)] = p
 
-for p in result_data:
-    prob_img.dataobj[tuple(p[1].voxels.T)] = p[0]/prob_terms[prob_terms['index'] == p[4]]['proba'].values[0]
+# -
 
 plotting.plot_stat_map(
-    prob_img, 
+    prob_img_nl, 
     title='Tags: Pain, Noxious, Nociceptive', 
     cmap='PuBuGn',
     display_mode='x',
     cut_coords=np.linspace(-63, 63, 3),
 )
-# -
 
 # Now we can analyze the results by plotting the p-values obtained
 

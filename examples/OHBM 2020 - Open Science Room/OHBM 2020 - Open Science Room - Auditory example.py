@@ -28,8 +28,6 @@
 
 # #### Let's begin
 
-# %load_ext snakeviz
-
 # +
 import warnings
 warnings.filterwarnings('ignore')
@@ -49,7 +47,7 @@ from neurolang import frontend as fe
 #
 
 nl = ProbabilisticFrontend()
-datasets_helper.load_auditory_datasets(nl, n=100)
+datasets_helper.load_auditory_datasets(nl)
 
 paths = 'neurolang_data/ontologies/neurofma_fma3.0.owl'
 nl.load_ontology(paths)
@@ -78,11 +76,7 @@ with nl.environment as e:
     e.fma_to_destrieux[e.fma_name, e.destrieux_name] = (
         label(e.fma_uri, e.fma_name) & e.relation_destrieux_fma(e.destrieux_name, e.fma_name)
     )
-
-# +
-# %%snakeviz
-
-with nl.environment as e:
+    
     e.region_voxels[e.id_neurosynth, e.x, e.y, e.z] = (
         e.fma_related_region[e.fma_subregions, 'Temporal lobe'] & 
         e.fma_to_destrieux[e.fma_subregions, e.destrieux_name] & 
@@ -94,19 +88,21 @@ with nl.environment as e:
         e.xyz_destrieux[e.x, e.y, e.z, e.id_destrieux] &
         e.xyz_neurosynth[e.x, e.y, e.z, e.id_neurosynth]
     )
-    
+# -
+
+with nl.scope as e:
     e.p_act[e.id_voxel, e.term, e.id_study] = (
         e.p_voxel_study[e.id_voxel, e.id_study] & 
-        e.p_term_study[e.term,  e.id_study] & 
+        e.p_term_study[e.term, e.id_study] & 
         e.p_study[e.id_study]
     )
     
-    e.probability_voxel[e.x, e.y, e.z] = (
+    e.probability_voxel[e.x, e.y, e.z, e.term, e.id_study] = (
         e.p_act[e.id_voxel, e.term, e.id_study] &
         e.region_voxels[e.id_voxel, e.x, e.y, e.z]
     )
     
-    nl_results = nl.solve_query(e.probability_voxel[e.x, e.y, e.z])
+    nl_act_term_study = nl.solve_query(e.probability_voxel[e.x, e.y, e.z, e.term, e.id_study])
     
     #e.probability_voxel[nl.symbols.agg_create_region(e.x, e.y, e.z)] = (
     #    e.p_act[e.id_voxel, e.term, e.id_study] &
@@ -117,10 +113,76 @@ with nl.environment as e:
     
     #nl_results = nl.solve_query(e.final[e.region])
 
+with nl.scope as e:
+    e.p_ts[e.term, e.id_study] = (
+        e.p_term_study[e.term, e.id_study] & 
+        e.p_study[e.id_study]
+    )
+    
+    nl_term_study = nl.solve_query(e.p_ts[e.term, e.id_study])
+
+df_conj = nl_act_term_study.value.as_pandas_dataframe()
+df_ts = nl_term_study.value.as_pandas_dataframe()
+
+df_conj_prob_column = df_conj.drop(['term','id_study', 'x', 'y', 'z'], axis=1).columns[0]
+df_conj = df_conj.rename(columns={f'{df_conj_prob_column}': "prob1"})
+df_conj.head()
+
+df_ts_prob_column = df_ts.drop(['term','id_study'], axis=1).columns[0]
+df_ts = df_ts.rename(columns={f'{df_ts_prob_column}': "prob2"})
+df_ts.head()
+
+df_merge = df_conj.merge(df_ts, left_on='id_study', right_on='id_study')
+
+df_merge
+
+df_merge['prob'] = df_merge['prob1'] / df_merge['prob2']
+
+# +
+from nilearn import datasets, image
+nsh = fe.neurosynth_utils.NeuroSynthHandler()
+ns_ds = nsh.ns_load_dataset()
+it = ns_ds.image_table
+
+dd = datasets.fetch_atlas_destrieux_2009()
+destrieux_to_ns_mni = image.resample_to_img(
+    dd["maps"], it.masker.volume, interpolation="nearest"
+)
+# -
+
+df_merge = df_merge[['x', 'y', 'z', 'prob']]
+
+df_merge.head()
+
+# +
+import nibabel as nib
+from neurolang.regions import region_union
+
+def create_region(x, y, z, it):
+    voxels = nib.affines.apply_affine(
+        np.linalg.inv(it.affine), np.c_[x, y, z]
+    )
+    return fe.ExplicitVBR(voxels, it.affine, image_dim=it.shape)
+
+
+regions = []
+vox_prob = []
+for x, y, z, p in df_merge.values:
+    r_overlay = create_region(x, y, z, it.masker.volume)
+    vox_prob.append((r_overlay.voxels, p))
+    regions.append(r_overlay)
+
+regions = region_union(regions)
+
+prob_img_nl = nib.spatialimages.SpatialImage(
+    np.zeros(regions.image_dim, dtype=float), affine=destrieux_to_ns_mni.affine
+)
+for v, p in vox_prob:
+    prob_img_nl.dataobj[tuple(v.T)] = p
 
 # -
 
-prob_img_nl = datasets_helper.parse_results(nl_results)
+#prob_img_nl = datasets_helper.parse_results(nl_results)
 plotting.plot_stat_map(
     prob_img_nl, 
     title='Tag "auditory" (Neurolang)', 
@@ -136,7 +198,7 @@ plotting.plot_stat_map(
     cut_coords=np.linspace(-30, 5, 5),
 )
 
-with nl.environment as e:
+with nl.scope as e:
     
     e.p_act[e.id_voxel, e.term, e.id_study] = (
         e.p_voxel_study[e.id_voxel, e.id_study] & 

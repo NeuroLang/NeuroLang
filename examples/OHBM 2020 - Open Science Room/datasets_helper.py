@@ -28,10 +28,9 @@ def ns_prob_joint_voxel_study(nsh):
     df["prob"] = p_doc
     df = df.astype({"prob": float, "voxel": int, "study": int})
     return df[["prob", "voxel", "study"]]
-    
 
 
-def load_auditory_datasets(nl, n=200):
+def load_auditory_datasets(nl):
 
     d_onto = utils._get_dataset_dir("ontologies", data_dir="neurolang_data")
     if not os.path.exists(d_onto + "/neurofma_fma3.0.owl"):
@@ -42,7 +41,7 @@ def load_auditory_datasets(nl, n=200):
 
     nsh = fe.neurosynth_utils.NeuroSynthHandler()
 
-    sample_studies = nsh.ns_study_ids()[:n]
+    sample_studies = nsh.ns_study_ids()
     sample_studies = pd.DataFrame(sample_studies)
     nl.add_uniform_probabilistic_choice_over_set(
         list(sample_studies.itertuples(name=None, index=False)), name="p_study"
@@ -50,7 +49,7 @@ def load_auditory_datasets(nl, n=200):
 
     df = ns_prob_joint_term_study(nsh, term=["auditory"])
     nl.add_probabilistic_facts_from_tuples(
-        df[df.study.isin(sample_studies[0])].itertuples(
+        df.itertuples(
             name=None, index=False
         ),
         name="p_term_study",
@@ -58,7 +57,7 @@ def load_auditory_datasets(nl, n=200):
 
     df = ns_prob_joint_voxel_study(nsh)
     nl.add_probabilistic_facts_from_tuples(
-        df[df.study.isin(sample_studies[0])].itertuples(
+        df.itertuples(
             name=None, index=False
         ),
         name="p_voxel_study",
@@ -81,10 +80,11 @@ def load_auditory_datasets(nl, n=200):
     dd_data = destrieux_to_ns_mni.get_fdata()
     dd_unmaskes = np.where(destrieux_to_ns_mni.get_fdata() > 0)
 
-    xyz_to_dd_region = []
+    xyz_to_dd_region = []        
     for v in zip(*dd_unmaskes):
         region = dd_data[v[0]][v[1]][v[2]]
-        xyz_to_dd_region.append((v, region))
+        coord = nib.affines.apply_affine(destrieux_to_ns_mni.affine, list(v))
+        xyz_to_dd_region.append((tuple(coord) + tuple([region])))
 
     dd_labels = []
     for n, name in dd["labels"]:
@@ -103,7 +103,7 @@ def load_auditory_datasets(nl, n=200):
         name="xyz_neurosynth",
     )
     xyz_dd = nl.add_tuple_set(
-        [(xyz[0], xyz[1], xyz[2], int(id_)) for xyz, id_ in xyz_to_dd_region],
+        [(x, y, z, int(id_)) for x, y, z, id_ in xyz_to_dd_region],
         name="xyz_destrieux",
     )
     dd_label = nl.add_tuple_set(dd_labels, name="destrieux_labels")
