@@ -133,6 +133,17 @@ def query_to_tagged_set_representation(query, symbol_table):
     return Conjunction(tuple(new_predicates))
 
 
+def _check_shatter_fully_solved(shattered_query):
+    if isinstance(shattered_query, Shatter) or (
+        isinstance(shattered_query, Conjunction)
+        and any(
+            isinstance(formula, Shatter)
+            for formula in shattered_query.formulas
+        )
+    ):
+        raise UnexpectedExpressionError("Cannot easily shatter query")
+
+
 def shatter_easy_probfacts(query, symbol_table):
     """
     Remove constants occurring in a given query, possibly removing self-joins.
@@ -179,12 +190,5 @@ def shatter_easy_probfacts(query, symbol_table):
     tagged_query = tagger.walk(ws_query)
     shatterer = EasyQueryShatterer(symbol_table)
     shattered_query = shatterer.walk(tagged_query)
-    if isinstance(shattered_query, Shatter) or (
-        isinstance(shattered_query, Conjunction)
-        and any(
-            isinstance(formula, Shatter)
-            for formula in shattered_query.formulas
-        )
-    ):
-        raise UnexpectedExpressionError("Cannot easily shatter query")
+    _check_shatter_fully_solved(shattered_query)
     return shattered_query
