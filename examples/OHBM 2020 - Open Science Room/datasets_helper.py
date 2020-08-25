@@ -1,12 +1,13 @@
 import os
 import urllib.request
-from typing import Iterable
 
 import nibabel as nib
 import numpy as np
 import pandas as pd
 from nilearn import datasets, image
 from nilearn.datasets import utils
+import json
+from typing import Iterable
 
 from neurolang import frontend as fe
 from neurolang.regions import region_union
@@ -80,11 +81,10 @@ def load_auditory_datasets(nl):
     dd_data = destrieux_to_ns_mni.get_fdata()
     dd_unmaskes = np.where(destrieux_to_ns_mni.get_fdata() > 0)
 
-    xyz_to_dd_region = []        
+    xyz_to_dd_region = []
     for v in zip(*dd_unmaskes):
         region = dd_data[v[0]][v[1]][v[2]]
-        coord = nib.affines.apply_affine(destrieux_to_ns_mni.affine, list(v))
-        xyz_to_dd_region.append((tuple(coord) + tuple([region])))
+        xyz_to_dd_region.append((v, region))
 
     dd_labels = []
     for n, name in dd["labels"]:
@@ -103,7 +103,7 @@ def load_auditory_datasets(nl):
         name="xyz_neurosynth",
     )
     xyz_dd = nl.add_tuple_set(
-        [(x, y, z, int(id_)) for x, y, z, id_ in xyz_to_dd_region],
+        [(xyz[0], xyz[1], xyz[2], int(id_)) for xyz, id_ in xyz_to_dd_region],
         name="xyz_destrieux",
     )
     dd_label = nl.add_tuple_set(dd_labels, name="destrieux_labels")
@@ -116,21 +116,21 @@ def load_auditory_datasets(nl):
 
 def create_region(x, y, z, it):
     mni_t1 = it.masker.volume
-    voxels = nib.affines.apply_affine(
-        np.linalg.inv(mni_t1.affine), np.c_[x, y, z]
-    )
-    return fe.ExplicitVBR(voxels, mni_t1.affine, image_dim=mni_t1.shape)
+    #voxels = nib.affines.apply_affine(
+    #    np.linalg.inv(mni_t1.affine), np.c_[x, y, z]
+    #)
+    #print(voxels)
+    return fe.ExplicitVBR(np.c_[x, y, z], mni_t1.affine, image_dim=mni_t1.shape)
 
 
 def parse_results(results):
-    results = results.value.as_pandas_dataframe()[['x', 'y', 'z', 'prob']]
     nsh = fe.neurosynth_utils.NeuroSynthHandler()
     ns_ds = nsh.ns_load_dataset()
     it = ns_ds.image_table
 
     regions = []
     vox_prob = []
-    for x, y, z, p in results.values:
+    for x, y, z, p in results.value:
         r_overlay = create_region(x, y, z, it)
         vox_prob.append((r_overlay.voxels, p))
         regions.append(r_overlay)
@@ -352,7 +352,7 @@ def destrieux_name_to_fma_relations():
     ]
 
 
-def load_pain_datasets(nl, n=50):
+def load_pain_datasets(nl, n=100):
     d_onto = utils._get_dataset_dir("ontologies", data_dir="neurolang_data")
 
     if not os.path.exists(d_onto + "/IOBC_1_4_0.xrdf"):
@@ -373,11 +373,10 @@ def load_pain_datasets(nl, n=50):
         list(sample_studies.itertuples(name=None, index=False)), name="p_study"
     )
 
-    #df = pd.DataFrame(
-    #    nsh.ns_term_study_associations(), columns=["prob", "study", "term"]
-    #)
-    #df = df.astype({"prob": float, "study": int})
-    df = ns_prob_joint_term_study(nsh, term=['pain', 'nociception', 'acoustic', 'noxious'])
+    # df = ns_prob_joint_term_study(nsh)
+    df = pd.DataFrame(
+        nsh.ns_term_study_associations(), columns=["prob", "study", "term"]
+    )
     nl.add_probabilistic_facts_from_tuples(
         df[df.study.isin(sample_studies[0])].itertuples(
             name=None, index=False
@@ -409,7 +408,7 @@ def load_pain_datasets(nl, n=50):
     )
 
 
-def load_reverse_inference_dataset(nl, n=50):
+def load_reverse_inference_dataset(nl, n=100):
 
     d_onto = utils._get_dataset_dir("ontologies", data_dir="neurolang_data")
     if not os.path.exists(d_onto + "/cogat.xrdf"):
@@ -418,28 +417,235 @@ def load_reverse_inference_dataset(nl, n=50):
         urllib.request.urlretrieve(url, d_onto + "/cogat.xrdf")
         print("Dataset created in neurolang_data/ontologies")
 
-    load_auditory_datasets(nl, n)
+    load_auditory_datasets(nl, n=200)
+
+
+def ns_prob_joint_voxel_study_deterministic(nsh):
+    data = nsh.ns_reported_activations()
+    df = pd.DataFrame(data, columns=["study", "voxel"])
+    df = df.astype({"study": int})
+    return df[["voxel", "study"]]
+
+
+def ns_prob_joint_term_study_deterministic(nsh, term=None):
+    studies_term = nsh.ns_study_tfidf_feature_for_terms(terms=term)
+    df = pd.DataFrame(studies_term, columns=["study", "term", 'prob'])
+    df = df.astype({"study": int, "prob": float})
+    df = df[df.prob > 0]
+    return df[["study", "term", "prob"]]
+
+
+def load_reverse_inference_dataset_deterministic(nl):
+
+    d_onto = utils._get_dataset_dir("ontologies", data_dir="neurolang_data")
+    if not os.path.exists(d_onto + "/cogat.xrdf"):
+        print("Downloading CogAt ontology")
+        url = "http://data.bioontology.org/ontologies/COGAT/download?apikey=8b5b7825-538d-40e0-9e9e-5ab9274a9aeb&download_format=rdf"
+        urllib.request.urlretrieve(url, d_onto + "/cogat.xrdf")
+        print("Dataset created in neurolang_data/ontologies")
+        
+    d_onto = utils._get_dataset_dir("ontologies", data_dir="neurolang_data")
+    if not os.path.exists(d_onto + "/neurofma_fma3.0.owl"):
+        print("Downloading FMA ontology")
+        url = "http://data.bioontology.org/ontologies/NeuroFMA/submissions/1/download?apikey=8b5b7825-538d-40e0-9e9e-5ab9274a9aeb"
+        urllib.request.urlretrieve(url, d_onto + "/neurofma_fma3.0.owl")
+        print("Dataset created in neurolang_data/ontologies")
 
     nsh = fe.neurosynth_utils.NeuroSynthHandler()
 
-    sample_studies = nsh.ns_study_ids()[:n]
-    sample_studies = pd.DataFrame(sample_studies)
+    #sample_studies = nsh.ns_study_ids()
+    #sample_studies = pd.DataFrame(sample_studies, columns=['study'])
+    #sample_studies = sample_studies.astype({"study": int})
+    #nl.add_tuple_set(
+    #    list(sample_studies.itertuples(name=None, index=False)), name="p_study"
+    #)
 
-    ns_reported_activations = nsh.ns_reported_activations()
-    df = pd.DataFrame(ns_reported_activations, columns=['study', 'voxel'])
-    df = df.astype({"voxel": int, "study": int})
-    nl.add_tuple_set(
-        df[df.study.isin(sample_studies[0])].itertuples(
-            name=None, index=False
-        ),
-        name="ns_reported_activations",
+    #df = ns_prob_joint_term_study_deterministic(nsh, term=nsh.dataset.feature_table.data.columns)
+    #nl.add_tuple_set(
+    #    df.itertuples(
+    #        name=None, index=False
+    #    ),
+    #    name="ns_pmid_term_tfidf",
+    #)
+    
+    d_neurosynth = utils._get_dataset_dir('neurosynth', data_dir='neurolang_data')
+
+    f_neurosynth = utils._fetch_files(
+        d_neurosynth, [
+            (
+                f,
+                'https://github.com/neurosynth/neurosynth-data/raw/master/current_data.tar.gz',
+                {'uncompress': True}
+            )
+            for f in ('database.txt', 'features.txt')
+        ],
+        verbose=True
     )
-    ns_term_study_associations = nsh.ns_term_study_associations()
-    df = pd.DataFrame(ns_term_study_associations, columns=['prob', 'study', 'term'])
-    df = df.astype({"prob": float, "study": int})
-    nl.add_probabilistic_facts_from_tuples(
-        df[df.study.isin(sample_studies[0])].itertuples(
-            name=None, index=False
-        ),
-        name="ns_term_study_associations",
+
+    features = pd.read_csv(f_neurosynth[1], sep='\t')
+
+    features_normalised = (
+        features
+        .melt(id_vars=features.columns[0], var_name='term', value_vars=features.columns[1:], value_name='tfidf')
+        .query('tfidf > 0')
     )
+    ns_pmid_term_tfidf = nl.add_tuple_set(features_normalised.values, name='ns_pmid_term_tfidf')
+
+    #df = ns_prob_joint_voxel_study_deterministic(nsh)
+    #nl.add_tuple_set(
+    #    df.itertuples(
+    #        name=None, index=False
+    #    ),
+    #    name="p_voxel_study",
+    #)
+
+    ns_ds = nsh.ns_load_dataset()
+    it = ns_ds.image_table
+    vox_ids, study_ids_ix = it.data.nonzero()
+    study_ids = ns_ds.image_table.ids[study_ids_ix]
+    study_id_vox_id = np.transpose([study_ids, vox_ids])
+
+    masked_ = it.masker.unmask(np.arange(it.data.shape[0]))
+    nnz = masked_.nonzero()
+    vox_id_MNI = np.c_[
+        masked_[nnz].astype(int),
+        nib.affines.apply_affine(it.masker.volume.affine, np.transpose(nnz)),]
+    
+    ns_activations_by_id = nl.add_tuple_set(
+        study_id_vox_id, name='ns_activations_by_id'
+    )
+
+    #dd = datasets.fetch_atlas_destrieux_2009()
+    #destrieux_to_ns_mni = image.resample_to_img(
+    #    dd["maps"], it.masker.volume, interpolation="nearest"
+    #)
+    #dd_data = destrieux_to_ns_mni.get_fdata()
+    #dd_unmaskes = np.where(destrieux_to_ns_mni.get_fdata() > 0)
+
+    #dd_labels = []
+    #for n, name in dd["labels"]:
+    #    dd_labels.append(
+    #        (
+    #            n,
+    #            name.decode("UTF-8")
+    #            .replace(" ", "_")
+    #            .replace("-", "_")
+    #            .lower(),
+    #        )
+    #    )
+        
+    #xyz_to_dd_region = []
+    #for v in zip(*dd_unmaskes):
+    #    region = dd_data[v[0]][v[1]][v[2]]
+    #    xyz_to_dd_region.append((v, region))
+    
+    xyz_to_ns_region = []
+    for n, x, y, z, in vox_id_MNI:
+        xyz_to_ns_region.append(tuple([x, y, z, n])) 
+        
+
+    xyz_ns = nl.add_tuple_set(
+        xyz_to_ns_region,
+        name="xyz_neurosynth",
+    )
+    #xyz_dd = nl.add_tuple_set(
+    #    xyz_to_dd_region,
+    #    name="xyz_destrieux",
+    #)
+    #dd_label = nl.add_tuple_set(dd_labels, name="destrieux_labels")
+
+    #ds = destrieux_name_to_fma_relations()
+    #nl.add_tuple_set(
+    #    [(dsname, onto) for dsname, onto in ds], name="relation_destrieux_fma"
+    #)
+
+    #atlas_l_filename = './22/MPM/JulichBrain_MPMAtlas_l_N10_nlin2Stdicbm152asym2009c_publicDOI_3f6407380a69007a54f5e13f3c1ba2e6.nii.gz'
+    atlas_r_filename = './22/MPM/JulichBrain_MPMAtlas_r_N10_nlin2Stdicbm152asym2009c_publicDOI_14622b49a715338ce96e96611d395646.nii.gz'
+    
+    img_l = image.load_img(atlas_r_filename)
+
+    julich_to_ns_mni = image.resample_to_img(
+        img_l, it.masker.volume, interpolation="nearest"
+    )
+    
+    jl_data = julich_to_ns_mni.get_fdata()
+    jl_unmaskes = np.nonzero(jl_data)
+    
+    xyz_to_jl_region = []
+    for v in zip(*jl_unmaskes):
+        region = jl_data[v[0]][v[1]][v[2]]
+        coord = nib.affines.apply_affine(julich_to_ns_mni.affine, list(v))
+        xyz_to_jl_region.append((tuple(coord) + tuple([region])))
+        
+    xyz_julich = nl.add_tuple_set(
+        xyz_to_jl_region,
+        name="xyz_julich",
+    )
+    
+    xml = './22/MPM/JulichBrain_MPMAtlas_r_N10_nlin2Stdicbm152asym2009c_publicDOI_14622b49a715338ce96e96611d395646.xml'
+    import xml.etree.ElementTree as ET
+    tree = ET.parse(xml)
+
+    id_2_num = {}
+    for a in tree.iter():
+        if a.tag == 'Structure':
+            num = int(a.attrib['grayvalue'])
+            id_ = int(a.attrib['id'])
+            id_2_num[id_] = num
+    
+    
+    path = './22/jubrain-ontology_22.json'
+    with open(path) as f:
+        data = json.load(f)
+        
+    regions = data['properties']['regions']
+    for elem in regions:
+        triples = parse_region(elem, id_2_num)
+        
+    julich_ontology = nl.add_tuple_set(
+        triples,
+        name="julich_ontology",
+    )
+
+
+def parse_region(elem, id_2_num, father=None, triples=[]):
+    name = elem['name']
+    #triples.append((name, 'subClassOf', father))
+    if 'labelIndex' in elem:
+        if elem['labelIndex'] is not None:
+            index = int(elem['labelIndex'])
+            if index in id_2_num:
+                num = id_2_num[index]
+                triples.append((name, 'labelIndex', num))
+    #if 'arealabel' in elem:
+    #    triples.append((name, 'arealabel', elem['arealabel']))
+        
+    for c in elem['children']:
+        parse_region(c, id_2_num, father=name, triples=triples)
+        
+    return triples
+
+
+def parse_results_deterministic(results):
+    nsh = fe.neurosynth_utils.NeuroSynthHandler()
+    ns_ds = nsh.ns_load_dataset()
+    it = ns_ds.image_table
+
+    regions = []
+    vox_prob = []
+    for voxel_id, xyz in results.as_numpy_array():
+        r_overlay = create_region(xyz[0], xyz[1], xyz[2], it)
+        vox_prob.append((r_overlay.voxels, 1))
+        regions.append(r_overlay)
+
+    regions = region_union(regions)
+
+    prob_img = nib.spatialimages.SpatialImage(
+        np.zeros(regions.image_dim, dtype=float), affine=regions.affine
+    )
+    for v, p in vox_prob:
+        prob_img.dataobj[tuple(v.T)] = 1
+
+    return prob_img
+
+

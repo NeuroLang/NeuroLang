@@ -14,8 +14,8 @@
 #     name: neurolang
 # ---
 
+# +
 import warnings
-warnings.simplefilter('ignore')
 warnings.filterwarnings('ignore')
 
 import stats_helper, datasets_helper
@@ -26,13 +26,14 @@ import numpy as np
 from matplotlib import pyplot as plt
 from typing import Iterable
 from neurolang import frontend as fe
+# -
 
 # We will use the FMA ontology to obtain regions of the brain included within the `Temporal lobe`. We will obtain all the entities that make up the `Temporal Lobe` and then we will convert them into regions using the information provided by the Destrieux atlas. This will allow us to perform spatial operations on these regions, allowing us to obtain those NeuroSynth regions associated with the term `auditory` that overlap our results.
 #
 #
 
 nl = ProbabilisticFrontend()
-datasets_helper.load_reverse_inference_dataset(nl, n=50)
+datasets_helper.load_reverse_inference_dataset(nl, n=100)
 
 paths = ['neurolang_data/ontologies/neurofma_fma3.0.owl', 'neurolang_data/ontologies/cogat.xrdf']
 nl.load_ontology(paths, load_format=["xml", "xml"])
@@ -42,15 +43,11 @@ label = nl.new_symbol(name=str(RDFS.label))
 subclass_of = nl.new_symbol(name=str(RDFS.subClassOf))
 regional_part = nl.new_symbol(name='http://sig.biostr.washington.edu/fma3.0#regional_part_of')
 
-#@nl.add_symbol
-#def agg_create_region(x: Iterable, y: Iterable, z: Iterable) -> fe.ExplicitVBR:
-#    mni_t1 = it.masker.volume
-#    voxels = nib.affines.apply_affine(np.linalg.inv(mni_t1.affine), np.c_[x, y, z])
-#    return fe.ExplicitVBR(voxels, mni_t1.affine, image_dim=mni_t1.shape)
-
 @nl.add_symbol
-def first_word(name: str) -> str:
-    return name.split(" ")[0]
+def agg_create_region(x: Iterable, y: Iterable, z: Iterable) -> fe.ExplicitVBR:
+    mni_t1 = it.masker.volume
+    voxels = nib.affines.apply_affine(np.linalg.inv(mni_t1.affine), np.c_[x, y, z])
+    return fe.ExplicitVBR(voxels, mni_t1.affine, image_dim=mni_t1.shape)
 
 with nl.environment as e:    
     e.fma_related_region[e.subregion_name, e.fma_uri] = (
@@ -86,13 +83,13 @@ with nl.environment as e:
         e.p_study[e.id_study]
     )
     
-    e.probability_voxel[e.id_voxel, e.x, e.y, e.z] = (
+    e.probability_voxel[e.x, e.y, e.z] = (
         e.p_act[e.id_voxel, e.term, e.id_study] &
         e.region_voxels[e.id_voxel, e.x, e.y, e.z]
     )
     
-    #nl_results = nl.solve_all()
-    nl_results = nl.solve_query(e.probability_voxel[e.id_voxel, e.x, e.y, e.z])
+    nl_results = nl.solve_all()
+    #nl_results = nl.solve_query(e.probability_voxel[e.x, e.y, e.z])
     
     #e.probability_voxel[nl.symbols.agg_create_region(e.x, e.y, e.z)] = (
     #    e.p_act[e.id_voxel, e.term, e.id_study] &
@@ -103,9 +100,11 @@ with nl.environment as e:
     
     #nl_results = nl.solve_query(e.final[e.region])
 
-t = nl_results.value._container.values
-f = [(float(prob), id_voxel, x, y, z) for z, id_voxel, x, y, prob in t]
-p_act_aud = nl.add_probabilistic_facts_from_tuples(tuple(f), name='p_act_aud');
+t = nl_results['probability_voxel'].value._container.values
+
+t = res['probability_voxel'].value._container.values
+f = [(voxid, x, y, z, term, prob) for voxid, x, y, z, term, prob in t if prob > 0.1]
+p_act_given_term = nl.add_tuple_set(tuple(f), name='p_act_given_term');
 
 prob_img_nl = datasets_helper.parse_results(nl_results)
 plotting.plot_stat_map(
@@ -123,44 +122,41 @@ plotting.plot_stat_map(
     cut_coords=np.linspace(-30, 5, 5),
 )
 
-# +
-from rdflib import RDF
-
-part_of = nl.new_symbol(name='http://www.obofoundry.org/ro/ro.owl#part_of')
-
-# Should found a better to imply this
-triples = nl.symbol_table[nl.get_ontology_triples_symbol().name]
-a = triples.value.as_numpy_array()
-t = [('Auditory', str(RDF.type), 'http://www.cognitiveatlas.org/ontology/cogat.owl#CAO_00148')]
-
-t = np.concatenate((a, t))
-nl.add_extensional_predicate_from_tuples(t, name=nl.get_ontology_triples_symbol().name)
-# -
-
-with nl.scope as e:
-    e.pre_part[e.x, e.y] = part_of[e.x, e.y]
-
-    e.perception_terms[e.short_name] = (
-        e.pre_part["Auditory", e.y] & 
-        subclass_of[e.z, e.y] & 
-        label(e.z, e.term) &
-        (e.short_name == nl.symbols.first_word(e.term))
+with nl.environment as e:
+    
+    e.p_act[e.id_voxel, e.term, e.id_study] = (
+        e.p_voxel_study[e.id_voxel, e.id_study] & 
+        e.p_term_study[e.term,  e.id_study] & 
+        e.p_study[e.id_study]
     )
     
-    e.p_term_given_act[e.term, e.voxid] = (
-        e.ns_reported_activations[e.study, e.voxid] &
-        e.perception_terms[e.term] & 
-        e.ns_term_study_associations[e.study, e.term]
+    e.probability_voxel[e.x, e.y, e.z] = (
+        e.p_act[e.id_voxel, e.term, e.id_study] &
+        e.region_voxels[e.id_voxel, e.x, e.y, e.z]
     )
     
-    e.p_term_g_aud_voxels[e.term] = (
-        e.p_term_given_act[e.term, e.voxid] &
-        e.p_act_aud[e.voxid, e.x, e.y, e.z]
-    )
-    
-    nl_reverse = nl.solve_query(e.p_term_g_aud_voxels[e.term])
+    ns_results = nl.solve_query(e.probability_voxel[e.x, e.y, e.z])
 
-nl_reverse
+prob_img_ns = datasets_helper.parse_results(ns_results)
+plotting.plot_stat_map(
+    prob_img_ns, 
+    title='Tag "auditory" (NeuroSynth)', 
+    cmap='PuBu',
+    display_mode='x',
+    cut_coords=np.linspace(-63, 63, 5),
+)
+
+plotting.plot_stat_map(
+    prob_img_ns, 
+    title='Tag "auditory" (Neurosynth)', 
+    cmap='PuBu',
+    display_mode='y',
+    cut_coords=np.linspace(-30, 5, 5),
+)
+
+
+
+
 
 
 
@@ -262,3 +258,106 @@ plotting.plot_stat_map(
 # [4] Insel, T. R., Landis, S.C., Collins, F.S.: Research priorities. The NIHBRAIN Initiative. Science (New York, N.Y.) 340 (6133), 687–688 (May  2013). https://doi.org/10.1126/science.1239276 <br/>
 # [5] Markram, H.: The human brain project. Scientific American306(6), 50–55 (Jun2012). https://doi.org/10.1038/scientificamerican0612-50
 # [6] Derrfuss, J. & Mar, R. A. Lost in localization: the need for a universal coordinate database. NeuroImage 48, 1–7, DOI:10.1016/j.neuroimage.2009.01.053 (2009).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# +
+import warnings
+warnings.filterwarnings('ignore')
+
+import stats_helper, datasets_helper
+from neurolang.frontend.probabilistic_frontend import ProbabilisticFrontend
+from rdflib import RDFS
+from nilearn import plotting
+import numpy as np
+from matplotlib import pyplot as plt
+from typing import Iterable
+from neurolang import frontend as fe
+# -
+
+nl = ProbabilisticFrontend()
+datasets_helper.load_reverse_inference_dataset(nl, n=100)
+
+paths = 'neurolang_data/ontologies/cogat.xrdf'
+nl.load_ontology(paths)
+
+# +
+from rdflib import RDF
+from neurolang.expressions import Constant
+from neurolang.datalog.expressions import Implication
+
+part_of = nl.new_symbol(name='http://www.obofoundry.org/ro/ro.owl#part_of')
+subclass_of = nl.new_symbol(name=str(RDFS.subClassOf))
+label = nl.new_symbol(name=str(RDFS.label))
+
+# +
+x = nl.new_symbol(name='x')
+type_ = nl.new_symbol(name=str(RDF.type))
+imp = Implication(type_('auditory', x) ,label(x, 'Audition'))
+
+nl.solver.walk(imp)
+
+# -
+
+with nl.scope as e:
+    e.answer[e.n] = (
+        part_of['auditory', e.y] 
+        & subclass_of[e.z, e.y]
+        & label(e.z, e.n)
+    )
+    
+    
+    res = nl.solve_all()
+
+list(res['answer'].unwrapped_iter())
+
+# +
+
+triples = nl.symbol_table[nl.get_ontology_triples_symbol().name]
+a = triples.value.as_numpy_array()
+t = [('Auditory', str(RDF.type), 'http://www.cognitiveatlas.org/ontology/cogat.owl#CAO_00148')]
+
+t = np.concatenate((a, t))
+nl.add_extensional_predicate_from_tuples(t, name=nl.get_ontology_triples_symbol().name)
+# -
+
+with nl.scope as e:
+    e.pre_part[e.x, e.y] = part_of[e.x, e.y]
+
+    e.answer[e.n] = (
+        e.pre_part["Auditory", e.y] & subclass_of[e.z, e.y] & label(e.z, e.n)
+    )
+    
+    
+    
+    #res = nl.solve_query(e.answer[e.x, e.y])
+    res = nl.solve_all()
+
+res.keys()
+
+list(res['pre_part'].unwrapped_iter())
+
+list(res['answer'].unwrapped_iter())
+
+with nl.scope as e:
+    e.ans2[e.y] = part_of['Auditory', e.y] 
+    
+    res = nl.solve_all()
+
+
+
+list(res['ans2'].unwrapped_iter())
+
+
