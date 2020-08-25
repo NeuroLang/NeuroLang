@@ -6,7 +6,6 @@ from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionWalker
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import Conjunction
-from ..relational_algebra import ColumnInt
 from .expression_processing import (
     group_preds_by_pred_symb,
     iter_conjunctive_query_predicates,
@@ -102,8 +101,13 @@ class EasyQueryShatterer(ExpressionWalker):
                 for i in const_idxs
             }
         )
-        proj_cols = (0,) + tuple(
-            i + 1
+        non_prob_columns = tuple(
+            c
+            for c in new_relation.columns
+            if c != shatter.functor.probability_column.value
+        )
+        proj_cols = (shatter.functor.probability_column.value,) + tuple(
+            non_prob_columns[i]
             for i, arg in enumerate(shatter.args)
             if not isinstance(arg, Constant)
         )
@@ -114,7 +118,7 @@ class EasyQueryShatterer(ExpressionWalker):
             arg for arg in shatter.args if not isinstance(arg, Constant)
         )
         new_tagged = ProbabilisticFactSet(
-            new_pred_symb, Constant(ColumnInt(0))
+            new_pred_symb, shatter.functor.probability_column
         )
         return FunctionApplication(new_tagged, non_const_args)
 
