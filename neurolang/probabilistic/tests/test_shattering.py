@@ -67,12 +67,6 @@ def test_query_shattering_not_easy():
         P, [(0.2, "a", "b"), (1.0, "a", "c"), (0.7, "b", "b")]
     )
     with pytest.raises(UnexpectedExpressionError):
-        query = Conjunction((P(x), P(y)))
-        symbol_table = generate_probabilistic_symbol_table_for_query(
-            cpl, query
-        )
-        shatter_easy_probfacts(query, symbol_table)
-    with pytest.raises(UnexpectedExpressionError):
         query = Conjunction((P(a, x), P(a, y)))
         symbol_table = generate_probabilistic_symbol_table_for_query(
             cpl, query
@@ -85,7 +79,7 @@ def test_query_shattering_not_easy():
         )
         shatter_easy_probfacts(query, symbol_table)
     with pytest.raises(UnexpectedExpressionError):
-        query = Conjunction((P(a), P(x)))
+        query = Conjunction((P(a, x), P(x, a)))
         symbol_table = generate_probabilistic_symbol_table_for_query(
             cpl, query
         )

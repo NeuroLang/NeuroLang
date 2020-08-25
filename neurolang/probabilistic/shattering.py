@@ -6,19 +6,25 @@ from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionWalker
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import Conjunction
-from .expression_processing import (
-    group_preds_by_pred_symb,
-    iter_conjunctive_query_predicates,
-)
+from .expression_processing import iter_conjunctive_query_predicates
 from .probabilistic_ra_utils import ProbabilisticFactSet
 
 
-def group_terms_by_index(predicates):
+def group_terms_by_index(list_of_tuple_of_terms):
     idx_to_terms = collections.defaultdict(list)
-    for predicate in predicates:
-        for idx, term in enumerate(predicate.args):
+    for terms in list_of_tuple_of_terms:
+        for idx, term in enumerate(terms):
             idx_to_terms[idx].append(term)
     return idx_to_terms
+
+
+def group_indexes_by_symbol(list_of_tuple_of_terms):
+    symbol_to_indexes = collections.defaultdict(list)
+    for terms in list_of_tuple_of_terms:
+        for idx, term in enumerate(terms):
+            if isinstance(term, Symbol):
+                symbol_to_indexes[term].append(idx)
+    return symbol_to_indexes
 
 
 def has_repeated_constant(list_of_terms):
@@ -47,7 +53,13 @@ def has_multiple_symbols(list_of_terms):
     )
 
 
-def is_easily_shatterable_self_join(predicates):
+def any_symbol_occurs_in_different_locations(symbol_to_indexes):
+    return any(
+        len(set(indexes)) > 1 for symbol, indexes in symbol_to_indexes.items()
+    )
+
+
+def is_easily_shatterable_self_join(list_of_tuple_of_terms):
     """
     Examples
     --------
@@ -60,13 +72,14 @@ def is_easily_shatterable_self_join(predicates):
         - P(a), P(x)
 
     """
-    idx_to_terms = group_terms_by_index(predicates)
+    idx_to_terms = group_terms_by_index(list_of_tuple_of_terms)
+    symbol_to_indexes = group_indexes_by_symbol(list_of_tuple_of_terms)
     return not any(
         has_repeated_constant(terms)
         or has_both_symbol_and_constant(terms)
         or has_multiple_symbols(terms)
         for terms in idx_to_terms.values()
-    )
+    ) and not any_symbol_occurs_in_different_locations(symbol_to_indexes)
 
 
 class Shatter(FunctionApplication):
@@ -74,13 +87,31 @@ class Shatter(FunctionApplication):
 
 
 class QueryEasyShatteringTagger(ExpressionWalker):
+    def __init__(self):
+        self._cached_args = collections.defaultdict(set)
+
     @add_match(
         FunctionApplication(ProbabilisticFactSet, ...),
         lambda fa: not isinstance(fa, Shatter)
         and any(isinstance(arg, Constant) for arg in fa.args),
     )
     def shatter_probfact_predicates(self, function_application):
+        self._check_can_shatter(function_application)
+        self._cached_args[function_application.functor.relation].add(
+            function_application.args
+        )
         return Shatter(*function_application.unapply())
+
+    def _check_can_shatter(self, function_application):
+        pred_symb = function_application.functor.relation
+        args = function_application.args
+        list_of_tuple_of_terms = self._cached_args.get(pred_symb, set()).union(
+            {args}
+        )
+        if not is_easily_shatterable_self_join(list_of_tuple_of_terms):
+            raise UnexpectedExpressionError(
+                f"Cannot easily shatter {pred_symb}-predicates"
+            )
 
 
 class EasyQueryShatterer(ExpressionWalker):
@@ -173,19 +204,6 @@ def shatter_easy_probfacts(query, symbol_table):
 
     """
     ws_query = query_to_tagged_set_representation(query, symbol_table)
-    pfact_pred_symbs = set(
-        pred_symb
-        for pred_symb, tagged_set in symbol_table.items()
-        if isinstance(tagged_set, ProbabilisticFactSet)
-    )
-    grouped_pfact_preds = group_preds_by_pred_symb(
-        list(iter_conjunctive_query_predicates(query)), pfact_pred_symbs
-    )
-    for pred_symb, predicates in grouped_pfact_preds.items():
-        if not is_easily_shatterable_self_join(predicates):
-            raise UnexpectedExpressionError(
-                f"Cannot easily shatter {pred_symb}-predicates"
-            )
     tagger = QueryEasyShatteringTagger()
     tagged_query = tagger.walk(ws_query)
     shatterer = EasyQueryShatterer(symbol_table)
