@@ -5,6 +5,7 @@ from ...expressions import Constant, FunctionApplication, Symbol
 from ...logic import Conjunction
 from ..cplogic.program import CPLogicProgram
 from ..probabilistic_ra_utils import (
+    ProbabilisticFactSet,
     generate_probabilistic_symbol_table_for_query,
 )
 from ..shattering import shatter_easy_probfacts
@@ -18,7 +19,7 @@ a = Constant("a")
 b = Constant("b")
 
 
-def test_query_shattering_single_predicate():
+def test_no_constant():
     query = P(x, y)
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
@@ -26,7 +27,14 @@ def test_query_shattering_single_predicate():
     )
     symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
     shattered = shatter_easy_probfacts(query, symbol_table)
-    assert shattered == Conjunction((query,))
+    assert isinstance(shattered, Conjunction)
+    assert len(shattered.formulas) == 1
+    assert isinstance(shattered.formulas[0], FunctionApplication)
+    assert isinstance(shattered.formulas[0].functor, ProbabilisticFactSet)
+    assert shattered.formulas[0].args == (x, y)
+
+
+def test_one_constant_one_var():
     query = P(a, x)
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
@@ -36,9 +44,10 @@ def test_query_shattering_single_predicate():
     shattered = shatter_easy_probfacts(query, symbol_table)
     assert isinstance(shattered, Conjunction)
     assert len(shattered.formulas) == 1
-    assert shattered.formulas[0].functor.name.startswith("fresh_")
+    assert isinstance(shattered.formulas[0], FunctionApplication)
+    assert isinstance(shattered.formulas[0].functor, ProbabilisticFactSet)
     assert shattered.formulas[0].args == (x,)
-    assert shattered.formulas[0].functor in symbol_table
+    assert shattered.formulas[0].functor.relation in symbol_table
 
 
 def test_query_shattering_self_join():

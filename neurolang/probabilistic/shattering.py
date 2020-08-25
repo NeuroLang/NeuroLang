@@ -6,6 +6,7 @@ from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionWalker, PatternWalker
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import Conjunction
+from ..relational_algebra import ColumnInt
 from .expression_processing import (
     group_preds_by_pred_symb,
     iter_conjunctive_query_predicates,
@@ -78,8 +79,11 @@ class Shatter(FunctionApplication):
     pass
 
 
-class QueryEasyShatteringTagger(PatternWalker):
-    @add_match(FunctionApplication(ProbabilisticFactSet, ...))
+class QueryEasyShatteringTagger(ExpressionWalker):
+    @add_match(
+        FunctionApplication(ProbabilisticFactSet, ...),
+        lambda fa: not isinstance(fa, Shatter),
+    )
     def shatter_probfact_predicates(self, function_application):
         const_idxs = list(
             i
@@ -90,20 +94,6 @@ class QueryEasyShatteringTagger(PatternWalker):
             return Shatter(*function_application.unapply())
         else:
             return function_application
-
-    @add_match(FunctionApplication(DeterministicFactSet, ...))
-    def pass_on_deterministic_fact_sets(self, function_application):
-        return function_application
-
-    @add_match(FunctionApplication(ProbabilisticFactSet, ...))
-    def pass_on_probabilistic_fact_sets(self, function_application):
-        return function_application
-
-    @add_match(Conjunction)
-    def conjunction(self, conjunction):
-        return Conjunction(
-            (self.walk(formula) for formula in conjunction.formulas)
-        )
 
 
 class EasyQueryShatterer(ExpressionWalker):
@@ -132,35 +122,13 @@ class EasyQueryShatterer(ExpressionWalker):
         new_relation = new_relation.projection(*proj_cols)
         new_pred_symb = Symbol.fresh()
         self.symbol_table[new_pred_symb] = Constant[AbstractSet](new_relation)
-        non_const_args = (
+        non_const_args = tuple(
             arg for arg in shatter.args if not isinstance(arg, Constant)
         )
-        new_predicate = new_pred_symb(*non_const_args)
-        return new_predicate
-
-    @add_match(FunctionApplication(ProbabilisticChoiceSet, ...))
-    def wrapped_probabilistic_choice_set(self, wrapped):
-        return self._wrapped_representation_to_predicate(wrapped)
-
-    @add_match(FunctionApplication(DeterministicFactSet, ...))
-    def wrapped_deterministic_fact_set(self, wrapped):
-        return self._wrapped_representation_to_predicate(wrapped)
-
-    @add_match(FunctionApplication(ProbabilisticFactSet, ...))
-    def wrapped_probabilistic_fact_set(self, wrapped):
-        return self._wrapped_representation_to_predicate(wrapped)
-
-    def _wrapped_representation_to_predicate(self, wrapped):
-        pred_symb = self._reverse_search_predicate_symbol(
-            wrapped.functor.relation
+        new_wrapped = ProbabilisticFactSet(
+            new_pred_symb, Constant(ColumnInt(0))
         )
-        return pred_symb(*wrapped.args)
-
-    def _reverse_search_predicate_symbol(self, relation):
-        for pred_symb, wrapped in self.symbol_table.items():
-            if wrapped.relation == relation:
-                return Symbol(pred_symb.name)
-        raise ValueError("No predicate symbol attached to the given relation")
+        return FunctionApplication(new_wrapped, non_const_args)
 
 
 def query_to_wrapped_set_representation(query, symbol_table):
