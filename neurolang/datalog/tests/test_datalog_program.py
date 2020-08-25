@@ -1,4 +1,4 @@
-from typing import AbstractSet
+from typing import AbstractSet, Tuple
 
 import pytest
 
@@ -10,6 +10,9 @@ from ...logic import ExistentialPredicate, Implication, Union
 from .. import DatalogProgram, Fact
 from ..basic_representation import UnionOfConjunctiveQueries
 from ..expressions import TranslateToLogic
+from ...utils.relational_algebra_set.pandas import RelationalAlgebraFrozenSet
+from ..wrapped_collections import WrappedNamedRelationalAlgebraFrozenSet, WrappedRelationalAlgebraFrozenSet
+
 
 S_ = Symbol
 C_ = Constant
@@ -248,3 +251,20 @@ def test_not_conjunctive():
 
     with pytest.raises(NeuroLangException):
         dl.walk(Imp_(Q(x, y), R(Q(x))))
+
+
+def test_infer_iterable_type():
+    iterable = range(5)
+    type_, it = DatalogProgram.infer_iterable_type(iterable)
+    assert type_ is int
+    assert list(it) == list(range(5))
+
+    r = RelationalAlgebraFrozenSet([(2, 'a')])
+    type_, it = DatalogProgram.infer_iterable_type(r)
+    assert type_ is Tuple[int, str]
+    assert it is r
+
+    rw = WrappedRelationalAlgebraFrozenSet(r)
+    type_, it = DatalogProgram.infer_iterable_type(rw)
+    assert type_ is Tuple[int, str]
+    assert it is rw
