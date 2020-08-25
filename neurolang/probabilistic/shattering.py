@@ -3,7 +3,7 @@ from typing import AbstractSet
 
 from ..exceptions import UnexpectedExpressionError
 from ..expression_pattern_matching import add_match
-from ..expression_walker import ExpressionWalker, PatternWalker
+from ..expression_walker import ExpressionWalker
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import Conjunction
 from ..relational_algebra import ColumnInt
@@ -11,12 +11,7 @@ from .expression_processing import (
     group_preds_by_pred_symb,
     iter_conjunctive_query_predicates,
 )
-from .probabilistic_ra_utils import (
-    DeterministicFactSet,
-    ProbabilisticChoiceSet,
-    ProbabilisticFactSet,
-    generate_probabilistic_symbol_table_for_query,
-)
+from .probabilistic_ra_utils import ProbabilisticFactSet
 
 
 def group_terms_by_index(predicates):
