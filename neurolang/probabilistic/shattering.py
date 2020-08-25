@@ -77,18 +77,11 @@ class Shatter(FunctionApplication):
 class QueryEasyShatteringTagger(ExpressionWalker):
     @add_match(
         FunctionApplication(ProbabilisticFactSet, ...),
-        lambda fa: not isinstance(fa, Shatter),
+        lambda fa: not isinstance(fa, Shatter)
+        and any(isinstance(arg, Constant) for arg in fa.args),
     )
     def shatter_probfact_predicates(self, function_application):
-        const_idxs = list(
-            i
-            for i, arg in enumerate(function_application.args)
-            if isinstance(arg, Constant)
-        )
-        if const_idxs:
-            return Shatter(*function_application.unapply())
-        else:
-            return function_application
+        return Shatter(*function_application.unapply())
 
 
 class EasyQueryShatterer(ExpressionWalker):
@@ -120,13 +113,13 @@ class EasyQueryShatterer(ExpressionWalker):
         non_const_args = tuple(
             arg for arg in shatter.args if not isinstance(arg, Constant)
         )
-        new_wrapped = ProbabilisticFactSet(
+        new_tagged = ProbabilisticFactSet(
             new_pred_symb, Constant(ColumnInt(0))
         )
-        return FunctionApplication(new_wrapped, non_const_args)
+        return FunctionApplication(new_tagged, non_const_args)
 
 
-def query_to_wrapped_set_representation(query, symbol_table):
+def query_to_tagged_set_representation(query, symbol_table):
     new_predicates = list()
     for predicate in iter_conjunctive_query_predicates(query):
         new_predicate = FunctionApplication(
@@ -164,11 +157,11 @@ def shatter_easy_probfacts(query, symbol_table):
        Probabilistic Data: A Survey. FNT in Databases 7, 197–341.
 
     """
-    ws_query = query_to_wrapped_set_representation(query, symbol_table)
+    ws_query = query_to_tagged_set_representation(query, symbol_table)
     pfact_pred_symbs = set(
         pred_symb
-        for pred_symb, wrapped_set in symbol_table.items()
-        if isinstance(wrapped_set, ProbabilisticFactSet)
+        for pred_symb, tagged_set in symbol_table.items()
+        if isinstance(tagged_set, ProbabilisticFactSet)
     )
     grouped_pfact_preds = group_preds_by_pred_symb(
         list(iter_conjunctive_query_predicates(query)), pfact_pred_symbs
