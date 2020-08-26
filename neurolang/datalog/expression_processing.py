@@ -466,17 +466,7 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
         ucq = idb[functor]
         cqs = []
         for cq in ucq.formulas:
-            free_variables = extract_logic_free_variables(cq)
-            linked_variables = cq.consequent.args
-            cq = ReplaceExpressionWalker(dict(
-                chain(
-                    zip(linked_variables, args),
-                    zip(
-                        free_variables,
-                        (Symbol.fresh() for _ in range(len(free_variables)))
-                    )
-                )
-            )).walk(cq)
+            cq = self._normalise_arguments(cq, args)
             antecedent = self.walk(cq.antecedent)
             cqs.append(antecedent)
 
@@ -485,6 +475,20 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
         else:
             res = cqs[0]
         return res
+
+    def _normalise_arguments(self, cq, args):
+        free_variables = extract_logic_free_variables(cq)
+        linked_variables = cq.consequent.args
+        cq = ReplaceExpressionWalker(dict(
+            chain(
+                zip(linked_variables, args),
+                zip(
+                    free_variables,
+                    (Symbol.fresh() for _ in range(len(free_variables)))
+                )
+            )
+        )).walk(cq)
+        return cq
 
     @add_match(Conjunction)
     def conjunction(self, expression):
