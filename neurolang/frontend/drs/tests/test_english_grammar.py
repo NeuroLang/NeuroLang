@@ -187,3 +187,32 @@ def test_implication_if_then():
         ),
     )
     assert t == e
+
+
+def test_sentence_conjunction():
+    _cp.parse("Jones owns Ulysses and Smith likes Ulysses")
+    _cp.parse("Jones owns Ulysses, Smith owns Ulysses, and Smith owns Ulysses")
+    _cp.parse(
+        "Jones and Smith own Ulysses, "
+        + "Jones likes Ulysses and Odyssey, "
+        + "and Smith likes every book"
+    )
+    _cp.parse(
+        """
+        if a region X provides a function F and X intersects
+        a region Y then Y affects F
+        """
+    )
+    _cp.parse(
+        """
+        if a region provides a function and that region intersects
+        a region Y then Y affects that function
+        """
+    )
+    _cp.parse(
+        """
+        if a region provides a function, that region intersects
+        a region Y, and Ulysses references Y then if Jones owns
+        Ulysses then the region Y affects that function
+        """
+    )

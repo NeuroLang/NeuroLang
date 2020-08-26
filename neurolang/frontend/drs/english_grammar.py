@@ -11,6 +11,7 @@ from .chart_parser import (
 
 
 S = Symbol("S")
+SL = Symbol("SL")
 NP = Symbol("NP")
 PN = Symbol("PN")
 VP = Symbol("VP")
@@ -28,6 +29,9 @@ g = Symbol("g")
 h = Symbol("h")
 w = Symbol("w")
 v = Symbol("v")
+_x = Symbol("_x")
+_y = Symbol("_y")
+_z = Symbol("_z")
 
 
 class num:
@@ -53,17 +57,20 @@ EnglishGrammar = Grammar(
         RootRule(S(n), (Constant("if"), S(n), Constant("then"), S(m))),
         Rule(VP(n), (V(n), NP(m, g, case.notnom))),
         Rule(
-            NP(num.plural, Symbol.fresh(), c),
-            (NP(n, g, c), Constant("and"), NP(m, h, c)),
+            NP(num.plural, _x, c), (NP(n, g, c), Constant("and"), NP(m, h, c)),
         ),
         Rule(NP(n, g, c), (NP(n, g, c), VAR())),
-        Rule(NP(n, g, Symbol.fresh()), (PN(n, g, v),)),
-        Rule(NP(Symbol.fresh(), Symbol.fresh(), Symbol.fresh()), (VAR(),)),
-        Rule(NP(n, g, Symbol.fresh()), (DET(n), N(n, g))),
+        Rule(NP(n, g, _x), (PN(n, g, v),)),
+        Rule(NP(_x, _y, _z), (VAR(),)),
+        Rule(NP(n, g, _x), (DET(n), N(n, g))),
         Rule(NP(n, g, c), (PRO(n, g, c),)),
+        Rule(SL(), (S(n),)),
+        Rule(SL(), (SL(), Constant(","), S(_y),)),
+        RootRule(S(_x), (SL(), Constant(","), Constant("and"), S(_y),)),
+        RootRule(S(_x), (S(_y), Constant("and"), S(_z),)),
         Rule(S(n), (Quote(Constant(CODE_QUOTE), v),)),
         Rule(LIT(v), (Quote(Constant(STRING_QUOTE), v),)),
-        Rule(NP(Symbol.fresh(), Symbol.fresh(), Symbol.fresh()), (LIT(v),)),
+        Rule(NP(_x, _y, _z), (LIT(v),)),
     )
 )
 
@@ -93,6 +100,10 @@ FIXED_VOCABULARY = {
     "likes": (V(num.singular),),
     "intersects": (V(num.singular),),
     "references": (V(num.singular),),
+    "provides": (V(num.singular),),
+    "affects": (V(num.singular),),
+    "reaches": (V(num.singular),),
+    "affect": (V(num.plural),),
     "own": (V(num.plural),),
     "have": (V(num.plural),),
     "like": (V(num.plural),),
@@ -104,6 +115,7 @@ FIXED_VOCABULARY = {
     "an": (DET(num.singular),),
     "every": (DET(num.singular),),
     "the": (DET(num.singular),),
+    "that": (DET(num.singular),),
     "woman": (N(num.singular, gen.female),),
     "stockbroker": (N(num.singular, gen.female), N(num.singular, gen.male),),
     "man": (N(num.singular, gen.male),),
@@ -112,4 +124,5 @@ FIXED_VOCABULARY = {
     "horse": (N(num.singular, gen.thing),),
     "region": (N(num.singular, gen.thing),),
     "ending": (N(num.singular, gen.thing),),
+    "function": (N(num.singular, gen.thing),),
 }

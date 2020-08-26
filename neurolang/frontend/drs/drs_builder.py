@@ -10,7 +10,7 @@ from ...expression_walker import (
     ReplaceSymbolWalker,
 )
 from .chart_parser import Quote, CODE_QUOTE
-from .english_grammar import S, V, NP, VP, PN, DET, N, VAR, LIT
+from .english_grammar import S, V, NP, VP, PN, DET, N, VAR, SL, LIT
 from .exceptions import ParseDatalogPredicateException
 from ...logic import (
     Implication,
@@ -52,7 +52,7 @@ class DRSBuilder(ExpressionWalker):
         exps = ()
         for e in drs.expressions:
             if isinstance(e, DRS):
-                refs += e.referents
+                refs += tuple(r for r in e.referents if r not in refs)
                 exps += e.expressions
             else:
                 exps += (e,)
@@ -151,6 +151,49 @@ class DRSBuilder(ExpressionWalker):
             set(drs_con.referents) - set(drs_ant.referents)
         )
         return self.walk(Implication(drs_con, drs_ant))
+
+    @add_match(
+        Fa(Fa(S, ...), (Fa(Fa(S, ...), ...), C("and"), Fa(Fa(S, ...), ...),),),
+    )
+    def simple_and(self, s):
+        (a, _, b) = s.args
+        a = self.walk(a)
+        b = self.walk(b)
+        return self.walk(DRS((), (a, b,)))
+
+    @add_match(
+        Fa(
+            Fa(S, ...),
+            (Fa(Fa(SL, ...), ...), C(","), C("and"), Fa(Fa(S, ...), ...),),
+        ),
+    )
+    def comma_and(self, s):
+        (sl, _, _, s) = s.args
+        sl = self.walk(sl)
+        s = self.walk(s)
+        return self.walk(DRS((), sl + (s,)))
+
+    @add_match(
+        Fa(
+            Fa(SL, ...),
+            (Fa(Fa(S, ...), ...),),
+        ),
+    )
+    def single_sentence_list(self, sl):
+        (s,) = sl.args
+        return (self.walk(s),)
+
+    @add_match(
+        Fa(
+            Fa(SL, ...),
+            (Fa(Fa(SL, ...), ...), C(","), Fa(Fa(S, ...), ...)),
+        ),
+    )
+    def sentence_list(self, sl):
+        (sl, _, s) = sl.args
+        sl = self.walk(sl)
+        s = self.walk(s)
+        return sl + (s,)
 
     @add_match(Fa(Fa(NP, ...), (Fa(Fa(LIT, ...), ...),)),)
     def lit_noun_phrase(self, np):
