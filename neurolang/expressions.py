@@ -50,10 +50,13 @@ def sure_is_not_pattern():
     thread_id = threading.get_ident()
 
     with _lock:
-        _sure_is_not_pattern[thread_id] = True
+        n = _sure_is_not_pattern.get(thread_id, 0)
+        _sure_is_not_pattern[thread_id] = n + 1
     yield
     with _lock:
-        del _sure_is_not_pattern[thread_id]
+        _sure_is_not_pattern[thread_id] -= 1
+        if _sure_is_not_pattern[thread_id] == 0:
+            del _sure_is_not_pattern[thread_id]
 
 
 @contextmanager
@@ -378,13 +381,6 @@ class ExpressionBlock(Expression):
         for exp in expressions:
             self._symbols |= exp._symbols
 
-    def __add__(self, other):
-        if not isinstance(other, ExpressionBlock):
-            raise NeuroLangTypeException(
-                "ExpressionBlock can only be added to other ExpressionBlock"
-            )
-        return ExpressionBlock(self.expressions + other.expressions)
-
     def __repr__(self):
         return 'BLOCK START\n' + '\n    '.join(
             repr(e) for e in self.expressions
@@ -599,46 +595,64 @@ class Lambda(Definition):
 
 class FunctionApplication(Definition):
     def __init__(
-        self, functor, args, kwargs=None,
+        self, functor, args,
+        kwargs=None, validate_arguments=False, verify_type=True
     ):
         self.functor = functor
         self.args = args
         self.kwargs = kwargs
 
-        if self.type in (Unknown, typing.Any):
-            if self.functor.type in (Unknown, typing.Any):
-                pass
-            elif isinstance(self.functor.type, typing.Callable):
-                self.type = self.functor.type.__args__[-1]
-            else:
-                raise NeuroLangTypeException("Functor is not an expression")
-        else:
-            if not (
-                self.functor.type in (Unknown, typing.Any)
-                or is_leq_informative(
-                    self.functor.type.__args__[-1],
-                    self.type
-                )
-            ):
-                raise NeuroLangTypeException(
-                    "Functor return type not unifiable with application type"
-                )
-
-        self._symbols = functor._symbols.copy()
+        if verify_type:
+            self._verify_and_set_type()
 
         if self.kwargs is None:
             self.kwargs = dict()
 
         if self.args is None:
             self.args = tuple()
-        elif not (
+        elif validate_arguments:
+            self._validate_arguments()
+        self.__symbols = None
+
+    def _verify_and_set_type(self):
+        if self.type in (Unknown, typing.Any):
+            if self.functor.type in (Unknown, typing.Any):
+                pass
+            elif isinstance(self.functor.type, typing.Callable):
+                self.type = self.functor.type.__args__[-1]
+            else:
+                if not (
+                    self.functor.type in (Unknown, typing.Any)
+                    or is_leq_informative(
+                        self.functor.type.__args__[-1],
+                        self.type
+                    )
+                ):
+                    raise NeuroLangTypeException(
+                        "Functor return type not unifiable "
+                        "with application type"
+                    )
+
+    def _validate_arguments(self):
+        if not (
             isinstance(self.args, tuple) and
             all(isinstance(a, Expression) for a in self.args)
         ):
-            raise ValueError('args parameter must be a tuple of expressions')
+            raise ValueError(
+                'args parameter must be a tuple of expressions'
+            )
 
-        for arg in chain(self.args, self.kwargs.values()):
-            self._symbols |= arg._symbols
+    @property
+    def _symbols(self):
+        if self.__symbols is None:
+            self.__symbols = self.functor._symbols.copy()
+            for arg in chain(self.args, self.kwargs.values()):
+                self.__symbols |= arg._symbols
+        return self.__symbols
+
+    @_symbols.setter
+    def _symbols(self, value):
+        self.__symbols = value
 
     @property
     def function(self):

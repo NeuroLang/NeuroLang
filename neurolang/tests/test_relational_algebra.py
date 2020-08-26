@@ -22,6 +22,7 @@ from ..relational_algebra import (
     Projection,
     RelationalAlgebraOptimiser,
     RelationalAlgebraSolver,
+    EliminateTrivialProjections,
     RelationalAlgebraPushInSelections,
     RenameColumn,
     RenameColumns,
@@ -838,3 +839,32 @@ def test_push_in_optimiser():
         )
     )
     assert res == exp_res
+
+
+def test_eliminate_trivial_projections_optimiser():
+    class Opt(EliminateTrivialProjections, ExpressionWalker):
+        pass
+
+    opt = Opt()
+
+    r1 = Constant(R1)
+    exp = Projection(
+        r1,
+        (Constant[ColumnInt](ColumnInt(0)), Constant[ColumnInt](ColumnInt(1)))
+    )
+
+    res = opt.walk(exp)
+    assert res is r1
+
+    a = Constant[ColumnStr](ColumnStr('a'))
+    b = Constant[ColumnStr](ColumnStr('b'))
+    R = NamedRelationalAlgebraFrozenSet(
+        columns=('a', 'b'),
+        iterable=R1
+    )
+
+    r = C_[AbstractSet[Tuple[int, int]]](R)
+
+    exp1 = Projection(r, (a, b))
+    res1 = opt.walk(exp1)
+    assert res1 is r
