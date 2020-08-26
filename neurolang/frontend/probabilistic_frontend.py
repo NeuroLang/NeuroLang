@@ -20,6 +20,7 @@ from ..probabilistic.cplogic.program import (
 from ..probabilistic.expression_processing import (
     separate_deterministic_probabilistic_code,
 )
+from ..probabilistic.stratification import stratify_program
 from ..region_solver import RegionSolver
 from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
@@ -62,6 +63,23 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         )
 
         self.ontology_loaded = True
+
+    def solve_query(self, query):
+        pred_symb = query.consequent.functor
+        det_idb, prob_idb, ppq_det_idb = stratify_program(query, self.solver)
+        if self.ontology_loaded:
+            eb = self._rewrite_program_with_ontology(det_idb)
+            det_idb = Union(det_idb.formulas + eb.formulas)
+        chase = self.chase_class(self.solver, rules=det_idb)
+        det_solution = chase.build_chase_solution()
+        cpl = self._make_probabilistic_program_from_deterministic_solution(
+            det_solution, prob_idb
+        )
+        solution = self.probabilistic_solver(cpl)
+        solution_sets = dict()
+        for pred_symb, relation in solution.items():
+            solution_sets[pred_symb.name] = relation.value
+        return solution_sets
 
     def solve_all(self):
         (
