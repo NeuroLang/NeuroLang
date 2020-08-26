@@ -9,5 +9,9 @@ class MalformedProbabilisticTupleError(NeuroLangException):
     pass
 
 
+class NotHierarchicalQueryException(NeuroLangException):
+    pass
+
+
 class UncomparableDistributionsError(NeuroLangException):
     pass
