@@ -381,13 +381,6 @@ class ExpressionBlock(Expression):
         for exp in expressions:
             self._symbols |= exp._symbols
 
-    def __add__(self, other):
-        if not isinstance(other, ExpressionBlock):
-            raise NeuroLangTypeException(
-                "ExpressionBlock can only be added to other ExpressionBlock"
-            )
-        return ExpressionBlock(self.expressions + other.expressions)
-
     def __repr__(self):
         return 'BLOCK START\n' + '\n    '.join(
             repr(e) for e in self.expressions
