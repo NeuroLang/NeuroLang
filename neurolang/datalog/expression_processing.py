@@ -449,6 +449,7 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
     """
     def __init__(self, program):
         self.program = program
+        self.idb = self.program.intensional_database()
 
     @add_match(
         FunctionApplication,
@@ -458,12 +459,11 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
     )
     def function_application(self, expression):
         functor = expression.functor
-        idb = self.program.intensional_database()
-        if functor not in idb:
+        if functor not in self.idb:
             return expression
 
         args = expression.args
-        ucq = idb[functor]
+        ucq = self.idb[functor]
         cqs = []
         for cq in ucq.formulas:
             cq = self._normalise_arguments(cq, args)
