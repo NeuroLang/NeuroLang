@@ -15,11 +15,14 @@ from ..exceptions import (
     SymbolNotFoundError,
     UnsupportedProgramError,
 )
-from ..expression_walker import (
+from ..expression_pattern_matching import (
     add_match,
+    NeuroLangPatternMatchingNoMatch
+)
+from ..expression_walker import (
     ExpressionWalker,
     ReplaceExpressionWalker,
-    PatternWalker
+    PatternWalker,
 )
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import Conjunction, Disjunction, Negation, Quantifier, Union
@@ -437,9 +440,16 @@ def flatten_query(query, program):
         raise UnsupportedProgramError(
             "Only program with an intensional database are supported"
         )
-    res = FlattenQueryInNonRecursiveUCQ(program).walk(query)
-    if isinstance(res, FunctionApplication):
-        res = Conjunction((res,))
+    try:
+        res = FlattenQueryInNonRecursiveUCQ(program).walk(query)
+        if isinstance(res, FunctionApplication):
+            res = Conjunction((res,))
+    except RecursionError:
+        raise UnsupportedProgramError(
+            "Flattening of recursive programs is not supported."
+        )
+    except NeuroLangPatternMatchingNoMatch:
+        raise UnsupportedProgramError("Expression not supported.")
     return res
 
 

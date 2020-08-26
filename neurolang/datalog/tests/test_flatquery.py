@@ -1,5 +1,8 @@
+import pytest
+
+from ...exceptions import UnsupportedProgramError
 from ...expressions import Symbol
-from ...logic import Conjunction, Disjunction, Implication, Union
+from ...logic import Conjunction, Disjunction, ExistentialPredicate, Implication, Union
 from ...expression_walker import ExpressionWalker
 from ..basic_representation import DatalogProgram
 from ..expression_processing import flatten_query
@@ -122,3 +125,30 @@ def test_flatten_with_2nd_level_disjunction():
         Z(z) == result.formulas[0] or
         Z(z) == result.formulas[1]
     )
+
+
+def test_flatten_recursive():
+    code = Union(
+        (
+            Implication(R(x, y), Conjunction((Z(y), Z(x)))),
+            Implication(R(x, y), Conjunction((Z(x), R(x, y)))),
+        )
+    )
+    program = TestDatalogProgram()
+    program.walk(code)
+    with pytest.raises(UnsupportedProgramError):
+        flatten_query(R(x, y), program)
+
+
+def test_incorrect_program():
+    code = Union(
+        (
+            Implication(
+                R(x), ExistentialPredicate(y, Conjunction((Z(y), Z(x))))
+            ),
+        )
+    )
+    program = TestDatalogProgram()
+    program.walk(code)
+    with pytest.raises(UnsupportedProgramError):
+        flatten_query(R(x, y), program)
