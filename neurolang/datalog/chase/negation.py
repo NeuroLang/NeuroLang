@@ -140,10 +140,16 @@ class DatalogChaseNegationGeneral(
                         functor
                     ))
                 else:
-                    negative_predicates.append((
-                        predicate.formula,
-                        instance[functor].value
-                    ))
+                    if functor in instance:
+                        negative_predicates.append((
+                            predicate.formula,
+                            instance[functor].value
+                        ))
+                    if functor in restriction_instance:
+                        negative_predicates.append((
+                            predicate.formula,
+                            restriction_instance[functor].value
+                        ))
             else:
                 functor = predicate.functor
 
