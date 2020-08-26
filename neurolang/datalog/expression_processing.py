@@ -3,20 +3,26 @@ Utilities to process intermediate representations of
 Datalog programs.
 """
 
+
+from itertools import chain
 from typing import Iterable
 
 import numpy as np
 
 from ..exceptions import (
-    ForbiddenDisjunctionError,
     ForbiddenExpressionError,
     RuleNotFoundError,
     SymbolNotFoundError,
     UnsupportedProgramError,
 )
-from ..expression_walker import ExpressionWalker
+from ..expression_walker import (
+    add_match,
+    ExpressionWalker,
+    ReplaceExpressionWalker,
+    PatternWalker
+)
 from ..expressions import Constant, FunctionApplication, Symbol
-from ..logic import Conjunction, Implication, Negation, Quantifier, Union
+from ..logic import Conjunction, Disjunction, Negation, Quantifier, Union
 from ..logic import expression_processing as elp
 from .expressions import TranslateToLogic
 
@@ -408,54 +414,6 @@ def enforce_conjunction(expression):
     )
 
 
-def get_rule_for_predicate(predicate, idb):
-    if predicate.functor not in idb:
-        return None
-    expression = idb[predicate.functor]
-    if isinstance(expression, Implication):
-        return expression
-    elif isinstance(expression, Union) and len(expression.formulas) == 1:
-        return expression.formulas[0]
-    raise ForbiddenDisjunctionError()
-
-
-def freshen_predicate_free_variables(pred, free_variables, substitutions):
-    new_args = tuple()
-    for arg in pred.args:
-        if arg in free_variables and arg not in substitutions:
-            substitutions[arg] = Symbol.fresh()
-        new_args += (substitutions.get(arg, arg),)
-    new_pred = FunctionApplication[pred.type](pred.functor, new_args)
-    return new_pred
-
-
-def freshen_conjunction_free_variables(
-    conjunction, free_variables, substitutions=None
-):
-    new_preds = []
-    substitutions = substitutions if substitutions is not None else dict()
-    for pred in conjunction.formulas:
-        new_pred = freshen_predicate_free_variables(
-            pred, free_variables, substitutions
-        )
-        new_preds.append(new_pred)
-    return Conjunction(tuple(new_preds))
-
-
-def rename_args_to_match(conjunction, src_predicate, dst_predicate):
-    renames = {
-        src: dst
-        for src, dst in zip(src_predicate.args, dst_predicate.args)
-        if src != dst
-    }
-    new_preds = []
-    for pred in conjunction.formulas:
-        new_args = tuple(renames.get(arg, arg) for arg in pred.args)
-        new_pred = FunctionApplication[pred.type](pred.functor, new_args)
-        new_preds.append(new_pred)
-    return Conjunction(tuple(new_preds))
-
-
 def flatten_query(query, program):
     """
     Construct the conjunction corresponding to a query on a program.
@@ -472,31 +430,78 @@ def flatten_query(query, program):
 
     Returns
     -------
-    conjunction of predicates
+    disjunction or conjunction of predicates
 
     """
     if not hasattr(program, "intensional_database"):
         raise UnsupportedProgramError(
             "Only program with an intensional database are supported"
         )
-    idb = program.intensional_database()
-    query = enforce_conjunction(query)
-    conj_query = Conjunction(tuple())
-    substitutions = dict()
-    for predicate in query.formulas:
-        rule = get_rule_for_predicate(predicate, idb)
-        if rule is None:
-            formula = predicate
+    res = FlattenQueryInNonRecursiveUCQ(program).walk(query)
+    if isinstance(res, FunctionApplication):
+        res = Conjunction((res,))
+    return res
+
+
+class FlattenQueryInNonRecursiveUCQ(PatternWalker):
+    """Flatten a query defined by a non-recursive
+    union of conjunctive queries (UCQ)
+    """
+    def __init__(self, program):
+        self.program = program
+
+    @add_match(
+        FunctionApplication,
+        lambda fa: all(
+            isinstance(arg, Symbol) for arg in fa.args
+        )
+    )
+    def function_application(self, expression):
+        functor = expression.functor
+        idb = self.program.intensional_database()
+        if functor not in idb:
+            return expression
+
+        args = expression.args
+        ucq = idb[functor]
+        cqs = []
+        for cq in ucq.formulas:
+            free_variables = extract_logic_free_variables(cq)
+            linked_variables = cq.consequent.args
+            cq = ReplaceExpressionWalker(dict(
+                chain(
+                    zip(linked_variables, args),
+                    zip(
+                        free_variables,
+                        (Symbol.fresh() for _ in range(len(free_variables)))
+                    )
+                )
+            )).walk(cq)
+            antecedent = self.walk(cq.antecedent)
+            cqs.append(antecedent)
+
+        if len(cqs) > 1:
+            res = Disjunction(tuple(cqs))
         else:
-            formula = enforce_conjunction(rule.antecedent)
-            free_variables = extract_logic_free_variables(rule)
-            formula = freshen_conjunction_free_variables(
-                formula, free_variables, substitutions
-            )
-            formula = flatten_query(formula, program)
-            formula = rename_args_to_match(formula, rule.consequent, predicate)
-        conj_query = conjunct_formulas(conj_query, formula)
-    return conj_query
+            res = cqs[0]
+        return res
+
+    @add_match(Conjunction)
+    def conjunction(self, expression):
+        formulas = list(expression.formulas)
+        new_formulas = tuple()
+        while len(formulas) > 0:
+            formula = formulas.pop()
+            new_formula = self.walk(formula)
+            if isinstance(new_formula, Conjunction):
+                new_formulas += new_formula.formulas
+            else:
+                new_formulas += (new_formula,)
+        if len(new_formulas) > 0:
+            res = Conjunction(tuple(new_formulas))
+        else:
+            res = new_formulas[0]
+        return res
 
 
 def is_rule_with_builtin(rule, known_builtins=None):
