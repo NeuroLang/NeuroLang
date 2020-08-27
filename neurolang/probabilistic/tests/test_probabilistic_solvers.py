@@ -573,8 +573,6 @@ def test_conjunct_pfact_equantified_pchoice(solver):
 
 
 def test_shatterable_query(solver):
-    if solver is not dichotomy_theorem_based_solver:
-        return
     pfact_sets = {P: {(0.8, "a", "1"), (0.5, "a", "2"), (0.1, "b", "2")}}
     code = Union((Implication(Q(x), Conjunction((P(a, x), P(b, x)))),))
     cpl_program = CPLogicProgram()
