@@ -180,15 +180,17 @@ def shatter_easy_probfacts(query, symbol_table):
     Remove constants occurring in a given query, possibly removing self-joins.
 
     If there is a self-join, the self-joined relation is split into multiple
-    relations. These relations are added in-place to the program and the
+    relations. These relations are added in-place to the symbol table. The
     returned equivalent query makes use of these relations.
 
     Parameters
     ----------
     query : conjunctive query (can be a single predicate)
         A query that contains constants.
-    program : probabilistic program
-        Program containing probabilistic relations associated with the query.
+    symbol_table
+        Symbol table containing relations associated with the query. This
+        `symbol_table` can be modified in-place by this function to add newly
+        generated symbols and relations by the shattering process.
 
     Returns
     -------
@@ -197,7 +199,7 @@ def shatter_easy_probfacts(query, symbol_table):
 
     Notes
     -----
-    TODO: handle queries like Q = R(a, y), R(x, b) (see example 4.2 in [1]_)
+    TODO: shatter queries like `Q = R(a, y), R(x, b)` (see example 4.2 in [1]_)
 
     .. [1] Van den Broeck, G., and Suciu, D. (2017). Query Processing on
        Probabilistic Data: A Survey. FNT in Databases 7, 197–341.
