@@ -9,6 +9,16 @@ from ..exceptions import UnsupportedProgramError
 from ..logic import Implication, Union
 
 
+def _iter_implication_or_union_of_implications(expression):
+    if expression is None:
+        return
+    if isinstance(expression, Implication):
+        yield expression
+    elif isinstance(expression, Union):
+        for formula in expression.formulas:
+            yield formula
+
+
 def reachable_code_from_query(query, program):
     """
     Find the part of the intensional database of the program that is needed to
@@ -24,12 +34,10 @@ def reachable_code_from_query(query, program):
     )
     reachable = set()
     for pred in predicates:
-        rule = program.intensional_database().get(pred.functor, None)
-        if isinstance(rule, Implication):
+        for rule in _iter_implication_or_union_of_implications(
+            program.intensional_database().get(pred.functor, None)
+        ):
             reachable |= set(reachable_code(rule, program).formulas)
-        elif isinstance(rule, Union):
-            for formula in rule.formulas:
-                reachable |= set(reachable_code(formula, program).formulas)
     return Union(tuple(reachable))
 
 
