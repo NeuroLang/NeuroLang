@@ -162,6 +162,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         if name is None:
             name = str(uuid1())
         self.solver.add_probabilistic_facts_from_tuples(Symbol(name), iterable)
+    
 
     def _make_probabilistic_program_from_deterministic_solution(
         self, deterministic_solution, probabilistic_idb
