@@ -582,6 +582,12 @@ def test_shatterable_query(solver):
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
     cpl_program.walk(code)
     qpred = Q(x)
-    result = solver.solve_succ_query(qpred, cpl_program)
-    expected = testing.make_prov_set([(0.5 * 0.1, "2",), ], ("_p_", "x"))
-    assert testing.eq_prov_relations(result, expected)
+    if solver is dichotomy_theorem_based_solver:
+        context = pytest.raises(NotHierarchicalQueryException)
+    else:
+        context = nullcontext()
+
+    with context:
+        result = solver.solve_succ_query(qpred, cpl_program)
+        expected = testing.make_prov_set([(0.5 * 0.1, "2",), ], ("_p_", "x"))
+        assert testing.eq_prov_relations(result, expected)
