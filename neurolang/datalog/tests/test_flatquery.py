@@ -1,5 +1,8 @@
+import pytest
+
+from ...exceptions import UnsupportedProgramError
 from ...expressions import Symbol
-from ...logic import Conjunction, Implication, Union
+from ...logic import Conjunction, Disjunction, ExistentialPredicate, Implication, Union
 from ...expression_walker import ExpressionWalker
 from ..basic_representation import DatalogProgram
 from ..expression_processing import flatten_query
@@ -77,3 +80,75 @@ def test_existential():
     )
     expected = match.functor(*reversed(match.args))
     assert expected in result.formulas
+
+
+def test_flatten_with_top_level_disjunction():
+    code = Union(
+        (
+            Implication(R(x), Z(x)),
+            Implication(R(y), P(y)),
+            Implication(Q(x), R(x)),
+        )
+    )
+    program = TestDatalogProgram()
+    program.walk(code)
+    result = flatten_query(Q(x), program)
+    assert isinstance(result, Disjunction)
+    assert len(result.formulas) == 2
+    assert P(x) in result.formulas
+    assert Z(x) in result.formulas
+
+
+def test_flatten_with_2nd_level_disjunction():
+    code = Union(
+        (
+            Implication(R(x), Z(x)),
+            Implication(R(y), P(y)),
+            Implication(Q(x, z), Conjunction((R(x), Z(z)))),
+        )
+    )
+    program = TestDatalogProgram()
+    program.walk(code)
+    result = flatten_query(Q(x), program)
+    assert isinstance(result, Conjunction)
+    assert len(result.formulas) == 2
+    assert (
+        (
+            isinstance(result.formulas[0], Disjunction) and
+            set((P(x), Z(x))) == set(result.formulas[0].formulas)
+        ) or (
+            isinstance(result.formulas[1], Disjunction) and
+            set((P(x), Z(x))) == set(result.formulas[1].formulas)
+        )
+    )
+    assert (
+        Z(z) == result.formulas[0] or
+        Z(z) == result.formulas[1]
+    )
+
+
+def test_flatten_recursive():
+    code = Union(
+        (
+            Implication(R(x, y), Conjunction((Z(y), Z(x)))),
+            Implication(R(x, y), Conjunction((Z(x), R(x, y)))),
+        )
+    )
+    program = TestDatalogProgram()
+    program.walk(code)
+    with pytest.raises(UnsupportedProgramError):
+        flatten_query(R(x, y), program)
+
+
+def test_incorrect_program():
+    code = Union(
+        (
+            Implication(
+                R(x), ExistentialPredicate(y, Conjunction((Z(y), Z(x))))
+            ),
+        )
+    )
+    program = TestDatalogProgram()
+    program.walk(code)
+    with pytest.raises(UnsupportedProgramError):
+        flatten_query(R(x, y), program)

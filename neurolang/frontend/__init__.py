@@ -20,7 +20,6 @@ from .query_resolution_datalog import QueryBuilderDatalog
 
 __all__ = [
     "NeurolangDL",
-    "RegionFrontend",
     "QueryBuilderDatalog",
 ]
 
