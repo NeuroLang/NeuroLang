@@ -187,7 +187,7 @@ def shatter_easy_probfacts(query, symbol_table):
     ----------
     query : conjunctive query (can be a single predicate)
         A query that contains constants.
-    symbol_table
+    symbol_table : mapping, mutable
         Symbol table containing relations associated with the query. This
         `symbol_table` can be modified in-place by this function to add newly
         generated symbols and relations by the shattering process.
