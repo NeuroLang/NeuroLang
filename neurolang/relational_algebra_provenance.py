@@ -15,6 +15,7 @@ from .expressions import (
 )
 from .relational_algebra import (
     Column,
+    ColumnInt,
     ColumnStr,
     ConcatenateConstantColumn,
     EquiJoin,
@@ -441,7 +442,14 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
 
     @add_match(Projection(ProvenanceAlgebraSet, ...))
     def projection_rap(self, projection):
-        cols = tuple(v.value for v in projection.attributes)
+        relation = projection.relation.relations
+        cols = tuple()
+        for v in projection.attributes:
+            if v.type is ColumnInt:
+                col = relation.columns[v.value]
+            else:
+                col = v.value
+            cols += (col,)
         if cols == tuple(
             c for c in projection.relation.relations.columns
             if c != projection.relation.provenance_column
@@ -449,7 +457,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
             return projection.relation
 
         with sure_is_not_pattern():
-            projected_relation = projection.relation.relations.aggregate(
+            projected_relation = relation.aggregate(
                 cols,
                 {
                     projection.relation.provenance_column:
