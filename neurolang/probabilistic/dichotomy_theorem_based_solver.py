@@ -242,7 +242,6 @@ def solve_succ_query(query_predicate, cpl_program):
 
         flat_query = flatten_query(conjunctive_query, cpl_program)
 
-
     with log_performance(LOG, "Translation and lifted optimisation"):
         flat_query = lift_optimization_for_choice_predicates(
             flat_query, cpl_program
