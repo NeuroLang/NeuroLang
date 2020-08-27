@@ -7,7 +7,7 @@ from ..datalog.constraints_representation import DatalogConstraintsProgram
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
 from ..expression_walker import ExpressionBasicEvaluator
-from ..expressions import Symbol, Unknown
+from ..expressions import Constant, Symbol, Unknown
 from ..logic import Union
 from ..probabilistic.cplogic.problog_solver import (
     solve_succ_all as problog_solve_succ_all,
@@ -64,8 +64,9 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
 
         self.ontology_loaded = True
 
-    def solve_query(self, query):
-        pred_symb = query.consequent.functor
+    def execute_query(self, head, predicate):
+        pred_symb = predicate.expression.functor
+        query = self.solver.symbol_table[pred_symb].formulas[0]
         det_idb, prob_idb, ppq_det_idb = stratify_program(query, self.solver)
         if self.ontology_loaded:
             eb = self._rewrite_program_with_ontology(det_idb)
@@ -76,10 +77,25 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             det_solution, prob_idb
         )
         solution = self.probabilistic_solver(cpl)
-        solution_sets = dict()
+        solver = RegionFrontendCPLogicSolver()
         for pred_symb, relation in solution.items():
-            solution_sets[pred_symb.name] = relation.value
-        return solution_sets
+            solver.add_extensional_predicate_from_tuples(
+                pred_symb, relation.value
+            )
+        solver.walk(ppq_det_idb)
+        chase = self.chase_class(solver, rules=ppq_det_idb)
+        solution = chase.build_chase_solution()
+        query_solution = solution[pred_symb].value.unwrap()
+        cols = list(
+            arg.name
+            for arg in predicate.expression.args
+            if isinstance(arg, Symbol)
+        )
+        query_solution = NamedRelationalAlgebraFrozenSet(cols, query_solution)
+        query_solution = query_solution.projection(
+            *(symb.expression.name for symb in head)
+        )
+        return Constant[AbstractSet](query_solution), None
 
     def solve_all(self):
         (

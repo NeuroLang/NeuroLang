@@ -16,9 +16,12 @@ def reachable_code_from_query(query, program):
     program.
 
     """
+    predicates = [query.consequent] + list(
+        extract_logic_predicates(query.antecedent)
+    )
     reachable = set()
-    for apred in extract_logic_predicates(query.antecedent):
-        rule = program.intensional_database().get(apred.functor, None)
+    for pred in predicates:
+        rule = program.intensional_database().get(pred.functor, None)
         if isinstance(rule, Implication):
             reachable |= set(reachable_code(rule, program).formulas)
         elif isinstance(rule, Union):
@@ -63,7 +66,7 @@ def stratify_program(query, program):
         elif (det_symbs | wlq_symbs).issuperset(dep_symbs):
             ppq_det_symbs.add(symb)
             ppq_det_idb.append(rule)
-        elif not prob_symbs.isdisjoint(dep_symbs):
+        elif symb in wlq_symbs or not prob_symbs.isdisjoint(dep_symbs):
             prob_symbs.add(symb)
             prob_idb.append(rule)
         else:

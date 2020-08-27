@@ -179,3 +179,23 @@ def test_within_language_succ_query():
     df = res["Z"].as_pandas_dataframe()
     assert np.isclose(df.loc[df["x"] == "b"].iloc[0][1], 2 / 3 / 2)
     assert np.isclose(df.loc[df["x"] == "a"].iloc[0][1], 1 / 3 / 2)
+
+
+def test_solve_query():
+    nl = ProbabilisticFrontend()
+    P = nl.add_uniform_probabilistic_choice_over_set(
+        [("a",), ("b",), ("c",)], name="P"
+    )
+    Q = nl.add_uniform_probabilistic_choice_over_set(
+        [("a",), ("d",), ("c",)], name="Q"
+    )
+    with nl.scope as e:
+        e.Z[e.x, e.PROB[e.x]] = P[e.x] & Q[e.x]
+        res = nl.query((e.x, e.p), e.Z[e.x, e.p])
+    df = res.as_pandas_dataframe()
+    assert len(df) == 2
+    assert all(c1 == c2 for c1, c2 in zip(df.columns, ["x", "p"]))
+    assert len(df.loc[df["x"] == "a"]) == 1
+    assert len(df.loc[df["x"] == "c"]) == 1
+    assert np.isclose(df.loc[df["x"] == "a"].iloc[0]["p"], 1 / 9)
+    assert np.isclose(df.loc[df["x"] == "c"].iloc[0]["p"], 1 / 9)
