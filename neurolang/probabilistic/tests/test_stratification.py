@@ -1,4 +1,7 @@
+import pytest
+
 from ...datalog.expressions import Fact
+from ...exceptions import UnsupportedProgramError
 from ...expressions import Constant, Symbol
 from ...logic import TRUE, Conjunction, Implication, Union
 from ..cplogic.program import CPLogicProgram
@@ -147,3 +150,35 @@ def test_stratify_multiple_wlqs():
     assert set(res_det_idb.formulas) == set(det_idb)
     assert set(res_prob_idb.formulas) == set(prob_idb)
     assert set(res_ppq_det_idb.formulas) == set(ppq_det_idb)
+
+
+def test_wlq_dependence_on_other_wlq():
+    det_idb = [
+        Implication(P(x, y), Conjunction((Q(x), R(y)))),
+    ]
+    prob_idb = [
+        Implication(Z(x), Conjunction((S(x), T(x, y)))),
+        Implication(
+            WLQ1(x, y, ProbabilisticQuery(PROB, (x, y)),),
+            Conjunction((P(x, y), Z(x))),
+        ),
+        Implication(
+            WLQ2(y, p, ProbabilisticQuery(PROB, (y, p)),),
+            Conjunction((WLQ1(y, y, p), Z(y))),
+        ),
+    ]
+    code = Union(
+        [
+            Fact(Q(a)),
+            Fact(R(b)),
+            Implication(ProbabilisticPredicate(Constant(0.5), S(a)), TRUE),
+            Implication(ProbabilisticPredicate(Constant(0.5), T(a)), TRUE),
+        ]
+        + det_idb
+        + prob_idb
+    )
+    program = CPLogicProgram()
+    program.walk(code)
+    query = Implication(Query(x, p), Conjunction((WLQ2(x, p), C(x))))
+    with pytest.raises(UnsupportedProgramError):
+        stratify_program(query, program)

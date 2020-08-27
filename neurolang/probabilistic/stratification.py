@@ -85,13 +85,19 @@ def _check_for_dependencies_between_wlqs(dep_mat, idb_symbs, wlq_symbs):
     """
     Raise an exception if a WLQ (Within-Language Query) depends on another WLQ.
     """
-    wlq_symbol_idxs = {idb_symbs.index(wlq_symb) for wlq_symb in wlq_symbs}
-    for wlq_symb_idx in wlq_symbol_idxs:
-        stack = [wlq_symb_idx]
-        while stack:
-            dep_idxs = np.argwhere(dep_mat[stack.pop()].astype(bool)).flatten()
-            if not wlq_symbol_idxs.isdisjoint(dep_idxs):
-                raise UnsupportedProgramError(
-                    "Unsupported dependency between within-language queries"
-                )
-            stack += list(dep_idxs)
+    wlq_symb_idxs = {idb_symbs.index(wlq_symb) for wlq_symb in wlq_symbs}
+    for wlq_symb_idx in wlq_symb_idxs:
+        if _wlq_depends_on_other_wlq(wlq_symb_idx, dep_mat, wlq_symb_idxs):
+            raise UnsupportedProgramError(
+                "Unsupported dependency between within-language queries"
+            )
+
+
+def _wlq_depends_on_other_wlq(wlq_symb_idx, dep_mat, wlq_symb_idxs):
+    stack = [wlq_symb_idx]
+    while stack:
+        dep_idxs = np.argwhere(dep_mat[stack.pop()].astype(bool)).flatten()
+        if not wlq_symb_idxs.isdisjoint(dep_idxs):
+            return True
+        stack += list(dep_idxs)
+    return False
