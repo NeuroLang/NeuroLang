@@ -10,14 +10,19 @@ Q = Symbol("Q")
 R = Symbol("R")
 Z = Symbol("Z")
 S = Symbol("S")
+T = Symbol("T")
 A = Symbol("A")
 B = Symbol("B")
 C = Symbol("C")
 WLQ = Symbol("WLQ")
+WLQ1 = Symbol("WLQ1")
+WLQ2 = Symbol("WLQ2")
 Query = Symbol("Query")
 x = Symbol("x")
 y = Symbol("y")
 p = Symbol("p")
+p1 = Symbol("p1")
+p2 = Symbol("p2")
 a = Constant("a")
 b = Constant("b")
 
@@ -91,6 +96,51 @@ def test_stratify_deterministic_probabilistic_wlq():
     program = CPLogicProgram()
     program.walk(code)
     query = Implication(Query(x, p), Conjunction((B(x, p), C(x))))
+    res_det_idb, res_prob_idb, res_ppq_det_idb = stratify_program(
+        query, program
+    )
+    assert set(res_det_idb.formulas) == set(det_idb)
+    assert set(res_prob_idb.formulas) == set(prob_idb)
+    assert set(res_ppq_det_idb.formulas) == set(ppq_det_idb)
+
+
+def test_stratify_multiple_wlqs():
+    det_idb = [
+        Implication(P(x, y), Conjunction((Q(x), R(y)))),
+    ]
+    prob_idb = [
+        Implication(Z(x), Conjunction((S(x), T(x, y)))),
+        Implication(
+            WLQ1(x, y, ProbabilisticQuery(PROB, (x, y)),),
+            Conjunction((P(x, y), Z(x))),
+        ),
+        Implication(
+            WLQ2(y, ProbabilisticQuery(PROB, (y,)),),
+            Conjunction((P(y, y), Z(y))),
+        ),
+    ]
+    ppq_det_idb = [
+        Implication(
+            B(x, p1, p2),
+            Conjunction((A(x), A(y), WLQ1(x, y, p1), WLQ2(y, p2))),
+        ),
+    ]
+    code = Union(
+        [
+            Fact(Q(a)),
+            Fact(R(b)),
+            Implication(ProbabilisticPredicate(Constant(0.5), S(a)), TRUE),
+            Implication(ProbabilisticPredicate(Constant(0.5), T(a)), TRUE),
+            Fact(A(b)),
+            Fact(C(b)),
+        ]
+        + det_idb
+        + prob_idb
+        + ppq_det_idb
+    )
+    program = CPLogicProgram()
+    program.walk(code)
+    query = Implication(Query(x, p1, p2), Conjunction((B(x, p1, p2), C(x))))
     res_det_idb, res_prob_idb, res_ppq_det_idb = stratify_program(
         query, program
     )
