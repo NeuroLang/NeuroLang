@@ -570,3 +570,19 @@ def test_conjunct_pfact_equantified_pchoice(solver):
         [(0.6 * 0.8 + 0.4 * 0.5, "a",), (0.1 * 0.4, "b"),], ("_p_", "x"),
     )
     assert testing.eq_prov_relations(result, expected)
+
+
+def test_shatterable_query(solver):
+    if solver is not dichotomy_theorem_based_solver:
+        return
+    __import__('pdb').set_trace()
+    pfact_sets = {P: {(0.8, "a", "1"), (0.5, "a", "2"), (0.1, "b", "2")}}
+    code = Union((Implication(Q(x), Conjunction((P(a, x), P(b, x)))),))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+    cpl_program.walk(code)
+    qpred = Q(x)
+    result = solver.solve_succ_query(qpred, cpl_program)
+    expected = testing.make_prov_set([(0.5 * 0.1, "2",), ], ("_p_", "x"))
+    assert testing.eq_prov_relations(result, expected)

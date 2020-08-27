@@ -464,7 +464,7 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
     @add_match(
         FunctionApplication,
         lambda fa: all(
-            isinstance(arg, Symbol) for arg in fa.args
+            isinstance(arg, (Constant, Symbol)) for arg in fa.args
         )
     )
     def function_application(self, expression):
