@@ -11,8 +11,8 @@ from ..english_grammar import EnglishGrammar, EnglishBaseLexicon
 import pytest
 
 
-_eg = EnglishGrammar(EnglishBaseLexicon())
-_cp = ChartParser(_eg)
+_eg = EnglishGrammar
+_cp = ChartParser(_eg, EnglishBaseLexicon())
 
 
 def test_simple_expression():
@@ -151,6 +151,61 @@ def test_quoted_predicate():
     assert Symbol("intersects")(y, x) in set(ant.expressions)
     assert len(con.referents) == 0
     assert Symbol("intersects")(x, y) in set(con.expressions)
+
+
+def test_conjunction_1():
+    b = DRSBuilder(_eg)
+    t = _cp.parse("X owns Y and Y references Z")[0]
+    drs = b.walk(t)
+    exp = DRS2FOL().walk(drs)
+    x = Symbol("X")
+    y = Symbol("Y")
+    z = Symbol("Z")
+
+    assert exp == ExistentialPredicate(
+        z,
+        ExistentialPredicate(
+            y,
+            ExistentialPredicate(
+                x,
+                Conjunction(
+                    (Symbol("owns")(x, y), Symbol("references")(y, z),)
+                ),
+            ),
+        ),
+    )
+
+
+def test_conjunction_2():
+    b = DRSBuilder(_eg)
+    t = _cp.parse(
+        "a man X owns a book Y, Y references a book Z, and X likes Z"
+    )[0]
+    drs = b.walk(t)
+    exp = DRS2FOL().walk(drs)
+    x = Symbol("X")
+    y = Symbol("Y")
+    z = Symbol("Z")
+
+    assert exp == ExistentialPredicate(
+        z,
+        ExistentialPredicate(
+            y,
+            ExistentialPredicate(
+                x,
+                Conjunction(
+                    (
+                        Symbol("owns")(x, y),
+                        Symbol("book")(y),
+                        Symbol("man")(x),
+                        Symbol("references")(y, z),
+                        Symbol("book")(z),
+                        Symbol("likes")(x, z),
+                    )
+                ),
+            ),
+        ),
+    )
 
 
 def test_quoted_string_literal():

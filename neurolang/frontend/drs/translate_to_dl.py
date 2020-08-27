@@ -14,6 +14,7 @@ from ...logic.horn_clauses import fol_query_to_datalog_program
 from .drs_builder import DRSBuilder, DRS2FOL
 from .chart_parser import ChartParser
 from .english_grammar import EnglishGrammar, EnglishBaseLexicon
+from .exceptions import TranslateToDatalogException
 import operator
 from ...expression_walker import ExpressionWalker
 from ...logic.transformations import (
@@ -28,9 +29,8 @@ _equals = Constant(operator.eq)
 
 class TranslateToDatalog:
     def __init__(self):
-        self.grammar = EnglishGrammar(EnglishBaseLexicon())
-        self.parser = ChartParser(self.grammar)
-        self.builder = DRSBuilder(self.grammar)
+        self.parser = ChartParser(EnglishGrammar, EnglishBaseLexicon())
+        self.builder = DRSBuilder(EnglishGrammar)
         self.into_fol = DRS2FOL()
 
     def translate_block(self, string):
@@ -63,15 +63,17 @@ class TranslateToDatalog:
     def translate_logical_sentence(self, exp):
         try:
             return _as_intensional_rule(exp)
-        except TranslateToDatalogError:
+        except TranslateToDatalogException:
             pass
 
         try:
             return _as_fact(exp)
-        except TranslateToDatalogError:
+        except TranslateToDatalogException:
             pass
 
-        raise TranslateToDatalogError(f"Unsupported expression: {repr(exp)}")
+        raise TranslateToDatalogException(
+            f"Unsupported expression: {repr(exp)}"
+        )
 
 
 class TransformIntoConjunctionOfDatalogSentences(
@@ -87,10 +89,7 @@ class TransformIntoConjunctionOfDatalogSentences(
     allowing to use them between facts and in implication heads, because then
     they will be properly distributed.
     """
-    pass
 
-
-class TranslateToDatalogError(Exception):
     pass
 
 
@@ -98,20 +97,22 @@ def _as_intensional_rule(exp):
     ucv, exp = _strip_universal_quantifiers(exp)
 
     if not isinstance(exp, Implication):
-        raise TranslateToDatalogError("A Datalog rule must be an implication")
+        raise TranslateToDatalogException(
+            "A Datalog rule must be an implication"
+        )
 
     head = exp.consequent
     body = exp.antecedent
 
     if not isinstance(head, FunctionApplication):
-        raise TranslateToDatalogError(
+        raise TranslateToDatalogException(
             "The head of a Datalog rule must be a function application"
         )
 
     head, body, ucv = _constrain_using_head_constants(head, body, ucv)
 
     if any(a not in ucv for a in head.args):
-        raise TranslateToDatalogError(
+        raise TranslateToDatalogException(
             "All rule head arguments must be universally quantified"
         )
 
@@ -126,6 +127,14 @@ def _strip_universal_quantifiers(exp):
         exp = exp.body
 
     return ucv, exp
+
+
+def _add_universal_quantifiers(exp, ucv):
+    ucv = list(ucv)
+    while ucv:
+        v = ucv.pop()
+        exp = UniversalPredicate(v, exp)
+    return exp
 
 
 def _constrain_using_head_constants(head, body, ucv):
@@ -146,7 +155,7 @@ def _constrain_using_head_constants(head, body, ucv):
 
 def _as_fact(exp):
     if not isinstance(exp, FunctionApplication):
-        raise TranslateToDatalogError(
+        raise TranslateToDatalogException(
             "A fact must be a single function application"
         )
 
