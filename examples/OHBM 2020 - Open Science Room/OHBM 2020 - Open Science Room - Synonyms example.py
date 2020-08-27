@@ -80,7 +80,7 @@ with nl.environment as e:
 # The fact of having obtained the synonyms of the term `pain` directly from the ontology, allows us to avoid having to declare each of the terms to be evaluated and to be able to obtain this information directly from `e.synonyms(e.term)` without the need to know it beforehand.
 
 with nl.scope as e:    
-    e.p_act[e.id_voxel, e.term, e.id_study] = (
+    e.p_act[e.id_voxel, e.term] = (
         e.p_voxel_study[e.id_voxel, e.id_study] & 
         e.p_term_study[e.term, e.study] & 
         e.p_study[e.id_study]
@@ -88,7 +88,7 @@ with nl.scope as e:
     
     e.act_term[e.term, e.id_voxel] = (
         e.synonyms[e.term] &
-        e.p_act[e.id_voxel, e.term, e.id_study]
+        e.p_act[e.id_voxel, e.term]
     )
  
     e.xyz_given_term[e.x, e.y, e.z] = (
@@ -143,7 +143,7 @@ plotting.plot_stat_map(
     title='Tags: Pain, Noxious, Nociceptive', 
     cmap='PuBuGn',
     display_mode='x',
-    cut_coords=np.linspace(-63, 63, 3),
+    cut_coords=np.linspace(-63, 63, 5),
 )
 
 # Now we can analyze the results by plotting the p-values obtained

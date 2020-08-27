@@ -42,10 +42,6 @@ from typing import Iterable
 from neurolang import frontend as fe
 # -
 
-# We will use the FMA ontology to obtain regions of the brain included within the `Temporal lobe`. We will obtain all the entities that make up the `Temporal Lobe` and then we will convert them into regions using the information provided by the Destrieux atlas. This will allow us to perform spatial operations on these regions, allowing us to obtain those NeuroSynth regions associated with the term `auditory` that overlap our results.
-#
-#
-
 nl = ProbabilisticFrontend()
 datasets_helper.load_auditory_datasets(nl)
 
@@ -64,23 +60,19 @@ def agg_create_region(x: Iterable, y: Iterable, z: Iterable) -> fe.ExplicitVBR:
     return fe.ExplicitVBR(voxels, mni_t1.affine, image_dim=mni_t1.shape)
 
 with nl.environment as e:    
-    e.fma_related_region[e.subregion_name, e.fma_uri] = (
-        label(e.xfma_entity_name, e.fma_uri) & 
-        regional_part(e.fma_region, e.xfma_entity_name) & 
+    e.fma_related_region[e.subregion_name, e.entity_name] = (
+        label(e.fma_uri, e.entity_name) &
+        regional_part(e.fma_region, e.fma_uri) &
         subclass_of(e.fma_subregion, e.fma_region) &
         label(e.fma_subregion, e.subregion_name)
     )
+    
     e.fma_related_region[e.recursive_region, e.fma_name] = (
         subclass_of(e.recursive_region, e.fma_subregion) & e.fma_related_region(e.fma_subregion, e.fma_name)
     )
+    
     e.fma_to_destrieux[e.fma_name, e.destrieux_name] = (
         label(e.fma_uri, e.fma_name) & e.relation_destrieux_fma(e.destrieux_name, e.fma_name)
-    )
-    
-    e.region_voxels[e.id_neurosynth, e.x, e.y, e.z] = (
-        e.fma_related_region[e.fma_subregions, 'Temporal lobe'] & 
-        e.fma_to_destrieux[e.fma_subregions, e.destrieux_name] & 
-        e.destrieux_to_neurosynth[e.destrieux_name, e.id_neurosynth, e.x, e.y, e.z]
     )
     
     e.destrieux_to_neurosynth[e.destrieux_name, e.id_neurosynth, e.x, e.y, e.z] = (
@@ -88,53 +80,49 @@ with nl.environment as e:
         e.xyz_destrieux[e.x, e.y, e.z, e.id_destrieux] &
         e.xyz_neurosynth[e.x, e.y, e.z, e.id_neurosynth]
     )
+
 # -
 
 with nl.scope as e:
-    e.p_act[e.id_voxel, e.term, e.id_study] = (
+    e.region_voxels[e.id_neurosynth, e.x, e.y, e.z] = (
+        e.fma_related_region[e.fma_subregions, 'Temporal lobe'] & 
+        e.fma_to_destrieux[e.fma_subregions, e.destrieux_name] & 
+        e.destrieux_to_neurosynth[e.destrieux_name, e.id_neurosynth, e.x, e.y, e.z]
+    )
+    
+    e.p_act[e.id_voxel, e.term] = (
         e.p_voxel_study[e.id_voxel, e.id_study] & 
         e.p_term_study[e.term, e.id_study] & 
         e.p_study[e.id_study]
     )
     
-    e.probability_voxel[e.x, e.y, e.z, e.term, e.id_study] = (
-        e.p_act[e.id_voxel, e.term, e.id_study] &
+    e.probability_voxel[e.x, e.y, e.z, e.term] = (
+        e.p_act[e.id_voxel, e.term] &
         e.region_voxels[e.id_voxel, e.x, e.y, e.z]
     )
     
-    nl_act_term_study = nl.solve_query(e.probability_voxel[e.x, e.y, e.z, e.term, e.id_study])
-    
-    #e.probability_voxel[nl.symbols.agg_create_region(e.x, e.y, e.z)] = (
-    #    e.p_act[e.id_voxel, e.term, e.id_study] &
-    #    e.region_voxels[e.id_voxel, e.x, e.y, e.z]
-    #)
-    
-    #e.final[e.region] = e.probability_voxel[e.region]
-    
-    #nl_results = nl.solve_query(e.final[e.region])
+    nl_act_term_study = nl.solve_query(e.probability_voxel[e.x, e.y, e.z, e.term])
 
 with nl.scope as e:
-    e.p_ts[e.term, e.id_study] = (
+    e.p_ts[e.term] = (
         e.p_term_study[e.term, e.id_study] & 
         e.p_study[e.id_study]
     )
     
-    nl_term_study = nl.solve_query(e.p_ts[e.term, e.id_study])
+    nl_term_study = nl.solve_query(e.p_ts[e.term])
 
 df_conj = nl_act_term_study.value.as_pandas_dataframe()
 df_ts = nl_term_study.value.as_pandas_dataframe()
 
-df_conj_prob_column = df_conj.drop(['term','id_study', 'x', 'y', 'z'], axis=1).columns[0]
+df_conj_prob_column = df_conj.drop(['term', 'x', 'y', 'z'], axis=1).columns[0]
 df_conj = df_conj.rename(columns={f'{df_conj_prob_column}': "prob1"})
 df_conj.head()
 
-df_ts_prob_column = df_ts.drop(['term','id_study'], axis=1).columns[0]
+df_ts_prob_column = df_ts.drop(['term'], axis=1).columns[0]
 df_ts = df_ts.rename(columns={f'{df_ts_prob_column}': "prob2"})
 df_ts.head()
 
-df_merge = df_conj.merge(df_ts, left_on='id_study', right_on='id_study')
-
-df_merge
+df_merge = df_conj.merge(df_ts, left_on='term', right_on='term')
 
 df_merge['prob'] = df_merge['prob1'] / df_merge['prob2']
 
@@ -157,6 +145,7 @@ df_merge.head()
 # +
 import nibabel as nib
 from neurolang.regions import region_union
+from tqdm import tqdm_notebook
 
 def create_region(x, y, z, it):
     voxels = nib.affines.apply_affine(
@@ -167,7 +156,7 @@ def create_region(x, y, z, it):
 
 regions = []
 vox_prob = []
-for x, y, z, p in df_merge.values:
+for x, y, z, p in tqdm_notebook(df_merge.values):
     r_overlay = create_region(x, y, z, it.masker.volume)
     vox_prob.append((r_overlay.voxels, p))
     regions.append(r_overlay)
@@ -177,7 +166,7 @@ regions = region_union(regions)
 prob_img_nl = nib.spatialimages.SpatialImage(
     np.zeros(regions.image_dim, dtype=float), affine=destrieux_to_ns_mni.affine
 )
-for v, p in vox_prob:
+for v, p in tqdm_notebook(vox_prob):
     prob_img_nl.dataobj[tuple(v.T)] = p
 
 # -
@@ -197,6 +186,8 @@ plotting.plot_stat_map(
     display_mode='y',
     cut_coords=np.linspace(-30, 5, 5),
 )
+
+
 
 with nl.scope as e:
     
@@ -262,10 +253,6 @@ plotting.plot_stat_map(
     cut_coords=np.linspace(-30, 5, 5),
 )
 
-# In the above results, we can see that the regions have a high specificity and that they focus entirely on our area of interest. Reducing the area of work in this way allows us to minimize variance, enabling us to obtain results with greater statistical power.
-
-# And now let's do the same with the NeuroSynth results to compare. It is important to mention that the techniques used for the calculation of the p-values, make a comparison against the average of the activations. Bearing this in mind, by decreasing the region to be analyzed and focusing it on the activated region, the average of the activations increases.
-
 res, p_values_corrected, p_value_image = stats_helper.compute_p_values(prob_img_ns, q=1e-25)
 
 plt.hist(-np.log10(res))
@@ -287,8 +274,6 @@ plotting.plot_stat_map(
     display_mode='y',
     cut_coords=np.linspace(-30, 5, 5),
 )
-
-# It can be seen above how despite using a restrictive threshold for the p-value ($q<10^{25}$, FDR corrected), in the Neurosynth example there are activations considered statistically significant in the motor cortex that should not be present for the `auditory` tag. Using a prior information in NeuroLang, we are able to remove these false positives and obtain a cleaner result. 
 
 # #### References
 # [1] Yarkoni, T.: Neurosynth core tools v0.3.1, DOI: 10.5281/zenodo.9925 (2014). <br/>
