@@ -12,8 +12,11 @@ from ..logic import Implication, Union
 def reachable_code_from_query(query, program):
     """
     Find the part of the intensional database of the program that is needed to
-    answer a rule-based query Head :- Body such that Head is not part of the
-    program.
+    answer a rule-based query Head :- Body such that Head is not necesarrily
+    part of the program.
+
+    This is useful if the query is formulated as a rule instead of simply a
+    query predicate (e.g. `ans(x, y) :- P(x, z), P(y, z)`).
 
     """
     predicates = [query.consequent] + list(
