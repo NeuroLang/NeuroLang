@@ -298,9 +298,12 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
         print(type(iterable))
         type_ = Unknown
         if hasattr(iterable, 'fetch_one'):
-            first = iterable.fetch_one()
-            if first == tuple():
+            if iterable.is_empty():
                 first = None
+            else:
+                first = iterable.fetch_one()
+                if first == tuple():
+                    first = None
         else:
             iterable_, iterable = tee(iterable)
             try:

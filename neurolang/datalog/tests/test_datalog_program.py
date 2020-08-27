@@ -1,3 +1,4 @@
+from neurolang.type_system import Unknown
 from typing import AbstractSet, Tuple
 
 import pytest
@@ -268,3 +269,13 @@ def test_infer_iterable_type():
     type_, it = DatalogProgram.infer_iterable_type(rw)
     assert type_ is Tuple[int, str]
     assert it is rw
+
+    dee = WrappedNamedRelationalAlgebraFrozenSet.dee()
+    type_, it = DatalogProgram.infer_iterable_type(dee)
+    assert type_ is Unknown
+    assert it is dee
+
+    dum = WrappedNamedRelationalAlgebraFrozenSet.dum()
+    type_, it = DatalogProgram.infer_iterable_type(dum)
+    assert type_ is Unknown
+    assert it is dum
