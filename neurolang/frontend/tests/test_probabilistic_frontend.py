@@ -213,12 +213,6 @@ def test_solve_complex_stratified_query():
     B(x, y, PROB[x, y]) :- Q(y), R(1, x), R(2, x)
     C(x, y, p1, p2)     :- A(x, p1), B(x, y, p2)
 
-    Pr{ A(4, 0.5 x 0.7 x 0.6) } = Pr{ Q(4) } x Pr{ R(1, 4) } x Pr{ R(2, 4) }
-                                = 0.5        x 0.7           x 0.6
-
-    Pr{ B(2, 4, 0.5 x 0.3 x 0.2) } = Pr{ Q(4) } x Pr{ R(1, 2) } x Pr{ R(2, 2) }
-                                   = 0.5        x 0.3           x 0.2
-
     """
     nl = ProbabilisticFrontend()
     R = nl.add_probabilistic_facts_from_tuples(
@@ -232,3 +226,36 @@ def test_solve_complex_stratified_query():
         e.C[e.x, e.y, e.p1, e.p2] = e.A[e.x, e.p1] & e.B[e.x, e.y, e.p2]
         res = nl.query((e.x, e.y, e.h, e.z), e.C[e.x, e.y, e.h, e.z])
     df = res.as_pandas_dataframe()
+    assert set(df.columns) == {"x", "y", "h", "z"}
+    assert len(df.loc[(df["x"] == 4) & (df["y"] == 4)]) == 1
+    assert np.isclose(
+        df.loc[(df["x"] == 4) & (df["y"] == 4)].iloc[0]["h"], 0.2 * 0.7 * 0.6,
+    )
+    assert np.isclose(
+        df.loc[(df["x"] == 4) & (df["y"] == 4)].iloc[0]["z"], 0.2 * 0.7 * 0.6,
+    )
+    assert len(df.loc[(df["x"] == 4) & (df["y"] == 6)]) == 1
+    assert np.isclose(
+        df.loc[(df["x"] == 4) & (df["y"] == 6)].iloc[0]["h"], 0.2 * 0.7 * 0.6,
+    )
+    assert np.isclose(
+        df.loc[(df["x"] == 4) & (df["y"] == 6)].iloc[0]["z"], 0.8 * 0.7 * 0.6,
+    )
+
+
+def test_solve_complex_stratified_query_with_deterministic_part():
+    nl = ProbabilisticFrontend()
+    A = nl.add_tuple_set([("a",), ("b",), ("c",)], name="A")
+    B = nl.add_tuple_set([("a",), ("b",)], name="B")
+    P = nl.add_probabilistic_facts_from_tuples(
+        [(0.2, "a"), (0.8, "b")], name="P",
+    )
+    with nl.scope as e:
+        e.C[e.x, e.y] = A[e.x] & A[e.y] & B[e.x]
+        e.D[e.x, e.y, e.PROB[e.x, e.y]] = e.C[e.x, e.y] & P[e.y]
+        res = nl.query((e.x, e.y, e.p), e.D[e.x, e.y, e.p])
+    df = res.as_pandas_dataframe()
+    assert df.loc[(df["x"] == "a") & (df["y"] == "b")].iloc[0]["p"] == 0.8
+    assert df.loc[(df["x"] == "b") & (df["y"] == "b")].iloc[0]["p"] == 0.8
+    assert df.loc[(df["x"] == "a") & (df["y"] == "a")].iloc[0]["p"] == 0.2
+    assert df.loc[(df["x"] == "b") & (df["y"] == "a")].iloc[0]["p"] == 0.2
