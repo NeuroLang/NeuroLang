@@ -17,6 +17,7 @@ y = Symbol("y")
 z = Symbol("z")
 a = Constant("a")
 b = Constant("b")
+d = Constant("d")
 
 
 def test_no_constant():
@@ -90,3 +91,31 @@ def test_query_shattering_not_easy():
             cpl, query
         )
         shatter_easy_probfacts(query, symbol_table)
+
+
+def test_predicates_with_more_than_two_parameters():
+    query = Conjunction((P(a, x, b, y), P(b, x, d, y)))
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        P,
+        [
+            (0.2, "a", "b", "c", "d"),
+            (1.0, "a", "c", "b", "f"),
+            (0.7, "b", "b", "d", "g"),
+        ],
+    )
+    symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
+    shattered = shatter_easy_probfacts(query, symbol_table)
+    assert isinstance(shattered, Conjunction)
+
+
+def test_predicates_with_more_than_one_self_join():
+    query = Conjunction((P(a, x, b), P(b, x, d), P(d, x, a)))
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        P,
+        [(0.2, "a", "b", "c",), (1.0, "a", "c", "b",), (0.7, "b", "b", "d",),],
+    )
+    symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
+    shattered = shatter_easy_probfacts(query, symbol_table)
+    assert isinstance(shattered, Conjunction)
