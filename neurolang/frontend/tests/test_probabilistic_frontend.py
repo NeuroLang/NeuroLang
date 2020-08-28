@@ -199,3 +199,43 @@ def test_solve_query():
     assert len(df.loc[df["x"] == "c"]) == 1
     assert np.isclose(df.loc[df["x"] == "a"].iloc[0]["p"], 1 / 9)
     assert np.isclose(df.loc[df["x"] == "c"].iloc[0]["p"], 1 / 9)
+
+
+def test_solve_complex_stratified_query():
+    """
+    R(1, 2) : 0.3
+    R(1, 4) : 0.7
+    R(2, 2) : 0.2
+    R(2, 4) : 0.6
+    R(2, 6) : 0.8
+    Q(4) : 0.5 v Q(6) : 0.5
+    A(x, PROB[x])       :- Q(x), R(1, x), R(2, x)
+    B(x, y, PROB[x, y]) :- Q(y), R(1, x), R(2, x)
+    C(x, y, p1, p2)     :- A(x, p1), B(x, y, p2)
+
+    Pr{ A(4, 0.5 x 0.7 x 0.6) } = Pr{ Q(4) } x Pr{ R(1, 4) } x Pr{ R(2, 4) }
+                                = 0.5        x 0.7           x 0.6
+
+    Pr{ B(2, 4, 0.5 x 0.3 x 0.2) } = Pr{ Q(4) } x Pr{ R(1, 2) } x Pr{ R(2, 2) }
+                                   = 0.5        x 0.3           x 0.2
+
+    """
+    nl = ProbabilisticFrontend()
+    R = nl.add_probabilistic_facts_from_tuples(
+        [(0.3, 1, 2), (0.7, 1, 4), (0.2, 2, 2), (0.6, 2, 4), (0.8, 2, 6)],
+        name="R",
+    )
+    Q = nl.add_uniform_probabilistic_choice_over_set([(6,), (4,),], name="Q")
+    with nl.scope as e:
+        e.A[e.x, e.PROB[e.x]] = Q[e.x] & R[1, e.x] & R[2, e.x]
+        e.B[e.x, e.y, e.PROB[e.x, e.y]] = Q[e.y] & R[1, e.x] & R[2, e.x]
+        e.C[e.x, e.p1, e.p2] = e.A[e.x, e.p1] & e.B[e.x, e.p2]
+        res = nl.query((e.x, e.h, e.z), e.C[e.x, e.h, e.z])
+    df = res.as_pandas_dataframe(test_solve_complex_stratified_query)
+    __import__('pdb').set_trace()
+    assert len(df) == 2
+    assert all(c1 == c2 for c1, c2 in zip(df.columns, ["x", "p"]))
+    assert len(df.loc[df["x"] == "a"]) == 1
+    assert len(df.loc[df["x"] == "c"]) == 1
+    assert np.isclose(df.loc[df["x"] == "a"].iloc[0]["p"], 1 / 9)
+    assert np.isclose(df.loc[df["x"] == "c"].iloc[0]["p"], 1 / 9)
