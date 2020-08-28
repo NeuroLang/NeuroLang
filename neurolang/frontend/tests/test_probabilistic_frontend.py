@@ -229,6 +229,6 @@ def test_solve_complex_stratified_query():
     with nl.scope as e:
         e.A[e.x, e.PROB[e.x]] = Q[e.x] & R[1, e.x] & R[2, e.x]
         e.B[e.x, e.y, e.PROB[e.x, e.y]] = Q[e.y] & R[1, e.x] & R[2, e.x]
-        e.C[e.x, e.p1, e.p2] = e.A[e.x, e.p1] & e.B[e.x, e.p2]
-        res = nl.query((e.x, e.h, e.z), e.C[e.x, e.h, e.z])
+        e.C[e.x, e.y, e.p1, e.p2] = e.A[e.x, e.p1] & e.B[e.x, e.y, e.p2]
+        res = nl.query((e.x, e.y, e.h, e.z), e.C[e.x, e.y, e.h, e.z])
     df = res.as_pandas_dataframe()
