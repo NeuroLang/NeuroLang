@@ -8,7 +8,10 @@ from ...relational_algebra import RenameColumn
 from .. import dichotomy_theorem_based_solver, weighted_model_counting
 from ..cplogic import testing
 from ..cplogic.program import CPLogicProgram
-from ..exceptions import NotHierarchicalQueryException
+from ..exceptions import (
+    NotEasilyShatterableError,
+    NotHierarchicalQueryException,
+)
 
 try:
     from contextlib import nullcontext
@@ -454,7 +457,7 @@ def test_repeated_antecedent_predicate_symbol(solver):
     qpred = Q(x, y)
 
     if solver is dichotomy_theorem_based_solver:
-        context = pytest.raises(NotHierarchicalQueryException)
+        context = pytest.raises(NotEasilyShatterableError)
     else:
         context = nullcontext()
 

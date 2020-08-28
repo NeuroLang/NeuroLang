@@ -1,11 +1,11 @@
 import collections
 from typing import AbstractSet
 
-from ..exceptions import UnexpectedExpressionError
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionWalker
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import Conjunction
+from .exceptions import NotEasilyShatterableError
 from .expression_processing import iter_conjunctive_query_predicates
 from .probabilistic_ra_utils import ProbabilisticFactSet
 
@@ -104,7 +104,7 @@ class QueryEasyShatteringTagger(ExpressionWalker):
 
     @add_match(
         FunctionApplication(ProbabilisticFactSet, ...),
-        lambda fa: not isinstance(fa, Shatter)
+        lambda fa: not isinstance(fa, Shatter),
     )
     def cache_non_constant_args(self, function_application):
         self._check_can_shatter(function_application)
@@ -120,7 +120,7 @@ class QueryEasyShatteringTagger(ExpressionWalker):
             {args}
         )
         if not is_easily_shatterable_self_join(list_of_tuple_of_terms):
-            raise UnexpectedExpressionError(
+            raise NotEasilyShatterableError(
                 f"Cannot easily shatter {pred_symb}-predicates"
             )
 
@@ -183,7 +183,7 @@ def _check_shatter_fully_solved(shattered_query):
             for formula in shattered_query.formulas
         )
     ):
-        raise UnexpectedExpressionError("Cannot easily shatter query")
+        raise NotEasilyShatterableError("Cannot easily shatter query")
 
 
 def shatter_easy_probfacts(query, symbol_table):
