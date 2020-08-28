@@ -30,6 +30,7 @@ z = Symbol("z")
 
 a = Constant("a")
 b = Constant("b")
+c = Constant("c")
 
 
 @pytest.fixture(
@@ -575,6 +576,27 @@ def test_conjunct_pfact_equantified_pchoice(solver):
 def test_shatterable_query(solver):
     pfact_sets = {P: {(0.8, "a", "1"), (0.5, "a", "2"), (0.1, "b", "2")}}
     code = Union((Implication(Q(x), Conjunction((P(a, x), P(b, x)))),))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+    cpl_program.walk(code)
+    qpred = Q(x)
+    if solver is dichotomy_theorem_based_solver:
+        context = pytest.raises(NotHierarchicalQueryException)
+    else:
+        context = nullcontext()
+
+    with context:
+        result = solver.solve_succ_query(qpred, cpl_program)
+        expected = testing.make_prov_set([(0.5 * 0.1, "2",), ], ("_p_", "x"))
+        assert testing.eq_prov_relations(result, expected)
+
+
+def test_shatterable_query_2(solver):
+    pfact_sets = {
+        P: {(0.8, "a", "c", "1"), (0.5, "a", "c", "2"), (0.1, "b", "b", "2")}
+    }
+    code = Union((Implication(Q(x), Conjunction((P(a, c, x), P(b, b, x)))),))
     cpl_program = CPLogicProgram()
     for pred_symb, pfact_set in pfact_sets.items():
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
