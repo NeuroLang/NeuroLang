@@ -51,6 +51,23 @@ def stratify_program(query, program):
     within-language probabilistic query dependency, no probabilistic predicate
     should appear in the strat that depends on the query.
 
+    Parameters
+    ----------
+    query : Implication
+        Query defining the part of the program that needs to be stratified.
+    program : CPLogicProgram
+        Program that will be stratified.
+
+    Returns
+    -------
+    tuple of three Union
+        Deterministic, probabilistic and post-probabilistic deterministic IDBs.
+
+    Raises
+    ------
+    UnsupportedProgramError
+        When a WLQ (within-language query) depends on another WLQ.
+
     """
     reachable_idb = list(reachable_code_from_query(query, program).formulas)
     idb_symbs, dep_mat = dependency_matrix(program, reachable_idb)
