@@ -43,10 +43,10 @@ def test_stratify_deterministic():
     program = CPLogicProgram()
     program.walk(code)
     query = Implication(Query(y), Conjunction((Z(x), P(x, y))))
-    det_idb, prob_idb, ppq_det_idb = stratify_program(query, program)
-    assert len(det_idb.formulas) == 2
-    assert len(prob_idb.formulas) == 0
-    assert len(ppq_det_idb.formulas) == 0
+    idbs = stratify_program(query, program)
+    assert len(idbs["deterministic"].formulas) == 2
+    assert "probabilistic" not in idbs
+    assert "post_probabilistic" not in idbs
 
 
 def test_stratify_deterministic_probabilistic():
@@ -62,12 +62,12 @@ def test_stratify_deterministic_probabilistic():
     program = CPLogicProgram()
     program.walk(code)
     query = Implication(Query(y), Conjunction((Z(x), P(x, y))))
-    det_idb, prob_idb, ppq_det_idb = stratify_program(query, program)
-    assert len(det_idb.formulas) == 1
-    assert det_idb.formulas[0].consequent.functor == P
-    assert len(prob_idb.formulas) == 1
-    assert prob_idb.formulas[0].consequent.functor == Z
-    assert len(ppq_det_idb.formulas) == 0
+    idbs = stratify_program(query, program)
+    assert len(idbs["deterministic"].formulas) == 1
+    assert idbs["deterministic"].formulas[0].consequent.functor == P
+    assert len(idbs["probabilistic"].formulas) == 1
+    assert idbs["probabilistic"].formulas[0].consequent.functor == Z
+    assert "post_probabilistic" not in idbs
 
 
 def test_stratify_deterministic_probabilistic_wlq():
@@ -99,12 +99,10 @@ def test_stratify_deterministic_probabilistic_wlq():
     program = CPLogicProgram()
     program.walk(code)
     query = Implication(Query(x, p), Conjunction((B(x, p), C(x))))
-    res_det_idb, res_prob_idb, res_ppq_det_idb = stratify_program(
-        query, program
-    )
-    assert set(res_det_idb.formulas) == set(det_idb)
-    assert set(res_prob_idb.formulas) == set(prob_idb)
-    assert set(res_ppq_det_idb.formulas) == set(ppq_det_idb)
+    idbs = stratify_program(query, program)
+    assert set(idbs["deterministic"].formulas) == set(det_idb)
+    assert set(idbs["probabilistic"].formulas) == set(prob_idb)
+    assert set(idbs["post_probabilistic"].formulas) == set(ppq_det_idb)
 
 
 def test_stratify_multiple_wlqs():
@@ -144,12 +142,10 @@ def test_stratify_multiple_wlqs():
     program = CPLogicProgram()
     program.walk(code)
     query = Implication(Query(x, p1, p2), Conjunction((B(x, p1, p2), C(x))))
-    res_det_idb, res_prob_idb, res_ppq_det_idb = stratify_program(
-        query, program
-    )
-    assert set(res_det_idb.formulas) == set(det_idb)
-    assert set(res_prob_idb.formulas) == set(prob_idb)
-    assert set(res_ppq_det_idb.formulas) == set(ppq_det_idb)
+    idbs = stratify_program(query, program)
+    assert set(idbs["deterministic"].formulas) == set(det_idb)
+    assert set(idbs["probabilistic"].formulas) == set(prob_idb)
+    assert set(idbs["post_probabilistic"].formulas) == set(ppq_det_idb)
 
 
 def test_wlq_dependence_on_other_wlq():

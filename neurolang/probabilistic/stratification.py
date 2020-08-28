@@ -1,3 +1,5 @@
+import collections
+
 import numpy as np
 
 from ..datalog.expression_processing import (
@@ -60,8 +62,8 @@ def stratify_program(query, program):
 
     Returns
     -------
-    tuple of three Union
-        Deterministic, probabilistic and post-probabilistic deterministic IDBs.
+    mapping from idb type to Union
+        Deterministic, probabilistic and post-probabilistic IDBs.
 
     Raises
     ------
@@ -69,41 +71,38 @@ def stratify_program(query, program):
         When a WLQ (within-language query) depends on another WLQ.
 
     """
-    reachable_idb = list(reachable_code_from_query(query, program).formulas)
-    idb_symbs, dep_mat = dependency_matrix(program, reachable_idb)
-    wlq_symbs = set(program.within_language_succ_queries())
-    # limit to reachable within-language queries
-    wlq_symbs = wlq_symbs.intersection(idb_symbs)
+    idb = list(reachable_code_from_query(query, program).formulas)
+    idb_symbs, dep_mat = dependency_matrix(program, idb)
+    wlq_symbs = set(program.within_language_succ_queries()).intersection(
+        idb_symbs
+    )
     _check_for_dependencies_between_wlqs(dep_mat, idb_symbs, wlq_symbs)
-    det_symbs = set(program.extensional_database()) | set(program.builtins())
-    prob_symbs = program.pfact_pred_symbs | program.pchoice_pred_symbs
-    ppq_det_symbs = set()
-    det_idb = list()
-    prob_idb = list()
-    ppq_det_idb = list()
-    rules = reachable_idb
-    while rules:
-        rule = rules.pop(0)
-        symb = rule.consequent.functor
+    grpd_symbs = collections.defaultdict(set)
+    grpd_symbs["deterministic"] |= set(program.extensional_database())
+    grpd_symbs["deterministic"] |= set(program.builtins())
+    grpd_symbs["probabilistic"] |= program.probabilistic_predicate_symbols
+    grpd_idbs = collections.defaultdict(list)
+    while idb:
+        rule = idb.pop(0)
         dep_symbs = set(
             pred.functor for pred in extract_logic_predicates(rule.antecedent)
         )
-        if det_symbs.issuperset(dep_symbs):
-            det_symbs.add(symb)
-            det_idb.append(rule)
-        elif (det_symbs | wlq_symbs).issuperset(dep_symbs):
-            ppq_det_symbs.add(symb)
-            ppq_det_idb.append(rule)
-        elif symb in wlq_symbs or not prob_symbs.isdisjoint(dep_symbs):
-            prob_symbs.add(symb)
-            prob_idb.append(rule)
+        idb_type = None
+        if grpd_symbs["deterministic"].issuperset(dep_symbs):
+            idb_type = "deterministic"
+        elif (grpd_symbs["deterministic"] | wlq_symbs).issuperset(dep_symbs):
+            idb_type = "post_probabilistic"
+        elif not grpd_symbs["probabilistic"].isdisjoint(dep_symbs):
+            idb_type = "probabilistic"
+        if idb_type is None:
+            idb.append(rule)
         else:
-            rules.append(rule)
-    return (
-        Union(tuple(det_idb)),
-        Union(tuple(prob_idb)),
-        Union(tuple(ppq_det_idb)),
-    )
+            grpd_symbs[idb_type].add(rule.consequent.functor)
+            grpd_idbs[idb_type].append(rule)
+    return {
+        idb_type: Union(tuple(idb_rules))
+        for idb_type, idb_rules in grpd_idbs.items()
+    }
 
 
 def _check_for_dependencies_between_wlqs(dep_mat, idb_symbs, wlq_symbs):

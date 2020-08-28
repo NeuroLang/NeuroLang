@@ -67,7 +67,10 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
     def execute_query(self, head, predicate):
         pred_symb = predicate.expression.functor
         query = self.solver.symbol_table[pred_symb].formulas[0]
-        det_idb, prob_idb, ppq_det_idb = stratify_program(query, self.solver)
+        idbs = stratify_program(query, self.solver)
+        det_idb = idbs.get("deterministic", Union(tuple()))
+        prob_idb = idbs.get("probabilistic", Union(tuple()))
+        ppq_det_idb = idbs.get("post_probabilistic", Union(tuple()))
         if self.ontology_loaded:
             eb = self._rewrite_program_with_ontology(det_idb)
             det_idb = Union(det_idb.formulas + eb.formulas)
