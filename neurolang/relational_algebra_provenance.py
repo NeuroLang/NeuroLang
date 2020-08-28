@@ -15,6 +15,7 @@ from .expressions import (
 )
 from .relational_algebra import (
     Column,
+    ColumnInt,
     ColumnStr,
     ConcatenateConstantColumn,
     EquiJoin,
@@ -438,6 +439,38 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
 
     def _semiring_mul(self, left, right):
         return left * right
+
+    @add_match(
+        Projection(ProvenanceAlgebraSet, ...),
+        lambda proj: any(
+            issubclass(att.type, ColumnInt) for att in proj.attributes
+        )
+    )
+    def projection_rap_columnint(self, projection):
+        columns = projection.relation.relations.columns
+        new_attributes = tuple()
+        for att in projection.attributes:
+            if issubclass(att.type, ColumnInt):
+                att = str2columnstr_constant(columns[att.value])
+            new_attributes += (att,)
+        return self.walk(Projection(projection.relation, new_attributes))
+
+    @add_match(
+        Selection(
+            ProvenanceAlgebraSet,
+            FunctionApplication(eq_, (Constant[ColumnInt], ...))
+        )
+    )
+    def selection_rap_eq_columnint(self, selection):
+        columns = selection.relation.relations.columns
+        formula = selection.formula
+        new_formula = FunctionApplication(
+            eq_, (
+                str2columnstr_constant(columns[formula.args[0].value]),
+                formula.args[1]
+            )
+        )
+        return self.walk(Selection(selection.relation, new_formula))
 
     @add_match(Projection(ProvenanceAlgebraSet, ...))
     def projection_rap(self, projection):
