@@ -102,6 +102,17 @@ class QueryEasyShatteringTagger(ExpressionWalker):
         )
         return Shatter(*function_application.unapply())
 
+    @add_match(
+        FunctionApplication(ProbabilisticFactSet, ...),
+        lambda fa: not isinstance(fa, Shatter)
+    )
+    def cache_non_constant_args(self, function_application):
+        self._check_can_shatter(function_application)
+        self._cached_args[function_application.functor.relation].add(
+            function_application.args
+        )
+        return function_application
+
     def _check_can_shatter(self, function_application):
         pred_symb = function_application.functor.relation
         args = function_application.args
