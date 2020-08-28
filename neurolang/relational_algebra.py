@@ -500,18 +500,6 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         return Constant[relation_type](relation, verify_type=False)
 
     @ew.add_match(
-        Selection(Constant, FunctionApplication(eq_, (Constant[ColumnInt], ...)))
-    )
-    def selection_by_constant_int(self, selection):
-        col, val = selection.formula.args
-        sel_col = selection.relation.value.columns[col.value]
-        selected_relation = selection.relation.value.selection(
-            {sel_col: val.value}
-        )
-
-        return self._build_relation_constant(selected_relation)
-
-    @ew.add_match(
         Selection(Constant, FunctionApplication(eq_, (Constant[Column], ...)))
     )
     def selection_by_constant(self, selection):
@@ -536,12 +524,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
     @ew.add_match(Projection(Constant, ...))
     def ra_projection(self, projection):
         relation = projection.relation
-        cols = tuple()
-        for v in projection.attributes:
-            if v.type is ColumnInt:
-                cols += (relation.value.columns[v.value],)
-            else:
-                cols += (v.value,)
+        cols = tuple(v.value for v in projection.attributes)
         projected_relation = relation.value.projection(*cols)
         return self._build_relation_constant(projected_relation)
 
