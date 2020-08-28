@@ -147,6 +147,17 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         self.solver.add_probabilistic_facts_from_tuples(symbol, iterable)
         return FrontEndSymbol(self, name)
 
+    def add_probabilistic_choice_from_tuples(
+        self, iterable, type_=Unknown, name=None
+    ):
+        if name is None:
+            name = str(uuid1())
+        if isinstance(type_, tuple):
+            type_ = Tuple[type_]
+        symbol = Symbol[AbstractSet[type_]](name)
+        self.solver.add_probabilistic_choice_from_tuples(symbol, iterable)
+        return FrontEndSymbol(self, name)
+
     def add_uniform_probabilistic_choice_over_set(
         self, iterable, type_=Unknown, name=None
     ):
