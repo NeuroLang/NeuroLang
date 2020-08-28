@@ -21,9 +21,10 @@ def group_terms_by_index(list_of_tuple_of_terms):
 def group_indexes_by_symbol(list_of_tuple_of_terms):
     symbol_to_indexes = collections.defaultdict(list)
     for terms in list_of_tuple_of_terms:
-        for idx, term in enumerate(terms):
-            if isinstance(term, Symbol):
-                symbol_to_indexes[term].append(idx)
+        for idx, term in [
+            (i, t) for i, t in enumerate(terms) if isinstance(t, Symbol)
+        ]:
+            symbol_to_indexes[term].append(idx)
     return symbol_to_indexes
 
 
