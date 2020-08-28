@@ -84,3 +84,9 @@ def test_query_shattering_not_easy():
             cpl, query
         )
         shatter_easy_probfacts(query, symbol_table)
+    with pytest.raises(UnexpectedExpressionError):
+        query = Conjunction((P(x, y), P(a, z)))
+        symbol_table = generate_probabilistic_symbol_table_for_query(
+            cpl, query
+        )
+        shatter_easy_probfacts(query, symbol_table)
