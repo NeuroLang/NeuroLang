@@ -78,9 +78,9 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         )
         solution = self.probabilistic_solver(cpl)
         solver = RegionFrontendCPLogicSolver()
-        for pred_symb, relation in solution.items():
+        for psymb, relation in solution.items():
             solver.add_extensional_predicate_from_tuples(
-                pred_symb, relation.value
+                psymb, relation.value.to_unnamed()
             )
         solver.walk(ppq_det_idb)
         chase = self.chase_class(solver, rules=ppq_det_idb)
