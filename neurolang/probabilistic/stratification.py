@@ -78,22 +78,14 @@ def stratify_program(query, program):
     )
     _check_for_dependencies_between_wlqs(dep_mat, idb_symbs, wlq_symbs)
     grpd_symbs = collections.defaultdict(set)
-    grpd_symbs["deterministic"] |= set(program.extensional_database())
-    grpd_symbs["deterministic"] |= set(program.builtins())
+    grpd_symbs["deterministic"] = set(program.extensional_database()) | set(
+        program.builtins()
+    )
     grpd_symbs["probabilistic"] |= program.probabilistic_predicate_symbols
     grpd_idbs = collections.defaultdict(list)
     while idb:
         rule = idb.pop(0)
-        dep_symbs = set(
-            pred.functor for pred in extract_logic_predicates(rule.antecedent)
-        )
-        idb_type = None
-        if grpd_symbs["deterministic"].issuperset(dep_symbs):
-            idb_type = "deterministic"
-        elif (grpd_symbs["deterministic"] | wlq_symbs).issuperset(dep_symbs):
-            idb_type = "post_probabilistic"
-        elif not grpd_symbs["probabilistic"].isdisjoint(dep_symbs):
-            idb_type = "probabilistic"
+        idb_type = _get_rule_idb_type(rule, grpd_symbs, wlq_symbs)
         if idb_type is None:
             idb.append(rule)
         else:
@@ -103,6 +95,20 @@ def stratify_program(query, program):
         idb_type: Union(tuple(idb_rules))
         for idb_type, idb_rules in grpd_idbs.items()
     }
+
+
+def _get_rule_idb_type(rule, grpd_symbs, wlq_symbs):
+    dep_symbs = set(
+        pred.functor for pred in extract_logic_predicates(rule.antecedent)
+    )
+    idb_type = None
+    if grpd_symbs["deterministic"].issuperset(dep_symbs):
+        idb_type = "deterministic"
+    elif (grpd_symbs["deterministic"] | wlq_symbs).issuperset(dep_symbs):
+        idb_type = "post_probabilistic"
+    elif not grpd_symbs["probabilistic"].isdisjoint(dep_symbs):
+        idb_type = "probabilistic"
+    return idb_type
 
 
 def _check_for_dependencies_between_wlqs(dep_mat, idb_symbs, wlq_symbs):
