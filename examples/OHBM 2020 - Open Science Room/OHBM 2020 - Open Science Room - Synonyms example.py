@@ -86,17 +86,20 @@ with nl.scope as e:
         e.p_study[e.id_study]
     )
     
-    e.act_term[e.term, e.id_voxel] = (
-        e.synonyms[e.term] &
-        e.p_act[e.id_voxel, e.term]
-    )
+    #e.act_term[e.term, e.id_voxel] = (
+    #    e.synonyms[e.term] &
+    #    e.p_act[e.id_voxel, e.term]
+    #)
  
-    e.xyz_given_term[e.x, e.y, e.z] = (
-        e.act_term[e.term, e.id_voxel] &
-        e.xyz_neurosynth[e.x, e.y, e.z, e.id_voxel]
-    )
+    #e.xyz_given_term[e.x, e.y, e.z] = (
+    #    e.act_term[e.term, e.id_voxel] &
+    #    e.xyz_neurosynth[e.x, e.y, e.z, e.id_voxel]
+    #)
     
-    nl_results = nl.solve_query(e.xyz_given_term[e.x, e.y, e.z])
+    #nl_results = nl.solve_query(e.xyz_given_term[e.x, e.y, e.z])
+    nl_results = nl.solve_query(e.p_act[e.id_voxel, e.term])
+
+
 
 result_data = nl_results.value.as_pandas_dataframe()
 prob_column = result_data.drop(['x', 'y', 'z'], axis=1).columns[0]

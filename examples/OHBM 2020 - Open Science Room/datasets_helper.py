@@ -381,16 +381,31 @@ def load_pain_datasets(nl):
         list(sample_studies.itertuples(name=None, index=False)), name="p_study"
     )
 
-    # df = ns_prob_joint_term_study(nsh)
-    df = pd.DataFrame(
-        nsh.ns_term_study_associations(), columns=["prob", "study", "term"]
+    d_neurosynth = utils._get_dataset_dir('neurosynth', data_dir='neurolang_data')
+    f_neurosynth = utils._fetch_files(
+        d_neurosynth, [
+            (
+                f,
+                'https://github.com/neurosynth/neurosynth-data/raw/master/current_data.tar.gz',
+                {'uncompress': True}
+            )
+            for f in ('database.txt', 'features.txt')
+        ],
+        verbose=True
     )
-    nl.add_probabilistic_facts_from_tuples(
-        df.itertuples(
-            name=None, index=False
-        ),
-        name="p_term_study",
+
+    features = pd.read_csv(f_neurosynth[1], sep='\t')
+
+    features_normalised = (
+        features
+        .melt(id_vars=features.columns[0], var_name='term', value_vars=features.columns[1:], value_name='tfidf')
+        .query('tfidf > 0')
     )
+    #ns_pmid_term_tfidf = nl.add_tuple_set(features_normalised.values, name='p_term_study')
+    features_normalised = features_normalised[['tfidf', 'term', 'pmid']]
+    features_normalised = features_normalised.astype({"pmid": int, "tfidf": float})
+    nl.add_probabilistic_facts_from_tuples(features_normalised.itertuples(name=None, index=False),  name='p_term_study')
+
 
     df = ns_prob_joint_voxel_study(nsh)
     nl.add_probabilistic_facts_from_tuples(

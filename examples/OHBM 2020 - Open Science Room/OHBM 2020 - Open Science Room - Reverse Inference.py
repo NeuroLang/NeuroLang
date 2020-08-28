@@ -100,9 +100,12 @@ label = nl.new_symbol(name=str(RDFS.label))
 hasTopConcept = nl.new_symbol(name='http://www.w3.org/2004/02/skos/core#hasTopConcept')
 
 @nl.add_symbol
-def word_lower(name: str) -> str:
-    print(name)
-    return str(name).lower()
+def word_lower(name1: str, name2: str) -> bool:
+    print('-->', name1, name2)
+    if str(name1).lower() == str(name2).lower():
+        return True
+    
+    return False
 
 
 # +
@@ -133,19 +136,19 @@ with nl.scope as e:
         e.p_study[e.id_study]
     )
     
-    e.ontology_terms[e.lower] = (
+    e.ontology_terms[e.name] = (
         hasTopConcept[e.uri, 'Executive-Cognitive Control'] &
-        label[e.uri, e.name] &
-        eq(e.lower, word_lower(e.name))
+        label[e.uri, e.name]
     )
     
-    e.probability_voxel[e.term] = (
-        e.p_act[e.id_voxel, e.term] &
-        e.julich_voxels[e.id_voxel, e.x, e.y, e.z] &
-        e.ontology_terms[e.term]
-    )
+    #e.probability_voxel[e.term1] = (
+    #    e.p_act[e.id_voxel, e.term1] &
+    #    e.julich_voxels[e.id_voxel, e.x, e.y, e.z] &
+    #    e.ontology_terms[e.term2] &
+    #    word_lower[e.term1, e.term2]
+    #)
     
-    nl_results = nl.solve_query(e.probability_voxel[e.term])
+    nl_results = nl.solve_query(e.p_act[e.id_voxel, e.term])
 # -
 
 nl_results
