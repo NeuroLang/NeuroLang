@@ -191,6 +191,13 @@ def shatter_easy_probfacts(query, symbol_table):
     """
     Remove constants occurring in a given query, possibly removing self-joins.
 
+    A query containing self-joins can be "easily" shattered whenever the
+    predicates in the self-joins do not have more than one variable occurring
+    in the same term in multiple predicates (e.g. `P(x), P(y)`, both `x` and
+    `y` occurr in the same term in both predicates) or the same constant
+    occurring in the same term in multiple predicates (e.g. `P(a, x), P(a, b)`,
+    `a` occurrs in the same term in both predicates).
+
     If there is a self-join, the self-joined relation is split into multiple
     relations. These relations are added in-place to the symbol table. The
     returned equivalent query makes use of these relations.
