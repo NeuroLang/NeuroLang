@@ -279,3 +279,29 @@ def test_infer_iterable_type():
     type_, it = DatalogProgram.infer_iterable_type(dum)
     assert type_ is Unknown
     assert it is dum
+
+
+def test_add_extensional_preducate_from_tuples():
+    iterable = ((i,) for i in range(5))
+
+    Q = S_('Q')
+
+    dl = Datalog()
+    dl.add_extensional_predicate_from_tuples(Q, iterable)
+    q = dl.extensional_database()[Q]
+    assert q.type is AbstractSet[Tuple[int]]
+    assert q.value == {(i,) for i in range(5)}
+
+    dl = Datalog()
+    r = RelationalAlgebraFrozenSet([(2, 'a')])
+    dl.add_extensional_predicate_from_tuples(Q, r)
+    q = dl.extensional_database()[Q]
+    assert q.type is AbstractSet[Tuple[int, str]]
+    assert q.value == r
+
+    dl = Datalog()
+    rw = WrappedRelationalAlgebraFrozenSet(r)
+    dl.add_extensional_predicate_from_tuples(Q, rw)
+    q = dl.extensional_database()[Q]
+    assert q.type is AbstractSet[Tuple[int, str]]
+    assert q.value == rw
