@@ -129,6 +129,14 @@ def _strip_universal_quantifiers(exp):
     return ucv, exp
 
 
+def _add_universal_quantifiers(exp, ucv):
+    ucv = list(ucv)
+    while ucv:
+        v = ucv.pop()
+        exp = UniversalPredicate(v, exp)
+    return exp
+
+
 def _constrain_using_head_constants(head, body, ucv):
     args = ()
 
