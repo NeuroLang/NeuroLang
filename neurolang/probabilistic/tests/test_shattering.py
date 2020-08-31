@@ -114,6 +114,19 @@ def test_query_shattering_not_easy():
         shatter_easy_probfacts(query, symbol_table)
 
 
+def test_shattering_duplicated_predicate():
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        P, [(0.2, "a", "b"), (1.0, "a", "c"), (0.7, "b", "b")]
+    )
+    query = Conjunction((P(x, y), P(x, y)))
+    symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
+    shattered = shatter_easy_probfacts(query, symbol_table)
+    assert isinstance(shattered, Conjunction)
+    assert len(shattered.formulas) == 1
+    assert shattered.formulas[0].args == (x, y)
+
+
 def test_predicates_with_more_than_two_parameters():
     query = Conjunction((P(a, x, b, y), P(b, x, d, y)))
     cpl = CPLogicProgram()

@@ -2,6 +2,10 @@ import collections
 import itertools
 from typing import AbstractSet
 
+from ..datalog.expression_processing import (
+    enforce_conjunction,
+    remove_conjunction_duplicates,
+)
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionWalker
 from ..expressions import Constant, FunctionApplication, Symbol
@@ -209,6 +213,8 @@ def shatter_easy_probfacts(query, symbol_table):
        Probabilistic Data: A Survey. FNT in Databases 7, 197–341.
 
     """
+    query = enforce_conjunction(query)
+    query = remove_conjunction_duplicates(query)
     ws_query = query_to_tagged_set_representation(query, symbol_table)
     tagger = QueryEasyShatteringTagger()
     tagged_query = tagger.walk(ws_query)
