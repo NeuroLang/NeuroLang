@@ -1,4 +1,5 @@
 import collections
+import itertools
 from typing import AbstractSet
 
 from ..expression_pattern_matching import add_match
@@ -10,77 +11,61 @@ from .expression_processing import iter_conjunctive_query_predicates
 from .probabilistic_ra_utils import ProbabilisticFactSet
 
 
-def group_terms_by_index(list_of_tuple_of_terms):
-    idx_to_terms = collections.defaultdict(list)
-    for terms in list_of_tuple_of_terms:
-        for idx, term in enumerate(terms):
-            idx_to_terms[idx].append(term)
-    return idx_to_terms
-
-
-def group_indexes_by_symbol(list_of_tuple_of_terms):
-    symbol_to_indexes = collections.defaultdict(list)
-    for terms in list_of_tuple_of_terms:
-        for idx, term in [
-            (i, t) for i, t in enumerate(terms) if isinstance(t, Symbol)
-        ]:
-            symbol_to_indexes[term].append(idx)
-    return symbol_to_indexes
-
-
-def has_repeated_constant(list_of_terms):
+def terms_differ_by_constant_term(terms_a, terms_b):
     return any(
-        count > 1
-        for term, count in collections.Counter(list_of_terms).items()
-        if isinstance(term, Constant)
+        isinstance(term_a, Constant)
+        and isinstance(term_b, Constant)
+        and term_a != term_b
+        for term_a, term_b in zip(terms_a, terms_b)
     )
 
 
-def has_both_symbol_and_constant(list_of_terms):
-    has_symbol = False
-    has_constant = False
-    for term in list_of_terms:
-        has_symbol |= isinstance(term, Symbol)
-        has_constant |= isinstance(term, Constant)
-        if has_symbol and has_constant:
-            return True
-    return False
-
-
-def has_multiple_symbols(list_of_terms):
-    return (
-        len(set(term for term in list_of_terms if isinstance(term, Symbol)))
-        > 1
+def all_terms_differ_by_constant_term(list_of_tuple_of_terms):
+    return all(
+        terms_differ_by_constant_term(terms_a, terms_b)
+        for terms_a, terms_b in itertools.combinations(
+            list_of_tuple_of_terms, 2
+        )
     )
 
 
-def any_symbol_occurs_in_different_locations(symbol_to_indexes):
-    return any(
-        len(set(indexes)) > 1 for symbol, indexes in symbol_to_indexes.items()
-    )
+def constant_terms_are_constant_in_all_tuples(list_of_tuple_of_terms):
+    arity = len(list_of_tuple_of_terms[0])
+    for i in range(arity):
+        nb_of_constant_terms = sum(
+            isinstance(terms[i], Constant) for terms in list_of_tuple_of_terms
+        )
+        if 0 < nb_of_constant_terms < len(list_of_tuple_of_terms):
+            return False
+    return True
 
 
 def is_easily_shatterable_self_join(list_of_tuple_of_terms):
     """
-    Examples
-    --------
-    The following conjunctive queries can be shattered easily:
-        - P(a, x), P(b, x)
-    The following conjunctive queries cannot be shattered easily:
-        - P(x), P(y)
-        - P(a, x), P(a, y)
-        - P(a, x), P(y, b)
-        - P(a), P(x)
+    A self-join of `m` predicates is easily shatterable if the following two
+    conditions are met.
+
+    Firstly, if the `i`th term of one of the predicates is a constant, then the
+    `i`th terms of all the other self-joined predicates must also be constants.
+    For example, the self-join `P(x, a), P(x, y)` does not meet this condition
+    because the second term appears both as a constant (in the first predicate)
+    and as a variable (in the second predicate).
+
+    Secondly, all predicates in the self-join must differ by at least one
+    constant term. In other words, for two predicates P1 and P2 in the
+    self-join, there must be a constant term at some position `i` in P1 whose
+    value is different than the constant `i`th term in P2 (we know it's
+    constant from the first condition). For example, the self-join `P(x, a),
+    P(y, a)` does not meet this condition because the only constant term is `a`
+    in both predicates. However, the self-join `P(x, a, b), P(x, a, c)` does
+    meet this condition because the predicates differ in their constant value
+    of the third term (`b` for the first predicate and `c` for the second
+    predicate).
 
     """
-    idx_to_terms = group_terms_by_index(list_of_tuple_of_terms)
-    symbol_to_indexes = group_indexes_by_symbol(list_of_tuple_of_terms)
-    return not any(
-        has_repeated_constant(terms)
-        or has_both_symbol_and_constant(terms)
-        or has_multiple_symbols(terms)
-        for terms in idx_to_terms.values()
-    ) and not any_symbol_occurs_in_different_locations(symbol_to_indexes)
+    return constant_terms_are_constant_in_all_tuples(
+        list_of_tuple_of_terms
+    ) and all_terms_differ_by_constant_term(list_of_tuple_of_terms)
 
 
 class Shatter(FunctionApplication):
@@ -117,8 +102,8 @@ class QueryEasyShatteringTagger(ExpressionWalker):
     def _check_can_shatter(self, function_application):
         pred_symb = function_application.functor.relation
         args = function_application.args
-        list_of_tuple_of_terms = self._cached_args.get(pred_symb, set()).union(
-            {args}
+        list_of_tuple_of_terms = list(
+            self._cached_args.get(pred_symb, set()).union({args})
         )
         if not is_easily_shatterable_self_join(list_of_tuple_of_terms):
             raise NotEasilyShatterableError(

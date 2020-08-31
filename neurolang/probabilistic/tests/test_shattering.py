@@ -60,6 +60,30 @@ def test_query_shattering_self_join():
     symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
     shattered = shatter_easy_probfacts(query, symbol_table)
     assert isinstance(shattered, Conjunction)
+    assert all(
+        shattered.formulas[i].args == (x,)
+        for i in (0, 1)
+    )
+
+
+def test_query_shattering_self_join_different_variables():
+    query = Conjunction((P(a, x), P(b, y)))
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        P, [(0.2, "a", "b"), (1.0, "a", "c"), (0.7, "b", "b")]
+    )
+    symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
+    shattered = shatter_easy_probfacts(query, symbol_table)
+    assert isinstance(shattered, Conjunction)
+    assert len(shattered.formulas) == 2
+    assert any(
+        shattered.formulas[i].args == (x,)
+        for i in (0, 1)
+    )
+    assert any(
+        shattered.formulas[i].args == (y,)
+        for i in (0, 1)
+    )
 
 
 def test_query_shattering_not_easy():
