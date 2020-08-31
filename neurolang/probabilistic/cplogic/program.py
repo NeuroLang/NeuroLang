@@ -73,6 +73,14 @@ class CPLogicMixin(PatternWalker):
         )
 
     @property
+    def probabilistic_predicate_symbols(self):
+        return (
+            self.pfact_pred_symbs
+            | self.pchoice_pred_symbs
+            | set(self.within_language_succ_queries())
+        )
+
+    @property
     def pfact_pred_symbs(self):
         return self._get_pred_symbs(self.pfact_pred_symb_set_symb)
 

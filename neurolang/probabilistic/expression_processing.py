@@ -7,7 +7,7 @@ import numpy
 from ..datalog import WrappedRelationalAlgebraSet
 from ..datalog.expression_processing import (
     extract_logic_predicates,
-    reachable_code
+    reachable_code,
 )
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
 from ..expressions import Constant, Expression, FunctionApplication
@@ -314,7 +314,19 @@ def lift_optimization_for_choice_predicates(query, program):
         ):
             added_equalities.append(eq(x, y))
         if len(added_equalities) > 0:
-            query = Conjunction(
-                query.formulas + tuple(added_equalities)
-            )
+            query = Conjunction(query.formulas + tuple(added_equalities))
     return query
+
+
+def iter_conjunctive_query_predicates(query):
+    if isinstance(query, FunctionApplication):
+        yield query
+    elif isinstance(query, Conjunction):
+        for predicate in query.formulas:
+            yield predicate
+    else:
+        raise UnexpectedExpressionError(
+            "Expected a predicate or conjunction of predicates, got {}".format(
+                type(query)
+            )
+        )
