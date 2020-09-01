@@ -2,7 +2,9 @@ import io
 from typing import AbstractSet, Tuple
 
 import numpy as np
+import pytest
 
+from ...exceptions import UnsupportedQueryError
 from ..probabilistic_frontend import ProbabilisticFrontend
 
 
@@ -179,3 +181,117 @@ def test_within_language_succ_query():
     df = res["Z"].as_pandas_dataframe()
     assert np.isclose(df.loc[df["x"] == "b"].iloc[0][1], 2 / 3 / 2)
     assert np.isclose(df.loc[df["x"] == "a"].iloc[0][1], 1 / 3 / 2)
+
+
+def test_solve_query():
+    nl = ProbabilisticFrontend()
+    P = nl.add_uniform_probabilistic_choice_over_set(
+        [("a",), ("b",), ("c",)], name="P"
+    )
+    Q = nl.add_uniform_probabilistic_choice_over_set(
+        [("a",), ("d",), ("c",)], name="Q"
+    )
+    with nl.scope as e:
+        e.Z[e.x, e.PROB[e.x]] = P[e.x] & Q[e.x]
+        res = nl.query((e.x, e.p), e.Z[e.x, e.p])
+    df = res.as_pandas_dataframe()
+    assert len(df) == 2
+    assert all(c1 == c2 for c1, c2 in zip(df.columns, ["x", "p"]))
+    assert len(df.loc[df["x"] == "a"]) == 1
+    assert len(df.loc[df["x"] == "c"]) == 1
+    assert np.isclose(df.loc[df["x"] == "a"].iloc[0]["p"], 1 / 9)
+    assert np.isclose(df.loc[df["x"] == "c"].iloc[0]["p"], 1 / 9)
+
+
+def test_solve_query_prob_col_not_last():
+    nl = ProbabilisticFrontend()
+    P = nl.add_uniform_probabilistic_choice_over_set(
+        [("a",), ("b",), ("c",)], name="P"
+    )
+    Q = nl.add_uniform_probabilistic_choice_over_set(
+        [("a",), ("d",), ("c",)], name="Q"
+    )
+    with nl.scope as e:
+        e.Z[e.PROB[e.x], e.x] = P[e.x] & Q[e.x]
+        res = nl.query((e.p, e.x), e.Z[e.p, e.x])
+    df = res.as_pandas_dataframe()
+    assert len(df) == 2
+    assert all(c1 == c2 for c1, c2 in zip(df.columns, ["p", "x"]))
+    assert len(df.loc[df["x"] == "a"]) == 1
+    assert len(df.loc[df["x"] == "c"]) == 1
+    assert np.isclose(df.loc[df["x"] == "a"].iloc[0]["p"], 1 / 9)
+    assert np.isclose(df.loc[df["x"] == "c"].iloc[0]["p"], 1 / 9)
+
+
+def test_solve_boolean_query():
+    nl = ProbabilisticFrontend()
+    P = nl.add_uniform_probabilistic_choice_over_set(
+        [("a",), ("b",), ("c",)], name="P"
+    )
+    Q = nl.add_uniform_probabilistic_choice_over_set(
+        [("a",), ("d",), ("c",)], name="Q"
+    )
+    with pytest.raises(UnsupportedQueryError):
+        with nl.scope as e:
+            e.ans[e.PROB()] = P[e.x] & Q[e.x]
+            nl.query((e.p), e.ans[e.p])
+
+
+def test_solve_complex_stratified_query():
+    """
+    R(1, 2) : 0.3
+    R(1, 4) : 0.7
+    R(2, 2) : 0.2
+    R(2, 4) : 0.6
+    R(2, 6) : 0.8
+    Q(4) : 0.2 v Q(6) : 0.8
+    A(x, PROB[x])       :- Q(x), R(1, x), R(2, x)
+    B(x, y, PROB[x, y]) :- Q(y), R(1, x), R(2, x)
+    C(x, y, p1, p2)     :- A(x, p1), B(x, y, p2)
+
+    """
+    nl = ProbabilisticFrontend()
+    R = nl.add_probabilistic_facts_from_tuples(
+        [(0.3, 1, 2), (0.7, 1, 4), (0.2, 2, 2), (0.6, 2, 4), (0.8, 2, 6)],
+        name="R",
+    )
+    Q = nl.add_probabilistic_choice_from_tuples([(0.2, 4), (0.8, 6)], name="Q")
+    with nl.scope as e:
+        e.A[e.x, e.PROB[e.x]] = Q[e.x] & R[1, e.x] & R[2, e.x]
+        e.B[e.x, e.y, e.PROB[e.x, e.y]] = Q[e.y] & R[1, e.x] & R[2, e.x]
+        e.C[e.x, e.y, e.p1, e.p2] = e.A[e.x, e.p1] & e.B[e.x, e.y, e.p2]
+        res = nl.query((e.x, e.y, e.h, e.z), e.C[e.x, e.y, e.h, e.z])
+    df = res.as_pandas_dataframe()
+    assert set(df.columns) == {"x", "y", "h", "z"}
+    assert len(df.loc[(df["x"] == 4) & (df["y"] == 4)]) == 1
+    assert np.isclose(
+        df.loc[(df["x"] == 4) & (df["y"] == 4)].iloc[0]["h"], 0.2 * 0.7 * 0.6,
+    )
+    assert np.isclose(
+        df.loc[(df["x"] == 4) & (df["y"] == 4)].iloc[0]["z"], 0.2 * 0.7 * 0.6,
+    )
+    assert len(df.loc[(df["x"] == 4) & (df["y"] == 6)]) == 1
+    assert np.isclose(
+        df.loc[(df["x"] == 4) & (df["y"] == 6)].iloc[0]["h"], 0.2 * 0.7 * 0.6,
+    )
+    assert np.isclose(
+        df.loc[(df["x"] == 4) & (df["y"] == 6)].iloc[0]["z"], 0.8 * 0.7 * 0.6,
+    )
+
+
+def test_solve_complex_stratified_query_with_deterministic_part():
+    nl = ProbabilisticFrontend()
+    A = nl.add_tuple_set([("a",), ("b",), ("c",)], name="A")
+    B = nl.add_tuple_set([("a",), ("b",)], name="B")
+    P = nl.add_probabilistic_facts_from_tuples(
+        [(0.2, "a"), (0.8, "b")], name="P",
+    )
+    with nl.scope as e:
+        e.C[e.x, e.y] = A[e.x] & A[e.y] & B[e.x]
+        e.D[e.x, e.y, e.PROB[e.x, e.y]] = e.C[e.x, e.y] & P[e.y]
+        res = nl.query((e.x, e.y, e.p), e.D[e.x, e.y, e.p])
+    df = res.as_pandas_dataframe()
+    assert df.loc[(df["x"] == "a") & (df["y"] == "b")].iloc[0]["p"] == 0.8
+    assert df.loc[(df["x"] == "b") & (df["y"] == "b")].iloc[0]["p"] == 0.8
+    assert df.loc[(df["x"] == "a") & (df["y"] == "a")].iloc[0]["p"] == 0.2
+    assert df.loc[(df["x"] == "b") & (df["y"] == "a")].iloc[0]["p"] == 0.2
