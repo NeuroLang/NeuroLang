@@ -525,3 +525,7 @@ def is_rule_with_builtin(rule, known_builtins=None):
         isinstance(pred.functor, Constant) or pred.functor in known_builtins
         for pred in extract_logic_predicates(rule.antecedent)
     )
+
+
+def remove_conjunction_duplicates(conjunction):
+    return Conjunction(tuple(set(conjunction.formulas)))

@@ -1,7 +1,7 @@
 import pytest
 
 from ...exceptions import UnexpectedExpressionError
-from ...expressions import Symbol
+from ...expressions import Constant, Symbol
 from ...logic import Union
 from ..expression_processing import (
     add_to_union,
@@ -14,6 +14,8 @@ Q = Symbol("Q")
 x = Symbol("x")
 y = Symbol("y")
 z = Symbol("z")
+a = Constant("a")
+b = Constant("b")
 
 
 def test_concatenate_to_union():

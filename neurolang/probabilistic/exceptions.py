@@ -1,4 +1,4 @@
-from ..exceptions import NeuroLangException
+from ..exceptions import NeuroLangException, UnexpectedExpressionError
 
 
 class DistributionDoesNotSumToOneError(NeuroLangException):
@@ -14,4 +14,8 @@ class NotHierarchicalQueryException(NeuroLangException):
 
 
 class UncomparableDistributionsError(NeuroLangException):
+    pass
+
+
+class NotEasilyShatterableError(UnexpectedExpressionError):
     pass
