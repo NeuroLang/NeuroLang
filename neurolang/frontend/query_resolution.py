@@ -209,12 +209,14 @@ class RegionMixin:
         return self.add_tuple_set(region_set, name=name, type_=Region)
 
     @staticmethod
-    def create_region(spatial_image, label=1, prebuild_tree=False):
-        voxels = np.transpose(
-            (
-                np.asanyarray(spatial_image.dataobj) == label
-            ).nonzero()
-        )
+    def create_region(spatial_image, label=None, prebuild_tree=False):
+        if label is not None:
+            voxels = (np.asanyarray(spatial_image.dataobj) == label).nonzero()
+        else:
+            voxels = np.asanyarray(spatial_image.dataobj).nonzero()
+
+        voxels = np.transpose(voxels)
+
         if len(voxels) == 0:
             return None
         region = ExplicitVBR(
@@ -222,6 +224,7 @@ class RegionMixin:
             spatial_image.affine, image_dim=spatial_image.shape,
             prebuild_tree=prebuild_tree
         )
+
         return region
 
     def add_atlas_set(self, name, atlas_labels, spatial_image):
