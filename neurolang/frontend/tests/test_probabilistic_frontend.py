@@ -2,7 +2,9 @@ import io
 from typing import AbstractSet, Tuple
 
 import numpy as np
+import pytest
 
+from ...exceptions import UnsupportedQueryError
 from ..probabilistic_frontend import ProbabilisticFrontend
 
 
@@ -219,6 +221,20 @@ def test_solve_query_prob_col_not_last():
     assert len(df.loc[df["x"] == "c"]) == 1
     assert np.isclose(df.loc[df["x"] == "a"].iloc[0]["p"], 1 / 9)
     assert np.isclose(df.loc[df["x"] == "c"].iloc[0]["p"], 1 / 9)
+
+
+def test_solve_boolean_query():
+    nl = ProbabilisticFrontend()
+    P = nl.add_uniform_probabilistic_choice_over_set(
+        [("a",), ("b",), ("c",)], name="P"
+    )
+    Q = nl.add_uniform_probabilistic_choice_over_set(
+        [("a",), ("d",), ("c",)], name="Q"
+    )
+    with pytest.raises(UnsupportedQueryError):
+        with nl.scope as e:
+            e.ans[e.PROB()] = P[e.x] & Q[e.x]
+            nl.query((e.p), e.ans[e.p])
 
 
 def test_solve_complex_stratified_query():

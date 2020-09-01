@@ -2,7 +2,11 @@ import typing
 
 from ...datalog import DatalogProgram
 from ...datalog.basic_representation import UnionOfConjunctiveQueries
-from ...exceptions import ForbiddenDisjunctionError, ForbiddenExpressionError
+from ...exceptions import (
+    ForbiddenDisjunctionError,
+    ForbiddenExpressionError,
+    UnsupportedQueryError,
+)
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
 from ...expressions import Constant, FunctionApplication, Symbol
@@ -266,6 +270,10 @@ class CPLogicMixin(PatternWalker):
             if isinstance(arg, Symbol)
         )
         prob_term = get_within_language_succ_query_prob_term(implication)
+        if not prob_term.args:
+            raise UnsupportedQueryError(
+                "Boolean queries are not currently supported"
+            )
         if not all(isinstance(arg, Symbol) for arg in prob_term.args):
             bad_vars = (
                 repr(arg)
