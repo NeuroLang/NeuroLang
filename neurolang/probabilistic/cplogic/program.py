@@ -272,7 +272,7 @@ class CPLogicMixin(PatternWalker):
         prob_term = get_within_language_succ_query_prob_term(implication)
         if not prob_term.args:
             raise UnsupportedQueryError(
-                "Boolean queries are not currently supported"
+                "Probabilistic boolean queries are not currently supported"
             )
         if not all(isinstance(arg, Symbol) for arg in prob_term.args):
             bad_vars = (
