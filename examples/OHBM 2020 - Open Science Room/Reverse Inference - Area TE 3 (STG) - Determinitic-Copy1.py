@@ -70,8 +70,8 @@ with nl.scope as e:
     
     e.julich_voxels[e.id_neurosynth, e.x, e.y, e.z] = (
         e.region_voxels['Area TE 3 (STG)', e.id_neurosynth, e.x, e.y, e.z]
+        
     )
-    
     
     nl_results = nl.solve_all()
 
@@ -125,10 +125,13 @@ for v, p in vox_prob:
 #    cut_coords=np.linspace(-63, 63, 4),
 #)
 
-
-plotting.plot_roi(prob_img)
+import matplotlib.pyplot as plt
+fg = plt.figure(figsize=(6, 6))
+plotting.plot_roi(prob_img, figure=fg)
 
 # -
+
+
 
 # ### Example
 

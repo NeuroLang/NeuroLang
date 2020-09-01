@@ -34,13 +34,15 @@ from neurolang import frontend as fe
 nl = ProbabilisticFrontend()
 datasets_helper.load_reverse_inference_dataset(nl)
 
-path = 'neurolang_data/ontologies/cogat.xrdf'
-nl.load_ontology(path)
+# +
+#path = 'neurolang_data/ontologies/cogat.xrdf'
+#nl.load_ontology(path)
+# -
 
 with nl.scope as e:
     e.julich_to_neurosynth[e.julich_id, e.id_neurosynth, e.x, e.y, e.z] = (
         e.xyz_julich[e.x, e.y, e.z, e.julich_id] &
-        e.xyz_neurosynth[e.x, e.y, e.z, e.id_neurosynth]
+        e.xyz_neurosynth[e.x, e.y, e.z, e.id_neurosynth] 
     )
     
     e.region_voxels[e.name, e.id_neurosynth, e.x, e.y, e.z] = (
@@ -53,7 +55,7 @@ with nl.scope as e:
     )
     
     e.julich_voxels[e.id_neurosynth, e.x, e.y, e.z] = (
-        e.region_voxels['Area Ia (Insula)', e.id_neurosynth, e.x, e.y, e.z]
+        e.region_voxels['Area TE 3 (STG)', e.id_neurosynth, e.x, e.y, e.z]
     )
     
     e.p_act[e.id_voxel, e.term] = (
@@ -64,7 +66,8 @@ with nl.scope as e:
     
     e.probability_voxel[e.term] = (
         e.p_act[e.id_voxel, e.term] &
-        e.julich_voxels[e.id_voxel, e.x, e.y, e.z]
+        e.julich_voxels[e.id_voxel, e.x, e.y, e.z]&
+        e.prob_julich[e.x, e.y, e.z]
     )
     
     nl_results = nl.solve_query(e.probability_voxel[e.term])
@@ -127,7 +130,7 @@ with nl.scope as e:
     )
     
     e.julich_voxels[e.id_neurosynth, e.x, e.y, e.z] = (
-        e.region_voxels['Area Ia (Insula)', e.id_neurosynth, e.x, e.y, e.z]
+        e.region_voxels['Area TE 3 (STG)', e.id_neurosynth, e.x, e.y, e.z]
     )
     
     e.p_act[e.id_voxel, e.term] = (
@@ -137,7 +140,7 @@ with nl.scope as e:
     )
     
     e.ontology_terms[e.name] = (
-        hasTopConcept[e.uri, 'Executive-Cognitive Control'] &
+        hasTopConcept[e.uri, 'Perception'] &
         label[e.uri, e.name]
     )
     

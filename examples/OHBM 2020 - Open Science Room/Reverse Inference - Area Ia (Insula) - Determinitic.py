@@ -126,7 +126,9 @@ for v, p in vox_prob:
 #)
 
 
-plotting.plot_roi(prob_img)
+import matplotlib.pyplot as plt
+fg = plt.figure(figsize=(10, 10))
+plotting.plot_roi(prob_img, figure=fg)
 
 # -
 

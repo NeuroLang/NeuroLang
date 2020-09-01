@@ -588,6 +588,28 @@ def load_reverse_inference_dataset(nl):
         triples,
         name="julich_ontology",
     )
+    
+    
+    atlas_r_filename = './22/prob/Area-TE-3/Area-TE-3_l_N10_nlin2Stdcolin27_5.1_publicP_ee94f5c173aaf6496d93f5ebc621a740.nii.gz'
+    img_l = image.load_img(atlas_r_filename)
+
+    julich_to_ns_mni_prob = image.resample_to_img(
+        img_l, it.masker.volume, interpolation="nearest"
+    )
+    
+    jl_data = julich_to_ns_mni_prob.get_fdata()
+    jl_unmaskes = np.nonzero(jl_data)
+
+    xyz_to_jl_prob = []
+    for v in zip(*jl_unmaskes):
+        prob = float(jl_data[v[0]][v[1]][v[2]])
+        coord = nib.affines.apply_affine(julich_to_ns_mni_prob.affine, list(v))
+        xyz_to_jl_prob.append((tuple([prob]) + tuple(coord)))
+        
+    xyz_julich = nl.add_probabilistic_facts_from_tuples(
+        xyz_to_jl_prob,
+        name="prob_julich",
+    )
 
 
 def ns_prob_joint_voxel_study_deterministic(nsh):

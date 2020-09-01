@@ -82,29 +82,29 @@ with nl.environment as e:
 with nl.scope as e:    
     e.p_act[e.id_voxel, e.term] = (
         e.p_voxel_study[e.id_voxel, e.id_study] & 
-        e.p_term_study[e.term, e.study] & 
+        e.p_term_study[e.term, e.id_study] & 
         e.p_study[e.id_study]
     )
     
-    #e.act_term[e.term, e.id_voxel] = (
-    #    e.synonyms[e.term] &
-    #    e.p_act[e.id_voxel, e.term]
-    #)
+    e.act_term[e.term, e.id_voxel] = (
+        e.synonyms[e.term] &
+        e.p_act[e.id_voxel, e.term]
+    )
  
-    #e.xyz_given_term[e.x, e.y, e.z] = (
-    #    e.act_term[e.term, e.id_voxel] &
-    #    e.xyz_neurosynth[e.x, e.y, e.z, e.id_voxel]
-    #)
+    e.xyz_given_term[e.x, e.y, e.z] = (
+        e.act_term[e.term, e.id_voxel] &
+        e.xyz_neurosynth[e.x, e.y, e.z, e.id_voxel]
+    )
     
-    #nl_results = nl.solve_query(e.xyz_given_term[e.x, e.y, e.z])
-    nl_results = nl.solve_query(e.p_act[e.id_voxel, e.term])
-
+    nl_results = nl.solve_query(e.xyz_given_term[e.x, e.y, e.z])
 
 
 result_data = nl_results.value.as_pandas_dataframe()
 prob_column = result_data.drop(['x', 'y', 'z'], axis=1).columns[0]
 result_data = result_data.rename(columns={f'{prob_column}': "prob"})
 result_data.head()
+
+result_data = result_data[['x', 'y', 'z', 'prob']]
 
 # +
 #result_data = result.value.to_numpy()
@@ -147,6 +147,13 @@ plotting.plot_stat_map(
     cmap='PuBuGn',
     display_mode='x',
     cut_coords=np.linspace(-63, 63, 5),
+)
+
+plotting.plot_stat_map(
+    prob_img, title='Tags: Pain, Noxious, Nociceptive', 
+    cmap='PuBuGn',
+    display_mode='y',
+    cut_coords=np.linspace(-30, 5, 5),
 )
 
 # Now we can analyze the results by plotting the p-values obtained
