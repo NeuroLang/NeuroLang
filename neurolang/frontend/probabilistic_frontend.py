@@ -75,19 +75,20 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             eb = self._rewrite_program_with_ontology(det_idb)
             det_idb = Union(det_idb.formulas + eb.formulas)
         chase = self.chase_class(self.solver, rules=det_idb)
-        det_solution = chase.build_chase_solution()
-        cpl = self._make_probabilistic_program_from_deterministic_solution(
-            det_solution, prob_idb
-        )
-        solution = self.probabilistic_solver(cpl)
-        solver = RegionFrontendCPLogicSolver()
-        for psymb, relation in solution.items():
-            solver.add_extensional_predicate_from_tuples(
-                psymb, relation.value.to_unnamed()
-            )
-        solver.walk(ppq_det_idb)
-        chase = self.chase_class(solver, rules=ppq_det_idb)
         solution = chase.build_chase_solution()
+        if prob_idb.formulas:
+            cpl = self._make_probabilistic_program_from_deterministic_solution(
+                solution, prob_idb
+            )
+            solution = self.probabilistic_solver(cpl)
+            solver = RegionFrontendCPLogicSolver()
+            for psymb, relation in solution.items():
+                solver.add_extensional_predicate_from_tuples(
+                    psymb, relation.value.to_unnamed()
+                )
+            solver.walk(ppq_det_idb)
+            chase = self.chase_class(solver, rules=ppq_det_idb)
+            solution = chase.build_chase_solution()
         query_solution = solution[pred_symb].value.unwrap()
         cols = list(
             arg.name

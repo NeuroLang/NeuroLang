@@ -8,6 +8,7 @@ from ..datalog.expression_processing import (
     reachable_code,
 )
 from ..exceptions import UnsupportedProgramError
+from ..expressions import Symbol
 from ..logic import Implication, Union
 
 
@@ -99,7 +100,9 @@ def stratify_program(query, program):
 
 def _get_rule_idb_type(rule, grpd_symbs, wlq_symbs):
     dep_symbs = set(
-        pred.functor for pred in extract_logic_predicates(rule.antecedent)
+        pred.functor
+        for pred in extract_logic_predicates(rule.antecedent)
+        if isinstance(pred.functor, Symbol)
     )
     idb_type = None
     if grpd_symbs["deterministic"].issuperset(dep_symbs):
