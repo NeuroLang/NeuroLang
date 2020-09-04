@@ -70,34 +70,21 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         query = self.solver.symbol_table[
             predicate.expression.functor
         ].formulas[0]
-        idbs = stratify_program(query, self.solver)
-        det_idb = idbs.get("deterministic", Union(tuple()))
-        prob_idb = idbs.get("probabilistic", Union(tuple()))
-        ppq_det_idb = idbs.get("post_probabilistic", Union(tuple()))
-        if self.ontology_loaded:
-            eb = self._rewrite_program_with_ontology(det_idb)
-            det_idb = Union(det_idb.formulas + eb.formulas)
-        chase = self.chase_class(self.solver, rules=det_idb)
-        solution = chase.build_chase_solution()
-        if prob_idb.formulas:
-            self._compute_probabilistic_solution(solution, prob_idb)
-        if ppq_det_idb.formulas:
-            # TODO add instance to solver instead
-            solver = RegionFrontendCPLogicSolver()
-            for psymb, relation in solution.items():
-                solver.add_extensional_predicate_from_tuples(
-                    psymb, relation.value,
-                )
-            solver.walk(ppq_det_idb)
-            chase = self.chase_class(solver, rules=ppq_det_idb)
-            solution = chase.build_chase_solution()
+        solution = self._solve(query)
         return (
             self._restrict_to_query_solution(head, predicate, solution),
             None,
         )
 
     def solve_all(self):
-        idbs = stratify_program(None, self.solver)
+        solution = self._solve()
+        solution_sets = dict()
+        for pred_symb, relation in solution.items():
+            solution_sets[pred_symb.name] = relation.value
+        return solution_sets
+
+    def _solve(self, query=None):
+        idbs = stratify_program(query, self.solver)
         det_idb = idbs.get("deterministic", Union(tuple()))
         prob_idb = idbs.get("probabilistic", Union(tuple()))
         ppq_det_idb = idbs.get("post_probabilistic", Union(tuple()))
@@ -118,10 +105,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             solver.walk(ppq_det_idb)
             chase = self.chase_class(solver, rules=ppq_det_idb)
             solution = chase.build_chase_solution()
-        solution_sets = dict()
-        for pred_symb, relation in solution.items():
-            solution_sets[pred_symb.name] = relation.value
-        return solution_sets
+        return solution
 
     @staticmethod
     def _restrict_to_query_solution(head, predicate, solution):

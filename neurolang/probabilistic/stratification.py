@@ -73,11 +73,7 @@ def stratify_program(query, program):
 
     """
     if query is None:
-        idb = [
-            rule
-            for exp in program.intensional_database().values()
-            for rule in _iter_implication_or_union_of_implications(exp)
-        ]
+        idb = _get_list_of_intensional_rules(program)
     else:
         idb = list(reachable_code_from_query(query, program).formulas)
     idb_symbs, dep_mat = dependency_matrix(program, idb)
@@ -101,6 +97,15 @@ def stratify_program(query, program):
         idb_type: Union(tuple(idb_rules))
         for idb_type, idb_rules in grpd_idbs.items()
     }
+
+
+def _get_list_of_intensional_rules(program):
+    idb = [
+        rule
+        for exp in program.intensional_database().values()
+        for rule in _iter_implication_or_union_of_implications(exp)
+    ]
+    return idb
 
 
 def _get_program_deterministic_symbols(program):
