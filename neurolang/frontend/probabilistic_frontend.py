@@ -9,16 +9,19 @@ from ..datalog.ontologies_rewriter import OntologyRewriter
 from ..expression_walker import ExpressionBasicEvaluator
 from ..expressions import Constant, Symbol, Unknown
 from ..logic import Union
-from ..probabilistic.cplogic.problog_solver import (
-    solve_succ_all as problog_solve_succ_all,
-)
 from ..probabilistic.cplogic.program import (
     CPLogicMixin,
     CPLogicProgram,
     TranslateProbabilisticQueryMixin,
 )
+from ..probabilistic.dichotomy_theorem_based_solver import (
+    solve_succ_query as lifted_solve_succ_query,
+)
 from ..probabilistic.expression_processing import (
+    construct_within_language_succ_result,
+    is_within_language_succ_query,
     separate_deterministic_probabilistic_code,
+    within_language_succ_query_to_intensional_rule,
 )
 from ..probabilistic.stratification import stratify_program
 from ..region_solver import RegionSolver
@@ -43,7 +46,7 @@ class RegionFrontendCPLogicSolver(
 
 class ProbabilisticFrontend(QueryBuilderDatalog):
     def __init__(
-        self, chase_class=Chase, probabilistic_solver=problog_solve_succ_all
+        self, chase_class=Chase, probabilistic_solver=lifted_solve_succ_query
     ):
         super().__init__(
             RegionFrontendCPLogicSolver(), chase_class=chase_class
@@ -80,11 +83,33 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             cpl = self._make_probabilistic_program_from_deterministic_solution(
                 solution, prob_idb
             )
-            solution = self.probabilistic_solver(cpl)
+            for rule in prob_idb.formulas:
+                if is_within_language_succ_query(rule):
+                    pred = within_language_succ_query_to_intensional_rule(
+                        rule
+                    ).consequent
+                else:
+                    pred = rule.consequent
+                provset = self.probabilistic_solver(pred, cpl)
+                if is_within_language_succ_query(rule):
+                    relation = construct_within_language_succ_result(
+                        provset, rule
+                    )
+                else:
+                    relation = Constant[AbstractSet](
+                        provset.value,
+                        auto_infer_type=False,
+                        verify_type=False,
+                    )
+                relation = Constant[AbstractSet](relation.value.to_unnamed())
+                solution[pred.functor] = relation
             solver = RegionFrontendCPLogicSolver()
             for psymb, relation in solution.items():
+                relation = relation.value
+                if isinstance(relation, NamedRelationalAlgebraFrozenSet):
+                    relation = relation.to_unnamed()
                 solver.add_extensional_predicate_from_tuples(
-                    psymb, relation.value.to_unnamed()
+                    psymb, relation,
                 )
             solver.walk(ppq_det_idb)
             chase = self.chase_class(solver, rules=ppq_det_idb)
@@ -122,7 +147,13 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             cpl = self._make_probabilistic_program_from_deterministic_solution(
                 solution, probabilistic_idb
             )
-            solution = self.probabilistic_solver(cpl)
+            for rule in probabilistic_idb.formulas:
+                if is_within_language_succ_query(rule):
+                    rule = within_language_succ_query_to_intensional_rule(rule)
+                pred_symb = rule.consequent.functor
+                solution[pred_symb] = self.probabilistic_solver(
+                    rule.consequent, cpl
+                )
         solution_sets = dict()
         for pred_symb, relation in solution.items():
             solution_sets[pred_symb.name] = relation.value

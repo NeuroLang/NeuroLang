@@ -1,5 +1,4 @@
 import collections
-from typing import AbstractSet
 
 import problog.core
 import problog.logic
@@ -7,15 +6,17 @@ import problog.program
 import problog.sdd_formula
 
 from ...expressions import Constant, FunctionApplication, Symbol
-from ...logic import Implication
 from ...relational_algebra import (
     ColumnStr,
     NamedRelationalAlgebraFrozenSet,
     str2columnstr_constant,
 )
 from ...relational_algebra_provenance import ProvenanceAlgebraSet
-from ..expression_processing import is_within_language_succ_query
-from ..expressions import PROB, ProbabilisticQuery
+from ..expression_processing import (
+    construct_within_language_succ_result,
+    is_within_language_succ_query,
+    within_language_succ_query_to_intensional_rule,
+)
 
 
 def nl_pred_to_pl_pred(pred):
@@ -87,17 +88,6 @@ def add_rule_to_problog(rule, pl):
     pl += pl_rule
 
 
-def within_language_succ_query_to_intensional_rule(rule):
-    csqt_without_prob = rule.consequent.functor(
-        *(
-            arg
-            for arg in rule.consequent.args
-            if isinstance(arg, (Constant, Symbol))
-        )
-    )
-    return Implication(csqt_without_prob, rule.antecedent)
-
-
 def cplogic_to_problog(cpl):
     pl = problog.program.SimpleProgram()
     for pred_symb, relation in cpl.extensional_database().items():
@@ -150,16 +140,6 @@ def solve_succ_query(query_pred, cpl):
         for arg in query_pred.args
     )
     return pl_preds_to_prov_set(res, columns)
-
-
-def construct_within_language_succ_result(provset, rule):
-    proj_cols = list()
-    for arg in rule.consequent.args:
-        if isinstance(arg, Symbol):
-            proj_cols.append(arg.name)
-        elif isinstance(arg, ProbabilisticQuery) and arg.functor == PROB:
-            proj_cols.append(provset.provenance_column)
-    return Constant[AbstractSet](provset.value.projection(*proj_cols))
 
 
 def get_query_preds(cpl):
