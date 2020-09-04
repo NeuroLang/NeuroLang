@@ -33,7 +33,7 @@ def reachable_code_from_query(query, program):
 
     """
     if query is None:
-        return _get_list_of_intensional_rules(program)
+        return Union(tuple(_get_list_of_intensional_rules(program)))
     predicates = [query.consequent] + list(
         extract_logic_predicates(query.antecedent)
     )
