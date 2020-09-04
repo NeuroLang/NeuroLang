@@ -72,17 +72,22 @@ def stratify_program(query, program):
         When a WLQ (within-language query) depends on another WLQ.
 
     """
-    idb = list(reachable_code_from_query(query, program).formulas)
+    if query is None:
+        idb = [
+            rule
+            for exp in program.intensional_database().values()
+            for rule in _iter_implication_or_union_of_implications(exp)
+        ]
+    else:
+        idb = list(reachable_code_from_query(query, program).formulas)
     idb_symbs, dep_mat = dependency_matrix(program, idb)
     wlq_symbs = set(program.within_language_succ_queries()).intersection(
         idb_symbs
     )
     _check_for_dependencies_between_wlqs(dep_mat, idb_symbs, wlq_symbs)
     grpd_symbs = collections.defaultdict(set)
-    grpd_symbs["deterministic"] = set(program.extensional_database()) | set(
-        program.builtins()
-    )
-    grpd_symbs["probabilistic"] |= program.probabilistic_predicate_symbols
+    grpd_symbs["deterministic"] = _get_program_deterministic_symbols(program)
+    grpd_symbs["probabilistic"] = program.probabilistic_predicate_symbols
     grpd_idbs = collections.defaultdict(list)
     while idb:
         rule = idb.pop(0)
@@ -98,6 +103,17 @@ def stratify_program(query, program):
     }
 
 
+def _get_program_deterministic_symbols(program):
+    det_symbs = set(program.extensional_database().keys())
+    det_symbs |= set(program.builtins())
+    if hasattr(program, "constraints"):
+        det_symbs |= set(
+            formula.consequent.functor
+            for formula in program.constraints().formulas
+        )
+    return det_symbs
+
+
 def _get_rule_idb_type(rule, grpd_symbs, wlq_symbs):
     dep_symbs = set(
         pred.functor
@@ -105,7 +121,10 @@ def _get_rule_idb_type(rule, grpd_symbs, wlq_symbs):
         if isinstance(pred.functor, Symbol)
     )
     idb_type = None
-    if grpd_symbs["deterministic"].issuperset(dep_symbs):
+    # handle the case of a WLQ with deterministic-only dependencies
+    if rule.consequent.functor in wlq_symbs:
+        idb_type = "probabilistic"
+    elif grpd_symbs["deterministic"].issuperset(dep_symbs):
         idb_type = "deterministic"
     elif (grpd_symbs["deterministic"] | wlq_symbs).issuperset(dep_symbs):
         idb_type = "post_probabilistic"

@@ -20,7 +20,6 @@ from ..probabilistic.dichotomy_theorem_based_solver import (
 from ..probabilistic.expression_processing import (
     construct_within_language_succ_result,
     is_within_language_succ_query,
-    separate_deterministic_probabilistic_code,
     within_language_succ_query_to_intensional_rule,
 )
 from ..probabilistic.stratification import stratify_program
@@ -98,33 +97,27 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         )
 
     def solve_all(self):
-        (
-            deterministic_idb,
-            probabilistic_idb,
-        ) = separate_deterministic_probabilistic_code(self.solver)
+        idbs = stratify_program(None, self.solver)
+        det_idb = idbs.get("deterministic", Union(tuple()))
+        prob_idb = idbs.get("probabilistic", Union(tuple()))
+        ppq_det_idb = idbs.get("post_probabilistic", Union(tuple()))
 
         if self.ontology_loaded:
-            eB = self._rewrite_program_with_ontology(deterministic_idb)
-            deterministic_idb = Union(deterministic_idb.formulas + eB.formulas)
-
-        solution = self.chase_class(
-            self.solver, rules=deterministic_idb
-        ).build_chase_solution()
-        if (
-            self.solver.pfact_pred_symbs
-            or self.solver.pchoice_pred_symbs
-            or probabilistic_idb.formulas
-        ):
-            cpl = self._make_probabilistic_program_from_deterministic_solution(
-                solution, probabilistic_idb
-            )
-            for rule in probabilistic_idb.formulas:
-                if is_within_language_succ_query(rule):
-                    rule = within_language_succ_query_to_intensional_rule(rule)
-                pred_symb = rule.consequent.functor
-                solution[pred_symb] = self.probabilistic_solver(
-                    rule.consequent, cpl
+            eB = self._rewrite_program_with_ontology(det_idb)
+            det_idb = Union(det_idb.formulas + eB.formulas)
+        chase = self.chase_class(self.solver, rules=det_idb)
+        solution = chase.build_chase_solution()
+        if prob_idb.formulas:
+            self._compute_probabilistic_solution(solution, prob_idb)
+        if ppq_det_idb.formulas:
+            solver = RegionFrontendCPLogicSolver()
+            for psymb, relation in solution.items():
+                solver.add_extensional_predicate_from_tuples(
+                    psymb, relation.value,
                 )
+            solver.walk(ppq_det_idb)
+            chase = self.chase_class(solver, rules=ppq_det_idb)
+            solution = chase.build_chase_solution()
         solution_sets = dict()
         for pred_symb, relation in solution.items():
             solution_sets[pred_symb.name] = relation.value

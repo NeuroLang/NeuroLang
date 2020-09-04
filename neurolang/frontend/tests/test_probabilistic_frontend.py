@@ -4,9 +4,9 @@ from typing import AbstractSet, Tuple
 import numpy as np
 import pytest
 
-from ...exceptions import UnsupportedQueryError
+from ...exceptions import UnsupportedProgramError
+from ...probabilistic.exceptions import UnsupportedProbabilisticQueryError
 from ..probabilistic_frontend import ProbabilisticFrontend
-from ...probabilistic.exceptions import NotHierarchicalQueryException
 
 
 def test_add_uniform_probabilistic_choice_set():
@@ -61,7 +61,7 @@ def test_probabilistic_query():
     with nl.scope as e:
         e.query1[e.y, e.PROB[e.y]] = data1[e.x] & data2[e.x, e.y]
         e.query2[e.y, e.PROB[e.y]] = e.query1[e.y] & data3[e.y]
-        with pytest.raises(NotHierarchicalQueryException):
+        with pytest.raises(UnsupportedProgramError):
             nl.solve_all()
 
 
@@ -171,8 +171,8 @@ def test_within_language_succ_query():
         res = nl.solve_all()
     assert "Z" in res.keys()
     df = res["Z"].as_pandas_dataframe()
-    assert np.isclose(df.loc[df["x"] == "b"].iloc[0][1], 2 / 3 / 2)
-    assert np.isclose(df.loc[df["x"] == "a"].iloc[0][1], 1 / 3 / 2)
+    assert np.isclose(df.loc[df[0] == "b"].iloc[0][1], 2 / 3 / 2)
+    assert np.isclose(df.loc[df[0] == "a"].iloc[0][1], 1 / 3 / 2)
 
 
 def test_solve_query():
@@ -223,7 +223,7 @@ def test_solve_boolean_query():
     Q = nl.add_uniform_probabilistic_choice_over_set(
         [("a",), ("d",), ("c",)], name="Q"
     )
-    with pytest.raises(UnsupportedQueryError):
+    with pytest.raises(UnsupportedProbabilisticQueryError):
         with nl.scope as e:
             e.ans[e.PROB()] = P[e.x] & Q[e.x]
             nl.query((e.p), e.ans[e.p])
