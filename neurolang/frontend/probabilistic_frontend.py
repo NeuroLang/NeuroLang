@@ -68,8 +68,9 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         self.ontology_loaded = True
 
     def execute_query(self, head, predicate):
-        pred_symb = predicate.expression.functor
-        query = self.solver.symbol_table[pred_symb].formulas[0]
+        query = self.solver.symbol_table[
+            predicate.expression.functor
+        ].formulas[0]
         idbs = stratify_program(query, self.solver)
         det_idb = idbs.get("deterministic", Union(tuple()))
         prob_idb = idbs.get("probabilistic", Union(tuple()))
@@ -80,51 +81,21 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         chase = self.chase_class(self.solver, rules=det_idb)
         solution = chase.build_chase_solution()
         if prob_idb.formulas:
-            cpl = self._make_probabilistic_program_from_deterministic_solution(
-                solution, prob_idb
-            )
-            for rule in prob_idb.formulas:
-                if is_within_language_succ_query(rule):
-                    pred = within_language_succ_query_to_intensional_rule(
-                        rule
-                    ).consequent
-                else:
-                    pred = rule.consequent
-                provset = self.probabilistic_solver(pred, cpl)
-                if is_within_language_succ_query(rule):
-                    relation = construct_within_language_succ_result(
-                        provset, rule
-                    )
-                else:
-                    relation = Constant[AbstractSet](
-                        provset.value,
-                        auto_infer_type=False,
-                        verify_type=False,
-                    )
-                relation = Constant[AbstractSet](relation.value.to_unnamed())
-                solution[pred.functor] = relation
+            self._compute_probabilistic_solution(solution, prob_idb)
+        if ppq_det_idb.formulas:
+            # TODO add instance to solver instead
             solver = RegionFrontendCPLogicSolver()
             for psymb, relation in solution.items():
-                relation = relation.value
-                if isinstance(relation, NamedRelationalAlgebraFrozenSet):
-                    relation = relation.to_unnamed()
                 solver.add_extensional_predicate_from_tuples(
-                    psymb, relation,
+                    psymb, relation.value,
                 )
             solver.walk(ppq_det_idb)
             chase = self.chase_class(solver, rules=ppq_det_idb)
             solution = chase.build_chase_solution()
-        query_solution = solution[pred_symb].value.unwrap()
-        cols = list(
-            arg.name
-            for arg in predicate.expression.args
-            if isinstance(arg, Symbol)
+        return (
+            self._restrict_to_query_solution(head, predicate, solution),
+            None,
         )
-        query_solution = NamedRelationalAlgebraFrozenSet(cols, query_solution)
-        query_solution = query_solution.projection(
-            *(symb.expression.name for symb in head)
-        )
-        return Constant[AbstractSet](query_solution), None
 
     def solve_all(self):
         (
@@ -158,6 +129,47 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         for pred_symb, relation in solution.items():
             solution_sets[pred_symb.name] = relation.value
         return solution_sets
+
+    @staticmethod
+    def _restrict_to_query_solution(head, predicate, solution):
+        """
+        Based on a solution instance and a query predicate, retrieve the
+        relation whose columns correspond to symbols in `head`.
+
+        """
+        query_solution = solution[predicate.expression.functor].value.unwrap()
+        cols = list(
+            arg.name
+            for arg in predicate.expression.args
+            if isinstance(arg, Symbol)
+        )
+        query_solution = NamedRelationalAlgebraFrozenSet(cols, query_solution)
+        query_solution = query_solution.projection(
+            *(symb.expression.name for symb in head)
+        )
+        return Constant[AbstractSet](query_solution)
+
+    def _compute_probabilistic_solution(self, solution, prob_idb):
+        cpl = self._make_probabilistic_program_from_deterministic_solution(
+            solution, prob_idb
+        )
+        for rule in prob_idb.formulas:
+            if is_within_language_succ_query(rule):
+                pred = within_language_succ_query_to_intensional_rule(
+                    rule
+                ).consequent
+            else:
+                pred = rule.consequent
+            provset = self.probabilistic_solver(pred, cpl)
+            if is_within_language_succ_query(rule):
+                relation = construct_within_language_succ_result(provset, rule)
+            else:
+                relation = Constant[AbstractSet](
+                    provset.value, auto_infer_type=False, verify_type=False,
+                )
+            relation = Constant[AbstractSet](relation.value.to_unnamed())
+            solution[pred.functor] = relation
+        return solution
 
     def _rewrite_program_with_ontology(self, deterministic_program):
         orw = OntologyRewriter(
