@@ -335,3 +335,15 @@ def test_post_probabilistic_aggregation():
 
     assert len(res) == 2
     assert res == {("a", 0.2 * 0.2 + 0.2 * 0.1), ("b", 0.9 * 0.7)}
+
+
+def test_empty_result_query():
+    nl = ProbabilisticFrontend()
+    A = nl.add_tuple_set([("f",), ("d",)], name="A")
+    B = nl.add_probabilistic_facts_from_tuples(
+        [(0.2, "a",), (0.7, "b,"), (0.6, "c",),], name="B"
+    )
+    with nl.scope as e:
+        e.Q[e.x, e.PROB[e.x]] = A[e.x] & B[e.x]
+        res = nl.query((e.x, e.p), e.Q[e.x, e.p])
+    assert res.is_empty()

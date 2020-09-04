@@ -130,7 +130,11 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         relation whose columns correspond to symbols in the head of the query.
 
         """
-        query_solution = solution[predicate.expression.functor].value.unwrap()
+        pred_symb = predicate.expression.functor
+        # return dee when empty solution (reported in GH481)
+        if pred_symb not in solution:
+            return Constant[AbstractSet](NamedRelationalAlgebraFrozenSet.dee())
+        query_solution = solution[pred_symb].value.unwrap()
         cols = list(
             arg.name
             for arg in predicate.expression.args
