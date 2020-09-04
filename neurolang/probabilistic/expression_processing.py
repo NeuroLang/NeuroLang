@@ -10,7 +10,7 @@ from ..datalog.expression_processing import (
     reachable_code,
 )
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
-from ..expressions import Constant, Expression, FunctionApplication
+from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..logic import Conjunction, Implication, Union
 from .exceptions import DistributionDoesNotSumToOneError
 from .expressions import PROB, ProbabilisticPredicate, ProbabilisticQuery
@@ -213,6 +213,27 @@ def get_within_language_succ_query_prob_term(implication):
         return prob_term
     except StopIteration:
         raise ValueError("Expression does not have a SUCC probabilistic term")
+
+
+def within_language_succ_query_to_intensional_rule(rule):
+    csqt_without_prob = rule.consequent.functor(
+        *(
+            arg
+            for arg in rule.consequent.args
+            if isinstance(arg, (Constant, Symbol))
+        )
+    )
+    return Implication(csqt_without_prob, rule.antecedent)
+
+
+def construct_within_language_succ_result(provset, rule):
+    proj_cols = list()
+    for arg in rule.consequent.args:
+        if isinstance(arg, Symbol):
+            proj_cols.append(arg.name)
+        elif isinstance(arg, ProbabilisticQuery) and arg.functor == PROB:
+            proj_cols.append(provset.provenance_column)
+    return Constant[AbstractSet](provset.value.projection(*proj_cols))
 
 
 def group_preds_by_pred_symb(predicates, filter_set=None):

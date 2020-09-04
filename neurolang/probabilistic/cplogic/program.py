@@ -2,17 +2,16 @@ import typing
 
 from ...datalog import DatalogProgram
 from ...datalog.basic_representation import UnionOfConjunctiveQueries
-from ...exceptions import (
-    ForbiddenDisjunctionError,
-    ForbiddenExpressionError,
-    UnsupportedQueryError,
-)
+from ...exceptions import ForbiddenDisjunctionError, ForbiddenExpressionError
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
 from ...expressions import Constant, FunctionApplication, Symbol
 from ...logic import Implication, Union
 from ...type_system import get_generic_type
-from ..exceptions import MalformedProbabilisticTupleError
+from ..exceptions import (
+    MalformedProbabilisticTupleError,
+    UnsupportedProbabilisticQueryError,
+)
 from ..expression_processing import (
     add_to_union,
     build_probabilistic_fact_set,
@@ -271,7 +270,7 @@ class CPLogicMixin(PatternWalker):
         )
         prob_term = get_within_language_succ_query_prob_term(implication)
         if not prob_term.args:
-            raise UnsupportedQueryError(
+            raise UnsupportedProbabilisticQueryError(
                 "Probabilistic boolean queries are not currently supported"
             )
         if not all(isinstance(arg, Symbol) for arg in prob_term.args):
