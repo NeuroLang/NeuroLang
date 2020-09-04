@@ -32,6 +32,8 @@ def reachable_code_from_query(query, program):
     query predicate (e.g. `ans(x, y) :- P(x, z), P(y, z)`).
 
     """
+    if query is None:
+        return _get_list_of_intensional_rules(program)
     predicates = [query.consequent] + list(
         extract_logic_predicates(query.antecedent)
     )
@@ -41,7 +43,7 @@ def reachable_code_from_query(query, program):
             program.intensional_database().get(pred.functor, None)
         ):
             reachable |= set(reachable_code(rule, program).formulas)
-    return Union(tuple(reachable))
+    return list(reachable)
 
 
 def stratify_program(query, program):
@@ -72,10 +74,7 @@ def stratify_program(query, program):
         When a WLQ (within-language query) depends on another WLQ.
 
     """
-    if query is None:
-        idb = _get_list_of_intensional_rules(program)
-    else:
-        idb = list(reachable_code_from_query(query, program).formulas)
+    idb = reachable_code_from_query(query, program)
     idb_symbs, dep_mat = dependency_matrix(program, idb)
     wlq_symbs = set(program.within_language_succ_queries()).intersection(
         idb_symbs
