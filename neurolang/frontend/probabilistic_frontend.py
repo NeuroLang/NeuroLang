@@ -161,7 +161,8 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
                 provset = self.probabilistic_solver(pred, cpl)
                 relation = construct_within_language_succ_result(provset, rule)
             else:
-                provset = self.probabilistic_solver(rule.consequent, cpl)
+                pred = rule.consequent
+                provset = self.probabilistic_solver(pred, cpl)
                 relation = Constant[AbstractSet](
                     provset.value, auto_infer_type=False, verify_type=False,
                 )
