@@ -158,17 +158,16 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
                 pred = within_language_succ_query_to_intensional_rule(
                     rule
                 ).consequent
-            else:
-                pred = rule.consequent
-            provset = self.probabilistic_solver(pred, cpl)
-            if is_within_language_succ_query(rule):
+                provset = self.probabilistic_solver(pred, cpl)
                 relation = construct_within_language_succ_result(provset, rule)
             else:
+                provset = self.probabilistic_solver(rule.consequent, cpl)
                 relation = Constant[AbstractSet](
                     provset.value, auto_infer_type=False, verify_type=False,
                 )
-            relation = Constant[AbstractSet](relation.value.to_unnamed())
-            solution[pred.functor] = relation
+            solution[pred.functor] = Constant[AbstractSet](
+                relation.value.to_unnamed()
+            )
         return solution
 
     def _rewrite_program_with_ontology(self, deterministic_program):
