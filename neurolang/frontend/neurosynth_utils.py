@@ -52,10 +52,20 @@ class NeuroSynthHandler(object):
         return result_set
 
     def ns_load_dataset(self):
-        logging.info(
-            "Downloading neurosynth database"
-        )
-        dataset = self.download_ns_dataset()
+        if resource_exists(
+            "neurolang.frontend", "neurosynth_data/dataset.pkl"
+        ):
+            file = resource_filename(
+                "neurolang.frontend", "neurosynth_data/dataset.pkl"
+            )
+            dataset = ns.Dataset.load(file)
+        else:
+            path = resource_filename("neurolang.frontend", "neurosynth_data")
+            logging.info(
+                f"Downloading neurosynth database"
+                f" and features in path: {path}"
+            )
+            dataset = self.download_ns_dataset(path)
 
         return dataset
 
@@ -102,28 +112,13 @@ class NeuroSynthHandler(object):
         )
 
     @staticmethod
-    def download_ns_dataset():
-        d_neurosynth = utils._get_dataset_dir(
-            "neurosynth", data_dir="neurolang_data"
-        )
-
-        f_neurosynth = utils._fetch_files(
-            d_neurosynth,
-            [
-                (
-                    f,
-                    "https://github.com/neurosynth/neurosynth-data/raw/master/current_data.tar.gz",
-                    {"uncompress": True},
-                )
-                for f in ("database.txt", "features.txt")
-            ],
-            verbose=True,
-        )
-
-        dataset = ns.Dataset(f_neurosynth[0])
-        dataset.add_features(f_neurosynth[1])
-        dataset.save(os.path.join(d_neurosynth, "dataset.pkl"))
-
+    def download_ns_dataset(path):
+        if not os.path.exists(path):
+            os.makedirs(path)
+        ns.dataset.download(path=path, unpack=True)
+        dataset = ns.Dataset(os.path.join(path, "database.txt"))
+        dataset.add_features(os.path.join(path, "features.txt"))
+        dataset.save(os.path.join(path, "dataset.pkl"))
         return dataset
 
     @property

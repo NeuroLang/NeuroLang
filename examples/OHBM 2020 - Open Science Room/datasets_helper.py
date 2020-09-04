@@ -377,10 +377,14 @@ def load_pain_datasets(nl):
 
     sample_studies = nsh.ns_study_ids()
     sample_studies = pd.DataFrame(sample_studies)
+    sample_studies = sample_studies.rename(columns={0: 'study'})
+    sample_studies = sample_studies.astype({'study': int})
+    
     nl.add_uniform_probabilistic_choice_over_set(
-        list(sample_studies.itertuples(name=None, index=False)), name="p_study"
+        sample_studies.values, name="p_study"
     )
-
+    
+    
     d_neurosynth = utils._get_dataset_dir('neurosynth', data_dir='neurolang_data')
     f_neurosynth = utils._fetch_files(
         d_neurosynth, [
@@ -401,17 +405,13 @@ def load_pain_datasets(nl):
         .melt(id_vars=features.columns[0], var_name='term', value_vars=features.columns[1:], value_name='tfidf')
         .query('tfidf > 0')
     )
-    #ns_pmid_term_tfidf = nl.add_tuple_set(features_normalised.values, name='p_term_study')
     features_normalised = features_normalised[['tfidf', 'term', 'pmid']]
     features_normalised = features_normalised.astype({"pmid": int, "tfidf": float})
     nl.add_probabilistic_facts_from_tuples(features_normalised.itertuples(name=None, index=False),  name='p_term_study')
 
-
     df = ns_prob_joint_voxel_study(nsh)
     nl.add_probabilistic_facts_from_tuples(
-        df.itertuples(
-            name=None, index=False
-        ),
+        df.itertuples(name=None, index=False),
         name="p_voxel_study",
     )
 
@@ -604,6 +604,7 @@ def load_reverse_inference_dataset(nl):
     for v in zip(*jl_unmaskes):
         prob = float(jl_data[v[0]][v[1]][v[2]])
         coord = nib.affines.apply_affine(julich_to_ns_mni_prob.affine, list(v))
+        coord = tuple(map(float, coord))
         xyz_to_jl_prob.append((tuple([prob]) + tuple(coord)))
         
     xyz_julich = nl.add_probabilistic_facts_from_tuples(
