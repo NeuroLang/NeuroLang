@@ -43,7 +43,7 @@ def reachable_code_from_query(query, program):
             program.intensional_database().get(pred.functor, None)
         ):
             reachable |= set(reachable_code(rule, program).formulas)
-    return list(reachable)
+    return Union(tuple(reachable))
 
 
 def stratify_program(query, program):
@@ -74,7 +74,7 @@ def stratify_program(query, program):
         When a WLQ (within-language query) depends on another WLQ.
 
     """
-    idb = reachable_code_from_query(query, program)
+    idb = list(reachable_code_from_query(query, program).formulas)
     idb_symbs, dep_mat = dependency_matrix(program, idb)
     wlq_symbs = set(program.within_language_succ_queries()).intersection(
         idb_symbs
