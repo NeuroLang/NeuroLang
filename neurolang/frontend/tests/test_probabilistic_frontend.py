@@ -6,6 +6,7 @@ import pytest
 
 from ...exceptions import UnsupportedQueryError
 from ..probabilistic_frontend import ProbabilisticFrontend
+from ...probabilistic.exceptions import NotHierarchicalQueryException
 
 
 def test_add_uniform_probabilistic_choice_set():
@@ -46,6 +47,24 @@ def test_deterministic_query():
         assert elem[0] in ["a", "b", "c", "d"]
 
 
+def test_probabilistic_query():
+    nl = ProbabilisticFrontend()
+    d1 = [(1,), (2,), (3,), (4,), (5,)]
+    data1 = nl.add_uniform_probabilistic_choice_over_set(d1, name="data1")
+
+    d2 = [(2, "a"), (3, "b"), (4, "d"), (5, "c"), (7, "z")]
+    data2 = nl.add_uniform_probabilistic_choice_over_set(d2, name="data2")
+
+    d3 = [("a",), ("b",), ("c",)]
+    data3 = nl.add_uniform_probabilistic_choice_over_set(d3, name="data3")
+
+    with nl.scope as e:
+        e.query1[e.y, e.PROB[e.y]] = data1[e.x] & data2[e.x, e.y]
+        e.query2[e.y, e.PROB[e.y]] = e.query1[e.y] & data3[e.y]
+        with pytest.raises(NotHierarchicalQueryException):
+            nl.solve_all()
+
+
 def test_mixed_queries():
     nl = ProbabilisticFrontend()
     d1 = [(1,), (2,), (3,), (4,), (5,)]
@@ -74,6 +93,7 @@ def test_mixed_queries():
 
 
 def test_ontology_query():
+
     test_case = """
     <rdf:RDF
         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
