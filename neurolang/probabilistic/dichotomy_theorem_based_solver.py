@@ -19,16 +19,14 @@ pages 144–155, New York, NY, USA, 2014. ACM.
 probabilistic databases. VLDB J., 16(4):523–544, 2007.
 '''
 
-from itertools import chain
 import logging
 from collections import defaultdict
-from neurolang.logic.transformations import ReplaceFreeSymbolWalker
 
-from ..datalog.expression_processing import flatten_query, extract_logic_free_variables
+from ..datalog.expression_processing import flatten_query
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
-from ..expression_walker import ExpressionWalker, PatternWalker, ReplaceExpressionWalker, add_match
-from ..expressions import Constant, Symbol, FunctionApplication
-from ..logic import Conjunction, Implication, Disjunction
+from ..expression_walker import ExpressionWalker, add_match
+from ..expressions import Constant, Symbol
+from ..logic import Conjunction, Implication
 from ..logic.expression_processing import extract_logic_predicates
 from ..relational_algebra import (
     ColumnStr,
@@ -288,35 +286,3 @@ def solve_succ_query(query_predicate, cpl_program):
         prob_set_result = solver.walk(ra_query)
 
     return prob_set_result
-
-
-class SyntacticIndependanceChecker(ExpressionWalker):
-    """Check for syntactic independance assuming the
-    first order logic expression is ranked and shattered.
-    These assumptions are not validated for computational
-    reasons. No quantifiers allowed and every free variable
-    is assumed to be existentially quantified.
-    """
-    @add_match(FunctionApplication)
-    def function_application(self, expression):
-        return all(
-            isinstance(arg, Symbol)
-            for arg in expression.args
-        )
-
-    @add_match(Conjunction)
-    def conjunction(self, expression):
-        seen_predicates = {}
-        for formula in expression.formulas:
-            predicates = extract_logic_predicates(formula)
-            if not (
-                seen_predicates.disjoint(predicates) or
-                self.walk(formula)
-            ):
-                return False
-            seen_predicates |= predicates
-        return True
-
-    @add_match(Disjunction)
-    def disjunction(self, expression):
-        return self.conjunction(expression)
