@@ -16,10 +16,12 @@ from ...relational_algebra import (
     NaturalJoin,
     Projection,
     RenameColumn,
-    Selection
+    Selection,
+    Union
 )
 from ...utils import NamedRelationalAlgebraFrozenSet
 from ..expressions import Conjunction, Negation
+from ...logic import Disjunction
 from ..translate_to_named_ra import TranslateToNamedRA
 
 C_ = Constant
@@ -359,6 +361,41 @@ def test_only_equality():
 
     assert isinstance(res, Constant)
     assert res.value == exp_result
+
+
+def test_disjunction():
+    p1 = S_('T')(S_('x'))
+    p2 = S_('U')(S_('x'))
+    p3 = S_('V')(S_('x'))
+    r1 = TranslateToNamedRA().walk(p1)
+    r2 = TranslateToNamedRA().walk(p2)
+    r3 = TranslateToNamedRA().walk(p3)
+
+    exp = Disjunction((p1,))
+    res = TranslateToNamedRA().walk(exp)
+    assert res == r1
+
+    exp = Disjunction((p1, p2))
+    res = TranslateToNamedRA().walk(exp)
+    assert res == Union(r1, r2)
+
+    exp = Disjunction((p1, p2, p3))
+    res = TranslateToNamedRA().walk(exp)
+    assert res == Union(r1, Union(r2, r3))
+
+    exp = Disjunction((p1, Conjunction((p2, p3))))
+    res = TranslateToNamedRA().walk(exp)
+    assert res == Union(
+        r1,
+        TranslateToNamedRA().walk(Conjunction((p2, p3)))
+    )
+
+    exp = Conjunction((p1, Disjunction((p2, p3))))
+    res = TranslateToNamedRA().walk(exp)
+    assert res == NaturalJoin(
+        r1,
+        TranslateToNamedRA().walk(Disjunction((p2, p3)))
+    )
 
 
 def test_border_cases():
