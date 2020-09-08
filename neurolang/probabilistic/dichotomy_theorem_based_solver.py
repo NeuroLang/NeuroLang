@@ -39,11 +39,11 @@ from ..relational_algebra import (
     Projection,
     RelationalAlgebraPushInSelections,
     RelationalAlgebraStringExpression,
-    str2columnstr_constant
+    str2columnstr_constant,
 )
 from ..relational_algebra_provenance import (
     ProvenanceAlgebraSet,
-    RelationalAlgebraProvenanceExpressionSemringSolver
+    RelationalAlgebraProvenanceExpressionSemringSolver,
 )
 from ..utils import log_performance
 from .exceptions import NotHierarchicalQueryException
@@ -52,9 +52,9 @@ from .probabilistic_ra_utils import (
     DeterministicFactSet,
     ProbabilisticChoiceSet,
     ProbabilisticFactSet,
-    generate_probabilistic_symbol_table_for_query
+    generate_probabilistic_symbol_table_for_query,
 )
-
+from .shattering import shatter_easy_probfacts
 
 LOG = logging.getLogger(__name__)
 
@@ -248,21 +248,28 @@ def solve_succ_query(query_predicate, cpl_program):
         flat_query = lift_optimization_for_choice_predicates(
             flat_query, cpl_program
         )
-        flat_query_formulas = set(flat_query.formulas)
-        prob_symbols = (
-            set(cpl_program.probabilistic_choices()) |
-            set(cpl_program.probabilistic_facts())
+        symbol_table = generate_probabilistic_symbol_table_for_query(
+            cpl_program, flat_query
         )
-        flat_query_probabilistic_section = Conjunction(
+        shattered_query = shatter_easy_probfacts(flat_query, symbol_table)
+        shattered_query_formulas = set(shattered_query.formulas)
+        prob_symbols = cpl_program.probabilistic_predicate_symbols
+        query_pred_symbs = set(f.functor for f in flat_query.formulas)
+        prob_symbols = prob_symbols.intersection(query_pred_symbs)
+        prob_symbols = set(
+            symbol_table[psymb].relation for psymb in prob_symbols
+        )
+        shattered_query_probabilistic_section = Conjunction(
             tuple(
-                formula for formula in flat_query_formulas
-                if formula.functor in prob_symbols
+                formula
+                for formula in shattered_query_formulas
+                if formula.functor.relation in prob_symbols
             )
         )
-        flat_query = Conjunction(tuple(flat_query_formulas))
+        flat_query = Conjunction(tuple(shattered_query_formulas))
 
         if not is_hierarchical_without_self_joins(
-            flat_query_probabilistic_section
+            shattered_query_probabilistic_section
         ):
             LOG.info(
                 'Query with conjunctions %s not hierarchical',
@@ -277,10 +284,6 @@ def solve_succ_query(query_predicate, cpl_program):
         ra_query = RAQueryOptimiser().walk(ra_query)
 
     with log_performance(LOG, "Run RAP query"):
-        symbol_table = generate_probabilistic_symbol_table_for_query(
-            cpl_program, flat_query
-        )
-
         solver = ProbSemiringSolver(symbol_table)
         prob_set_result = solver.walk(ra_query)
 
