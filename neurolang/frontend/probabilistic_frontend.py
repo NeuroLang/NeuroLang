@@ -26,6 +26,7 @@ from ..probabilistic.expression_processing import (
     is_within_language_succ_query,
     within_language_succ_query_to_intensional_rule,
 )
+from ..probabilistic.query_resolution import compute_probabilistic_solution
 from ..probabilistic.stratification import stratify_program
 from ..region_solver import RegionSolver
 from ..relational_algebra import (
@@ -107,7 +108,9 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         chase = self.chase_class(self.solver, rules=det_idb)
         solution = chase.build_chase_solution()
         if prob_idb.formulas:
-            self._compute_probabilistic_solution(solution, prob_idb)
+            compute_probabilistic_solution(
+                self.solver, solution, prob_idb, self.probabilistic_solver
+            )
         if ppq_det_idb.formulas:
             solver = RegionFrontendCPLogicSolver()
             for psymb, relation in solution.items():
@@ -145,28 +148,6 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             *(symb.name for symb in head_symbols)
         )
         return Constant[AbstractSet](query_solution)
-
-    def _compute_probabilistic_solution(self, solution, prob_idb):
-        cpl = self._make_probabilistic_program_from_deterministic_solution(
-            solution, prob_idb
-        )
-        for rule in prob_idb.formulas:
-            if is_within_language_succ_query(rule):
-                pred = within_language_succ_query_to_intensional_rule(
-                    rule
-                ).consequent
-                provset = self.probabilistic_solver(pred, cpl)
-                relation = construct_within_language_succ_result(provset, rule)
-            else:
-                pred = rule.consequent
-                provset = self.probabilistic_solver(pred, cpl)
-                relation = Constant[AbstractSet](
-                    provset.value, auto_infer_type=False, verify_type=False,
-                )
-            solution[pred.functor] = Constant[AbstractSet](
-                relation.value.to_unnamed()
-            )
-        return solution
 
     def _rewrite_program_with_ontology(self, deterministic_program):
         orw = OntologyRewriter(
@@ -231,22 +212,3 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         ra_set = ra_set.extended_projection(projections)
         self.solver.add_probabilistic_choice_from_tuples(symbol, ra_set)
         return FrontEndSymbol(self, name)
-
-    def _make_probabilistic_program_from_deterministic_solution(
-        self, deterministic_solution, probabilistic_idb
-    ):
-        cpl = CPLogicProgram()
-        for pred_symb, ra_set in deterministic_solution.items():
-            cpl.add_extensional_predicate_from_tuples(
-                pred_symb, ra_set.value.unwrap()
-            )
-        for pred_symb in self.solver.pfact_pred_symbs:
-            cpl.add_probabilistic_facts_from_tuples(
-                pred_symb, self.solver.symbol_table[pred_symb].value.unwrap()
-            )
-        for pred_symb in self.solver.pchoice_pred_symbs:
-            cpl.add_probabilistic_choice_from_tuples(
-                pred_symb, self.solver.symbol_table[pred_symb].value.unwrap()
-            )
-        cpl.walk(probabilistic_idb)
-        return cpl
