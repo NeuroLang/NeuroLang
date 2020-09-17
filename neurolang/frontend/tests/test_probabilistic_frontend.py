@@ -4,7 +4,7 @@ from typing import AbstractSet, Tuple
 import numpy as np
 import pytest
 
-from ...exceptions import UnsupportedProgramError
+from ...exceptions import UnsupportedProgramError, UnsupportedQueryError
 from ...probabilistic.exceptions import UnsupportedProbabilisticQueryError
 from ..probabilistic_frontend import ProbabilisticFrontend
 
@@ -347,3 +347,11 @@ def test_empty_result_query():
         e.Q[e.x, e.PROB[e.x]] = A[e.x] & B[e.x]
         res = nl.query((e.x, e.p), e.Q[e.x, e.p])
     assert res.is_empty()
+    with nl.scope as e:
+        e.Q[e.x] = A[e.x] & A["b"]
+        res = nl.query((e.x,), e.Q[e.x])
+    assert res.is_empty()
+    with pytest.raises(UnsupportedQueryError):
+        with nl.scope as e:
+            e.Q[e.x] = A[e.x] & B[e.x] & A["b"]
+            res = nl.query((e.x,), e.Q[e.x])
