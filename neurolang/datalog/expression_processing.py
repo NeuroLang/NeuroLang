@@ -27,9 +27,11 @@ from ..expression_walker import (
     ReplaceSymbolsByConstants,
 )
 from ..expressions import Constant, FunctionApplication, Symbol
-from ..logic import Conjunction, Disjunction, Negation, Quantifier, Union
+from ..logic import TRUE, Conjunction, Disjunction, Negation, Quantifier, Union
 from ..logic import expression_processing as elp
 from .expressions import TranslateToLogic
+
+EQ = Constant(operator.eq)
 
 
 class TranslateToDatalogSemantics(TranslateToLogic, ExpressionWalker):
@@ -581,3 +583,26 @@ class ApplyVariableEqualities(PatternWalker):
         )
         rsbc = ReplaceSymbolsByConstants(var_eqs)
         return rsbc.walk(conjunction_without_variable_equalities)
+
+
+class ExtractAndRemoveVariableEqualities(ExpressionWalker):
+    def __init__(self):
+        self.variable_equalities = dict()
+
+    @add_match(FunctionApplication(EQ, (Symbol, Symbol)))
+    def variable_equality_between_variables(self, function_application):
+        first, second = sorted(function_application.args, key=lambda s: s.name)
+        self.variable_equalities[first] = second
+        return TRUE
+
+    @add_match(FunctionApplication(EQ, (Symbol, Constant)))
+    def variable_equality_with_constant(self, function_application):
+        symb, const = function_application.args
+        self.variable_equalities[symb] = const
+        return TRUE
+
+    @add_match(FunctionApplication(EQ, (Constant, Symbol)))
+    def variable_equality_with_constant_reversed(self, function_application):
+        const, symb = function_application.args
+        self.variable_equalities[symb] = const
+        return TRUE
