@@ -108,8 +108,14 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         chase = self.chase_class(self.solver, rules=det_idb)
         solution = chase.build_chase_solution()
         if prob_idb.formulas:
-            compute_probabilistic_solution(
-                self.solver, solution, prob_idb, self.probabilistic_solver
+            pfact_edb = self.solver.probabilistic_facts()
+            pchoice_edb = self.solver.probabilistic_choices()
+            solution = compute_probabilistic_solution(
+                solution,
+                pfact_edb,
+                pchoice_edb,
+                prob_idb,
+                self.probabilistic_solver,
             )
         if ppq_det_idb.formulas:
             solver = RegionFrontendCPLogicSolver()
