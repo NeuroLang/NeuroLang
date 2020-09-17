@@ -10,6 +10,7 @@ from ..datalog.aggregation import (
 from ..datalog.constraints_representation import DatalogConstraintsProgram
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
+from ..exceptions import UnsupportedQueryError
 from ..expression_walker import ExpressionBasicEvaluator
 from ..expressions import Constant, Symbol, Unknown
 from ..logic import Union
@@ -19,6 +20,9 @@ from ..probabilistic.cplogic.program import (
 )
 from ..probabilistic.dichotomy_theorem_based_solver import (
     solve_succ_query as lifted_solve_succ_query,
+)
+from ..probabilistic.expression_processing import (
+    is_probabilistic_predicate_symbol,
 )
 from ..probabilistic.query_resolution import compute_probabilistic_solution
 from ..probabilistic.stratification import stratify_program
@@ -67,9 +71,12 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         self.ontology_loaded = True
 
     def execute_query(self, head, predicate):
-        query = self.solver.symbol_table[
-            predicate.expression.functor
-        ].formulas[0]
+        query_pred_symb = predicate.expression.functor
+        if is_probabilistic_predicate_symbol(query_pred_symb, self.solver):
+            raise UnsupportedQueryError(
+                "Queries on probabilistic predicates are not supported"
+            )
+        query = self.solver.symbol_table[query_pred_symb].formulas[0]
         solution = self._solve(query)
         if not isinstance(head, tuple):
             # assumes head is a predicate e.g. r(x, y)
@@ -95,7 +102,6 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         det_idb = idbs.get("deterministic", Union(tuple()))
         prob_idb = idbs.get("probabilistic", Union(tuple()))
         ppq_det_idb = idbs.get("post_probabilistic", Union(tuple()))
-
         if self.ontology_loaded:
             eB = self._rewrite_program_with_ontology(det_idb)
             det_idb = Union(det_idb.formulas + eB.formulas)

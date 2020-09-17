@@ -546,9 +546,9 @@ def remove_conjunction_duplicates(conjunction):
     return Conjunction(tuple(set(conjunction.formulas)))
 
 
-def iter_ucq_rules(ucq_or_implication):
-    if isinstance(ucq_or_implication, Implication):
-        yield ucq_or_implication
+def iter_disjunction_or_implication_rules(implication_or_disjunction):
+    if isinstance(implication_or_disjunction, Implication):
+        yield implication_or_disjunction
     else:
-        for formula in ucq_or_implication.formulas:
+        for formula in implication_or_disjunction.formulas:
             yield formula

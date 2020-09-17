@@ -7,10 +7,9 @@ from ..datalog.expression_processing import (
     extract_logic_predicates,
     reachable_code,
 )
-from ..exceptions import UnsupportedProgramError, UnsupportedQueryError
+from ..exceptions import UnsupportedProgramError
 from ..expressions import Symbol
 from ..logic import Implication, Union
-from ..probabilistic.expressions import PROB, ProbabilisticQuery
 
 
 def _iter_implication_or_union_of_implications(expression):
@@ -73,9 +72,6 @@ def stratify_program(query, program):
     ------
     UnsupportedProgramError
         When a WLQ (within-language query) depends on another WLQ.
-    UnsupportedQueryError
-        When the query consequent head's relation symbol is probabilistic (i.e.
-        neither a deterministic relation symbol nor a WLQ symbol).
 
     """
     idb = list(reachable_code_from_query(query, program).formulas)
@@ -96,30 +92,10 @@ def stratify_program(query, program):
         else:
             grpd_symbs[idb_type].add(rule.consequent.functor)
             grpd_idbs[idb_type].append(rule)
-    _check_query_predicate_not_probabilistic(query, grpd_symbs, wlq_symbs)
     return {
         idb_type: Union(tuple(idb_rules))
         for idb_type, idb_rules in grpd_idbs.items()
     }
-
-
-def _check_query_predicate_not_probabilistic(query, grpd_symbs, wlq_symbs):
-    if query is None:
-        return
-    query_pred_symb = query.consequent.functor
-    if query_pred_symb in grpd_symbs["probabilistic"] - wlq_symbs:
-        proposed_wlq = Implication(
-            Symbol("MyQuery")(
-                *query.consequent.args,
-                ProbabilisticQuery(PROB, query.consequent.args),
-            ),
-            query.consequent,
-        )
-        raise UnsupportedQueryError(
-            "A query predicate cannot be a probabilistic predicate. "
-            "Probabilities can be captured in a deterministic set "
-            f"by defining a rule {proposed_wlq}."
-        )
 
 
 def _get_list_of_intensional_rules(program):
