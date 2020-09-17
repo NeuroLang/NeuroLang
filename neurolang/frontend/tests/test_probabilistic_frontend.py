@@ -351,6 +351,14 @@ def test_empty_result_query():
         e.Q[e.x] = A[e.x] & A["b"]
         res = nl.query((e.x,), e.Q[e.x])
     assert res.is_empty()
+
+
+def test_forbidden_query_on_probabilistic_predicate():
+    nl = ProbabilisticFrontend()
+    A = nl.add_tuple_set([("f",), ("d",)], name="A")
+    B = nl.add_probabilistic_facts_from_tuples(
+        [(0.2, "a",), (0.7, "b,"), (0.6, "c",)], name="B"
+    )
     with pytest.raises(UnsupportedQueryError):
         with nl.scope as e:
             e.Q[e.x] = A[e.x] & B[e.x] & A["b"]
