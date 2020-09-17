@@ -10,7 +10,6 @@ from ..datalog.aggregation import (
 from ..datalog.constraints_representation import DatalogConstraintsProgram
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
-from ..exceptions import UnsupportedQueryError
 from ..expression_walker import ExpressionBasicEvaluator
 from ..expressions import Constant, Symbol, Unknown
 from ..logic import Union
@@ -102,13 +101,6 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         prob_idb = idbs.get("probabilistic", Union(tuple()))
         ppq_det_idb = idbs.get("post_probabilistic", Union(tuple()))
 
-        if self._is_query_predicate_probabilistic(query, prob_idb):
-            raise UnsupportedQueryError(
-                "A query predicate cannot be a probabilistic predicate. "
-                "Use a within-language query to capture the probability "
-                "into a deterministic set instead."
-            )
-
         if self.ontology_loaded:
             eB = self._rewrite_program_with_ontology(det_idb)
             det_idb = Union(det_idb.formulas + eB.formulas)
@@ -130,16 +122,6 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             chase = self.chase_class(solver, rules=ppq_det_idb)
             solution = chase.build_chase_solution()
         return solution
-
-    def _is_query_predicate_probabilistic(self, query, prob_idb):
-        if query is None:
-            return False
-        pred_symb = query.consequent.functor
-        prob_symbs = set(
-            formula.consequent.functor for formula in prob_idb.formulas
-        )
-        wlq_symbs = set(self.solver.within_language_succ_queries())
-        return pred_symb in prob_symbs - wlq_symbs
 
     @staticmethod
     def _restrict_to_query_solution(head_symbols, predicate, solution):

@@ -7,7 +7,7 @@ from ..datalog.expression_processing import (
     extract_logic_predicates,
     reachable_code,
 )
-from ..exceptions import UnsupportedProgramError
+from ..exceptions import UnsupportedProgramError, UnsupportedQueryError
 from ..expressions import Symbol
 from ..logic import Implication, Union
 
@@ -72,6 +72,9 @@ def stratify_program(query, program):
     ------
     UnsupportedProgramError
         When a WLQ (within-language query) depends on another WLQ.
+    UnsupportedQueryError
+        When the query consequent head's relation symbol is probabilistic (i.e.
+        neither a deterministic relation symbol nor a WLQ symbol).
 
     """
     idb = list(reachable_code_from_query(query, program).formulas)
@@ -92,6 +95,13 @@ def stratify_program(query, program):
         else:
             grpd_symbs[idb_type].add(rule.consequent.functor)
             grpd_idbs[idb_type].append(rule)
+    query_pred_symb = query.consequent.functor
+    if query_pred_symb in grpd_symbs["probabilistic"] - wlq_symbs:
+        raise UnsupportedQueryError(
+            "A query predicate cannot be a probabilistic predicate. "
+            "Use a within-language query to capture the probability "
+            "into a deterministic set instead."
+        )
     return {
         idb_type: Union(tuple(idb_rules))
         for idb_type, idb_rules in grpd_idbs.items()
