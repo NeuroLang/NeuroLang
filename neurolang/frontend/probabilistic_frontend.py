@@ -15,16 +15,10 @@ from ..expressions import Constant, Symbol, Unknown
 from ..logic import Union
 from ..probabilistic.cplogic.program import (
     CPLogicMixin,
-    CPLogicProgram,
     TranslateProbabilisticQueryMixin,
 )
 from ..probabilistic.dichotomy_theorem_based_solver import (
     solve_succ_query as lifted_solve_succ_query,
-)
-from ..probabilistic.expression_processing import (
-    construct_within_language_succ_result,
-    is_within_language_succ_query,
-    within_language_succ_query_to_intensional_rule,
 )
 from ..probabilistic.query_resolution import compute_probabilistic_solution
 from ..probabilistic.stratification import stratify_program
