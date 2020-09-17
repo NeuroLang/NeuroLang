@@ -1,3 +1,5 @@
+import operator
+
 import pytest
 
 from ...exceptions import UnexpectedExpressionError
@@ -153,3 +155,33 @@ def test_predicates_with_more_than_one_self_join():
     symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
     shattered = shatter_easy_probfacts(query, symbol_table)
     assert isinstance(shattered, Conjunction)
+
+
+def test_shattering_with_variable_equality():
+    query = Conjunction((P(x, y, z), Constant(operator.eq)(x, a)))
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        P,
+        [(0.2, "a", "b", "c",), (1.0, "a", "c", "b",), (0.7, "b", "b", "d",),],
+    )
+    symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
+    shattered = shatter_easy_probfacts(query, symbol_table)
+    assert isinstance(shattered, Conjunction)
+    assert len(shattered.formulas) == 1
+    assert isinstance(shattered.formulas[0].functor, ProbabilisticFactSet)
+    assert shattered.formulas[0].args == (a, y, z)
+
+
+def test_shattering_with_reversed_variable_equality():
+    query = Conjunction((P(x, y, z), Constant(operator.eq)(a, x)))
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        P,
+        [(0.2, "a", "b", "c",), (1.0, "a", "c", "b",), (0.7, "b", "b", "d",),],
+    )
+    symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
+    shattered = shatter_easy_probfacts(query, symbol_table)
+    assert isinstance(shattered, Conjunction)
+    assert len(shattered.formulas) == 1
+    assert isinstance(shattered.formulas[0].functor, ProbabilisticFactSet)
+    assert shattered.formulas[0].args == (a, y, z)

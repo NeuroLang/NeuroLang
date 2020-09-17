@@ -4,6 +4,7 @@ Datalog programs.
 """
 
 
+import operator
 from itertools import chain
 from typing import Iterable
 
@@ -16,13 +17,14 @@ from ..exceptions import (
     UnsupportedProgramError,
 )
 from ..expression_pattern_matching import (
+    NeuroLangPatternMatchingNoMatch,
     add_match,
-    NeuroLangPatternMatchingNoMatch
 )
 from ..expression_walker import (
     ExpressionWalker,
-    ReplaceExpressionWalker,
     PatternWalker,
+    ReplaceExpressionWalker,
+    ReplaceSymbolsByConstants,
 )
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import Conjunction, Disjunction, Negation, Quantifier, Union
@@ -464,15 +466,14 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
     """Flatten a query defined by a non-recursive
     union of conjunctive queries (UCQ)
     """
+
     def __init__(self, program):
         self.program = program
         self.idb = self.program.intensional_database()
 
     @add_match(
         FunctionApplication,
-        lambda fa: all(
-            isinstance(arg, (Constant, Symbol)) for arg in fa.args
-        )
+        lambda fa: all(isinstance(arg, (Constant, Symbol)) for arg in fa.args),
     )
     def function_application(self, expression):
         functor = expression.functor
@@ -496,15 +497,17 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
     def _normalise_arguments(self, cq, args):
         free_variables = extract_logic_free_variables(cq)
         linked_variables = cq.consequent.args
-        cq = ReplaceExpressionWalker(dict(
-            chain(
-                zip(linked_variables, args),
-                zip(
-                    free_variables,
-                    (Symbol.fresh() for _ in range(len(free_variables)))
+        cq = ReplaceExpressionWalker(
+            dict(
+                chain(
+                    zip(linked_variables, args),
+                    zip(
+                        free_variables,
+                        (Symbol.fresh() for _ in range(len(free_variables))),
+                    ),
                 )
             )
-        )).walk(cq)
+        ).walk(cq)
         return cq
 
     @add_match(Conjunction)
@@ -536,3 +539,45 @@ def is_rule_with_builtin(rule, known_builtins=None):
 
 def remove_conjunction_duplicates(conjunction):
     return Conjunction(tuple(set(conjunction.formulas)))
+
+
+def is_variable_equality(formula):
+    return (
+        formula.functor == Constant(operator.eq)
+        and any(isinstance(arg, Symbol) for arg in formula.args)
+        and any(isinstance(arg, Constant) for arg in formula.args)
+    )
+
+
+def extract_variable_equalities(conjunction):
+    var_eqs = dict()
+    for formula in conjunction.formulas:
+        if is_variable_equality(formula):
+            symbol = next(
+                arg for arg in formula.args if isinstance(arg, Symbol)
+            )
+            constant = next(
+                arg for arg in formula.args if isinstance(arg, Constant)
+            )
+            var_eqs[symbol] = constant
+    return var_eqs
+
+
+class ApplyVariableEqualities(PatternWalker):
+    @add_match(
+        Conjunction,
+        lambda conjunction: any(
+            is_variable_equality(formula) for formula in conjunction.formulas
+        ),
+    )
+    def conjunction_with_variable_equalities(self, conjunction):
+        var_eqs = extract_variable_equalities(conjunction)
+        conjunction_without_variable_equalities = Conjunction(
+            tuple(
+                formula
+                for formula in conjunction.formulas
+                if not is_variable_equality(formula)
+            )
+        )
+        rsbc = ReplaceSymbolsByConstants(var_eqs)
+        return rsbc.walk(conjunction_without_variable_equalities)

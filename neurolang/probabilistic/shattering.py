@@ -5,6 +5,7 @@ from typing import AbstractSet
 from ..datalog.expression_processing import (
     enforce_conjunction,
     remove_conjunction_duplicates,
+    ApplyVariableEqualities,
 )
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionWalker
@@ -155,13 +156,22 @@ class EasyQueryShatterer(ExpressionWalker):
         return FunctionApplication(new_tagged, non_const_args)
 
 
+class EasyProbfactShatterer(
+    ApplyVariableEqualities, QueryEasyShatteringTagger, EasyQueryShatterer
+):
+    def __init__(self, symbol_table):
+        EasyQueryShatterer.__init__(self, symbol_table)
+        QueryEasyShatteringTagger.__init__(self)
+
+
 def query_to_tagged_set_representation(query, symbol_table):
     new_predicates = list()
     for predicate in iter_conjunctive_query_predicates(query):
-        new_predicate = FunctionApplication(
-            symbol_table[predicate.functor], predicate.args
-        )
-        new_predicates.append(new_predicate)
+        if isinstance(predicate.functor, Symbol):
+            predicate = FunctionApplication(
+                symbol_table[predicate.functor], predicate.args
+            )
+        new_predicates.append(predicate)
     return Conjunction(tuple(new_predicates))
 
 
@@ -205,10 +215,6 @@ def shatter_easy_probfacts(query, symbol_table):
     Conjunctive query
         An equivalent conjunctive query without constants.
 
-    Notes
-    -----
-    TODO: shatter queries like `Q = R(a, y), R(x, b)` (see example 4.2 in [1]_)
-
     .. [1] Van den Broeck, G., and Suciu, D. (2017). Query Processing on
        Probabilistic Data: A Survey. FNT in Databases 7, 197–341.
 
@@ -216,9 +222,7 @@ def shatter_easy_probfacts(query, symbol_table):
     query = enforce_conjunction(query)
     query = remove_conjunction_duplicates(query)
     ws_query = query_to_tagged_set_representation(query, symbol_table)
-    tagger = QueryEasyShatteringTagger()
-    tagged_query = tagger.walk(ws_query)
-    shatterer = EasyQueryShatterer(symbol_table)
-    shattered_query = shatterer.walk(tagged_query)
+    shatterer = EasyProbfactShatterer(symbol_table)
+    shattered_query = shatterer.walk(ws_query)
     _check_shatter_fully_solved(shattered_query)
     return shattered_query
