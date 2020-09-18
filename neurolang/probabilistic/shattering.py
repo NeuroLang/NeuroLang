@@ -5,10 +5,10 @@ from typing import AbstractSet
 from ..datalog.expression_processing import (
     enforce_conjunction,
     remove_conjunction_duplicates,
-    ApplyVariableEqualities,
+    ExtractSubstitutionsFromVariableEqualities,
 )
 from ..expression_pattern_matching import add_match
-from ..expression_walker import ExpressionWalker
+from ..expression_walker import ExpressionWalker, ReplaceSymbolWalker
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import Conjunction
 from .exceptions import NotEasilyShatterableError
@@ -156,9 +156,7 @@ class EasyQueryShatterer(ExpressionWalker):
         return FunctionApplication(new_tagged, non_const_args)
 
 
-class EasyProbfactShatterer(
-    ApplyVariableEqualities, QueryEasyShatteringTagger, EasyQueryShatterer
-):
+class EasyProbfactShatterer(QueryEasyShatteringTagger, EasyQueryShatterer):
     def __init__(self, symbol_table):
         EasyQueryShatterer.__init__(self, symbol_table)
         QueryEasyShatteringTagger.__init__(self)
@@ -222,6 +220,10 @@ def shatter_easy_probfacts(query, symbol_table):
     query = enforce_conjunction(query)
     query = remove_conjunction_duplicates(query)
     ws_query = query_to_tagged_set_representation(query, symbol_table)
+    substitution_extractor = ExtractSubstitutionsFromVariableEqualities()
+    ws_query = substitution_extractor.walk(ws_query)
+    symbol_replacer = ReplaceSymbolWalker(substitution_extractor.substitutions)
+    ws_query = symbol_replacer.walk(ws_query)
     shatterer = EasyProbfactShatterer(symbol_table)
     shattered_query = shatterer.walk(ws_query)
     _check_shatter_fully_solved(shattered_query)

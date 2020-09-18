@@ -543,66 +543,76 @@ def remove_conjunction_duplicates(conjunction):
     return Conjunction(tuple(set(conjunction.formulas)))
 
 
-def is_variable_equality(formula):
-    return (
-        formula.functor == Constant(operator.eq)
-        and any(isinstance(arg, Symbol) for arg in formula.args)
-        and any(isinstance(arg, Constant) for arg in formula.args)
-    )
-
-
-def extract_variable_equalities(conjunction):
-    var_eqs = dict()
-    for formula in conjunction.formulas:
-        if is_variable_equality(formula):
-            symbol = next(
-                arg for arg in formula.args if isinstance(arg, Symbol)
-            )
-            constant = next(
-                arg for arg in formula.args if isinstance(arg, Constant)
-            )
-            var_eqs[symbol] = constant
-    return var_eqs
-
-
-class ApplyVariableEqualities(PatternWalker):
-    @add_match(
-        Conjunction,
-        lambda conjunction: any(
-            is_variable_equality(formula) for formula in conjunction.formulas
-        ),
-    )
-    def conjunction_with_variable_equalities(self, conjunction):
-        var_eqs = extract_variable_equalities(conjunction)
-        conjunction_without_variable_equalities = Conjunction(
-            tuple(
-                formula
-                for formula in conjunction.formulas
-                if not is_variable_equality(formula)
-            )
-        )
-        rsbc = ReplaceSymbolsByConstants(var_eqs)
-        return rsbc.walk(conjunction_without_variable_equalities)
-
-
-class ExtractAndRemoveVariableEqualities(ExpressionWalker):
+class ExtractSubstitutionsFromVariableEqualities(ExpressionWalker):
     def __init__(self):
-        self.variable_equalities = dict()
+        self._equality_sets = list()
+
+    @property
+    def substitutions(self):
+        substitutions = dict()
+        for eq_set in self._equality_sets:
+            if any(isinstance(term, Constant) for term in eq_set):
+                update = self._get_const_equality_substitutions(eq_set)
+            else:
+                update = self._get_between_symbs_equality_substitutions(eq_set)
+            substitutions.update(update)
+        return substitutions
 
     @add_match(FunctionApplication(EQ, (Symbol, Symbol)))
     def variable_equality_between_variables(self, function_application):
-        first, second = sorted(function_application.args, key=lambda s: s.name)
-        self.variable_equalities[first] = second
+        first, second = function_application.args
+        self._add_equality_with_symbol(first, second)
         return TRUE
 
     @add_match(FunctionApplication(EQ, (Symbol, Constant)))
     def variable_equality_with_constant(self, function_application):
         symb, const = function_application.args
-        self.variable_equalities[symb] = const
+        self._add_equality_with_constant(symb, const)
         return TRUE
 
     @add_match(FunctionApplication(EQ, (Constant, Symbol)))
     def variable_equality_with_constant_reversed(self, function_application):
         const, symb = function_application.args
-        self.variable_equalities[symb] = const
+        self._add_equality_with_constant(symb, const)
         return TRUE
+
+    @add_match(
+        Conjunction,
+        lambda conj: any(formula == TRUE for formula in conj.formulas),
+    )
+    def simplify_conjunction_with_true_conjuncts(self, conjunction):
+        new_formulas = tuple(
+            formula for formula in conjunction.formulas if formula != True
+        )
+        return Conjunction(new_formulas)
+
+    def _add_equality_with_constant(self, symb, const):
+        for eq_set in self._equality_sets:
+            if any(term == symb for term in eq_set):
+                eq_set.add(const)
+            if sum(isinstance(term, Constant) for term in eq_set) > 1:
+                raise UnsupportedProgramError(
+                    "Cannot have two constant equalities for the same symbol"
+                )
+        else:
+            self._equality_sets.append({symb, const})
+
+    def _add_equality_with_symbol(self, first, second):
+        for eq_set in self._equality_sets:
+            if any(term == first for term in eq_set):
+                eq_set.add(second)
+            elif any(term == second for term in eq_set):
+                eq_set.add(first)
+        else:
+            self._equality_sets.append({first, second})
+
+    @staticmethod
+    def _get_const_equality_substitutions(eq_set):
+        const = next(term for term in eq_set if isinstance(term, Constant))
+        return {term: const for term in eq_set if isinstance(term, Symbol)}
+
+    @staticmethod
+    def _get_between_symbs_equality_substitutions(eq_set):
+        iterator = iter(eq_set)
+        chosen_symb = next(iterator)
+        return {symb: chosen_symb for symb in iterator}

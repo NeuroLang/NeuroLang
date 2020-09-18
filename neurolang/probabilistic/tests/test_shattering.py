@@ -169,7 +169,8 @@ def test_shattering_with_variable_equality():
     assert isinstance(shattered, Conjunction)
     assert len(shattered.formulas) == 1
     assert isinstance(shattered.formulas[0].functor, ProbabilisticFactSet)
-    assert shattered.formulas[0].args == (a, y, z)
+    assert shattered.formulas[0].args == (y, z)
+    assert len(symbol_table[shattered.formulas[0].functor.relation].value) == 2
 
 
 def test_shattering_with_reversed_variable_equality():
@@ -184,4 +185,5 @@ def test_shattering_with_reversed_variable_equality():
     assert isinstance(shattered, Conjunction)
     assert len(shattered.formulas) == 1
     assert isinstance(shattered.formulas[0].functor, ProbabilisticFactSet)
-    assert shattered.formulas[0].args == (a, y, z)
+    assert shattered.formulas[0].args == (y, z)
+    assert len(symbol_table[shattered.formulas[0].functor.relation].value) == 2
