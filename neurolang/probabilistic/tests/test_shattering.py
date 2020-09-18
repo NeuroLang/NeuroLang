@@ -12,6 +12,8 @@ from ..probabilistic_ra_utils import (
 )
 from ..shattering import shatter_easy_probfacts
 
+EQ = Constant(operator.eq)
+
 P = Symbol("P")
 Q = Symbol("Q")
 x = Symbol("x")
@@ -158,7 +160,7 @@ def test_predicates_with_more_than_one_self_join():
 
 
 def test_shattering_with_variable_equality():
-    query = Conjunction((P(x, y, z), Constant(operator.eq)(x, a)))
+    query = Conjunction((P(x, y, z), EQ(x, a)))
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
         P,
@@ -174,7 +176,7 @@ def test_shattering_with_variable_equality():
 
 
 def test_shattering_with_reversed_variable_equality():
-    query = Conjunction((P(x, y, z), Constant(operator.eq)(a, x)))
+    query = Conjunction((P(x, y, z), EQ(a, x)))
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
         P,
@@ -187,3 +189,19 @@ def test_shattering_with_reversed_variable_equality():
     assert isinstance(shattered.formulas[0].functor, ProbabilisticFactSet)
     assert shattered.formulas[0].args == (y, z)
     assert len(symbol_table[shattered.formulas[0].functor.relation].value) == 2
+
+
+def test_shattering_between_symbol_equalities():
+    query = Conjunction((P(x, y, z), EQ(x, y), EQ(y, z)))
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        P,
+        [(0.2, "a", "b", "c",), (1.0, "a", "c", "b",), (0.7, "b", "b", "b",),],
+    )
+    symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
+    shattered = shatter_easy_probfacts(query, symbol_table)
+    assert isinstance(shattered, Conjunction)
+    assert len(shattered.formulas) == 1
+    assert isinstance(shattered.formulas[0].functor, ProbabilisticFactSet)
+    assert len(shattered.formulas[0].args)
+    assert len(set(shattered.formulas[0].args)) == 1

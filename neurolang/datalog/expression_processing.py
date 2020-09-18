@@ -582,7 +582,7 @@ class ExtractSubstitutionsFromVariableEqualities(ExpressionWalker):
     )
     def simplify_conjunction_with_true_conjuncts(self, conjunction):
         new_formulas = tuple(
-            formula for formula in conjunction.formulas if formula != True
+            formula for formula in conjunction.formulas if formula != TRUE
         )
         return Conjunction(new_formulas)
 
@@ -590,10 +590,6 @@ class ExtractSubstitutionsFromVariableEqualities(ExpressionWalker):
         for eq_set in self._equality_sets:
             if any(term == symb for term in eq_set):
                 eq_set.add(const)
-            if sum(isinstance(term, Constant) for term in eq_set) > 1:
-                raise UnsupportedProgramError(
-                    "Cannot have two constant equalities for the same symbol"
-                )
         else:
             self._equality_sets.append({symb, const})
 
