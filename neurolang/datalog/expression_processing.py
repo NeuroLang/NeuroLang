@@ -25,6 +25,7 @@ from ..expression_walker import (
     PatternWalker,
     ReplaceExpressionWalker,
     ReplaceSymbolsByConstants,
+    ReplaceSymbolWalker,
 )
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import TRUE, Conjunction, Disjunction, Negation, Quantifier, Union
@@ -543,7 +544,9 @@ def remove_conjunction_duplicates(conjunction):
     return Conjunction(tuple(set(conjunction.formulas)))
 
 
-class ExtractSubstitutionsFromVariableEqualities(ExpressionWalker):
+class ExtractSubstitutionsFromVariableEqualitiesInConjunction(
+    ExpressionWalker
+):
     def __init__(self):
         self._equality_sets = list()
 
@@ -612,3 +615,26 @@ class ExtractSubstitutionsFromVariableEqualities(ExpressionWalker):
         iterator = iter(eq_set)
         chosen_symb = next(iterator)
         return {symb: chosen_symb for symb in iterator}
+
+
+def is_variable_equality(formula):
+    return (
+        isinstance(formula, FunctionApplication)
+        and formula.functor == EQ
+        and len(formula.args) == 2
+        and all(isinstance(arg, (Constant, Symbol)) for arg in formula.args)
+    )
+
+
+class VariableEqualityPropagator(ExpressionWalker):
+    @add_match(
+        Conjunction,
+        lambda conj: any(
+            is_variable_equality(formula) for formula in conj.formulas
+        ),
+    )
+    def conjunction(self, conjunction):
+        extractor = ExtractSubstitutionsFromVariableEqualitiesInConjunction()
+        new_conjunction = extractor.walk(conjunction)
+        replacer = ReplaceSymbolWalker(extractor.substitutions)
+        return replacer.walk(new_conjunction)
