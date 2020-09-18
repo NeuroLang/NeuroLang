@@ -24,7 +24,6 @@ from ..expression_walker import (
     ExpressionWalker,
     PatternWalker,
     ReplaceExpressionWalker,
-    ReplaceSymbolsByConstants,
     ReplaceSymbolWalker,
 )
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
@@ -614,19 +613,24 @@ class ExtractSubstitutionsFromVariableEqualitiesInConjunction(PatternWalker):
         return expression
 
     def _add_equality_with_constant(self, symb, const):
+        found_eq_set = False
         for eq_set in self._equality_sets:
             if any(term == symb for term in eq_set):
                 eq_set.add(const)
-        else:
+                found_eq_set = True
+        if not found_eq_set:
             self._equality_sets.append({symb, const})
 
     def _add_equality_with_symbol(self, first, second):
+        found_eq_set = False
         for eq_set in self._equality_sets:
             if any(term == first for term in eq_set):
                 eq_set.add(second)
+                found_eq_set = True
             elif any(term == second for term in eq_set):
                 eq_set.add(first)
-        else:
+                found_eq_set = True
+        if not found_eq_set:
             self._equality_sets.append({first, second})
 
     @staticmethod
