@@ -27,7 +27,7 @@ from ..expression_walker import (
     ReplaceSymbolsByConstants,
     ReplaceSymbolWalker,
 )
-from ..expressions import Constant, FunctionApplication, Symbol
+from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..logic import TRUE, Conjunction, Disjunction, Negation, Quantifier, Union
 from ..logic import expression_processing as elp
 from .expressions import TranslateToLogic
@@ -544,9 +544,16 @@ def remove_conjunction_duplicates(conjunction):
     return Conjunction(tuple(set(conjunction.formulas)))
 
 
-class ExtractSubstitutionsFromVariableEqualitiesInConjunction(
-    ExpressionWalker
-):
+def is_variable_equality(formula):
+    return (
+        isinstance(formula, FunctionApplication)
+        and formula.functor == EQ
+        and len(formula.args) == 2
+        and all(isinstance(arg, (Constant, Symbol)) for arg in formula.args)
+    )
+
+
+class ExtractSubstitutionsFromVariableEqualitiesInConjunction(PatternWalker):
     def __init__(self):
         self._equality_sets = list()
 
@@ -560,6 +567,19 @@ class ExtractSubstitutionsFromVariableEqualitiesInConjunction(
                 update = self._get_between_symbs_equality_substitutions(eq_set)
             substitutions.update(update)
         return substitutions
+
+    @add_match(
+        Conjunction,
+        lambda conj: any(
+            is_variable_equality(formula) for formula in conj.formulas
+        ),
+    )
+    def conjunction_with_variable_equality(self, conjunction):
+        return self.walk(
+            Conjunction(
+                tuple(self.walk(formula) for formula in conjunction.formulas)
+            )
+        )
 
     @add_match(FunctionApplication(EQ, (Symbol, Symbol)))
     def variable_equality_between_variables(self, function_application):
@@ -589,6 +609,10 @@ class ExtractSubstitutionsFromVariableEqualitiesInConjunction(
         )
         return Conjunction(new_formulas)
 
+    @add_match(Expression)
+    def expression(self, expression):
+        return expression
+
     def _add_equality_with_constant(self, symb, const):
         for eq_set in self._equality_sets:
             if any(term == symb for term in eq_set):
@@ -617,15 +641,6 @@ class ExtractSubstitutionsFromVariableEqualitiesInConjunction(
         return {symb: chosen_symb for symb in iterator}
 
 
-def is_variable_equality(formula):
-    return (
-        isinstance(formula, FunctionApplication)
-        and formula.functor == EQ
-        and len(formula.args) == 2
-        and all(isinstance(arg, (Constant, Symbol)) for arg in formula.args)
-    )
-
-
 class VariableEqualityPropagator(ExpressionWalker):
     @add_match(
         Conjunction,
@@ -637,4 +652,8 @@ class VariableEqualityPropagator(ExpressionWalker):
         extractor = ExtractSubstitutionsFromVariableEqualitiesInConjunction()
         new_conjunction = extractor.walk(conjunction)
         replacer = ReplaceSymbolWalker(extractor.substitutions)
-        return replacer.walk(new_conjunction)
+        new_conjunction = replacer.walk(new_conjunction)
+        new_conjunction = Conjunction(
+            tuple(self.walk(formula) for formula in new_conjunction.formulas)
+        )
+        return new_conjunction

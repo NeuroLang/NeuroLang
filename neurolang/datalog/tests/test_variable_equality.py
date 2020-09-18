@@ -43,7 +43,7 @@ def test_propagation_ucq_two_conjunctions():
     )
 
 
-def test_propagation_disjunction_with_nested_disjunction():
+def test_propagation_nested_disjunction():
     conjunction_a = Conjunction((P(x), Q(x, y), EQ(y, a)))
     conjunction_b = Conjunction((Q(z, z), P(y), P(z), R(y, x), EQ(z, a)))
     conjunction_c = Conjunction((R(z, y), EQ(z, c)))
