@@ -334,3 +334,4 @@ def test_post_probabilistic_aggregation():
         res = nl.query((e.x, e.s), e.D[e.x, e.s])
 
     assert len(res) == 2
+    assert res == {("a", 0.2 * 0.2), ("b", 0.9 * 0.8)}
