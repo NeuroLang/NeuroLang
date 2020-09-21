@@ -2,7 +2,11 @@ import collections
 from typing import AbstractSet, Tuple
 from uuid import uuid1
 
-from ..datalog.aggregation import Chase, TranslateToLogicWithAggregation
+from ..datalog.aggregation import (
+    Chase,
+    DatalogWithAggregationMixin,
+    TranslateToLogicWithAggregation,
+)
 from ..datalog.constraints_representation import DatalogConstraintsProgram
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
@@ -37,6 +41,7 @@ class RegionFrontendCPLogicSolver(
     TranslateToLogicWithAggregation,
     RegionSolver,
     CPLogicMixin,
+    DatalogWithAggregationMixin,
     DatalogConstraintsProgram,
     ExpressionBasicEvaluator,
 ):
@@ -71,10 +76,17 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             predicate.expression.functor
         ].formulas[0]
         solution = self._solve(query)
-        return (
-            self._restrict_to_query_solution(head, predicate, solution),
-            None,
+        if not isinstance(head, tuple):
+            # assumes head is a predicate e.g. r(x, y)
+            head_symbols = tuple(head.expression.args)
+            functor_orig = head.expression.functor
+        else:
+            head_symbols = tuple(t.expression for t in head)
+            functor_orig = None
+        solution = self._restrict_to_query_solution(
+            head_symbols, predicate, solution
         )
+        return solution, functor_orig
 
     def solve_all(self):
         solution = self._solve()
@@ -108,10 +120,10 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         return solution
 
     @staticmethod
-    def _restrict_to_query_solution(head, predicate, solution):
+    def _restrict_to_query_solution(head_symbols, predicate, solution):
         """
         Based on a solution instance and a query predicate, retrieve the
-        relation whose columns correspond to symbols in `head`.
+        relation whose columns correspond to symbols in the head of the query.
 
         """
         query_solution = solution[predicate.expression.functor].value.unwrap()
@@ -122,7 +134,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         )
         query_solution = NamedRelationalAlgebraFrozenSet(cols, query_solution)
         query_solution = query_solution.projection(
-            *(symb.expression.name for symb in head)
+            *(symb.name for symb in head_symbols)
         )
         return Constant[AbstractSet](query_solution)
 
