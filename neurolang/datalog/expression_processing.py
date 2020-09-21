@@ -574,11 +574,11 @@ class ExtractSubstitutionsFromVariableEqualitiesInConjunction(PatternWalker):
         ),
     )
     def conjunction_with_variable_equality(self, conjunction):
-        return self.walk(
-            Conjunction(
-                tuple(self.walk(formula) for formula in conjunction.formulas)
-            )
+        conjuncts = (self.walk(formula) for formula in conjunction.formulas)
+        conjuncts = tuple(
+            conjunct for conjunct in conjuncts if conjunct != TRUE
         )
+        return self.walk(Conjunction(conjuncts))
 
     @add_match(FunctionApplication(EQ, (Symbol, Symbol)))
     def variable_equality_between_variables(self, function_application):
@@ -597,16 +597,6 @@ class ExtractSubstitutionsFromVariableEqualitiesInConjunction(PatternWalker):
         const, symb = function_application.args
         self._add_equality_with_constant(symb, const)
         return TRUE
-
-    @add_match(
-        Conjunction,
-        lambda conj: any(formula == TRUE for formula in conj.formulas),
-    )
-    def simplify_conjunction_with_true_conjuncts(self, conjunction):
-        new_formulas = tuple(
-            formula for formula in conjunction.formulas if formula != TRUE
-        )
-        return Conjunction(new_formulas)
 
     @add_match(Expression)
     def expression(self, expression):
