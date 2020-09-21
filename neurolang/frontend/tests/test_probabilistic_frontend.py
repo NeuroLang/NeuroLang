@@ -287,3 +287,32 @@ def test_solve_complex_stratified_query_with_deterministic_part():
     assert df.loc[(df["x"] == "b") & (df["y"] == "b")].iloc[0]["p"] == 0.8
     assert df.loc[(df["x"] == "a") & (df["y"] == "a")].iloc[0]["p"] == 0.2
     assert df.loc[(df["x"] == "b") & (df["y"] == "a")].iloc[0]["p"] == 0.2
+
+
+def test_neurolang_dl_aggregation():
+    neurolang = ProbabilisticFrontend()
+    q = neurolang.new_symbol(name='q')
+    p = neurolang.new_symbol(name='p')
+    r = neurolang.new_symbol(name='r')
+    x = neurolang.new_symbol(name='x')
+    y = neurolang.new_symbol(name='y')
+
+    @neurolang.add_symbol
+    def sum_(x):
+        return sum(x)
+
+    for i in range(10):
+        q[i % 2, i] = True
+
+    p[x, sum_(y)] = q[x, y]
+
+    sol = neurolang.query(r(x, y), p(x, y))
+
+    res_q = {
+        (0, 2 + 4 + 8),
+        (1, 1 + 5 + 9)
+    }
+
+    assert len(sol) == 2
+    assert sol[r] == res_q
+    assert sol[p] == res_q
