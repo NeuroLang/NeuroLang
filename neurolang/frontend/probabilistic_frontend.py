@@ -114,6 +114,10 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
                 solver.add_extensional_predicate_from_tuples(
                     psymb, relation.value,
                 )
+            for builtin_symb in self.solver.builtins():
+                solver.symbol_table[builtin_symb] = self.solver.symbol_table[
+                    builtin_symb
+                ]
             solver.walk(ppq_det_idb)
             chase = self.chase_class(solver, rules=ppq_det_idb)
             solution = chase.build_chase_solution()
