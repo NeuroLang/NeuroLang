@@ -321,7 +321,7 @@ def test_post_probabilistic_aggregation():
         [(0.2, "a"), (0.9, "b"), (0.5, "c")], name="A",
     )
     B = nl.add_probabilistic_choice_from_tuples(
-        [(0.2, "a", "c"), (0.8, "b", "c")], name="B",
+        [(0.2, "a", "c"), (0.7, "b", "c"), (0.1, "a", "d")], name="B",
     )
 
     @nl.add_symbol
@@ -334,4 +334,4 @@ def test_post_probabilistic_aggregation():
         res = nl.query((e.x, e.s), e.D[e.x, e.s])
 
     assert len(res) == 2
-    assert res == {("a", 0.2 * 0.2), ("b", 0.9 * 0.8)}
+    assert res == {("a", 0.2 * 0.2 + 0.2 * 0.1), ("b", 0.9 * 0.7)}
