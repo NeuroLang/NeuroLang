@@ -16,16 +16,23 @@ from ..exceptions import (
     UnsupportedProgramError,
 )
 from ..expression_pattern_matching import (
+    NeuroLangPatternMatchingNoMatch,
     add_match,
-    NeuroLangPatternMatchingNoMatch
 )
 from ..expression_walker import (
     ExpressionWalker,
-    ReplaceExpressionWalker,
     PatternWalker,
+    ReplaceExpressionWalker,
 )
 from ..expressions import Constant, FunctionApplication, Symbol
-from ..logic import Conjunction, Disjunction, Negation, Quantifier, Union
+from ..logic import (
+    Conjunction,
+    Disjunction,
+    Implication,
+    Negation,
+    Quantifier,
+    Union,
+)
 from ..logic import expression_processing as elp
 from .expressions import TranslateToLogic
 
@@ -464,15 +471,14 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
     """Flatten a query defined by a non-recursive
     union of conjunctive queries (UCQ)
     """
+
     def __init__(self, program):
         self.program = program
         self.idb = self.program.intensional_database()
 
     @add_match(
         FunctionApplication,
-        lambda fa: all(
-            isinstance(arg, (Constant, Symbol)) for arg in fa.args
-        )
+        lambda fa: all(isinstance(arg, (Constant, Symbol)) for arg in fa.args),
     )
     def function_application(self, expression):
         functor = expression.functor
@@ -496,15 +502,17 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
     def _normalise_arguments(self, cq, args):
         free_variables = extract_logic_free_variables(cq)
         linked_variables = cq.consequent.args
-        cq = ReplaceExpressionWalker(dict(
-            chain(
-                zip(linked_variables, args),
-                zip(
-                    free_variables,
-                    (Symbol.fresh() for _ in range(len(free_variables)))
+        cq = ReplaceExpressionWalker(
+            dict(
+                chain(
+                    zip(linked_variables, args),
+                    zip(
+                        free_variables,
+                        (Symbol.fresh() for _ in range(len(free_variables))),
+                    ),
                 )
             )
-        )).walk(cq)
+        ).walk(cq)
         return cq
 
     @add_match(Conjunction)
@@ -536,3 +544,11 @@ def is_rule_with_builtin(rule, known_builtins=None):
 
 def remove_conjunction_duplicates(conjunction):
     return Conjunction(tuple(set(conjunction.formulas)))
+
+
+def iter_disjunction_or_implication_rules(implication_or_disjunction):
+    if isinstance(implication_or_disjunction, Implication):
+        yield implication_or_disjunction
+    else:
+        for formula in implication_or_disjunction.formulas:
+            yield formula
