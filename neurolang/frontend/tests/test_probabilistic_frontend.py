@@ -316,7 +316,7 @@ def test_equality():
 
 def test_equality2():
     nl = ProbabilisticFrontend()
-    nl.add_tuple_set([('Hola', 'var'), ('Hello', 'var1'), ('Bonjour', 'var')], name='test_var')
+    nl.add_tuple_set([('Hola', 'var'), ('Hello', 'var2'), ('Bonjour', 'var')], name='test_var')
 
     @nl.add_symbol
     def word_lower(name: str) -> str:
