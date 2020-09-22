@@ -312,6 +312,8 @@ def test_equality():
         sol = nl.query((e.x,), e.r3[e.x])
 
     assert set(sol) == set((('hola',), ('hello',), ('bonjour',)))
+
+
 def test_neurolang_dl_aggregation():
     neurolang = ProbabilisticFrontend()
     q = neurolang.new_symbol(name="q")
