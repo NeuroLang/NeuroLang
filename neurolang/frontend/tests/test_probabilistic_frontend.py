@@ -161,7 +161,7 @@ def test_simple_within_language_succ_query():
 def test_within_language_succ_query():
     nl = ProbabilisticFrontend()
     P = nl.add_uniform_probabilistic_choice_over_set(
-        [("a", "b",), ("b", "c",), ("b", "d",)], name="P"
+        [("a", "b",), ("b", "c",), ("b", "d",),], name="P",
     )
     Q = nl.add_uniform_probabilistic_choice_over_set(
         [("a",), ("b",)], name="Q"
@@ -312,3 +312,49 @@ def test_equality():
         sol = nl.query((e.x,), e.r3[e.x])
 
     assert set(sol) == set((('hola',), ('hello',), ('bonjour',)))
+def test_neurolang_dl_aggregation():
+    neurolang = ProbabilisticFrontend()
+    q = neurolang.new_symbol(name="q")
+    p = neurolang.new_symbol(name="p")
+    r = neurolang.new_symbol(name="r")
+    x = neurolang.new_symbol(name="x")
+    y = neurolang.new_symbol(name="y")
+
+    @neurolang.add_symbol
+    def sum_(x):
+        return sum(x)
+
+    for i in range(10):
+        q[i % 2, i] = True
+
+    p[x, sum_(y)] = q[x, y]
+
+    sol = neurolang.query(r(x, y), p(x, y))
+
+    res_q = {(0, 2 + 4 + 8), (1, 1 + 5 + 9)}
+
+    assert len(sol) == 2
+    assert sol[r] == res_q
+    assert sol[p] == res_q
+
+
+def test_post_probabilistic_aggregation():
+    nl = ProbabilisticFrontend()
+    A = nl.add_probabilistic_facts_from_tuples(
+        [(0.2, "a"), (0.9, "b"), (0.5, "c")], name="A",
+    )
+    B = nl.add_probabilistic_choice_from_tuples(
+        [(0.2, "a", "c"), (0.7, "b", "c"), (0.1, "a", "d")], name="B",
+    )
+
+    @nl.add_symbol
+    def mysum(x):
+        return sum(x)
+
+    with nl.scope as e:
+        e.C[e.x, e.y, e.PROB[e.x, e.y]] = A[e.x] & B[e.x, e.y]
+        e.D[e.x, e.mysum(e.p)] = e.C[e.x, e.y, e.p]
+        res = nl.query((e.x, e.s), e.D[e.x, e.s])
+
+    assert len(res) == 2
+    assert res == {("a", 0.2 * 0.2 + 0.2 * 0.1), ("b", 0.9 * 0.7)}
