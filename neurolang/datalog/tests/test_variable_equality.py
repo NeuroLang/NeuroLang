@@ -33,7 +33,7 @@ def test_propagation_to_one_conjunct():
     program.walk(rule)
     assert R in program.intensional_database()
     expected = Union((Implication(R(x), Conjunction((P(x, a),))),))
-    assert program.intensional_database()[R] == expected
+    assert expected == program.intensional_database()[R]
 
 
 def test_propagation_to_two_conjuncts():
@@ -42,4 +42,4 @@ def test_propagation_to_two_conjuncts():
     program.walk(rule)
     assert R in program.intensional_database()
     expected = Union((Implication(R(x, a), Conjunction((P(x, a), Q(a, a)))),))
-    assert program.intensional_database()[R] == expected
+    assert expected == program.intensional_database()[R]
