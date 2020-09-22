@@ -1,9 +1,12 @@
 import operator
 
+from ...datalog.basic_representation import DatalogProgram
 from ...expressions import Constant, Symbol
-from ..expression_processing import VariableEqualityPropagator
-from ...logic import Conjunction, Disjunction
-
+from ...logic import Conjunction, Implication, Union
+from ..expression_processing import (
+    ConjunctionSimplifier,
+    VariableEqualityPropagator,
+)
 
 P = Symbol("P")
 Q = Symbol("Q")
@@ -18,54 +21,25 @@ c = Constant("c")
 EQ = Constant(operator.eq)
 
 
+class DatalogWithVariableEqualityPropagation(
+    VariableEqualityPropagator, ConjunctionSimplifier, DatalogProgram
+):
+    pass
+
+
 def test_propagation_to_one_conjunct():
-    conjunction = Conjunction((P(x, y), EQ(y, a)))
-    propagator = VariableEqualityPropagator()
-    result = propagator.walk(conjunction)
-    assert result == Conjunction((P(x, a),))
+    rule = Implication(R(x), Conjunction((P(x, y), EQ(y, a))))
+    program = DatalogWithVariableEqualityPropagation()
+    program.walk(rule)
+    assert R in program.intensional_database()
+    expected = Union((Implication(R(x), Conjunction((P(x, a),))),))
+    assert program.intensional_database()[R] == expected
 
 
 def test_propagation_to_two_conjuncts():
-    conjunction = Conjunction((P(x, y), EQ(y, a), Q(y, y)))
-    propagator = VariableEqualityPropagator()
-    result = propagator.walk(conjunction)
-    assert result == Conjunction((P(x, a), Q(a, a)))
-
-
-def test_propagation_ucq_two_conjunctions():
-    conjunction_a = Conjunction((P(x, y), EQ(y, a), Q(y, y)))
-    conjunction_b = Conjunction((P(x, y), EQ(y, b), Q(y, x)))
-    ucq = Disjunction((conjunction_a, conjunction_b))
-    propagator = VariableEqualityPropagator()
-    result = propagator.walk(ucq)
-    assert result == Disjunction(
-        (Conjunction((P(x, a), Q(a, a))), Conjunction((P(x, b), Q(b, x))))
-    )
-
-
-def test_propagation_nested_disjunction():
-    conjunction_a = Conjunction((P(x), Q(x, y), EQ(y, a)))
-    conjunction_b = Conjunction((Q(z, z), P(y), P(z), R(y, x), EQ(z, a)))
-    conjunction_c = Conjunction((R(z, y), EQ(z, c)))
-    expression = Conjunction(
-        (
-            (
-                conjunction_a,
-                Disjunction((conjunction_b, conjunction_c)),
-                EQ(x, b),
-            )
-        )
-    )
-    propagator = VariableEqualityPropagator()
-    result = propagator.walk(expression)
-    assert result == Conjunction(
-        (
-            Conjunction((P(b), Q(b, a))),
-            Disjunction(
-                (
-                    Conjunction((Q(a, a), P(a), P(a), R(a, b))),
-                    Conjunction((R(c, a),)),
-                )
-            ),
-        )
-    )
+    rule = Implication(R(x, y), Conjunction((P(x, y), EQ(y, a), Q(y, y))))
+    program = DatalogWithVariableEqualityPropagation()
+    program.walk(rule)
+    assert R in program.intensional_database()
+    expected = Union((Implication(R(x, a), Conjunction((P(x, a), Q(a, a)))),))
+    assert program.intensional_database()[R] == expected

@@ -28,7 +28,15 @@ from ..expression_walker import (
     ReplaceSymbolWalker,
 )
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
-from ..logic import TRUE, Conjunction, Disjunction, Negation, Quantifier, Union
+from ..logic import (
+    TRUE,
+    Conjunction,
+    Disjunction,
+    Implication,
+    Negation,
+    Quantifier,
+    Union,
+)
 from ..logic import expression_processing as elp
 from .expressions import TranslateToLogic
 
@@ -553,7 +561,7 @@ def is_variable_equality(formula):
     )
 
 
-class ExtractSubstitutionsFromVariableEqualitiesInConjunction(PatternWalker):
+class VariableEqualityExtractor(PatternWalker):
     def __init__(self):
         self._equality_sets = list()
 
@@ -575,11 +583,10 @@ class ExtractSubstitutionsFromVariableEqualitiesInConjunction(PatternWalker):
         ),
     )
     def conjunction_with_variable_equality(self, conjunction):
-        conjuncts = (self.walk(formula) for formula in conjunction.formulas)
         conjuncts = tuple(
-            conjunct for conjunct in conjuncts if conjunct != TRUE
+            self.walk(formula) for formula in conjunction.formulas
         )
-        return self.walk(Conjunction(conjuncts))
+        return Conjunction(conjuncts)
 
     @add_match(FunctionApplication(EQ, (Symbol, Symbol)))
     def variable_equality_between_variables(self, function_application):
@@ -632,24 +639,38 @@ class ExtractSubstitutionsFromVariableEqualitiesInConjunction(PatternWalker):
         return {symb: chosen_symb for symb in iterator}
 
 
-class VariableEqualityPropagator(ExpressionWalker):
+class VariableEqualityPropagator(PatternWalker):
     @add_match(
-        Conjunction,
-        lambda conj: any(
-            is_variable_equality(formula) for formula in conj.formulas
+        Implication(FunctionApplication(Symbol, ...), Conjunction),
+        lambda implication: any(
+            is_variable_equality(formula)
+            for formula in implication.antecedent.formulas
         ),
     )
-    def conjunction(self, conjunction):
-        extractor = self.SubstitutionExtractor()
-        new_conjunction = extractor.walk(conjunction)
-        replacer = ReplaceSymbolWalker(extractor.substitutions)
-        new_conjunction = replacer.walk(new_conjunction)
-        new_conjunction = Conjunction(
-            tuple(self.walk(formula) for formula in new_conjunction.formulas)
+    def implication_with_variable_equality_in_antecedent(self, implication):
+        extractor = self._Extractor()
+        new_antecedent = self.walk(extractor.walk(implication.antecedent))
+        new_implication = Implication[implication.type](
+            implication.consequent, new_antecedent
         )
-        return new_conjunction
+        replacer = ReplaceSymbolWalker(extractor.substitutions)
+        new_implication = replacer.walk(new_implication)
+        return self.walk(new_implication)
 
-    class SubstitutionExtractor(
-        ExtractSubstitutionsFromVariableEqualitiesInConjunction, IdentityWalker
-    ):
+    class _Extractor(VariableEqualityExtractor, IdentityWalker):
         pass
+
+
+class ConjunctionSimplifier(PatternWalker):
+    @add_match(
+        Conjunction,
+        lambda conjunction: any(
+            formula == True for formula in conjunction.formulas
+        ),
+    )
+    def simplifiable_conjunction(self, conjunction):
+        return Conjunction[bool](
+            tuple(
+                formula for formula in conjunction.formulas if formula != True
+            )
+        )
