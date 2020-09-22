@@ -509,3 +509,28 @@ def test_translate_expression_to_fronted_expression():
     assert imp_fe.expression == imp_exp
     assert imp_fe.consequent == tr.walk(imp_exp.consequent)
     assert imp_fe.antecedent == tr.walk(imp_exp.antecedent)
+
+
+def test_equality():
+    nl = frontend.NeurolangDL()
+    r1 = nl.add_tuple_set([(i,) for i in range(5)], name='r1')
+
+    with nl.scope as e:
+        e.r2[e.x] = r1(e.y) & (e.x == e.y * 2)
+
+        sol = nl.query((e.x,), e.r2[e.x])
+
+    assert set(sol) == set((2 * i,) for i in range(5))
+
+    r2 = nl.add_tuple_set([('Hola',), ('Hello',), ('Bonjour',)], name='r2')
+
+    @nl.add_symbol
+    def lower(input: str) -> str:
+        return input.lower()
+
+    with nl.scope as e:
+        e.r3[e.x] = r2(e.y) & (e.x == lower(e.y))
+
+        sol = nl.query((e.x,), e.r3[e.x])
+
+    assert set(sol) == set((('hola',), ('hello',), ('bonjour',)))
