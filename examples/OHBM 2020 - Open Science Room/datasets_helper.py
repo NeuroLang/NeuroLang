@@ -1,6 +1,5 @@
 import os
 import urllib.request
-
 import nibabel as nib
 import numpy as np
 import pandas as pd
@@ -8,7 +7,6 @@ from nilearn import datasets, image
 from nilearn.datasets import utils
 import json
 from typing import Iterable
-
 from neurolang import frontend as fe
 from neurolang.regions import region_union
 
@@ -477,14 +475,6 @@ def load_reverse_inference_dataset(nl):
     features_normalised = features_normalised.astype({"pmid": int, "tfidf": float})
     nl.add_probabilistic_facts_from_tuples(features_normalised.itertuples(name=None, index=False),  name='p_term_study')
 
-    #df = ns_prob_joint_term_study(nsh, term=["auditory"])
-    #nl.add_probabilistic_facts_from_tuples(
-    #    df.itertuples(
-    #        name=None, index=False
-    #    ),
-    #    name="p_term_study",
-    #)
-
     df = ns_prob_joint_voxel_study(nsh)
     nl.add_probabilistic_facts_from_tuples(
         df.itertuples(name=None, index=False),
@@ -541,7 +531,6 @@ def load_reverse_inference_dataset(nl):
     nl.add_tuple_set(
         [(dsname, onto) for dsname, onto in ds], name="relation_destrieux_fma"
     )
-    
     
     atlas_r_filename = './22/MPM/JulichBrain_MPMAtlas_r_N10_nlin2Stdicbm152asym2009c_publicDOI_14622b49a715338ce96e96611d395646.nii.gz'
     img_l = image.load_img(atlas_r_filename)

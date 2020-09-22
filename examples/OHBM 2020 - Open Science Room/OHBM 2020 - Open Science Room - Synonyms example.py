@@ -81,9 +81,9 @@ with nl.environment as e:
 
 with nl.scope as e:    
     e.p_act[e.id_voxel, e.term] = (
-        e.p_voxel_study[e.id_voxel, e.id_study] & 
-        e.p_term_study[e.term, e.id_study] & 
-        e.p_study[e.id_study]
+        e.p_term_study[e.term,  e.id_study] & 
+        e.p_study[e.id_study] &
+        e.p_voxel_study[e.id_voxel, e.id_study]
     )
     
     e.act_term[e.term, e.id_voxel] = (
@@ -97,16 +97,51 @@ with nl.scope as e:
     )
     
     nl_results = nl.solve_query(e.xyz_given_term[e.x, e.y, e.z])
+    #nl_results = nl.solve_query(e.act_term[e.term, e.id_voxel])
 
+
+with nl.scope as e:
+    e.p_ts[e.term] = (
+        e.p_term_study[e.term, e.id_study] & 
+        e.p_study[e.id_study]
+    )
+    
+    nl_term_study = nl.solve_query(e.p_ts[e.term])
+
+result_d = nl_term_study.value.as_pandas_dataframe()
+prob_column = result_d.drop(['term'], axis=1).columns[0]
+result_term = result_d.rename(columns={f'{prob_column}': "prob2"})
+#result_term.to_pickle('term_study_query.pickle')
+
+import pandas as pd
+result_term = pd.read_pickle('term_study_query.pickle')
+
+result_term.head()
 
 result_data = nl_results.value.as_pandas_dataframe()
-prob_column = result_data.drop(['x', 'y', 'z'], axis=1).columns[0]
-result_data = result_data.rename(columns={f'{prob_column}': "prob"})
+prob_column = result_data.drop(['term', 'x', 'y', 'z'], axis=1).columns[0]
+result_data = result_data.rename(columns={f'{prob_column}': "prob1"})
 result_data.head()
 
-result_data = result_data[['x', 'y', 'z', 'prob']]
+#result_data.to_pickle('term_query.pickle')
+result_data = pd.read_pickle('term_query.pickle')
+result_data.head()
+
+merged = result_data.merge(result_term, left_on='term', right_on='term')
+
+merged['prob'] = merged['prob1'] / merged['prob2']
+
+merged = merged[['term', 'x', 'y', 'z', 'prob']]
+
+temp = merged.drop('term', axis=1)
+temp = temp.groupby(['x', 'y', 'z']).sum()
+
+temp = temp.reset_index()
+
+temp.head()
 
 # +
+import numpy as np
 #result_data = result.value.to_numpy()
 #prob_terms = aux.load_neurosynth_pain_prob_terms()
 
@@ -126,7 +161,7 @@ it = ns_ds.image_table
 
 regions = []
 vox_prob = []
-for x, y, z, p in result_data.values:
+for x, y, z, p in temp.values:
     r_overlay = create_region(x, y, z, it.masker.volume)
     vox_prob.append((r_overlay.voxels, p))
     regions.append(r_overlay)
@@ -144,14 +179,13 @@ for v, p in vox_prob:
 plotting.plot_stat_map(
     prob_img_nl, 
     title='Tags: Pain, Noxious, Nociceptive', 
-    cmap='PuBuGn',
     display_mode='x',
     cut_coords=np.linspace(-63, 63, 5),
 )
 
 plotting.plot_stat_map(
-    prob_img, title='Tags: Pain, Noxious, Nociceptive', 
-    cmap='PuBuGn',
+    prob_img_nl, 
+    title='Tags: Pain, Noxious, Nociceptive', 
     display_mode='y',
     cut_coords=np.linspace(-30, 5, 5),
 )

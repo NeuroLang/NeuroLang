@@ -39,6 +39,8 @@ datasets_helper.load_reverse_inference_dataset(nl)
 #nl.load_ontology(path)
 # -
 
+nl.symbol_table['xyz_julich']
+
 with nl.scope as e:
     e.julich_to_neurosynth[e.julich_id, e.id_neurosynth, e.x, e.y, e.z] = (
         e.xyz_julich[e.x, e.y, e.z, e.julich_id] &
