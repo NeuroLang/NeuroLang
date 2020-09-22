@@ -22,6 +22,7 @@ from ..expression_pattern_matching import (
 )
 from ..expression_walker import (
     ExpressionWalker,
+    IdentityWalker,
     PatternWalker,
     ReplaceExpressionWalker,
     ReplaceSymbolWalker,
@@ -598,10 +599,6 @@ class ExtractSubstitutionsFromVariableEqualitiesInConjunction(PatternWalker):
         self._add_equality_with_constant(symb, const)
         return TRUE
 
-    @add_match(Expression)
-    def expression(self, expression):
-        return expression
-
     def _add_equality_with_constant(self, symb, const):
         found_eq_set = False
         for eq_set in self._equality_sets:
@@ -643,7 +640,7 @@ class VariableEqualityPropagator(ExpressionWalker):
         ),
     )
     def conjunction(self, conjunction):
-        extractor = ExtractSubstitutionsFromVariableEqualitiesInConjunction()
+        extractor = self.SubstitutionExtractor()
         new_conjunction = extractor.walk(conjunction)
         replacer = ReplaceSymbolWalker(extractor.substitutions)
         new_conjunction = replacer.walk(new_conjunction)
@@ -651,3 +648,8 @@ class VariableEqualityPropagator(ExpressionWalker):
             tuple(self.walk(formula) for formula in new_conjunction.formulas)
         )
         return new_conjunction
+
+    class SubstitutionExtractor(
+        ExtractSubstitutionsFromVariableEqualitiesInConjunction, IdentityWalker
+    ):
+        pass
