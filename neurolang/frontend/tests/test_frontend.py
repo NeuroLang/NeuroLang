@@ -1,4 +1,5 @@
 from collections import namedtuple
+from neurolang.expressions import FunctionApplication
 from operator import contains
 from typing import AbstractSet, Callable, Tuple
 from unittest.mock import patch
@@ -52,6 +53,15 @@ def test_symbol_management():
     assert id == neurolang.symbols.id
     assert id == neurolang.symbols['id']
     assert id.type == Callable[[int], int]
+
+    f = neurolang.new_symbol()
+    new_expression = f(..., 1)
+    assert isinstance(new_expression.expression, exp.FunctionApplication)
+    assert new_expression.expression.functor == f.expression
+    assert isinstance(new_expression.expression.args[0], exp.Symbol)
+    assert new_expression.expression.args[0].is_fresh
+    assert isinstance(new_expression.expression.args[1], exp.Constant)
+    assert new_expression.expression.args[1].value == 1
 
 
 def test_symbol_environment():

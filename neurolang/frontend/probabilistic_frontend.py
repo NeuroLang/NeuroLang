@@ -2,29 +2,30 @@ import collections
 from typing import AbstractSet, Tuple
 from uuid import uuid1
 
-from ..datalog.aggregation import Chase, TranslateToLogicWithAggregation
+from ..datalog.aggregation import (
+    Chase,
+    DatalogWithAggregationMixin,
+    TranslateToLogicWithAggregation
+)
 from ..datalog.constraints_representation import DatalogConstraintsProgram
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
 from ..expression_walker import ExpressionBasicEvaluator
-from ..expressions import Symbol, Unknown
+from ..expressions import Constant, Symbol, Unknown
 from ..logic import Union
-from ..probabilistic import (
-    dichotomy_theorem_based_solver,
-    weighted_model_counting
-)
-from ..probabilistic.cplogic.problog_solver import \
-    solve_succ_all as problog_solve_succ_all
 from ..probabilistic.cplogic.program import (
     CPLogicMixin,
     CPLogicProgram,
     TranslateProbabilisticQueryMixin
 )
-from ..probabilistic.dichotomy_theorem_based_solver import solve_succ_query
-from ..probabilistic.exceptions import NotHierarchicalQueryException
+from ..probabilistic.dichotomy_theorem_based_solver import \
+    solve_succ_query as lifted_solve_succ_query
 from ..probabilistic.expression_processing import (
-    separate_deterministic_probabilistic_code
+    construct_within_language_succ_result,
+    is_within_language_succ_query,
+    within_language_succ_query_to_intensional_rule
 )
+from ..probabilistic.stratification import stratify_program
 from ..region_solver import RegionSolver
 from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
@@ -39,6 +40,7 @@ class RegionFrontendCPLogicSolver(
     TranslateToLogicWithAggregation,
     RegionSolver,
     CPLogicMixin,
+    DatalogWithAggregationMixin,
     DatalogConstraintsProgram,
     ExpressionBasicEvaluator,
 ):
@@ -47,7 +49,7 @@ class RegionFrontendCPLogicSolver(
 
 class ProbabilisticFrontend(QueryBuilderDatalog):
     def __init__(
-        self, chase_class=Chase, probabilistic_solver=problog_solve_succ_all
+        self, chase_class=Chase, probabilistic_solver=lifted_solve_succ_query
     ):
         super().__init__(
             RegionFrontendCPLogicSolver(), chase_class=chase_class
@@ -70,60 +72,98 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
 
         self.ontology_loaded = True
 
+    def execute_query(self, head, predicate):
+        query = self.solver.symbol_table[
+            predicate.expression.functor
+        ].formulas[0]
+        solution = self._solve(query)
+        if not isinstance(head, tuple):
+            # assumes head is a predicate e.g. r(x, y)
+            head_symbols = tuple(head.expression.args)
+            functor_orig = head.expression.functor
+        else:
+            head_symbols = tuple(t.expression for t in head)
+            functor_orig = None
+        solution = self._restrict_to_query_solution(
+            head_symbols, predicate, solution
+        )
+        return solution, functor_orig
+
     def solve_all(self):
-        (
-            deterministic_idb,
-            probabilistic_idb,
-        ) = separate_deterministic_probabilistic_code(self.solver)
-
-        if self.ontology_loaded:
-            eB = self._rewrite_program_with_ontology(deterministic_idb)
-            deterministic_idb = Union(deterministic_idb.formulas + eB.formulas)
-
-        solution = self.chase_class(
-            self.solver, rules=deterministic_idb
-        ).build_chase_solution()
-        if (
-            self.solver.pfact_pred_symbs
-            or self.solver.pchoice_pred_symbs
-            or probabilistic_idb.formulas
-        ):
-            cpl = self._make_probabilistic_program_from_deterministic_solution(
-                solution, probabilistic_idb
-            )
-            solution = self.probabilistic_solver(cpl)
+        solution = self._solve()
         solution_sets = dict()
         for pred_symb, relation in solution.items():
             solution_sets[pred_symb.name] = relation.value
         return solution_sets
 
-    def solve_query(self, query_pred):
-        (
-            deterministic_idb,
-            probabilistic_idb,
-        ) = separate_deterministic_probabilistic_code(self.solver)
+    def _solve(self, query=None):
+        idbs = stratify_program(query, self.solver)
+        det_idb = idbs.get("deterministic", Union(tuple()))
+        prob_idb = idbs.get("probabilistic", Union(tuple()))
+        ppq_det_idb = idbs.get("post_probabilistic", Union(tuple()))
 
         if self.ontology_loaded:
-            eB = self._rewrite_program_with_ontology(deterministic_idb)
-            self.solver.walk(eB)
+            eB = self._rewrite_program_with_ontology(det_idb)
+            det_idb = Union(det_idb.formulas + eB.formulas)
+        chase = self.chase_class(self.solver, rules=det_idb)
+        solution = chase.build_chase_solution()
+        if prob_idb.formulas:
+            self._compute_probabilistic_solution(solution, prob_idb)
+        if ppq_det_idb.formulas:
+            solver = RegionFrontendCPLogicSolver()
+            for psymb, relation in solution.items():
+                solver.add_extensional_predicate_from_tuples(
+                    psymb, relation.value,
+                )
+            for builtin_symb in self.solver.builtins():
+                solver.symbol_table[builtin_symb] = self.solver.symbol_table[
+                    builtin_symb
+                ]
+            solver.walk(ppq_det_idb)
+            chase = self.chase_class(solver, rules=ppq_det_idb)
+            solution = chase.build_chase_solution()
+        return solution
 
-        deterministic_solution = self.chase_class(
-            self.solver
-        ).build_chase_solution()
-        if probabilistic_idb.formulas:
-            cpl = self._make_probabilistic_program_from_deterministic_solution(
-                deterministic_solution, probabilistic_idb
+    @staticmethod
+    def _restrict_to_query_solution(head_symbols, predicate, solution):
+        """
+        Based on a solution instance and a query predicate, retrieve the
+        relation whose columns correspond to symbols in the head of the query.
+
+        """
+        query_solution = solution[predicate.expression.functor].value.unwrap()
+        cols = list(
+            arg.name
+            for arg in predicate.expression.args
+            if isinstance(arg, Symbol)
+        )
+        query_solution = NamedRelationalAlgebraFrozenSet(cols, query_solution)
+        query_solution = query_solution.projection(
+            *(symb.name for symb in head_symbols)
+        )
+        return Constant[AbstractSet](query_solution)
+
+    def _compute_probabilistic_solution(self, solution, prob_idb):
+        cpl = self._make_probabilistic_program_from_deterministic_solution(
+            solution, prob_idb
+        )
+        for rule in prob_idb.formulas:
+            if is_within_language_succ_query(rule):
+                pred = within_language_succ_query_to_intensional_rule(
+                    rule
+                ).consequent
+                provset = self.probabilistic_solver(pred, cpl)
+                relation = construct_within_language_succ_result(provset, rule)
+            else:
+                pred = rule.consequent
+                provset = self.probabilistic_solver(pred, cpl)
+                relation = Constant[AbstractSet](
+                    provset.value, auto_infer_type=False, verify_type=False,
+                )
+            solution[pred.functor] = Constant[AbstractSet](
+                relation.value.to_unnamed()
             )
-            try:
-                res = dichotomy_theorem_based_solver.solve_succ_query(
-                    query_pred.expression, cpl
-                )
-            except NotHierarchicalQueryException:
-                res = weighted_model_counting.solve_succ_query(
-                    query_pred.expression, cpl
-                )
-            return res
-        return deterministic_solution
+        return solution
 
     def _rewrite_program_with_ontology(self, deterministic_program):
         orw = OntologyRewriter(
@@ -136,6 +176,37 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             eB += (imp[0],)
 
         return Union(eB)
+
+    def add_probabilistic_facts_from_tuples(
+        self, iterable, type_=Unknown, name=None
+    ):
+        return self._add_probabilistic_tuples(
+            iterable,
+            type_,
+            name,
+            self.solver.add_probabilistic_facts_from_tuples,
+        )
+
+    def add_probabilistic_choice_from_tuples(
+        self, iterable, type_=Unknown, name=None
+    ):
+        return self._add_probabilistic_tuples(
+            iterable,
+            type_,
+            name,
+            self.solver.add_probabilistic_choice_from_tuples,
+        )
+
+    def _add_probabilistic_tuples(
+        self, iterable, type_, name, solver_add_method
+    ):
+        if name is None:
+            name = str(uuid1())
+        if isinstance(type_, tuple):
+            type_ = Tuple[type_]
+        symbol = Symbol[AbstractSet[type_]](name)
+        solver_add_method(symbol, iterable)
+        return FrontEndSymbol(self, name)
 
     def add_uniform_probabilistic_choice_over_set(
         self, iterable, type_=Unknown, name=None

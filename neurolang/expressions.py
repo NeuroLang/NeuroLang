@@ -406,6 +406,7 @@ class Symbol(NonConstant):
         """Initialize symbol with it's name."""
         self.name = name
         self._symbols = {self}
+        self.is_fresh = False
 
     def __eq__(self, other):
         return (
@@ -436,6 +437,7 @@ class Symbol(NonConstant):
         new_symbol = cls(next(Symbol._fresh_generator_))
         if cls.type is not typing.Any:
             new_symbol = new_symbol.cast(cls.type)
+        new_symbol.is_fresh = True
         return new_symbol
 
 

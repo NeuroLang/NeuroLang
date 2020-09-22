@@ -344,6 +344,13 @@ def dependency_matrix(datalog, rules=None):
 
     idb_symbols = tuple(sorted(idb_symbols, key=lambda s: s.name))
     edb = datalog.extensional_database()
+    if hasattr(datalog, "constraints"):
+        constraint_symbols = set(
+            formula.consequent.functor
+            for formula in datalog.constraints().formulas
+        )
+    else:
+        constraint_symbols = set()
 
     dependency_matrix = np.zeros(
         (len(idb_symbols), len(idb_symbols)), dtype=int
@@ -355,7 +362,7 @@ def dependency_matrix(datalog, rules=None):
         ix_head = idb_symbols.index(head_functor)
         for predicate in extract_logic_predicates(rule.antecedent):
             functor = predicate.functor
-            if functor in edb:
+            if functor in edb or functor in constraint_symbols:
                 continue
             elif functor in idb_symbols:
                 ix_functor = idb_symbols.index(functor)
@@ -525,3 +532,7 @@ def is_rule_with_builtin(rule, known_builtins=None):
         isinstance(pred.functor, Constant) or pred.functor in known_builtins
         for pred in extract_logic_predicates(rule.antecedent)
     )
+
+
+def remove_conjunction_duplicates(conjunction):
+    return Conjunction(tuple(set(conjunction.formulas)))

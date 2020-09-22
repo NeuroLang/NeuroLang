@@ -52,10 +52,15 @@ def test_fresh_symbol():
     s1 = S_.fresh()
     s2 = S_.fresh()
     s3 = S_[int].fresh()
+    s4 = S_('a')
 
     assert isinstance(s1, S_) and s1.type is Unknown
     assert s1 != s2
     assert s1 != s2 and s2 != s3 and s3.type is int
+    assert s1.is_fresh
+    assert s2.is_fresh
+    assert s3.is_fresh
+    assert not s4.is_fresh
 
 
 def test_fresh_symbol_2():
