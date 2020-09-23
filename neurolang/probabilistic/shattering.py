@@ -213,9 +213,6 @@ def shatter_easy_probfacts(query, symbol_table):
     Conjunctive query
         An equivalent conjunctive query without constants.
 
-    .. [1] Van den Broeck, G., and Suciu, D. (2017). Query Processing on
-       Probabilistic Data: A Survey. FNT in Databases 7, 197–341.
-
     """
     query = enforce_conjunction(query)
     query = remove_conjunction_duplicates(query)
