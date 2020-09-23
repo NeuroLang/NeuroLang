@@ -1,7 +1,13 @@
+import operator
+
 import numpy as np
 import pytest
 
 from ...datalog import Fact
+from ...datalog.expression_processing import (
+    ConjunctionSimplifier,
+    VariableEqualityPropagator,
+)
 from ...expressions import Constant, Symbol
 from ...logic import Conjunction, Implication, Union
 from ...relational_algebra import RenameColumn
@@ -18,6 +24,7 @@ try:
 except ImportError:
     from contextlib import suppress as nullcontext
 
+EQ = Constant(operator.eq)
 
 P = Symbol("P")
 Q = Symbol("Q")
@@ -59,7 +66,13 @@ def test_deterministic(solver):
         1.0 | b
 
     """
-    code = Union((Fact(Q(a)), Fact(Q(b)), Implication(P(x), Q(x)),))
+    code = Union(
+        (
+            Fact(Q(a)),
+            Fact(Q(b)),
+            Implication(P(x), Q(x)),
+        )
+    )
     cpl_program = CPLogicProgram()
     cpl_program.walk(code)
     query_pred = P(x)
@@ -166,7 +179,10 @@ def test_multi_level_conjunction(solver):
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
     result = solver.solve_succ_query(H(x, y), cpl_program)
     expected = testing.make_prov_set(
-        [(0.2 * 0.9 * 0.1, "a", "a"), (0.2 * 0.9 * 0.5, "a", "b"),],
+        [
+            (0.2 * 0.9 * 0.1, "a", "a"),
+            (0.2 * 0.9 * 0.5, "a", "b"),
+        ],
         ("_p_", "x", "y"),
     )
     assert testing.eq_prov_relations(result, expected)
@@ -215,7 +231,13 @@ def test_simple_probchoice(solver):
         )
     qpred = P(x)
     result = solver.solve_succ_query(qpred, cpl_program)
-    expected = testing.make_prov_set([(0.2, "a"), (0.8, "b"),], ("_p_", "x"),)
+    expected = testing.make_prov_set(
+        [
+            (0.2, "a"),
+            (0.8, "b"),
+        ],
+        ("_p_", "x"),
+    )
     assert testing.eq_prov_relations(result, expected)
 
 
@@ -282,7 +304,11 @@ def test_large_probabilistic_choice(solver):
     qpred = Z(x, y)
     result = solver.solve_succ_query(qpred, cpl_program)
     expected = testing.make_prov_set(
-        [(0.5 * probs[0], 0, 0), (0.5 * probs[0], 0, 1),], ("_p_", "x", "y")
+        [
+            (0.5 * probs[0], 0, 0),
+            (0.5 * probs[0], 0, 1),
+        ],
+        ("_p_", "x", "y"),
     )
     assert testing.eq_prov_relations(result, expected)
 
@@ -399,7 +425,12 @@ def test_multilevel_existential(solver):
     qpred = C(z)
     result = solver.solve_succ_query(qpred, cpl_program)
     expected = testing.make_prov_set(
-        [(0.1, "a"), (0.4, "b"), (0.5, "c"),], ("_p_", "z"),
+        [
+            (0.1, "a"),
+            (0.4, "b"),
+            (0.5, "c"),
+        ],
+        ("_p_", "z"),
     )
     assert testing.eq_prov_relations(result, expected)
 
@@ -411,9 +442,13 @@ def test_multilevel_existential(solver):
         context = nullcontext()
 
     with context:
-        result = solver.solve_succ_query(qpred, cpl_program,)
+        result = solver.solve_succ_query(
+            qpred,
+            cpl_program,
+        )
         expected = testing.make_prov_set(
-            [(0.5 * 0.1 * 0.5, "c")], ("_p_", "z"),
+            [(0.5 * 0.1 * 0.5, "c")],
+            ("_p_", "z"),
         )
         assert testing.eq_prov_relations(result, expected)
 
@@ -561,7 +596,11 @@ def test_conjunct_pfact_equantified_pchoice(solver):
     qpred = Q(x)
     result = solver.solve_succ_query(qpred, cpl_program)
     expected = testing.make_prov_set(
-        [(0.6 * 0.8 + 0.4 * 0.5, "a",), (0.1 * 0.4, "b"),], ("_p_", "x"),
+        [
+            (0.6 * 0.8 + 0.4 * 0.5, "a"),
+            (0.1 * 0.4, "b"),
+        ],
+        ("_p_", "x"),
     )
     assert testing.eq_prov_relations(result, expected)
 
@@ -575,7 +614,12 @@ def test_shatterable_query(solver):
     cpl_program.walk(code)
     qpred = Q(x)
     result = solver.solve_succ_query(qpred, cpl_program)
-    expected = testing.make_prov_set([(0.5 * 0.1, "2",),], ("_p_", "x"))
+    expected = testing.make_prov_set(
+        [
+            (0.5 * 0.1, "2"),
+        ],
+        ("_p_", "x"),
+    )
     assert testing.eq_prov_relations(result, expected)
 
 
@@ -590,5 +634,47 @@ def test_shatterable_query_2(solver):
     cpl_program.walk(code)
     qpred = Q(x)
     result = solver.solve_succ_query(qpred, cpl_program)
-    expected = testing.make_prov_set([(0.5 * 0.1, "2",),], ("_p_", "x"))
+    expected = testing.make_prov_set(
+        [
+            (0.5 * 0.1, "2"),
+        ],
+        ("_p_", "x"),
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
+class CPLogicWithVarEqPropagation(
+    VariableEqualityPropagator,
+    ConjunctionSimplifier,
+    CPLogicProgram,
+):
+    pass
+
+
+def test_program_with_variable_equality(solver):
+    pfact_sets = {
+        Q: {(0.2, "a"), (0.3, "b"), (0.4, "c")},
+    }
+    pchoice_as_sets = {
+        P: {(0.5, "a", "b"), (0.5, "b", "c")},
+    }
+    code = Union(
+        (Implication(Z(x, y), Conjunction((P(y, x), Q(y), EQ(y, a)))),)
+    )
+    cpl_program = CPLogicWithVarEqPropagation()
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+    cpl_program.walk(code)
+    qpred = Z(x, y)
+    result = solver.solve_succ_query(qpred, cpl_program)
+    expected = testing.make_prov_set(
+        [
+            (0.5 * 0.2, "b", "a"),
+        ],
+        ("_p_", "x", "y"),
+    )
     assert testing.eq_prov_relations(result, expected)

@@ -3,7 +3,6 @@ import itertools
 from typing import AbstractSet
 
 from ..datalog.expression_processing import (
-    VariableEqualityPropagator,
     enforce_conjunction,
     remove_conjunction_duplicates,
 )
@@ -217,8 +216,6 @@ def shatter_easy_probfacts(query, symbol_table):
     query = enforce_conjunction(query)
     query = remove_conjunction_duplicates(query)
     ws_query = query_to_tagged_set_representation(query, symbol_table)
-    var_eq_propagator = VariableEqualityPropagator()
-    ws_query = var_eq_propagator.walk(ws_query)
     shatterer = EasyProbfactShatterer(symbol_table)
     shattered_query = shatterer.walk(ws_query)
     _check_shatter_fully_solved(shattered_query)
