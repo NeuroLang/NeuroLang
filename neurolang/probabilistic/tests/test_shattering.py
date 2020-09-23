@@ -7,6 +7,7 @@ from ...expressions import Constant, FunctionApplication, Symbol
 from ...logic import Conjunction
 from ..cplogic.program import CPLogicProgram
 from ..probabilistic_ra_utils import (
+    DeterministicFactSet,
     ProbabilisticFactSet,
     generate_probabilistic_symbol_table_for_query,
 )
@@ -152,7 +153,11 @@ def test_predicates_with_more_than_one_self_join():
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
         P,
-        [(0.2, "a", "b", "c",), (1.0, "a", "c", "b",), (0.7, "b", "b", "d",),],
+        [
+            (0.2, "a", "b", "c"),
+            (1.0, "a", "c", "b"),
+            (0.7, "b", "b", "d"),
+        ],
     )
     symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
     shattered = shatter_easy_probfacts(query, symbol_table)
@@ -164,15 +169,26 @@ def test_shattering_with_variable_equality():
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
         P,
-        [(0.2, "a", "b", "c",), (1.0, "a", "c", "b",), (0.7, "b", "b", "d",),],
+        [
+            (0.2, "a", "b", "c"),
+            (1.0, "a", "c", "b"),
+            (0.7, "b", "b", "d"),
+        ],
     )
     symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
     shattered = shatter_easy_probfacts(query, symbol_table)
     assert isinstance(shattered, Conjunction)
-    assert len(shattered.formulas) == 1
-    assert isinstance(shattered.formulas[0].functor, ProbabilisticFactSet)
-    assert shattered.formulas[0].args == (y, z)
-    assert len(symbol_table[shattered.formulas[0].functor.relation].value) == 2
+    assert len(shattered.formulas) == 2
+    assert any(
+        isinstance(formula.functor, ProbabilisticFactSet)
+        and formula.args == (y, z)
+        for formula in shattered.formulas
+    )
+    assert any(
+        isinstance(formula.functor, DeterministicFactSet)
+        and formula.args == (x,)
+        for formula in shattered.formulas
+    )
 
 
 def test_shattering_with_reversed_variable_equality():
@@ -180,15 +196,26 @@ def test_shattering_with_reversed_variable_equality():
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
         P,
-        [(0.2, "a", "b", "c",), (1.0, "a", "c", "b",), (0.7, "b", "b", "d",),],
+        [
+            (0.2, "a", "b", "c"),
+            (1.0, "a", "c", "b"),
+            (0.7, "b", "b", "d"),
+        ],
     )
     symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
     shattered = shatter_easy_probfacts(query, symbol_table)
     assert isinstance(shattered, Conjunction)
-    assert len(shattered.formulas) == 1
-    assert isinstance(shattered.formulas[0].functor, ProbabilisticFactSet)
-    assert shattered.formulas[0].args == (y, z)
-    assert len(symbol_table[shattered.formulas[0].functor.relation].value) == 2
+    assert len(shattered.formulas) == 2
+    assert any(
+        isinstance(formula.functor, ProbabilisticFactSet)
+        and formula.args == (y, z)
+        for formula in shattered.formulas
+    )
+    assert any(
+        isinstance(formula.functor, DeterministicFactSet)
+        and formula.args == (x,)
+        for formula in shattered.formulas
+    )
 
 
 def test_shattering_between_symbol_equalities():
@@ -196,12 +223,18 @@ def test_shattering_between_symbol_equalities():
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
         P,
-        [(0.2, "a", "b", "c",), (1.0, "a", "c", "b",), (0.7, "b", "b", "b",),],
+        [
+            (0.2, "a", "b", "c"),
+            (1.0, "a", "c", "b"),
+            (0.7, "b", "b", "b"),
+        ],
     )
     symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
     shattered = shatter_easy_probfacts(query, symbol_table)
     assert isinstance(shattered, Conjunction)
-    assert len(shattered.formulas) == 1
-    assert isinstance(shattered.formulas[0].functor, ProbabilisticFactSet)
-    assert len(shattered.formulas[0].args)
-    assert len(set(shattered.formulas[0].args)) == 1
+    assert len(shattered.formulas) == 3
+    assert any(
+        isinstance(formula.functor, ProbabilisticFactSet)
+        and len(set(formula.args)) == 1
+        for formula in shattered.formulas
+    )

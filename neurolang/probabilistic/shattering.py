@@ -1,8 +1,11 @@
 import collections
 import itertools
+import operator
 from typing import AbstractSet
 
 from ..datalog.expression_processing import (
+    PropagatedEquality,
+    VariableEqualityPropagator,
     enforce_conjunction,
     remove_conjunction_duplicates,
 )
@@ -10,9 +13,12 @@ from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionWalker
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import Conjunction
+from ..utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
 from .exceptions import NotEasilyShatterableError
 from .expression_processing import iter_conjunctive_query_predicates
-from .probabilistic_ra_utils import ProbabilisticFactSet
+from .probabilistic_ra_utils import DeterministicFactSet, ProbabilisticFactSet
+
+EQ = Constant(operator.eq)
 
 
 def terms_differ_by_constant_term(terms_a, terms_b):
@@ -154,11 +160,27 @@ class EasyQueryShatterer(ExpressionWalker):
         )
         return FunctionApplication(new_tagged, non_const_args)
 
+    @add_match(PropagatedEquality(EQ, (Symbol, Constant)))
+    def shatter_var_const_equality(self, equality):
+        symbol, constant = equality.args
+        new_relation = NamedRelationalAlgebraFrozenSet(
+            (symbol.name,), [(constant.value,)]
+        )
+        new_pred_symb = Symbol.fresh()
+        new_tagged = DeterministicFactSet(new_pred_symb)
+        self.symbol_table[new_pred_symb] = Constant[AbstractSet](new_relation)
+        return FunctionApplication(new_tagged, (symbol,))
 
-class EasyProbfactShatterer(QueryEasyShatteringTagger, EasyQueryShatterer):
+
+class EasyProbfactShatterer(
+    VariableEqualityPropagator,
+    QueryEasyShatteringTagger,
+    EasyQueryShatterer,
+):
     def __init__(self, symbol_table):
-        EasyQueryShatterer.__init__(self, symbol_table)
+        VariableEqualityPropagator.__init__(self)
         QueryEasyShatteringTagger.__init__(self)
+        EasyQueryShatterer.__init__(self, symbol_table)
 
 
 def query_to_tagged_set_representation(query, symbol_table):

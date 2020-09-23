@@ -652,6 +652,8 @@ class CPLogicWithVarEqPropagation(
 
 
 def test_program_with_variable_equality(solver):
+    if solver != dichotomy_theorem_based_solver:
+        return
     pfact_sets = {
         Q: {(0.2, "a"), (0.3, "b"), (0.4, "c")},
     }
