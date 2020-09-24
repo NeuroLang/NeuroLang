@@ -564,7 +564,7 @@ class ExtractedEquality(FunctionApplication):
     pass
 
 
-class PropagatedEquality(FunctionApplication):
+class UnifiedEquality(FunctionApplication):
     pass
 
 
@@ -656,12 +656,12 @@ class VariableEqualityExtractor(PatternWalker):
         return {symb: chosen_symb for symb in iterator}
 
 
-class VariableEqualityPropagator(PatternWalker):
+class VariableEqualityUnifier(PatternWalker):
     @add_match(
         Implication(FunctionApplication(Symbol, ...), Conjunction),
         lambda implication: any(
             is_equality_between_symbol_and_symbol_or_constant(formula)
-            and not isinstance(formula, PropagatedEquality)
+            and not isinstance(formula, UnifiedEquality)
             for formula in implication.antecedent.formulas
         ),
     )
@@ -669,7 +669,7 @@ class VariableEqualityPropagator(PatternWalker):
         (
             new_antecedent,
             replacer,
-        ) = self._extract_and_propagate_equalities(implication.antecedent)
+        ) = self._extract_and_unify_equalities(implication.antecedent)
         new_consequent = replacer.walk(implication.consequent)
         new_implication = Implication[implication.type](
             new_consequent, new_antecedent
@@ -680,7 +680,7 @@ class VariableEqualityPropagator(PatternWalker):
         Conjunction,
         lambda conjunction: any(
             is_equality_between_symbol_and_symbol_or_constant(formula)
-            and not isinstance(formula, PropagatedEquality)
+            and not isinstance(formula, UnifiedEquality)
             for formula in conjunction.formulas
         ),
     )
@@ -688,18 +688,18 @@ class VariableEqualityPropagator(PatternWalker):
         (
             new_conjunction,
             _,
-        ) = self._extract_and_propagate_equalities(conjunction)
+        ) = self._extract_and_unify_equalities(conjunction)
         return self.walk(new_conjunction)
 
     @staticmethod
-    def _extract_and_propagate_equalities(conjunction):
-        extractor = VariableEqualityPropagator._Extractor()
+    def _extract_and_unify_equalities(conjunction):
+        extractor = VariableEqualityUnifier._Extractor()
         new_conjunction = extractor.walk(conjunction)
         replacer = ReplaceSymbolWalker(extractor.substitutions)
         conjuncts = list()
         for formula in new_conjunction.formulas:
             if is_equality_between_symbol_and_symbol_or_constant(formula):
-                conjuncts.append(PropagatedEquality(*formula.unapply()))
+                conjuncts.append(UnifiedEquality(*formula.unapply()))
             else:
                 conjuncts.append(replacer.walk(formula))
         new_conjunction = Conjunction(conjuncts)
@@ -709,7 +709,7 @@ class VariableEqualityPropagator(PatternWalker):
         pass
 
 
-class TautologyRemover(PatternWalker):
+class EliminateTrivialTrueCases(PatternWalker):
     @add_match(Conjunction, lambda conjunction: len(conjunction.formulas) == 0)
     def empty_conjunction(self, empty_conjunction):
         return TRUE
@@ -736,19 +736,19 @@ class TautologyRemover(PatternWalker):
         return self.walk(Fact(implication.consequent))
 
 
-class PropagatedEqualityRemover(TautologyRemover):
-    @add_match(PropagatedEquality)
-    def replace_propagated_equality_with_true(self, equality):
+class UnifiedEqualityRemover(EliminateTrivialTrueCases):
+    @add_match(UnifiedEquality)
+    def replace_unified_equality_with_true(self, equality):
         return TRUE
 
     @add_match(
         Implication(..., Conjunction),
         lambda implication: any(
-            isinstance(formula, PropagatedEquality)
+            isinstance(formula, UnifiedEquality)
             for formula in implication.antecedent.formulas
         ),
     )
-    def implication_with_propagated_equality(self, implication):
+    def implication_with_unified_equality(self, implication):
         return self.walk(
             implication.apply(
                 implication.consequent, self.walk(implication.antecedent)
@@ -758,11 +758,11 @@ class PropagatedEqualityRemover(TautologyRemover):
     @add_match(
         Conjunction,
         lambda conjunction: any(
-            isinstance(formula, PropagatedEquality)
+            isinstance(formula, UnifiedEquality)
             for formula in conjunction.formulas
         ),
     )
-    def conjunction_with_propagated_equality(self, conjunction):
+    def conjunction_with_unified_equality(self, conjunction):
         return self.walk(
             conjunction.apply(
                 tuple(self.walk(formula) for formula in conjunction.formulas)

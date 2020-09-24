@@ -5,8 +5,8 @@ from ...expression_walker import ExpressionWalker
 from ...expressions import Constant, Symbol
 from ...logic import Conjunction, Implication, Union
 from ..expression_processing import (
-    PropagatedEqualityRemover,
-    VariableEqualityPropagator,
+    UnifiedEqualityRemover,
+    VariableEqualityUnifier,
 )
 
 P = Symbol("P")
@@ -23,8 +23,8 @@ EQ = Constant(operator.eq)
 
 
 class DatalogWithVariableEqualityPropagation(
-    VariableEqualityPropagator,
-    PropagatedEqualityRemover,
+    VariableEqualityUnifier,
+    UnifiedEqualityRemover,
     DatalogProgram,
     ExpressionWalker,
 ):
