@@ -560,14 +560,6 @@ def iter_disjunction_or_implication_rules(implication_or_disjunction):
             yield formula
 
 
-class ExtractedEquality(FunctionApplication):
-    pass
-
-
-class UnifiedEquality(FunctionApplication):
-    pass
-
-
 def is_equality_between_symbol_and_symbol_or_constant(formula):
     return (
         isinstance(formula, FunctionApplication)
@@ -596,32 +588,27 @@ class VariableEqualityExtractor(PatternWalker):
         Conjunction,
         lambda conj: any(
             is_equality_between_symbol_and_symbol_or_constant(formula)
-            and not isinstance(formula, ExtractedEquality)
             for formula in conj.formulas
         ),
     )
     def conjunction_with_variable_equality(self, conjunction):
-        conjuncts = tuple(
-            self.walk(formula) for formula in conjunction.formulas
-        )
-        return self.walk(Conjunction(conjuncts))
+        for formula in conjunction.formulas:
+            self.walk(formula)
 
     @add_match(FunctionApplication(EQ, (Symbol, Symbol)))
     def variable_equality_between_variables(self, function_application):
         first, second = function_application.args
         self._add_equality_with_symbol(first, second)
-        return ExtractedEquality(*function_application.unapply())
 
     @add_match(FunctionApplication(EQ, (Constant, Symbol)))
     def variable_equality_with_constant_reversed(self, function_application):
         functor, (const, symb) = function_application.unapply()
-        return function_application.apply(functor, (symb, const))
+        self.walk(function_application.apply(functor, (symb, const)))
 
     @add_match(FunctionApplication(EQ, (Symbol, Constant)))
     def variable_equality_with_constant(self, function_application):
         symb, const = function_application.args
         self._add_equality_with_constant(symb, const)
-        return ExtractedEquality(*function_application.unapply())
 
     def _add_equality_with_constant(self, symb, const):
         found_eq_set = False
@@ -661,7 +648,6 @@ class VariableEqualityUnifier(PatternWalker):
         Implication(FunctionApplication(Symbol, ...), Conjunction),
         lambda implication: any(
             is_equality_between_symbol_and_symbol_or_constant(formula)
-            and not isinstance(formula, UnifiedEquality)
             for formula in implication.antecedent.formulas
         ),
     )
@@ -680,7 +666,6 @@ class VariableEqualityUnifier(PatternWalker):
         Conjunction,
         lambda conjunction: any(
             is_equality_between_symbol_and_symbol_or_constant(formula)
-            and not isinstance(formula, UnifiedEquality)
             for formula in conjunction.formulas
         ),
     )
@@ -694,16 +679,18 @@ class VariableEqualityUnifier(PatternWalker):
     @staticmethod
     def _extract_and_unify_equalities(conjunction):
         extractor = VariableEqualityUnifier._Extractor()
-        new_conjunction = extractor.walk(conjunction)
+        extractor.walk(conjunction)
         replacer = ReplaceSymbolWalker(extractor.substitutions)
-        conjuncts = list()
-        for formula in new_conjunction.formulas:
-            if is_equality_between_symbol_and_symbol_or_constant(formula):
-                conjuncts.append(UnifiedEquality(*formula.unapply()))
-            else:
-                conjuncts.append(replacer.walk(formula))
-        new_conjunction = Conjunction(conjuncts)
-        return new_conjunction, replacer
+        conjuncts = tuple(
+            replacer.walk(formula)
+            for formula in conjunction.formulas
+            if not is_equality_between_symbol_and_symbol_or_constant(formula)
+        )
+        if conjuncts:
+            new_exp = Conjunction(conjuncts)
+        else:
+            new_exp = TRUE
+        return new_exp, replacer
 
     class _Extractor(VariableEqualityExtractor, IdentityWalker):
         pass
@@ -734,37 +721,3 @@ class EliminateTrivialTrueCases(PatternWalker):
     )
     def implication_to_fact(self, implication):
         return self.walk(Fact(implication.consequent))
-
-
-class UnifiedEqualityRemover(EliminateTrivialTrueCases):
-    @add_match(UnifiedEquality)
-    def replace_unified_equality_with_true(self, equality):
-        return TRUE
-
-    @add_match(
-        Implication(..., Conjunction),
-        lambda implication: any(
-            isinstance(formula, UnifiedEquality)
-            for formula in implication.antecedent.formulas
-        ),
-    )
-    def implication_with_unified_equality(self, implication):
-        return self.walk(
-            implication.apply(
-                implication.consequent, self.walk(implication.antecedent)
-            )
-        )
-
-    @add_match(
-        Conjunction,
-        lambda conjunction: any(
-            isinstance(formula, UnifiedEquality)
-            for formula in conjunction.formulas
-        ),
-    )
-    def conjunction_with_unified_equality(self, conjunction):
-        return self.walk(
-            conjunction.apply(
-                tuple(self.walk(formula) for formula in conjunction.formulas)
-            )
-        )
