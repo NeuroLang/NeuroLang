@@ -707,11 +707,7 @@ class VariableEqualityPropagator(PatternWalker):
         pass
 
 
-class ConjunctionSimplifier(PatternWalker):
-    @add_match(PropagatedEquality)
-    def replace_propagated_equality_with_true(self, equality):
-        return TRUE
-
+class TautologyRemover(PatternWalker):
     @add_match(
         Conjunction,
         lambda conjunction: any(
@@ -722,5 +718,39 @@ class ConjunctionSimplifier(PatternWalker):
         return Conjunction[bool](
             tuple(
                 formula for formula in conjunction.formulas if formula != TRUE
+            )
+        )
+
+
+class PropagatedEqualityRemover(TautologyRemover):
+    @add_match(PropagatedEquality)
+    def replace_propagated_equality_with_true(self, equality):
+        return TRUE
+
+    @add_match(
+        Implication(..., Conjunction),
+        lambda implication: any(
+            isinstance(formula, PropagatedEquality)
+            for formula in implication.antecedent.formulas
+        ),
+    )
+    def implication_with_propagated_equality(self, implication):
+        return self.walk(
+            implication.apply(
+                implication.consequent, self.walk(implication.antecedent)
+            )
+        )
+
+    @add_match(
+        Conjunction,
+        lambda conjunction: any(
+            isinstance(formula, PropagatedEquality)
+            for formula in conjunction.formulas
+        ),
+    )
+    def conjunction_with_propagated_equality(self, conjunction):
+        return self.walk(
+            conjunction.apply(
+                tuple(self.walk(formula) for formula in conjunction.formulas)
             )
         )

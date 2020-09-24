@@ -1,10 +1,11 @@
 import operator
 
 from ...datalog.basic_representation import DatalogProgram
+from ...expression_walker import ExpressionWalker
 from ...expressions import Constant, Symbol
 from ...logic import Conjunction, Implication, Union
 from ..expression_processing import (
-    ConjunctionSimplifier,
+    PropagatedEqualityRemover,
     VariableEqualityPropagator,
 )
 
@@ -22,7 +23,10 @@ EQ = Constant(operator.eq)
 
 
 class DatalogWithVariableEqualityPropagation(
-    VariableEqualityPropagator, ConjunctionSimplifier, DatalogProgram
+    VariableEqualityPropagator,
+    PropagatedEqualityRemover,
+    DatalogProgram,
+    ExpressionWalker,
 ):
     pass
 
@@ -38,6 +42,15 @@ def test_propagation_to_one_conjunct():
 
 def test_propagation_to_two_conjuncts():
     rule = Implication(R(x, y), Conjunction((P(x, y), EQ(y, a), Q(y, y))))
+    program = DatalogWithVariableEqualityPropagation()
+    program.walk(rule)
+    assert R in program.intensional_database()
+    expected = Union((Implication(R(x, a), Conjunction((P(x, a), Q(a, a)))),))
+    assert expected == program.intensional_database()[R]
+
+
+def test_single_equality_antecedent():
+    rule = Implication(R(x), Conjunction((EQ(x, a))))
     program = DatalogWithVariableEqualityPropagation()
     program.walk(rule)
     assert R in program.intensional_database()
