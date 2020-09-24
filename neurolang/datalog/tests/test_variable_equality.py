@@ -1,17 +1,19 @@
 import operator
 
 from ...datalog.basic_representation import DatalogProgram
-from ...expression_walker import ExpressionWalker
+from ...expression_walker import ChainedWalker, ExpressionWalker
 from ...expressions import Constant, Symbol
 from ...logic import Conjunction, Implication, Union
+from ...logic.transformations import CollapseConjunctions
 from ..expression_processing import (
     EliminateTrivialTrueCases,
-    VariableEqualityUnifier,
+    UnifyVariableEqualities,
 )
 
 P = Symbol("P")
 Q = Symbol("Q")
 R = Symbol("R")
+Z = Symbol("Z")
 x = Symbol("x")
 y = Symbol("y")
 z = Symbol("z")
@@ -23,7 +25,7 @@ EQ = Constant(operator.eq)
 
 
 class DatalogWithVariableEqualityPropagation(
-    VariableEqualityUnifier,
+    UnifyVariableEqualities,
     EliminateTrivialTrueCases,
     DatalogProgram,
     ExpressionWalker,
@@ -31,9 +33,15 @@ class DatalogWithVariableEqualityPropagation(
     pass
 
 
+def make_test_program_with_first_conjunction_collapse():
+    return ChainedWalker(
+        CollapseConjunctions, DatalogWithVariableEqualityPropagation
+    )
+
+
 def test_propagation_to_one_conjunct():
     rule = Implication(R(x), Conjunction((P(x, y), EQ(y, a))))
-    program = DatalogWithVariableEqualityPropagation()
+    program = make_test_program_with_first_conjunction_collapse()
     program.walk(rule)
     assert R in program.intensional_database()
     expected = Union((Implication(R(x), Conjunction((P(x, a),))),))
@@ -42,7 +50,7 @@ def test_propagation_to_one_conjunct():
 
 def test_propagation_to_two_conjuncts():
     rule = Implication(R(x, y), Conjunction((P(x, y), EQ(y, a), Q(y, y))))
-    program = DatalogWithVariableEqualityPropagation()
+    program = make_test_program_with_first_conjunction_collapse()
     program.walk(rule)
     assert R in program.intensional_database()
     expected = Union((Implication(R(x, a), Conjunction((P(x, a), Q(a, a)))),))
@@ -51,7 +59,7 @@ def test_propagation_to_two_conjuncts():
 
 def test_single_equality_antecedent():
     rule = Implication(R(x), Conjunction((EQ(x, a),)))
-    program = DatalogWithVariableEqualityPropagation()
+    program = make_test_program_with_first_conjunction_collapse()
     program.walk(rule)
     assert R not in program.intensional_database()
     assert R in program.extensional_database()
@@ -59,7 +67,7 @@ def test_single_equality_antecedent():
 
 def test_between_vars_equality_propagation():
     rule = Implication(R(x, y), Conjunction((P(x, y), EQ(y, x), Q(y, y))))
-    program = DatalogWithVariableEqualityPropagation()
+    program = make_test_program_with_first_conjunction_collapse()
     program.walk(rule)
     assert R in program.intensional_database()
     expecteds = [
@@ -74,7 +82,7 @@ def test_multiple_between_vars_equalities():
     rule = Implication(
         R(x, y, z), Conjunction((P(z, x), EQ(y, z), EQ(y, x), Q(y, y)))
     )
-    program = DatalogWithVariableEqualityPropagation()
+    program = make_test_program_with_first_conjunction_collapse()
     program.walk(rule)
     assert R in program.intensional_database()
     expecteds = [
@@ -90,7 +98,7 @@ def test_mix_between_var_eqs_var_to_const_eq():
         R(x, y, z),
         Conjunction((P(z, x), EQ(y, z), EQ(y, a), Q(y, y), EQ(b, x))),
     )
-    program = DatalogWithVariableEqualityPropagation()
+    program = make_test_program_with_first_conjunction_collapse()
     program.walk(rule)
     assert R in program.intensional_database()
     expected = Union(
@@ -103,3 +111,29 @@ def test_mix_between_var_eqs_var_to_const_eq():
     )
     result = program.intensional_database()[R]
     assert hash(result) == hash(expected)
+
+
+def test_collapsable_conjunction():
+    rule = Implication(
+        R(x, y),
+        Conjunction(
+            (
+                Conjunction((P(z), Q(y, x), EQ(y, z))),
+                Conjunction((Q(z, y), P(z), P(y), EQ(z, a))),
+                Z(b),
+                Z(z),
+            )
+        ),
+    )
+    program = make_test_program_with_first_conjunction_collapse()
+    program.walk(rule)
+    expected = Union(
+        (
+            Implication(
+                R(x, a),
+                Conjunction((P(a), Q(a, x), Q(a, a), Z(b), Z(a))),
+            ),
+        )
+    )
+    result = program.intensional_database()[R]
+    assert result == expected

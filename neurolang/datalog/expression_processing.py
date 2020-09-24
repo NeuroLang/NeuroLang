@@ -38,6 +38,7 @@ from ..logic import (
     Union,
 )
 from ..logic import expression_processing as elp
+from ..logic.transformations import CollapseConjunctions
 from .expressions import Fact, TranslateToLogic
 
 EQ = Constant(operator.eq)
@@ -569,7 +570,7 @@ def is_equality_between_symbol_and_symbol_or_constant(formula):
     )
 
 
-class VariableEqualityExtractor(PatternWalker):
+class ExtractVariableEqualities(PatternWalker):
     def __init__(self):
         self._equality_sets = list()
 
@@ -643,7 +644,7 @@ class VariableEqualityExtractor(PatternWalker):
         return {symb: chosen_symb for symb in iterator}
 
 
-class VariableEqualityUnifier(PatternWalker):
+class UnifyVariableEqualities(PatternWalker):
     @add_match(
         Implication(FunctionApplication(Symbol, ...), Conjunction),
         lambda implication: any(
@@ -652,11 +653,13 @@ class VariableEqualityUnifier(PatternWalker):
         ),
     )
     def extract_and_unify_var_eqs_in_implication(self, implication):
+        consequent = self.walk(implication.consequent)
+        antecedent = self.walk(implication.antecedent)
         (
             new_antecedent,
             replacer,
-        ) = self._extract_and_unify_equalities(implication.antecedent)
-        new_consequent = replacer.walk(implication.consequent)
+        ) = self._extract_and_unify_equalities(antecedent)
+        new_consequent = replacer.walk(consequent)
         new_implication = Implication[implication.type](
             new_consequent, new_antecedent
         )
@@ -678,7 +681,7 @@ class VariableEqualityUnifier(PatternWalker):
 
     @staticmethod
     def _extract_and_unify_equalities(conjunction):
-        extractor = VariableEqualityUnifier._Extractor()
+        extractor = UnifyVariableEqualities._Extractor()
         extractor.walk(conjunction)
         replacer = ReplaceSymbolWalker(extractor.substitutions)
         conjuncts = tuple(
@@ -692,7 +695,7 @@ class VariableEqualityUnifier(PatternWalker):
             new_exp = TRUE
         return new_exp, replacer
 
-    class _Extractor(VariableEqualityExtractor, IdentityWalker):
+    class _Extractor(ExtractVariableEqualities, IdentityWalker):
         pass
 
 
