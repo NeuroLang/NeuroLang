@@ -85,7 +85,7 @@ def test_multiple_between_vars_equalities():
     assert any(hash(expected) == hash(result) for expected in expecteds)
 
 
-def test_mixed_between_var_eqs_var_to_const_eq():
+def test_mix_between_var_eqs_var_to_const_eq():
     rule = Implication(
         R(x, y, z),
         Conjunction((P(z, x), EQ(y, z), EQ(y, a), Q(y, y), EQ(b, x))),
