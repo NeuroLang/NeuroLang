@@ -7,6 +7,7 @@ import numpy
 from ..datalog import WrappedRelationalAlgebraSet
 from ..datalog.expression_processing import (
     extract_logic_predicates,
+    iter_disjunction_or_implication_rules,
     reachable_code,
 )
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
@@ -351,3 +352,27 @@ def iter_conjunctive_query_predicates(query):
                 type(query)
             )
         )
+
+
+def is_probabilistic_predicate_symbol(pred_symb, program):
+    wlq_symbs = set(program.within_language_succ_queries())
+    prob_symbs = program.pfact_pred_symbs | program.pchoice_pred_symbs
+    stack = [pred_symb]
+    while stack:
+        pred_symb = stack.pop()
+        if pred_symb in prob_symbs:
+            return True
+        if (
+            pred_symb in wlq_symbs
+            or pred_symb not in program.intensional_database()
+        ):
+            continue
+        for rule in iter_disjunction_or_implication_rules(
+            program.symbol_table[pred_symb]
+        ):
+            stack += [
+                apred.functor
+                for apred in extract_logic_predicates(rule.antecedent)
+                if apred.functor not in wlq_symbs
+            ]
+    return False
