@@ -438,10 +438,7 @@ def test_multilevel_existential(solver):
         context = nullcontext()
 
     with context:
-        result = solver.solve_succ_query(
-            qpred,
-            cpl_program,
-        )
+        result = solver.solve_succ_query(qpred, cpl_program)
         expected = testing.make_prov_set(
             [(0.5 * 0.1 * 0.5, "c")],
             ("_p_", "z"),
