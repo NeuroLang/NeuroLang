@@ -1,12 +1,13 @@
 import operator
 
 from ...datalog.basic_representation import DatalogProgram
-from ...expression_walker import ChainedWalker, ExpressionWalker
+from ...expression_walker import ExpressionWalker
 from ...expressions import Constant, Symbol
 from ...logic import Conjunction, Implication, Union
-from ...logic.transformations import CollapseConjunctions
 from ..expression_processing import (
+    CollapseConjunctiveAntecedents,
     EliminateTrivialTrueCases,
+    RemoveDuplicatedAntecedentPredicates,
     UnifyVariableEqualities,
 )
 
@@ -25,9 +26,10 @@ EQ = Constant(operator.eq)
 
 
 class DatalogWithVariableEqualityPropagation(
-    CollapseConjunctions,
+    CollapseConjunctiveAntecedents,
     UnifyVariableEqualities,
     EliminateTrivialTrueCases,
+    RemoveDuplicatedAntecedentPredicates,
     DatalogProgram,
     ExpressionWalker,
 ):
@@ -131,4 +133,10 @@ def test_collapsable_conjunction():
         )
     )
     result = program.intensional_database()[R]
-    assert result == expected
+    assert isinstance(result, Union)
+    assert len(result.formulas) == 1
+    assert isinstance(result.formulas[0], Implication)
+    assert result.formulas[0].consequent == expected.formulas[0].consequent
+    assert set(result.formulas[0].antecedent.formulas) == set(
+        expected.formulas[0].antecedent.formulas
+    )
