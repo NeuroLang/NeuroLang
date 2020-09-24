@@ -57,7 +57,7 @@ def test_single_equality_antecedent():
     assert R in program.extensional_database()
 
 
-def test_between_symbs_equality_propagation():
+def test_between_vars_equality_propagation():
     rule = Implication(R(x, y), Conjunction((P(x, y), EQ(y, x), Q(y, y))))
     program = DatalogWithVariableEqualityPropagation()
     program.walk(rule)
@@ -70,7 +70,7 @@ def test_between_symbs_equality_propagation():
     assert any(hash(expected) == hash(result) for expected in expecteds)
 
 
-def test_multiple_between_symbs_equalities():
+def test_multiple_between_vars_equalities():
     rule = Implication(
         R(x, y, z), Conjunction((P(z, x), EQ(y, z), EQ(y, x), Q(y, y)))
     )
