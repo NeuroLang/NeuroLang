@@ -25,6 +25,7 @@ EQ = Constant(operator.eq)
 
 
 class DatalogWithVariableEqualityPropagation(
+    CollapseConjunctions,
     UnifyVariableEqualities,
     EliminateTrivialTrueCases,
     DatalogProgram,
@@ -33,15 +34,9 @@ class DatalogWithVariableEqualityPropagation(
     pass
 
 
-def make_test_program_with_first_conjunction_collapse():
-    return ChainedWalker(
-        CollapseConjunctions, DatalogWithVariableEqualityPropagation
-    )
-
-
 def test_propagation_to_one_conjunct():
     rule = Implication(R(x), Conjunction((P(x, y), EQ(y, a))))
-    program = make_test_program_with_first_conjunction_collapse()
+    program = DatalogWithVariableEqualityPropagation()
     program.walk(rule)
     assert R in program.intensional_database()
     expected = Union((Implication(R(x), Conjunction((P(x, a),))),))
@@ -50,7 +45,7 @@ def test_propagation_to_one_conjunct():
 
 def test_propagation_to_two_conjuncts():
     rule = Implication(R(x, y), Conjunction((P(x, y), EQ(y, a), Q(y, y))))
-    program = make_test_program_with_first_conjunction_collapse()
+    program = DatalogWithVariableEqualityPropagation()
     program.walk(rule)
     assert R in program.intensional_database()
     expected = Union((Implication(R(x, a), Conjunction((P(x, a), Q(a, a)))),))
@@ -59,7 +54,7 @@ def test_propagation_to_two_conjuncts():
 
 def test_single_equality_antecedent():
     rule = Implication(R(x), Conjunction((EQ(x, a),)))
-    program = make_test_program_with_first_conjunction_collapse()
+    program = DatalogWithVariableEqualityPropagation()
     program.walk(rule)
     assert R not in program.intensional_database()
     assert R in program.extensional_database()
@@ -67,7 +62,7 @@ def test_single_equality_antecedent():
 
 def test_between_vars_equality_propagation():
     rule = Implication(R(x, y), Conjunction((P(x, y), EQ(y, x), Q(y, y))))
-    program = make_test_program_with_first_conjunction_collapse()
+    program = DatalogWithVariableEqualityPropagation()
     program.walk(rule)
     assert R in program.intensional_database()
     expecteds = [
@@ -82,7 +77,7 @@ def test_multiple_between_vars_equalities():
     rule = Implication(
         R(x, y, z), Conjunction((P(z, x), EQ(y, z), EQ(y, x), Q(y, y)))
     )
-    program = make_test_program_with_first_conjunction_collapse()
+    program = DatalogWithVariableEqualityPropagation()
     program.walk(rule)
     assert R in program.intensional_database()
     expecteds = [
@@ -98,7 +93,7 @@ def test_mix_between_var_eqs_var_to_const_eq():
         R(x, y, z),
         Conjunction((P(z, x), EQ(y, z), EQ(y, a), Q(y, y), EQ(b, x))),
     )
-    program = make_test_program_with_first_conjunction_collapse()
+    program = DatalogWithVariableEqualityPropagation()
     program.walk(rule)
     assert R in program.intensional_database()
     expected = Union(
@@ -125,7 +120,7 @@ def test_collapsable_conjunction():
             )
         ),
     )
-    program = make_test_program_with_first_conjunction_collapse()
+    program = DatalogWithVariableEqualityPropagation()
     program.walk(rule)
     expected = Union(
         (

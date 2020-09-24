@@ -653,47 +653,17 @@ class UnifyVariableEqualities(PatternWalker):
         ),
     )
     def extract_and_unify_var_eqs_in_implication(self, implication):
-        consequent = self.walk(implication.consequent)
-        antecedent = self.walk(implication.antecedent)
-        (
-            new_antecedent,
-            replacer,
-        ) = self._extract_and_unify_equalities(antecedent)
-        new_consequent = replacer.walk(consequent)
-        new_implication = Implication[implication.type](
-            new_consequent, new_antecedent
-        )
-        return self.walk(new_implication)
-
-    @add_match(
-        Conjunction,
-        lambda conjunction: any(
-            is_equality_between_symbol_and_symbol_or_constant(formula)
-            for formula in conjunction.formulas
-        ),
-    )
-    def extract_and_unify_var_eqs_in_conjunction(self, conjunction):
-        (
-            new_conjunction,
-            _,
-        ) = self._extract_and_unify_equalities(conjunction)
-        return self.walk(new_conjunction)
-
-    @staticmethod
-    def _extract_and_unify_equalities(conjunction):
         extractor = UnifyVariableEqualities._Extractor()
-        extractor.walk(conjunction)
+        extractor.walk(implication.antecedent)
         replacer = ReplaceSymbolWalker(extractor.substitutions)
+        consequent = replacer.walk(implication.consequent)
         conjuncts = tuple(
             replacer.walk(formula)
-            for formula in conjunction.formulas
+            for formula in implication.antecedent.formulas
             if not is_equality_between_symbol_and_symbol_or_constant(formula)
         )
-        if conjuncts:
-            new_exp = Conjunction(conjuncts)
-        else:
-            new_exp = TRUE
-        return new_exp, replacer
+        antecedent = Conjunction(conjuncts) if conjuncts else TRUE
+        return self.walk(Implication(consequent, antecedent))
 
     class _Extractor(ExtractVariableEqualities, IdentityWalker):
         pass
