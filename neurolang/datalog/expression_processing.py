@@ -651,7 +651,7 @@ class VariableEqualityUnifier(PatternWalker):
             for formula in implication.antecedent.formulas
         ),
     )
-    def extract_and_replace_var_eqs_in_implication(self, implication):
+    def extract_and_unify_var_eqs_in_implication(self, implication):
         (
             new_antecedent,
             replacer,
@@ -669,7 +669,7 @@ class VariableEqualityUnifier(PatternWalker):
             for formula in conjunction.formulas
         ),
     )
-    def extract_and_replace_var_eqs_in_conjunction(self, conjunction):
+    def extract_and_unify_var_eqs_in_conjunction(self, conjunction):
         (
             new_conjunction,
             _,
