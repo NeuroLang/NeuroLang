@@ -50,9 +50,8 @@ def test_propagation_to_two_conjuncts():
 
 
 def test_single_equality_antecedent():
-    rule = Implication(R(x), Conjunction((EQ(x, a))))
+    rule = Implication(R(x), Conjunction((EQ(x, a),)))
     program = DatalogWithVariableEqualityPropagation()
     program.walk(rule)
-    assert R in program.intensional_database()
-    expected = Union((Implication(R(x, a), Conjunction((P(x, a), Q(a, a)))),))
-    assert expected == program.intensional_database()[R]
+    assert R not in program.intensional_database()
+    assert R in program.extensional_database()

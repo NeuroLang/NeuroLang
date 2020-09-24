@@ -27,7 +27,7 @@ from ..expression_walker import (
     ReplaceExpressionWalker,
     ReplaceSymbolWalker,
 )
-from ..expressions import Constant, Expression, FunctionApplication, Symbol
+from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import (
     TRUE,
     Conjunction,
@@ -38,7 +38,7 @@ from ..logic import (
     Union,
 )
 from ..logic import expression_processing as elp
-from .expressions import TranslateToLogic
+from .expressions import Fact, TranslateToLogic
 
 EQ = Constant(operator.eq)
 
@@ -716,6 +716,10 @@ class VariableEqualityPropagator(PatternWalker):
 
 
 class TautologyRemover(PatternWalker):
+    @add_match(Conjunction, lambda conjunction: len(conjunction.formulas) == 0)
+    def empty_conjunction(self, empty_conjunction):
+        return TRUE
+
     @add_match(
         Conjunction,
         lambda conjunction: any(
@@ -723,11 +727,19 @@ class TautologyRemover(PatternWalker):
         ),
     )
     def simplifiable_conjunction(self, conjunction):
-        return Conjunction[bool](
+        new_conjunction = Conjunction[bool](
             tuple(
                 formula for formula in conjunction.formulas if formula != TRUE
             )
         )
+        return self.walk(new_conjunction)
+
+    @add_match(
+        Implication(FunctionApplication, TRUE),
+        lambda implication: not isinstance(implication, Fact),
+    )
+    def implication_to_fact(self, implication):
+        return self.walk(Fact(implication.consequent))
 
 
 class PropagatedEqualityRemover(TautologyRemover):
