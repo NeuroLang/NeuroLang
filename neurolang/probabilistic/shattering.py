@@ -13,7 +13,7 @@ from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionWalker
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import Conjunction
-from ..utils.relational_algebra_set import NamedRelationalAlgebraFrozenSet
+from ..utils.relational_algebra_set import RelationalAlgebraFrozenSet
 from .exceptions import NotEasilyShatterableError
 from .expression_processing import iter_conjunctive_query_predicates
 from .probabilistic_ra_utils import DeterministicFactSet, ProbabilisticFactSet
@@ -163,9 +163,7 @@ class EasyQueryShatterer(ExpressionWalker):
     @add_match(PropagatedEquality(EQ, (Symbol, Constant)))
     def shatter_var_const_equality(self, equality):
         symbol, constant = equality.args
-        new_relation = NamedRelationalAlgebraFrozenSet(
-            (symbol.name,), [(constant.value,)]
-        )
+        new_relation = RelationalAlgebraFrozenSet([(constant.value,)])
         new_pred_symb = Symbol.fresh()
         new_tagged = DeterministicFactSet(new_pred_symb)
         self.symbol_table[new_pred_symb] = Constant[AbstractSet](new_relation)

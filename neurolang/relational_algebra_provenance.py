@@ -447,7 +447,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
         )
     )
     def projection_rap_columnint(self, projection):
-        columns = projection.relation.relations.columns
+        columns = projection.relation.non_provenance_columns
         new_attributes = tuple()
         for att in projection.attributes:
             if issubclass(att.type, ColumnInt):
@@ -462,7 +462,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
         )
     )
     def selection_rap_eq_columnint(self, selection):
-        columns = selection.relation.relations.columns
+        columns = selection.relation.non_provenance_columns
         formula = selection.formula
         new_formula = FunctionApplication(
             eq_, (

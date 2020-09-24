@@ -251,17 +251,14 @@ def solve_succ_query(query_predicate, cpl_program):
         )
         shattered_query = shatter_easy_probfacts(flat_query, symbol_table)
         shattered_query_formulas = set(shattered_query.formulas)
-        prob_symbols = cpl_program.probabilistic_predicate_symbols
-        query_pred_symbs = set(f.functor for f in flat_query.formulas)
-        prob_symbols = prob_symbols.intersection(query_pred_symbs)
-        prob_symbols = set(
-            symbol_table[psymb].relation for psymb in prob_symbols
-        )
         shattered_query_probabilistic_section = Conjunction(
             tuple(
                 formula
                 for formula in shattered_query_formulas
-                if formula.functor.relation in prob_symbols
+                if isinstance(
+                    formula.functor,
+                    (ProbabilisticFactSet, ProbabilisticChoiceSet),
+                )
             )
         )
         flat_query = Conjunction(tuple(shattered_query_formulas))

@@ -4,10 +4,6 @@ import numpy as np
 import pytest
 
 from ...datalog import Fact
-from ...datalog.expression_processing import (
-    ConjunctionSimplifier,
-    VariableEqualityPropagator,
-)
 from ...expressions import Constant, Symbol
 from ...logic import Conjunction, Implication, Union
 from ...relational_algebra import RenameColumn
@@ -643,14 +639,6 @@ def test_shatterable_query_2(solver):
     assert testing.eq_prov_relations(result, expected)
 
 
-class CPLogicWithVarEqPropagation(
-    VariableEqualityPropagator,
-    ConjunctionSimplifier,
-    CPLogicProgram,
-):
-    pass
-
-
 def test_program_with_variable_equality(solver):
     if solver != dichotomy_theorem_based_solver:
         return
@@ -663,7 +651,7 @@ def test_program_with_variable_equality(solver):
     code = Union(
         (Implication(Z(x, y), Conjunction((P(y, x), Q(y), EQ(y, a)))),)
     )
-    cpl_program = CPLogicWithVarEqPropagation()
+    cpl_program = CPLogicProgram()
     for pred_symb, pfact_set in pfact_sets.items():
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
     for pred_symb, pchoice_as_set in pchoice_as_sets.items():
