@@ -44,7 +44,7 @@ class ProvenanceAlgebraSet(Constant):
         self.relations = relations
         self.provenance_column = provenance_column
         if not isinstance(provenance_column, Column):
-            raise ValueError("Provenance column needs to be of ColumnStr type")
+            raise ValueError("Provenance column needs to be of Column type")
 
     @property
     def value(self):
