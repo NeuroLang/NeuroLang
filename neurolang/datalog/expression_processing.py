@@ -4,6 +4,8 @@ Datalog programs.
 """
 
 
+import collections
+import operator
 from itertools import chain
 from typing import Iterable
 
@@ -21,11 +23,14 @@ from ..expression_pattern_matching import (
 )
 from ..expression_walker import (
     ExpressionWalker,
+    IdentityWalker,
     PatternWalker,
     ReplaceExpressionWalker,
+    ReplaceSymbolWalker,
 )
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import (
+    TRUE,
     Conjunction,
     Disjunction,
     Implication,
@@ -34,7 +39,10 @@ from ..logic import (
     Union,
 )
 from ..logic import expression_processing as elp
+from ..logic.transformations import CollapseConjunctions
 from .expressions import TranslateToLogic
+
+EQ = Constant(operator.eq)
 
 
 class TranslateToDatalogSemantics(TranslateToLogic, ExpressionWalker):
@@ -397,11 +405,17 @@ def program_has_loops(program_representation):
 
 
 def conjunct_if_needed(formulas):
-    """Only conjunct the given list of formulas if there is more than one."""
+    """
+    Only conjunct the given list of formulas if there is more than one. If
+    an empty list of formulas is passed, `Constant[bool](True)` is returned
+    instead.
+
+    """
+    if len(formulas) == 0:
+        return TRUE
     if len(formulas) == 1:
         return formulas[0]
-    else:
-        return Conjunction(formulas)
+    return Conjunction(formulas)
 
 
 def conjunct_formulas(f1, f2):
@@ -552,3 +566,146 @@ def iter_disjunction_or_implication_rules(implication_or_disjunction):
     else:
         for formula in implication_or_disjunction.formulas:
             yield formula
+
+
+def is_equality_between_symbol_and_symbol_or_constant(formula):
+    return (
+        isinstance(formula, FunctionApplication)
+        and formula.functor == EQ
+        and len(formula.args) == 2
+        and all(isinstance(arg, (Constant, Symbol)) for arg in formula.args)
+    )
+
+
+class RemoveDuplicatedAntecedentPredicates(PatternWalker):
+    @add_match(
+        Implication(FunctionApplication, Conjunction),
+        lambda implication: any(
+            count > 1
+            for count in collections.Counter(
+                implication.antecedent.formulas
+            ).values()
+        ),
+    )
+    def implication_with_duplicated_antecedent_predicate(self, implication):
+        return self.walk(
+            implication.apply(
+                implication.consequent,
+                remove_conjunction_duplicates(implication.antecedent),
+            )
+        )
+
+
+class ExtractVariableEqualities(PatternWalker):
+    def __init__(self):
+        self._equality_sets = list()
+
+    @property
+    def substitutions(self):
+        substitutions = dict()
+        for eq_set in self._equality_sets:
+            if any(isinstance(term, Constant) for term in eq_set):
+                update = self._get_const_equality_substitutions(eq_set)
+            else:
+                update = self._get_between_symbs_equality_substitutions(eq_set)
+            substitutions.update(update)
+        return substitutions
+
+    @add_match(
+        Conjunction,
+        lambda conj: any(
+            is_equality_between_symbol_and_symbol_or_constant(formula)
+            for formula in conj.formulas
+        ),
+    )
+    def conjunction_with_variable_equality(self, conjunction):
+        for formula in conjunction.formulas:
+            self.walk(formula)
+
+    @add_match(FunctionApplication(EQ, (Symbol, Symbol)))
+    def variable_equality_between_variables(self, function_application):
+        first, second = function_application.args
+        self._add_equality_with_symbol(first, second)
+
+    @add_match(FunctionApplication(EQ, (Constant, Symbol)))
+    def variable_equality_with_constant_reversed(self, function_application):
+        functor, (const, symb) = function_application.unapply()
+        self.walk(function_application.apply(functor, (symb, const)))
+
+    @add_match(FunctionApplication(EQ, (Symbol, Constant)))
+    def variable_equality_with_constant(self, function_application):
+        symb, const = function_application.args
+        self._add_equality_with_constant(symb, const)
+
+    def _add_equality_with_constant(self, symb, const):
+        found_eq_set = False
+        for eq_set in self._equality_sets:
+            if any(term == symb for term in eq_set):
+                eq_set.add(const)
+                found_eq_set = True
+        if not found_eq_set:
+            self._equality_sets.append({symb, const})
+
+    def _add_equality_with_symbol(self, first, second):
+        found_eq_set = False
+        for eq_set in self._equality_sets:
+            if any(term == first for term in eq_set):
+                eq_set.add(second)
+                found_eq_set = True
+            elif any(term == second for term in eq_set):
+                eq_set.add(first)
+                found_eq_set = True
+        if not found_eq_set:
+            self._equality_sets.append({first, second})
+
+    @staticmethod
+    def _get_const_equality_substitutions(eq_set):
+        const = next(term for term in eq_set if isinstance(term, Constant))
+        return {term: const for term in eq_set if isinstance(term, Symbol)}
+
+    @staticmethod
+    def _get_between_symbs_equality_substitutions(eq_set):
+        iterator = iter(eq_set)
+        chosen_symb = next(iterator)
+        return {symb: chosen_symb for symb in iterator}
+
+
+class UnifyVariableEqualities(PatternWalker):
+    @add_match(
+        Implication(FunctionApplication(Symbol, ...), Conjunction),
+        lambda implication: any(
+            is_equality_between_symbol_and_symbol_or_constant(formula)
+            for formula in implication.antecedent.formulas
+        ),
+    )
+    def extract_and_unify_var_eqs_in_implication(self, implication):
+        extractor = UnifyVariableEqualities._Extractor()
+        extractor.walk(implication.antecedent)
+        replacer = ReplaceSymbolWalker(extractor.substitutions)
+        consequent = replacer.walk(implication.consequent)
+        conjuncts = tuple(
+            replacer.walk(formula)
+            for formula in implication.antecedent.formulas
+            if not is_equality_between_symbol_and_symbol_or_constant(formula)
+        )
+        antecedent = conjunct_if_needed(conjuncts)
+        return self.walk(Implication(consequent, antecedent))
+
+    class _Extractor(ExtractVariableEqualities, IdentityWalker):
+        pass
+
+
+class CollapseConjunctiveAntecedents(CollapseConjunctions):
+    @add_match(
+        Implication(FunctionApplication, Conjunction),
+        lambda implication: any(
+            isinstance(formula, Conjunction)
+            for formula in implication.antecedent.formulas
+        ),
+    )
+    def implication_with_collapsable_conjunctive_antecedent(self, implication):
+        return self.walk(
+            implication.apply(
+                implication.consequent, self.walk(implication.antecedent)
+            )
+        )
