@@ -1,4 +1,5 @@
 import collections
+from neurolang.datalog.basic_representation import DatalogProgram
 from typing import AbstractSet, Tuple
 from uuid import uuid1
 
@@ -8,12 +9,13 @@ from ..datalog.aggregation import (
     TranslateToLogicWithAggregation,
 )
 from ..datalog.constraints_representation import DatalogConstraintsProgram
+from ..datalog.magic_sets import magic_rewrite
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
 from ..exceptions import UnsupportedQueryError
 from ..expression_walker import ExpressionBasicEvaluator
 from ..expressions import Constant, Symbol, Unknown
-from ..logic import Union
+from ..logic import Implication, Union
 from ..probabilistic.cplogic.program import (
     CPLogicMixin,
     TranslateProbabilisticQueryMixin,
@@ -31,7 +33,7 @@ from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraStringExpression,
 )
-from . import QueryBuilderDatalog
+from . import QueryBuilderDatalog, RegionFrontendDatalogSolver
 from .query_resolution_expressions import Symbol as FrontEndSymbol
 
 
@@ -76,7 +78,15 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             raise UnsupportedQueryError(
                 "Queries on probabilistic predicates are not supported"
             )
-        query = self.solver.symbol_table[query_pred_symb].formulas[0]
+        self.solver.push_scope()
+        query = Implication(
+            Symbol.fresh()(
+                *(arg.expression for arg in head)
+            ),
+            predicate.expression
+        )
+        self.solver.walk(query)
+        # query = self.solver.symbol_table[query_pred_symb].formulas[0]
         solution = self._solve(query)
         if not isinstance(head, tuple):
             # assumes head is a predicate e.g. r(x, y)
@@ -88,6 +98,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         solution = self._restrict_to_query_solution(
             head_symbols, predicate, solution
         )
+        self.solver.pop_scope()
         return solution, functor_orig
 
     def solve_all(self):
@@ -98,6 +109,20 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         return solution_sets
 
     def _solve(self, query=None):
+        if False:
+            print(query)
+            dp = self.solver
+            old_extensional_database = dp.extensional_database
+            dp.extensional_database = (
+                lambda: DatalogProgram.extensional_database(dp)
+            )
+            goal, rewritten_code = magic_rewrite(query.consequent, dp)
+            dp.extensional_database = old_extensional_database
+
+            print(self.frontend_translator.walk(goal))
+            for formula in rewritten_code.formulas:
+                print(f'\t{self.frontend_translator.walk(formula)}')
+
         idbs = stratify_program(query, self.solver)
         det_idb = idbs.get("deterministic", Union(tuple()))
         prob_idb = idbs.get("probabilistic", Union(tuple()))
