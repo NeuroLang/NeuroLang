@@ -295,7 +295,6 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
         type, iterable
             the inferred type and the iterable.
         """
-        print(type(iterable))
         type_ = Unknown
         if hasattr(iterable, 'fetch_one'):
             if iterable.is_empty():
