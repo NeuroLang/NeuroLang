@@ -2,11 +2,7 @@ import typing
 
 from ...datalog import DatalogProgram
 from ...datalog.basic_representation import UnionOfConjunctiveQueries
-from ...exceptions import (
-    ForbiddenDisjunctionError,
-    ForbiddenExpressionError,
-    UnsupportedQueryError,
-)
+from ...exceptions import ForbiddenDisjunctionError, ForbiddenExpressionError
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
 from ...expressions import Constant, FunctionApplication, Symbol
