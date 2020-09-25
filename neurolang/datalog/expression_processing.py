@@ -40,7 +40,7 @@ from ..logic import (
 )
 from ..logic import expression_processing as elp
 from ..logic.transformations import CollapseConjunctions
-from .expressions import Fact, TranslateToLogic
+from .expressions import TranslateToLogic
 
 EQ = Constant(operator.eq)
 
@@ -405,11 +405,17 @@ def program_has_loops(program_representation):
 
 
 def conjunct_if_needed(formulas):
-    """Only conjunct the given list of formulas if there is more than one."""
+    """
+    Only conjunct the given list of formulas if there is more than one. If
+    an empty list of formulas is passed, `Constant[bool](True)` is returned
+    instead.
+
+    """
+    if len(formulas) == 0:
+        return TRUE
     if len(formulas) == 1:
         return formulas[0]
-    else:
-        return Conjunction(formulas)
+    return Conjunction(formulas)
 
 
 def conjunct_formulas(f1, f2):
@@ -682,49 +688,11 @@ class UnifyVariableEqualities(PatternWalker):
             for formula in implication.antecedent.formulas
             if not is_equality_between_symbol_and_symbol_or_constant(formula)
         )
-        antecedent = Conjunction(conjuncts) if conjuncts else TRUE
+        antecedent = conjunct_if_needed(conjuncts)
         return self.walk(Implication(consequent, antecedent))
 
     class _Extractor(ExtractVariableEqualities, IdentityWalker):
         pass
-
-
-class EliminateTrivialTrueCases(PatternWalker):
-    @add_match(
-        Implication(FunctionApplication, Conjunction),
-        lambda implication: len(implication.antecedent.formulas) == 0,
-    )
-    def empty_conjunction_in_antecedent(self, implication):
-        return implication.apply(implication.consequent, TRUE)
-
-    @add_match(
-        Implication(FunctionApplication, Conjunction),
-        lambda implication: any(
-            formula == TRUE for formula in implication.antecedent.formulas
-        ),
-    )
-    def simplifiable_conjunction_in_antecedent(self, implication):
-        new_antecedent = Conjunction[bool](
-            tuple(
-                formula
-                for formula in implication.antecedent.formulas
-                if formula != TRUE
-            )
-        )
-        new_implication = implication.apply(
-            implication.consequent, new_antecedent
-        )
-        return self.walk(new_implication)
-
-    @add_match(
-        Implication(FunctionApplication, TRUE),
-        lambda implication: not isinstance(implication, Fact)
-        and all(
-            isinstance(term, Constant) for term in implication.consequent.args
-        ),
-    )
-    def fact_wannabe(self, implication):
-        return self.walk(Fact(implication.consequent))
 
 
 class CollapseConjunctiveAntecedents(CollapseConjunctions):
