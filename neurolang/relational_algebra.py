@@ -656,7 +656,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
             except NeuroLangPatternMatchingNoMatch:
                 fun, args = self._fa_2_lambda.walk(self._rccsbs.walk(fun_exp))
                 return lambda t: fun(
-                    **{arg: getattr(t, arg) for arg in args}
+                    **{arg: t[arg] for arg in args}
                 )
         elif isinstance(fun_exp, Constant[ColumnInt]):
             return RelationalAlgebraColumnInt(fun_exp.value)
