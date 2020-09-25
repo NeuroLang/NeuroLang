@@ -9,7 +9,6 @@ from ..expression_walker import (
 )
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..relational_algebra import (
-    Column,
     ColumnInt,
     ColumnStr,
     Destroy,
@@ -22,10 +21,12 @@ from ..relational_algebra import (
     RelationalAlgebraOperation,
     RenameColumn,
     Selection,
+    Union,
     get_expression_columns
 )
 from ..utils import NamedRelationalAlgebraFrozenSet
 from .expressions import Conjunction, Negation
+from ..logic import Disjunction
 
 EQ = Constant(eq)
 CONTAINS = Constant(contains)
@@ -252,6 +253,17 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         else:
             res = Negation(self.walk(expression.formula))
         return res
+
+    @add_match(Disjunction)
+    def translate_disjunction(self, expression):
+        ra_formulas = self.walk(expression.formulas)
+        ra_formulas = list(ra_formulas)
+        formula = ra_formulas.pop()
+        while len(ra_formulas) > 0:
+            formula_ = ra_formulas.pop()
+            formula = Union(formula_, formula)
+
+        return formula
 
     @add_match(Conjunction)
     def translate_conjunction(self, expression):

@@ -52,10 +52,11 @@ class ProvenanceAlgebraSet(Constant):
 
     @property
     def non_provenance_columns(self):
-        non_prov_cols = set(self.value.columns) - {
-            self.provenance_column
-        }
-        return tuple(sorted(non_prov_cols))
+        return tuple(
+            column
+            for column in self.value.columns
+            if column != self.provenance_column
+        )
 
 
 def check_do_not_share_non_prov_col(prov_set_1, prov_set_2):
@@ -447,7 +448,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
         )
     )
     def projection_rap_columnint(self, projection):
-        columns = projection.relation.relations.columns
+        columns = projection.relation.non_provenance_columns
         new_attributes = tuple()
         for att in projection.attributes:
             if issubclass(att.type, ColumnInt):
@@ -462,7 +463,7 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
         )
     )
     def selection_rap_eq_columnint(self, selection):
-        columns = selection.relation.relations.columns
+        columns = selection.relation.non_provenance_columns
         formula = selection.formula
         new_formula = FunctionApplication(
             eq_, (

@@ -4,7 +4,8 @@ from typing import AbstractSet, Tuple
 import numpy as np
 import pytest
 
-from ...exceptions import UnsupportedQueryError
+from ...exceptions import UnsupportedProgramError, UnsupportedQueryError
+from ...probabilistic.exceptions import UnsupportedProbabilisticQueryError
 from ..probabilistic_frontend import ProbabilisticFrontend
 
 
@@ -60,17 +61,8 @@ def test_probabilistic_query():
     with nl.scope as e:
         e.query1[e.y, e.PROB[e.y]] = data1[e.x] & data2[e.x, e.y]
         e.query2[e.y, e.PROB[e.y]] = e.query1[e.y] & data3[e.y]
-        res = nl.solve_all()
-
-    assert "query1" in res.keys()
-    assert "query2" in res.keys()
-    assert len(res["query1"].columns) == 2
-    assert len(res["query2"].columns) == 2
-    q2 = res["query2"].as_pandas_dataframe().values
-    assert len(q2) == 3
-    for elem in q2:
-        assert elem[0] in ["a", "b", "c"]
-        assert np.isclose(elem[1], 1 / 3 / 5 / 5)
+        with pytest.raises(UnsupportedProgramError):
+            nl.solve_all()
 
 
 def test_mixed_queries():
@@ -169,7 +161,12 @@ def test_simple_within_language_succ_query():
 def test_within_language_succ_query():
     nl = ProbabilisticFrontend()
     P = nl.add_uniform_probabilistic_choice_over_set(
-        [("a", "b",), ("b", "c",), ("b", "d",)], name="P"
+        [
+            ("a", "b"),
+            ("b", "c"),
+            ("b", "d"),
+        ],
+        name="P",
     )
     Q = nl.add_uniform_probabilistic_choice_over_set(
         [("a",), ("b",)], name="Q"
@@ -179,8 +176,8 @@ def test_within_language_succ_query():
         res = nl.solve_all()
     assert "Z" in res.keys()
     df = res["Z"].as_pandas_dataframe()
-    assert np.isclose(df.loc[df["x"] == "b"].iloc[0][1], 2 / 3 / 2)
-    assert np.isclose(df.loc[df["x"] == "a"].iloc[0][1], 1 / 3 / 2)
+    assert np.isclose(df.loc[df[0] == "b"].iloc[0][1], 2 / 3 / 2)
+    assert np.isclose(df.loc[df[0] == "a"].iloc[0][1], 1 / 3 / 2)
 
 
 def test_solve_query():
@@ -231,7 +228,7 @@ def test_solve_boolean_query():
     Q = nl.add_uniform_probabilistic_choice_over_set(
         [("a",), ("d",), ("c",)], name="Q"
     )
-    with pytest.raises(UnsupportedQueryError):
+    with pytest.raises(UnsupportedProbabilisticQueryError):
         with nl.scope as e:
             e.ans[e.PROB()] = P[e.x] & Q[e.x]
             nl.query((e.p), e.ans[e.p])
@@ -265,17 +262,21 @@ def test_solve_complex_stratified_query():
     assert set(df.columns) == {"x", "y", "h", "z"}
     assert len(df.loc[(df["x"] == 4) & (df["y"] == 4)]) == 1
     assert np.isclose(
-        df.loc[(df["x"] == 4) & (df["y"] == 4)].iloc[0]["h"], 0.2 * 0.7 * 0.6,
+        df.loc[(df["x"] == 4) & (df["y"] == 4)].iloc[0]["h"],
+        0.2 * 0.7 * 0.6,
     )
     assert np.isclose(
-        df.loc[(df["x"] == 4) & (df["y"] == 4)].iloc[0]["z"], 0.2 * 0.7 * 0.6,
+        df.loc[(df["x"] == 4) & (df["y"] == 4)].iloc[0]["z"],
+        0.2 * 0.7 * 0.6,
     )
     assert len(df.loc[(df["x"] == 4) & (df["y"] == 6)]) == 1
     assert np.isclose(
-        df.loc[(df["x"] == 4) & (df["y"] == 6)].iloc[0]["h"], 0.2 * 0.7 * 0.6,
+        df.loc[(df["x"] == 4) & (df["y"] == 6)].iloc[0]["h"],
+        0.2 * 0.7 * 0.6,
     )
     assert np.isclose(
-        df.loc[(df["x"] == 4) & (df["y"] == 6)].iloc[0]["z"], 0.8 * 0.7 * 0.6,
+        df.loc[(df["x"] == 4) & (df["y"] == 6)].iloc[0]["z"],
+        0.8 * 0.7 * 0.6,
     )
 
 
@@ -284,7 +285,8 @@ def test_solve_complex_stratified_query_with_deterministic_part():
     A = nl.add_tuple_set([("a",), ("b",), ("c",)], name="A")
     B = nl.add_tuple_set([("a",), ("b",)], name="B")
     P = nl.add_probabilistic_facts_from_tuples(
-        [(0.2, "a"), (0.8, "b")], name="P",
+        [(0.2, "a"), (0.8, "b")],
+        name="P",
     )
     with nl.scope as e:
         e.C[e.x, e.y] = A[e.x] & A[e.y] & B[e.x]
@@ -295,3 +297,101 @@ def test_solve_complex_stratified_query_with_deterministic_part():
     assert df.loc[(df["x"] == "b") & (df["y"] == "b")].iloc[0]["p"] == 0.8
     assert df.loc[(df["x"] == "a") & (df["y"] == "a")].iloc[0]["p"] == 0.2
     assert df.loc[(df["x"] == "b") & (df["y"] == "a")].iloc[0]["p"] == 0.2
+
+
+def test_neurolang_dl_aggregation():
+    neurolang = ProbabilisticFrontend()
+    q = neurolang.new_symbol(name="q")
+    p = neurolang.new_symbol(name="p")
+    r = neurolang.new_symbol(name="r")
+    x = neurolang.new_symbol(name="x")
+    y = neurolang.new_symbol(name="y")
+
+    @neurolang.add_symbol
+    def sum_(x):
+        return sum(x)
+
+    for i in range(10):
+        q[i % 2, i] = True
+
+    p[x, sum_(y)] = q[x, y]
+
+    sol = neurolang.query(r(x, y), p(x, y))
+
+    res_q = {(0, 2 + 4 + 8), (1, 1 + 5 + 9)}
+
+    assert len(sol) == 2
+    assert sol[r] == res_q
+    assert sol[p] == res_q
+
+
+def test_post_probabilistic_aggregation():
+    nl = ProbabilisticFrontend()
+    A = nl.add_probabilistic_facts_from_tuples(
+        [(0.2, "a"), (0.9, "b"), (0.5, "c")],
+        name="A",
+    )
+    B = nl.add_probabilistic_choice_from_tuples(
+        [(0.2, "a", "c"), (0.7, "b", "c"), (0.1, "a", "d")],
+        name="B",
+    )
+
+    @nl.add_symbol
+    def mysum(x):
+        return sum(x)
+
+    with nl.scope as e:
+        e.C[e.x, e.y, e.PROB[e.x, e.y]] = A[e.x] & B[e.x, e.y]
+        e.D[e.x, e.mysum(e.p)] = e.C[e.x, e.y, e.p]
+        res = nl.query((e.x, e.s), e.D[e.x, e.s])
+
+    assert len(res) == 2
+    assert res == {("a", 0.2 * 0.2 + 0.2 * 0.1), ("b", 0.9 * 0.7)}
+
+
+def test_empty_result_query():
+    nl = ProbabilisticFrontend()
+    A = nl.add_tuple_set([("f",), ("d",)], name="A")
+    B = nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.2, "a"),
+            (0.7, "b"),
+            (0.6, "c"),
+        ],
+        name="B",
+    )
+    with nl.scope as e:
+        e.Q[e.x, e.PROB[e.x]] = A[e.x] & B[e.x]
+        res = nl.query((e.x, e.p), e.Q[e.x, e.p])
+    assert res.is_empty()
+    with nl.scope as e:
+        e.Q[e.x] = A[e.x] & A["b"]
+        res = nl.query((e.x,), e.Q[e.x])
+    assert res.is_empty()
+
+
+def test_forbidden_query_on_probabilistic_predicate():
+    nl = ProbabilisticFrontend()
+    A = nl.add_tuple_set([("f",), ("d",)], name="A")
+    B = nl.add_probabilistic_facts_from_tuples(
+        [(0.2, "a"), (0.7, "b"), (0.6, "c")], name="B"
+    )
+    with pytest.raises(UnsupportedQueryError):
+        with nl.scope as e:
+            e.Q[e.x] = A[e.x] & B[e.x] & A["b"]
+            nl.query((e.x,), e.Q[e.x])
+
+
+def test_empty_boolean_query_result():
+    nl = ProbabilisticFrontend()
+    A = nl.add_tuple_set([("a",), ("b",), ("c",)], name="A")
+    B = nl.add_probabilistic_facts_from_tuples(
+        [(0.4, "a"), (0.5, "b")], name="B"
+    )
+    C = nl.add_probabilistic_choice_from_tuples(
+        [(0.8, "c"), (0.2, "f")], name="C"
+    )
+    with nl.scope as e:
+        e.D[e.x, e.PROB[e.x]] = A[e.x] & B[e.x] & C[e.x]
+        res = nl.query(tuple(), e.D[e.x, e.p])
+    assert not res

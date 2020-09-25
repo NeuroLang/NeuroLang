@@ -28,11 +28,15 @@ class Expression(object):
         )
 
     def __call__(self, *args, **kwargs):
-        new_args = tuple(
-            a.expression if isinstance(a, Expression)
-            else nl.Constant(a)
-            for a in args
-        )
+        new_args = []
+        for a in args:
+            if a is Ellipsis:
+                new_args.append(nl.Symbol.fresh())
+            elif isinstance(a, Expression):
+                new_args.append(a.expression)
+            else:
+                new_args.append(nl.Constant(a))
+        new_args = tuple(new_args)
 
         if (
             self.query_builder.logic_programming and
@@ -77,7 +81,10 @@ class Expression(object):
                 name += f'_{self.expression.number}'
             return name
         elif isinstance(self.expression, nl.Symbol):
-            return f'{self.expression.name}'
+            if self.expression.is_fresh:
+                return '...'
+            else:
+                return f'{self.expression.name}'
         else:
             return object.__repr__(self)
 
