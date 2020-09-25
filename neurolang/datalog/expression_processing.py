@@ -4,7 +4,6 @@ Datalog programs.
 """
 
 
-import operator
 from itertools import chain
 from typing import Iterable
 
@@ -22,14 +21,11 @@ from ..expression_pattern_matching import (
 )
 from ..expression_walker import (
     ExpressionWalker,
-    IdentityWalker,
     PatternWalker,
     ReplaceExpressionWalker,
-    ReplaceSymbolWalker,
 )
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import (
-    TRUE,
     Conjunction,
     Disjunction,
     Implication,
@@ -38,9 +34,7 @@ from ..logic import (
     Union,
 )
 from ..logic import expression_processing as elp
-from .expressions import Fact, TranslateToLogic
-
-EQ = Constant(operator.eq)
+from .expressions import TranslateToLogic
 
 
 class TranslateToDatalogSemantics(TranslateToLogic, ExpressionWalker):
@@ -558,219 +552,3 @@ def iter_disjunction_or_implication_rules(implication_or_disjunction):
     else:
         for formula in implication_or_disjunction.formulas:
             yield formula
-
-
-class ExtractedEquality(FunctionApplication):
-    pass
-
-
-class PropagatedEquality(FunctionApplication):
-    pass
-
-
-def is_equality_between_symbol_and_symbol_or_constant(formula):
-    return (
-        isinstance(formula, FunctionApplication)
-        and formula.functor == EQ
-        and len(formula.args) == 2
-        and all(isinstance(arg, (Constant, Symbol)) for arg in formula.args)
-    )
-
-
-class VariableEqualityExtractor(PatternWalker):
-    def __init__(self):
-        self._equality_sets = list()
-
-    @property
-    def substitutions(self):
-        substitutions = dict()
-        for eq_set in self._equality_sets:
-            if any(isinstance(term, Constant) for term in eq_set):
-                update = self._get_const_equality_substitutions(eq_set)
-            else:
-                update = self._get_between_symbs_equality_substitutions(eq_set)
-            substitutions.update(update)
-        return substitutions
-
-    @add_match(
-        Conjunction,
-        lambda conj: any(
-            is_equality_between_symbol_and_symbol_or_constant(formula)
-            and not isinstance(
-                formula, (ExtractedEquality, PropagatedEquality)
-            )
-            for formula in conj.formulas
-        ),
-    )
-    def conjunction_with_variable_equality(self, conjunction):
-        conjuncts = tuple(
-            self.walk(formula) for formula in conjunction.formulas
-        )
-        return self.walk(Conjunction(conjuncts))
-
-    @add_match(FunctionApplication(EQ, (Symbol, Symbol)))
-    def variable_equality_between_variables(self, function_application):
-        first, second = function_application.args
-        self._add_equality_with_symbol(first, second)
-        return ExtractedEquality(*function_application.unapply())
-
-    @add_match(FunctionApplication(EQ, (Constant, Symbol)))
-    def variable_equality_with_constant_reversed(self, function_application):
-        functor, (const, symb) = function_application.unapply()
-        return function_application.apply(functor, (symb, const))
-
-    @add_match(FunctionApplication(EQ, (Symbol, Constant)))
-    def variable_equality_with_constant(self, function_application):
-        symb, const = function_application.args
-        self._add_equality_with_constant(symb, const)
-        return ExtractedEquality(*function_application.unapply())
-
-    def _add_equality_with_constant(self, symb, const):
-        found_eq_set = False
-        for eq_set in self._equality_sets:
-            if any(term == symb for term in eq_set):
-                eq_set.add(const)
-                found_eq_set = True
-        if not found_eq_set:
-            self._equality_sets.append({symb, const})
-
-    def _add_equality_with_symbol(self, first, second):
-        found_eq_set = False
-        for eq_set in self._equality_sets:
-            if any(term == first for term in eq_set):
-                eq_set.add(second)
-                found_eq_set = True
-            elif any(term == second for term in eq_set):
-                eq_set.add(first)
-                found_eq_set = True
-        if not found_eq_set:
-            self._equality_sets.append({first, second})
-
-    @staticmethod
-    def _get_const_equality_substitutions(eq_set):
-        const = next(term for term in eq_set if isinstance(term, Constant))
-        return {term: const for term in eq_set if isinstance(term, Symbol)}
-
-    @staticmethod
-    def _get_between_symbs_equality_substitutions(eq_set):
-        iterator = iter(eq_set)
-        chosen_symb = next(iterator)
-        return {symb: chosen_symb for symb in iterator}
-
-
-class VariableEqualityPropagator(PatternWalker):
-    @add_match(
-        Implication(FunctionApplication(Symbol, ...), Conjunction),
-        lambda implication: any(
-            is_equality_between_symbol_and_symbol_or_constant(formula)
-            and not isinstance(
-                formula, (ExtractedEquality, PropagatedEquality)
-            )
-            for formula in implication.antecedent.formulas
-        ),
-    )
-    def extract_and_replace_var_eqs_in_implication(self, implication):
-        (
-            new_antecedent,
-            replacer,
-        ) = self._extract_and_propagate_equalities(implication.antecedent)
-        new_consequent = replacer.walk(implication.consequent)
-        new_implication = Implication[implication.type](
-            new_consequent, new_antecedent
-        )
-        return self.walk(new_implication)
-
-    @add_match(
-        Conjunction,
-        lambda conjunction: any(
-            is_equality_between_symbol_and_symbol_or_constant(formula)
-            and not isinstance(
-                formula, (ExtractedEquality, PropagatedEquality)
-            )
-            for formula in conjunction.formulas
-        ),
-    )
-    def extract_and_replace_var_eqs_in_conjunction(self, conjunction):
-        (
-            new_conjunction,
-            _,
-        ) = self._extract_and_propagate_equalities(conjunction)
-        return self.walk(new_conjunction)
-
-    @staticmethod
-    def _extract_and_propagate_equalities(conjunction):
-        extractor = VariableEqualityPropagator._Extractor()
-        new_conjunction = extractor.walk(conjunction)
-        replacer = ReplaceSymbolWalker(extractor.substitutions)
-        conjuncts = list()
-        for formula in new_conjunction.formulas:
-            if is_equality_between_symbol_and_symbol_or_constant(formula):
-                conjuncts.append(PropagatedEquality(*formula.unapply()))
-            else:
-                conjuncts.append(replacer.walk(formula))
-        new_conjunction = Conjunction(conjuncts)
-        return new_conjunction, replacer
-
-    class _Extractor(VariableEqualityExtractor, IdentityWalker):
-        pass
-
-
-class TautologyRemover(PatternWalker):
-    @add_match(Conjunction, lambda conjunction: len(conjunction.formulas) == 0)
-    def empty_conjunction(self, empty_conjunction):
-        return TRUE
-
-    @add_match(
-        Conjunction,
-        lambda conjunction: any(
-            formula == TRUE for formula in conjunction.formulas
-        ),
-    )
-    def simplifiable_conjunction(self, conjunction):
-        new_conjunction = Conjunction[bool](
-            tuple(
-                formula for formula in conjunction.formulas if formula != TRUE
-            )
-        )
-        return self.walk(new_conjunction)
-
-    @add_match(
-        Implication(FunctionApplication, TRUE),
-        lambda implication: not isinstance(implication, Fact),
-    )
-    def implication_to_fact(self, implication):
-        return self.walk(Fact(implication.consequent))
-
-
-class PropagatedEqualityRemover(TautologyRemover):
-    @add_match(PropagatedEquality)
-    def replace_propagated_equality_with_true(self, equality):
-        return TRUE
-
-    @add_match(
-        Implication(..., Conjunction),
-        lambda implication: any(
-            isinstance(formula, PropagatedEquality)
-            for formula in implication.antecedent.formulas
-        ),
-    )
-    def implication_with_propagated_equality(self, implication):
-        return self.walk(
-            implication.apply(
-                implication.consequent, self.walk(implication.antecedent)
-            )
-        )
-
-    @add_match(
-        Conjunction,
-        lambda conjunction: any(
-            isinstance(formula, PropagatedEquality)
-            for formula in conjunction.formulas
-        ),
-    )
-    def conjunction_with_propagated_equality(self, conjunction):
-        return self.walk(
-            conjunction.apply(
-                tuple(self.walk(formula) for formula in conjunction.formulas)
-            )
-        )

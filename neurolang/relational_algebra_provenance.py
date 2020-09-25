@@ -52,10 +52,11 @@ class ProvenanceAlgebraSet(Constant):
 
     @property
     def non_provenance_columns(self):
-        non_prov_cols = set(self.value.columns) - {
-            self.provenance_column
-        }
-        return tuple(sorted(non_prov_cols))
+        return tuple(
+            column
+            for column in self.value.columns
+            if column != self.provenance_column
+        )
 
 
 def check_do_not_share_non_prov_col(prov_set_1, prov_set_2):
