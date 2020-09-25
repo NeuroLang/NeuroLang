@@ -34,26 +34,19 @@ from neurolang import frontend as fe
 nl = ProbabilisticFrontend()
 datasets_helper.load_reverse_inference_dataset(nl)
 
-# +
-#path = 'neurolang_data/ontologies/cogat.xrdf'
-#nl.load_ontology(path)
-# -
-
-nl.symbol_table['xyz_julich']
-
 with nl.scope as e:
-    e.julich_to_neurosynth[e.julich_id, e.id_neurosynth, e.x, e.y, e.z] = (
-        e.xyz_julich[e.x, e.y, e.z, e.julich_id] &
+    e.julich_to_neurosynth[e.j_id, e.id_neurosynth, e.x, e.y, e.z] = (
+        e.xyz_julich[e.x, e.y, e.z, e.j_id] &
         e.xyz_neurosynth[e.x, e.y, e.z, e.id_neurosynth] 
     )
     
-    e.region_voxels[e.name, e.id_neurosynth, e.x, e.y, e.z] = (
-        e.julich_id[e.name, e.julich_id] &
-        e.julich_to_neurosynth[e.julich_id, e.id_neurosynth, e.x, e.y, e.z]
+    e.julich_id[e.j_name, e.id] = (
+        e.julich_ontology[e.j_name, 'labelIndex', e.id]
     )
     
-    e.julich_id[e.name, e.id] = (
-        e.julich_ontology[e.name, 'labelIndex', e.id]
+    e.region_voxels[e.j_name, e.id_neurosynth, e.x, e.y, e.z] = (
+        e.julich_id[e.j_name, e.j_id] &
+        e.julich_to_neurosynth[e.j_id, e.id_neurosynth, e.x, e.y, e.z]
     )
     
     e.julich_voxels[e.id_neurosynth, e.x, e.y, e.z] = (
@@ -66,17 +59,15 @@ with nl.scope as e:
         e.p_study[e.id_study]
     )
     
-    e.probability_voxel[e.term] = (
-        e.p_act[e.id_voxel, e.term] &
-        e.julich_voxels[e.id_voxel, e.x, e.y, e.z]&
+    e.probability_voxel[e.ns_term] = (
+        e.p_act[e.id_voxel, e.ns_term] &
+        e.julich_voxels[e.id_voxel, e.x, e.y, e.z] #&
         e.prob_julich[e.x, e.y, e.z]
     )
     
-    nl_results = nl.solve_query(e.probability_voxel[e.term])
+    nl_results = nl.solve_query(e.probability_voxel[e.ns_term])
 
-nl_results.value.as_pandas_dataframe().head()
-
-
+nl_results
 
 
 
@@ -105,12 +96,8 @@ label = nl.new_symbol(name=str(RDFS.label))
 hasTopConcept = nl.new_symbol(name='http://www.w3.org/2004/02/skos/core#hasTopConcept')
 
 @nl.add_symbol
-def word_lower(name1: str, name2: str) -> bool:
-    print('-->', name1, name2)
-    if str(name1).lower() == str(name2).lower():
-        return True
-    
-    return False
+def word_lower(name: str) -> name:
+    return name.lower()
 
 
 # +
@@ -122,12 +109,12 @@ with nl.scope as e:
         e.xyz_neurosynth[e.x, e.y, e.z, e.id_neurosynth]
     )
     
-    e.region_voxels[e.name, e.id_neurosynth, e.x, e.y, e.z] = (
-        e.julich_id[e.name, e.julich_id] &
+    e.region_voxels[e.julich_name, e.id_neurosynth, e.x, e.y, e.z] = (
+        e.julich_id[e.julich_name, e.julich_id] &
         e.julich_to_neurosynth[e.julich_id, e.id_neurosynth, e.x, e.y, e.z]
     )
     
-    e.julich_id[e.name, e.id] = (
+    e.julich_id[e.julich_name, e.id] = (
         e.julich_ontology[e.name, 'labelIndex', e.id]
     )
     
@@ -141,19 +128,19 @@ with nl.scope as e:
         e.p_study[e.id_study]
     )
     
-    e.ontology_terms[e.name] = (
+    e.ontology_terms[e.onto_name] = (
         hasTopConcept[e.uri, 'Perception'] &
-        label[e.uri, e.name]
+        label[e.uri, e.onto_name]
     )
     
-    #e.probability_voxel[e.term1] = (
-    #    e.p_act[e.id_voxel, e.term1] &
-    #    e.julich_voxels[e.id_voxel, e.x, e.y, e.z] &
-    #    e.ontology_terms[e.term2] &
-    #    word_lower[e.term1, e.term2]
-    #)
+    e.probability_voxel[e.lower_name] = (
+        e.p_act[e.id_voxel, e.term] &
+        e.julich_voxels[e.id_voxel, e.x, e.y, e.z] &
+        e.ontology_terms[e.term] &
+        (e.lower_name == word_lower[e.term]
+    )
     
-    nl_results = nl.solve_query(e.p_act[e.id_voxel, e.term])
+    nl_results = nl.solve_query(e.probability_voxel[e.lower_name])
 # -
 
 nl_results
