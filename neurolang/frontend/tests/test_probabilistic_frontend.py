@@ -399,7 +399,7 @@ def test_empty_boolean_query_result():
 
 def test_equality():
     nl = ProbabilisticFrontend()
-    r1 = nl.add_tuple_set([(i,) for i in range(5)], name='r1')
+    r1 = nl.add_tuple_set([(i,) for i in range(5)], name="r1")
 
     with nl.scope as e:
         e.r2[e.x] = r1(e.y) & (e.x == e.y * 2)
@@ -408,7 +408,7 @@ def test_equality():
 
     assert set(sol) == set((2 * i,) for i in range(5))
 
-    r2 = nl.add_tuple_set([('Hola',), ('Hello',), ('Bonjour',)], name='r2')
+    r2 = nl.add_tuple_set([("Hola",), ("Hello",), ("Bonjour",)], name="r2")
 
     @nl.add_symbol
     def lower(input: str) -> str:
@@ -419,14 +419,14 @@ def test_equality():
 
         sol = nl.query((e.x,), e.r3[e.x])
 
-    assert set(sol) == set((('hola',), ('hello',), ('bonjour',)))
+    assert set(sol) == set((("hola",), ("hello",), ("bonjour",)))
 
 
 def test_equality2():
     nl = ProbabilisticFrontend()
     nl.add_tuple_set(
-        [('Hola', 'var'), ('Hello', 'var2'), ('Bonjour', 'var')],
-        name='test_var'
+        [("Hola", "var"), ("Hello", "var2"), ("Bonjour", "var")],
+        name="test_var",
     )
 
     @nl.add_symbol
@@ -434,11 +434,49 @@ def test_equality2():
         return str(name).lower()
 
     with nl.scope as e:
-        e.low[e.lower] = (
-            e.test_var[e.name, 'var'] &
-            (e.lower == word_lower(e.name))
+        e.low[e.lower] = e.test_var[e.name, "var"] & (
+            e.lower == word_lower(e.name)
         )
 
         query = nl.query((e.lower,), e.low[e.lower])
 
-    assert set(query) == set((('hola',), ('bonjour',)))
+    assert set(query) == set((("hola",), ("bonjour",)))
+
+
+def test_result_both_deterministic_and_post_probabilistic():
+    nl = ProbabilisticFrontend()
+    nl.add_tuple_set(
+        [
+            ("this", "is", "inglese"),
+            ("questo", "è", "italiano"),
+            ("ceci", "est", "francese"),
+        ],
+        name="parole",
+    )
+    nl.add_probabilistic_choice_from_tuples(
+        [
+            (0.4, "valentino"),
+            (0.6, "pietro"),
+        ],
+        name="persona_scelta",
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.1, "italiano"),
+            (0.7, "inglese"),
+            (0.2, "francese"),
+        ],
+        name="lingua_parlata",
+    )
+    with nl.scope as e:
+        e.e_una_lingua[e.lingua] = e.parole[e.subject, e.verb, e.lingua]
+        e.lingua_da_lua_decisa[
+            e.persona, e.lingua, e.PROB[e.persona, e.lingua]
+        ] = (
+            e.e_una_lingua[e.lingua]
+            & e.persona_scelta[e.persona]
+            & e.lingua_parlata[e.lingua]
+        )
+        res = nl.solve_all()
+    assert "e_una_lingua" in res
+    assert "lingua_da_lua_decisa" in res
