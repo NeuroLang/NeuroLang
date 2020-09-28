@@ -29,6 +29,7 @@ from ..expressions import Constant, Symbol
 from ..logic import Conjunction, Implication
 from ..logic.expression_processing import extract_logic_predicates
 from ..relational_algebra import (
+    ColumnInt,
     ColumnStr,
     EliminateTrivialProjections,
     ExtendedProjection,
@@ -178,7 +179,9 @@ class ProbSemiringSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
         )
         relation = NameColumns(relation, named_columns)
         relation = self.walk(relation)
-        rap_column = ColumnStr(f"col_{prob_fact_set.probability_column.value}")
+        rap_column = ColumnStr(
+            relation.value.columns[prob_fact_set.probability_column.value]
+        )
 
         self.translated_probfact_sets[relation_symbol] = ProvenanceAlgebraSet(
             relation.value, rap_column
