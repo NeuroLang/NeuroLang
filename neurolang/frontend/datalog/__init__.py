@@ -3,7 +3,7 @@ from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
 import tatsu
 
 from ...datalog import Conjunction, Fact, Implication, Negation, Union
-from ...expressions import Constant, Expression, Symbol
+from ...expressions import Constant, Expression, FunctionApplication, Symbol
 from ...probabilistic.expressions import ProbabilisticPredicate
 
 
@@ -218,11 +218,13 @@ class DatalogSemantics:
             return Constant(pow)(ast[0], ast[2])
 
     def function_application(self, ast):
-        return Symbol(ast[0])(*ast[2])
+        if not isinstance(ast[0], Expression):
+            f = Symbol(ast[0])
+        else:
+            f = ast[0]
+        return FunctionApplication(f, args=ast[2])
 
     def identifier(self, ast):
-        if isinstance(ast, Symbol):
-            return ast
         return Symbol(ast)
 
     def argument(self, ast):
