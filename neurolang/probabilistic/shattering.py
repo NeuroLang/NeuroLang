@@ -4,19 +4,15 @@ import operator
 from typing import AbstractSet
 
 from ..datalog.expression_processing import (
-    PropagatedEquality,
-    VariableEqualityPropagator,
-    enforce_conjunction,
-    remove_conjunction_duplicates,
+    UnifyVariableEqualities,
+    enforce_conjunctive_antecedent,
 )
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionWalker
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import Conjunction
-from ..utils.relational_algebra_set import RelationalAlgebraFrozenSet
 from .exceptions import NotEasilyShatterableError
-from .expression_processing import iter_conjunctive_query_predicates
-from .probabilistic_ra_utils import DeterministicFactSet, ProbabilisticFactSet
+from .probabilistic_ra_utils import ProbabilisticFactSet
 
 EQ = Constant(operator.eq)
 
@@ -160,45 +156,32 @@ class EasyQueryShatterer(ExpressionWalker):
         )
         return FunctionApplication(new_tagged, non_const_args)
 
-    @add_match(PropagatedEquality(EQ, (Symbol, Constant)))
-    def shatter_var_const_equality(self, equality):
-        symbol, constant = equality.args
-        new_relation = RelationalAlgebraFrozenSet([(constant.value,)])
-        new_pred_symb = Symbol.fresh()
-        new_tagged = DeterministicFactSet(new_pred_symb)
-        self.symbol_table[new_pred_symb] = Constant[AbstractSet](new_relation)
-        return FunctionApplication(new_tagged, (symbol,))
-
 
 class EasyProbfactShatterer(
-    VariableEqualityPropagator,
     QueryEasyShatteringTagger,
     EasyQueryShatterer,
 ):
     def __init__(self, symbol_table):
-        VariableEqualityPropagator.__init__(self)
         QueryEasyShatteringTagger.__init__(self)
         EasyQueryShatterer.__init__(self, symbol_table)
 
 
 def query_to_tagged_set_representation(query, symbol_table):
+    query = enforce_conjunctive_antecedent(query)
     new_predicates = list()
-    for predicate in iter_conjunctive_query_predicates(query):
+    for predicate in query.antecedent.formulas:
         if isinstance(predicate.functor, Symbol):
             predicate = FunctionApplication(
                 symbol_table[predicate.functor], predicate.args
             )
         new_predicates.append(predicate)
-    return Conjunction(tuple(new_predicates))
+    return query.apply(query.consequent, Conjunction(tuple(new_predicates)))
 
 
 def _check_shatter_fully_solved(shattered_query):
-    if isinstance(shattered_query, Shatter) or (
-        isinstance(shattered_query, Conjunction)
-        and any(
-            isinstance(formula, Shatter)
-            for formula in shattered_query.formulas
-        )
+    if any(
+        isinstance(formula, Shatter)
+        for formula in shattered_query.antecedent.formulas
     ):
         raise NotEasilyShatterableError("Cannot easily shatter query")
 
@@ -220,23 +203,25 @@ def shatter_easy_probfacts(query, symbol_table):
 
     Parameters
     ----------
-    query : conjunctive query (can be a single predicate)
-        A query that contains constants.
+    query : Implication
+        A conjunctive query (the body can be a single predicate).
     symbol_table : mapping, mutable
-        Symbol table containing relations associated with the query. This
-        `symbol_table` can be modified in-place by this function to add newly
-        generated symbols and relations by the shattering process.
+        Symbol table containing relations associated with the query's
+        relational symbols. This `symbol_table` can be modified in-place by
+        this function to add newly generated relational symbols and their
+        associated relations.
 
     Returns
     -------
-    Conjunctive query
+    Implication
         An equivalent conjunctive query without constants.
 
     """
-    query = enforce_conjunction(query)
-    query = remove_conjunction_duplicates(query)
-    ws_query = query_to_tagged_set_representation(query, symbol_table)
+    query = enforce_conjunctive_antecedent(query)
+    unifier = UnifyVariableEqualities()
+    query = unifier.walk(query)
+    tagged_query = query_to_tagged_set_representation(query, symbol_table)
     shatterer = EasyProbfactShatterer(symbol_table)
-    shattered_query = shatterer.walk(ws_query)
+    shattered_query = shatterer.walk(tagged_query)
     _check_shatter_fully_solved(shattered_query)
     return shattered_query

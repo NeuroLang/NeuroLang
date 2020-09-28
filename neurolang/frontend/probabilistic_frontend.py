@@ -19,7 +19,7 @@ from ..probabilistic.cplogic.program import (
     TranslateProbabilisticQueryMixin,
 )
 from ..probabilistic.dichotomy_theorem_based_solver import (
-    solve_succ_query as lifted_solve_succ_query,
+    solve_conjunctive_query as lifted_solve_succ_query,
 )
 from ..probabilistic.expression_processing import (
     is_probabilistic_predicate_symbol,
@@ -121,7 +121,8 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             solver = RegionFrontendCPLogicSolver()
             for psymb, relation in solution.items():
                 solver.add_extensional_predicate_from_tuples(
-                    psymb, relation.value,
+                    psymb,
+                    relation.value,
                 )
             for builtin_symb in self.solver.builtins():
                 solver.symbol_table[builtin_symb] = self.solver.symbol_table[

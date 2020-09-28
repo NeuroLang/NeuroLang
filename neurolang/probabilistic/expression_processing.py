@@ -13,6 +13,12 @@ from ..datalog.expression_processing import (
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..logic import Conjunction, Implication, Union
+from ..relational_algebra import (
+    ExtendedProjection,
+    ExtendedProjectionListMember,
+    Projection,
+    str2columnstr_constant,
+)
 from .exceptions import DistributionDoesNotSumToOneError
 from .expressions import PROB, ProbabilisticPredicate, ProbabilisticQuery
 
@@ -340,20 +346,6 @@ def lift_optimization_for_choice_predicates(query, program):
     return query
 
 
-def iter_conjunctive_query_predicates(query):
-    if isinstance(query, FunctionApplication):
-        yield query
-    elif isinstance(query, Conjunction):
-        for predicate in query.formulas:
-            yield predicate
-    else:
-        raise UnexpectedExpressionError(
-            "Expected a predicate or conjunction of predicates, got {}".format(
-                type(query)
-            )
-        )
-
-
 def is_probabilistic_predicate_symbol(pred_symb, program):
     wlq_symbs = set(program.within_language_succ_queries())
     prob_symbs = program.pfact_pred_symbs | program.pchoice_pred_symbs
@@ -376,3 +368,24 @@ def is_probabilistic_predicate_symbol(pred_symb, program):
                 if apred.functor not in wlq_symbs
             ]
     return False
+
+
+def project_on_query_head(query, provset):
+    proj_cols = tuple(
+        str2columnstr_constant(arg.name)
+        for arg in query.consequent.args
+        if isinstance(arg, Symbol)
+    )
+    result = Projection(provset, proj_cols)
+    proj_list = list()
+    for term in query.consequent.args:
+        if isinstance(term, Constant):
+            proj_list.append(
+                ExtendedProjectionListMember(
+                    term, str2columnstr_constant(Symbol.fresh().name)
+                )
+            )
+        else:
+            col = str2columnstr_constant(term.name)
+            proj_list.append(ExtendedProjectionListMember(col, col))
+    return ExtendedProjection(result, tuple(proj_list))

@@ -951,4 +951,4 @@ def generate_probability_table(solver):
     return ids_with_probs
 
 
-solve_succ_query = solve_succ_query_sdd_direct
+solve_conjunctive_query = solve_succ_query_sdd_direct
