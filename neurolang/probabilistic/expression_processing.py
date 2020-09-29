@@ -16,8 +16,10 @@ from ..logic import Conjunction, Implication, Union
 from ..relational_algebra import (
     ExtendedProjection,
     ExtendedProjectionListMember,
-    Projection,
     str2columnstr_constant,
+)
+from ..relational_algebra_provenance import (
+    RelationalAlgebraProvenanceCountingSolver,
 )
 from .exceptions import DistributionDoesNotSumToOneError
 from .expressions import PROB, ProbabilisticPredicate, ProbabilisticQuery
@@ -371,12 +373,6 @@ def is_probabilistic_predicate_symbol(pred_symb, program):
 
 
 def project_on_query_head(query, provset):
-    proj_cols = tuple(
-        str2columnstr_constant(arg.name)
-        for arg in query.consequent.args
-        if isinstance(arg, Symbol)
-    )
-    result = Projection(provset, proj_cols)
     proj_list = list()
     for term in query.consequent.args:
         if isinstance(term, Constant):
@@ -388,4 +384,6 @@ def project_on_query_head(query, provset):
         else:
             col = str2columnstr_constant(term.name)
             proj_list.append(ExtendedProjectionListMember(col, col))
-    return ExtendedProjection(result, tuple(proj_list))
+    result = ExtendedProjection(provset, tuple(proj_list))
+    solver = RelationalAlgebraProvenanceCountingSolver()
+    return solver.walk(result)

@@ -608,37 +608,6 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
 
         return res
 
-    @add_match(ExtendedProjection(ProvenanceAlgebraSet, ...))
-    def extended_projection(self, proj_op):
-        relation = self.walk(proj_op.relation)
-        if any(
-            proj_list_member.dst_column == relation.provenance_column
-            for proj_list_member in proj_op.projection_list
-        ):
-            new_prov_col = str2columnstr_constant(Symbol.fresh().name)
-        else:
-            new_prov_col = str2columnstr_constant(relation.provenance_column)
-        relation = self.walk(
-            RenameColumn(
-                relation,
-                str2columnstr_constant(relation.provenance_column),
-                new_prov_col
-            )
-        )
-        new_proj_list = proj_op.projection_list + (
-            ExtendedProjectionListMember(
-                fun_exp=new_prov_col, dst_column=new_prov_col
-            ),
-        )
-        return ProvenanceAlgebraSet(
-            self.walk(
-                ExtendedProjection(
-                    Constant[AbstractSet](relation.value), new_proj_list,
-                )
-            ).value,
-            new_prov_col.value,
-        )
-
     # Raise Exception for non-implemented RAP operations
     @add_match(
         RelationalAlgebraOperation,

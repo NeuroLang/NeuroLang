@@ -271,11 +271,20 @@ def solve_succ_query(query, cpl_program):
             )
 
         ra_query = TranslateToNamedRA().walk(shattered_query.antecedent)
-        ra_query = project_on_query_head(shattered_query, ra_query)
+        proj_cols = tuple(
+            str2columnstr_constant(arg.name)
+            for arg in shattered_query.consequent.args
+            if isinstance(arg, Symbol)
+        )
+        ra_query= Projection(ra_query, proj_cols)
         ra_query = RAQueryOptimiser().walk(ra_query)
 
     with log_performance(LOG, "Run RAP query"):
         solver = ProbSemiringSolver(symbol_table)
         prob_set_result = solver.walk(ra_query)
+        prob_set_result = project_on_query_head(
+            shattered_query, prob_set_result
+        )
+
 
     return prob_set_result
