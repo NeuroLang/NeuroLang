@@ -110,18 +110,21 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         if prob_idb.formulas:
             pfact_edb = self.solver.probabilistic_facts()
             pchoice_edb = self.solver.probabilistic_choices()
-            solution = compute_probabilistic_solution(
-                solution,
-                pfact_edb,
-                pchoice_edb,
-                prob_idb,
-                self.probabilistic_solver,
+            solution.update(
+                compute_probabilistic_solution(
+                    solution,
+                    pfact_edb,
+                    pchoice_edb,
+                    prob_idb,
+                    self.probabilistic_solver,
+                )
             )
         if ppq_det_idb.formulas:
             solver = RegionFrontendCPLogicSolver()
             for psymb, relation in solution.items():
                 solver.add_extensional_predicate_from_tuples(
-                    psymb, relation.value,
+                    psymb,
+                    relation.value,
                 )
             for builtin_symb in self.solver.builtins():
                 solver.symbol_table[builtin_symb] = self.solver.symbol_table[
