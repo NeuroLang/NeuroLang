@@ -6,6 +6,7 @@ import pytest
 
 from ...exceptions import UnsupportedProgramError, UnsupportedQueryError
 from ...probabilistic.exceptions import UnsupportedProbabilisticQueryError
+from ...relational_algebra import ColumnInt
 from ..probabilistic_frontend import ProbabilisticFrontend
 
 
@@ -477,6 +478,21 @@ def test_result_both_deterministic_and_post_probabilistic():
             & e.persona_scelta[e.persona]
             & e.lingua_parlata[e.lingua]
         )
+        e.utilizzare_le_probabilita[e.lingua, e.p] = e.lingua_da_lua_decisa[
+            ..., e.lingua, e.p
+        ] & (e.p > 0.1)
         res = nl.solve_all()
     assert "e_una_lingua" in res
     assert "lingua_da_lua_decisa" in res
+    assert "utilizzare_le_probabilita" in res
+    assert len(res["utilizzare_le_probabilita"]) == 3
+    assert res["utilizzare_le_probabilita"].projection(ColumnInt(0)) == {
+        ("francese",),
+        ("inglese",),
+    }
+    assert res["utilizzare_le_probabilita"].selection(
+        {ColumnInt(0): "francese"}
+    ).projection(ColumnInt(1)) == {(0.12,)}
+    assert res["utilizzare_le_probabilita"].selection(
+        {ColumnInt(0): "inglese"}
+    ).projection(ColumnInt(1)) == {(0.7 * 0.4,), (0.7 * 0.6,)}
