@@ -79,7 +79,8 @@ class Shatter(FunctionApplication):
 
 
 class QueryEasyShatteringTagger(ExpressionWalker):
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self._cached_args = collections.defaultdict(set)
 
     @add_match(
@@ -118,7 +119,8 @@ class QueryEasyShatteringTagger(ExpressionWalker):
 
 
 class EasyQueryShatterer(ExpressionWalker):
-    def __init__(self, symbol_table):
+    def __init__(self, symbol_table, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.symbol_table = symbol_table
 
     @add_match(Shatter(ProbabilisticFactSet, ...))
@@ -162,8 +164,7 @@ class EasyProbfactShatterer(
     EasyQueryShatterer,
 ):
     def __init__(self, symbol_table):
-        QueryEasyShatteringTagger.__init__(self)
-        EasyQueryShatterer.__init__(self, symbol_table)
+        super().__init__(symbol_table)
 
 
 def query_to_tagged_set_representation(query, symbol_table):
