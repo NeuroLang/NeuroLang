@@ -276,7 +276,7 @@ def solve_succ_query(query, cpl_program):
             for arg in shattered_query.consequent.args
             if isinstance(arg, Symbol)
         )
-        ra_query= Projection(ra_query, proj_cols)
+        ra_query = Projection(ra_query, proj_cols)
         ra_query = RAQueryOptimiser().walk(ra_query)
 
     with log_performance(LOG, "Run RAP query"):
@@ -285,6 +285,5 @@ def solve_succ_query(query, cpl_program):
         prob_set_result = project_on_query_head(
             shattered_query, prob_set_result
         )
-
 
     return prob_set_result
