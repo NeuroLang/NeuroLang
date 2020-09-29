@@ -3,6 +3,7 @@ import operator
 from ..expressions import Constant
 from ..probabilistic.cplogic import testing
 from ..relational_algebra import (
+    ColumnInt,
     ColumnStr,
     NamedRelationalAlgebraFrozenSet,
     NaturalJoin,
@@ -16,6 +17,8 @@ from ..relational_algebra_provenance import (
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceExpressionSemringSolver,
 )
+
+EQ = Constant(operator.eq)
 
 
 def test_integer_addition_semiring():
@@ -204,6 +207,65 @@ def test_union():
     expected = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
             ("_p_", "x"), [(2, "a"), (8, "b"), (10, "c")]
+        ),
+        ColumnStr("_p_"),
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_selection_by_columnint():
+    r = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            ("_p_", "x", "y"), [(0.2, "a", "b"), (0.5, "b", "a")]
+        ),
+        ColumnStr("_p_"),
+    )
+    op = Selection(r, EQ(Constant(ColumnInt(0)), Constant("a")))
+    solver = RelationalAlgebraProvenanceExpressionSemringSolver()
+    result = solver.walk(op)
+    expected = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(("_p_", "x", "y"), [(0.2, "a", "b")]),
+        ColumnStr("_p_"),
+    )
+    assert testing.eq_prov_relations(result, expected)
+    op = Selection(r, EQ(Constant(ColumnInt(0)), Constant("a")))
+    op = Selection(op, EQ(Constant(ColumnInt(1)), Constant("b")))
+    solver = RelationalAlgebraProvenanceExpressionSemringSolver()
+    result = solver.walk(op)
+    expected = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(("_p_", "x", "y"), [(0.2, "a", "b")]),
+        ColumnStr("_p_"),
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_projection_columnint():
+    r = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            ("_p_", "x", "y"), [(0.2, "a", "b"), (0.5, "b", "a")]
+        ),
+        ColumnStr("_p_"),
+    )
+    op = Projection(r, (Constant(ColumnInt(0)),))
+    solver = RelationalAlgebraProvenanceExpressionSemringSolver()
+    result = solver.walk(op)
+    expected = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            ("_p_", "x"), [(0.2, "a"), (0.5, "b")]
+        ),
+        ColumnStr("_p_"),
+    )
+    assert testing.eq_prov_relations(result, expected)
+    op = Projection(r, (Constant(ColumnInt(0)), Constant(ColumnInt(1))))
+    solver = RelationalAlgebraProvenanceExpressionSemringSolver()
+    result = solver.walk(op)
+    assert testing.eq_prov_relations(result, r)
+    op = Projection(r, (Constant(ColumnInt(1)), Constant(ColumnInt(0))))
+    solver = RelationalAlgebraProvenanceExpressionSemringSolver()
+    result = solver.walk(op)
+    expected = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            ("_p_", "y", "x"), [(0.2, "b", "a"), (0.5, "a", "b")]
         ),
         ColumnStr("_p_"),
     )

@@ -58,5 +58,9 @@ class UnsupportedProgramError(NeuroLangException):
     pass
 
 
+class UnsupportedQueryError(NeuroLangException):
+    pass
+
+
 class ProtectedKeywordError(NeuroLangException):
     pass

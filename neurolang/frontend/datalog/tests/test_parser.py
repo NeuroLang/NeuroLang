@@ -1,9 +1,8 @@
 from operator import add, eq, mul, pow, sub, truediv
 
 from ....datalog import Conjunction, Fact, Implication, Negation, Union
-from ....datalog.aggregation import AggregationApplication
 from ....probabilistic.expressions import ProbabilisticPredicate
-from ....expressions import Constant, Symbol
+from ....expressions import Constant, Symbol, FunctionApplication
 from .. import ExternalSymbol, parser
 
 
@@ -147,12 +146,13 @@ def test_aggregation():
     x = Symbol('x')
     y = Symbol('y')
     res = parser('A(x, f(y)):-B(x, y)')
-    assert res == Union((
+    expected_result = Union((
         Implication(
-            A(x, AggregationApplication(f, (y,))),
+            A(x, FunctionApplication(f, (y,))),
             Conjunction((B(x, y),))
         ),
     ))
+    assert res == expected_result
 
 
 def test_probabilistic_fact():

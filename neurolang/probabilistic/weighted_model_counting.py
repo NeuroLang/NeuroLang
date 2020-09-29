@@ -745,7 +745,6 @@ def solve_succ_query_sdd_direct(
         ra_query = TranslateToNamedRA().walk(flat_query)
         ra_query = Projection(ra_query, variables_to_project)
         ra_query = RAQueryOptimiser().walk(ra_query)
-        print(ra_query)
 
     with log_performance(LOG, "Run RAP query"):
         symbol_table = generate_probabilistic_symbol_table_for_query(

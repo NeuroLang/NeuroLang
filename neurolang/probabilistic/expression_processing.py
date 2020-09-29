@@ -7,10 +7,11 @@ import numpy
 from ..datalog import WrappedRelationalAlgebraSet
 from ..datalog.expression_processing import (
     extract_logic_predicates,
-    reachable_code
+    iter_disjunction_or_implication_rules,
+    reachable_code,
 )
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
-from ..expressions import Constant, Expression, FunctionApplication
+from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..logic import Conjunction, Implication, Union
 from .exceptions import DistributionDoesNotSumToOneError
 from .expressions import PROB, ProbabilisticPredicate, ProbabilisticQuery
@@ -215,6 +216,27 @@ def get_within_language_succ_query_prob_term(implication):
         raise ValueError("Expression does not have a SUCC probabilistic term")
 
 
+def within_language_succ_query_to_intensional_rule(rule):
+    csqt_without_prob = rule.consequent.functor(
+        *(
+            arg
+            for arg in rule.consequent.args
+            if isinstance(arg, (Constant, Symbol))
+        )
+    )
+    return Implication(csqt_without_prob, rule.antecedent)
+
+
+def construct_within_language_succ_result(provset, rule):
+    proj_cols = list()
+    for arg in rule.consequent.args:
+        if isinstance(arg, Symbol):
+            proj_cols.append(arg.name)
+        elif isinstance(arg, ProbabilisticQuery) and arg.functor == PROB:
+            proj_cols.append(provset.provenance_column)
+    return Constant[AbstractSet](provset.value.projection(*proj_cols))
+
+
 def group_preds_by_pred_symb(predicates, filter_set=None):
     """
     Group predicates by their predicate symbol.
@@ -314,7 +336,43 @@ def lift_optimization_for_choice_predicates(query, program):
         ):
             added_equalities.append(eq(x, y))
         if len(added_equalities) > 0:
-            query = Conjunction(
-                query.formulas + tuple(added_equalities)
-            )
+            query = Conjunction(query.formulas + tuple(added_equalities))
     return query
+
+
+def iter_conjunctive_query_predicates(query):
+    if isinstance(query, FunctionApplication):
+        yield query
+    elif isinstance(query, Conjunction):
+        for predicate in query.formulas:
+            yield predicate
+    else:
+        raise UnexpectedExpressionError(
+            "Expected a predicate or conjunction of predicates, got {}".format(
+                type(query)
+            )
+        )
+
+
+def is_probabilistic_predicate_symbol(pred_symb, program):
+    wlq_symbs = set(program.within_language_succ_queries())
+    prob_symbs = program.pfact_pred_symbs | program.pchoice_pred_symbs
+    stack = [pred_symb]
+    while stack:
+        pred_symb = stack.pop()
+        if pred_symb in prob_symbs:
+            return True
+        if (
+            pred_symb in wlq_symbs
+            or pred_symb not in program.intensional_database()
+        ):
+            continue
+        for rule in iter_disjunction_or_implication_rules(
+            program.symbol_table[pred_symb]
+        ):
+            stack += [
+                apred.functor
+                for apred in extract_logic_predicates(rule.antecedent)
+                if apred.functor not in wlq_symbs
+            ]
+    return False

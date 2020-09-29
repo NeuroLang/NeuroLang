@@ -13,15 +13,16 @@ from ..expression_walker import (
     ExpressionBasicEvaluator,
 )
 from ..region_solver import RegionSolver
-from ..regions import ExplicitVBR
+from ..regions import ExplicitVBR, ExplicitVBROverlay
 from ..utils.data_manipulation import parse_region_label_map
 from .query_resolution_datalog import QueryBuilderDatalog
 
 
 __all__ = [
     "NeurolangDL",
-    "RegionFrontend",
     "QueryBuilderDatalog",
+    "ExplicitVBR",
+    "ExplicitVBROverlay"
 ]
 
 

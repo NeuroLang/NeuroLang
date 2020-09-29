@@ -3,22 +3,46 @@ Utilities to process intermediate representations of
 Datalog programs.
 """
 
+
+import collections
+import operator
+from itertools import chain
 from typing import Iterable
 
 import numpy as np
 
 from ..exceptions import (
-    ForbiddenDisjunctionError,
     ForbiddenExpressionError,
     RuleNotFoundError,
     SymbolNotFoundError,
     UnsupportedProgramError,
 )
-from ..expression_walker import ExpressionWalker
+from ..expression_pattern_matching import (
+    NeuroLangPatternMatchingNoMatch,
+    add_match,
+)
+from ..expression_walker import (
+    ExpressionWalker,
+    IdentityWalker,
+    PatternWalker,
+    ReplaceExpressionWalker,
+    ReplaceSymbolWalker,
+)
 from ..expressions import Constant, FunctionApplication, Symbol
-from ..logic import Conjunction, Implication, Negation, Quantifier, Union
+from ..logic import (
+    TRUE,
+    Conjunction,
+    Disjunction,
+    Implication,
+    Negation,
+    Quantifier,
+    Union,
+)
 from ..logic import expression_processing as elp
+from ..logic.transformations import CollapseConjunctions
 from .expressions import TranslateToLogic
+
+EQ = Constant(operator.eq)
 
 
 class TranslateToDatalogSemantics(TranslateToLogic, ExpressionWalker):
@@ -335,6 +359,13 @@ def dependency_matrix(datalog, rules=None):
 
     idb_symbols = tuple(sorted(idb_symbols, key=lambda s: s.name))
     edb = datalog.extensional_database()
+    if hasattr(datalog, "constraints"):
+        constraint_symbols = set(
+            formula.consequent.functor
+            for formula in datalog.constraints().formulas
+        )
+    else:
+        constraint_symbols = set()
 
     dependency_matrix = np.zeros(
         (len(idb_symbols), len(idb_symbols)), dtype=int
@@ -346,7 +377,7 @@ def dependency_matrix(datalog, rules=None):
         ix_head = idb_symbols.index(head_functor)
         for predicate in extract_logic_predicates(rule.antecedent):
             functor = predicate.functor
-            if functor in edb:
+            if functor in edb or functor in constraint_symbols:
                 continue
             elif functor in idb_symbols:
                 ix_functor = idb_symbols.index(functor)
@@ -374,11 +405,17 @@ def program_has_loops(program_representation):
 
 
 def conjunct_if_needed(formulas):
-    """Only conjunct the given list of formulas if there is more than one."""
+    """
+    Only conjunct the given list of formulas if there is more than one. If
+    an empty list of formulas is passed, `Constant[bool](True)` is returned
+    instead.
+
+    """
+    if len(formulas) == 0:
+        return TRUE
     if len(formulas) == 1:
         return formulas[0]
-    else:
-        return Conjunction(formulas)
+    return Conjunction(formulas)
 
 
 def conjunct_formulas(f1, f2):
@@ -408,54 +445,6 @@ def enforce_conjunction(expression):
     )
 
 
-def get_rule_for_predicate(predicate, idb):
-    if predicate.functor not in idb:
-        return None
-    expression = idb[predicate.functor]
-    if isinstance(expression, Implication):
-        return expression
-    elif isinstance(expression, Union) and len(expression.formulas) == 1:
-        return expression.formulas[0]
-    raise ForbiddenDisjunctionError()
-
-
-def freshen_predicate_free_variables(pred, free_variables, substitutions):
-    new_args = tuple()
-    for arg in pred.args:
-        if arg in free_variables and arg not in substitutions:
-            substitutions[arg] = Symbol.fresh()
-        new_args += (substitutions.get(arg, arg),)
-    new_pred = FunctionApplication[pred.type](pred.functor, new_args)
-    return new_pred
-
-
-def freshen_conjunction_free_variables(
-    conjunction, free_variables, substitutions=None
-):
-    new_preds = []
-    substitutions = substitutions if substitutions is not None else dict()
-    for pred in conjunction.formulas:
-        new_pred = freshen_predicate_free_variables(
-            pred, free_variables, substitutions
-        )
-        new_preds.append(new_pred)
-    return Conjunction(tuple(new_preds))
-
-
-def rename_args_to_match(conjunction, src_predicate, dst_predicate):
-    renames = {
-        src: dst
-        for src, dst in zip(src_predicate.args, dst_predicate.args)
-        if src != dst
-    }
-    new_preds = []
-    for pred in conjunction.formulas:
-        new_args = tuple(renames.get(arg, arg) for arg in pred.args)
-        new_pred = FunctionApplication[pred.type](pred.functor, new_args)
-        new_preds.append(new_pred)
-    return Conjunction(tuple(new_preds))
-
-
 def flatten_query(query, program):
     """
     Construct the conjunction corresponding to a query on a program.
@@ -472,31 +461,90 @@ def flatten_query(query, program):
 
     Returns
     -------
-    conjunction of predicates
+    disjunction or conjunction of predicates
 
     """
     if not hasattr(program, "intensional_database"):
         raise UnsupportedProgramError(
             "Only program with an intensional database are supported"
         )
-    idb = program.intensional_database()
-    query = enforce_conjunction(query)
-    conj_query = Conjunction(tuple())
-    substitutions = dict()
-    for predicate in query.formulas:
-        rule = get_rule_for_predicate(predicate, idb)
-        if rule is None:
-            formula = predicate
+    try:
+        res = FlattenQueryInNonRecursiveUCQ(program).walk(query)
+        if isinstance(res, FunctionApplication):
+            res = Conjunction((res,))
+    except RecursionError:
+        raise UnsupportedProgramError(
+            "Flattening of recursive programs is not supported."
+        )
+    except NeuroLangPatternMatchingNoMatch:
+        raise UnsupportedProgramError("Expression not supported.")
+    return res
+
+
+class FlattenQueryInNonRecursiveUCQ(PatternWalker):
+    """Flatten a query defined by a non-recursive
+    union of conjunctive queries (UCQ)
+    """
+
+    def __init__(self, program):
+        self.program = program
+        self.idb = self.program.intensional_database()
+
+    @add_match(
+        FunctionApplication,
+        lambda fa: all(isinstance(arg, (Constant, Symbol)) for arg in fa.args),
+    )
+    def function_application(self, expression):
+        functor = expression.functor
+        if functor not in self.idb:
+            return expression
+
+        args = expression.args
+        ucq = self.idb[functor]
+        cqs = []
+        for cq in ucq.formulas:
+            cq = self._normalise_arguments(cq, args)
+            antecedent = self.walk(cq.antecedent)
+            cqs.append(antecedent)
+
+        if len(cqs) > 1:
+            res = Disjunction(tuple(cqs))
         else:
-            formula = enforce_conjunction(rule.antecedent)
-            free_variables = extract_logic_free_variables(rule)
-            formula = freshen_conjunction_free_variables(
-                formula, free_variables, substitutions
+            res = cqs[0]
+        return res
+
+    def _normalise_arguments(self, cq, args):
+        free_variables = extract_logic_free_variables(cq)
+        linked_variables = cq.consequent.args
+        cq = ReplaceExpressionWalker(
+            dict(
+                chain(
+                    zip(linked_variables, args),
+                    zip(
+                        free_variables,
+                        (Symbol.fresh() for _ in range(len(free_variables))),
+                    ),
+                )
             )
-            formula = flatten_query(formula, program)
-            formula = rename_args_to_match(formula, rule.consequent, predicate)
-        conj_query = conjunct_formulas(conj_query, formula)
-    return conj_query
+        ).walk(cq)
+        return cq
+
+    @add_match(Conjunction)
+    def conjunction(self, expression):
+        formulas = list(expression.formulas)
+        new_formulas = tuple()
+        while len(formulas) > 0:
+            formula = formulas.pop()
+            new_formula = self.walk(formula)
+            if isinstance(new_formula, Conjunction):
+                new_formulas += new_formula.formulas
+            else:
+                new_formulas += (new_formula,)
+        if len(new_formulas) > 0:
+            res = Conjunction(tuple(new_formulas))
+        else:
+            res = new_formulas[0]
+        return res
 
 
 def is_rule_with_builtin(rule, known_builtins=None):
@@ -506,3 +554,158 @@ def is_rule_with_builtin(rule, known_builtins=None):
         isinstance(pred.functor, Constant) or pred.functor in known_builtins
         for pred in extract_logic_predicates(rule.antecedent)
     )
+
+
+def remove_conjunction_duplicates(conjunction):
+    return Conjunction(tuple(set(conjunction.formulas)))
+
+
+def iter_disjunction_or_implication_rules(implication_or_disjunction):
+    if isinstance(implication_or_disjunction, Implication):
+        yield implication_or_disjunction
+    else:
+        for formula in implication_or_disjunction.formulas:
+            yield formula
+
+
+def is_equality_between_symbol_and_symbol_or_constant(formula):
+    return (
+        isinstance(formula, FunctionApplication)
+        and formula.functor == EQ
+        and len(formula.args) == 2
+        and all(isinstance(arg, (Constant, Symbol)) for arg in formula.args)
+    )
+
+
+class RemoveDuplicatedAntecedentPredicates(PatternWalker):
+    @add_match(
+        Implication(FunctionApplication, Conjunction),
+        lambda implication: any(
+            count > 1
+            for count in collections.Counter(
+                implication.antecedent.formulas
+            ).values()
+        ),
+    )
+    def implication_with_duplicated_antecedent_predicate(self, implication):
+        return self.walk(
+            implication.apply(
+                implication.consequent,
+                remove_conjunction_duplicates(implication.antecedent),
+            )
+        )
+
+
+class ExtractVariableEqualities(PatternWalker):
+    def __init__(self):
+        self._equality_sets = list()
+
+    @property
+    def substitutions(self):
+        substitutions = dict()
+        for eq_set in self._equality_sets:
+            if any(isinstance(term, Constant) for term in eq_set):
+                update = self._get_const_equality_substitutions(eq_set)
+            else:
+                update = self._get_between_symbs_equality_substitutions(eq_set)
+            substitutions.update(update)
+        return substitutions
+
+    @add_match(
+        Conjunction,
+        lambda conj: any(
+            is_equality_between_symbol_and_symbol_or_constant(formula)
+            for formula in conj.formulas
+        ),
+    )
+    def conjunction_with_variable_equality(self, conjunction):
+        for formula in conjunction.formulas:
+            self.walk(formula)
+
+    @add_match(FunctionApplication(EQ, (Symbol, Symbol)))
+    def variable_equality_between_variables(self, function_application):
+        first, second = function_application.args
+        self._add_equality_with_symbol(first, second)
+
+    @add_match(FunctionApplication(EQ, (Constant, Symbol)))
+    def variable_equality_with_constant_reversed(self, function_application):
+        functor, (const, symb) = function_application.unapply()
+        self.walk(function_application.apply(functor, (symb, const)))
+
+    @add_match(FunctionApplication(EQ, (Symbol, Constant)))
+    def variable_equality_with_constant(self, function_application):
+        symb, const = function_application.args
+        self._add_equality_with_constant(symb, const)
+
+    def _add_equality_with_constant(self, symb, const):
+        found_eq_set = False
+        for eq_set in self._equality_sets:
+            if any(term == symb for term in eq_set):
+                eq_set.add(const)
+                found_eq_set = True
+        if not found_eq_set:
+            self._equality_sets.append({symb, const})
+
+    def _add_equality_with_symbol(self, first, second):
+        found_eq_set = False
+        for eq_set in self._equality_sets:
+            if any(term == first for term in eq_set):
+                eq_set.add(second)
+                found_eq_set = True
+            elif any(term == second for term in eq_set):
+                eq_set.add(first)
+                found_eq_set = True
+        if not found_eq_set:
+            self._equality_sets.append({first, second})
+
+    @staticmethod
+    def _get_const_equality_substitutions(eq_set):
+        const = next(term for term in eq_set if isinstance(term, Constant))
+        return {term: const for term in eq_set if isinstance(term, Symbol)}
+
+    @staticmethod
+    def _get_between_symbs_equality_substitutions(eq_set):
+        iterator = iter(eq_set)
+        chosen_symb = next(iterator)
+        return {symb: chosen_symb for symb in iterator}
+
+
+class UnifyVariableEqualities(PatternWalker):
+    @add_match(
+        Implication(FunctionApplication(Symbol, ...), Conjunction),
+        lambda implication: any(
+            is_equality_between_symbol_and_symbol_or_constant(formula)
+            for formula in implication.antecedent.formulas
+        ),
+    )
+    def extract_and_unify_var_eqs_in_implication(self, implication):
+        extractor = UnifyVariableEqualities._Extractor()
+        extractor.walk(implication.antecedent)
+        replacer = ReplaceSymbolWalker(extractor.substitutions)
+        consequent = replacer.walk(implication.consequent)
+        conjuncts = tuple(
+            replacer.walk(formula)
+            for formula in implication.antecedent.formulas
+            if not is_equality_between_symbol_and_symbol_or_constant(formula)
+        )
+        antecedent = conjunct_if_needed(conjuncts)
+        return self.walk(Implication(consequent, antecedent))
+
+    class _Extractor(ExtractVariableEqualities, IdentityWalker):
+        pass
+
+
+class CollapseConjunctiveAntecedents(CollapseConjunctions):
+    @add_match(
+        Implication(FunctionApplication, Conjunction),
+        lambda implication: any(
+            isinstance(formula, Conjunction)
+            for formula in implication.antecedent.formulas
+        ),
+    )
+    def implication_with_collapsable_conjunctive_antecedent(self, implication):
+        return self.walk(
+            implication.apply(
+                implication.consequent, self.walk(implication.antecedent)
+            )
+        )

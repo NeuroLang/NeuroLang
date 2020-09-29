@@ -8,7 +8,10 @@ from ...relational_algebra import RenameColumn
 from .. import dichotomy_theorem_based_solver, weighted_model_counting
 from ..cplogic import testing
 from ..cplogic.program import CPLogicProgram
-from ..exceptions import NotHierarchicalQueryException
+from ..exceptions import (
+    NotEasilyShatterableError,
+    NotHierarchicalQueryException,
+)
 
 try:
     from contextlib import nullcontext
@@ -30,13 +33,12 @@ z = Symbol("z")
 
 a = Constant("a")
 b = Constant("b")
+c = Constant("c")
 
 
 @pytest.fixture(
     params=((weighted_model_counting, dichotomy_theorem_based_solver)),
-    ids=[
-        'SDD-WMC', 'dichotomy-Safe query'
-    ]
+    ids=["SDD-WMC", "dichotomy-Safe query"],
 )
 def solver(request):
     return request.param
@@ -299,9 +301,7 @@ def test_simple_existential(solver):
         - Pr[Q(a)] = 1.0
 
     """
-    pchoice_as_sets = {
-        P: {(0.2, "a", "a"), (0.7, "a", "b"), (0.1, "c", "c")}
-    }
+    pchoice_as_sets = {P: {(0.2, "a", "a"), (0.7, "a", "b"), (0.1, "c", "c")}}
     code = Union((Implication(Q(x), P(x, y)),))
     cpl_program = CPLogicProgram()
     for pred_symb, pchoice_as_set in pchoice_as_sets.items():
@@ -310,10 +310,7 @@ def test_simple_existential(solver):
         )
     cpl_program.walk(code)
     exp, result = testing.inspect_resolution(Q(x), cpl_program)
-    expected = testing.make_prov_set(
-        [(0.9, "a"), (.1, "c")],
-        ("_p_", "x")
-    )
+    expected = testing.make_prov_set([(0.9, "a"), (0.1, "c")], ("_p_", "x"))
     assert testing.eq_prov_relations(result, expected)
 
 
@@ -375,7 +372,7 @@ def test_multilevel_existential(solver):
             Implication(H(x, y), Conjunction((R(x), Z(y)))),
             Implication(A(x), Conjunction((H(x, y), P(y, x)))),
             Implication(B(x), Conjunction((A(x), Q(y)))),
-            Implication(C(x), H(x, y))
+            Implication(C(x), H(x, y)),
         )
     )
     cpl_program = CPLogicProgram()
@@ -402,12 +399,7 @@ def test_multilevel_existential(solver):
     qpred = C(z)
     result = solver.solve_succ_query(qpred, cpl_program)
     expected = testing.make_prov_set(
-        [
-            (.1, "a"),
-            (.4, "b"),
-            (.5, "c"),
-        ],
-        ("_p_", "z"),
+        [(0.1, "a"), (0.4, "b"), (0.5, "c"),], ("_p_", "z"),
     )
     assert testing.eq_prov_relations(result, expected)
 
@@ -420,7 +412,9 @@ def test_multilevel_existential(solver):
 
     with context:
         result = solver.solve_succ_query(qpred, cpl_program,)
-        expected = testing.make_prov_set([(0.5 * 0.1 * 0.5, "c")], ("_p_", "z"),)
+        expected = testing.make_prov_set(
+            [(0.5 * 0.1 * 0.5, "c")], ("_p_", "z"),
+        )
         assert testing.eq_prov_relations(result, expected)
 
 
@@ -463,7 +457,7 @@ def test_repeated_antecedent_predicate_symbol(solver):
     qpred = Q(x, y)
 
     if solver is dichotomy_theorem_based_solver:
-        context = pytest.raises(NotHierarchicalQueryException)
+        context = pytest.raises(NotEasilyShatterableError)
     else:
         context = nullcontext()
 
@@ -569,4 +563,32 @@ def test_conjunct_pfact_equantified_pchoice(solver):
     expected = testing.make_prov_set(
         [(0.6 * 0.8 + 0.4 * 0.5, "a",), (0.1 * 0.4, "b"),], ("_p_", "x"),
     )
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_shatterable_query(solver):
+    pfact_sets = {P: {(0.8, "a", "1"), (0.5, "a", "2"), (0.1, "b", "2")}}
+    code = Union((Implication(Q(x), Conjunction((P(a, x), P(b, x)))),))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+    cpl_program.walk(code)
+    qpred = Q(x)
+    result = solver.solve_succ_query(qpred, cpl_program)
+    expected = testing.make_prov_set([(0.5 * 0.1, "2",),], ("_p_", "x"))
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_shatterable_query_2(solver):
+    pfact_sets = {
+        P: {(0.8, "a", "c", "1"), (0.5, "a", "c", "2"), (0.1, "b", "b", "2")}
+    }
+    code = Union((Implication(Q(x), Conjunction((P(a, c, x), P(b, b, x)))),))
+    cpl_program = CPLogicProgram()
+    for pred_symb, pfact_set in pfact_sets.items():
+        cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
+    cpl_program.walk(code)
+    qpred = Q(x)
+    result = solver.solve_succ_query(qpred, cpl_program)
+    expected = testing.make_prov_set([(0.5 * 0.1, "2",),], ("_p_", "x"))
     assert testing.eq_prov_relations(result, expected)
