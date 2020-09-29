@@ -59,13 +59,17 @@ with nl.scope as e:
         e.p_study[e.id_study]
     )
     
-    e.probability_voxel[e.ns_term] = (
+    e.probability_voxel[e.ns_term, e.PROB[e.ns_term]] = (
         e.p_act[e.id_voxel, e.ns_term] &
         e.julich_voxels[e.id_voxel, e.x, e.y, e.z] #&
-        e.prob_julich[e.x, e.y, e.z]
+        #e.prob_julich[e.x, e.y, e.z]
     )
     
-    nl_results = nl.solve_query(e.probability_voxel[e.ns_term])
+    e.result[e.t, e.p] = (
+        e.probability_voxel[e.t, e.p]
+    )
+    
+    nl_results = nl.query((e.t, e.p,), e.result[e.t, e.p])
 
 nl_results
 
@@ -133,14 +137,18 @@ with nl.scope as e:
         label[e.uri, e.onto_name]
     )
     
-    e.probability_voxel[e.lower_name] = (
+    e.probability_voxel[e.lower_name, e.PROB[e.lower_name]] = (
         e.p_act[e.id_voxel, e.term] &
         e.julich_voxels[e.id_voxel, e.x, e.y, e.z] &
         e.ontology_terms[e.term] &
         (e.lower_name == word_lower[e.term]
     )
     
-    nl_results = nl.solve_query(e.probability_voxel[e.lower_name])
+    e.result[e.t, e.p] = (
+        e.probability_voxel[e.t, e.p]
+    )
+    
+    nl_results = nl.query((e.t, e.p,), e.result[e.t, e.p])
 # -
 
 nl_results
