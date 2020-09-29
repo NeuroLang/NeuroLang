@@ -73,7 +73,7 @@ def test_deterministic(solver):
     cpl_program = CPLogicProgram()
     cpl_program.walk(code)
     query = Implication(ans(x), P(x))
-    result = solver.solve_conjunctive_query(query, cpl_program)
+    result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set([(1.0, "a"), (1.0, "b")], ("_p_", "x"))
     assert testing.eq_prov_relations(result, expected)
 
@@ -90,7 +90,7 @@ def test_deterministic_conjunction_varying_arity(solver):
     cpl_program = CPLogicProgram()
     cpl_program.walk(code)
     query = Implication(ans(x, y), Z(x, y))
-    result = solver.solve_conjunctive_query(query, cpl_program)
+    result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set([(1.0, "a", "b")], ("_p_", "x", "y"))
     assert testing.eq_prov_relations(result, expected)
 
@@ -118,7 +118,7 @@ def test_simple_bernoulli(solver):
         P, {(0.7, "a"), (0.8, "b")}
     )
     query = Implication(ans(x), P(x))
-    result = solver.solve_conjunctive_query(query, cpl_program)
+    result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set([(0.7, "a"), (0.8, "b")], ("_p_", "x"))
     assert testing.eq_prov_relations(result, expected)
 
@@ -135,7 +135,7 @@ def test_bernoulli_conjunction(solver):
     for pred_symb, pfact_set in probfacts_sets.items():
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
     query = Implication(ans(x), Z(x))
-    result = solver.solve_conjunctive_query(query, cpl_program)
+    result = solver.solve_succ_query(query, cpl_program)
 
     expected = testing.make_prov_set([(0.9 * 0.9 * 0.5, "b")], ("_p_", "x"))
     assert testing.eq_prov_relations(result, expected)
@@ -177,7 +177,7 @@ def test_multi_level_conjunction(solver):
     for pred_symb, pfact_set in probfacts_sets.items():
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
     query = Implication(ans(x, y), H(x, y))
-    result = solver.solve_conjunctive_query(query, cpl_program)
+    result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set(
         [
             (0.2 * 0.9 * 0.1, "a", "a"),
@@ -218,7 +218,7 @@ def test_intertwined_conjunctions_and_probfacts(solver):
     cpl.add_probabilistic_facts_from_tuples(P, {(0.8, "a")})
     cpl.add_probabilistic_facts_from_tuples(C, {(0.5, "a"), (0.9, "b")})
     query = Implication(ans(y), Z(y))
-    result = solver.solve_conjunctive_query(query, cpl)
+    result = solver.solve_succ_query(query, cpl)
     expected = testing.make_prov_set([(0.8 * 0.5, "a")], ("_p_", "y"))
     assert testing.eq_prov_relations(result, expected)
 
@@ -231,7 +231,7 @@ def test_simple_probchoice(solver):
             pred_symb, pchoice_as_set
         )
     query = Implication(ans(x), P(x))
-    result = solver.solve_conjunctive_query(query, cpl_program)
+    result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set(
         [
             (0.2, "a"),
@@ -303,7 +303,7 @@ def test_large_probabilistic_choice(solver):
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
     cpl_program.walk(code)
     query = Implication(ans(x, y), Z(x, y))
-    result = solver.solve_conjunctive_query(query, cpl_program)
+    result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set(
         [
             (0.5 * probs[0], 0, 0),
@@ -381,7 +381,7 @@ def test_existential_alternative_variables(solver):
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
     cpl_program.walk(code)
     query = Implication(ans(z), H(z))
-    result = solver.solve_conjunctive_query(query, cpl_program)
+    result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set([(0.2 * 0.8, "b")], ("prob", "z"))
     assert testing.eq_prov_relations(result, expected)
 
@@ -408,7 +408,7 @@ def test_multilevel_existential(solver):
         )
     cpl_program.walk(code)
     query = Implication(ans(x, y), H(x, y))
-    result = solver.solve_conjunctive_query(query, cpl_program)
+    result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set(
         [
             (0.1 * 0.1, "a", "b"),
@@ -423,7 +423,7 @@ def test_multilevel_existential(solver):
     assert testing.eq_prov_relations(result, expected)
 
     query = Implication(ans(z), C(z))
-    result = solver.solve_conjunctive_query(query, cpl_program)
+    result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set(
         [
             (0.1, "a"),
@@ -442,7 +442,7 @@ def test_multilevel_existential(solver):
         context = nullcontext()
 
     with context:
-        result = solver.solve_conjunctive_query(query, cpl_program)
+        result = solver.solve_succ_query(query, cpl_program)
         expected = testing.make_prov_set(
             [(0.5 * 0.1 * 0.5, "c")],
             ("_p_", "z"),
@@ -494,7 +494,7 @@ def test_repeated_antecedent_predicate_symbol(solver):
         context = nullcontext()
 
     with context:
-        result = solver.solve_conjunctive_query(query, cpl_program)
+        result = solver.solve_succ_query(query, cpl_program)
         expected = testing.make_prov_set(
             [
                 (0.4 * (1 - 0.7) + 0.4 * 0.7, "a", "a"),
@@ -564,7 +564,7 @@ def test_fake_neurosynth(solver):
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
     cpl_program.walk(code)
     query = Implication(ans(t), TermAssociation(t))
-    result = solver.solve_conjunctive_query(query, cpl_program)
+    result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set(
         [
             (
@@ -591,7 +591,7 @@ def test_conjunct_pfact_equantified_pchoice(solver):
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
     cpl_program.walk(code)
     query = Implication(ans(x), Q(x))
-    result = solver.solve_conjunctive_query(query, cpl_program)
+    result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set(
         [
             (0.6 * 0.8 + 0.4 * 0.5, "a"),
@@ -610,7 +610,7 @@ def test_shatterable_query(solver):
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
     cpl_program.walk(code)
     query = Implication(ans(x), Q(x))
-    result = solver.solve_conjunctive_query(query, cpl_program)
+    result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set(
         [
             (0.5 * 0.1, "2"),
@@ -630,7 +630,7 @@ def test_shatterable_query_2(solver):
         cpl_program.add_probabilistic_facts_from_tuples(pred_symb, pfact_set)
     cpl_program.walk(code)
     query = Implication(ans(x), Q(x))
-    result = solver.solve_conjunctive_query(query, cpl_program)
+    result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set(
         [
             (0.5 * 0.1, "2"),
@@ -661,7 +661,7 @@ def test_program_with_variable_equality(solver):
         )
     cpl_program.walk(code)
     query = Implication(ans(x, y), Z(x, y))
-    result = solver.solve_conjunctive_query(query, cpl_program)
+    result = solver.solve_succ_query(query, cpl_program)
     expected = testing.make_prov_set(
         [
             (0.5 * 0.2, "b", "a"),

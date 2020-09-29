@@ -219,7 +219,7 @@ class RAQueryOptimiser(
     pass
 
 
-def solve_conjunctive_query(query, cpl_program):
+def solve_succ_query(query, cpl_program):
     """
     Solve conjunctive query of CP-Logic program.
 

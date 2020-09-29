@@ -19,7 +19,7 @@ from ..probabilistic.cplogic.program import (
     TranslateProbabilisticQueryMixin,
 )
 from ..probabilistic.dichotomy_theorem_based_solver import (
-    solve_conjunctive_query as lifted_solve_succ_query,
+    solve_succ_query as lifted_solve_succ_query,
 )
 from ..probabilistic.expression_processing import (
     is_probabilistic_predicate_symbol,
