@@ -752,6 +752,7 @@ def load_reverse_inference_dataset_deterministic(nl):
         coord = nib.affines.apply_affine(julich_to_ns_mni.affine, list(v))
         xyz_to_jl_region.append((tuple(coord) + tuple([region])))
         
+    print(xyz_to_jl_region)
     xyz_julich = nl.add_tuple_set(
         xyz_to_jl_region,
         name="xyz_julich",
@@ -776,6 +777,7 @@ def load_reverse_inference_dataset_deterministic(nl):
     regions = data['properties']['regions']
     for elem in regions:
         triples = parse_region(elem, id_2_num)
+    print(triples)
         
     julich_ontology = nl.add_tuple_set(
         triples,
