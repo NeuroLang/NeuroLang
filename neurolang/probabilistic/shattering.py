@@ -1,18 +1,20 @@
 import collections
 import itertools
+import operator
 from typing import AbstractSet
 
 from ..datalog.expression_processing import (
-    enforce_conjunction,
-    remove_conjunction_duplicates,
+    UnifyVariableEqualities,
+    enforce_conjunctive_antecedent,
 )
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionWalker
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import Conjunction
 from .exceptions import NotEasilyShatterableError
-from .expression_processing import iter_conjunctive_query_predicates
 from .probabilistic_ra_utils import ProbabilisticFactSet
+
+EQ = Constant(operator.eq)
 
 
 def terms_differ_by_constant_term(terms_a, terms_b):
@@ -77,7 +79,8 @@ class Shatter(FunctionApplication):
 
 
 class QueryEasyShatteringTagger(ExpressionWalker):
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self._cached_args = collections.defaultdict(set)
 
     @add_match(
@@ -116,7 +119,8 @@ class QueryEasyShatteringTagger(ExpressionWalker):
 
 
 class EasyQueryShatterer(ExpressionWalker):
-    def __init__(self, symbol_table):
+    def __init__(self, symbol_table, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.symbol_table = symbol_table
 
     @add_match(Shatter(ProbabilisticFactSet, ...))
@@ -155,23 +159,30 @@ class EasyQueryShatterer(ExpressionWalker):
         return FunctionApplication(new_tagged, non_const_args)
 
 
+class EasyProbfactShatterer(
+    QueryEasyShatteringTagger,
+    EasyQueryShatterer,
+):
+    def __init__(self, symbol_table):
+        super().__init__(symbol_table)
+
+
 def query_to_tagged_set_representation(query, symbol_table):
+    query = enforce_conjunctive_antecedent(query)
     new_predicates = list()
-    for predicate in iter_conjunctive_query_predicates(query):
-        new_predicate = FunctionApplication(
-            symbol_table[predicate.functor], predicate.args
-        )
-        new_predicates.append(new_predicate)
-    return Conjunction(tuple(new_predicates))
+    for predicate in query.antecedent.formulas:
+        if isinstance(predicate.functor, Symbol):
+            predicate = FunctionApplication(
+                symbol_table[predicate.functor], predicate.args
+            )
+        new_predicates.append(predicate)
+    return query.apply(query.consequent, Conjunction(tuple(new_predicates)))
 
 
 def _check_shatter_fully_solved(shattered_query):
-    if isinstance(shattered_query, Shatter) or (
-        isinstance(shattered_query, Conjunction)
-        and any(
-            isinstance(formula, Shatter)
-            for formula in shattered_query.formulas
-        )
+    if any(
+        isinstance(formula, Shatter)
+        for formula in shattered_query.antecedent.formulas
     ):
         raise NotEasilyShatterableError("Cannot easily shatter query")
 
@@ -193,32 +204,25 @@ def shatter_easy_probfacts(query, symbol_table):
 
     Parameters
     ----------
-    query : conjunctive query (can be a single predicate)
-        A query that contains constants.
+    query : Implication
+        A conjunctive query (the body can be a single predicate).
     symbol_table : mapping, mutable
-        Symbol table containing relations associated with the query. This
-        `symbol_table` can be modified in-place by this function to add newly
-        generated symbols and relations by the shattering process.
+        Symbol table containing relations associated with the query's
+        relational symbols. This `symbol_table` can be modified in-place by
+        this function to add newly generated relational symbols and their
+        associated relations.
 
     Returns
     -------
-    Conjunctive query
+    Implication
         An equivalent conjunctive query without constants.
 
-    Notes
-    -----
-    TODO: shatter queries like `Q = R(a, y), R(x, b)` (see example 4.2 in [1]_)
-
-    .. [1] Van den Broeck, G., and Suciu, D. (2017). Query Processing on
-       Probabilistic Data: A Survey. FNT in Databases 7, 197–341.
-
     """
-    query = enforce_conjunction(query)
-    query = remove_conjunction_duplicates(query)
-    ws_query = query_to_tagged_set_representation(query, symbol_table)
-    tagger = QueryEasyShatteringTagger()
-    tagged_query = tagger.walk(ws_query)
-    shatterer = EasyQueryShatterer(symbol_table)
+    query = enforce_conjunctive_antecedent(query)
+    unifier = UnifyVariableEqualities()
+    query = unifier.walk(query)
+    tagged_query = query_to_tagged_set_representation(query, symbol_table)
+    shatterer = EasyProbfactShatterer(symbol_table)
     shattered_query = shatterer.walk(tagged_query)
     _check_shatter_fully_solved(shattered_query)
     return shattered_query

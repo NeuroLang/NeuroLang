@@ -8,7 +8,7 @@ from ..expression_processing import (
     CollapseConjunctiveAntecedents,
     RemoveDuplicatedAntecedentPredicates,
     TranslateToLogic,
-    UnifyVariableEqualities,
+    UnifyVariableEqualitiesMixin,
 )
 
 P = Symbol("P")
@@ -28,7 +28,7 @@ EQ = Constant(operator.eq)
 class DatalogWithVariableEqualityPropagation(
     TranslateToLogic,
     CollapseConjunctiveAntecedents,
-    UnifyVariableEqualities,
+    UnifyVariableEqualitiesMixin,
     RemoveDuplicatedAntecedentPredicates,
     DatalogProgram,
     ExpressionWalker,

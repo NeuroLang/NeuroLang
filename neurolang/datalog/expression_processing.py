@@ -445,6 +445,15 @@ def enforce_conjunction(expression):
     )
 
 
+def enforce_conjunctive_antecedent(implication):
+    return implication.apply(
+        implication.consequent,
+        remove_conjunction_duplicates(
+            enforce_conjunction(implication.antecedent)
+        ),
+    )
+
+
 def flatten_query(query, program):
     """
     Construct the conjunction corresponding to a query on a program.
@@ -670,7 +679,7 @@ class ExtractVariableEqualities(PatternWalker):
         return {symb: chosen_symb for symb in iterator}
 
 
-class UnifyVariableEqualities(PatternWalker):
+class UnifyVariableEqualitiesMixin(PatternWalker):
     @add_match(
         Implication(FunctionApplication(Symbol, ...), Conjunction),
         lambda implication: any(
@@ -679,7 +688,7 @@ class UnifyVariableEqualities(PatternWalker):
         ),
     )
     def extract_and_unify_var_eqs_in_implication(self, implication):
-        extractor = UnifyVariableEqualities._Extractor()
+        extractor = UnifyVariableEqualitiesMixin._Extractor()
         extractor.walk(implication.antecedent)
         replacer = ReplaceSymbolWalker(extractor.substitutions)
         consequent = replacer.walk(implication.consequent)
@@ -693,6 +702,10 @@ class UnifyVariableEqualities(PatternWalker):
 
     class _Extractor(ExtractVariableEqualities, IdentityWalker):
         pass
+
+
+class UnifyVariableEqualities(UnifyVariableEqualitiesMixin, ExpressionWalker):
+    pass
 
 
 class CollapseConjunctiveAntecedents(CollapseConjunctions):
