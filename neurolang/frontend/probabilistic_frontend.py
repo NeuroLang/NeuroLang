@@ -110,12 +110,14 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         if prob_idb.formulas:
             pfact_edb = self.solver.probabilistic_facts()
             pchoice_edb = self.solver.probabilistic_choices()
-            solution = compute_probabilistic_solution(
-                solution,
-                pfact_edb,
-                pchoice_edb,
-                prob_idb,
-                self.probabilistic_solver,
+            solution.update(
+                compute_probabilistic_solution(
+                    solution,
+                    pfact_edb,
+                    pchoice_edb,
+                    prob_idb,
+                    self.probabilistic_solver,
+                )
             )
         if ppq_det_idb.formulas:
             solver = RegionFrontendCPLogicSolver()
