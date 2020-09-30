@@ -136,7 +136,8 @@ def _get_rule_idb_type(rule, grpd_symbs, wlq_symbs):
     elif grpd_symbs["deterministic"].issuperset(dep_symbs):
         idb_type = "deterministic"
     elif (
-        grpd_symbs["deterministic"] | wlq_symbs
+        grpd_symbs["deterministic"]
+        | wlq_symbs
         | grpd_symbs["post_probabilistic"]
     ).issuperset(dep_symbs):
         idb_type = "post_probabilistic"

@@ -77,7 +77,7 @@ def test_stratify_deterministic_probabilistic_wlq():
     prob_idb = [
         Implication(Z(x), S(x)),
         Implication(
-            WLQ(x, y, ProbabilisticQuery(PROB, (x, y)),),
+            WLQ(x, y, ProbabilisticQuery(PROB, (x, y))),
             Conjunction((P(x, y), Z(x))),
         ),
     ]
@@ -112,11 +112,11 @@ def test_stratify_multiple_wlqs():
     prob_idb = [
         Implication(Z(x), Conjunction((S(x), T(x, y)))),
         Implication(
-            WLQ1(x, y, ProbabilisticQuery(PROB, (x, y)),),
+            WLQ1(x, y, ProbabilisticQuery(PROB, (x, y))),
             Conjunction((P(x, y), Z(x))),
         ),
         Implication(
-            WLQ2(y, ProbabilisticQuery(PROB, (y,)),),
+            WLQ2(y, ProbabilisticQuery(PROB, (y,))),
             Conjunction((P(y, y), Z(y))),
         ),
     ]
@@ -155,11 +155,11 @@ def test_wlq_dependence_on_other_wlq():
     prob_idb = [
         Implication(Z(x), Conjunction((S(x), T(x, y)))),
         Implication(
-            WLQ1(x, y, ProbabilisticQuery(PROB, (x, y)),),
+            WLQ1(x, y, ProbabilisticQuery(PROB, (x, y))),
             Conjunction((P(x, y), Z(x))),
         ),
         Implication(
-            WLQ2(y, p, ProbabilisticQuery(PROB, (y, p)),),
+            WLQ2(y, p, ProbabilisticQuery(PROB, (y, p))),
             Conjunction((WLQ1(y, y, p), Z(y))),
         ),
     ]
