@@ -249,14 +249,20 @@ def solve_succ_query(query, cpl_program):
             cpl_program, flat_query_body
         )
         shattered_query = shatter_easy_probfacts(flat_query, symbol_table)
+        prob_pred_symbs = (
+            cpl_program.pfact_pred_symbs
+            | cpl_program.pchoice_pred_symbs
+        )
+        # note: this assumes that the shattering process does not change the
+        # order of the antecedent's conjuncts
         shattered_query_probabilistic_body = Conjunction(
             tuple(
-                formula
-                for formula in shattered_query.antecedent.formulas
-                if isinstance(
-                    formula.functor,
-                    (ProbabilisticFactSet, ProbabilisticChoiceSet),
+                shattered_conjunct
+                for shattered_conjunct, flat_conjunct in zip(
+                    shattered_query.antecedent.formulas,
+                    flat_query.antecedent.formulas,
                 )
+                if flat_conjunct.functor in prob_pred_symbs
             )
         )
         if not is_hierarchical_without_self_joins(
