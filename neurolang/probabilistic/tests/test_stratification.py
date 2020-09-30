@@ -28,6 +28,7 @@ p1 = Symbol("p1")
 p2 = Symbol("p2")
 a = Constant("a")
 b = Constant("b")
+c = Constant("c")
 
 
 def test_stratify_deterministic():
@@ -197,3 +198,29 @@ def test_cannot_stratify_recursive_program():
     query = Implication(Query(x), A(x))
     with pytest.raises(ForbiddenRecursivityError):
         stratify_program(query, program)
+
+
+def test_stratification_multiple_post_probabilistic_rules():
+    facts = [Fact(R(a)), Fact(R(b)), Fact(B(a)), Fact(B(c)), Fact(B(b))]
+    det_idb = [Implication(A(x, y), Conjunction((B(y), R(x))))]
+    pfacts = [
+        Implication(ProbabilisticPredicate(Constant(0.2), C(a, b)), TRUE)
+    ]
+    prob_idb = [
+        Implication(
+            WLQ(x, y, ProbabilisticQuery(PROB, (x, y))),
+            Conjunction((A(x, y), C(x, y))),
+        )
+    ]
+    post_prob_idb = [
+        Implication(Z(x, p), Conjunction((WLQ(x, y, p), R(y)))),
+        Implication(T(p), Z(x, p)),
+    ]
+    code = Union(tuple(facts + pfacts + prob_idb + det_idb + post_prob_idb))
+    program = CPLogicProgram()
+    program.walk(code)
+    query = Implication(Query(x), T(x))
+    idbs = stratify_program(query, program)
+    assert set(idbs["deterministic"].formulas) == set(det_idb)
+    assert set(idbs["probabilistic"].formulas) == set(prob_idb)
+    assert set(idbs["post_probabilistic"].formulas) == set(post_prob_idb)
