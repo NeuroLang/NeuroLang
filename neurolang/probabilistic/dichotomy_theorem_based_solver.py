@@ -221,12 +221,12 @@ class RAQueryOptimiser(
 
 def solve_succ_query(query, cpl_program):
     """
-    Solve conjunctive query of CP-Logic program.
+    Solve a SUCC query on a CP-Logic program.
 
     Parameters
     ----------
     query : Implication
-        Conjunctive query of the form CQ(x) :- R_1(x), ..., R_k(x).
+        SUCC query of the form `ans(x) :- P(x)`.
     cpl_program : CPLogicProgram
         CP-Logic program on which the query should be solved.
 
