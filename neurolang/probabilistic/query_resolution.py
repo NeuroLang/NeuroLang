@@ -19,18 +19,18 @@ def compute_probabilistic_solution(
     )
     for rule in prob_idb.formulas:
         if is_within_language_succ_query(rule):
-            pred = within_language_succ_query_to_intensional_rule(
-                rule
-            ).consequent
-            provset = prob_solver(pred, cpl)
+            query = within_language_succ_query_to_intensional_rule(rule)
+            provset = prob_solver(query, cpl)
             relation = construct_within_language_succ_result(provset, rule)
         else:
-            pred = rule.consequent
-            provset = prob_solver(pred, cpl)
+            query = rule
+            provset = prob_solver(query, cpl)
             relation = Constant[AbstractSet](
-                provset.value, auto_infer_type=False, verify_type=False,
+                provset.value,
+                auto_infer_type=False,
+                verify_type=False,
             )
-        solution[pred.functor] = Constant[AbstractSet](
+        solution[query.consequent.functor] = Constant[AbstractSet](
             relation.value.to_unnamed()
         )
     return solution

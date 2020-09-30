@@ -7,7 +7,7 @@ from ..datalog.expression_processing import (
     extract_logic_predicates,
     reachable_code,
 )
-from ..exceptions import UnsupportedProgramError
+from ..exceptions import ForbiddenRecursivityError, UnsupportedProgramError
 from ..expressions import Symbol
 from ..logic import Implication, Union
 
@@ -84,14 +84,21 @@ def stratify_program(query, program):
     grpd_symbs["deterministic"] = _get_program_deterministic_symbols(program)
     grpd_symbs["probabilistic"] = program.probabilistic_predicate_symbols
     grpd_idbs = collections.defaultdict(list)
+    count = len(idb)
     while idb:
         rule = idb.pop(0)
         idb_type = _get_rule_idb_type(rule, grpd_symbs, wlq_symbs)
         if idb_type is None:
             idb.append(rule)
+            count -= 1
+            if count < 0:
+                raise ForbiddenRecursivityError(
+                    "Unstratifiable recursive program"
+                )
         else:
             grpd_symbs[idb_type].add(rule.consequent.functor)
             grpd_idbs[idb_type].append(rule)
+            count = len(idb)
     return {
         idb_type: Union(tuple(idb_rules))
         for idb_type, idb_rules in grpd_idbs.items()
@@ -130,7 +137,11 @@ def _get_rule_idb_type(rule, grpd_symbs, wlq_symbs):
         idb_type = "probabilistic"
     elif grpd_symbs["deterministic"].issuperset(dep_symbs):
         idb_type = "deterministic"
-    elif (grpd_symbs["deterministic"] | wlq_symbs).issuperset(dep_symbs):
+    elif (
+        grpd_symbs["deterministic"]
+        | wlq_symbs
+        | grpd_symbs["post_probabilistic"]
+    ).issuperset(dep_symbs):
         idb_type = "post_probabilistic"
     elif not grpd_symbs["probabilistic"].isdisjoint(dep_symbs):
         idb_type = "probabilistic"

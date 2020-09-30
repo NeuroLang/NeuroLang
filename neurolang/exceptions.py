@@ -60,3 +60,7 @@ class UnsupportedQueryError(NeuroLangException):
 
 class ProtectedKeywordError(NeuroLangException):
     pass
+
+
+class ForbiddenRecursivityError(UnsupportedProgramError):
+    pass

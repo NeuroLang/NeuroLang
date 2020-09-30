@@ -3,8 +3,7 @@ from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
 import tatsu
 
 from ...datalog import Conjunction, Fact, Implication, Negation, Union
-from ...datalog.aggregation import AggregationApplication
-from ...expressions import Constant, Expression, Symbol, FunctionApplication
+from ...expressions import Constant, Expression, FunctionApplication, Symbol
 from ...probabilistic.expressions import ProbabilisticPredicate
 
 
@@ -161,11 +160,6 @@ class DatalogSemantics:
             if len(ast) == 4:
                 arguments = []
                 for arg in ast[2]:
-                    if isinstance(arg, FunctionApplication):
-                        arg = AggregationApplication(
-                            arg.functor,
-                            arg.args
-                        )
                     arguments.append(arg)
 
                 ast = ast[0](*arguments)
@@ -224,7 +218,11 @@ class DatalogSemantics:
             return Constant(pow)(ast[0], ast[2])
 
     def function_application(self, ast):
-        return Symbol(ast[0])(*ast[2])
+        if not isinstance(ast[0], Expression):
+            f = Symbol(ast[0])
+        else:
+            f = ast[0]
+        return FunctionApplication(f, args=ast[2])
 
     def identifier(self, ast):
         return Symbol(ast)
