@@ -46,7 +46,10 @@ from ..relational_algebra_provenance import (
 )
 from ..utils import log_performance
 from .exceptions import NotHierarchicalQueryException
-from .expression_processing import lift_optimization_for_choice_predicates
+from .expression_processing import (
+    lift_optimization_for_choice_predicates,
+    project_on_query_head,
+)
 from .probabilistic_ra_utils import (
     DeterministicFactSet,
     ProbabilisticChoiceSet,
@@ -211,81 +214,82 @@ class ProbSemiringSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
 class RAQueryOptimiser(
     EliminateTrivialProjections,
     RelationalAlgebraPushInSelections,
-    ExpressionWalker
+    ExpressionWalker,
 ):
     pass
 
 
-def solve_succ_query(query_predicate, cpl_program):
+def solve_succ_query(query, cpl_program):
     """
-    Obtain the solution of a SUCC query on a CP-Logic program.
+    Solve a SUCC query on a CP-Logic program.
 
-    The SUCC query must take the form
+    Parameters
+    ----------
+    query : Implication
+        SUCC query of the form `ans(x) :- P(x)`.
+    cpl_program : CPLogicProgram
+        CP-Logic program on which the query should be solved.
 
-        SUCC[ P(x) ]
+    Returns
+    -------
+    ProvenanceAlgebraSet
+        Provenance set labelled with probabilities for each tuple in the result
+        set.
+
     """
-    with log_performance(LOG, 'Preparing query'):
-        if isinstance(query_predicate, Implication):
-            conjunctive_query = query_predicate.antecedent
-            variables_to_project = tuple(
-                str2columnstr_constant(s.name)
-                for s in query_predicate.consequent.args
-                if isinstance(s, Symbol)
-            )
-        else:
-            conjunctive_query = query_predicate
-            variables_to_project = tuple(
-                str2columnstr_constant(s.name)
-                for s in query_predicate._symbols
-                if s not in (
-                    p.functor for p in
-                    extract_logic_predicates(query_predicate)
-                )
-            )
-
-        flat_query = flatten_query(conjunctive_query, cpl_program)
+    with log_performance(LOG, "Preparing query"):
+        flat_query_body = flatten_query(query.antecedent, cpl_program)
 
     with log_performance(LOG, "Translation and lifted optimisation"):
-        flat_query = lift_optimization_for_choice_predicates(
-            flat_query, cpl_program
+        flat_query_body = lift_optimization_for_choice_predicates(
+            flat_query_body, cpl_program
         )
+        flat_query = Implication(query.consequent, flat_query_body)
         symbol_table = generate_probabilistic_symbol_table_for_query(
-            cpl_program, flat_query
+            cpl_program, flat_query_body
         )
         shattered_query = shatter_easy_probfacts(flat_query, symbol_table)
-        shattered_query_formulas = set(shattered_query.formulas)
-        prob_symbols = cpl_program.probabilistic_predicate_symbols
-        query_pred_symbs = set(f.functor for f in flat_query.formulas)
-        prob_symbols = prob_symbols.intersection(query_pred_symbs)
-        prob_symbols = set(
-            symbol_table[psymb].relation for psymb in prob_symbols
+        prob_pred_symbs = (
+            cpl_program.pfact_pred_symbs
+            | cpl_program.pchoice_pred_symbs
         )
-        shattered_query_probabilistic_section = Conjunction(
+        # note: this assumes that the shattering process does not change the
+        # order of the antecedent's conjuncts
+        shattered_query_probabilistic_body = Conjunction(
             tuple(
-                formula
-                for formula in shattered_query_formulas
-                if formula.functor.relation in prob_symbols
+                shattered_conjunct
+                for shattered_conjunct, flat_conjunct in zip(
+                    shattered_query.antecedent.formulas,
+                    flat_query.antecedent.formulas,
+                )
+                if flat_conjunct.functor in prob_pred_symbs
             )
         )
-        flat_query = Conjunction(tuple(shattered_query_formulas))
-
         if not is_hierarchical_without_self_joins(
-            shattered_query_probabilistic_section
+            shattered_query_probabilistic_body
         ):
             LOG.info(
-                'Query with conjunctions %s not hierarchical',
-                flat_query.formulas
+                "Query with conjunctions %s not hierarchical",
+                shattered_query_probabilistic_body.formulas,
             )
             raise NotHierarchicalQueryException(
                 "Query not hierarchical, algorithm can't be applied"
             )
 
-        ra_query = TranslateToNamedRA().walk(flat_query)
-        ra_query = Projection(ra_query, variables_to_project)
+        ra_query = TranslateToNamedRA().walk(shattered_query.antecedent)
+        proj_cols = tuple(
+            str2columnstr_constant(arg.name)
+            for arg in shattered_query.consequent.args
+            if isinstance(arg, Symbol)
+        )
+        ra_query = Projection(ra_query, proj_cols)
         ra_query = RAQueryOptimiser().walk(ra_query)
 
     with log_performance(LOG, "Run RAP query"):
         solver = ProbSemiringSolver(symbol_table)
         prob_set_result = solver.walk(ra_query)
+        prob_set_result = project_on_query_head(
+            shattered_query, prob_set_result
+        )
 
     return prob_set_result
