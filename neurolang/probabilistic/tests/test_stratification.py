@@ -1,7 +1,7 @@
 import pytest
 
 from ...datalog.expressions import Fact
-from ...exceptions import UnsupportedProgramError
+from ...exceptions import ForbiddenRecursivityError, UnsupportedProgramError
 from ...expressions import Constant, Symbol
 from ...logic import TRUE, Conjunction, Implication, Union
 from ..cplogic.program import CPLogicProgram
@@ -28,6 +28,7 @@ p1 = Symbol("p1")
 p2 = Symbol("p2")
 a = Constant("a")
 b = Constant("b")
+c = Constant("c")
 
 
 def test_stratify_deterministic():
@@ -77,7 +78,7 @@ def test_stratify_deterministic_probabilistic_wlq():
     prob_idb = [
         Implication(Z(x), S(x)),
         Implication(
-            WLQ(x, y, ProbabilisticQuery(PROB, (x, y)),),
+            WLQ(x, y, ProbabilisticQuery(PROB, (x, y))),
             Conjunction((P(x, y), Z(x))),
         ),
     ]
@@ -112,11 +113,11 @@ def test_stratify_multiple_wlqs():
     prob_idb = [
         Implication(Z(x), Conjunction((S(x), T(x, y)))),
         Implication(
-            WLQ1(x, y, ProbabilisticQuery(PROB, (x, y)),),
+            WLQ1(x, y, ProbabilisticQuery(PROB, (x, y))),
             Conjunction((P(x, y), Z(x))),
         ),
         Implication(
-            WLQ2(y, ProbabilisticQuery(PROB, (y,)),),
+            WLQ2(y, ProbabilisticQuery(PROB, (y,))),
             Conjunction((P(y, y), Z(y))),
         ),
     ]
@@ -155,11 +156,11 @@ def test_wlq_dependence_on_other_wlq():
     prob_idb = [
         Implication(Z(x), Conjunction((S(x), T(x, y)))),
         Implication(
-            WLQ1(x, y, ProbabilisticQuery(PROB, (x, y)),),
+            WLQ1(x, y, ProbabilisticQuery(PROB, (x, y))),
             Conjunction((P(x, y), Z(x))),
         ),
         Implication(
-            WLQ2(y, p, ProbabilisticQuery(PROB, (y, p)),),
+            WLQ2(y, p, ProbabilisticQuery(PROB, (y, p))),
             Conjunction((WLQ1(y, y, p), Z(y))),
         ),
     ]
@@ -178,3 +179,48 @@ def test_wlq_dependence_on_other_wlq():
     query = Implication(Query(x, p), Conjunction((WLQ2(x, p), C(x))))
     with pytest.raises(UnsupportedProgramError):
         stratify_program(query, program)
+
+
+def test_cannot_stratify_recursive_program():
+    prob_idb = [
+        Implication(B(x), Conjunction((A(x), C(x)))),
+        Implication(A(x), B(x)),
+    ]
+    code = Union(
+        [
+            Fact(C(a)),
+            Fact(C(b)),
+        ]
+        + prob_idb
+    )
+    program = CPLogicProgram()
+    program.walk(code)
+    query = Implication(Query(x), A(x))
+    with pytest.raises(ForbiddenRecursivityError):
+        stratify_program(query, program)
+
+
+def test_stratification_multiple_post_probabilistic_rules():
+    facts = [Fact(R(a)), Fact(R(b)), Fact(B(a)), Fact(B(c)), Fact(B(b))]
+    det_idb = [Implication(A(x, y), Conjunction((B(y), R(x))))]
+    pfacts = [
+        Implication(ProbabilisticPredicate(Constant(0.2), C(a, b)), TRUE)
+    ]
+    prob_idb = [
+        Implication(
+            WLQ(x, y, ProbabilisticQuery(PROB, (x, y))),
+            Conjunction((A(x, y), C(x, y))),
+        )
+    ]
+    post_prob_idb = [
+        Implication(Z(x, p), Conjunction((WLQ(x, y, p), R(y)))),
+        Implication(T(p), Z(x, p)),
+    ]
+    code = Union(tuple(facts + pfacts + prob_idb + det_idb + post_prob_idb))
+    program = CPLogicProgram()
+    program.walk(code)
+    query = Implication(Query(x), T(x))
+    idbs = stratify_program(query, program)
+    assert set(idbs["deterministic"].formulas) == set(det_idb)
+    assert set(idbs["probabilistic"].formulas) == set(prob_idb)
+    assert set(idbs["post_probabilistic"].formulas) == set(post_prob_idb)
