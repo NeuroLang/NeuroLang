@@ -7,7 +7,7 @@ from ..datalog.expression_processing import (
     extract_logic_predicates,
     reachable_code,
 )
-from ..exceptions import NeuroLangException, UnsupportedProgramError
+from ..exceptions import ForbiddenRecursivityError, UnsupportedProgramError
 from ..expressions import Symbol
 from ..logic import Implication, Union
 
@@ -92,7 +92,9 @@ def stratify_program(query, program):
             idb.append(rule)
             count -= 1
             if count < 0:
-                raise NeuroLangException("Stratification didn't work")
+                raise ForbiddenRecursivityError(
+                    "Unstratifiable recursive program"
+                )
         else:
             grpd_symbs[idb_type].add(rule.consequent.functor)
             grpd_idbs[idb_type].append(rule)

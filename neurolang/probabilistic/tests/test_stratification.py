@@ -1,7 +1,7 @@
 import pytest
 
 from ...datalog.expressions import Fact
-from ...exceptions import UnsupportedProgramError
+from ...exceptions import ForbiddenRecursivityError, UnsupportedProgramError
 from ...expressions import Constant, Symbol
 from ...logic import TRUE, Conjunction, Implication, Union
 from ..cplogic.program import CPLogicProgram
@@ -177,4 +177,23 @@ def test_wlq_dependence_on_other_wlq():
     program.walk(code)
     query = Implication(Query(x, p), Conjunction((WLQ2(x, p), C(x))))
     with pytest.raises(UnsupportedProgramError):
+        stratify_program(query, program)
+
+
+def test_cannot_stratify_recursive_program():
+    prob_idb = [
+        Implication(B(x), Conjunction((A(x), C(x)))),
+        Implication(A(x), B(x)),
+    ]
+    code = Union(
+        [
+            Fact(C(a)),
+            Fact(C(b)),
+        ]
+        + prob_idb
+    )
+    program = CPLogicProgram()
+    program.walk(code)
+    query = Implication(Query(x), A(x))
+    with pytest.raises(ForbiddenRecursivityError):
         stratify_program(query, program)
