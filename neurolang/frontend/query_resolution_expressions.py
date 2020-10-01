@@ -3,6 +3,7 @@ from functools import wraps
 from typing import AbstractSet, Callable, Tuple
 
 from .. import datalog as dl
+from ..datalog import constraints_representation as cr
 from .. import expressions as exp
 from .. import neurolang as nl
 from ..expression_pattern_matching import NeuroLangPatternMatchingNoMatch
@@ -81,10 +82,10 @@ class Expression(object):
                 name += f'_{self.expression.number}'
             return name
         elif isinstance(self.expression, nl.Symbol):
-            if self.expression.is_fresh:
-                return '...'
-            else:
-                return f'{self.expression.name}'
+            # if self.expression.is_fresh:
+            #    return '...'
+            # else:
+            return f'{self.expression.name}'
         else:
             return object.__repr__(self)
 
@@ -425,6 +426,20 @@ class Implication(Expression):
         )
 
 
+class RightImplication(Expression):
+    def __init__(self, query_builder, expression, antecedent, consequent):
+        self.expression = expression
+        self.query_builder = query_builder
+        self.antecedent = antecedent
+        self.consequent = consequent
+
+    def __repr__(self):
+        return u'{a} \u2192 {c}'.format(
+            a=repr(self.antecedent),
+            c=repr(self.consequent)
+        )
+
+
 class Fact(Expression):
     def __init__(self, query_builder, expression, consequent):
         self.expression = expression
@@ -469,6 +484,15 @@ class TranslateExpressionToFrontEndExpression(ExpressionWalker):
             expression,
             self.walk(expression.consequent),
             self.walk(expression.antecedent)
+        )
+
+    @add_match(cr.RightImplication)
+    def right_implication(self, expression):
+        return RightImplication(
+            self.query_builder,
+            expression,
+            self.walk(expression.antecedent),
+            self.walk(expression.consequent)
         )
 
     @add_match(dl.Conjunction)

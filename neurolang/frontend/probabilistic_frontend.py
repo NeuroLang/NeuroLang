@@ -70,6 +70,14 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
 
         self.ontology_loaded = True
 
+    @property
+    def current_program(self):
+        cp = []
+        for constraint in self.solver.constraints().formulas:
+            cp.append(self.frontend_translator.walk(constraint))
+        cp += super().current_program
+        return cp
+
     def execute_query(self, head, predicate):
         query_pred_symb = predicate.expression.functor
         if is_probabilistic_predicate_symbol(query_pred_symb, self.solver):
