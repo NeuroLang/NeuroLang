@@ -143,7 +143,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         )
 
         solution = {
-            k.name: v.value for k, v in solution_ir.items()
+            k.name: v.value.unwrap() for k, v in solution_ir.items()
         }
         return solution
 
