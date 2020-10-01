@@ -158,11 +158,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             return self._empty_set_same_structure()
         new_container = self._container[list(columns)]
         output = self._empty_set_same_structure()
-        output._container = new_container
-        output._container.rename(
+        output._container = new_container.rename(
             columns={c: i
-                     for i, c in enumerate(output._container.columns)},
-            inplace=True,
+                     for i, c in enumerate(columns)},
         )
         return output
 
