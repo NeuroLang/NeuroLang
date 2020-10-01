@@ -5,15 +5,20 @@ NeuroLang Example based Implementing a NeuroSynth Query
 
 '''
 
+import logging
+import sys
+from typing import Iterable
 
-from nilearn import datasets, image, plotting
-import pandas as pd
 from neurolang import frontend as fe
 from neurolang.frontend import probabilistic_frontend as pfe
-from typing import Iterable
 import nibabel as nib
+from nilearn import datasets, image, plotting
 import numpy as np
+import pandas as pd
 
+logger = logging.getLogger('neurolang.probabilistic')
+logger.setLevel(logging.INFO)
+logger.addHandler(logging.StreamHandler(sys.stderr))
 
 ###############################################################################
 # Data preparation
@@ -30,11 +35,17 @@ mni_t1_4mm = image.resample_img(mni_t1, np.eye(3) * 4)
 # Load Destrieux's atlas
 destrieux_dataset = datasets.fetch_atlas_destrieux_2009()
 destrieux = nib.load(destrieux_dataset['maps'])
-destrieux_resampled = image.resample_img(destrieux, mni_t1_4mm.affine)
-destrieux_resampled_data = np.asanyarray(destrieux_resampled.dataobj, dtype=np.int32)
+destrieux_resampled = image.resample_img(
+    destrieux, mni_t1_4mm.affine, interpolation='nearest'
+)
+destrieux_resampled_data = np.asanyarray(
+    destrieux_resampled.dataobj, dtype=np.int32
+)
 destrieux_voxels_ijk = destrieux_resampled_data.nonzero()
 destrieux_voxels_value = destrieux_resampled_data[destrieux_voxels_ijk]
-destrieux_table = pd.DataFrame(np.transpose(destrieux_voxels_ijk), columns=['i', 'j', 'k'])
+destrieux_table = pd.DataFrame(
+    np.transpose(destrieux_voxels_ijk), columns=['i', 'j', 'k']
+)
 destrieux_table['label'] = destrieux_voxels_value
 
 destrieux_label_names = []
@@ -50,7 +61,7 @@ for label_number, name in destrieux_dataset['labels']:
 # Load the NeuroSynth database
 
 ns_database_fn, ns_features_fn = datasets.utils._fetch_files(
-    'neurolang',
+    datasets.utils._get_dataset_dir('neurosynth'),
     [
         (
             'database.txt',
@@ -190,26 +201,19 @@ with nl.scope as e:
         e.vox_cond_query_auditory(e.i, e.j, e.k, e.p)
     )
 
-    img_query = nl.query(
-       (e.x,),
-       e.img(e.x)
-    )
-
-    dest_query = nl.query(
-        (e.x,),
-        e.destrieux_region_image_probability(e.x)
-    )
-
-    drcp = nl.query((e.r, e.p), e.region_cond_query(e.r, e.p))
-    drmp = nl.query((e.r, e.p), e.destrieux_region_max_probability(e.r, e.p))
-
+    print("About to solve all")
+    res = nl.solve_all()
+    img_query = res['img']
+    dest_query = res['destrieux_region_image_probability']
+    drcp = res['region_cond_query']
+    drmp = res['destrieux_region_max_probability']
 
 ###############################################################################
 # Plotting results
 # --------------------------------------------
 
-print(drmp.as_pandas_dataframe().sort_values('p'))
-print(drcp.as_pandas_dataframe().sort_values('p'))
+print(drmp.as_pandas_dataframe().sort_values(drmp.columns[-1]))
+print(drcp.as_pandas_dataframe().sort_values(drcp.columns[-1]))
 result_image = (
     img_query
     .fetch_one()
@@ -217,14 +221,16 @@ result_image = (
     .spatial_image()
 )
 img = result_image.get_fdata()
-# plot = plotting.plot_stat_map(
-#    result_image, threshold=np.percentile(img[img > 0], 95)
-# )
-# plotting.show()
+plot = plotting.plot_stat_map(
+    result_image, threshold=np.percentile(img[img > 0], 95)
+)
+plotting.show()
 
 img = dest_query.fetch_one()[0].spatial_image().get_fdata()
 plot = plotting.plot_stat_map(
     dest_query.fetch_one()[0].spatial_image(),
-    threshold=np.percentile(img[img > 0], 95)
+    display_mode='y',
+    threshold=np.percentile(img[img > 0], 85),
+    cmap='YlOrRd'
 )
 plotting.show()
