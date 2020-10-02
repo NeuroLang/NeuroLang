@@ -488,7 +488,7 @@ def test_result_both_deterministic_and_post_probabilistic():
     assert len(res["utilizzare_le_probabilita"]) == 3
     assert (
         res["utilizzare_le_probabilita"]
-        .projection(ColumnStr('lingua')) == {
+        .projection(ColumnStr('lingua')).to_unnamed() == {
             ("francese",),
             ("inglese",),
         }
