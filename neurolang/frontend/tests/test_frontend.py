@@ -356,6 +356,26 @@ def test_neurolange_dl_get_param_names():
     assert neurolang.symbols['test_fun'].help().strip() == "HELP TEST"
 
 
+def test_neurolange_dl_named_sets():
+    neurolang = frontend.NeurolangDL()
+    r = neurolang.new_symbol(name='r')
+    s = neurolang.new_symbol(name='s')
+    x = neurolang.new_symbol(name='x')
+    y = neurolang.new_symbol(name='y')
+
+    dataset = {(i, i * 2) for i in range(10)}
+    q = neurolang.add_tuple_set(dataset, name='q')
+    r[x] = q(x, x)
+    s[x, y] = q(x, x) & (y == x)
+
+    res = neurolang.solve_all()
+
+    assert res['r'].columns == ('x',)
+    assert res['r'].to_unnamed() == {
+        (i,) for i, j in dataset if i == j
+    }
+
+
 def test_neurolang_dl_datalog_code_list_symbols():
     neurolang = frontend.NeurolangDL()
     original_symbols = set(neurolang.symbols)

@@ -158,10 +158,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             return self._empty_set_same_structure()
         new_container = self._container[list(columns)]
         output = self._empty_set_same_structure()
-        output._container = new_container.rename(
-            columns={c: i
-                     for i, c in enumerate(columns)},
-        )
+        output._container = new_container
+        output._container.columns = range(len(columns))
         return output
 
     def selection(self, select_criteria):
@@ -474,6 +472,12 @@ class NamedRelationalAlgebraFrozenSet(
             might_have_duplicates=True,
             columns=columns
         )
+
+    def projection_to_unnamed(self, *columns):
+        unnamed_self = self.to_unnamed()
+        named_columns = list(self.columns)
+        columns = tuple(named_columns.index(c) for c in columns)
+        return unnamed_self.projection(*columns)
 
     def equijoin(self, other, join_indices, return_mappings=False):
         raise NotImplementedError()

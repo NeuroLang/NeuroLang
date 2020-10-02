@@ -1,4 +1,5 @@
 
+from collections import defaultdict
 from typing import AbstractSet, Tuple
 from uuid import uuid1
 
@@ -176,7 +177,17 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             predicate_name = predicate_name.expression
         elif not isinstance(predicate_name, str):
             raise ValueError(f'{predicate_name} is not a string or symbol')
-        return tuple(
-            s.name if hasattr(s, 'name') else exp.Symbol.fresh().name
-            for s in self.solver.predicate_terms(predicate_name)
-        )
+        parameter_names = []
+        pcount = defaultdict(lambda: 0)
+        for s in self.solver.predicate_terms(predicate_name):
+            if hasattr(s, 'name'):
+                param_name = s.name
+            elif hasattr(s, 'functor') and hasattr(s.functor, 'name'):
+                param_name = s.name
+            else:
+                param_name = exp.Symbol.fresh().name
+            pcount[param_name] += 1
+            if pcount[param_name] > 1:
+                param_name = f'{param_name}_{pcount[param_name] - 1}'
+            parameter_names.append(param_name)
+        return tuple(parameter_names)

@@ -171,8 +171,7 @@ class Chase(chase.Chase):
         new_tuples = (
             substitutions
             .aggregate(group_vars, output_args)
-            .projection(*(oa[0] for oa in output_args))
-            .to_unnamed()
+            .projection_to_unnamed(*(oa[0] for oa in output_args))
         )
         new_tuples = self.datalog_program.new_set(new_tuples)
         return self.compute_instance_update(
