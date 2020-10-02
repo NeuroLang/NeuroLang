@@ -184,17 +184,24 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         parameter_names = []
         pcount = defaultdict(lambda: 0)
         for s in self.solver.predicate_terms(predicate_name):
-            if hasattr(s, 'name'):
-                param_name = s.name
-            elif hasattr(s, 'functor') and hasattr(s.functor, 'name'):
-                param_name = s.functor.name
-            else:
-                param_name = exp.Symbol.fresh().name
+            param_name = self._obtain_parameter_name(s)
             pcount[param_name] += 1
             if pcount[param_name] > 1:
                 param_name = f'{param_name}_{pcount[param_name] - 1}'
             parameter_names.append(param_name)
         return tuple(parameter_names)
+
+    def _obtain_parameter_name(self, parameter_expression):
+        if hasattr(parameter_expression, 'name'):
+            param_name = parameter_expression.name
+        elif (
+            hasattr(parameter_expression, 'functor') and
+            hasattr(parameter_expression.functor, 'name')
+        ):
+            param_name = parameter_expression.functor.name
+        else:
+            param_name = exp.Symbol.fresh().name
+        return param_name
 
     def _get_predicate_name(self, predicate_name):
         if isinstance(predicate_name, Symbol):
