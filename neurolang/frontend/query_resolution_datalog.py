@@ -1,4 +1,5 @@
 
+from collections import defaultdict
 from typing import AbstractSet, Tuple
 from uuid import uuid1
 
@@ -167,6 +168,42 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         return Symbol(self, name)
 
     def predicate_parameter_names(self, predicate_name):
+        """Get the names of the parameters for the given predicate
+
+        Parameters
+        ----------
+        predicate_name : str
+            predicate to obtain the names from
+
+        Returns
+        -------
+        tuple[str]
+            parameter names
+        """
+        predicate_name = self._get_predicate_name(predicate_name)
+        parameter_names = []
+        pcount = defaultdict(lambda: 0)
+        for s in self.solver.predicate_terms(predicate_name):
+            param_name = self._obtain_parameter_name(s)
+            pcount[param_name] += 1
+            if pcount[param_name] > 1:
+                param_name = f'{param_name}_{pcount[param_name] - 1}'
+            parameter_names.append(param_name)
+        return tuple(parameter_names)
+
+    def _obtain_parameter_name(self, parameter_expression):
+        if hasattr(parameter_expression, 'name'):
+            param_name = parameter_expression.name
+        elif (
+            hasattr(parameter_expression, 'functor') and
+            hasattr(parameter_expression.functor, 'name')
+        ):
+            param_name = parameter_expression.functor.name
+        else:
+            param_name = exp.Symbol.fresh().name
+        return param_name
+
+    def _get_predicate_name(self, predicate_name):
         if isinstance(predicate_name, Symbol):
             predicate_name = predicate_name.neurolang_symbol
         elif (
@@ -176,7 +213,4 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             predicate_name = predicate_name.expression
         elif not isinstance(predicate_name, str):
             raise ValueError(f'{predicate_name} is not a string or symbol')
-        return tuple(
-            s.name if hasattr(s, 'name') else exp.Symbol.fresh().name
-            for s in self.solver.predicate_terms(predicate_name)
-        )
+        return predicate_name
