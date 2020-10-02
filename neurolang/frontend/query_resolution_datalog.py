@@ -7,9 +7,8 @@ from .. import expressions as exp
 from ..datalog import aggregation
 from ..datalog.expression_processing import (TranslateToDatalogSemantics,
                                              reachable_code)
-from ..probabilistic.expression_processing import is_within_language_succ_query
 from ..type_system import Unknown
-from ..utils import RelationalAlgebraFrozenSet
+from ..utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
 from .datalog import parser as datalog_parser
 from .datalog.natural_syntax_datalog import parser as nat_datalog_parser
 from .query_resolution import NeuroSynthMixin, QueryBuilderBase, RegionMixin
@@ -143,7 +142,11 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         )
 
         solution = {
-            k.name: v.value.unwrap() for k, v in solution_ir.items()
+            k.name: NamedRelationalAlgebraFrozenSet(
+                self.predicate_parameter_names(k.name),
+                v.value.unwrap()
+            )
+            for k, v in solution_ir.items()
         }
         return solution
 

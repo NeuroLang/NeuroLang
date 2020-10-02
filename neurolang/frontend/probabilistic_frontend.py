@@ -102,7 +102,10 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         solution = self._solve()
         solution_sets = dict()
         for pred_symb, relation in solution.items():
-            solution_sets[pred_symb.name] = relation.value.unwrap()
+            solution_sets[pred_symb.name] = NamedRelationalAlgebraFrozenSet(
+                self.predicate_parameter_names(pred_symb.name),
+                relation.value.unwrap()
+            )
         return solution_sets
 
     def _solve(self, query=None):
