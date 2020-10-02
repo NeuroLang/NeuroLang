@@ -17,22 +17,22 @@ from nilearn import datasets, image, plotting
 import numpy as np
 import pandas as pd
 
-logger = logging.getLogger('neurolang.probabilistic')
+logger = logging.getLogger('neurolang.frontend')
 logger.setLevel(logging.INFO)
 logger.addHandler(logging.StreamHandler(sys.stderr))
 warnings.filterwarnings("ignore")
 
 
-###############################################################################
-# Data preparation
-# ----------------
+"""
+Data preparation
+----------------
+"""
 
 ###############################################################################
 # Load the MNI template and resample it to 4mm voxels
 
 mni_t1 = nib.load(datasets.fetch_icbm152_2009()['t1'])
 mni_t1_4mm = image.resample_img(mni_t1, np.eye(3) * 4)
-
 
 ###############################################################################
 # Load Destrieux's atlas
@@ -117,17 +117,29 @@ neuroFMA = datasets.utils._fetch_files(
 )[0]
 
 
+fma_destrieux_path = datasets.utils._fetch_files(
+    datasets.utils._get_dataset_dir('neuroFMA'),
+    [
+        (
+            'fma_destrieux.csv',
+            'https://raw.githubusercontent.com/NeuroLang/neurolang_data/main/fma_destrieux.csv',
+            {}
+        )
+    ]
+)[0]
+fma_destrieux_rel = pd.read_csv(fma_destrieux_path, sep=';', header=None)
+
 ###############################################################################
 # Probabilistic Logic Programming in NeuroLang
 # --------------------------------------------
 
 nl = pfe.ProbabilisticFrontend()
 nl.load_ontology(neuroFMA)
-for r in nl.current_program:
-    print(r)
 
 ###############################################################################
 # Adding new aggregation function to build a region overlay
+from rdflib import RDFS
+
 @nl.add_symbol
 def agg_create_region_overlay(
     i: Iterable, j: Iterable, k: Iterable, p: Iterable
@@ -143,6 +155,10 @@ def agg_create_region_overlay(
 def agg_max(i: Iterable) -> float:
     return np.max(i)
 
+
+label = nl.new_symbol(name=str(RDFS.label))
+subclass_of = nl.new_symbol(name=str(RDFS.subClassOf))
+regional_part = nl.new_symbol(name='http://sig.biostr.washington.edu/fma3.0#regional_part_of')
 
 ###############################################################################
 # Loading the database
@@ -160,6 +176,10 @@ destrieux_labels = nl.add_tuple_set(
     destrieux_label_names, name='destrieux_labels'
 )
 
+fma_destrieux = nl.add_tuple_set(
+    fma_destrieux_rel, name='relation_destrieux_fma'
+)
+
 for set_symbol in (
     'activations', 'terms', 'docs', 'destrieux_image', 'destrieux_labels'
 ):
@@ -168,9 +188,36 @@ for set_symbol in (
 ###############################################################################
 # Probabilistic program and querying
 
-
 with nl.scope as e:
+    
+    e.fma_related_region[e.subregion_name, e.fma_uri] = (
+        label(e.fma_entity_name, e.fma_uri) & 
+        regional_part(e.fma_region, e.fma_entity_name) & 
+        subclass_of(e.fma_subregion, e.fma_region) &
+        label(e.fma_subregion, e.subregion_name)
+    )
+    
+    e.fma_related_region[e.recursive_region, e.fma_name] = (
+        subclass_of(e.recursive_region, e.fma_subregion) & e.fma_related_region(e.fma_subregion, e.fma_name)
+    )
+    
+    e.fma_to_destrieux[e.fma_name, e.destrieux_name] = (
+        label(..., e.fma_name) & e.relation_destrieux_fma(e.destrieux_name, e.fma_name)
+    )
+    
+    e.destrieux_ijk[e.destrieux_name, e.i, e.j, e.k] = (
+        e.destrieux_labels[e.destrieux_name, e.id_destrieux] &
+        e.destrieux_image[e.i, e.j, e.k, e.id_destrieux]
+    )
+    
+    e.region_voxels[e.i, e.j, e.k] = (
+        e.fma_related_region[e.fma_subregions, 'Temporal lobe'] & 
+        e.fma_to_destrieux[e.fma_subregions, e.destrieux_name] & 
+        e.destrieux_ijk[e.destrieux_name, e.i, e.j, e.k]
+    )
+    
     e.vox_term_prob[e.i, e.j, e.k, e.PROB[e.i, e.j, e.k]] = (
+        e.region_voxels[e.i, e.j, e.k] &
         e.activations[
             e.d, ..., ..., ..., ..., 'MNI', ..., ..., ..., ...,
             ..., ..., ..., e.i, e.j, e.k
@@ -230,9 +277,11 @@ with nl.scope as e:
 
     res = nl.solve_all()
     img_query = res['voxel_activation_probability']
+    #img_query = nl.query((e.region,), e.voxel_activation_probability[e.region])
     dest_query = res['destrieux_region_image_probability']
     drcp = res['region_cond_query']
     drmp = res['destrieux_region_max_probability']
+    
 
 ###############################################################################
 # Results
