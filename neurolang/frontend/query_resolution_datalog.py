@@ -168,15 +168,19 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         return Symbol(self, name)
 
     def predicate_parameter_names(self, predicate_name):
-        if isinstance(predicate_name, Symbol):
-            predicate_name = predicate_name.neurolang_symbol
-        elif (
-            isinstance(predicate_name, Expression) and
-            isinstance(predicate_name.expression, exp.Symbol)
-        ):
-            predicate_name = predicate_name.expression
-        elif not isinstance(predicate_name, str):
-            raise ValueError(f'{predicate_name} is not a string or symbol')
+        """Get the names of the parameters for the given predicate
+
+        Parameters
+        ----------
+        predicate_name : str
+            predicate to obtain the names from
+
+        Returns
+        -------
+        tuple[str]
+            parameter names
+        """
+        predicate_name = self._get_predicate_name(predicate_name)
         parameter_names = []
         pcount = defaultdict(lambda: 0)
         for s in self.solver.predicate_terms(predicate_name):
@@ -191,3 +195,15 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                 param_name = f'{param_name}_{pcount[param_name] - 1}'
             parameter_names.append(param_name)
         return tuple(parameter_names)
+
+    def _get_predicate_name(self, predicate_name):
+        if isinstance(predicate_name, Symbol):
+            predicate_name = predicate_name.neurolang_symbol
+        elif (
+            isinstance(predicate_name, Expression) and
+            isinstance(predicate_name.expression, exp.Symbol)
+        ):
+            predicate_name = predicate_name.expression
+        elif not isinstance(predicate_name, str):
+            raise ValueError(f'{predicate_name} is not a string or symbol')
+        return predicate_name
