@@ -70,6 +70,14 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
 
         self.ontology_loaded = True
 
+    @property
+    def current_program(self):
+        cp = []
+        for constraint in self.solver.constraints().formulas:
+            cp.append(self.frontend_translator.walk(constraint))
+        cp += super().current_program
+        return cp
+
     def execute_query(self, head, predicate):
         query_pred_symb = predicate.expression.functor
         if is_probabilistic_predicate_symbol(query_pred_symb, self.solver):
@@ -94,7 +102,10 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         solution = self._solve()
         solution_sets = dict()
         for pred_symb, relation in solution.items():
-            solution_sets[pred_symb.name] = relation.value
+            solution_sets[pred_symb.name] = NamedRelationalAlgebraFrozenSet(
+                self.predicate_parameter_names(pred_symb.name),
+                relation.value.unwrap()
+            )
         return solution_sets
 
     def _solve(self, query=None):
