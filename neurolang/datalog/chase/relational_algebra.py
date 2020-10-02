@@ -253,25 +253,36 @@ class ChaseNamedRelationalAlgebraMixin:
         if substitutions_columns.isdisjoint(consequent.args):
             return substitutions
 
-        args = tuple(
-            arg.name for arg in consequent.args
-            if isinstance(arg, Symbol)
-        )
-        substitutions_unnamed = substitutions.projection_to_unnamed(*args)
-        already_computed = instance[consequent.functor].value
-        substitutions_unnamed = substitutions_unnamed - already_computed
-
-        output_columns = []
-        projection_columns = []
-        for i, column in enumerate(substitutions.columns):
-            if column in output_columns:
+        args = []
+        args_to_project = []
+        for i, arg in enumerate(consequent.args):
+            if not isinstance(arg, Symbol) or arg.name in args:
                 continue
-            output_columns.append(column)
-            projection_columns.append(i)
+            args.append(arg.name)
+            args_to_project.append(i)
+
+        already_computed = NamedRelationalAlgebraFrozenSet(
+            args,
+            (
+                instance[consequent.functor]
+                .value.unwrap()
+                .projection(*args_to_project)
+            )
+        )
+        if substitutions_columns.symmetric_difference(args):
+            already_computed = (
+                already_computed
+                .naturaljoin(substitutions)
+                .projection(*substitutions.columns)
+            )
+        substitutions_unwrapped = substitutions.unwrap()
+        substitutions_unwrapped = substitutions_unwrapped - already_computed
 
         res = WrappedNamedRelationalAlgebraFrozenSet(
-            output_columns,
-            substitutions_unnamed.projection(*projection_columns)
+            substitutions_unwrapped.columns,
+            substitutions_unwrapped,
+            row_type=substitutions.row_type,
+            verify_row_type=False
         )
 
         return res
@@ -334,7 +345,10 @@ class ChaseNamedRelationalAlgebraMixin:
 
         if isinstance(substitutions, NamedRelationalAlgebraFrozenSet):
             new_tuples = substitutions.projection_to_unnamed(
-                *(arg.name for arg in rule.consequent.args)
+                *(
+                    arg.name for arg in rule.consequent.args
+                    if arg in substitutions.columns
+                )
             )
             new_tuples = WrappedRelationalAlgebraSet(new_tuples)
         else:

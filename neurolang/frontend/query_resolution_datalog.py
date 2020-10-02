@@ -183,7 +183,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             if hasattr(s, 'name'):
                 param_name = s.name
             elif hasattr(s, 'functor') and hasattr(s.functor, 'name'):
-                param_name = s.name
+                param_name = s.functor.name
             else:
                 param_name = exp.Symbol.fresh().name
             pcount[param_name] += 1
