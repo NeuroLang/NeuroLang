@@ -494,7 +494,7 @@ def test_result_both_deterministic_and_post_probabilistic():
         }
     )
     assert res["utilizzare_le_probabilita"].to_unnamed().selection(
-        {ColumnStr(0): "francese"}
+        {ColumnInt(0): "francese"}
     ).projection(ColumnInt(1)) == {(0.12,)}
     assert res["utilizzare_le_probabilita"].to_unnamed().selection(
         {ColumnInt(0): "inglese"}
