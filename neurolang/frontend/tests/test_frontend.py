@@ -326,8 +326,8 @@ def test_neurolang_dl_solve_all():
     q = neurolang.add_tuple_set(dataset, name='q')
     r[x] = q(x, x)
     sol = neurolang.solve_all()
-    assert sol['q'] == dataset
-    assert sol['r'] == set((i,) for i, j in dataset if i == j)
+    assert sol['q'].to_unnamed() == dataset
+    assert sol['r'].to_unnamed() == set((i,) for i, j in dataset if i == j)
     assert len(sol) == 2
     assert neurolang.predicate_parameter_names(r) == ('x',)
 
@@ -354,6 +354,26 @@ def test_neurolange_dl_get_param_names():
     assert neurolang.symbols[r].predicate_parameter_names == ('x',)
     assert r[x].help() is not None
     assert neurolang.symbols['test_fun'].help().strip() == "HELP TEST"
+
+
+def test_neurolange_dl_named_sets():
+    neurolang = frontend.NeurolangDL()
+    r = neurolang.new_symbol(name='r')
+    s = neurolang.new_symbol(name='s')
+    x = neurolang.new_symbol(name='x')
+    y = neurolang.new_symbol(name='y')
+
+    dataset = {(i, i * 2) for i in range(10)}
+    q = neurolang.add_tuple_set(dataset, name='q')
+    r[x] = q(x, x)
+    s[x, y] = q(x, x) & (y == x)
+
+    res = neurolang.solve_all()
+
+    assert res['r'].columns == ('x',)
+    assert res['r'].to_unnamed() == {
+        (i,) for i, j in dataset if i == j
+    }
 
 
 def test_neurolang_dl_datalog_code_list_symbols():
@@ -386,14 +406,14 @@ def test_neurolang_dl_datalog_code():
 
     res = neurolang.solve_all()
 
-    assert res['A'] == {(4, 5), (5, 6), (6, 5)}
-    assert res['B'] == {
+    assert res['A'].to_unnamed() == {(4, 5), (5, 6), (6, 5)}
+    assert res['B'].to_unnamed() == {
         (4, 5), (5, 6), (6, 5), (4, 6), (5, 5), (6, 6)
     }
-    assert res['C'] == {
+    assert res['C'].to_unnamed() == {
         (4,), (5,), (6,)
     }
-    assert res['D'] == {
+    assert res['D'].to_unnamed() == {
         ('x',),
     }
 
@@ -440,9 +460,9 @@ def test_neurolang_dl_attribute_access():
     q = res['q']
     r = res['r']
     assert len(q) == 1
-    el = next(q.unwrapped_iter())[0]
+    el = next(q.to_unnamed().itervalues())[0]
     assert el == one_element
-    assert r.unwrap() == {(one_element.x,)}
+    assert r.to_unnamed() == {(one_element.x,)}
 
 
 def test_neurolang_dl_set_destroy():
@@ -454,7 +474,7 @@ def test_neurolang_dl_set_destroy():
         e.q[e.y] = a[e.x] & contains_(e.x, e.y)
         res = neurolang.solve_all()
 
-    q = res['q'].unwrap()
+    q = res['q'].to_unnamed()
     assert len(q) == 3
     assert set(q) == {(0,), (1,), (2,)}
 

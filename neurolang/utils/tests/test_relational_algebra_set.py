@@ -465,6 +465,32 @@ def test_named_relational_algebra_ra_projection(ra_module):
     assert ras_.projection() == ra_module.NamedRelationalAlgebraFrozenSet.dee()
 
 
+def test_named_relational_algebra_ra_projection_to_unnamed(ra_module):
+    a = [(i % 2, i, i * 2) for i in range(5)]
+    ras = ra_module.NamedRelationalAlgebraFrozenSet(("x", "y", "z"), a)
+
+    ras_x = ras.projection_to_unnamed("x")
+    assert (0,) in ras_x and (1,) in ras_x
+    assert len(ras_x) == 2
+    assert ras_x.columns == (0,)
+
+    ras_xz = ras.projection_to_unnamed("x", "z")
+    assert all((i % 2, i * 2) in ras_xz for i in range(5))
+    assert tuple(ras_xz.columns) == (0, 1)
+
+    ras_xx = ras.projection_to_unnamed("x", "x")
+    assert all((i % 2, i % 2) in ras_xx for i in range(5))
+    assert tuple(ras_xx.columns) == (0, 1)
+
+    ras_ = ras.projection_to_unnamed()
+    assert ras_.arity == 0
+    assert len(ras_) > 0
+    assert (
+        ras.projection_to_unnamed() ==
+        ra_module.RelationalAlgebraFrozenSet.dee()
+    )
+
+
 def test_named_relational_algebra_ra_selection(ra_module):
     a = [(i % 2, i, i * 2) for i in range(5)]
 
