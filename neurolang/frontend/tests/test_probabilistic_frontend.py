@@ -6,7 +6,7 @@ import pytest
 
 from ...exceptions import UnsupportedProgramError, UnsupportedQueryError
 from ...probabilistic.exceptions import UnsupportedProbabilisticQueryError
-from ...relational_algebra import ColumnInt
+from ...relational_algebra import ColumnInt, ColumnStr
 from ..probabilistic_frontend import ProbabilisticFrontend
 
 
@@ -134,7 +134,7 @@ def test_ontology_query():
         e.answer[e.x, e.y] = p2[e.x, e.y]
         solution_instance = nl.solve_all()
 
-    resp = list(solution_instance["answer"].unwrapped_iter())
+    resp = list(solution_instance["answer"].to_unnamed().itervalues())
     assert (
         "http://www.w3.org/2002/03owlt/hasValue/premises001#i",
         "true",
@@ -177,8 +177,8 @@ def test_within_language_succ_query():
         res = nl.solve_all()
     assert "Z" in res.keys()
     df = res["Z"].as_pandas_dataframe()
-    assert np.isclose(df.loc[df[0] == "b"].iloc[0][1], 2 / 3 / 2)
-    assert np.isclose(df.loc[df[0] == "a"].iloc[0][1], 1 / 3 / 2)
+    assert np.isclose(df.loc[df.iloc[:, 0] == "b"].iloc[0, 1], 2 / 3 / 2)
+    assert np.isclose(df.loc[df.iloc[:, 0] == "a"].iloc[0, 1], 1 / 3 / 2)
 
 
 def test_solve_query():
@@ -486,13 +486,16 @@ def test_result_both_deterministic_and_post_probabilistic():
     assert "lingua_da_lua_decisa" in res
     assert "utilizzare_le_probabilita" in res
     assert len(res["utilizzare_le_probabilita"]) == 3
-    assert res["utilizzare_le_probabilita"].projection(ColumnInt(0)) == {
-        ("francese",),
-        ("inglese",),
-    }
-    assert res["utilizzare_le_probabilita"].selection(
-        {ColumnInt(0): "francese"}
+    assert (
+        res["utilizzare_le_probabilita"]
+        .projection(ColumnStr('lingua')) == {
+            ("francese",),
+            ("inglese",),
+        }
+    )
+    assert res["utilizzare_le_probabilita"].to_unnamed().selection(
+        {ColumnStr(0): "francese"}
     ).projection(ColumnInt(1)) == {(0.12,)}
-    assert res["utilizzare_le_probabilita"].selection(
+    assert res["utilizzare_le_probabilita"].to_unnamed().selection(
         {ColumnInt(0): "inglese"}
     ).projection(ColumnInt(1)) == {(0.7 * 0.4,), (0.7 * 0.6,)}
