@@ -136,6 +136,7 @@ fma_destrieux_rel = pd.read_csv(fma_destrieux_path, sep=';', header=None)
 nl = pfe.ProbabilisticFrontend()
 nl.load_ontology(neuroFMA)
 
+
 ###############################################################################
 # Adding new aggregation function to build a region overlay
 from rdflib import RDFS
