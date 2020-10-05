@@ -1,4 +1,5 @@
 import collections
+import logging
 from typing import AbstractSet, Tuple
 from uuid import uuid1
 
@@ -31,6 +32,7 @@ from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraStringExpression,
 )
+from ..utils import log_performance
 from . import QueryBuilderDatalog
 from .query_resolution_expressions import Symbol as FrontEndSymbol
 
@@ -45,6 +47,9 @@ class RegionFrontendCPLogicSolver(
     ExpressionBasicEvaluator,
 ):
     pass
+
+
+LOG = logging.getLogger(__name__)
 
 
 class ProbabilisticFrontend(QueryBuilderDatalog):
@@ -114,8 +119,9 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         prob_idb = idbs.get("probabilistic", Union(tuple()))
         ppq_det_idb = idbs.get("post_probabilistic", Union(tuple()))
         if self.ontology_loaded:
-            eB = self._rewrite_program_with_ontology(det_idb)
-            det_idb = Union(det_idb.formulas + eB.formulas)
+            with log_performance(LOG, "Rewriting ontology"):
+                eB = self._rewrite_program_with_ontology(det_idb)
+                det_idb = Union(det_idb.formulas + eB.formulas)
         chase = self.chase_class(self.solver, rules=det_idb)
         solution = chase.build_chase_solution()
         if prob_idb.formulas:

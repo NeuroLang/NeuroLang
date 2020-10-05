@@ -163,8 +163,9 @@ def _check_for_dependencies_between_wlqs(dep_mat, idb_symbs, wlq_symbs):
 def _wlq_depends_on_other_wlq(wlq_symb_idx, dep_mat, wlq_symb_idxs):
     stack = [wlq_symb_idx]
     while stack:
-        dep_idxs = np.argwhere(dep_mat[stack.pop()].astype(bool)).flatten()
+        this_idx = stack.pop()
+        dep_idxs = np.argwhere(dep_mat[this_idx].astype(bool)).flatten()
         if not wlq_symb_idxs.isdisjoint(dep_idxs):
             return True
-        stack += list(dep_idxs)
+        stack += [d for d in dep_idxs if d != this_idx]
     return False
