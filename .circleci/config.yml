@@ -104,6 +104,9 @@ jobs:
 
 
   token_udpate:
+    docker:
+      - image: circleci/python:3.7
+    working_directory: ~/repo
     steps:
       - run:
           name: Update dependants
