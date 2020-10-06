@@ -371,6 +371,7 @@ def test_neurolange_dl_named_sets():
     res = neurolang.solve_all()
 
     assert res['r'].columns == ('x',)
+    assert res['r'].row_type == Tuple[int]
     assert res['r'].to_unnamed() == {
         (i,) for i, j in dataset if i == j
     }
@@ -406,6 +407,7 @@ def test_neurolang_dl_datalog_code():
 
     res = neurolang.solve_all()
 
+    assert res['A'].row_type == Tuple[int, int]
     assert res['A'].to_unnamed() == {(4, 5), (5, 6), (6, 5)}
     assert res['B'].to_unnamed() == {
         (4, 5), (5, 6), (6, 5), (4, 6), (5, 5), (6, 6)
