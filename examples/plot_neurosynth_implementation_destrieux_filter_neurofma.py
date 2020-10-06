@@ -127,7 +127,7 @@ fma_destrieux_path = datasets.utils._fetch_files(
         )
     ]
 )[0]
-fma_destrieux_rel = pd.read_csv(fma_destrieux_path, sep=';', header=None)
+fma_destrieux_rel = pd.read_csv(fma_destrieux_path, sep=';', header=None, names=['destrieux', 'fma'], dtype={'destrieux': str, 'fma': str})
 
 ###############################################################################
 # Probabilistic Logic Programming in NeuroLang
@@ -161,9 +161,7 @@ label = nl.new_symbol(name=str(RDFS.label))
 subclass_of = nl.new_symbol(name=str(RDFS.subClassOf))
 regional_part = nl.new_symbol(name='http://sig.biostr.washington.edu/fma3.0#regional_part_of')
 
-###############################################################################
-# Loading the database
-
+""
 activations = nl.add_tuple_set(ns_database.values, name='activations')
 terms = nl.add_tuple_set(ns_terms.values, name='terms')
 docs = nl.add_uniform_probabilistic_choice_over_set(
@@ -178,7 +176,7 @@ destrieux_labels = nl.add_tuple_set(
 )
 
 fma_destrieux = nl.add_tuple_set(
-    fma_destrieux_rel, name='relation_destrieux_fma'
+    fma_destrieux_rel.values, name='relation_destrieux_fma'
 )
 
 for set_symbol in (
@@ -191,19 +189,18 @@ for set_symbol in (
 
 with nl.scope as e:
     
-    e.fma_related_region[e.subregion_name, e.fma_uri] = (
-        label(e.fma_entity_name, e.fma_uri) & 
-        regional_part(e.fma_region, e.fma_entity_name) & 
+    e.fma_related_region[e.subregion_name, e.fma_entity_name] = (
+        label(e.fma_uri, e.fma_entity_name) & 
+        regional_part(e.fma_region, e.fma_uri) & 
         subclass_of(e.fma_subregion, e.fma_region) &
         label(e.fma_subregion, e.subregion_name)
     )
     
-    e.fma_related_region[e.recursive_region, e.fma_name] = (
-        subclass_of(e.recursive_region, e.fma_subregion) & e.fma_related_region(e.fma_subregion, e.fma_name)
-    )
-    
-    e.fma_to_destrieux[e.fma_name, e.destrieux_name] = (
-        label(..., e.fma_name) & e.relation_destrieux_fma(e.destrieux_name, e.fma_name)
+    e.fma_related_region[e.recursive_name, e.fma_name] = (
+        e.fma_related_region(e.fma_subregion, e.fma_name) &
+        label(e.fma_uri, e.fma_subregion) &
+        subclass_of(e.recursive_region, e.fma_uri) & 
+        label(e.recursive_region, e.recursive_name)
     )
     
     e.destrieux_ijk[e.destrieux_name, e.i, e.j, e.k] = (
@@ -212,8 +209,8 @@ with nl.scope as e:
     )
     
     e.region_voxels[e.i, e.j, e.k] = (
-        e.fma_related_region[e.fma_subregions, 'Temporal lobe'] & 
-        e.fma_to_destrieux[e.fma_subregions, e.destrieux_name] & 
+        e.fma_related_region[e.fma_subregions, 'Temporal lobe'] &
+        e.relation_destrieux_fma[e.destrieux_name, e.fma_subregions] &
         e.destrieux_ijk[e.destrieux_name, e.i, e.j, e.k]
     )
     
