@@ -102,6 +102,18 @@ jobs:
       - install
       - test
 
+
+  token_udpate:
+    steps:
+      - run:
+          name: Update dependants
+          command: |
+            curl \
+              -XPOST -u "token:${{ secrets.CI_TRIGGER_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              https://api.github.com/repos/NeuroLang/neurolang_web/dispatches \
+              -d '{"event_type":"NeuroLang"}'
+
   benchmark:
     docker:
       - image: circleci/python:3.7
@@ -160,6 +172,7 @@ workflows:
   version: 2
   test_benchmark_build:
     jobs:
+      - token_udpate
       - py36
       - py37
       - benchmark:
