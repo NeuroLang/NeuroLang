@@ -275,7 +275,6 @@ with nl.scope as e:
 
     res = nl.solve_all()
     img_query = res['voxel_activation_probability']
-    #img_query = nl.query((e.region,), e.voxel_activation_probability[e.region])
     dest_query = res['destrieux_region_image_probability']
     drcp = res['region_cond_query']
     drmp = res['destrieux_region_max_probability']
@@ -332,3 +331,6 @@ plot = plotting.plot_stat_map(
     cmap='YlOrRd'
 )
 plotting.show()
+
+""
+
