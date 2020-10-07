@@ -108,7 +108,8 @@ class NeuroSynthHandler(object):
 
     def ns_study_ids(self):
         return np.expand_dims(
-            self.dataset.feature_table.data.index.astype(StudyID), axis=1
+            self.dataset.feature_table.data.index.to_series().apply(StudyID),
+            axis=1,
         )
 
     @staticmethod
