@@ -142,13 +142,13 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             .build_chase_solution()
         )
 
-        solution = {
-            k.name: NamedRelationalAlgebraFrozenSet(
+        solution = {}
+        for k, v in solution_ir.items():
+            solution[k.name] = NamedRelationalAlgebraFrozenSet(
                 self.predicate_parameter_names(k.name),
                 v.value.unwrap()
             )
-            for k, v in solution_ir.items()
-        }
+            solution[k.name].row_type = v.value.row_type
         return solution
 
     def reset_program(self):

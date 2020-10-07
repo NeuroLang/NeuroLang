@@ -42,6 +42,7 @@ def test_deterministic_query():
         res = nl.solve_all()
 
     assert "query1" in res.keys()
+    assert res['query1'].row_type == Tuple[str]
     q1 = res["query1"].as_pandas_dataframe().values
     assert len(q1) == 4
     for elem in q1:
