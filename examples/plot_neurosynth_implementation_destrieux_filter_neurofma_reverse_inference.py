@@ -229,60 +229,12 @@ with nl.scope as e:
     term_prob = res['term_prob']
     
 
-""
-term_prob
-
 ###############################################################################
 # Results
 # --------------------------------------------
 
-###############################################################################
-# Maximum probability per voxel in the region that the region has an activation
-# when an article has the word "Auditory"
-(
-    drmp
-    .as_pandas_dataframe()
-    .sort_values(drmp.columns[-1], ascending=False)
-    .head()
-)
-
-
-###############################################################################
-# Conditional probabilityper region that the region has an activation
-# when an article has the word "Auditory"
-(
-    drcp
-    .as_pandas_dataframe()
-    .sort_values(drcp.columns[-1], ascending=False)
-    .head()
-)
-
-###############################################################################
-# Per voxel associations to "Auditory" top 5%
-result_image = (
-    img_query
-    .fetch_one()
-    [0]
-    .spatial_image()
-)
-img = result_image.get_fdata()
-plot = plotting.plot_stat_map(
-    result_image, threshold=np.percentile(img[img > 0], 95)
-)
-plotting.show()
-
-###############################################################################
-# Per region associations to "Auditory" top 15%
-
-
-img = dest_query.fetch_one()[0].spatial_image().get_fdata()
-plot = plotting.plot_stat_map(
-    dest_query.fetch_one()[0].spatial_image(),
-    display_mode='y',
-    threshold=np.percentile(img[img > 0], 85),
-    cmap='YlOrRd'
-)
-plotting.show()
+c = res['term_prob']._container.copy()
+c[c['PROB'] >= c['PROB'].quantile(.99)].sort_values('PROB', ascending=False)
 
 ""
 
