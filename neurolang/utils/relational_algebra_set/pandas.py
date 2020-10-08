@@ -157,11 +157,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         if self.is_empty():
             return self._empty_set_same_structure()
         new_container = self._container[list(columns)]
+        new_container.columns = pd.RangeIndex(len(columns))
         output = self._empty_set_same_structure()
-        output._container = new_container.rename(
-            columns={c: i
-                     for i, c in enumerate(columns)},
-        )
+        output._container = new_container
         return output
 
     def selection(self, select_criteria):

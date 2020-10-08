@@ -17,9 +17,10 @@ from nilearn import datasets, image, plotting
 import numpy as np
 import pandas as pd
 
-logger = logging.getLogger('neurolang.frontend')
-logger.setLevel(logging.INFO)
-logger.addHandler(logging.StreamHandler(sys.stderr))
+for module_name in ('frontend', 'probabilistic'):
+    logger = logging.getLogger(f'neurolang.{module_name}')
+    logger.setLevel(logging.INFO)
+    logger.addHandler(logging.StreamHandler(sys.stderr))
 warnings.filterwarnings("ignore")
 
 
@@ -315,7 +316,8 @@ result_image = (
 )
 img = result_image.get_fdata()
 plot = plotting.plot_stat_map(
-    result_image, threshold=np.percentile(img[img > 0], 95)
+    result_image,
+    # threshold=np.percentile(img[img > 0], 95)
 )
 plotting.show()
 
