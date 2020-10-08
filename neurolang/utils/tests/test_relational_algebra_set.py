@@ -1,9 +1,9 @@
 import pytest
 
-from ..relational_algebra_set import RelationalAlgebraStringExpression, pandas
+from ..relational_algebra_set import RelationalAlgebraStringExpression, pandas, vaex
 
 
-@pytest.fixture(ids=['pandas'], params=[(pandas,)])
+@pytest.fixture(ids=['pandas', 'vaex'], params=[(pandas, vaex)])
 def ra_module(request):
     return request.param[0]
 
@@ -30,7 +30,7 @@ def test_relational_algebra_set_semantics(ra_module):
     ras_ = ra_module.RelationalAlgebraSet(a)
     ras__ = set((e,) for e in a)
 
-    assert ras.columns == [0]
+    assert ras.columns == [0] or ras.columns == ['x']
 
     assert ras == ras_
     assert ras == ras__
