@@ -12,7 +12,6 @@ from .expressions import (Constant, Expression, FunctionApplication, Lambda,
                           is_leq_informative, unify_types)
 from .neurolang_compiler import NeuroLangIntermediateRepresentationCompiler
 from .solver import *
-from .version import __version__
 
 __all__ = [
     '__version__',
