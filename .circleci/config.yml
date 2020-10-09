@@ -11,7 +11,7 @@ commands:
       # Download and cache dependencies
       - restore_cache:
           keys:
-            - v1-dependencies-{{ checksum "requirements.txt" }}
+            - v1-dependencies-{{ checksum "setup.cfg" }}
             # fallback to using the latest cache if no exact match is found
             - v1-dependencies-
 
@@ -21,12 +21,9 @@ commands:
             python -m venv venv
             . venv/bin/activate
             pip install --upgrade pip
-            pip install .[dev]
-            if
-              [ ${CIRCLE_JOB} == "docs" ]
-            then
-              pip install .[doc]
-            fi
+            python setup.py egg_info
+            cat *.egg-info/requires.txt | egrep -v '^\[' > requires.txt
+            pip install requires.txt
             if
               [ ${CIRCLE_JOB} == "benchmark" ]
             then
