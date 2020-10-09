@@ -67,7 +67,7 @@ commands:
             ./cc-test-reporter before-build
             make test
 
-      -run:
+      - run:
           name: store tests results
           when: always
           command: |
