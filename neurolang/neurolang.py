@@ -1,4 +1,5 @@
 from __future__ import absolute_import, division, print_function
+from importlib.metadata import version, PackageNotFoundError
 
 from .exceptions import NeuroLangException
 from .expression_pattern_matching import *
@@ -12,6 +13,15 @@ from .expressions import (Constant, Expression, FunctionApplication, Lambda,
                           is_leq_informative, unify_types)
 from .neurolang_compiler import NeuroLangIntermediateRepresentationCompiler
 from .solver import *
+
+
+try:
+    __version__ = version('neurolang')
+except PackageNotFoundError:
+    __version__ = None
+    # package is not installed
+    pass
+
 
 __all__ = [
     '__version__',
