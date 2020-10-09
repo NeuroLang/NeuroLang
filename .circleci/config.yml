@@ -21,6 +21,10 @@ commands:
             python -m venv venv
             . venv/bin/activate
             pip install --upgrade pip
+
+            pip install setuptools_scm
+            pip install importlib_metadata
+            
             python setup.py egg_info
             cat *.egg-info/requires.txt | egrep -v '^\[' > requires.txt
             pip install -r requires.txt
