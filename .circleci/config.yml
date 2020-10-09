@@ -23,7 +23,7 @@ commands:
             pip install --upgrade pip
             python setup.py egg_info
             cat *.egg-info/requires.txt | egrep -v '^\[' > requires.txt
-            pip install requires.txt
+            pip install -r requires.txt
             if
               [ ${CIRCLE_JOB} == "benchmark" ]
             then
