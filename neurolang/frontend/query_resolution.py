@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from typing import AbstractSet, Callable, Tuple
+from typing import AbstractSet, Callable, Tuple, Union, List, Any, Iterable, Optional
 from uuid import uuid1
 
 import numpy as np
@@ -10,6 +10,7 @@ from ..regions import ExplicitVBR, ImplicitVBR, SphericalVolume
 from ..type_system import Unknown, is_leq_informative
 from .neurosynth_utils import NeuroSynthHandler, StudyID, TfIDf
 from .query_resolution_expressions import Expression, Symbol
+from ..typed_symbol_table import TypedSymbolTable
 
 
 class QueryBuilderBase:
@@ -21,41 +22,119 @@ class QueryBuilderBase:
         for k, v in self.solver.included_functions.items():
             self.symbol_table[exp.Symbol[v.type](k)] = v
 
+        # ! Code duplication ?
         for k, v in self.solver.included_functions.items():
             self.symbol_table[exp.Symbol[v.type](k)] = v
 
         self._symbols_proxy = QuerySymbolsProxy(self)
 
-    def get_symbol(self, symbol_name):
+    def get_symbol(self, symbol_name: Union[str, Expression]) -> Symbol:
+        """Retrieves symbol with given name
+
+        Parameters
+        ----------
+        symbol_name : Union[str, Expression]
+            name of the symbol to be retrieved. If of type Expression,
+            expression's name is used as the name
+
+        Returns
+        -------
+        Symbol
+            symbol corresponding to the input name
+
+        Raises
+        ------
+        ValueError
+            if no symbol could be found with given name
+
+        Example
+        -------
+        >>> nl = ProbabilisticFrontend()
+        >>> nl.add_symbol(3, "x")
+        >>> nl.get_symbol("x")
+        x: <class 'int'> = 3
+        """
         if isinstance(symbol_name, Expression):
             symbol_name = symbol_name.expression.name
         if symbol_name not in self.symbol_table:
             raise ValueError(f"Symbol {symbol_name} not defined")
         return Symbol(self, symbol_name)
 
-    def __getitem__(self, symbol_name):
+    def __getitem__(self, symbol_name: Union[Symbol, str, Expression]) -> Symbol:
+        """Overload for the .get_symbol method
+
+        Parameters
+        ----------
+        symbol_name : Union[Symbol, str, Expression]
+            if symbol, passes symbol's name to .get_symbol method
+
+        Returns
+        -------
+        Symbol
+            output from .get_symbol method
+        """
         if isinstance(symbol_name, Symbol):
             symbol_name = symbol_name.symbol_name
         return self.get_symbol(symbol_name)
 
-    def __contains__(self, symbol):
+    def __contains__(self, symbol: Symbol) -> bool:
+        """Checks if symbol exists in current query
+
+        Parameters
+        ----------
+        symbol : Symbol
+            symbol to check
+
+        Returns
+        -------
+        bool
+            does symbol exist in current query
+        """
         return symbol in self.symbol_table
 
     @property
-    def types(self):
+    def types(self) -> List[Union[Expression, Any]]:
+        """Returns a list of the types of the symbols currently
+        in the table, or Unknown if no type is declared for the symbol
+
+        Returns
+        -------
+        List[Union[Expression, Any]]
+            List of types or Unknown if symbol has no type
+        """
         return self.symbol_table.types
 
     @property
-    def symbol_table(self):
+    def symbol_table(self) -> TypedSymbolTable:
+        """wrapper for the solver's symbol_table"""
         return self.solver.symbol_table
 
     @property
-    def symbols(self):
+    def symbols(self) -> Iterable[str]:
+        """Iterator through the symbol's names"""
         return self._symbols_proxy
 
     @property
     @contextmanager
-    def environment(self):
+    def environment(self) -> "QuerySymbolsProxy":
+        """Dynamic context that can be used to create
+        symbols to write a datalog program.
+        Contrary to a scope, symbols stay in the symbol_table
+        when exiting the environment context
+
+        Yields
+        -------
+        QuerySymbolsProxy
+            in dynamic mode, can be used to create symbols on-the-fly
+
+        Example
+        -------
+        >>> nl = ProbabilisticFrontend()
+        >>> with nl.environment as e:
+        ...     e.x = 3
+        >>> "x" in nl
+        True
+        """
         old_dynamic_mode = self._symbols_proxy._dynamic_mode
         self._symbols_proxy._dynamic_mode = True
         try:
@@ -65,7 +144,25 @@ class QueryBuilderBase:
 
     @property
     @contextmanager
-    def scope(self):
+    def scope(self) -> "QuerySymbolsProxy":
+        """Dynamic context that can be used to create
+        symbols to write a datalog program.
+        Contrary to an environment, symbols disappear from the symbol_table
+        when exiting the scope context
+
+        Yields
+        -------
+        QuerySymbolsProxy
+            in dynamic mode, can be used to create symbols on-the-fly
+
+        Example
+        -------
+        >>> nl = ProbabilisticFrontend()
+        >>> with nl.scope as e:
+        ...     e.x = 3
+        >>> "x" in nl
+        False
+        """
         old_dynamic_mode = self._symbols_proxy._dynamic_mode
         self._symbols_proxy._dynamic_mode = True
         self.solver.push_scope()
@@ -75,7 +172,25 @@ class QueryBuilderBase:
             self.solver.pop_scope()
             self._symbols_proxy._dynamic_mode = old_dynamic_mode
 
-    def new_symbol(self, type_=Unknown, name=None):
+    def new_symbol(
+        self, type_: Union[Any, Tuple[Any], List[Any]] = Unknown, name: str = None
+    ) -> Expression:
+        """Creates a symbol and associated expression, optionally
+        specifying it's type and/or name
+
+        Parameters
+        ----------
+        type_ : Union[Any, Tuple[Any], List[Any]], optional
+            type of the created symbol, by default Unknown
+            if Iterable, will be cast to a Tuple
+        name : str, optional
+            name of the created symbol, by default None
+
+        Returns
+        -------
+        Expression
+            associated to the created symbol
+        """
         if isinstance(type_, (tuple, list)):
             type_ = tuple(type_)
             type_ = Tuple[type_]
@@ -85,14 +200,62 @@ class QueryBuilderBase:
         return Expression(self, exp.Symbol[type_](name))
 
     @property
-    def functions(self):
+    def functions(self) -> List[str]:
+        """Returns the list of symbols corresponding to callables
+
+        Returns
+        -------
+        List[str]
+            list of symbols of type leq Callable
+
+        Example
+        -------
+        >>> nl = ProbabilisticFrontend()
+        >>> def f(x: int) -> int:
+        ...     return x+2
+        ...
+        >>> nl.add_symbol(f, "f")
+        f: typing.Callable[[int], int] = <function f at ...>
+        >>> "f" in nl.functions
+        True
+        >>> nl.add_symbol(3, "x")
+        x: <class 'int'> = 3
+        >>> "x" in nl.functions
+        False
+        """
         return [
             s.name
             for s in self.symbol_table
             if is_leq_informative(s.type, Callable)
         ]
 
-    def add_symbol(self, value, name=None):
+    def add_symbol(self, value: Any, name: str = None) -> Symbol:
+        """Creates a symbol with given value and adds it to the
+        current symbol_table
+
+        Parameters
+        ----------
+        value : Any
+            value of the symbol to add. If not an Expression,
+            will be cast as a Constant
+        name : str, optional
+            overrides automatic naming of the symbol, by default None
+
+        Returns
+        -------
+        Symbol
+            created symbol
+
+        Example
+        -------
+        >>> nl = ProbabilisticFrontend()
+        >>> @nl.add_symbol
+        ... def g(x: int) -> int:
+        ...     return x + 2
+        ...
+        >>> nl.get_symbol("g")
+        g: typing.Callable[[int], int] = <function g at ...>
+        """
         name = self._obtain_symbol_name(name, value)
 
         if isinstance(value, Expression):
@@ -107,7 +270,7 @@ class QueryBuilderBase:
 
         return Symbol(self, name)
 
-    def _obtain_symbol_name(self, name, value):
+    def _obtain_symbol_name(self, name: Optional[str], value: Any) -> str:
         if name is not None:
             return name
 
@@ -122,10 +285,45 @@ class QueryBuilderBase:
 
         return name
 
-    def del_symbol(self, name):
+    def del_symbol(self, name: str) -> None:
+        """Deletes the symbol with parameter name
+        from the symbol_table
+
+        Parameters
+        ----------
+        name : str
+            Name of the symbol to delete
+
+        Example
+        -------
+        >>> nl = pfe.ProbabilisticFrontend()
+        >>> nl.add_symbol(3, "x")
+        x: <class 'int'> = 3
+        >>> nl.get_symbol("x")
+        x: <class 'int'> = 3
+        >>> nl.del_symbol("x")
+        >>> nl.get_symbol("x")
+        ValueError: Symbol x not defined
+        """
         del self.symbol_table[name]
 
-    def add_tuple_set(self, iterable, type_=Unknown, name=None):
+    def add_tuple_set(self, iterable: Iterable, type_: Any = Unknown, name: str = None) -> Symbol:
+        """Creates a Symbol
+
+        Parameters
+        ----------
+        iterable : Iterable
+            [description]
+        type_ : Any, optional
+            [description], by default Unknown
+        name : str, optional
+            [description], by default None
+
+        Returns
+        -------
+        Symbol
+            [description]
+        """
         if not isinstance(type_, tuple) or len(type_) == 1:
             if isinstance(type_, tuple) and len(type_) == 1:
                 type_ = type_[0]
@@ -174,7 +372,14 @@ class QueryBuilderBase:
 
 class RegionMixin:
     @property
-    def region_names(self):
+    def region_names(self) -> List[str]:
+        """Returns the list of symbol names with Region type
+
+        Returns
+        -------
+        List[str]
+            list of symbol names from symbol_table
+        """
         return [s.name for s in self.symbol_table.symbols_by_type(Region)]
 
     @property
@@ -189,8 +394,7 @@ class RegionMixin:
     def add_region(self, region, name=None):
         if not isinstance(region, self.solver.type):
             raise ValueError(
-                f"type mismatch between region and solver type:"
-                f" {self.solver.type}"
+                f"type mismatch between region and solver type:" f" {self.solver.type}"
             )
 
         return self.add_symbol(region, name)
@@ -230,9 +434,7 @@ class RegionMixin:
                 (exp.Constant[str](label_name), symbol)
             )
             atlas_set.add(tuple_symbol)
-        atlas_set = exp.Constant[AbstractSet[Tuple[str, Region]]](
-            frozenset(atlas_set)
-        )
+        atlas_set = exp.Constant[AbstractSet[Tuple[str, Region]]](frozenset(atlas_set))
         atlas_symbol = exp.Symbol[atlas_set.type](name)
         self.symbol_table[atlas_symbol] = atlas_set
         return self[atlas_symbol]
@@ -247,15 +449,11 @@ class RegionMixin:
             region_symbol = self.get_symbol(region_symbol_name)
             region = region_symbol.value
             if isinstance(region, ImplicitVBR):
-                self.add_region(
-                    region.to_explicit_vbr(affine, dim), region_symbol_name
-                )
+                self.add_region(region.to_explicit_vbr(affine, dim), region_symbol_name)
 
 
 class NeuroSynthMixin:
-    def load_neurosynth_term_study_ids(
-        self, term, name=None, frequency_threshold=0.05
-    ):
+    def load_neurosynth_term_study_ids(self, term, name=None, frequency_threshold=0.05):
         """
         Load study ids (PMIDs) of studies in the Neurosynth database that are
         related to a given term based on a hard thresholding of TF-IDF
@@ -287,9 +485,7 @@ class NeuroSynthMixin:
         study_set = self.neurosynth_db.ns_study_id_set_from_term(
             term, frequency_threshold
         )
-        return self.add_tuple_set(
-            study_set.values, type_=Tuple[StudyID], name=name
-        )
+        return self.add_tuple_set(study_set.values, type_=Tuple[StudyID], name=name)
 
     def load_neurosynth_study_tfidf_feature_for_terms(self, terms, name=None):
         """
@@ -365,9 +561,7 @@ class NeuroSynthMixin:
         if not name:
             name = str(uuid1())
         result_set = self.neurosynth_db.ns_reported_activations()
-        return self.add_tuple_set(
-            result_set, type_=Tuple[StudyID, int], name=name
-        )
+        return self.add_tuple_set(result_set, type_=Tuple[StudyID, int], name=name)
 
     def load_neurosynth_term_study_associations(
         self,
@@ -407,9 +601,7 @@ class NeuroSynthMixin:
         result_set = self.neurosynth_db.ns_term_study_associations(
             threshold=threshold, study_ids=study_ids
         )
-        return self.add_tuple_set(
-            result_set, type_=Tuple[StudyID, str], name=name
-        )
+        return self.add_tuple_set(result_set, type_=Tuple[StudyID, str], name=name)
 
 
 class QuerySymbolsProxy:
