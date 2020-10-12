@@ -1,9 +1,22 @@
+r'''
+Neurolang datalog grammar definition
+and convertion to intermediate representation
+=============================================
+
+1- defines the neurolang datalog syntax
+2- code written using this grammar can be parsed
+into an Abstract Syntax Tree (AST)
+3- the obtained AST can ba walked through to convert it
+to the intermediate representation used in the backend
+'''
+
 from __future__ import absolute_import, division, print_function
 
 import inspect
 import logging
 import typing
-from collections import Iterable, Mapping, namedtuple
+from typing import Union, Optional
+from collections import Iterable, Mapping
 
 import tatsu
 
@@ -50,7 +63,8 @@ __all__ = [
     "ExistentialPredicate",
 ]
 
-
+# Extended Backus–Naur Form (EBNF) grammar describing the datalog syntax
+# used to write programs:
 grammar_EBNF = r"""
     @@whitespace :: /[\s\t\n\r\\ ]/
 
@@ -125,11 +139,13 @@ grammar_EBNF = r"""
 """
 
 
-Category = namedtuple("Category", "type_name type_name_plural type")
-
-
 class NeuroLangIntermediateRepresentation(ASTWalker):
-    def __init__(self, type_name_map=None):
+    """Abstract Syntax Tree walker class implementing
+    convertion from an ASTNode to the corresponding Expression"""
+    def __init__(
+        self,
+        type_name_map: Optional[Union[Iterable, Mapping]] = None
+    ):
         if isinstance(type_name_map, Mapping):
             self.type_name_map = type_name_map
         elif isinstance(type_name_map, Iterable):
@@ -452,7 +468,21 @@ class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
         )
 
 
-def parser(code, **kwargs):
+def parser(code: str, **kwargs):
+    """Parses datalog code into an Abstract Syntax Tree (AST)
+
+    Parameters
+    ----------
+    code : str
+        code written in datalog, as described by it's EBNF syntax
+    **kwargs
+        completed and passed to the tatsu parser
+
+    Returns
+    -------
+        AST
+        Abstract Syntax Tree resulting from code parsing
+    """
     kwargs["semantics"] = kwargs.get("semantics", TatsuASTConverter())
     kwargs["parseinfo"] = True
     kwargs["trace"] = kwargs.get("trace", False)
