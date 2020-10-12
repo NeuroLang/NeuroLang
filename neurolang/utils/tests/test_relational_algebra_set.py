@@ -3,9 +3,9 @@ import pytest
 from ..relational_algebra_set import RelationalAlgebraStringExpression, pandas, vaex
 
 
-@pytest.fixture(ids=['pandas', 'vaex'], params=[(pandas, vaex)])
+@pytest.fixture(ids=['vaex'], params=[(vaex)])
 def ra_module(request):
-    return request.param[0]
+    return request.param
 
 
 def test_relational_algebra_set_semantics_empty(ra_module):
