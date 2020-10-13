@@ -637,11 +637,17 @@ class NeuroSynthMixin:
 
 
 class QuerySymbolsProxy:
+    """Class useful to create symbols on-the-fly
+    Typically used in QueryBuilderBase contexts as the yielded value
+    to write a program.
+    Various methods are overloads of QueryBuilderBase methods"""
+
     def __init__(self, query_builder):
         self._dynamic_mode = False
         self._query_builder = query_builder
 
     def __getattr__(self, name):
+        """See QueryBuilderBase.get_symbol"""
         if name in self.__getattribute__("_query_builder"):
             return self._query_builder.get_symbol(name)
 
@@ -654,6 +660,7 @@ class QuerySymbolsProxy:
                 raise
 
     def __setattr__(self, name, value):
+        """See QueryBuilderBase.add_symbol"""
         if name == "_dynamic_mode":
             return super().__setattr__(name, value)
         elif self._dynamic_mode:
@@ -662,34 +669,56 @@ class QuerySymbolsProxy:
             return super().__setattr__(name, value)
 
     def __delattr__(self, name):
+        """See QueryBuilderBase.del_symbol"""
         if self._dynamic_mode and name:
             self._query_builder.del_symbol(name)
         else:
             super().__delattr__(name)
 
     def __getitem__(self, attr):
+        """See QueryBuilderBase.get_symbol"""
         return self._query_builder.get_symbol(attr)
 
     def __setitem__(self, key, value):
+        """See QueryBuilderBase.add_symbol"""
         return self._query_builder.add_symbol(value, name=key)
 
     def __contains__(self, symbol):
+        """See QueryBuilderBase.__contains__"""
         return symbol in self._query_builder.symbol_table
 
-    def __iter__(self):
+    def __iter__(self) -> List[str]:
+        """Iterates through the names of the symbols
+        currently in the symbol_table, ordered in ascending name
+
+        Returns
+        -------
+        List[str]
+            list of symbol names
+        """
         return iter(
             sorted(set(s.name for s in self._query_builder.symbol_table))
         )
 
-    def __len__(self):
+    def __len__(self) -> int:
+        """Returns number of symbols currently in symbol_table
+
+        Returns
+        -------
+        int
+            see description
+        """
         return len(self._query_builder.symbol_table)
 
     def __dir__(self):
+        """Descibes self and lists symbols in current symbol_table"""
         init = object.__dir__(self)
+        # ! why not call `in self` ?
         init += [symbol.name for symbol in self._query_builder.symbol_table]
         return init
 
     def __repr__(self):
+        """Describes symbols currently in symbol_table"""
         init = [symbol.name for symbol in self._query_builder.symbol_table]
-
+        # ! why not call `in self` ?
         return f"QuerySymbolsProxy with symbols {init}"
