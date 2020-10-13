@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from typing import AbstractSet, Callable, Tuple, Union, List, Any, Iterable, Optional
+from typing import AbstractSet, Callable, Tuple, Union, List, Any, Iterable, Optional, Iterator
 from uuid import uuid1
 
 import numpy as np
@@ -117,7 +117,7 @@ class QueryBuilderBase:
         return self.solver.symbol_table
 
     @property
-    def symbols(self) -> Iterable[str]:
+    def symbols(self) -> Iterator[str]:
         """Iterator through the symbol's names"""
         return self._symbols_proxy
 
@@ -180,14 +180,14 @@ class QueryBuilderBase:
             self._symbols_proxy._dynamic_mode = old_dynamic_mode
 
     def new_symbol(
-        self, type_: Union[Any, Tuple[Any], List[Any]] = Unknown, name: str = None
+        self, type_: Union[Any, Tuple[Any, ...], List[Any]] = Unknown, name: str = None
     ) -> Expression:
         """Creates a symbol and associated expression, optionally
         specifying it's type and/or name
 
         Parameters
         ----------
-        type_ : Union[Any, Tuple[Any], List[Any]], optional
+        type_ : Union[Any, Tuple[Any, ...], List[Any]], optional
             type of the created symbol, by default Unknown
             if Iterable, will be cast to a Tuple
         name : str, optional
@@ -220,7 +220,6 @@ class QueryBuilderBase:
         >>> nl = QueryBuilderBase(...)
         >>> def f(x: int) -> int:
         ...     return x+2
-        ...
         >>> nl.add_symbol(f, "f")
         f: typing.Callable[[int], int] = <function f at ...>
         >>> "f" in nl.functions
@@ -260,7 +259,6 @@ class QueryBuilderBase:
         >>> @nl.add_symbol
         ... def g(x: int) -> int:
         ...     return x + 2
-        ...
         >>> nl.get_symbol("g")
         g: typing.Callable[[int], int] = <function g at ...>
         """
@@ -324,7 +322,7 @@ class QueryBuilderBase:
         self, iterable: Iterable, type_: Any = Unknown, name: str = None
     ) -> Symbol:
         """Creates an AbstractSet Symbol containing the elements specified in the
-        iterable with a List[Tuple[Any]] format (see examples).
+        iterable with a List[Tuple[Any, ...]] format (see examples).
         Typically used to crate extensional facts from existing databases
 
         Parameters

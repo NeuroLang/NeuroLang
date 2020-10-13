@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import AbstractSet, Tuple
+from typing import AbstractSet, Tuple, List, Dict, Iterable, Any, Union
 from uuid import uuid1
 
 from .. import datalog
@@ -36,25 +36,73 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         self.nat_datalog_parser = nat_datalog_parser
 
     @property
-    def current_program(self):
+    def current_program(self) -> List[Expression]:
+        """Returns the list of expressions that have currently been declared in the
+        program
+
+        Returns
+        -------
+        List[Expression]
+            see description
+
+        Example
+        -------
+        >>> nl = QueryBuilderDatalog(...)
+        >>> nl.add_tuple_set([(1, 2), (2, 2)], name="l")
+        l: typing.AbstractSet[typing.Tuple[int, int]] = [(1, 2), (2, 2)]
+        >>> with nl.scope as e:
+        ...     e.l2[e.x] = e.l[e.x, e.y] & (e.x == e.y)
+        ...     cp = nl.current_program
+        >>> cp
+        [
+            l2(x) ← ( l(x, y) ) ∧ ( x eq y )
+        ]
+        """
         cp = []
         for rules in self.solver.intensional_database().values():
             for rule in rules.formulas:
                 cp.append(self.frontend_translator.walk(rule))
         return cp
 
-    def assign(self, consequent, antecedent):
-        consequent = self.translate_expression_to_datalog.walk(
-            consequent.expression
-        )
-        antecedent = self.translate_expression_to_datalog.walk(
-            antecedent.expression
-        )
+    def assign(self, consequent: Expression, antecedent: Expression) -> Expression:
+        """Creates an implication of the consequent by the antecedent
+        and adds the rule to the current program:
+            consequent <- antecedent
+
+        Parameters
+        ----------
+        consequent : Expression
+            see description, will be processed to a logic form before
+            creating the implication rule
+        antecedent : Expression
+            see description, will be processed to a logic form before
+            creating the implication rule
+
+        Returns
+        -------
+        Expression
+            see description
+
+        Example
+        -------
+        >>> nl = QueryBuilderDatalog(...)
+        >>> nl.add_tuple_set([(1, 2), (2, 2)], name="l")
+        l: typing.AbstractSet[typing.Tuple[int, int]] = [(1, 2), (2, 2)]
+        >>> with nl.scope as e:
+        ...     nl.assign(e.l2[e.x], e.l2[e.x, e.y])
+        ...     cp = nl.current_program
+        >>> cp
+        [
+            l2(x) ← l(x, y)
+        ]
+        """
+        consequent = self.translate_expression_to_datalog.walk(consequent.expression)
+        antecedent = self.translate_expression_to_datalog.walk(antecedent.expression)
         rule = datalog.Implication(consequent, antecedent)
         self.solver.walk(rule)
         return rule
 
-    def execute_datalog_program(self, code):
+    def execute_datalog_program(self, code: str) -> None:
         """Execute a datalog program in classical syntax
 
         Parameters
@@ -65,7 +113,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         ir = self.datalog_parser(code)
         self.solver.walk(ir)
 
-    def execute_nat_datalog_program(self, code):
+    def execute_nat_datalog_program(self, code: str) -> None:
         """Execute a natural language datalog program in classical syntax
 
         Parameters
@@ -76,21 +124,37 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         ir = self.nat_datalog_parser(code)
         self.solver.walk(ir)
 
-    def query(self, *args):
+    def query(self, *args) -> Union[bool, RelationalAlgebraFrozenSet, Symbol]:
         """Performs an inferential query on the database.
         There are three modalities
         1. If there is only one argument, the query returns `True` or `False`
         depending on wether the query could be inferred.
         2. If there are two arguments and the first is a tuple of `Symbol`, it
         returns the set of results meeting the query in the second argument.
+        # ! How to write this thirs modality ?
         3. If the first argument is a predicate (e.g. `Q(x)`) it performs the
         query adds it to the engine memory and returns the
         corresponding symbol.
 
         Returns
         -------
-        bool, frozenset, Symbol
+        Union[bool, RelationalAlgebraFrozenSet, Symbol]
             read the descrpition.
+
+        Example
+        -------
+        >>> nl = QueryBuilderDatalog(...)
+        >>> nl.add_tuple_set([(1, 2), (2, 2)], name="l")
+        l: typing.AbstractSet[typing.Tuple[int, int]] = [(1, 2), (2, 2)]
+        >>> with nl.scope as e:
+        ...     e.l2[e.x, e.y] = e.l[e.x, e.y] & (e.x == e.y)
+        ...     s1 = nl.query(e.l2[e.x, e.y])
+        ...     s2 = nl.query((e.x,), e.l2[e.x, e.y])
+        >>> s1
+        True
+        >>> s2
+            x
+        0   2
         """
 
         if len(args) == 1:
@@ -112,7 +176,42 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         else:
             return RelationalAlgebraFrozenSet(solution_set.value)
 
-    def execute_query(self, head, predicate):
+    def execute_query(
+        self, head: Tuple[Expression, ...], predicate: Expression
+    ) -> Union[bool, RelationalAlgebraFrozenSet]:
+        """Performs an inferential query:
+        1- If head is an empty Tuple, will verify if the predicate query
+        can be inferred, returning a bool
+        2- If head is a tuple of expressions, will return a
+        RelationalAlgebraFrozenSet listing the results meeting the query
+
+        Parameters
+        ----------
+        head : Tuple[Expression, ...]
+            see description
+        predicate : Expression
+            see description
+
+        Returns
+        -------
+        Union[bool, RelationalAlgebraFrozenSet]
+            see description
+
+        Examples
+        --------
+        >>> nl = QueryBuilderDatalog(...)
+        >>> nl.add_tuple_set([(1, 2), (2, 2)], name="l")
+        l: typing.AbstractSet[typing.Tuple[int, int]] = [(1, 2), (2, 2)]
+        >>> with nl.scope as e:
+        ...     e.l2[e.x, e.y] = e.l[e.x, e.y] & (e.x == e.y)
+        ...     s1 = nl.execute_query(tuple(), e.l2[e.x, e.y])
+        ...     s2 = nl.execute_query((e.x,), e.l2[e.x, e.y])
+        >>> s1
+        True
+        >>> s2
+            x
+        0   2
+        """
         functor_orig = None
         self.solver.symbol_table = self.symbol_table.create_scope()
         if isinstance(head, Operation):
@@ -133,10 +232,36 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         self.solver.symbol_table = self.symbol_table.enclosing_scope
         return solution_set, functor_orig
 
-    def solve_all(self):
+    def solve_all(self) -> Dict:
         """
         Returns a dictionary of "predicate_name": "Content"
         for all elements in the solution of the datalog program.
+
+        Returns
+        -------
+        Dict
+            extensional and intentional facts that have been derived
+            through the current program
+
+        Example
+        -------
+        Note: example ran with pandas backend
+        >>> nl = QueryBuilderDatalog(...)
+        >>> nl.add_tuple_set([(1, 2), (2, 2)], name="l")
+        l: typing.AbstractSet[typing.Tuple[int, int]] = [(1, 2), (2, 2)]
+        >>> with nl.scope as e:
+        ...     e.l2[e.x] = e.l[e.x, e.y] & (e.x == e.y)
+        ...     solution = nl.solve_all()
+        >>> solution
+        {
+            'l':
+                0   1
+            0   1   2
+            1   2   2
+            'l2':
+                x
+            0   2
+        }
         """
         solution_ir = self.chase_class(self.solver).build_chase_solution()
 
@@ -148,23 +273,57 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             solution[k.name].row_type = v.value.row_type
         return solution
 
-    def reset_program(self):
+    def reset_program(self) -> None:
+        """Clears current symbol table"""
         self.symbol_table.clear()
 
-    def add_tuple_set(self, iterable, type_=Unknown, name=None):
+    def add_tuple_set(
+        self, iterable: Iterable, type_: Any = Unknown, name: str = None
+    ) -> Symbol:
+        """Creates an AbstractSet Symbol containing the elements specified in the
+        iterable with a List[Tuple[Any]] format (see examples).
+        Typically used to crate extensional facts from existing databases
+
+        Parameters
+        ----------
+        iterable : Iterable
+            typically a list of tuples of values, other formats will
+            be interpreted as the latter
+        type_ : Any, optional
+            type of elements for the tuples, if not specified
+            will be inferred from the first element, by default Unknown
+        name : str, optional
+            name for the AbstractSet symbol, by default None
+
+        Returns
+        -------
+        Symbol
+            see description
+
+        Examples
+        --------
+        >>> nl = pfe.ProbabilisticFrontend()
+        >>> nl.add_tuple_set([(1, 2), (3, 4)], name="l1")
+        l1: typing.AbstractSet[typing.Tuple[int, int]] = \
+            [(1, 2), (3, 4)]
+        >>> nl.add_tuple_set([[1, 2, 3], (3, 4)], name="l2")
+        l2: typing.AbstractSet[typing.Tuple[int, int, float]] = \
+            [(1, 2, 3.0), (3, 4, nan)]
+        >>> nl.add_tuple_set((1, 2, 3), name="l3")
+        l3: typing.AbstractSet[typing.Tuple[int]] = \
+            [(1,), (2,), (3,)]
+        """
         if name is None:
             name = str(uuid1())
 
         if isinstance(type_, tuple):
             type_ = Tuple[type_]
         symbol = exp.Symbol[AbstractSet[type_]](name)
-        self.solver.add_extensional_predicate_from_tuples(
-            symbol, iterable, type_=type_
-        )
+        self.solver.add_extensional_predicate_from_tuples(symbol, iterable, type_=type_)
 
         return Symbol(self, name)
 
-    def predicate_parameter_names(self, predicate_name):
+    def predicate_parameter_names(self, predicate_name: str) -> Tuple[str]:
         """Get the names of the parameters for the given predicate
 
         Parameters
