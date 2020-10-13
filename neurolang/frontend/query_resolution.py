@@ -11,10 +11,17 @@ from ..type_system import Unknown, is_leq_informative
 from .neurosynth_utils import NeuroSynthHandler, StudyID, TfIDf
 from .query_resolution_expressions import Expression, Symbol
 from ..typed_symbol_table import TypedSymbolTable
+from ..solver import GenericSolver
 
 
 class QueryBuilderBase:
-    def __init__(self, solver, logic_programming=False):
+    """Base class to build datalog queries: create symbols,
+    retrieve them, delete them"""
+
+    def __init__(
+        self, solver: GenericSolver, logic_programming: bool = False
+    ) -> "QueryBuilderBase":
+        """Creates a QueryBuilderBase instance with specified solver"""
         self.solver = solver
         self.set_type = AbstractSet[self.solver.type]
         self.logic_programming = logic_programming
@@ -49,7 +56,7 @@ class QueryBuilderBase:
 
         Example
         -------
-        >>> nl = ProbabilisticFrontend()
+        >>> nl = QueryBuilderBase(...)
         >>> nl.add_symbol(3, "x")
         >>> nl.get_symbol("x")
         x: <class 'int'> = 3
@@ -78,7 +85,7 @@ class QueryBuilderBase:
         return self.get_symbol(symbol_name)
 
     def __contains__(self, symbol: Symbol) -> bool:
-        """Checks if symbol exists in current query
+        """Checks if symbol exists in current symbol_table
 
         Parameters
         ----------
@@ -129,7 +136,7 @@ class QueryBuilderBase:
 
         Example
         -------
-        >>> nl = ProbabilisticFrontend()
+        >>> nl = QueryBuilderBase(...)
         >>> with nl.environment as e:
         ...     e.x = 3
         >>> "x" in nl
@@ -157,7 +164,7 @@ class QueryBuilderBase:
 
         Example
         -------
-        >>> nl = ProbabilisticFrontend()
+        >>> nl = QueryBuilderBase(...)
         >>> with nl.scope as e:
         ...     e.x = 3
         >>> "x" in nl
@@ -210,7 +217,7 @@ class QueryBuilderBase:
 
         Example
         -------
-        >>> nl = ProbabilisticFrontend()
+        >>> nl = QueryBuilderBase(...)
         >>> def f(x: int) -> int:
         ...     return x+2
         ...
@@ -231,7 +238,8 @@ class QueryBuilderBase:
 
     def add_symbol(self, value: Any, name: str = None) -> Symbol:
         """Creates a symbol with given value and adds it to the
-        current symbol_table
+        current symbol_table.
+        Can typicaly be used to decorate callables.
 
         Parameters
         ----------
@@ -248,7 +256,7 @@ class QueryBuilderBase:
 
         Example
         -------
-        >>> nl = ProbabilisticFrontend()
+        >>> nl = QueryBuilderBase(...)
         >>> @nl.add_symbol
         ... def g(x: int) -> int:
         ...     return x + 2
@@ -294,6 +302,11 @@ class QueryBuilderBase:
         name : str
             Name of the symbol to delete
 
+        Raises
+        ------
+        ValueError
+            if no symbol could be found with given name
+
         Example
         -------
         >>> nl = pfe.ProbabilisticFrontend()
@@ -307,22 +320,41 @@ class QueryBuilderBase:
         """
         del self.symbol_table[name]
 
-    def add_tuple_set(self, iterable: Iterable, type_: Any = Unknown, name: str = None) -> Symbol:
-        """Creates a Symbol
+    def add_tuple_set(
+        self, iterable: Iterable, type_: Any = Unknown, name: str = None
+    ) -> Symbol:
+        """Creates an AbstractSet Symbol containing the elements specified in the
+        iterable with a List[Tuple[Any]] format (see examples).
+        Typically used to crate extensional facts from existing databases
 
         Parameters
         ----------
         iterable : Iterable
-            [description]
+            typically a list of tuples of values, other formats will
+            be interpreted as the latter
         type_ : Any, optional
-            [description], by default Unknown
+            type of elements for the tuples, if not specified
+            will be inferred from the first element, by default Unknown
         name : str, optional
-            [description], by default None
+            name for the AbstractSet symbol, by default None
 
         Returns
         -------
         Symbol
-            [description]
+            see description
+
+        Examples
+        --------
+        >>> nl = pfe.ProbabilisticFrontend()
+        >>> nl.add_tuple_set([(1, 2), (3, 4)], name="l1")
+        l1: typing.AbstractSet[typing.Tuple[int, int]] = \
+            [(1, 2), (3, 4)]
+        >>> nl.add_tuple_set([[1, 2, 3], (3, 4)], name="l2")
+        l2: typing.AbstractSet[typing.Tuple[int, int, float]] = \
+            [(1, 2, 3.0), (3, 4, nan)]
+        >>> nl.add_tuple_set((1, 2, 3), name="l3")
+        l3: typing.AbstractSet[typing.Tuple[int]] = \
+            [(1,), (2,), (3,)]
         """
         if not isinstance(type_, tuple) or len(type_) == 1:
             if isinstance(type_, tuple) and len(type_) == 1:
