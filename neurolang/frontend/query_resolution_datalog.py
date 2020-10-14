@@ -143,6 +143,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
         Example
         -------
+        Note: example ran with pandas backend
         >>> nl = QueryBuilderDatalog(...)
         >>> nl.add_tuple_set([(1, 2), (2, 2)], name="l")
         l: typing.AbstractSet[typing.Tuple[int, int]] = [(1, 2), (2, 2)]
@@ -199,6 +200,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
         Examples
         --------
+        Note: example ran with pandas backend
         >>> nl = QueryBuilderDatalog(...)
         >>> nl.add_tuple_set([(1, 2), (2, 2)], name="l")
         l: typing.AbstractSet[typing.Tuple[int, int]] = [(1, 2), (2, 2)]
