@@ -1,5 +1,5 @@
 import collections
-from typing import AbstractSet, Tuple
+from typing import AbstractSet, Tuple, List, Union, Dict, Optional, Type, Iterable, Any
 from uuid import uuid1
 
 from ..datalog.aggregation import (
@@ -33,7 +33,10 @@ from ..relational_algebra import (
     RelationalAlgebraStringExpression,
 )
 from . import QueryBuilderDatalog
-from .query_resolution_expressions import Symbol as FrontEndSymbol
+from .query_resolution_expressions import (
+    Symbol as FrontEndSymbol,
+    Expression as FrontEndExpression,
+)
 
 
 class RegionFrontendCPLogicSolver(
@@ -49,16 +52,24 @@ class RegionFrontendCPLogicSolver(
 
 
 class ProbabilisticFrontend(QueryBuilderDatalog):
-    def __init__(
-        self, chase_class=Chase, probabilistic_solver=lifted_solve_succ_query
-    ):
-        super().__init__(
-            RegionFrontendCPLogicSolver(), chase_class=chase_class
-        )
+    def __init__(self, chase_class=Chase, probabilistic_solver=lifted_solve_succ_query):
+        super().__init__(RegionFrontendCPLogicSolver(), chase_class=chase_class)
         self.probabilistic_solver = probabilistic_solver
         self.ontology_loaded = False
 
-    def load_ontology(self, paths, load_format="xml"):
+    def load_ontology(
+        self, paths: Union[str, List[str]], load_format: Union[str, List[str]] = "xml"
+    ) -> None:
+        """Loads and parses ontology stored at the specified paths, and
+        store them into attributes
+
+        Parameters
+        ----------
+        paths : Union[str, List[str]]
+            where the ontology files are stored
+        load_format : Union[str, List[str]], optional
+            storage format, by default "xml"
+        """
         onto = OntologyParser(paths, load_format)
         d_pred, u_constraints = onto.parse_ontology()
         self.solver.walk(u_constraints)
@@ -72,14 +83,111 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         self.ontology_loaded = True
 
     @property
-    def current_program(self):
+    def current_program(self) -> List[FrontEndExpression]:
+        """Returns the list of expressions that have currently been declared in the
+        program, or through the program's constraints
+
+        Returns
+        -------
+        List[FrontEndExpression]
+            see description
+
+        Example
+        -------
+        >>> nl = ProbabilisticFrontend()
+        >>> P = nl.add_uniform_probabilistic_choice_over_set(
+        ...     [("a",), ("b",), ("c",)], name="P"
+        ... )
+        >>> Q = nl.add_uniform_probabilistic_choice_over_set(
+        ...     [("a",), ("d",), ("c",)], name="Q"
+        ... )
+        >>> with nl.scope as e:
+        ...     e.Z[e.x, e.PROB[e.x]] = P[e.x] & Q[e.x]
+        ...     cp = nl.current_program
+        >>> cp
+        [
+            Z(x, ( PROB(x) )) ← ( P(x) ) ∧ ( Q(x) )
+        ]
+        """
         cp = []
         for constraint in self.solver.constraints().formulas:
             cp.append(self.frontend_translator.walk(constraint))
         cp += super().current_program
         return cp
 
-    def execute_query(self, head, predicate):
+    def execute_query(
+        self,
+        head: Union[
+            Symbol[Tuple[FrontEndExpression, ...]], Tuple[FrontEndExpression, ...]
+        ],
+        predicate: FrontEndExpression,
+    ) -> Tuple[AbstractSet, Optional[Symbol]]:
+        """Performs an inferential query: will return as first output
+        an abstract set with as many elements as solutions
+        of the predicate query,and columns corresponding to
+        the expressions in the head.
+        Typically, probabilities are encapsulated into predicates.
+        If head expressions are arguments of a functor, the latter will
+        be returned as the second output, defaulted as None
+
+        Parameters
+        ----------
+        head : Union[Symbol[Tuple[Expression, ...]], Tuple[Expression, ...]]
+            see description
+        predicate : Expression
+            see description
+
+        Returns
+        -------
+        Tuple[AbstractSet, Optional[Symbol]]
+            see description
+
+        Examples
+        --------
+        Note: example ran with pandas backend
+        >>> nl = ProbabilisticFrontend(...)
+        >>> P = nl.add_uniform_probabilistic_choice_over_set(
+        ...     [("a",), ("b",), ("c",)], name="P"
+        ... )
+        >>> Q = nl.add_uniform_probabilistic_choice_over_set(
+        ...     [("a",), ("d",), ("c",)], name="Q"
+        ... )
+        >>> with nl.scope as e:
+        ...     e.Z[e.x, e.PROB[e.x]] = P[e.x] & Q[e.x]
+        ...     s1 = nl.execute_query(tuple(), e.Z[e.x, e.p])
+        ...     s2 = nl.execute_query((e.x, ), e.Z[e.x, e.p])
+        ...     s3 = nl.execute_query(e.Z[e.x, e.p], e.Z[e.x, e.p])
+        >>> s1
+        (
+            C{
+                Empty DataFrame
+                Columns: []
+                Index: [0, 1]
+                : typing.AbstractSet
+            },
+            None
+        )
+        >>> s2
+        (
+            C{
+                    x
+                0   a
+                1   c
+                : typing.AbstractSet
+            },
+            None
+        )
+        >>> s3
+        (
+            C{
+                    x   p
+                0   a   0.111111
+                1   c   0.111111
+                : typing.AbstractSet
+            },
+            S{Z: Unknown}
+        )
+        """
         query_pred_symb = predicate.expression.functor
         if is_probabilistic_predicate_symbol(query_pred_symb, self.solver):
             raise UnsupportedQueryError(
@@ -94,12 +202,42 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         else:
             head_symbols = tuple(t.expression for t in head)
             functor_orig = None
-        solution = self._restrict_to_query_solution(
-            head_symbols, predicate, solution
-        )
+        solution = self._restrict_to_query_solution(head_symbols, predicate, solution)
         return solution, functor_orig
 
-    def solve_all(self):
+    def solve_all(self) -> Dict:
+        """
+        Returns a dictionary of "predicate_name": "Content"
+        for all elements in the solution of the datalog program.
+        Typically, probabilities are encapsulated into predicates.
+
+        Returns
+        -------
+        Dict
+            extensional and intentional facts that have been derived
+            through the current program, optionally with probabilities
+
+        Example
+        -------
+        Note: example ran with pandas backend
+        >>> nl = ProbabilisticFrontend()
+        >>> P = nl.add_uniform_probabilistic_choice_over_set(
+        ...     [("a",), ("b",), ("c",)], name="P"
+        ... )
+        >>> Q = nl.add_uniform_probabilistic_choice_over_set(
+        ...     [("a",), ("d",), ("c",)], name="Q"
+        ... )
+        >>> with nl.scope as e:
+        ...     e.Z[e.PROB[e.x], e.x] = P[e.x] & Q[e.x]
+        ...     solution = nl.solve_all()
+        >>> solution
+        {
+            'Z':
+                PROB        x
+            0   0.111111    a
+            1   0.111111    c
+        }
+        """
         solution = self._solve()
         solution_sets = dict()
         for pred_symb, relation in solution.items():
@@ -187,9 +325,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             return Constant[AbstractSet](NamedRelationalAlgebraFrozenSet.dum())
         query_solution = solution[pred_symb].value.unwrap()
         cols = list(
-            arg.name
-            for arg in predicate.expression.args
-            if isinstance(arg, Symbol)
+            arg.name for arg in predicate.expression.args if isinstance(arg, Symbol)
         )
         query_solution = NamedRelationalAlgebraFrozenSet(cols, query_solution)
         query_solution = query_solution.projection(
@@ -198,9 +334,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         return Constant[AbstractSet](query_solution)
 
     def _rewrite_program_with_ontology(self, deterministic_program):
-        orw = OntologyRewriter(
-            deterministic_program, self.solver.constraints()
-        )
+        orw = OntologyRewriter(deterministic_program, self.solver.constraints())
         rewrite = orw.Xrewrite()
 
         eB = ()
@@ -210,8 +344,42 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         return Union(eB)
 
     def add_probabilistic_facts_from_tuples(
-        self, iterable, type_=Unknown, name=None
-    ):
+        self, iterable: Iterable[Tuple[float, Any]], type_: Type = Unknown, name: Optional[str] = None
+    ) -> FrontEndSymbol:
+        """Add probabilistic facts from tuples whose first element
+        contains the probability label attached to that tuple.
+        Note that those facts are independant, contrary to
+        a probabilistic choice.
+        See example for details.
+
+        Parameters
+        ----------
+        iterable : Iterable
+            typically List[Tuple[float, Any]], other types of Iterable
+            will be cast as lists.
+        type_ : Type, optional
+            type for resulting AbstractSet if None will be inferred
+            from the data, by default Unknown
+        name : Optional[str], optional
+            name for the resulting FrontEndSYmbol, if None
+            will be randomized, by default None
+
+        Returns
+        -------
+        FrontEndSymbol
+            see description
+
+        Example
+        -------
+        >>> p = [(0.8, 'a'), (0.7, 'b')]
+        >>> nl.add_probabilistic_facts_from_tuples(p, name="P")
+        P: typing.AbstractSet[typing.Tuple[float, str]] = \
+            [(0.8, 'a'), (0.7, 'b')]
+
+        Adds the probabilistic facts:
+            P(a) : 0.8  <-  T
+            P(b) : 0.7  <-  T
+        """
         return self._add_probabilistic_tuples(
             iterable,
             type_,
@@ -220,8 +388,47 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         )
 
     def add_probabilistic_choice_from_tuples(
-        self, iterable, type_=Unknown, name=None
-    ):
+        self, iterable: Iterable[Tuple[float, Any]], type_: Type = Unknown, name: Optional[str] = None
+    ) -> FrontEndSymbol:
+        """Add probabilistic choice from tuples whose first element
+        contains the probability label attached to that tuple.
+        Contrary to a list of probabilistic facts, this represents a choice
+        among possible values for the predicate.
+        See example for details.
+
+        Parameters
+        ----------
+        iterable : Iterable
+            typically List[Tuple[float, Any]], other types of Iterable
+            will be cast as lists
+            Note that the float probabilities must sum to 1.
+        type_ : Type, optional
+            type for resulting AbstractSet if None will be inferred
+            from the data, by default Unknown
+        name : Optional[str], optional
+            name for the resulting FrontEndSYmbol, if None
+            will be randomized, by default None
+
+        Returns
+        -------
+        FrontEndSymbol
+            see description
+
+        Raises
+        ------
+        DistributionDoesNotSumToOneError
+            if float probabilities do not sum to 1.
+
+        Example
+        -------
+        >>> p = [(0.8, 'a'), (0.2, 'b')]
+        >>> nl.add_probabilistic_choice_from_tuples(p, name="P")
+        P: typing.AbstractSet[typing.Tuple[float, str]] = \
+            [(0.8, 'a'), (0.2, 'b')]
+
+        Adds the probabilistic choice:
+            P(a) : 0.8  v  P(b) : 0.2  <-  T
+        """
         return self._add_probabilistic_tuples(
             iterable,
             type_,
@@ -229,9 +436,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             self.solver.add_probabilistic_choice_from_tuples,
         )
 
-    def _add_probabilistic_tuples(
-        self, iterable, type_, name, solver_add_method
-    ):
+    def _add_probabilistic_tuples(self, iterable, type_, name, solver_add_method):
         if name is None:
             name = str(uuid1())
         if isinstance(type_, tuple):
@@ -241,8 +446,42 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         return FrontEndSymbol(self, name)
 
     def add_uniform_probabilistic_choice_over_set(
-        self, iterable, type_=Unknown, name=None
-    ):
+        self, iterable: Iterable[Tuple[float, Any]], type_: Type = Unknown, name: Optional[str] = None
+    ) -> FrontEndSymbol:
+        """Add uniform probabilistic choice among values
+        in the iterable.
+        Contrary to a list of probabilistic facts, this represents a choice
+        among possible values for the predicate.
+        All probabilities will be equal.
+        See example for details.
+
+        Parameters
+        ----------
+        iterable : Iterable
+            typically List[Any], other types of Iterable
+            will be cast as lists
+        type_ : Type, optional
+            type for resulting AbstractSet if None will be inferred
+            from the data, by default Unknown
+        name : Optional[str], optional
+            name for the resulting FrontEndSYmbol, if None
+            will be randomized, by default None
+
+        Returns
+        -------
+        FrontEndSymbol
+            see description
+
+        Example
+        -------
+        >>> p = ['a', 'b']
+        >>> nl.add_uniform_probabilistic_choice_over_set(p, name="P")
+        P: typing.AbstractSet[typing.Tuple[float, str]] = \
+            [(0.5, 'a'), (0.5, 'b')]
+
+        Adds the probabilistic choice:
+            P(a) : 0.5  v  P(b) : 0.5  <-  T
+        """
         if name is None:
             name = str(uuid1())
         if isinstance(type_, tuple):

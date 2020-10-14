@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import AbstractSet, Tuple, List, Dict, Iterable, Any, Union
+from typing import AbstractSet, Tuple, List, Dict, Iterable, Any, Union, Type, Optional
 from uuid import uuid1
 
 from .. import datalog
@@ -178,24 +178,27 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             return RelationalAlgebraFrozenSet(solution_set.value)
 
     def execute_query(
-        self, head: Tuple[Expression, ...], predicate: Expression
-    ) -> Union[bool, RelationalAlgebraFrozenSet]:
-        """Performs an inferential query:
-        1- If head is an empty Tuple, will verify if the predicate query
-        can be inferred, returning a bool
-        2- If head is a tuple of expressions, will return a
-        RelationalAlgebraFrozenSet listing the results meeting the query
+        self,
+        head: Union[Symbol[Tuple[Expression, ...]], Tuple[Expression, ...]],
+        predicate: Expression,
+    ) -> Tuple[AbstractSet, Optional[Symbol]]:
+        """Performs an inferential query: will return as first output
+        an abstract set with as many elements as solutions
+        of the predicate query,and columns corresponding to
+        the expressions in the head.
+        If head expressions are arguments of a functor, the latter will
+        be returned as the second output, defaulted as None
 
         Parameters
         ----------
-        head : Tuple[Expression, ...]
+        head : Union[Symbol[Tuple[Expression, ...]], Tuple[Expression, ...]]
             see description
         predicate : Expression
             see description
 
         Returns
         -------
-        Union[bool, RelationalAlgebraFrozenSet]
+        Tuple[AbstractSet, Optional[Symbol]]
             see description
 
         Examples
@@ -208,11 +211,37 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         ...     e.l2[e.x, e.y] = e.l[e.x, e.y] & (e.x == e.y)
         ...     s1 = nl.execute_query(tuple(), e.l2[e.x, e.y])
         ...     s2 = nl.execute_query((e.x,), e.l2[e.x, e.y])
+        ...     s3 = nl.execute_query(e.l2[e.x, e.y], e.l2[e.x, e.y])
         >>> s1
-        True
+        (
+            C{
+                Empty DataFrame
+                Columns: []
+                Index: [0]
+                : typing.AbstractSet
+            },
+            None
+        )
         >>> s2
-            x
-        0   2
+        (
+            C{
+                    x
+                0   2
+                : typing.AbstractSet
+            },
+            None
+        )
+        >>> s3
+        (
+            C{
+                    x   y
+                0   2   2
+                : typing.AbstractSet
+            },
+            S{
+                l2: Unknown
+            }
+        )
         """
         functor_orig = None
         self.solver.symbol_table = self.symbol_table.create_scope()
@@ -280,10 +309,10 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         self.symbol_table.clear()
 
     def add_tuple_set(
-        self, iterable: Iterable, type_: Any = Unknown, name: str = None
+        self, iterable: Iterable, type_: Type = Unknown, name: str = None
     ) -> Symbol:
         """Creates an AbstractSet Symbol containing the elements specified in the
-        iterable with a List[Tuple[Any]] format (see examples).
+        iterable with a List[Tuple[Any, ...]] format (see examples).
         Typically used to crate extensional facts from existing databases
 
         Parameters
@@ -291,7 +320,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         iterable : Iterable
             typically a list of tuples of values, other formats will
             be interpreted as the latter
-        type_ : Any, optional
+        type_ : Type, optional
             type of elements for the tuples, if not specified
             will be inferred from the first element, by default Unknown
         name : str, optional

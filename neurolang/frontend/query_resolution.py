@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from typing import AbstractSet, Callable, Tuple, Union, List, Any, Iterable, Optional, Iterator
+from typing import AbstractSet, Callable, Tuple, Union, List, Any, Iterable, Optional, Iterator, Type
 from uuid import uuid1
 
 import numpy as np
@@ -100,13 +100,13 @@ class QueryBuilderBase:
         return symbol in self.symbol_table
 
     @property
-    def types(self) -> List[Union[Expression, Any]]:
+    def types(self) -> List[Union[Expression, Type]]:
         """Returns a list of the types of the symbols currently
         in the table, or Unknown if no type is declared for the symbol
 
         Returns
         -------
-        List[Union[Expression, Any]]
+        List[Union[Expression, Type]]
             List of types or Unknown if symbol has no type
         """
         return self.symbol_table.types
@@ -319,7 +319,7 @@ class QueryBuilderBase:
         del self.symbol_table[name]
 
     def add_tuple_set(
-        self, iterable: Iterable, type_: Any = Unknown, name: str = None
+        self, iterable: Iterable, type_: Type = Unknown, name: str = None
     ) -> Symbol:
         """Creates an AbstractSet Symbol containing the elements specified in the
         iterable with a List[Tuple[Any, ...]] format (see examples).
@@ -330,7 +330,7 @@ class QueryBuilderBase:
         iterable : Iterable
             typically a list of tuples of values, other formats will
             be interpreted as the latter
-        type_ : Any, optional
+        type_ : Type, optional
             type of elements for the tuples, if not specified
             will be inferred from the first element, by default Unknown
         name : str, optional
