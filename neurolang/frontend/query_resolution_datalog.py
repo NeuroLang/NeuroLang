@@ -179,7 +179,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
     def execute_query(
         self,
-        head: Union[Symbol[Tuple[Expression, ...]], Tuple[Expression, ...]],
+        head: Union[Symbol, Tuple[Expression, ...]],
         predicate: Expression,
     ) -> Tuple[AbstractSet, Optional[Symbol]]:
         """Performs an inferential query: will return as first output
@@ -191,7 +191,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
         Parameters
         ----------
-        head : Union[Symbol[Tuple[Expression, ...]], Tuple[Expression, ...]]
+        head : Union[Symbol, Tuple[Expression, ...]]
             see description
         predicate : Expression
             see description
