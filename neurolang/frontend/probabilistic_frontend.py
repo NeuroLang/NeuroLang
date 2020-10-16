@@ -106,6 +106,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
                 self.predicate_parameter_names(pred_symb.name),
                 relation.value.unwrap()
             )
+            solution_sets[pred_symb.name].row_type = relation.value.row_type
         return solution_sets
 
     def _solve(self, query=None):
