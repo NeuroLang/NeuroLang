@@ -42,7 +42,7 @@ def test_deterministic_query():
         res = nl.solve_all()
 
     assert "query1" in res.keys()
-    assert res['query1'].row_type == Tuple[str]
+    assert res["query1"].row_type == Tuple[str]
     q1 = res["query1"].as_pandas_dataframe().values
     assert len(q1) == 4
     for elem in q1:
@@ -487,16 +487,86 @@ def test_result_both_deterministic_and_post_probabilistic():
     assert "lingua_da_lua_decisa" in res
     assert "utilizzare_le_probabilita" in res
     assert len(res["utilizzare_le_probabilita"]) == 3
-    assert (
-        res["utilizzare_le_probabilita"]
-        .projection(ColumnStr('lingua')).to_unnamed() == {
-            ("francese",),
-            ("inglese",),
-        }
-    )
+    assert res["utilizzare_le_probabilita"].projection(
+        ColumnStr("lingua")
+    ).to_unnamed() == {
+        ("francese",),
+        ("inglese",),
+    }
     assert res["utilizzare_le_probabilita"].to_unnamed().selection(
         {ColumnInt(0): "francese"}
     ).projection(ColumnInt(1)) == {(0.12,)}
     assert res["utilizzare_le_probabilita"].to_unnamed().selection(
         {ColumnInt(0): "inglese"}
     ).projection(ColumnInt(1)) == {(0.7 * 0.4,), (0.7 * 0.6,)}
+
+
+def test_result_query_relation_correct_column_names():
+    nl = ProbabilisticFrontend()
+    nl.add_tuple_set(
+        [
+            ("burrata", "italian"),
+            ("prosciutto", "italian"),
+            ("saint-nectaire", "french"),
+            ("blanquette", "french"),
+            ("empanadas", "argentinian"),
+            ("chimichurri", "argentinian"),
+        ],
+        name="dish_origin",
+    )
+    nl.add_tuple_set(
+        [
+            ("prosciutto",),
+            ("blanquette",),
+            ("empanadas",),
+        ],
+        name="nonvegetarian_dish",
+    )
+    nl.add_tuple_set(
+        [
+            ("bob", "argentinian"),
+            ("bob", "english"),
+            ("bob", "french"),
+            ("bob", "italian"),
+            ("julie", "french"),
+            ("julie", "english"),
+            ("julie", "italian"),
+            ("alice", "argentinian"),
+            ("alice", "english"),
+        ],
+        name="speaks",
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.8, "bob"),
+            (0.9, "alice"),
+            (0.2, "julie"),
+        ],
+        name="wants_to_eat_meat",
+    )
+    with nl.environment as e:
+        e.eats[e.person, e.dish, e.PROB[e.person, e.dish]] = (
+            e.speaks[e.person, e.language]
+            & e.wants_to_eat_meat[e.person]
+            & e.nonvegetarian_dish[e.dish]
+            & e.dish_origin[e.dish, e.origin]
+            & (e.origin == e.language)
+        )
+        solution = nl.solve_all()
+    assert all(
+        name in solution
+        for name in [
+            "dish_origin",
+            "nonvegetarian_dish",
+            "speaks",
+            "eats",
+        ]
+    )
+    assert "wants_to_eat_meat" not in solution
+    assert tuple(solution["eats"].columns) == ("person", "dish", "PROB")
+    with nl.environment as e:
+        solution = nl.query(
+            (e.probability, e.person, e.dish),
+            e.eats(e.person, e.dish, e.probability),
+        )
+    assert tuple(solution.columns) == ("probability", "person", "dish")
