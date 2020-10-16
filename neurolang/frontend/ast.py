@@ -1,11 +1,11 @@
-r'''
+r"""
 Defines Abstract Syntax Tree base classes
 =========================================
 
 1- defines an AST node
 2- defines an AST walker, able to go through
 an AST to convert it to some other representation
-'''
+"""
 import logging
 from typing import Any, List, Union
 
@@ -15,6 +15,7 @@ from ..expressions import Expression
 class ASTNode(dict):
     """Class representing a Node in an
     Abstract Syntax Tree"""
+
     def __init__(self, name, children):
         self.name = name
         self.update(children)
@@ -31,8 +32,7 @@ class ASTWalker(object):
     to go through the AST representation to the intermediate representation"""
 
     def evaluate(
-        self,
-        ast: Union[ASTNode, List[ASTNode], Any]
+        self, ast: Union[ASTNode, List[ASTNode], Any]
     ) -> Union[Expression, List[Expression], Any]:
         """Converts input to intermediate representation:
         - if input is an ASTNode, calls -if it exists- the class method

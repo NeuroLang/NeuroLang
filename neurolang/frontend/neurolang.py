@@ -1,4 +1,4 @@
-r'''
+r"""
 Neurolang datalog grammar definition
 and convertion to intermediate representation
 =============================================
@@ -8,15 +8,15 @@ and convertion to intermediate representation
 into an Abstract Syntax Tree (AST)
 3- the obtained AST can ba walked through to convert it
 to the intermediate representation used in the backend
-'''
+"""
 
 from __future__ import absolute_import, division, print_function
 
 import inspect
 import logging
 import typing
-from typing import Union, Optional
 from collections import Iterable, Mapping
+from typing import Optional, Union
 
 import tatsu
 
@@ -142,9 +142,9 @@ grammar_EBNF = r"""
 class NeuroLangIntermediateRepresentation(ASTWalker):
     """Abstract Syntax Tree walker class implementing
     convertion from an ASTNode to the corresponding Expression"""
+
     def __init__(
-        self,
-        type_name_map: Optional[Union[Iterable, Mapping]] = None
+        self, type_name_map: Optional[Union[Iterable, Mapping]] = None
     ):
         if isinstance(type_name_map, Mapping):
             self.type_name_map = type_name_map

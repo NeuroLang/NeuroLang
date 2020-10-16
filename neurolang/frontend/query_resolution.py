@@ -1,16 +1,16 @@
 from contextlib import contextmanager
 from typing import (
     AbstractSet,
-    Callable,
-    Tuple,
-    Union,
-    List,
     Any,
-    Iterable,
-    Optional,
-    Iterator,
-    Type,
+    Callable,
     Dict,
+    Iterable,
+    Iterator,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    Union,
 )
 from uuid import uuid1
 
@@ -21,9 +21,9 @@ from .. import expressions as exp
 from ..region_solver import Region
 from ..regions import ExplicitVBR, ImplicitVBR, SphericalVolume
 from ..type_system import Unknown, is_leq_informative
+from ..typed_symbol_table import TypedSymbolTable
 from .neurosynth_utils import NeuroSynthHandler, StudyID, TfIDf
 from .query_resolution_expressions import Expression, Symbol
-from ..typed_symbol_table import TypedSymbolTable
 
 
 class QueryBuilderBase:
@@ -83,7 +83,9 @@ class QueryBuilderBase:
             raise ValueError(f"Symbol {symbol_name} not defined")
         return Symbol(self, symbol_name)
 
-    def __getitem__(self, symbol_name: Union[Symbol, str, Expression]) -> Symbol:
+    def __getitem__(
+        self, symbol_name: Union[Symbol, str, Expression]
+    ) -> Symbol:
         """Overload for the .get_symbol method
 
         Parameters
@@ -196,7 +198,9 @@ class QueryBuilderBase:
             self._symbols_proxy._dynamic_mode = old_dynamic_mode
 
     def new_symbol(
-        self, type_: Union[Any, Tuple[Any, ...], List[Any]] = Unknown, name: str = None
+        self,
+        type_: Union[Any, Tuple[Any, ...], List[Any]] = Unknown,
+        name: str = None,
     ) -> Expression:
         """Creates a symbol and associated expression, optionally
         specifying it's type and/or name
@@ -459,7 +463,9 @@ class RegionMixin:
         """
         return self.new_symbol(type_=Region, name=name)
 
-    def add_region(self, region: Expression, name: Optional[str] = None) -> Symbol:
+    def add_region(
+        self, region: Expression, name: Optional[str] = None
+    ) -> Symbol:
         """Adds region Symbol to symbol_table
 
         Parameters
@@ -481,7 +487,8 @@ class RegionMixin:
         """
         if not isinstance(region, self.solver.type):
             raise ValueError(
-                f"type mismatch between region and solver type:" f" {self.solver.type}"
+                f"type mismatch between region and solver type:"
+                f" {self.solver.type}"
             )
 
         return self.add_symbol(region, name)
@@ -508,7 +515,9 @@ class RegionMixin:
 
     @staticmethod
     def create_region(
-        spatial_image: DataobjImage, label: int = 1, prebuild_tree: bool = False
+        spatial_image: DataobjImage,
+        label: int = 1,
+        prebuild_tree: bool = False,
     ) -> ExplicitVBR:
         """Creates an ExplicitVBR out of the voxels of a dense spatial_image
         with specified label
@@ -541,7 +550,10 @@ class RegionMixin:
         return region
 
     def add_atlas_set(
-        self, name: str, atlas_labels: Dict[int, str], spatial_image: DataobjImage
+        self,
+        name: str,
+        atlas_labels: Dict[int, str],
+        spatial_image: DataobjImage,
     ) -> Symbol:
         """Creates an atlas set:
         1- for each region specified by a label and name in atlas_labels,
@@ -581,7 +593,9 @@ class RegionMixin:
                 (exp.Constant[str](label_name), symbol)
             )
             atlas_set.add(tuple_symbol)
-        atlas_set = exp.Constant[AbstractSet[Tuple[str, Region]]](frozenset(atlas_set))
+        atlas_set = exp.Constant[AbstractSet[Tuple[str, Region]]](
+            frozenset(atlas_set)
+        )
         atlas_symbol = exp.Symbol[atlas_set.type](name)
         self.symbol_table[atlas_symbol] = atlas_set
         return self[atlas_symbol]
@@ -620,7 +634,9 @@ class RegionMixin:
             region_symbol = self.get_symbol(region_symbol_name)
             region = region_symbol.value
             if isinstance(region, ImplicitVBR):
-                self.add_region(region.to_explicit_vbr(affine, dim), region_symbol_name)
+                self.add_region(
+                    region.to_explicit_vbr(affine, dim), region_symbol_name
+                )
 
 
 class NeuroSynthMixin:
@@ -661,7 +677,9 @@ class NeuroSynthMixin:
         study_set = self.neurosynth_db.ns_study_id_set_from_term(
             term, frequency_threshold
         )
-        return self.add_tuple_set(study_set.values, type_=Tuple[StudyID], name=name)
+        return self.add_tuple_set(
+            study_set.values, type_=Tuple[StudyID], name=name
+        )
 
     def load_neurosynth_study_tfidf_feature_for_terms(
         self, terms: Iterable[str], name: Optional[str] = None
@@ -741,7 +759,9 @@ class NeuroSynthMixin:
         if not name:
             name = str(uuid1())
         result_set = self.neurosynth_db.ns_reported_activations()
-        return self.add_tuple_set(result_set, type_=Tuple[StudyID, int], name=name)
+        return self.add_tuple_set(
+            result_set, type_=Tuple[StudyID, int], name=name
+        )
 
     def load_neurosynth_term_study_associations(
         self,
@@ -781,7 +801,9 @@ class NeuroSynthMixin:
         result_set = self.neurosynth_db.ns_term_study_associations(
             threshold=threshold, study_ids=study_ids
         )
-        return self.add_tuple_set(result_set, type_=Tuple[StudyID, str], name=name)
+        return self.add_tuple_set(
+            result_set, type_=Tuple[StudyID, str], name=name
+        )
 
 
 class QuerySymbolsProxy:

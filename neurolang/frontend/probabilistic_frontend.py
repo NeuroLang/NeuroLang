@@ -1,5 +1,15 @@
 import collections
-from typing import AbstractSet, Tuple, List, Union, Dict, Optional, Type, Iterable, Any
+from typing import (
+    AbstractSet,
+    Any,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    Union,
+)
 from uuid import uuid1
 
 from ..datalog.aggregation import (
@@ -33,10 +43,8 @@ from ..relational_algebra import (
     RelationalAlgebraStringExpression,
 )
 from . import QueryBuilderDatalog
-from .query_resolution_expressions import (
-    Symbol as FrontEndSymbol,
-    Expression as FrontEndExpression,
-)
+from .query_resolution_expressions import Expression as FrontEndExpression
+from .query_resolution_expressions import Symbol as FrontEndSymbol
 
 
 class RegionFrontendCPLogicSolver(
@@ -52,13 +60,19 @@ class RegionFrontendCPLogicSolver(
 
 
 class ProbabilisticFrontend(QueryBuilderDatalog):
-    def __init__(self, chase_class=Chase, probabilistic_solver=lifted_solve_succ_query):
-        super().__init__(RegionFrontendCPLogicSolver(), chase_class=chase_class)
+    def __init__(
+        self, chase_class=Chase, probabilistic_solver=lifted_solve_succ_query
+    ):
+        super().__init__(
+            RegionFrontendCPLogicSolver(), chase_class=chase_class
+        )
         self.probabilistic_solver = probabilistic_solver
         self.ontology_loaded = False
 
     def load_ontology(
-        self, paths: Union[str, List[str]], load_format: Union[str, List[str]] = "xml"
+        self,
+        paths: Union[str, List[str]],
+        load_format: Union[str, List[str]] = "xml",
     ) -> None:
         """Loads and parses ontology stored at the specified paths, and
         store them into attributes
@@ -118,7 +132,8 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
     def execute_query(
         self,
         head: Union[
-            Symbol[Tuple[FrontEndExpression, ...]], Tuple[FrontEndExpression, ...]
+            Symbol[Tuple[FrontEndExpression, ...]],
+            Tuple[FrontEndExpression, ...],
         ],
         predicate: FrontEndExpression,
     ) -> Tuple[AbstractSet, Optional[Symbol]]:
@@ -202,7 +217,9 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         else:
             head_symbols = tuple(t.expression for t in head)
             functor_orig = None
-        solution = self._restrict_to_query_solution(head_symbols, predicate, solution)
+        solution = self._restrict_to_query_solution(
+            head_symbols, predicate, solution
+        )
         return solution, functor_orig
 
     def solve_all(self) -> Dict:
@@ -325,7 +342,9 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             return Constant[AbstractSet](NamedRelationalAlgebraFrozenSet.dum())
         query_solution = solution[pred_symb].value.unwrap()
         cols = list(
-            arg.name for arg in predicate.expression.args if isinstance(arg, Symbol)
+            arg.name
+            for arg in predicate.expression.args
+            if isinstance(arg, Symbol)
         )
         query_solution = NamedRelationalAlgebraFrozenSet(cols, query_solution)
         query_solution = query_solution.projection(
@@ -334,7 +353,9 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         return Constant[AbstractSet](query_solution)
 
     def _rewrite_program_with_ontology(self, deterministic_program):
-        orw = OntologyRewriter(deterministic_program, self.solver.constraints())
+        orw = OntologyRewriter(
+            deterministic_program, self.solver.constraints()
+        )
         rewrite = orw.Xrewrite()
 
         eB = ()
@@ -344,7 +365,10 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         return Union(eB)
 
     def add_probabilistic_facts_from_tuples(
-        self, iterable: Iterable[Tuple[float, Any]], type_: Type = Unknown, name: Optional[str] = None
+        self,
+        iterable: Iterable[Tuple[float, Any]],
+        type_: Type = Unknown,
+        name: Optional[str] = None,
     ) -> FrontEndSymbol:
         """Add probabilistic facts from tuples whose first element
         contains the probability label attached to that tuple.
@@ -388,7 +412,10 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         )
 
     def add_probabilistic_choice_from_tuples(
-        self, iterable: Iterable[Tuple[float, Any]], type_: Type = Unknown, name: Optional[str] = None
+        self,
+        iterable: Iterable[Tuple[float, Any]],
+        type_: Type = Unknown,
+        name: Optional[str] = None,
     ) -> FrontEndSymbol:
         """Add probabilistic choice from tuples whose first element
         contains the probability label attached to that tuple.
@@ -436,7 +463,9 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             self.solver.add_probabilistic_choice_from_tuples,
         )
 
-    def _add_probabilistic_tuples(self, iterable, type_, name, solver_add_method):
+    def _add_probabilistic_tuples(
+        self, iterable, type_, name, solver_add_method
+    ):
         if name is None:
             name = str(uuid1())
         if isinstance(type_, tuple):
@@ -446,7 +475,10 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         return FrontEndSymbol(self, name)
 
     def add_uniform_probabilistic_choice_over_set(
-        self, iterable: Iterable[Tuple[float, Any]], type_: Type = Unknown, name: Optional[str] = None
+        self,
+        iterable: Iterable[Tuple[float, Any]],
+        type_: Type = Unknown,
+        name: Optional[str] = None,
     ) -> FrontEndSymbol:
         """Add uniform probabilistic choice among values
         in the iterable.

@@ -1,5 +1,15 @@
 from collections import defaultdict
-from typing import AbstractSet, Tuple, List, Dict, Iterable, Any, Union, Type, Optional
+from typing import (
+    AbstractSet,
+    Any,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    Union,
+)
 from uuid import uuid1
 
 from .. import datalog
@@ -64,7 +74,9 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
                 cp.append(self.frontend_translator.walk(rule))
         return cp
 
-    def assign(self, consequent: Expression, antecedent: Expression) -> Expression:
+    def assign(
+        self, consequent: Expression, antecedent: Expression
+    ) -> Expression:
         """Creates an implication of the consequent by the antecedent
         and adds the rule to the current program:
             consequent <- antecedent
@@ -96,8 +108,12 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             l2(x) ← l(x, y)
         ]
         """
-        consequent = self.translate_expression_to_datalog.walk(consequent.expression)
-        antecedent = self.translate_expression_to_datalog.walk(antecedent.expression)
+        consequent = self.translate_expression_to_datalog.walk(
+            consequent.expression
+        )
+        antecedent = self.translate_expression_to_datalog.walk(
+            antecedent.expression
+        )
         rule = datalog.Implication(consequent, antecedent)
         self.solver.walk(rule)
         return rule
@@ -131,7 +147,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         depending on wether the query could be inferred.
         2. If there are two arguments and the first is a tuple of `Symbol`, it
         returns the set of results meeting the query in the second argument.
-        # ! How to write this thirs modality ?
+        # ! How to write this third modality ?
         3. If the first argument is a predicate (e.g. `Q(x)`) it performs the
         query adds it to the engine memory and returns the
         corresponding symbol.
@@ -350,7 +366,9 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         if isinstance(type_, tuple):
             type_ = Tuple[type_]
         symbol = exp.Symbol[AbstractSet[type_]](name)
-        self.solver.add_extensional_predicate_from_tuples(symbol, iterable, type_=type_)
+        self.solver.add_extensional_predicate_from_tuples(
+            symbol, iterable, type_=type_
+        )
 
         return Symbol(self, name)
 
