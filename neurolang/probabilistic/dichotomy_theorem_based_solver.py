@@ -237,7 +237,9 @@ def solve_succ_query(query, cpl_program):
         set.
 
     """
-    with log_performance(LOG, "Preparing query"):
+    with log_performance(
+        LOG, "Preparing query %s", init_args=(query.consequent.functor.name,),
+    ):
         flat_query_body = flatten_query(query.antecedent, cpl_program)
 
     with log_performance(LOG, "Translation and lifted optimisation"):
