@@ -82,10 +82,10 @@ class Expression(object):
                 name += f'_{self.expression.number}'
             return name
         elif isinstance(self.expression, nl.Symbol):
-            # if self.expression.is_fresh:
-            #    return '...'
-            # else:
-            return f'{self.expression.name}'
+            if self.expression.is_fresh:
+                return '...'
+            else:
+                return f'{self.expression.name}'
         else:
             return object.__repr__(self)
 
