@@ -8,7 +8,7 @@ from typing import (
     Optional,
     Tuple,
     Type,
-    Union,
+    Union as typingUnion,
 )
 from uuid import uuid1
 
@@ -71,17 +71,17 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
 
     def load_ontology(
         self,
-        paths: Union[str, List[str]],
-        load_format: Union[str, List[str]] = "xml",
+        paths: typingUnion[str, List[str]],
+        load_format: typingUnion[str, List[str]] = "xml",
     ) -> None:
         """Loads and parses ontology stored at the specified paths, and
         store them into attributes
 
         Parameters
         ----------
-        paths : Union[str, List[str]]
+        paths : typingUnion[str, List[str]]
             where the ontology files are stored
-        load_format : Union[str, List[str]], optional
+        load_format : typingUnion[str, List[str]], optional
             storage format, by default "xml"
         """
         onto = OntologyParser(paths, load_format)
@@ -131,7 +131,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
 
     def execute_query(
         self,
-        head: Union[
+        head: typingUnion[
             Symbol[Tuple[FrontEndExpression, ...]],
             Tuple[FrontEndExpression, ...],
         ],
@@ -147,7 +147,10 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
 
         Parameters
         ----------
-        head : Union[Symbol[Tuple[Expression, ...]], Tuple[Expression, ...]]
+        head : typingUnion[
+            Symbol[Tuple[FrontEndExpression, ...]],
+            Tuple[FrontEndExpression, ...],
+        ]
             see description
         predicate : Expression
             see description
