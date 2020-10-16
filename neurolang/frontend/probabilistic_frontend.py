@@ -23,6 +23,7 @@ from ..probabilistic.dichotomy_theorem_based_solver import (
 )
 from ..probabilistic.expression_processing import (
     is_probabilistic_predicate_symbol,
+    is_within_language_succ_query,
 )
 from ..probabilistic.query_resolution import compute_probabilistic_solution
 from ..probabilistic.stratification import stratify_program
@@ -104,7 +105,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         for pred_symb, relation in solution.items():
             solution_sets[pred_symb.name] = NamedRelationalAlgebraFrozenSet(
                 self.predicate_parameter_names(pred_symb.name),
-                relation.value.unwrap()
+                relation.value.unwrap(),
             )
             solution_sets[pred_symb.name].row_type = relation.value.row_type
         return solution_sets
@@ -122,14 +123,24 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         if prob_idb.formulas:
             pfact_edb = self.solver.probabilistic_facts()
             pchoice_edb = self.solver.probabilistic_choices()
+            prob_solution = compute_probabilistic_solution(
+                solution,
+                pfact_edb,
+                pchoice_edb,
+                prob_idb,
+                self.probabilistic_solver,
+            )
+            wlq_symbs = set(
+                rule.consequent.functor
+                for rule in prob_idb.formulas
+                if is_within_language_succ_query(rule)
+            )
             solution.update(
-                compute_probabilistic_solution(
-                    solution,
-                    pfact_edb,
-                    pchoice_edb,
-                    prob_idb,
-                    self.probabilistic_solver,
-                )
+                {
+                    pred_symb: relation
+                    for pred_symb, relation in prob_solution.items()
+                    if pred_symb in wlq_symbs
+                }
             )
         if ppq_det_idb.formulas:
             solver = RegionFrontendCPLogicSolver()
