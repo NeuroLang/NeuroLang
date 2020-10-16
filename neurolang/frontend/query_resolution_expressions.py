@@ -82,7 +82,12 @@ class Expression(object):
                 name += f'_{self.expression.number}'
             return name
         elif isinstance(self.expression, nl.Symbol):
-            if self.expression.is_fresh:
+            if (
+                self.expression.is_fresh and not (
+                    hasattr(self, 'in_ontology') and
+                    self.in_ontology
+                )
+            ):
                 return '...'
             else:
                 return f'{self.expression.name}'
@@ -455,10 +460,13 @@ class Fact(Expression):
 class TranslateExpressionToFrontEndExpression(ExpressionWalker):
     def __init__(self, query_builder):
         self.query_builder = query_builder
+        self.right_implication_mode = False
 
     @add_match(exp.Symbol)
     def symbol(self, expression):
-        return Expression(self.query_builder, expression)
+        ret = Expression(self.query_builder, expression)
+        ret.in_ontology = self.right_implication_mode
+        return ret
 
     @add_match(exp.Constant)
     def constant(self, expression):
@@ -488,12 +496,15 @@ class TranslateExpressionToFrontEndExpression(ExpressionWalker):
 
     @add_match(cr.RightImplication)
     def right_implication(self, expression):
-        return RightImplication(
+        self.right_implication_mode = True
+        ret = RightImplication(
             self.query_builder,
             expression,
             self.walk(expression.antecedent),
             self.walk(expression.consequent)
         )
+        self.right_implication_mode = False
+        return ret
 
     @add_match(dl.Conjunction)
     def conjunction(self, expression):
