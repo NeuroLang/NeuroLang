@@ -9,7 +9,6 @@ NeuroLang Example based Implementing a NeuroSynth Query
 from nilearn import datasets, image, plotting
 import pandas as pd
 from neurolang import frontend as fe
-from neurolang.frontend import probabilistic_frontend as pfe
 from typing import Iterable
 import nibabel as nib
 import numpy as np
@@ -78,7 +77,7 @@ ns_terms.to_csv('term_documents.csv')
 # Probabilistic Logic Programming in NeuroLang
 # --------------------------------------------
 
-nl = pfe.ProbabilisticFrontend()
+nl = fe.NeurolangPDL()
 
 
 ###############################################################################

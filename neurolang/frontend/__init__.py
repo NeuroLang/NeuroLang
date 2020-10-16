@@ -16,10 +16,12 @@ from ..region_solver import RegionSolver
 from ..regions import ExplicitVBR, ExplicitVBROverlay
 from ..utils.data_manipulation import parse_region_label_map
 from .query_resolution_datalog import QueryBuilderDatalog
+from .probabilistic_frontend import ProbabilisticFrontend as NeurolangPDL
 
 
 __all__ = [
     "NeurolangDL",
+    "NeurolangPDL",
     "QueryBuilderDatalog",
     "ExplicitVBR",
     "ExplicitVBROverlay"

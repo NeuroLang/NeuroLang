@@ -11,7 +11,6 @@ from typing import Iterable
 import warnings
 
 from neurolang import frontend as fe
-from neurolang.frontend import probabilistic_frontend as pfe
 import nibabel as nib
 from nilearn import datasets, image, plotting
 import numpy as np
@@ -121,7 +120,7 @@ neuroFMA = datasets.utils._fetch_files(
 # Probabilistic Logic Programming in NeuroLang
 # --------------------------------------------
 
-nl = pfe.ProbabilisticFrontend()
+nl = fe.NeurolangPDL()
 nl.load_ontology(neuroFMA)
 for r in nl.current_program:
     print(r)
