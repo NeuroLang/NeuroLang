@@ -96,7 +96,6 @@ def agg_create_region_overlay(
 @nl.add_symbol
 def agg_percentile(x: Iterable, q: float) -> float:
     ret = np.percentile(x, 95)
-    print("THR", ret)
     return ret
 
 
@@ -141,12 +140,10 @@ datalog_code = '''
 with nl.scope as e:
     nl.execute_datalog_program(datalog_code)
 
-    start = time()
     img_query = nl.query(
        (e.x, e.thr),
        e.img(e.x, e.thr)
     )
-    print(f'{time() - start}')
 
 
 ###############################################################################

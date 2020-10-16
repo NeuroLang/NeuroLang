@@ -120,10 +120,8 @@ neuroFMA = datasets.utils._fetch_files(
 # Probabilistic Logic Programming in NeuroLang
 # --------------------------------------------
 
-nl = fe.NeurolangPDL()
+nl = fe.Ne()
 nl.load_ontology(neuroFMA)
-for r in nl.current_program:
-    print(r)
 
 ###############################################################################
 # Adding new aggregation function to build a region overlay
