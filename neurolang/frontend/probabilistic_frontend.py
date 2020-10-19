@@ -115,16 +115,16 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         det_idb = idbs.get("deterministic", Union(tuple()))
         prob_idb = idbs.get("probabilistic", Union(tuple()))
         postprob_idb = idbs.get("post_probabilistic", Union(tuple()))
-        solution = self._solve_deterministic_strata(det_idb)
+        solution = self._solve_deterministic_stratum(det_idb)
         if prob_idb.formulas:
-            solution = self._solve_probabilistic_strata(solution, prob_idb)
+            solution = self._solve_probabilistic_stratum(solution, prob_idb)
         if postprob_idb.formulas:
-            solution = self._solve_postprobabilistic_deterministic_strata(
+            solution = self._solve_postprobabilistic_deterministic_stratum(
                 solution, postprob_idb
             )
         return solution
 
-    def _solve_deterministic_strata(self, det_idb):
+    def _solve_deterministic_stratum(self, det_idb):
         if self.ontology_loaded:
             eB = self._rewrite_program_with_ontology(det_idb)
             det_idb = Union(det_idb.formulas + eB.formulas)
@@ -132,7 +132,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         solution = chase.build_chase_solution()
         return solution
 
-    def _solve_probabilistic_strata(self, solution, prob_idb):
+    def _solve_probabilistic_stratum(self, solution, prob_idb):
         pfact_edb = self.solver.probabilistic_facts()
         pchoice_edb = self.solver.probabilistic_choices()
         prob_solution = compute_probabilistic_solution(
@@ -156,7 +156,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         )
         return solution
 
-    def _solve_postprobabilistic_deterministic_strata(
+    def _solve_postprobabilistic_deterministic_stratum(
         self, solution, postprob_idb
     ):
         solver = RegionFrontendCPLogicSolver()
