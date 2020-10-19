@@ -674,7 +674,7 @@ class Implication(Expression):
         self.antecedent = antecedent
         self.consequent = consequent
 
-    def __repr__(self) -> self:
+    def __repr__(self) -> str:
         return "{c} \u2190 {a}".format(
             a=repr(self.antecedent), c=repr(self.consequent)
         )

@@ -1,7 +1,6 @@
 from collections import defaultdict
 from typing import (
     AbstractSet,
-    Any,
     Dict,
     Iterable,
     List,
