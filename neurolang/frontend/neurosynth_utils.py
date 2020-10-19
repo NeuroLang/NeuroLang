@@ -14,10 +14,6 @@ except ModuleNotFoundError:
     raise ImportError("Neurosynth not installed in the system")
 
 
-class StudyID(str):
-    pass
-
-
 class TfIDf(float):
     pass
 
@@ -101,9 +97,7 @@ class NeuroSynthHandler(object):
         """
         image_table = self.dataset.image_table
         vox_ids, study_ids_ix = image_table.data.nonzero()
-        study_ids = (
-            pd.Series(image_table.ids).iloc[study_ids_ix]
-        )
+        study_ids = pd.Series(image_table.ids).iloc[study_ids_ix]
         return np.transpose([study_ids, vox_ids])
 
     def ns_study_ids(self):
