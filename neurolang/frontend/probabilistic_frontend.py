@@ -23,6 +23,7 @@ from ..probabilistic.dichotomy_theorem_based_solver import (
 )
 from ..probabilistic.expression_processing import (
     is_probabilistic_predicate_symbol,
+    is_within_language_succ_query,
 )
 from ..probabilistic.query_resolution import compute_probabilistic_solution
 from ..probabilistic.stratification import stratify_program
@@ -104,7 +105,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         for pred_symb, relation in solution.items():
             solution_sets[pred_symb.name] = NamedRelationalAlgebraFrozenSet(
                 self.predicate_parameter_names(pred_symb.name),
-                relation.value.unwrap()
+                relation.value.unwrap(),
             )
             solution_sets[pred_symb.name].row_type = relation.value.row_type
         return solution_sets
@@ -113,38 +114,64 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         idbs = stratify_program(query, self.solver)
         det_idb = idbs.get("deterministic", Union(tuple()))
         prob_idb = idbs.get("probabilistic", Union(tuple()))
-        ppq_det_idb = idbs.get("post_probabilistic", Union(tuple()))
+        postprob_idb = idbs.get("post_probabilistic", Union(tuple()))
+        solution = self._solve_deterministic_stratum(det_idb)
+        if prob_idb.formulas:
+            solution = self._solve_probabilistic_stratum(solution, prob_idb)
+        if postprob_idb.formulas:
+            solution = self._solve_postprobabilistic_deterministic_stratum(
+                solution, postprob_idb
+            )
+        return solution
+
+    def _solve_deterministic_stratum(self, det_idb):
         if self.ontology_loaded:
             eB = self._rewrite_program_with_ontology(det_idb)
             det_idb = Union(det_idb.formulas + eB.formulas)
         chase = self.chase_class(self.solver, rules=det_idb)
         solution = chase.build_chase_solution()
-        if prob_idb.formulas:
-            pfact_edb = self.solver.probabilistic_facts()
-            pchoice_edb = self.solver.probabilistic_choices()
-            solution.update(
-                compute_probabilistic_solution(
-                    solution,
-                    pfact_edb,
-                    pchoice_edb,
-                    prob_idb,
-                    self.probabilistic_solver,
-                )
+        return solution
+
+    def _solve_probabilistic_stratum(self, solution, prob_idb):
+        pfact_edb = self.solver.probabilistic_facts()
+        pchoice_edb = self.solver.probabilistic_choices()
+        prob_solution = compute_probabilistic_solution(
+            solution,
+            pfact_edb,
+            pchoice_edb,
+            prob_idb,
+            self.probabilistic_solver,
+        )
+        wlq_symbs = set(
+            rule.consequent.functor
+            for rule in prob_idb.formulas
+            if is_within_language_succ_query(rule)
+        )
+        solution.update(
+            {
+                pred_symb: relation
+                for pred_symb, relation in prob_solution.items()
+                if pred_symb in wlq_symbs
+            }
+        )
+        return solution
+
+    def _solve_postprobabilistic_deterministic_stratum(
+        self, solution, postprob_idb
+    ):
+        solver = RegionFrontendCPLogicSolver()
+        for psymb, relation in solution.items():
+            solver.add_extensional_predicate_from_tuples(
+                psymb,
+                relation.value,
             )
-        if ppq_det_idb.formulas:
-            solver = RegionFrontendCPLogicSolver()
-            for psymb, relation in solution.items():
-                solver.add_extensional_predicate_from_tuples(
-                    psymb,
-                    relation.value,
-                )
-            for builtin_symb in self.solver.builtins():
-                solver.symbol_table[builtin_symb] = self.solver.symbol_table[
-                    builtin_symb
-                ]
-            solver.walk(ppq_det_idb)
-            chase = self.chase_class(solver, rules=ppq_det_idb)
-            solution = chase.build_chase_solution()
+        for builtin_symb in self.solver.builtins():
+            solver.symbol_table[builtin_symb] = self.solver.symbol_table[
+                builtin_symb
+            ]
+        solver.walk(postprob_idb)
+        chase = self.chase_class(solver, rules=postprob_idb)
+        solution = chase.build_chase_solution()
         return solution
 
     @staticmethod
