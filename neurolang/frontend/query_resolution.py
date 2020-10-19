@@ -384,6 +384,16 @@ class NeuroSynthMixin:
             result_set, type_=Tuple[int, int], name=name
         )
 
+    def load_neurosynth_non_reported_activations(self, name=None):
+        if not hasattr(self, "neurosynth_db"):
+            self.neurosynth_db = NeuroSynthHandler()
+        if not name:
+            name = str(uuid1())
+        result_set = self.neurosynth_db.ns_non_reported_activations()
+        return self.add_tuple_set(
+            result_set, type_=Tuple[StudyID, int], name=name
+        )
+
     def load_neurosynth_term_study_associations(
         self, name=None, threshold=1e-3, study_ids=None,
     ):

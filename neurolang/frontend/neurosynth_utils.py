@@ -100,6 +100,13 @@ class NeuroSynthHandler(object):
         study_ids = pd.Series(image_table.ids).iloc[study_ids_ix]
         return np.transpose([study_ids, vox_ids])
 
+    def ns_non_reported_activations(self):
+        image_table = self.dataset.image_table
+        mat = (image_table.data != 0).todense()
+        vox_ids, study_ids_ix = np.where(~mat)
+        study_ids = pd.Series(image_table.ids).astype(int).iloc[study_ids_ix]
+        return np.transpose([study_ids, vox_ids])
+
     def ns_study_ids(self):
         return np.expand_dims(
             self.dataset.feature_table.data.index.values,
