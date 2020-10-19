@@ -30,7 +30,7 @@ class QueryBuilderBase:
         if isinstance(symbol_name, Expression):
             symbol_name = symbol_name.expression.name
         if symbol_name not in self.symbol_table:
-            raise ValueError(f'Symbol {symbol_name} not defined')
+            raise ValueError(f"Symbol {symbol_name} not defined")
         return Symbol(self, symbol_name)
 
     def __getitem__(self, symbol_name):
@@ -82,15 +82,13 @@ class QueryBuilderBase:
 
         if name is None:
             name = str(uuid1())
-        return Expression(
-            self,
-            exp.Symbol[type_](name)
-        )
+        return Expression(self, exp.Symbol[type_](name))
 
     @property
     def functions(self):
         return [
-            s.name for s in self.symbol_table
+            s.name
+            for s in self.symbol_table
             if is_leq_informative(s.type, Callable)
         ]
 
@@ -113,12 +111,12 @@ class QueryBuilderBase:
         if name is not None:
             return name
 
-        if not hasattr(value, '__qualname__'):
+        if not hasattr(value, "__qualname__"):
             return str(uuid1())
 
-        if '.' in value.__qualname__:
-            ix = value.__qualname__.rindex('.')
-            name = value.__qualname__[ix + 1:]
+        if "." in value.__qualname__:
+            ix = value.__qualname__.rindex(".")
+            name = value.__qualname__[ix + 1 :]
         else:
             name = value.__qualname__
 
@@ -151,7 +149,7 @@ class QueryBuilderBase:
         element_type = set_type.__args__[0]
         new_set = []
         for e in iterable:
-            if not(isinstance(e, Symbol)):
+            if not (isinstance(e, Symbol)):
                 s, c = self._create_symbol_and_get_constant(e, element_type)
                 self.symbol_table[s] = c
             else:
@@ -177,20 +175,12 @@ class QueryBuilderBase:
 class RegionMixin:
     @property
     def region_names(self):
-        return [
-            s.name for s in
-            self.symbol_table.symbols_by_type(
-                Region
-            )
-        ]
+        return [s.name for s in self.symbol_table.symbols_by_type(Region)]
 
     @property
     def region_set_names(self):
         return [
-            s.name for s in
-            self.symbol_table.symbols_by_type(
-                self.set_type
-            )
+            s.name for s in self.symbol_table.symbols_by_type(self.set_type)
         ]
 
     def new_region_symbol(self, name=None):
@@ -211,16 +201,15 @@ class RegionMixin:
     @staticmethod
     def create_region(spatial_image, label=1, prebuild_tree=False):
         voxels = np.transpose(
-            (
-                np.asanyarray(spatial_image.dataobj) == label
-            ).nonzero()
+            (np.asanyarray(spatial_image.dataobj) == label).nonzero()
         )
         if len(voxels) == 0:
             return None
         region = ExplicitVBR(
             voxels,
-            spatial_image.affine, image_dim=spatial_image.shape,
-            prebuild_tree=prebuild_tree
+            spatial_image.affine,
+            image_dim=spatial_image.shape,
+            prebuild_tree=prebuild_tree,
         )
         return region
 
@@ -232,15 +221,13 @@ class RegionMixin:
                 continue
             symbol = exp.Symbol[Region](label_name)
             self.symbol_table[symbol] = exp.Constant[Region](region)
-            self.symbol_table[self.new_symbol(type_=str).expression] = (
-                exp.Constant[str](label_name)
-            )
+            self.symbol_table[
+                self.new_symbol(type_=str).expression
+            ] = exp.Constant[str](label_name)
 
             tuple_symbol = self.new_symbol(type_=Tuple[str, Region]).expression
-            self.symbol_table[tuple_symbol] = (
-                exp.Constant[Tuple[str, Region]](
-                    (exp.Constant[str](label_name), symbol)
-                )
+            self.symbol_table[tuple_symbol] = exp.Constant[Tuple[str, Region]](
+                (exp.Constant[str](label_name), symbol)
             )
             atlas_set.add(tuple_symbol)
         atlas_set = exp.Constant[AbstractSet[Tuple[str, Region]]](
@@ -354,9 +341,7 @@ class NeuroSynthMixin:
         if not name:
             name = str(uuid1())
         result_set = self.neurosynth_db.ns_study_ids()
-        return self.add_tuple_set(
-            result_set, type_=Tuple[StudyID], name=name
-        )
+        return self.add_tuple_set(result_set, type_=Tuple[StudyID], name=name)
 
     def load_neurosynth_reported_activations(self, name=None):
         """
@@ -385,7 +370,10 @@ class NeuroSynthMixin:
         )
 
     def load_neurosynth_term_study_associations(
-        self, name=None, threshold=1e-3, study_ids=None,
+        self,
+        name=None,
+        threshold=1e-3,
+        study_ids=None,
     ):
         """
         Load all term-to-study associations in the Neurosynth database based on
@@ -430,21 +418,19 @@ class QuerySymbolsProxy:
         self._query_builder = query_builder
 
     def __getattr__(self, name):
-        if name in self.__getattribute__('_query_builder'):
+        if name in self.__getattribute__("_query_builder"):
             return self._query_builder.get_symbol(name)
 
         try:
             return super().__getattribute__(name)
         except AttributeError:
             if self._dynamic_mode:
-                return self._query_builder.new_symbol(
-                    Unknown, name=name
-                )
+                return self._query_builder.new_symbol(Unknown, name=name)
             else:
                 raise
 
     def __setattr__(self, name, value):
-        if name == '_dynamic_mode':
+        if name == "_dynamic_mode":
             return super().__setattr__(name, value)
         elif self._dynamic_mode:
             return self._query_builder.add_symbol(value, name=name)
@@ -468,10 +454,7 @@ class QuerySymbolsProxy:
 
     def __iter__(self):
         return iter(
-            sorted(set(
-                s.name for s in
-                self._query_builder.symbol_table
-            ))
+            sorted(set(s.name for s in self._query_builder.symbol_table))
         )
 
     def __len__(self):
@@ -479,16 +462,10 @@ class QuerySymbolsProxy:
 
     def __dir__(self):
         init = object.__dir__(self)
-        init += [
-            symbol.name
-            for symbol in self._query_builder.symbol_table
-        ]
+        init += [symbol.name for symbol in self._query_builder.symbol_table]
         return init
 
     def __repr__(self):
-        init = [
-            symbol.name
-            for symbol in self._query_builder.symbol_table
-        ]
+        init = [symbol.name for symbol in self._query_builder.symbol_table]
 
-        return f'QuerySymbolsProxy with symbols {init}'
+        return f"QuerySymbolsProxy with symbols {init}"
