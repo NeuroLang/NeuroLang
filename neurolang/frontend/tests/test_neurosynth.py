@@ -25,6 +25,13 @@ def mock_reported_activations(*args, **kwargs):
     }
 
 
+def mock_non_reported_activations(*args, **kwargs):
+    return {
+        (StudyID(1), 42),
+        (StudyID(5), 19),
+    }
+
+
 def test_reported_activations(monkeypatch):
     monkeypatch.setattr(
         NeuroSynthHandler, "ns_reported_activations", mock_reported_activations
@@ -32,3 +39,14 @@ def test_reported_activations(monkeypatch):
     frontend = NeurolangDL()
     symbol = frontend.load_neurosynth_reported_activations()
     assert frontend[symbol.symbol_name].value == mock_reported_activations()
+
+
+def test_load_non_reported_activations(monkeypatch):
+    monkeypatch.setattr(
+        NeuroSynthHandler,
+        "ns_non_reported_activations",
+        mock_non_reported_activations,
+    )
+    frontend = NeurolangDL()
+    symbol = frontend.load_neurosynth_non_reported_activations()
+    assert frontend[symbol].value == mock_non_reported_activations()
