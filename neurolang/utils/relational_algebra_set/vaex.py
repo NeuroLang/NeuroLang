@@ -89,9 +89,11 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             res = False
         else:
             col = True
-            for e, c in zip(element, self._container.iteritems()):
-                col = col & (c[1] == e)
-            res = col.any()
+            for e, v in zip(element, self._container.__iter__()):
+                c = self._container[v]
+                col = col & (c == e)
+            res = self._container[col]
+            res = len(res) > 0
         return res
 
     @staticmethod
@@ -846,19 +848,22 @@ class RelationalAlgebraSet(
         value = self._normalise_element(value)
         e_hash = hash(value)
         if self.is_empty():
-            self._container = pd.DataFrame([value], index=[e_hash])
+            iterable = pd.DataFrame([value], index=[e_hash])
+            self._container = vx.from_pandas(iterable)
         else:
-            self._container.loc[e_hash] = value
+            iterable = pd.DataFrame([value], index=[e_hash])
+            self._container = self._container.concat(iterable)
 
+            
     def discard(self, value):
         if not self.is_empty():
             try:
                 value = self._normalise_element(value)
                 col = True
-                for e, c in zip(value, self._container.iterrows()):
-                    col = col & (c[1] == e)
-                ix = self._container.index[col]
-                self._container.drop(index=ix, inplace=True)
+                for e, v in zip(value, self._container.__iter__()):
+                    c = self._container[v]
+                    col = col & (c == e)
+                self._container = self._container[~col]
             except KeyError:
                 pass
 
