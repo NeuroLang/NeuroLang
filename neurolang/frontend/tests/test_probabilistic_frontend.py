@@ -505,68 +505,26 @@ def test_result_query_relation_correct_column_names():
     nl = ProbabilisticFrontend()
     nl.add_tuple_set(
         [
-            ("burrata", "italian"),
-            ("prosciutto", "italian"),
-            ("saint-nectaire", "french"),
-            ("blanquette", "french"),
-            ("empanadas", "argentinian"),
-            ("chimichurri", "argentinian"),
+            ("alice",),
+            ("bob",),
         ],
-        name="dish_origin",
+        name="person",
     )
     nl.add_tuple_set(
-        [
-            ("prosciutto",),
-            ("blanquette",),
-            ("empanadas",),
-        ],
-        name="nonvegetarian_dish",
-    )
-    nl.add_tuple_set(
-        [
-            ("bob", "argentinian"),
-            ("bob", "english"),
-            ("bob", "french"),
-            ("bob", "italian"),
-            ("julie", "french"),
-            ("julie", "english"),
-            ("julie", "italian"),
-            ("alice", "argentinian"),
-            ("alice", "english"),
-        ],
-        name="speaks",
+        [("alice", "paris"), ("bob", "marseille")],
+        name="lives_in",
     )
     nl.add_probabilistic_facts_from_tuples(
         [
             (0.8, "bob"),
             (0.9, "alice"),
-            (0.2, "julie"),
         ],
-        name="wants_to_eat_meat",
+        name="does_not_smoke",
     )
     with nl.environment as e:
-        e.eats[e.person, e.dish, e.PROB[e.person, e.dish]] = (
-            e.speaks[e.person, e.language]
-            & e.wants_to_eat_meat[e.person]
-            & e.nonvegetarian_dish[e.dish]
-            & e.dish_origin[e.dish, e.origin]
-            & (e.origin == e.language)
+        e.climbs[e.p, e.PROB[e.p, e.city], e.city] = (
+            e.person[e.p] & e.lives_in[e.p, e.city] & e.does_not_smoke[e.p]
         )
         solution = nl.solve_all()
-    assert all(
-        name in solution
-        for name in [
-            "dish_origin",
-            "nonvegetarian_dish",
-            "speaks",
-            "eats",
-        ]
-    )
-    assert "wants_to_eat_meat" not in solution
-    assert tuple(solution["eats"].columns) == ("person", "dish", "PROB")
-    with nl.environment as e:
-        solution = nl.query(
-            (e.probability, e.person, e.dish),
-            e.eats(e.person, e.dish, e.probability),
-        )
-    assert tuple(solution.columns) == ("probability", "person", "dish")
+    assert all(name in solution for name in ["climbs", "person", "lives_in"])
+    assert solution["climbs"].columns == ("p", "PROB", "city")
