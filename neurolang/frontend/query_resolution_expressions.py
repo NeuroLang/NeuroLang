@@ -13,7 +13,7 @@ from typing import (
 )
 
 from .. import datalog as dl
-from .. import expressions as exp
+from .. import expressions as ir
 from .. import neurolang as nl
 from ..datalog import constraints_representation as cr
 from ..expression_pattern_matching import NeuroLangPatternMatchingNoMatch
@@ -32,7 +32,7 @@ class Expression(object):
     to a query"""
 
     def __init__(
-        self, query_builder: "QueryBuilderBase", expression: exp.Expression
+        self, query_builder: "QueryBuilderBase", expression: ir.Expression
     ) -> "Expression":
         """Returns frontend expression, containing backend expression
         and associated query_builder as attributes
@@ -41,7 +41,7 @@ class Expression(object):
         ----------
         query_builder : QueryBuilderBase
             used to build the current program
-        expression : exp.Expression
+        expression : ir.Expression
             backend expression
 
         Returns
@@ -105,7 +105,7 @@ class Expression(object):
         else:
             functor = self.expression
 
-        new_expression = exp.FunctionApplication(functor, new_args)
+        new_expression = ir.FunctionApplication(functor, new_args)
         return Operation(self.query_builder, new_expression, self, args)
 
     def __setitem__(
@@ -144,7 +144,7 @@ class Expression(object):
         if self.query_builder.logic_programming:
             if not isinstance(key, tuple):
                 key = (key,)
-            self.query_builder.assign(self(*key), value)
+            self.query_builder.declare_implication(self(*key), value)
         else:
             super().__setitem__(key, value)
 
@@ -230,7 +230,7 @@ class Expression(object):
             name_ = name.expression
         else:
             name_ = nl.Constant[str](name)
-        new_expression = exp.FunctionApplication(
+        new_expression = ir.FunctionApplication(
             nl.Constant(getattr),
             (
                 self.expression,
@@ -380,8 +380,8 @@ class Operation(Expression):
     def __init__(
         self,
         query_builder: "QueryBuilderBase",
-        expression: exp.Expression,
-        operator: exp.FunctionApplication,
+        expression: ir.Expression,
+        operator: ir.FunctionApplication,
         arguments: Tuple[Expression, ...],
         infix: bool = False,
     ) -> "Operation":
@@ -464,7 +464,7 @@ class Symbol(Expression):
         if isinstance(symbol, Symbol):
             return f"{self.symbol_name}: {symbol.type}"
         elif isinstance(symbol, nl.Constant):
-            if exp.is_leq_informative(symbol.type, AbstractSet):
+            if ir.is_leq_informative(symbol.type, AbstractSet):
                 value = list(self)
             else:
                 value = symbol.value
@@ -485,8 +485,8 @@ class Symbol(Expression):
         if not (
             isinstance(symbol, nl.Constant)
             and (
-                exp.is_leq_informative(symbol.type, AbstractSet)
-                or exp.is_leq_informative(symbol.type, Tuple)
+                ir.is_leq_informative(symbol.type, AbstractSet)
+                or ir.is_leq_informative(symbol.type, Tuple)
             )
         ):
             raise TypeError(
@@ -498,7 +498,7 @@ class Symbol(Expression):
         else:
             return self.__iter_non_logic_programming(symbol)
 
-    def __iter_logic_programming(self, symbol: exp.Symbol) -> Iterable:
+    def __iter_logic_programming(self, symbol: ir.Symbol) -> Iterable:
         for v in symbol.value:
             if isinstance(v, nl.Constant):
                 yield self._rsbv.walk(v.value)
@@ -507,7 +507,7 @@ class Symbol(Expression):
             else:
                 raise nl.NeuroLangException(f"element {v} invalid in set")
 
-    def __iter_non_logic_programming(self, symbol: exp.Symbol) -> Iterable:
+    def __iter_non_logic_programming(self, symbol: ir.Symbol) -> Iterable:
         all_symbols = self.query_builder.solver.symbol_table.symbols_by_type(
             symbol.type.__args__[0]
         )
@@ -525,8 +525,8 @@ class Symbol(Expression):
     def __len__(self) -> Optional[int]:
         symbol = self.symbol
         if isinstance(symbol, nl.Constant) and (
-            exp.is_leq_informative(symbol.type, AbstractSet)
-            or exp.is_leq_informative(symbol.type, Tuple)
+            ir.is_leq_informative(symbol.type, AbstractSet)
+            or ir.is_leq_informative(symbol.type, Tuple)
         ):
             return len(symbol.value)
 
@@ -540,17 +540,17 @@ class Symbol(Expression):
         return hash(self.expression)
 
     @property
-    def symbol(self) -> exp.Symbol:
+    def symbol(self) -> ir.Symbol:
         """Returns symbol from symbol_table"""
         return self.query_builder.solver.symbol_table[self.symbol_name]
 
     @property
-    def neurolang_symbol(self) -> exp.Symbol:
+    def neurolang_symbol(self) -> ir.Symbol:
         """Returns backend symbol"""
         return nl.Symbol[self.type](self.symbol_name)
 
     @property
-    def expression(self) -> exp.Symbol:
+    def expression(self) -> ir.Symbol:
         """Overloads symbol property"""
         return self.symbol
 
@@ -569,7 +569,7 @@ class Symbol(Expression):
             if Symbol doesn't have a python value
         """
         constant = self.query_builder.solver.symbol_table[self.symbol_name]
-        if isinstance(constant, exp.Constant) and isinstance(
+        if isinstance(constant, ir.Constant) and isinstance(
             constant.value, RelationalAlgebraFrozenSet
         ):
             return RelationalAlgebraFrozenSet(constant.value)
@@ -595,7 +595,7 @@ class Query(Expression):
     def __init__(
         self,
         query_builder: "QueryBuilderBase",
-        expression: exp.Expression,
+        expression: ir.Expression,
         symbol: Symbol,
         predicate: Expression,
     ) -> "Query":
@@ -618,7 +618,7 @@ class Exists(Expression):
     def __init__(
         self,
         query_builder: "QueryBuilderBase",
-        expression: exp.Expression,
+        expression: ir.Expression,
         symbol: Symbol,
         predicate: Expression,
     ) -> "Exists":
@@ -641,7 +641,7 @@ class All(Expression):
     def __init__(
         self,
         query_builder: "QueryBuilderBase",
-        expression: exp.Expression,
+        expression: ir.Expression,
         symbol: Symbol,
         predicate: Expression,
     ) -> "All":
@@ -665,7 +665,7 @@ class Implication(Expression):
     def __init__(
         self,
         query_builder: "QueryBuilderBase",
-        expression: exp.Expression,
+        expression: ir.Expression,
         consequent: Expression,
         antecedent: Expression,
     ) -> "Implication":
@@ -689,7 +689,7 @@ class RightImplication(Expression):
     def __init__(
         self,
         query_builder: "QueryBuilderBase",
-        expression: exp.Expression,
+        expression: ir.Expression,
         antecedent: Expression,
         consequent: Expression,
     ) -> "RightImplication":
@@ -712,7 +712,7 @@ class Fact(Expression):
     def __init__(
         self,
         query_builder: "QueryBuilderBase",
-        expression: exp.Expression,
+        expression: ir.Expression,
         consequent: Expression,
     ) -> "Fact":
         self.expression = expression
@@ -735,30 +735,30 @@ class TranslateExpressionToFrontEndExpression(ExpressionWalker):
         self.query_builder = query_builder
         self.right_implication_mode = False
 
-    @add_match(exp.Symbol)
-    def symbol(self, expression: exp.Expression) -> Expression:
+    @add_match(ir.Symbol)
+    def symbol(self, expression: ir.Expression) -> Expression:
         ret = Expression(self.query_builder, expression)
         ret.in_ontology = self.right_implication_mode
         return ret
 
-    @add_match(exp.Constant)
-    def constant(self, expression: exp.Expression) -> Any:
+    @add_match(ir.Constant)
+    def constant(self, expression: ir.Expression) -> Any:
         return expression.value
 
-    @add_match(exp.FunctionApplication)
-    def function_application(self, expression: exp.Expression) -> Any:
+    @add_match(ir.FunctionApplication)
+    def function_application(self, expression: ir.Expression) -> Any:
         functor = self.walk(expression.functor)
         args = tuple(self.walk(arg) for arg in expression.args)
         return functor(*args)
 
     @add_match(dl.Implication(..., True))
-    def fact(self, expression: exp.Expression) -> Fact:
+    def fact(self, expression: ir.Expression) -> Fact:
         return Fact(
             self.query_builder, expression, self.walk(expression.consequent)
         )
 
     @add_match(dl.Implication)
-    def implication(self, expression: exp.Expression) -> Implication:
+    def implication(self, expression: ir.Expression) -> Implication:
         return Implication(
             self.query_builder,
             expression,
@@ -779,7 +779,7 @@ class TranslateExpressionToFrontEndExpression(ExpressionWalker):
         return ret
 
     @add_match(dl.Conjunction)
-    def conjunction(self, expression: exp.Expression) -> Expression:
+    def conjunction(self, expression: ir.Expression) -> Expression:
         formulas = list(expression.formulas[::-1])
         current_expression = self.walk(formulas.pop())
         while len(formulas) > 0:
