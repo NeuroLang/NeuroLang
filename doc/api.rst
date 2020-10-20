@@ -1,26 +1,28 @@
 API
 ===
 
+Module
+------
+
+.. toctree::
+   neurolang.frontend
 
 Classes
 -------
 
-.. currentmodule:: neurolang
-
 .. autosummary::
    :template: class.rst
    :toctree: gen_api
-  
-   PatternMatcher
-   Expression
+
+.. automodule:: neurolang.frontend
+   :members:
+
+.. autoclass:: neurolang.frontend.NeurolangDL
+   :members:
 
 
-Functions
----------
-
-.. autosummary::
-   :template: function.rst
-   :toctree: gen_api
-
-   add_match
-
+Indices and tables
+==================
+* :ref:`genindex`
+* :ref:`modindex`
+* :ref:`search`

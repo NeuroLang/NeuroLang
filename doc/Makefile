@@ -4,6 +4,7 @@
 # You can set these variables from the command line.
 SPHINXOPTS    = -v
 SPHINXBUILD   = sphinx-build
+SPHINXAPI     = sphinx-apidoc
 PAPER         =
 BUILDDIR      = _build
 
@@ -52,6 +53,10 @@ clean:
 	rm -rf $(BUILDDIR)/*
 	rm -rf reference/*
 	rm -rf auto_examples/*
+	rm -rf gen_api
+
+api:
+	$(SPHINXAPI) -o gen_api ../neurolang "*test*"
 
 html:
 	$(SPHINXBUILD) -b html $(ALLSPHINXOPTS) $(BUILDDIR)/html
