@@ -1,3 +1,11 @@
+r"""
+Query Builder Base, Region and Neurosynth Mixins
+================================================
+Base classes to construct datalog programs.
+Capabilities to declare, manage and manipulate symbols.
+Mixins provide capabilities related to brain volumes and
+Neurosynth metadata manipulation
+"""
 from contextlib import contextmanager
 from typing import (
     AbstractSet,
@@ -31,13 +39,29 @@ from ..datalog import DatalogProgram
 
 
 class QueryBuilderBase:
-    """Base class to build datalog queries: create symbols,
-    retrieve them, delete them"""
+    """Base classes to construct datalog programs.
+    Capabilities to declare, manage and manipulate symbols.
+    """
 
     def __init__(
         self, program_ir: DatalogProgram, logic_programming: bool = False
     ) -> "QueryBuilderBase":
-        """Creates a QueryBuilderBase instance with specified program_ir"""
+        """Query Builder with symbol management capabilities
+
+        Parameters
+        ----------
+        program_ir : DatalogProgram
+            datalog program's intermediate representation,
+            usually blank
+        logic_programming : bool, optional
+            defines if symbols can be dynamically
+            declared, by default False
+
+        Returns
+        -------
+        QueryBuilderBase
+            see description
+        """
         self.program_ir = program_ir
         self.set_type = AbstractSet[self.program_ir.type]
         self.logic_programming = logic_programming
@@ -86,11 +110,13 @@ class QueryBuilderBase:
     ) -> FESymbol:
         """Retrieves symbol via its name, either providing a
         FEExpression with the correct name or the name itself
+        Points towards .get_symbol method
 
         Parameters
         ----------
         symbol_name : Union[FESymbol, str, FEExpression]
-            if symbol, passes symbol's name to .get_symbol method
+            if of type FESymbol, symol's name will be passed
+            to the .get_symbol method
 
         Returns
         -------
@@ -112,7 +138,7 @@ class QueryBuilderBase:
         Returns
         -------
         bool
-            does symbol exist in current query
+            does symbol exist in current symbol_table
         """
         return symbol in self.symbol_table
 
@@ -287,6 +313,9 @@ class QueryBuilderBase:
         ...     return x + 2
         >>> nl.get_symbol("g")
         g: typing.Callable[[int], int] = <function g at ...>
+        >>> nl.add_symbol(3, "x")
+        >>> nl.get_symbol("x")
+        x: <class 'int'> = 3
         """
         name = self._obtain_symbol_name(name, value)
 
@@ -573,7 +602,7 @@ class RegionMixin:
         1- for each region specified by a label and name in atlas_labels,
         creates associated ExplicitVBR and symbols
         Tuple[region_name: str, Region]
-        2- groups regions in an AbstractSet[Uple[str, Region]] symbol with
+        2- groups regions in an AbstractSet[Tuple[str, Region]] symbol with
         specified name
 
         Parameters
@@ -833,7 +862,7 @@ class QuerySymbolsProxy:
     """Class useful to create symbols on-the-fly
     Typically used in QueryBuilderBase contexts as the yielded value
     to write a program.
-    Various methods are overloads of QueryBuilderBase methods"""
+    Various methods are projectors to QueryBuilderBase methods"""
 
     def __init__(self, query_builder):
         self._dynamic_mode = False

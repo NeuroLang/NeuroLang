@@ -1,8 +1,7 @@
 r"""
 Neurolang datalog grammar definition
 and translation to intermediate representation
-=============================================
-
+==============================================
 1- defines the neurolang datalog syntax
 2- code written using this grammar can be parsed
 into an Abstract Syntax Tree (AST)

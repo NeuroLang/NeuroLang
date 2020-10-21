@@ -1,3 +1,9 @@
+r"""
+Query Builder Datalog
+=====================
+Complements QueryBuilderBase with query capabilities,
+as well as Region and Neurosynth capabilities
+"""
 from collections import defaultdict
 from typing import (
     AbstractSet,
@@ -8,7 +14,6 @@ from typing import (
     Tuple,
     Type,
     Union,
-    Classvar,
 )
 from uuid import uuid1
 
@@ -36,11 +41,31 @@ __all__ = ["QueryBuilderDatalog"]
 
 
 class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
+    """Complements QueryBuilderBase with query capabilities,
+    as well as Region and Neurosynth capabilities
+    """
+
     def __init__(
         self,
         program_ir: DatalogProgram,
-        chase_class: Classvar = aggregation.Chase,
-    ):
+        chase_class: Type[aggregation.Chase] = aggregation.Chase,
+    ) -> "QueryBuilderDatalog":
+        """Query builder with query, Region, Neurosynth capabilities
+
+        Parameters
+        ----------
+        program_ir : DatalogProgram
+            datalog program's intermediate representation,
+            usually blank
+        chase_class : Type[aggregation.Chase], optional
+            used to compute deterministic solutions,
+            by default aggregation.Chase
+
+        Returns
+        -------
+        QueryBuilderDatalog
+            see description
+        """
         super().__init__(program_ir, logic_programming=True)
         self.chase_class = chase_class
         self.frontend_translator = TranslateExpressionToFrontEndExpression(
@@ -52,8 +77,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
     @property
     def current_program(self) -> List[FEExpression]:
-        """Returns the list of expressions that have currently been declared in the
-        program
+        """Returns the list of expressions that have currently been
+        declared in the program
 
         Returns
         -------
@@ -154,10 +179,10 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         There are three modalities
         1. If there is only one argument, the query returns `True` or `False`
         depending on wether the query could be inferred.
-        2. If there are two arguments and the first is a tuple of `FESymbol`, it
-        returns the set of results meeting the query in the second argument.
+        2. If there are two arguments and the first is a tuple of `FESymbol`,
+        it returns the set of results meeting the query in the second argument.
         3. If the first argument is a predicate (e.g. `Q(x)`) it performs the
-        query adds it to the engine memory and returns the
+        query, adds it to the engine memory, and returns the
         corresponding symbol.
         See example for 3 modalities
 
@@ -212,11 +237,11 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         predicate: FEExpression,
     ) -> Tuple[AbstractSet, Optional[FESymbol]]:
         """Performs an inferential query. Will return as first output
-        an AbstractSet with as many elements as solutions
-        of the predicate query. The AbstractSet's columns correspond to
+        an AbstractSet with as many elements as solutions of the
+        predicate query. The AbstractSet's columns correspond to
         the expressions in the head.
         If head expressions are arguments of a functor, the latter will
-        be returned as the second output, defaulted as None
+        be returned as the second output, defaulted as None.
 
         Parameters
         ----------
@@ -388,12 +413,14 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
         return FESymbol(self, name)
 
-    def predicate_parameter_names(self, predicate_name: str) -> Tuple[str]:
+    def predicate_parameter_names(
+        self, predicate_name: Union[str, FESymbol, FEExpression]
+    ) -> Tuple[str]:
         """Get the names of the parameters for the given predicate
 
         Parameters
         ----------
-        predicate_name : str
+        predicate_name : Union[str, FESymbol, FEExpression]
             predicate to obtain the names from
 
         Returns

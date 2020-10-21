@@ -1,3 +1,10 @@
+r"""
+Query Resolution Expression
+===========================
+Declares FrontEnd Expression class and subclasses.
+Those classes are used to build datalog programs
+in an ergonomic manner, and attention is paid to their representation
+"""
 import operator as op
 from functools import wraps
 from typing import (
@@ -42,12 +49,12 @@ class Expression(object):
         query_builder : QueryBuilderBase
             used to build the current program
         expression : ir.Expression
-            backend expression
+            BackEnd expression
 
         Returns
         -------
         Expression
-            frontend expression
+            FrontEnd expression
 
         Example
         -------
@@ -547,7 +554,7 @@ class Symbol(Expression):
 
     @property
     def symbol(self) -> ir.Symbol:
-        """Returns symbol from symbol_table"""
+        """Returns backend symbol from symbol_table"""
         return self.query_builder.program_ir.symbol_table[self.symbol_name]
 
     @property
@@ -557,7 +564,7 @@ class Symbol(Expression):
 
     @property
     def expression(self) -> ir.Symbol:
-        """Overloads symbol property"""
+        """Projects to symbol property"""
         return self.symbol
 
     @property
@@ -714,7 +721,7 @@ class RightImplication(Expression):
 class Fact(Expression):
     """A Fact reprsents an information considered
     as True. It can be seen as the Implication:
-    Even(2) ← True"""
+    fact ← True, e.g. Even(2) ← True"""
 
     def __init__(
         self,

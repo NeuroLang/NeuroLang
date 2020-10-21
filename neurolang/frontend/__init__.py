@@ -50,6 +50,11 @@ class LoadParcellationMixin:
 
 
 class NeurolangDL(QueryBuilderDatalog):
+    """QueryBuilderDatalog with a
+    RegionFrontendDatalogSolver program intermediate
+    representation
+    """
+
     def __init__(self, program_ir=None):
         if program_ir is None:
             program_ir = RegionFrontendDatalogSolver()
@@ -63,4 +68,7 @@ class RegionFrontendDatalogSolver(
     DatalogProgram,
     ExpressionBasicEvaluator,
 ):
+    """DatalogProgram preloaded with Region symbols and
+    complemented with aggregation capabilities"""
+
     pass

@@ -1,3 +1,10 @@
+r"""
+Probabilistic Frontend
+======================
+Complements QueryBuilderDetalog class with probabilistic capabilities
+1- add extensional probabilistic facts
+2- sove probabilistic queries
+"""
 import collections
 import typing
 from typing import (
@@ -9,6 +16,7 @@ from typing import (
     Optional,
     Tuple,
     Type,
+    Callable,
 )
 from uuid import uuid1
 
@@ -64,9 +72,31 @@ class RegionFrontendCPLogicSolver(
 
 
 class ProbabilisticFrontend(QueryBuilderDatalog):
+    """Complements QueryBuilderDetalog class with probabilistic capabilities
+    1- add extensional probabilistic facts
+    2- sove probabilistic queries
+    """
+
     def __init__(
-        self, chase_class=Chase, probabilistic_solver=lifted_solve_succ_query
-    ):
+        self,
+        chase_class: Type[Chase] = Chase,
+        probabilistic_solver: Callable = lifted_solve_succ_query,
+    ) -> "ProbabilisticFrontend":
+        """Query builder with probabilistic capabilities
+
+        Parameters
+        ----------
+        chase_class : Type[Chase], optional
+            used to compute deterministic solutions, by default Chase
+        probabilistic_solver : Callable, optional
+            used to compute probabilistic solutions,
+            by default lifted_solve_succ_query
+
+        Returns
+        -------
+        ProbabilisticFrontend
+            see description
+        """
         super().__init__(
             RegionFrontendCPLogicSolver(), chase_class=chase_class
         )
@@ -102,8 +132,9 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
 
     @property
     def current_program(self) -> List[FEExpression]:
-        """Returns the list of expressions that have currently been declared in the
-        program, or through the program's constraints
+        """Returns the list of Front End Expressions that have
+        currently been declared in the program, or through
+        the program's constraints
 
         Returns
         -------
@@ -142,10 +173,11 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         predicate: FEExpression,
     ) -> Tuple[AbstractSet, Optional[IRSymbol]]:
         """Performs an inferential query: will return as first output
-        an abstract set with as many elements as solutions
-        of the predicate query,and columns corresponding to
+        an AbstractSet with as many elements as solutions
+        of the predicate query. AbstractSet's columns correspond to
         the expressions in the head.
-        Typically, probabilities are encapsulated into predicates.
+        Typically, probabilities are abstracted and processed similar
+        to symbols, though of different nature (see examples)
         If head expressions are arguments of a functor, the latter will
         be returned as the second output, defaulted as None
 
@@ -235,7 +267,8 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         """
         Returns a dictionary of "predicate_name": "Content"
         for all elements in the solution of the datalog program.
-        Typically, probabilities are encapsulated into predicates.
+        Typically, probabilities are abstracted and processed similar
+        to symbols, though of different nature (see examples)
 
         Returns
         -------
@@ -343,7 +376,6 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         """
         Based on a solution instance and a query predicate, retrieve the
         relation whose columns correspond to symbols in the head of the query.
-
         """
         pred_symb = predicate.expression.functor
         # return dum when empty solution (reported in GH481)
@@ -383,14 +415,18 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
     ) -> FESymbol:
         """Add probabilistic facts from tuples whose first element
         contains the probability label attached to that tuple.
-        Note that those facts are independant, contrary to
-        a probabilistic choice.
+        In the tuple (p, a, b, ...), p is the float probability
+        of tuple (a, b, ...) to be True in any possible world.
+
+        Note that those each tuple from the iterable is independant
+        from the others, meaning that multiple tuples can be True 
+        in the same possible world, contrary to a probabilistic choice.
         See example for details.
 
         Warning
         -------
-        Typing for the iterable is improper, true -but yet unsupported-
-        typing should be Iterable[Tuple[float, Any, ...]]
+        Typing for the iterable is improper, true -but yet unsupported
+        in Python typing- typing should be Iterable[Tuple[float, Any, ...]]
         See examples
 
         Parameters
@@ -437,8 +473,12 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
     ) -> FESymbol:
         """Add probabilistic choice from tuples whose first element
         contains the probability label attached to that tuple.
-        Contrary to a list of probabilistic facts, this represents a choice
-        among possible values for the predicate, meaning that tuples
+        In the tuple (p, a, b, ...), p is the float probability
+        of tuple (a, b, ...) to be True and all remaining tuples to
+        be False in any possible world.
+
+        Note that, contrary to a list of probabilistic facts, this represents
+        a choice among possible values for the predicate, meaning that tuples
         in the set are mutually exclusive.
         See example for details.
 
@@ -508,8 +548,10 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
     ) -> FESymbol:
         """Add uniform probabilistic choice among values
         in the iterable.
-        Contrary to a list of probabilistic facts, this represents a choice
-        among possible values for the predicate, meaning that tuples
+        Every tuple in the iterable will be assigned the same probability to
+        be True, with all remaning tuples false, in any possible world.
+        Note that, contrary to a list of probabilistic facts, this represents
+        a choice among possible values for the predicate, meaning that tuples
         in the set are mutually exclusive.
         All probabilities will be equal.
         See example for details.

@@ -29,19 +29,20 @@ class ASTNode(dict):
 
 
 class ASTWalker(object):
-    """Base class for Abstract Syntax Tree walkers,
-    to go through the AST representation to the intermediate representation"""
+    """Base class for Abstract Syntax Tree walkers.
+    Walke through an AST translating nodes to
+    the corresponding Neurolang intermediate representation"""
 
     def evaluate(
         self, ast: Union[ASTNode, List[ASTNode], Any]
     ) -> Union[IRExpression, List[IRExpression], Any]:
         """Converts input to intermediate representation:
         - if input is an ASTNode, calls -if it exists- the class method
-        corresponding to the node type (class method is declared
+        corresponding to the node type (methods are declared
         in child class)
         - if input is a list of ASTNode, recursively calls itself
         on every node
-        - else, simply passes input through
+        - else, simply passes ast through
 
         Parameters
         ----------
