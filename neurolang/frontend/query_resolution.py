@@ -31,10 +31,7 @@ from ..regions import ExplicitVBR, ImplicitVBR, SphericalVolume
 from ..type_system import Unknown, is_leq_informative
 from ..typed_symbol_table import TypedSymbolTable
 from .neurosynth_utils import NeuroSynthHandler, StudyID, TfIDf
-from .query_resolution_expressions import (
-    Expression as FEExpression,
-    Symbol as FESymbol,
-)
+from . import query_resolution_expressions as fe
 from ..datalog import DatalogProgram
 
 
@@ -71,19 +68,19 @@ class QueryBuilderBase:
 
         self._symbols_proxy = QuerySymbolsProxy(self)
 
-    def get_symbol(self, symbol_name: Union[str, FEExpression]) -> FESymbol:
+    def get_symbol(self, symbol_name: Union[str, fe.Expression]) -> fe.Symbol:
         """Retrieves symbol via its name, either providing a
-        FEExpression with the correct name or the name itself
+        fe.Expression with the correct name or the name itself
 
         Parameters
         ----------
-        symbol_name : Union[str, FEExpression]
-            name of the symbol to be retrieved. If of type FEExpression,
+        symbol_name : Union[str, fe.Expression]
+            name of the symbol to be retrieved. If of type fe.Expression,
             expression's name is used as the name
 
         Returns
         -------
-        FESymbol
+        fe.Symbol
             symbol corresponding to the input name
 
         Raises
@@ -99,40 +96,40 @@ class QueryBuilderBase:
         >>> nl.get_symbol("x")
         x: <class 'int'> = 3
         """
-        if isinstance(symbol_name, FEExpression):
+        if isinstance(symbol_name, fe.Expression):
             symbol_name = symbol_name.expression.name
         if symbol_name not in self.symbol_table:
-            raise ValueError(f"FESymbol {symbol_name} not defined")
-        return FESymbol(self, symbol_name)
+            raise ValueError(f"fe.Symbol {symbol_name} not defined")
+        return fe.Symbol(self, symbol_name)
 
     def __getitem__(
-        self, symbol_name: Union[FESymbol, str, FEExpression]
-    ) -> FESymbol:
+        self, symbol_name: Union[fe.Symbol, str, fe.Expression]
+    ) -> fe.Symbol:
         """Retrieves symbol via its name, either providing a
-        FEExpression with the correct name or the name itself
+        fe.Expression with the correct name or the name itself
         Points towards .get_symbol method
 
         Parameters
         ----------
-        symbol_name : Union[FESymbol, str, FEExpression]
-            if of type FESymbol, symol's name will be passed
+        symbol_name : Union[fe.Symbol, str, fe.Expression]
+            if of type fe.Symbol, symol's name will be passed
             to the .get_symbol method
 
         Returns
         -------
-        FESymbol
+        fe.Symbol
             output from .get_symbol method
         """
-        if isinstance(symbol_name, FESymbol):
+        if isinstance(symbol_name, fe.Symbol):
             symbol_name = symbol_name.symbol_name
         return self.get_symbol(symbol_name)
 
-    def __contains__(self, symbol: FESymbol) -> bool:
+    def __contains__(self, symbol: fe.Symbol) -> bool:
         """Checks if symbol exists in current symbol_table
 
         Parameters
         ----------
-        symbol : FESymbol
+        symbol : fe.Symbol
             symbol to check
 
         Returns
@@ -149,7 +146,7 @@ class QueryBuilderBase:
 
         Returns
         -------
-        List[Union[FEExpression, Type]]
+        List[Union[fe.Expression, Type]]
             List of types or Unknown if symbol has no known type
         """
         return self.symbol_table.types
@@ -228,7 +225,7 @@ class QueryBuilderBase:
         self,
         type_: Union[Any, Tuple[Any, ...], List[Any]] = Unknown,
         name: str = None,
-    ) -> FEExpression:
+    ) -> fe.Expression:
         """Creates a symbol and associated expression, optionally
         specifying it's type and/or name
 
@@ -242,7 +239,7 @@ class QueryBuilderBase:
 
         Returns
         -------
-        FEExpression
+        fe.Expression
             associated to the created symbol
         """
         if isinstance(type_, (tuple, list)):
@@ -251,7 +248,7 @@ class QueryBuilderBase:
 
         if name is None:
             name = str(uuid1())
-        return FEExpression(self, ir.Symbol[type_](name))
+        return fe.Expression(self, ir.Symbol[type_](name))
 
     @property
     def functions(self) -> List[str]:
@@ -284,8 +281,8 @@ class QueryBuilderBase:
         ]
 
     def add_symbol(
-        self, value: Union[FEExpression, ir.Constant, Any], name: str = None
-    ) -> FESymbol:
+        self, value: Union[fe.Expression, ir.Constant, Any], name: str = None
+    ) -> fe.Symbol:
         """Creates a symbol with given value and adds it to the
         current symbol_table.
         Can typicaly be used to decorate callables, or add an
@@ -293,15 +290,15 @@ class QueryBuilderBase:
 
         Parameters
         ----------
-        value : Union[FEExpression, ir.Constant, Any]
-            value of the symbol to add. If not an FEExpression,
+        value : Union[fe.Expression, ir.Constant, Any]
+            value of the symbol to add. If not an fe.Expression,
             will be cast as a Constant
         name : str, optional
             overrides automatic naming of the symbol, by default None
 
         Returns
         -------
-        FESymbol
+        fe.Symbol
             created symbol
 
         Example
@@ -319,7 +316,7 @@ class QueryBuilderBase:
         """
         name = self._obtain_symbol_name(name, value)
 
-        if isinstance(value, FEExpression):
+        if isinstance(value, fe.Expression):
             value = value.expression
         elif isinstance(value, ir.Constant):
             pass
@@ -329,7 +326,7 @@ class QueryBuilderBase:
         symbol = ir.Symbol[value.type](name)
         self.symbol_table[symbol] = value
 
-        return FESymbol(self, name)
+        return fe.Symbol(self, name)
 
     def _obtain_symbol_name(self, name: Optional[str], value: Any) -> str:
         if name is not None:
@@ -370,7 +367,7 @@ class QueryBuilderBase:
         x: <class 'int'> = 3
         >>> nl.del_symbol("x")
         >>> nl.get_symbol("x")
-        ValueError: FESymbol x not defined
+        ValueError: Symbol x not defined
         """
         del self.symbol_table[name]
 
@@ -379,8 +376,8 @@ class QueryBuilderBase:
         iterable: Union[Iterable, Iterable[Tuple[Any, ...]]],
         type_: Type = Unknown,
         name: str = None,
-    ) -> FESymbol:
-        """Creates an AbstractSet FESymbol containing the elements specified in the
+    ) -> fe.Symbol:
+        """Creates an AbstractSet fe.Symbol containing the elements specified in the
         iterable with a List[Tuple[Any, ...]] format (see examples).
         Typically used to create extensional facts from existing databases
 
@@ -397,7 +394,7 @@ class QueryBuilderBase:
 
         Returns
         -------
-        FESymbol
+        fe.Symbol
             see description
 
         Examples
@@ -431,13 +428,13 @@ class QueryBuilderBase:
         symbol = ir.Symbol[set_type](name)
         self.symbol_table[symbol] = constant
 
-        return FESymbol(self, name)
+        return fe.Symbol(self, name)
 
     def _add_tuple_set_elements(self, iterable, set_type):
         element_type = set_type.__args__[0]
         new_set = []
         for e in iterable:
-            if not (isinstance(e, FESymbol)):
+            if not (isinstance(e, fe.Symbol)):
                 s, c = self._create_symbol_and_get_constant(e, element_type)
                 self.symbol_table[s] = c
             else:
@@ -491,7 +488,7 @@ class RegionMixin:
             s.name for s in self.symbol_table.symbols_by_type(self.set_type)
         ]
 
-    def new_region_symbol(self, name: Optional[str] = None) -> FESymbol:
+    def new_region_symbol(self, name: Optional[str] = None) -> fe.Symbol:
         """Returns symbol with type Region
 
         Parameters
@@ -501,26 +498,26 @@ class RegionMixin:
 
         Returns
         -------
-        FESymbol
+        fe.Symbol
             see description
         """
         return self.new_symbol(type_=Region, name=name)
 
     def add_region(
-        self, region: FEExpression, name: Optional[str] = None
-    ) -> FESymbol:
-        """Adds region FESymbol to symbol_table
+        self, region: fe.Expression, name: Optional[str] = None
+    ) -> fe.Symbol:
+        """Adds region fe.Symbol to symbol_table
 
         Parameters
         ----------
-        region : FEExpression
+        region : fe.Expression
             should be of the program_ir's type
         name : Optional[str], optional
             symbol's name, if None will be fresh, by default None
 
         Returns
         -------
-        FESymbol
+        fe.Symbol
             symbol added to the symbol_table
 
         Raises
@@ -538,8 +535,8 @@ class RegionMixin:
 
     def add_region_set(
         self, region_set: Iterable, name: Optional[str] = None
-    ) -> FESymbol:
-        """Creates an AbstractSet FESymbol containing the elements specified in the
+    ) -> fe.Symbol:
+        """Creates an AbstractSet fe.Symbol containing the elements specified in the
         iterable with a List[Tuple[Region]] format
 
         Parameters
@@ -551,7 +548,7 @@ class RegionMixin:
 
         Returns
         -------
-        FESymbol
+        fe.Symbol
             see description
         """
         return self.add_tuple_set(region_set, name=name, type_=Region)
@@ -597,7 +594,7 @@ class RegionMixin:
         name: str,
         atlas_labels: Dict[int, str],
         spatial_image: DataobjImage,
-    ) -> FESymbol:
+    ) -> fe.Symbol:
         """Creates an atlas set:
         1- for each region specified by a label and name in atlas_labels,
         creates associated ExplicitVBR and symbols
@@ -617,7 +614,7 @@ class RegionMixin:
 
         Returns
         -------
-        FESymbol
+        fe.Symbol
             see description
         """
         atlas_set = set()
@@ -648,7 +645,7 @@ class RegionMixin:
         center: Union[np.ndarray, Iterable[int]],
         radius: int,
         name: Optional[str] = None,
-    ) -> FESymbol:
+    ) -> fe.Symbol:
         """Creates a Region symbol associated with the spherical
         volume described by its center and volume
 
@@ -664,7 +661,7 @@ class RegionMixin:
 
         Returns
         -------
-        FESymbol
+        fe.Symbol
             see description
         """
         sr = SphericalVolume(center, radius)
@@ -695,7 +692,7 @@ class NeuroSynthMixin:
         term: str,
         name: Optional[str] = None,
         frequency_threshold: Optional[float] = 0.05,
-    ) -> FESymbol:
+    ) -> fe.Symbol:
         """
         Load study ids (PMIDs) of studies in the Neurosynth database that are
         related to a given term based on a hard thresholding of TF-IDF
@@ -716,8 +713,8 @@ class NeuroSynthMixin:
 
         Returns
         -------
-        FESymbol
-            FESymbol associated to the resulting set.
+        fe.Symbol
+            fe.Symbol associated to the resulting set.
 
         """
         if not hasattr(self, "neurosynth_db"):
@@ -733,7 +730,7 @@ class NeuroSynthMixin:
 
     def load_neurosynth_study_tfidf_feature_for_terms(
         self, terms: Iterable[str], name: Optional[str] = None
-    ) -> FESymbol:
+    ) -> fe.Symbol:
         """
         Load TF-IDF features measured in each study within the Neurosynth
         database for the given terms.
@@ -749,8 +746,8 @@ class NeuroSynthMixin:
 
         Returns
         -------
-        FESymbol
-            FESymbol associated to the resulting set.
+        fe.Symbol
+            fe.Symbol associated to the resulting set.
 
         """
         if not hasattr(self, "neurosynth_db"):
@@ -764,7 +761,7 @@ class NeuroSynthMixin:
 
     def load_neurosynth_study_ids(
         self, name: Optional[str] = None
-    ) -> FESymbol:
+    ) -> fe.Symbol:
         """
         Load all study ids (PMIDs) that are part of the Neurosynth database.
 
@@ -776,8 +773,8 @@ class NeuroSynthMixin:
 
         Returns
         -------
-        FESymbol
-            FESymbol associated to the resulting set.
+        fe.Symbol
+            fe.Symbol associated to the resulting set.
 
         """
         if not hasattr(self, "neurosynth_db"):
@@ -789,7 +786,7 @@ class NeuroSynthMixin:
 
     def load_neurosynth_reported_activations(
         self, name: Optional[str] = None
-    ) -> FESymbol:
+    ) -> fe.Symbol:
         """
         Load all activations reported in the Neurosynth database in the form of
         a set of (study id, voxel id) pairs.
@@ -802,8 +799,8 @@ class NeuroSynthMixin:
 
         Returns
         -------
-        FESymbol
-            FESymbol associated to the resulting set.
+        fe.Symbol
+            fe.Symbol associated to the resulting set.
 
         """
         if not hasattr(self, "neurosynth_db"):
@@ -820,7 +817,7 @@ class NeuroSynthMixin:
         name: Optional[str] = None,
         threshold: Optional[float] = 1e-3,
         study_ids: Optional[List[int]] = None,
-    ) -> FESymbol:
+    ) -> fe.Symbol:
         """
         Load all term-to-study associations in the Neurosynth database based on
         a hard thresholding of the TF-IDF features measured from the abstracts
@@ -842,8 +839,8 @@ class NeuroSynthMixin:
 
         Returns
         -------
-        FESymbol
-            FESymbol associated to the resulting set.
+        fe.Symbol
+            fe.Symbol associated to the resulting set.
 
         """
         if not hasattr(self, "neurosynth_db"):

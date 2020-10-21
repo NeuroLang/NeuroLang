@@ -29,12 +29,8 @@ from ..datalog.constraints_representation import DatalogConstraintsProgram
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
 from ..exceptions import UnsupportedQueryError
+from .. import expressions as ir
 from ..expression_walker import ExpressionBasicEvaluator
-from ..expressions import (
-    Constant as IRConstant,
-    Symbol as IRSymbol,
-    Unknown as IRUnknown,
-)
 from ..logic import Union
 from ..probabilistic.cplogic.program import (
     CPLogicMixin,
@@ -55,8 +51,7 @@ from ..relational_algebra import (
     RelationalAlgebraStringExpression,
 )
 from . import QueryBuilderDatalog
-from .query_resolution_expressions import Expression as FEExpression
-from .query_resolution_expressions import Symbol as FESymbol
+from . import query_resolution_expressions as fe
 
 
 class RegionFrontendCPLogicSolver(
@@ -131,14 +126,14 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         self.ontology_loaded = True
 
     @property
-    def current_program(self) -> List[FEExpression]:
+    def current_program(self) -> List[fe.Expression]:
         """Returns the list of Front End Expressions that have
         currently been declared in the program, or through
         the program's constraints
 
         Returns
         -------
-        List[FEExpression]
+        List[fe.Expression]
             see description
 
         Example
@@ -167,11 +162,11 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
     def _execute_query(
         self,
         head: typing.Union[
-            IRSymbol[Tuple[FEExpression, ...]],
-            Tuple[FEExpression, ...],
+            ir.Symbol[Tuple[fe.Expression, ...]],
+            Tuple[fe.Expression, ...],
         ],
-        predicate: FEExpression,
-    ) -> Tuple[AbstractSet, Optional[IRSymbol]]:
+        predicate: fe.Expression,
+    ) -> Tuple[AbstractSet, Optional[ir.Symbol]]:
         """Performs an inferential query: will return as first output
         an AbstractSet with as many elements as solutions
         of the predicate query. AbstractSet's columns correspond to
@@ -184,8 +179,8 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         Parameters
         ----------
         head : typing.Union[
-            IRSymbol[Tuple[FEExpression, ...]],
-            Tuple[FEExpression, ...],
+            ir.Symbol[Tuple[fe.Expression, ...]],
+            Tuple[fe.Expression, ...],
         ]
             see description
         predicate : Expression
@@ -193,7 +188,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
 
         Returns
         -------
-        Tuple[AbstractSet, Optional[IRSymbol]]
+        Tuple[AbstractSet, Optional[ir.Symbol]]
             see description
 
         Examples
@@ -239,7 +234,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
                 1   c   0.111111
                 : typing.AbstractSet
             },
-            S{Z: IRUnknown}
+            S{Z: Unknown}
         )
         """
         query_pred_symb = predicate.expression.functor
@@ -380,20 +375,20 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         pred_symb = predicate.expression.functor
         # return dum when empty solution (reported in GH481)
         if pred_symb not in solution:
-            return IRConstant[AbstractSet](
+            return ir.Constant[AbstractSet](
                 NamedRelationalAlgebraFrozenSet.dum()
             )
         query_solution = solution[pred_symb].value.unwrap()
         cols = list(
             arg.name
             for arg in predicate.expression.args
-            if isinstance(arg, IRSymbol)
+            if isinstance(arg, ir.Symbol)
         )
         query_solution = NamedRelationalAlgebraFrozenSet(cols, query_solution)
         query_solution = query_solution.projection(
             *(symb.name for symb in head_symbols)
         )
-        return IRConstant[AbstractSet](query_solution)
+        return ir.Constant[AbstractSet](query_solution)
 
     def _rewrite_program_with_ontology(self, deterministic_program):
         orw = OntologyRewriter(
@@ -410,16 +405,16 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
     def add_probabilistic_facts_from_tuples(
         self,
         iterable: Iterable[Tuple[float, Any]],
-        type_: Type = IRUnknown,
+        type_: Type = ir.Unknown,
         name: Optional[str] = None,
-    ) -> FESymbol:
+    ) -> fe.Symbol:
         """Add probabilistic facts from tuples whose first element
         contains the probability label attached to that tuple.
         In the tuple (p, a, b, ...), p is the float probability
         of tuple (a, b, ...) to be True in any possible world.
 
         Note that those each tuple from the iterable is independant
-        from the others, meaning that multiple tuples can be True 
+        from the others, meaning that multiple tuples can be True
         in the same possible world, contrary to a probabilistic choice.
         See example for details.
 
@@ -436,14 +431,14 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             of the tuple consituted of the remaining elements
         type_ : Type, optional
             type for resulting AbstractSet if None will be inferred
-            from the data, by default IRUnknown
+            from the data, by default ir.Unknown
         name : Optional[str], optional
             name for the resulting FrontEndSYmbol, if None
             will be fresh, by default None
 
         Returns
         -------
-        FESymbol
+        fe.Symbol
             see description
 
         Example
@@ -468,9 +463,9 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
     def add_probabilistic_choice_from_tuples(
         self,
         iterable: Iterable[Tuple[float, Any]],
-        type_: Type = IRUnknown,
+        type_: Type = ir.Unknown,
         name: Optional[str] = None,
-    ) -> FESymbol:
+    ) -> fe.Symbol:
         """Add probabilistic choice from tuples whose first element
         contains the probability label attached to that tuple.
         In the tuple (p, a, b, ...), p is the float probability
@@ -496,14 +491,14 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             Note that the float probabilities must sum to 1.
         type_ : Type, optional
             type for resulting AbstractSet if None will be inferred
-            from the data, by default IRUnknown
+            from the data, by default ir.Unknown
         name : Optional[str], optional
             name for the resulting FrontEndSYmbol, if None
             will be fresh, by default None
 
         Returns
         -------
-        FESymbol
+        fe.Symbol
             see description
 
         Raises
@@ -536,16 +531,16 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             name = str(uuid1())
         if isinstance(type_, tuple):
             type_ = Tuple[type_]
-        symbol = IRSymbol[AbstractSet[type_]](name)
+        symbol = ir.Symbol[AbstractSet[type_]](name)
         solver_add_method(symbol, iterable)
-        return FESymbol(self, name)
+        return fe.Symbol(self, name)
 
     def add_uniform_probabilistic_choice_over_set(
         self,
         iterable: Iterable[Tuple[Any, ...]],
-        type_: Type = IRUnknown,
+        type_: Type = ir.Unknown,
         name: Optional[str] = None,
-    ) -> FESymbol:
+    ) -> fe.Symbol:
         """Add uniform probabilistic choice among values
         in the iterable.
         Every tuple in the iterable will be assigned the same probability to
@@ -563,14 +558,14 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             will be cast as lists
         type_ : Type, optional
             type for resulting AbstractSet if None will be inferred
-            from the data, by default IRUnknown
+            from the data, by default ir.Unknown
         name : Optional[str], optional
             name for the resulting FrontEndSYmbol, if None
             will be fresh, by default None
 
         Returns
         -------
-        FESymbol
+        fe.Symbol
             see description
 
         Example
@@ -588,11 +583,11 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             name = str(uuid1())
         if isinstance(type_, tuple):
             type_ = Tuple[type_]
-        symbol = IRSymbol[AbstractSet[type_]](name)
+        symbol = ir.Symbol[AbstractSet[type_]](name)
         arity = len(next(iter(iterable)))
-        columns = tuple(IRSymbol.fresh().name for _ in range(arity))
+        columns = tuple(ir.Symbol.fresh().name for _ in range(arity))
         ra_set = NamedRelationalAlgebraFrozenSet(columns, iterable)
-        prob_col = IRSymbol.fresh().name
+        prob_col = ir.Symbol.fresh().name
         probability = 1 / len(iterable)
         projections = collections.OrderedDict()
         projections[prob_col] = probability
@@ -600,4 +595,4 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             projections[col] = RelationalAlgebraStringExpression(col)
         ra_set = ra_set.extended_projection(projections)
         self.program_ir.add_probabilistic_choice_from_tuples(symbol, ra_set)
-        return FESymbol(self, name)
+        return fe.Symbol(self, name)

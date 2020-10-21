@@ -29,13 +29,8 @@ from ..utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
 from .datalog import parser as datalog_parser
 from .datalog.natural_syntax_datalog import parser as nat_datalog_parser
 from .query_resolution import NeuroSynthMixin, QueryBuilderBase, RegionMixin
-from .query_resolution_expressions import (
-    Expression as FEExpression,
-    Operation as FEOperation,
-    Symbol as FESymbol,
-    TranslateExpressionToFrontEndExpression,
-)
 from ..datalog import DatalogProgram
+from . import query_resolution_expressions as fe
 
 __all__ = ["QueryBuilderDatalog"]
 
@@ -68,7 +63,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         """
         super().__init__(program_ir, logic_programming=True)
         self.chase_class = chase_class
-        self.frontend_translator = TranslateExpressionToFrontEndExpression(
+        self.frontend_translator = fe.TranslateExpressionToFrontEndExpression(
             self
         )
         self.translate_expression_to_datalog = TranslateToDatalogSemantics()
@@ -76,13 +71,13 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         self.nat_datalog_parser = nat_datalog_parser
 
     @property
-    def current_program(self) -> List[FEExpression]:
+    def current_program(self) -> List[fe.Expression]:
         """Returns the list of expressions that have currently been
         declared in the program
 
         Returns
         -------
-        List[FEExpression]
+        List[fe.Expression]
             see description
 
         Example
@@ -106,24 +101,24 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         return cp
 
     def _declare_implication(
-        self, consequent: FEExpression, antecedent: FEExpression
-    ) -> FEExpression:
+        self, consequent: fe.Expression, antecedent: fe.Expression
+    ) -> fe.Expression:
         """Creates an implication of the consequent by the antecedent
         and adds the rule to the current program:
             consequent <- antecedent
 
         Parameters
         ----------
-        consequent : FEExpression
+        consequent : fe.Expression
             see description, will be processed to a logic form before
             creating the implication rule
-        antecedent : FEExpression
+        antecedent : fe.Expression
             see description, will be processed to a logic form before
             creating the implication rule
 
         Returns
         -------
-        FEExpression
+        fe.Expression
             see description
 
         Example
@@ -174,12 +169,12 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
     def query(
         self, *args
-    ) -> Union[bool, RelationalAlgebraFrozenSet, FESymbol]:
+    ) -> Union[bool, RelationalAlgebraFrozenSet, fe.Symbol]:
         """Performs an inferential query on the database.
         There are three modalities
         1. If there is only one argument, the query returns `True` or `False`
         depending on wether the query could be inferred.
-        2. If there are two arguments and the first is a tuple of `FESymbol`,
+        2. If there are two arguments and the first is a tuple of `fe.Symbol`,
         it returns the set of results meeting the query in the second argument.
         3. If the first argument is a predicate (e.g. `Q(x)`) it performs the
         query, adds it to the engine memory, and returns the
@@ -188,7 +183,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
         Returns
         -------
-        Union[bool, RelationalAlgebraFrozenSet, FESymbol]
+        Union[bool, RelationalAlgebraFrozenSet, fe.Symbol]
             read the descrpition.
 
         Example
@@ -225,7 +220,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         if not isinstance(head, tuple):
             out_symbol = ir.Symbol[solution_set.type](functor_orig.name)
             self.add_tuple_set(solution_set.value, name=functor_orig.name)
-            return FESymbol(self, out_symbol.name)
+            return fe.Symbol(self, out_symbol.name)
         elif len(head) == 0:
             return len(solution_set.value) > 0
         else:
@@ -233,9 +228,9 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
     def _execute_query(
         self,
-        head: Union[FESymbol, Tuple[FEExpression, ...]],
-        predicate: FEExpression,
-    ) -> Tuple[AbstractSet, Optional[FESymbol]]:
+        head: Union[fe.Symbol, Tuple[fe.Expression, ...]],
+        predicate: fe.Expression,
+    ) -> Tuple[AbstractSet, Optional[fe.Symbol]]:
         """Performs an inferential query. Will return as first output
         an AbstractSet with as many elements as solutions of the
         predicate query. The AbstractSet's columns correspond to
@@ -245,14 +240,14 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
         Parameters
         ----------
-        head : Union[FESymbol, Tuple[FEExpression, ...]]
+        head : Union[fe.Symbol, Tuple[fe.Expression, ...]]
             see description
-        predicate : FEExpression
+        predicate : fe.Expression
             see description
 
         Returns
         -------
-        Tuple[AbstractSet, Optional[FESymbol]]
+        Tuple[AbstractSet, Optional[fe.Symbol]]
             see description
 
         Examples
@@ -300,7 +295,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         """
         functor_orig = None
         self.program_ir.symbol_table = self.symbol_table.create_scope()
-        if isinstance(head, FEOperation):
+        if isinstance(head, fe.Operation):
             functor_orig = head.expression.functor
             new_head = self.new_symbol()(*head.arguments)
             functor = new_head.expression.functor
@@ -366,8 +361,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
     def add_tuple_set(
         self, iterable: Iterable, type_: Type = Unknown, name: str = None
-    ) -> FESymbol:
-        """Creates an AbstractSet FESymbol containing the elements specified in the
+    ) -> fe.Symbol:
+        """Creates an AbstractSet fe.Symbol containing the elements specified in the
         iterable with a List[Tuple[Any, ...]] format (see examples).
         Typically used to crate extensional facts from existing databases
 
@@ -384,7 +379,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
         Returns
         -------
-        FESymbol
+        fe.Symbol
             see description
 
         Examples
@@ -411,16 +406,16 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             symbol, iterable, type_=type_
         )
 
-        return FESymbol(self, name)
+        return fe.Symbol(self, name)
 
     def predicate_parameter_names(
-        self, predicate_name: Union[str, FESymbol, FEExpression]
+        self, predicate_name: Union[str, fe.Symbol, fe.Expression]
     ) -> Tuple[str]:
         """Get the names of the parameters for the given predicate
 
         Parameters
         ----------
-        predicate_name : Union[str, FESymbol, FEExpression]
+        predicate_name : Union[str, fe.Symbol, fe.Expression]
             predicate to obtain the names from
 
         Returns
@@ -451,9 +446,9 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         return param_name
 
     def _get_predicate_name(self, predicate_name):
-        if isinstance(predicate_name, FESymbol):
+        if isinstance(predicate_name, fe.Symbol):
             predicate_name = predicate_name.neurolang_symbol
-        elif isinstance(predicate_name, FEExpression) and isinstance(
+        elif isinstance(predicate_name, fe.Expression) and isinstance(
             predicate_name.expression, ir.Symbol
         ):
             predicate_name = predicate_name.expression

@@ -10,7 +10,7 @@ an AST to convert it to some other representation
 import logging
 from typing import Any, List, Union
 
-from ..expressions import Expression as IRExpression
+from .. import expressions as ir
 
 
 class ASTNode(dict):
@@ -35,7 +35,7 @@ class ASTWalker(object):
 
     def evaluate(
         self, ast: Union[ASTNode, List[ASTNode], Any]
-    ) -> Union[IRExpression, List[IRExpression], Any]:
+    ) -> Union[ir.Expression, List[ir.Expression], Any]:
         """Converts input to intermediate representation:
         - if input is an ASTNode, calls -if it exists- the class method
         corresponding to the node type (methods are declared
@@ -51,7 +51,7 @@ class ASTWalker(object):
 
         Returns
         -------
-        Union[IRExpression, List[IRExpression], Any]
+        Union[ir.Expression, List[ir.Expression], Any]
             intermediate representation of input
         """
         if isinstance(ast, ASTNode):
