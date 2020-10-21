@@ -26,18 +26,22 @@ from ..expression_walker import (
     PatternMatcher,
     add_match,
 )
-from ..expressions import Constant as IRConstant
-from ..expressions import Expression as IRExpression
-from ..expressions import ExpressionBlock as IRExpressionBlock
-from ..expressions import FunctionApplication as IRFunctionApplication
-from ..expressions import Lambda as IRLambda
-from ..expressions import NeuroLangTypeException as IRNeuroLangTypeException
-from ..expressions import Projection as IRProjection
-from ..expressions import Query as IRQuery
-from ..expressions import Statement as IRStatement
-from ..expressions import Symbol as IRSymbol
-from ..expressions import Unknown as IRUnknown
-from ..expressions import infer_type, is_leq_informative, unify_types
+from ..expressions import (
+    Constant as IRConstant,
+    Expression as IRExpression,
+    ExpressionBlock as IRExpressionBlock,
+    FunctionApplication as IRFunctionApplication,
+    Lambda as IRLambda,
+    NeuroLangTypeException as IRNeuroLangTypeException,
+    Projection as IRProjection,
+    Query as IRQuery,
+    Statement as IRStatement,
+    Symbol as IRSymbol,
+    Unknown as IRUnknown,
+    infer_type,
+    is_leq_informative,
+    unify_types,
+)
 from ..logic import ExistentialPredicate
 from .ast import ASTWalker
 from .ast_tatsu import TatsuASTConverter

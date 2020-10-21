@@ -41,19 +41,19 @@ class LoadParcellationMixin:
                 voxel_coordinates, parc_im.affine, parc_im.shape
             )
 
-            c = nl.Constant[self.solver.type](region)
-            s = nl.Symbol[self.solver.type](region_name)
-            self.solver.symbol_table[s] = c
+            c = nl.Constant[self.program_ir.type](region)
+            s = nl.Symbol[self.program_ir.type](region_name)
+            self.program_ir.symbol_table[s] = c
             res.append(s)
 
         return res
 
 
 class NeurolangDL(QueryBuilderDatalog):
-    def __init__(self, solver=None):
-        if solver is None:
-            solver = RegionFrontendDatalogSolver()
-        super().__init__(solver, chase_class=Chase)
+    def __init__(self, program_ir=None):
+        if program_ir is None:
+            program_ir = RegionFrontendDatalogSolver()
+        super().__init__(program_ir, chase_class=Chase)
 
 
 class RegionFrontendDatalogSolver(

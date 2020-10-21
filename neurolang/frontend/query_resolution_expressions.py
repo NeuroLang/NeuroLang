@@ -52,10 +52,10 @@ class Expression(object):
         Example
         -------
         >>> nl = NeurolangDL()
-        >>> from neurolang.expressions import Symbol as BeSymbol
-        >>> BeA = BeSymbol("A")
-        >>> FeA = FeExpression(nl, BeA)
-        >>> FeA
+        >>> from neurolang import expressions as ir
+        >>> irA = ir.Symbol("A")
+        >>> feA = Expression(nl, irA)
+        >>> feA
         A
         """
         self.query_builder = query_builder
@@ -63,7 +63,7 @@ class Expression(object):
 
     @property
     def type(self) -> Type:
-        """Returns backend expression's type"""
+        """Returns expression's type"""
         return self.expression.type
 
     def do(self, name=None):
@@ -114,16 +114,18 @@ class Expression(object):
         value: Union["Expression", Any],
     ) -> None:
         """Sets items using a frontend Tuple[Expression] key
-        and an Expression value.
-        1- If logic programming is enabled, self[key] will be
+        and an Expression value. self[key] will be
         interpreted as self(*key) (see __call__ method)
-        2- ! If logic programming is not enabled by the builder,
+
+        Warning
+        -------
+        If logic programming is not enabled by the builder,
         will set item in the general Python sense !
 
         Parameters
         ----------
         key : Union[Tuple["Expression"], "Expression"]
-            will be interpreted a a *tuple if logic programming
+            will be interpreted a a *tuple
         value : Union["Expression", Any]
             If not a frontend expression, will be cast as
             one with a Constant value
@@ -144,19 +146,21 @@ class Expression(object):
         if self.query_builder.logic_programming:
             if not isinstance(key, tuple):
                 key = (key,)
-            self.query_builder.declare_implication(self(*key), value)
+            self.query_builder._declare_implication(self(*key), value)
         else:
             super().__setitem__(key, value)
 
     def __getitem__(
         self, key: Union[Tuple["Expression"], "Expression"]
     ) -> Union["Expression", Any]:
-        """Gets Expression value.
-        1- If logic programming is enabled, self[key] will be
+        """Gets Expression value. self[key] will be
         interpreted as (see __call__ method):
             a- self(*key) if key is a tuple
             b- self(key) if not
-        2- ! If logic programming is not enabled by the builder,
+
+        Warning
+        -------
+        If logic programming is not enabled by the builder,
         will get item in the general Python sense !
 
         Parameters
@@ -456,7 +460,7 @@ class Symbol(Expression):
         self.symbol_name = symbol_name
         self.query_builder = query_builder
         self._rsbv = ReplaceExpressionsByValues(
-            self.query_builder.solver.symbol_table
+            self.query_builder.program_ir.symbol_table
         )
 
     def __repr__(self) -> str:
@@ -508,8 +512,10 @@ class Symbol(Expression):
                 raise nl.NeuroLangException(f"element {v} invalid in set")
 
     def __iter_non_logic_programming(self, symbol: ir.Symbol) -> Iterable:
-        all_symbols = self.query_builder.solver.symbol_table.symbols_by_type(
-            symbol.type.__args__[0]
+        all_symbols = (
+            self.query_builder.program_ir.symbol_table.symbols_by_type(
+                symbol.type.__args__[0]
+            )
         )
 
         for s in symbol.value:
@@ -542,7 +548,7 @@ class Symbol(Expression):
     @property
     def symbol(self) -> ir.Symbol:
         """Returns symbol from symbol_table"""
-        return self.query_builder.solver.symbol_table[self.symbol_name]
+        return self.query_builder.program_ir.symbol_table[self.symbol_name]
 
     @property
     def neurolang_symbol(self) -> ir.Symbol:
@@ -568,7 +574,7 @@ class Symbol(Expression):
         ValueError
             if Symbol doesn't have a python value
         """
-        constant = self.query_builder.solver.symbol_table[self.symbol_name]
+        constant = self.query_builder.program_ir.symbol_table[self.symbol_name]
         if isinstance(constant, ir.Constant) and isinstance(
             constant.value, RelationalAlgebraFrozenSet
         ):
@@ -684,7 +690,8 @@ class RightImplication(Expression):
     """Corresponds to the logical implication:
     antecedent → consequent
     or alternatively
-    if antecedent then consequent"""
+    if antecedent then consequent
+    In the logic context, used to denote a constraint"""
 
     def __init__(
         self,
@@ -707,7 +714,7 @@ class RightImplication(Expression):
 class Fact(Expression):
     """A Fact reprsents an information considered
     as True. It can be seen as the Implication:
-    fact ← True"""
+    Even(2) ← True"""
 
     def __init__(
         self,

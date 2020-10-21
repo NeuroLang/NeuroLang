@@ -56,8 +56,6 @@ class ASTWalker(object):
         if isinstance(ast, ASTNode):
             logging.debug("evaluating %s" % ast.name)
             arguments = {k: self.evaluate(v) for k, v in ast.items()}
-            # ? Why do we need to wrap the node into a seemingly
-            # ? equivalent other node ?
             new_node = ASTNode(ast.name, arguments)
             if hasattr(self, new_node.name):
                 logging.debug("\tdeferring to class method %s" % ast.name)
@@ -74,7 +72,7 @@ class ASTWalker(object):
 
     @staticmethod
     def _default(ast: ASTNode) -> ASTNode:
-        """Dummy evaluation result for a node
+        """Identity evaluation for a node
         whose type isn't covered by the class methods.
         Passes node through
 

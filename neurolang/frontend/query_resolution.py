@@ -23,8 +23,11 @@ from ..regions import ExplicitVBR, ImplicitVBR, SphericalVolume
 from ..type_system import Unknown, is_leq_informative
 from ..typed_symbol_table import TypedSymbolTable
 from .neurosynth_utils import NeuroSynthHandler, StudyID, TfIDf
-from .query_resolution_expressions import Expression as FEExpression
-from .query_resolution_expressions import Symbol as FESymbol
+from .query_resolution_expressions import (
+    Expression as FEExpression,
+    Symbol as FESymbol,
+)
+from ..datalog import DatalogProgram
 
 
 class QueryBuilderBase:
@@ -32,24 +35,21 @@ class QueryBuilderBase:
     retrieve them, delete them"""
 
     def __init__(
-        self, solver: Any, logic_programming: bool = False
+        self, program_ir: DatalogProgram, logic_programming: bool = False
     ) -> "QueryBuilderBase":
-        """Creates a QueryBuilderBase instance with specified solver"""
-        # ! What is type of solver ? Should be child class of
-        # ! TypedSymbolTableMixin to have property included_functions
-        # ! so DatalogProgram would for instance be relevant, but this
-        # ! specializes usage to datalog only...
-        self.solver = solver
-        self.set_type = AbstractSet[self.solver.type]
+        """Creates a QueryBuilderBase instance with specified program_ir"""
+        self.program_ir = program_ir
+        self.set_type = AbstractSet[self.program_ir.type]
         self.logic_programming = logic_programming
 
-        for k, v in self.solver.included_functions.items():
+        for k, v in self.program_ir.included_functions.items():
             self.symbol_table[ir.Symbol[v.type](k)] = v
 
         self._symbols_proxy = QuerySymbolsProxy(self)
 
     def get_symbol(self, symbol_name: Union[str, FEExpression]) -> FESymbol:
-        """Retrieves symbol with given name
+        """Retrieves symbol via its name, either providing a
+        FEExpression with the correct name or the name itself
 
         Parameters
         ----------
@@ -69,7 +69,8 @@ class QueryBuilderBase:
 
         Example
         -------
-        >>> nl = QueryBuilderBase(...)
+        >>> p_ir = DatalogProgram()
+        >>> nl = QueryBuilderBase(program_ir=p_ir)
         >>> nl.add_symbol(3, "x")
         >>> nl.get_symbol("x")
         x: <class 'int'> = 3
@@ -83,7 +84,8 @@ class QueryBuilderBase:
     def __getitem__(
         self, symbol_name: Union[FESymbol, str, FEExpression]
     ) -> FESymbol:
-        """Overload for the .get_symbol method
+        """Retrieves symbol via its name, either providing a
+        FEExpression with the correct name or the name itself
 
         Parameters
         ----------
@@ -115,21 +117,21 @@ class QueryBuilderBase:
         return symbol in self.symbol_table
 
     @property
-    def types(self) -> List[Union[FEExpression, Type]]:
+    def types(self) -> List[Type]:
         """Returns a list of the types of the symbols currently
-        in the table, or Unknown if no type is declared for the symbol
+        in the table (type can be Unknown)
 
         Returns
         -------
         List[Union[FEExpression, Type]]
-            List of types or Unknown if symbol has no type
+            List of types or Unknown if symbol has no known type
         """
         return self.symbol_table.types
 
     @property
     def symbol_table(self) -> TypedSymbolTable:
-        """wrapper for the solver's symbol_table"""
-        return self.solver.symbol_table
+        """Projector to the program_ir's symbol_table"""
+        return self.program_ir.symbol_table
 
     @property
     def symbols(self) -> Iterator[str]:
@@ -151,7 +153,8 @@ class QueryBuilderBase:
 
         Example
         -------
-        >>> nl = QueryBuilderBase(...)
+        >>> p_ir = DatalogProgram()
+        >>> nl = QueryBuilderBase(program_ir=p_ir)
         >>> with nl.environment as e:
         ...     e.x = 3
         >>> "x" in nl
@@ -179,7 +182,8 @@ class QueryBuilderBase:
 
         Example
         -------
-        >>> nl = QueryBuilderBase(...)
+        >>> p_ir = DatalogProgram()
+        >>> nl = QueryBuilderBase(program_ir=p_ir)
         >>> with nl.scope as e:
         ...     e.x = 3
         >>> "x" in nl
@@ -187,11 +191,11 @@ class QueryBuilderBase:
         """
         old_dynamic_mode = self._symbols_proxy._dynamic_mode
         self._symbols_proxy._dynamic_mode = True
-        self.solver.push_scope()
+        self.program_ir.push_scope()
         try:
             yield self._symbols_proxy
         finally:
-            self.solver.pop_scope()
+            self.program_ir.pop_scope()
             self._symbols_proxy._dynamic_mode = old_dynamic_mode
 
     def new_symbol(
@@ -234,7 +238,8 @@ class QueryBuilderBase:
 
         Example
         -------
-        >>> nl = QueryBuilderBase(...)
+        >>> p_ir = DatalogProgram()
+        >>> nl = QueryBuilderBase(program_ir=p_ir)
         >>> def f(x: int) -> int:
         ...     return x+2
         >>> nl.add_symbol(f, "f")
@@ -257,7 +262,8 @@ class QueryBuilderBase:
     ) -> FESymbol:
         """Creates a symbol with given value and adds it to the
         current symbol_table.
-        Can typicaly be used to decorate callables.
+        Can typicaly be used to decorate callables, or add an
+        IRConstant to the program.
 
         Parameters
         ----------
@@ -274,7 +280,8 @@ class QueryBuilderBase:
 
         Example
         -------
-        >>> nl = QueryBuilderBase(...)
+        >>> p_ir = DatalogProgram()
+        >>> nl = QueryBuilderBase(program_ir=p_ir)
         >>> @nl.add_symbol
         ... def g(x: int) -> int:
         ...     return x + 2
@@ -326,7 +333,8 @@ class QueryBuilderBase:
 
         Example
         -------
-        >>> nl = pfe.ProbabilisticFrontend()
+        >>> p_ir = DatalogProgram()
+        >>> nl = QueryBuilderBase(program_ir=p_ir)
         >>> nl.add_symbol(3, "x")
         x: <class 'int'> = 3
         >>> nl.get_symbol("x")
@@ -365,7 +373,8 @@ class QueryBuilderBase:
 
         Examples
         --------
-        >>> nl = pfe.ProbabilisticFrontend()
+        >>> p_ir = DatalogProgram()
+        >>> nl = QueryBuilderBase(program_ir=p_ir)
         >>> nl.add_tuple_set([(1, 2), (3, 4)], name="l1")
         l1: typing.AbstractSet[typing.Tuple[int, int]] = \
             [(1, 2), (3, 4)]
@@ -406,7 +415,7 @@ class QueryBuilderBase:
                 s = e.neurolang_symbol
             new_set.append(s)
 
-        return ir.Constant[set_type](self.solver.new_set(new_set))
+        return ir.Constant[set_type](self.program_ir.new_set(new_set))
 
     @staticmethod
     def _create_symbol_and_get_constant(element, element_type):
@@ -423,6 +432,11 @@ class QueryBuilderBase:
 
 
 class RegionMixin:
+    """Mixin complementing a QueryBuilderBase
+    with methods specific to the manipulation
+    of brain volumes: regions, atlases, etc...
+    """
+
     @property
     def region_names(self) -> List[str]:
         """Returns the list of symbol names with Region type
@@ -471,7 +485,7 @@ class RegionMixin:
         Parameters
         ----------
         region : FEExpression
-            should be of the solver's type
+            should be of the program_ir's type
         name : Optional[str], optional
             symbol's name, if None will be fresh, by default None
 
@@ -483,12 +497,12 @@ class RegionMixin:
         Raises
         ------
         ValueError
-            if region is not of solver's type
+            if region is not of program_ir's type
         """
-        if not isinstance(region, self.solver.type):
+        if not isinstance(region, self.program_ir.type):
             raise ValueError(
-                f"type mismatch between region and solver type:"
-                f" {self.solver.type}"
+                f"type mismatch between region and program_ir type:"
+                f" {self.program_ir.type}"
             )
 
         return self.add_symbol(region, name)
@@ -640,6 +654,13 @@ class RegionMixin:
 
 
 class NeuroSynthMixin:
+    """Neurosynth is a platform for large-scale, automated synthesis
+    of functional magnetic resonance imaging (fMRI) data.
+    see https://neurosynth.org/
+    This Mixin complements a QueryBuilderBase with methods
+    related to meta-analysis data loading.
+    """
+
     def load_neurosynth_term_study_ids(
         self,
         term: str,

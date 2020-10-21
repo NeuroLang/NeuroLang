@@ -1,4 +1,5 @@
 import collections
+import typing
 from typing import (
     AbstractSet,
     Any,
@@ -9,7 +10,6 @@ from typing import (
     Tuple,
     Type,
 )
-from typing import Union as typingUnion
 from uuid import uuid1
 
 from ..datalog.aggregation import (
@@ -22,9 +22,11 @@ from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
 from ..exceptions import UnsupportedQueryError
 from ..expression_walker import ExpressionBasicEvaluator
-from ..expressions import Constant as IRConstant
-from ..expressions import Symbol as IRSymbol
-from ..expressions import Unknown as IRUnknown
+from ..expressions import (
+    Constant as IRConstant,
+    Symbol as IRSymbol,
+    Unknown as IRUnknown,
+)
 from ..logic import Union
 from ..probabilistic.cplogic.program import (
     CPLogicMixin,
@@ -73,26 +75,26 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
 
     def load_ontology(
         self,
-        paths: typingUnion[str, List[str]],
-        load_format: typingUnion[str, List[str]] = "xml",
+        paths: typing.Union[str, List[str]],
+        load_format: typing.Union[str, List[str]] = "xml",
     ) -> None:
         """Loads and parses ontology stored at the specified paths, and
         store them into attributes
 
         Parameters
         ----------
-        paths : typingUnion[str, List[str]]
+        paths : typing.Union[str, List[str]]
             where the ontology files are stored
-        load_format : typingUnion[str, List[str]], optional
+        load_format : typing.Union[str, List[str]], optional
             storage format, by default "xml"
         """
         onto = OntologyParser(paths, load_format)
         d_pred, u_constraints = onto.parse_ontology()
-        self.solver.walk(u_constraints)
-        self.solver.add_extensional_predicate_from_tuples(
+        self.program_ir.walk(u_constraints)
+        self.program_ir.add_extensional_predicate_from_tuples(
             onto.get_triples_symbol(), d_pred[onto.get_triples_symbol()]
         )
-        self.solver.add_extensional_predicate_from_tuples(
+        self.program_ir.add_extensional_predicate_from_tuples(
             onto.get_pointers_symbol(), d_pred[onto.get_pointers_symbol()]
         )
 
@@ -126,14 +128,14 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         ]
         """
         cp = []
-        for constraint in self.solver.constraints().formulas:
+        for constraint in self.program_ir.constraints().formulas:
             cp.append(self.frontend_translator.walk(constraint))
         cp += super().current_program
         return cp
 
     def _execute_query(
         self,
-        head: typingUnion[
+        head: typing.Union[
             IRSymbol[Tuple[FEExpression, ...]],
             Tuple[FEExpression, ...],
         ],
@@ -149,7 +151,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
 
         Parameters
         ----------
-        head : typingUnion[
+        head : typing.Union[
             IRSymbol[Tuple[FEExpression, ...]],
             Tuple[FEExpression, ...],
         ]
@@ -165,7 +167,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         Examples
         --------
         Note: example ran with pandas backend
-        >>> nl = ProbabilisticFrontend(...)
+        >>> nl = ProbabilisticFrontend()
         >>> P = nl.add_uniform_probabilistic_choice_over_set(
         ...     [("a",), ("b",), ("c",)], name="P"
         ... )
@@ -209,11 +211,11 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         )
         """
         query_pred_symb = predicate.expression.functor
-        if is_probabilistic_predicate_symbol(query_pred_symb, self.solver):
+        if is_probabilistic_predicate_symbol(query_pred_symb, self.program_ir):
             raise UnsupportedQueryError(
                 "Queries on probabilistic predicates are not supported"
             )
-        query = self.solver.symbol_table[query_pred_symb].formulas[0]
+        query = self.program_ir.symbol_table[query_pred_symb].formulas[0]
         solution = self._solve(query)
         if not isinstance(head, tuple):
             # assumes head is a predicate e.g. r(x, y)
@@ -229,7 +231,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
 
     def solve_all(
         self,
-    ) -> Dict[FESymbol, NamedRelationalAlgebraFrozenSet]:
+    ) -> Dict[str, NamedRelationalAlgebraFrozenSet]:
         """
         Returns a dictionary of "predicate_name": "Content"
         for all elements in the solution of the datalog program.
@@ -237,7 +239,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
 
         Returns
         -------
-        Dict
+        Dict[str, NamedRelationalAlgebraFrozenSet]
             extensional and intentional facts that have been derived
             through the current program, optionally with probabilities
 
@@ -273,7 +275,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         return solution_sets
 
     def _solve(self, query=None):
-        idbs = stratify_program(query, self.solver)
+        idbs = stratify_program(query, self.program_ir)
         det_idb = idbs.get("deterministic", Union(tuple()))
         prob_idb = idbs.get("probabilistic", Union(tuple()))
         postprob_idb = idbs.get("post_probabilistic", Union(tuple()))
@@ -290,13 +292,13 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         if self.ontology_loaded:
             eB = self._rewrite_program_with_ontology(det_idb)
             det_idb = Union(det_idb.formulas + eB.formulas)
-        chase = self.chase_class(self.solver, rules=det_idb)
+        chase = self.chase_class(self.program_ir, rules=det_idb)
         solution = chase.build_chase_solution()
         return solution
 
     def _solve_probabilistic_stratum(self, solution, prob_idb):
-        pfact_edb = self.solver.probabilistic_facts()
-        pchoice_edb = self.solver.probabilistic_choices()
+        pfact_edb = self.program_ir.probabilistic_facts()
+        pchoice_edb = self.program_ir.probabilistic_choices()
         prob_solution = compute_probabilistic_solution(
             solution,
             pfact_edb,
@@ -327,8 +329,8 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
                 psymb,
                 relation.value,
             )
-        for builtin_symb in self.solver.builtins():
-            solver.symbol_table[builtin_symb] = self.solver.symbol_table[
+        for builtin_symb in self.program_ir.builtins():
+            solver.symbol_table[builtin_symb] = self.program_ir.symbol_table[
                 builtin_symb
             ]
         solver.walk(postprob_idb)
@@ -363,7 +365,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
 
     def _rewrite_program_with_ontology(self, deterministic_program):
         orw = OntologyRewriter(
-            deterministic_program, self.solver.constraints()
+            deterministic_program, self.program_ir.constraints()
         )
         rewrite = orw.Xrewrite()
 
@@ -410,6 +412,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
 
         Example
         -------
+        >>> nl = ProbabilisticFrontend()
         >>> p = [(0.8, 'a', 'b'), (0.7, 'b', 'c')]
         >>> nl.add_probabilistic_facts_from_tuples(p, name="P")
         P: typing.AbstractSet[typing.Tuple[float, str]] = \
@@ -423,7 +426,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             iterable,
             type_,
             name,
-            self.solver.add_probabilistic_facts_from_tuples,
+            self.program_ir.add_probabilistic_facts_from_tuples,
         )
 
     def add_probabilistic_choice_from_tuples(
@@ -470,6 +473,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
 
         Example
         -------
+        >>> nl = ProbabilisticFrontend()
         >>> p = [(0.8, 'a', 'b'), (0.2, 'b', 'c')]
         >>> nl.add_probabilistic_choice_from_tuples(p, name="P")
         P: typing.AbstractSet[typing.Tuple[float, str, str]] = \
@@ -482,7 +486,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             iterable,
             type_,
             name,
-            self.solver.add_probabilistic_choice_from_tuples,
+            self.program_ir.add_probabilistic_choice_from_tuples,
         )
 
     def _add_probabilistic_tuples(
@@ -529,6 +533,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
 
         Example
         -------
+        >>> nl = ProbabilisticFrontend()
         >>> p = [('a',), ('b',)]
         >>> nl.add_uniform_probabilistic_choice_over_set(p, name="P")
         P: typing.AbstractSet[typing.Tuple[float, str]] = \
@@ -552,5 +557,5 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         for col in columns:
             projections[col] = RelationalAlgebraStringExpression(col)
         ra_set = ra_set.extended_projection(projections)
-        self.solver.add_probabilistic_choice_from_tuples(symbol, ra_set)
+        self.program_ir.add_probabilistic_choice_from_tuples(symbol, ra_set)
         return FESymbol(self, name)

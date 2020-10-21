@@ -8,6 +8,7 @@ from typing import (
     Tuple,
     Type,
     Union,
+    Classvar,
 )
 from uuid import uuid1
 
@@ -23,19 +24,24 @@ from ..utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
 from .datalog import parser as datalog_parser
 from .datalog.natural_syntax_datalog import parser as nat_datalog_parser
 from .query_resolution import NeuroSynthMixin, QueryBuilderBase, RegionMixin
-from .query_resolution_expressions import Expression as FEExpression
-from .query_resolution_expressions import Operation as FEOperation
-from .query_resolution_expressions import Symbol as FESymbol
 from .query_resolution_expressions import (
+    Expression as FEExpression,
+    Operation as FEOperation,
+    Symbol as FESymbol,
     TranslateExpressionToFrontEndExpression,
 )
+from ..datalog import DatalogProgram
 
 __all__ = ["QueryBuilderDatalog"]
 
 
 class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
-    def __init__(self, solver, chase_class=aggregation.Chase):
-        super().__init__(solver, logic_programming=True)
+    def __init__(
+        self,
+        program_ir: DatalogProgram,
+        chase_class: Classvar = aggregation.Chase,
+    ):
+        super().__init__(program_ir, logic_programming=True)
         self.chase_class = chase_class
         self.frontend_translator = TranslateExpressionToFrontEndExpression(
             self
@@ -56,7 +62,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
         Example
         -------
-        >>> nl = QueryBuilderDatalog(...)
+        >>> p_ir = DatalogProgram()
+        >>> nl = QueryBuilderDatalog(program_ir=p_ir)
         >>> nl.add_tuple_set([(1, 2), (2, 2)], name="l")
         l: typing.AbstractSet[typing.Tuple[int, int]] = [(1, 2), (2, 2)]
         >>> with nl.scope as e:
@@ -68,12 +75,12 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         ]
         """
         cp = []
-        for rules in self.solver.intensional_database().values():
+        for rules in self.program_ir.intensional_database().values():
             for rule in rules.formulas:
                 cp.append(self.frontend_translator.walk(rule))
         return cp
 
-    def declare_implication(
+    def _declare_implication(
         self, consequent: FEExpression, antecedent: FEExpression
     ) -> FEExpression:
         """Creates an implication of the consequent by the antecedent
@@ -96,11 +103,12 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
         Example
         -------
-        >>> nl = QueryBuilderDatalog(...)
+        >>> p_ir = DatalogProgram()
+        >>> nl = QueryBuilderDatalog(program_ir=p_ir)
         >>> nl.add_tuple_set([(1, 2), (2, 2)], name="l")
         l: typing.AbstractSet[typing.Tuple[int, int]] = [(1, 2), (2, 2)]
         >>> with nl.scope as e:
-        ...     nl.declare_implication(e.l2[e.x], e.l2[e.x, e.y])
+        ...     nl._declare_implication(e.l2[e.x], e.l2[e.x, e.y])
         ...     cp = nl.current_program
         >>> cp
         [
@@ -114,7 +122,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             antecedent.expression
         )
         rule = datalog.Implication(consequent, antecedent)
-        self.solver.walk(rule)
+        self.program_ir.walk(rule)
         return rule
 
     def execute_datalog_program(self, code: str) -> None:
@@ -125,8 +133,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         code : string
             datalog program.
         """
-        ir = self.datalog_parser(code)
-        self.solver.walk(ir)
+        intermediate_representation = self.datalog_parser(code)
+        self.program_ir.walk(intermediate_representation)
 
     def execute_nat_datalog_program(self, code: str) -> None:
         """Execute a natural language datalog program in classical syntax
@@ -136,8 +144,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         code : string
             datalog program.
         """
-        ir = self.nat_datalog_parser(code)
-        self.solver.walk(ir)
+        intermediate_representation = self.nat_datalog_parser(code)
+        self.program_ir.walk(intermediate_representation)
 
     def query(
         self, *args
@@ -148,10 +156,10 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         depending on wether the query could be inferred.
         2. If there are two arguments and the first is a tuple of `FESymbol`, it
         returns the set of results meeting the query in the second argument.
-        # ! How to write this third modality ?
         3. If the first argument is a predicate (e.g. `Q(x)`) it performs the
         query adds it to the engine memory and returns the
         corresponding symbol.
+        See example for 3 modalities
 
         Returns
         -------
@@ -161,18 +169,22 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         Example
         -------
         Note: example ran with pandas backend
-        >>> nl = QueryBuilderDatalog(...)
+        >>> p_ir = DatalogProgram()
+        >>> nl = QueryBuilderDatalog(program_ir=p_ir)
         >>> nl.add_tuple_set([(1, 2), (2, 2)], name="l")
         l: typing.AbstractSet[typing.Tuple[int, int]] = [(1, 2), (2, 2)]
-        >>> with nl.scope as e:
+        >>> with nl.environment as e:
         ...     e.l2[e.x, e.y] = e.l[e.x, e.y] & (e.x == e.y)
         ...     s1 = nl.query(e.l2[e.x, e.y])
         ...     s2 = nl.query((e.x,), e.l2[e.x, e.y])
+        ...     s3 = nl.query(e.l3[e.x], e.l2[e.x, e.y])
         >>> s1
         True
         >>> s2
             x
         0   2
+        >>> s3
+        l3: typing.AbstractSet[typing.Tuple[int]] = [(2,)]
         """
 
         if len(args) == 1:
@@ -199,9 +211,9 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         head: Union[FESymbol, Tuple[FEExpression, ...]],
         predicate: FEExpression,
     ) -> Tuple[AbstractSet, Optional[FESymbol]]:
-        """Performs an inferential query: will return as first output
-        an abstract set with as many elements as solutions
-        of the predicate query,and columns corresponding to
+        """Performs an inferential query. Will return as first output
+        an AbstractSet with as many elements as solutions
+        of the predicate query. The AbstractSet's columns correspond to
         the expressions in the head.
         If head expressions are arguments of a functor, the latter will
         be returned as the second output, defaulted as None
@@ -221,7 +233,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         Examples
         --------
         Note: example ran with pandas backend
-        >>> nl = QueryBuilderDatalog(...)
+        >>> p_ir = DatalogProgram()
+        >>> nl = QueryBuilderDatalog(program_ir=p_ir)
         >>> nl.add_tuple_set([(1, 2), (2, 2)], name="l")
         l: typing.AbstractSet[typing.Tuple[int, int]] = [(1, 2), (2, 2)]
         >>> with nl.scope as e:
@@ -261,7 +274,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         )
         """
         functor_orig = None
-        self.solver.symbol_table = self.symbol_table.create_scope()
+        self.program_ir.symbol_table = self.symbol_table.create_scope()
         if isinstance(head, FEOperation):
             functor_orig = head.expression.functor
             new_head = self.new_symbol()(*head.arguments)
@@ -269,32 +282,33 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         elif isinstance(head, tuple):
             new_head = self.new_symbol()(*head)
             functor = new_head.expression.functor
-        query_expression = self.declare_implication(new_head, predicate)
+        query_expression = self._declare_implication(new_head, predicate)
 
-        reachable_rules = reachable_code(query_expression, self.solver)
+        reachable_rules = reachable_code(query_expression, self.program_ir)
         solution = self.chase_class(
-            self.solver, rules=reachable_rules
+            self.program_ir, rules=reachable_rules
         ).build_chase_solution()
 
         solution_set = solution.get(functor.name, ir.Constant(set()))
-        self.solver.symbol_table = self.symbol_table.enclosing_scope
+        self.program_ir.symbol_table = self.symbol_table.enclosing_scope
         return solution_set, functor_orig
 
-    def solve_all(self) -> Dict:
+    def solve_all(self) -> Dict[str, NamedRelationalAlgebraFrozenSet]:
         """
         Returns a dictionary of "predicate_name": "Content"
         for all elements in the solution of the datalog program.
 
         Returns
         -------
-        Dict
+        Dict[str, NamedRelationalAlgebraFrozenSet]
             extensional and intentional facts that have been derived
             through the current program
 
         Example
         -------
         Note: example ran with pandas backend
-        >>> nl = QueryBuilderDatalog(...)
+        >>> p_ir = DatalogProgram()
+        >>> nl = QueryBuilderDatalog(program_ir=p_ir)
         >>> nl.add_tuple_set([(1, 2), (2, 2)], name="l")
         l: typing.AbstractSet[typing.Tuple[int, int]] = [(1, 2), (2, 2)]
         >>> with nl.scope as e:
@@ -311,7 +325,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             0   2
         }
         """
-        solution_ir = self.chase_class(self.solver).build_chase_solution()
+        solution_ir = self.chase_class(self.program_ir).build_chase_solution()
 
         solution = {}
         for k, v in solution_ir.items():
@@ -350,7 +364,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
         Examples
         --------
-        >>> nl = pfe.ProbabilisticFrontend()
+        >>> p_ir = DatalogProgram()
+        >>> nl = QueryBuilderDatalog(program_ir=p_ir)
         >>> nl.add_tuple_set([(1, 2), (3, 4)], name="l1")
         l1: typing.AbstractSet[typing.Tuple[int, int]] = \
             [(1, 2), (3, 4)]
@@ -367,7 +382,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         if isinstance(type_, tuple):
             type_ = Tuple[type_]
         symbol = ir.Symbol[AbstractSet[type_]](name)
-        self.solver.add_extensional_predicate_from_tuples(
+        self.program_ir.add_extensional_predicate_from_tuples(
             symbol, iterable, type_=type_
         )
 
@@ -389,7 +404,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         predicate_name = self._get_predicate_name(predicate_name)
         parameter_names = []
         pcount = defaultdict(lambda: 0)
-        for s in self.solver.predicate_terms(predicate_name):
+        for s in self.program_ir.predicate_terms(predicate_name):
             param_name = self._obtain_parameter_name(s)
             pcount[param_name] += 1
             if pcount[param_name] > 1:
