@@ -93,7 +93,19 @@ import xml.etree.ElementTree as ET
 import json
 
 #path_julich = '/Users/gzanitti/Projects/INRIA/neurolang_data/Julich-Brain/julich_brain.hdf'
-path_julich = '/Users/gzanitti/Projects/INRIA/neurolang_data/Julich-Brain/julich_brain_resampled.hdf'
+#path_julich = '/Users/gzanitti/Projects/INRIA/neurolang_data/Julich-Brain/julich_brain_resampled.hdf'
+path_julich = datasets.utils._fetch_files(
+    datasets.utils._get_dataset_dir('julich_brain'),
+    [
+        (
+            'jubrain_ontology.xml',
+            https://github.com/NeuroLang/neurolang_data/blob/main/Julich-Brain/julich_brain_resampled.hdf
+            'https://github.com/NeuroLang/neurolang_data/raw/main/Julich-Brain/julich_brain_resampled.hdf',
+            {'move': 'jubrain_ontology.xml'}
+        )
+    ]
+)[0]
+
 df_julich = pd.read_hdf(path_julich, key='data')
 
 
@@ -236,65 +248,143 @@ areas = df_julich.Area.unique()
 df_julich = df_julich[['Area', 'Hemis', 'ref', 'i', 'j', 'k']]
 
 ""
+df_julich.head()
+
+""
 for area in areas:
     if area == 'Area PFcm (IPL)':
         continue
     
-    df_temp = df_julich[df_julich.Area == area]
+    df_area = df_julich[df_julich.Area == area]
     
+    result = pd.DataFrame()
+    for hemi in ['l', 'r']:
+        df_temp = df_area[df_area.Hemis == hemi]
+        
+        print(len(df_temp), hemi)
     
-    julich_image = nl.add_tuple_set(
-        df_temp.values,
-        name='julich_image'
+        julich_image = nl.add_tuple_set(
+            df_temp.values,
+            name='julich_image'
+        )
+
+        #julich_image = nl.add_probabilistic_facts_from_tuples(
+        #    df_temp.itertuples(
+        #        name=None, index=False
+        #    ),
+        #    name='julich_image'
+        #)
+
+        with nl.scope as e:
+
+            e.ontology_terms[e.onto_name] = (
+                hasTopConcept[e.uri, e.cp] &
+                label[e.uri, e.onto_name]
+            )
+
+            e.filtered_terms[e.lower_name] = (
+                e.ontology_terms[e.term] &
+                (e.lower_name == word_lower[e.term])
+            )
+
+            e.filtered_regions[e.d, e.i, e.j, e.k] = (
+                e.julich_image[..., ..., 'MNI', e.i, e.j, e.k] &
+                e.activations[
+                    e.d, ..., ..., ..., ..., 'MNI', ..., ..., ..., ...,
+                    ..., ..., ..., e.i, e.j, e.k
+                ]
+            )
+
+            e.term_prob[e.t, e.PROB[e.t]] = (
+                e.filtered_regions[e.d, e.i, e.j, e.k]
+                & e.terms[e.d, e.t]
+                & e.docs[e.d]
+            )
+
+            e.result[e.term, e.PROB] = (
+                e.filtered_terms[e.term] &
+                e.term_prob[e.term, e.PROB]
+            )
+
+
+            res = nl.solve_all()
+            c = res['result'].as_pandas_dataframe()
+            c['Hemis'] = hemi
+            result = pd.concat((result, c))
+        
+    result.to_hdf('julich_filtered_results.hdf', key=area)
+
+""
+#df_hip = df_julich[df_julich.Area.str.contains('Hippocampus')]
+#df_ipl = df_julich[df_julich.Area.str.contains('IPL')]
+
+#df_ipl = df_ipl[df_ipl.Hemis == 'l']
+#df_hip = df_hip[df_hip.Hemis == 'r']
+ 
+#df_temp = pd.concat((df_ipl, df_hip))
+
+""
+@nl.add_symbol
+def name_contains(name: str, word: str) -> bool:
+    return word in name
+
+
+""
+julich_image = nl.add_tuple_set(
+    df_julich.values,
+    name='julich_image'
+)
+
+
+with nl.scope as e:
+
+    e.ontology_terms[e.onto_name] = (
+        hasTopConcept[e.uri, e.cp] &
+        label[e.uri, e.onto_name]
+    )
+
+    e.filtered_terms[e.lower_name] = (
+        e.ontology_terms[e.term] &
+        (e.lower_name == word_lower[e.term])
+    )
+
+    e.filtered_regions[e.d, e.i, e.j, e.k] = (
+        e.julich_image[e.area, 'r', 'MNI', e.i, e.j, e.k] &
+        e.activations[
+            e.d, ..., ..., ..., ..., 'MNI', ..., ..., ..., ...,
+            ..., ..., ..., e.i, e.j, e.k
+        ] &
+        name_contains(e.area, 'Hippocampus')
     )
     
-    #julich_image = nl.add_probabilistic_facts_from_tuples(
-    #    df_temp.itertuples(
-    #        name=None, index=False
-    #    ),
-    #    name='julich_image'
-    #)
-    
-    with nl.scope as e:
-    
-        e.ontology_terms[e.onto_name] = (
-            hasTopConcept[e.uri, e.cp] &
-            label[e.uri, e.onto_name]
-        )
+    e.filtered_regions[e.d, e.i, e.j, e.k] = (
+        e.julich_image[e.area, 'l', 'MNI', e.i, e.j, e.k] &
+        e.activations[
+            e.d, ..., ..., ..., ..., 'MNI', ..., ..., ..., ...,
+            ..., ..., ..., e.i, e.j, e.k
+        ] &
+        name_contains(e.area, 'IPL')
+    )
 
-        e.filtered_terms[e.lower_name] = (
-            e.ontology_terms[e.term] &
-            (e.lower_name == word_lower[e.term])
-        )
-        
-        e.filtered_regions[e.d, e.i, e.j, e.k] = (
-            e.julich_image[..., ..., 'MNI', e.i, e.j, e.k] &
-            e.activations[
-                e.d, ..., ..., ..., ..., 'MNI', ..., ..., ..., ...,
-                ..., ..., ..., e.i, e.j, e.k
-            ]
-        )
+    e.term_prob[e.t, e.PROB[e.t]] = (
+        e.filtered_regions[e.d, e.i, e.j, e.k]
+        & e.terms[e.d, e.t]
+        & e.docs[e.d]
+    )
 
-        e.term_prob[e.t, e.PROB[e.t]] = (
-            #e.julich_image[..., ..., 'MNI', e.i, e.j, e.k] &
-            #e.activations[
-            #    e.d, ..., ..., ..., ..., 'MNI', ..., ..., ..., ...,
-            #    ..., ..., ..., e.i, e.j, e.k
-            #]
-            e.filtered_regions[e.d, e.i, e.j, e.k]
-            & e.terms[e.d, e.t]
-            & e.docs[e.d]
-        )
-        
-        e.result[e.term, e.PROB] = (
-            e.filtered_terms[e.term] &
-            e.term_prob[e.term, e.PROB]
-        )
+    e.result[e.term, e.PROB] = (
+        e.filtered_terms[e.term] &
+        e.term_prob[e.term, e.PROB]
+    )
 
 
-        res = nl.solve_all()
-        c = res['result'].as_pandas_dataframe()
-        c.to_hdf('julich_filtered_results.hdf', key=area)
+    res = nl.solve_all()
+    c = res['result'].as_pandas_dataframe()
+
+c.to_hdf('julich_hip_ipl.hdf', key='data')
+
+""
+c
 
 ""
 
