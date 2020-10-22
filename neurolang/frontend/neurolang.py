@@ -1,8 +1,8 @@
 r"""
-Neurolang datalog grammar definition
+Neurolang Datalog grammar definition
 and translation to intermediate representation
 ==============================================
-1- defines the neurolang datalog syntax
+1- defines the Neurolang Datalog syntax
 2- code written using this grammar can be parsed
 into an Abstract Syntax Tree (AST)
 3- the obtained AST can ba walked through to translate it
@@ -41,7 +41,7 @@ __all__ = [
     "ExistentialPredicate",
 ]
 
-# Extended Backus–Naur Form (EBNF) grammar describing the datalog syntax
+# Extended Backus–Naur Form (EBNF) grammar describing the Datalog syntax
 # used to write programs:
 grammar_EBNF = r"""
     @@whitespace :: /[\s\t\n\r\\ ]/
@@ -118,10 +118,12 @@ grammar_EBNF = r"""
 
 
 class NeuroLangIntermediateRepresentation(ASTWalker):
-    """Abstract Syntax Tree walker class implementing
+    """
+    Abstract Syntax Tree walker class implementing
     translation from an ASTNode to the corresponding
     Neurolang Intermediate Representation Expression
-    (ir.Expression)"""
+    (ir.Expression)
+    """
 
     def __init__(
         self, type_name_map: Optional[Union[Iterable, Mapping]] = None
@@ -451,12 +453,13 @@ class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
 
 
 def parser(code: str, **kwargs):
-    """Parses datalog code into an Abstract Syntax Tree (AST)
+    """
+    Parses Datalog code into an Abstract Syntax Tree (AST)
 
     Parameters
     ----------
     code : str
-        code written in datalog, as described by it's EBNF syntax
+        code written in Datalog, as described by it's EBNF syntax
     **kwargs
         completed and passed to the tatsu parser
 

@@ -50,7 +50,8 @@ class LoadParcellationMixin:
 
 
 class NeurolangDL(QueryBuilderDatalog):
-    """QueryBuilderDatalog with a
+    """
+    QueryBuilderDatalog with a
     RegionFrontendDatalogSolver program intermediate
     representation
     """
@@ -68,7 +69,9 @@ class RegionFrontendDatalogSolver(
     DatalogProgram,
     ExpressionBasicEvaluator,
 ):
-    """DatalogProgram preloaded with Region symbols and
-    complemented with aggregation capabilities"""
+    """
+    DatalogProgram preloaded with Region symbols and
+    complemented with aggregation capabilities
+    """
 
     pass

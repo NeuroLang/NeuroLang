@@ -2,7 +2,7 @@ r"""
 Query Resolution Expression
 ===========================
 Declares FrontEnd Expression class and subclasses.
-Those classes are used to build datalog programs
+Those classes are used to build Datalog programs
 in an ergonomic manner, and attention is paid to their representation
 """
 import operator as op
@@ -34,14 +34,17 @@ from ..utils import RelationalAlgebraFrozenSet
 
 
 class Expression(object):
-    """Generic class representing expressions in the front end
+    """
+    Generic class representing expressions in the front end
     An expression can be anything, from a symbol to an operation
-    to a query"""
+    to a query
+    """
 
     def __init__(
         self, query_builder: "QueryBuilderBase", expression: ir.Expression
     ) -> "Expression":
-        """Returns frontend expression, containing backend expression
+        """
+        Returns frontend expression, containing backend expression
         and associated query_builder as attributes
 
         Parameters
@@ -80,7 +83,8 @@ class Expression(object):
         )
 
     def __call__(self, *args, **kwargs) -> "Operation":
-        """Returns a FunctionApplication expression, applied
+        """
+        Returns a FunctionApplication expression, applied
         to the *args cast as Constant if not Symbol or Expression
         **kwargs are ignored
 
@@ -120,7 +124,8 @@ class Expression(object):
         key: Union[Tuple["Expression"], "Expression"],
         value: Union["Expression", Any],
     ) -> None:
-        """Sets items using a frontend Tuple[Expression] key
+        """
+        Sets items using a frontend Tuple[Expression] key
         and an Expression value. self[key] will be
         interpreted as self(*key) (see __call__ method)
 
@@ -160,7 +165,8 @@ class Expression(object):
     def __getitem__(
         self, key: Union[Tuple["Expression"], "Expression"]
     ) -> Union["Expression", Any]:
-        """Gets Expression value. self[key] will be
+        """
+        Gets Expression value. self[key] will be
         interpreted as (see __call__ method):
             a- self(*key) if key is a tuple
             b- self(key) if not
@@ -199,7 +205,8 @@ class Expression(object):
             super().__getitem__(key)
 
     def __repr__(self) -> str:
-        """Represents expression
+        """
+        Represents expression
 
         Returns
         -------
@@ -368,7 +375,8 @@ for operator in [
 
 
 class Operation(Expression):
-    """An Operation is an Expression representing the
+    """
+    An Operation is an Expression representing the
     application of an operator to a tuple of arguments
 
     Example
@@ -439,7 +447,8 @@ class Operation(Expression):
 
 
 class Symbol(Expression):
-    """A Symbol represents an atomic Expression. Its is
+    """
+    A Symbol represents an atomic Expression. Its is
     the most recurrent element of queries
 
     Example
@@ -569,7 +578,8 @@ class Symbol(Expression):
 
     @property
     def value(self) -> Any:
-        """If any, returns value corresponding to the symbol
+        """
+        If any, returns value corresponding to the symbol
 
         Returns
         -------
@@ -592,18 +602,14 @@ class Symbol(Expression):
             except NeuroLangPatternMatchingNoMatch:
                 raise ValueError("Expression doesn't have a python value")
 
-    @property
-    def parameter_names(self):
-        # ! Doesn't seem to be any trace of this in code base,
-        # ! what does it do ?
-        return self.query_builder.parameter_names(self)
-
 
 class Query(Expression):
-    """A query represents the symbols that verify a given
+    """
+    A query represents the symbols that verify a given
     predicate:
     x | x%2 == 0
-    with x an int represents even numbers"""
+    with x an int represents even numbers
+    """
 
     def __init__(
         self,
@@ -624,9 +630,11 @@ class Query(Expression):
 
 
 class Exists(Expression):
-    """Corresponds to the logical ∃
+    """
+    Corresponds to the logical ∃
     ∃x: x == 1
-    enunciates a truth"""
+    enunciates a truth
+    """
 
     def __init__(
         self,
@@ -647,9 +655,11 @@ class Exists(Expression):
 
 
 class All(Expression):
-    """Corresponds to the logical ∀
+    """
+    Corresponds to the logical ∀
     ∀x: x == x
-    enunciates a truth"""
+    enunciates a truth
+    """
 
     def __init__(
         self,
@@ -670,10 +680,12 @@ class All(Expression):
 
 
 class Implication(Expression):
-    """Corresponds to the logical implication:
+    """
+    Corresponds to the logical implication:
     consequent ← antecedent
     or alternatively
-    consequent if antecedent"""
+    consequent if antecedent
+    """
 
     def __init__(
         self,
@@ -694,11 +706,13 @@ class Implication(Expression):
 
 
 class RightImplication(Expression):
-    """Corresponds to the logical implication:
+    """
+    Corresponds to the logical implication:
     antecedent → consequent
     or alternatively
     if antecedent then consequent
-    In the logic context, used to denote a constraint"""
+    In the logic context, used to denote a constraint
+    """
 
     def __init__(
         self,
@@ -719,9 +733,11 @@ class RightImplication(Expression):
 
 
 class Fact(Expression):
-    """A Fact reprsents an information considered
+    """
+    A Fact reprsents an information considered
     as True. It can be seen as the Implication:
-    fact ← True, e.g. Even(2) ← True"""
+    fact ← True, e.g. Even(2) ← True
+    """
 
     def __init__(
         self,
@@ -740,8 +756,10 @@ class Fact(Expression):
 
 
 class TranslateExpressionToFrontEndExpression(ExpressionWalker):
-    """Walks through a backend Expression to translate it to a
-    frontend Expression"""
+    """
+    Walks through a backend Expression to translate it to a
+    frontend Expression
+    """
 
     def __init__(
         self, query_builder: "QueryBuilderBase"

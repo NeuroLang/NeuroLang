@@ -14,8 +14,10 @@ from .. import expressions as ir
 
 
 class ASTNode(dict):
-    """Class representing a Node in an
-    Abstract Syntax Tree"""
+    """
+    Class representing a Node in an
+    Abstract Syntax Tree
+    """
 
     def __init__(self, name, children):
         self.name = name
@@ -29,14 +31,17 @@ class ASTNode(dict):
 
 
 class ASTWalker(object):
-    """Base class for Abstract Syntax Tree walkers.
+    """
+    Base class for Abstract Syntax Tree walkers.
     Walke through an AST translating nodes to
-    the corresponding Neurolang intermediate representation"""
+    the corresponding Neurolang intermediate representation
+    """
 
     def evaluate(
         self, ast: Union[ASTNode, List[ASTNode], Any]
     ) -> Union[ir.Expression, List[ir.Expression], Any]:
-        """Converts input to intermediate representation:
+        """
+        Converts input to intermediate representation:
         - if input is an ASTNode, calls -if it exists- the class method
         corresponding to the node type (methods are declared
         in child class)
@@ -73,7 +78,8 @@ class ASTWalker(object):
 
     @staticmethod
     def _default(ast: ASTNode) -> ASTNode:
-        """Identity evaluation for a node
+        """
+        Identity evaluation for a node
         whose type isn't covered by the class methods.
         Passes node through
 

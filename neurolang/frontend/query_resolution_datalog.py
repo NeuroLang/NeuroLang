@@ -36,7 +36,8 @@ __all__ = ["QueryBuilderDatalog"]
 
 
 class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
-    """Complements QueryBuilderBase with query capabilities,
+    """
+    Complements QueryBuilderBase with query capabilities,
     as well as Region and Neurosynth capabilities
     """
 
@@ -45,12 +46,13 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         program_ir: DatalogProgram,
         chase_class: Type[aggregation.Chase] = aggregation.Chase,
     ) -> "QueryBuilderDatalog":
-        """Query builder with query, Region, Neurosynth capabilities
+        """
+        Query builder with query, Region, Neurosynth capabilities
 
         Parameters
         ----------
         program_ir : DatalogProgram
-            datalog program's intermediate representation,
+            Datalog program's intermediate representation,
             usually blank
         chase_class : Type[aggregation.Chase], optional
             used to compute deterministic solutions,
@@ -72,7 +74,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
     @property
     def current_program(self) -> List[fe.Expression]:
-        """Returns the list of expressions that have currently been
+        """
+        Returns the list of expressions that have currently been
         declared in the program
 
         Returns
@@ -103,7 +106,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
     def _declare_implication(
         self, consequent: fe.Expression, antecedent: fe.Expression
     ) -> fe.Expression:
-        """Creates an implication of the consequent by the antecedent
+        """
+        Creates an implication of the consequent by the antecedent
         and adds the rule to the current program:
             consequent <- antecedent
 
@@ -146,23 +150,24 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         return rule
 
     def execute_datalog_program(self, code: str) -> None:
-        """Execute a datalog program in classical syntax
+        """
+        Execute a Datalog program in classical syntax
 
         Parameters
         ----------
         code : string
-            datalog program.
+            Datalog program.
         """
         intermediate_representation = self.datalog_parser(code)
         self.program_ir.walk(intermediate_representation)
 
     def execute_nat_datalog_program(self, code: str) -> None:
-        """Execute a natural language datalog program in classical syntax
+        """Execute a natural language Datalog program in classical syntax
 
         Parameters
         ----------
         code : string
-            datalog program.
+            Datalog program.
         """
         intermediate_representation = self.nat_datalog_parser(code)
         self.program_ir.walk(intermediate_representation)
@@ -170,7 +175,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
     def query(
         self, *args
     ) -> Union[bool, RelationalAlgebraFrozenSet, fe.Symbol]:
-        """Performs an inferential query on the database.
+        """
+        Performs an inferential query on the database.
         There are three modalities
         1. If there is only one argument, the query returns `True` or `False`
         depending on wether the query could be inferred.
@@ -231,7 +237,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         head: Union[fe.Symbol, Tuple[fe.Expression, ...]],
         predicate: fe.Expression,
     ) -> Tuple[AbstractSet, Optional[fe.Symbol]]:
-        """Performs an inferential query. Will return as first output
+        """
+        Performs an inferential query. Will return as first output
         an AbstractSet with as many elements as solutions of the
         predicate query. The AbstractSet's columns correspond to
         the expressions in the head.
@@ -316,7 +323,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
     def solve_all(self) -> Dict[str, NamedRelationalAlgebraFrozenSet]:
         """
         Returns a dictionary of "predicate_name": "Content"
-        for all elements in the solution of the datalog program.
+        for all elements in the solution of the Datalog program.
 
         Returns
         -------
@@ -362,8 +369,9 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
     def add_tuple_set(
         self, iterable: Iterable, type_: Type = Unknown, name: str = None
     ) -> fe.Symbol:
-        """Creates an AbstractSet fe.Symbol containing the elements specified in the
-        iterable with a List[Tuple[Any, ...]] format (see examples).
+        """
+        Creates an AbstractSet fe.Symbol containing the elements specified in
+        the iterable with a List[Tuple[Any, ...]] format (see examples).
         Typically used to crate extensional facts from existing databases
 
         Parameters
@@ -411,7 +419,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
     def predicate_parameter_names(
         self, predicate_name: Union[str, fe.Symbol, fe.Expression]
     ) -> Tuple[str]:
-        """Get the names of the parameters for the given predicate
+        """
+        Get the names of the parameters for the given predicate
 
         Parameters
         ----------

@@ -1,8 +1,8 @@
 r"""
 Probabilistic Frontend
 ======================
-Complements QueryBuilderDetalog class with probabilistic capabilities
-1- add extensional probabilistic facts
+Complements QueryBuilderDatalog class with probabilistic capabilities
+1- add extensional probabilistic facts and choices
 2- sove probabilistic queries
 """
 import collections
@@ -67,8 +67,9 @@ class RegionFrontendCPLogicSolver(
 
 
 class ProbabilisticFrontend(QueryBuilderDatalog):
-    """Complements QueryBuilderDetalog class with probabilistic capabilities
-    1- add extensional probabilistic facts
+    """
+    Complements QueryBuilderDatalog class with probabilistic capabilities
+    1- add extensional probabilistic facts and choices
     2- sove probabilistic queries
     """
 
@@ -77,7 +78,8 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         chase_class: Type[Chase] = Chase,
         probabilistic_solver: Callable = lifted_solve_succ_query,
     ) -> "ProbabilisticFrontend":
-        """Query builder with probabilistic capabilities
+        """
+        Query builder with probabilistic capabilities
 
         Parameters
         ----------
@@ -103,7 +105,8 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         paths: typing.Union[str, List[str]],
         load_format: typing.Union[str, List[str]] = "xml",
     ) -> None:
-        """Loads and parses ontology stored at the specified paths, and
+        """
+        Loads and parses ontology stored at the specified paths, and
         store them into attributes
 
         Parameters
@@ -127,7 +130,8 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
 
     @property
     def current_program(self) -> List[fe.Expression]:
-        """Returns the list of Front End Expressions that have
+        """
+        Returns the list of Front End Expressions that have
         currently been declared in the program, or through
         the program's constraints
 
@@ -167,7 +171,8 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         ],
         predicate: fe.Expression,
     ) -> Tuple[AbstractSet, Optional[ir.Symbol]]:
-        """Performs an inferential query: will return as first output
+        """
+        Performs an inferential query: will return as first output
         an AbstractSet with as many elements as solutions
         of the predicate query. AbstractSet's columns correspond to
         the expressions in the head.
@@ -261,7 +266,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
     ) -> Dict[str, NamedRelationalAlgebraFrozenSet]:
         """
         Returns a dictionary of "predicate_name": "Content"
-        for all elements in the solution of the datalog program.
+        for all elements in the solution of the Datalog program.
         Typically, probabilities are abstracted and processed similar
         to symbols, though of different nature (see examples)
 
@@ -408,12 +413,13 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         type_: Type = ir.Unknown,
         name: Optional[str] = None,
     ) -> fe.Symbol:
-        """Add probabilistic facts from tuples whose first element
+        """
+        Add probabilistic facts from tuples whose first element
         contains the probability label attached to that tuple.
         In the tuple (p, a, b, ...), p is the float probability
         of tuple (a, b, ...) to be True in any possible world.
 
-        Note that those each tuple from the iterable is independant
+        Note that each tuple from the iterable is independant
         from the others, meaning that multiple tuples can be True
         in the same possible world, contrary to a probabilistic choice.
         See example for details.
@@ -428,12 +434,12 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         ----------
         iterable : Iterable[Tuple[float, Any, ...]]
             the first float number represents the probability
-            of the tuple consituted of the remaining elements
+            of the tuple constituted of the remaining elements
         type_ : Type, optional
             type for resulting AbstractSet if None will be inferred
             from the data, by default ir.Unknown
         name : Optional[str], optional
-            name for the resulting FrontEndSYmbol, if None
+            name for the resulting fe.Symbol, if None
             will be fresh, by default None
 
         Returns
@@ -466,7 +472,8 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         type_: Type = ir.Unknown,
         name: Optional[str] = None,
     ) -> fe.Symbol:
-        """Add probabilistic choice from tuples whose first element
+        """
+        Add probabilistic choice from tuples whose first element
         contains the probability label attached to that tuple.
         In the tuple (p, a, b, ...), p is the float probability
         of tuple (a, b, ...) to be True and all remaining tuples to
@@ -487,13 +494,13 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         ----------
         iterable : Iterable[Tuple[float, Any, ...]]
             the first float number represents the probability
-            of the tuple consituted of the remaining elements
+            of the tuple constituted of the remaining elements
             Note that the float probabilities must sum to 1.
         type_ : Type, optional
             type for resulting AbstractSet if None will be inferred
             from the data, by default ir.Unknown
         name : Optional[str], optional
-            name for the resulting FrontEndSYmbol, if None
+            name for the resulting fe.Symbol, if None
             will be fresh, by default None
 
         Returns
@@ -541,14 +548,16 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         type_: Type = ir.Unknown,
         name: Optional[str] = None,
     ) -> fe.Symbol:
-        """Add uniform probabilistic choice among values
-        in the iterable.
+        """
+        Add uniform probabilistic choice over values in the iterable.
+
         Every tuple in the iterable will be assigned the same probability to
-        be True, with all remaning tuples false, in any possible world.
+        be True, with all remaning tuples False, in any possible world.
+
         Note that, contrary to a list of probabilistic facts, this represents
         a choice among possible values for the predicate, meaning that tuples
         in the set are mutually exclusive.
-        All probabilities will be equal.
+
         See example for details.
 
         Parameters
@@ -560,7 +569,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             type for resulting AbstractSet if None will be inferred
             from the data, by default ir.Unknown
         name : Optional[str], optional
-            name for the resulting FrontEndSYmbol, if None
+            name for the resulting fe.Symbol, if None
             will be fresh, by default None
 
         Returns

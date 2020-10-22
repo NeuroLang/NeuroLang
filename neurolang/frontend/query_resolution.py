@@ -1,7 +1,7 @@
 r"""
 Query Builder Base, Region and Neurosynth Mixins
 ================================================
-Base classes to construct datalog programs.
+Base classes to construct Datalog programs.
 Capabilities to declare, manage and manipulate symbols.
 Mixins provide capabilities related to brain volumes and
 Neurosynth metadata manipulation
@@ -36,19 +36,21 @@ from ..datalog import DatalogProgram
 
 
 class QueryBuilderBase:
-    """Base classes to construct datalog programs.
+    """
+    Base class to construct Datalog programs.
     Capabilities to declare, manage and manipulate symbols.
     """
 
     def __init__(
         self, program_ir: DatalogProgram, logic_programming: bool = False
     ) -> "QueryBuilderBase":
-        """Query Builder with symbol management capabilities
+        """
+        Query Builder with symbol management capabilities
 
         Parameters
         ----------
         program_ir : DatalogProgram
-            datalog program's intermediate representation,
+            Datalog program's intermediate representation,
             usually blank
         logic_programming : bool, optional
             defines if symbols can be dynamically
@@ -69,7 +71,8 @@ class QueryBuilderBase:
         self._symbols_proxy = QuerySymbolsProxy(self)
 
     def get_symbol(self, symbol_name: Union[str, fe.Expression]) -> fe.Symbol:
-        """Retrieves symbol via its name, either providing a
+        """
+        Retrieves symbol via its name, either providing a
         fe.Expression with the correct name or the name itself
 
         Parameters
@@ -105,7 +108,8 @@ class QueryBuilderBase:
     def __getitem__(
         self, symbol_name: Union[fe.Symbol, str, fe.Expression]
     ) -> fe.Symbol:
-        """Retrieves symbol via its name, either providing a
+        """
+        Retrieves symbol via its name, either providing a
         fe.Expression with the correct name or the name itself
         Points towards .get_symbol method
 
@@ -125,7 +129,8 @@ class QueryBuilderBase:
         return self.get_symbol(symbol_name)
 
     def __contains__(self, symbol: fe.Symbol) -> bool:
-        """Checks if symbol exists in current symbol_table
+        """
+        Checks if symbol exists in current symbol_table
 
         Parameters
         ----------
@@ -141,7 +146,8 @@ class QueryBuilderBase:
 
     @property
     def types(self) -> List[Type]:
-        """Returns a list of the types of the symbols currently
+        """
+        Returns a list of the types of the symbols currently
         in the table (type can be Unknown)
 
         Returns
@@ -164,8 +170,9 @@ class QueryBuilderBase:
     @property
     @contextmanager
     def environment(self) -> "QuerySymbolsProxy":
-        """Dynamic context that can be used to create
-        symbols to write a datalog program.
+        """
+        Dynamic context that can be used to create
+        symbols to write a Datalog program.
         Contrary to a scope, symbols stay in the symbol_table
         when exiting the environment context
 
@@ -193,8 +200,9 @@ class QueryBuilderBase:
     @property
     @contextmanager
     def scope(self) -> "QuerySymbolsProxy":
-        """Dynamic context that can be used to create
-        symbols to write a datalog program.
+        """
+        Dynamic context that can be used to create
+        symbols to write a Datalog program.
         Contrary to an environment, symbols disappear from the symbol_table
         when exiting the scope context
 
@@ -226,7 +234,8 @@ class QueryBuilderBase:
         type_: Union[Any, Tuple[Any, ...], List[Any]] = Unknown,
         name: str = None,
     ) -> fe.Expression:
-        """Creates a symbol and associated expression, optionally
+        """
+        Creates a symbol and associated expression, optionally
         specifying it's type and/or name
 
         Parameters
@@ -252,7 +261,8 @@ class QueryBuilderBase:
 
     @property
     def functions(self) -> List[str]:
-        """Returns the list of symbols corresponding to callables
+        """
+        Returns the list of symbols corresponding to callables
 
         Returns
         -------
@@ -283,16 +293,17 @@ class QueryBuilderBase:
     def add_symbol(
         self, value: Union[fe.Expression, ir.Constant, Any], name: str = None
     ) -> fe.Symbol:
-        """Creates a symbol with given value and adds it to the
+        """
+        Creates a symbol with given value and adds it to the
         current symbol_table.
         Can typicaly be used to decorate callables, or add an
-        IRConstant to the program.
+        ir.Constant to the program.
 
         Parameters
         ----------
         value : Union[fe.Expression, ir.Constant, Any]
             value of the symbol to add. If not an fe.Expression,
-            will be cast as a Constant
+            will be cast as an ir.Constant
         name : str, optional
             overrides automatic naming of the symbol, by default None
 
@@ -344,7 +355,8 @@ class QueryBuilderBase:
         return name
 
     def del_symbol(self, name: str) -> None:
-        """Deletes the symbol with parameter name
+        """
+        Deletes the symbol with parameter name
         from the symbol_table
 
         Parameters
@@ -377,8 +389,9 @@ class QueryBuilderBase:
         type_: Type = Unknown,
         name: str = None,
     ) -> fe.Symbol:
-        """Creates an AbstractSet fe.Symbol containing the elements specified in the
-        iterable with a List[Tuple[Any, ...]] format (see examples).
+        """
+        Creates an AbstractSet fe.Symbol containing the elements specified in
+        the iterable with a List[Tuple[Any, ...]] format (see examples).
         Typically used to create extensional facts from existing databases
 
         Parameters
@@ -458,14 +471,16 @@ class QueryBuilderBase:
 
 
 class RegionMixin:
-    """Mixin complementing a QueryBuilderBase
+    """
+    Mixin complementing a QueryBuilderBase
     with methods specific to the manipulation
     of brain volumes: regions, atlases, etc...
     """
 
     @property
     def region_names(self) -> List[str]:
-        """Returns the list of symbol names with Region type
+        """
+        Returns the list of symbol names with Region type
 
         Returns
         -------
@@ -476,7 +491,8 @@ class RegionMixin:
 
     @property
     def region_set_names(self) -> List[str]:
-        """Returns the list of symbol names with set_type
+        """
+        Returns the list of symbol names with set_type
 
         Returns
         -------
@@ -489,7 +505,8 @@ class RegionMixin:
         ]
 
     def new_region_symbol(self, name: Optional[str] = None) -> fe.Symbol:
-        """Returns symbol with type Region
+        """
+        Returns symbol with type Region
 
         Parameters
         ----------
@@ -506,7 +523,8 @@ class RegionMixin:
     def add_region(
         self, region: fe.Expression, name: Optional[str] = None
     ) -> fe.Symbol:
-        """Adds region fe.Symbol to symbol_table
+        """
+        Adds region fe.Symbol to symbol_table
 
         Parameters
         ----------
@@ -536,8 +554,9 @@ class RegionMixin:
     def add_region_set(
         self, region_set: Iterable, name: Optional[str] = None
     ) -> fe.Symbol:
-        """Creates an AbstractSet fe.Symbol containing the elements specified in the
-        iterable with a List[Tuple[Region]] format
+        """
+        Creates an AbstractSet fe.Symbol containing the elements specified in
+        the iterable with a List[Tuple[Region]] format
 
         Parameters
         ----------
@@ -559,7 +578,8 @@ class RegionMixin:
         label: int = 1,
         prebuild_tree: bool = False,
     ) -> ExplicitVBR:
-        """Creates an ExplicitVBR out of the voxels of a dense spatial_image
+        """
+        Creates an ExplicitVBR out of the voxels of a dense spatial_image
         with specified label
 
         Parameters
@@ -595,7 +615,8 @@ class RegionMixin:
         atlas_labels: Dict[int, str],
         spatial_image: DataobjImage,
     ) -> fe.Symbol:
-        """Creates an atlas set:
+        """
+        Creates an atlas set:
         1- for each region specified by a label and name in atlas_labels,
         creates associated ExplicitVBR and symbols
         Tuple[region_name: str, Region]
@@ -646,7 +667,8 @@ class RegionMixin:
         radius: int,
         name: Optional[str] = None,
     ) -> fe.Symbol:
-        """Creates a Region symbol associated with the spherical
+        """
+        Creates a Region symbol associated with the spherical
         volume described by its center and volume
 
         Parameters
@@ -680,11 +702,12 @@ class RegionMixin:
 
 
 class NeuroSynthMixin:
-    """Neurosynth is a platform for large-scale, automated synthesis
+    """
+    Neurosynth is a platform for large-scale, automated synthesis
     of functional magnetic resonance imaging (fMRI) data.
     see https://neurosynth.org/
     This Mixin complements a QueryBuilderBase with methods
-    related to meta-analysis data loading.
+    related to coordinate-based meta-analysis (CBMA) data loading.
     """
 
     def load_neurosynth_term_study_ids(
@@ -856,10 +879,12 @@ class NeuroSynthMixin:
 
 
 class QuerySymbolsProxy:
-    """Class useful to create symbols on-the-fly
+    """
+    Class useful to create symbols on-the-fly
     Typically used in QueryBuilderBase contexts as the yielded value
     to write a program.
-    Various methods are projectors to QueryBuilderBase methods"""
+    Various methods are projectors to QueryBuilderBase methods
+    """
 
     def __init__(self, query_builder):
         self._dynamic_mode = False
@@ -907,7 +932,8 @@ class QuerySymbolsProxy:
         return symbol in self._query_builder.symbol_table
 
     def __iter__(self) -> List[str]:
-        """Iterates through the names of the symbols
+        """
+        Iterates through the names of the symbols
         currently in the symbol_table, ordered in ascending name
 
         Returns
@@ -920,7 +946,8 @@ class QuerySymbolsProxy:
         )
 
     def __len__(self) -> int:
-        """Returns number of symbols currently in symbol_table
+        """
+        Returns number of symbols currently in symbol_table
 
         Returns
         -------
