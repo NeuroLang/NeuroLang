@@ -1,4 +1,3 @@
-
 from collections import defaultdict
 from typing import AbstractSet, Tuple
 from uuid import uuid1
@@ -6,27 +5,32 @@ from uuid import uuid1
 from .. import datalog
 from .. import expressions as exp
 from ..datalog import aggregation
-from ..datalog.expression_processing import (TranslateToDatalogSemantics,
-                                             reachable_code)
+from ..datalog.expression_processing import (
+    TranslateToDatalogSemantics,
+    reachable_code,
+)
 from ..type_system import Unknown
 from ..utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
 from .datalog import parser as datalog_parser
 from .datalog.natural_syntax_datalog import parser as nat_datalog_parser
 from .query_resolution import NeuroSynthMixin, QueryBuilderBase, RegionMixin
 from .query_resolution_expressions import (
-    Expression, Operation, Symbol, TranslateExpressionToFrontEndExpression)
+    Expression,
+    Operation,
+    Symbol,
+    TranslateExpressionToFrontEndExpression,
+)
 
-__all__ = ['QueryBuilderDatalog']
+__all__ = ["QueryBuilderDatalog"]
 
 
 class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
     def __init__(self, solver, chase_class=aggregation.Chase):
-        super().__init__(
-            solver, logic_programming=True
-        )
+        super().__init__(solver, logic_programming=True)
         self.chase_class = chase_class
-        self.frontend_translator = \
-            TranslateExpressionToFrontEndExpression(self)
+        self.frontend_translator = TranslateExpressionToFrontEndExpression(
+            self
+        )
         self.translate_expression_to_datalog = TranslateToDatalogSemantics()
         self.datalog_parser = datalog_parser
         self.nat_datalog_parser = nat_datalog_parser
@@ -101,9 +105,7 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
 
         if not isinstance(head, tuple):
             out_symbol = exp.Symbol[solution_set.type](functor_orig.name)
-            self.add_tuple_set(
-                solution_set.value, name=functor_orig.name
-            )
+            self.add_tuple_set(solution_set.value, name=functor_orig.name)
             return Symbol(self, out_symbol.name)
         elif len(head) == 0:
             return len(solution_set.value) > 0
@@ -123,30 +125,25 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         query_expression = self.assign(new_head, predicate)
 
         reachable_rules = reachable_code(query_expression, self.solver)
-        solution = (
-            self.chase_class(self.solver, rules=reachable_rules)
-            .build_chase_solution()
-        )
+        solution = self.chase_class(
+            self.solver, rules=reachable_rules
+        ).build_chase_solution()
 
         solution_set = solution.get(functor.name, exp.Constant(set()))
         self.solver.symbol_table = self.symbol_table.enclosing_scope
         return solution_set, functor_orig
 
     def solve_all(self):
-        '''
+        """
         Returns a dictionary of "predicate_name": "Content"
         for all elements in the solution of the datalog program.
-        '''
-        solution_ir = (
-            self.chase_class(self.solver)
-            .build_chase_solution()
-        )
+        """
+        solution_ir = self.chase_class(self.solver).build_chase_solution()
 
         solution = {}
         for k, v in solution_ir.items():
             solution[k.name] = NamedRelationalAlgebraFrozenSet(
-                self.predicate_parameter_names(k.name),
-                v.value.unwrap()
+                self.predicate_parameter_names(k.name), v.value.unwrap()
             )
             solution[k.name].row_type = v.value.row_type
         return solution
@@ -187,16 +184,15 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             param_name = self._obtain_parameter_name(s)
             pcount[param_name] += 1
             if pcount[param_name] > 1:
-                param_name = f'{param_name}_{pcount[param_name] - 1}'
+                param_name = f"{param_name}_{pcount[param_name] - 1}"
             parameter_names.append(param_name)
         return tuple(parameter_names)
 
     def _obtain_parameter_name(self, parameter_expression):
-        if hasattr(parameter_expression, 'name'):
+        if hasattr(parameter_expression, "name"):
             param_name = parameter_expression.name
-        elif (
-            hasattr(parameter_expression, 'functor') and
-            hasattr(parameter_expression.functor, 'name')
+        elif hasattr(parameter_expression, "functor") and hasattr(
+            parameter_expression.functor, "name"
         ):
             param_name = parameter_expression.functor.name
         else:
@@ -206,11 +202,10 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
     def _get_predicate_name(self, predicate_name):
         if isinstance(predicate_name, Symbol):
             predicate_name = predicate_name.neurolang_symbol
-        elif (
-            isinstance(predicate_name, Expression) and
-            isinstance(predicate_name.expression, exp.Symbol)
+        elif isinstance(predicate_name, Expression) and isinstance(
+            predicate_name.expression, exp.Symbol
         ):
             predicate_name = predicate_name.expression
         elif not isinstance(predicate_name, str):
-            raise ValueError(f'{predicate_name} is not a string or symbol')
+            raise ValueError(f"{predicate_name} is not a string or symbol")
         return predicate_name

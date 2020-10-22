@@ -3,6 +3,7 @@ from operator import add, eq, ge, gt, le, lt, mul, ne, pow, sub, truediv
 import tatsu
 
 from ...datalog import Conjunction, Fact, Implication, Negation, Union
+from ...datalog.constraints_representation import RightImplication
 from ...expressions import Constant, Expression, FunctionApplication, Symbol
 from ...probabilistic.expressions import ProbabilisticPredicate
 
@@ -151,6 +152,9 @@ class DatalogSemantics:
 
     def rule(self, ast):
         return Implication(ast[0], ast[2])
+
+    def constraint(self, ast):
+        return RightImplication(ast[0], ast[2])
 
     def body(self, ast):
         return Conjunction(ast)

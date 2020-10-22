@@ -42,7 +42,7 @@ def test_deterministic_query():
         res = nl.solve_all()
 
     assert "query1" in res.keys()
-    assert res['query1'].row_type == Tuple[str]
+    assert res["query1"].row_type == Tuple[str]
     q1 = res["query1"].as_pandas_dataframe().values
     assert len(q1) == 4
     for elem in q1:
@@ -487,16 +487,44 @@ def test_result_both_deterministic_and_post_probabilistic():
     assert "lingua_da_lua_decisa" in res
     assert "utilizzare_le_probabilita" in res
     assert len(res["utilizzare_le_probabilita"]) == 3
-    assert (
-        res["utilizzare_le_probabilita"]
-        .projection(ColumnStr('lingua')).to_unnamed() == {
-            ("francese",),
-            ("inglese",),
-        }
-    )
+    assert res["utilizzare_le_probabilita"].projection(
+        ColumnStr("lingua")
+    ).to_unnamed() == {
+        ("francese",),
+        ("inglese",),
+    }
     assert res["utilizzare_le_probabilita"].to_unnamed().selection(
         {ColumnInt(0): "francese"}
     ).projection(ColumnInt(1)) == {(0.12,)}
     assert res["utilizzare_le_probabilita"].to_unnamed().selection(
         {ColumnInt(0): "inglese"}
     ).projection(ColumnInt(1)) == {(0.7 * 0.4,), (0.7 * 0.6,)}
+
+
+def test_result_query_relation_correct_column_names():
+    nl = ProbabilisticFrontend()
+    nl.add_tuple_set(
+        [
+            ("alice",),
+            ("bob",),
+        ],
+        name="person",
+    )
+    nl.add_tuple_set(
+        [("alice", "paris"), ("bob", "marseille")],
+        name="lives_in",
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.8, "bob"),
+            (0.9, "alice"),
+        ],
+        name="does_not_smoke",
+    )
+    with nl.environment as e:
+        e.climbs[e.p, e.PROB[e.p, e.city], e.city] = (
+            e.person[e.p] & e.lives_in[e.p, e.city] & e.does_not_smoke[e.p]
+        )
+        solution = nl.solve_all()
+    assert all(name in solution for name in ["climbs", "person", "lives_in"])
+    assert solution["climbs"].columns == ("p", "PROB", "city")

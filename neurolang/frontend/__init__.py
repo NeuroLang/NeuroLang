@@ -9,15 +9,12 @@ from ..datalog.aggregation import (
     DatalogWithAggregationMixin,
     TranslateToLogicWithAggregation,
 )
-from ..expression_walker import (
-    ExpressionBasicEvaluator,
-)
+from ..expression_walker import ExpressionBasicEvaluator
 from ..region_solver import RegionSolver
 from ..regions import ExplicitVBR, ExplicitVBROverlay
 from ..utils.data_manipulation import parse_region_label_map
 from .query_resolution_datalog import QueryBuilderDatalog
 from .query_resolution_expressions import Symbol
-
 
 __all__ = [
     "NeurolangDL",
