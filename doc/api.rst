@@ -20,6 +20,9 @@ Classes
 .. autoclass:: neurolang.frontend.NeurolangDL
    :members:
 
+.. autoclass:: neurolang.frontend.Symbol
+   :members:
+
 
 Indices and tables
 ==================
