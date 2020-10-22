@@ -18,6 +18,6 @@ Contents:
 .. toctree::
    :maxdepth: 2
 
-   theory
+   tutorial
    auto_examples/index
    api

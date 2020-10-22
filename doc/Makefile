@@ -56,7 +56,8 @@ clean:
 	rm -rf gen_api
 
 api:
-	$(SPHINXAPI) -o gen_api ../neurolang "*test*"
+	$(SPHINXAPI) -o gen_api ../neurolang
+	rm gen_api/*.tests.*
 
 html:
 	$(SPHINXBUILD) -b html $(ALLSPHINXOPTS) $(BUILDDIR)/html
