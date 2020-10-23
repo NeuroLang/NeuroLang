@@ -52,7 +52,7 @@ class TranslateProbabilisticQueryMixin(PatternWalker):
             for arg in implication.consequent.args
         ),
     )
-    def succ_query(self, implication):
+    def within_language_prob_query(self, implication):
         csqt_args = tuple()
         for arg in implication.consequent.args:
             if is_within_language_prob_query_wannabe(arg):
