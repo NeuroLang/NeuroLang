@@ -465,12 +465,13 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
     def selection_rap_eq_columnint(self, selection):
         columns = selection.relation.non_provenance_columns
         formula = selection.formula
-        new_formula = FunctionApplication(
-            eq_, (
-                str2columnstr_constant(columns[formula.args[0].value]),
-                formula.args[1]
-            )
-        )
+        new_args = list(formula.args)
+        for i in range(2):
+            if issubclass(formula.args[i].type, ColumnInt):
+                new_args[i] = str2columnstr_constant(
+                    columns[formula.args[i].value]
+                )
+        new_formula = FunctionApplication(eq_, tuple(new_args))
         return self.walk(Selection(selection.relation, new_formula))
 
     @add_match(Projection(ProvenanceAlgebraSet, ...))
