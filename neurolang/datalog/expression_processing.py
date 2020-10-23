@@ -487,7 +487,7 @@ def flatten_query(query, program):
         )
     except NeuroLangPatternMatchingNoMatch:
         raise UnsupportedProgramError("Expression not supported.")
-    return res
+    return remove_conjunction_duplicates(res)
 
 
 class FlattenQueryInNonRecursiveUCQ(PatternWalker):
