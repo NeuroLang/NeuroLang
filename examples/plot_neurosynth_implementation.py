@@ -117,23 +117,19 @@ with nl.scope as e:
         e.docs[e.d]
     )
 
-    e.term_prob[e.t, e.PROB[e.t]] = (
-        e.terms[e.d, e.t] &
-        e.docs[e.d]
-    )
+    e.vox_marg[e.i, e.j, e.k] = e.activations[
+            e.d, ..., ..., ..., ..., 'MNI', ..., ..., ..., ...,
+            ..., ..., ..., e.i, e.j, e.k
+        ] & e.docs[e.d]
 
-    e.vox_cond_query[e.i, e.j, e.k, e.p] = (
-        e.vox_term_prob(e.i, e.j, e.k, e.num_prob)
-        & e.term_prob("auditory", e.denom_prob)
-        & (e.p == (e.num_prob / e.denom_prob))
-    )
+    e.term_marg[e.t] = e.terms[e.d, e.t] & e.docs[e.d] & (e.t == "Auditory")
 
-    e.vox_cond_query_auditory[e.i, e.j, e.k, e.p] = (
-        e.vox_cond_query[e.i, e.j, e.k, e.p]
+    e.vox_cond_query_auditory[e.i, e.j, e.k, e.t, e.PROB[e.i, e.j, e.k, e.t]] = (
+        (e.vox_marg[e.i, e.j, e.k] // e.term_marg[e.t])
     )
 
     e.img[agg_create_region_overlay[e.i, e.j, e.k, e.p]] = (
-        e.vox_cond_query_auditory[e.i, e.j, e.k, e.p]
+        e.vox_cond_query_auditory[e.i, e.j, e.k, 'auditory', e.p]
     )
 
     img_query = nl.query(
