@@ -606,7 +606,7 @@ class NamedRelationalAlgebraFrozenSet(
             yield g_id, group_set
 
     def aggregate(self, group_columns, aggregate_function):
-        group_columns = list(group_columns)
+        group_columns = list(set(group_columns))
         if len(group_columns) > 0:
             groups = self._container.groupby(group_columns)
         else:
