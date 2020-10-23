@@ -22,11 +22,11 @@ def compute_probabilistic_solution(
     for rule in prob_idb.formulas:
         is_wlq_pq = is_within_language_prob_query(rule)
         if is_wlq_pq and isinstance(rule.antecedent, Condition):
-            provset = marg_prob_solver(rule, succ_prob_solver, cpl)
-            relation = construct_within_language_succ_result(provset, rule)
-        elif is_wlq_pq:
             query = within_language_succ_query_to_intensional_rule(rule)
-            provset = succ_prob_solver(query, cpl)
+            if isinstance(rule.antecedent, Condition):
+                provset = marg_prob_solver(query, cpl)
+            else:
+                provset = succ_prob_solver(query, cpl)
             relation = construct_within_language_succ_result(provset, rule)
         else:
             query = rule

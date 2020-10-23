@@ -10,6 +10,10 @@ class UnaryLogicOperator(LogicOperator):
     pass
 
 
+class BinaryLogicOperator(LogicOperator):
+    pass
+
+
 class NaryLogicOperator(LogicOperator):
     pass
 

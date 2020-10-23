@@ -9,7 +9,6 @@ from ...probabilistic.exceptions import UnsupportedProbabilisticQueryError
 from ...relational_algebra import ColumnInt, ColumnStr
 from ..probabilistic_frontend import ProbabilisticFrontend
 
-
 def test_add_uniform_probabilistic_choice_set():
     nl = ProbabilisticFrontend()
 
@@ -65,6 +64,28 @@ def test_probabilistic_query():
         e.query2[e.y, e.PROB[e.y]] = e.query1[e.y] & data3[e.y]
         with pytest.raises(UnsupportedProgramError):
             nl.solve_all()
+
+
+def test_marg_query():
+    nl = ProbabilisticFrontend()
+    nl.add_probabilistic_choice_from_tuples({(0.2, "a"), (0.3, "b"), (0.5, "c")}, name='P')
+    nl.add_tuple_set({(1, "a"), (2,  "a"), (2, "b")}, name="Q")
+    nl.add_tuple_set({(1, "a"), (1, "b"), (2, "b"), (2, "c")}, name="R")
+
+    with nl.scope as e:
+        e.Z[e.x, e.z, e.PROB[e.x, e.z]] = (
+            (e.Q(e.x, e.y) & e.P(e.y)) // (e.R(e.z, e.y) & e.P(e.y))
+        )
+
+        res = nl.solve_all()
+
+    expected = {
+        (1, 1, .4),
+        (2, 1, 1.),
+        (2, 2, .375),
+    }
+    assert res['Z'].columns[:2] == ('x', 'z')
+    assert set(res['Z']) == expected
 
 
 def test_mixed_queries():

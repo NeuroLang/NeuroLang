@@ -5,8 +5,19 @@ from ..exceptions import NeuroLangException
 from ..expression_walker import PatternWalker, add_match
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..utils import OrderedSet
-from . import (FALSE, TRUE, Conjunction, Disjunction, Implication, Negation,
-               Quantifier, Union, LogicOperator)
+from . import (
+    FALSE,
+    TRUE,
+    BinaryLogicOperator,
+    Conjunction,
+    Disjunction,
+    Implication,
+    LogicOperator,
+    NaryLogicOperator,
+    Negation,
+    Quantifier,
+    UnaryLogicOperator,
+)
 
 
 class LogicSolver(PatternWalker):
@@ -157,23 +168,22 @@ class TranslateToLogic(PatternWalker):
 
 
 class WalkLogicProgramAggregatingSets(PatternWalker):
-    @add_match(Conjunction)
-    def conjunction(self, expression):
+    @add_match(NaryLogicOperator)
+    def n_ary(self, expression):
         fvs = OrderedSet()
         for formula in expression.formulas:
             fvs |= self.walk(formula)
         return fvs
 
-    @add_match(Union)
-    def union(self, expression):
-        return self.conjunction(expression)
+    @add_match(BinaryLogicOperator)
+    def binary(self, expression):
+        fvs = OrderedSet()
+        for formula in expression.unapply():
+            fvs |= self.walk(formula)
+        return fvs
 
-    @add_match(Disjunction)
-    def disjunction(self, expression):
-        return self.conjunction(expression)
-
-    @add_match(Negation)
-    def negation(self, expression):
+    @add_match(UnaryLogicOperator)
+    def unary(self, expression):
         return self.walk(expression.formula)
 
 
