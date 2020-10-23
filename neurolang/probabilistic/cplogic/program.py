@@ -1,5 +1,5 @@
-from operator import floordiv
 import typing
+from operator import floordiv
 
 from ...datalog import DatalogProgram
 from ...datalog.basic_representation import UnionOfConjunctiveQueries
@@ -23,7 +23,7 @@ from ..expression_processing import (
     is_within_language_prob_query,
     union_contains_probabilistic_facts,
 )
-from ..expressions import PROB, ProbabilisticQuery, Condition
+from ..expressions import PROB, Condition, ProbabilisticQuery
 
 
 def is_succ_probabilistic_query_wannabe(expression):
@@ -40,7 +40,7 @@ class TranslateProbabilisticQueryMixin(PatternWalker):
         return self.walk(
             Implication(
                 implication.consequent,
-                Condition(*implication.antecedent.args)
+                Condition(*implication.antecedent.args),
             )
         )
 
