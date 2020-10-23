@@ -21,7 +21,7 @@ def compute_probabilistic_solution(
     )
     for rule in prob_idb.formulas:
         is_wlq_pq = is_within_language_prob_query(rule)
-        if is_wlq_pq and isinstance(rule.antecedent, Condition):
+        if is_wlq_pq:
             query = within_language_succ_query_to_intensional_rule(rule)
             if isinstance(rule.antecedent, Condition):
                 provset = marg_prob_solver(query, cpl)
