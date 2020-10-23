@@ -27,7 +27,7 @@ from ..expression_processing import (
 from ..expressions import PROB, Condition, ProbabilisticQuery
 
 
-def is_succ_probabilistic_query_wannabe(expression):
+def is_within_language_prob_query_wannabe(expression):
     return (
         isinstance(expression, FunctionApplication)
         and get_generic_type(type(expression)) is FunctionApplication
@@ -48,14 +48,14 @@ class TranslateProbabilisticQueryMixin(PatternWalker):
     @add_match(
         Implication,
         lambda implication: any(
-            is_succ_probabilistic_query_wannabe(arg)
+            is_within_language_prob_query_wannabe(arg)
             for arg in implication.consequent.args
         ),
     )
     def succ_query(self, implication):
         csqt_args = tuple()
         for arg in implication.consequent.args:
-            if is_succ_probabilistic_query_wannabe(arg):
+            if is_within_language_prob_query_wannabe(arg):
                 arg = ProbabilisticQuery(*arg.unapply())
             csqt_args += (arg,)
         consequent = implication.consequent.functor(*csqt_args)
