@@ -27,9 +27,11 @@ from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import ExpressionWalker, add_match
 from ..expressions import Constant, Symbol
 from ..logic import Conjunction, Implication
-from ..logic.expression_processing import extract_logic_predicates
+from ..logic.expression_processing import (
+    extract_logic_free_variables,
+    extract_logic_predicates
+)
 from ..relational_algebra import (
-    ColumnInt,
     ColumnStr,
     EliminateTrivialProjections,
     ExtendedProjection,
@@ -41,7 +43,9 @@ from ..relational_algebra import (
     str2columnstr_constant,
 )
 from ..relational_algebra_provenance import (
+    NaturalJoinInverse,
     ProvenanceAlgebraSet,
+    RelationalAlgebraProvenanceCountingSolver,
     RelationalAlgebraProvenanceExpressionSemringSolver,
 )
 from ..utils import log_performance
@@ -295,3 +299,61 @@ def solve_succ_query(query, cpl_program):
         )
 
     return prob_set_result
+
+
+def solve_marg_query(rule, cpl):
+    """
+    Solve a MARG query on a CP-Logic program.
+
+    Parameters
+    ----------
+    query : Implication
+        Consequent must be of type `Condition`.
+        MARG query of the form `ans(x) :- P(x)`.
+    cpl_program : CPLogicProgram
+        CP-Logic program on which the query should be solved.
+
+    Returns
+    -------
+    ProvenanceAlgebraSet
+        Provenance set labelled with probabilities for each tuple in the result
+        set.
+
+    """
+    res_args = tuple(
+        s
+        for s in rule.consequent.args
+        if isinstance(s, Symbol)
+    )
+
+    joint_antecedent = Conjunction(
+        tuple(
+            extract_logic_predicates(rule.antecedent.conditioned) |
+            extract_logic_predicates(rule.antecedent.conditioning)
+        )
+    )
+    joint_logic_variables = extract_logic_free_variables(
+        joint_antecedent
+    ) & res_args
+    joint_rule = Implication(
+        Symbol.fresh()(*joint_logic_variables), joint_antecedent
+    )
+    joint_provset = solve_succ_query(joint_rule, cpl)
+
+    denominator_antecedent = rule.antecedent.conditioning
+    denominator_logic_variables = extract_logic_free_variables(
+        denominator_antecedent
+    ) & res_args
+    denominator_rule = Implication(
+        Symbol.fresh()(*denominator_logic_variables),
+        denominator_antecedent
+    )
+    denominator_provset = solve_succ_query(denominator_rule, cpl)
+    rapcs = RelationalAlgebraProvenanceCountingSolver()
+    provset = rapcs.walk(
+        Projection(
+            NaturalJoinInverse(joint_provset, denominator_provset),
+            tuple(str2columnstr_constant(s.name) for s in res_args)
+        )
+    )
+    return provset

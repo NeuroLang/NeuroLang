@@ -14,6 +14,7 @@ from ..exceptions import (
     NotEasilyShatterableError,
     NotHierarchicalQueryException,
 )
+from ..expressions import Condition, PROB, ProbabilisticQuery
 
 try:
     from contextlib import nullcontext
@@ -667,5 +668,46 @@ def test_program_with_variable_equality(solver):
             (0.5 * 0.2, "b", "a"),
         ],
         ("_p_", "x", "y"),
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_program_with_marg_query(solver):
+    pchoice_as_sets = {
+        P: {(0.2, "a"), (0.3, "b"), (0.5, "c")}
+    }
+    deterministic_sets = {
+        Q: {(1, "a"), (2,  "a"), (2, "b")},
+        R: {(1, "a"), (1, "b"), (2, "b"), (2, "c")}
+    }
+
+    code = Union((
+        Implication(Z(x, z, ProbabilisticQuery(PROB, (x, z))), Condition(
+            Conjunction((Q(x, y), P(y))),
+            Conjunction((R(z, y), P(y)))
+        )),
+    ))
+
+    cpl_program = CPLogicProgram()
+    for pred_symb, fact_set in deterministic_sets.items():
+        cpl_program.add_extensional_predicate_from_tuples(pred_symb, fact_set)
+    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
+        cpl_program.add_probabilistic_choice_from_tuples(
+            pred_symb, pchoice_as_set
+        )
+
+    cpl_program.walk(code)
+
+    result = solver.solve_marg_query(
+        code.formulas[0], cpl_program
+    )
+
+    expected = testing.make_prov_set(
+        [
+            (.4, 1, 1),
+            (1., 2, 1),
+            (.375, 2, 2),
+        ],
+        ("_p_", "x", "z"),
     )
     assert testing.eq_prov_relations(result, expected)

@@ -14,7 +14,7 @@ from ...relational_algebra import (
 from ...relational_algebra_provenance import ProvenanceAlgebraSet
 from ..expression_processing import (
     construct_within_language_succ_result,
-    is_within_language_succ_query,
+    is_within_language_prob_query,
     within_language_succ_query_to_intensional_rule,
 )
 
@@ -98,7 +98,7 @@ def cplogic_to_problog(cpl):
         add_probchoice_to_problog(pred_symb, cpl.symbol_table[pred_symb], pl)
     for union in cpl.intensional_database().values():
         for rule in union.formulas:
-            if is_within_language_succ_query(rule):
+            if is_within_language_prob_query(rule):
                 rule = within_language_succ_query_to_intensional_rule(rule)
             add_rule_to_problog(rule, pl)
     return pl
@@ -146,7 +146,7 @@ def get_query_preds(cpl):
     query_preds = list()
     for union in cpl.intensional_database().values():
         for rule in union.formulas:
-            if is_within_language_succ_query(rule):
+            if is_within_language_prob_query(rule):
                 rule = within_language_succ_query_to_intensional_rule(rule)
                 query_preds.append(rule.consequent)
     return query_preds

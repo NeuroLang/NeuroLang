@@ -3,6 +3,16 @@ from ..expressions import Definition, FunctionApplication, Symbol
 PROB = Symbol("PROB")
 
 
+class Condition(Definition):
+    def __init__(self, conditioned, conditioning):
+        self.conditioned = conditioned
+        self.conditioning = conditioning
+        self._symbols = conditioned._symbols | conditioning._symbols
+
+    def __repr__(self):
+        return f"P[{self.conditioned} | {self.conditioning}]"
+
+
 class ProbabilisticPredicate(Definition):
     def __init__(self, probability, body):
         self.probability = probability

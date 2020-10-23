@@ -20,10 +20,11 @@ from ..probabilistic.cplogic.program import (
 )
 from ..probabilistic.dichotomy_theorem_based_solver import (
     solve_succ_query as lifted_solve_succ_query,
+    solve_marg_query as lifted_solve_marg_query
 )
 from ..probabilistic.expression_processing import (
     is_probabilistic_predicate_symbol,
-    is_within_language_succ_query,
+    is_within_language_prob_query,
 )
 from ..probabilistic.query_resolution import compute_probabilistic_solution
 from ..probabilistic.stratification import stratify_program
@@ -50,12 +51,15 @@ class RegionFrontendCPLogicSolver(
 
 class ProbabilisticFrontend(QueryBuilderDatalog):
     def __init__(
-        self, chase_class=Chase, probabilistic_solver=lifted_solve_succ_query
+        self, chase_class=Chase,
+        probabilistic_solver=lifted_solve_succ_query,
+        probabilistic_marg_solver=lifted_solve_marg_query
     ):
         super().__init__(
             RegionFrontendCPLogicSolver(), chase_class=chase_class
         )
         self.probabilistic_solver = probabilistic_solver
+        self.probabilistic_marg_solver = lifted_solve_marg_query
         self.ontology_loaded = False
 
     def load_ontology(self, paths, load_format="xml"):
@@ -141,11 +145,12 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             pchoice_edb,
             prob_idb,
             self.probabilistic_solver,
+            self.probabilistic_marg_solver
         )
         wlq_symbs = set(
             rule.consequent.functor
             for rule in prob_idb.formulas
-            if is_within_language_succ_query(rule)
+            if is_within_language_prob_query(rule)
         )
         solution.update(
             {
