@@ -1,7 +1,7 @@
 import pytest
 
 from ...expressions import Constant, Symbol
-from ...logic import Implication
+from ...logic import Conjunction, Implication
 from ...relational_algebra import ColumnStr, NamedRelationalAlgebraFrozenSet
 from ...relational_algebra_provenance import ProvenanceAlgebraSet
 from .. import dichotomy_theorem_based_solver, weighted_model_counting
@@ -66,6 +66,87 @@ def test_marg_query_ground_conditioning(solver):
                 (0.5, "b"),
                 (0.3, "a"),
                 (0.2, "c"),
+            ],
+        ),
+        ColumnStr("_p_"),
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_marg_query_two_vars_conditioning(solver):
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        R,
+        [
+            (0.2, "a", "a"),
+            (0.4, "b", "a"),
+            (0.1, "b", "c"),
+            (0.9, "c", "a"),
+            (0.1, "c", "b"),
+        ],
+    )
+    cpl.add_probabilistic_choice_from_tuples(
+        Z,
+        [
+            (0.2, "c"),
+            (0.5, "b"),
+            (0.3, "a"),
+        ],
+    )
+    query = Implication(
+        Q(x, y, ProbabilisticQuery(PROB, (x, y))), Condition(Z(x), R(x, y))
+    )
+    cpl.walk(query)
+    result = solver.solve_marg_query(query, cpl)
+    expected = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            ("_p_", "x", "y"),
+            [
+                (0.3, "a", "a"),
+                (0.5, "b", "a"),
+                (0.5, "b", "c"),
+                (0.2, "c", "a"),
+                (0.2, "c", "b"),
+            ],
+        ),
+        ColumnStr("_p_"),
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_marg_query_conjunctive_conditioned_and_conditioning(solver):
+    if solver != dichotomy_theorem_based_solver:
+        return
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        R,
+        [
+            (0.2, "a", "a"),
+            (0.4, "b", "a"),
+            (0.1, "b", "c"),
+            (0.9, "c", "a"),
+            (0.1, "c", "b"),
+        ],
+    )
+    cpl.add_probabilistic_choice_from_tuples(
+        Z,
+        [
+            (0.2, "c"),
+            (0.5, "b"),
+            (0.3, "a"),
+        ],
+    )
+    cpl.walk(Implication(H(x, y), Conjunction((Z(x), R(y, x)))))
+    query = Implication(
+        Q(x, y, ProbabilisticQuery(PROB, (x, y))), Condition(H(x, y), Z(y))
+    )
+    cpl.walk(query)
+    result = solver.solve_marg_query(query, cpl)
+    expected = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            ("_p_", "x", "y"),
+            [
+                (0.2, "a", "a"),
             ],
         ),
         ColumnStr("_p_"),
