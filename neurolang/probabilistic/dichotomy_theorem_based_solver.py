@@ -20,12 +20,13 @@ probabilistic databases. VLDB J., 16(4):523–544, 2007.
 '''
 
 import logging
+import operator
 from collections import defaultdict
 
 from ..datalog.expression_processing import flatten_query
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import ExpressionWalker, add_match
-from ..expressions import Constant, Symbol
+from ..expressions import Constant, Symbol, FunctionApplication
 from ..logic import Conjunction, Implication
 from ..logic.expression_processing import (
     extract_logic_free_variables,
@@ -40,6 +41,7 @@ from ..relational_algebra import (
     Projection,
     RelationalAlgebraPushInSelections,
     RelationalAlgebraStringExpression,
+    RelationalAlgebraColumnStr,
     str2columnstr_constant,
 )
 from ..relational_algebra_provenance import (
@@ -250,6 +252,14 @@ def solve_succ_query(query, cpl_program):
         flat_query_body = lift_optimization_for_choice_predicates(
             flat_query_body, cpl_program
         )
+        probchoice_var_eqs = set(
+            formula.args
+            for formula in flat_query_body.formulas
+            if (
+                isinstance(formula, FunctionApplication)
+                and formula.functor == operator.eq
+            )
+        )
         flat_query = Implication(query.consequent, flat_query_body)
         symbol_table = generate_probabilistic_symbol_table_for_query(
             cpl_program, flat_query_body
@@ -298,7 +308,32 @@ def solve_succ_query(query, cpl_program):
             shattered_query, prob_set_result
         )
 
+    prob_set_result = project_var_eq_columns(
+        prob_set_result, probchoice_var_eqs
+    )
+
     return prob_set_result
+
+
+def project_var_eq_columns(provset, var_eqs):
+    proj_list = {
+        c: RelationalAlgebraColumnStr(c)
+        for c in provset.non_provenance_columns
+    }
+    proj_list[provset.provenance_column] = RelationalAlgebraColumnStr(
+        provset.provenance_column
+    )
+    for x, y in var_eqs:
+        if not isinstance(x, Symbol) or not isinstance(y, Symbol):
+            continue
+        if x.name not in proj_list:
+            proj_list[x.name] = RelationalAlgebraColumnStr(y.name)
+        elif y.name not in proj_list:
+            proj_list[y.name] = RelationalAlgebraColumnStr(x.name)
+    return ProvenanceAlgebraSet(
+        provset.relations.extended_projection(proj_list),
+        provset.provenance_column
+    )
 
 
 def solve_marg_query(rule, cpl):
