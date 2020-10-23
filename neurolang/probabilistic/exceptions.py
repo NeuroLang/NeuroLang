@@ -27,3 +27,7 @@ class NotEasilyShatterableError(UnexpectedExpressionError):
 
 class UnsupportedProbabilisticQueryError(UnsupportedQueryError):
     pass
+
+
+class ForbiddenConditionalQueryNoProb(UnsupportedQueryError):
+    pass

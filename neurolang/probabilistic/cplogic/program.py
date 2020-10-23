@@ -1,3 +1,4 @@
+from operator import floordiv
 import typing
 
 from ...datalog import DatalogProgram
@@ -34,6 +35,15 @@ def is_succ_probabilistic_query_wannabe(expression):
 
 
 class TranslateProbabilisticQueryMixin(PatternWalker):
+    @add_match(Implication(..., FunctionApplication(Constant(floordiv), ...)))
+    def conditional_query(self, implication):
+        return self.walk(
+            Implication(
+                implication.consequent,
+                Condition(*implication.antecedent.args)
+            )
+        )
+
     @add_match(
         Implication,
         lambda implication: any(
@@ -261,6 +271,14 @@ class CPLogicMixin(PatternWalker):
             )
         self.symbol_table[pred_symb] = Union((implication,))
         return implication
+
+    @add_match(Implication(..., Condition))
+    def marg_implication(self, implication):
+        raise ForbiddenConditionalQueryNoProb(
+            "Conditional queries which don't have PROB in "
+            "the head (within-language probabilistic) "
+            "are forbidden"
+        )
 
     @add_match(Implication, is_within_language_prob_query)
     def within_language_succ_query(self, implication):

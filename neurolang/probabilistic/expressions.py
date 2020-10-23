@@ -10,7 +10,7 @@ class Condition(Definition):
         self._symbols = conditioned._symbols | conditioning._symbols
 
     def __repr__(self):
-        return f"P[{self.conditioned} | {self.conditioning}]"
+        return f"[{self.conditioned} | {self.conditioning}]"
 
 
 class ProbabilisticPredicate(Definition):
