@@ -10,6 +10,7 @@ from ...expressions import Constant, FunctionApplication, Symbol
 from ...logic import Implication, Union
 from ...type_system import get_generic_type
 from ..exceptions import (
+    ForbiddenConditionalQueryNoProb,
     MalformedProbabilisticTupleError,
     UnsupportedProbabilisticQueryError,
 )
