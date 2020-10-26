@@ -38,6 +38,7 @@ from ..logic import (
     Quantifier,
     Union,
 )
+from ..logic.unification import most_general_unifier
 from ..logic import expression_processing as elp
 from ..logic.transformations import CollapseConjunctions
 from .expressions import TranslateToLogic
@@ -525,17 +526,22 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
     def _normalise_arguments(self, cq, args):
         free_variables = extract_logic_free_variables(cq)
         linked_variables = cq.consequent.args
-        cq = ReplaceExpressionWalker(
-            dict(
-                chain(
-                    zip(linked_variables, args),
-                    zip(
-                        free_variables,
-                        (Symbol.fresh() for _ in range(len(free_variables))),
-                    ),
-                )
+        replacements = collections.OrderedDict()
+        replacements.update({x: Symbol.fresh() for x in free_variables})
+        replacements.update(dict(zip(linked_variables, args)))
+        cq = ReplaceExpressionWalker(replacements).walk(cq)
+        vareqs, _ = most_general_unifier(
+            cq.consequent.functor(*args), cq.consequent
+        )
+        if vareqs:
+            conj_eqs = Conjunction(tuple(
+                Constant(operator.eq)(x, y)
+                for x, y in vareqs.items()
+            ))
+            cq = Implication(
+                cq.consequent, conjunct_formulas(cq.antecedent, conj_eqs)
             )
-        ).walk(cq)
+        __import__('pdb').set_trace()
         return cq
 
     @add_match(Conjunction)

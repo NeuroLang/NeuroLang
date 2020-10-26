@@ -168,3 +168,14 @@ def test_flatten_with_variable_equality():
     program.walk(rule)
     flat = flatten_query(R(x, y), program)
     assert set(flat.formulas) == set(extract_logic_predicates(rule.antecedent))
+
+
+def test_flatten_repeated_variable_in_rule():
+    rule = Implication(R(x, x), Q(x, x, z))
+    program = TestDatalogProgram()
+    program.walk(rule)
+    flat = flatten_query(R(x, y), program)
+    assert len(flat.formulas) == 1
+    assert flat.formulas[0].functor == Q
+    assert flat.formulas[0].args[0] == x
+    assert flat.formulas[0].args[1] == y
