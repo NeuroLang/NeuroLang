@@ -530,6 +530,8 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
         replacements.update({x: Symbol.fresh() for x in free_variables})
         replacements.update(dict(zip(linked_variables, args)))
         cq = ReplaceExpressionWalker(replacements).walk(cq)
+        # find variable equalities by applying most general unifier (MGU)
+        # algorithm to unify the head of the query and the body of the rule
         vareqs, _ = most_general_unifier(
             cq.consequent.functor(*args), cq.consequent
         )
