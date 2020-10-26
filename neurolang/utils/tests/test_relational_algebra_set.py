@@ -884,11 +884,11 @@ def test_extended_projection_ra_string_expression_empty_relation(ra_module):
     assert relation.extended_projection(eval_expressions) == expected
 
 
-def test_aggregate_repeated_column(ra_module):
+def test_aggregate_repeated_group_column(ra_module):
     relation = ra_module.NamedRelationalAlgebraFrozenSet(
-        columns=["x"], iterable=[("a",), ("b",)],
+        columns=["x", "y"], iterable=[("a", 4), ("b", 5)],
     )
-    result = relation.aggregate(["x", "x"], dict())
+    result = relation.aggregate(["x", "x"], {"y": sum})
     expected = ra_module.NamedRelationalAlgebraFrozenSet(
         columns=["x", "x"], iterable=[("a", "a"), ("b", "b")],
     )
