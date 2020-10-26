@@ -673,6 +673,12 @@ class NamedRelationalAlgebraFrozenSet(
             )
         elif isinstance(aggregate_function, (tuple, list)):
             arg_iterable = aggregate_function
+        else:
+            raise ValueError(
+                "Unsupported aggregate_function: {} of type {}".format(
+                    aggregate_function, type(aggregate_function)
+                )
+            )
 
         for dst, src, fun in arg_iterable:
             if dst in group_columns:
