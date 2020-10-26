@@ -541,7 +541,6 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
             cq = Implication(
                 cq.consequent, conjunct_formulas(cq.antecedent, conj_eqs)
             )
-        __import__('pdb').set_trace()
         return cq
 
     @add_match(Conjunction)

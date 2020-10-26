@@ -171,11 +171,28 @@ def test_flatten_with_variable_equality():
 
 
 def test_flatten_repeated_variable_in_rule():
+    """
+    Given a program with the rule `R(x, x) :- Q(x, x, z)` and a (single
+    predicate) conjunctive query `R(x, y)`, we expect the resulting flattened
+    query to be either `Q(y, y, _freshvar_), x = y` or `Q(x, x, _freshvar_), y
+    = x`.
+
+    """
     rule = Implication(R(x, x), Q(x, x, z))
     program = TestDatalogProgram()
     program.walk(rule)
     flat = flatten_query(R(x, y), program)
-    assert len(flat.formulas) == 1
-    assert flat.formulas[0].functor == Q
-    assert flat.formulas[0].args[0] == x
-    assert flat.formulas[0].args[1] == y
+    assert len(flat.formulas) == 2
+    assert (
+        Constant(operator.eq)(x, y) in flat.formulas
+        and any(
+            (formula.functor == Q and formula.args[:2] == (y, y))
+            for formula in flat.formulas
+        )
+    ) or (
+        Constant(operator.eq)(y, x) in flat.formulas
+        and any(
+            (formula.functor == Q and formula.args[:2] == (x, x))
+            for formula in flat.formulas
+        )
+    )
