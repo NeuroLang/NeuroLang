@@ -1,3 +1,4 @@
+import operator
 from typing import AbstractSet
 
 import numpy as np
@@ -8,6 +9,7 @@ from ..expressions import Constant, Symbol
 from ..probabilistic.cplogic import testing
 from ..relational_algebra import (
     ColumnStr,
+    ColumnInt,
     NaturalJoin,
     Product,
     RenameColumn,
@@ -505,4 +507,34 @@ def test_njoin_inverse():
     op = NaturalJoinInverse(r1, r2)
     solver = RelationalAlgebraProvenanceCountingSolver()
     result = solver.walk(op)
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_selection_between_columnints():
+    r = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            columns=("_p_", "x", "y"),
+            iterable=[
+                (0.5, "a", "b"),
+                (0.7, "a", "a"),
+                (0.2, "b", "b"),
+            ],
+        ),
+        ColumnStr("_p_"),
+    )
+    col1 = Constant[ColumnInt](ColumnInt(0))
+    col2 = Constant[ColumnInt](ColumnInt(1))
+    op = Selection(r, Constant(operator.eq)(col1, col2))
+    solver = RelationalAlgebraProvenanceCountingSolver()
+    result = solver.walk(op)
+    expected = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            columns=("_p_", "x", "y"),
+            iterable=[
+                (0.7, "a", "a"),
+                (0.2, "b", "b"),
+            ],
+        ),
+        ColumnStr("_p_"),
+    )
     assert testing.eq_prov_relations(result, expected)

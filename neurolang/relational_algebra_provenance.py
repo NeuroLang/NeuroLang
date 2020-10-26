@@ -114,6 +114,27 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
     @add_match(
         Selection(
             ...,
+            FunctionApplication(
+                eq_, (Constant[ColumnInt], Constant[ColumnInt])
+            ),
+        )
+    )
+    def selection_between_column_int(self, selection):
+        relation = self.walk(selection.relation)
+        columns = relation.non_provenance_columns
+        lhs_col = str2columnstr_constant(
+            columns[selection.formula.args[0].value]
+        )
+        rhs_col = str2columnstr_constant(
+            columns[selection.formula.args[1].value]
+        )
+        new_formula = Constant(operator.eq)(lhs_col, rhs_col)
+        new_selection = Selection(relation, new_formula)
+        return self.walk(new_selection)
+
+    @add_match(
+        Selection(
+            ...,
             FunctionApplication(eq_, (Constant[Column], Constant[Column])),
         )
     )
@@ -455,6 +476,25 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
                 att = str2columnstr_constant(columns[att.value])
             new_attributes += (att,)
         return self.walk(Projection(projection.relation, new_attributes))
+
+    @add_match(
+        Selection(
+            ProvenanceAlgebraSet,
+            FunctionApplication(
+                eq_, (Constant[ColumnInt], Constant[ColumnInt])
+            )
+        )
+    )
+    def selection_rap_eq_columnint_columnint(self, selection):
+        columns = selection.relation.non_provenance_columns
+        formula = selection.formula
+        new_formula = FunctionApplication(
+            eq_, (
+                str2columnstr_constant(columns[formula.args[0].value]),
+                str2columnstr_constant(columns[formula.args[1].value]),
+            )
+        )
+        return self.walk(Selection(selection.relation, new_formula))
 
     @add_match(
         Selection(
