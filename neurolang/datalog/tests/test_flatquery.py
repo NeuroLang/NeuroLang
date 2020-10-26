@@ -122,7 +122,7 @@ def test_flatten_with_2nd_level_disjunction():
     )
     program = TestDatalogProgram()
     program.walk(code)
-    result = flatten_query(Q(x), program)
+    result = flatten_query(Q(x, z), program)
     assert isinstance(result, Conjunction)
     assert len(result.formulas) == 2
     assert (

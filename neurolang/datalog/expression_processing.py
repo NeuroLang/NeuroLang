@@ -527,15 +527,18 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
         free_variables = extract_logic_free_variables(cq)
         linked_variables = cq.consequent.args
         replacements = collections.OrderedDict()
+        # replace free variables by fresh symbols to avoid any collision with
+        # other substitutions
         replacements.update({x: Symbol.fresh() for x in free_variables})
         replacements.update(dict(zip(linked_variables, args)))
         cq = ReplaceExpressionWalker(replacements).walk(cq)
         # find variable equalities by applying most general unifier (MGU)
         # algorithm to unify the head of the query and the body of the rule
-        vareqs, _ = most_general_unifier(
+        mgu = most_general_unifier(
             cq.consequent.functor(*args), cq.consequent
         )
-        if vareqs:
+        if mgu is not None and mgu[0]:
+            vareqs = mgu[0]
             conj_eqs = Conjunction(tuple(
                 Constant(operator.eq)(x, y)
                 for x, y in vareqs.items()
