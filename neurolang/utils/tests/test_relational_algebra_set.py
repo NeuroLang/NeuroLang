@@ -888,11 +888,8 @@ def test_aggregate_repeated_group_column(ra_module):
     relation = ra_module.NamedRelationalAlgebraFrozenSet(
         columns=["x", "y"], iterable=[("a", 4), ("b", 5)],
     )
-    result = relation.aggregate(["x", "x"], {"y": sum})
-    expected = ra_module.NamedRelationalAlgebraFrozenSet(
-        columns=["x", "x"], iterable=[("a", "a"), ("b", "b")],
-    )
-    assert result == expected
+    with pytest.raises(ValueError, match="Cannot group on repeated columns"):
+        relation.aggregate(["x", "x"], {"y": sum})
 
 
 def test_unsupported_aggregation_function(ra_module):

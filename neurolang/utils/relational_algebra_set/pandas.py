@@ -607,6 +607,8 @@ class NamedRelationalAlgebraFrozenSet(
 
     def aggregate(self, group_columns, aggregate_function):
         group_columns = list(group_columns)
+        if len(set(group_columns)) < len(group_columns):
+            raise ValueError("Cannot group on repeated columns")
         if len(group_columns) > 0:
             groups = self._container.groupby(group_columns)
         else:
