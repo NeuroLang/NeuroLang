@@ -528,3 +528,19 @@ def test_result_query_relation_correct_column_names():
         solution = nl.solve_all()
     assert all(name in solution for name in ["climbs", "person", "lives_in"])
     assert solution["climbs"].columns == ("p", "PROB", "city")
+
+
+def test_repeated_variable_in_rule_consequent():
+    nl = ProbabilisticFrontend()
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.2, 7, 7, 3),
+            (0.5, 2, 7, 2),
+        ],
+        name="Q"
+    )
+    with nl.environment as e:
+        e.H[e.x, e.x, e.PROB[e.x]] = e.Q[e.x, e.x, e.w]
+        res = nl.query((e.x, e.y, e.p), e.H[e.x, e.y, e.p])
+    expected = {(7, 7, 0.2)}
+    assert res == expected
