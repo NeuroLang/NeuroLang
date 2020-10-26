@@ -821,7 +821,7 @@ def test_extended_projection(ra_module):
 
     new_set = base_set.extended_projection({
         "x": ra_module.RelationalAlgebraColumnInt(1),
-        "y": ra_module.RelationalAlgebraColumnInt(2) 
+        "y": ra_module.RelationalAlgebraColumnInt(2)
     })
 
     assert initial_set == new_set
@@ -882,3 +882,19 @@ def test_extended_projection_ra_string_expression_empty_relation(ra_module):
         columns=["z"], iterable=[],
     )
     assert relation.extended_projection(eval_expressions) == expected
+
+
+def test_aggregate_repeated_group_column(ra_module):
+    relation = ra_module.NamedRelationalAlgebraFrozenSet(
+        columns=["x", "y"], iterable=[("a", 4), ("b", 5)],
+    )
+    with pytest.raises(ValueError, match="Cannot group on repeated columns"):
+        relation.aggregate(["x", "x"], {"y": sum})
+
+
+def test_unsupported_aggregation_function(ra_module):
+    relation = ra_module.NamedRelationalAlgebraFrozenSet(
+        columns=["x"], iterable=[("a",), ("b",)],
+    )
+    with pytest.raises(ValueError, match="Unsupported aggregate_function"):
+        relation.aggregate(["x"], None)
