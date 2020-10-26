@@ -166,12 +166,14 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
     def _execute_query(
         self,
         head: typing.Union[
-            ir.Symbol[Tuple[fe.Expression, ...]],
+            fe.Symbol,
             Tuple[fe.Expression, ...],
         ],
         predicate: fe.Expression,
     ) -> Tuple[AbstractSet, Optional[ir.Symbol]]:
         """
+        [Internal usage - documentation for developpers]
+
         Performs an inferential query: will return as first output
         an AbstractSet with as many elements as solutions
         of the predicate query. AbstractSet's columns correspond to
@@ -184,7 +186,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         Parameters
         ----------
         head : typing.Union[
-            ir.Symbol[Tuple[fe.Expression, ...]],
+            fe.Symbol,
             Tuple[fe.Expression, ...],
         ]
             see description
@@ -409,7 +411,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
 
     def add_probabilistic_facts_from_tuples(
         self,
-        iterable: Iterable[Tuple[float, Any]],
+        iterable: Iterable[Tuple[Any, ...]],
         type_: Type = ir.Unknown,
         name: Optional[str] = None,
     ) -> fe.Symbol:
@@ -432,7 +434,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
 
         Parameters
         ----------
-        iterable : Iterable[Tuple[float, Any, ...]]
+        iterable : Iterable[Tuple[Any, ...]]
             the first float number represents the probability
             of the tuple constituted of the remaining elements
         type_ : Type, optional
@@ -468,7 +470,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
 
     def add_probabilistic_choice_from_tuples(
         self,
-        iterable: Iterable[Tuple[float, Any]],
+        iterable: Iterable[Tuple[Any, ...]],
         type_: Type = ir.Unknown,
         name: Optional[str] = None,
     ) -> fe.Symbol:
@@ -492,7 +494,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
 
         Parameters
         ----------
-        iterable : Iterable[Tuple[float, Any, ...]]
+        iterable : Iterable[Tuple[Any, ...]]
             the first float number represents the probability
             of the tuple constituted of the remaining elements
             Note that the float probabilities must sum to 1.

@@ -189,6 +189,8 @@ class QueryBuilderBase:
         ...     e.x = 3
         >>> "x" in nl
         True
+        >>> nl.symbols.x == 3
+        True
         """
         old_dynamic_mode = self._symbols_proxy._dynamic_mode
         self._symbols_proxy._dynamic_mode = True
@@ -499,7 +501,6 @@ class RegionMixin:
         List[str]
             list of symbol names from symbol_table
         """
-        # ! Not sure this works as intended by the name
         return [
             s.name for s in self.symbol_table.symbols_by_type(self.set_type)
         ]
@@ -959,12 +960,10 @@ class QuerySymbolsProxy:
     def __dir__(self):
         """Descibes self and lists symbols in current symbol_table"""
         init = object.__dir__(self)
-        # ! why not call `in self` ?
         init += [symbol.name for symbol in self._query_builder.symbol_table]
         return init
 
     def __repr__(self):
         """Describes symbols currently in symbol_table"""
         init = [symbol.name for symbol in self._query_builder.symbol_table]
-        # ! why not call `in self` ?
         return f"QuerySymbolsProxy with symbols {init}"

@@ -236,8 +236,10 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         self,
         head: Union[fe.Symbol, Tuple[fe.Expression, ...]],
         predicate: fe.Expression,
-    ) -> Tuple[AbstractSet, Optional[fe.Symbol]]:
+    ) -> Tuple[AbstractSet, Optional[ir.Symbol]]:
         """
+        [Internal usage - documentation for developpers]
+
         Performs an inferential query. Will return as first output
         an AbstractSet with as many elements as solutions of the
         predicate query. The AbstractSet's columns correspond to

@@ -77,7 +77,6 @@ class Expression(object):
         return self.expression.type
 
     def do(self, name=None):
-        # ! what is this method ?
         return self.query_builder.execute_expression(
             self.expression, name=name
         )
@@ -494,7 +493,6 @@ class Symbol(Expression):
             return f"{self.symbol_name}: {symbol.type}"
 
     def _repr_iterable_value(self, symbol: "Symbol") -> List[str]:
-        # ! symbol isn't used ?
         contained = []
         for v in self:
             contained.append(repr(v))
