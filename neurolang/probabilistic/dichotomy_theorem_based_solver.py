@@ -28,6 +28,7 @@ from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import ExpressionWalker, add_match
 from ..expressions import Constant, Symbol, FunctionApplication
 from ..logic import Conjunction, Implication
+from ..utils.orderedset import OrderedSet
 from ..logic.expression_processing import (
     extract_logic_free_variables,
     extract_logic_predicates
@@ -294,9 +295,11 @@ def solve_succ_query(query, cpl_program):
 
         ra_query = TranslateToNamedRA().walk(shattered_query.antecedent)
         proj_cols = tuple(
-            str2columnstr_constant(arg.name)
-            for arg in shattered_query.consequent.args
-            if isinstance(arg, Symbol)
+            OrderedSet(
+                str2columnstr_constant(arg.name)
+                for arg in shattered_query.consequent.args
+                if isinstance(arg, Symbol)
+            )
         )
         ra_query = Projection(ra_query, proj_cols)
         ra_query = RAQueryOptimiser().walk(ra_query)
