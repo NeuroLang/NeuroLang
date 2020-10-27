@@ -673,6 +673,7 @@ def test_program_with_variable_equality(solver):
     assert testing.eq_prov_relations(result, expected)
 
 
+@pytest.mark.xfail(reason="Flattenign query issue")
 def test_repeated_variable_probabilistic_rule(solver):
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(

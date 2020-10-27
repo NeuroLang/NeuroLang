@@ -66,7 +66,11 @@ class RegionFrontendCPLogicSolver(
     pass
 
 
+<<<<<<< HEAD
 class NeurolangPDL(QueryBuilderDatalog):
+=======
+class ProbabilisticFrontend(QueryBuilderDatalog):
+>>>>>>> master
     """
     Complements QueryBuilderDatalog class with probabilistic capabilities
     1- add extensional probabilistic facts and choices
@@ -607,6 +611,9 @@ class NeurolangPDL(QueryBuilderDatalog):
         ra_set = ra_set.extended_projection(projections)
         self.program_ir.add_probabilistic_choice_from_tuples(symbol, ra_set)
         return fe.Symbol(self, name)
+<<<<<<< HEAD
 
 
 ProbabilisticFrontend = NeurolangPDL
+=======
+>>>>>>> master
