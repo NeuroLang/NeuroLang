@@ -64,3 +64,7 @@ class ProtectedKeywordError(NeuroLangException):
 
 class ForbiddenRecursivityError(UnsupportedProgramError):
     pass
+
+
+class ForbiddenUnstratifiedAggregation(UnsupportedProgramError):
+    pass

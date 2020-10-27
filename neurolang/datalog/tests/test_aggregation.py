@@ -1,3 +1,4 @@
+from neurolang.exceptions import ForbiddenUnstratifiedAggregation
 from typing import AbstractSet
 
 import pytest
@@ -63,6 +64,30 @@ def test_aggregation_parsing():
         dl.walk(U_([
             Imp_(Q(x, Fa_(C_(sum), (y,)), Fa_(C_(sum), (y,))), P(x, y)),
         ]))
+
+
+def test_aggregation_non_stratified():
+    P = S_('P')  # noqa: N806
+    Q = S_('Q')  # noqa: N806
+    R = S_('R')  # noqa: N806
+    x = S_('x')
+
+    edb = [
+        F_(P(C_(i)))
+        for i in range(3)
+    ]
+
+    code = Eb_(edb + [
+        Imp_(Q(Fa_(S_('sum'), (x,))), Q(x)),
+    ])
+
+    dl = Datalog()
+    dl.walk(code)
+
+    chase = Chase(dl)
+
+    with pytest.raises(ForbiddenUnstratifiedAggregation):
+        chase.build_chase_solution()
 
 
 def test_aggregation_chase_no_grouping():
