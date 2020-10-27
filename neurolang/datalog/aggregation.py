@@ -159,17 +159,23 @@ class Chase(chase.Chase):
                 seen_in_stratum.add(rule.consequent.functor)
                 if is_aggregation_rule(rule):
                     aggregate_rules.append(rule)
-                for rules in aggregate_rules:
-                    if any(
-                        predicate.functor in seen_in_stratum
-                        for predicate
-                        in extract_logic_predicates(rule.antecedent)
-                    ):
-                        raise ForbiddenUnstratifiedAggregation(
-                            f"Unstratifyable aggregation {rule.consequent.functor}"
-                        )
-                
+
+                self._stratum_is_aggregation_viable(
+                    seen_in_stratum, aggregate_rules
+                )
+
         return super().check_constraints(instance_update)
+
+    def _stratum_is_aggregation_viable(self, seen_in_stratum, aggregate_rules):
+        for rule in aggregate_rules:
+            if any(
+                predicate.functor in seen_in_stratum
+                for predicate
+                in extract_logic_predicates(rule.antecedent)
+            ):
+                raise ForbiddenUnstratifiedAggregation(
+                    f"Unstratifyable aggregation {rule.consequent.functor}"
+                )
 
     def compute_result_set(
         self, rule, substitutions, instance, restriction_instance=None

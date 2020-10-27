@@ -69,7 +69,6 @@ def test_aggregation_parsing():
 def test_aggregation_non_stratified():
     P = S_('P')  # noqa: N806
     Q = S_('Q')  # noqa: N806
-    R = S_('R')  # noqa: N806
     x = S_('x')
 
     edb = [
