@@ -1,6 +1,6 @@
 
-This is a theory section
-========================
+Probabilistic Logic Programming Tutorial
+========================================
 
 I might want to describe some equations: 
 
