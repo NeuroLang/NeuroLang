@@ -21,8 +21,9 @@ probabilistic databases. VLDB J., 16(4):523–544, 2007.
 
 import logging
 from collections import defaultdict
+import operator
 
-from ..datalog.expression_processing import flatten_query
+from ..datalog.expression_processing import flatten_query, enforce_conjunction
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import ExpressionWalker, add_match
 from ..expressions import Constant, Symbol
@@ -44,6 +45,7 @@ from ..relational_algebra import (
 from ..relational_algebra_provenance import (
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceExpressionSemringSolver,
+    RelationalAlgebraProvenanceCountingSolver,
 )
 from ..utils import log_performance
 from .exceptions import NotHierarchicalQueryException
@@ -294,7 +296,9 @@ def solve_succ_query(query, cpl_program):
         solver = ProbSemiringSolver(symbol_table)
         prob_set_result = solver.walk(ra_query)
         prob_set_result = project_on_query_head(
-            shattered_query, prob_set_result
+            flat_query, prob_set_result
         )
 
     return prob_set_result
+
+

@@ -683,5 +683,22 @@ def test_repeated_variable_probabilistic_rule(solver):
     cpl.walk(Implication(H(x, x), Q(x, x, y)))
     query = Implication(ans(x, y), H(x, y))
     result = solver.solve_succ_query(query, cpl)
-    expected = {(0.2, 7, 7)}
-    assert result == expected
+    expected = testing.make_prov_set([(0.2, 7, 7)], ("_p_", "x", "y"))
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_repeated_variable_with_constant_in_head(solver):
+    if solver != dichotomy_theorem_based_solver:
+        return
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        Q, [(0.2, 7, 8), (0.6, 8, 9), (0.9, 8, 8)],
+    )
+    cpl.add_probabilistic_choice_from_tuples(
+        P, [(0.4, 8), (0.6, 9)],
+    )
+    cpl.walk(Implication(R(Constant[int](8), x), Conjunction((Q(x, x), P(x)))))
+    query = Implication(ans(x, y), R(x, y))
+    result = solver.solve_succ_query(query, cpl)
+    expected = testing.make_prov_set([(0.4 * 0.9, 8, 8)], ("_p_", "x", "y"))
+    assert testing.eq_prov_relations(result, expected)

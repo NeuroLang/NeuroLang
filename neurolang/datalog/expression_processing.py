@@ -31,6 +31,7 @@ from ..expression_walker import (
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import (
     TRUE,
+    FALSE,
     Conjunction,
     Disjunction,
     Implication,
@@ -504,7 +505,7 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
         FunctionApplication,
         lambda fa: all(isinstance(arg, (Constant, Symbol)) for arg in fa.args),
     )
-    def function_application(self, expression):
+    def query_predicate(self, expression):
         functor = expression.functor
         if functor not in self.idb:
             return expression
@@ -513,9 +514,10 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
         ucq = self.idb[functor]
         cqs = []
         for cq in ucq.formulas:
-            cq = self._normalise_arguments(cq, args)
-            antecedent = self.walk(cq.antecedent)
-            cqs.append(antecedent)
+            exp = self._normalise_arguments(cq, args)
+            if exp != FALSE:
+                exp = self.walk(exp.antecedent)
+            cqs.append(exp)
 
         if len(cqs) > 1:
             res = Disjunction(tuple(cqs))
@@ -524,28 +526,17 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
         return res
 
     def _normalise_arguments(self, cq, args):
-        free_variables = extract_logic_free_variables(cq)
-        linked_variables = cq.consequent.args
         replacements = collections.OrderedDict()
+        free_variables = extract_logic_free_variables(cq)
         # replace free variables by fresh symbols to avoid any collision with
         # other substitutions
-        replacements.update({x: Symbol.fresh() for x in free_variables})
-        replacements.update(dict(zip(linked_variables, args)))
+        replacements.update({var: Symbol.fresh() for var in free_variables})
+        mgu = most_general_unifier(cq.consequent, cq.consequent.functor(*args))
+        # if we cannot unify, this is always a false statement
+        if mgu is None:
+            return FALSE
+        replacements.update(mgu[0])
         cq = ReplaceExpressionWalker(replacements).walk(cq)
-        # find variable equalities by applying most general unifier (MGU)
-        # algorithm to unify the head of the query and the body of the rule
-        mgu = most_general_unifier(
-            cq.consequent.functor(*args), cq.consequent
-        )
-        if mgu is not None and mgu[0]:
-            vareqs = mgu[0]
-            conj_eqs = Conjunction(tuple(
-                Constant(operator.eq)(x, y)
-                for x, y in vareqs.items()
-            ))
-            cq = Implication(
-                cq.consequent, conjunct_formulas(cq.antecedent, conj_eqs)
-            )
         return cq
 
     @add_match(Conjunction)
