@@ -1,3 +1,4 @@
+from neurolang.type_system import is_leq_informative
 from operator import contains, eq, not_
 from typing import AbstractSet, Callable, Tuple
 
@@ -410,7 +411,11 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         for destroy in classified_formulas['destroy_formulas']:
             if destroy.args[0] in named_columns:
                 output = Destroy(output, destroy.args[0], destroy.args[1])
-                named_columns.add(destroy.args[1])
+                if is_leq_informative(destroy.args[1].type, Tuple):
+                    for arg in destroy.args[1].value:
+                        named_columns.add(Constant(arg))
+                else:
+                    named_columns.add(destroy.args[1])
             else:
                 destroy_to_keep.append(destroy)
         classified_formulas['destroy_formulas'] = destroy_to_keep

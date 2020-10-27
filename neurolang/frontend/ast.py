@@ -1,7 +1,24 @@
+r"""
+Defines Abstract Syntax Tree base classes
+for text-parsed language code
+=========================================
+
+1- defines an AST node
+2- defines an AST walker, able to go through
+an AST to convert it to some other representation
+"""
 import logging
+from typing import Any, List, Union
+
+from .. import expressions as ir
 
 
 class ASTNode(dict):
+    """
+    Class representing a Node in an
+    Abstract Syntax Tree
+    """
+
     def __init__(self, name, children):
         self.name = name
         self.update(children)
@@ -14,7 +31,34 @@ class ASTNode(dict):
 
 
 class ASTWalker(object):
-    def evaluate(self, ast):
+    """
+    Base class for Abstract Syntax Tree walkers.
+    Walke through an AST translating nodes to
+    the corresponding Neurolang intermediate representation
+    """
+
+    def evaluate(
+        self, ast: Union[ASTNode, List[ASTNode], Any]
+    ) -> Union[ir.Expression, List[ir.Expression], Any]:
+        """
+        Converts input to intermediate representation:
+        - if input is an ASTNode, calls -if it exists- the class method
+        corresponding to the node type (methods are declared
+        in child class)
+        - if input is a list of ASTNode, recursively calls itself
+        on every node
+        - else, simply passes ast through
+
+        Parameters
+        ----------
+        ast : Union[ASTNode, List[ASTNode], Any]
+            input to convert to intermediate representation
+
+        Returns
+        -------
+        Union[ir.Expression, List[ir.Expression], Any]
+            intermediate representation of input
+        """
         if isinstance(ast, ASTNode):
             logging.debug("evaluating %s" % ast.name)
             arguments = {k: self.evaluate(v) for k, v in ast.items()}
@@ -33,5 +77,20 @@ class ASTWalker(object):
             return ast
 
     @staticmethod
-    def _default(ast):
+    def _default(ast: ASTNode) -> ASTNode:
+        """
+        Identity evaluation for a node
+        whose type isn't covered by the class methods.
+        Passes node through
+
+        Parameters
+        ----------
+        ast : ASTNode
+            Node of unsupported type
+
+        Returnss
+        -------
+        ASTNode
+            Input Node passed through
+        """
         return ast

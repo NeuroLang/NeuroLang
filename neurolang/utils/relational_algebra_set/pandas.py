@@ -34,6 +34,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             elif isinstance(iterable, pd.DataFrame):
                 self._container = iterable.copy()
             else:
+                if hasattr(iterable, 'to_numpy'):
+                    iterable = iterable.to_numpy()
                 self._container = pd.DataFrame(iterable)
 
     def _drop_duplicates_if_needed(self):
@@ -272,10 +274,9 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             if res is not None:
                 return res
             ocont = other._container
-            new_container = pd.merge(
-                left=self._container,
-                right=ocont,
-                how="outer",
+            new_container = pd.concat(
+                [self._container, ocont],
+                axis=0,
             )
             output = self._empty_set_same_structure()
             output._container = new_container
@@ -375,6 +376,8 @@ class NamedRelationalAlgebraFrozenSet(
             self._container = iterable.copy()
             self._container.columns = self._columns
         else:
+            if hasattr(iterable, 'to_numpy'):
+                iterable = iterable.to_numpy()
             self._container = pd.DataFrame(
                 iterable, columns=self._columns
             )
@@ -597,7 +600,9 @@ class NamedRelationalAlgebraFrozenSet(
     def groupby(self, columns):
         if self.is_empty():
             return
-        for g_id, group in self._container.groupby(by=list(columns)):
+        for g_id, group in self._container.groupby(
+            by=list(columns), sort=False
+        ):
             group_set = self._light_init_same_structure(
                 group,
                 might_have_duplicates=self._might_have_duplicates,
@@ -607,6 +612,8 @@ class NamedRelationalAlgebraFrozenSet(
 
     def aggregate(self, group_columns, aggregate_function):
         group_columns = list(group_columns)
+        if len(set(group_columns)) < len(group_columns):
+            raise ValueError("Cannot group on repeated columns")
         if len(group_columns) > 0:
             groups = self._container.groupby(group_columns)
         else:
@@ -673,6 +680,12 @@ class NamedRelationalAlgebraFrozenSet(
             )
         elif isinstance(aggregate_function, (tuple, list)):
             arg_iterable = aggregate_function
+        else:
+            raise ValueError(
+                "Unsupported aggregate_function: {} of type {}".format(
+                    aggregate_function, type(aggregate_function)
+                )
+            )
 
         for dst, src, fun in arg_iterable:
             if dst in group_columns:
@@ -780,10 +793,9 @@ class NamedRelationalAlgebraFrozenSet(
             raise ValueError(
                 "Union defined only for sets with the same columns"
             )
-        new_container = pd.merge(
-            left=self._container,
-            right=other._container,
-            how="outer",
+        new_container = pd.concat(
+            [self._container, other._container],
+            axis=0,
         )
 
         self._keep_column_types(new_container)
