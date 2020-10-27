@@ -160,9 +160,9 @@ class Chase(chase.Chase):
                 if is_aggregation_rule(rule):
                     aggregate_rules.append(rule)
 
-                self._stratum_is_aggregation_viable(
-                    seen_in_stratum, aggregate_rules
-                )
+            self._stratum_is_aggregation_viable(
+                seen_in_stratum, aggregate_rules
+            )
 
         return super().check_constraints(instance_update)
 
