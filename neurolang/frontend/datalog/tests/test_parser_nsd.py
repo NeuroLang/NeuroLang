@@ -3,7 +3,7 @@ from operator import add, eq, mul, pow, sub, truediv
 from ....datalog import Conjunction, Fact, Implication, Negation, Union
 from ....datalog.aggregation import AggregationApplication
 from ....expressions import Constant, Symbol
-from .. import ExternalSymbol
+from ..standard_syntax_datalog import ExternalSymbol
 from ..natural_syntax_datalog import parser
 from ....probabilistic.expressions import ProbabilisticPredicate
 

@@ -26,7 +26,7 @@ from ..datalog.expression_processing import (
 )
 from ..type_system import Unknown
 from ..utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
-from .datalog import parser as datalog_parser
+from .datalog.standard_syntax_datalog import parser as datalog_parser
 from .datalog.natural_syntax_datalog import parser as nat_datalog_parser
 from .query_resolution import NeuroSynthMixin, QueryBuilderBase, RegionMixin
 from ..datalog import DatalogProgram
