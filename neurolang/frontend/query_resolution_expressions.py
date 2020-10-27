@@ -100,15 +100,7 @@ class Expression(object):
         >>> A(x)
         <class 'neurolang.frontend.query_resolution_expressions.Operation'>
         """
-        new_args = []
-        for a in args:
-            if a is Ellipsis:
-                new_args.append(nl.Symbol.fresh())
-            elif isinstance(a, Expression):
-                new_args.append(a.expression)
-            else:
-                new_args.append(nl.Constant(a))
-        new_args = tuple(new_args)
+        new_args = self._translate_tuple(args)
 
         if self.query_builder.logic_programming and isinstance(self, Symbol):
             functor = self.neurolang_symbol
@@ -117,6 +109,26 @@ class Expression(object):
 
         new_expression = ir.FunctionApplication(functor, new_args)
         return Operation(self.query_builder, new_expression, self, args)
+
+    def _translate_tuple(self, args):
+        new_args = []
+        for a in args:
+            if a is Ellipsis:
+                new_args.append(nl.Symbol.fresh())
+            elif isinstance(a, Expression):
+                new_args.append(a.expression)
+            elif isinstance(a, tuple):
+                new_tuple = self._translate_tuple(a)
+                types = tuple(a.type for a in new_tuple)
+                new_tuple = nl.Constant[Tuple[types]](
+                    new_tuple,
+                    verify_type=False
+                )
+                new_args.append(new_tuple)
+            else:
+                new_args.append(nl.Constant(a))
+        new_args = tuple(new_args)
+        return new_args
 
     def __setitem__(
         self,

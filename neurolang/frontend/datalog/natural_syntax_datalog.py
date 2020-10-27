@@ -6,7 +6,7 @@ from ...probabilistic.expressions import ProbabilisticPredicate
 from ...datalog import Implication
 from ...datalog.aggregation import AggregationApplication
 from ...expressions import Expression, FunctionApplication
-from . import DatalogSemantics as DatalogClassicSemantics
+from .standard_syntax_datalog import DatalogSemantics as DatalogClassicSemantics
 
 
 GRAMMAR = u"""
@@ -123,17 +123,17 @@ GRAMMAR = u"""
 
 
 OPERATOR = {
-    '+': add,
-    '-': sub,
-    '==': eq,
-    '>=': ge,
-    '>': gt,
-    '<=': le,
-    '<': lt,
-    '*': mul,
-    '!=': ne,
-    '**': pow,
-    '/': truediv
+    "+": add,
+    "-": sub,
+    "==": eq,
+    ">=": ge,
+    ">": gt,
+    "<=": le,
+    "<": lt,
+    "*": mul,
+    "!=": ne,
+    "**": pow,
+    "/": truediv,
 }
 
 
@@ -142,37 +142,34 @@ COMPILED_GRAMMAR = tatsu.compile(GRAMMAR)
 
 class DatalogSemantics(DatalogClassicSemantics):
     def constant_predicate(self, ast):
-        return ast['predicate'](*ast['arguments'])
+        return ast["predicate"](*ast["arguments"])
 
     def head_predicate(self, ast):
         if not isinstance(ast, Expression):
-            if ast['arguments'] is not None and len(ast['arguments']) > 0:
+            if ast["arguments"] is not None and len(ast["arguments"]) > 0:
                 arguments = []
-                for arg in ast['arguments']:
+                for arg in ast["arguments"]:
                     if isinstance(arg, FunctionApplication):
-                        arg = AggregationApplication(
-                            arg.functor,
-                            arg.args
-                        )
+                        arg = AggregationApplication(arg.functor, arg.args)
                     arguments.append(arg)
-                ast = ast['predicate'](*arguments)
+                ast = ast["predicate"](*arguments)
             else:
-                ast = ast['predicate']()
+                ast = ast["predicate"]()
         return ast
 
     def predicate(self, ast):
         if not isinstance(ast, Expression):
-            ast = ast['predicate'](*ast['arguments'])
+            ast = ast["predicate"](*ast["arguments"])
         return ast
 
     def probabilistic_expression(self, ast):
-        probability = ast['probability']
-        expression = ast['expression']
+        probability = ast["probability"]
+        expression = ast["expression"]
 
         if isinstance(expression, Implication):
             return Implication(
                 ProbabilisticPredicate(probability, expression.consequent),
-                expression.antecedent
+                expression.antecedent,
             )
         else:
             raise ValueError("Invalid rule")
@@ -180,6 +177,7 @@ class DatalogSemantics(DatalogClassicSemantics):
 
 def parser(code, locals=None, globals=None):
     return tatsu.parse(
-        COMPILED_GRAMMAR, code.strip(),
-        semantics=DatalogSemantics(locals=locals, globals=globals)
+        COMPILED_GRAMMAR,
+        code.strip(),
+        semantics=DatalogSemantics(locals=locals, globals=globals),
     )
