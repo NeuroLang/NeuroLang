@@ -13,7 +13,7 @@ from .expressions import (
     Symbol,
     Unknown, sure_is_not_pattern,
 )
-from .utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet, log_performance
+from .utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraSet
 from .utils.relational_algebra_set import (
     RelationalAlgebraColumnInt, RelationalAlgebraColumnStr,
     RelationalAlgebraStringExpression
@@ -47,11 +47,6 @@ def get_expression_columns(expression):
         arg = args.pop()
         if isinstance(arg, Constant[Column]):
             columns.add(arg)
-        elif isinstance(arg, Constant[Tuple]):
-            args += (
-                Constant[t](v, verify_type=False)
-                for v, t in zip(arg.value, arg.type.__args__)
-            )
         elif isinstance(arg, Constant):
             continue
         elif isinstance(arg, Expression):
@@ -704,8 +699,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
             row_group_iterator = (t for _, t in relation.groupby(cols))
         else:
             row_group_iterator = (relation,)
-        for i, t in enumerate(row_group_iterator):
-            print(f"Destroying set {i}")
+        for t in row_group_iterator:
             destroyed_set = set_type(columns=dst_columns)
             for row in t:
                 row_set = set_type(
@@ -1182,44 +1176,4 @@ class RelationalAlgebraPushInSelections(ew.PatternWalker):
         return Projection(
             Selection(expression.relation.relation, expression.formula),
             expression.relation.attributes
-        )
-
-
-class RelationalAlgebraPushInDestroy(ew.PatternWalker):
-    @ew.add_match(
-        Destroy(NaturalJoin, ..., ...),
-        lambda exp: (
-            exp.src_column not in
-            get_expression_columns(exp.relation.relation_right)
-        )
-    )
-    def push_destroy_in_left(self, expression):
-        return self.walk(
-            NaturalJoin(
-                Destroy(
-                    expression.relation.relation_left,
-                    expression.src_column,
-                    expression.dst_column
-                ),
-                expression.relation.relation_right
-            )
-        )
-
-    @ew.add_match(
-        Destroy(NaturalJoin, ..., ...),
-        lambda exp: (
-            exp.src_column not in
-            get_expression_columns(exp.relation.relation_left)
-        )
-    )
-    def push_destroy_in_right(self, expression):
-        return self.walk(
-            NaturalJoin(
-                expression.relation.relation_left,
-                Destroy(
-                    expression.relation.relation_right,
-                    expression.src_column,
-                    expression.dst_column
-                )
-            )
         )

@@ -5,9 +5,6 @@ from itertools import product
 
 from .exceptions import NeuroLangException
 from .aabb_tree import AABB, Tree, aabb_from_vertices, Node
-from .utils.relational_algebra_set.pandas import (
-    NamedRelationalAlgebraFrozenSet
-)
 
 __all__ = [
     'region_union', 'region_intersection', 'region_difference',
@@ -281,7 +278,6 @@ class ExplicitVBR(VolumetricBrainRegion):
         self.image_dim = image_dim
         self._aabb_tree = None
         self._bounding_box = self.generate_bounding_box(self.voxels)
-        self._hash = None
         if prebuild_tree:
             self.build_tree()
 
@@ -373,11 +369,6 @@ class ExplicitVBR(VolumetricBrainRegion):
             np.linalg.solve(affine, self.affine),
             self.voxels)
 
-    def to_numpy(self):
-        arr = self.voxels.view()
-        arr.flags.writeable = False
-        return arr
-
     def spatial_image(self, out=None, value=1):
         if out is None:
             mask = np.zeros(self.image_dim, dtype=np.int16)
@@ -391,29 +382,15 @@ class ExplicitVBR(VolumetricBrainRegion):
         mask[tuple(self.voxels.T)] = value
         return out
 
-    def __iter__(self):
-        for row in self.voxels:
-            yield tuple(row)
-
     def __eq__(self, other):
-        return (
-            (hash(self) == hash(other)) and
-            (
-                (self is other) or
-                (
-                    np.array_equiv(self.affine, other.affine) and
-                    np.array_equiv(self.voxels, other.voxels)
-                )
-            )
-        )
+        return (np.array_equiv(self.affine, other.affine) and
+                np.array_equiv(self.voxels, other.voxels))
 
     def __repr__(self):
         return f'Region(VBR= affine:{self.affine}, voxels:{self.voxels})'
 
     def __hash__(self):
-        if self._hash is None:
-            self._hash = hash((self.voxels.tobytes(), self.affine.tobytes()))
-        return self._hash
+        return hash((self.voxels.tobytes(), self.affine.tobytes()))
 
 
 class ExplicitVBROverlay(ExplicitVBR):

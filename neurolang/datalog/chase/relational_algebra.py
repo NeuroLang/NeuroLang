@@ -1,5 +1,4 @@
 import logging
-from logging import log
 import operator
 from collections import defaultdict
 from functools import lru_cache
@@ -11,10 +10,9 @@ from ...logic.unification import apply_substitution_arguments
 from ...relational_algebra import (ColumnInt, Product, Projection,
                                    RelationalAlgebraOptimiser,
                                    RelationalAlgebraPushInSelections,
-                                   RelationalAlgebraPushInDestroy,
                                    RelationalAlgebraSolver, Selection, eq_)
 from ...type_system import Unknown, is_leq_informative
-from ...utils import NamedRelationalAlgebraFrozenSet, log_performance
+from ...utils import NamedRelationalAlgebraFrozenSet
 from ..expression_processing import extract_logic_free_variables
 from ..expressions import Conjunction, Implication
 from ..instance import MapInstance
@@ -48,11 +46,8 @@ class ChaseRelationalAlgebraPlusCeriMixin:
         )
         ra_code_opt = RelationalAlgebraOptimiser().walk(ra_code)
         if not isinstance(ra_code_opt, Constant) or len(ra_code_opt.value) > 0:
-            with log_performance(
-                LOG, 
-                'About to execute RA query %s', (ra_code,)
-            ):
-                result = RelationalAlgebraSolver().walk(ra_code_opt)
+            LOG.info('About to execute RA query %s', ra_code)
+            result = RelationalAlgebraSolver().walk(ra_code_opt)
         else:
             return [{}]
 
@@ -145,7 +140,6 @@ class ChaseRelationalAlgebraPlusCeriMixin:
 
 class NamedRelationalAlgebraOptimiser(
     RelationalAlgebraPushInSelections,
-    RelationalAlgebraPushInDestroy,
     ExpressionWalker
 ):
     pass
@@ -174,37 +168,22 @@ class ChaseNamedRelationalAlgebraMixin:
         else:
             predicates = (rule.antecedent,)
 
-        with log_performance(
-            LOG, "Computing substitutions: %s",
-            init_args=(repr(rule),)
-        ):
-            substitutions = self.obtain_substitutions(
-                predicates, instance, restriction_instance
+        substitutions = self.obtain_substitutions(
+            predicates, instance, restriction_instance
+        )
+
+        if consequent.functor in instance:
+            substitutions = self.eliminate_already_computed(
+                consequent, instance, substitutions
+            )
+        if consequent.functor in restriction_instance:
+            substitutions = self.eliminate_already_computed(
+                consequent, restriction_instance, substitutions
             )
 
-        if False:
-            with log_performance(
-                LOG, "Eliminate already computed: %s",
-                init_args=(repr(rule),)
-            ):
-                if consequent.functor in instance:
-                    substitutions = self.eliminate_already_computed(
-                        consequent, instance, substitutions
-                    )
-                if consequent.functor in restriction_instance:
-                    substitutions = self.eliminate_already_computed(
-                        consequent, restriction_instance, substitutions
-                    )
-
-        with log_performance(
-            LOG, "Compute final result set: %s",
-            init_args=(repr(rule),)
-        ):
-            res = self.compute_result_set(
-                rule, substitutions, instance, restriction_instance
-            )
-
-        return res
+        return self.compute_result_set(
+            rule, substitutions, instance, restriction_instance
+        )
 
     @lru_cache(1024)
     def rewrite_constants_in_consequent(self, rule):
@@ -329,10 +308,8 @@ class ChaseNamedRelationalAlgebraMixin:
             Conjunction(predicates)
         )
 
-        with log_performance(
-            LOG, 'About to execute RA query %s', (ra_code,)
-        ):
-            result = RelationalAlgebraSolver(symbol_table).walk(ra_code)
+        LOG.info('About to execute RA query %s', ra_code)
+        result = RelationalAlgebraSolver(symbol_table).walk(ra_code)
 
         result_value = result.value
         substitutions = WrappedNamedRelationalAlgebraFrozenSet(
