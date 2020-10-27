@@ -11,7 +11,8 @@ End-User Frontend
 .. autosummary::
    :toctree: gen_api
 
-    frontend
+    frontend.NeurolangDL
+    frontend.NeurolangPDL
 
 Intermediate Representation Infrastructure
 ------------------------------------------

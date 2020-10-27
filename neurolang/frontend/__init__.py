@@ -15,7 +15,7 @@ from ..regions import ExplicitVBR, ExplicitVBROverlay
 from ..utils.data_manipulation import parse_region_label_map
 from .query_resolution_datalog import QueryBuilderDatalog
 from .query_resolution_expressions import Symbol
-from .probabilistic_frontend import ProbabilisticFrontend as NeurolangPDL
+from .probabilistic_frontend import NeurolangPDL
 
 
 __all__ = [

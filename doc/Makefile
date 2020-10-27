@@ -56,7 +56,7 @@ clean:
 	rm -rf gen_api
 
 api:
-	$(SPHINXAPI) -o gen_api ../neurolang
+	$(SPHINXAPI) -o gen_api ../neurolang -M --separate
 	rm gen_api/*.tests.*
 
 html:

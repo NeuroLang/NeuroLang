@@ -100,7 +100,6 @@ class Expression(object):
         >>> A(x)
         <class 'neurolang.frontend.query_resolution_expressions.Operation'>
         """
-    def __call__(self, *args, **kwargs):
         new_args = self._translate_tuple(args)
 
         if self.query_builder.logic_programming and isinstance(self, Symbol):
@@ -108,7 +107,7 @@ class Expression(object):
         else:
             functor = self.expression
 
-        new_expression = exp.FunctionApplication(functor, new_args)
+        new_expression = ir.FunctionApplication(functor, new_args)
         return Operation(self.query_builder, new_expression, self, args)
 
     def _translate_tuple(self, args):
