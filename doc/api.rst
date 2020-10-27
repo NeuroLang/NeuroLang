@@ -2,8 +2,8 @@
 
 .. currentmodule:: neurolang
 
-API reference
-=============
+User Guide
+==========
 
 End-User Frontend
 -----------------

@@ -6,7 +6,7 @@ Welcome to neurolang's documentation!
 .. To see how to use it, please refer to the `README file <https://github.com/NeuroLang/neurolang/blob/master/README.md>`_ in the Github repository.
 
 
-NeuroLang is a probabilistic logic programming system specialised in the analysis of neuroimaging data. See our `example gallery <auto_examples/index>` for some use cases on neuroimaging meta-analysis.
+NeuroLang is a probabilistic logic programming system specialised in the analysis of neuroimaging data. See our example gallery for some use cases on neuroimaging meta-analysis.
 
 .. raw:: html
 

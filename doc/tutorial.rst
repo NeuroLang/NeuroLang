@@ -1,17 +1,18 @@
 
-Probabilistic Logic Programming Tutorial
-========================================
-
-I might want to describe some equations: 
-
-.. math::
-
-    \int_0^\infty e^{-x^2} dx=\frac{\sqrt{\pi}}{2}
+Get Started with NeuroLang
+==========================
 
 
-And refer to a paper [author2015]_.
+First Steps With NeuroLang
+--------------------------
+NeuroLang is a unifying formalism to perform complex queries and explorations using heterogeneous data sources like tabular data,
+volumetric images, and ontologies. To perform this in sound manner, NeuroLang is a probabilistic logic programming language based on Datalog [abiteboul1995]_, [maier2018]_. A simple example can be produced by analysing the NeuroSynth database, to find all article titles which have the word "pain" in the abstract. For this, we start by importing the NeuroLang deterministic solver::
+
+    >>> from neurolang.frontend import NeurolangDL
+    >>> 
 
 
-.. [author2015] first a., second a., cheese b. (2015). The title of their 
-                paper. Journal of papers, *15*: 1023-1049.
+
+.. [abiteboul1995] Abiteboul, S., Hull, R. & Vianu, V. Foundations of databases. (Addison Wesley, 1995).
+.. [maier2018] Maier, D., Tekle, K. T., Kifer, M. & Warren, D. S. Datalog: concepts, history, and outlook. in Declarative Logic Programming (eds. Kifer, M. & Liu, Y. A.) 3–100 (Association for Computing Machinery and Morgan & Claypool, 2018). doi:10.1145/3191315.3191317.
 
