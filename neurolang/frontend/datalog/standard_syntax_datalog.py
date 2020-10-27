@@ -7,6 +7,7 @@ from ...datalog.constraints_representation import RightImplication
 from ...expressions import Constant, Expression, FunctionApplication, Symbol
 from ...probabilistic.expressions import ProbabilisticPredicate
 
+
 GRAMMAR = u"""
     @@grammar::Datalog
     @@parseinfo :: True
@@ -89,17 +90,17 @@ GRAMMAR = u"""
 
 
 OPERATOR = {
-    '+': add,
-    '-': sub,
-    '==': eq,
-    '>=': ge,
-    '>': gt,
-    '<=': le,
-    '<': lt,
-    '*': mul,
-    '!=': ne,
-    '**': pow,
-    '/': truediv
+    "+": add,
+    "-": sub,
+    "==": eq,
+    ">=": ge,
+    ">": gt,
+    "<=": le,
+    "<": lt,
+    "*": mul,
+    "!=": ne,
+    "**": pow,
+    "/": truediv,
 }
 
 
@@ -138,7 +139,7 @@ class DatalogSemantics:
         if isinstance(expression, Implication):
             return Implication(
                 ProbabilisticPredicate(probability, expression.consequent),
-                expression.antecedent
+                expression.antecedent,
             )
         else:
             raise ValueError("Invalid rule")
@@ -231,7 +232,7 @@ class DatalogSemantics:
         return Symbol(ast)
 
     def argument(self, ast):
-        if ast == '...':
+        if ast == "...":
             return Symbol.fresh()
         else:
             return ast
@@ -251,6 +252,7 @@ class DatalogSemantics:
 
 def parser(code, locals=None, globals=None):
     return tatsu.parse(
-        COMPILED_GRAMMAR, code.strip(),
-        semantics=DatalogSemantics(locals=locals, globals=globals)
+        COMPILED_GRAMMAR,
+        code.strip(),
+        semantics=DatalogSemantics(locals=locals, globals=globals),
     )
