@@ -20,6 +20,7 @@ probabilistic databases. VLDB J., 16(4):523–544, 2007.
 '''
 
 import logging
+import typing
 from collections import defaultdict
 import operator
 
@@ -213,6 +214,49 @@ class ProbSemiringSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
     def probabilistic_fact_set_invalid(self, prob_fact_set):
         raise NotImplementedError()
 
+    @add_match(ExtendedProjection(ProvenanceAlgebraSet, ...))
+    def extended_projection(self, op):
+        provset = self.walk(op.relation)
+        self._check_prov_col_not_in_proj_list(provset, op.projection_list)
+        self._check_all_non_prov_cols_in_proj_list(provset, op.projection_list)
+        relation = Constant[typing.AbstractSet](provset.relations)
+        prov_col = str2columnstr_constant(provset.provenance_column)
+        new_prov_col = str2columnstr_constant(Symbol.fresh().name)
+        proj_list_with_prov_col = op.projection_list + (
+            ExtendedProjectionListMember(prov_col, new_prov_col),
+        )
+        ra_op = ExtendedProjection(relation, proj_list_with_prov_col)
+        new_relation = self.walk(ra_op)
+        new_provset = ProvenanceAlgebraSet(
+            new_relation.value, new_prov_col.value
+        )
+        return new_provset
+
+    @staticmethod
+    def _check_prov_col_not_in_proj_list(provset, proj_list):
+        if any(
+            member.dst_column.value == provset.provenance_column
+            for member in proj_list
+        ):
+            raise ValueError(
+                "Cannot project on provenance column: "
+                f"{provset.provenance_column}"
+            )
+
+    @staticmethod
+    def _check_all_non_prov_cols_in_proj_list(provset, proj_list):
+        non_prov_cols = set(provset.non_provenance_columns)
+        found_cols = set(
+            member.dst_column.value
+            for member in proj_list
+            if member.dst_column.value in non_prov_cols
+            and member.fun_exp == member.dst_column
+        )
+        if non_prov_cols.symmetric_difference(found_cols):
+            raise ValueError(
+                "All non-provenance columns must be part of the extended "
+                "projection as {c: c} projection list member."
+            )
 
 class RAQueryOptimiser(
     EliminateTrivialProjections,
@@ -282,11 +326,11 @@ def solve_succ_query(query, cpl_program):
             )
 
         ra_query = TranslateToNamedRA().walk(shattered_query.antecedent)
+        # finally project on the initial query's head variables
         proj_cols = tuple(
             OrderedSet(
                 str2columnstr_constant(arg.name)
-                for arg in shattered_query.consequent.args
-                if isinstance(arg, Symbol)
+                for arg in query.consequent.args
             )
         )
         ra_query = Projection(ra_query, proj_cols)
@@ -295,10 +339,5 @@ def solve_succ_query(query, cpl_program):
     with log_performance(LOG, "Run RAP query"):
         solver = ProbSemiringSolver(symbol_table)
         prob_set_result = solver.walk(ra_query)
-        prob_set_result = project_on_query_head(
-            flat_query, prob_set_result
-        )
 
     return prob_set_result
-
-
