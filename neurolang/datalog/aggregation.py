@@ -12,12 +12,12 @@ in the set ``Q``.
 
 from warnings import warn
 
-from ..exceptions import NeuroLangException
+from ..exceptions import ForbiddenUnstratifiedAggregation, NeuroLangException
 from ..expression_walker import (
     FunctionApplicationToPythonLambda,
     PatternWalker,
     ReplaceSymbolsByConstants,
-    add_match,
+    add_match
 )
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..type_system import get_generic_type
@@ -26,9 +26,10 @@ from . import (
     Implication,
     Union,
     chase,
-    is_conjunctive_expression_with_nested_predicates,
+    is_conjunctive_expression_with_nested_predicates
 )
 from .basic_representation import UnionOfConjunctiveQueries
+from .expression_processing import extract_logic_predicates, stratify
 from .expressions import TranslateToLogic
 
 FA2L = FunctionApplicationToPythonLambda()
@@ -148,11 +149,33 @@ class DatalogWithAggregationMixin(PatternWalker):
 
 class Chase(chase.Chase):
     def check_constraints(self, instance_update):
-        warn(
-            "No check performed. Should implement check for stratified"
-            " aggregation"
-        )
+        code = Union(tuple(self.rules))
+        stratified_code, stratifiable = stratify(code, self.datalog_program)
+
+        for stratum in stratified_code:
+            seen_in_stratum = set()
+            aggregate_rules = []
+            for rule in stratum:
+                seen_in_stratum.add(rule.consequent.functor)
+                if is_aggregation_rule(rule):
+                    aggregate_rules.append(rule)
+
+            self._stratum_is_aggregation_viable(
+                seen_in_stratum, aggregate_rules
+            )
+
         return super().check_constraints(instance_update)
+
+    def _stratum_is_aggregation_viable(self, seen_in_stratum, aggregate_rules):
+        for rule in aggregate_rules:
+            if any(
+                predicate.functor in seen_in_stratum
+                for predicate
+                in extract_logic_predicates(rule.antecedent)
+            ):
+                raise ForbiddenUnstratifiedAggregation(
+                    f"Unstratifiable aggregation {rule.consequent.functor}"
+                )
 
     def compute_result_set(
         self, rule, substitutions, instance, restriction_instance=None
