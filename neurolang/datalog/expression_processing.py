@@ -6,7 +6,6 @@ Datalog programs.
 
 import collections
 import operator
-from itertools import chain
 from typing import Iterable
 
 import numpy as np
