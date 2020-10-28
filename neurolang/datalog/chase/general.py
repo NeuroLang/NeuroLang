@@ -424,16 +424,6 @@ class ChaseGeneral():
 class ChaseNonRecursive:
     """Chase class for non-recursive programs.
     """
-    def build_chase_solution(self):
-        instance = MapInstance()
-        instance_update = MapInstance(
-            self.datalog_program.extensional_database()
-        )
-        self.check_constraints(instance_update)
-        rules = list(self.rules)
-        instance_update = self.execute_chase(rules, instance_update, instance)
-
-        return instance_update
 
     def execute_chase(self, rules, instance_update, instance):
         rules_seen = set()
