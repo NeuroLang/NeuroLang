@@ -519,6 +519,28 @@ def test_neurolang_dl_aggregation_environment_direct_query():
     assert sol == res_q
 
 
+def test_aggregation_number_of_arrivals():
+    neurolang = frontend.NeurolangDL()
+    @neurolang.add_symbol
+    def agg_count(x) -> int:
+        return len(x)
+
+    with neurolang.environment as e:
+        e.A[0, 1] = True
+        e.A[1, 2] = True
+        e.A[2, 3] = True
+        e.reachable[e.x, e.y] = e.A[e.x, e.y]
+        e.reachable[e.x, e.y] = e.reachable[e.x, e.z] & e.A[e.z, e.y]
+
+        e.count_destinations[e.x, agg_count(e.y)] = e.reachable[e.x, e.y]
+
+        res = neurolang.query((e.x, e.c), e.count_destinations(e.x, e.c))
+
+    assert res == {
+        (0, 3), (1, 2), (2, 1)
+    }
+
+
 def test_neurolang_dl_attribute_access():
     neurolang = frontend.NeurolangDL()
     one_element = namedtuple('t', ('x', 'y'))(1, 2)
