@@ -165,7 +165,7 @@ class NeurolangPDL(QueryBuilderDatalog):
 
     def _execute_query(
         self,
-        head: typing.Union[fe.Symbol, Tuple[fe.Expression, ...],],
+        head: typing.Union[fe.Symbol, Tuple[fe.Expression, ...]],
         predicate: fe.Expression,
     ) -> Tuple[AbstractSet, Optional[ir.Symbol]]:
         """
