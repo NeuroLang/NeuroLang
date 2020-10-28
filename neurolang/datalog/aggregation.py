@@ -174,7 +174,7 @@ class Chase(chase.Chase):
                 in extract_logic_predicates(rule.antecedent)
             ):
                 raise ForbiddenUnstratifiedAggregation(
-                    f"Unstratifyable aggregation {rule.consequent.functor}"
+                    f"Unstratifiable aggregation {rule.consequent.functor}"
                 )
 
     def compute_result_set(
