@@ -461,23 +461,24 @@ class ChaseNaive:
 
     def build_chase_solution(self):
         instance = MapInstance()
-        empty = MapInstance()
         instance_update = MapInstance(
             self.datalog_program.extensional_database()
         )
         self.check_constraints(instance_update)
+        instance = self.execute_chase(self.rules, instance_update, instance)
+        return instance
+
+    def execute_chase(self, rules, instance_update, instance):
         while len(instance_update) > 0:
             instance |= instance_update
             new_update = MapInstance()
-            for rule in self.rules:
+            for rule in rules:
                 with log_performance(LOG, 'Evaluating rule %s', (rule,)):
                     upd = self.chase_step(
                         instance | instance_update, rule,
-                        restriction_instance=empty
                     )
                 new_update |= upd
             instance_update = new_update
-
         return instance
 
 
@@ -491,18 +492,21 @@ class ChaseSemiNaive:
             self.datalog_program.extensional_database()
         )
         self.check_constraints(instance_update)
+        instance = self.execute_chase(self.rules, instance_update, instance)
+        return instance
+
+    def execute_chase(self, rules, instance_update, instance):
         continue_chase = len(instance_update) > 0
         while continue_chase:
             instance |= instance_update
             instance_update = MapInstance()
             continue_chase = False
-            for rule in self.rules:
+            for rule in rules:
                 with log_performance(LOG, 'Evaluating rule %s', (rule,)):
                     instance_update = self.per_rule_update(
                         rule, instance, instance_update
                     )
                 continue_chase |= len(instance_update) > 0
-
         return instance
 
     def per_rule_update(self, rule, instance, instance_update):

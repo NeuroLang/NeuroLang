@@ -31,6 +31,7 @@ from . import (
 from .basic_representation import UnionOfConjunctiveQueries
 from .expression_processing import extract_logic_predicates, stratify
 from .expressions import TranslateToLogic
+from .instance import MapInstance
 
 FA2L = FunctionApplicationToPythonLambda()
 
@@ -151,8 +152,9 @@ class Chase(chase.Chase):
     def check_constraints(self, instance_update):
         code = Union(tuple(self.rules))
         stratified_code, stratifiable = stratify(code, self.datalog_program)
+        self.stratified_code = stratified_code
 
-        for stratum in stratified_code:
+        for stratum in self.stratified_code:
             seen_in_stratum = set()
             aggregate_rules = []
             for rule in stratum:
@@ -165,6 +167,18 @@ class Chase(chase.Chase):
             )
 
         return super().check_constraints(instance_update)
+
+    def build_chase_solution(self):
+        instance_update = MapInstance(
+            self.datalog_program.extensional_database()
+        )
+        self.check_constraints(instance_update)
+        instance = MapInstance()
+        for stratum in self.stratified_code:
+            instance = self.execute_chase(stratum, instance_update, instance)
+            instance_update = instance
+            instance = MapInstance()
+        return instance_update
 
     def _stratum_is_aggregation_viable(self, seen_in_stratum, aggregate_rules):
         for rule in aggregate_rules:
