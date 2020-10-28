@@ -411,6 +411,15 @@ class ChaseGeneral():
     def eliminate_already_computed(self, consequent, instance, substitutions):
         return substitutions
 
+    def build_chase_solution(self):
+        instance = MapInstance()
+        instance_update = MapInstance(
+            self.datalog_program.extensional_database()
+        )
+        self.check_constraints(instance_update)
+        instance = self.execute_chase(self.rules, instance_update, instance)
+        return instance
+
 
 class ChaseNonRecursive:
     """Chase class for non-recursive programs.
@@ -421,10 +430,15 @@ class ChaseNonRecursive:
             self.datalog_program.extensional_database()
         )
         self.check_constraints(instance_update)
-        rules_to_compute = list(self.rules)
+        rules = list(self.rules)
+        instance_update = self.execute_chase(rules, instance_update, instance)
+
+        return instance_update
+
+    def execute_chase(self, rules, instance_update, instance):
         rules_seen = set()
-        while rules_to_compute:
-            rule = rules_to_compute.pop(0)
+        while rules:
+            rule = rules.pop(0)
             functor = rule.consequent.functor
             functor_ix = self._dependency_matrix_symbols.index(functor)
             if any(
@@ -432,7 +446,7 @@ class ChaseNonRecursive:
                 for dep_index in
                 self._dependency_matrix[functor_ix].nonzero()[0]
             ):
-                rules_to_compute.append(rule)
+                rules.append(rule)
                 continue
             rules_seen.add(functor)
 
@@ -440,7 +454,6 @@ class ChaseNonRecursive:
                 instance_update |= self.chase_step(
                     instance, rule, restriction_instance=instance_update
                 )
-
         return instance_update
 
     def check_constraints(self, instance_update):
@@ -458,16 +471,6 @@ class ChaseNonRecursive:
 class ChaseNaive:
     """Chase implementation using the naive algorithm.
     """
-
-    def build_chase_solution(self):
-        instance = MapInstance()
-        instance_update = MapInstance(
-            self.datalog_program.extensional_database()
-        )
-        self.check_constraints(instance_update)
-        instance = self.execute_chase(self.rules, instance_update, instance)
-        return instance
-
     def execute_chase(self, rules, instance_update, instance):
         while len(instance_update) > 0:
             instance |= instance_update
@@ -486,14 +489,6 @@ class ChaseSemiNaive:
     """Chase implementation using the semi-naive algorithm.
     This algorithm will not work if there are non-linear rules.
        """
-    def build_chase_solution(self):
-        instance = MapInstance()
-        instance_update = MapInstance(
-            self.datalog_program.extensional_database()
-        )
-        self.check_constraints(instance_update)
-        instance = self.execute_chase(self.rules, instance_update, instance)
-        return instance
 
     def execute_chase(self, rules, instance_update, instance):
         continue_chase = len(instance_update) > 0
