@@ -8,6 +8,7 @@ from ...expressions import Constant, Symbol
 from ...logic import Conjunction, Implication, Union
 from ...relational_algebra import RenameColumn
 from .. import dichotomy_theorem_based_solver, weighted_model_counting
+from ..dichotomy_theorem_based_solver import ProbSemiringSolver
 from ..cplogic import testing
 from ..cplogic.program import CPLogicProgram
 from ..exceptions import (
@@ -15,6 +16,13 @@ from ..exceptions import (
     NotHierarchicalQueryException,
 )
 from ..expressions import Condition, PROB, ProbabilisticQuery
+from ...relational_algebra import (
+    ExtendedProjection, ExtendedProjectionListMember,
+    NamedRelationalAlgebraFrozenSet,
+    ColumnStr,
+    str2columnstr_constant,
+)
+from ...relational_algebra_provenance import ProvenanceAlgebraSet
 
 try:
     from contextlib import nullcontext
@@ -35,6 +43,7 @@ C = Symbol("C")
 x = Symbol("x")
 y = Symbol("y")
 z = Symbol("z")
+p = Symbol("p")
 
 a = Constant("a")
 b = Constant("b")
@@ -711,3 +720,137 @@ def test_program_with_marg_query(solver):
         ("_p_", "x", "z"),
     )
     assert testing.eq_prov_relations(result, expected)
+
+
+def test_repeated_variable_probabilistic_rule(solver):
+    if solver != dichotomy_theorem_based_solver:
+        return
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        Q, [(0.2, 7, 7, 2), (0.5, 7, 8, 4)]
+    )
+    cpl.walk(Implication(H(x, x), Q(x, x, y)))
+    query = Implication(ans(x, y), H(x, y))
+    result = solver.solve_succ_query(query, cpl)
+    expected = testing.make_prov_set([(0.2, 7, 7)], ("_p_", "x", "y"))
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_repeated_variable_with_constant_in_head(solver):
+    if solver != dichotomy_theorem_based_solver:
+        return
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        Q, [(0.2, 7, 8), (0.6, 8, 9), (0.9, 8, 8)],
+    )
+    cpl.add_probabilistic_choice_from_tuples(
+        P, [(0.4, 8), (0.6, 9)],
+    )
+    cpl.walk(Implication(R(Constant[int](8), x), Conjunction((Q(x, x), P(x)))))
+    query = Implication(ans(x, y), R(x, y))
+    result = solver.solve_succ_query(query, cpl)
+    expected = testing.make_prov_set([(0.4 * 0.9, 8, 8)], ("_p_", "x", "y"))
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_empty_result_program(solver):
+    if solver != dichotomy_theorem_based_solver:
+        return
+    rule = Implication(R(Constant(2), Constant(3)), Conjunction((Q(x),)))
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        Q, [(0.2, 7)],
+    )
+    cpl.walk(rule)
+    query = Implication(ans(x), R(x, x))
+    result = solver.solve_succ_query(query, cpl)
+    expected = testing.make_prov_set([], ("_p_",))
+    assert testing.eq_prov_relations(result, expected)
+
+
+
+def test_probsemiring_extended_proj():
+    provset = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            ("_p_", "x", "y"),
+            [
+                (0.2, "a", "b"),
+                (0.3, "b", "a"),
+                (0.5, "c", "c"),
+            ]
+        ),
+        ColumnStr("_p_"),
+    )
+    proj_list = [
+        ExtendedProjectionListMember(str2columnstr_constant("x"),
+                                     str2columnstr_constant("x")),
+        ExtendedProjectionListMember(str2columnstr_constant("y"),
+                                     str2columnstr_constant("y")),
+        ExtendedProjectionListMember(Constant("d"),
+                                     str2columnstr_constant("z")),
+    ]
+    proj = ExtendedProjection(provset, proj_list)
+    solver = ProbSemiringSolver()
+    result = solver.walk(proj)
+    expected = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            ("_p_", "x", "y", "z"),
+            [
+                (0.2, "a", "b", "d"),
+                (0.3, "b", "a", "d"),
+                (0.5, "c", "c", "d"),
+            ]
+        ),
+        ColumnStr("_p_"),
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_probsemiring_forbidden_extended_proj_missing_nonprov_cols():
+    provset = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            ("_p_", "x", "y"),
+            [
+                (0.2, "a", "b"),
+                (0.3, "b", "a"),
+                (0.5, "c", "c"),
+            ]
+        ),
+        ColumnStr("_p_"),
+    )
+    proj_list = [
+        ExtendedProjectionListMember(str2columnstr_constant("x"),
+                                     str2columnstr_constant("x")),
+        ExtendedProjectionListMember(Constant("d"),
+                                     str2columnstr_constant("z")),
+    ]
+    proj = ExtendedProjection(provset, proj_list)
+    solver = ProbSemiringSolver()
+    with pytest.raises(ValueError):
+        solver.walk(proj)
+
+
+def test_probsemiring_forbidden_extended_proj_on_provcol():
+    provset = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            ("_p_", "x", "y"),
+            [
+                (0.2, "a", "b"),
+                (0.3, "b", "a"),
+                (0.5, "c", "c"),
+            ]
+        ),
+        ColumnStr("_p_"),
+    )
+    proj_list = [
+        ExtendedProjectionListMember(str2columnstr_constant("x"),
+                                     str2columnstr_constant("x")),
+        ExtendedProjectionListMember(str2columnstr_constant("y"),
+                                     str2columnstr_constant("y")),
+        ExtendedProjectionListMember(Constant("d"),
+                                     str2columnstr_constant("_p_")),
+    ]
+    proj = ExtendedProjection(provset, proj_list)
+    solver = ProbSemiringSolver()
+    with pytest.raises(ValueError):
+        solver.walk(proj)

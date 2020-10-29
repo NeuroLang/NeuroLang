@@ -21,13 +21,14 @@ probabilistic databases. VLDB J., 16(4):523–544, 2007.
 
 import logging
 import operator
+import typing
 from collections import defaultdict
 
-from ..datalog.expression_processing import flatten_query
+from ..datalog.expression_processing import flatten_query, enforce_conjunction
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import ExpressionWalker, add_match
 from ..expressions import Constant, Symbol, FunctionApplication
-from ..logic import Conjunction, Implication
+from ..logic import Conjunction, Implication, FALSE
 from ..utils.orderedset import OrderedSet
 from ..logic.expression_processing import (
     extract_logic_free_variables,
@@ -44,12 +45,14 @@ from ..relational_algebra import (
     RelationalAlgebraStringExpression,
     RelationalAlgebraColumnStr,
     str2columnstr_constant,
+    NamedRelationalAlgebraFrozenSet,
 )
 from ..relational_algebra_provenance import (
     NaturalJoinInverse,
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
     RelationalAlgebraProvenanceExpressionSemringSolver,
+    RelationalAlgebraProvenanceCountingSolver,
 )
 from ..utils import log_performance
 from .exceptions import NotHierarchicalQueryException
@@ -217,6 +220,50 @@ class ProbSemiringSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
     def probabilistic_fact_set_invalid(self, prob_fact_set):
         raise NotImplementedError()
 
+    @add_match(ExtendedProjection(ProvenanceAlgebraSet, ...))
+    def extended_projection(self, op):
+        provset = self.walk(op.relation)
+        self._check_prov_col_not_in_proj_list(provset, op.projection_list)
+        self._check_all_non_prov_cols_in_proj_list(provset, op.projection_list)
+        relation = Constant[typing.AbstractSet](provset.relations)
+        prov_col = str2columnstr_constant(provset.provenance_column)
+        new_prov_col = str2columnstr_constant(Symbol.fresh().name)
+        proj_list_with_prov_col = op.projection_list + (
+            ExtendedProjectionListMember(prov_col, new_prov_col),
+        )
+        ra_op = ExtendedProjection(relation, proj_list_with_prov_col)
+        new_relation = self.walk(ra_op)
+        new_provset = ProvenanceAlgebraSet(
+            new_relation.value, new_prov_col.value
+        )
+        return new_provset
+
+    @staticmethod
+    def _check_prov_col_not_in_proj_list(provset, proj_list):
+        if any(
+            member.dst_column.value == provset.provenance_column
+            for member in proj_list
+        ):
+            raise ValueError(
+                "Cannot project on provenance column: "
+                f"{provset.provenance_column}"
+            )
+
+    @staticmethod
+    def _check_all_non_prov_cols_in_proj_list(provset, proj_list):
+        non_prov_cols = set(provset.non_provenance_columns)
+        found_cols = set(
+            member.dst_column.value
+            for member in proj_list
+            if member.dst_column.value in non_prov_cols
+            and member.fun_exp == member.dst_column
+        )
+        if non_prov_cols.symmetric_difference(found_cols):
+            raise ValueError(
+                "All non-provenance columns must be part of the extended "
+                "projection as {c: c} projection list member."
+            )
+
 
 class RAQueryOptimiser(
     EliminateTrivialProjections,
@@ -248,6 +295,15 @@ def solve_succ_query(query, cpl_program):
         LOG, "Preparing query %s", init_args=(query.consequent.functor.name,),
     ):
         flat_query_body = flatten_query(query.antecedent, cpl_program)
+
+    if flat_query_body == FALSE or (
+        isinstance(flat_query_body, Conjunction)
+        and any(conjunct == FALSE for conjunct in flat_query_body.formulas)
+    ):
+        return ProvenanceAlgebraSet(
+            NamedRelationalAlgebraFrozenSet(("_p_",)),
+            ColumnStr("_p_"),
+        )
 
     with log_performance(LOG, "Translation and lifted optimisation"):
         flat_query_body = lift_optimization_for_choice_predicates(
@@ -294,11 +350,11 @@ def solve_succ_query(query, cpl_program):
             )
 
         ra_query = TranslateToNamedRA().walk(shattered_query.antecedent)
+        # finally project on the initial query's head variables
         proj_cols = tuple(
             OrderedSet(
                 str2columnstr_constant(arg.name)
-                for arg in shattered_query.consequent.args
-                if isinstance(arg, Symbol)
+                for arg in query.consequent.args
             )
         )
         ra_query = Projection(ra_query, proj_cols)
@@ -307,9 +363,6 @@ def solve_succ_query(query, cpl_program):
     with log_performance(LOG, "Run RAP query"):
         solver = ProbSemiringSolver(symbol_table)
         prob_set_result = solver.walk(ra_query)
-        prob_set_result = project_on_query_head(
-            shattered_query, prob_set_result
-        )
 
     prob_set_result = project_var_eq_columns(
         prob_set_result, probchoice_var_eqs

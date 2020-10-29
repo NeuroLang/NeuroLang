@@ -1,9 +1,21 @@
+r"""
+Neurolang Datalog grammar definition
+and translation to intermediate representation
+==============================================
+1- defines the Neurolang Datalog syntax
+2- code written using this grammar can be parsed
+into an Abstract Syntax Tree (AST)
+3- the obtained AST can ba walked through to translate it
+to the intermediate representation used in the backend
+"""
+
 from __future__ import absolute_import, division, print_function
 
 import inspect
 import logging
 import typing
-from collections import Iterable, Mapping, namedtuple
+from collections import Iterable, Mapping
+from typing import Optional, Union
 
 import tatsu
 
@@ -13,22 +25,7 @@ from ..expression_walker import (
     PatternMatcher,
     add_match,
 )
-from ..expressions import (
-    Constant,
-    Expression,
-    ExpressionBlock,
-    FunctionApplication,
-    Lambda,
-    NeuroLangTypeException,
-    Projection,
-    Query,
-    Statement,
-    Symbol,
-    Unknown,
-    infer_type,
-    is_leq_informative,
-    unify_types,
-)
+from .. import expressions as ir
 from ..logic import ExistentialPredicate
 from .ast import ASTWalker
 from .ast_tatsu import TatsuASTConverter
@@ -41,16 +38,11 @@ __all__ = [
     "grammar_EBNF",
     "parser",
     "add_match",
-    "Constant",
-    "Symbol",
-    "FunctionApplication",
-    "Lambda",
-    "Statement",
-    "Query",
     "ExistentialPredicate",
 ]
 
-
+# Extended Backus–Naur Form (EBNF) grammar describing the Datalog syntax
+# used to write programs:
 grammar_EBNF = r"""
     @@whitespace :: /[\s\t\n\r\\ ]/
 
@@ -125,11 +117,17 @@ grammar_EBNF = r"""
 """
 
 
-Category = namedtuple("Category", "type_name type_name_plural type")
-
-
 class NeuroLangIntermediateRepresentation(ASTWalker):
-    def __init__(self, type_name_map=None):
+    """
+    Abstract Syntax Tree walker class implementing
+    translation from an ASTNode to the corresponding
+    Neurolang Intermediate Representation Expression
+    (ir.Expression)
+    """
+
+    def __init__(
+        self, type_name_map: Optional[Union[Iterable, Mapping]] = None
+    ):
         if isinstance(type_name_map, Mapping):
             self.type_name_map = type_name_map
         elif isinstance(type_name_map, Iterable):
@@ -158,12 +156,12 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
             "Evaluating query {} {} {}".format(identifier, link, value)
         )
 
-        result = Query[category](identifier, value)
+        result = ir.Query[category](identifier, value)
         return result
 
     @staticmethod
     def _verify_query_spelling_arity(category, link):
-        if is_leq_informative(category, typing.AbstractSet):
+        if ir.is_leq_informative(category, typing.AbstractSet):
             if "are" not in link:
                 raise NeuroLangException(
                     'Plural type queries need to be linked with "are"'
@@ -176,23 +174,25 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
 
     def assignment(self, ast):
         identifier = ast["identifier"]
-        type_ = infer_type(ast["argument"])
-        identifier = Symbol[type_](identifier.name)
-        result = Statement[type_](identifier, ast["argument"])
+        type_ = ir.infer_type(ast["argument"])
+        identifier = ir.Symbol[type_](identifier.name)
+        result = ir.Statement[type_](identifier, ast["argument"])
         return result
 
     def tuple(self, ast):
         types_ = []
         values = []
         for element in ast["element"]:
-            type_ = infer_type(element)
+            type_ = ir.infer_type(element)
             types_.append(type_)
             values.append(element)
 
-        return Constant[typing.Tuple[tuple(types_)]](tuple(values))
+        return ir.Constant[typing.Tuple[tuple(types_)]](tuple(values))
 
     def predicate(self, ast):
-        return FunctionApplication(ast["identifier"], args=(ast["argument"],))
+        return ir.FunctionApplication(
+            ast["identifier"], args=(ast["argument"],)
+        )
 
     def value(self, ast):
         return ast["value"]
@@ -217,12 +217,12 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
 
     def sum(self, ast):
         arguments = ast["term"]
-        result_type = infer_type(arguments[0])
+        result_type = ir.infer_type(arguments[0])
         result = arguments[0]
         if "op" in ast:
             for op, argument in zip(ast["op"], arguments[1:]):
-                argument_type = infer_type(argument)
-                result_type = unify_types(result_type, argument_type)
+                argument_type = ir.infer_type(argument)
+                result_type = ir.unify_types(result_type, argument_type)
                 if op == "+":
                     result = result + argument
                 else:
@@ -232,12 +232,12 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
 
     def product(self, ast):
         arguments = ast["factor"]
-        result_type = infer_type(arguments[0])
+        result_type = ir.infer_type(arguments[0])
         result = arguments[0]
         if "op" in ast:
             for op, argument in zip(ast["op"], arguments[1:]):
-                argument_type = infer_type(argument)
-                result_type = unify_types(result_type, argument_type)
+                argument_type = ir.infer_type(argument)
+                result_type = ir.unify_types(result_type, argument_type)
                 if op == "*":
                     result = result * argument
                 elif op == "/":
@@ -253,18 +253,18 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
 
         if "exponent" in ast:
             exponent = ast["exponent"]
-            result_type = infer_type(result)
-            exponent_type = infer_type(exponent)
+            result_type = ir.infer_type(result)
+            exponent_type = ir.infer_type(exponent)
             result = result ** exponent
-            result.type = unify_types(result_type, exponent_type)
+            result.type = ir.unify_types(result_type, exponent_type)
         return result
 
     def comparison(self, ast):
         if len(ast["operand"]) == 1:
             return ast["operand"]
         else:
-            return FunctionApplication(
-                Symbol(ast["operator"]),
+            return ir.FunctionApplication(
+                ir.Symbol(ast["operator"]),
                 tuple(
                     ast["operand"],
                 ),
@@ -274,7 +274,7 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
         identifier = ast["root"]
         if "children" in ast and ast["children"] is not None:
             identifier += "." + ".".join(ast["children"])
-        return Symbol(identifier)
+        return ir.Symbol(identifier)
 
     def function_application(self, ast):
         function = ast["identifier"]
@@ -282,17 +282,17 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
         arguments = []
         argument_types = []
         for a in ast["argument"]:
-            argument_type = infer_type(a)
+            argument_type = ir.infer_type(a)
             value = a
-            if isinstance(value, Statement):
+            if isinstance(value, ir.Statement):
                 value = value.lhs
-            elif isinstance(value, Query):
+            elif isinstance(value, ir.Query):
                 value = value.head
 
             arguments.append(a)
             argument_types.append(argument_type)
 
-        function = FunctionApplication[typing.Any](
+        function = ir.FunctionApplication[typing.Any](
             function, args=tuple(arguments)
         )
 
@@ -301,42 +301,42 @@ class NeuroLangIntermediateRepresentation(ASTWalker):
     def projection(self, ast):
         symbol = ast["identifier"]
         item = ast["item"]
-        if symbol.type is Unknown:
-            return Projection(symbol, item)
-        elif is_leq_informative(symbol.type, typing.Tuple):
-            item_type = infer_type(item)
-            if not is_leq_informative(item_type, typing.SupportsInt):
-                raise NeuroLangTypeException(
+        if symbol.type is ir.Unknown:
+            return ir.Projection(symbol, item)
+        elif ir.is_leq_informative(symbol.type, typing.Tuple):
+            item_type = ir.infer_type(item)
+            if not ir.is_leq_informative(item_type, typing.SupportsInt):
+                raise ir.NeuroLangTypeException(
                     "Tuple projection argument should be an int"
                 )
-            item = Constant[int](int(item))
+            item = ir.Constant[int](int(item))
             if len(symbol.type.__args__) > item:
-                return Projection[symbol.type.__args__[item]](symbol, item)
+                return ir.Projection[symbol.type.__args__[item]](symbol, item)
             else:
-                raise NeuroLangTypeException(
+                raise ir.NeuroLangTypeException(
                     "Tuple doesn't have %d items" % item
                 )
-        elif is_leq_informative(symbol.type, typing.Mapping):
+        elif ir.is_leq_informative(symbol.type, typing.Mapping):
             key_type = symbol.type.__args__[0]
-            if not is_leq_informative(item_type, key_type):
-                raise NeuroLangTypeException(
+            if not ir.is_leq_informative(item_type, key_type):
+                raise ir.NeuroLangTypeException(
                     "key type does not agree with Mapping key %s" % key_type
                 )
 
-            return Expression[symbol.type.__args__[1]](symbol.name[item])
+            return ir.Expression[symbol.type.__args__[1]](symbol.name[item])
         else:
-            raise NeuroLangTypeException(
+            raise ir.NeuroLangTypeException(
                 "%s is not a tuple" % ast["identifier"]
             )
 
     def string(self, ast):
-        return Constant[str](str(ast["value"]))
+        return ir.Constant[str](str(ast["value"]))
 
     def point_float(self, ast):
-        return Constant[float](float("".join(ast["value"])))
+        return ir.Constant[float](float("".join(ast["value"])))
 
     def integer(self, ast):
-        return Constant[int](int(ast["value"]))
+        return ir.Constant[int](int(ast["value"]))
 
 
 class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
@@ -360,10 +360,10 @@ class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
 
         if symbols is not None:
             for k, v in symbols.items():
-                if not isinstance(v, Constant):
-                    t = infer_type(v)
-                    v = Constant[t](v)
-                self.symbol_table[Symbol[v.type](k)] = v
+                if not isinstance(v, ir.Constant):
+                    t = ir.infer_type(v)
+                    v = ir.Constant[t](v)
+                self.symbol_table[ir.Symbol[v.type](k)] = v
 
         self._init_function_symbols(functions)
 
@@ -390,8 +390,8 @@ class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
             for k, v in typing.get_type_hints(func).items():
                 func.__annotations__[k] = v
 
-            t = infer_type(func)
-            self.symbol_table[Symbol[t](name)] = Constant[t](func)
+            t = ir.infer_type(func)
+            self.symbol_table[ir.Symbol[t](name)] = ir.Constant[t](func)
 
     def _init_functions(self, functions):
         for type_name, type_ in self.type_name_map.items():
@@ -446,13 +446,28 @@ class NeuroLangIntermediateRepresentationCompiler(ExpressionBasicEvaluator):
 
     def compile(self, ast, **kwargs):
         return self.walk(
-            ExpressionBlock(
+            ir.ExpressionBlock(
                 self.get_intermediate_representation(ast, **kwargs)
             )
         )
 
 
-def parser(code, **kwargs):
+def parser(code: str, **kwargs):
+    """
+    Parses Datalog code into an Abstract Syntax Tree (AST)
+
+    Parameters
+    ----------
+    code : str
+        code written in Datalog, as described by it's EBNF syntax
+    **kwargs
+        completed and passed to the tatsu parser
+
+    Returns
+    -------
+        AST
+        Abstract Syntax Tree resulting from code parsing
+    """
     kwargs["semantics"] = kwargs.get("semantics", TatsuASTConverter())
     kwargs["parseinfo"] = True
     kwargs["trace"] = kwargs.get("trace", False)
