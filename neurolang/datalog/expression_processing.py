@@ -659,21 +659,20 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
 
         """
         symb_to_const = dict()
-        for conjunct in conjunction.formulas:
-            if (
-                conjunct.functor == EQ
-                and any(isinstance(arg, Symbol) for arg in conjunct.args)
-                and any(isinstance(arg, Constant) for arg in conjunct.args)
-            ):
-                symbol = next(
-                    arg for arg in conjunct.args if isinstance(arg, Symbol)
-                )
-                constant = next(
-                    arg for arg in conjunct.args if isinstance(arg, Constant)
-                )
-                if symbol in symb_to_const:
-                    return False
-                symb_to_const[symbol] = constant
+        symb_to_const_eq_formulas = (
+            conjunct for conjunct in conjunction.formulas
+            if is_symb_to_const_equality(conjunct)
+        )
+        for equality in symb_to_const_eq_formulas:
+            symbol = next(
+                arg for arg in equality.args if isinstance(arg, Symbol)
+            )
+            constant = next(
+                arg for arg in equality.args if isinstance(arg, Constant)
+            )
+            if symbol in symb_to_const:
+                return False
+            symb_to_const[symbol] = constant
         return True
 
     @add_match(Conjunction)
@@ -725,6 +724,16 @@ def is_equality_between_symbol_and_symbol_or_constant(formula):
         and formula.functor == EQ
         and len(formula.args) == 2
         and all(isinstance(arg, (Constant, Symbol)) for arg in formula.args)
+    )
+
+
+def is_symb_to_const_equality(formula):
+    return (
+        isinstance(formula, FunctionApplication)
+        and formula.functor == EQ
+        and len(formula.args) == 2
+        and any(isinstance(arg, Symbol) for arg in formula.args)
+        and any(isinstance(arg, Constant) for arg in formula.args)
     )
 
 

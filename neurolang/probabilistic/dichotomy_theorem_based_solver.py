@@ -259,6 +259,7 @@ class ProbSemiringSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
                 "projection as {c: c} projection list member."
             )
 
+
 class RAQueryOptimiser(
     EliminateTrivialProjections,
     RelationalAlgebraPushInSelections,
