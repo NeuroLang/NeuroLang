@@ -702,3 +702,19 @@ def test_repeated_variable_with_constant_in_head(solver):
     result = solver.solve_succ_query(query, cpl)
     expected = testing.make_prov_set([(0.4 * 0.9, 8, 8)], ("_p_", "x", "y"))
     assert testing.eq_prov_relations(result, expected)
+
+
+def test_empty_result_program(solver):
+    if solver != dichotomy_theorem_based_solver:
+        return
+    rule = Implication(R(Constant(2), Constant(3)), Conjunction((Q(x),)))
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        Q, [(0.2, "a"), (0.4, "b")],
+    )
+    cpl.walk(rule)
+    query = Implication(ans(x), R(x, x))
+    __import__('pdb').set_trace()
+    result = solver.solve_succ_query(query, cpl)
+    expected = testing.make_prov_set([], ("_p_",))
+    assert testing.eq_prov_relations(result, expected)
