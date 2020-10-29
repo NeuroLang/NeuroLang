@@ -136,9 +136,32 @@ def test_marg_query_conjunctive_conditioned_and_conditioning(solver):
             (0.3, "a"),
         ],
     )
+    cpl.add_probabilistic_choice_from_tuples(
+        A,
+        [
+            (0.9, "b"),
+            (0.1, "a"),
+        ],
+    )
+    cpl.add_probabilistic_facts_from_tuples(
+        B,
+        [
+            (0.3, "b"),
+            (0.9, "a"),
+        ],
+    )
+    cpl.add_probabilistic_facts_from_tuples(
+        C,
+        [
+            (0.01, "a"),
+            (0.27, "c"),
+        ],
+    )
     cpl.walk(Implication(H(x, y), Conjunction((Z(x), R(y, x)))))
+    # Prob{ H(x, y) ^ C(x) | A(x) ^ B(x) }
     query = Implication(
-        Q(x, y, ProbabilisticQuery(PROB, (x, y))), Condition(H(x, y), Z(y))
+        Q(x, y, ProbabilisticQuery(PROB, (x, y))),
+        Condition(Conjunction((H(x, y), C(x))), Conjunction((A(x), B(x)))),
     )
     cpl.walk(query)
     result = solver.solve_marg_query(query, cpl)
@@ -146,7 +169,9 @@ def test_marg_query_conjunctive_conditioned_and_conditioning(solver):
         NamedRelationalAlgebraFrozenSet(
             ("_p_", "x", "y"),
             [
-                (0.2, "a", "a"),
+                (0.2 * 0.01 * 0.3, "a", "a"),
+                (0.4 * 0.01 * 0.3, "a", "b"),
+                (0.9 * 0.01 * 0.3, "a", "c"),
             ],
         ),
         ColumnStr("_p_"),

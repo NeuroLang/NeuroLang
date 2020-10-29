@@ -415,7 +415,6 @@ def solve_marg_query(rule, cpl):
         set.
 
     """
-    __import__('pdb').set_trace()
     res_args = tuple(
         s
         for s in rule.consequent.args
