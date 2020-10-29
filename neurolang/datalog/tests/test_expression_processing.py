@@ -27,6 +27,8 @@ from ..expression_processing import (
     conjunct_formulas,
     program_has_loops,
     is_rule_with_builtin,
+    HeadConstantToBodyEquality,
+    HeadRepeatedVariableToBodyEquality
 )
 
 S_ = Symbol
@@ -35,6 +37,8 @@ Imp_ = Implication
 B_ = ExpressionBlock
 EP_ = ExistentialPredicate
 T_ = Fact
+
+EQ = Constant(eq)
 
 
 DT = TranslateToDatalogSemantics()
@@ -405,3 +409,27 @@ def test_is_rule_with_builtin():
     )
     rule = Implication(Q(x), some_builtin(x, y))
     assert is_rule_with_builtin(rule, known_builtins=dl.builtins())
+
+
+
+def test_head_constant_to_body_equality():
+    P = Symbol("P")
+    Q = Symbol("Q")
+    x = Symbol("x")
+    a = Constant("a")
+    walker = HeadConstantToBodyEquality()
+    rule = Implication(P(x, a), Q(x))
+    result = walker.walk(rule)
+    assert result.consequent.args[1].is_fresh
+    assert EQ(result.consequent.args[1], a) in result.antecedent.formulas
+
+
+def test_head_repeated_variable_to_body_equality():
+    P = Symbol("P")
+    Q = Symbol("Q")
+    x = Symbol("x")
+    walker = HeadRepeatedVariableToBodyEquality()
+    rule = Implication(P(x, x), Q(x))
+    result = walker.walk(rule)
+    assert result.consequent.args[1].is_fresh
+    assert EQ(result.consequent.args[1], x) in result.antecedent.formulas
