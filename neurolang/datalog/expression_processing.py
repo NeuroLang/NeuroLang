@@ -456,6 +456,10 @@ def enforce_conjunctive_antecedent(implication):
 
 
 def maybe_deconjunct_single_pred(conjunction):
+    """
+    Remove the conjunction from single-conjunct conjunctions. The conjunction
+    remains unchanged if it has multiple conjuncts.
+    """
     if len(conjunction.formulas) == 1:
         return conjunction.formulas[0]
     return conjunction
