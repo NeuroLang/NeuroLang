@@ -28,7 +28,8 @@ from ..expression_processing import (
     program_has_loops,
     is_rule_with_builtin,
     HeadConstantToBodyEquality,
-    HeadRepeatedVariableToBodyEquality
+    HeadRepeatedVariableToBodyEquality,
+    maybe_deconjunct_single_pred,
 )
 
 S_ = Symbol
@@ -433,3 +434,17 @@ def test_head_repeated_variable_to_body_equality():
     result = walker.walk(rule)
     assert result.consequent.args[1].is_fresh
     assert EQ(result.consequent.args[1], x) in result.antecedent.formulas
+
+
+
+def test_maybe_deconjunct():
+    P = Symbol("P")
+    Q = Symbol("Q")
+    x = Symbol("x")
+    assert maybe_deconjunct_single_pred(Conjunction(tuple())) == Conjunction(
+        tuple()
+    )
+    assert maybe_deconjunct_single_pred(
+        Conjunction((P(x), Q(x)))
+    ) == Conjunction((P(x), Q(x)))
+    assert maybe_deconjunct_single_pred(Conjunction((P(x),))) == P(x)
