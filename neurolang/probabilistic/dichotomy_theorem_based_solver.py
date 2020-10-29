@@ -22,9 +22,14 @@ probabilistic databases. VLDB J., 16(4):523–544, 2007.
 import logging
 import operator
 import typing
+import itertools
+import collections
 from collections import defaultdict
 
-from ..datalog.expression_processing import flatten_query, enforce_conjunction
+from ..datalog.expression_processing import (
+    flatten_query, enforce_conjunction,
+    maybe_deconjunct_single_pred
+)
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import ExpressionWalker, add_match
 from ..expressions import Constant, Symbol, FunctionApplication
@@ -46,6 +51,7 @@ from ..relational_algebra import (
     RelationalAlgebraColumnStr,
     str2columnstr_constant,
     NamedRelationalAlgebraFrozenSet,
+    RelationalAlgebraOperation,
 )
 from ..relational_algebra_provenance import (
     NaturalJoinInverse,
@@ -69,6 +75,8 @@ from .probabilistic_ra_utils import (
 from .shattering import shatter_easy_probfacts
 
 LOG = logging.getLogger(__name__)
+
+EQ = Constant(operator.eq)
 
 
 def is_hierarchical_without_self_joins(query):
@@ -124,6 +132,12 @@ def extract_atom_sets_and_detect_self_joins(query):
                 continue
             atom_set[variable].add(functor)
     return has_self_joins, atom_set
+
+
+class AdditiveProjection(RelationalAlgebraOperation):
+    def __init__(self, relation, projection_list):
+        self.relation = relation
+        self.projection_list = projection_list
 
 
 class ProbSemiringSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
@@ -220,49 +234,34 @@ class ProbSemiringSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
     def probabilistic_fact_set_invalid(self, prob_fact_set):
         raise NotImplementedError()
 
-    @add_match(ExtendedProjection(ProvenanceAlgebraSet, ...))
-    def extended_projection(self, op):
+    @add_match(AdditiveProjection(ProvenanceAlgebraSet, ...))
+    def additive_projection(self, op):
         provset = self.walk(op.relation)
-        self._check_prov_col_not_in_proj_list(provset, op.projection_list)
-        self._check_all_non_prov_cols_in_proj_list(provset, op.projection_list)
         relation = Constant[typing.AbstractSet](provset.relations)
         prov_col = str2columnstr_constant(provset.provenance_column)
-        new_prov_col = str2columnstr_constant(Symbol.fresh().name)
-        proj_list_with_prov_col = op.projection_list + (
-            ExtendedProjectionListMember(prov_col, new_prov_col),
-        )
-        ra_op = ExtendedProjection(relation, proj_list_with_prov_col)
+        np_cols = provset.non_provenance_columns
+        for member in op.projection_list:
+            if member.dst_column.value in np_cols:
+                raise ValueError(
+                    f"Destination column {member.dst_column} cannot be a "
+                    "non-provenance column"
+                )
+        new_pcol = str2columnstr_constant(Symbol.fresh().name)
+        proj_list = [
+            ExtendedProjectionListMember(
+                str2columnstr_constant(np_col),
+                str2columnstr_constant(np_col),
+            )
+            for np_col in np_cols
+        ] + list(op.projection_list) + [
+            ExtendedProjectionListMember(prov_col, new_pcol),
+        ]
+        ra_op = ExtendedProjection(relation, tuple(proj_list))
         new_relation = self.walk(ra_op)
         new_provset = ProvenanceAlgebraSet(
-            new_relation.value, new_prov_col.value
+            new_relation.value, new_pcol.value
         )
         return new_provset
-
-    @staticmethod
-    def _check_prov_col_not_in_proj_list(provset, proj_list):
-        if any(
-            member.dst_column.value == provset.provenance_column
-            for member in proj_list
-        ):
-            raise ValueError(
-                "Cannot project on provenance column: "
-                f"{provset.provenance_column}"
-            )
-
-    @staticmethod
-    def _check_all_non_prov_cols_in_proj_list(provset, proj_list):
-        non_prov_cols = set(provset.non_provenance_columns)
-        found_cols = set(
-            member.dst_column.value
-            for member in proj_list
-            if member.dst_column.value in non_prov_cols
-            and member.fun_exp == member.dst_column
-        )
-        if non_prov_cols.symmetric_difference(found_cols):
-            raise ValueError(
-                "All non-provenance columns must be part of the extended "
-                "projection as {c: c} projection list member."
-            )
 
 
 class RAQueryOptimiser(
@@ -309,14 +308,6 @@ def solve_succ_query(query, cpl_program):
         flat_query_body = lift_optimization_for_choice_predicates(
             flat_query_body, cpl_program
         )
-        probchoice_var_eqs = set(
-            formula.args
-            for formula in flat_query_body.formulas
-            if (
-                isinstance(formula, FunctionApplication)
-                and formula.functor == operator.eq
-            )
-        )
         flat_query = Implication(query.consequent, flat_query_body)
         symbol_table = generate_probabilistic_symbol_table_for_query(
             cpl_program, flat_query_body
@@ -348,8 +339,10 @@ def solve_succ_query(query, cpl_program):
             raise NotHierarchicalQueryException(
                 "Query not hierarchical, algorithm can't be applied"
             )
-
-        ra_query = TranslateToNamedRA().walk(shattered_query.antecedent)
+        vareq_proj_list, qbody = _split_vareq_new_proj_cols(shattered_query)
+        ra_query = TranslateToNamedRA().walk(qbody)
+        if vareq_proj_list:
+            ra_query = AdditiveProjection(ra_query, vareq_proj_list)
         # finally project on the initial query's head variables
         proj_cols = tuple(
             OrderedSet(
@@ -364,32 +357,43 @@ def solve_succ_query(query, cpl_program):
         solver = ProbSemiringSolver(symbol_table)
         prob_set_result = solver.walk(ra_query)
 
-    prob_set_result = project_var_eq_columns(
-        prob_set_result, probchoice_var_eqs
-    )
-
     return prob_set_result
 
 
-def project_var_eq_columns(provset, var_eqs):
-    proj_list = {
-        c: RelationalAlgebraColumnStr(c)
-        for c in provset.non_provenance_columns
-    }
-    proj_list[provset.provenance_column] = RelationalAlgebraColumnStr(
-        provset.provenance_column
+def _split_vareq_new_proj_cols(query):
+    head_symbols = set(query.consequent.args)
+    conjunction = enforce_conjunction(query.antecedent)
+    one_occ_symbs = _get_symbols_occurring_in_only_one_conjunct(conjunction)
+    one_occ_symbs &= head_symbols
+    new_formulas = list()
+    proj_list = list()
+    for formula in conjunction.formulas:
+        if (
+            formula.functor == EQ
+            and len(set(formula.args).intersection(one_occ_symbs)) == 1
+        ):
+            if formula.args[0] in one_occ_symbs:
+                dst, src = formula.args
+            else:
+                src, dst = formula.args
+            if isinstance(src, Symbol):
+                src = str2columnstr_constant(src.name)
+            dst = str2columnstr_constant(dst.name)
+            proj_list.append(ExtendedProjectionListMember(src, dst))
+        else:
+            new_formulas.append(formula)
+    new_query_body = maybe_deconjunct_single_pred(Conjunction(new_formulas))
+    return proj_list, new_query_body
+
+
+def _get_symbols_occurring_in_only_one_conjunct(conjunction):
+    counts = collections.Counter(
+        itertools.chain(*(
+            conjunct._symbols
+            for conjunct in conjunction.formulas
+        ))
     )
-    for x, y in var_eqs:
-        if not isinstance(x, Symbol) or not isinstance(y, Symbol):
-            continue
-        if x.name not in proj_list:
-            proj_list[x.name] = RelationalAlgebraColumnStr(y.name)
-        elif y.name not in proj_list:
-            proj_list[y.name] = RelationalAlgebraColumnStr(x.name)
-    return ProvenanceAlgebraSet(
-        provset.relations.extended_projection(proj_list),
-        provset.provenance_column
-    )
+    return {k for k, v in counts.items() if v == 1}
 
 
 def solve_marg_query(rule, cpl):
@@ -411,6 +415,7 @@ def solve_marg_query(rule, cpl):
         set.
 
     """
+    __import__('pdb').set_trace()
     res_args = tuple(
         s
         for s in rule.consequent.args

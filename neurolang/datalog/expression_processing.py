@@ -710,8 +710,10 @@ def is_rule_with_builtin(rule, known_builtins=None):
     )
 
 
-def remove_conjunction_duplicates(conjunction):
-    return Conjunction(tuple(set(conjunction.formulas)))
+def remove_conjunction_duplicates(expression):
+    if isinstance(expression, Conjunction):
+        return Conjunction(tuple(set(expression.formulas)))
+    return expression
 
 
 def iter_disjunction_or_implication_rules(implication_or_disjunction):

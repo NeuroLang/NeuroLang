@@ -16,7 +16,7 @@ from typing import (
     List,
     Optional,
     Tuple,
-    Type
+    Type,
 )
 from uuid import uuid1
 
@@ -24,7 +24,7 @@ from .. import expressions as ir
 from ..datalog.aggregation import (
     Chase,
     DatalogWithAggregationMixin,
-    TranslateToLogicWithAggregation
+    TranslateToLogicWithAggregation,
 )
 from ..datalog.constraints_representation import DatalogConstraintsProgram
 from ..datalog.ontologies_parser import OntologyParser
@@ -34,11 +34,13 @@ from ..expression_walker import ExpressionBasicEvaluator
 from ..logic import Union
 from ..probabilistic.cplogic.program import (
     CPLogicMixin,
-    TranslateProbabilisticQueryMixin
+    TranslateProbabilisticQueryMixin,
+)
+from ..probabilistic.dichotomy_theorem_based_solver import (
+    solve_marg_query as lifted_solve_marg_query,
 )
 from ..probabilistic.dichotomy_theorem_based_solver import (
     solve_succ_query as lifted_solve_succ_query,
-    solve_marg_query as lifted_solve_marg_query
 )
 from ..probabilistic.expression_processing import (
     is_probabilistic_predicate_symbol,
@@ -49,7 +51,7 @@ from ..probabilistic.stratification import stratify_program
 from ..region_solver import RegionSolver
 from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
-    RelationalAlgebraStringExpression
+    RelationalAlgebraStringExpression,
 )
 from . import query_resolution_expressions as fe
 from .query_resolution_datalog import QueryBuilderDatalog
@@ -75,15 +77,10 @@ class NeurolangPDL(QueryBuilderDatalog):
     """
 
     def __init__(
-<<<<<<< HEAD
-        self, chase_class=Chase,
-        probabilistic_solver=lifted_solve_succ_query,
-        probabilistic_marg_solver=lifted_solve_marg_query
-    ):
-=======
         self,
-        chase_class: Type[Chase] = Chase,
+        chase_class=Chase,
         probabilistic_solver: Callable = lifted_solve_succ_query,
+        probabilistic_marg_solver: Callable = lifted_solve_marg_query,
     ) -> "ProbabilisticFrontend":
         """
         Query builder with probabilistic capabilities
@@ -101,7 +98,6 @@ class NeurolangPDL(QueryBuilderDatalog):
         ProbabilisticFrontend
             see description
         """
->>>>>>> flatquery-issue
         super().__init__(
             RegionFrontendCPLogicSolver(), chase_class=chase_class
         )
@@ -269,7 +265,9 @@ class NeurolangPDL(QueryBuilderDatalog):
         )
         return solution, functor_orig
 
-    def solve_all(self,) -> Dict[str, NamedRelationalAlgebraFrozenSet]:
+    def solve_all(
+        self,
+    ) -> Dict[str, NamedRelationalAlgebraFrozenSet]:
         """
         Returns a dictionary of "predicate_name": "Content"
         for all elements in the solution of the Datalog program.
@@ -344,7 +342,7 @@ class NeurolangPDL(QueryBuilderDatalog):
             pchoice_edb,
             prob_idb,
             self.probabilistic_solver,
-            self.probabilistic_marg_solver
+            self.probabilistic_marg_solver,
         )
         wlq_symbs = set(
             rule.consequent.functor
@@ -366,7 +364,8 @@ class NeurolangPDL(QueryBuilderDatalog):
         solver = RegionFrontendCPLogicSolver()
         for psymb, relation in solution.items():
             solver.add_extensional_predicate_from_tuples(
-                psymb, relation.value,
+                psymb,
+                relation.value,
             )
         for builtin_symb in self.program_ir.builtins():
             solver.symbol_table[builtin_symb] = self.program_ir.symbol_table[
