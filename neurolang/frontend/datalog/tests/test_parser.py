@@ -3,7 +3,7 @@ from operator import add, eq, mul, pow, sub, truediv
 from ....datalog import Conjunction, Fact, Implication, Negation, Union
 from ....probabilistic.expressions import ProbabilisticPredicate
 from ....expressions import Constant, Symbol, FunctionApplication
-from ..standard_syntax_datalog import ExternalSymbol, parser
+from ..standard_syntax import ExternalSymbol, parser
 
 
 def test_facts():

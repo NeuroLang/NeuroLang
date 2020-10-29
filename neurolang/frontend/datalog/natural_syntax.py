@@ -6,7 +6,9 @@ from ...probabilistic.expressions import ProbabilisticPredicate
 from ...datalog import Implication
 from ...datalog.aggregation import AggregationApplication
 from ...expressions import Expression, FunctionApplication
-from .standard_syntax_datalog import DatalogSemantics as DatalogClassicSemantics
+from .standard_syntax import (
+    DatalogSemantics as DatalogClassicSemantics
+)
 
 
 GRAMMAR = u"""

@@ -119,16 +119,20 @@ class Expression(object):
                 new_args.append(a.expression)
             elif isinstance(a, tuple):
                 new_tuple = self._translate_tuple(a)
-                types = tuple(a.type for a in new_tuple)
-                new_tuple = nl.Constant[Tuple[types]](
-                    new_tuple,
-                    verify_type=False
-                )
-                new_args.append(new_tuple)
+                new_tuple_constant = self._build_tuple_constant(new_tuple)
+                new_args.append(new_tuple_constant)
             else:
                 new_args.append(nl.Constant(a))
         new_args = tuple(new_args)
         return new_args
+
+    def _build_tuple_constant(self, new_tuple):
+        types = tuple(a.type for a in new_tuple)
+        new_tuple = nl.Constant[Tuple[types]](
+            new_tuple,
+            verify_type=False
+        )
+        return new_tuple
 
     def __setitem__(
         self,
