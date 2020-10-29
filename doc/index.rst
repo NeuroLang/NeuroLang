@@ -33,3 +33,4 @@ Contents:
    tutorial
    auto_examples/index
    api
+   tutorial_logic_programming
