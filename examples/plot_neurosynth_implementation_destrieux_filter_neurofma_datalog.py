@@ -17,9 +17,10 @@ from nilearn import datasets, image, plotting
 import numpy as np
 import pandas as pd
 
-logger = logging.getLogger('neurolang.frontend')
-logger.setLevel(logging.INFO)
-logger.addHandler(logging.StreamHandler(sys.stderr))
+for module_name in ('frontend', 'probabilistic'):
+    logger = logging.getLogger(f'neurolang.{module_name}')
+    logger.setLevel(logging.INFO)
+    logger.addHandler(logging.StreamHandler(sys.stderr))
 warnings.filterwarnings("ignore")
 
 
@@ -162,6 +163,9 @@ subclass_of = nl.new_symbol(name=str(RDFS.subClassOf))
 regional_part = nl.new_symbol(name='http://sig.biostr.washington.edu/fma3.0#regional_part_of')
 
 ""
+label
+
+""
 activations = nl.add_tuple_set(ns_database.values, name='activations')
 terms = nl.add_tuple_set(ns_terms.values, name='terms')
 docs = nl.add_uniform_probabilistic_choice_over_set(
@@ -187,96 +191,133 @@ for set_symbol in (
 ###############################################################################
 # Probabilistic program and querying
 
-with nl.scope as e:
+datalog_code = f'''
+    fma_related_region(subregion_name, fma_entity_name) :- \
+        `{str(label)}`(fma_uri, fma_entity_name), \
+        `{str(regional_part)}`(fma_region, fma_uri), \
+        `{str(subclass_of)}`(fma_subregion, fma_region), \
+        `{str(label)}`(fma_subregion, subregion_name)
     
-    e.fma_related_region[e.subregion_name, e.fma_entity_name] = (
-        label(e.fma_uri, e.fma_entity_name) & 
-        regional_part(e.fma_region, e.fma_uri) & 
-        subclass_of(e.fma_subregion, e.fma_region) &
-        label(e.fma_subregion, e.subregion_name)
-    )
+    fma_related_region(recursive_name, fma_name) :- \
+        fma_related_region(fma_subregion, fma_name), \
+        `{str(label)}`(fma_uri, fma_subregion), \
+        `{str(subclass_of)}`(recursive_region, fma_uri), \
+        `{str(label)}`(recursive_region, recursive_name)
     
-    e.fma_related_region[e.recursive_name, e.fma_name] = (
-        e.fma_related_region(e.fma_subregion, e.fma_name) &
-        label(e.fma_uri, e.fma_subregion) &
-        subclass_of(e.recursive_region, e.fma_uri) & 
-        label(e.recursive_region, e.recursive_name)
-    )
+    destrieux_ijk(destrieux_name, i, j, k) :- \
+        destrieux_labels(destrieux_name, id_destrieux), \
+        destrieux_image(i, j, k, id_destrieux)
     
-    e.destrieux_ijk[e.destrieux_name, e.i, e.j, e.k] = (
-        e.destrieux_labels[e.destrieux_name, e.id_destrieux] &
-        e.destrieux_image[e.i, e.j, e.k, e.id_destrieux]
-    )
+    region_voxels(i, j, k) :- \
+        fma_related_region(fma_subregions, 'Temporal lobe'), \
+        relation_destrieux_fma(destrieux_name, fma_subregions), \
+        destrieux_ijk(destrieux_name, i, j, k)
     
-    e.region_voxels[e.i, e.j, e.k] = (
-        e.fma_related_region[e.fma_subregions, 'Temporal lobe'] &
-        e.relation_destrieux_fma[e.destrieux_name, e.fma_subregions] &
-        e.destrieux_ijk[e.destrieux_name, e.i, e.j, e.k]
-    )
-    
-    e.term_prob[e.t, e.PROB[e.t]] = (
-        e.region_voxels[e.i, e.j, e.k] &
-        e.activations[
-            e.d, ..., ..., ..., ..., 'MNI', ..., ..., ..., ...,
-            ..., ..., ..., e.i, e.j, e.k
-        ] &
-        e.terms[e.d, e.t] &
-        e.docs[e.d]
-    )
+    vox_term_prob(i, j, k, PROB(i, j, k)) :- \
+        region_voxels(i, j, k), \
+        activations(d, ..., ..., ..., ..., 'MNI', ..., ..., ..., ..., ..., ..., ..., i, j, k),  \
+        terms(d, 'auditory'), \
+        docs(d)
 
+    term_prob(t, PROB(t)) :- \
+        terms(d, t), \
+        docs(d)
 
-    res = nl.solve_all()
-    term_prob = res['term_prob']
-    
+    region_term_prob(region, PROB(region)) :-  \
+        destrieux_labels(region, region_label), \
+        destrieux_image(i, j, k, region_label), \
+        activations(d, ..., ..., ..., ..., 'MNI', ..., ..., ..., ...,..., ..., ..., i, j, k), \
+        terms(d, 'auditory'), \
+        docs(d)
 
-""
-from neurolang.frontend.query_resolution_datalog import execute_datalog_program
+    vox_cond_query(i, j, k, p) :- \
+        vox_term_prob(i, j, k, num_prob), \
+        term_prob('auditory', denom_prob), \
+        p == num_prob / denom_prob
 
-query = '''
-    fma_related_region[subregion_name, fma_entity_name] = (
-        label[fma_uri, fma_entity_name] & 
-        regional_part[fma_region, fma_uri] & 
-        subclass_of[fma_subregion, fma_region] &
-        label[fma_subregion, subregion_name]
-    )
-    
-    fma_related_region[e.recursive_name, e.fma_name] = (
-        e.fma_related_region(e.fma_subregion, e.fma_name) &
-        label(e.fma_uri, e.fma_subregion) &
-        subclass_of(e.recursive_region, e.fma_uri) & 
-        label(e.recursive_region, e.recursive_name)
-    )
-    
-    e.destrieux_ijk[e.destrieux_name, e.i, e.j, e.k] = (
-        e.destrieux_labels[e.destrieux_name, e.id_destrieux] &
-        e.destrieux_image[e.i, e.j, e.k, e.id_destrieux]
-    )
-    
-    e.region_voxels[e.i, e.j, e.k] = (
-        e.fma_related_region[e.fma_subregions, 'Temporal lobe'] &
-        e.relation_destrieux_fma[e.destrieux_name, e.fma_subregions] &
-        e.destrieux_ijk[e.destrieux_name, e.i, e.j, e.k]
-    )
-    
-    e.term_prob[e.t, e.PROB[e.t]] = (
-        e.region_voxels[e.i, e.j, e.k] &
-        e.activations[
-            e.d, ..., ..., ..., ..., 'MNI', ..., ..., ..., ...,
-            ..., ..., ..., e.i, e.j, e.k
-        ] &
-        e.terms[e.d, e.t] &
-        e.docs[e.d]
-    )
-    
+    vox_cond_query_auditory(i, j, k, p) :- \
+        vox_cond_query(i, j, k, p)
 
+    region_cond_query(name, p) :- \
+        region_term_prob(name, num_prob), \
+        term_prob('auditory', denom_prob), \
+        p == num_prob / denom_prob
+
+    destrieux_region_max_probability(region, agg_max(p)) :- \
+        vox_cond_query_auditory(i, j, k, p), \
+        destrieux_image(i, j, k, region_label), \
+        destrieux_labels(region, region_label)
+
+    destrieux_region_image_probability(agg_create_region_overlay(i, j, k, p)) :- \
+        region_cond_query(name, p), \
+        destrieux_labels(name, label), \
+        destrieux_image(i, j, k, label)
+
+    voxel_activation_probability(agg_create_region_overlay(i, j, k, p)) :- \
+        vox_cond_query_auditory(i, j, k, p)
 '''
+
+with nl.scope as e:
+    nl.execute_datalog_program(datalog_code)
+    
+    res = nl.solve_all()
+    img_query = res['voxel_activation_probability']
+    dest_query = res['destrieux_region_image_probability']
+    drcp = res['region_cond_query']
+    drmp = res['destrieux_region_max_probability']
 
 ###############################################################################
 # Results
 # --------------------------------------------
 
-c = res['term_prob']._container.copy()
-c[c['PROB'] >= c['PROB'].quantile(.99)].sort_values('PROB', ascending=False)
+###############################################################################
+# Maximum probability per voxel in the region that the region has an activation
+# when an article has the word "Auditory"
+(
+    drmp
+    .as_pandas_dataframe()
+    .sort_values(drmp.columns[-1], ascending=False)
+    .head()
+)
+
+
+###############################################################################
+# Conditional probabilityper region that the region has an activation
+# when an article has the word "Auditory"
+(
+    drcp
+    .as_pandas_dataframe()
+    .sort_values(drcp.columns[-1], ascending=False)
+    .head()
+)
+
+###############################################################################
+# Per voxel associations to "Auditory" top 5%
+result_image = (
+    img_query
+    .fetch_one()
+    [0]
+    .spatial_image()
+)
+img = result_image.get_fdata()
+plot = plotting.plot_stat_map(
+    result_image,
+    # threshold=np.percentile(img[img > 0], 95)
+)
+plotting.show()
+
+###############################################################################
+# Per region associations to "Auditory" top 15%
+
+
+img = dest_query.fetch_one()[0].spatial_image().get_fdata()
+plot = plotting.plot_stat_map(
+    dest_query.fetch_one()[0].spatial_image(),
+    display_mode='y',
+    threshold=np.percentile(img[img > 0], 85),
+    cmap='YlOrRd'
+)
+plotting.show()
 
 ""
 

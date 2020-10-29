@@ -98,16 +98,14 @@ path_julich = datasets.utils._fetch_files(
     datasets.utils._get_dataset_dir('julich_brain'),
     [
         (
-            'jubrain_ontology.xml',
-            https://github.com/NeuroLang/neurolang_data/blob/main/Julich-Brain/julich_brain_resampled.hdf
+            'julich_brain_resampled.hdf',
             'https://github.com/NeuroLang/neurolang_data/raw/main/Julich-Brain/julich_brain_resampled.hdf',
-            {'move': 'jubrain_ontology.xml'}
+            {'move': 'julich_brain_resampled.hdf'}
         )
     ]
 )[0]
 
 df_julich = pd.read_hdf(path_julich, key='data')
-
 
 
 tree = ET.parse(julich_ontology_l)
@@ -315,6 +313,9 @@ for area in areas:
     result.to_hdf('julich_filtered_results.hdf', key=area)
 
 ""
+
+
+""
 #df_hip = df_julich[df_julich.Area.str.contains('Hippocampus')]
 #df_ipl = df_julich[df_julich.Area.str.contains('IPL')]
 
@@ -384,7 +385,53 @@ with nl.scope as e:
 c.to_hdf('julich_hip_ipl.hdf', key='data')
 
 ""
-c
+
+
+""
+
+
+""
+
+
+""
+
+
+""
+
+
+""
+import pandas as pd
+import re 
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+percentile = 0
+with pd.HDFStore('julich_filtered_results.hdf') as hdf:
+    res = []
+    for k in hdf.keys():
+        df = hdf[k].sort_values('PROB', ascending=False)
+        if '(' in k:
+            parcel, region = re.search('/(.*) \((.*)\)', k).groups()
+        else:
+            parcel = None
+            region = k[1:]
+        df['region'] = region
+        df['subregion'] = parcel
+        res.append(df)
+    res = pd.concat(res)[['region', 'subregion', 'term', 'Hemis', 'PROB']]
+res.head()
+all_regions = res
+per_large_regions = all_regions.groupby(['region', 'Hemis', 'term']).mean()
+thr = np.percentile(per_large_regions.PROB, 0)
+to_plot = per_large_regions.reset_index().set_index(['region', 'Hemis']).pivot(columns='term').T.loc['PROB']
+with sns.plotting_context("paper", font_scale=.6):
+    plt.figure(figsize=(10, 10))
+    ax = sns.heatmap(to_plot, mask=to_plot < thr, cmap='viridis', annot=False, fmt='.2f', linewidths=.2, cbar_kws={"shrink": .5})
+    ax.xaxis.tick_top() # x axis on top
+    ax.xaxis.set_label_position('top')  
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=90) 
+    plt.savefig('all_large_region_associations.pdf')
 
 ""
 

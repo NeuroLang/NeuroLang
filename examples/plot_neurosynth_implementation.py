@@ -15,9 +15,10 @@ import nibabel as nib
 import numpy as np
 
 
-###############################################################################
-# Data preparation
-# ----------------
+"""
+Data preparation
+----------------
+"""
 
 ###############################################################################
 # Load the MNI atlas and resample it to 4mm voxels

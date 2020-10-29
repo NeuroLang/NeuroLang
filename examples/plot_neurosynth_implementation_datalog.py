@@ -16,9 +16,10 @@ import numpy as np
 from time import time
 
 
-###############################################################################
-# Data preparation
-# ----------------
+"""
+Data preparation
+----------------
+"""
 
 ###############################################################################
 # Load the MNI atlas and resample it to 4mm voxels
@@ -161,3 +162,6 @@ plot = plotting.plot_stat_map(
     result_image, threshold=thr
 )
 plotting.show()
+
+""
+

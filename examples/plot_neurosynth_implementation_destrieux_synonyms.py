@@ -17,9 +17,10 @@ from nilearn import datasets, image, plotting
 import numpy as np
 import pandas as pd
 
-logger = logging.getLogger('neurolang.frontend')
-logger.setLevel(logging.INFO)
-logger.addHandler(logging.StreamHandler(sys.stderr))
+for module_name in ('frontend', 'probabilistic'):
+    logger = logging.getLogger(f'neurolang.{module_name}')
+    logger.setLevel(logging.INFO)
+    logger.addHandler(logging.StreamHandler(sys.stderr))
 warnings.filterwarnings("ignore")
 
 
@@ -104,38 +105,27 @@ ns_terms = (
 ###############################################################################
 # Load the NeuroFMA ontology
 
-neuroFMA = datasets.utils._fetch_files(
-    datasets.utils._get_dataset_dir('neuroFMA'),
+iobc = datasets.utils._fetch_files(
+    datasets.utils._get_dataset_dir('IOBC'),
     [
         (
-            'neurofma.xml',
-            'http://data.bioontology.org/ontologies/NeuroFMA/download?'
+            'iobc.xrdf',
+            'http://data.bioontology.org/ontologies/IOBC/download?'
             'apikey=8b5b7825-538d-40e0-9e9e-5ab9274a9aeb&download_format=rdf',
-            {'move': 'neurofma.xml'}
+            {'move': 'iobc.xrdf'}
         )
     ]
 )[0]
-
-
-fma_destrieux_path = datasets.utils._fetch_files(
-    datasets.utils._get_dataset_dir('neuroFMA'),
-    [
-        (
-            'fma_destrieux.csv',
-            'https://raw.githubusercontent.com/NeuroLang/neurolang_data/main/fma_destrieux.csv',
-            {}
-        )
-    ]
-)[0]
-fma_destrieux_rel = pd.read_csv(fma_destrieux_path, sep=';', header=None, names=['destrieux', 'fma'], dtype={'destrieux': str, 'fma': str})
 
 ###############################################################################
 # Probabilistic Logic Programming in NeuroLang
 # --------------------------------------------
 
 nl = pfe.ProbabilisticFrontend()
-nl.load_ontology(neuroFMA)
+nl.load_ontology(iobc)
 
+###############################################################################
+# #### TAKES TO MUCH TIME - NOT FINISHES
 
 ###############################################################################
 # Adding new aggregation function to build a region overlay
@@ -156,10 +146,15 @@ def agg_create_region_overlay(
 def agg_max(i: Iterable) -> float:
     return np.max(i)
 
+@nl.add_symbol
+def first_word(name: str) -> str:
+    return name.split(" ")[0]
+
 
 label = nl.new_symbol(name=str(RDFS.label))
+related = nl.new_symbol(name='http://www.w3.org/2004/02/skos/core#related')
+altLabel = nl.new_symbol(name='http://www.w3.org/2004/02/skos/core#altLabel')
 subclass_of = nl.new_symbol(name=str(RDFS.subClassOf))
-regional_part = nl.new_symbol(name='http://sig.biostr.washington.edu/fma3.0#regional_part_of')
 
 ""
 activations = nl.add_tuple_set(ns_database.values, name='activations')
@@ -175,10 +170,6 @@ destrieux_labels = nl.add_tuple_set(
     destrieux_label_names, name='destrieux_labels'
 )
 
-fma_destrieux = nl.add_tuple_set(
-    fma_destrieux_rel.values, name='relation_destrieux_fma'
-)
-
 for set_symbol in (
     'activations', 'terms', 'docs', 'destrieux_image', 'destrieux_labels'
 ):
@@ -189,94 +180,138 @@ for set_symbol in (
 
 with nl.scope as e:
     
-    e.fma_related_region[e.subregion_name, e.fma_entity_name] = (
-        label(e.fma_uri, e.fma_entity_name) & 
-        regional_part(e.fma_region, e.fma_uri) & 
-        subclass_of(e.fma_subregion, e.fma_region) &
-        label(e.fma_subregion, e.subregion_name)
+    e.related_biostimulation_terms[e.word] = (e.word == 'pain')
+    
+    e.related_biostimulation_terms[e.alternative_names] = (
+        subclass_of(e.biostimulation_subclass, 'http://purl.jp/bio/4/id/200906066643737725') &
+        label(e.pain_entity, 'Pain') & 
+        related(e.pain_entity, e.biostimulation_subclass) &
+        altLabel(e.biostimulation_subclass, e.alternative_names)
+    )
+    e.synonyms[e.short_name] = (
+        (e.short_name == nl.symbols.first_word(e.alternative_names)) & 
+        e.related_biostimulation_terms(e.alternative_names)
     )
     
-    e.fma_related_region[e.recursive_name, e.fma_name] = (
-        e.fma_related_region(e.fma_subregion, e.fma_name) &
-        label(e.fma_uri, e.fma_subregion) &
-        subclass_of(e.recursive_region, e.fma_uri) & 
-        label(e.recursive_region, e.recursive_name)
-    )
-    
-    e.destrieux_ijk[e.destrieux_name, e.i, e.j, e.k] = (
-        e.destrieux_labels[e.destrieux_name, e.id_destrieux] &
-        e.destrieux_image[e.i, e.j, e.k, e.id_destrieux]
-    )
-    
-    e.region_voxels[e.i, e.j, e.k] = (
-        e.fma_related_region[e.fma_subregions, 'Temporal lobe'] &
-        e.relation_destrieux_fma[e.destrieux_name, e.fma_subregions] &
-        e.destrieux_ijk[e.destrieux_name, e.i, e.j, e.k]
-    )
-    
-    e.term_prob[e.t, e.PROB[e.t]] = (
-        e.region_voxels[e.i, e.j, e.k] &
+    e.vox_term_prob[e.i, e.j, e.k, e.PROB[e.i, e.j, e.k]] = (
         e.activations[
             e.d, ..., ..., ..., ..., 'MNI', ..., ..., ..., ...,
             ..., ..., ..., e.i, e.j, e.k
         ] &
+        e.terms[e.d, e.name] &
+        e.synonyms[e.name] &
+        e.docs[e.d]
+    )
+
+    e.term_prob[e.t, e.PROB[e.t]] = (
         e.terms[e.d, e.t] &
         e.docs[e.d]
     )
 
+    e.region_term_prob[e.region, e.PROB[e.region]] = (
+        e.destrieux_labels(e.region, e.region_label)
+        & e.destrieux_image(e.i, e.j, e.k, e.region_label)
+        & e.activations[
+            e.d, ..., ..., ..., ..., 'MNI', ..., ..., ..., ...,
+            ..., ..., ..., e.i, e.j, e.k
+        ]
+        e.terms[e.d, e.name] &
+        e.synonyms[e.name] &
+        & e.docs[e.d]
+    )
+
+    e.vox_cond_query[e.i, e.j, e.k, e.p] = (
+        e.vox_term_prob(e.i, e.j, e.k, e.num_prob)
+        & e.term_prob('auditory', e.denom_prob)
+        & (e.p == (e.num_prob / e.denom_prob))
+    )
+
+    e.vox_cond_query_auditory[e.i, e.j, e.k, e.p] = (
+        e.vox_cond_query[e.i, e.j, e.k, e.p]
+    )
+
+    e.region_cond_query[e.name, e.p] = (
+        e.region_term_prob[e.name, e.num_prob]
+        & e.term_prob('auditory', e.denom_prob)
+        & (e.p == (e.num_prob / e.denom_prob))
+
+    )
+
+    e.destrieux_region_max_probability[e.region, agg_max(e.p)] = (
+        e.vox_cond_query_auditory(e.i, e.j, e.k, e.p)
+        & e.destrieux_image(e.i, e.j, e.k, e.region_label)
+        & e.destrieux_labels(e.region, e.region_label)
+    )
+
+    e.destrieux_region_image_probability[agg_create_region_overlay(e.i, e.j, e.k, e.p)] = (
+        e.region_cond_query[e.name, e.p] &
+        e.destrieux_labels[e.name, e.label] &
+        e.destrieux_image[e.i, e.j, e.k, e.label]
+    )
+
+    e.voxel_activation_probability[agg_create_region_overlay[e.i, e.j, e.k, e.p]] = (
+        e.vox_cond_query_auditory(e.i, e.j, e.k, e.p)
+    )
 
     res = nl.solve_all()
-    term_prob = res['term_prob']
+    img_query = res['voxel_activation_probability']
+    dest_query = res['destrieux_region_image_probability']
+    drcp = res['region_cond_query']
+    drmp = res['destrieux_region_max_probability']
     
-
-""
-from neurolang.frontend.query_resolution_datalog import execute_datalog_program
-
-query = '''
-    fma_related_region[subregion_name, fma_entity_name] = (
-        label[fma_uri, fma_entity_name] & 
-        regional_part[fma_region, fma_uri] & 
-        subclass_of[fma_subregion, fma_region] &
-        label[fma_subregion, subregion_name]
-    )
-    
-    fma_related_region[e.recursive_name, e.fma_name] = (
-        e.fma_related_region(e.fma_subregion, e.fma_name) &
-        label(e.fma_uri, e.fma_subregion) &
-        subclass_of(e.recursive_region, e.fma_uri) & 
-        label(e.recursive_region, e.recursive_name)
-    )
-    
-    e.destrieux_ijk[e.destrieux_name, e.i, e.j, e.k] = (
-        e.destrieux_labels[e.destrieux_name, e.id_destrieux] &
-        e.destrieux_image[e.i, e.j, e.k, e.id_destrieux]
-    )
-    
-    e.region_voxels[e.i, e.j, e.k] = (
-        e.fma_related_region[e.fma_subregions, 'Temporal lobe'] &
-        e.relation_destrieux_fma[e.destrieux_name, e.fma_subregions] &
-        e.destrieux_ijk[e.destrieux_name, e.i, e.j, e.k]
-    )
-    
-    e.term_prob[e.t, e.PROB[e.t]] = (
-        e.region_voxels[e.i, e.j, e.k] &
-        e.activations[
-            e.d, ..., ..., ..., ..., 'MNI', ..., ..., ..., ...,
-            ..., ..., ..., e.i, e.j, e.k
-        ] &
-        e.terms[e.d, e.t] &
-        e.docs[e.d]
-    )
-    
-
-'''
 
 ###############################################################################
 # Results
 # --------------------------------------------
 
-c = res['term_prob']._container.copy()
-c[c['PROB'] >= c['PROB'].quantile(.99)].sort_values('PROB', ascending=False)
+###############################################################################
+# Maximum probability per voxel in the region that the region has an activation
+# when an article has the word "Auditory"
+(
+    drmp
+    .as_pandas_dataframe()
+    .sort_values(drmp.columns[-1], ascending=False)
+    .head()
+)
+
+
+###############################################################################
+# Conditional probabilityper region that the region has an activation
+# when an article has the word "Auditory"
+(
+    drcp
+    .as_pandas_dataframe()
+    .sort_values(drcp.columns[-1], ascending=False)
+    .head()
+)
+
+###############################################################################
+# Per voxel associations to "Auditory" top 5%
+result_image = (
+    img_query
+    .fetch_one()
+    [0]
+    .spatial_image()
+)
+img = result_image.get_fdata()
+plot = plotting.plot_stat_map(
+    result_image,
+    # threshold=np.percentile(img[img > 0], 95)
+)
+plotting.show()
+
+###############################################################################
+# Per region associations to "Auditory" top 15%
+
+
+img = dest_query.fetch_one()[0].spatial_image().get_fdata()
+plot = plotting.plot_stat_map(
+    dest_query.fetch_one()[0].spatial_image(),
+    display_mode='y',
+    threshold=np.percentile(img[img > 0], 85),
+    cmap='YlOrRd'
+)
+plotting.show()
 
 ""
 
