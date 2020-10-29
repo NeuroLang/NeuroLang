@@ -6,6 +6,7 @@ from ...exceptions import UnsupportedProgramError
 from ...expression_walker import ExpressionWalker
 from ...expressions import Constant, Symbol
 from ...logic import (
+    FALSE,
     Conjunction,
     Disjunction,
     ExistentialPredicate,
@@ -158,8 +159,7 @@ def test_incorrect_program():
     )
     program = TestDatalogProgram()
     program.walk(code)
-    with pytest.raises(UnsupportedProgramError):
-        flatten_query(R(x, y), program)
+    assert flatten_query(R(x, y), program) == FALSE
 
 
 def test_flatten_with_variable_equality():
@@ -196,3 +196,16 @@ def test_flatten_repeated_variable_in_rule():
             for formula in flat.formulas
         )
     )
+
+
+def test_flatten_not_unifiable_becomes_false():
+    code = Union(
+        (
+            Implication(R(Constant(2), Constant(3)), Conjunction((Q(y, x),))),
+            Implication(Z(x), Conjunction((R(x, x),))),
+        )
+    )
+    program = TestDatalogProgram()
+    program.walk(code)
+    flat = flatten_query(Z(z), program)
+    assert flat == FALSE

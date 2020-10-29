@@ -641,8 +641,40 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
             )
         )
         antecedent = conjunct_formulas(antecedent, equality_conj)
+        if not self._check_compatibility_symbol_to_constant_equalities(
+            antecedent
+        ):
+            return FALSE
         antecedent = maybe_deconjunct_single_pred(antecedent)
         return antecedent
+
+    @staticmethod
+    def _check_compatibility_symbol_to_constant_equalities(conjunction):
+        """
+        Statically analyse variable-to-constant equalities within the
+        conjunction to check for compatibility. For example, if the two
+        conjuncts `x = 2` and `x = 3` are present, this function will return
+        `False`. It also handles equalities where the order is `const =
+        symbol`, such as `2 = 3, x = 3`.
+
+        """
+        symb_to_const = dict()
+        for conjunct in conjunction.formulas:
+            if (
+                conjunct.functor == EQ
+                and any(isinstance(arg, Symbol) for arg in conjunct.args)
+                and any(isinstance(arg, Constant) for arg in conjunct.args)
+            ):
+                symbol = next(
+                    arg for arg in conjunct.args if isinstance(arg, Symbol)
+                )
+                constant = next(
+                    arg for arg in conjunct.args if isinstance(arg, Constant)
+                )
+                if symbol in symb_to_const:
+                    return False
+                symb_to_const[symbol] = constant
+        return True
 
     @add_match(Conjunction)
     def conjunction(self, expression):
@@ -660,6 +692,10 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
         else:
             res = new_formulas[0]
         return res
+
+    @add_match(FALSE)
+    def false(self, false):
+        return false
 
 
 def is_rule_with_builtin(rule, known_builtins=None):

@@ -28,7 +28,7 @@ from ..datalog.expression_processing import flatten_query, enforce_conjunction
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import ExpressionWalker, add_match
 from ..expressions import Constant, Symbol
-from ..logic import Conjunction, Implication
+from ..logic import Conjunction, Implication, FALSE
 from ..logic.expression_processing import extract_logic_predicates
 from ..utils.orderedset import OrderedSet
 from ..relational_algebra import (
@@ -42,6 +42,7 @@ from ..relational_algebra import (
     RelationalAlgebraPushInSelections,
     RelationalAlgebraStringExpression,
     str2columnstr_constant,
+    NamedRelationalAlgebraFrozenSet,
 )
 from ..relational_algebra_provenance import (
     ProvenanceAlgebraSet,
@@ -288,6 +289,15 @@ def solve_succ_query(query, cpl_program):
         LOG, "Preparing query %s", init_args=(query.consequent.functor.name,),
     ):
         flat_query_body = flatten_query(query.antecedent, cpl_program)
+
+    if flat_query_body == FALSE or (
+        isinstance(flat_query_body, Conjunction)
+        and any(conjunct == FALSE for conjunct in flat_query_body.formulas)
+    ):
+        return ProvenanceAlgebraSet(
+            NamedRelationalAlgebraFrozenSet(("_p_",)),
+            ColumnStr("_p_"),
+        )
 
     with log_performance(LOG, "Translation and lifted optimisation"):
         flat_query_body = lift_optimization_for_choice_predicates(
