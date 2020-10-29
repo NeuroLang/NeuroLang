@@ -266,6 +266,9 @@ with nl.scope as e:
     drcp = res['region_cond_query']
     drmp = res['destrieux_region_max_probability']
 
+""
+print(datalog_code)
+
 ###############################################################################
 # Results
 # --------------------------------------------
