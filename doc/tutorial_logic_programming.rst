@@ -83,13 +83,12 @@ we can then count all arrivals for starts `0` and `1`::
   1  1  2
 
 
-Adding Probabilistic Facts, Choices and Querying Them
---------------------------------------------
+.. Adding Probabilistic Facts, Choices and Querying Them
+.. --------------------------------------------
 
-Neurolang can also handle probabilistic facts, and choices. In the
-probabilistic facts, each tuple of a certain set is considered an
-independent random variable that can exist or not in a possible world
-independently with a given probability. For this we need to use Neurolang's
-probabilistic solver. For instance::
+.. Neurolang can also handle probabilistic facts, and choices. In the
+.. probabilistic facts, each tuple of a certain set is considered an
+.. independent random variable that can exist or not in a possible world
+.. independently with a given probability. For this we need to use Neurolang's
+.. probabilistic solver. For instance::
   
-
