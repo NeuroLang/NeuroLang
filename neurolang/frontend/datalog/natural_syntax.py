@@ -104,7 +104,7 @@ GRAMMAR = u"""
             | ext_identifier ;
 
     identifier = /[a-zA-Z_][a-zA-Z0-9_]*/
-               | '`'@:?"[0-9a-zA-Z/#%:-]+"'`';
+               | '`'@:?"[0-9a-zA-Z/#%._:-]+"'`';
 
     comparison_operator = '==' | '<' | '<=' | '>=' | '>' | '!=' ;
 
