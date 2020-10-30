@@ -453,9 +453,18 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             if formula.args[0] in named_columns:
                 src, dst = formula.args
             # case x = y where y already in set (create new column x)
-            # or case x = C where C is a constant (create new constant col x)
-            else:
+            elif formula.args[1] in named_columns:
                 dst, src = formula.args
+            # case x = C where C is a constant (create new constant col x)
+            elif (
+                isinstance(formula.args[0], Constant)
+                and formula.args[0].type is ColumnStr
+                and isinstance(formula.args[1], Constant)
+                and formula.args[1].type is not ColumnStr
+            ):
+                dst, src = formula.args
+            else:
+                return output
             extended_projections += (ExtendedProjectionListMember(src, dst),)
             named_columns.add(dst)
 
