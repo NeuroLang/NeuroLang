@@ -562,3 +562,32 @@ def test_extended_projection_variable_equality_not_named():
     conjunction = Conjunction((Q(x), EQ(y, x), EQ(z, y)))
     with pytest.raises(UnrestrictedEqualityException):
         TranslateToNamedRA().walk(conjunction)
+
+
+def test_extended_projection_variable_equality_twice_same_lhs():
+    Q = Symbol("Q")
+    x = Symbol("x")
+    y = Symbol("y")
+    z = Symbol("z")
+    conjunction = Conjunction((Q(x), EQ(x, y), EQ(x, z)))
+    result = TranslateToNamedRA().walk(conjunction)
+    assert result == ExtendedProjection(
+        NameColumns(
+            Projection(Q, (C_(ColumnInt(0)),)),
+            (C_(ColumnStr("x")),),
+        ),
+        (
+            ExtendedProjectionListMember(
+                str2columnstr_constant("x"),
+                str2columnstr_constant("x"),
+            ),
+            ExtendedProjectionListMember(
+                str2columnstr_constant("x"),
+                str2columnstr_constant("y"),
+            ),
+            ExtendedProjectionListMember(
+                str2columnstr_constant("x"),
+                str2columnstr_constant("z"),
+            ),
+        ),
+    )
