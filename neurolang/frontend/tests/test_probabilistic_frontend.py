@@ -528,3 +528,39 @@ def test_result_query_relation_correct_column_names():
         solution = nl.solve_all()
     assert all(name in solution for name in ["climbs", "person", "lives_in"])
     assert solution["climbs"].columns == ("p", "PROB", "city")
+
+
+def test_add_constraints_and_rewrite():
+    nl = ProbabilisticFrontend()
+
+    nl.add_tuple_set(
+        [
+            ("neurolang"),
+        ],
+        name="project",
+    )
+
+    nl.add_tuple_set(
+        [
+            ("neurolang", "db"),
+            ("neurolang", "logic"),
+        ],
+        name="inArea",
+    )
+
+    with nl.scope as e:
+        nl.add_constraint(
+            e.project[e.x] & e.inArea[e.x, e.y], 
+            e.hasCollaborator[e.z, e.y, e.x]
+        )
+
+        e.p[e.b] = (
+            e.hasCollaborator[e.a, 'db', e.b]
+        )
+        res = nl.solve_all()
+
+
+    assert list(res['p'])[0] == ('neurolang',)
+
+
+
