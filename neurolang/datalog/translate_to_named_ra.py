@@ -253,9 +253,13 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
     def translate_conjunction(self, expression):
         classified_formulas = self.classify_formulas_obtain_names(expression)
 
-        output = self.process_positive_formulas(classified_formulas)
+        output = TranslateToNamedRA.process_positive_formulas(
+            classified_formulas
+        )
 
-        output = self.process_negative_formulas(classified_formulas, output)
+        output = TranslateToNamedRA.process_negative_formulas(
+            classified_formulas, output
+        )
 
         while (
             len(classified_formulas["destroy_formulas"])
@@ -263,27 +267,27 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             + len(classified_formulas["eq_formulas"])
             + len(classified_formulas["ext_proj_formulas"])
         ) > 0:
-            new_output = self.process_destroy_formulas(
+            new_output = TranslateToNamedRA.process_destroy_formulas(
                 classified_formulas, output
             )
 
-            new_output = self.process_equality_formulas(
+            new_output = TranslateToNamedRA.process_equality_formulas(
                 classified_formulas, new_output
             )
 
-            new_output = self.process_extended_projection_formulas(
-                classified_formulas, new_output
+            new_output = (
+                TranslateToNamedRA.process_extended_projection_formulas(
+                    classified_formulas, new_output
+                )
             )
 
-            new_output = self.process_selection_formulas(
+            new_output = TranslateToNamedRA.process_selection_formulas(
                 classified_formulas, new_output
             )
 
             if new_output is output:
-                new_output = (
-                    self.process_equality_formulas_as_extended_projections(
-                        classified_formulas, new_output
-                    )
+                new_output = TranslateToNamedRA.process_equality_formulas_as_extended_projections(
+                    classified_formulas, new_output
                 )
 
             if new_output is output:
@@ -356,7 +360,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
     def process_negative_formulas(classified_formulas, output):
         named_columns = classified_formulas["named_columns"]
         for neg_formula in classified_formulas["neg_formulas"]:
-            neg_cols = self.obtain_negative_columns(neg_formula)
+            neg_cols = TranslateToNamedRA.obtain_negative_columns(neg_formula)
             if named_columns > neg_cols:
                 neg_formula = NaturalJoin(output, neg_formula)
             elif named_columns != neg_cols:
@@ -392,7 +396,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         named_columns = classified_formulas["named_columns"]
         to_keep = []
         for formula in classified_formulas["eq_formulas"]:
-            new_output = self.process_equality_formula(
+            new_output = TranslateToNamedRA.process_equality_formula(
                 formula, named_columns, output
             )
             if new_output is output:
@@ -410,7 +414,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             and isinstance(right, Constant)
             and not isinstance(right, Constant[ColumnStr])
         ):
-            return self.process_equality_formulas_constant(
+            return TranslateToNamedRA.process_equality_formulas_constant(
                 output, left, right, named_columns
             )
 
