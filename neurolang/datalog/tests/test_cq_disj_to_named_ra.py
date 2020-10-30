@@ -17,7 +17,8 @@ from ...relational_algebra import (
     Projection,
     RenameColumn,
     Selection,
-    Union
+    Union,
+    str2columnstr_constant,
 )
 from ...utils import NamedRelationalAlgebraFrozenSet
 from ..expressions import Conjunction, Negation
@@ -27,6 +28,8 @@ from ..translate_to_named_ra import TranslateToNamedRA
 C_ = Constant
 S_ = Symbol
 F_ = FunctionApplication
+
+EQ = Constant(eq)
 
 
 def test_translate_set():
@@ -542,3 +545,27 @@ def test_border_case_2():
         )
     )
     assert res == expected_res
+
+
+def test_extended_projection_variable_equality():
+    Q = Symbol("Q")
+    x = Symbol("x")
+    y = Symbol("y")
+    conjunction = Conjunction((Q(x), EQ(y, x)))
+    result = TranslateToNamedRA().walk(conjunction)
+    assert result == ExtendedProjection(
+        NameColumns(
+            Projection(Q, (C_(ColumnInt(0)),)),
+            (C_(ColumnStr("x")),),
+        ),
+        (
+            ExtendedProjectionListMember(
+                str2columnstr_constant("x"),
+                str2columnstr_constant("x"),
+            ),
+            ExtendedProjectionListMember(
+                str2columnstr_constant("x"),
+                str2columnstr_constant("y"),
+            )
+        )
+    )
