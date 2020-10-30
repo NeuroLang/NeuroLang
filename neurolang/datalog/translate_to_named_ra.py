@@ -253,13 +253,9 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
     def translate_conjunction(self, expression):
         classified_formulas = self.classify_formulas_obtain_names(expression)
 
-        output = TranslateToNamedRA.process_positive_formulas(
-            classified_formulas
-        )
+        output = self.process_positive_formulas(classified_formulas)
 
-        output = TranslateToNamedRA.process_negative_formulas(
-            classified_formulas, output
-        )
+        output = self.process_negative_formulas(classified_formulas, output)
 
         while (
             len(classified_formulas["destroy_formulas"])
@@ -267,27 +263,27 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             + len(classified_formulas["eq_formulas"])
             + len(classified_formulas["ext_proj_formulas"])
         ) > 0:
-            new_output = TranslateToNamedRA.process_destroy_formulas(
+            new_output = self.process_destroy_formulas(
                 classified_formulas, output
             )
 
-            new_output = TranslateToNamedRA.process_equality_formulas(
+            new_output = self.process_equality_formulas(
                 classified_formulas, new_output
             )
 
-            new_output = (
-                TranslateToNamedRA.process_extended_projection_formulas(
-                    classified_formulas, new_output
-                )
+            new_output = self.process_extended_projection_formulas(
+                classified_formulas, new_output
             )
 
-            new_output = TranslateToNamedRA.process_selection_formulas(
+            new_output = self.process_selection_formulas(
                 classified_formulas, new_output
             )
 
             if new_output is output:
-                new_output = TranslateToNamedRA.process_equality_formulas_as_extended_projections(
-                    classified_formulas, new_output
+                new_output = (
+                    self.process_equality_formulas_as_extended_projections(
+                        classified_formulas, new_output
+                    )
                 )
 
             if new_output is output:
