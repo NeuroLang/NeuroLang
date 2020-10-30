@@ -122,10 +122,22 @@ def test_equality_symbols():
 
     exp = Conjunction((fb, C_(eq)(x, z)))
 
-    expected_result = Selection(
-        NaturalJoin(fb_trans, RenameColumn(fb_trans, Constant(ColumnStr('x')),
-                                           Constant(ColumnStr('z')))),
-        C_(eq)(C_(ColumnStr('x')), C_(ColumnStr('z')))
+    expected_result = ExtendedProjection(
+        fb_trans,
+        (
+            ExtendedProjectionListMember(
+                Constant(ColumnStr("x")),
+                Constant(ColumnStr("x"))
+            ),
+            ExtendedProjectionListMember(
+                Constant(ColumnStr("y")),
+                Constant(ColumnStr("y"))
+            ),
+            ExtendedProjectionListMember(
+                Constant(ColumnStr("x")),
+                Constant(ColumnStr("z"))
+            ),
+        ),
     )
 
     res = tr.walk(exp)
@@ -133,10 +145,22 @@ def test_equality_symbols():
 
     exp = Conjunction((fb, C_(eq)(z, x)))
 
-    expected_result = Selection(
-        NaturalJoin(fb_trans, RenameColumn(fb_trans, Constant(ColumnStr('x')),
-                                           Constant(ColumnStr('z')))),
-        C_(eq)(C_(ColumnStr('z')), C_(ColumnStr('x')))
+    expected_result = ExtendedProjection(
+        fb_trans,
+        (
+            ExtendedProjectionListMember(
+                Constant(ColumnStr("x")),
+                Constant(ColumnStr("x"))
+            ),
+            ExtendedProjectionListMember(
+                Constant(ColumnStr("y")),
+                Constant(ColumnStr("y"))
+            ),
+            ExtendedProjectionListMember(
+                Constant(ColumnStr("x")),
+                Constant(ColumnStr("z"))
+            ),
+        ),
     )
 
     res = tr.walk(exp)
@@ -440,22 +464,21 @@ def test_border_cases():
     res = tr.walk(exp)
     expected_res = (
         ExtendedProjection(
-            Selection(
-                NaturalJoin(
-                    NameColumns(
-                        Projection(R1, (C_(0),)),
-                        (C_('x'),)
-                    ),
-                    RenameColumn(
-                        NameColumns(
-                            Projection(R1, (C_(0),)),
-                            (C_('x'),)
-                        ),
-                        C_('x'),
-                        C_('y')
-                    )
+            ExtendedProjection(
+                NameColumns(
+                    Projection(R1, (C_(0),)),
+                    (C_('x'),)
                 ),
-                C_(eq)(C_('x'), C_('y'))
+                (
+                    ExtendedProjectionListMember(
+                        C_(ColumnStr("x")),
+                        C_(ColumnStr("x")),
+                    ),
+                    ExtendedProjectionListMember(
+                        C_(ColumnStr("x")),
+                        C_(ColumnStr("y")),
+                    ),
+                )
             ),
             (
                 ExtendedProjectionListMember(C_('x'), C_('x')),

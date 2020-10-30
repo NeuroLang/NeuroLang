@@ -1,5 +1,3 @@
-import itertools
-import collections
 from operator import contains, eq, not_
 from typing import AbstractSet, Callable, Tuple
 
@@ -330,13 +328,6 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             'destroy_formulas': [],
             'named_columns': set()
         }
-        # used to classify variable equality conjuncts as extended projection
-        # when the variable only occurs in that equality
-        one_occ_symbs = set()
-        if isinstance(expression, Conjunction):
-            one_occ_symbs |= self._get_symb_names_occurring_in_one_conjunct(
-                expression
-            )
 
         for formula in expression.formulas:
             formula = self.walk(formula)
@@ -344,7 +335,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
                 classified_formulas['neg_formulas'].append(formula.formula)
             elif isinstance(formula, FunctionApplication):
                 self.classify_formulas_obtain_named_function_applications(
-                    formula, classified_formulas, one_occ_symbs
+                    formula, classified_formulas
                 )
             else:
                 classified_formulas['pos_formulas'].append(formula)
@@ -359,18 +350,15 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         return classified_formulas
 
     def classify_formulas_obtain_named_function_applications(
-        self, formula, classified_formulas, one_occ_symbs
+        self, formula, classified_formulas
     ):
         if formula.functor == EQ:
             if formula.args[0] == formula.args[1]:
                 pass
-            elif (
-                isinstance(formula.args[1], FunctionApplication)
-                or any(arg.value in one_occ_symbs for arg in formula.args)
-            ):
-                classified_formulas['ext_proj_formulas'].append(formula)
             elif isinstance(formula.args[1], (Constant, Symbol)):
                 classified_formulas['eq_formulas'].append(formula)
+            elif isinstance(formula.args[1], FunctionApplication):
+                classified_formulas['ext_proj_formulas'].append(formula)
         elif (
             formula.functor == CONTAINS and
             (
@@ -459,17 +447,21 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         if left in named_columns and right in named_columns:
             output = Selection(output, criteria)
         elif left in named_columns:
-            output = Selection(NaturalJoin(
-                    output, RenameColumn(output, left, right)
-                ),
-                criteria
+            output = ExtendedProjection(
+                output,
+                tuple(
+                    ExtendedProjectionListMember(c, c)
+                    for c in named_columns
+                ) + (ExtendedProjectionListMember(left, right),),
             )
             named_columns.add(right)
         elif right in named_columns:
-            output = Selection(NaturalJoin(
-                    output, RenameColumn(output, right, left)
-                ),
-                criteria
+            output = ExtendedProjection(
+                output,
+                tuple(
+                    ExtendedProjectionListMember(c, c)
+                    for c in named_columns
+                ) + (ExtendedProjectionListMember(right, left),),
             )
             named_columns.add(left)
         else:
@@ -556,13 +548,3 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
                 to_keep.append(selection)
         classified_formulas['selection_formulas'] = to_keep
         return output
-
-    @staticmethod
-    def _get_symb_names_occurring_in_one_conjunct(conjunction):
-        counts = collections.Counter(
-            itertools.chain(*(
-                conjunct._symbols
-                for conjunct in conjunction.formulas
-            ))
-        )
-        return {k.name for k, v in counts.items() if v == 1}
