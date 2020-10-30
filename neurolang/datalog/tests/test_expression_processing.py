@@ -6,7 +6,7 @@ import typing
 import numpy as np
 
 from ...exceptions import SymbolNotFoundError
-from ...expression_walker import ExpressionBasicEvaluator
+from ...expression_walker import ExpressionBasicEvaluator, ExpressionWalker
 from ...expressions import Constant, ExpressionBlock, Symbol
 from ...logic import (
     ExistentialPredicate, Implication,
@@ -412,13 +412,26 @@ def test_is_rule_with_builtin():
     assert is_rule_with_builtin(rule, known_builtins=dl.builtins())
 
 
+class TestHeadConstantToBodyEquality(
+    HeadConstantToBodyEquality,
+    ExpressionWalker
+):
+    pass
+
+
+class TestHeadRepeatedVariableToBodyEquality(
+    HeadRepeatedVariableToBodyEquality,
+    ExpressionWalker
+):
+    pass
+
 
 def test_head_constant_to_body_equality():
     P = Symbol("P")
     Q = Symbol("Q")
     x = Symbol("x")
     a = Constant("a")
-    walker = HeadConstantToBodyEquality()
+    walker = TestHeadConstantToBodyEquality()
     rule = Implication(P(x, a), Q(x))
     result = walker.walk(rule)
     assert result.consequent.args[1].is_fresh
@@ -429,7 +442,7 @@ def test_head_repeated_variable_to_body_equality():
     P = Symbol("P")
     Q = Symbol("Q")
     x = Symbol("x")
-    walker = HeadRepeatedVariableToBodyEquality()
+    walker = TestHeadRepeatedVariableToBodyEquality()
     rule = Implication(P(x, x), Q(x))
     result = walker.walk(rule)
     assert result.consequent.args[1].is_fresh
