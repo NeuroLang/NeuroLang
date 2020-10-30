@@ -555,16 +555,15 @@ class FreshenFreeVariables(PatternWalker):
     @add_match(
         Implication(FunctionApplication, ...),
         lambda implication: any(
-            not var.is_fresh or not hasattr(var, "freshened")
+            not var.is_fresh
             for var in extract_logic_free_variables(implication)
         ),
     )
     def implication_with_free_variables(self, implication):
-        replacements = dict()
-        for var in extract_logic_free_variables(implication):
-            new_var = Symbol.fresh()
-            new_var.freshened = True
-            replacements[var] = new_var
+        replacements = {
+            var: Symbol.fresh()
+            for var in extract_logic_free_variables(implication)
+        }
         implication = ReplaceExpressionWalker(replacements).walk(implication)
         return self.walk(implication)
 
