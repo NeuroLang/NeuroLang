@@ -29,7 +29,7 @@ Data preparation
 ----------------
 """
 
-###############################################################################
+# ##############################################################################
 # Load the MNI template and resample it to 4mm voxels
 
 mni_t1 = nib.load(datasets.fetch_icbm152_2009()['t1'])
@@ -61,7 +61,7 @@ for label_number, name in destrieux_dataset['labels']:
     destrieux_label_names.append((name.lower(), label_number))
 
 
-###############################################################################
+# ##############################################################################
 # Load the NeuroSynth database
 
 ns_database_fn, ns_features_fn = datasets.utils._fetch_files(
@@ -102,7 +102,7 @@ ns_terms = (
 )
 
 
-###############################################################################
+# ##############################################################################
 # Load the NeuroFMA ontology
 
 neuroFMA = datasets.utils._fetch_files(
@@ -130,7 +130,7 @@ fma_destrieux_path = datasets.utils._fetch_files(
 )[0]
 fma_destrieux_rel = pd.read_csv(fma_destrieux_path, sep=';', header=None, names=['destrieux', 'fma'], dtype={'destrieux': str, 'fma': str})
 
-###############################################################################
+# ##############################################################################
 # Probabilistic Logic Programming in NeuroLang
 # --------------------------------------------
 
@@ -188,7 +188,7 @@ for set_symbol in (
 ):
     print(f"#{set_symbol}: {len(nl.symbols[set_symbol].value)}")
 
-###############################################################################
+# ##############################################################################
 # Probabilistic program and querying
 
 datalog_code = f'''
@@ -267,7 +267,68 @@ with nl.scope as e:
     drmp = res['destrieux_region_max_probability']
 
 ""
-print(datalog_code)
+###############################################################################
+# fma_related_region(subregion_name, fma_entity_name) :-
+#     `http://www.w3.org/2000/01/rdf-schema#label`(fma_uri, fma_entity_name),
+#     `http://sig.biostr.washington.edu/fma3.0#regional_part_of`(fma_region, fma_uri),
+#     `http://www.w3.org/2000/01/rdf-schema#subClassOf`(fma_subregion, fma_region),
+#     `http://www.w3.org/2000/01/rdf-schema#label`(fma_subregion, subregion_name)
+#     
+# fma_related_region(recursive_name, fma_name) :-
+#     fma_related_region(fma_subregion, fma_name),
+#     `http://www.w3.org/2000/01/rdf-schema#label`(fma_uri, fma_subregion),
+#     `http://www.w3.org/2000/01/rdf-schema#subClassOf`(recursive_region, fma_uri),
+#     `http://www.w3.org/2000/01/rdf-schema#label`(recursive_region, recursive_name)
+#     
+# destrieux_ijk(destrieux_name, i, j, k) :-
+#     destrieux_labels(destrieux_name, id_destrieux),
+#     destrieux_image(i, j, k, id_destrieux)
+#     
+# region_voxels(i, j, k) :-
+#     fma_related_region(fma_subregions, 'Temporal lobe'),
+#     relation_destrieux_fma(destrieux_name, fma_subregions),
+#     destrieux_ijk(destrieux_name, i, j, k)
+#     
+# vox_term_prob(i, j, k, PROB(i, j, k)) :-
+#     region_voxels(i, j, k),
+#     activations(d, ..., ..., ..., ..., 'MNI', ..., ..., ..., ..., ..., ..., ..., i, j, k),
+#     terms(d, 'auditory'),
+#     docs(d)
+#
+# term_prob(t, PROB(t)) :-
+#     terms(d, t),
+#     docs(d)
+#
+# region_term_prob(region, PROB(region)) :-
+#     destrieux_labels(region, region_label),
+#     destrieux_image(i, j, k, region_label),
+#     activations(d, ..., ..., ..., ..., 'MNI', ..., ..., ..., ...,..., ..., ..., i, j, k),
+#     terms(d, 'auditory'),
+#     docs(d)
+#
+# vox_cond_query(i, j, k, p) :-
+#     vox_term_prob(i, j, k, num_prob),
+#     term_prob('auditory', denom_prob),
+#     p == num_prob / denom_prob
+#
+# vox_cond_query_auditory(i, j, k, p) :- vox_cond_query(i, j, k, p)
+#
+# region_cond_query(name, p) :-
+#     region_term_prob(name, num_prob),
+#     term_prob('auditory', denom_prob),
+#     p == num_prob / denom_prob
+#
+# destrieux_region_max_probability(region, agg_max(p)) :-
+#     vox_cond_query_auditory(i, j, k, p),
+#     destrieux_image(i, j, k, region_label),
+#     destrieux_labels(region, region_label)
+#
+# destrieux_region_image_probability(agg_create_region_overlay(i, j, k, p)) :-
+# region _cond_query(name, p),
+#     destrieux_labels(name, label),
+#     destrieux_image(i, j, k, label)
+#
+# voxel_activation_probability(agg_create_region_overlay(i, j, k, p)) :- vox_cond_query_auditory(i, j, k, p)
 
 ###############################################################################
 # Results
@@ -324,3 +385,4 @@ plotting.show()
 
 ""
 
+# endregion
