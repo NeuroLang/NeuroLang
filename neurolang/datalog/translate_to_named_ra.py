@@ -452,25 +452,30 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             # case y = x where y already in set (create new column x)
             if formula.args[0] in named_columns:
                 src, dst = formula.args
-            # case x = y where y already in set (create new column x)
-            elif formula.args[1] in named_columns:
-                dst, src = formula.args
-            # case x = C where C is a constant (create new constant col x)
             elif (
-                isinstance(formula.args[0], Constant)
-                and formula.args[0].type is ColumnStr
-                and isinstance(formula.args[1], Constant)
-                and formula.args[1].type is not ColumnStr
+                # case x = y where y already in set (create new column x)
+                formula.args[1] in named_columns
+                # case x = C where C is a constant (create new constant col x)
+                or TranslateToNamedRA.is_col_to_const_equality(formula)
             ):
                 dst, src = formula.args
+            # other cases not handled by this function
             else:
                 return output
             extended_projections += (ExtendedProjectionListMember(src, dst),)
             named_columns.add(dst)
-
         new_output = ExtendedProjection(output, extended_projections)
         classified_formulas["eq_formulas"] = []
         return new_output
+
+    @staticmethod
+    def is_col_to_const_equality(formula):
+        return (
+            isinstance(formula.args[0], Constant)
+            and formula.args[0].type is ColumnStr
+            and isinstance(formula.args[1], Constant)
+            and formula.args[1].type is not ColumnStr
+        )
 
     @staticmethod
     def process_extended_projection_formulas(classified_formulas, output):
