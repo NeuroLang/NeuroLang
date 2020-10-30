@@ -487,7 +487,6 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
                 src, dst = formula.args
             # case x = y where y already in set (create new column x)
             # or case x = C where C is a constant (create new constant col x)
-            # TODO? handle case C = x where C is a constant and x dst col
             else:
                 dst, src = formula.args
             extended_projections += (
