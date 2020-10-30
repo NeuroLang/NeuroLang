@@ -592,3 +592,28 @@ def test_extended_projection_variable_equality():
             )
         )
     )
+
+
+def test_extended_projection_variable_equality_constant():
+    Q = Symbol("Q")
+    x = Symbol("x")
+    y = Symbol("y")
+    a = Constant("a")
+    conjunction = Conjunction((Q(x), EQ(y, a)))
+    result = TranslateToNamedRA().walk(conjunction)
+    assert result == ExtendedProjection(
+        NameColumns(
+            Projection(Q, (C_(ColumnInt(0)),)),
+            (C_(ColumnStr("x")),),
+        ),
+        (
+            ExtendedProjectionListMember(
+                str2columnstr_constant("x"),
+                str2columnstr_constant("x"),
+            ),
+            ExtendedProjectionListMember(
+                Constant("a"),
+                str2columnstr_constant("y"),
+            )
+        )
+    )

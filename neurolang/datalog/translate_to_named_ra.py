@@ -446,24 +446,8 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         criteria = EQ(left, right)
         if left in named_columns and right in named_columns:
             output = Selection(output, criteria)
-        elif left in named_columns:
-            output = ExtendedProjection(
-                output,
-                tuple(
-                    ExtendedProjectionListMember(c, c)
-                    for c in named_columns
-                ) + (ExtendedProjectionListMember(left, right),),
-            )
-            named_columns.add(right)
-        elif right in named_columns:
-            output = ExtendedProjection(
-                output,
-                tuple(
-                    ExtendedProjectionListMember(c, c)
-                    for c in named_columns
-                ) + (ExtendedProjectionListMember(right, left),),
-            )
-            named_columns.add(left)
+        elif left in named_columns or right in named_columns:
+            pass
         else:
             raise UnrestrictedEqualityException(left, right)
         return output
@@ -498,11 +482,18 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             ExtendedProjectionListMember(c, c) for c in named_columns
         )
         for formula in classified_formulas["eq_formulas"]:
-            left, right = formula.args
+            # case y = x where y already in set (create new column x)
+            if formula.args[0] in named_columns:
+                src, dst = formula.args
+            # case x = y where y already in set (create new column x)
+            # or case x = C where C is a constant (create new constant col x)
+            # TODO? handle case C = x where C is a constant and x dst col
+            else:
+                dst, src = formula.args
             extended_projections += (
-                ExtendedProjectionListMember(right, left),
+                ExtendedProjectionListMember(src, dst),
             )
-            named_columns.add(left)
+            named_columns.add(dst)
 
         new_output = ExtendedProjection(output, extended_projections)
         classified_formulas["eq_formulas"] = []
