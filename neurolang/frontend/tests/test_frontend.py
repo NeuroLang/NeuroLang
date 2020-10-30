@@ -440,13 +440,105 @@ def test_neurolang_dl_aggregation():
     sol = neurolang.query(r(x, y), p(x, y))
 
     res_q = {
-        (0, 2 + 4 + 8),
-        (1, 1 + 5 + 9)
+        (0, 2 + 4 + 6 + 8),
+        (1, 1 + 3 + 5 + 7 + 9)
     }
 
     assert len(sol) == 2
     assert sol[r] == res_q
     assert sol[p] == res_q
+
+
+def test_neurolang_dl_aggregation_direct_query():
+    neurolang = frontend.NeurolangDL()
+    q = neurolang.new_symbol(name='q')
+    p = neurolang.new_symbol(name='p')
+    x = neurolang.new_symbol(name='x')
+    y = neurolang.new_symbol(name='y')
+
+    @neurolang.add_symbol
+    def sum_(x):
+        return sum(x)
+
+    for i in range(10):
+        q[i % 2, i] = True
+
+    p[x, sum_(y)] = q[x, y]
+
+    sol = neurolang.query((x, y), p(x, y))
+
+    res_q = {
+        (0, 2 + 4 + 6 + 8),
+        (1, 1 + 3 + 5 + 7 + 9)
+    }
+
+    assert sol == res_q
+
+
+def test_neurolang_dl_aggregation_environment():
+    neurolang = frontend.NeurolangDL()
+    @neurolang.add_symbol
+    def sum_(x):
+        return sum(x)
+
+    with neurolang.environment as e:
+        for i in range(10):
+            e.q[i % 2, i] = True
+
+        e.p[e.x, sum_(e.y)] = e.q[e.x, e.y]
+        sol = neurolang.query(e.r(e.x, e.y), e.p(e.x, e.y))
+
+    res_q = {
+        (0, 2 + 4 + 6 + 8),
+        (1, 1 + 3 + 5 + 7 + 9)
+    }
+
+    assert len(sol) == 2
+    assert sol['r'] == res_q
+    assert sol['p'] == res_q
+
+
+def test_neurolang_dl_aggregation_environment_direct_query():
+    neurolang = frontend.NeurolangDL()
+    @neurolang.add_symbol
+    def sum_(x):
+        return sum(x)
+
+    with neurolang.environment as e:
+        for i in range(10):
+            e.q[i % 2, i] = True
+
+        e.p[e.x, sum_(e.y)] = e.q[e.x, e.y]
+        sol = neurolang.query((e.x, e.y), e.p(e.x, e.y))
+
+    res_q = {
+        (0, 2 + 4 + 6 + 8),
+        (1, 1 + 3 + 5 + 7 + 9)
+    }
+
+    assert sol == res_q
+
+
+def test_aggregation_number_of_arrivals():
+    neurolang = frontend.NeurolangDL()
+    @neurolang.add_symbol
+    def agg_count(x) -> int:
+        return len(x)
+
+    with neurolang.environment as e:
+        e.A[0, 1] = True
+        e.A[1, 2] = True
+        e.A[2, 3] = True
+        e.reachable[e.x, e.y] = e.A[e.x, e.y]
+        e.reachable[e.x, e.y] = e.reachable[e.x, e.z] & e.A[e.z, e.y]
+
+        e.count_destinations[e.x, agg_count(e.y)] = e.reachable[e.x, e.y]
+
+        res = neurolang.query((e.x, e.c), e.count_destinations(e.x, e.c))
+
+    assert res == {
+        (0, 3), (1, 2), (2, 1)
+    }
 
 
 def test_neurolang_dl_attribute_access():
