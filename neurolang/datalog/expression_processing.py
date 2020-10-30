@@ -501,7 +501,7 @@ class HeadConstantToBodyEquality(PatternWalker):
         new_consequent = implication.consequent.functor(*new_consequent_vars)
         new_antecedent = Conjunction(tuple(body_formulas))
         new_antecedent = maybe_deconjunct_single_pred(new_antecedent)
-        return Implication(new_consequent, new_antecedent)
+        return self.walk(Implication(new_consequent, new_antecedent))
 
 
 class HeadRepeatedVariableToBodyEquality(PatternWalker):
@@ -548,18 +548,25 @@ class HeadRepeatedVariableToBodyEquality(PatternWalker):
             implication.antecedent, Conjunction(tuple(vareq_formulas))
         )
         new_antecedent = maybe_deconjunct_single_pred(new_antecedent)
-        return Implication(new_consequent, new_antecedent)
+        return self.walk(Implication(new_consequent, new_antecedent))
 
 
 class FreshenFreeVariables(PatternWalker):
     @add_match(
         Implication(FunctionApplication, ...),
-        lambda implication: bool(extract_logic_free_variables(implication)),
+        lambda implication: any(
+            not var.is_fresh or not hasattr(var, "freshened")
+            for var in extract_logic_free_variables(implication)
+        ),
     )
     def implication_with_free_variables(self, implication):
-        free_vars = extract_logic_free_variables(implication)
-        replacements = {var: Symbol.fresh() for var in free_vars}
-        return ReplaceExpressionWalker(replacements).walk(implication)
+        replacements = dict()
+        for var in extract_logic_free_variables(implication):
+            new_var = Symbol.fresh()
+            new_var.freshened = True
+            replacements[var] = new_var
+        implication = ReplaceExpressionWalker(replacements).walk(implication)
+        return self.walk(implication)
 
 
 def flatten_query(query, program):
