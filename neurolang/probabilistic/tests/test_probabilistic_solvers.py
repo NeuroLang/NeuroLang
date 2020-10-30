@@ -680,7 +680,6 @@ def test_program_with_variable_equality(solver):
     assert testing.eq_prov_relations(result, expected)
 
 
-@pytest.mark.xfail(reason="Flattenign query issue")
 def test_repeated_variable_probabilistic_rule(solver):
     if solver != dichotomy_theorem_based_solver:
         return
