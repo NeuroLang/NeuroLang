@@ -6,6 +6,7 @@ Complements QueryBuilderDatalog class with probabilistic capabilities
 2- sove probabilistic queries
 """
 import collections
+from neurolang.frontend.query_resolution_expressions import TranslateExpressionToFrontEndExpression
 import typing
 from typing import (
     AbstractSet,
@@ -319,6 +320,8 @@ class NeurolangPDL(QueryBuilderDatalog):
         if '__constraints__' in self.symbol_table:
             eB = self._rewrite_program_with_ontology(det_idb)
             det_idb = Union(det_idb.formulas + eB.formulas)
+            for rule in det_idb.formulas:
+                print(TranslateExpressionToFrontEndExpression(self).walk(rule))
         chase = self.chase_class(self.program_ir, rules=det_idb)
         solution = chase.build_chase_solution()
         return solution

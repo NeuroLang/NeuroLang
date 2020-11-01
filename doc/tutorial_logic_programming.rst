@@ -83,6 +83,38 @@ we can then count all arrivals for starts `0` and `1`::
   1  1  2
 
 
+Adding Constraints and Open Knowledge Rules
+-------------------------------------------
+
+Neurolang also supports tuple-generating dependencies (TGDs).
+We can say that a person is a parent if they have a child::
+
+  >>> from neurolang.frontend import NeurolangPDL
+  >>> nl = NeurolangPDL()
+  >>> with nl.environment as e:
+  ...   e.parent['John', 'Carl'] = True
+  ...   e.parent['Mary', 'Carl'] = True
+  ...   e.parent['Pat', 'Anna'] = True
+  ...   e.parent['Anna', 'Pete'] = True
+  ...   e.person[e.x] = e.parent[e.x, ...]
+  ...   e.person[e.x] = e.parent[..., e.x]
+  ...   nl.add_constraint(e.person[e.x], e.person[e.y] & e.parent[e.y, e.x])
+  ...   e.has_parent[e.x] = e.person[e.x] & e.parent[e.x, e.y]
+  >>> res = nl.solve_all()
+  >>> print(res)
+
+
+  >>> from neurolang.frontend import NeurolangPDL
+  >>> nl = NeurolangPDL()
+  >>> with nl.environment as e:
+  ...   e.person['Pat'] = True
+  ...   e.person['Chris'] = True
+  ...   nl.add_constraint(e.person[e.x], e.parent[e.y, e.x])
+  ...   e.has_grand_parent[e.x] = e.person[e.x] & e.person[e.y] & e.parent[e.y, e.x] & e.parent[e.z, e.y]
+  >>> res = nl.solve_all()
+  >>> print(res)
+
+
 .. Adding Probabilistic Facts, Choices and Querying Them
 .. --------------------------------------------
 
