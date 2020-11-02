@@ -8,18 +8,15 @@ from ...expressions import Constant, Symbol
 from ...logic import Conjunction, Implication, Union
 from ...relational_algebra import RenameColumn
 from .. import dichotomy_theorem_based_solver, weighted_model_counting
-from ..dichotomy_theorem_based_solver import (
-    ProbSemiringSolver, AdditiveProjection
-)
+from ..dichotomy_theorem_based_solver import ProbSemiringSolver
 from ..cplogic import testing
 from ..cplogic.program import CPLogicProgram
 from ..exceptions import (
     NotEasilyShatterableError,
     NotHierarchicalQueryException,
 )
-from ..expressions import Condition, PROB, ProbabilisticQuery
 from ...relational_algebra import (
-    ExtendedProjectionListMember,
+    ExtendedProjection, ExtendedProjectionListMember,
     NamedRelationalAlgebraFrozenSet,
     ColumnStr,
     str2columnstr_constant,
@@ -683,47 +680,6 @@ def test_program_with_variable_equality(solver):
     assert testing.eq_prov_relations(result, expected)
 
 
-def test_program_with_marg_query(solver):
-    pchoice_as_sets = {
-        P: {(0.2, "a"), (0.3, "b"), (0.5, "c")}
-    }
-    deterministic_sets = {
-        Q: {(1, "a"), (2,  "a"), (2, "b")},
-        R: {(1, "a"), (1, "b"), (2, "b"), (2, "c")}
-    }
-
-    code = Union((
-        Implication(Z(x, z, ProbabilisticQuery(PROB, (x, z))), Condition(
-            Conjunction((Q(x, y), P(y))),
-            Conjunction((R(z, y), P(y)))
-        )),
-    ))
-
-    cpl_program = CPLogicProgram()
-    for pred_symb, fact_set in deterministic_sets.items():
-        cpl_program.add_extensional_predicate_from_tuples(pred_symb, fact_set)
-    for pred_symb, pchoice_as_set in pchoice_as_sets.items():
-        cpl_program.add_probabilistic_choice_from_tuples(
-            pred_symb, pchoice_as_set
-        )
-
-    cpl_program.walk(code)
-
-    result = solver.solve_marg_query(
-        code.formulas[0], cpl_program
-    )
-
-    expected = testing.make_prov_set(
-        [
-            (.4, 1, 1),
-            (1., 2, 1),
-            (.375, 2, 2),
-        ],
-        ("_p_", "x", "z"),
-    )
-    assert testing.eq_prov_relations(result, expected)
-
-
 def test_repeated_variable_probabilistic_rule(solver):
     if solver != dichotomy_theorem_based_solver:
         return
@@ -770,7 +726,8 @@ def test_empty_result_program(solver):
     assert testing.eq_prov_relations(result, expected)
 
 
-def test_additive_projection():
+
+def test_probsemiring_extended_proj():
     provset = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
             ("_p_", "x", "y"),
@@ -783,10 +740,14 @@ def test_additive_projection():
         ColumnStr("_p_"),
     )
     proj_list = [
+        ExtendedProjectionListMember(str2columnstr_constant("x"),
+                                     str2columnstr_constant("x")),
+        ExtendedProjectionListMember(str2columnstr_constant("y"),
+                                     str2columnstr_constant("y")),
         ExtendedProjectionListMember(Constant("d"),
                                      str2columnstr_constant("z")),
     ]
-    proj = AdditiveProjection(provset, proj_list)
+    proj = ExtendedProjection(provset, proj_list)
     solver = ProbSemiringSolver()
     result = solver.walk(proj)
     expected = ProvenanceAlgebraSet(
@@ -803,7 +764,7 @@ def test_additive_projection():
     assert testing.eq_prov_relations(result, expected)
 
 
-def test_additive_projection_forbidden_non_prov_col():
+def test_probsemiring_forbidden_extended_proj_missing_nonprov_cols():
     provset = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
             ("_p_", "x", "y"),
@@ -821,7 +782,33 @@ def test_additive_projection_forbidden_non_prov_col():
         ExtendedProjectionListMember(Constant("d"),
                                      str2columnstr_constant("z")),
     ]
-    proj = AdditiveProjection(provset, proj_list)
+    proj = ExtendedProjection(provset, proj_list)
+    solver = ProbSemiringSolver()
+    with pytest.raises(ValueError):
+        solver.walk(proj)
+
+
+def test_probsemiring_forbidden_extended_proj_on_provcol():
+    provset = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            ("_p_", "x", "y"),
+            [
+                (0.2, "a", "b"),
+                (0.3, "b", "a"),
+                (0.5, "c", "c"),
+            ]
+        ),
+        ColumnStr("_p_"),
+    )
+    proj_list = [
+        ExtendedProjectionListMember(str2columnstr_constant("x"),
+                                     str2columnstr_constant("x")),
+        ExtendedProjectionListMember(str2columnstr_constant("y"),
+                                     str2columnstr_constant("y")),
+        ExtendedProjectionListMember(Constant("d"),
+                                     str2columnstr_constant("_p_")),
+    ]
+    proj = ExtendedProjection(provset, proj_list)
     solver = ProbSemiringSolver()
     with pytest.raises(ValueError):
         solver.walk(proj)
