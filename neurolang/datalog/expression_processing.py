@@ -501,7 +501,7 @@ class HeadConstantToBodyEquality(PatternWalker):
         new_consequent = implication.consequent.functor(*new_consequent_vars)
         new_antecedent = Conjunction(tuple(body_formulas))
         new_antecedent = maybe_deconjunct_single_pred(new_antecedent)
-        return Implication(new_consequent, new_antecedent)
+        return self.walk(Implication(new_consequent, new_antecedent))
 
 
 class HeadRepeatedVariableToBodyEquality(PatternWalker):
@@ -548,7 +548,24 @@ class HeadRepeatedVariableToBodyEquality(PatternWalker):
             implication.antecedent, Conjunction(tuple(vareq_formulas))
         )
         new_antecedent = maybe_deconjunct_single_pred(new_antecedent)
-        return Implication(new_consequent, new_antecedent)
+        return self.walk(Implication(new_consequent, new_antecedent))
+
+
+class FreshenFreeVariables(PatternWalker):
+    @add_match(
+        Implication(FunctionApplication, ...),
+        lambda implication: any(
+            not var.is_fresh
+            for var in extract_logic_free_variables(implication)
+        ),
+    )
+    def implication_with_free_variables(self, implication):
+        replacements = {
+            var: Symbol.fresh()
+            for var in extract_logic_free_variables(implication)
+        }
+        implication = ReplaceExpressionWalker(replacements).walk(implication)
+        return self.walk(implication)
 
 
 def flatten_query(query, program):
@@ -600,6 +617,7 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
     class _RuleNormaliser(
         HeadConstantToBodyEquality,
         HeadRepeatedVariableToBodyEquality,
+        FreshenFreeVariables,
         ExpressionWalker,
     ):
         pass
@@ -625,17 +643,11 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
         return res
 
     def _unify_cq_antecedent(self, cq, qpred):
-        replacements = collections.OrderedDict()
-        free_variables = extract_logic_free_variables(cq)
-        # replace free variables by fresh symbols to avoid any collision with
-        # other substitutions
-        replacements.update({var: Symbol.fresh() for var in free_variables})
         mgu = most_general_unifier(cq.consequent, qpred)
         # if we cannot unify, this is always a false statement
         if mgu is None:
             return FALSE
-        replacements.update(mgu[0])
-        antecedent = ReplaceExpressionWalker(replacements).walk(cq.antecedent)
+        antecedent = ReplaceExpressionWalker(mgu[0]).walk(cq.antecedent)
         equality_conj = Conjunction(
             tuple(
                 Constant(operator.eq)(x, y)
@@ -664,7 +676,8 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
         """
         symb_to_const = dict()
         symb_to_const_eq_formulas = (
-            conjunct for conjunct in conjunction.formulas
+            conjunct
+            for conjunct in conjunction.formulas
             if is_symb_to_const_equality(conjunct)
         )
         for equality in symb_to_const_eq_formulas:

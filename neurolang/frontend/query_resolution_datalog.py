@@ -20,6 +20,7 @@ from uuid import uuid1
 from .. import datalog
 from .. import expressions as ir
 from ..datalog import aggregation
+from ..datalog.constraints_representation import RightImplication
 from ..datalog.expression_processing import (
     TranslateToDatalogSemantics,
     reachable_code,
@@ -146,6 +147,47 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             antecedent.expression
         )
         rule = datalog.Implication(consequent, antecedent)
+        self.program_ir.walk(rule)
+        return rule
+
+    def add_constraint(
+        self, antecedent: fe.Expression, consequent: fe.Expression
+    ) -> fe.Expression:
+        """
+        Creates an right implication of the consequent by the antecedent
+        and adds the rule to the current program:
+            antecedent -> consequent
+
+        Parameters
+        ----------
+        antecedent : fe.Expression
+            see description, will be processed to a logic form before
+            creating the right implication rule
+        consequent : fe.Expression
+            see description, will be processed to a logic form before
+            creating the right implication rule
+
+        Returns
+        -------
+        fe.Expression
+            see description
+
+        Example
+        -------
+        >>> p_ir = DatalogProgram()
+        >>> nl = QueryBuilderDatalog(program_ir=p_ir)
+        >>> nl.add_tuple_set([(1, 2), (2, 2)], name="l")
+        l: typing.AbstractSet[typing.Tuple[int, int]] = [(1, 2), (2, 2)]
+        >>> with nl.scope as e:
+        ...     nl.add_constraint(e.l2[e.x, e.y], e.l2[e.x])
+        """
+        consequent = self.translate_expression_to_datalog.walk(
+            consequent.expression
+        )
+        antecedent = self.translate_expression_to_datalog.walk(
+            antecedent.expression
+        )
+        rule = RightImplication(antecedent, consequent)
         self.program_ir.walk(rule)
         return rule
 

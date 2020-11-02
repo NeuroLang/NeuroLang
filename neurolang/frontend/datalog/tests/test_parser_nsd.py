@@ -228,6 +228,24 @@ def test_aggregation_nsd():
     ))
 
 
+def test_uri_nsd():
+    from rdflib import RDFS
+
+    label = Symbol(name=str(RDFS.label))
+    regional_part = Symbol(name='http://sig.biostr.washington.edu/fma3.0#regional_part_of')
+    x = Symbol('x')
+
+    res = parser(f'x is `{str(label.name)}` if x is `{str(regional_part.name)}`')
+    expected_result = Union((
+        Implication(
+            label(x),
+            Conjunction((regional_part(x),))
+        ),
+    ))
+
+    assert res == expected_result
+
+
 def test_probabilistic_fact():
     A = Symbol('A')
     p = Symbol('p')

@@ -131,8 +131,6 @@ class NeurolangPDL(QueryBuilderDatalog):
             onto.get_pointers_symbol(), d_pred[onto.get_pointers_symbol()]
         )
 
-        self.ontology_loaded = True
-
     @property
     def current_program(self) -> List[fe.Expression]:
         """
@@ -326,7 +324,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         return solution
 
     def _solve_deterministic_stratum(self, det_idb):
-        if self.ontology_loaded:
+        if '__constraints__' in self.symbol_table:
             eB = self._rewrite_program_with_ontology(det_idb)
             det_idb = Union(det_idb.formulas + eB.formulas)
         chase = self.chase_class(self.program_ir, rules=det_idb)

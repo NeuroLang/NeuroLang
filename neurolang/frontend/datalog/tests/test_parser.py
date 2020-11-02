@@ -155,6 +155,25 @@ def test_aggregation():
     assert res == expected_result
 
 
+def test_uri():
+    from rdflib import RDFS
+
+    label = Symbol(name=str(RDFS.label))
+    regional_part = Symbol(name='http://sig.biostr.washington.edu/fma3.0#regional_part_of')
+    x = Symbol('x')
+    y = Symbol('y')
+
+    res = parser(f'`{str(label.name)}`(x):-`{str(regional_part.name)}`(x, y)')
+    expected_result = Union((
+        Implication(
+            label(x),
+            Conjunction((regional_part(x, y),))
+        ),
+    ))
+
+    assert res == expected_result
+
+
 def test_probabilistic_fact():
     A = Symbol('A')
     p = Symbol('p')
