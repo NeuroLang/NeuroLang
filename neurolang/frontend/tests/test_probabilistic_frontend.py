@@ -9,6 +9,7 @@ from ...probabilistic.exceptions import UnsupportedProbabilisticQueryError
 from ...relational_algebra import ColumnInt, ColumnStr
 from ..probabilistic_frontend import ProbabilisticFrontend
 
+
 def test_add_uniform_probabilistic_choice_set():
     nl = ProbabilisticFrontend()
 
@@ -68,24 +69,26 @@ def test_probabilistic_query():
 
 def test_marg_query():
     nl = ProbabilisticFrontend()
-    nl.add_probabilistic_choice_from_tuples({(0.2, "a"), (0.3, "b"), (0.5, "c")}, name='P')
-    nl.add_tuple_set({(1, "a"), (2,  "a"), (2, "b")}, name="Q")
+    nl.add_probabilistic_choice_from_tuples(
+        {(0.2, "a"), (0.3, "b"), (0.5, "c")}, name="P"
+    )
+    nl.add_tuple_set({(1, "a"), (2, "a"), (2, "b")}, name="Q")
     nl.add_tuple_set({(1, "a"), (1, "b"), (2, "b"), (2, "c")}, name="R")
 
     with nl.scope as e:
-        e.Z[e.x, e.z, e.PROB[e.x, e.z]] = (
-            (e.Q(e.x, e.y) & e.P(e.y)) // (e.R(e.z, e.y) & e.P(e.y))
+        e.Z[e.x, e.z, e.PROB[e.x, e.z]] = (e.Q(e.x, e.y) & e.P(e.y)) // (
+            e.R(e.z, e.y) & e.P(e.y)
         )
 
         res = nl.solve_all()
 
     expected = {
-        (1, 1, .4),
-        (2, 1, 1.),
-        (2, 2, .375),
+        (1, 1, 0.4),
+        (2, 1, 1.0),
+        (2, 2, 0.375),
     }
-    assert res['Z'].columns[:2] == ('x', 'z')
-    assert set(res['Z']) == expected
+    assert res["Z"].columns[:2] == ("x", "z")
+    assert set(res["Z"]) == expected
 
 
 def test_mixed_queries():
@@ -571,17 +574,54 @@ def test_add_constraints_and_rewrite():
 
     with nl.scope as e:
         nl.add_constraint(
-            e.project[e.x] & e.inArea[e.x, e.y], 
-            e.hasCollaborator[e.z, e.y, e.x]
+            e.project[e.x] & e.inArea[e.x, e.y],
+            e.hasCollaborator[e.z, e.y, e.x],
         )
 
-        e.p[e.b] = (
-            e.hasCollaborator[e.a, 'db', e.b]
-        )
+        e.p[e.b] = e.hasCollaborator[e.a, "db", e.b]
         res = nl.solve_all()
 
-
-    assert list(res['p'])[0] == ('neurolang',)
-
+    assert list(res["p"])[0] == ("neurolang",)
 
 
+def test_solve_marg_query():
+    nl = ProbabilisticFrontend()
+    nl.add_tuple_set(
+        [
+            ("alice",),
+            ("bob",),
+        ],
+        name="person",
+    )
+    nl.add_tuple_set(
+        [("alice", "paris"), ("bob", "marseille")],
+        name="lives_in",
+    )
+    nl.add_probabilistic_choice_from_tuples(
+        [
+            (0.2, "alice", "running"),
+            (0.8, "alice", "climbing"),
+        ],
+        name="practice",
+    )
+    nl.add_probabilistic_choice_from_tuples(
+        [
+            (0.3, "bob", "running"),
+            (0.7, "bob", "climbing"),
+        ],
+        name="practice",
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.8, "bob"),
+            (0.9, "alice"),
+        ],
+        name="does_not_smoke",
+    )
+    with nl.environment as e:
+        e.query[e.p, e.PROB[e.p, e.city, e.sport], e.city, e.sport] = (
+            e.person[e.p] & e.lives_in[e.p, e.city] & e.does_not_smoke[e.p]
+        ) // e.practice[e.person, e.sport]
+        solution = nl.solve_all()
+    assert all(name in solution for name in ["query", "person", "lives_in"])
+    assert solution["query"].columns == ("p", "PROB", "city", "sport")
