@@ -23,6 +23,9 @@ Then, we can add some facts (connected) and rules (reachable)::
   ...   e.reachable[e.x, e.y] = e.connected[e.x, e.y]
   ...   e.reachable[e.x, e.y] = e.reachable[e.x, e.z] & e.connected[e.z, e.y]
 
+please note how the environment :python:`e` allows for the creation of logic programming symbols
+dynamically.
+
 With this we now have program loaded in memory which can be explored as::
 
   >>> print(nl.symbols['connected'])
