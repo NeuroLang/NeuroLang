@@ -36,7 +36,11 @@ def is_within_language_prob_query_wannabe(expression):
 
 
 class TranslateProbabilisticQueryMixin(PatternWalker):
-    @add_match(Implication(..., FunctionApplication(Constant(floordiv), ...)))
+    @add_match(
+        Implication(
+            ..., FunctionApplication(Constant[typing.Any](floordiv), ...)
+        )
+    )
     def conditional_query(self, implication):
         return self.walk(
             Implication(
