@@ -176,6 +176,17 @@ class WalkLogicProgramAggregatingSets(PatternWalker):
     def negation(self, expression):
         return self.walk(expression.formula)
 
+    @add_match(Quantifier)
+    def quantifier(self, expression):
+        return self.walk(expression.body)
+
+    @add_match(LogicOperator)
+    def logic_operator(self, expression):
+        fvs = OrderedSet()
+        for arg in expression.unapply():
+            fvs |= self.walk(arg)
+        return fvs
+
 
 class ExtractFreeVariablesWalker(WalkLogicProgramAggregatingSets):
     @add_match(FunctionApplication)

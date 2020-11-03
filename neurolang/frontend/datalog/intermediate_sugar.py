@@ -6,7 +6,7 @@ Set of syntactic sugar processors at the intermediate level.
 from typing import DefaultDict
 
 from ... import expression_walker as ew, expressions as ir
-from ...datalog.expression_processing import extract_logic_atoms
+from ...datalog.expression_processing import conjunct_if_needed, extract_logic_atoms
 from ...logic import Conjunction, Implication
 
 
@@ -59,9 +59,10 @@ class TranslateColumnsToAtoms(ew.ExpressionWalker):
         replaced_expression = ew.ReplaceExpressionWalker(replacements).walk(
             expression
         )
-        new_antecedent = replaced_expression.antecedent.formulas + tuple(
-            new_atoms
+        new_antecedent = conjunct_if_needed(
+            (replaced_expression.antecedent,) + tuple(new_atoms)
         )
+
         return self.walk(
             Implication(replaced_expression.consequent, new_antecedent)
         )
