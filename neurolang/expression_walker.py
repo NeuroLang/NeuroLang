@@ -382,7 +382,7 @@ class ReplaceExpressionsByValues(ExpressionWalker):
         return constant.value
 
 
-class TypedSymbolTableEvaluator(TypedSymbolTableMixin, ExpressionWalker):
+class ResolveSymbolMixin(PatternMatcher):
     @add_match(Symbol)
     def symbol_from_table(self, symbol):
         try:
@@ -393,6 +393,10 @@ class TypedSymbolTableEvaluator(TypedSymbolTableMixin, ExpressionWalker):
             else:
                 raise ValueError(f"{symbol} not in symbol table")
 
+
+class TypedSymbolTableEvaluator(
+    ResolveSymbolMixin, TypedSymbolTableMixin, ExpressionWalker
+):
     @add_match(Statement)
     def statement(self, statement):
         rhs = self.walk(statement.rhs)
