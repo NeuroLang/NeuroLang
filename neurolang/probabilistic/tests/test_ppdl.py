@@ -1,9 +1,9 @@
 import pytest
 
-from ...datalog import DatalogProgram, Fact
+from ...datalog import Fact
 from ...exceptions import ForbiddenExpressionError
-from ...expressions import Constant, ExpressionBlock, Query, Symbol
-from ...logic import Conjunction, Implication
+from ...expressions import Constant, Symbol
+from ...logic import Implication, Union
 from ...logic.unification import apply_substitution, most_general_unifier
 from ..ppdl import PPDL, PPDLDeltaTerm, get_dterm
 
@@ -61,7 +61,7 @@ def test_unification_of_delta_atom():
 
 def test_ppdl_program():
     tau_1 = Implication(P(x, PPDLDeltaTerm(bernoulli, (C_(0.5),))), Q(x))
-    program = ExpressionBlock((tau_1,))
+    program = Union((tau_1,))
     ppdl = PPDL()
     ppdl.walk(program)
     edb = ppdl.extensional_database()
@@ -78,7 +78,7 @@ def test_ppdl_program():
             Q(x),
         )
         ppdl = PPDL()
-        ppdl.walk(ExpressionBlock((tau_2, Fact(Q(C_(2))))))
+        ppdl.walk(Union((tau_2, Fact(Q(C_(2))))))
         edb = ppdl.extensional_database()
         idb = ppdl.intensional_database()
         assert tau_2 in idb[P].formulas
@@ -95,7 +95,7 @@ def test_burglar():
     Trig = S_("Trig")
     Alarm = S_("Alarm")
     x, h, b, c, r = S_("x"), S_("h"), S_("b"), S_("c"), S_("r")
-    program = ExpressionBlock(
+    program = Union(
         (
             Implication(Unit(h, c), House(h, c)),
             Implication(Unit(b, c), Business(b, c)),
@@ -131,7 +131,7 @@ def test_pcs_example():
     HasRPC = S_("HasRPC")
     x = S_("x")
     p = S_("p")
-    program = ExpressionBlock(
+    program = Union(
         (
             Implication(
                 Gender(x, PPDLDeltaTerm(bernoulli, (p,))),

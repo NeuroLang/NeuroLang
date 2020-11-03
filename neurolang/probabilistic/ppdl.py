@@ -1,23 +1,12 @@
-import operator
-from typing import Iterable
-from uuid import uuid1
-
 from ..datalog.basic_representation import (
     DatalogProgram,
     UnionOfConjunctiveQueries,
 )
-from ..datalog.expression_processing import extract_logic_predicates
-from ..exceptions import ForbiddenExpressionError, UnsupportedProgramError
+from ..exceptions import ForbiddenExpressionError
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionWalker, PatternWalker
-from ..expressions import (
-    Constant,
-    Expression,
-    ExpressionBlock,
-    FunctionApplication,
-    Symbol,
-)
-from ..logic import Conjunction, ExistentialPredicate, Implication, Union
+from ..expressions import FunctionApplication, Symbol
+from ..logic import Implication, Union
 
 
 def is_ppdl_rule(exp):
