@@ -465,6 +465,15 @@ def maybe_deconjunct_single_pred(conjunction):
     return conjunction
 
 
+def maybe_disjunct(
+    formulas: typing.Iterable[Expression],
+) -> typing.Union[Expression, Disjunction]:
+    formulas = tuple(formulas)
+    if len(formulas) > 1:
+        return Disjunction(formulas)
+    return formulas[0]
+
+
 class HeadConstantToBodyEquality(PatternWalker):
     """
     Transform rules whose head (consequent) predicate contains constant terms
@@ -638,11 +647,7 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
             if exp != FALSE:
                 exp = self.walk(exp)
             cqs.append(exp)
-        if len(cqs) > 1:
-            res = Disjunction(tuple(cqs))
-        else:
-            res = cqs[0]
-        return res
+        return maybe_disjunct(cqs)
 
     def _unify_cq_antecedent(self, cq, qpred):
         mgu = most_general_unifier(cq.consequent, qpred)
