@@ -611,7 +611,7 @@ def flatten_query(query, program):
         )
     except NeuroLangPatternMatchingNoMatch:
         raise UnsupportedProgramError("Expression not supported.")
-    return remove_conjunction_duplicates(res)
+    return res
 
 
 class FlattenQueryInNonRecursiveUCQ(PatternWalker):
@@ -717,10 +717,6 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
             res = new_formulas[0]
         return res
 
-    @add_match(FALSE)
-    def false(self, false):
-        return false
-
 
 def is_rule_with_builtin(rule, known_builtins=None):
     if known_builtins is None:
@@ -731,10 +727,8 @@ def is_rule_with_builtin(rule, known_builtins=None):
     )
 
 
-def remove_conjunction_duplicates(expression):
-    if isinstance(expression, Conjunction):
-        return Conjunction(tuple(set(expression.formulas)))
-    return expression
+def remove_conjunction_duplicates(conjunction):
+    return Conjunction(tuple(set(conjunction.formulas)))
 
 
 def iter_disjunction_or_implication_rules(implication_or_disjunction):
