@@ -682,7 +682,7 @@ def test_not_ordered_equalites():
     w = Symbol("w")
     h = Symbol("h")
     z = Symbol("z")
-    conjunction = Conjunction((Q(x), EQ(z, y), EQ(w, h), EQ(w, x), EQ(w, z)))
+    conjunction = Conjunction((Q(x), EQ(w, h), EQ(h, x), EQ(y, w), EQ(z, y)))
     result = TranslateToNamedRA().walk(conjunction)
     expected = ExtendedProjection(
         NameColumns(
@@ -696,19 +696,19 @@ def test_not_ordered_equalites():
             ),
             ExtendedProjectionListMember(
                 str2columnstr_constant("x"),
+                str2columnstr_constant("h"),
+            ),
+            ExtendedProjectionListMember(
+                str2columnstr_constant("h"),
                 str2columnstr_constant("w"),
             ),
             ExtendedProjectionListMember(
                 str2columnstr_constant("w"),
-                str2columnstr_constant("z"),
-            ),
-            ExtendedProjectionListMember(
-                str2columnstr_constant("z"),
                 str2columnstr_constant("y"),
             ),
             ExtendedProjectionListMember(
-                str2columnstr_constant("w"),
-                str2columnstr_constant("h"),
+                str2columnstr_constant("y"),
+                str2columnstr_constant("z"),
             ),
         ),
     )
