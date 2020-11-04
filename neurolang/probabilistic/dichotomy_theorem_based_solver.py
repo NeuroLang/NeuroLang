@@ -28,7 +28,10 @@ from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import ExpressionWalker, add_match
 from ..expressions import Constant, Symbol
 from ..logic import Conjunction, Implication, FALSE
-from ..logic.expression_processing import extract_logic_predicates
+from ..logic.expression_processing import (
+    extract_logic_predicates,
+    extract_logic_free_variables,
+)
 from ..utils.orderedset import OrderedSet
 from ..relational_algebra import (
     ColumnInt,

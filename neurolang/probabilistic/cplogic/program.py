@@ -45,16 +45,25 @@ class TranslateProbabilisticQueryMixin(PatternWalker):
         new_implication = Implication(
             implication.consequent, Condition(*implication.antecedent.args)
         )
-        if (
-            not is_within_language_prob_query_wannabe(new_implication)
-            or sum(
+        if not (
+            any(
                 isinstance(arg, ProbabilisticQuery)
+                or is_within_language_prob_query_wannabe(arg)
                 for arg in new_implication.consequent.args
             )
-            != 1
         ):
             raise ForbiddenExpressionError(
                 "Missing probabilistic term in consequent's head"
+            )
+        if (
+            sum(
+                isinstance(arg, ProbabilisticQuery)
+                for arg in new_implication.consequent.args
+            )
+            > 1
+        ):
+            raise ForbiddenExpressionError(
+                "Can only contain one probabilistic term in consequent's head"
             )
         return self.walk(new_implication)
 
