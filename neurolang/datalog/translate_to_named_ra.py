@@ -1,7 +1,8 @@
+import collections
 from operator import contains, eq, not_
 from typing import AbstractSet, Callable, Tuple
 
-from ..exceptions import NeuroLangException
+from ..exceptions import ForbiddenExpressionError, NeuroLangException
 from ..expression_walker import (
     ExpressionBasicEvaluator,
     ReplaceExpressionsByValues,
@@ -36,16 +37,6 @@ REBV = ReplaceExpressionsByValues({})
 
 class TranslateToNamedRAException(NeuroLangException):
     pass
-
-
-class UnrestrictedEqualityException(TranslateToNamedRAException):
-    def __init__(self, left, right):
-        super().__init__(
-            f"At least one of the symbols {left} {right} must be "
-            "in the free variables of the antecedent"
-        )
-        self.left = left
-        self.right = right
 
 
 class CouldNotTranslateConjunctionException(TranslateToNamedRAException):
@@ -417,10 +408,6 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         criteria = EQ(left, right)
         if left in named_columns and right in named_columns:
             output = Selection(output, criteria)
-        elif left in named_columns or right in named_columns:
-            pass
-        else:
-            raise UnrestrictedEqualityException(left, right)
         return output
 
     @staticmethod
@@ -444,7 +431,15 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         extended_projections = tuple(
             ExtendedProjectionListMember(c, c) for c in named_columns
         )
-        for formula in classified_formulas["eq_formulas"]:
+        stack = list(classified_formulas["eq_formulas"])
+        seen_counts = collections.defaultdict(int)
+        while stack:
+            formula = stack.pop()
+            seen_counts[formula] += 1
+            if seen_counts[formula] > 2:
+                raise ForbiddenExpressionError(
+                    f"Could not resolve equality {formula}"
+                )
             # case y = x where y already in set (create new column x)
             if formula.args[0] in named_columns:
                 src, dst = formula.args
@@ -455,11 +450,12 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
                 or TranslateToNamedRA.is_col_to_const_equality(formula)
             ):
                 dst, src = formula.args
-            # other cases not handled by this function
             else:
-                return output
+                stack.insert(0, formula)
+                continue
             extended_projections += (ExtendedProjectionListMember(src, dst),)
             named_columns.add(dst)
+            seen_counts = collections.defaultdict(int)
         new_output = ExtendedProjection(output, extended_projections)
         classified_formulas["eq_formulas"] = []
         return new_output
