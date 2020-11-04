@@ -283,10 +283,17 @@ class _TestTranslator(TranslateProbabilisticQueryMixin, ExpressionWalker):
 
 def test_wlq_floordiv_translation():
     wlq = Implication(
-        Q(x, y, PROB(x, y)), Constant(operator.floordiv)(P(x), Q(x, y))
+        Q(x, y, PROB(x, y)), Constant(operator.floordiv)(P(x), R(x, y))
     )
     translator = _TestTranslator()
     result = translator.walk(wlq)
     assert result == Implication(
-        Q(x, y, ProbabilisticQuery(PROB, (x, y))), Condition(P(x), Q(x, y))
+        Q(x, y, ProbabilisticQuery(PROB, (x, y))), Condition(P(x), R(x, y))
     )
+
+
+def test_wlq_marg_bad_syntax():
+    bad_wlq = Implication(Q(x, y), Constant(operator.floordiv)(P(x), Z(x, y)))
+    translator = _TestTranslator()
+    with pytest.raises(ForbiddenExpressionError):
+        translator.walk(bad_wlq)
