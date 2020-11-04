@@ -435,8 +435,6 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         seen_counts = collections.defaultdict(int)
         while stack:
             formula = stack.pop()
-            if formula not in seen_counts:
-                seen_counts = collections.defaultdict(int)
             seen_counts[formula] += 1
             if seen_counts[formula] > 2:
                 raise ForbiddenExpressionError(
@@ -456,6 +454,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
                 stack.insert(0, formula)
                 continue
             extended_projections += (ExtendedProjectionListMember(src, dst),)
+            seen_counts = collections.defaultdict(int)
             named_columns.add(dst)
         new_output = ExtendedProjection(output, extended_projections)
         classified_formulas["eq_formulas"] = []
