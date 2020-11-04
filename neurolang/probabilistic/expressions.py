@@ -1,6 +1,21 @@
 from ..expressions import Definition, FunctionApplication, Symbol
+from ..logic import BinaryLogicOperator
 
 PROB = Symbol("PROB")
+
+
+class ProbabilisticBinaryLogicOperator(BinaryLogicOperator):
+    pass
+
+
+class Condition(ProbabilisticBinaryLogicOperator):
+    def __init__(self, conditioned, conditioning):
+        self.conditioned = conditioned
+        self.conditioning = conditioning
+        self._symbols = conditioned._symbols | conditioning._symbols
+
+    def __repr__(self):
+        return f"[{self.conditioned} | {self.conditioning}]"
 
 
 class ProbabilisticPredicate(Definition):

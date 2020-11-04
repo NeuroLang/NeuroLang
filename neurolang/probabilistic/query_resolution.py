@@ -1,36 +1,69 @@
+import typing
 from typing import AbstractSet
 
 from ..datalog.instance import MapInstance
 from ..expressions import Constant
+from ..logic import Implication
 from .cplogic.program import CPLogicProgram
 from .expression_processing import (
     construct_within_language_succ_result,
-    is_within_language_succ_query,
+    is_within_language_prob_query,
     within_language_succ_query_to_intensional_rule,
 )
+from .expressions import Condition
+
+
+def _solve_within_language_prob_query(
+    cpl: CPLogicProgram,
+    rule: Implication,
+    succ_prob_solver: typing.Callable,
+    marg_prob_solver: typing.Callable,
+) -> Constant[AbstractSet]:
+    query = within_language_succ_query_to_intensional_rule(rule)
+    if isinstance(rule.antecedent, Condition):
+        provset = marg_prob_solver(query, cpl)
+    else:
+        provset = succ_prob_solver(query, cpl)
+    relation = construct_within_language_succ_result(provset, rule)
+    return relation
+
+
+def _solve_for_probabilistic_rule(
+    cpl: CPLogicProgram,
+    rule: Implication,
+    succ_prob_solver: typing.Callable,
+):
+    provset = succ_prob_solver(rule, cpl)
+    relation = Constant[AbstractSet](
+        provset.value,
+        auto_infer_type=False,
+        verify_type=False,
+    )
+    return relation
 
 
 def compute_probabilistic_solution(
-    det_edb, pfact_edb, pchoice_edb, prob_idb, prob_solver
+    det_edb,
+    pfact_edb,
+    pchoice_edb,
+    prob_idb,
+    succ_prob_solver,
+    marg_prob_solver,
 ):
     solution = MapInstance()
     cpl = _build_probabilistic_program(
         det_edb, pfact_edb, pchoice_edb, prob_idb
     )
     for rule in prob_idb.formulas:
-        if is_within_language_succ_query(rule):
-            query = within_language_succ_query_to_intensional_rule(rule)
-            provset = prob_solver(query, cpl)
-            relation = construct_within_language_succ_result(provset, rule)
-        else:
-            query = rule
-            provset = prob_solver(query, cpl)
-            relation = Constant[AbstractSet](
-                provset.value,
-                auto_infer_type=False,
-                verify_type=False,
+        if is_within_language_prob_query(rule):
+            relation = _solve_within_language_prob_query(
+                cpl, rule, succ_prob_solver, marg_prob_solver
             )
-        solution[query.consequent.functor] = Constant[AbstractSet](
+        else:
+            relation = _solve_for_probabilistic_rule(
+                cpl, rule, succ_prob_solver
+            )
+        solution[rule.consequent.functor] = Constant[AbstractSet](
             relation.value.to_unnamed()
         )
     return solution
