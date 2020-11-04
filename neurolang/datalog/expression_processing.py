@@ -635,7 +635,9 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
         for cq in ucq.formulas:
             cq = self._rule_normaliser.walk(cq)
             exp = self._unify_cq_antecedent(cq, qpred)
-            cqs.append(self.walk(exp))
+            if exp != FALSE:
+                exp = self.walk(exp)
+            cqs.append(exp)
         if len(cqs) > 1:
             res = Disjunction(tuple(cqs))
         else:
@@ -708,10 +710,6 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
         else:
             res = new_formulas[0]
         return res
-
-    @add_match(FALSE)
-    def false(self, false):
-        return false
 
 
 def is_rule_with_builtin(rule, known_builtins=None):
