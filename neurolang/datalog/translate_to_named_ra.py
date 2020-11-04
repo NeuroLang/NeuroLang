@@ -454,7 +454,6 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
                 stack.insert(0, formula)
                 continue
             extended_projections += (ExtendedProjectionListMember(src, dst),)
-            seen_counts = collections.defaultdict(int)
             named_columns.add(dst)
             seen_counts = collections.defaultdict(int)
         new_output = ExtendedProjection(output, extended_projections)
