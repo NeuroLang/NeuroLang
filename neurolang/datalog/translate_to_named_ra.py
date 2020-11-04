@@ -456,6 +456,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             extended_projections += (ExtendedProjectionListMember(src, dst),)
             seen_counts = collections.defaultdict(int)
             named_columns.add(dst)
+            seen_counts = collections.defaultdict(int)
         new_output = ExtendedProjection(output, extended_projections)
         classified_formulas["eq_formulas"] = []
         return new_output
