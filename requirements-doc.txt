@@ -5,3 +5,4 @@
 sphinx
 sphinx-gallery
 numpydoc
+sphinx_bootstrap_theme
