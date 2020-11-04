@@ -78,7 +78,7 @@ class NeurolangPDL(QueryBuilderDatalog):
 
     def __init__(
         self,
-        chase_class=Chase,
+        chase_class: Type[Chase] = Chase,
         probabilistic_solver: Callable = lifted_solve_succ_query,
         probabilistic_marg_solver: Callable = lifted_solve_marg_query,
     ) -> "ProbabilisticFrontend":
@@ -263,9 +263,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         )
         return solution, functor_orig
 
-    def solve_all(
-        self,
-    ) -> Dict[str, NamedRelationalAlgebraFrozenSet]:
+    def solve_all(self) -> Dict[str, NamedRelationalAlgebraFrozenSet]:
         """
         Returns a dictionary of "predicate_name": "Content"
         for all elements in the solution of the Datalog program.
