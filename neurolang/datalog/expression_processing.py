@@ -6,6 +6,7 @@ Datalog programs.
 
 import collections
 import operator
+import typing
 from typing import Iterable
 
 import numpy as np
@@ -27,7 +28,7 @@ from ..expression_walker import (
     ReplaceExpressionWalker,
     ReplaceSymbolWalker,
 )
-from ..expressions import Constant, FunctionApplication, Symbol
+from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..logic import (
     FALSE,
     TRUE,
