@@ -22,10 +22,7 @@ from ...relational_algebra import (
 )
 from ...utils import NamedRelationalAlgebraFrozenSet
 from ..expressions import Conjunction, Negation
-from ..translate_to_named_ra import (
-    TranslateToNamedRA,
-    UnrestrictedEqualityException,
-)
+from ..translate_to_named_ra import TranslateToNamedRA
 
 C_ = Constant
 S_ = Symbol
@@ -160,7 +157,7 @@ def test_equality_symbols():
     assert res == expected_result
 
     exp = Conjunction((fb, C_(eq)(z, w)))
-    with pytest.raises(NeuroLangException, match="At least.*"):
+    with pytest.raises(NeuroLangException, match="Could not resolve*"):
         res = tr.walk(exp)
 
 
@@ -560,8 +557,28 @@ def test_extended_projection_variable_equality_not_named():
     y = Symbol("y")
     z = Symbol("z")
     conjunction = Conjunction((Q(x), EQ(y, x), EQ(z, y)))
-    with pytest.raises(UnrestrictedEqualityException):
-        TranslateToNamedRA().walk(conjunction)
+    result = TranslateToNamedRA().walk(conjunction)
+    expected = ExtendedProjection(
+        NameColumns(
+            Projection(Q, (C_(ColumnInt(0)),)),
+            (C_(ColumnStr("x")),),
+        ),
+        (
+            ExtendedProjectionListMember(
+                str2columnstr_constant("x"),
+                str2columnstr_constant("x"),
+            ),
+            ExtendedProjectionListMember(
+                str2columnstr_constant("x"),
+                str2columnstr_constant("y"),
+            ),
+            ExtendedProjectionListMember(
+                str2columnstr_constant("y"),
+                str2columnstr_constant("z"),
+            ),
+        ),
+    )
+    assert result == expected
 
 
 def test_extended_projection_variable_equality_twice_same_lhs():
@@ -591,3 +608,68 @@ def test_extended_projection_variable_equality_twice_same_lhs():
             ),
         ),
     )
+
+
+def test_double_equality():
+    Q = Symbol("Q")
+    x = Symbol("x")
+    y = Symbol("y")
+    z = Symbol("z")
+    conjunction = Conjunction((Q(x), EQ(x, y), EQ(x, z)))
+    result = TranslateToNamedRA().walk(conjunction)
+    expected = ExtendedProjection(
+        NameColumns(
+            Projection(Q, (C_(ColumnInt(0)),)),
+            (C_(ColumnStr("x")),),
+        ),
+        (
+            ExtendedProjectionListMember(
+                str2columnstr_constant("x"),
+                str2columnstr_constant("x"),
+            ),
+            ExtendedProjectionListMember(
+                str2columnstr_constant("x"),
+                str2columnstr_constant("z"),
+            ),
+            ExtendedProjectionListMember(
+                str2columnstr_constant("x"),
+                str2columnstr_constant("y"),
+            ),
+        ),
+    )
+    assert result == expected
+
+
+def test_three_way_equality():
+    Q = Symbol("Q")
+    x = Symbol("x")
+    y = Symbol("y")
+    w = Symbol("w")
+    z = Symbol("z")
+    conjunction = Conjunction((Q(x), EQ(z, y), EQ(y, w), EQ(w, x)))
+    result = TranslateToNamedRA().walk(conjunction)
+    expected = ExtendedProjection(
+        NameColumns(
+            Projection(Q, (C_(ColumnInt(0)),)),
+            (C_(ColumnStr("x")),),
+        ),
+        (
+            ExtendedProjectionListMember(
+                str2columnstr_constant("x"),
+                str2columnstr_constant("x"),
+            ),
+            ExtendedProjectionListMember(
+                str2columnstr_constant("x"),
+                str2columnstr_constant("w"),
+            ),
+            ExtendedProjectionListMember(
+                str2columnstr_constant("w"),
+                str2columnstr_constant("y"),
+            ),
+            ExtendedProjectionListMember(
+                str2columnstr_constant("y"),
+                str2columnstr_constant("z"),
+            ),
+        ),
+    )
+    assert result == expected
