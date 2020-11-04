@@ -20,7 +20,6 @@ probabilistic databases. VLDB J., 16(4):523–544, 2007.
 """
 
 import logging
-import operator
 import typing
 from collections import defaultdict
 
@@ -28,11 +27,9 @@ from ..datalog.expression_processing import enforce_conjunction, flatten_query
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import ExpressionWalker, add_match
 from ..expressions import Constant, Symbol
-from ..logic import FALSE, Conjunction, Implication
-from ..logic.expression_processing import (
-    extract_logic_free_variables,
-    extract_logic_predicates,
-)
+from ..logic import Conjunction, Implication, FALSE
+from ..logic.expression_processing import extract_logic_predicates
+from ..utils.orderedset import OrderedSet
 from ..relational_algebra import (
     ColumnInt,
     ColumnStr,
@@ -45,12 +42,14 @@ from ..relational_algebra import (
     RelationalAlgebraPushInSelections,
     RelationalAlgebraStringExpression,
     str2columnstr_constant,
+    NamedRelationalAlgebraFrozenSet,
 )
 from ..relational_algebra_provenance import (
     NaturalJoinInverse,
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
     RelationalAlgebraProvenanceExpressionSemringSolver,
+    RelationalAlgebraProvenanceCountingSolver,
 )
 from ..utils import log_performance
 from ..utils.orderedset import OrderedSet
@@ -206,14 +205,16 @@ class ProbSemiringSolver(RelationalAlgebraProvenanceExpressionSemringSolver):
         raise NotImplementedError()
 
     @add_match(ExtendedProjection(ProvenanceAlgebraSet, ...))
-    def extended_projection(self, op):
-        provset = self.walk(op.relation)
-        self._check_prov_col_not_in_proj_list(provset, op.projection_list)
-        self._check_all_non_prov_cols_in_proj_list(provset, op.projection_list)
+    def extended_projection(self, proj_op):
+        provset = self.walk(proj_op.relation)
+        self._check_prov_col_not_in_proj_list(provset, proj_op.projection_list)
+        self._check_all_non_prov_cols_in_proj_list(
+            provset, proj_op.projection_list
+        )
         relation = Constant[typing.AbstractSet](provset.relations)
         prov_col = str2columnstr_constant(provset.provenance_column)
         new_prov_col = str2columnstr_constant(Symbol.fresh().name)
-        proj_list_with_prov_col = op.projection_list + (
+        proj_list_with_prov_col = proj_op.projection_list + (
             ExtendedProjectionListMember(prov_col, new_prov_col),
         )
         ra_op = ExtendedProjection(relation, proj_list_with_prov_col)

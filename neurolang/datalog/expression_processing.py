@@ -6,6 +6,7 @@ Datalog programs.
 
 import collections
 import operator
+import typing
 from typing import Iterable
 
 import numpy as np
@@ -27,7 +28,7 @@ from ..expression_walker import (
     ReplaceExpressionWalker,
     ReplaceSymbolWalker,
 )
-from ..expressions import Constant, FunctionApplication, Symbol
+from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..logic import (
     FALSE,
     TRUE,
@@ -465,6 +466,15 @@ def maybe_deconjunct_single_pred(conjunction):
     return conjunction
 
 
+def maybe_disjunct(
+    formulas: typing.Iterable[Expression],
+) -> typing.Union[Expression, Disjunction]:
+    formulas = tuple(formulas)
+    if len(formulas) > 1:
+        return Disjunction(formulas)
+    return formulas[0]
+
+
 class HeadConstantToBodyEquality(PatternWalker):
     """
     Transform rules whose head (consequent) predicate contains constant terms
@@ -635,12 +645,10 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
         for cq in ucq.formulas:
             cq = self._rule_normaliser.walk(cq)
             exp = self._unify_cq_antecedent(cq, qpred)
-            cqs.append(self.walk(exp))
-        if len(cqs) > 1:
-            res = Disjunction(tuple(cqs))
-        else:
-            res = cqs[0]
-        return res
+            if exp != FALSE:
+                exp = self.walk(exp)
+            cqs.append(exp)
+        return maybe_disjunct(cqs)
 
     def _unify_cq_antecedent(self, cq, qpred):
         mgu = most_general_unifier(cq.consequent, qpred)
