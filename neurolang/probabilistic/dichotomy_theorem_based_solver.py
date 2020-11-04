@@ -28,6 +28,7 @@ from ..expression_walker import ExpressionWalker, add_match
 from ..expressions import Constant, Symbol
 from ..logic import Conjunction, Implication
 from ..logic.expression_processing import extract_logic_predicates
+from ..utils.orderedset import OrderedSet
 from ..relational_algebra import (
     ColumnInt,
     ColumnStr,
@@ -237,7 +238,9 @@ def solve_succ_query(query, cpl_program):
         set.
 
     """
-    with log_performance(LOG, "Preparing query"):
+    with log_performance(
+        LOG, "Preparing query %s", init_args=(query.consequent.functor.name,),
+    ):
         flat_query_body = flatten_query(query.antecedent, cpl_program)
 
     with log_performance(LOG, "Translation and lifted optimisation"):
@@ -278,9 +281,11 @@ def solve_succ_query(query, cpl_program):
 
         ra_query = TranslateToNamedRA().walk(shattered_query.antecedent)
         proj_cols = tuple(
-            str2columnstr_constant(arg.name)
-            for arg in shattered_query.consequent.args
-            if isinstance(arg, Symbol)
+            OrderedSet(
+                str2columnstr_constant(arg.name)
+                for arg in shattered_query.consequent.args
+                if isinstance(arg, Symbol)
+            )
         )
         ra_query = Projection(ra_query, proj_cols)
         ra_query = RAQueryOptimiser().walk(ra_query)

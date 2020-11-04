@@ -14,6 +14,7 @@ from ..exceptions import (
     NotEasilyShatterableError,
     NotHierarchicalQueryException,
 )
+from ..expressions import ProbabilisticQuery, PROB
 
 try:
     from contextlib import nullcontext
@@ -34,6 +35,7 @@ C = Symbol("C")
 x = Symbol("x")
 y = Symbol("y")
 z = Symbol("z")
+p = Symbol("p")
 
 a = Constant("a")
 b = Constant("b")
@@ -669,3 +671,19 @@ def test_program_with_variable_equality(solver):
         ("_p_", "x", "y"),
     )
     assert testing.eq_prov_relations(result, expected)
+
+
+@pytest.mark.xfail(reason="Flattenign query issue")
+def test_repeated_variable_probabilistic_rule(solver):
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_facts_from_tuples(
+        Q, [(0.2, 7, 7, 2), (0.5, 7, 8, 4)]
+    )
+    wlq = Implication(
+        H(x, x, ProbabilisticQuery(PROB, (x,))), Q(x, x, y)
+    )
+    cpl.walk(wlq)
+    query = Implication(ans(x, y, p), H(x, y, p))
+    result = solver.solve_succ_query(query, cpl)
+    expected = {(0.2, 7, 7)}
+    assert result == expected
