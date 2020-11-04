@@ -650,8 +650,8 @@ def test_shatterable_query_2(solver):
 
 
 def test_program_with_variable_equality(solver):
-    if solver != dichotomy_theorem_based_solver:
-        return
+    if solver is not dichotomy_theorem_based_solver:
+        pytest.skip()
     pfact_sets = {
         Q: {(0.2, "a"), (0.3, "b"), (0.4, "c")},
     }
@@ -681,8 +681,8 @@ def test_program_with_variable_equality(solver):
 
 
 def test_repeated_variable_probabilistic_rule(solver):
-    if solver != dichotomy_theorem_based_solver:
-        return
+    if solver is not dichotomy_theorem_based_solver:
+        pytest.skip()
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
         Q, [(0.2, 7, 7, 2), (0.5, 7, 8, 4)]
@@ -695,8 +695,8 @@ def test_repeated_variable_probabilistic_rule(solver):
 
 
 def test_repeated_variable_with_constant_in_head(solver):
-    if solver != dichotomy_theorem_based_solver:
-        return
+    if solver is not dichotomy_theorem_based_solver:
+        pytest.skip()
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
         Q, [(0.2, 7, 8), (0.6, 8, 9), (0.9, 8, 8)],
@@ -712,8 +712,8 @@ def test_repeated_variable_with_constant_in_head(solver):
 
 
 def test_empty_result_program(solver):
-    if solver != dichotomy_theorem_based_solver:
-        return
+    if solver is not dichotomy_theorem_based_solver:
+        pytest.skip()
     rule = Implication(R(Constant(2), Constant(3)), Conjunction((Q(x),)))
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
