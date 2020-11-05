@@ -2,13 +2,12 @@ from pytest import raises
 
 from .. import expression_walker
 from .. import expressions
-from .. import neurolang as nl
 
 from typing import Callable, AbstractSet, Tuple
 
-S_ = nl.Symbol
-C_ = nl.Constant
-F_ = nl.FunctionApplication
+S_ = expressions.Symbol
+C_ = expressions.Constant
+F_ = expressions.FunctionApplication
 
 
 def test_symbol_table_as_parameter():
@@ -49,7 +48,7 @@ def test_evaluating_embedded_functions():
     f = S_[Callable[[AbstractSet[int]], int]]('add_set')
 
     assert f in w.symbol_table
-    assert isinstance(w.symbol_table[f], nl.Constant)
+    assert isinstance(w.symbol_table[f], expressions.Constant)
     assert w.symbol_table[f].value == w.function_add_set
 
     res = w.walk(F_[int](f, (a,)))

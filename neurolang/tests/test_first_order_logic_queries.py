@@ -3,7 +3,7 @@ import typing
 from .. import solver
 from .. import expressions
 from .. import logic
-from ..neurolang import TypedSymbolTable
+from ..typed_symbol_table import TypedSymbolTable
 
 C_ = expressions.Constant
 S_ = expressions.Symbol
