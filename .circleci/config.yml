@@ -153,7 +153,9 @@ jobs:
           name: Install extra packages & build documentation
           command: |
             . venv/bin/activate
+            pip install -e .
             cd doc
+            make api
             make html
           no_output_timeout: 7h
       - store_artifacts:
@@ -166,9 +168,9 @@ workflows:
     jobs:
       - py36
       - py37
-        # - docs:
-        #  requires:
-        #    - py37
+      - docs:
+         requires:
+          - py37
         #      - benchmark:
         #  requires:
         #    - py37
