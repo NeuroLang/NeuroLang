@@ -159,7 +159,13 @@ jobs:
             make html
           no_output_timeout: 7h
       - store_artifacts:
+          destination: dev
           path: doc/_build/html
+       - persist_to_workspace:
+          root: doc/_build
+          paths:
+            - html
+
 
   deploy_docs:
     docker:
@@ -194,6 +200,8 @@ jobs:
               git reset --hard origin/master
               git clean -xdf
               echo "Deploying dev docs for ${CIRCLE_BRANCH}.";
+              ls /tmp;
+              ls /tmp/build;
               cp -a /tmp/build/html/* .;
               if [[ -z $(git diff) ]]; then
                 echo "Nothing to commit"
