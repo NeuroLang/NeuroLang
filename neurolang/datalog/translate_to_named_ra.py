@@ -272,10 +272,8 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             )
 
             if new_output is output:
-                new_output = (
-                    self.process_equality_formulas_as_extended_projections(
-                        classified_formulas, new_output
-                    )
+                new_output = self.process_equality_formulas_as_extended_projections(
+                    classified_formulas, new_output
                 )
 
             if new_output is output:

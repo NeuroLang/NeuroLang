@@ -7,7 +7,6 @@ from ...datalog.constraints_representation import RightImplication
 from ...expressions import Constant, Expression, FunctionApplication, Symbol
 from ...probabilistic.expressions import ProbabilisticPredicate
 
-
 GRAMMAR = u"""
     @@grammar::Datalog
     @@parseinfo :: True
