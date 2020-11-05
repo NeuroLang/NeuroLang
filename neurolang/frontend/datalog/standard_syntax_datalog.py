@@ -113,6 +113,16 @@ class ExternalSymbol(Symbol):
 
 class DatalogSemantics:
     def __init__(self, locals=None, globals=None):
+        """Initialise class to implement datalog semantics
+
+        Parameters
+        ----------
+        locals : [dict], optional
+            local variables to embed into the expressions, by default None
+        globals : [dict], optional
+             global variables to embed into the expressions, by default None
+        """
+
         super().__init__()
 
         if locals is None:
