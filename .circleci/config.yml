@@ -166,10 +166,9 @@ workflows:
     jobs:
       - py36
       - py37
-      - docs:
-          requires:
-            - py37
-
+        # - docs:
+        #  requires:
+        #    - py37
         #      - benchmark:
         #  requires:
         #    - py37
