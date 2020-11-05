@@ -84,8 +84,6 @@ commands:
       - store_test_results:
           path: test_reports
           when: always
-
-
 jobs:
   py36:
     docker:
@@ -156,7 +154,6 @@ jobs:
           command: |
             . venv/bin/activate
             cd doc
-            make api
             make html
           no_output_timeout: 7h
       - store_artifacts:
