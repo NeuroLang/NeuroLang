@@ -254,7 +254,7 @@ def test_wlq_marg_conditioned_conditioning_shared_var():
     )
     cpl = CPLogicProgram()
     cpl.walk(wlq)
-    assert Q in cpl.within_language_succ_queries()
+    assert Q in cpl.within_language_prob_queries()
 
 
 def test_wlq_marg_conditioning_empty_conjunction():
@@ -264,7 +264,7 @@ def test_wlq_marg_conditioning_empty_conjunction():
     )
     cpl = CPLogicProgram()
     cpl.walk(wlq)
-    assert Q in cpl.within_language_succ_queries()
+    assert Q in cpl.within_language_prob_queries()
 
 
 def test_wlq_marg_conjunctive_conditioning():
@@ -274,7 +274,7 @@ def test_wlq_marg_conjunctive_conditioning():
     )
     cpl = CPLogicProgram()
     cpl.walk(wlq)
-    assert Q in cpl.within_language_succ_queries()
+    assert Q in cpl.within_language_prob_queries()
 
 
 class _TestTranslator(TranslateProbabilisticQueryMixin, ExpressionWalker):

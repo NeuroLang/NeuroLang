@@ -7,7 +7,7 @@ from ...exceptions import ForbiddenDisjunctionError, ForbiddenExpressionError
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
 from ...expressions import Constant, FunctionApplication, Symbol
-from ...logic import Implication, Union
+from ...logic import TRUE, Implication, Union
 from ...type_system import get_generic_type
 from ..exceptions import (
     ForbiddenConditionalQueryNoProb,
@@ -20,11 +20,15 @@ from ..expression_processing import (
     check_probabilistic_choice_set_probabilities_sum_to_one,
     get_within_language_prob_query_prob_term,
     group_probabilistic_facts_by_pred_symb,
-    is_probabilistic_fact,
     is_within_language_prob_query,
     union_contains_probabilistic_facts,
 )
-from ..expressions import PROB, Condition, ProbabilisticQuery
+from ..expressions import (
+    PROB,
+    Condition,
+    ProbabilisticPredicate,
+    ProbabilisticQuery,
+)
 
 
 def is_within_language_prob_query_wannabe(expression):
@@ -113,7 +117,7 @@ class CPLogicMixin(PatternWalker):
         return (
             self.pfact_pred_symbs
             | self.pchoice_pred_symbs
-            | set(self.within_language_succ_queries())
+            | set(self.within_language_prob_queries())
         )
 
     @property
@@ -124,7 +128,7 @@ class CPLogicMixin(PatternWalker):
     def pchoice_pred_symbs(self):
         return self._get_pred_symbs(self.pchoice_pred_symb_set_symb)
 
-    def within_language_succ_queries(self):
+    def within_language_prob_queries(self):
         return {
             pred_symb: union.formulas[0]
             for pred_symb, union in self.intensional_database().items()
@@ -271,15 +275,55 @@ class CPLogicMixin(PatternWalker):
             self.symbol_table[set_symb].value | {pred_symb}
         )
 
-    @add_match(Implication, is_probabilistic_fact)
+    @add_match(Implication(ProbabilisticPredicate, TRUE))
     def probabilistic_fact(self, expression):
         pred_symb = expression.consequent.body.functor
+        self._register_prob_pred_symb_set_symb(
+            pred_symb, self.pfact_pred_symb_set_symb
+        )
         if pred_symb not in self.symbol_table:
             self.symbol_table[pred_symb] = Union(tuple())
         self.symbol_table[pred_symb] = add_to_union(
             self.symbol_table[pred_symb], [expression]
         )
         return expression
+
+    @add_match(Implication(ProbabilisticPredicate, ...))
+    def query_based_probabilistic_fact(self, implication):
+        """
+        Construct probabilistic facts from deterministic queries.
+
+        This extends the syntax with rules such as
+
+            P(x) : f(x) :- Q(x)
+
+        where x is a set of variables, f(x) is an arithmetic expression
+        yielding a probability between [0, 1] that may use built-ins, and where
+        Q(x) is a conjunction of predicates.
+
+        Note that only deterministic antecedents are allowed. Declarativity
+        makes it impossible to enforce that at declaration time. If a
+        query-based probabilistic fact has a dependency on a probabilistic
+        predicate, this will be discovered at query-resolution time, after the
+        program has been fully declared.
+
+        Internally, the rule is translated into two rules. A deterministic rule
+        that takes care of inferring the set of tuples in the probabilistic
+        table and a probabilistic rule that transforms the result from the
+        deterministic resolution into a proper probabilistic table by
+        re-attaching the deterministically-obtained probabilities.
+        For example, the rule `P(x) : f(x) :- Q(x)` is translated into the
+        rules
+
+            _f1_(_f2_, x) :- Q(x), _f2_ = f(x)
+            P(x) : _f2_ :- _f1_(_f2_, x)
+
+        where `_f1_` and `_f2_` are fresh symbols. Note: we make sure not to
+        expose the resulting `_f1_` relation to the user, as it is not part of
+        its program.
+
+        """
+        self.probabilistic_fact(implication)
 
     @add_match(Implication(..., Condition), is_within_language_prob_query)
     def within_language_marg_query(self, implication):
