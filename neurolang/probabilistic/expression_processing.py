@@ -12,7 +12,7 @@ from ..datalog.expression_processing import (
 )
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
-from ..logic import Conjunction, Implication, Union
+from ..logic import TRUE, Conjunction, Implication, Union
 from ..relational_algebra import (
     ExtendedProjection,
     ExtendedProjectionListMember,
@@ -48,7 +48,7 @@ def is_probabilistic_fact(expression):
         isinstance(expression, Implication)
         and isinstance(expression.consequent, ProbabilisticPredicate)
         and isinstance(expression.consequent.body, FunctionApplication)
-        and expression.antecedent == Constant[bool](True)
+        and expression.antecedent == TRUE
     )
 
 
