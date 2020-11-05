@@ -53,7 +53,7 @@ commands:
           paths:
             - ./venv
             - cc-test-reporter
-          key: v1-dependencies-{{ checksum "requirements.txt" }}
+          key: v1-dependencies-{{ checksum "setup.cfg" }}
 
   test:
     description: "Run the tests"
