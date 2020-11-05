@@ -161,49 +161,49 @@ jobs:
       - store_artifacts:
           path: doc/_build/html
 
-    deploy:
-      docker:
-        - image: circleci/python:3.8.1-buster
-      steps:
-        - attach_workspace:
-            at: /tmp/build
-        - run:
-            name: Fetch docs
-            command: |
-              set -e
-              mkdir -p ~/.ssh
-              echo -e "Host *\nStrictHostKeyChecking no" > ~/.ssh/config
-              chmod og= ~/.ssh/config
-              if [ ! -d ~/neurolang.github.io ]; then
-                git clone git@github.com:/neurolang/neurolang.github.io.git ~/neurolang.github.io --depth=1
-              fi
-        - run:
-            name: Deploy docs
-            command: |
-              set -e;
+  deploy:
+    docker:
+      - image: circleci/python:3.8.1-buster
+    steps:
+      - attach_workspace:
+          at: /tmp/build
+      - run:
+          name: Fetch docs
+          command: |
+            set -e
+            mkdir -p ~/.ssh
+            echo -e "Host *\nStrictHostKeyChecking no" > ~/.ssh/config
+            chmod og= ~/.ssh/config
+            if [ ! -d ~/neurolang.github.io ]; then
+              git clone git@github.com:/neurolang/neurolang.github.io.git ~/neurolang.github.io --depth=1
+            fi
+      - run:
+          name: Deploy docs
+          command: |
+            set -e;
+            cd ~/neurolang.github.io;
+            if [[ "${CIRCLE_BRANCH}" != "master" ]]; then
+              echo "No deployment (build: ${CIRCLE_BRANCH}).";
+            else
+              git config --global user.email "circle@neurolang.com";
+              git config --global user.name "Circle CI";
               cd ~/neurolang.github.io;
-              if [[ "${CIRCLE_BRANCH}" != "master" ]]; then
-                echo "No deployment (build: ${CIRCLE_BRANCH}).";
+              git checkout master
+              git remote -v
+              git fetch origin
+              git reset --hard origin/master
+              git clean -xdf
+              echo "Deploying dev docs for ${CIRCLE_BRANCH}.";
+              cp -a /tmp/build/html/* .;
+              if [[ -z $(git diff) ]]; then
+                echo "Nothing to commit"
               else
-                git config --global user.email "circle@neurolang.com";
-                git config --global user.name "Circle CI";
-                cd ~/neurolang.github.io;
-                git checkout master
-                git remote -v
-                git fetch origin
-                git reset --hard origin/master
-                git clean -xdf
-                echo "Deploying dev docs for ${CIRCLE_BRANCH}.";
-                cp -a /tmp/build/html/* .;
-                if [[ -z $(git diff) ]]; then
-                  echo "Nothing to commit"
-                else
-                  touch .nojekyll;
-                  git add -A;
-                  git commit -m "CircleCI update of dev docs (${CIRCLE_BUILD_NUM}).";
-                  git push origin master;
-                fi
+                touch .nojekyll;
+                git add -A;
+                git commit -m "CircleCI update of dev docs (${CIRCLE_BUILD_NUM}).";
+                git push origin master;
               fi
+            fi
 
 
 
