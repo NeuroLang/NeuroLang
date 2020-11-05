@@ -218,7 +218,7 @@ workflows:
           - py37
       - deploy_docs:
          requires:
-           - doc
+           - docs
           
         #      - benchmark:
         #  requires:
