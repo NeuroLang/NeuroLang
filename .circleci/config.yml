@@ -153,6 +153,7 @@ jobs:
           name: Install extra packages & build documentation
           command: |
             . venv/bin/activate
+            pip install -e .
             cd doc
             make api
             make html
