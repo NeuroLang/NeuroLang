@@ -192,10 +192,14 @@ def test_shattering_with_variable_equality():
     symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
     shattered = shatter_easy_probfacts(query, symbol_table)
     assert isinstance(shattered, Implication)
-    assert len(shattered.antecedent.formulas) == 1
+    assert len(shattered.antecedent.formulas) == 2
     assert any(
         isinstance(formula.functor, ProbabilisticFactSet)
-        and formula.args == (y, z)
+        and formula.args == (x, y, z)
+        for formula in shattered.antecedent.formulas
+    )
+    assert any(
+        formula.functor == EQ and formula.args == (x, a)
         for formula in shattered.antecedent.formulas
     )
 
@@ -214,10 +218,14 @@ def test_shattering_with_reversed_variable_equality():
     symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
     shattered = shatter_easy_probfacts(query, symbol_table)
     assert isinstance(shattered, Implication)
-    assert len(shattered.antecedent.formulas) == 1
+    assert len(shattered.antecedent.formulas) == 2
     assert any(
         isinstance(formula.functor, ProbabilisticFactSet)
-        and formula.args == (y, z)
+        and formula.args == (x, y, z)
+        for formula in shattered.antecedent.formulas
+    )
+    assert any(
+        formula.functor == EQ and formula.args == (a, x)
         for formula in shattered.antecedent.formulas
     )
 
@@ -238,9 +246,17 @@ def test_shattering_between_symbol_equalities():
     symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
     shattered = shatter_easy_probfacts(query, symbol_table)
     assert isinstance(shattered, Implication)
-    assert len(shattered.antecedent.formulas) == 1
+    assert len(shattered.antecedent.formulas) == 3
     assert any(
         isinstance(formula.functor, ProbabilisticFactSet)
-        and len(set(formula.args)) == 1
+        and len(set(formula.args)) == 3
+        for formula in shattered.antecedent.formulas
+    )
+    assert any(
+        formula.functor == EQ and formula.args == (x, y)
+        for formula in shattered.antecedent.formulas
+    )
+    assert any(
+        formula.functor == EQ and formula.args == (y, z)
         for formula in shattered.antecedent.formulas
     )

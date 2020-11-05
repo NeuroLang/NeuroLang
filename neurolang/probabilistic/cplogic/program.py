@@ -1,4 +1,5 @@
 import typing
+from operator import floordiv
 
 from ...datalog import DatalogProgram
 from ...datalog.basic_representation import UnionOfConjunctiveQueries
@@ -9,6 +10,7 @@ from ...expressions import Constant, FunctionApplication, Symbol
 from ...logic import Implication, Union
 from ...type_system import get_generic_type
 from ..exceptions import (
+    ForbiddenConditionalQueryNoProb,
     MalformedProbabilisticTupleError,
     UnsupportedProbabilisticQueryError,
 )
@@ -16,16 +18,16 @@ from ..expression_processing import (
     add_to_union,
     build_probabilistic_fact_set,
     check_probabilistic_choice_set_probabilities_sum_to_one,
-    get_within_language_succ_query_prob_term,
+    get_within_language_prob_query_prob_term,
     group_probabilistic_facts_by_pred_symb,
     is_probabilistic_fact,
-    is_within_language_succ_query,
+    is_within_language_prob_query,
     union_contains_probabilistic_facts,
 )
-from ..expressions import PROB, ProbabilisticQuery
+from ..expressions import PROB, Condition, ProbabilisticQuery
 
 
-def is_succ_probabilistic_query_wannabe(expression):
+def is_within_language_prob_query_wannabe(expression):
     return (
         isinstance(expression, FunctionApplication)
         and get_generic_type(type(expression)) is FunctionApplication
@@ -35,16 +37,47 @@ def is_succ_probabilistic_query_wannabe(expression):
 
 class TranslateProbabilisticQueryMixin(PatternWalker):
     @add_match(
+        Implication(
+            ..., FunctionApplication(Constant[typing.Any](floordiv), ...)
+        )
+    )
+    def conditional_query(self, implication):
+        new_implication = Implication(
+            implication.consequent, Condition(*implication.antecedent.args)
+        )
+        if not (
+            any(
+                isinstance(arg, ProbabilisticQuery)
+                or is_within_language_prob_query_wannabe(arg)
+                for arg in new_implication.consequent.args
+            )
+        ):
+            raise ForbiddenExpressionError(
+                "Missing probabilistic term in consequent's head"
+            )
+        if (
+            sum(
+                isinstance(arg, ProbabilisticQuery)
+                for arg in new_implication.consequent.args
+            )
+            > 1
+        ):
+            raise ForbiddenExpressionError(
+                "Can only contain one probabilistic term in consequent's head"
+            )
+        return self.walk(new_implication)
+
+    @add_match(
         Implication,
         lambda implication: any(
-            is_succ_probabilistic_query_wannabe(arg)
+            is_within_language_prob_query_wannabe(arg)
             for arg in implication.consequent.args
         ),
     )
-    def succ_query(self, implication):
+    def within_language_prob_query(self, implication):
         csqt_args = tuple()
         for arg in implication.consequent.args:
-            if is_succ_probabilistic_query_wannabe(arg):
+            if is_within_language_prob_query_wannabe(arg):
                 arg = ProbabilisticQuery(*arg.unapply())
             csqt_args += (arg,)
         consequent = implication.consequent.functor(*csqt_args)
@@ -96,7 +129,7 @@ class CPLogicMixin(PatternWalker):
             pred_symb: union.formulas[0]
             for pred_symb, union in self.intensional_database().items()
             if len(union.formulas) == 1
-            and is_within_language_succ_query(union.formulas[0])
+            and is_within_language_prob_query(union.formulas[0])
         }
 
     def probabilistic_facts(self):
@@ -248,7 +281,29 @@ class CPLogicMixin(PatternWalker):
         )
         return expression
 
-    @add_match(Implication, is_within_language_succ_query)
+    @add_match(Implication(..., Condition), is_within_language_prob_query)
+    def within_language_marg_query(self, implication):
+        self._validate_within_language_marg_query(implication)
+        pred_symb = implication.consequent.functor.cast(
+            UnionOfConjunctiveQueries
+        )
+        if pred_symb in self.symbol_table:
+            raise ForbiddenDisjunctionError(
+                "Disjunctive within-language probabilistic queries "
+                "are not allowed"
+            )
+        self.symbol_table[pred_symb] = Union((implication,))
+        return implication
+
+    @add_match(Implication(..., Condition))
+    def marg_implication(self, implication):
+        raise ForbiddenConditionalQueryNoProb(
+            "Conditional queries which don't have PROB in "
+            "the head (within-language probabilistic) "
+            "are forbidden"
+        )
+
+    @add_match(Implication, is_within_language_prob_query)
     def within_language_succ_query(self, implication):
         self._validate_within_language_succ_query(implication)
         pred_symb = implication.consequent.functor.cast(
@@ -256,7 +311,8 @@ class CPLogicMixin(PatternWalker):
         )
         if pred_symb in self.symbol_table:
             raise ForbiddenDisjunctionError(
-                "Disjunctive within-language queries are not allowed"
+                "Disjunctive within-language probabilistic queries "
+                "are not allowed"
             )
         self.symbol_table[pred_symb] = Union((implication,))
         return implication
@@ -268,7 +324,36 @@ class CPLogicMixin(PatternWalker):
             for arg in implication.consequent.args
             if isinstance(arg, Symbol)
         )
-        prob_term = get_within_language_succ_query_prob_term(implication)
+        prob_term = get_within_language_prob_query_prob_term(implication)
+        if not prob_term.args:
+            raise UnsupportedProbabilisticQueryError(
+                "Probabilistic boolean queries are not currently supported"
+            )
+        if not all(isinstance(arg, Symbol) for arg in prob_term.args):
+            bad_vars = (
+                repr(arg)
+                for arg in prob_term.args
+                if not isinstance(arg, Symbol)
+            )
+            raise ForbiddenExpressionError(
+                "All terms in PROB(...) should be variables. "
+                "Found these terms: {}".format(", ".join(bad_vars))
+            )
+        prob_vars = set(prob_term.args)
+        if csqt_vars != prob_vars:
+            raise ForbiddenExpressionError(
+                "Variables of the set-based query and variables in the "
+                "PROB(...) term should be the same variables"
+            )
+
+    @staticmethod
+    def _validate_within_language_marg_query(implication):
+        csqt_vars = set(
+            arg
+            for arg in implication.consequent.args
+            if isinstance(arg, Symbol)
+        )
+        prob_term = get_within_language_prob_query_prob_term(implication)
         if not prob_term.args:
             raise UnsupportedProbabilisticQueryError(
                 "Probabilistic boolean queries are not currently supported"

@@ -106,41 +106,18 @@ docs = nl.add_uniform_probabilistic_choice_over_set(
 ###############################################################################
 # Probabilistic program and querying
 
-
 with nl.scope as e:
-    e.vox_term_prob[e.i, e.j, e.k, e.PROB[e.i, e.j, e.k]] = (
-        e.activations[
-            e.d, ..., ..., ..., ..., 'MNI', ..., ..., ..., ...,
-            ..., ..., ..., e.i, e.j, e.k
-        ] &
-        e.terms[e.d, 'auditory'] &
-        e.docs[e.d]
-    )
-
-    e.term_prob[e.t, e.PROB[e.t]] = (
-        e.terms[e.d, e.t] &
-        e.docs[e.d]
-    )
-
-    e.vox_cond_query[e.i, e.j, e.k, e.p] = (
-        e.vox_term_prob(e.i, e.j, e.k, e.num_prob)
-        & e.term_prob("auditory", e.denom_prob)
-        & (e.p == (e.num_prob / e.denom_prob))
-    )
-
-    e.vox_cond_query_auditory[e.i, e.j, e.k, e.p] = (
-        e.vox_cond_query[e.i, e.j, e.k, e.p]
-    )
-
-    e.img[agg_create_region_overlay[e.i, e.j, e.k, e.p]] = (
-        e.vox_cond_query_auditory[e.i, e.j, e.k, e.p]
-    )
-
-    img_query = nl.query(
-       (e.x,),
-       e.img(e.x)
-    )
-
+    e.vox_activation[e.i, e.j, e.k, e.d] = e.activations[
+        e.d, ..., ..., ..., ..., "MNI", ..., ..., ..., ..., ..., ..., ...,
+        e.i, e.j, e.k,
+    ]
+    e.probmap[e.i, e.j, e.k, e.PROB[e.i, e.j, e.k]] = (
+        e.vox_activation[e.i, e.j, e.k, e.d]
+    ) // e.terms[e.d, "auditory"]
+    e.img[e.agg_create_region_overlay[e.i, e.j, e.k, e.p]] = e.probmap[
+        e.i, e.j, e.k, e.p
+    ]
+    img_query = nl.query((e.x,), e.img(e.x))
 
 
 ###############################################################################

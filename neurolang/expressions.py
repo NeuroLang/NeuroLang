@@ -273,7 +273,7 @@ class Expression(metaclass=ExpressionMeta):
             variable_type = Unknown
 
         return FunctionApplication[variable_type](
-            self, args, kwargs,
+            self, args, kwargs=kwargs,
          )
 
     def __getattr__(self, attr):

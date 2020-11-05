@@ -3,10 +3,7 @@ import itertools
 import operator
 from typing import AbstractSet
 
-from ..datalog.expression_processing import (
-    UnifyVariableEqualities,
-    enforce_conjunctive_antecedent,
-)
+from ..datalog.expression_processing import enforce_conjunctive_antecedent
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionWalker
 from ..expressions import Constant, FunctionApplication, Symbol
@@ -219,8 +216,6 @@ def shatter_easy_probfacts(query, symbol_table):
 
     """
     query = enforce_conjunctive_antecedent(query)
-    unifier = UnifyVariableEqualities()
-    query = unifier.walk(query)
     tagged_query = query_to_tagged_set_representation(query, symbol_table)
     shatterer = EasyProbfactShatterer(symbol_table)
     shattered_query = shatterer.walk(tagged_query)

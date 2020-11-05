@@ -6,8 +6,21 @@ import pytest
 
 from ...exceptions import UnsupportedProgramError, UnsupportedQueryError
 from ...probabilistic.exceptions import UnsupportedProbabilisticQueryError
-from ...relational_algebra import ColumnInt, ColumnStr
+from ...utils.relational_algebra_set import RelationalAlgebraFrozenSet
 from ..probabilistic_frontend import ProbabilisticFrontend
+
+
+def assert_almost_equal(set_a, set_b):
+    for tupl_a in set_a:
+        assert any(
+            all(
+                np.isclose(term_a, term_b)
+                if isinstance(term_a, (float, np.float32, np.float64))
+                else term_a == term_b
+                for term_a, term_b in zip(tupl_a, tupl_b)
+            )
+            for tupl_b in set_b
+        )
 
 
 def test_add_uniform_probabilistic_choice_set():
@@ -42,7 +55,6 @@ def test_deterministic_query():
         res = nl.solve_all()
 
     assert "query1" in res.keys()
-    assert res["query1"].row_type == Tuple[str]
     q1 = res["query1"].as_pandas_dataframe().values
     assert len(q1) == 4
     for elem in q1:
@@ -65,6 +77,31 @@ def test_probabilistic_query():
         e.query2[e.y, e.PROB[e.y]] = e.query1[e.y] & data3[e.y]
         with pytest.raises(UnsupportedProgramError):
             nl.solve_all()
+
+
+def test_marg_query():
+    nl = ProbabilisticFrontend()
+    nl.add_probabilistic_choice_from_tuples(
+        {(0.2, "a"), (0.3, "b"), (0.5, "c")}, name="P"
+    )
+    nl.add_tuple_set({(1, "a"), (2, "a"), (2, "b")}, name="Q")
+    nl.add_tuple_set({(1, "a"), (1, "b"), (2, "b"), (2, "c")}, name="R")
+
+    with nl.scope as e:
+        e.Z[e.x, e.z, e.PROB[e.x, e.z]] = (e.Q(e.x, e.y) & e.P(e.y)) // (
+            e.R(e.z, e.y) & e.P(e.y)
+        )
+
+        res = nl.solve_all()
+
+    expected = RelationalAlgebraFrozenSet(
+        {
+            (1, 1, 0.4),
+            (2, 1, 1.0),
+            (2, 2, 0.375),
+        }
+    )
+    assert_almost_equal(res["Z"], expected)
 
 
 def test_mixed_queries():
@@ -135,7 +172,7 @@ def test_ontology_query():
         e.answer[e.x, e.y] = p2[e.x, e.y]
         solution_instance = nl.solve_all()
 
-    resp = list(solution_instance["answer"].to_unnamed().itervalues())
+    resp = list(solution_instance["answer"].itervalues())
     assert (
         "http://www.w3.org/2002/03owlt/hasValue/premises001#i",
         "true",
@@ -193,13 +230,13 @@ def test_solve_query():
     with nl.scope as e:
         e.Z[e.x, e.PROB[e.x]] = P[e.x] & Q[e.x]
         res = nl.query((e.x, e.p), e.Z[e.x, e.p])
-    df = res.as_pandas_dataframe()
-    assert len(df) == 2
-    assert all(c1 == c2 for c1, c2 in zip(df.columns, ["x", "p"]))
-    assert len(df.loc[df["x"] == "a"]) == 1
-    assert len(df.loc[df["x"] == "c"]) == 1
-    assert np.isclose(df.loc[df["x"] == "a"].iloc[0]["p"], 1 / 9)
-    assert np.isclose(df.loc[df["x"] == "c"].iloc[0]["p"], 1 / 9)
+    expected = RelationalAlgebraFrozenSet(
+        [
+            ("a", 1 / 9),
+            ("c", 1 / 9),
+        ]
+    )
+    assert_almost_equal(res, expected)
 
 
 def test_solve_query_prob_col_not_last():
@@ -213,13 +250,13 @@ def test_solve_query_prob_col_not_last():
     with nl.scope as e:
         e.Z[e.PROB[e.x], e.x] = P[e.x] & Q[e.x]
         res = nl.query((e.p, e.x), e.Z[e.p, e.x])
-    df = res.as_pandas_dataframe()
-    assert len(df) == 2
-    assert all(c1 == c2 for c1, c2 in zip(df.columns, ["p", "x"]))
-    assert len(df.loc[df["x"] == "a"]) == 1
-    assert len(df.loc[df["x"] == "c"]) == 1
-    assert np.isclose(df.loc[df["x"] == "a"].iloc[0]["p"], 1 / 9)
-    assert np.isclose(df.loc[df["x"] == "c"].iloc[0]["p"], 1 / 9)
+    expected = RelationalAlgebraFrozenSet(
+        [
+            (1 / 9, "a"),
+            (1 / 9, "c"),
+        ]
+    )
+    assert_almost_equal(res, expected)
 
 
 def test_solve_boolean_query():
@@ -260,26 +297,13 @@ def test_solve_complex_stratified_query():
         e.B[e.x, e.y, e.PROB[e.x, e.y]] = Q[e.y] & R[1, e.x] & R[2, e.x]
         e.C[e.x, e.y, e.p1, e.p2] = e.A[e.x, e.p1] & e.B[e.x, e.y, e.p2]
         res = nl.query((e.x, e.y, e.h, e.z), e.C[e.x, e.y, e.h, e.z])
-    df = res.as_pandas_dataframe()
-    assert set(df.columns) == {"x", "y", "h", "z"}
-    assert len(df.loc[(df["x"] == 4) & (df["y"] == 4)]) == 1
-    assert np.isclose(
-        df.loc[(df["x"] == 4) & (df["y"] == 4)].iloc[0]["h"],
-        0.2 * 0.7 * 0.6,
+    expected = RelationalAlgebraFrozenSet(
+        [
+            (4, 4, 0.2 * 0.7 * 0.6, 0.2 * 0.7 * 0.6),
+            (4, 6, 0.2 * 0.7 * 0.6, 0.8 * 0.7 * 0.6),
+        ]
     )
-    assert np.isclose(
-        df.loc[(df["x"] == 4) & (df["y"] == 4)].iloc[0]["z"],
-        0.2 * 0.7 * 0.6,
-    )
-    assert len(df.loc[(df["x"] == 4) & (df["y"] == 6)]) == 1
-    assert np.isclose(
-        df.loc[(df["x"] == 4) & (df["y"] == 6)].iloc[0]["h"],
-        0.2 * 0.7 * 0.6,
-    )
-    assert np.isclose(
-        df.loc[(df["x"] == 4) & (df["y"] == 6)].iloc[0]["z"],
-        0.8 * 0.7 * 0.6,
-    )
+    assert_almost_equal(res, expected)
 
 
 def test_solve_complex_stratified_query_with_deterministic_part():
@@ -294,11 +318,15 @@ def test_solve_complex_stratified_query_with_deterministic_part():
         e.C[e.x, e.y] = A[e.x] & A[e.y] & B[e.x]
         e.D[e.x, e.y, e.PROB[e.x, e.y]] = e.C[e.x, e.y] & P[e.y]
         res = nl.query((e.x, e.y, e.p), e.D[e.x, e.y, e.p])
-    df = res.as_pandas_dataframe()
-    assert df.loc[(df["x"] == "a") & (df["y"] == "b")].iloc[0]["p"] == 0.8
-    assert df.loc[(df["x"] == "b") & (df["y"] == "b")].iloc[0]["p"] == 0.8
-    assert df.loc[(df["x"] == "a") & (df["y"] == "a")].iloc[0]["p"] == 0.2
-    assert df.loc[(df["x"] == "b") & (df["y"] == "a")].iloc[0]["p"] == 0.2
+    expected = RelationalAlgebraFrozenSet(
+        [
+            ("a", "a", 0.2),
+            ("a", "b", 0.8),
+            ("b", "a", 0.2),
+            ("b", "b", 0.8),
+        ]
+    )
+    assert_almost_equal(res, expected)
 
 
 def test_neurolang_dl_aggregation():
@@ -487,18 +515,14 @@ def test_result_both_deterministic_and_post_probabilistic():
     assert "lingua_da_lua_decisa" in res
     assert "utilizzare_le_probabilita" in res
     assert len(res["utilizzare_le_probabilita"]) == 3
-    assert res["utilizzare_le_probabilita"].projection(
-        ColumnStr("lingua")
-    ).to_unnamed() == {
-        ("francese",),
-        ("inglese",),
-    }
-    assert res["utilizzare_le_probabilita"].to_unnamed().selection(
-        {ColumnInt(0): "francese"}
-    ).projection(ColumnInt(1)) == {(0.12,)}
-    assert res["utilizzare_le_probabilita"].to_unnamed().selection(
-        {ColumnInt(0): "inglese"}
-    ).projection(ColumnInt(1)) == {(0.7 * 0.4,), (0.7 * 0.6,)}
+    expected = RelationalAlgebraFrozenSet(
+        [
+            ("francese", 0.12),
+            ("inglese", 0.7 * 0.4),
+            ("inglese", 0.7 * 0.6),
+        ]
+    )
+    assert_almost_equal(res["utilizzare_le_probabilita"], expected)
 
 
 def test_result_query_relation_correct_column_names():
@@ -527,7 +551,6 @@ def test_result_query_relation_correct_column_names():
         )
         solution = nl.solve_all()
     assert all(name in solution for name in ["climbs", "person", "lives_in"])
-    assert solution["climbs"].columns == ("p", "PROB", "city")
 
 
 def test_add_constraints_and_rewrite():
@@ -550,17 +573,58 @@ def test_add_constraints_and_rewrite():
 
     with nl.scope as e:
         nl.add_constraint(
-            e.project[e.x] & e.inArea[e.x, e.y], 
-            e.hasCollaborator[e.z, e.y, e.x]
+            e.project[e.x] & e.inArea[e.x, e.y],
+            e.hasCollaborator[e.z, e.y, e.x],
         )
 
-        e.p[e.b] = (
-            e.hasCollaborator[e.a, 'db', e.b]
-        )
+        e.p[e.b] = e.hasCollaborator[e.a, "db", e.b]
         res = nl.solve_all()
 
-
-    assert list(res['p'])[0] == ('neurolang',)
-
+    assert list(res["p"])[0] == ("neurolang",)
 
 
+def test_solve_marg_query():
+    nl = ProbabilisticFrontend()
+    nl.add_tuple_set(
+        [
+            ("alice",),
+            ("bob",),
+        ],
+        name="person",
+    )
+    nl.add_tuple_set(
+        [("alice", "paris"), ("bob", "marseille")],
+        name="lives_in",
+    )
+    nl.add_probabilistic_choice_from_tuples(
+        [
+            (0.2, "alice", "running"),
+            (0.8, "bob", "climbing"),
+        ],
+        name="practice",
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.8, "bob"),
+            (0.9, "alice"),
+        ],
+        name="does_not_smoke",
+    )
+    with nl.environment as e:
+        e.query[e.p, e.PROB[e.p, e.city, e.sport], e.city, e.sport] = (
+            e.person[e.p] & e.lives_in[e.p, e.city] & e.does_not_smoke[e.p]
+        ) // e.practice[e.p, e.sport]
+        solution = nl.solve_all()
+    assert all(name in solution for name in ["query", "person", "lives_in"])
+    with nl.environment as e:
+        result = nl.query(
+            (e.p, e.prob, e.city, e.sport),
+            e.query(e.p, e.prob, e.city, e.sport),
+        )
+    expected = RelationalAlgebraFrozenSet(
+        iterable=[
+            ("alice", 0.9, "paris", "running"),
+            ("bob", 0.8, "marseille", "climbing"),
+        ],
+    )
+    assert_almost_equal(result, expected)

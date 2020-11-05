@@ -17,7 +17,7 @@ from typing import (
     List,
     Optional,
     Tuple,
-    Type
+    Type,
 )
 from uuid import uuid1
 
@@ -25,7 +25,7 @@ from .. import expressions as ir
 from ..datalog.aggregation import (
     Chase,
     DatalogWithAggregationMixin,
-    TranslateToLogicWithAggregation
+    TranslateToLogicWithAggregation,
 )
 from ..datalog.constraints_representation import DatalogConstraintsProgram
 from ..datalog.ontologies_parser import OntologyParser
@@ -35,21 +35,24 @@ from ..expression_walker import ExpressionBasicEvaluator
 from ..logic import Union
 from ..probabilistic.cplogic.program import (
     CPLogicMixin,
-    TranslateProbabilisticQueryMixin
+    TranslateProbabilisticQueryMixin,
 )
 from ..probabilistic.dichotomy_theorem_based_solver import (
-    solve_succ_query as lifted_solve_succ_query
+    solve_marg_query as lifted_solve_marg_query,
+)
+from ..probabilistic.dichotomy_theorem_based_solver import (
+    solve_succ_query as lifted_solve_succ_query,
 )
 from ..probabilistic.expression_processing import (
     is_probabilistic_predicate_symbol,
-    is_within_language_succ_query
+    is_within_language_prob_query,
 )
 from ..probabilistic.query_resolution import compute_probabilistic_solution
 from ..probabilistic.stratification import stratify_program
 from ..region_solver import RegionSolver
 from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
-    RelationalAlgebraStringExpression
+    RelationalAlgebraStringExpression,
 )
 from . import query_resolution_expressions as fe
 from .query_resolution_datalog import QueryBuilderDatalog
@@ -78,6 +81,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         self,
         chase_class: Type[Chase] = Chase,
         probabilistic_solver: Callable = lifted_solve_succ_query,
+        probabilistic_marg_solver: Callable = lifted_solve_marg_query,
     ) -> "ProbabilisticFrontend":
         """
         Query builder with probabilistic capabilities
@@ -99,6 +103,8 @@ class NeurolangPDL(QueryBuilderDatalog):
             RegionFrontendCPLogicSolver(), chase_class=chase_class
         )
         self.probabilistic_solver = probabilistic_solver
+        self.probabilistic_marg_solver = lifted_solve_marg_query
+        self.ontology_loaded = False
 
     def load_ontology(
         self,
@@ -258,7 +264,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         )
         return solution, functor_orig
 
-    def solve_all(self,) -> Dict[str, NamedRelationalAlgebraFrozenSet]:
+    def solve_all(self) -> Dict[str, NamedRelationalAlgebraFrozenSet]:
         """
         Returns a dictionary of "predicate_name": "Content"
         for all elements in the solution of the Datalog program.
@@ -295,11 +301,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         solution = self._solve()
         solution_sets = dict()
         for pred_symb, relation in solution.items():
-            solution_sets[pred_symb.name] = NamedRelationalAlgebraFrozenSet(
-                self.predicate_parameter_names(pred_symb.name),
-                relation.value.unwrap(),
-            )
-            solution_sets[pred_symb.name].row_type = relation.value.row_type
+            solution_sets[pred_symb.name] = relation.value.unwrap()
         return solution_sets
 
     def _solve(self, query=None):
@@ -317,7 +319,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         return solution
 
     def _solve_deterministic_stratum(self, det_idb):
-        if '__constraints__' in self.symbol_table:
+        if "__constraints__" in self.symbol_table:
             eB = self._rewrite_program_with_ontology(det_idb)
             det_idb = Union(det_idb.formulas + eB.formulas)
             for rule in det_idb.formulas:
@@ -335,11 +337,12 @@ class NeurolangPDL(QueryBuilderDatalog):
             pchoice_edb,
             prob_idb,
             self.probabilistic_solver,
+            self.probabilistic_marg_solver,
         )
         wlq_symbs = set(
             rule.consequent.functor
             for rule in prob_idb.formulas
-            if is_within_language_succ_query(rule)
+            if is_within_language_prob_query(rule)
         )
         solution.update(
             {
@@ -356,7 +359,8 @@ class NeurolangPDL(QueryBuilderDatalog):
         solver = RegionFrontendCPLogicSolver()
         for psymb, relation in solution.items():
             solver.add_extensional_predicate_from_tuples(
-                psymb, relation.value,
+                psymb,
+                relation.value,
             )
         for builtin_symb in self.program_ir.builtins():
             solver.symbol_table[builtin_symb] = self.program_ir.symbol_table[
@@ -389,7 +393,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         query_solution = query_solution.projection(
             *(symb.name for symb in head_symbols)
         )
-        return ir.Constant[AbstractSet](query_solution)
+        return ir.Constant[AbstractSet](query_solution.to_unnamed())
 
     def _rewrite_program_with_ontology(self, deterministic_program):
         orw = OntologyRewriter(
