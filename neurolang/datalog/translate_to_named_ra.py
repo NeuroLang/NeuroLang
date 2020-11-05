@@ -6,7 +6,7 @@ from ..exceptions import ForbiddenExpressionError, NeuroLangException
 from ..expression_walker import (
     ExpressionBasicEvaluator,
     ReplaceExpressionsByValues,
-    add_match
+    add_match,
 )
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import Disjunction
@@ -23,7 +23,7 @@ from ..relational_algebra import (
     RelationalAlgebraOperation,
     Selection,
     Union,
-    get_expression_columns
+    get_expression_columns,
 )
 from ..type_system import is_leq_informative
 from ..utils import NamedRelationalAlgebraFrozenSet
