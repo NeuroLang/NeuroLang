@@ -25,6 +25,7 @@ from ..relational_algebra import (
     Union,
     get_expression_columns,
 )
+from ..type_system import is_leq_informative
 from ..utils import NamedRelationalAlgebraFrozenSet
 from .expressions import Conjunction, Negation
 
@@ -271,10 +272,8 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             )
 
             if new_output is output:
-                new_output = (
-                    self.process_equality_formulas_as_extended_projections(
-                        classified_formulas, new_output
-                    )
+                new_output = self.process_equality_formulas_as_extended_projections(
+                    classified_formulas, new_output
                 )
 
             if new_output is output:
@@ -372,7 +371,11 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         for destroy in classified_formulas["destroy_formulas"]:
             if destroy.args[0] in named_columns:
                 output = Destroy(output, destroy.args[0], destroy.args[1])
-                named_columns.add(destroy.args[1])
+                if is_leq_informative(destroy.args[1].type, Tuple):
+                    for arg in destroy.args[1].value:
+                        named_columns.add(Constant(arg))
+                else:
+                    named_columns.add(destroy.args[1])
             else:
                 destroy_to_keep.append(destroy)
         classified_formulas["destroy_formulas"] = destroy_to_keep
