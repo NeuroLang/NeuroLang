@@ -1,19 +1,35 @@
 import os
-import typing
+from typing import Iterable, Tuple, Union
 
 import neurosynth
 import nibabel
+import nilearn.datasets
+import nilearn.image
 import nilearn.plotting
 import numpy as np
+import pandas as pd
 
-from neurolang.frontend import NeurolangPDL
+from neurolang.frontend import ExplicitVBR, ExplicitVBROverlay, NeurolangPDL
+
+###############################################################################
+# Data preparation
+# ----------------
+
+###############################################################################
+# Load the MNI atlas and resample it to 4mm voxels
+
+mni_t1 = nibabel.load(nilearn.datasets.fetch_icbm152_2009()["t1"])
+mni_t1_4mm = nilearn.image.resample_img(mni_t1, np.eye(3) * 4)
+
+###############################################################################
+# Define a function that transforms TFIDF features to probabilities
 
 
 def tfidf_to_probability(
-    tfidf: typing.Union[float, np.array],
+    tfidf: Union[float, np.array],
     alpha: float = 3000,
     tau: float = 0.01,
-) -> typing.Union[float, np.array]:
+) -> Union[float, np.array]:
     """
     Threshold TFIDF features to interpret them as probabilities using a sigmoid
     function.
@@ -52,72 +68,100 @@ term_1 = "memory"
 term_2 = "auditory"
 terms = [term_1, term_2]
 
+###############################################################################
+# Probabilistic Logic Programming in NeuroLang
+# --------------------------------------------
+
 nl = NeurolangPDL()
-VoxelReported = nl.load_neurosynth_reported_activations(name="VoxelReported")
-# TODO: currently, the process of adding these probabilistic facts cannot be
-# done directly within the program because query-based probabilistic facts are
-# not yet available. the definition of TermInStudy probabilistic facts within
-# the program will later be possible using a rule
-# TermInStudy(t, s) : sigmoid(alpha * (x - tau)) :- NeurosynthTFIDF(x, t, s)
-# where x is the TFIDF feature stored within the NeurosynthTFIDF deterministic
-# relation (loaded from the Neurosynth dataset)
-study_tfidf = nl.neurosynth_db.ns_study_tfidf_feature_for_terms(terms)
-study_tfidf["prob"] = tfidf_to_probability(study_tfidf["tfidf"])
-# Create a TermInStudy probabilistic relation that model the association
-# between a term and a study probabilistically from soft-thresholded TFIDF
-# features
+
+###############################################################################
+# Adding new aggregation function to build a region overlay
+
+
+@nl.add_symbol
+def agg_create_region_overlay(
+    i: Iterable, j: Iterable, k: Iterable, p: Iterable
+) -> ExplicitVBR:
+    voxels = np.c_[i, j, k]
+    return ExplicitVBROverlay(
+        voxels, mni_t1_4mm.affine, p, image_dim=mni_t1_4mm.shape
+    )
+
+
+###############################################################################
+# Loading the database
+
+ns_database_fn, ns_features_fn = nilearn.datasets.utils._fetch_files(
+    "neurolang/frontend/neurosynth_data",
+    [
+        (
+            "database.txt",
+            "https://github.com/neurosynth/neurosynth-data/raw/master/current_data.tar.gz",
+            {"uncompress": True},
+        ),
+        (
+            "features.txt",
+            "https://github.com/neurosynth/neurosynth-data/raw/master/current_data.tar.gz",
+            {"uncompress": True},
+        ),
+    ],
+)
+
+ns_database = pd.read_csv(ns_database_fn, sep=f"\t")
+ijk_positions = np.round(
+    nibabel.affines.apply_affine(
+        np.linalg.inv(mni_t1_4mm.affine),
+        ns_database[["x", "y", "z"]].values.astype(float),
+    )
+).astype(int)
+ns_database["i"] = ijk_positions[:, 0]
+ns_database["j"] = ijk_positions[:, 1]
+ns_database["k"] = ijk_positions[:, 2]
+ns_database = set(
+    ns_database[["i", "j", "k", "id"]].itertuples(name=None, index=False)
+)
+
+ns_features = pd.read_csv(ns_features_fn, sep=f"\t")
+ns_docs = ns_features[["pmid"]].drop_duplicates()
+ns_terms = pd.melt(
+    ns_features, var_name="term", id_vars="pmid", value_name="TfIdf"
+)
+ns_terms = ns_terms.loc[ns_terms.term.isin(["memory", "auditory"])]
+ns_terms["prob"] = tfidf_to_probability(ns_terms["TfIdf"])
+ns_terms = set(
+    ns_terms[["prob", "term", "pmid"]].itertuples(name=None, index=False)
+)
 TermInStudy = nl.add_probabilistic_facts_from_tuples(
-    set(
-        study_tfidf[["prob", "term", "study_id"]].itertuples(
-            name=None, index=False
-        )
-    ),
-    name="TermInStudy",
-    type_=typing.Tuple[float, str, int],
+    ns_terms, name="TermInStudy"
 )
-# Load all study IDs (PMIDs) in the Neurosynth database
-StudyID = nl.load_neurosynth_study_ids(name="StudyID")
-# Uniform probabilistic choice over study IDs
+VoxelReported = nl.add_tuple_set(ns_database, name="VoxelReported")
 SelectedStudy = nl.add_uniform_probabilistic_choice_over_set(
-    StudyID.value,
-    name="SelectedStudy",
+    ns_docs.values, name="SelectedStudy"
 )
+
+###############################################################################
+# Probabilistic program and querying
+
 with nl.environment as e:
     e.TermAssociation[e.t] = e.SelectedStudy[e.s] & e.TermInStudy[e.t, e.s]
-    e.Activation[e.v] = e.SelectedStudy[e.s] & e.VoxelReported[e.v, e.s]
-    # The Query rule represents the calculation of conditional probabilities
-    # Prob[ Activation(v) | TermAssociation(t1) and TermAssociation(t2) ]
-    # for each voxel v, and pair of terms (t1, t2). This results in a
-    # probabilistic brain map for activations in studies related to both terms
-    # t1 and t2 (two-term conjunctive query).
-    e.Query[e.v, e.PROB[e.v]] = (e.Activation[e.v]) // (
+    e.Activation[e.i, e.j, e.k] = (
+        e.SelectedStudy[e.s] & e.VoxelReported[e.i, e.j, e.k, e.s]
+    )
+    e.probmap[e.i, e.j, e.k, e.PROB[e.i, e.j, e.k]] = (e.Activation[e.i, e.j, e.k]) // (
         e.TermAssociation["auditory"] & e.TermAssociation["memory"]
     )
-    # Run the query
-    result = nl.query((e.v, e.probability), e.Query[e.v, e.probability])
+    e.img[e.agg_create_region_overlay[e.i, e.j, e.k, e.p]] = e.probmap[
+        e.i, e.j, e.k, e.p
+    ]
+    img_query = nl.query((e.x,), e.img[e.x])
 
-ns_base_img = nibabel.load(
-    os.path.join(
-        neurosynth.__path__[0],
-        "resources/MNI152_T1_2mm_brain.nii.gz",
-    )
-)
-ns_masker = neurosynth.mask.Masker(
-    os.path.join(
-        neurosynth.__path__[0],
-        "resources/MNI152_T1_2mm_brain.nii.gz",
-    )
-)
-n_voxels = ns_masker.get_mask().shape[0]
-ns_affine = ns_base_img.affine
+###############################################################################
+# Plotting results
+# --------------------------------------------
 
-df = result.as_pandas_dataframe()
-df.columns = ["voxel_id", "probability"]
-stat_map = np.zeros(shape=n_voxels)
-stat_map[df["voxel_id"]] = df["probability"]
-img = nibabel.Nifti1Image(ns_masker.unmask(stat_map), ns_affine)
-nilearn.plotting.plot_glass_brain(
-    img,
-    title=f"{term_1} & {term_2}",
-    colorbar=True,
+result_image = img_query.fetch_one()[0].spatial_image()
+img = result_image.get_fdata()
+plot = nilearn.plotting.plot_stat_map(
+    result_image, threshold=np.percentile(img[img > 0], 95)
 )
+nilearn.plotting.show()
