@@ -902,6 +902,8 @@ def test_unsupported_aggregation_function(ra_module):
 
 
 def test_selection_does_not_convert_to_pandas_series(ra_module):
+    # GH543: this selection was converting the internal container to a
+    # pd.Series while it should keep it as a pd.DataFrame
     relation = ra_module.RelationalAlgebraFrozenSet([("a",)])
     criteria = RelationalAlgebraStringExpression("(0 == \"a\")")
     result = relation.selection(criteria)
