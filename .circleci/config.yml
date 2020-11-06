@@ -183,6 +183,7 @@ jobs:
             mkdir -p ~/.ssh
             echo -e "Host *\nStrictHostKeyChecking no" > ~/.ssh/config
             chmod og= ~/.ssh/config
+            ssh-add ~/.ssh/id_rsa_8cc70a9b0d7801361ff8748451246419
             if [ ! -d ~/neurolang.github.io ]; then
               git clone git@github.com:/neurolang/neurolang.github.io.git ~/neurolang.github.io --depth=1
             fi
