@@ -173,6 +173,9 @@ jobs:
     steps:
       - attach_workspace:
           at: /tmp/build
+      - add_ssh_keys:
+          fingerprints:
+            - "8c:c7:0a:9b:0d:78:01:36:1f:f8:74:84:51:24:64:19"            
       - run:
           name: Fetch docs
           command: |
