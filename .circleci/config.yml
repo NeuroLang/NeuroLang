@@ -188,7 +188,7 @@ jobs:
           command: |
             set -e;
             cd ~/neurolang.github.io;
-            if [[ "${CIRCLE_BRANCH}" != "master" ]]; then
+            if [[ true || "${CIRCLE_BRANCH}" != "master" ]]; then
               echo "No deployment (build: ${CIRCLE_BRANCH}).";
             else
               git config --global user.email "circle@neurolang.com";
