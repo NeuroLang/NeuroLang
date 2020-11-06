@@ -14,6 +14,14 @@ except ModuleNotFoundError:
     raise ImportError("Neurosynth not installed in the system")
 
 
+class StudyID(str):
+    pass
+
+
+class TfIDf(float):
+    pass
+
+
 class NeuroSynthHandler(object):
     """
     Class for the management of data provided by neurosynth.
@@ -26,23 +34,21 @@ class NeuroSynthHandler(object):
         study_ids = self.dataset.get_studies(
             features=terms, frequency_threshold=frequency_threshold
         )
-        return study_ids.values
+        return set(StudyID(study_id) for study_id in study_ids)
 
     def ns_study_tfidf_feature_for_terms(self, terms):
-        features = self.dataset.feature_table.data
-        if set(terms) - set(features.columns):
-            not_found = sorted(set(terms) - set(features.columns))
-            raise ValueError(
-                "Could not find terms: {}".format(", ".join(not_found))
+        feature_table = self.dataset.feature_table.data
+        result_set = set()
+        for term in terms:
+            if term not in feature_table.columns:
+                continue
+            result_set |= set(
+                (StudyID(tupl[0]), term, tupl[1])
+                for tupl in feature_table[[term]].itertuples(
+                    index=True, name=None
+                )
             )
-        features = features[list(terms)]
-        features["study_id"] = features.index.to_series().astype(int)
-        return features.melt(
-            id_vars="study_id",
-            var_name="term",
-            value_vars=list(terms),
-            value_name="tfidf",
-        )[["study_id", "term", "tfidf"]]
+        return result_set
 
     def ns_load_dataset(self):
 
@@ -72,8 +78,9 @@ class NeuroSynthHandler(object):
         features = self.dataset.feature_table.data
         terms = features.columns
         if study_ids is None:
-            study_ids = features.index.to_series()
-        features = features.loc[study_ids]
+            study_ids = features.index.to_series().apply(StudyID)
+        study_ids_as_int = study_ids.apply(int)
+        features = features.loc[study_ids_as_int]
         features["pmid"] = study_ids
         return (
             features.melt(
@@ -94,12 +101,14 @@ class NeuroSynthHandler(object):
         """
         image_table = self.dataset.image_table
         vox_ids, study_ids_ix = image_table.data.nonzero()
-        study_ids = pd.Series(image_table.ids).iloc[study_ids_ix]
-        return np.transpose([vox_ids, study_ids])
+        study_ids = (
+            pd.Series(image_table.ids).apply(StudyID).iloc[study_ids_ix]
+        )
+        return np.transpose([study_ids, vox_ids])
 
     def ns_study_ids(self):
         return np.expand_dims(
-            self.dataset.feature_table.data.index.values, axis=1
+            self.dataset.feature_table.data.index.astype(StudyID), axis=1
         )
 
     @staticmethod
