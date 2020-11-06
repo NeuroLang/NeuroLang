@@ -1,3 +1,4 @@
+import pandas as pd
 import pytest
 
 from ..relational_algebra_set import RelationalAlgebraStringExpression, pandas
@@ -898,3 +899,12 @@ def test_unsupported_aggregation_function(ra_module):
     )
     with pytest.raises(ValueError, match="Unsupported aggregate_function"):
         relation.aggregate(["x"], None)
+
+
+def test_selection_does_not_convert_to_pandas_series(ra_module):
+    relation = ra_module.RelationalAlgebraFrozenSet([("a",)])
+    criteria = RelationalAlgebraStringExpression("(0 == \"a\")")
+    result = relation.selection(criteria)
+    assert result == relation
+    if ra_module is pandas:
+        assert isinstance(result, pd.DataFrame)
