@@ -30,7 +30,7 @@ from ..region_solver import Region
 from ..regions import ExplicitVBR, ImplicitVBR, SphericalVolume
 from ..type_system import Unknown, is_leq_informative
 from ..typed_symbol_table import TypedSymbolTable
-from .neurosynth_utils import NeuroSynthHandler, StudyID, TfIDf
+from .neurosynth_utils import NeuroSynthHandler
 from . import query_resolution_expressions as fe
 from ..datalog import DatalogProgram
 
@@ -749,7 +749,7 @@ class NeuroSynthMixin:
             term, frequency_threshold
         )
         return self.add_tuple_set(
-            study_set.values, type_=Tuple[StudyID], name=name
+            study_set.values, type_=Tuple[int], name=name
         )
 
     def load_neurosynth_study_tfidf_feature_for_terms(
@@ -780,7 +780,7 @@ class NeuroSynthMixin:
             name = str(uuid1())
         result_set = self.neurosynth_db.ns_study_tfidf_feature_for_terms(terms)
         return self.add_tuple_set(
-            result_set.values, type_=Tuple[StudyID, str, TfIDf], name=name
+            result_set.values, type_=Tuple[int, str, float], name=name
         )
 
     def load_neurosynth_study_ids(
@@ -806,7 +806,7 @@ class NeuroSynthMixin:
         if not name:
             name = str(uuid1())
         result_set = self.neurosynth_db.ns_study_ids()
-        return self.add_tuple_set(result_set, type_=Tuple[StudyID], name=name)
+        return self.add_tuple_set(result_set, type_=Tuple[int], name=name)
 
     def load_neurosynth_reported_activations(
         self, name: Optional[str] = None
@@ -833,7 +833,7 @@ class NeuroSynthMixin:
             name = str(uuid1())
         result_set = self.neurosynth_db.ns_reported_activations()
         return self.add_tuple_set(
-            result_set, type_=Tuple[StudyID, int], name=name
+            result_set, type_=Tuple[int, int], name=name
         )
 
     def load_neurosynth_term_study_associations(
@@ -875,7 +875,7 @@ class NeuroSynthMixin:
             threshold=threshold, study_ids=study_ids
         )
         return self.add_tuple_set(
-            result_set, type_=Tuple[StudyID, str], name=name
+            result_set, type_=Tuple[int, str], name=name
         )
 
 

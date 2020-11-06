@@ -2,11 +2,11 @@ import numpy as np
 import pytest
 
 from .. import NeurolangDL
-from ..neurosynth_utils import NeuroSynthHandler, StudyID
+from ..neurosynth_utils import NeuroSynthHandler
 
 
 def mock_study_ids(*args, **kwargs):
-    return {(StudyID(1),), (StudyID(2),)}
+    return {(1,), (2,)}
 
 
 def test_load_study_ids(monkeypatch):
@@ -18,10 +18,10 @@ def test_load_study_ids(monkeypatch):
 
 def mock_reported_activations(*args, **kwargs):
     return {
-        (StudyID(1), 42),
-        (StudyID(1), 21),
-        (StudyID(2), 42),
-        (StudyID(3), 21),
+        (1, 42),
+        (1, 21),
+        (2, 42),
+        (3, 21),
     }
 
 
