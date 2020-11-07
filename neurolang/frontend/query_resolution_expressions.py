@@ -22,7 +22,11 @@ from typing import (
 from .. import datalog as dl, expressions as ir
 from ..datalog import constraints_representation as cr
 from ..expression_pattern_matching import NeuroLangPatternMatchingNoMatch
-from ..expression_walker import ExpressionWalker, ReplaceExpressionsByValues, add_match
+from ..expression_walker import (
+    ExpressionWalker,
+    ReplaceExpressionsByValues,
+    add_match
+)
 from ..type_system import is_leq_informative
 from ..utils import RelationalAlgebraFrozenSet
 
