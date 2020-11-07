@@ -188,7 +188,8 @@ jobs:
           at: /tmp/build
       - add_ssh_keys:
           fingerprints:
-            - "b5:4f:45:48:f3:35:86:4b:fd:16:3d:f2:32:36:9b:19"           
+            - "b5:4f:45:48:f3:35:86:4b:fd:16:3d:f2:32:36:9b:19"
+      - checkout
       - run:
           name: Fetch docs
           command: |
