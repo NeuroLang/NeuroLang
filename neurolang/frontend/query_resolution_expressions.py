@@ -28,7 +28,7 @@ from ..expression_walker import (
     ReplaceExpressionsByValues,
     add_match,
 )
-from ..type_system import is_leq_informative
+from ..type_system import get_args, is_leq_informative
 from ..utils import RelationalAlgebraFrozenSet
 
 
@@ -239,7 +239,7 @@ class Expression(object):
         y: <class 'int'> = 2
         """
         if isinstance(self.expression, ir.Constant):
-            return repr(self.expression.value)
+            return self._repr_constant(self.expression)
         elif isinstance(self.expression, dl.magic_sets.AdornedExpression):
             name = f"{self.expression.expression.name}"
             if self.expression.adornment:
@@ -256,6 +256,18 @@ class Expression(object):
                 return f"{self.expression.name}"
         else:
             return object.__repr__(self)
+
+    def _repr_constant(self, expression):
+        if is_leq_informative(expression.type, AbstractSet):
+            if expression.value.is_empty():
+                repr_ = "Empty set"
+            else:
+                repr_ = (
+                    f"{expression.value.fetch_one()} ..."
+                )
+        else:
+            repr_ = repr(expression.value)
+        return repr_
 
     def __getattr__(self, name: Union["Expression", str]) -> "Operation":
         if isinstance(name, Expression):
@@ -498,12 +510,8 @@ class Symbol(Expression):
         if isinstance(symbol, Symbol):
             return f"{self.symbol_name}: {symbol.type}"
         elif isinstance(symbol, ir.Constant):
-            if ir.is_leq_informative(symbol.type, AbstractSet):
-                value = list(self)
-            else:
-                value = symbol.value
-
-            return f"{self.symbol_name}: {symbol.type} = {value}"
+            repr_constant = self._repr_constant(symbol)
+            return f"{self.symbol_name}: {symbol.type} = {repr_constant}"
         else:
             return f"{self.symbol_name}: {symbol.type}"
 
