@@ -202,8 +202,10 @@ jobs:
       - run:
           name: Deploy docs
           command: |
+            echo $PWD;
+            cd ~/project;
             set +e;
-            TAG=$(git describe --tag --exact-match)
+            TAG=$(git describe --tag --exact-match);
             set -e;
             cd ~/neurolang.github.io;
             if [[ "${CIRCLE_BRANCH}" != "master" ]]; then
