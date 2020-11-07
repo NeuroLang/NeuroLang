@@ -186,28 +186,17 @@ class RegionMixin:
         fe.Symbol
             see description
         """
-        atlas_set = set()
+        atlas_set = []
         for label_number, label_name in atlas_labels:
             region = self.create_region(spatial_image, label=label_number)
             if region is None:
                 continue
-            symbol = ir.Symbol[Region](label_name)
-            self.symbol_table[symbol] = ir.Constant[Region](region)
-            self.symbol_table[
-                self.new_symbol(type_=str).expression
-            ] = ir.Constant[str](label_name)
+            atlas_set.append((label_name, region))
 
-            tuple_symbol = self.new_symbol(type_=Tuple[str, Region]).expression
-            self.symbol_table[tuple_symbol] = ir.Constant[Tuple[str, Region]](
-                (ir.Constant[str](label_name), symbol)
-            )
-            atlas_set.add(tuple_symbol)
-        atlas_set = ir.Constant[AbstractSet[Tuple[str, Region]]](
-            frozenset(atlas_set)
+        symbol = self.add_tuple_set(
+            atlas_set, name=name, type_=Tuple[str, ExplicitVBR]
         )
-        atlas_symbol = ir.Symbol[atlas_set.type](name)
-        self.symbol_table[atlas_symbol] = atlas_set
-        return self[atlas_symbol]
+        return symbol
 
     def sphere(
         self,
