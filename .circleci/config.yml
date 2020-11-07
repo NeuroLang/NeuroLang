@@ -209,7 +209,7 @@ jobs:
               DST=$PWD/dev
               mkdir -p $DST
               git add dev
-            else;
+            else
               MSG="Tagged commit updating release doc (${CIRCLE_BUILD_NUM})."
               echo $MSG
               DST=$PWD
