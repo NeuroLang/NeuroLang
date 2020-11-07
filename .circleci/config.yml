@@ -214,7 +214,6 @@ jobs:
               echo $MSG
               DST=$PWD
             fi
-            DST=$PWD
             cp -va /tmp/build/html/* $DST;
             if [[ -z $(git diff) ]]; then
               echo "Nothing to commit"
