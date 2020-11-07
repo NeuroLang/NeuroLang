@@ -155,7 +155,7 @@ jobs:
             . venv/bin/activate
             pip install -e .
             cd doc
-            make api
+            # make api
             make html
           no_output_timeout: 7h
       - store_artifacts:
@@ -175,7 +175,8 @@ jobs:
           at: /tmp/build
       - add_ssh_keys:
           fingerprints:
-            - "8c:c7:0a:9b:0d:78:01:36:1f:f8:74:84:51:24:64:19"            
+            - "8c:c7:0a:9b:0d:78:01:36:1f:f8:74:84:51:24:64:19"
+            - "b5:4f:45:48:f3:35:86:4b:fd:16:3d:f2:32:36:9b:19"           
       - run:
           name: Fetch docs
           command: |
