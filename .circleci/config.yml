@@ -149,6 +149,10 @@ jobs:
     steps:
       - checkout
       - install
+      - restore_cache:
+          keys:
+            - v1-docs-{{ .Branch }}
+
       - run:
           name: Install extra packages & build documentation
           command: |
@@ -158,6 +162,11 @@ jobs:
             make api
             make html
           no_output_timeout: 7h
+
+      - save_cache:
+          keys:
+            - v1-docs-{{ .Branch }}
+
       - store_artifacts:
           destination: dev
           path: doc/_build/html
@@ -165,6 +174,8 @@ jobs:
           root: doc/_build
           paths:
             - html
+
+
 
 
   deploy_docs:
