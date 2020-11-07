@@ -202,6 +202,7 @@ jobs:
       - run:
           name: Deploy docs
           command: |
+            set +e;
             TAG=$(git describe --tag --exact-match)
             set -e;
             cd ~/neurolang.github.io;
