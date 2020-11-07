@@ -224,6 +224,10 @@ jobs:
             else
               echo $MSG
               echo "keys $(ssh-add -l)"
+              echo "cleaning keys"
+              ssh-add -D
+              ssh-add ~/.ssh/id*
+              echo "keys $(ssh-add -l)"
               touch .nojekyll;
               git add -A;
               git commit -m "${MSG}"
