@@ -203,18 +203,18 @@ jobs:
             git reset --hard origin/master
             git clean -xdf
             echo "Deploying dev docs for ${CIRCLE_BRANCH}.";
-            ls /tmp
-            ls /tmp/build;
-            if [[ -z $(git describe --tag) ]]; then
-              MSG="Non-tagged commit updating dev doc (${CIRCLE_BUILD_NUM})."
-              echo $MSG
-              DST=$PWD/dev
-              mkdir -p $DST
-            else
-              MSG="Tagged commit updating release doc (${CIRCLE_BUILD_NUM})."
-              echo $MSG
-              DST=$PWD
-            fi
+            #if [[ -z $(git describe --tag) ]]; then
+            #  MSG="Non-tagged commit updating dev doc (${CIRCLE_BUILD_NUM})."
+            #  echo $MSG
+            #  DST=$PWD/dev
+            #  mkdir -p $DST
+            #  git add $DST
+            #else;
+            #  MSG="Tagged commit updating release doc (${CIRCLE_BUILD_NUM})."
+            #  echo $MSG
+            #  DST=$PWD
+            #fi
+            DST=$PWD
             cp -a /tmp/build/html/* $DST;
             if [[ -z $(git diff) ]]; then
               echo "Nothing to commit"
