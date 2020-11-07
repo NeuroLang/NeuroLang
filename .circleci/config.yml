@@ -202,8 +202,8 @@ jobs:
       - run:
           name: Deploy docs
           command: |
-            set -e;
             TAG=$(git describe --tag --exact-match)
+            set -e;
             cd ~/neurolang.github.io;
             if [[ "${CIRCLE_BRANCH}" != "master" ]]; then
               echo "No deployment (build: ${CIRCLE_BRANCH}).";
