@@ -181,6 +181,8 @@ jobs:
           name: Fetch docs
           command: |
             set -e
+            mkdir -p ~/.ssh
+            echo $(ssh-keyscan github.com) >> ~/.ssh/known_hosts
             # mkdir -p ~/.ssh
             # echo -e "Host *\nStrictHostKeyChecking no" > ~/.ssh/config
             # chmod og= ~/.ssh/config
@@ -206,13 +208,25 @@ jobs:
             echo "Deploying dev docs for ${CIRCLE_BRANCH}.";
             ls /tmp
             ls /tmp/build;
-            cp -a /tmp/build/html/* .;
+            if [[ -z $(git describe --tag) ]]; then
+              MSG="Non-tagged commit updating dev doc (${CIRCLE_BUILD_NUM})."
+              echo $MSG
+              DST=$PWD/dev
+              mkdir -p $DST
+            else
+              MSG="Tagged commit updating release doc (${CIRCLE_BUILD_NUM})."
+              echo $MSG
+              DST=$PWD
+            fi
+            echo 1; fi
+            cp -a /tmp/build/html/* $DST;
             if [[ -z $(git diff) ]]; then
               echo "Nothing to commit"
             else
+              echo $MSG
               touch .nojekyll;
               git add -A;
-              git commit -m "CircleCI update of dev docs (${CIRCLE_BUILD_NUM}).";
+              git commit -m $MSG
               git push origin master;
             fi
             # fi
