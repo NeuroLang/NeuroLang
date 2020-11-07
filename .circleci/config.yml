@@ -190,43 +190,43 @@ jobs:
           command: |
             set -e;
             cd ~/neurolang.github.io;
-            # if [[ "${CIRCLE_BRANCH}" != "master" ]]; then
-            #  echo "No deployment (build: ${CIRCLE_BRANCH}).";
-            # else
-            git config --global user.email "circle@neurolang.com";
-            git config --global user.name "Circle CI";
-            cd ~/neurolang.github.io;
-            git checkout master
-            git remote -v
-            git fetch origin
-            git reset --hard origin/master
-            git clean -xdf
-            echo "Deploying dev docs for ${CIRCLE_BRANCH}.";
-            if [[ -z $(git describe --tag) ]]; then
-              MSG="Non-tagged commit updating dev doc (${CIRCLE_BUILD_NUM})."
-              echo $MSG
-              DST=$PWD/dev
+            if [[ "${CIRCLE_BRANCH}" != "master" ]]; then
+              echo "No deployment (build: ${CIRCLE_BRANCH}).";
             else
-              MSG="Tagged commit updating release doc (${CIRCLE_BUILD_NUM})."
-              echo $MSG
-              DST=$PWD
+              git config --global user.email "circle@neurolang.com";
+              git config --global user.name "Circle CI";
+              cd ~/neurolang.github.io;
+              git checkout master
+              git remote -v
+              git fetch origin
+              git reset --hard origin/master
+              git clean -xdf
+              echo "Deploying dev docs for ${CIRCLE_BRANCH}.";
+              if [[ -z $(git describe --tag) ]]; then
+                MSG="Non-tagged commit updating dev doc (${CIRCLE_BUILD_NUM})."
+                echo $MSG
+                DST=$PWD/dev
+              else
+                MSG="Tagged commit updating release doc (${CIRCLE_BUILD_NUM})."
+                echo $MSG
+                DST=$PWD
+              fi
+              cp -va /tmp/build/html/* $DST;
+              if [[ -z $(git diff) ]]; then
+                echo "Nothing to commit"
+              else
+                echo $MSG
+                echo "keys $(ssh-add -l)"
+                echo "cleaning keys"
+                ssh-add -D
+                ssh-add ~/.ssh/id*
+                echo "keys $(ssh-add -l)"
+                touch .nojekyll;
+                git add -A;
+                git commit -m "${MSG}"
+                git push origin master;
+              fi
             fi
-            cp -va /tmp/build/html/* $DST;
-            if [[ -z $(git diff) ]]; then
-              echo "Nothing to commit"
-            else
-              echo $MSG
-              echo "keys $(ssh-add -l)"
-              echo "cleaning keys"
-              ssh-add -D
-              ssh-add ~/.ssh/id*
-              echo "keys $(ssh-add -l)"
-              touch .nojekyll;
-              git add -A;
-              git commit -m "${MSG}"
-              git push origin master;
-            fi
-            # fi
 
 
 
@@ -234,11 +234,11 @@ workflows:
   version: 2
   test_benchmark_build:
     jobs:
-      # - py36
-      # - py37
-      # - docs:
-      #   requires:
-      #    - py37
+       - py36
+       - py37
+       - docs:
+         requires:
+          - py37
       - docs
       - deploy_docs:
          requires:
