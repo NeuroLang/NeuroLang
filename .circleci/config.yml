@@ -214,16 +214,15 @@ jobs:
               git fetch origin
               git reset --hard origin/master
               git clean -xdf
-              echo "Deploying dev docs for ${CIRCLE_BRANCH}.";
-              if [[ -z $(git describe --tag --exact-match) ]]; then
-                MSG="Non-tagged commit updating dev doc (${CIRCLE_BUILD_NUM})."
-                echo $MSG
-                DST=$PWD/dev
-              else
-                MSG="Tagged commit updating release doc (${CIRCLE_BUILD_NUM})."
-                echo $MSG
-                DST=$PWD
-              fi
+              # if [[ -z $(git describe --tag --exact-match) ]]; then
+              #  MSG="Non-tagged commit updating dev doc (${CIRCLE_BUILD_NUM})."
+              #  echo $MSG
+              #  DST=$PWD/dev
+              #else
+              MSG="Tagged commit updating release doc (${CIRCLE_BUILD_NUM})."
+              echo $MSG
+              DST=$PWD
+              # fi
               cp -va /tmp/build/html/* $DST;
               if [[ -z $(git diff) ]]; then
                 echo "Nothing to commit"
