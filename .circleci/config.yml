@@ -234,7 +234,8 @@ jobs:
                 echo "keys $(ssh-add -l)"
                 echo "cleaning keys"
                 ssh-add -D
-                ssh-add ~/.ssh/id*
+                # Add identities only from this job
+                ssh-add ~/.ssh/id_rsa_*
                 echo "keys $(ssh-add -l)"
                 touch .nojekyll;
                 git add -A;
