@@ -21,7 +21,7 @@ import sphinx_bootstrap_theme
 
 # General information about the project.
 project = "neurolang"
-copyright = "2017, Demian Wassermann"
+copyright = "2017, Demian Wassermann et al"
 
 
 from pkg_resources import get_distribution
@@ -110,7 +110,7 @@ autodoc_default_flags = ["members", "inherited-members"]
 # built documents.
 #
 # The short X.Y version.
-# version = '0.1'
+version = source_version
 # The full version, including alpha/beta/rc tags.
 # release = '0.1'
 
