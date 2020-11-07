@@ -164,6 +164,9 @@ jobs:
           no_output_timeout: 7h
 
       - save_cache:
+          paths:
+            - ./venv
+            - doc
           keys:
             - v1-docs-{{ .Branch }}
 
