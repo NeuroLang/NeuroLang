@@ -237,7 +237,7 @@ workflows:
       - py36
       - py37
       - docs:
-        requires:
+         requires:
          - py37
       - deploy_docs:
          requires:
