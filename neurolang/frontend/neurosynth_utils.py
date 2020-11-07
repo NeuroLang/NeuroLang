@@ -1,12 +1,9 @@
-import collections
 import logging
 import os
 
 import numpy as np
 import pandas as pd
 from pkg_resources import resource_exists, resource_filename
-
-from ..regions import region_set_from_masked_data
 
 try:
     import neurosynth as ns

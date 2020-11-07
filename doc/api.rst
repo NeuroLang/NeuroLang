@@ -11,8 +11,19 @@ End-User Frontend
 .. autosummary::
    :toctree: gen_api
 
-    frontend.NeurolangDL
-    frontend.NeurolangPDL
+    NeurolangDL
+    NeurolangPDL
+
+
+Volumetric Region and Overlays
+------------------------------
+
+.. autosummary::
+
+
+   :toctree: gen_api
+    ExplicitVBR
+    ExplicitVBROverlay
 
 Intermediate Representation Infrastructure
 ------------------------------------------
