@@ -13,4 +13,5 @@ Important links
 ===============
 - Official source code repo: https://github.com/Neurolang/Neurolang/
 - HTML documentation (stable release): http://neurolang.github.io/
+- HTML documentation (dev release): http://neurolang.github.io/dev
 
