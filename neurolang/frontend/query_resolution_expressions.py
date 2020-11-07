@@ -16,19 +16,14 @@ from typing import (
     Optional,
     Tuple,
     Type,
-    Union,
+    Union
 )
 
-from .. import datalog as dl
-from .. import expressions as ir
+from .. import datalog as dl, expressions as ir
 from ..datalog import constraints_representation as cr
 from ..expression_pattern_matching import NeuroLangPatternMatchingNoMatch
-from ..expression_walker import (
-    ExpressionWalker,
-    ReplaceExpressionsByValues,
-    add_match,
-)
-from ..type_system import get_args, is_leq_informative
+from ..expression_walker import ExpressionWalker, ReplaceExpressionsByValues, add_match
+from ..type_system import is_leq_informative
 from ..utils import RelationalAlgebraFrozenSet
 
 
@@ -127,10 +122,7 @@ class Expression(object):
 
     def _build_tuple_constant(self, new_tuple):
         types = tuple(a.type for a in new_tuple)
-        new_tuple = ir.Constant[Tuple[types]](
-            new_tuple,
-            verify_type=False
-        )
+        new_tuple = ir.Constant[Tuple[types]](new_tuple, verify_type=False)
         return new_tuple
 
     def __setitem__(
@@ -262,9 +254,7 @@ class Expression(object):
             if expression.value.is_empty():
                 repr_ = "Empty set"
             else:
-                repr_ = (
-                    f"{expression.value.fetch_one()} ..."
-                )
+                repr_ = f"{expression.value.fetch_one()} ..."
         else:
             repr_ = repr(expression.value)
         return repr_
@@ -275,11 +265,7 @@ class Expression(object):
         else:
             name_ = ir.Constant[str](name)
         new_expression = ir.FunctionApplication(
-            ir.Constant(getattr),
-            (
-                self.expression,
-                name_,
-            ),
+            ir.Constant(getattr), (self.expression, name_,),
         )
         return Operation(self.query_builder, new_expression, self, (name,))
 
@@ -549,10 +535,8 @@ class Symbol(Expression):
                 raise ir.NeuroLangException(f"element {v} invalid in set")
 
     def __iter_non_logic_programming(self, symbol: ir.Symbol) -> Iterable:
-        all_symbols = (
-            self.query_builder.program_ir.symbol_table.symbols_by_type(
-                symbol.type.__args__[0]
-            )
+        all_symbols = self.query_builder.program_ir.symbol_table.symbols_by_type(
+            symbol.type.__args__[0]
         )
 
         for s in symbol.value:
@@ -771,9 +755,7 @@ class Fact(Expression):
         self.consequent = consequent
 
     def __repr__(self) -> str:
-        return "{c}".format(
-            c=repr(self.consequent),
-        )
+        return "{c}".format(c=repr(self.consequent),)
 
 
 class TranslateExpressionToFrontEndExpression(ExpressionWalker):
