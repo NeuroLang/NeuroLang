@@ -183,6 +183,9 @@ jobs:
             set -e
             mkdir -p ~/.ssh
             echo $(ssh-keyscan github.com) >> ~/.ssh/known_hosts
+            if [ -d ~/neurolang.github.io ]; then
+              rm -rf  ~/neurolang.github.io
+            fi
             if [ ! -d ~/neurolang.github.io ]; then
               git clone git@github.com:/neurolang/neurolang.github.io.git ~/neurolang.github.io
             fi
@@ -220,6 +223,7 @@ jobs:
               echo "Nothing to commit"
             else
               echo $MSG
+              echo "keys $(ssh-add -l)"
               touch .nojekyll;
               git add -A;
               git commit -m "${MSG}"
