@@ -147,9 +147,9 @@ with nl.environment as e:
     e.Activation[e.i, e.j, e.k] = (
         e.SelectedStudy[e.s] & e.VoxelReported[e.i, e.j, e.k, e.s]
     )
-    e.probmap[e.i, e.j, e.k, e.PROB[e.i, e.j, e.k]] = (e.Activation[e.i, e.j, e.k]) // (
-        e.TermAssociation["auditory"] & e.TermAssociation["memory"]
-    )
+    e.probmap[e.i, e.j, e.k, e.PROB[e.i, e.j, e.k]] = (
+        e.Activation[e.i, e.j, e.k]
+    ) // (e.TermAssociation["auditory"] & e.TermAssociation["memory"])
     e.img[e.agg_create_region_overlay[e.i, e.j, e.k, e.p]] = e.probmap[
         e.i, e.j, e.k, e.p
     ]
