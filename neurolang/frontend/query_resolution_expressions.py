@@ -535,7 +535,8 @@ class Symbol(Expression):
                 raise ir.NeuroLangException(f"element {v} invalid in set")
 
     def __iter_non_logic_programming(self, symbol: ir.Symbol) -> Iterable:
-        all_symbols = self.query_builder.program_ir.symbol_table.symbols_by_type(
+        program_ir = self.query_builder.program_ir
+        all_symbols = program_ir.symbol_table.symbols_by_type(
             symbol.type.__args__[0]
         )
 
