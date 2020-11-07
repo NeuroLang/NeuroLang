@@ -181,9 +181,9 @@ jobs:
           name: Fetch docs
           command: |
             set -e
-            mkdir -p ~/.ssh
-            echo -e "Host *\nStrictHostKeyChecking no" > ~/.ssh/config
-            chmod og= ~/.ssh/config
+            # mkdir -p ~/.ssh
+            # echo -e "Host *\nStrictHostKeyChecking no" > ~/.ssh/config
+            # chmod og= ~/.ssh/config
             if [ ! -d ~/neurolang.github.io ]; then
               git clone git@github.com:/neurolang/neurolang.github.io.git ~/neurolang.github.io
             fi
