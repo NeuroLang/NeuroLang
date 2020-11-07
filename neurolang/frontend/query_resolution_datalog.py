@@ -29,7 +29,8 @@ from ..type_system import Unknown
 from ..utils import NamedRelationalAlgebraFrozenSet, RelationalAlgebraFrozenSet
 from .datalog.standard_syntax import parser as datalog_parser
 from .datalog.natural_syntax import parser as nat_datalog_parser
-from .query_resolution import NeuroSynthMixin, QueryBuilderBase, RegionMixin
+from .neuroimaging_mixins import NeuroSynthMixin, RegionMixin
+from .query_resolution import QueryBuilderBase
 from ..datalog import DatalogProgram
 from . import query_resolution_expressions as fe
 
