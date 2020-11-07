@@ -1,11 +1,11 @@
 from collections import namedtuple
-from neurolang.expressions import FunctionApplication
 from operator import contains
 from typing import AbstractSet, Callable, Tuple
 from unittest.mock import patch
 
 import numpy as np
 import pytest
+
 from neurolang import frontend
 from neurolang.frontend import query_resolution
 
@@ -18,10 +18,7 @@ from .. import query_resolution_expressions as qre
 
 
 def test_symbol_management():
-    class Solver(
-        DatalogProgram,
-        ExpressionBasicEvaluator
-    ):
+    class Solver(DatalogProgram, ExpressionBasicEvaluator):
         pass
 
     neurolang = query_resolution.QueryBuilderBase(Solver())
@@ -33,11 +30,11 @@ def test_symbol_management():
     assert sym_.expression.type is Tuple[float, int]
     assert sym.expression.name != sym_.expression.name
 
-    a = neurolang.new_symbol(int, name='a')
-    assert a.expression.name == 'a'
+    a = neurolang.new_symbol(int, name="a")
+    assert a.expression.name == "a"
 
-    b = neurolang.add_symbol(1, name='b')
-    assert 'b' in neurolang.symbols
+    b = neurolang.add_symbol(1, name="b")
+    assert "b" in neurolang.symbols
     assert b.value == 1
     assert b.type is int
     assert neurolang.symbols.b == b
@@ -49,9 +46,9 @@ def test_symbol_management():
     def id(x: int) -> int:
         return x
 
-    assert 'id' in neurolang.symbols
+    assert "id" in neurolang.symbols
     assert id == neurolang.symbols.id
-    assert id == neurolang.symbols['id']
+    assert id == neurolang.symbols["id"]
     assert id.type == Callable[[int], int]
 
     f = neurolang.new_symbol()
@@ -65,29 +62,26 @@ def test_symbol_management():
 
 
 def test_symbol_environment():
-    class Solver(
-        DatalogProgram,
-        ExpressionBasicEvaluator
-    ):
+    class Solver(DatalogProgram, ExpressionBasicEvaluator):
         pass
 
     neurolang = query_resolution.QueryBuilderBase(Solver())
 
-    b = neurolang.add_symbol(1, name='b')
+    b = neurolang.add_symbol(1, name="b")
     neurolang.symbols._dynamic_mode = True
-    assert 'c' not in neurolang.symbols
+    assert "c" not in neurolang.symbols
     c = neurolang.symbols.c
     assert c.type is Unknown
-    assert c.expression.name == 'c'
+    assert c.expression.name == "c"
     del neurolang.symbols.b
     assert b not in neurolang.symbols
     neurolang.symbols._dynamic_mode = False
 
     with neurolang.environment as e:
-        assert 'c' not in e
+        assert "c" not in e
         c = e.c
         assert c.type is Unknown
-        assert c.expression.name == 'c'
+        assert c.expression.name == "c"
 
         e.d = 5
         assert e.d.value == 5
@@ -97,17 +91,17 @@ def test_symbol_environment():
     assert neurolang.symbols.d.type is int
 
     with neurolang.scope as e:
-        assert 'f' not in e
+        assert "f" not in e
         f = e.f
         assert f.type is Unknown
-        assert f.expression.name == 'f'
+        assert f.expression.name == "f"
 
         e.g = 5
         assert e.g.value == 5
         assert e.g.type is int
 
-    assert 'f' not in neurolang.symbols
-    assert 'g' not in neurolang.symbols
+    assert "f" not in neurolang.symbols
+    assert "g" not in neurolang.symbols
 
 
 def test_add_set():
@@ -119,14 +113,16 @@ def test_add_set():
     assert s.type is AbstractSet[int]
     assert res.type is AbstractSet[int]
     assert res.value == frozenset((i,) for i in range(10))
+    assert isinstance(repr(res), str)
 
-    v = frozenset(zip(('a', 'b', 'c'), range(3)))
+    v = frozenset(zip(("a", "b", "c"), range(3)))
     s = neurolang.add_tuple_set(v, (str, int))
     res = neurolang[s]
 
     assert s.type is AbstractSet[Tuple[str, int]]
     assert res.type is AbstractSet[Tuple[str, int]]
     assert res.value == v
+    assert isinstance(repr(res), str)
 
 
 def test_add_set_neurolangdl():
@@ -139,7 +135,7 @@ def test_add_set_neurolangdl():
     assert res.type is AbstractSet[int]
     assert res.value == frozenset((i,) for i in range(10))
 
-    v = frozenset(zip(('a', 'b', 'c'), range(3)))
+    v = frozenset(zip(("a", "b", "c"), range(3)))
     s = neurolang.add_tuple_set(v, (str, int))
     res = neurolang[s]
 
@@ -159,11 +155,9 @@ def test_query_regions_from_region_set():
     regions_ = {(i1,), (i2,), (i3,)}
     regions = neurolang.add_tuple_set(regions_)
 
-    x = neurolang.new_region_symbol(name='x')
+    x = neurolang.new_region_symbol(name="x")
     query_result = neurolang.query(
-        (x,),
-        regions(x) &
-        neurolang.symbols.inferior_of(x, central)
+        (x,), regions(x) & neurolang.symbols.inferior_of(x, central)
     )
 
     assert len(query_result) == len(regions)
@@ -186,20 +180,20 @@ def test_query_new_predicate():
     )
 
     regions_ = {
-        (inferior_posterior,), (inferior_central,), (inferior_anterior,)
+        (inferior_posterior,),
+        (inferior_central,),
+        (inferior_anterior,),
     }
     regions = neurolang.add_tuple_set(regions_)
 
     def posterior_and_inferior(y, z):
-        return (
-            neurolang.symbols.anatomical_posterior_of(y, z) &
-            neurolang.symbols.anatomical_inferior_of(y, z)
-        )
+        return neurolang.symbols.anatomical_posterior_of(
+            y, z
+        ) & neurolang.symbols.anatomical_inferior_of(y, z)
 
-    x = neurolang.new_region_symbol(name='x')
+    x = neurolang.new_region_symbol(name="x")
     query_result = neurolang.query(
-        (x,),
-        regions(x) & posterior_and_inferior(x, central)
+        (x,), regions(x) & posterior_and_inferior(x, central)
     )
     assert len(query_result) == 1
     assert next(iter(query_result)) == (inferior_posterior,)
@@ -211,14 +205,13 @@ def test_load_spherical_volume_first_order():
 
     inferior = ExplicitVBR(np.array([[0, 0, 0], [1, 1, 1]]), np.eye(4))
 
-    neurolang.add_region(inferior, name='inferior_region')
-    neurolang.sphere((0, 0, 0), .5, name='unit_sphere')
-    assert (
-        neurolang.symbols['unit_sphere'].value ==
-        SphericalVolume((0, 0, 0), .5)
+    neurolang.add_region(inferior, name="inferior_region")
+    neurolang.sphere((0, 0, 0), 0.5, name="unit_sphere")
+    assert neurolang.symbols["unit_sphere"].value == SphericalVolume(
+        (0, 0, 0), 0.5
     )
 
-    x = neurolang.new_region_symbol(name='x')
+    x = neurolang.new_region_symbol(name="x")
     query = neurolang.query(
         x, neurolang.symbols.overlapping(x, neurolang.symbols.unit_sphere)
     )
@@ -231,12 +224,12 @@ def test_load_spherical_volume_first_order():
         x, neurolang.symbols.overlapping(x, neurolang.symbols.unit_sphere)
     )
     query_result = query.do()
-    sphere_constant = neurolang.symbols['unit_sphere'].value
+    sphere_constant = neurolang.symbols["unit_sphere"].value
     assert (
-        isinstance(sphere_constant, ExplicitVBR) and
-        np.array_equal(sphere_constant.affine, np.eye(4)) and
-        sphere_constant.image_dim == (500, 500, 500) and
-        np.array_equal(sphere_constant.voxels, [[0, 0, 0]])
+        isinstance(sphere_constant, ExplicitVBR)
+        and np.array_equal(sphere_constant.affine, np.eye(4))
+        and sphere_constant.image_dim == (500, 500, 500)
+        and np.array_equal(sphere_constant.voxels, [[0, 0, 0]])
     )
     assert len(query_result.value) == 1
     assert next(iter(query_result.value)) == inferior
@@ -248,21 +241,20 @@ def test_load_spherical_volume_datalog():
     inferior = ExplicitVBR(np.array([[0, 0, 0], [1, 1, 1]]), np.eye(4))
 
     regions = neurolang.add_tuple_set(
-       {(inferior, 'inferior_region')}, name='regions'
+        {(inferior, "inferior_region")}, name="regions"
     )
-    neurolang.sphere((0, 0, 0), .5, name='unit_sphere')
-    assert (
-        neurolang.symbols['unit_sphere'].value ==
-        SphericalVolume((0, 0, 0), .5)
+    neurolang.sphere((0, 0, 0), 0.5, name="unit_sphere")
+    assert neurolang.symbols["unit_sphere"].value == SphericalVolume(
+        (0, 0, 0), 0.5
     )
 
     q = neurolang.new_symbol()
-    x = neurolang.new_region_symbol(name='x')
-    n = neurolang.new_region_symbol(name='n')
+    x = neurolang.new_region_symbol(name="x")
+    n = neurolang.new_region_symbol(name="n")
     query = neurolang.query(
         q(x),
-        neurolang.symbols.overlapping(x, neurolang.symbols.unit_sphere) &
-        regions(x, n)
+        neurolang.symbols.overlapping(x, neurolang.symbols.unit_sphere)
+        & regions(x, n),
     )
 
     assert len(query.value) == 1
@@ -271,31 +263,31 @@ def test_load_spherical_volume_datalog():
     neurolang.make_implicit_regions_explicit(np.eye(4), (500, 500, 500))
     query = neurolang.query(
         q(x),
-        neurolang.symbols.overlapping(x, neurolang.symbols.unit_sphere) &
-        regions(x, n)
+        neurolang.symbols.overlapping(x, neurolang.symbols.unit_sphere)
+        & regions(x, n),
     )
 
     assert len(query.value) == 1
     assert next(iter(query.value))[0] == inferior
 
-    sphere_constant = neurolang.symbols['unit_sphere'].value
+    sphere_constant = neurolang.symbols["unit_sphere"].value
     assert (
-        isinstance(sphere_constant, ExplicitVBR) and
-        np.array_equal(sphere_constant.affine, np.eye(4)) and
-        sphere_constant.image_dim == (500, 500, 500) and
-        np.array_equal(sphere_constant.voxels, [[0, 0, 0]])
+        isinstance(sphere_constant, ExplicitVBR)
+        and np.array_equal(sphere_constant.affine, np.eye(4))
+        and sphere_constant.image_dim == (500, 500, 500)
+        and np.array_equal(sphere_constant.voxels, [[0, 0, 0]])
     )
 
 
 def test_neurolang_dl_query():
     neurolang = frontend.NeurolangDL()
-    r = neurolang.new_symbol(name='r')
-    x = neurolang.new_symbol(name='x')
-    y = neurolang.new_symbol(name='y')
-    z = neurolang.new_symbol(name='z')
+    r = neurolang.new_symbol(name="r")
+    x = neurolang.new_symbol(name="x")
+    y = neurolang.new_symbol(name="y")
+    z = neurolang.new_symbol(name="z")
 
     dataset = {(i, i * 2) for i in range(10)}
-    q = neurolang.add_tuple_set(dataset, name='q')
+    q = neurolang.add_tuple_set(dataset, name="q")
     sol = neurolang.query((x, y), q(x, y))
     assert sol == dataset
 
@@ -319,26 +311,26 @@ def test_neurolang_dl_query():
 
 def test_neurolang_dl_solve_all():
     neurolang = frontend.NeurolangDL()
-    r = neurolang.new_symbol(name='r')
-    x = neurolang.new_symbol(name='x')
+    r = neurolang.new_symbol(name="r")
+    x = neurolang.new_symbol(name="x")
 
     dataset = {(i, i * 2) for i in range(10)}
-    q = neurolang.add_tuple_set(dataset, name='q')
+    q = neurolang.add_tuple_set(dataset, name="q")
     r[x] = q(x, x)
     sol = neurolang.solve_all()
-    assert sol['q'].to_unnamed() == dataset
-    assert sol['r'].to_unnamed() == set((i,) for i, j in dataset if i == j)
+    assert sol["q"].to_unnamed() == dataset
+    assert sol["r"].to_unnamed() == set((i,) for i, j in dataset if i == j)
     assert len(sol) == 2
-    assert neurolang.predicate_parameter_names(r) == ('x',)
+    assert neurolang.predicate_parameter_names(r) == ("x",)
 
 
 def test_neurolange_dl_get_param_names():
     neurolang = frontend.NeurolangDL()
-    r = neurolang.new_symbol(name='r')
-    x = neurolang.new_symbol(name='x')
+    r = neurolang.new_symbol(name="r")
+    x = neurolang.new_symbol(name="x")
 
     dataset = {(i, i * 2) for i in range(10)}
-    q = neurolang.add_tuple_set(dataset, name='q')
+    q = neurolang.add_tuple_set(dataset, name="q")
     r[x] = q(x, x)
 
     @neurolang.add_symbol
@@ -348,39 +340,38 @@ def test_neurolange_dl_get_param_names():
         """
         return 0
 
-    assert neurolang.predicate_parameter_names('q') == ('0', '1')
-    assert neurolang.predicate_parameter_names(q) == ('0', '1')
-    assert neurolang.predicate_parameter_names(r) == ('x',)
-    assert neurolang.symbols[r].predicate_parameter_names == ('x',)
+    assert neurolang.predicate_parameter_names("q") == ("0", "1")
+    assert neurolang.predicate_parameter_names(q) == ("0", "1")
+    assert neurolang.predicate_parameter_names(r) == ("x",)
+    assert neurolang.symbols[r].predicate_parameter_names == ("x",)
     assert r[x].help() is not None
-    assert neurolang.symbols['test_fun'].help().strip() == "HELP TEST"
+    assert neurolang.symbols["test_fun"].help().strip() == "HELP TEST"
 
 
 def test_neurolange_dl_named_sets():
     neurolang = frontend.NeurolangDL()
-    r = neurolang.new_symbol(name='r')
-    s = neurolang.new_symbol(name='s')
-    x = neurolang.new_symbol(name='x')
-    y = neurolang.new_symbol(name='y')
+    r = neurolang.new_symbol(name="r")
+    s = neurolang.new_symbol(name="s")
+    x = neurolang.new_symbol(name="x")
+    y = neurolang.new_symbol(name="y")
 
     dataset = {(i, i * 2) for i in range(10)}
-    q = neurolang.add_tuple_set(dataset, name='q')
+    q = neurolang.add_tuple_set(dataset, name="q")
     r[x] = q(x, x)
     s[x, y] = q(x, x) & (y == x)
 
     res = neurolang.solve_all()
 
-    assert res['r'].columns == ('x',)
-    assert res['r'].row_type == Tuple[int]
-    assert res['r'].to_unnamed() == {
-        (i,) for i, j in dataset if i == j
-    }
+    assert res["r"].columns == ("x",)
+    assert res["r"].row_type == Tuple[int]
+    assert res["r"].to_unnamed() == {(i,) for i, j in dataset if i == j}
 
 
 def test_neurolang_dl_datalog_code_list_symbols():
     neurolang = frontend.NeurolangDL()
     original_symbols = set(neurolang.symbols)
-    neurolang.execute_datalog_program('''
+    neurolang.execute_datalog_program(
+        """
     A(4, 5)
     A(5, 6)
     A(6, 5)
@@ -388,14 +379,16 @@ def test_neurolang_dl_datalog_code_list_symbols():
     B(x,y) :- B(x, z),A(z, y)
     C(x) :- B(x, y), y == 5
     D("x")
-    ''')
+    """
+    )
 
-    assert set(neurolang.symbols) == {'A', 'B', 'C', 'D'} | original_symbols
+    assert set(neurolang.symbols) == {"A", "B", "C", "D"} | original_symbols
 
 
 def test_neurolang_dl_datalog_code():
     neurolang = frontend.NeurolangDL()
-    neurolang.execute_datalog_program('''
+    neurolang.execute_datalog_program(
+        """
     A(4, 5)
     A(5, 6)
     A(6, 5)
@@ -403,30 +396,34 @@ def test_neurolang_dl_datalog_code():
     B(x,y) :- B(x, z),A(z, y)
     C(x) :- B(x, y), y == 5
     D("x")
-    ''')
+    """
+    )
 
     res = neurolang.solve_all()
 
-    assert res['A'].row_type == Tuple[int, int]
-    assert res['A'].to_unnamed() == {(4, 5), (5, 6), (6, 5)}
-    assert res['B'].to_unnamed() == {
-        (4, 5), (5, 6), (6, 5), (4, 6), (5, 5), (6, 6)
+    assert res["A"].row_type == Tuple[int, int]
+    assert res["A"].to_unnamed() == {(4, 5), (5, 6), (6, 5)}
+    assert res["B"].to_unnamed() == {
+        (4, 5),
+        (5, 6),
+        (6, 5),
+        (4, 6),
+        (5, 5),
+        (6, 6),
     }
-    assert res['C'].to_unnamed() == {
-        (4,), (5,), (6,)
-    }
-    assert res['D'].to_unnamed() == {
-        ('x',),
+    assert res["C"].to_unnamed() == {(4,), (5,), (6,)}
+    assert res["D"].to_unnamed() == {
+        ("x",),
     }
 
 
 def test_neurolang_dl_aggregation():
     neurolang = frontend.NeurolangDL()
-    q = neurolang.new_symbol(name='q')
-    p = neurolang.new_symbol(name='p')
-    r = neurolang.new_symbol(name='r')
-    x = neurolang.new_symbol(name='x')
-    y = neurolang.new_symbol(name='y')
+    q = neurolang.new_symbol(name="q")
+    p = neurolang.new_symbol(name="p")
+    r = neurolang.new_symbol(name="r")
+    x = neurolang.new_symbol(name="x")
+    y = neurolang.new_symbol(name="y")
 
     @neurolang.add_symbol
     def sum_(x):
@@ -439,10 +436,7 @@ def test_neurolang_dl_aggregation():
 
     sol = neurolang.query(r(x, y), p(x, y))
 
-    res_q = {
-        (0, 2 + 4 + 6 + 8),
-        (1, 1 + 3 + 5 + 7 + 9)
-    }
+    res_q = {(0, 2 + 4 + 6 + 8), (1, 1 + 3 + 5 + 7 + 9)}
 
     assert len(sol) == 2
     assert sol[r] == res_q
@@ -451,10 +445,10 @@ def test_neurolang_dl_aggregation():
 
 def test_neurolang_dl_aggregation_direct_query():
     neurolang = frontend.NeurolangDL()
-    q = neurolang.new_symbol(name='q')
-    p = neurolang.new_symbol(name='p')
-    x = neurolang.new_symbol(name='x')
-    y = neurolang.new_symbol(name='y')
+    q = neurolang.new_symbol(name="q")
+    p = neurolang.new_symbol(name="p")
+    x = neurolang.new_symbol(name="x")
+    y = neurolang.new_symbol(name="y")
 
     @neurolang.add_symbol
     def sum_(x):
@@ -467,16 +461,14 @@ def test_neurolang_dl_aggregation_direct_query():
 
     sol = neurolang.query((x, y), p(x, y))
 
-    res_q = {
-        (0, 2 + 4 + 6 + 8),
-        (1, 1 + 3 + 5 + 7 + 9)
-    }
+    res_q = {(0, 2 + 4 + 6 + 8), (1, 1 + 3 + 5 + 7 + 9)}
 
     assert sol == res_q
 
 
 def test_neurolang_dl_aggregation_environment():
     neurolang = frontend.NeurolangDL()
+
     @neurolang.add_symbol
     def sum_(x):
         return sum(x)
@@ -488,18 +480,16 @@ def test_neurolang_dl_aggregation_environment():
         e.p[e.x, sum_(e.y)] = e.q[e.x, e.y]
         sol = neurolang.query(e.r(e.x, e.y), e.p(e.x, e.y))
 
-    res_q = {
-        (0, 2 + 4 + 6 + 8),
-        (1, 1 + 3 + 5 + 7 + 9)
-    }
+    res_q = {(0, 2 + 4 + 6 + 8), (1, 1 + 3 + 5 + 7 + 9)}
 
     assert len(sol) == 2
-    assert sol['r'] == res_q
-    assert sol['p'] == res_q
+    assert sol["r"] == res_q
+    assert sol["p"] == res_q
 
 
 def test_neurolang_dl_aggregation_environment_direct_query():
     neurolang = frontend.NeurolangDL()
+
     @neurolang.add_symbol
     def sum_(x):
         return sum(x)
@@ -511,16 +501,14 @@ def test_neurolang_dl_aggregation_environment_direct_query():
         e.p[e.x, sum_(e.y)] = e.q[e.x, e.y]
         sol = neurolang.query((e.x, e.y), e.p(e.x, e.y))
 
-    res_q = {
-        (0, 2 + 4 + 6 + 8),
-        (1, 1 + 3 + 5 + 7 + 9)
-    }
+    res_q = {(0, 2 + 4 + 6 + 8), (1, 1 + 3 + 5 + 7 + 9)}
 
     assert sol == res_q
 
 
 def test_aggregation_number_of_arrivals():
     neurolang = frontend.NeurolangDL()
+
     @neurolang.add_symbol
     def agg_count(x) -> int:
         return len(x)
@@ -536,23 +524,21 @@ def test_aggregation_number_of_arrivals():
 
         res = neurolang.query((e.x, e.c), e.count_destinations(e.x, e.c))
 
-    assert res == {
-        (0, 3), (1, 2), (2, 1)
-    }
+    assert res == {(0, 3), (1, 2), (2, 1)}
 
 
 def test_neurolang_dl_attribute_access():
     neurolang = frontend.NeurolangDL()
-    one_element = namedtuple('t', ('x', 'y'))(1, 2)
+    one_element = namedtuple("t", ("x", "y"))(1, 2)
 
-    a = neurolang.add_tuple_set([(one_element,)], name='a')
+    a = neurolang.add_tuple_set([(one_element,)], name="a")
     with neurolang.scope as e:
         e.q[e.x] = a[e.x]
         e.r[e.y] = a[e.w] & (e.y == e.w.x)
         res = neurolang.solve_all()
 
-    q = res['q']
-    r = res['r']
+    q = res["q"]
+    r = res["r"]
     assert len(q) == 1
     el = next(q.to_unnamed().itervalues())[0]
     assert el == one_element
@@ -563,20 +549,20 @@ def test_neurolang_dl_set_destroy():
     neurolang = frontend.NeurolangDL()
     contains_ = neurolang.add_symbol(contains)
 
-    a = neurolang.add_tuple_set([(frozenset((0, 1, 2)),)], name='a')
+    a = neurolang.add_tuple_set([(frozenset((0, 1, 2)),)], name="a")
     with neurolang.scope as e:
         e.q[e.y] = a[e.x] & contains_(e.x, e.y)
         res = neurolang.solve_all()
 
-    q = res['q'].to_unnamed()
+    q = res["q"].to_unnamed()
     assert len(q) == 3
     assert set(q) == {(0,), (1,), (2,)}
 
 
 @pytest.mark.skip
 @patch(
-    'neurolang.frontend.neurosynth_utils.'
-    'NeuroSynthHandler.ns_region_set_from_term'
+    "neurolang.frontend.neurosynth_utils."
+    "NeuroSynthHandler.ns_region_set_from_term"
 )
 def test_neurosynth_region(mock_ns_regions):
     mock_ns_regions.return_value = {
@@ -584,7 +570,7 @@ def test_neurosynth_region(mock_ns_regions):
     }
     neurolang = frontend.NeurolangDL()
     s = neurolang.load_neurosynth_term_regions(
-        'gambling', 10, 'gambling_regions'
+        "gambling", 10, "gambling_regions"
     )
     res = neurolang[s]
     mock_ns_regions.assert_called()
@@ -599,7 +585,7 @@ def test_translate_expression_to_fronted_expression():
 
     assert tr.walk(exp.Constant(1)) == 1
 
-    symbol_exp = exp.Symbol('a')
+    symbol_exp = exp.Symbol("a")
     symbol_fe = tr.walk(symbol_exp)
     assert symbol_fe.expression == symbol_exp
     assert symbol_fe.query_builder == tr.query_builder
@@ -616,8 +602,7 @@ def test_translate_expression_to_fronted_expression():
     assert fact_fe.consequent == fa_fe
 
     imp_exp = Implication(
-        symbol_exp(exp.Symbol('x')),
-        exp.Symbol('b')(exp.Symbol('x'))
+        symbol_exp(exp.Symbol("x")), exp.Symbol("b")(exp.Symbol("x"))
     )
     imp_fe = tr.walk(imp_exp)
     assert imp_fe.expression == imp_exp
