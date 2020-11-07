@@ -183,9 +183,6 @@ jobs:
             set -e
             mkdir -p ~/.ssh
             echo $(ssh-keyscan github.com) >> ~/.ssh/known_hosts
-            if [ -d ~/neurolang.github.io ]; then
-              rm -rf  ~/neurolang.github.io
-            fi
             if [ ! -d ~/neurolang.github.io ]; then
               git clone git@github.com:/neurolang/neurolang.github.io.git ~/neurolang.github.io
             fi
@@ -206,17 +203,17 @@ jobs:
             git reset --hard origin/master
             git clean -xdf
             echo "Deploying dev docs for ${CIRCLE_BRANCH}.";
-            #if [[ -z $(git describe --tag) ]]; then
-            MSG="Non-tagged commit updating dev doc (${CIRCLE_BUILD_NUM})."
-            #  echo $MSG
-            #  DST=$PWD/dev
-            #  mkdir -p $DST
-            #  git add dev
-            #else;
-            #  MSG="Tagged commit updating release doc (${CIRCLE_BUILD_NUM})."
-            #  echo $MSG
-            #  DST=$PWD
-            #fi
+            if [[ -z $(git describe --tag) ]]; then
+              MSG="Non-tagged commit updating dev doc (${CIRCLE_BUILD_NUM})."
+              echo $MSG
+              DST=$PWD/dev
+              mkdir -p $DST
+              git add dev
+            else;
+              MSG="Tagged commit updating release doc (${CIRCLE_BUILD_NUM})."
+              echo $MSG
+              DST=$PWD
+            fi
             DST=$PWD
             cp -va /tmp/build/html/* $DST;
             if [[ -z $(git diff) ]]; then
