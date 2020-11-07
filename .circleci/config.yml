@@ -215,7 +215,7 @@ jobs:
             #  DST=$PWD
             #fi
             DST=$PWD
-            cp -a /tmp/build/html/* $DST;
+            cp -va /tmp/build/html/* $DST;
             if [[ -z $(git diff) ]]; then
               echo "Nothing to commit"
             else
