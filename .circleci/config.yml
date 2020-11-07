@@ -167,8 +167,7 @@ jobs:
           paths:
             - ./venv
             - doc
-          key:
-            - v1-docs-{{ .Branch }}
+          key: v1-docs-{{ .Branch }}
 
       - store_artifacts:
           destination: dev
