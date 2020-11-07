@@ -187,7 +187,7 @@ class RegionMixin:
             see description
         """
         atlas_set = []
-        for label_number, label_name in atlas_labels:
+        for label_number, label_name in atlas_labels.items():
             region = self.create_region(spatial_image, label=label_number)
             if region is None:
                 continue
