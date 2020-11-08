@@ -5,6 +5,7 @@ Datalog programs.
 
 
 import collections
+from neurolang.logic.expression_processing import extract_logic_atoms
 import operator
 import typing
 from typing import Iterable
@@ -149,7 +150,7 @@ def all_body_preds_in_set(implication, predicate_set):
 
     """
     preds = (
-        e.functor for e in extract_logic_predicates(implication.antecedent)
+        e.functor for e in extract_logic_atoms(implication.antecedent)
     )
     predicate_set = predicate_set | {implication.consequent.functor}
     return all(not isinstance(e, Symbol) or e in predicate_set for e in preds)

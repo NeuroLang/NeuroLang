@@ -379,7 +379,7 @@ def test_neurolange_dl_negation():
 
     res = neurolang.solve_all()
 
-    assert res["s"].to_unnamed() == {(i, j) for i, j in dataset if i == j}
+    assert res["s"].to_unnamed() == {(i, j) for i, j in dataset if i != j}
 
 
 def test_neurolang_dl_datalog_code_list_symbols():
