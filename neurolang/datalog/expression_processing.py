@@ -378,7 +378,7 @@ def dependency_matrix(datalog, rules=None):
         rule = to_reach.pop()
         head_functor = rule.consequent.functor
         ix_head = idb_symbols.index(head_functor)
-        for predicate in extract_logic_predicates(rule.antecedent):
+        for predicate in extract_logic_atoms(rule.antecedent):
             functor = predicate.functor
             if functor in edb or functor in constraint_symbols:
                 continue

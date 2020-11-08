@@ -6,6 +6,7 @@ Complements QueryBuilderDatalog class with probabilistic capabilities
 2- sove probabilistic queries
 """
 import collections
+from neurolang.datalog.negation import DatalogProgramNegationMixin
 import typing
 from typing import (
     AbstractSet,
@@ -27,6 +28,7 @@ from ..datalog.aggregation import (
     TranslateToLogicWithAggregation,
 )
 from ..datalog.constraints_representation import DatalogConstraintsProgram
+from ..datalog.negation import DatalogProgramNegationMixin
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
 from ..exceptions import UnsupportedQueryError
@@ -63,6 +65,7 @@ class RegionFrontendCPLogicSolver(
     RegionSolver,
     CPLogicMixin,
     DatalogWithAggregationMixin,
+    DatalogProgramNegationMixin,
     DatalogConstraintsProgram,
     ExpressionBasicEvaluator,
 ):
@@ -297,11 +300,14 @@ class NeurolangPDL(QueryBuilderDatalog):
             1   0.111111    c
         }
         """
-        solution = self._solve()
-        solution_sets = dict()
-        for pred_symb, relation in solution.items():
-            solution_sets[pred_symb.name] = relation.value.unwrap()
-        return solution_sets
+        solution_ir = self._solve()
+        solution = {}
+        for k, v in solution_ir.items():
+            solution[k.name] = NamedRelationalAlgebraFrozenSet(
+                self.predicate_parameter_names(k.name), v.value.unwrap()
+            )
+            solution[k.name].row_type = v.value.row_type
+        return solution
 
     def _solve(self, query=None):
         idbs = stratify_program(query, self.program_ir)
