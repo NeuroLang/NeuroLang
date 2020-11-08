@@ -441,7 +441,7 @@ def is_ground_predicate(predicate):
 def enforce_conjunction(expression):
     if isinstance(expression, Conjunction):
         return expression
-    elif isinstance(expression, FunctionApplication):
+    elif isinstance(expression, (FunctionApplication, Negation)):
         return Conjunction((expression,))
     raise ForbiddenExpressionError(
         "Cannot conjunct expression of type {}".format(type(expression))
@@ -717,6 +717,10 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
         else:
             res = new_formulas[0]
         return res
+
+    @add_match(Negation)
+    def negation(self, expression):
+        return Negation(self.walk(expression.formula))
 
 
 def is_rule_with_builtin(rule, known_builtins=None):
