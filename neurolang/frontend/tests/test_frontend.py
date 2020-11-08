@@ -367,6 +367,21 @@ def test_neurolange_dl_named_sets():
     assert res["r"].to_unnamed() == {(i,) for i, j in dataset if i == j}
 
 
+def test_neurolange_dl_negation():
+    neurolang = frontend.NeurolangDL()
+    s = neurolang.new_symbol(name="s")
+    x = neurolang.new_symbol(name="x")
+    y = neurolang.new_symbol(name="y")
+
+    dataset = {(i, i * 2) for i in range(10)}
+    q = neurolang.add_tuple_set(dataset, name="q")
+    s[x, y] = ~q(x, x) & q(x, y)
+
+    res = neurolang.solve_all()
+
+    assert res["s"].to_unnamed() == {(i, j) for i, j in dataset if i == j}
+
+
 def test_neurolang_dl_datalog_code_list_symbols():
     neurolang = frontend.NeurolangDL()
     original_symbols = set(neurolang.symbols)
