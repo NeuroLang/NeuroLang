@@ -254,7 +254,9 @@ jobs:
       - run:
           name: verify git tag
           command: |
-            git describe --tag --exact-match
+            if ! git describe --tag --exact-match; then
+              circleci step halt
+            fi
       - run:
           name: init .pypirc
           command: |
@@ -272,7 +274,8 @@ jobs:
           name: upload to pypi
           command: |
             . venv/bin/activate
-            twine upload dist/*
+            pip install --user --upgrade twine
+            twine upload --repository testpypi dist/*
 
 
 
