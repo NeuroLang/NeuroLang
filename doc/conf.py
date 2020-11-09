@@ -15,6 +15,7 @@
 
 import os
 import sys
+import subprocess
 
 import sphinx
 import sphinx_bootstrap_theme
@@ -28,7 +29,11 @@ from pkg_resources import get_distribution
 
 release = get_distribution(project).version
 # for example take major/minor
-source_version = ".".join(release.split(".")[:2])
+
+if subprocess.call("git describe --tag --exact-match", shell=True):
+    source_version = ".".join(release.split(".")[:2])
+else:
+    source_version = release
 
 currentdir = os.path.abspath(os.path.dirname(__file__))
 sys.path.append(os.path.join(currentdir, "tools"))
@@ -163,7 +168,7 @@ html_theme_options = {
     "bootswatch_theme": "flatly",
     "navbar_sidebarrel": False,
     "bootstrap_version": "3",
-    "navbar_links": [("Tutorial", "tutorial"), ("Gallery", "examples/index")],
+    "navbar_links": [("Tutorial", "tutorial"), ("Gallery", "auto_examples/index")],
 }
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
