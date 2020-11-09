@@ -5,9 +5,8 @@ from typing import AbstractSet
 
 from ..datalog.expression_processing import enforce_conjunctive_antecedent
 from ..expression_pattern_matching import add_match
-from ..expression_walker import ExpressionWalker, ReplaceExpressionWalker, ReplaceSymbolWalker, ReplaceSymbolsByConstants
+from ..expression_walker import ExpressionWalker, ReplaceExpressionWalker
 from ..expressions import Constant, FunctionApplication, Symbol
-from ..logic import Conjunction
 from .exceptions import NotEasilyShatterableError
 from .probabilistic_ra_utils import ProbabilisticFactSet
 

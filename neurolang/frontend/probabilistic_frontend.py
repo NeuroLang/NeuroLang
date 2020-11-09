@@ -28,7 +28,6 @@ from ..datalog.aggregation import (
     TranslateToLogicWithAggregation,
 )
 from ..datalog.constraints_representation import DatalogConstraintsProgram
-from ..datalog.negation import DatalogProgramNegationMixin
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
 from ..exceptions import UnsupportedQueryError

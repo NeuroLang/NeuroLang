@@ -5,7 +5,6 @@ Datalog programs.
 
 
 import collections
-from neurolang.logic.expression_processing import extract_logic_atoms
 import operator
 import typing
 from typing import Iterable
