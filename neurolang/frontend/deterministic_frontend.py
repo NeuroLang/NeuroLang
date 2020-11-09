@@ -7,8 +7,9 @@ from ..datalog import DatalogProgram
 from ..datalog.aggregation import (
     Chase,
     DatalogWithAggregationMixin,
-    TranslateToLogicWithAggregation
+    TranslateToLogicWithAggregation,
 )
+from ..datalog.negation import DatalogProgramNegationMixin
 from ..expression_walker import ExpressionBasicEvaluator
 from ..region_solver import RegionSolver
 from ..regions import ExplicitVBR, ExplicitVBROverlay
@@ -62,6 +63,7 @@ class RegionFrontendDatalogSolver(
     TranslateToLogicWithAggregation,
     RegionSolver,
     DatalogWithAggregationMixin,
+    DatalogProgramNegationMixin,
     DatalogProgram,
     ExpressionBasicEvaluator,
 ):
