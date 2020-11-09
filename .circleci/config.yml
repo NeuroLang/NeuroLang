@@ -255,7 +255,7 @@ jobs:
           name: verify git tag
           command: |
             git describe --tag --exact-match
-            - run:
+      - run:
           name: init .pypirc
           command: |
             echo -e "[pypi]" >> ~/.pypirc
