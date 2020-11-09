@@ -301,28 +301,14 @@ class CPLogicMixin(PatternWalker):
         yielding a probability between [0, 1] that may use built-ins, and where
         Q(x) is a conjunction of predicates.
 
-        Note that only deterministic antecedents are allowed. Declarativity
-        makes it impossible to enforce that at declaration time. If a
-        query-based probabilistic fact has a dependency on a probabilistic
-        predicate, this will be discovered at query-resolution time, after the
-        program has been fully declared.
-
-        Internally, the rule is translated into two rules. A deterministic rule
-        that takes care of inferring the set of tuples in the probabilistic
-        table and a probabilistic rule that transforms the result from the
-        deterministic resolution into a proper probabilistic table by
-        re-attaching the deterministically-obtained probabilities.
-        For example, the rule `P(x) : f(x) :- Q(x)` is translated into the
-        rules
-
-            _f1_(_f2_, x) :- Q(x), _f2_ = f(x)
-            P(x) : _f2_ :- _f1_(_f2_, x)
-
-        where `_f1_` and `_f2_` are fresh symbols. Note: we make sure not to
-        expose the resulting `_f1_` relation to the user, as it is not part of
-        its program.
+        Only deterministic antecedents are allowed. Declarativity makes it
+        impossible to enforce that at declaration time. Thus, if a query-based
+        probabilistic fact has a dependency on a probabilistic predicate, this
+        will be discovered at query-resolution time, after the program has been
+        fully declared.
 
         """
+        # TODO: check for bad syntax and forbidden expressions
         self.probabilistic_fact(implication)
 
     @add_match(Implication(..., Condition), is_within_language_prob_query)
