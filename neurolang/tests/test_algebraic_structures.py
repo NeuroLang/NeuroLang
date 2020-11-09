@@ -1,7 +1,8 @@
 import operator
 
-from .. import neurolang as nl
 from .. import expressions
+from ..neurolang_compiler import NeuroLangIntermediateRepresentationCompiler
+from ..solver import GenericSolver, NumericOperationsSolver
 
 C_ = expressions.Constant
 S_ = expressions.Symbol
@@ -142,10 +143,10 @@ def test_algebraic_structure_of_naturals():
     }
     symbols[S_[int]('null')] = C_[int](null_element)
 
-    class TheSolver(nl.NumericOperationsSolver[int], nl.GenericSolver):
+    class TheSolver(NumericOperationsSolver[int], GenericSolver):
         pass
 
-    nli = nl.NeuroLangIntermediateRepresentationCompiler(
+    nli = NeuroLangIntermediateRepresentationCompiler(
         solver=TheSolver(), symbols=symbols
     )
     check_algebraic_structure_is_a_ring(

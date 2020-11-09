@@ -6,7 +6,7 @@ Datalog programs.
 
 import collections
 import operator
-from itertools import chain
+import typing
 from typing import Iterable
 
 import numpy as np
@@ -28,8 +28,9 @@ from ..expression_walker import (
     ReplaceExpressionWalker,
     ReplaceSymbolWalker,
 )
-from ..expressions import Constant, FunctionApplication, Symbol
+from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..logic import (
+    FALSE,
     TRUE,
     Conjunction,
     Disjunction,
@@ -37,9 +38,10 @@ from ..logic import (
     Negation,
     Quantifier,
     Union,
+    expression_processing as elp,
 )
-from ..logic import expression_processing as elp
 from ..logic.transformations import CollapseConjunctions
+from ..logic.unification import most_general_unifier
 from .expressions import TranslateToLogic
 
 EQ = Constant(operator.eq)
@@ -147,7 +149,7 @@ def all_body_preds_in_set(implication, predicate_set):
 
     """
     preds = (
-        e.functor for e in extract_logic_predicates(implication.antecedent)
+        e.functor for e in extract_logic_atoms(implication.antecedent)
     )
     predicate_set = predicate_set | {implication.consequent.functor}
     return all(not isinstance(e, Symbol) or e in predicate_set for e in preds)
@@ -395,7 +397,7 @@ def dependency_matrix(datalog, rules=None):
         rule = to_reach.pop()
         head_functor = rule.consequent.functor
         ix_head = idb_symbols.index(head_functor)
-        for predicate in extract_logic_predicates(rule.antecedent):
+        for predicate in extract_logic_atoms(rule.antecedent):
             functor = predicate.functor
             if functor in edb or functor in constraint_symbols:
                 continue
@@ -458,7 +460,7 @@ def is_ground_predicate(predicate):
 def enforce_conjunction(expression):
     if isinstance(expression, Conjunction):
         return expression
-    elif isinstance(expression, FunctionApplication):
+    elif isinstance(expression, (FunctionApplication, Negation)):
         return Conjunction((expression,))
     raise ForbiddenExpressionError(
         "Cannot conjunct expression of type {}".format(type(expression))
@@ -472,6 +474,128 @@ def enforce_conjunctive_antecedent(implication):
             enforce_conjunction(implication.antecedent)
         ),
     )
+
+
+def maybe_deconjunct_single_pred(conjunction):
+    """
+    Remove the conjunction from single-conjunct conjunctions. The conjunction
+    remains unchanged if it has multiple conjuncts.
+    """
+    if len(conjunction.formulas) == 1:
+        return conjunction.formulas[0]
+    return conjunction
+
+
+def maybe_disjunct(
+    formulas: typing.Iterable[Expression],
+) -> typing.Union[Expression, Disjunction]:
+    formulas = tuple(formulas)
+    if len(formulas) > 1:
+        return Disjunction(formulas)
+    return formulas[0]
+
+
+class HeadConstantToBodyEquality(PatternWalker):
+    """
+    Transform rules whose head (consequent) predicate contains constant terms
+    into an equivalent rule where the head predicate only contains variable
+    terms and the body (antecedent) of the rule contains variable-to-constant
+    equalities. A fresh variable is generated for each constant term in the
+    head predicate.
+
+    Examples
+    --------
+    The rule `Q(x, 2) :- P(x, y)` is transformed into the rule `Q(x, _f_) :-
+    P(x, y), _f_ = 2`, where `_f_` is a fresh variable.
+
+    """
+
+    @add_match(
+        Implication(FunctionApplication, ...),
+        lambda implication: any(
+            isinstance(term, Constant) for term in implication.consequent.args
+        ),
+    )
+    def implication_with_constant_term_in_head(self, implication):
+        body_formulas = list(
+            enforce_conjunction(implication.antecedent).formulas
+        )
+        new_consequent_vars = list()
+        for term in implication.consequent.args:
+            if isinstance(term, Constant):
+                var = Symbol.fresh()
+                body_formulas.append(EQ(var, term))
+            else:
+                var = term
+            new_consequent_vars.append(var)
+        new_consequent = implication.consequent.functor(*new_consequent_vars)
+        new_antecedent = Conjunction(tuple(body_formulas))
+        new_antecedent = maybe_deconjunct_single_pred(new_antecedent)
+        return self.walk(Implication(new_consequent, new_antecedent))
+
+
+class HeadRepeatedVariableToBodyEquality(PatternWalker):
+    """
+    Transform rules whose head (consequent) predicate contains repeated
+    variables (symbols) to an equivalent rule without repeated variables and
+    corresponding variable equalities. New fresh variables are generated to
+    replace variable repetitions.
+
+    Examples
+    --------
+    The rule `Q(x, x) :- P(x, y)` is transformed into the rule `Q(x, _f_) :-
+    P(x, y), _f_ = x`, where `_f_` is a fresh variable.
+
+    """
+
+    @add_match(
+        Implication(FunctionApplication, ...),
+        lambda implication: max(
+            collections.Counter(
+                (
+                    arg
+                    for arg in implication.consequent.args
+                    if isinstance(arg, Symbol)
+                )
+            ).values()
+        )
+        > 1,
+    )
+    def implication_with_repeated_variable_in_head(self, implication):
+        seen_args = set()
+        new_csqt_args = list()
+        vareq_formulas = list()
+        for csqt_arg in implication.consequent.args:
+            if isinstance(csqt_arg, Symbol) and csqt_arg in seen_args:
+                new_csqt_arg = Symbol.fresh()
+                vareq_formulas.append(EQ(new_csqt_arg, csqt_arg))
+            else:
+                new_csqt_arg = csqt_arg
+                seen_args.add(csqt_arg)
+            new_csqt_args.append(new_csqt_arg)
+        new_consequent = implication.consequent.functor(*new_csqt_args)
+        new_antecedent = conjunct_formulas(
+            implication.antecedent, Conjunction(tuple(vareq_formulas))
+        )
+        new_antecedent = maybe_deconjunct_single_pred(new_antecedent)
+        return self.walk(Implication(new_consequent, new_antecedent))
+
+
+class FreshenFreeVariables(PatternWalker):
+    @add_match(
+        Implication(FunctionApplication, ...),
+        lambda implication: any(
+            not var.is_fresh
+            for var in extract_logic_free_variables(implication)
+        ),
+    )
+    def implication_with_free_variables(self, implication):
+        replacements = {
+            var: Symbol.fresh()
+            for var in extract_logic_free_variables(implication)
+        }
+        implication = ReplaceExpressionWalker(replacements).walk(implication)
+        return self.walk(implication)
 
 
 def flatten_query(query, program):
@@ -518,45 +642,83 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
     def __init__(self, program):
         self.program = program
         self.idb = self.program.intensional_database()
+        self._rule_normaliser = FlattenQueryInNonRecursiveUCQ._RuleNormaliser()
+
+    class _RuleNormaliser(
+        HeadConstantToBodyEquality,
+        HeadRepeatedVariableToBodyEquality,
+        FreshenFreeVariables,
+        ExpressionWalker,
+    ):
+        pass
 
     @add_match(
         FunctionApplication,
         lambda fa: all(isinstance(arg, (Constant, Symbol)) for arg in fa.args),
     )
-    def function_application(self, expression):
-        functor = expression.functor
-        if functor not in self.idb:
-            return expression
-
-        args = expression.args
-        ucq = self.idb[functor]
+    def query_predicate(self, qpred):
+        pred_symb = qpred.functor
+        if pred_symb not in self.idb:
+            return qpred
+        ucq = self.idb[pred_symb]
         cqs = []
         for cq in ucq.formulas:
-            cq = self._normalise_arguments(cq, args)
-            antecedent = self.walk(cq.antecedent)
-            cqs.append(antecedent)
+            cq = self._rule_normaliser.walk(cq)
+            exp = self._unify_cq_antecedent(cq, qpred)
+            if exp != FALSE:
+                exp = self.walk(exp)
+            cqs.append(exp)
+        return maybe_disjunct(cqs)
 
-        if len(cqs) > 1:
-            res = Disjunction(tuple(cqs))
-        else:
-            res = cqs[0]
-        return res
-
-    def _normalise_arguments(self, cq, args):
-        free_variables = extract_logic_free_variables(cq)
-        linked_variables = cq.consequent.args
-        cq = ReplaceExpressionWalker(
-            dict(
-                chain(
-                    zip(linked_variables, args),
-                    zip(
-                        free_variables,
-                        (Symbol.fresh() for _ in range(len(free_variables))),
-                    ),
-                )
+    def _unify_cq_antecedent(self, cq, qpred):
+        mgu = most_general_unifier(cq.consequent, qpred)
+        # if we cannot unify, this is always a false statement
+        if mgu is None:
+            return FALSE
+        antecedent = ReplaceExpressionWalker(mgu[0]).walk(cq.antecedent)
+        equality_conj = Conjunction(
+            tuple(
+                Constant(operator.eq)(x, y)
+                for x, y in mgu[0].items()
+                if (isinstance(x, Symbol) and isinstance(y, Constant))
+                or (isinstance(x, Constant) and isinstance(y, Symbol))
             )
-        ).walk(cq)
-        return cq
+        )
+        antecedent = conjunct_formulas(antecedent, equality_conj)
+        if not self._check_compatibility_symbol_to_constant_equalities(
+            antecedent
+        ):
+            return FALSE
+        antecedent = maybe_deconjunct_single_pred(antecedent)
+        return antecedent
+
+    @staticmethod
+    def _check_compatibility_symbol_to_constant_equalities(conjunction):
+        """
+        Statically analyse variable-to-constant equalities within the
+        conjunction to check for compatibility. For example, if the two
+        conjuncts `x = 2` and `x = 3` are present, this function will return
+        `False`. It also handles equalities where the order is `const =
+        symbol`, such as `2 = 3, x = 3`.
+
+        """
+        symb_to_const = dict()
+        symb_to_const_eq_formulas = (
+            conjunct
+            for conjunct in conjunction.formulas
+            if is_symb_to_const_equality(conjunct)
+        )
+        for equality in symb_to_const_eq_formulas:
+            symbol = next(
+                arg for arg in equality.args if isinstance(arg, Symbol)
+            )
+            constant = next(
+                arg for arg in equality.args if isinstance(arg, Constant)
+            )
+            if symbol in symb_to_const:
+                return False
+            symb_to_const[symbol] = constant
+        return True
 
     @add_match(Conjunction)
     def conjunction(self, expression):
@@ -574,6 +736,10 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
         else:
             res = new_formulas[0]
         return res
+
+    @add_match(Negation)
+    def negation(self, expression):
+        return Negation(self.walk(expression.formula))
 
 
 def is_rule_with_builtin(rule, known_builtins=None):
@@ -603,6 +769,16 @@ def is_equality_between_symbol_and_symbol_or_constant(formula):
         and formula.functor == EQ
         and len(formula.args) == 2
         and all(isinstance(arg, (Constant, Symbol)) for arg in formula.args)
+    )
+
+
+def is_symb_to_const_equality(formula):
+    return (
+        isinstance(formula, FunctionApplication)
+        and formula.functor == EQ
+        and len(formula.args) == 2
+        and any(isinstance(arg, Symbol) for arg in formula.args)
+        and any(isinstance(arg, Constant) for arg in formula.args)
     )
 
 

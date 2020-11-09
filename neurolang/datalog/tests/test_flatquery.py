@@ -6,6 +6,7 @@ from ...exceptions import UnsupportedProgramError
 from ...expression_walker import ExpressionWalker
 from ...expressions import Constant, Symbol
 from ...logic import (
+    FALSE,
     Conjunction,
     Disjunction,
     ExistentialPredicate,
@@ -122,7 +123,7 @@ def test_flatten_with_2nd_level_disjunction():
     )
     program = TestDatalogProgram()
     program.walk(code)
-    result = flatten_query(Q(x), program)
+    result = flatten_query(Q(x, z), program)
     assert isinstance(result, Conjunction)
     assert len(result.formulas) == 2
     assert (
@@ -158,8 +159,7 @@ def test_incorrect_program():
     )
     program = TestDatalogProgram()
     program.walk(code)
-    with pytest.raises(UnsupportedProgramError):
-        flatten_query(R(x, y), program)
+    assert flatten_query(R(x, y), program) == FALSE
 
 
 def test_flatten_with_variable_equality():
@@ -168,3 +168,44 @@ def test_flatten_with_variable_equality():
     program.walk(rule)
     flat = flatten_query(R(x, y), program)
     assert set(flat.formulas) == set(extract_logic_predicates(rule.antecedent))
+
+
+def test_flatten_repeated_variable_in_rule():
+    """
+    Given a program with the rule `R(x, x) :- Q(x, x, z)` and a (single
+    predicate) conjunctive query `R(x, y)`, we expect the resulting flattened
+    query to be either `Q(y, y, _freshvar_), x = y` or `Q(x, x, _freshvar_), y
+    = x`.
+
+    """
+    rule = Implication(R(x, x), Q(x, x, z))
+    program = TestDatalogProgram()
+    program.walk(rule)
+    flat = flatten_query(R(x, y), program)
+    assert len(flat.formulas) == 2
+    assert (
+        Constant(operator.eq)(x, y) in flat.formulas
+        and any(
+            (formula.functor == Q and formula.args[:2] == (y, y))
+            for formula in flat.formulas
+        )
+    ) or (
+        Constant(operator.eq)(y, x) in flat.formulas
+        and any(
+            (formula.functor == Q and formula.args[:2] == (x, x))
+            for formula in flat.formulas
+        )
+    )
+
+
+def test_flatten_not_unifiable_becomes_false():
+    code = Union(
+        (
+            Implication(R(Constant(2), Constant(3)), Conjunction((Q(y, x),))),
+            Implication(Z(x), Conjunction((R(x, x),))),
+        )
+    )
+    program = TestDatalogProgram()
+    program.walk(code)
+    flat = flatten_query(Z(z), program)
+    assert flat == FALSE

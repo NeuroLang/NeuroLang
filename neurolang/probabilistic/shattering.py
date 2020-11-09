@@ -3,14 +3,10 @@ import itertools
 import operator
 from typing import AbstractSet
 
-from ..datalog.expression_processing import (
-    UnifyVariableEqualities,
-    enforce_conjunctive_antecedent,
-)
+from ..datalog.expression_processing import enforce_conjunctive_antecedent
 from ..expression_pattern_matching import add_match
-from ..expression_walker import ExpressionWalker
+from ..expression_walker import ExpressionWalker, ReplaceExpressionWalker
 from ..expressions import Constant, FunctionApplication, Symbol
-from ..logic import Conjunction
 from .exceptions import NotEasilyShatterableError
 from .probabilistic_ra_utils import ProbabilisticFactSet
 
@@ -169,14 +165,10 @@ class EasyProbfactShatterer(
 
 def query_to_tagged_set_representation(query, symbol_table):
     query = enforce_conjunctive_antecedent(query)
-    new_predicates = list()
-    for predicate in query.antecedent.formulas:
-        if isinstance(predicate.functor, Symbol):
-            predicate = FunctionApplication(
-                symbol_table[predicate.functor], predicate.args
-            )
-        new_predicates.append(predicate)
-    return query.apply(query.consequent, Conjunction(tuple(new_predicates)))
+    new_antecedent = ReplaceExpressionWalker(symbol_table).walk(
+        query.antecedent
+    )
+    return query.apply(query.consequent, new_antecedent)
 
 
 def _check_shatter_fully_solved(shattered_query):
@@ -219,8 +211,6 @@ def shatter_easy_probfacts(query, symbol_table):
 
     """
     query = enforce_conjunctive_antecedent(query)
-    unifier = UnifyVariableEqualities()
-    query = unifier.walk(query)
     tagged_query = query_to_tagged_set_representation(query, symbol_table)
     shatterer = EasyProbfactShatterer(symbol_table)
     shattered_query = shatterer.walk(tagged_query)

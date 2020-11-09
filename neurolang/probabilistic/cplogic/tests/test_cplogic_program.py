@@ -1,3 +1,4 @@
+import operator
 import typing
 
 import pytest
@@ -8,14 +9,20 @@ from ....exceptions import (
     ForbiddenExpressionError,
     ProtectedKeywordError,
 )
+from ....expression_walker import ExpressionWalker
 from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication, Union
 from ...exceptions import (
     DistributionDoesNotSumToOneError,
     MalformedProbabilisticTupleError,
 )
-from ...expressions import PROB, ProbabilisticPredicate, ProbabilisticQuery
-from ..program import CPLogicProgram
+from ...expressions import (
+    PROB,
+    Condition,
+    ProbabilisticPredicate,
+    ProbabilisticQuery,
+)
+from ..program import CPLogicProgram, TranslateProbabilisticQueryMixin
 
 P = Symbol("P")
 Q = Symbol("Q")
@@ -235,3 +242,58 @@ def test_within_language_succ_query_invalid():
     cpl = CPLogicProgram()
     with pytest.raises(ForbiddenExpressionError):
         cpl.walk(q)
+
+
+def test_wlq_marg_conditioned_conditioning_shared_var():
+    """
+    MARG task: Prob[ P(x) | Z(x) ] where variable x is shared by the
+    conditioned predicate P(x) and by the conditioning predicate Z(x)
+    """
+    wlq = Implication(
+        Q(x, ProbabilisticQuery(PROB, (x,))), Condition(P(x), Z(x))
+    )
+    cpl = CPLogicProgram()
+    cpl.walk(wlq)
+    assert Q in cpl.within_language_succ_queries()
+
+
+def test_wlq_marg_conditioning_empty_conjunction():
+    wlq = Implication(
+        Q(x, ProbabilisticQuery(PROB, (x,))),
+        Condition(P(x), Conjunction(tuple())),
+    )
+    cpl = CPLogicProgram()
+    cpl.walk(wlq)
+    assert Q in cpl.within_language_succ_queries()
+
+
+def test_wlq_marg_conjunctive_conditioning():
+    wlq = Implication(
+        Q(x, y, ProbabilisticQuery(PROB, (x, y))),
+        Condition(P(x), Conjunction((R(x), Q(y)))),
+    )
+    cpl = CPLogicProgram()
+    cpl.walk(wlq)
+    assert Q in cpl.within_language_succ_queries()
+
+
+class _TestTranslator(TranslateProbabilisticQueryMixin, ExpressionWalker):
+    pass
+
+
+def test_wlq_floordiv_translation():
+    wlq = Implication(
+        Q(x, y, PROB(x, y)), Constant(operator.floordiv)(P(x), R(x, y))
+    )
+    translator = _TestTranslator()
+    result = translator.walk(wlq)
+    assert result == Implication(
+        Q(x, y, ProbabilisticQuery(PROB, (x, y))), Condition(P(x), R(x, y))
+    )
+
+
+def test_wlq_marg_bad_syntax():
+    bad_wlq = Implication(Q(x, y), Constant(operator.floordiv)(P(x), Z(x, y)))
+    translator = _TestTranslator()
+    with pytest.raises(ForbiddenExpressionError):
+        translator.walk(bad_wlq)

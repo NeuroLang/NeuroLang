@@ -1,7 +1,0 @@
-# In addition to requirements.txt & requirements-dev.txt; packages required to build documentation.
-
-# + requirements.txt
-# + requirements-dev.txt
-sphinx
-sphinx-gallery
-numpydoc

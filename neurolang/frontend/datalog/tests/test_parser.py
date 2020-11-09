@@ -3,7 +3,7 @@ from operator import add, eq, mul, pow, sub, truediv
 from ....datalog import Conjunction, Fact, Implication, Negation, Union
 from ....probabilistic.expressions import ProbabilisticPredicate
 from ....expressions import Constant, Symbol, FunctionApplication
-from .. import ExternalSymbol, parser
+from ..standard_syntax import ExternalSymbol, parser
 
 
 def test_facts():
@@ -152,6 +152,25 @@ def test_aggregation():
             Conjunction((B(x, y),))
         ),
     ))
+    assert res == expected_result
+
+
+def test_uri():
+    from rdflib import RDFS
+
+    label = Symbol(name=str(RDFS.label))
+    regional_part = Symbol(name='http://sig.biostr.washington.edu/fma3.0#regional_part_of')
+    x = Symbol('x')
+    y = Symbol('y')
+
+    res = parser(f'`{str(label.name)}`(x):-`{str(regional_part.name)}`(x, y)')
+    expected_result = Union((
+        Implication(
+            label(x),
+            Conjunction((regional_part(x, y),))
+        ),
+    ))
+
     assert res == expected_result
 
 

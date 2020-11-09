@@ -10,16 +10,19 @@ import typing
 from typing import (
     AbstractSet,
     Any,
+    Callable,
     Dict,
     Iterable,
     List,
     Optional,
     Tuple,
     Type,
-    Callable,
 )
 from uuid import uuid1
 
+from neurolang.datalog.negation import DatalogProgramNegationMixin
+
+from .. import expressions as ir
 from ..datalog.aggregation import (
     Chase,
     DatalogWithAggregationMixin,
@@ -29,7 +32,6 @@ from ..datalog.constraints_representation import DatalogConstraintsProgram
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
 from ..exceptions import UnsupportedQueryError
-from .. import expressions as ir
 from ..expression_walker import ExpressionBasicEvaluator
 from ..logic import Union
 from ..probabilistic.cplogic.program import (
@@ -37,11 +39,12 @@ from ..probabilistic.cplogic.program import (
     TranslateProbabilisticQueryMixin,
 )
 from ..probabilistic.dichotomy_theorem_based_solver import (
+    solve_marg_query as lifted_solve_marg_query,
     solve_succ_query as lifted_solve_succ_query,
 )
 from ..probabilistic.expression_processing import (
     is_probabilistic_predicate_symbol,
-    is_within_language_succ_query,
+    is_within_language_prob_query,
 )
 from ..probabilistic.query_resolution import compute_probabilistic_solution
 from ..probabilistic.stratification import stratify_program
@@ -50,8 +53,8 @@ from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraStringExpression,
 )
-from . import QueryBuilderDatalog
 from . import query_resolution_expressions as fe
+from .query_resolution_datalog import QueryBuilderDatalog
 
 
 class RegionFrontendCPLogicSolver(
@@ -60,13 +63,14 @@ class RegionFrontendCPLogicSolver(
     RegionSolver,
     CPLogicMixin,
     DatalogWithAggregationMixin,
+    DatalogProgramNegationMixin,
     DatalogConstraintsProgram,
     ExpressionBasicEvaluator,
 ):
     pass
 
 
-class ProbabilisticFrontend(QueryBuilderDatalog):
+class NeurolangPDL(QueryBuilderDatalog):
     """
     Complements QueryBuilderDatalog class with probabilistic capabilities
     1- add extensional probabilistic facts and choices
@@ -77,6 +81,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         self,
         chase_class: Type[Chase] = Chase,
         probabilistic_solver: Callable = lifted_solve_succ_query,
+        probabilistic_marg_solver: Callable = lifted_solve_marg_query,
     ) -> "ProbabilisticFrontend":
         """
         Query builder with probabilistic capabilities
@@ -98,6 +103,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             RegionFrontendCPLogicSolver(), chase_class=chase_class
         )
         self.probabilistic_solver = probabilistic_solver
+        self.probabilistic_marg_solver = lifted_solve_marg_query
         self.ontology_loaded = False
 
     def load_ontology(
@@ -125,8 +131,6 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         self.program_ir.add_extensional_predicate_from_tuples(
             onto.get_pointers_symbol(), d_pred[onto.get_pointers_symbol()]
         )
-
-        self.ontology_loaded = True
 
     @property
     def current_program(self) -> List[fe.Expression]:
@@ -165,10 +169,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
 
     def _execute_query(
         self,
-        head: typing.Union[
-            fe.Symbol,
-            Tuple[fe.Expression, ...],
-        ],
+        head: typing.Union[fe.Symbol, Tuple[fe.Expression, ...]],
         predicate: fe.Expression,
     ) -> Tuple[AbstractSet, Optional[ir.Symbol]]:
         """
@@ -263,9 +264,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         )
         return solution, functor_orig
 
-    def solve_all(
-        self,
-    ) -> Dict[str, NamedRelationalAlgebraFrozenSet]:
+    def solve_all(self) -> Dict[str, NamedRelationalAlgebraFrozenSet]:
         """
         Returns a dictionary of "predicate_name": "Content"
         for all elements in the solution of the Datalog program.
@@ -299,15 +298,14 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             1   0.111111    c
         }
         """
-        solution = self._solve()
-        solution_sets = dict()
-        for pred_symb, relation in solution.items():
-            solution_sets[pred_symb.name] = NamedRelationalAlgebraFrozenSet(
-                self.predicate_parameter_names(pred_symb.name),
-                relation.value.unwrap(),
+        solution_ir = self._solve()
+        solution = {}
+        for k, v in solution_ir.items():
+            solution[k.name] = NamedRelationalAlgebraFrozenSet(
+                self.predicate_parameter_names(k.name), v.value.unwrap()
             )
-            solution_sets[pred_symb.name].row_type = relation.value.row_type
-        return solution_sets
+            solution[k.name].row_type = v.value.row_type
+        return solution
 
     def _solve(self, query=None):
         idbs = stratify_program(query, self.program_ir)
@@ -324,7 +322,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         return solution
 
     def _solve_deterministic_stratum(self, det_idb):
-        if self.ontology_loaded:
+        if "__constraints__" in self.symbol_table:
             eB = self._rewrite_program_with_ontology(det_idb)
             det_idb = Union(det_idb.formulas + eB.formulas)
         chase = self.chase_class(self.program_ir, rules=det_idb)
@@ -340,11 +338,12 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
             pchoice_edb,
             prob_idb,
             self.probabilistic_solver,
+            self.probabilistic_marg_solver,
         )
         wlq_symbs = set(
             rule.consequent.functor
             for rule in prob_idb.formulas
-            if is_within_language_succ_query(rule)
+            if is_within_language_prob_query(rule)
         )
         solution.update(
             {
@@ -395,7 +394,7 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         query_solution = query_solution.projection(
             *(symb.name for symb in head_symbols)
         )
-        return ir.Constant[AbstractSet](query_solution)
+        return ir.Constant[AbstractSet](query_solution.to_unnamed())
 
     def _rewrite_program_with_ontology(self, deterministic_program):
         orw = OntologyRewriter(
@@ -607,3 +606,6 @@ class ProbabilisticFrontend(QueryBuilderDatalog):
         ra_set = ra_set.extended_projection(projections)
         self.program_ir.add_probabilistic_choice_from_tuples(symbol, ra_set)
         return fe.Symbol(self, name)
+
+
+ProbabilisticFrontend = NeurolangPDL

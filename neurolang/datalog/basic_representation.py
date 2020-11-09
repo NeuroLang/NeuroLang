@@ -78,7 +78,7 @@ class DatalogProgram(TypedSymbolTableMixin, PatternWalker):
         else:
             return new_expression
 
-    @add_match(Fact(FunctionApplication[bool](Symbol, ...)))
+    @add_match(Fact(FunctionApplication(Symbol, ...)))
     def fact(self, expression):
         fact = expression.fact
         if fact.functor.name in self.protected_keywords:

@@ -174,7 +174,7 @@ def separate_deterministic_probabilistic_code(
             and not is_builtin(p, program.builtins())
         )
 
-        if is_within_language_succ_query(
+        if is_within_language_prob_query(
             pred
         ) or not probabilistic_symbols.isdisjoint(preds_antecedent):
             probabilistic_symbols.add(pred.consequent.functor)
@@ -204,15 +204,15 @@ def is_builtin(pred, known_builtins=None):
     return isinstance(pred.functor, Constant) or pred.functor in known_builtins
 
 
-def is_within_language_succ_query(implication):
+def is_within_language_prob_query(implication):
     try:
-        get_within_language_succ_query_prob_term(implication)
+        get_within_language_prob_query_prob_term(implication)
         return True
     except ValueError:
         return False
 
 
-def get_within_language_succ_query_prob_term(implication):
+def get_within_language_prob_query_prob_term(implication):
     try:
         prob_term = next(
             arg

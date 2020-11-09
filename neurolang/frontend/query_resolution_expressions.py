@@ -16,18 +16,16 @@ from typing import (
     Optional,
     Tuple,
     Type,
-    Union,
+    Union
 )
 
-from .. import datalog as dl
-from .. import expressions as ir
-from .. import neurolang as nl
+from .. import datalog as dl, expressions as ir
 from ..datalog import constraints_representation as cr
 from ..expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 from ..expression_walker import (
     ExpressionWalker,
     ReplaceExpressionsByValues,
-    add_match,
+    add_match
 )
 from ..type_system import is_leq_informative
 from ..utils import RelationalAlgebraFrozenSet
@@ -100,15 +98,7 @@ class Expression(object):
         >>> A(x)
         <class 'neurolang.frontend.query_resolution_expressions.Operation'>
         """
-        new_args = []
-        for a in args:
-            if a is Ellipsis:
-                new_args.append(nl.Symbol.fresh())
-            elif isinstance(a, Expression):
-                new_args.append(a.expression)
-            else:
-                new_args.append(nl.Constant(a))
-        new_args = tuple(new_args)
+        new_args = self._translate_tuple(args)
 
         if self.query_builder.logic_programming and isinstance(self, Symbol):
             functor = self.neurolang_symbol
@@ -117,6 +107,27 @@ class Expression(object):
 
         new_expression = ir.FunctionApplication(functor, new_args)
         return Operation(self.query_builder, new_expression, self, args)
+
+    def _translate_tuple(self, args):
+        new_args = []
+        for a in args:
+            if a is Ellipsis:
+                new_args.append(ir.Symbol.fresh())
+            elif isinstance(a, Expression):
+                new_args.append(a.expression)
+            elif isinstance(a, tuple):
+                new_tuple = self._translate_tuple(a)
+                new_tuple_constant = self._build_tuple_constant(new_tuple)
+                new_args.append(new_tuple_constant)
+            else:
+                new_args.append(ir.Constant(a))
+        new_args = tuple(new_args)
+        return new_args
+
+    def _build_tuple_constant(self, new_tuple):
+        types = tuple(a.type for a in new_tuple)
+        new_tuple = ir.Constant[Tuple[types]](new_tuple, verify_type=False)
+        return new_tuple
 
     def __setitem__(
         self,
@@ -152,7 +163,7 @@ class Expression(object):
         >>> B[x] = A[x] & (x == 1)
         """
         if not isinstance(value, Expression):
-            value = Expression(self.query_builder, nl.Constant(value))
+            value = Expression(self.query_builder, ir.Constant(value))
 
         if self.query_builder.logic_programming:
             if not isinstance(key, tuple):
@@ -223,8 +234,8 @@ class Expression(object):
         >>> print(y)
         y: <class 'int'> = 2
         """
-        if isinstance(self.expression, nl.Constant):
-            return repr(self.expression.value)
+        if isinstance(self.expression, ir.Constant):
+            return self._repr_constant(self.expression)
         elif isinstance(self.expression, dl.magic_sets.AdornedExpression):
             name = f"{self.expression.expression.name}"
             if self.expression.adornment:
@@ -232,7 +243,7 @@ class Expression(object):
             if self.expression.number:
                 name += f"_{self.expression.number}"
             return name
-        elif isinstance(self.expression, nl.Symbol):
+        elif isinstance(self.expression, ir.Symbol):
             if self.expression.is_fresh and not (
                 hasattr(self, "in_ontology") and self.in_ontology
             ):
@@ -242,33 +253,39 @@ class Expression(object):
         else:
             return object.__repr__(self)
 
+    def _repr_constant(self, expression):
+        if is_leq_informative(expression.type, AbstractSet):
+            if expression.value.is_empty():
+                repr_ = "Empty set"
+            else:
+                repr_ = f"{expression.value.fetch_one()} ..."
+        else:
+            repr_ = repr(expression.value)
+        return repr_
+
     def __getattr__(self, name: Union["Expression", str]) -> "Operation":
         if isinstance(name, Expression):
             name_ = name.expression
         else:
-            name_ = nl.Constant[str](name)
+            name_ = ir.Constant[str](name)
         new_expression = ir.FunctionApplication(
-            nl.Constant(getattr),
-            (
-                self.expression,
-                name_,
-            ),
+            ir.Constant(getattr), (self.expression, name_,),
         )
         return Operation(self.query_builder, new_expression, self, (name,))
 
     def help(self) -> str:
         """Returns help based on Expression's subclass"""
         expression = self.expression
-        if isinstance(expression, nl.Constant):
+        if isinstance(expression, ir.Constant):
             if is_leq_informative(expression.type, Callable):
                 return expression.value.__doc__
             elif is_leq_informative(expression.type, AbstractSet):
                 return "Set of tuples"
             else:
                 return "Constant value"
-        elif isinstance(expression, nl.FunctionApplication):
+        elif isinstance(expression, ir.FunctionApplication):
             return "Evaluation of function to parameters"
-        elif isinstance(expression, nl.Symbol):
+        elif isinstance(expression, ir.Symbol):
             return "Unlinked symbol"
         else:
             return "Help not defined yet"
@@ -294,12 +311,12 @@ def op_bind(op):
             (
                 arg.expression
                 if isinstance(arg, Expression)
-                else nl.Constant(arg)
+                else ir.Constant(arg)
                 for arg in (self,) + args
             )
         )
         arg_types = [a.type for a in new_args]
-        functor = nl.Constant[Callable[arg_types, nl.Unknown]](
+        functor = ir.Constant[Callable[arg_types, ir.Unknown]](
             op, auto_infer_type=False
         )
         new_expression = functor(*new_args)
@@ -323,7 +340,7 @@ def rop_bind(op):
         if isinstance(value, Expression):
             value = value.expression
         else:
-            value = nl.Constant(value)
+            value = ir.Constant(value)
 
         return Operation(
             self.query_builder,
@@ -482,13 +499,9 @@ class Symbol(Expression):
         symbol = self.symbol
         if isinstance(symbol, Symbol):
             return f"{self.symbol_name}: {symbol.type}"
-        elif isinstance(symbol, nl.Constant):
-            if ir.is_leq_informative(symbol.type, AbstractSet):
-                value = list(self)
-            else:
-                value = symbol.value
-
-            return f"{self.symbol_name}: {symbol.type} = {value}"
+        elif isinstance(symbol, ir.Constant):
+            repr_constant = self._repr_constant(symbol)
+            return f"{self.symbol_name}: {symbol.type} = {repr_constant}"
         else:
             return f"{self.symbol_name}: {symbol.type}"
 
@@ -501,7 +514,7 @@ class Symbol(Expression):
     def __iter__(self) -> Iterable:
         symbol = self.symbol
         if not (
-            isinstance(symbol, nl.Constant)
+            isinstance(symbol, ir.Constant)
             and (
                 ir.is_leq_informative(symbol.type, AbstractSet)
                 or ir.is_leq_informative(symbol.type, Tuple)
@@ -518,33 +531,32 @@ class Symbol(Expression):
 
     def __iter_logic_programming(self, symbol: ir.Symbol) -> Iterable:
         for v in symbol.value:
-            if isinstance(v, nl.Constant):
+            if isinstance(v, ir.Constant):
                 yield self._rsbv.walk(v.value)
-            elif isinstance(v, nl.Symbol):
+            elif isinstance(v, ir.Symbol):
                 yield Symbol(self.query_builder, v)
             else:
-                raise nl.NeuroLangException(f"element {v} invalid in set")
+                raise ir.NeuroLangException(f"element {v} invalid in set")
 
     def __iter_non_logic_programming(self, symbol: ir.Symbol) -> Iterable:
-        all_symbols = (
-            self.query_builder.program_ir.symbol_table.symbols_by_type(
-                symbol.type.__args__[0]
-            )
+        program_ir = self.query_builder.program_ir
+        all_symbols = program_ir.symbol_table.symbols_by_type(
+            symbol.type.__args__[0]
         )
 
         for s in symbol.value:
-            if not isinstance(s, nl.Constant):
+            if not isinstance(s, ir.Constant):
                 yield Symbol(self.query_builder, s.name)
                 continue
             for k, v in all_symbols.items():
-                if isinstance(v, nl.Constant) and s is v.value:
+                if isinstance(v, ir.Constant) and s is v.value:
                     yield Symbol(self.query_builder, k.name)
                     break
-                yield Expression(self.query_builder, nl.Constant(s))
+                yield Expression(self.query_builder, ir.Constant(s))
 
     def __len__(self) -> Optional[int]:
         symbol = self.symbol
-        if isinstance(symbol, nl.Constant) and (
+        if isinstance(symbol, ir.Constant) and (
             ir.is_leq_informative(symbol.type, AbstractSet)
             or ir.is_leq_informative(symbol.type, Tuple)
         ):
@@ -567,7 +579,7 @@ class Symbol(Expression):
     @property
     def neurolang_symbol(self) -> ir.Symbol:
         """Returns backend symbol"""
-        return nl.Symbol[self.type](self.symbol_name)
+        return ir.Symbol[self.type](self.symbol_name)
 
     @property
     def expression(self) -> ir.Symbol:
@@ -748,9 +760,7 @@ class Fact(Expression):
         self.consequent = consequent
 
     def __repr__(self) -> str:
-        return "{c}".format(
-            c=repr(self.consequent),
-        )
+        return "{c}".format(c=repr(self.consequent),)
 
 
 class TranslateExpressionToFrontEndExpression(ExpressionWalker):

@@ -1,16 +1,28 @@
 .. neurolang documentation master file, created by sphinx-quickstart on Tue Apr 14 10:29:06 2015. You can adapt this file completely to your liking, but it should at least contain the root `toctree` directive.
 
 Welcome to neurolang's documentation!
-====================================
+=====================================
 
-`NeuroLang`
+.. To see how to use it, please refer to the `README file <https://github.com/NeuroLang/neurolang/blob/master/README.md>`_ in the Github repository.
 
-To see how to use it, please refer to the `README file 
-<https://github.com/NeuroLang/neurolang/blob/master/README.md>`_ in the Github repository.
 
-This is an example of documentation of the software, using sphinx_. 
+NeuroLang is a probabilistic logic programming system specialised in the analysis of neuroimaging data, but not exclusively determined by it. See our example gallery for some use cases on neuroimaging meta-analysis.
 
-.. _sphinx: http://sphinx-doc.org/
+.. raw:: html
+
+
+    <div style="clear: both"></div>
+    <div class="container-fluid hidden-xs hidden-sm">
+      <div class="row">
+        <a href="auto_examples/plot_neurosynth_implementation.html">
+          <div class="col-md-2 thumbnail">
+            <img src="_images/sphx_glr_plot_neurosynth_implementation_thumb.png">
+          </div>
+        </a>
+      </div>
+    </div>
+    <br>
+
 
 
 Contents:
@@ -18,6 +30,7 @@ Contents:
 .. toctree::
    :maxdepth: 2
 
-   theory
+   tutorial
    auto_examples/index
    api
+   tutorial_logic_programming
