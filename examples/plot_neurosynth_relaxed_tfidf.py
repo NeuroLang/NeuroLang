@@ -1,7 +1,5 @@
-import os
-from typing import Iterable, Tuple, Union
+from typing import Iterable, Union
 
-import neurosynth
 import nibabel
 import nilearn.datasets
 import nilearn.image
@@ -96,18 +94,20 @@ ns_database_fn, ns_features_fn = nilearn.datasets.utils._fetch_files(
     [
         (
             "database.txt",
-            "https://github.com/neurosynth/neurosynth-data/raw/master/current_data.tar.gz",
+            "https://github.com/neurosynth/neurosynth-data"
+            "/raw/master/current_data.tar.gz",
             {"uncompress": True},
         ),
         (
             "features.txt",
-            "https://github.com/neurosynth/neurosynth-data/raw/master/current_data.tar.gz",
+            "https://github.com/neurosynth/neurosynth-data"
+            "/raw/master/current_data.tar.gz",
             {"uncompress": True},
         ),
     ],
 )
 
-ns_database = pd.read_csv(ns_database_fn, sep=f"\t")
+ns_database = pd.read_csv(ns_database_fn, sep="\t")
 ijk_positions = np.round(
     nibabel.affines.apply_affine(
         np.linalg.inv(mni_t1_4mm.affine),
@@ -121,7 +121,7 @@ ns_database = set(
     ns_database[["i", "j", "k", "id"]].itertuples(name=None, index=False)
 )
 
-ns_features = pd.read_csv(ns_features_fn, sep=f"\t")
+ns_features = pd.read_csv(ns_features_fn, sep="\t")
 ns_docs = ns_features[["pmid"]].drop_duplicates()
 ns_terms = pd.melt(
     ns_features, var_name="term", id_vars="pmid", value_name="TfIdf"
