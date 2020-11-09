@@ -256,7 +256,6 @@ jobs:
 
     steps:
       - checkout
-      - install
       - run:
           name: verify git tag
           command: |
