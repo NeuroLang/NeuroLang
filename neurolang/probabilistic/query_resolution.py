@@ -31,7 +31,7 @@ class QueryBasedProbFactToDetRule(PatternWalker):
 
     where `_f1_` and `_f2_` are fresh symbols. Note: we make sure not to
     expose the resulting `_f1_` relation to the user, as it is not part of
-    its program.
+    her program.
 
     """
 
