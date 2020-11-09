@@ -262,7 +262,9 @@ class ExtractLogicPredicates(WalkLogicProgramAggregatingSets):
 
 def extract_logic_predicates(expression):
     """Extract predicates from expression
-    knowing that it's in logic format
+    knowing that it's in logic format, if
+    predicates are negated then (not predicate)
+    will be the result.ormat
 
     Parameters
     ----------

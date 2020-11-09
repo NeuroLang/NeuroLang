@@ -194,6 +194,26 @@ def extract_logic_predicates(expression):
     return elp.extract_logic_predicates(expression)
 
 
+def extract_logic_atoms(expression):
+    """Extract atoms from expression
+    knowing that it's in Datalog format
+
+    Parameters
+    ----------
+    expression : Expression
+        expression to extract atoms from
+
+
+    Returns
+    -------
+    OrderedSet
+        set of all predicates in the atoms in lexicographical
+        order.
+
+    """
+    return elp.extract_logic_atoms(expression)
+
+
 def stratify(union, datalog_instance):
     """Given an expression block containing `Implication` instances
      and a datalog instance, return the stratification of the formulas
