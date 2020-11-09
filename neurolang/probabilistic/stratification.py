@@ -2,6 +2,8 @@ import collections
 
 import numpy as np
 
+from neurolang.logic.expression_processing import extract_logic_atoms
+
 from ..datalog.expression_processing import (
     dependency_matrix,
     extract_logic_predicates,
@@ -128,7 +130,7 @@ def _get_program_deterministic_symbols(program):
 def _get_rule_idb_type(rule, grpd_symbs, wlq_symbs):
     dep_symbs = set(
         pred.functor
-        for pred in extract_logic_predicates(rule.antecedent)
+        for pred in extract_logic_atoms(rule.antecedent)
         if isinstance(pred.functor, Symbol)
     )
     idb_type = None
