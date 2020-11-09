@@ -5,8 +5,17 @@ from ..exceptions import NeuroLangException
 from ..expression_walker import PatternWalker, add_match
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..utils import OrderedSet
-from . import (FALSE, TRUE, Conjunction, Disjunction, Implication, Negation,
-               Quantifier, Union, LogicOperator)
+from . import (
+    FALSE,
+    TRUE,
+    Conjunction,
+    Disjunction,
+    Implication,
+    LogicOperator,
+    Negation,
+    Quantifier,
+    Union,
+)
 
 
 class LogicSolver(PatternWalker):
@@ -82,7 +91,7 @@ class LogicSolver(PatternWalker):
             )
 
         solved_consequent = self.walk(expression.consequent)
-        if (solved_consequent is not expression.consequent):
+        if solved_consequent is not expression.consequent:
             return self.walk(Implication(solved_consequent, solved_antecedent))
 
         return expression
@@ -128,20 +137,19 @@ class TranslateToLogic(PatternWalker):
     @add_match(
         LogicOperator,
         lambda expression: any(
-            isinstance(arg, FunctionApplication) and
-            is_logic_function_application(arg)
+            isinstance(arg, FunctionApplication)
+            and is_logic_function_application(arg)
             for arg in expression.unapply()
-        )
+        ),
     )
     def translate_logic_operator(self, expression):
         args = expression.unapply()
         new_args = tuple()
         changed = False
         for arg in args:
-            if (
-                isinstance(arg, FunctionApplication) and
-                is_logic_function_application(arg)
-            ):
+            if isinstance(
+                arg, FunctionApplication
+            ) and is_logic_function_application(arg):
                 new_arg = self.walk(arg)
             else:
                 new_arg = arg
@@ -202,7 +210,7 @@ class ExtractFreeVariablesWalker(WalkLogicProgramAggregatingSets):
             elif isinstance(a, Constant):
                 pass
             else:
-                raise NeuroLangException('Not a Datalog function application')
+                raise NeuroLangException("Not a Datalog function application")
         return variables
 
     @add_match(Quantifier)
@@ -211,14 +219,13 @@ class ExtractFreeVariablesWalker(WalkLogicProgramAggregatingSets):
 
     @add_match(Implication)
     def extract_variables_s(self, expression):
-        return (
-            self.walk(expression.antecedent) -
-            self.walk(expression.consequent)
+        return self.walk(expression.antecedent) - self.walk(
+            expression.consequent
         )
 
     @add_match(Symbol)
     def extract_variables_symbol(self, expression):
-        return OrderedSet((expression, ))
+        return OrderedSet((expression,))
 
     @add_match(Constant)
     def _(self, expression):

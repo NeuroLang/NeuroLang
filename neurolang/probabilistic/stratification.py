@@ -1,7 +1,8 @@
 import collections
-from neurolang.logic.expression_processing import extract_logic_atoms
 
 import numpy as np
+
+from neurolang.logic.expression_processing import extract_logic_atoms
 
 from ..datalog.expression_processing import (
     dependency_matrix,

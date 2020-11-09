@@ -38,8 +38,8 @@ from ..logic import (
     Negation,
     Quantifier,
     Union,
+    expression_processing as elp,
 )
-from ..logic import expression_processing as elp
 from ..logic.transformations import CollapseConjunctions
 from ..logic.unification import most_general_unifier
 from .expressions import TranslateToLogic
@@ -148,9 +148,7 @@ def all_body_preds_in_set(implication, predicate_set):
         in the prediacte_set
 
     """
-    preds = (
-        e.functor for e in extract_logic_atoms(implication.antecedent)
-    )
+    preds = (e.functor for e in extract_logic_atoms(implication.antecedent))
     predicate_set = predicate_set | {implication.consequent.functor}
     return all(not isinstance(e, Symbol) or e in predicate_set for e in preds)
 

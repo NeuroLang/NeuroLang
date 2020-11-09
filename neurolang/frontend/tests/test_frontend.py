@@ -336,7 +336,7 @@ def test_neurolange_dl_get_param_names():
     @neurolang.add_symbol
     def test_fun(x: int) -> int:
         """
-            HELP TEST
+        HELP TEST
         """
         return 0
 

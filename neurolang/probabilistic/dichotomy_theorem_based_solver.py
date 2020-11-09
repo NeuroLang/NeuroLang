@@ -27,12 +27,12 @@ from ..datalog.expression_processing import enforce_conjunction, flatten_query
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import ExpressionWalker, add_match
 from ..expressions import Constant, Symbol
-from ..logic import Conjunction, Implication, FALSE
+from ..logic import FALSE, Conjunction, Implication
 from ..logic.expression_processing import (
-    extract_logic_atoms, extract_logic_predicates,
+    extract_logic_atoms,
     extract_logic_free_variables,
+    extract_logic_predicates,
 )
-from ..utils.orderedset import OrderedSet
 from ..relational_algebra import (
     ColumnInt,
     ColumnStr,
@@ -45,14 +45,12 @@ from ..relational_algebra import (
     RelationalAlgebraPushInSelections,
     RelationalAlgebraStringExpression,
     str2columnstr_constant,
-    NamedRelationalAlgebraFrozenSet,
 )
 from ..relational_algebra_provenance import (
     NaturalJoinInverse,
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
     RelationalAlgebraProvenanceExpressionSemringSolver,
-    RelationalAlgebraProvenanceCountingSolver,
 )
 from ..utils import log_performance
 from ..utils.orderedset import OrderedSet

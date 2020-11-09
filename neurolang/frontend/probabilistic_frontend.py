@@ -6,7 +6,6 @@ Complements QueryBuilderDatalog class with probabilistic capabilities
 2- sove probabilistic queries
 """
 import collections
-from neurolang.datalog.negation import DatalogProgramNegationMixin
 import typing
 from typing import (
     AbstractSet,
@@ -20,6 +19,8 @@ from typing import (
     Type,
 )
 from uuid import uuid1
+
+from neurolang.datalog.negation import DatalogProgramNegationMixin
 
 from .. import expressions as ir
 from ..datalog.aggregation import (
@@ -39,8 +40,6 @@ from ..probabilistic.cplogic.program import (
 )
 from ..probabilistic.dichotomy_theorem_based_solver import (
     solve_marg_query as lifted_solve_marg_query,
-)
-from ..probabilistic.dichotomy_theorem_based_solver import (
     solve_succ_query as lifted_solve_succ_query,
 )
 from ..probabilistic.expression_processing import (
