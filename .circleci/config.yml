@@ -183,6 +183,9 @@ jobs:
   deploy_docs:
     docker:
       - image: circleci/python:3.7
+
+    working_directory: ~/repo
+
     steps:
       - attach_workspace:
           at: /tmp/build
@@ -202,8 +205,6 @@ jobs:
       - run:
           name: Deploy docs
           command: |
-            echo $PWD;
-            cd ~/project;
             set +e;
             TAG=$(git describe --tag --exact-match);
             set -e;
@@ -250,6 +251,9 @@ jobs:
   deploy_pip:
     docker:
       - image: circleci/python:3.7
+
+    working_directory: ~/repo
+
     steps:
       - checkout
       - install
