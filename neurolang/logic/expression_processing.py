@@ -261,7 +261,9 @@ class ExtractLogicPredicates(WalkLogicProgramAggregatingSets):
 
 def extract_logic_predicates(expression):
     """Extract predicates from expression
-    knowing that it's in logic format
+    knowing that it's in logic format, if
+    predicates are negated then (not predicate)
+    will be the result.ormat
 
     Parameters
     ----------
@@ -277,4 +279,39 @@ def extract_logic_predicates(expression):
 
     """
     edp = ExtractLogicPredicates()
+    return edp.walk(expression)
+
+
+class ExtractLogicAtoms(WalkLogicProgramAggregatingSets):
+    @add_match(Symbol)
+    def symbol(self, expression):
+        return OrderedSet()
+
+    @add_match(Constant)
+    def constant(self, expression):
+        return OrderedSet()
+
+    @add_match(FunctionApplication)
+    def extract_predicates_fa(self, expression):
+        return OrderedSet([expression])
+
+
+def extract_logic_atoms(expression):
+    """Extract atoms from expression
+    knowing that it's in logic format
+
+    Parameters
+    ----------
+    expression : Expression
+        expression to extract predicates from
+
+
+    Returns
+    -------
+    OrderedSet
+        set of all atoms in the expression in lexicographical
+        order.
+
+    """
+    edp = ExtractLogicAtoms()
     return edp.walk(expression)
