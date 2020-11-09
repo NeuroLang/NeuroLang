@@ -288,17 +288,18 @@ workflows:
   version: 2
   test_benchmark_build:
     jobs:
-      - py36
-      - py37
-      - deploy_pip:
-         requires:
-          - py37
-      - docs:
-         requires:
-         - py37
-      - deploy_docs:
-         requires:
-           - docs
+      # - py36
+      # - py37
+      - deploy_pip
+      # - deploy_pip:
+      #   requires:
+      #    - py37
+      # - docs:
+      #   requires:
+      #   - py37
+      # - deploy_docs:
+      #  requires:
+      #     - docs
         
         #      - benchmark:
         #  requires:
