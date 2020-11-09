@@ -73,8 +73,8 @@ term_2 = "auditory"
 terms = [term_1, term_2]
 
 ###############################################################################
-# Probabilistic Logic Program
-# ---------------------------
+# Probabilistic Logic Programming in NeuroLang
+# --------------------------------------------
 
 nl = NeurolangPDL()
 

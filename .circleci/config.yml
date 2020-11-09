@@ -149,6 +149,10 @@ jobs:
     steps:
       - checkout
       - install
+      - restore_cache:
+          keys:
+            - v1-docs-{{ .Branch }}
+
       - run:
           name: Install extra packages & build documentation
           command: |
@@ -158,8 +162,90 @@ jobs:
             make api
             make html
           no_output_timeout: 7h
+
+      - save_cache:
+          paths:
+            - ./venv
+            - doc
+          key: v1-docs-{{ .Branch }}
+
       - store_artifacts:
+          destination: dev
           path: doc/_build/html
+      - persist_to_workspace:
+          root: doc/_build
+          paths:
+            - html
+
+
+
+
+  deploy_docs:
+    docker:
+      - image: circleci/python:3.7
+    steps:
+      - attach_workspace:
+          at: /tmp/build
+      - add_ssh_keys:
+          fingerprints:
+            - "b5:4f:45:48:f3:35:86:4b:fd:16:3d:f2:32:36:9b:19"
+      - checkout
+      - run:
+          name: Fetch docs
+          command: |
+            set -e
+            mkdir -p ~/.ssh
+            echo $(ssh-keyscan github.com) >> ~/.ssh/known_hosts
+            if [ ! -d ~/neurolang.github.io ]; then
+              git clone git@github.com:/neurolang/neurolang.github.io.git ~/neurolang.github.io
+            fi
+      - run:
+          name: Deploy docs
+          command: |
+            echo $PWD;
+            cd ~/project;
+            set +e;
+            TAG=$(git describe --tag --exact-match);
+            set -e;
+            cd ~/neurolang.github.io;
+            if [[ "${CIRCLE_BRANCH}" != "master" ]]; then
+              echo "No deployment (build: ${CIRCLE_BRANCH}).";
+            else
+              git config --global user.email "circle@neurolang.com";
+              git config --global user.name "Circle CI";
+              cd ~/neurolang.github.io;
+              git checkout master
+              git remote -v
+              git fetch origin
+              git reset --hard origin/master
+              git clean -xdf
+              if [[ -z $TAG ]]; then
+                MSG="Non-tagged commit updating dev doc (${CIRCLE_BUILD_NUM})."
+                echo $MSG
+                DST=$PWD/dev
+              else
+                MSG="Tagged commit updating release doc (${CIRCLE_BUILD_NUM})."
+                echo $MSG
+                DST=$PWD
+              fi
+              cp -va /tmp/build/html/* $DST;
+              if [[ -z $(git diff) ]]; then
+                echo "Nothing to commit"
+              else
+                echo $MSG
+                echo "keys $(ssh-add -l)"
+                echo "cleaning keys"
+                ssh-add -D
+                # Add identities only from this job
+                ssh-add ~/.ssh/id_rsa_*
+                echo "keys $(ssh-add -l)"
+                touch .nojekyll;
+                git add -A;
+                git commit -m "${MSG}"
+                git push origin master;
+              fi
+            fi
+
 
 
 workflows:
@@ -170,7 +256,11 @@ workflows:
       - py37
       - docs:
          requires:
-          - py37
+         - py37
+      - deploy_docs:
+         requires:
+           - docs
+        
         #      - benchmark:
         #  requires:
         #    - py37
