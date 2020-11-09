@@ -252,6 +252,7 @@ jobs:
       - image: circleci/python:3.7
     steps:
       - checkout
+      - install
       - run:
           name: verify git tag
           command: |
