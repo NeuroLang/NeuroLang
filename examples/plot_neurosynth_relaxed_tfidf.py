@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+r"""
+CBMA two-term conjunctive query in NeuroLang
+====================================================
+
+"""
 from typing import Iterable, Union
 
 import nibabel
@@ -67,8 +73,8 @@ term_2 = "auditory"
 terms = [term_1, term_2]
 
 ###############################################################################
-# Probabilistic Logic Programming in NeuroLang
-# --------------------------------------------
+# Probabilistic Logic Program
+# ---------------------------
 
 nl = NeurolangPDL()
 
