@@ -62,47 +62,6 @@ for label_number, name in destrieux_dataset['labels']:
 
 
 ###############################################################################
-# Load the NeuroSynth database
-
-ns_database_fn, ns_features_fn = datasets.utils._fetch_files(
-    'neurolang',
-    [
-        (
-            'database.txt',
-            'https://github.com/neurosynth/neurosynth-data/raw/master/current_data.tar.gz',
-            {'uncompress': True}
-        ),
-        (
-            'features.txt',
-            'https://github.com/neurosynth/neurosynth-data/raw/master/current_data.tar.gz',
-            {'uncompress': True}
-        ),
-    ]
-)
-
-ns_database = pd.read_csv(ns_database_fn, sep=f'\t')
-ijk_positions = (
-    np.round(nib.affines.apply_affine(
-        np.linalg.inv(mni_t1_4mm.affine),
-        ns_database[['x', 'y', 'z']].values.astype(float)
-    )).astype(int)
-)
-ns_database['i'] = ijk_positions[:, 0]
-ns_database['j'] = ijk_positions[:, 1]
-ns_database['k'] = ijk_positions[:, 2]
-
-ns_features = pd.read_csv(ns_features_fn, sep=f'\t')
-ns_docs = ns_features[['pmid']].drop_duplicates()
-ns_terms = (
-    pd.melt(
-            ns_features,
-            var_name='term', id_vars='pmid', value_name='TfIdf'
-       )
-    .query('TfIdf > 1e-3')[['pmid', 'term']]
-)
-
-
-###############################################################################
 # Load the NeuroFMA ontology
 
 neuroFMA = datasets.utils._fetch_files(
@@ -141,17 +100,13 @@ nl.load_ontology(neuroFMA)
 ###############################################################################
 # Adding new aggregation function to build a region overlay
 
-np.ones(voxels.shape)
-
-
-""
 @nl.add_symbol
 def agg_create_region_overlay(
     i: Iterable, j: Iterable, k: Iterable
 ) -> fe.ExplicitVBR:
     voxels = np.c_[i, j, k]
     return fe.ExplicitVBROverlay(
-        voxels, mni_t1_4mm.affine, ,
+        voxels, mni_t1_4mm.affine, np.ones(voxels.shape[0]),
         image_dim=mni_t1_4mm.shape
     )
 
@@ -165,11 +120,6 @@ regional_part = nl.new_symbol(name='http://sig.biostr.washington.edu/fma3.0#regi
 ###############################################################################
 # and load all the information within Neurolang
 
-#activations = nl.add_tuple_set(ns_database.values, name='activations')
-##terms = nl.add_tuple_set(ns_terms.values, name='terms')
-#docs = nl.add_uniform_probabilistic_choice_over_set(
-#        ns_docs.values, name='docs'
-#)
 destrieux_image = nl.add_tuple_set(
     destrieux_table.values,
     name='destrieux_image'
@@ -206,7 +156,7 @@ with nl.scope as e:
         e.destrieux_image[e.i, e.j, e.k, e.id_destrieux]
     )
     
-    e.region_voxels[agg_create_region[e.i, e.j, e.k]] = (
+    e.region_voxels[agg_create_region_overlay[e.i, e.j, e.k]] = (
         e.fma_related_region[e.fma_subregions, 'Temporal lobe'] &
         e.relation_destrieux_fma[e.destrieux_name, e.fma_subregions] &
         e.destrieux_ijk[e.destrieux_name, e.i, e.j, e.k]
@@ -222,8 +172,6 @@ with nl.scope as e:
 # Using the ontology, we limit the results of the analysis only to regions 
 # within the Temporal Lobe
 
-###############################################################################
-# Per voxel associations to "Auditory" top 5%
 result_image = (
     img_query
     .fetch_one()
@@ -231,9 +179,8 @@ result_image = (
     .spatial_image()
 )
 img = result_image.get_fdata()
-plot = plotting.plot_stat_map(
+plot = plotting.plot_roi(
     result_image,
-    #threshold=np.percentile(img[img > 0], 95)
 )
 plotting.show()
 
