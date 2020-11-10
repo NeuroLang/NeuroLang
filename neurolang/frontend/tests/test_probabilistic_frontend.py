@@ -628,3 +628,17 @@ def test_solve_marg_query():
         ],
     )
     assert_almost_equal(result, expected)
+
+
+def test_query_based_pfact():
+    nl = ProbabilisticFrontend()
+    nl.add_tuple_set(
+        [
+            (2, 0.2),
+            (7, 0.8),
+            (4, 0.4),
+        ],
+        name="A",
+    )
+    with nl.environment as e:
+        (e.B @ (e.p / 2))[e.x, e.p] = e.A[e.x, e.p]

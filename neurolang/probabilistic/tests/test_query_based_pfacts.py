@@ -1,24 +1,98 @@
 import pytest
 
-from ...expressions import Constant, Symbol
+from ...datalog.expression_processing import EQ
+from ...exceptions import ForbiddenDisjunctionError
+from ...expression_walker import IdentityWalker
+from ...expressions import MATMUL, Constant, FunctionApplication, Symbol
 from ...logic import Conjunction, Implication, Union
-from ..cplogic.program import CPLogicProgram
-from ..query_resolution import (
-    QueryBasedProbFactToDetRule,
-    compute_probabilistic_solution,
+from ..cplogic.program import (
+    CPLogicProgram,
+    TranslateQueryBasedProbabilisticFactMixin,
 )
+from ..expressions import ProbabilisticPredicate
+from ..query_resolution import QueryBasedProbFactToDetRule
+
+P = Symbol("P")
+Q = Symbol("Q")
+x = Symbol("x")
+y = Symbol("y")
+p = Symbol("p")
 
 
-class CPLogicWithQueryBasedPfactProgram(
+class TestQueryBasedProbFactToDetRule(
+    QueryBasedProbFactToDetRule,
+    IdentityWalker,
+):
+    pass
+
+
+def test_query_based_pfact():
+    """
+    Translate rule
+        P(x) : (p / 2) :- Q(x)
+    to the two rules
+        _f1_(_f2_, x) :- Q(x), _f2_ = (p / 2)
+        P(x) : _f2_ :- _f1_(_f2_, x)
+
+    """
+    pfact = Implication(
+        ProbabilisticPredicate(p / Constant(2), P(x)),
+        Q(x, p),
+    )
+    converter = TestQueryBasedProbFactToDetRule()
+    result = converter.walk(pfact)
+    assert isinstance(result, Union)
+    det_rule = next(
+        formula
+        for formula in result.formulas
+        if (
+            isinstance(formula.consequent, FunctionApplication)
+            # check _f1_
+            and formula.consequent.functor.is_fresh
+            # check _f2_ first arg in consequent
+            and formula.consequent.args[0].is_fresh
+            and formula.consequent.args[1:] == (x,)
+        )
+    )
+    assert any(
+        isinstance(formula.consequent, ProbabilisticPredicate)
+        and formula.consequent.probability == det_rule.consequent.args[0]
+        and formula.antecedent == det_rule.consequent
+        and formula.consequent.body == P(x)
+        for formula in result.formulas
+    )
+
+
+class TestQueryBasedProbFactToDetRuleProgram(
     QueryBasedProbFactToDetRule,
     CPLogicProgram,
 ):
     pass
 
 
-def test_query_based_pfact():
-    pass
-
-
 def test_prevent_combination_of_query_based_and_set_based():
+    pfact = Implication(
+        ProbabilisticPredicate(p / Constant(2), P(x)),
+        Q(x, p),
+    )
+    cpl = TestQueryBasedProbFactToDetRuleProgram()
+    cpl.add_probabilistic_facts_from_tuples(P, [(0.2, "a")])
+    with pytest.raises(ForbiddenDisjunctionError):
+        cpl.walk(pfact)
+
+
+class TestTranslateQueryBasedProbabilisticFact(
+    TranslateQueryBasedProbabilisticFactMixin,
+    IdentityWalker,
+):
     pass
+
+
+def test_translation_sugar_syntax():
+    pfact = Implication(MATMUL(P, (p / Constant(2)))(x), Q(x, p))
+    translator = TestTranslateQueryBasedProbabilisticFact()
+    result = translator.walk(pfact)
+    expected = Implication(
+        ProbabilisticPredicate(p / Constant(2), P(x)), Q(x, p)
+    )
+    assert result == expected

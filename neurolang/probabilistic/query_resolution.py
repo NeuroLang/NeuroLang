@@ -5,7 +5,7 @@ from ..datalog.expression_processing import EQ, conjunct_formulas
 from ..datalog.instance import MapInstance
 from ..expression_pattern_matching import add_match
 from ..expression_walker import PatternWalker
-from ..expressions import Constant, Symbol
+from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import TRUE, Implication, Union
 from .cplogic.program import CPLogicProgram
 from .expression_processing import (
@@ -37,16 +37,22 @@ class QueryBasedProbFactToDetRule(PatternWalker):
 
     @add_match(
         Implication(ProbabilisticPredicate, ...),
-        lambda implication: implication.antecedent != TRUE,
+        lambda implication: implication.antecedent != TRUE
+        and not (
+            isinstance(implication.antecedent, FunctionApplication)
+            and implication.antecedent.functor.is_fresh
+        ),
     )
     def query_based_probabilistic_fact(self, impl):
         prob_symb = Symbol.fresh()
         det_pred_symb = Symbol.fresh()
         eq_formula = EQ(prob_symb, impl.consequent.probability)
         det_antecedent = conjunct_formulas(impl.antecedent, eq_formula)
-        det_consequent = det_pred_symb(prob_symb, *impl.consequent.args)
+        det_consequent = det_pred_symb(prob_symb, *impl.consequent.body.args)
         det_rule = Implication(det_consequent, det_antecedent)
-        prob_consequent = ProbabilisticPredicate(impl.consequent, prob_symb)
+        prob_consequent = ProbabilisticPredicate(
+            prob_symb, impl.consequent.body
+        )
         prob_rule = Implication(prob_consequent, det_consequent)
         return self.walk(Union((det_rule, prob_rule)))
 

@@ -6,7 +6,7 @@ from ...datalog.basic_representation import UnionOfConjunctiveQueries
 from ...exceptions import ForbiddenDisjunctionError, ForbiddenExpressionError
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
-from ...expressions import Constant, FunctionApplication, Symbol
+from ...expressions import MATMUL, Constant, FunctionApplication, Symbol
 from ...logic import TRUE, Implication, Union
 from ...type_system import get_generic_type
 from ..exceptions import (
@@ -86,6 +86,34 @@ class TranslateProbabilisticQueryMixin(PatternWalker):
             csqt_args += (arg,)
         consequent = implication.consequent.functor(*csqt_args)
         return self.walk(Implication(consequent, implication.antecedent))
+
+
+class TranslateQueryBasedProbabilisticFactMixin(PatternWalker):
+    """
+    Translate an expression of the form
+
+        (P @ y)(x) :- Q(x)
+
+    to its equivalent query-based probabilistic fact
+
+        P(x) : y :- Q(x)
+
+    This is useful when the rule was defined at the frontend level using the
+    sugar syntax `(P @ y)[x] = Q[x]`.
+
+    """
+
+    @add_match(
+        Implication(
+            FunctionApplication(MATMUL(Symbol, ...), ...),
+            ...,
+        )
+    )
+    def query_based_probfact_wannabe(self, impl):
+        pred_symb, probability = impl.consequent.functor.args
+        body = pred_symb(*impl.consequent.args)
+        new_consequent = ProbabilisticPredicate(probability, body)
+        return Implication(new_consequent, impl.antecedent)
 
 
 class CPLogicMixin(PatternWalker):
@@ -283,6 +311,13 @@ class CPLogicMixin(PatternWalker):
         )
         if pred_symb not in self.symbol_table:
             self.symbol_table[pred_symb] = Union(tuple())
+        elif isinstance(
+            self.symbol_table[pred_symb], Constant[typing.AbstractSet]
+        ):
+            raise ForbiddenDisjunctionError(
+                "Probabilistic facts cannot be defined both from sets and "
+                "from rules"
+            )
         self.symbol_table[pred_symb] = add_to_union(
             self.symbol_table[pred_symb], [expression]
         )
