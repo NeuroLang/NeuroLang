@@ -104,7 +104,7 @@ def _solve_for_probabilistic_rule(
 
 def compute_probabilistic_solution(
     det_edb,
-    pfact_edb,
+    pfact_db,
     pchoice_edb,
     prob_idb,
     succ_prob_solver,
@@ -112,7 +112,7 @@ def compute_probabilistic_solution(
 ):
     solution = MapInstance()
     cpl = _build_probabilistic_program(
-        det_edb, pfact_edb, pchoice_edb, prob_idb
+        det_edb, pfact_db, pchoice_edb, prob_idb
     )
     for rule in prob_idb.formulas:
         if is_within_language_prob_query(rule):
@@ -129,36 +129,8 @@ def compute_probabilistic_solution(
     return solution
 
 
-def _build_probabilistic_program(det_edb, pfact_edb, pchoice_edb, prob_idb):
-    cpl = CPLogicProgram()
-    db_to_add_fun = [
-        (det_edb, cpl.add_extensional_predicate_from_tuples),
-        (pfact_edb, cpl.add_probabilistic_facts_from_tuples),
-        (pchoice_edb, cpl.add_probabilistic_choice_from_tuples),
-    ]
-    for database, add_fun in db_to_add_fun:
-        for pred_symb, expr in database.items():
-            # handle set-based probabilistic tables
-            if isinstance(expr, Constant[typing.AbstractSet]):
-                ra_set = expr
-            # handle query-based probabilistic facts
-            elif isinstance(expr, Union):
-                if len(expr.formulas) > 1:
-                    raise ForbiddenDisjunctionError(
-                        "Cannot define probabilistic facts through multiple "
-                        "queries"
-                    )
-                impl = expr.formulas[0]
-                # we know the rule is of the form
-                # P(x_1, ..., x_n) : y :- Q(y, x_1, ..., x_n)
-                # where Q is an extensional relation symbol
-                # so the values can be retrieved from the EDB
-                ra_set = det_edb[impl.antecedent.functor]
-            add_fun(pred_symb, ra_set.value.unwrap())
-    # remove query-based probabilistic facts that have already been processed
-    # and transformed into probabilistic tables based on the deterministic
-    # solution
-    prob_idb = Union(
+def _discard_query_based_probfacts(prob_idb):
+    return Union(
         tuple(
             formula
             for formula in prob_idb.formulas
@@ -168,5 +140,32 @@ def _build_probabilistic_program(det_edb, pfact_edb, pchoice_edb, prob_idb):
             )
         )
     )
+
+
+def _build_probabilistic_program(det_edb, pfact_db, pchoice_edb, prob_idb):
+    cpl = CPLogicProgram()
+    db_to_add_fun = [
+        (det_edb, cpl.add_extensional_predicate_from_tuples),
+        (pfact_db, cpl.add_probabilistic_facts_from_tuples),
+        (pchoice_edb, cpl.add_probabilistic_choice_from_tuples),
+    ]
+    for database, add_fun in db_to_add_fun:
+        for pred_symb, expr in database.items():
+            # handle set-based probabilistic tables
+            if isinstance(expr, Constant[typing.AbstractSet]):
+                ra_set = expr
+            # handle query-based probabilistic facts
+            elif isinstance(expr, Union):
+                impl = expr.formulas[0]
+                # we know the rule is of the form
+                # P(x_1, ..., x_n) : y :- Q(y, x_1, ..., x_n)
+                # where Q is an extensional relation symbol
+                # so the values can be retrieved from the EDB
+                ra_set = det_edb[impl.antecedent.functor]
+            add_fun(pred_symb, ra_set.value.unwrap())
+    # remove query-based probabilistic facts that have already been processed
+    # and transformed into probabilistic tables based on the deterministic
+    # solution of their probability and antecedent
+    prob_idb = _discard_query_based_probfacts(prob_idb)
     cpl.walk(prob_idb)
     return cpl

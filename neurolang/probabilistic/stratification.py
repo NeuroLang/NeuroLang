@@ -127,11 +127,18 @@ def _get_program_deterministic_symbols(program):
     return det_symbs
 
 
-def _get_rule_idb_type(rule, grpd_symbs, wlq_symbs):
-    pred_symb = rule.consequent.functor
+def _get_idb_type_already_classified(pred_symb, grpd_symbs):
     for typ, symbs in grpd_symbs.items():
         if pred_symb in symbs:
             return typ
+    return None
+
+
+def _get_rule_idb_type(rule, grpd_symbs, wlq_symbs):
+    pred_symb = rule.consequent.functor
+    idb_type = _get_idb_type_already_classified(pred_symb, grpd_symbs)
+    if idb_type is not None:
+        return idb_type
     dep_symbs = set(
         pred.functor
         for pred in extract_logic_atoms(rule.antecedent)
