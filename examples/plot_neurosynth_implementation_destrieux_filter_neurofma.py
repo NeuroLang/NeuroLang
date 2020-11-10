@@ -230,54 +230,24 @@ with nl.scope as e:
         e.docs[e.d]
     )
 
-    e.region_term_prob[e.region, e.PROB[e.region]] = (
-        e.destrieux_labels(e.region, e.region_label)
-        & e.destrieux_image(e.i, e.j, e.k, e.region_label)
-        & e.activations[
-            e.d, ..., ..., ..., ..., 'MNI', ..., ..., ..., ...,
-            ..., ..., ..., e.i, e.j, e.k
-        ]
-        & e.terms[e.d, 'auditory']
-        & e.docs[e.d]
-    )
-
     e.vox_cond_query[e.i, e.j, e.k, e.p] = (
         e.vox_term_prob(e.i, e.j, e.k, e.num_prob)
         & e.term_prob('auditory', e.denom_prob)
         & (e.p == (e.num_prob / e.denom_prob))
     )
 
-    e.vox_cond_query_auditory[e.i, e.j, e.k, e.p] = (
-        e.vox_cond_query[e.i, e.j, e.k, e.p]
-    )
-
-    e.region_cond_query[e.name, e.p] = (
-        e.region_term_prob[e.name, e.num_prob]
-        & e.term_prob('auditory', e.denom_prob)
-        & (e.p == (e.num_prob / e.denom_prob))
-
-    )
-
     e.destrieux_region_max_probability[e.region, agg_max(e.p)] = (
-        e.vox_cond_query_auditory(e.i, e.j, e.k, e.p)
+        e.vox_cond_query(e.i, e.j, e.k, e.p)
         & e.destrieux_image(e.i, e.j, e.k, e.region_label)
         & e.destrieux_labels(e.region, e.region_label)
     )
 
-    e.destrieux_region_image_probability[agg_create_region_overlay(e.i, e.j, e.k, e.p)] = (
-        e.region_cond_query[e.name, e.p] &
-        e.destrieux_labels[e.name, e.label] &
-        e.destrieux_image[e.i, e.j, e.k, e.label]
-    )
-
     e.voxel_activation_probability[agg_create_region_overlay[e.i, e.j, e.k, e.p]] = (
-        e.vox_cond_query_auditory(e.i, e.j, e.k, e.p)
+        e.vox_cond_query(e.i, e.j, e.k, e.p)
     )
 
     res = nl.solve_all()
     img_query = res['voxel_activation_probability']
-    dest_query = res['destrieux_region_image_probability']
-    drcp = res['region_cond_query']
     drmp = res['destrieux_region_max_probability']
     
 
@@ -299,16 +269,6 @@ with nl.scope as e:
 
 
 ###############################################################################
-# Conditional probabilityper region that the region has an activation
-# when an article has the word "Auditory"
-(
-    drcp
-    .as_pandas_dataframe()
-    .sort_values(drcp.columns[-1], ascending=False)
-    .head()
-)
-
-###############################################################################
 # Per voxel associations to "Auditory" top 5%
 result_image = (
     img_query
@@ -322,19 +282,3 @@ plot = plotting.plot_stat_map(
     # threshold=np.percentile(img[img > 0], 95)
 )
 plotting.show()
-
-###############################################################################
-# Per region associations to "Auditory" top 15%
-
-
-img = dest_query.fetch_one()[0].spatial_image().get_fdata()
-plot = plotting.plot_stat_map(
-    dest_query.fetch_one()[0].spatial_image(),
-    display_mode='y',
-    threshold=np.percentile(img[img > 0], 85),
-    cmap='YlOrRd'
-)
-plotting.show()
-
-""
-
