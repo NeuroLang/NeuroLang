@@ -5,7 +5,10 @@ import numpy as np
 import pytest
 
 from ...exceptions import UnsupportedProgramError, UnsupportedQueryError
-from ...probabilistic.exceptions import UnsupportedProbabilisticQueryError
+from ...probabilistic.exceptions import (
+    ForbiddenConditionalQueryNonConjunctive,
+    UnsupportedProbabilisticQueryError
+)
 from ...utils.relational_algebra_set import RelationalAlgebraFrozenSet
 from ..probabilistic_frontend import ProbabilisticFrontend
 
@@ -663,3 +666,40 @@ def test_solve_marg_query():
         ],
     )
     assert_almost_equal(result, expected)
+
+
+def test_solve_marg_query_disjunction():
+    nl = ProbabilisticFrontend()
+    nl.add_tuple_set(
+        [
+            ("alice",),
+            ("bob",),
+        ],
+        name="person",
+    )
+    nl.add_tuple_set(
+        [("alice", "paris"), ("bob", "marseille")],
+        name="lives_in",
+    )
+    nl.add_probabilistic_choice_from_tuples(
+        [
+            (0.2, "alice", "running"),
+            (0.8, "bob", "climbing"),
+        ],
+        name="practice",
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.8, "bob"),
+            (0.9, "alice"),
+        ],
+        name="does_not_smoke",
+    )
+    with pytest.raises(ForbiddenConditionalQueryNonConjunctive):
+        with nl.environment as e:
+            e.query[e.p, e.PROB[e.p, e.city, e.sport], e.city, e.sport] = (
+                e.person[e.p] & (
+                    e.lives_in[e.p, e.city] |
+                    e.does_not_smoke[e.p]
+                )
+            ) // e.practice[e.p, e.sport]
