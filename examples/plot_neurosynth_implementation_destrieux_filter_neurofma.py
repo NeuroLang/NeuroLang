@@ -65,7 +65,7 @@ for label_number, name in destrieux_dataset['labels']:
 # Load the NeuroSynth database
 
 ns_database_fn, ns_features_fn = datasets.utils._fetch_files(
-    datasets.utils._get_dataset_dir('neurosynth'),
+    'neurolang',
     [
         (
             'database.txt',
@@ -106,7 +106,7 @@ ns_terms = (
 # Load the NeuroFMA ontology
 
 neuroFMA = datasets.utils._fetch_files(
-    datasets.utils._get_dataset_dir('neuroFMA'),
+    'neurolang',
     [
         (
             'neurofma.xml',
@@ -119,7 +119,7 @@ neuroFMA = datasets.utils._fetch_files(
 
 
 fma_destrieux_path = datasets.utils._fetch_files(
-    datasets.utils._get_dataset_dir('neuroFMA'),
+    'neurolang',
     [
         (
             'fma_destrieux.csv',
