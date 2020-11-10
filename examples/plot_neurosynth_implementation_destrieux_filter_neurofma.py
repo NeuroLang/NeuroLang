@@ -1,27 +1,27 @@
 # -*- coding: utf-8 -*-
 r'''
-NeuroLang Example based Implementing a NeuroSynth Query
-====================================================
+Loading and Filtering the results of the Destrieux et al. Atlas using the FMA ontology
+======================================================================================
+
+Uploading the Destrieux regions and the FMA ontology into NeuroLang and
+executing a simple query combining both datasets
 
 '''
 
 import logging
 import sys
-from typing import Iterable
 import warnings
+
+import numpy as np
+import pandas as pd
+import nibabel as nib
 
 from neurolang import frontend as fe
 from neurolang.frontend import probabilistic_frontend as pfe
-import nibabel as nib
+from typing import Iterable
 from nilearn import datasets, image, plotting
-import numpy as np
-import pandas as pd
+from rdflib import RDFS
 
-for module_name in ('frontend', 'probabilistic'):
-    logger = logging.getLogger(f'neurolang.{module_name}')
-    logger.setLevel(logging.INFO)
-    logger.addHandler(logging.StreamHandler(sys.stderr))
-warnings.filterwarnings("ignore")
 
 
 """
@@ -140,7 +140,6 @@ nl.load_ontology(neuroFMA)
 
 ###############################################################################
 # Adding new aggregation function to build a region overlay
-from rdflib import RDFS
 
 @nl.add_symbol
 def agg_create_region_overlay(
@@ -157,12 +156,18 @@ def agg_create_region_overlay(
 def agg_max(i: Iterable) -> float:
     return np.max(i)
 
+###############################################################################
+# Create the ontology symbols that we will use in our query
 
 label = nl.new_symbol(name=str(RDFS.label))
 subclass_of = nl.new_symbol(name=str(RDFS.subClassOf))
 regional_part = nl.new_symbol(name='http://sig.biostr.washington.edu/fma3.0#regional_part_of')
 
-""
+
+###############################################################################
+# Upload all information within Neurolang
+
+
 activations = nl.add_tuple_set(ns_database.values, name='activations')
 terms = nl.add_tuple_set(ns_terms.values, name='terms')
 docs = nl.add_uniform_probabilistic_choice_over_set(
