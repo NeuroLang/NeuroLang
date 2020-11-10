@@ -37,21 +37,6 @@ class QueryBasedProbFactToDetRule(PatternWalker):
     """
 
     @add_match(
-        Union,
-        lambda union: any(
-            isinstance(formula, Union) for formula in union.formulas
-        ),
-    )
-    def flatten_union(self, union):
-        formulas = list()
-        for formula in union.formulas:
-            if isinstance(formula, Union):
-                formulas += list(formula.formulas)
-            else:
-                formulas.append(formula)
-        return Union(tuple(formulas))
-
-    @add_match(
         Implication(ProbabilisticPredicate, ...),
         lambda implication: implication.antecedent != TRUE
         and not (
@@ -70,7 +55,9 @@ class QueryBasedProbFactToDetRule(PatternWalker):
             prob_symb, impl.consequent.body
         )
         prob_rule = Implication(prob_consequent, det_consequent)
-        return self.walk(Union((det_rule, prob_rule)))
+        self.walk(det_rule)
+        self.walk(prob_rule)
+        return impl
 
 
 def _solve_within_language_prob_query(
