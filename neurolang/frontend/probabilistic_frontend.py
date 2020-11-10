@@ -20,8 +20,6 @@ from typing import (
 )
 from uuid import uuid1
 
-from neurolang.datalog.negation import DatalogProgramNegationMixin
-
 from .. import expressions as ir
 from ..datalog.aggregation import (
     Chase,
@@ -29,6 +27,7 @@ from ..datalog.aggregation import (
     TranslateToLogicWithAggregation,
 )
 from ..datalog.constraints_representation import DatalogConstraintsProgram
+from ..datalog.negation import DatalogProgramNegationMixin
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
 from ..exceptions import UnsupportedQueryError
@@ -60,6 +59,7 @@ from ..relational_algebra import (
     RelationalAlgebraStringExpression,
 )
 from . import query_resolution_expressions as fe
+from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
 from .query_resolution_datalog import QueryBuilderDatalog
 
 
@@ -68,6 +68,7 @@ class RegionFrontendCPLogicSolver(
     TranslateQueryBasedProbabilisticFactMixin,
     QueryBasedProbFactToDetRule,
     TranslateToLogicWithAggregation,
+    ProbFol2DatalogMixin,
     RegionSolver,
     CPLogicMixin,
     DatalogWithAggregationMixin,
