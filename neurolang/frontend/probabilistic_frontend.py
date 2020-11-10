@@ -26,6 +26,7 @@ from ..datalog.aggregation import (
     DatalogWithAggregationMixin,
     TranslateToLogicWithAggregation,
 )
+from ..datalog.basic_representation import DatalogProgram
 from ..datalog.constraints_representation import DatalogConstraintsProgram
 from ..datalog.negation import DatalogProgramNegationMixin
 from ..datalog.ontologies_parser import OntologyParser
@@ -91,6 +92,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         chase_class: Type[Chase] = Chase,
         probabilistic_solver: Callable = lifted_solve_succ_query,
         probabilistic_marg_solver: Callable = lifted_solve_marg_query,
+        program_ir: Optional[DatalogProgram] = None,
     ) -> "ProbabilisticFrontend":
         """
         Query builder with probabilistic capabilities
@@ -108,9 +110,9 @@ class NeurolangPDL(QueryBuilderDatalog):
         ProbabilisticFrontend
             see description
         """
-        super().__init__(
-            RegionFrontendCPLogicSolver(), chase_class=chase_class
-        )
+        if program_ir is None:
+            program_ir = RegionFrontendCPLogicSolver()
+        super().__init__(program_ir=program_ir, chase_class=chase_class)
         self.probabilistic_solver = probabilistic_solver
         self.probabilistic_marg_solver = lifted_solve_marg_query
         self.ontology_loaded = False
