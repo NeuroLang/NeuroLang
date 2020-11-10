@@ -9,6 +9,7 @@ executing a simple query combining both datasets
 
 '''
 
+""
 import logging
 import sys
 import warnings
@@ -23,10 +24,8 @@ from typing import Iterable
 from nilearn import datasets, image, plotting
 from rdflib import RDFS
 
-"""
-Data preparation
-----------------
-"""
+# Data preparation
+# ------------------------
 
 ###############################################################################
 # Load Destrieux's atlas
