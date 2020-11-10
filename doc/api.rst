@@ -10,9 +10,10 @@ End-User Frontend
 
 .. autosummary::
    :toctree: gen_api
+   :nosignatures:
 
-    frontend.NeurolangDL
-    frontend.NeurolangPDL
+    NeurolangDL
+    NeurolangPDL
 
 Intermediate Representation Infrastructure
 ------------------------------------------
@@ -40,7 +41,7 @@ Intermediate Language Representations
 
 
 Indices and tables
-==================
+------------------
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
