@@ -27,12 +27,12 @@ from ..datalog.expression_processing import enforce_conjunction, flatten_query
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import ExpressionWalker, add_match
 from ..expressions import Constant, Symbol
-from ..logic import Conjunction, Implication, FALSE
+from ..logic import FALSE, Conjunction, Implication
 from ..logic.expression_processing import (
-    extract_logic_predicates,
+    extract_logic_atoms,
     extract_logic_free_variables,
+    extract_logic_predicates,
 )
-from ..utils.orderedset import OrderedSet
 from ..relational_algebra import (
     ColumnInt,
     ColumnStr,
@@ -45,14 +45,12 @@ from ..relational_algebra import (
     RelationalAlgebraPushInSelections,
     RelationalAlgebraStringExpression,
     str2columnstr_constant,
-    NamedRelationalAlgebraFrozenSet,
 )
 from ..relational_algebra_provenance import (
     NaturalJoinInverse,
     ProvenanceAlgebraSet,
     RelationalAlgebraProvenanceCountingSolver,
     RelationalAlgebraProvenanceExpressionSemringSolver,
-    RelationalAlgebraProvenanceCountingSolver,
 )
 from ..utils import log_performance
 from ..utils.orderedset import OrderedSet
@@ -101,7 +99,7 @@ def is_hierarchical_without_self_joins(query):
 
 def extract_atom_sets_and_detect_self_joins(query):
     has_self_joins = False
-    predicates = extract_logic_predicates(query)
+    predicates = extract_logic_atoms(query)
     seen_predicate_functor = set()
     atom_set = defaultdict(set)
     for predicate in predicates:
@@ -297,8 +295,10 @@ def solve_succ_query(query, cpl_program):
         )
 
     with log_performance(LOG, "Translation and lifted optimisation"):
-        flat_query_body = lift_optimization_for_choice_predicates(
-            flat_query_body, cpl_program
+        flat_query_body = enforce_conjunction(
+            lift_optimization_for_choice_predicates(
+                flat_query_body, cpl_program
+            )
         )
         flat_query = Implication(query.consequent, flat_query_body)
         symbol_table = generate_probabilistic_symbol_table_for_query(
@@ -317,7 +317,8 @@ def solve_succ_query(query, cpl_program):
                     shattered_query.antecedent.formulas,
                     flat_query.antecedent.formulas,
                 )
-                if flat_conjunct.functor in prob_pred_symbs
+                if extract_logic_atoms(flat_conjunct)[0].functor
+                in prob_pred_symbs
             )
         )
         if not is_hierarchical_without_self_joins(

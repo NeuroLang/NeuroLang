@@ -10,20 +10,10 @@ End-User Frontend
 
 .. autosummary::
    :toctree: gen_api
+   :nosignatures:
 
     NeurolangDL
     NeurolangPDL
-
-
-Volumetric Region and Overlays
-------------------------------
-
-.. autosummary::
-
-
-   :toctree: gen_api
-    ExplicitVBR
-    ExplicitVBROverlay
 
 Intermediate Representation Infrastructure
 ------------------------------------------
@@ -51,7 +41,7 @@ Intermediate Language Representations
 
 
 Indices and tables
-==================
+------------------
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`

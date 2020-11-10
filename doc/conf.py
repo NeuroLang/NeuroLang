@@ -28,7 +28,7 @@ from pkg_resources import get_distribution
 
 release = get_distribution(project).version
 # for example take major/minor
-source_version = release.split('+')[0]
+source_version = ".".join(release.split(".")[:2])
 
 currentdir = os.path.abspath(os.path.dirname(__file__))
 sys.path.append(os.path.join(currentdir, "tools"))
@@ -164,9 +164,8 @@ html_theme_options = {
     "navbar_sidebarrel": False,
     "bootstrap_version": "3",
     "navbar_links": [
-        ("Tutorial", "tutorial"),
-        ("Gallery", "auto_examples/index"),
-        ('API', 'api')
+        ("Tutorial", "tutorial"), ("Gallery", "auto_examples/index"),
+        ("Authors", "authors"),
     ],
 }
 # Theme options are theme-specific and customize the look and feel of a theme

@@ -8,15 +8,13 @@ from ..utils import OrderedSet
 from . import (
     FALSE,
     TRUE,
-    BinaryLogicOperator,
     Conjunction,
     Disjunction,
     Implication,
     LogicOperator,
-    NaryLogicOperator,
     Negation,
     Quantifier,
-    UnaryLogicOperator,
+    Union,
 )
 
 
@@ -93,7 +91,7 @@ class LogicSolver(PatternWalker):
             )
 
         solved_consequent = self.walk(expression.consequent)
-        if (solved_consequent is not expression.consequent):
+        if solved_consequent is not expression.consequent:
             return self.walk(Implication(solved_consequent, solved_antecedent))
 
         return expression
@@ -139,20 +137,19 @@ class TranslateToLogic(PatternWalker):
     @add_match(
         LogicOperator,
         lambda expression: any(
-            isinstance(arg, FunctionApplication) and
-            is_logic_function_application(arg)
+            isinstance(arg, FunctionApplication)
+            and is_logic_function_application(arg)
             for arg in expression.unapply()
-        )
+        ),
     )
     def translate_logic_operator(self, expression):
         args = expression.unapply()
         new_args = tuple()
         changed = False
         for arg in args:
-            if (
-                isinstance(arg, FunctionApplication) and
-                is_logic_function_application(arg)
-            ):
+            if isinstance(
+                arg, FunctionApplication
+            ) and is_logic_function_application(arg):
                 new_arg = self.walk(arg)
             else:
                 new_arg = arg
@@ -168,23 +165,35 @@ class TranslateToLogic(PatternWalker):
 
 
 class WalkLogicProgramAggregatingSets(PatternWalker):
-    @add_match(NaryLogicOperator)
-    def n_ary(self, expression):
+    @add_match(Conjunction)
+    def conjunction(self, expression):
         fvs = OrderedSet()
         for formula in expression.formulas:
             fvs |= self.walk(formula)
         return fvs
 
-    @add_match(BinaryLogicOperator)
-    def binary(self, expression):
-        fvs = OrderedSet()
-        for formula in expression.unapply():
-            fvs |= self.walk(formula)
-        return fvs
+    @add_match(Union)
+    def union(self, expression):
+        return self.conjunction(expression)
 
-    @add_match(UnaryLogicOperator)
-    def unary(self, expression):
+    @add_match(Disjunction)
+    def disjunction(self, expression):
+        return self.conjunction(expression)
+
+    @add_match(Negation)
+    def negation(self, expression):
         return self.walk(expression.formula)
+
+    @add_match(Quantifier)
+    def quantifier(self, expression):
+        return self.walk(expression.body)
+
+    @add_match(LogicOperator)
+    def logic_operator(self, expression):
+        fvs = OrderedSet()
+        for arg in expression.unapply():
+            fvs |= self.walk(arg)
+        return fvs
 
 
 class ExtractFreeVariablesWalker(WalkLogicProgramAggregatingSets):
@@ -201,7 +210,7 @@ class ExtractFreeVariablesWalker(WalkLogicProgramAggregatingSets):
             elif isinstance(a, Constant):
                 pass
             else:
-                raise NeuroLangException('Not a Datalog function application')
+                raise NeuroLangException("Not a Datalog function application")
         return variables
 
     @add_match(Quantifier)
@@ -210,14 +219,13 @@ class ExtractFreeVariablesWalker(WalkLogicProgramAggregatingSets):
 
     @add_match(Implication)
     def extract_variables_s(self, expression):
-        return (
-            self.walk(expression.antecedent) -
-            self.walk(expression.consequent)
+        return self.walk(expression.antecedent) - self.walk(
+            expression.consequent
         )
 
     @add_match(Symbol)
     def extract_variables_symbol(self, expression):
-        return OrderedSet((expression, ))
+        return OrderedSet((expression,))
 
     @add_match(Constant)
     def _(self, expression):
@@ -261,7 +269,9 @@ class ExtractLogicPredicates(WalkLogicProgramAggregatingSets):
 
 def extract_logic_predicates(expression):
     """Extract predicates from expression
-    knowing that it's in logic format
+    knowing that it's in logic format, if
+    predicates are negated then (not predicate)
+    will be the result.ormat
 
     Parameters
     ----------
@@ -277,4 +287,39 @@ def extract_logic_predicates(expression):
 
     """
     edp = ExtractLogicPredicates()
+    return edp.walk(expression)
+
+
+class ExtractLogicAtoms(WalkLogicProgramAggregatingSets):
+    @add_match(Symbol)
+    def symbol(self, expression):
+        return OrderedSet()
+
+    @add_match(Constant)
+    def constant(self, expression):
+        return OrderedSet()
+
+    @add_match(FunctionApplication)
+    def extract_predicates_fa(self, expression):
+        return OrderedSet([expression])
+
+
+def extract_logic_atoms(expression):
+    """Extract atoms from expression
+    knowing that it's in logic format
+
+    Parameters
+    ----------
+    expression : Expression
+        expression to extract predicates from
+
+
+    Returns
+    -------
+    OrderedSet
+        set of all atoms in the expression in lexicographical
+        order.
+
+    """
+    edp = ExtractLogicAtoms()
     return edp.walk(expression)

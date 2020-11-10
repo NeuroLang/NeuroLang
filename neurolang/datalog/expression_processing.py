@@ -38,8 +38,8 @@ from ..logic import (
     Negation,
     Quantifier,
     Union,
+    expression_processing as elp,
 )
-from ..logic import expression_processing as elp
 from ..logic.transformations import CollapseConjunctions
 from ..logic.unification import most_general_unifier
 from .expressions import TranslateToLogic
@@ -149,7 +149,7 @@ def all_body_preds_in_set(implication, predicate_set):
 
     """
     preds = (
-        e.functor for e in extract_logic_predicates(implication.antecedent)
+        e.functor for e in extract_logic_atoms(implication.antecedent)
     )
     predicate_set = predicate_set | {implication.consequent.functor}
     return all(not isinstance(e, Symbol) or e in predicate_set for e in preds)
@@ -191,6 +191,26 @@ def extract_logic_predicates(expression):
 
     """
     return elp.extract_logic_predicates(expression)
+
+
+def extract_logic_atoms(expression):
+    """Extract atoms from expression
+    knowing that it's in Datalog format
+
+    Parameters
+    ----------
+    expression : Expression
+        expression to extract atoms from
+
+
+    Returns
+    -------
+    OrderedSet
+        set of all predicates in the atoms in lexicographical
+        order.
+
+    """
+    return elp.extract_logic_atoms(expression)
 
 
 def stratify(union, datalog_instance):
@@ -377,7 +397,7 @@ def dependency_matrix(datalog, rules=None):
         rule = to_reach.pop()
         head_functor = rule.consequent.functor
         ix_head = idb_symbols.index(head_functor)
-        for predicate in extract_logic_predicates(rule.antecedent):
+        for predicate in extract_logic_atoms(rule.antecedent):
             functor = predicate.functor
             if functor in edb or functor in constraint_symbols:
                 continue
@@ -440,7 +460,7 @@ def is_ground_predicate(predicate):
 def enforce_conjunction(expression):
     if isinstance(expression, Conjunction):
         return expression
-    elif isinstance(expression, FunctionApplication):
+    elif isinstance(expression, (FunctionApplication, Negation)):
         return Conjunction((expression,))
     raise ForbiddenExpressionError(
         "Cannot conjunct expression of type {}".format(type(expression))
@@ -716,6 +736,10 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
         else:
             res = new_formulas[0]
         return res
+
+    @add_match(Negation)
+    def negation(self, expression):
+        return Negation(self.walk(expression.formula))
 
 
 def is_rule_with_builtin(rule, known_builtins=None):
