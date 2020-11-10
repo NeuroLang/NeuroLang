@@ -1,8 +1,16 @@
 # -*- coding: utf-8 -*-
-r"""
-CBMA two-term conjunctive query in NeuroLang
-====================================================
+"""
+Two-term conjunctive Coordinate-Based Meta-Analysis (CBMA) forward inference \
+with relaxed TFIDF thresholding on the Neurosynth database
+============================================================================
 
+This example first shows how to encode the Neurosynth Coordinate-Based
+Meta-Analysis (CBMA) database in NeuroLang, with probabilistic term-to-study
+associations using a sigmoid-based soft thresholding of TFIDF features.
+
+It then shows how a two-term conjunctive query can be expressed and solved to
+obtain an uncorreted forward inference map for studies associated with both
+terms 'auditory' and 'memory'.
 """
 from typing import Iterable, Union
 
