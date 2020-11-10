@@ -33,7 +33,7 @@ Data preparation
 # Load the MNI template and resample it to 4mm voxels
 
 mni_t1 = nib.load(datasets.fetch_icbm152_2009()['t1'])
-mni_t1_4mm = image.resample_img(mni_t1, np.eye(3) * 4)
+mni_t1_4mm = image.resample_img(mni_t1, np.eye(3))
 
 ###############################################################################
 # Load Destrieux's atlas
@@ -179,10 +179,7 @@ result_image = (
     .spatial_image()
 )
 img = result_image.get_fdata()
-plot = plotting.plot_roi(
-    result_image,
-)
-plotting.show()
+plotting.plot_roi(result_image, display_mode='x')
 
 ""
 
