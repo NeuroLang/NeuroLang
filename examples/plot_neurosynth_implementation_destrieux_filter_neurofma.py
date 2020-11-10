@@ -141,20 +141,19 @@ nl.load_ontology(neuroFMA)
 ###############################################################################
 # Adding new aggregation function to build a region overlay
 
+np.ones(voxels.shape)
+
+
+""
 @nl.add_symbol
 def agg_create_region_overlay(
-    i: Iterable, j: Iterable, k: Iterable, p: Iterable
+    i: Iterable, j: Iterable, k: Iterable
 ) -> fe.ExplicitVBR:
     voxels = np.c_[i, j, k]
     return fe.ExplicitVBROverlay(
-        voxels, mni_t1_4mm.affine, p,
+        voxels, mni_t1_4mm.affine, ,
         image_dim=mni_t1_4mm.shape
     )
-
-
-@nl.add_symbol
-def agg_max(i: Iterable) -> float:
-    return np.max(i)
 
 ###############################################################################
 # Create the ontology symbols that we will use in our query
@@ -166,11 +165,11 @@ regional_part = nl.new_symbol(name='http://sig.biostr.washington.edu/fma3.0#regi
 ###############################################################################
 # and load all the information within Neurolang
 
-activations = nl.add_tuple_set(ns_database.values, name='activations')
-terms = nl.add_tuple_set(ns_terms.values, name='terms')
-docs = nl.add_uniform_probabilistic_choice_over_set(
-        ns_docs.values, name='docs'
-)
+#activations = nl.add_tuple_set(ns_database.values, name='activations')
+##terms = nl.add_tuple_set(ns_terms.values, name='terms')
+#docs = nl.add_uniform_probabilistic_choice_over_set(
+#        ns_docs.values, name='docs'
+#)
 destrieux_image = nl.add_tuple_set(
     destrieux_table.values,
     name='destrieux_image'
@@ -207,46 +206,14 @@ with nl.scope as e:
         e.destrieux_image[e.i, e.j, e.k, e.id_destrieux]
     )
     
-    e.region_voxels[e.i, e.j, e.k] = (
+    e.region_voxels[agg_create_region[e.i, e.j, e.k]] = (
         e.fma_related_region[e.fma_subregions, 'Temporal lobe'] &
         e.relation_destrieux_fma[e.destrieux_name, e.fma_subregions] &
         e.destrieux_ijk[e.destrieux_name, e.i, e.j, e.k]
     )
     
-    e.vox_term_prob[e.i, e.j, e.k, e.PROB[e.i, e.j, e.k]] = (
-        e.region_voxels[e.i, e.j, e.k] &
-        e.activations[
-            e.d, ..., ..., ..., ..., 'MNI', ..., ..., ..., ...,
-            ..., ..., ..., e.i, e.j, e.k
-        ] &
-        e.terms[e.d, 'auditory'] &
-        e.docs[e.d]
-    )
-
-    e.term_prob[e.t, e.PROB[e.t]] = (
-        e.terms[e.d, e.t] &
-        e.docs[e.d]
-    )
-
-    e.vox_cond_query[e.i, e.j, e.k, e.p] = (
-        e.vox_term_prob(e.i, e.j, e.k, e.num_prob)
-        & e.term_prob('auditory', e.denom_prob)
-        & (e.p == (e.num_prob / e.denom_prob))
-    )
-
-    e.destrieux_region_max_probability[e.region, agg_max(e.p)] = (
-       e.vox_cond_query(e.i, e.j, e.k, e.p)
-       & e.destrieux_image(e.i, e.j, e.k, e.region_label)
-       & e.destrieux_labels(e.region, e.region_label)
-    )
-
-    e.voxel_activation_probability[agg_create_region_overlay[e.i, e.j, e.k, e.p]] = (
-        e.vox_cond_query(e.i, e.j, e.k, e.p)
-    )
-
     res = nl.solve_all()
-    img_query = res['voxel_activation_probability']
-    drmp = res['destrieux_region_max_probability']
+    img_query = res['region_voxels']
     
 
 ###############################################################################
@@ -254,17 +221,6 @@ with nl.scope as e:
 # --------------------------------------------
 # Using the ontology, we limit the results of the analysis only to regions 
 # within the Temporal Lobe
-
-###############################################################################
-# Maximum probability per voxel in the region that the region has an activation
-# when an article has the word "Auditory"
-(
-    drmp
-    .as_pandas_dataframe()
-    .sort_values(drmp.columns[-1], ascending=False)
-    .head()
-)
-
 
 ###############################################################################
 # Per voxel associations to "Auditory" top 5%
@@ -277,6 +233,9 @@ result_image = (
 img = result_image.get_fdata()
 plot = plotting.plot_stat_map(
     result_image,
-    threshold=np.percentile(img[img > 0], 95)
+    #threshold=np.percentile(img[img > 0], 95)
 )
 plotting.show()
+
+""
+
