@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 r'''
-Loading and Filtering the results of the Destrieux et al. Atlas using the FMA ontology
-======================================================================================
+Identifying the temporal lobe using the Destrieux et al. atlas and the FMA ontology
+===================================================================================
+
 
 Loading the Destrieux regions and the FMA ontology into NeuroLang and
 executing a simple query combining both datasets
@@ -22,25 +23,19 @@ from typing import Iterable
 from nilearn import datasets, image, plotting
 from rdflib import RDFS
 
-
-
 """
 Data preparation
 ----------------
 """
 
 ###############################################################################
-# Load the MNI template and resample it to 4mm voxels
-
-mni_t1 = nib.load(datasets.fetch_icbm152_2009()['t1'])
-mni_t1_4mm = image.resample_img(mni_t1, np.eye(3))
-
-###############################################################################
 # Load Destrieux's atlas
+mni_t1 = nib.load(datasets.fetch_icbm152_2009()['t1'])
+
 destrieux_dataset = datasets.fetch_atlas_destrieux_2009()
 destrieux = nib.load(destrieux_dataset['maps'])
 destrieux_resampled = image.resample_img(
-    destrieux, mni_t1_4mm.affine, interpolation='nearest'
+    destrieux, mni_t1.affine, interpolation='nearest'
 )
 destrieux_resampled_data = np.asanyarray(
     destrieux_resampled.dataobj, dtype=np.int32
@@ -90,10 +85,13 @@ fma_destrieux_path = datasets.utils._fetch_files(
 fma_destrieux_rel = pd.read_csv(fma_destrieux_path, sep=';', header=None, names=['destrieux', 'fma'], dtype={'destrieux': str, 'fma': str})
 
 ###############################################################################
-# Probabilistic Logic Programming in NeuroLang
+# Loading and querying the information
 # --------------------------------------------
 
-nl = pfe.ProbabilisticFrontend()
+###############################################################################
+# Loading the intology within NeuroLang
+
+nl = pfe.NeurolangPDL()
 nl.load_ontology(neuroFMA)
 
 
@@ -106,8 +104,8 @@ def agg_create_region_overlay(
 ) -> fe.ExplicitVBR:
     voxels = np.c_[i, j, k]
     return fe.ExplicitVBROverlay(
-        voxels, mni_t1_4mm.affine, np.ones(voxels.shape[0]),
-        image_dim=mni_t1_4mm.shape
+        voxels, mni_t1.affine, np.ones(voxels.shape[0]),
+        image_dim=mni_t1.shape
     )
 
 ###############################################################################
@@ -118,7 +116,7 @@ subclass_of = nl.new_symbol(name=str(RDFS.subClassOf))
 regional_part = nl.new_symbol(name='http://sig.biostr.washington.edu/fma3.0#regional_part_of')
 
 ###############################################################################
-# and load all the information within Neurolang
+# and load all the tuples in our database
 
 destrieux_image = nl.add_tuple_set(
     destrieux_table.values,
@@ -133,7 +131,7 @@ fma_destrieux = nl.add_tuple_set(
 )
 
 ###############################################################################
-# Probabilistic program and querying
+# And finally, we perform the query:
 
 with nl.scope as e:
     
@@ -144,11 +142,11 @@ with nl.scope as e:
         label(e.fma_subregion, e.subregion_name)
     )
     
-    e.fma_related_region[e.recursive_name, e.fma_name] = (
-        e.fma_related_region(e.fma_subregion, e.fma_name) &
+    e.fma_related_region[e.subregion_name, e.fma_entity_name] = (
+        e.fma_related_region(e.fma_subregion, e.fma_entity_name) &
         label(e.fma_uri, e.fma_subregion) &
         subclass_of(e.recursive_region, e.fma_uri) & 
-        label(e.recursive_region, e.recursive_name)
+        label(e.recursive_region, e.subregion_name)
     )
     
     e.destrieux_ijk[e.destrieux_name, e.i, e.j, e.k] = (
@@ -179,7 +177,7 @@ result_image = (
     .spatial_image()
 )
 img = result_image.get_fdata()
-plotting.plot_roi(result_image, display_mode='x', cut_coords=np.linspace(-63, 63, 4))
+plotting.plot_roi(result_image, display_mode='x', cut_coords=np.linspace(-63, 63, 5))
 
 ""
 
