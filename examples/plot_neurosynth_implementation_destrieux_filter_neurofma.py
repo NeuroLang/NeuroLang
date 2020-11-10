@@ -245,8 +245,8 @@ with nl.scope as e:
     )
 
     res = nl.solve_all()
-    #img_query = res['voxel_activation_probability']
-    #drmp = res['destrieux_region_max_probability']
+    img_query = res['voxel_activation_probability']
+    drmp = res['destrieux_region_max_probability']
     
 
 ###############################################################################
