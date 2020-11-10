@@ -163,10 +163,8 @@ label = nl.new_symbol(name=str(RDFS.label))
 subclass_of = nl.new_symbol(name=str(RDFS.subClassOf))
 regional_part = nl.new_symbol(name='http://sig.biostr.washington.edu/fma3.0#regional_part_of')
 
-
 ###############################################################################
-# Upload all information within Neurolang
-
+# and load all the information within Neurolang
 
 activations = nl.add_tuple_set(ns_database.values, name='activations')
 terms = nl.add_tuple_set(ns_terms.values, name='terms')
@@ -237,9 +235,9 @@ with nl.scope as e:
     )
 
     e.destrieux_region_max_probability[e.region, agg_max(e.p)] = (
-        e.vox_cond_query(e.i, e.j, e.k, e.p)
-        & e.destrieux_image(e.i, e.j, e.k, e.region_label)
-        & e.destrieux_labels(e.region, e.region_label)
+       e.vox_cond_query(e.i, e.j, e.k, e.p)
+       & e.destrieux_image(e.i, e.j, e.k, e.region_label)
+       & e.destrieux_labels(e.region, e.region_label)
     )
 
     e.voxel_activation_probability[agg_create_region_overlay[e.i, e.j, e.k, e.p]] = (
@@ -247,8 +245,8 @@ with nl.scope as e:
     )
 
     res = nl.solve_all()
-    img_query = res['voxel_activation_probability']
-    drmp = res['destrieux_region_max_probability']
+    #img_query = res['voxel_activation_probability']
+    #drmp = res['destrieux_region_max_probability']
     
 
 ###############################################################################
@@ -279,6 +277,6 @@ result_image = (
 img = result_image.get_fdata()
 plot = plotting.plot_stat_map(
     result_image,
-    # threshold=np.percentile(img[img > 0], 95)
+    threshold=np.percentile(img[img > 0], 95)
 )
 plotting.show()
