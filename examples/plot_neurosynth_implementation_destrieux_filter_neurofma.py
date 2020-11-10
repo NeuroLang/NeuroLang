@@ -3,7 +3,7 @@ r'''
 Loading and Filtering the results of the Destrieux et al. Atlas using the FMA ontology
 ======================================================================================
 
-Uploading the Destrieux regions and the FMA ontology into NeuroLang and
+Loading the Destrieux regions and the FMA ontology into NeuroLang and
 executing a simple query combining both datasets
 
 '''
@@ -185,11 +185,6 @@ fma_destrieux = nl.add_tuple_set(
     fma_destrieux_rel.values, name='relation_destrieux_fma'
 )
 
-for set_symbol in (
-    'activations', 'terms', 'docs', 'destrieux_image', 'destrieux_labels'
-):
-    print(f"#{set_symbol}: {len(nl.symbols[set_symbol].value)}")
-
 ###############################################################################
 # Probabilistic program and querying
 
@@ -289,6 +284,8 @@ with nl.scope as e:
 ###############################################################################
 # Results
 # --------------------------------------------
+# Using the ontology, we limit the results of the analysis only to regions 
+# within the Temporal Lobe
 
 ###############################################################################
 # Maximum probability per voxel in the region that the region has an activation
