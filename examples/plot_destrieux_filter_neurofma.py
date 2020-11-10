@@ -131,7 +131,7 @@ fma_destrieux = nl.add_tuple_set(
 )
 
 ###############################################################################
-# And finally, we perform the query:
+# And finally, we perform the query. In it, the first two terms correspond to a recursive query that allows us to go through the ontology to obtain all the entities that make up a particular region. Then, we use this term to obtain all the entities that compose the temporal lobe.
 
 with nl.scope as e:
     
