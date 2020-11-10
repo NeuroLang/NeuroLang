@@ -179,7 +179,7 @@ result_image = (
     .spatial_image()
 )
 img = result_image.get_fdata()
-plotting.plot_roi(result_image, display_mode='x')
+plotting.plot_roi(result_image, display_mode='x', cut_coords=np.linspace(-63, 63, 4))
 
 ""
 
