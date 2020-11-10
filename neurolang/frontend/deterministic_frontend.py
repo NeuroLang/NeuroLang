@@ -7,10 +7,11 @@ from ..datalog import DatalogProgram
 from ..datalog.aggregation import (
     Chase,
     DatalogWithAggregationMixin,
-    TranslateToLogicWithAggregation,
+    TranslateToLogicWithAggregation
 )
 from ..datalog.negation import DatalogProgramNegationMixin
 from ..expression_walker import ExpressionBasicEvaluator
+from ..logic.horn_clauses import Fol2DatalogMixin
 from ..region_solver import RegionSolver
 from ..regions import ExplicitVBR, ExplicitVBROverlay
 from ..utils.data_manipulation import parse_region_label_map
@@ -61,6 +62,7 @@ class NeurolangDL(QueryBuilderDatalog):
 
 class RegionFrontendDatalogSolver(
     TranslateToLogicWithAggregation,
+    Fol2DatalogMixin,
     RegionSolver,
     DatalogWithAggregationMixin,
     DatalogProgramNegationMixin,
