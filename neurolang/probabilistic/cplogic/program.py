@@ -73,7 +73,10 @@ class TranslateProbabilisticQueryMixin(PatternWalker):
 
     @add_match(
         Implication,
-        lambda implication: any(
+        lambda implication: isinstance(
+            implication.consequent, FunctionApplication
+        )
+        and any(
             is_within_language_prob_query_wannabe(arg)
             for arg in implication.consequent.args
         ),
@@ -113,7 +116,7 @@ class TranslateQueryBasedProbabilisticFactMixin(PatternWalker):
         pred_symb, probability = impl.consequent.functor.args
         body = pred_symb(*impl.consequent.args)
         new_consequent = ProbabilisticPredicate(probability, body)
-        return Implication(new_consequent, impl.antecedent)
+        return self.walk(Implication(new_consequent, impl.antecedent))
 
 
 class CPLogicMixin(PatternWalker):
@@ -343,8 +346,17 @@ class CPLogicMixin(PatternWalker):
         fully declared.
 
         """
-        # TODO: check for bad syntax and forbidden expressions
-        self.probabilistic_fact(implication)
+        pred_symb = implication.consequent.body.functor
+        pred_symb = pred_symb.cast(UnionOfConjunctiveQueries)
+        self._register_prob_pred_symb_set_symb(
+            pred_symb, self.pfact_pred_symb_set_symb
+        )
+        if pred_symb in self.symbol_table:
+            raise ForbiddenDisjunctionError(
+                "Probabilistic predicate {} already defined".format(pred_symb)
+            )
+        self.symbol_table[pred_symb] = Union((implication,))
+        return implication
 
     @add_match(Implication(..., Condition), is_within_language_prob_query)
     def within_language_marg_query(self, implication):

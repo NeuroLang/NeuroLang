@@ -78,7 +78,7 @@ def stratify_program(query, program):
     """
     idb = list(reachable_code_from_query(query, program).formulas)
     idb_symbs, dep_mat = dependency_matrix(program, idb)
-    wlq_symbs = set(program.within_language_succ_queries()).intersection(
+    wlq_symbs = set(program.within_language_prob_queries()).intersection(
         idb_symbs
     )
     _check_for_dependencies_between_wlqs(dep_mat, idb_symbs, wlq_symbs)
@@ -128,6 +128,10 @@ def _get_program_deterministic_symbols(program):
 
 
 def _get_rule_idb_type(rule, grpd_symbs, wlq_symbs):
+    pred_symb = rule.consequent.functor
+    for typ, symbs in grpd_symbs.items():
+        if pred_symb in symbs:
+            return typ
     dep_symbs = set(
         pred.functor
         for pred in extract_logic_atoms(rule.antecedent)
@@ -135,7 +139,7 @@ def _get_rule_idb_type(rule, grpd_symbs, wlq_symbs):
     )
     idb_type = None
     # handle the case of a WLQ with deterministic-only dependencies
-    if rule.consequent.functor in wlq_symbs:
+    if pred_symb in wlq_symbs:
         idb_type = "probabilistic"
     elif grpd_symbs["deterministic"].issuperset(dep_symbs):
         idb_type = "deterministic"

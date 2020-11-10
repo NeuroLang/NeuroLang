@@ -349,7 +349,7 @@ def lift_optimization_for_choice_predicates(query, program):
 
 
 def is_probabilistic_predicate_symbol(pred_symb, program):
-    wlq_symbs = set(program.within_language_succ_queries())
+    wlq_symbs = set(program.within_language_prob_queries())
     prob_symbs = program.pfact_pred_symbs | program.pchoice_pred_symbs
     stack = [pred_symb]
     while stack:

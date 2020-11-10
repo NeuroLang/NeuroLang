@@ -3,6 +3,7 @@ from typing import AbstractSet
 
 from ..datalog.expression_processing import EQ, conjunct_formulas
 from ..datalog.instance import MapInstance
+from ..exceptions import ForbiddenDisjunctionError
 from ..expression_pattern_matching import add_match
 from ..expression_walker import PatternWalker
 from ..expressions import Constant, FunctionApplication, Symbol
@@ -19,8 +20,8 @@ from .expressions import Condition, ProbabilisticPredicate
 class QueryBasedProbFactToDetRule(PatternWalker):
     """
     Translate a query-based probabilistic fact to two rules. A deterministic
-    rule that takes care of inferring the set of tuples in the probabilistic
-    table and a probabilistic rule that transforms the result from the
+    rule that takes care of inferring the set of probabilistic tuples and their
+    probabilities and a probabilistic rule that transforms the result from the
     deterministic resolution into a proper probabilistic table by re-attaching
     the deterministically-obtained probabilities.
 
@@ -34,6 +35,21 @@ class QueryBasedProbFactToDetRule(PatternWalker):
     her program.
 
     """
+
+    @add_match(
+        Union,
+        lambda union: any(
+            isinstance(formula, Union) for formula in union.formulas
+        ),
+    )
+    def flatten_union(self, union):
+        formulas = list()
+        for formula in union.formulas:
+            if isinstance(formula, Union):
+                formulas += list(formula.formulas)
+            else:
+                formulas.append(formula)
+        return Union(tuple(formulas))
 
     @add_match(
         Implication(ProbabilisticPredicate, ...),
@@ -126,11 +142,31 @@ def _build_probabilistic_program(det_edb, pfact_edb, pchoice_edb, prob_idb):
             if isinstance(expr, Constant[typing.AbstractSet]):
                 ra_set = expr
             # handle query-based probabilistic facts
-            elif isinstance(expr, Implication):
+            elif isinstance(expr, Union):
+                if len(expr.formulas) > 1:
+                    raise ForbiddenDisjunctionError(
+                        "Cannot define probabilistic facts through multiple "
+                        "queries"
+                    )
+                impl = expr.formulas[0]
                 # we know the rule is of the form
                 # P(x_1, ..., x_n) : y :- Q(y, x_1, ..., x_n)
+                # where Q is an extensional relation symbol
                 # so the values can be retrieved from the EDB
-                ra_set = det_edb[expr.antecedent.functor]
+                ra_set = det_edb[impl.antecedent.functor]
             add_fun(pred_symb, ra_set.value.unwrap())
+    # remove query-based probabilistic facts that have already been processed
+    # and transformed into probabilistic tables based on the deterministic
+    # solution
+    prob_idb = Union(
+        tuple(
+            formula
+            for formula in prob_idb.formulas
+            if not (
+                isinstance(formula.consequent, ProbabilisticPredicate)
+                and formula.antecedent != TRUE
+            )
+        )
+    )
     cpl.walk(prob_idb)
     return cpl

@@ -37,16 +37,22 @@ from ..logic import Union
 from ..probabilistic.cplogic.program import (
     CPLogicMixin,
     TranslateProbabilisticQueryMixin,
+    TranslateQueryBasedProbabilisticFactMixin,
 )
 from ..probabilistic.dichotomy_theorem_based_solver import (
     solve_marg_query as lifted_solve_marg_query,
+)
+from ..probabilistic.dichotomy_theorem_based_solver import (
     solve_succ_query as lifted_solve_succ_query,
 )
 from ..probabilistic.expression_processing import (
     is_probabilistic_predicate_symbol,
     is_within_language_prob_query,
 )
-from ..probabilistic.query_resolution import compute_probabilistic_solution
+from ..probabilistic.query_resolution import (
+    QueryBasedProbFactToDetRule,
+    compute_probabilistic_solution,
+)
 from ..probabilistic.stratification import stratify_program
 from ..region_solver import RegionSolver
 from ..relational_algebra import (
@@ -59,6 +65,8 @@ from .query_resolution_datalog import QueryBuilderDatalog
 
 class RegionFrontendCPLogicSolver(
     TranslateProbabilisticQueryMixin,
+    TranslateQueryBasedProbabilisticFactMixin,
+    QueryBasedProbFactToDetRule,
     TranslateToLogicWithAggregation,
     RegionSolver,
     CPLogicMixin,

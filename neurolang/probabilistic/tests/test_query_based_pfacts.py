@@ -1,10 +1,9 @@
 import pytest
 
-from ...datalog.expression_processing import EQ
 from ...exceptions import ForbiddenDisjunctionError
 from ...expression_walker import IdentityWalker
 from ...expressions import MATMUL, Constant, FunctionApplication, Symbol
-from ...logic import Conjunction, Implication, Union
+from ...logic import Implication, Union
 from ..cplogic.program import (
     CPLogicProgram,
     TranslateQueryBasedProbabilisticFactMixin,
@@ -19,7 +18,7 @@ y = Symbol("y")
 p = Symbol("p")
 
 
-class TestQueryBasedProbFactToDetRule(
+class QueryBasedProbFactToDetRuleTest(
     QueryBasedProbFactToDetRule,
     IdentityWalker,
 ):
@@ -39,7 +38,7 @@ def test_query_based_pfact():
         ProbabilisticPredicate(p / Constant(2), P(x)),
         Q(x, p),
     )
-    converter = TestQueryBasedProbFactToDetRule()
+    converter = QueryBasedProbFactToDetRuleTest()
     result = converter.walk(pfact)
     assert isinstance(result, Union)
     det_rule = next(
@@ -63,7 +62,7 @@ def test_query_based_pfact():
     )
 
 
-class TestQueryBasedProbFactToDetRuleProgram(
+class QueryBasedProbFactToDetRuleProgramTest(
     QueryBasedProbFactToDetRule,
     CPLogicProgram,
 ):
@@ -75,7 +74,7 @@ def test_prevent_combination_of_query_based_and_set_based():
         ProbabilisticPredicate(p / Constant(2), P(x)),
         Q(x, p),
     )
-    cpl = TestQueryBasedProbFactToDetRuleProgram()
+    cpl = QueryBasedProbFactToDetRuleProgramTest()
     cpl.add_probabilistic_facts_from_tuples(P, [(0.2, "a")])
     with pytest.raises(ForbiddenDisjunctionError):
         cpl.walk(pfact)

@@ -676,4 +676,14 @@ def test_query_based_pfact():
         name="A",
     )
     with nl.environment as e:
-        (e.B @ (e.p / 2))[e.x, e.p] = e.A[e.x, e.p]
+        (e.B @ (e.p / 2))[e.x] = e.A[e.x, e.p]
+        e.Query[e.PROB[e.x], e.x] = e.B[e.x]
+        result = nl.query((e.x, e.p), e.Query[e.p, e.x])
+    expected = RelationalAlgebraFrozenSet(
+        [
+            (2, 0.1),
+            (7, 0.4),
+            (4, 0.2),
+        ]
+    )
+    assert_almost_equal(result, expected)

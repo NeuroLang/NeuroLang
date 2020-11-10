@@ -6,6 +6,7 @@ from ...expressions import Constant, Symbol
 from ...logic import TRUE, Conjunction, Implication, Union
 from ..cplogic.program import CPLogicProgram
 from ..expressions import PROB, ProbabilisticPredicate, ProbabilisticQuery
+from ..query_resolution import QueryBasedProbFactToDetRule
 from ..stratification import stratify_program
 
 P = Symbol("P")
@@ -224,3 +225,51 @@ def test_stratification_multiple_post_probabilistic_rules():
     assert set(idbs["deterministic"].formulas) == set(det_idb)
     assert set(idbs["probabilistic"].formulas) == set(prob_idb)
     assert set(idbs["post_probabilistic"].formulas) == set(post_prob_idb)
+
+
+class CPLogicWithQueryBasedProbFactProgram(
+    QueryBasedProbFactToDetRule,
+    CPLogicProgram,
+):
+    pass
+
+
+def test_stratify_query_based_probfact():
+    code = Union(
+        (
+            Fact(Q(a, Constant(0.4))),
+            Fact(Q(b, Constant(0.2))),
+            Implication(
+                ProbabilisticPredicate(p / Constant(2), P(x)),
+                Q(x, p),
+            ),
+            Implication(
+                ProbabilisticPredicate(p / Constant(4), Z(y)),
+                Q(y, p),
+            ),
+        )
+    )
+    program = CPLogicWithQueryBasedProbFactProgram()
+    program.walk(code)
+    query = Implication(Query(x, p), Conjunction((P(x), Z(y))))
+    idbs = stratify_program(query, program)
+    P_formula = next(
+        formula
+        for formula in idbs["probabilistic"].formulas
+        if formula.consequent.functor == P
+        and formula.antecedent.functor.is_fresh
+    )
+    Z_formula = next(
+        formula
+        for formula in idbs["probabilistic"].formulas
+        if formula.consequent.functor == Z
+        and formula.antecedent.functor.is_fresh
+    )
+    assert any(
+        formula.consequent.functor == P_formula.antecedent.functor
+        for formula in idbs["deterministic"].formulas
+    )
+    assert any(
+        formula.consequent.functor == Z_formula.antecedent.functor
+        for formula in idbs["deterministic"].formulas
+    )
