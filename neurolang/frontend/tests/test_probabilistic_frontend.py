@@ -329,6 +329,41 @@ def test_solve_complex_stratified_query_with_deterministic_part():
     assert_almost_equal(res, expected)
 
 
+def test_neurolange_dl_deterministic_negation():
+    neurolang = ProbabilisticFrontend()
+    s = neurolang.new_symbol(name="s")
+    x = neurolang.new_symbol(name="x")
+    y = neurolang.new_symbol(name="y")
+
+    dataset = {(i, i * 2) for i in range(10)}
+    q = neurolang.add_tuple_set(dataset, name="q")
+    s[x, y] = ~q(x, x) & q(x, y)
+
+    res = neurolang.solve_all()
+
+    assert res["s"].to_unnamed() == {(i, j) for i, j in dataset if i != j}
+
+
+@pytest.mark.xfail(reason="RAP negation needs to be implemented")
+def test_neurolange_dl_probabilistic_negation():
+    neurolang = ProbabilisticFrontend()
+    s = neurolang.new_symbol(name="s")
+    x = neurolang.new_symbol(name="x")
+    y = neurolang.new_symbol(name="y")
+    prob = neurolang.new_symbol(name="PROB")
+
+    dataset_det = {(i, i * 2) for i in range(10)}
+    dataset = {((1 + i) / 10, i, i * 2) for i in range(10)}
+    q = neurolang.add_tuple_set(dataset_det, name="q")
+    r = neurolang.add_probabilistic_facts_from_tuples(dataset, name="r")
+
+    s[x, y, prob(x, y)] = ~r(x, x) & q(x, y)
+
+    res = neurolang.solve_all()
+
+    assert res["s"].to_unnamed() == {(i, j) for i, j in dataset if i != j}
+
+
 def test_neurolang_dl_aggregation():
     neurolang = ProbabilisticFrontend()
     q = neurolang.new_symbol(name="q")

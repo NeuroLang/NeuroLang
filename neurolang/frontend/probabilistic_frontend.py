@@ -20,6 +20,8 @@ from typing import (
 )
 from uuid import uuid1
 
+from neurolang.datalog.negation import DatalogProgramNegationMixin
+
 from .. import expressions as ir
 from ..datalog.aggregation import (
     Chase,
@@ -38,8 +40,6 @@ from ..probabilistic.cplogic.program import (
 )
 from ..probabilistic.dichotomy_theorem_based_solver import (
     solve_marg_query as lifted_solve_marg_query,
-)
-from ..probabilistic.dichotomy_theorem_based_solver import (
     solve_succ_query as lifted_solve_succ_query,
 )
 from ..probabilistic.expression_processing import (
@@ -63,6 +63,7 @@ class RegionFrontendCPLogicSolver(
     RegionSolver,
     CPLogicMixin,
     DatalogWithAggregationMixin,
+    DatalogProgramNegationMixin,
     DatalogConstraintsProgram,
     ExpressionBasicEvaluator,
 ):
@@ -297,11 +298,14 @@ class NeurolangPDL(QueryBuilderDatalog):
             1   0.111111    c
         }
         """
-        solution = self._solve()
-        solution_sets = dict()
-        for pred_symb, relation in solution.items():
-            solution_sets[pred_symb.name] = relation.value.unwrap()
-        return solution_sets
+        solution_ir = self._solve()
+        solution = {}
+        for k, v in solution_ir.items():
+            solution[k.name] = NamedRelationalAlgebraFrozenSet(
+                self.predicate_parameter_names(k.name), v.value.unwrap()
+            )
+            solution[k.name].row_type = v.value.row_type
+        return solution
 
     def _solve(self, query=None):
         idbs = stratify_program(query, self.program_ir)
