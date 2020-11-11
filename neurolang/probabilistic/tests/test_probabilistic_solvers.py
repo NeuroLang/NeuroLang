@@ -6,22 +6,23 @@ import pytest
 from ...datalog import Fact
 from ...expressions import Constant, Symbol
 from ...logic import Conjunction, Implication, Union
-from ...relational_algebra import RenameColumn
+from ...relational_algebra import (
+    ColumnStr,
+    ExtendedProjection,
+    ExtendedProjectionListMember,
+    NamedRelationalAlgebraFrozenSet,
+    RenameColumn,
+    str2columnstr_constant,
+)
+from ...relational_algebra_provenance import ProvenanceAlgebraSet
 from .. import dichotomy_theorem_based_solver, weighted_model_counting
-from ..dichotomy_theorem_based_solver import ProbSemiringSolver
 from ..cplogic import testing
 from ..cplogic.program import CPLogicProgram
+from ..dichotomy_theorem_based_solver import ProbSemiringSolver
 from ..exceptions import (
     NotEasilyShatterableError,
     NotHierarchicalQueryException,
 )
-from ...relational_algebra import (
-    ExtendedProjection, ExtendedProjectionListMember,
-    NamedRelationalAlgebraFrozenSet,
-    ColumnStr,
-    str2columnstr_constant,
-)
-from ...relational_algebra_provenance import ProvenanceAlgebraSet
 
 try:
     from contextlib import nullcontext
@@ -725,6 +726,27 @@ def test_empty_result_program(solver):
     expected = testing.make_prov_set([], ("_p_",))
     assert testing.eq_prov_relations(result, expected)
 
+
+def test_program_with_probchoice_selfjoin(solver):
+    if solver is not dichotomy_theorem_based_solver:
+        pytest.skip()
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_choice_from_tuples(
+        P,
+        [(0.2, "a"), (0.8, "b")],
+    )
+    cpl.add_probabilistic_facts_from_tuples(
+        Q,
+        [(0.6, "a"), (0.8, "b")],
+    )
+    rule = Implication(R(x, y), Conjunction((Q(x), P(x), P(y))))
+    cpl.walk(rule)
+    query = Implication(ans(x, y), R(x, y))
+    result = solver.solve_succ_query(query, cpl)
+    expected = testing.make_prov_set(
+        [(0.2 * 0.6, "a", "a"), (0.8 * 0.8, "b", "b")], ("_p_", "x", "y")
+    )
+    assert testing.eq_prov_relations(result, expected)
 
 
 def test_probsemiring_extended_proj():
