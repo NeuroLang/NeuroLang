@@ -6,6 +6,8 @@ import numpy
 
 from ..datalog import WrappedRelationalAlgebraSet
 from ..datalog.expression_processing import (
+    UnifyVariableEqualities,
+    conjunct_formulas,
     extract_logic_predicates,
     iter_disjunction_or_implication_rules,
     reachable_code,
@@ -345,6 +347,17 @@ def lift_optimization_for_choice_predicates(query, program):
             added_equalities.append(eq(x, y))
         if len(added_equalities) > 0:
             query = Conjunction(query.formulas + tuple(added_equalities))
+            unifier = UnifyVariableEqualities()
+            rule = Implication(Symbol.fresh()(tuple()), query)
+            query = unifier.walk(rule).antecedent
+            kept_equalities = Conjunction(
+                (
+                    eq
+                    for eq in added_equalities
+                    if any(arg not in query._symbols for arg in eq.args)
+                )
+            )
+            query = conjunct_formulas(query, kept_equalities)
     return query
 
 
