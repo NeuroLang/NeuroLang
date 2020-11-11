@@ -16,19 +16,18 @@ from typing import (
     List,
     Optional,
     Tuple,
-    Type,
+    Type
 )
 from uuid import uuid1
-
-from neurolang.datalog.negation import DatalogProgramNegationMixin
 
 from .. import expressions as ir
 from ..datalog.aggregation import (
     Chase,
     DatalogWithAggregationMixin,
-    TranslateToLogicWithAggregation,
+    TranslateToLogicWithAggregation
 )
 from ..datalog.constraints_representation import DatalogConstraintsProgram
+from ..datalog.negation import DatalogProgramNegationMixin
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
 from ..exceptions import UnsupportedQueryError
@@ -36,30 +35,32 @@ from ..expression_walker import ExpressionBasicEvaluator
 from ..logic import Union
 from ..probabilistic.cplogic.program import (
     CPLogicMixin,
-    TranslateProbabilisticQueryMixin,
+    TranslateProbabilisticQueryMixin
 )
 from ..probabilistic.dichotomy_theorem_based_solver import (
     solve_marg_query as lifted_solve_marg_query,
-    solve_succ_query as lifted_solve_succ_query,
+    solve_succ_query as lifted_solve_succ_query
 )
 from ..probabilistic.expression_processing import (
     is_probabilistic_predicate_symbol,
-    is_within_language_prob_query,
+    is_within_language_prob_query
 )
 from ..probabilistic.query_resolution import compute_probabilistic_solution
 from ..probabilistic.stratification import stratify_program
 from ..region_solver import RegionSolver
 from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
-    RelationalAlgebraStringExpression,
+    RelationalAlgebraStringExpression
 )
 from . import query_resolution_expressions as fe
+from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
 from .query_resolution_datalog import QueryBuilderDatalog
 
 
 class RegionFrontendCPLogicSolver(
     TranslateProbabilisticQueryMixin,
     TranslateToLogicWithAggregation,
+    ProbFol2DatalogMixin,
     RegionSolver,
     CPLogicMixin,
     DatalogWithAggregationMixin,

@@ -13,48 +13,38 @@ from the chapter 4 of [1]_.
 
 .. [1] Abiteboul, Hull, and Vianu, Foundations of Databases: The Logical Level.
 """
-from functools import reduce
 import operator
-from . import (
-    Symbol,
-    Constant,
-    FunctionApplication,
-    Implication,
-    Union,
-    Conjunction,
-    Disjunction,
-    Negation,
-    UniversalPredicate,
-    ExistentialPredicate,
-    LogicOperator,
-    Quantifier,
-    TRUE,
-    FALSE,
-)
+from functools import reduce
 from typing import Callable
-from ..type_system import is_leq_informative, Unknown
+
 from ..datalog.expressions import Fact
 from ..datalog.negation import is_conjunctive_negation
 from ..exceptions import NeuroLangException
+from ..expression_walker import ChainedWalker, PatternWalker, add_match
 from ..expressions import ExpressionBlock
-from ..expression_walker import (
-    add_match,
-    PatternWalker,
-    ChainedWalker,
+from ..type_system import Unknown, is_leq_informative
+from . import (
+    FALSE,
+    TRUE,
+    Conjunction,
+    Constant,
+    Disjunction,
+    ExistentialPredicate,
+    FunctionApplication,
+    Implication,
+    LogicOperator,
+    Negation,
+    Quantifier,
+    Symbol,
+    Union
 )
 from .expression_processing import extract_logic_free_variables
-
-
 from .transformations import (
-    LogicExpressionWalker,
-    EliminateImplications,
-    MoveNegationsToAtoms,
-    MoveQuantifiersUp,
     DesambiguateQuantifiedVariables,
-    DistributeDisjunctions,
-    CollapseDisjunctions,
-    CollapseConjunctions,
-    RemoveUniversalPredicates,
+    EliminateImplications,
+    LogicExpressionWalker,
+    MoveNegationsToAtoms,
+    RemoveUniversalPredicates
 )
 
 
@@ -458,7 +448,7 @@ class Fol2DatalogTranslationException(NeuroLangException):
     pass
 
 
-class Fol2DatalogMixin(LogicExpressionWalker):
+class Fol2DatalogMixin(PatternWalker):
     @add_match(
         Implication, lambda imp: not is_conjunctive_negation(imp.antecedent)
     )

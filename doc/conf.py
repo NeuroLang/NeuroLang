@@ -163,7 +163,10 @@ html_theme_options = {
     "bootswatch_theme": "flatly",
     "navbar_sidebarrel": False,
     "bootstrap_version": "3",
-    "navbar_links": [("Tutorial", "tutorial"), ("Gallery", "examples/index")],
+    "navbar_links": [
+        ("Tutorial", "tutorial"), ("Gallery", "auto_examples/index"),
+        ("Authors", "authors"),
+    ],
 }
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
