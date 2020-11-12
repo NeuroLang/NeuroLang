@@ -2,6 +2,7 @@ import operator
 
 import pytest
 
+from ...datalog.expressions import Fact
 from ...exceptions import UnsupportedProgramError
 from ...expression_walker import ExpressionWalker
 from ...expressions import Constant, Symbol
@@ -27,6 +28,7 @@ y = Symbol("y")
 z = Symbol("z")
 
 a = Constant("a")
+b = Constant("b")
 
 
 class TestDatalogProgram(DatalogProgram, ExpressionWalker):
@@ -209,3 +211,29 @@ def test_flatten_not_unifiable_becomes_false():
     program.walk(code)
     flat = flatten_query(Z(z), program)
     assert flat == FALSE
+
+
+def test_flatten_query_double_vareq():
+    code = Implication(P(x), Conjunction((R(x),)))
+    program = TestDatalogProgram()
+    program.walk(code)
+    query = Conjunction((P(a), P(b)))
+    flat = flatten_query(query, program)
+    assert len(flat.formulas) == 4
+    eq_fresh_vars = set(
+        formula.args[0]
+        for formula in flat.formulas
+        if formula.functor == EQ
+        and len(formula.args) == 2
+        and formula.args[0].is_fresh
+    )
+    assert (
+        set(
+            formula.args[0]
+            for formula in flat.formulas
+            if formula.functor == R
+            and len(formula.args) == 1
+            and formula.args[0].is_fresh
+        )
+        == eq_fresh_vars
+    )
