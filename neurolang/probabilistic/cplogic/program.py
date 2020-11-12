@@ -1,12 +1,12 @@
 import typing
-from operator import floordiv
+from operator import floordiv, matmul
 
 from ...datalog import DatalogProgram
 from ...datalog.basic_representation import UnionOfConjunctiveQueries
 from ...exceptions import ForbiddenDisjunctionError, ForbiddenExpressionError
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
-from ...expressions import MATMUL, Constant, FunctionApplication, Symbol
+from ...expressions import Constant, FunctionApplication, Symbol
 from ...logic import TRUE, Implication, Union
 from ...type_system import get_generic_type
 from ..exceptions import (
@@ -28,6 +28,12 @@ from ..expressions import (
     Condition,
     ProbabilisticPredicate,
     ProbabilisticQuery,
+)
+
+MATMUL = Constant(
+    matmul,
+    verify_type=False,
+    auto_infer_type=False,
 )
 
 

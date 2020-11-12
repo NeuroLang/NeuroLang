@@ -863,10 +863,3 @@ class TypedSymbolTableMixin:
         if es is None:
             raise NeuroLangException('No enclosing scope')
         self.symbol_table = self.symbol_table.enclosing_scope
-
-
-MATMUL = Constant(
-    op.matmul,
-    verify_type=False,
-    auto_infer_type=False,
-)
