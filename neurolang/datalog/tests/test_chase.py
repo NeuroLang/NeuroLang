@@ -15,6 +15,7 @@ from ..chase import (ChaseGeneral, ChaseMGUMixin, ChaseNaive,
 from ..expressions import (Conjunction, Fact, Implication, TranslateToLogic,
                            Union)
 from ..instance import MapInstance
+from ..expression_processing import EQ
 
 try:
     from contextlib import nullcontext
@@ -784,3 +785,25 @@ def test_transitive_closure(chase_class):
             for j in range(i, 5)
             if i != j
         }
+
+
+def test_nested_function_application(chase_class):
+    x = S_("x")
+    y = S_("y")
+    z = S_("z")
+    f = S_("f")
+    g = S_("g")
+    R = S_("R")
+    Q = S_("Q")
+    dl = Datalog()
+    dl.symbol_table[f] = C_(lambda x, y: (x + y) // 2)
+    dl.symbol_table[g] = C_(lambda x: x ** 2)
+    dl.add_extensional_predicate_from_tuples(R, {(1,), (2,)})
+    dl.walk(Implication(Q(z), Conjunction((R(x), R(y), EQ(z, f(g(x), g(y)))))))
+    solution = chase_class(dl).build_chase_solution()
+    assert solution[Q].value == {
+        C_(((1 ** 2 + 1 ** 2) // 2,)),
+        C_(((1 ** 2 + 2 ** 2) // 2,)),
+        C_(((2 ** 2 + 1 ** 2) // 2,)),
+        C_(((2 ** 2 + 2 ** 2) // 2,)),
+    }
