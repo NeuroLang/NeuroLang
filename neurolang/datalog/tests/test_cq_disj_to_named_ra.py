@@ -749,6 +749,7 @@ def test_equality_builtin_application():
             ),
         ),
     )
+    assert result == expected
 
 
 def test_equality_nested_builtin_application():
