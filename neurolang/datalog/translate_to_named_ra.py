@@ -178,14 +178,22 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
         projections = list()
         selections = dict()
         selection_columns = dict()
-        TranslateToNamedRA._translate_fa_args(
-            expression.args,
-            named_args,
-            projections,
-            selections,
-            selection_columns,
-            [0],
-        )
+        stack = list(reversed(expression.args))
+        counter = 0
+        while stack:
+            arg = stack.pop()
+            if isinstance(arg, Constant):
+                selections[counter] = arg
+            elif arg in named_args:
+                selection_columns[counter] = named_args.index(arg)
+            elif isinstance(arg, FunctionApplication):
+                stack += list(reversed(arg.args))
+            else:
+                projections.append(
+                    Constant[ColumnInt](counter, verify_type=False)
+                )
+                named_args.append(arg)
+            counter += 1
         in_set = self.generate_ra_expression(
             functor,
             selections,
@@ -194,36 +202,6 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             tuple(named_args),
         )
         return in_set
-
-    @staticmethod
-    def _translate_fa_args(
-        args,
-        named_args,
-        projections,
-        selections,
-        selection_columns,
-        counter,
-    ):
-        for arg in args:
-            if isinstance(arg, Constant):
-                selections[counter[0]] = arg
-            elif arg in named_args:
-                selection_columns[counter[0]] = named_args.index(arg)
-            elif isinstance(arg, FunctionApplication):
-                TranslateToNamedRA._translate_fa_args(
-                    arg.args,
-                    named_args,
-                    projections,
-                    selections,
-                    selection_columns,
-                    counter,
-                )
-            else:
-                projections.append(
-                    Constant[ColumnInt](counter[0], verify_type=False)
-                )
-                named_args.append(arg)
-            counter[0] += 1
 
     def generate_ra_expression(
         self, functor, selections, selection_columns, projections, named_args
