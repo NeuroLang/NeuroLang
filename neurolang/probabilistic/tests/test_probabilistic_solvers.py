@@ -40,6 +40,7 @@ H = Symbol("H")
 A = Symbol("A")
 B = Symbol("B")
 C = Symbol("C")
+w = Symbol("w")
 x = Symbol("x")
 y = Symbol("y")
 z = Symbol("z")
@@ -745,6 +746,29 @@ def test_program_with_probchoice_selfjoin(solver):
     result = solver.solve_succ_query(query, cpl)
     expected = testing.make_prov_set(
         [(0.2 * 0.6, "a", "a"), (0.8 * 0.8, "b", "b")], ("_p_", "x", "y")
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_probchoice_selfjoin_multiple_variables(solver):
+    if solver is not dichotomy_theorem_based_solver:
+        pytest.skip()
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_choice_from_tuples(
+        P,
+        [(0.2, "a", "b"), (0.8, "b", "c")],
+    )
+    cpl.add_probabilistic_facts_from_tuples(
+        Q,
+        [(0.6, "a"), (0.8, "b")],
+    )
+    rule = Implication(R(x, y, z, w), Conjunction((Q(x), P(x, y), P(z, w))))
+    cpl.walk(rule)
+    query = Implication(ans(x, y, z, w), R(x, y, z, w))
+    result = solver.solve_succ_query(query, cpl)
+    expected = testing.make_prov_set(
+        [(0.2 * 0.6, "a", "b", "a", "b"), (0.8 * 0.8, "b", "c", "b", "c")],
+        ("_p_", "x", "y", "z", "w"),
     )
     assert testing.eq_prov_relations(result, expected)
 
