@@ -194,6 +194,14 @@ def test_convert_to_lambda():
     assert args == {'x'}
 
 
+def test_expression_walker_keep_fresh():
+    s = S_.fresh()
+    assert s.is_fresh
+    walker = expression_walker.ExpressionWalker()
+    result = walker.walk(s)
+    assert result.is_fresh
+
+
 def test_replace_expression_maintains_symbol_fresh():
     s = S_.fresh()
     assert s.is_fresh
