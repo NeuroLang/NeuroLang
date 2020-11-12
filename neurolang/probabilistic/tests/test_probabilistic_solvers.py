@@ -40,6 +40,7 @@ H = Symbol("H")
 A = Symbol("A")
 B = Symbol("B")
 C = Symbol("C")
+w = Symbol("w")
 x = Symbol("x")
 y = Symbol("y")
 z = Symbol("z")
@@ -700,10 +701,12 @@ def test_repeated_variable_with_constant_in_head(solver):
         pytest.skip()
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
-        Q, [(0.2, 7, 8), (0.6, 8, 9), (0.9, 8, 8)],
+        Q,
+        [(0.2, 7, 8), (0.6, 8, 9), (0.9, 8, 8)],
     )
     cpl.add_probabilistic_choice_from_tuples(
-        P, [(0.4, 8), (0.6, 9)],
+        P,
+        [(0.4, 8), (0.6, 9)],
     )
     cpl.walk(Implication(R(Constant[int](8), x), Conjunction((Q(x, x), P(x)))))
     query = Implication(ans(x, y), R(x, y))
@@ -718,7 +721,8 @@ def test_empty_result_program(solver):
     rule = Implication(R(Constant(2), Constant(3)), Conjunction((Q(x),)))
     cpl = CPLogicProgram()
     cpl.add_probabilistic_facts_from_tuples(
-        Q, [(0.2, 7)],
+        Q,
+        [(0.2, 7)],
     )
     cpl.walk(rule)
     query = Implication(ans(x), R(x, x))
@@ -749,6 +753,52 @@ def test_program_with_probchoice_selfjoin(solver):
     assert testing.eq_prov_relations(result, expected)
 
 
+def test_probchoice_selfjoin_multiple_variables(solver):
+    if solver is not dichotomy_theorem_based_solver:
+        pytest.skip()
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_choice_from_tuples(
+        P,
+        [(0.2, "a", "b"), (0.8, "b", "c")],
+    )
+    cpl.add_probabilistic_facts_from_tuples(
+        Q,
+        [(0.6, "a"), (0.8, "b")],
+    )
+    rule = Implication(R(x, y, z, w), Conjunction((Q(x), P(x, y), P(z, w))))
+    cpl.walk(rule)
+    query = Implication(ans(x, y, z, w), R(x, y, z, w))
+    result = solver.solve_succ_query(query, cpl)
+    expected = testing.make_prov_set(
+        [(0.2 * 0.6, "a", "b", "a", "b"), (0.8 * 0.8, "b", "c", "b", "c")],
+        ("_p_", "x", "y", "z", "w"),
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
+def test_probchoice_selfjoin_multiple_variables_shared_var(solver):
+    if solver is not dichotomy_theorem_based_solver:
+        pytest.skip()
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_choice_from_tuples(
+        P,
+        [(0.2, "a", "b"), (0.8, "b", "b")],
+    )
+    cpl.add_probabilistic_facts_from_tuples(
+        Q,
+        [(0.6, "a", "b"), (0.8, "b", "a"), (0.2, "b", "b")],
+    )
+    rule = Implication(R(x, y, z), Conjunction((Q(x, y), P(x, y), P(z, x))))
+    cpl.walk(rule)
+    query = Implication(ans(x, y, z), R(x, y, z))
+    result = solver.solve_succ_query(query, cpl)
+    expected = testing.make_prov_set(
+        [(0.2 * 0.8, "b", "b", "b")],
+        ("_p_", "x", "y", "z"),
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
 def test_probsemiring_extended_proj():
     provset = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
@@ -757,17 +807,20 @@ def test_probsemiring_extended_proj():
                 (0.2, "a", "b"),
                 (0.3, "b", "a"),
                 (0.5, "c", "c"),
-            ]
+            ],
         ),
         ColumnStr("_p_"),
     )
     proj_list = [
-        ExtendedProjectionListMember(str2columnstr_constant("x"),
-                                     str2columnstr_constant("x")),
-        ExtendedProjectionListMember(str2columnstr_constant("y"),
-                                     str2columnstr_constant("y")),
-        ExtendedProjectionListMember(Constant("d"),
-                                     str2columnstr_constant("z")),
+        ExtendedProjectionListMember(
+            str2columnstr_constant("x"), str2columnstr_constant("x")
+        ),
+        ExtendedProjectionListMember(
+            str2columnstr_constant("y"), str2columnstr_constant("y")
+        ),
+        ExtendedProjectionListMember(
+            Constant("d"), str2columnstr_constant("z")
+        ),
     ]
     proj = ExtendedProjection(provset, proj_list)
     solver = ProbSemiringSolver()
@@ -779,7 +832,7 @@ def test_probsemiring_extended_proj():
                 (0.2, "a", "b", "d"),
                 (0.3, "b", "a", "d"),
                 (0.5, "c", "c", "d"),
-            ]
+            ],
         ),
         ColumnStr("_p_"),
     )
@@ -794,15 +847,17 @@ def test_probsemiring_forbidden_extended_proj_missing_nonprov_cols():
                 (0.2, "a", "b"),
                 (0.3, "b", "a"),
                 (0.5, "c", "c"),
-            ]
+            ],
         ),
         ColumnStr("_p_"),
     )
     proj_list = [
-        ExtendedProjectionListMember(str2columnstr_constant("x"),
-                                     str2columnstr_constant("x")),
-        ExtendedProjectionListMember(Constant("d"),
-                                     str2columnstr_constant("z")),
+        ExtendedProjectionListMember(
+            str2columnstr_constant("x"), str2columnstr_constant("x")
+        ),
+        ExtendedProjectionListMember(
+            Constant("d"), str2columnstr_constant("z")
+        ),
     ]
     proj = ExtendedProjection(provset, proj_list)
     solver = ProbSemiringSolver()
@@ -818,17 +873,20 @@ def test_probsemiring_forbidden_extended_proj_on_provcol():
                 (0.2, "a", "b"),
                 (0.3, "b", "a"),
                 (0.5, "c", "c"),
-            ]
+            ],
         ),
         ColumnStr("_p_"),
     )
     proj_list = [
-        ExtendedProjectionListMember(str2columnstr_constant("x"),
-                                     str2columnstr_constant("x")),
-        ExtendedProjectionListMember(str2columnstr_constant("y"),
-                                     str2columnstr_constant("y")),
-        ExtendedProjectionListMember(Constant("d"),
-                                     str2columnstr_constant("_p_")),
+        ExtendedProjectionListMember(
+            str2columnstr_constant("x"), str2columnstr_constant("x")
+        ),
+        ExtendedProjectionListMember(
+            str2columnstr_constant("y"), str2columnstr_constant("y")
+        ),
+        ExtendedProjectionListMember(
+            Constant("d"), str2columnstr_constant("_p_")
+        ),
     ]
     proj = ExtendedProjection(provset, proj_list)
     solver = ProbSemiringSolver()

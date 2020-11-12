@@ -6,7 +6,7 @@ from ...logic import Union
 from ..expression_processing import (
     add_to_union,
     get_probchoice_variable_equalities,
-    group_preds_by_pred_symb,
+    group_preds_by_functor,
 )
 
 P = Symbol("P")
@@ -82,8 +82,8 @@ def test_get_probchoice_variable_equalities():
 
 def test_group_preds_by_pred_symb():
     predicates = [P(x, y), Q(x)]
-    grouped = group_preds_by_pred_symb(predicates, filter_set={Q})
+    grouped = group_preds_by_functor(predicates, filter_set={Q})
     assert grouped == {Q: {Q(x)}}
     predicates = [P(x, y), Q(x)]
-    grouped = group_preds_by_pred_symb(predicates, filter_set=set())
+    grouped = group_preds_by_functor(predicates, filter_set=set())
     assert grouped == dict()
