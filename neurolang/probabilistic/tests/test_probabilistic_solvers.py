@@ -773,6 +773,29 @@ def test_probchoice_selfjoin_multiple_variables(solver):
     assert testing.eq_prov_relations(result, expected)
 
 
+def test_probchoice_selfjoin_multiple_variables_shared_var(solver):
+    if solver is not dichotomy_theorem_based_solver:
+        pytest.skip()
+    cpl = CPLogicProgram()
+    cpl.add_probabilistic_choice_from_tuples(
+        P,
+        [(0.2, "a", "b"), (0.8, "b", "b")],
+    )
+    cpl.add_probabilistic_facts_from_tuples(
+        Q,
+        [(0.6, "a", "b"), (0.8, "b", "a"), (0.2, "b", "b")],
+    )
+    rule = Implication(R(x, y, z), Conjunction((Q(x, y), P(x, y), P(z, x))))
+    cpl.walk(rule)
+    query = Implication(ans(x, y, z), R(x, y, z))
+    result = solver.solve_succ_query(query, cpl)
+    expected = testing.make_prov_set(
+        [(0.2 * 0.8, "b", "b", "b")],
+        ("_p_", "x", "y", "z"),
+    )
+    assert testing.eq_prov_relations(result, expected)
+
+
 def test_probsemiring_extended_proj():
     provset = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
