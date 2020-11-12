@@ -350,6 +350,11 @@ def lift_optimization_for_choice_predicates(query, program):
             unifier = UnifyVariableEqualities()
             rule = Implication(Symbol.fresh()(tuple()), query)
             query = unifier.walk(rule).antecedent
+            # keep head variable equalities to prevent the rule from becoming
+            # invalid due to a head variable not occurring in the antecedent
+            # by keeping these variable equalities, we make sure that the
+            # logical semantic of the rule is maintained (without modifying the
+            # query's head)
             kept_equalities = Conjunction(
                 (
                     eq
