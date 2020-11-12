@@ -6,6 +6,7 @@ import numpy
 
 from ..datalog import WrappedRelationalAlgebraSet
 from ..datalog.expression_processing import (
+    EQ,
     UnifyVariableEqualities,
     conjunct_formulas,
     extract_logic_predicates,
@@ -268,7 +269,7 @@ def group_preds_by_functor(predicates, filter_set=None):
     """
     grouped = collections.defaultdict(set)
     for pred in predicates:
-        if filter_set is not None and pred.functor in filter_set:
+        if filter_set is None or pred.functor in filter_set:
             grouped[pred.functor].add(pred)
     return dict(grouped)
 
@@ -338,27 +339,27 @@ def lift_optimization_for_choice_predicates(query, program):
         conjunctive query rewritten for choice predicate implementation.
 
     """
-    if len(program.pchoice_pred_symbs) > 0:
-        eq = Constant(op.eq)
-        added_equalities = []
-        for x, y in get_probchoice_variable_equalities(
-            query.formulas, program.pchoice_pred_symbs
-        ):
-            added_equalities.append(eq(x, y))
-        if len(added_equalities) > 0:
-            query = Conjunction(query.formulas + tuple(added_equalities))
+    if len(program.pchoice_pred_symbs) == 0:
+        return query
+    pchoice_eqs = get_probchoice_variable_equalities(
+        query.formulas, program.pchoice_pred_symbs
+    )
+    if len(pchoice_eqs) == 0:
+        return query
+    eq_conj = Conjunction(tuple(EQ(x, y) for x, y in pchoice_eqs))
+    grpd_preds = group_preds_by_functor(query.formulas)
+    new_formulas = set(eq_conj.formulas)
+    for functor, preds in grpd_preds.items():
+        if functor not in program.pchoice_pred_symbs:
+            new_formulas |= set(preds)
+        else:
+            conj = conjunct_formulas(Conjunction(tuple(preds)), eq_conj)
             unifier = UnifyVariableEqualities()
-            rule = Implication(Symbol.fresh()(tuple()), query)
-            query = unifier.walk(rule).antecedent
-            kept_equalities = Conjunction(
-                (
-                    eq
-                    for eq in added_equalities
-                    if any(arg not in query._symbols for arg in eq.args)
-                )
-            )
-            query = conjunct_formulas(query, kept_equalities)
-    return query
+            rule = Implication(Symbol.fresh()(tuple()), conj)
+            unified_conj = unifier.walk(rule).antecedent
+            new_formulas |= set(unified_conj.formulas)
+    new_query = Conjunction(tuple(new_formulas))
+    return new_query
 
 
 def is_probabilistic_predicate_symbol(pred_symb, program):
