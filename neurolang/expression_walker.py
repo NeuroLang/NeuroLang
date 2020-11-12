@@ -272,7 +272,8 @@ class ReplaceExpressionWalker(ExpressionWalker):
                 new_arg = self.walk(arg)
                 changed |= new_arg is not arg
             elif isinstance(arg, tuple):
-                new_arg, _ = self.process_iterable_argument(arg)
+                new_arg, change = self.process_iterable_argument(arg)
+                changed |= change
             elif arg is Ellipsis:
                 raise NeuroLangException(
                     "... is not a valid Expression argument"
