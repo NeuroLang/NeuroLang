@@ -174,24 +174,56 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
     @add_match(FunctionApplication)
     def translate_fa(self, expression):
         functor = self.walk(expression.functor)
-        named_args = tuple()
-        projections = tuple()
+        named_args = list()
+        projections = list()
         selections = dict()
         selection_columns = dict()
-        for i, arg in enumerate(expression.args):
-            if isinstance(arg, Constant):
-                selections[i] = arg
-            elif arg in named_args:
-                selection_columns[i] = named_args.index(arg)
-            else:
-                projections += (Constant[ColumnInt](i, verify_type=False),)
-                named_args += (arg,)
-
-        in_set = self.generate_ra_expression(
-            functor, selections, selection_columns, projections, named_args
+        TranslateToNamedRA._translate_fa_args(
+            expression.args,
+            named_args,
+            projections,
+            selections,
+            selection_columns,
+            [0],
         )
-
+        in_set = self.generate_ra_expression(
+            functor,
+            selections,
+            selection_columns,
+            tuple(projections),
+            tuple(named_args),
+        )
         return in_set
+
+    @staticmethod
+    def _translate_fa_args(
+        args,
+        named_args,
+        projections,
+        selections,
+        selection_columns,
+        counter,
+    ):
+        for arg in args:
+            if isinstance(arg, Constant):
+                selections[counter[0]] = arg
+            elif arg in named_args:
+                selection_columns[counter[0]] = named_args.index(arg)
+            elif isinstance(arg, FunctionApplication):
+                TranslateToNamedRA._translate_fa_args(
+                    arg.args,
+                    named_args,
+                    projections,
+                    selections,
+                    selection_columns,
+                    counter,
+                )
+            else:
+                projections.append(
+                    Constant[ColumnInt](counter[0], verify_type=False)
+                )
+                named_args.append(arg)
+            counter[0] += 1
 
     def generate_ra_expression(
         self, functor, selections, selection_columns, projections, named_args
