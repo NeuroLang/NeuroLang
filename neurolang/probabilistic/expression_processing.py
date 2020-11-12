@@ -247,23 +247,23 @@ def construct_within_language_succ_result(provset, rule):
     return Constant[AbstractSet](provset.value.projection(*proj_cols))
 
 
-def group_preds_by_pred_symb(predicates, filter_set=None):
+def group_preds_by_functor(predicates, filter_set=None):
     """
-    Group predicates by their predicate symbol.
+    Group predicates by their functor.
 
-    An optional filter set of predicate symbols can be passed to only return
-    the ones in the set.
+    An optional filter set of functors can be passed to only return the ones in
+    the set.
 
     Parameters
     ----------
     predicates : iterable of predicates
         Predicates that should be grouped.
-    filter_set : set of predicate symbols (optional)
-        Predicate symbols to consider.
+    filter_set : set of functors (optional)
+        Functors to consider.
 
     Returns
     -------
-    dict of predicate symbol to set of predicates
+    dict of functors to set of predicates
 
     """
     grouped = collections.defaultdict(set)
@@ -297,7 +297,7 @@ def get_probchoice_variable_equalities(predicates, pchoice_pred_symbs):
     P(y)` can only be true if `x == y`.
 
     """
-    grouped_pchoice_preds = group_preds_by_pred_symb(
+    grouped_pchoice_preds = group_preds_by_functor(
         predicates, pchoice_pred_symbs
     )
     eq_set = set()
