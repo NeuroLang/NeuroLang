@@ -1,11 +1,9 @@
 import io
-import operator
 from typing import AbstractSet, Tuple
 
 import numpy as np
 import pytest
 
-from ...datalog.expression_processing import EQ
 from ...exceptions import UnsupportedProgramError, UnsupportedQueryError
 from ...probabilistic.exceptions import (
     ForbiddenConditionalQueryNonConjunctive,
@@ -693,88 +691,6 @@ def test_query_based_pfact():
         ]
     )
     assert_almost_equal(result, expected)
-
-
-@pytest.mark.skip
-def test_query_based_pfact_region_volume_with_workaround():
-    from ...expression_pattern_matching import add_match
-    from ...expression_walker import PatternWalker
-    from ...expressions import Constant, FunctionApplication, Symbol
-    from ...frontend.probabilistic_frontend import RegionFrontendCPLogicSolver
-    from ...logic import Conjunction, Implication
-
-    def _is_volume_division_equality(formula):
-        return (
-            formula.functor == EQ
-            and isinstance(formula.args[1], FunctionApplication)
-            and formula.args[1].functor == Constant(operator.truediv)
-            and all(
-                isinstance(arg, FunctionApplication)
-                for arg in formula.args[1].args
-            )
-        )
-
-    class VolumeDivisionEqualityRewritter(PatternWalker):
-        @add_match(
-            Implication(FunctionApplication, Conjunction),
-            lambda impl: any(
-                _is_volume_division_equality(formula)
-                for formula in impl.antecedent.formulas
-            ),
-        )
-        def volume_division_equality(self, impl):
-            new_formulas = list()
-            for formula in impl.antecedent.formulas:
-                if _is_volume_division_equality(formula):
-                    symb1 = Symbol.fresh()
-                    symb2 = Symbol.fresh()
-                    eq1 = EQ(symb1, formula.args[1].args[0])
-                    eq2 = EQ(symb2, formula.args[1].args[1])
-                    new_eq = EQ(
-                        formula.args[0],
-                        Constant(operator.truediv)(symb1, symb2),
-                    )
-                    new_formulas += [new_eq, eq1, eq2]
-                else:
-                    new_formulas.append(formula)
-            new_impl = Implication(
-                impl.consequent, Conjunction(tuple(new_formulas))
-            )
-            return self.walk(new_impl)
-
-    class WorkAroundSolver(
-        VolumeDivisionEqualityRewritter,
-        RegionFrontendCPLogicSolver,
-    ):
-        pass
-
-    nl = ProbabilisticFrontend(program_ir=WorkAroundSolver())
-
-    @nl.add_symbol
-    def volume(s: SphericalVolume) -> float:
-        return (4 / 3) * np.pi * s.radius ** 3
-
-    nl.add_tuple_set(
-        [
-            ("contained", SphericalVolume((0, 0, 0), 1)),
-            ("container", SphericalVolume((0, 0, 0), 2)),
-        ],
-        name="my_sphere",
-    )
-
-    with nl.environment as e:
-        (e.Z @ (e.volume[e.contained] / e.volume[e.container]))[
-            e.contained, e.container
-        ] = (
-            e.my_sphere["contained", e.contained]
-            & e.my_sphere["container", e.container]
-        )
-        e.Query[
-            e.contained, e.container, e.PROB[e.contained, e.container]
-        ] = e.Z[e.contained, e.container]
-        res = nl.query((e.p,), e.Query[e.contained, e.container, e.p])
-    expected = RelationalAlgebraFrozenSet([(1 / 2 ** 3,)])
-    assert res == expected
 
 
 def test_query_based_pfact_region_volume():
