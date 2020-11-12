@@ -695,7 +695,8 @@ def test_query_based_pfact():
     assert_almost_equal(result, expected)
 
 
-def test_query_based_pfact_region_volume():
+@pytest.mark.skip
+def test_query_based_pfact_region_volume_with_workaround():
     from ...expression_pattern_matching import add_match
     from ...expression_walker import PatternWalker
     from ...expressions import Constant, FunctionApplication, Symbol
@@ -748,6 +749,36 @@ def test_query_based_pfact_region_volume():
         pass
 
     nl = ProbabilisticFrontend(program_ir=WorkAroundSolver())
+
+    @nl.add_symbol
+    def volume(s: SphericalVolume) -> float:
+        return (4 / 3) * np.pi * s.radius ** 3
+
+    nl.add_tuple_set(
+        [
+            ("contained", SphericalVolume((0, 0, 0), 1)),
+            ("container", SphericalVolume((0, 0, 0), 2)),
+        ],
+        name="my_sphere",
+    )
+
+    with nl.environment as e:
+        (e.Z @ (e.volume[e.contained] / e.volume[e.container]))[
+            e.contained, e.container
+        ] = (
+            e.my_sphere["contained", e.contained]
+            & e.my_sphere["container", e.container]
+        )
+        e.Query[
+            e.contained, e.container, e.PROB[e.contained, e.container]
+        ] = e.Z[e.contained, e.container]
+        res = nl.query((e.p,), e.Query[e.contained, e.container, e.p])
+    expected = RelationalAlgebraFrozenSet([(1 / 2 ** 3,)])
+    assert res == expected
+
+
+def test_query_based_pfact_region_volume():
+    nl = ProbabilisticFrontend()
 
     @nl.add_symbol
     def volume(s: SphericalVolume) -> float:
