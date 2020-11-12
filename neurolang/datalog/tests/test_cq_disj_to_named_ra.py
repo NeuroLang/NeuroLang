@@ -749,3 +749,40 @@ def test_equality_builtin_application():
             ),
         ),
     )
+
+
+def test_equality_nested_builtin_application():
+    x = Symbol("x")
+    y = Symbol("y")
+    z = Symbol("z")
+    P = Symbol("P")
+    f = Constant(lambda x: x // 2)
+    g = Constant(lambda x: x ** 2)
+    conjunction = Conjunction((P(x), P(y), EQ(z, f(g(x), g(y)))))
+    result = TranslateToNamedRA().walk(conjunction)
+    expected = ExtendedProjection(
+        NaturalJoin(
+            NameColumns(
+                Projection(P, (C_(ColumnInt(0)),)),
+                (C_(ColumnStr("x")),),
+            ),
+            NameColumns(
+                Projection(P, (C_(ColumnInt(0)),)),
+                (C_(ColumnStr("y")),),
+            ),
+        ),
+        (
+            ExtendedProjectionListMember(
+                str2columnstr_constant("x"),
+                str2columnstr_constant("x"),
+            ),
+            ExtendedProjectionListMember(
+                str2columnstr_constant("y"),
+                str2columnstr_constant("y"),
+            ),
+            ExtendedProjectionListMember(
+                f(g(C_(ColumnStr("x"))), g(C_(ColumnStr("y")))),
+                str2columnstr_constant("z"),
+            ),
+        ),
+    )
