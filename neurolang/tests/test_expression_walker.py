@@ -192,3 +192,11 @@ def test_convert_to_lambda():
     l3, args = fa2pl.walk(func)
     assert l3(x=3) == 2
     assert args == {'x'}
+
+
+def test_replace_expression_maintains_symbol_fresh():
+    s = S_.fresh()
+    assert s.is_fresh
+    replacer = expression_walker.ReplaceExpressionWalker({})
+    result = replacer.walk(s)
+    assert result.is_fresh
