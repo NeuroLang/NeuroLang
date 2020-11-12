@@ -1,5 +1,4 @@
 import collections
-import operator as op
 from typing import AbstractSet, Iterable
 
 import numpy
