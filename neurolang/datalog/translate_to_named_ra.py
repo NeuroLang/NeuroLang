@@ -174,23 +174,33 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
     @add_match(FunctionApplication)
     def translate_fa(self, expression):
         functor = self.walk(expression.functor)
-        named_args = tuple()
-        projections = tuple()
+        named_args = list()
+        projections = list()
         selections = dict()
         selection_columns = dict()
-        for i, arg in enumerate(expression.args):
+        stack = list(reversed(expression.args))
+        counter = 0
+        while stack:
+            arg = stack.pop()
             if isinstance(arg, Constant):
-                selections[i] = arg
+                selections[counter] = arg
             elif arg in named_args:
-                selection_columns[i] = named_args.index(arg)
+                selection_columns[counter] = named_args.index(arg)
+            elif isinstance(arg, FunctionApplication):
+                stack += list(reversed(arg.args))
             else:
-                projections += (Constant[ColumnInt](i, verify_type=False),)
-                named_args += (arg,)
-
+                projections.append(
+                    Constant[ColumnInt](counter, verify_type=False)
+                )
+                named_args.append(arg)
+            counter += 1
         in_set = self.generate_ra_expression(
-            functor, selections, selection_columns, projections, named_args
+            functor,
+            selections,
+            selection_columns,
+            tuple(projections),
+            tuple(named_args),
         )
-
         return in_set
 
     def generate_ra_expression(
