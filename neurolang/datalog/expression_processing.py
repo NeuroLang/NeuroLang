@@ -679,7 +679,9 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
         if mgu is None:
             return FALSE
         antecedent = ReplaceExpressionWalker(mgu[0]).walk(cq.antecedent)
-        if not self._check_compatibility_symb_to_const_eqs(antecedent):
+        if isinstance(
+            antecedent, Conjunction
+        ) and not self._check_compatibility_symb_to_const_eqs(antecedent):
             return FALSE
         return maybe_deconjunct_single_pred(antecedent)
 
@@ -693,7 +695,6 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
         symbol`, such as `2 = 3, x = 3`.
 
         """
-        conjunction = enforce_conjunction(conjunction)
         symb_to_const = dict()
         symb_to_const_eq_formulas = (
             conjunct
