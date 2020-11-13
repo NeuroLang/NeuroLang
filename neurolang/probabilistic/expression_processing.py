@@ -8,6 +8,7 @@ from ..datalog.expression_processing import (
     EQ,
     UnifyVariableEqualities,
     conjunct_formulas,
+    enforce_conjunction,
     extract_logic_predicates,
     iter_disjunction_or_implication_rules,
     reachable_code,
@@ -355,7 +356,7 @@ def lift_optimization_for_choice_predicates(query, program):
             conj = conjunct_formulas(Conjunction(tuple(preds)), eq_conj)
             unifier = UnifyVariableEqualities()
             rule = Implication(Symbol.fresh()(tuple()), conj)
-            unified_conj = unifier.walk(rule).antecedent
+            unified_conj = enforce_conjunction(unifier.walk(rule).antecedent)
             new_formulas |= set(unified_conj.formulas)
     new_query = Conjunction(tuple(new_formulas))
     return new_query

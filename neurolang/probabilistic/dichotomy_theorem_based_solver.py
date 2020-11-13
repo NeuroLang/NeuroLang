@@ -23,7 +23,11 @@ import logging
 import typing
 from collections import defaultdict
 
-from ..datalog.expression_processing import enforce_conjunction, flatten_query
+from ..datalog.expression_processing import (
+    enforce_conjunction,
+    flatten_query,
+    unify_query_vareqs,
+)
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import ExpressionWalker, add_match
 from ..expressions import Constant, Symbol
@@ -307,7 +311,8 @@ def solve_succ_query(query, cpl_program):
         symbol_table = generate_probabilistic_symbol_table_for_query(
             cpl_program, flat_query_body
         )
-        shattered_query = shatter_easy_probfacts(flat_query, symbol_table)
+        unified_query = unify_query_vareqs(flat_query, keep_head_var_eqs=True)
+        shattered_query = shatter_easy_probfacts(unified_query, symbol_table)
         prob_pred_symbs = (
             cpl_program.pfact_pred_symbs | cpl_program.pchoice_pred_symbs
         )
@@ -318,7 +323,7 @@ def solve_succ_query(query, cpl_program):
                 shattered_conjunct
                 for shattered_conjunct, flat_conjunct in zip(
                     shattered_query.antecedent.formulas,
-                    flat_query.antecedent.formulas,
+                    enforce_conjunction(unified_query.antecedent).formulas,
                 )
                 if extract_logic_atoms(flat_conjunct)[0].functor
                 in prob_pred_symbs

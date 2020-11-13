@@ -7,7 +7,7 @@ import pytest
 from ...exceptions import UnsupportedProgramError, UnsupportedQueryError
 from ...probabilistic.exceptions import (
     ForbiddenConditionalQueryNonConjunctive,
-    UnsupportedProbabilisticQueryError
+    UnsupportedProbabilisticQueryError,
 )
 from ...utils.relational_algebra_set import RelationalAlgebraFrozenSet
 from ..probabilistic_frontend import ProbabilisticFrontend
@@ -698,8 +698,62 @@ def test_solve_marg_query_disjunction():
     with pytest.raises(ForbiddenConditionalQueryNonConjunctive):
         with nl.environment as e:
             e.query[e.p, e.PROB[e.p, e.city, e.sport], e.city, e.sport] = (
-                e.person[e.p] & (
-                    e.lives_in[e.p, e.city] |
-                    e.does_not_smoke[e.p]
-                )
+                e.person[e.p]
+                & (e.lives_in[e.p, e.city] | e.does_not_smoke[e.p])
             ) // e.practice[e.p, e.sport]
+
+
+def test_cbma_two_term_conjunctive_query():
+    nl = ProbabilisticFrontend()
+    nl.add_uniform_probabilistic_choice_over_set(
+        [
+            ("s1",),
+            ("s2",),
+            ("s3",),
+        ],
+        name="SelectedStudy",
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.1, "t1", "s1"),
+            (0.2, "t2", "s1"),
+            (0.3, "t1", "s2"),
+            (0.4, "t2", "s2"),
+            (0.5, "t1", "s3"),
+            (0.6, "t2", "s3"),
+        ],
+        name="TermInStudy",
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.6, "v1", "s1"),
+            (0.5, "v2", "s1"),
+            (0.4, "v1", "s2"),
+            (0.3, "v2", "s2"),
+            (0.2, "v1", "s3"),
+            (0.1, "v2", "s3"),
+        ],
+        name="VoxelReported",
+    )
+    with nl.environment as e:
+        e.TermAssociation[e.t] = e.SelectedStudy[e.s] & e.TermInStudy[e.t, e.s]
+        e.Activation[e.v] = e.SelectedStudy[e.s] & e.VoxelReported[e.v, e.s]
+        e.probmap[e.v, e.PROB[e.v]] = (e.Activation[e.v]) // (
+            e.TermAssociation["t1"] & e.TermAssociation["t2"]
+        )
+        res = nl.query((e.v, e.p), e.probmap[e.v, e.p])
+    expected = RelationalAlgebraFrozenSet(
+        [
+            (
+                "v1",
+                (0.6 * 0.1 * 0.2 + 0.4 * 0.3 * 0.4 + 0.2 * 0.5 * 0.6)
+                / (0.1 * 0.2 + 0.3 * 0.4 + 0.5 * 0.6),
+            ),
+            (
+                "v2",
+                (0.5 * 0.1 * 0.2 + 0.3 * 0.4 * 0.3 + 0.1 * 0.5 * 0.6)
+                / (0.1 * 0.2 + 0.3 * 0.4 + 0.5 * 0.6),
+            ),
+        ]
+    )
+    assert_almost_equal(res, expected)
