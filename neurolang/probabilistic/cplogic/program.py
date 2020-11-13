@@ -30,12 +30,6 @@ from ..expressions import (
     ProbabilisticQuery,
 )
 
-MATMUL = Constant(
-    matmul,
-    verify_type=False,
-    auto_infer_type=False,
-)
-
 
 def is_within_language_prob_query_wannabe(expression):
     return (
@@ -114,7 +108,7 @@ class TranslateQueryBasedProbabilisticFactMixin(PatternWalker):
 
     @add_match(
         Implication(
-            FunctionApplication(MATMUL(Symbol, ...), ...),
+            FunctionApplication(Constant(matmul)(Symbol, ...), ...),
             ...,
         )
     )

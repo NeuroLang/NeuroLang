@@ -1,3 +1,5 @@
+import operator
+
 import pytest
 
 from ...exceptions import ForbiddenDisjunctionError
@@ -5,7 +7,6 @@ from ...expression_walker import IdentityWalker
 from ...expressions import Constant, FunctionApplication, Symbol
 from ...logic import Implication
 from ..cplogic.program import (
-    MATMUL,
     CPLogicProgram,
     TranslateQueryBasedProbabilisticFactMixin,
 )
@@ -84,7 +85,9 @@ class TestTranslateQueryBasedProbabilisticFact(
 
 
 def test_translation_sugar_syntax():
-    pfact = Implication(MATMUL(P, (p / Constant(2)))(x), Q(x, p))
+    pfact = Implication(
+        Constant(operator.matmul)(P, (p / Constant(2)))(x), Q(x, p)
+    )
     translator = TestTranslateQueryBasedProbabilisticFact()
     result = translator.walk(pfact)
     expected = Implication(
