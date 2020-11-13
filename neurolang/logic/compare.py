@@ -3,7 +3,7 @@ import typing
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionWalker
 from ..expressions import Definition, Expression
-from . import Conjunction, Disjunction, Implication, Union
+from . import NaryLogicOperator
 
 
 class LogicalComparison(Definition):
@@ -18,17 +18,11 @@ class LogicalComparison(Definition):
 
 
 class ExpressionComparator(ExpressionWalker):
-    @add_match(LogicalComparison(Union, Union))
-    def unions(self, comp):
-        return self._compare_set_of_formulas(comp.first, comp.second)
-
-    @add_match(LogicalComparison(Conjunction, Conjunction))
-    def conjunctions(self, comp):
-        return self._compare_set_of_formulas(comp.first, comp.second)
-
-    @add_match(LogicalComparison(Disjunction, Disjunction))
-    def disjunctions(self, comp):
-        return self._compare_set_of_formulas(comp.first, comp.second)
+    @add_match(LogicalComparison(NaryLogicOperator, NaryLogicOperator))
+    def nary_logic_operators(self, comp):
+        return type(comp.first) is type(
+            comp.second
+        ) and self._compare_set_of_formulas(comp.first, comp.second)
 
     @add_match(LogicalComparison(Expression, Expression))
     def expressions(self, comp):
