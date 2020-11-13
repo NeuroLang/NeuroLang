@@ -12,6 +12,10 @@ class TranslateColumnsToAtoms(sugar.TranslateColumnsToAtoms, ExpressionWalker):
     pass
 
 
+class TranslateSelectByFirstColumn(sugar.TranslateSelectByFirstColumn, ExpressionWalker):
+    pass
+
+
 def test_columns_to_atoms_rules():
     A = Symbol("A")
     B = Symbol("B")
@@ -82,3 +86,43 @@ def test_columns_to_atoms_facts():
     assert all(arg.is_fresh for arg in b.args)
     assert out_rule.consequent.functor == A
     assert out_rule.consequent.args[0] == b.args[1]
+
+
+def test_select_by_first_implication():
+    A = Symbol("A")
+    B = Symbol("B")
+    C = Symbol("C")
+    c = Constant('c')
+    x = Symbol("x")
+
+    test_rule = Implication(A(x), C(sugar.SelectByFirstColumn(B, c), x))
+
+    tr = TranslateSelectByFirstColumn().walk(test_rule)
+    fs = next(s for s in tr._symbols if s.is_fresh)
+    assert tr == Implication(A(x), Conjunction((C(fs, x), B(c, fs))))
+
+
+def test_select_by_first_implication_builtin():
+    A = Symbol("A")
+    B = Symbol("B")
+    C = Symbol("C")
+    c = Constant('c')
+    eq = Constant(lambda x, y: x == y)
+    x = Symbol("x")
+    y = Symbol("y")
+
+    test_rule = Implication(
+        A(x),
+        Conjunction((
+            C(sugar.SelectByFirstColumn(B, c), x),
+            eq(sugar.SelectByFirstColumn(B, c), y)
+        ))
+    )
+
+    tr = TranslateSelectByFirstColumn().walk(test_rule)
+    fs = next(s for s in tr._symbols if s.is_fresh)
+    res = Implication(
+        A(x),
+        Conjunction((C(fs, x), eq(fs, y), B(c, fs)))
+    )
+    assert tr == res

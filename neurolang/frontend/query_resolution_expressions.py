@@ -104,7 +104,7 @@ class Expression(object):
             functor = self.neurolang_symbol
         else:
             functor = self.expression
-
+        print(self, type(self))
         new_expression = ir.FunctionApplication(functor, new_args)
         return Operation(self.query_builder, new_expression, self, args)
 
@@ -416,7 +416,7 @@ class Operation(Expression):
         self,
         query_builder: "QueryBuilderBase",
         expression: ir.Expression,
-        operator: ir.FunctionApplication,
+        operator: Expression,
         arguments: Tuple[Expression, ...],
         infix: bool = False,
     ) -> "Operation":
@@ -460,6 +460,18 @@ class Operation(Expression):
         else:
             arg_repr = repr(a)
         return arg_repr
+
+    def __ilshift__(self, other: "Expression") -> None:
+        if (
+            self.query_builder.logic_programming and
+            isinstance(self.operator.expression, ir.Symbol)
+        ):
+            return self.query_builder._declare_implication(
+                self,
+                self.other
+            )
+        else:
+            return super().__ilshift__(self, other)
 
 
 class Symbol(Expression):
