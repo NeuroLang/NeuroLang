@@ -1,5 +1,3 @@
-import typing
-
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionWalker
 from ..expressions import Definition, Expression
