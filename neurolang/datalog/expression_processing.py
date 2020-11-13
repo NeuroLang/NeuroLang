@@ -868,6 +868,33 @@ class ExtractVariableEqualities(PatternWalker):
         return {symb: chosen_symb for symb in iterator}
 
 
+def unify_query_vareqs(query, keep_head_var_eqs=False):
+    query = enforce_conjunctive_antecedent(query)
+    extractor = UnifyVariableEqualitiesMixin._Extractor()
+    extractor.walk(query.antecedent)
+    replacer = ReplaceSymbolWalker(extractor.substitutions)
+    conjuncts = set(
+        replacer.walk(formula)
+        for formula in query.antecedent.formulas
+        if not is_equality_between_symbol_and_symbol_or_constant(formula)
+    )
+    if keep_head_var_eqs:
+        head_symbols = set(
+            arg for arg in query.consequent.args if isinstance(arg, Symbol)
+        )
+        conjuncts |= set(
+            EQ(x, y)
+            for x, y in extractor.substitutions.items()
+            if x in head_symbols
+        )
+        consequent = query.consequent
+    else:
+        consequent = replacer.walk(query.consequent)
+    antecedent = conjunct_if_needed(tuple(conjuncts))
+    query = Implication(consequent, antecedent)
+    return query
+
+
 class UnifyVariableEqualitiesMixin(PatternWalker):
     @add_match(
         Implication(FunctionApplication(Symbol, ...), Conjunction),
@@ -877,17 +904,8 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
         ),
     )
     def extract_and_unify_var_eqs_in_implication(self, implication):
-        extractor = UnifyVariableEqualitiesMixin._Extractor()
-        extractor.walk(implication.antecedent)
-        replacer = ReplaceSymbolWalker(extractor.substitutions)
-        consequent = replacer.walk(implication.consequent)
-        conjuncts = tuple(
-            replacer.walk(formula)
-            for formula in implication.antecedent.formulas
-            if not is_equality_between_symbol_and_symbol_or_constant(formula)
-        )
-        antecedent = conjunct_if_needed(conjuncts)
-        return self.walk(Implication(consequent, antecedent))
+        new_impl = unify_query_vareqs(implication, keep_head_var_eqs=False)
+        return self.walk(new_impl)
 
     class _Extractor(ExtractVariableEqualities, IdentityWalker):
         pass

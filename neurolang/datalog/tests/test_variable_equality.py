@@ -4,6 +4,7 @@ from ...datalog.basic_representation import DatalogProgram
 from ...expression_walker import ExpressionWalker
 from ...expressions import Constant, Symbol
 from ...logic import Conjunction, Implication, Union
+from ...logic.compare import logic_exps_equal
 from ..expression_processing import (
     CollapseConjunctiveAntecedents,
     RemoveDuplicatedAntecedentPredicates,
@@ -50,9 +51,10 @@ def test_propagation_to_two_conjuncts():
     rule = Implication(R(x, y), Conjunction((P(x, y), EQ(y, a), Q(y, y))))
     program = DatalogWithVariableEqualityPropagation()
     program.walk(rule)
-    assert R in program.intensional_database()
     expected = Union((Implication(R(x, a), Conjunction((P(x, a), Q(a, a)))),))
-    assert expected == program.intensional_database()[R]
+    assert R in program.intensional_database()
+    result = program.intensional_database()[R]
+    assert logic_exps_equal(result, expected)
 
 
 def test_single_equality_antecedent():
@@ -73,7 +75,7 @@ def test_between_vars_equality_propagation():
         Union((Implication(R(y, y), Conjunction((P(y, y), Q(y, y)))),)),
     ]
     result = program.intensional_database()[R]
-    assert any(hash(expected) == hash(result) for expected in expecteds)
+    assert any(logic_exps_equal(expected, result) for expected in expecteds)
 
 
 def test_multiple_between_vars_equalities():
@@ -82,13 +84,13 @@ def test_multiple_between_vars_equalities():
     )
     program = DatalogWithVariableEqualityPropagation()
     program.walk(rule)
-    assert R in program.intensional_database()
     expecteds = [
         Union((Implication(R(v, v, v), Conjunction((P(v, v), Q(v, v)))),))
         for v in (x, y, z)
     ]
+    assert R in program.intensional_database()
     result = program.intensional_database()[R]
-    assert any(hash(expected) == hash(result) for expected in expecteds)
+    assert any(logic_exps_equal(expected, result) for expected in expecteds)
 
 
 def test_mix_between_var_eqs_var_to_const_eq():
@@ -98,7 +100,6 @@ def test_mix_between_var_eqs_var_to_const_eq():
     )
     program = DatalogWithVariableEqualityPropagation()
     program.walk(rule)
-    assert R in program.intensional_database()
     expected = Union(
         (
             Implication(
@@ -107,8 +108,9 @@ def test_mix_between_var_eqs_var_to_const_eq():
             ),
         )
     )
+    assert R in program.intensional_database()
     result = program.intensional_database()[R]
-    assert hash(result) == hash(expected)
+    assert logic_exps_equal(result, expected)
 
 
 def test_collapsable_conjunction():
@@ -134,10 +136,4 @@ def test_collapsable_conjunction():
         )
     )
     result = program.intensional_database()[R]
-    assert isinstance(result, Union)
-    assert len(result.formulas) == 1
-    assert isinstance(result.formulas[0], Implication)
-    assert result.formulas[0].consequent == expected.formulas[0].consequent
-    assert set(result.formulas[0].antecedent.formulas) == set(
-        expected.formulas[0].antecedent.formulas
-    )
+    assert logic_exps_equal(result, expected)
