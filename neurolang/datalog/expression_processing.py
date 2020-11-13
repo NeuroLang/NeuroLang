@@ -601,25 +601,6 @@ class FreshenFreeVariables(PatternWalker):
         return self.walk(implication)
 
 
-class FreshenHeadVariables(PatternWalker):
-    @add_match(
-        Implication(FunctionApplication, ...),
-        lambda implication: any(
-            not (arg.is_fresh or arg.name.startswith("fresh"))
-            for arg in implication.consequent.args
-            if isinstance(arg, Symbol)
-        ),
-    )
-    def implication_with_not_fresh_head_variables(self, implication):
-        replacements = {
-            arg: Symbol.fresh()
-            for arg in implication.consequent.args
-            if isinstance(arg, Symbol)
-        }
-        implication = ReplaceExpressionWalker(replacements).walk(implication)
-        return self.walk(implication)
-
-
 def flatten_query(query, program):
     """
     Construct the conjunction corresponding to a query on a program.
@@ -670,7 +651,6 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
         HeadConstantToBodyEquality,
         HeadRepeatedVariableToBodyEquality,
         FreshenFreeVariables,
-        FreshenHeadVariables,
         ExpressionWalker,
     ):
         pass
