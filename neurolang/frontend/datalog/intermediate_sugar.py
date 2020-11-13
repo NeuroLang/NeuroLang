@@ -33,6 +33,26 @@ def _has_column_sugar(conjunction, marker):
 
 
 class TranslateColumnsToAtoms(ew.PatternWalker):
+    """
+    Syntactic sugar to handle cases where the first column is used
+    as a selector. Specifically cases such as
+
+    >>> Implication(B(z), C(z, Column(A, 1)))
+
+    is transformed to
+
+    >>> Implication(B(z), Conjunction((A(fresh0, fresh1), C(z, fresh1))))
+
+    If this syntactic sugar is on the head, then every atom that, by type
+    has two arguments, but only one is used, will be replaced by the case
+    where first argument is the sugared element.
+
+    >>> Implication(Column(A, 2), B(Column(A, 2), x)))
+
+    is transformed to
+
+    >>> Implication(A(fresh0, fresh1, fresh2), B(fresh2, x)))
+    """
     @ew.add_match(
         ir.FunctionApplication,
         lambda exp: any(isinstance(arg, Column) for arg in exp.args),
