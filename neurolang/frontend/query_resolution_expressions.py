@@ -104,7 +104,6 @@ class Expression(object):
             functor = self.neurolang_symbol
         else:
             functor = self.expression
-        print(self, type(self))
         new_expression = ir.FunctionApplication(functor, new_args)
         return Operation(self.query_builder, new_expression, self, args)
 
@@ -307,14 +306,12 @@ binary_operations = (
 def op_bind(op):
     @wraps(op)
     def fun(self, *args):
-        new_args = tuple(
-            (
-                arg.expression
-                if isinstance(arg, Expression)
-                else ir.Constant(arg)
-                for arg in (self,) + args
-            )
-        )
+        new_args = self._translate_tuple(args)
+        if self.query_builder.logic_programming and isinstance(self, Symbol):
+            self_arg = self.neurolang_symbol
+        else:
+            self_arg = self.expression
+        new_args = (self_arg,) + new_args
         arg_types = [a.type for a in new_args]
         functor = ir.Constant[Callable[arg_types, ir.Unknown]](
             op, auto_infer_type=False

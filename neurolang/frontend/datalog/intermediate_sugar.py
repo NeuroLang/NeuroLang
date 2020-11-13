@@ -2,7 +2,7 @@
 Set of syntactic sugar processors at the intermediate level.
 """
 
-
+import operator as op
 from typing import AbstractSet, Callable, DefaultDict
 
 from ... import expression_walker as ew, expressions as ir
@@ -107,6 +107,9 @@ class SelectByFirstColumn(ir.Definition):
         self.selector = selector
         self._symbols = self.set_symbol._symbols | self.selector._symbols
 
+    def __repr__(self):
+        return f"{self.set_symbol}.{self.selector}"
+
 
 class TranslateSelectByFirstColumn(ew.PatternWalker):
     """
@@ -171,7 +174,7 @@ class TranslateSelectByFirstColumn(ew.PatternWalker):
             ReplaceExpressionWalker(replacements).walk(expression.antecedent),
         )
 
-        return new_rule
+        return self.walk(new_rule)
 
     @ew.add_match(
         Implication, lambda exp: _has_column_sugar(exp, SelectByFirstColumn)
@@ -226,3 +229,45 @@ class TranslateSelectByFirstColumn(ew.PatternWalker):
         else:
             arity = None
         return arity
+
+
+RSHIFT = ir.Constant(op.rshift)
+
+
+class TranslateRShiftToSelectByColumn(ew.PatternWalker):
+    @ew.add_match(
+        Implication,
+        lambda imp: (
+            imp.consequent.functor == RSHIFT or
+            any(
+                isinstance(arg, ir.FunctionApplication) and
+                arg.functor == RSHIFT
+                for atom in extract_logic_atoms(imp.antecedent)
+                for arg in atom.args
+            )
+        )
+    )
+    def replace_rshift_by_select_by_first_column(self, expression):
+        if expression.consequent.functor == RSHIFT:
+            new_consequent = SelectByFirstColumn(*expression.consequent.args)
+        else:
+            new_consequent = expression.consequent
+
+        atom_replacements = {}
+        for atom in extract_logic_atoms(expression.antecedent):
+            args = tuple()
+            changed = False
+            for arg in atom.args:
+                if isinstance(arg, ir.FunctionApplication) and arg.functor == RSHIFT:
+                    arg = SelectByFirstColumn(*arg.args)
+                    changed = True
+                args += (arg,)
+            if changed:
+                atom_replacements[atom] = atom.functor(*args)
+
+        if len(atom_replacements) > 0:
+            new_antecedent = ew.ReplaceExpressionWalker(atom_replacements).walk(expression.antecedent)
+        if len(atom_replacements) > 0 or new_consequent is not expression.consequent:
+            expression = Implication(new_consequent, new_antecedent)
+
+        return self.walk(expression)
