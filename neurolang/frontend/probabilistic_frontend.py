@@ -16,7 +16,7 @@ from typing import (
     List,
     Optional,
     Tuple,
-    Type,
+    Type
 )
 from uuid import uuid1
 
@@ -24,9 +24,8 @@ from .. import expressions as ir
 from ..datalog.aggregation import (
     Chase,
     DatalogWithAggregationMixin,
-    TranslateToLogicWithAggregation,
+    TranslateToLogicWithAggregation
 )
-from ..datalog.basic_representation import DatalogProgram
 from ..datalog.constraints_representation import DatalogConstraintsProgram
 from ..datalog.negation import DatalogProgramNegationMixin
 from ..datalog.ontologies_parser import OntologyParser
@@ -36,28 +35,22 @@ from ..expression_walker import ExpressionBasicEvaluator
 from ..logic import Union
 from ..probabilistic.cplogic.program import (
     CPLogicMixin,
-    TranslateProbabilisticQueryMixin,
-    TranslateQueryBasedProbabilisticFactMixin,
+    TranslateProbabilisticQueryMixin
 )
 from ..probabilistic.dichotomy_theorem_based_solver import (
     solve_marg_query as lifted_solve_marg_query,
-)
-from ..probabilistic.dichotomy_theorem_based_solver import (
-    solve_succ_query as lifted_solve_succ_query,
+    solve_succ_query as lifted_solve_succ_query
 )
 from ..probabilistic.expression_processing import (
     is_probabilistic_predicate_symbol,
-    is_within_language_prob_query,
+    is_within_language_prob_query
 )
-from ..probabilistic.query_resolution import (
-    QueryBasedProbFactToDetRule,
-    compute_probabilistic_solution,
-)
+from ..probabilistic.query_resolution import compute_probabilistic_solution
 from ..probabilistic.stratification import stratify_program
 from ..region_solver import RegionSolver
 from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
-    RelationalAlgebraStringExpression,
+    RelationalAlgebraStringExpression
 )
 from . import query_resolution_expressions as fe
 from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
@@ -66,8 +59,6 @@ from .query_resolution_datalog import QueryBuilderDatalog
 
 class RegionFrontendCPLogicSolver(
     TranslateProbabilisticQueryMixin,
-    TranslateQueryBasedProbabilisticFactMixin,
-    QueryBasedProbFactToDetRule,
     TranslateToLogicWithAggregation,
     ProbFol2DatalogMixin,
     RegionSolver,
@@ -92,7 +83,6 @@ class NeurolangPDL(QueryBuilderDatalog):
         chase_class: Type[Chase] = Chase,
         probabilistic_solver: Callable = lifted_solve_succ_query,
         probabilistic_marg_solver: Callable = lifted_solve_marg_query,
-        program_ir: Optional[DatalogProgram] = None,
     ) -> "ProbabilisticFrontend":
         """
         Query builder with probabilistic capabilities
@@ -110,9 +100,9 @@ class NeurolangPDL(QueryBuilderDatalog):
         ProbabilisticFrontend
             see description
         """
-        if program_ir is None:
-            program_ir = RegionFrontendCPLogicSolver()
-        super().__init__(program_ir=program_ir, chase_class=chase_class)
+        super().__init__(
+            RegionFrontendCPLogicSolver(), chase_class=chase_class
+        )
         self.probabilistic_solver = probabilistic_solver
         self.probabilistic_marg_solver = lifted_solve_marg_query
         self.ontology_loaded = False
