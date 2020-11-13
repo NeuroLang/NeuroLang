@@ -6,7 +6,9 @@ import operator as op
 from typing import AbstractSet, Callable, DefaultDict
 
 from ... import expression_walker as ew, expressions as ir
-from ...datalog.expression_processing import conjunct_formulas, extract_logic_atoms
+from ...datalog.expression_processing import (
+    conjunct_formulas, extract_logic_atoms
+)
 from ...exceptions import SymbolNotFoundError
 from ...expression_walker import ReplaceExpressionWalker
 from ...logic import Conjunction, Implication
@@ -28,16 +30,6 @@ def _has_column_sugar(conjunction, marker):
         for atom in extract_logic_atoms(conjunction)
         for arg in atom.args
     )
-
-
-def _concatenate_flatten_tuples(*args):
-    res = tuple()
-    for arg in args:
-        if isinstance(arg, tuple):
-            res += arg
-        else:
-            res += (arg,)
-    return res
 
 
 class TranslateColumnsToAtoms(ew.PatternWalker):
@@ -80,11 +72,7 @@ class TranslateColumnsToAtoms(ew.PatternWalker):
         )
 
     def _obtain_new_atoms_and_column_replacements(self, expression):
-        sugared_columns = DefaultDict(dict)
-        for atom in extract_logic_atoms(expression):
-            for arg in atom.args:
-                if isinstance(arg, Column):
-                    sugared_columns[arg.set_symbol][arg] = ir.Symbol.fresh()
+        sugared_columns = self._obtain_sugared_columns(expression)
 
         new_atoms = []
         replacements = {}
@@ -99,6 +87,14 @@ class TranslateColumnsToAtoms(ew.PatternWalker):
             new_atoms.append(k(*args))
             replacements.update(v)
         return replacements, tuple(new_atoms)
+
+    def _obtain_sugared_columns(self, expression):
+        sugared_columns = DefaultDict(dict)
+        for atom in extract_logic_atoms(expression):
+            for arg in atom.args:
+                if isinstance(arg, Column):
+                    sugared_columns[arg.set_symbol][arg] = ir.Symbol.fresh()
+        return sugared_columns
 
 
 class SelectByFirstColumn(ir.Definition):
@@ -248,12 +244,27 @@ class TranslateRShiftToSelectByColumn(ew.PatternWalker):
             )
         ),
     )
-    def replace_rshift_by_select_by_first_column(self, expression):
+    def _replace_rshift_by_select_by_first_column(self, expression):
         if expression.consequent.functor == RSHIFT:
             new_consequent = SelectByFirstColumn(*expression.consequent.args)
         else:
             new_consequent = expression.consequent
 
+        atom_replacements = self._obtain_functor_replacements(expression)
+
+        if len(atom_replacements) > 0:
+            new_antecedent = ew.ReplaceExpressionWalker(
+                atom_replacements
+            ).walk(expression.antecedent)
+        if (
+            len(atom_replacements) > 0
+            or new_consequent is not expression.consequent
+        ):
+            expression = Implication(new_consequent, new_antecedent)
+
+        return self.walk(expression)
+
+    def _obtain_functor_replacements(self, expression):
         atom_replacements = {}
         for atom in extract_logic_atoms(expression.antecedent):
             args = tuple()
@@ -268,15 +279,4 @@ class TranslateRShiftToSelectByColumn(ew.PatternWalker):
                 args += (arg,)
             if changed:
                 atom_replacements[atom] = atom.functor(*args)
-
-        if len(atom_replacements) > 0:
-            new_antecedent = ew.ReplaceExpressionWalker(
-                atom_replacements
-            ).walk(expression.antecedent)
-        if (
-            len(atom_replacements) > 0
-            or new_consequent is not expression.consequent
-        ):
-            expression = Implication(new_consequent, new_antecedent)
-
-        return self.walk(expression)
+        return atom_replacements
