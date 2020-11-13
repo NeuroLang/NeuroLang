@@ -474,14 +474,19 @@ def enforce_conjunctive_antecedent(implication):
     )
 
 
-def maybe_deconjunct_single_pred(conjunction):
+def maybe_deconjunct_single_pred(expression):
     """
-    Remove the conjunction from single-conjunct conjunctions. The conjunction
-    remains unchanged if it has multiple conjuncts.
+    Remove the conjunction from single-conjunct conjunctions.
+
+    The conjunction remains unchanged if it has multiple conjuncts or if it
+    already is a single predicate.
+
     """
-    if len(conjunction.formulas) == 1:
-        return conjunction.formulas[0]
-    return conjunction
+    if isinstance(expression, FunctionApplication):
+        return expression
+    if len(expression.formulas) == 1:
+        return expression.formulas[0]
+    return expression
 
 
 def maybe_disjunct(
@@ -693,32 +698,13 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
         # if we cannot unify, this is always a false statement
         if mgu is None:
             return FALSE
-        var_substitutions = {
-            old: new
-            for old, new in mgu[0].items()
-            if isinstance(old, Symbol) and isinstance(new, Symbol)
-        }
-        antecedent = ReplaceExpressionWalker(var_substitutions).walk(
-            cq.antecedent
-        )
-        equality_conj = Conjunction(
-            tuple(
-                Constant(operator.eq)(x, y)
-                for x, y in mgu[0].items()
-                if (isinstance(x, Symbol) and isinstance(y, Constant))
-                or (isinstance(x, Constant) and isinstance(y, Symbol))
-            )
-        )
-        antecedent = conjunct_formulas(antecedent, equality_conj)
-        if not self._check_compatibility_symbol_to_constant_equalities(
-            antecedent
-        ):
+        antecedent = ReplaceExpressionWalker(mgu[0]).walk(cq.antecedent)
+        if not self._check_compatibility_symb_to_const_eqs(antecedent):
             return FALSE
-        antecedent = maybe_deconjunct_single_pred(antecedent)
-        return antecedent
+        return maybe_deconjunct_single_pred(antecedent)
 
     @staticmethod
-    def _check_compatibility_symbol_to_constant_equalities(conjunction):
+    def _check_compatibility_symb_to_const_eqs(conjunction):
         """
         Statically analyse variable-to-constant equalities within the
         conjunction to check for compatibility. For example, if the two
@@ -727,6 +713,7 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
         symbol`, such as `2 = 3, x = 3`.
 
         """
+        conjunction = enforce_conjunction(conjunction)
         symb_to_const = dict()
         symb_to_const_eq_formulas = (
             conjunct

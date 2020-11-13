@@ -218,21 +218,5 @@ def test_flatten_query_double_vareq():
     program.walk(code)
     query = Conjunction((P(a), P(b)))
     flat = flatten_query(query, program)
-    assert len(flat.formulas) == 4
-    eq_fresh_vars = set(
-        formula.args[0]
-        for formula in flat.formulas
-        if formula.functor == EQ
-        and len(formula.args) == 2
-        and formula.args[0].is_fresh
-    )
-    assert (
-        set(
-            formula.args[0]
-            for formula in flat.formulas
-            if formula.functor == R
-            and len(formula.args) == 1
-            and formula.args[0].is_fresh
-        )
-        == eq_fresh_vars
-    )
+    assert isinstance(flat, Conjunction)
+    assert set(flat.formulas) == {R(a), R(b)}
