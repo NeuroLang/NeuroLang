@@ -3,9 +3,9 @@ from unittest.mock import Mock
 
 from ....datalog import Fact
 from ....datalog.expression_processing import extract_logic_atoms
-from ....expression_walker import ExpressionWalker, ResolveSymbolMixin
-from ....expressions import Constant, Symbol, TypedSymbolTableMixin
-from ....logic import Conjunction, Implication, Union
+from ....expression_walker import ExpressionWalker
+from ....expressions import Constant, Symbol
+from ....logic import Conjunction, Implication
 from .. import intermediate_sugar as sugar
 
 
