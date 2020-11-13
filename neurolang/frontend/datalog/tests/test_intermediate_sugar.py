@@ -8,6 +8,7 @@ from ....expressions import Constant, Symbol, TypedSymbolTableMixin
 from ....logic import Conjunction, Implication, Union
 from .. import intermediate_sugar as sugar
 
+
 class SymbolTableMixin:
     def __init__(self, symbol_table=None):
         if symbol_table is None:
@@ -15,11 +16,15 @@ class SymbolTableMixin:
         self.symbol_table = symbol_table
 
 
-class TranslateColumnsToAtoms(sugar.TranslateColumnsToAtoms, SymbolTableMixin, ExpressionWalker):
+class TranslateColumnsToAtoms(
+    sugar.TranslateColumnsToAtoms, SymbolTableMixin, ExpressionWalker
+):
     pass
 
 
-class TranslateSelectByFirstColumn(sugar.TranslateSelectByFirstColumn, SymbolTableMixin, ExpressionWalker):
+class TranslateSelectByFirstColumn(
+    sugar.TranslateSelectByFirstColumn, SymbolTableMixin, ExpressionWalker
+):
     pass
 
 
@@ -49,8 +54,7 @@ def test_columns_to_atoms_rules():
     assert c.args[0] == b.args[1]
 
     test_rule = Implication(
-        A(sugar.Column(B, one)),
-        C(sugar.Column(B, one), x)
+        A(sugar.Column(B, one)), C(sugar.Column(B, one), x)
     )
 
     tcta = TranslateColumnsToAtoms({B: Constant(Mock(arity=3))})
@@ -99,7 +103,7 @@ def test_select_by_first_implication():
     A = Symbol("A")
     B = Symbol("B")
     C = Symbol("C")
-    c = Constant('c')
+    c = Constant("c")
     x = Symbol("x")
 
     test_rule = Implication(A(x), C(sugar.SelectByFirstColumn(B, c), x))
@@ -113,25 +117,24 @@ def test_select_by_first_implication_builtin():
     A = Symbol("A")
     B = Symbol("B")
     C = Symbol("C")
-    c = Constant('c')
+    c = Constant("c")
     eq = Constant(lambda x, y: x == y)
     x = Symbol("x")
     y = Symbol("y")
 
     test_rule = Implication(
         A(x),
-        Conjunction((
-            C(sugar.SelectByFirstColumn(B, c), x),
-            eq(sugar.SelectByFirstColumn(B, c), y)
-        ))
+        Conjunction(
+            (
+                C(sugar.SelectByFirstColumn(B, c), x),
+                eq(sugar.SelectByFirstColumn(B, c), y),
+            )
+        ),
     )
 
     tr = TranslateSelectByFirstColumn().walk(test_rule)
     fs = next(s for s in tr._symbols if s.is_fresh)
-    res = Implication(
-        A(x),
-        Conjunction((C(fs, x), eq(fs, y), B(c, fs)))
-    )
+    res = Implication(A(x), Conjunction((C(fs, x), eq(fs, y), B(c, fs))))
     assert tr == res
 
 
@@ -139,18 +142,13 @@ def test_select_by_first_implication_builtin_head():
     A = Symbol("A")
     B = Symbol("B")
     C = Symbol[AbstractSet[Tuple[int, int]]]("C")
-    c = Constant('c')
+    c = Constant("c")
     eq = Constant(lambda x, y: x == y)
     x = Symbol("x")
     y = Symbol("y")
 
     test_rule = Implication(
-        sugar.SelectByFirstColumn(A, c),
-        Conjunction((
-            C(x),
-            eq(y),
-            B(x)
-        ))
+        sugar.SelectByFirstColumn(A, c), Conjunction((C(x), eq(y), B(x)))
     )
 
     tr = TranslateSelectByFirstColumn({C: C, B: B}).walk(test_rule)
@@ -158,8 +156,5 @@ def test_select_by_first_implication_builtin_head():
     assert len(fresh_symbols) == 1
 
     fs = fresh_symbols[0]
-    res = Implication(
-        A(c, fs),
-        Conjunction((C(fs, x), eq(fs, y), B(x)))
-    )
+    res = Implication(A(c, fs), Conjunction((C(fs, x), eq(fs, y), B(x))))
     assert tr == res
