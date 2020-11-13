@@ -101,7 +101,7 @@ def extract_atom_sets_and_detect_self_joins(query):
     has_self_joins = False
     predicates = extract_logic_atoms(query)
     predicates = set(
-        pred for pred in predicates if isinstance(pred.functor, Symbol)
+        pred for pred in predicates if not isinstance(pred.functor, Constant)
     )
     seen_predicate_functor = set()
     atom_set = defaultdict(set)
