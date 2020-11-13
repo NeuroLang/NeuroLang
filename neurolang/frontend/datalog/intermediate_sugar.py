@@ -6,14 +6,11 @@ Set of syntactic sugar processors at the intermediate level.
 from typing import AbstractSet, Callable, DefaultDict
 
 from ... import expression_walker as ew, expressions as ir
-from ...datalog.expression_processing import (
-    conjunct_formulas,
-    extract_logic_atoms,
-)
+from ...datalog.expression_processing import conjunct_formulas, extract_logic_atoms
 from ...exceptions import SymbolNotFoundError
 from ...expression_walker import ReplaceExpressionWalker
 from ...logic import Conjunction, Implication
-from ...type_system import get_args, is_leq_informative
+from ...type_system import Unknown, get_args, is_leq_informative
 
 
 class Column(ir.Definition):
@@ -44,9 +41,6 @@ def _concatenate_flatten_tuples(*args):
 
 
 class TranslateColumnsToAtoms(ew.PatternWalker):
-    def __init__(self, symbol_table=None):
-        self.symbol_table = symbol_table
-
     @ew.add_match(
         ir.FunctionApplication,
         lambda exp: any(isinstance(arg, Column) for arg in exp.args),
@@ -115,6 +109,26 @@ class SelectByFirstColumn(ir.Definition):
 
 
 class TranslateSelectByFirstColumn(ew.PatternWalker):
+    """
+    Syntactic sugar to handle cases where the first column is used
+    as a selector. Specifically cases such as
+
+    >>> Implication(B(z), C(z, SelectByFirstColumn(A, c)))
+
+    is transformed to
+
+    >>> Implication(B(z), Conjunction((A(c, fresh), C(z, fresh))))
+
+    If this syntactic sugar is on the head, then every atom that, by type
+    has two arguments, but only one is used, will be replaced by the case
+    where first argument is the sugared element.
+
+    >>> Implication(SelectByFirstColumn(A, c), Conjunction((eq(x), B(x))))
+
+    is transformed to
+
+    >>> Implication(A(c, fresh), Conjunction((eq(fresh, x), B(x))))
+    """
     @ew.add_match(
         ir.FunctionApplication,
         lambda exp: any(
@@ -148,9 +162,9 @@ class TranslateSelectByFirstColumn(ew.PatternWalker):
         new_consequent = consequent.set_symbol(consequent.selector, head_fresh)
 
         replacements = {consequent: new_consequent}
-        for atom in extract_logic_atoms(expression.consequent):
+        for atom in extract_logic_atoms(expression.antecedent):
             if len(atom.args) == 1 and self._theoretical_arity(atom) == 2:
-                replacements[atom] = atom.functor((head_fresh, atom.args[0]))
+                replacements[atom] = atom.functor(head_fresh, atom.args[0])
 
         new_rule = Implication(
             new_consequent,
@@ -158,21 +172,6 @@ class TranslateSelectByFirstColumn(ew.PatternWalker):
         )
 
         return new_rule
-
-    def _theoretical_arity(self, atom):
-        functor = atom.functor
-        if isinstance(functor, ir.Symbol):
-            try:
-                functor = self.symbol_table[functor]
-            except KeyError:
-                raise SymbolNotFoundError(f"Symbol {functor} not found")
-        if is_leq_informative(Callable, functor.type):
-            arity = len(get_args(functor.type))
-        elif is_leq_informative(AbstractSet, functor.type):
-            arity = len(get_args(get_args(functor.type)[0]))
-        else:
-            arity = None
-        return arity
 
     @ew.add_match(
         Implication, lambda exp: _has_column_sugar(exp, SelectByFirstColumn)
@@ -210,3 +209,20 @@ class TranslateSelectByFirstColumn(ew.PatternWalker):
             new_atom = k.set_symbol(k.selector, v)
             new_atoms.append(new_atom)
         return sugared_columns, tuple(new_atoms)
+
+    def _theoretical_arity(self, atom):
+        functor = atom.functor
+        if isinstance(functor, ir.Symbol) and functor.type is Unknown:
+            try:
+                functor = self.symbol_table[functor]
+            except KeyError:
+                raise SymbolNotFoundError(f"Symbol {functor} not found")
+        if functor.type is Unknown:
+            arity = None
+        elif is_leq_informative(functor.type, Callable):
+            arity = len(get_args(functor.type)[:-1])
+        elif is_leq_informative(functor.type, AbstractSet):
+            arity = len(get_args(get_args(functor.type)[0]))
+        else:
+            arity = None
+        return arity

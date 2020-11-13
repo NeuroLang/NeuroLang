@@ -1,18 +1,25 @@
+from typing import AbstractSet, Tuple
 from unittest.mock import Mock
 
-from ....logic import Conjunction, Implication, Union
 from ....datalog import Fact
 from ....datalog.expression_processing import extract_logic_atoms
 from ....expression_walker import ExpressionWalker, ResolveSymbolMixin
-from ....expressions import Constant, Symbol
+from ....expressions import Constant, Symbol, TypedSymbolTableMixin
+from ....logic import Conjunction, Implication, Union
 from .. import intermediate_sugar as sugar
 
+class SymbolTableMixin:
+    def __init__(self, symbol_table=None):
+        if symbol_table is None:
+            symbol_table = dict()
+        self.symbol_table = symbol_table
 
-class TranslateColumnsToAtoms(sugar.TranslateColumnsToAtoms, ExpressionWalker):
+
+class TranslateColumnsToAtoms(sugar.TranslateColumnsToAtoms, SymbolTableMixin, ExpressionWalker):
     pass
 
 
-class TranslateSelectByFirstColumn(sugar.TranslateSelectByFirstColumn, ExpressionWalker):
+class TranslateSelectByFirstColumn(sugar.TranslateSelectByFirstColumn, SymbolTableMixin, ExpressionWalker):
     pass
 
 
@@ -124,5 +131,35 @@ def test_select_by_first_implication_builtin():
     res = Implication(
         A(x),
         Conjunction((C(fs, x), eq(fs, y), B(c, fs)))
+    )
+    assert tr == res
+
+
+def test_select_by_first_implication_builtin_head():
+    A = Symbol("A")
+    B = Symbol("B")
+    C = Symbol[AbstractSet[Tuple[int, int]]]("C")
+    c = Constant('c')
+    eq = Constant(lambda x, y: x == y)
+    x = Symbol("x")
+    y = Symbol("y")
+
+    test_rule = Implication(
+        sugar.SelectByFirstColumn(A, c),
+        Conjunction((
+            C(x),
+            eq(y),
+            B(x)
+        ))
+    )
+
+    tr = TranslateSelectByFirstColumn({C: C, B: B}).walk(test_rule)
+    fresh_symbols = [s for s in tr._symbols if s.is_fresh]
+    assert len(fresh_symbols) == 1
+
+    fs = fresh_symbols[0]
+    res = Implication(
+        A(c, fs),
+        Conjunction((C(fs, x), eq(fs, y), B(x)))
     )
     assert tr == res
