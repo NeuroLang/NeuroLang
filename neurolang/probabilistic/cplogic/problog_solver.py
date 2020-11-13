@@ -162,7 +162,7 @@ def solve_succ_all(cpl):
         pl, problog.sdd_formula.SDD
     ).evaluate()
     nl_solution = pl_solution_to_nl_solution(pl_solution, query_preds)
-    for pred_symb, rule in cpl.within_language_succ_queries().items():
+    for pred_symb, rule in cpl.within_language_prob_queries().items():
         nl_solution[pred_symb] = construct_within_language_succ_result(
             nl_solution[pred_symb], rule,
         )
