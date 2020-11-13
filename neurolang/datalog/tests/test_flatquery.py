@@ -2,7 +2,6 @@ import operator
 
 import pytest
 
-from ...datalog.expressions import Fact
 from ...exceptions import UnsupportedProgramError
 from ...expression_walker import ExpressionWalker
 from ...expressions import Constant, Symbol
