@@ -700,6 +700,8 @@ def test_query_based_pfact_region_volume():
     def volume(s: SphericalVolume) -> float:
         return (4 / 3) * np.pi * s.radius ** 3
 
+    assert volume.symbol_name in nl.functions
+
     nl.add_tuple_set(
         [
             ("contained", SphericalVolume((0, 0, 0), 1)),

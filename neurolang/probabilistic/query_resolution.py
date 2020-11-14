@@ -3,7 +3,6 @@ from typing import AbstractSet
 
 from ..datalog.expression_processing import EQ, conjunct_formulas
 from ..datalog.instance import MapInstance
-from ..exceptions import ForbiddenDisjunctionError
 from ..expression_pattern_matching import add_match
 from ..expression_walker import PatternWalker
 from ..expressions import Constant, FunctionApplication, Symbol
