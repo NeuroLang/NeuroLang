@@ -625,7 +625,7 @@ def test_translate_expression_to_fronted_expression():
     assert imp_fe.antecedent == tr.walk(imp_exp.antecedent)
 
 
-def test_first_column_sugar_body():
+def test_first_column_sugar_body_s():
     qr = frontend.NeurolangDL()
     qr.add_tuple_set({
         ('one', 1), ('two', 2)
@@ -633,7 +633,20 @@ def test_first_column_sugar_body():
 
     with qr.scope as e:
         e.s[e.x] = (e.x == e.y) & e.dd('one', e.y)
-        e.r[e.x] = (e.x == (e.dd >> 'one'))
+        e.r[e.x] = (e.x == (e.dd.s['one']))
         res_all = qr.solve_all()
 
     assert res_all['r'] == res_all['s']
+
+
+def test_first_column_sugar_head_s():
+    qr = frontend.NeurolangDL()
+    qr.add_tuple_set({
+        (1, 'one'), (2, 'two')
+    }, name='dd')
+
+    with qr.scope as e:
+        e.r.s['one'] = e.dd('one')
+        res_all = qr.solve_all()
+
+    assert set(res_all['r']) == {('one', 1)}

@@ -577,6 +577,16 @@ class Symbol(Expression):
         else:
             return self.expression == other
 
+    def __getattr__(self, name: Union["Expression", str]) -> "Operation":
+        if isinstance(name, Expression):
+            name_ = name.expression
+        else:
+            name_ = ir.Constant[str](name)
+        new_expression = ir.FunctionApplication(
+            ir.Constant(getattr), (self.neurolang_symbol, name_,),
+        )
+        return Operation(self.query_builder, new_expression, self, (name,))
+
     def __hash__(self) -> int:
         return hash(self.expression)
 

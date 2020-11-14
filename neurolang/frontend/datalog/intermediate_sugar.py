@@ -6,11 +6,10 @@ import operator as op
 from typing import AbstractSet, Callable, DefaultDict
 
 from ... import expression_walker as ew, expressions as ir
-from ...datalog.expression_processing import (
-    conjunct_formulas, extract_logic_atoms
-)
+from ...datalog.expression_processing import conjunct_formulas, extract_logic_atoms
 from ...exceptions import SymbolNotFoundError
 from ...expression_walker import ReplaceExpressionWalker
+from ...expressions import Constant, FunctionApplication, Symbol
 from ...logic import Conjunction, Implication
 from ...type_system import Unknown, get_args, is_leq_informative
 
@@ -248,55 +247,69 @@ class TranslateSelectByFirstColumn(ew.PatternWalker):
         return arity
 
 
-RSHIFT = ir.Constant(op.rshift)
+GETATTR = ir.Constant(getattr)
+
+
+class ConvertAttrSToSelectByColumn(ew.ExpressionWalker):
+    @ew.add_match(
+        FunctionApplication(
+            FunctionApplication(GETATTR, (..., Constant[str]('s'))),
+            (...,)
+        )
+    )
+    def conversion(self, expression):
+        return self.walk(
+            SelectByFirstColumn(
+                expression.functor.args[0],
+                expression.args[0]
+            )
+        )
+
+
+class RecogniseSSugar(ew.PatternWalker):
+    @ew.add_match(Constant)
+    def constant(self, expression):
+        return False
+
+    @ew.add_match(Symbol)
+    def symbol(self, expression):
+        return False
+
+    @ew.add_match(
+        FunctionApplication(
+            FunctionApplication(GETATTR, (..., Constant[str]('s'))),
+            (...,)
+        )
+    )
+    def s_sugar(self, expression):
+        return True
+
+    @ew.add_match(...)
+    def others(self, expression):
+        params = list(expression.unapply())
+        while params:
+            param = params.pop()
+            if isinstance(param, tuple):
+                params += param
+            else:
+                if self.walk(param):
+                    return True
+        return False
+
+
+_RECOGNISE_S_SUGAR = RecogniseSSugar()
 
 
 class TranslateRShiftToSelectByColumn(ew.PatternWalker):
-    @ew.add_match(
-        Implication,
-        lambda imp: (
-            imp.consequent.functor == RSHIFT
-            or any(
-                isinstance(arg, ir.FunctionApplication)
-                and arg.functor == RSHIFT
-                for atom in extract_logic_atoms(imp.antecedent)
-                for arg in atom.args
-            )
-        ),
-    )
-    def _replace_rshift_by_select_by_first_column(self, expression):
-        if expression.consequent.functor == RSHIFT:
-            new_consequent = SelectByFirstColumn(*expression.consequent.args)
-        else:
-            new_consequent = expression.consequent
+    _convert_attr_s__to_SelectByColumn = ConvertAttrSToSelectByColumn()
 
-        atom_replacements = self._obtain_functor_replacements(expression)
-
-        if len(atom_replacements) > 0:
-            new_antecedent = ew.ReplaceExpressionWalker(
-                atom_replacements
-            ).walk(expression.antecedent)
-        if (
-            len(atom_replacements) > 0
-            or new_consequent is not expression.consequent
-        ):
-            expression = Implication(new_consequent, new_antecedent)
-
-        return self.walk(expression)
-
-    def _obtain_functor_replacements(self, expression):
-        atom_replacements = {}
-        for atom in extract_logic_atoms(expression.antecedent):
-            args = tuple()
-            changed = False
-            for arg in atom.args:
-                if (
-                    isinstance(arg, ir.FunctionApplication)
-                    and arg.functor == RSHIFT
-                ):
-                    arg = SelectByFirstColumn(*arg.args)
-                    changed = True
-                args += (arg,)
-            if changed:
-                atom_replacements[atom] = atom.functor(*args)
-        return atom_replacements
+    @ew.add_match(Implication, lambda imp: _RECOGNISE_S_SUGAR.walk(imp))
+    def replace_s_getattr_by_first_column(self, expression):
+        new_expression = (
+            TranslateRShiftToSelectByColumn.
+            _convert_attr_s__to_SelectByColumn.
+            walk(expression)
+        )
+        if new_expression is not expression:
+            new_expression = self.walk(new_expression)
+        return new_expression
