@@ -1,3 +1,4 @@
+from ...datalog.expression_processing import EQ
 from ...expressions import Symbol
 from ...logic import Conjunction
 from ..dichotomy_theorem_based_solver import is_hierarchical_without_self_joins
@@ -6,6 +7,7 @@ Q = Symbol('Q')
 R = Symbol('R')
 S = Symbol('S')
 T = Symbol('T')
+w = Symbol('w')
 x = Symbol('x')
 y = Symbol('y')
 z = Symbol('z')
@@ -29,3 +31,8 @@ def test_not_hierarchical_without_self_joins():
 
     assert not is_hierarchical_without_self_joins(q1)
     assert not is_hierarchical_without_self_joins(q2)
+
+
+def test_hierarchical_despite_multiple_equalities():
+    q = Conjunction((Q(x), R(y), EQ(y, z), EQ(x, w)))
+    assert is_hierarchical_without_self_joins(q)
