@@ -15,6 +15,10 @@ from ..logic.horn_clauses import Fol2DatalogMixin
 from ..region_solver import RegionSolver
 from ..regions import ExplicitVBR, ExplicitVBROverlay
 from ..utils.data_manipulation import parse_region_label_map
+from .datalog.intermediate_sugar import (
+    TranslateRShiftToSelectByColumn,
+    TranslateSelectByFirstColumn
+)
 from .query_resolution_datalog import QueryBuilderDatalog
 from .query_resolution_expressions import Symbol
 
@@ -62,6 +66,8 @@ class NeurolangDL(QueryBuilderDatalog):
 
 class RegionFrontendDatalogSolver(
     TranslateToLogicWithAggregation,
+    TranslateRShiftToSelectByColumn,
+    TranslateSelectByFirstColumn,
     Fol2DatalogMixin,
     RegionSolver,
     DatalogWithAggregationMixin,

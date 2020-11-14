@@ -270,8 +270,10 @@ class ReplaceExpressionWalker(ExpressionWalker):
         for arg in args:
             if isinstance(arg, Expression):
                 new_arg = self.walk(arg)
+                changed |= new_arg is not arg
             elif isinstance(arg, tuple):
-                new_arg, _ = self.process_iterable_argument(arg)
+                new_arg, change = self.process_iterable_argument(arg)
+                changed |= change
             elif arg is Ellipsis:
                 raise NeuroLangException(
                     "... is not a valid Expression argument"
@@ -279,8 +281,10 @@ class ReplaceExpressionWalker(ExpressionWalker):
             else:
                 new_arg = arg
             new_args += (new_arg,)
-
-        return expression.apply(*new_args)
+        if changed:
+            return expression.apply(*new_args)
+        else:
+            return expression
 
     @add_match(Expression)
     def replace_free_variable(self, expression):
@@ -382,7 +386,7 @@ class ReplaceExpressionsByValues(ExpressionWalker):
         return constant.value
 
 
-class TypedSymbolTableEvaluator(TypedSymbolTableMixin, ExpressionWalker):
+class ResolveSymbolMixin(PatternMatcher):
     @add_match(Symbol)
     def symbol_from_table(self, symbol):
         try:
@@ -393,6 +397,10 @@ class TypedSymbolTableEvaluator(TypedSymbolTableMixin, ExpressionWalker):
             else:
                 raise ValueError(f"{symbol} not in symbol table")
 
+
+class TypedSymbolTableEvaluator(
+    ResolveSymbolMixin, TypedSymbolTableMixin, ExpressionWalker
+):
     @add_match(Statement)
     def statement(self, statement):
         rhs = self.walk(statement.rhs)
