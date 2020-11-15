@@ -650,3 +650,16 @@ def test_first_column_sugar_head_s():
         res_all = qr.solve_all()
 
     assert set(res_all['r']) == {('one', 1)}
+
+
+def test_head_constant():
+    qr = frontend.NeurolangDL()
+    qr.add_tuple_set({
+        (1,)
+    }, name='dd')
+
+    with qr.scope as e:
+        e.r['one', e.x] = e.dd(e.x)
+        res_all = qr.solve_all()
+
+    assert set(res_all['r']) == {('one', 1)}
