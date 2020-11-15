@@ -8,7 +8,7 @@ from typing import AbstractSet, Callable, DefaultDict
 from ... import expression_walker as ew, expressions as ir
 from ...datalog.expression_processing import (
     conjunct_formulas,
-    extract_logic_atoms
+    extract_logic_atoms,
 )
 from ...exceptions import SymbolNotFoundError
 from ...expression_walker import ReplaceExpressionWalker
@@ -319,8 +319,12 @@ class TranslateSSugarToSelectByColumn(ew.PatternWalker):
 
     @ew.add_match(Implication, lambda imp: _RECOGNISE_S_SUGAR.walk(imp))
     def replace_s_getattr_by_first_column(self, expression):
-        new_expression = TranslateSSugarToSelectByColumn._convert_attr_s__to_SelectByColumn.walk(
-            expression
+        new_expression = (
+            TranslateSSugarToSelectByColumn
+            ._convert_attr_s__to_SelectByColumn
+            .walk(
+                expression
+            )
         )
         if new_expression is not expression:
             new_expression = self.walk(new_expression)
