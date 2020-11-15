@@ -14,7 +14,6 @@ import pandas as pd
 from nilearn import datasets, image, plotting
 
 from neurolang import ExplicitVBROverlay, NeurolangPDL
-from neurolang.regions import ExplicitVBROverlay
 
 ###############################################################################
 # Data preparation
@@ -45,7 +44,7 @@ ns_database_fn, ns_features_fn = datasets.utils._fetch_files(
     ],
 )
 
-ns_database = pd.read_csv(ns_database_fn, sep=f"\t")
+ns_database = pd.read_csv(ns_database_fn, sep="\t")
 ijk_positions = np.round(
     nib.affines.apply_affine(
         np.linalg.inv(mni_t1_4mm.affine),
@@ -56,7 +55,7 @@ ns_database["i"] = ijk_positions[:, 0]
 ns_database["j"] = ijk_positions[:, 1]
 ns_database["k"] = ijk_positions[:, 2]
 
-ns_features = pd.read_csv(ns_features_fn, sep=f"\t")
+ns_features = pd.read_csv(ns_features_fn, sep="\t")
 ns_docs = ns_features[["pmid"]].drop_duplicates()
 ns_terms = pd.melt(
     ns_features, var_name="term", id_vars="pmid", value_name="TfIdf"
