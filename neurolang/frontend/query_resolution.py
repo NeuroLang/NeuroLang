@@ -145,10 +145,12 @@ class QueryBuilderBase:
         """
         return symbol in self.symbol_table
 
-    def exists(self, quantified_variable: fe.Symbol, body: fe.Expression) -> fe.Exists:
+    def exists(
+        self, quantified_variable: fe.Symbol, body: fe.Expression
+    ) -> fe.Exists:
         """
         Existential predicate on the body. The predicate
-        will be cosidered satisfied if any instance of 
+        will be cosidered satisfied if any instance of
         `quantified_variable` satifies `body`.
 
         Parameters
@@ -179,10 +181,12 @@ class QueryBuilderBase:
 
         return existential_predicate
 
-    def all(self, quantified_variable: fe.Symbol, body: fe.Expression) -> fe.All:
+    def all(
+        self, quantified_variable: fe.Symbol, body: fe.Expression
+    ) -> fe.All:
         """
         Universal predicate on the body. The predicate
-        will be cosidered satisfied if all instances of 
+        will be cosidered satisfied if all instances of
         `quantified_variable` satify `body`.
 
         Parameters

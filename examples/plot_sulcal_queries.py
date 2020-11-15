@@ -91,9 +91,9 @@ def principal_direction(s: ExplicitVBR, direction: str, eps=1e-6) -> bool:
 
     s_xyz = s.to_xyz()
     cov = np.cov(s_xyz.T)
-    eval, evec = np.linalg.eig(cov)
-    i = np.argmax(np.abs(eval))
-    abs_max_evec = np.abs(evec[:, i].squeeze())
+    evals, evecs = np.linalg.eig(cov)
+    i = np.argmax(np.abs(evals))
+    abs_max_evec = np.abs(evecs[:, i].squeeze())
     sort_dir = np.argsort(abs_max_evec)
     if np.abs(abs_max_evec[sort_dir[-1]] - abs_max_evec[sort_dir[-2]]) < eps:
         return False
