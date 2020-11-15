@@ -31,6 +31,7 @@ Contents:
 .. toctree::
    :maxdepth: 1
 
+   install
    tutorial
    auto_examples/index
    api
