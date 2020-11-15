@@ -151,7 +151,7 @@ jobs:
       - install
       - restore_cache:
           keys:
-            - v1-docs--{{ .Branch }}-
+            - v1-docs-{{ .Branch }}-
 
       - run:
           name: Install extra packages & build documentation
