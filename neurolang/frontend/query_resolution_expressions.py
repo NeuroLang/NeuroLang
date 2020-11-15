@@ -19,7 +19,7 @@ from typing import (
     Union
 )
 
-from .. import datalog as dl, expressions as ir
+from .. import datalog as dl, expressions as ir, logic as lg
 from ..datalog import constraints_representation as cr
 from ..expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 from ..expression_walker import (
@@ -844,3 +844,30 @@ class TranslateExpressionToFrontEndExpression(ExpressionWalker):
         while len(formulas) > 0:
             current_expression = current_expression & self.walk(formulas.pop())
         return current_expression
+
+    @add_match(dl.Negation)
+    def negation(self, expression: ir.Expression) -> Expression:
+        formula = self.walk(expression.formula)
+        return ~formula
+
+    @add_match(lg.ExistentialPredicate)
+    def exists(self, expression: ir.Expression) -> Expression:
+        head = self.walk(expression.head)
+        body = self.walk(expression.body)
+        return Exists(
+            self.query_builder,
+            expression,
+            head,
+            body
+        )
+
+    @add_match(lg.UniversalPredicate)
+    def forall(self, expression: ir.Expression) -> Expression:
+        head = self.walk(expression.head)
+        body = self.walk(expression.body)
+        return All(
+            self.query_builder,
+            expression,
+            head,
+            body
+        )

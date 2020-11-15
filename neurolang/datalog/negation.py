@@ -164,8 +164,8 @@ def is_conjunctive_negation(expression):
             stack += exp.formulas
         elif isinstance(exp, Negation):
             stack.append(exp.formula)
-        elif isinstance(exp, Quantifier):
-            stack.append(exp.body)
+#        elif isinstance(exp, Quantifier):
+#            stack.append(exp.body)
         else:
             return False
 

@@ -10,7 +10,7 @@ from ...datalog.expression_processing import conjunct_formulas, extract_logic_at
 from ...exceptions import SymbolNotFoundError
 from ...expression_walker import ReplaceExpressionWalker
 from ...expressions import Constant, FunctionApplication, Symbol
-from ...logic import Conjunction, Implication
+from ...logic import Conjunction, Implication, TRUE
 from ...type_system import Unknown, get_args, is_leq_informative
 
 
@@ -251,6 +251,10 @@ GETATTR = ir.Constant(getattr)
 
 
 class ConvertAttrSToSelectByColumn(ew.ExpressionWalker):
+    """
+    Convert terms such as P.s[c]
+    or `getattr(P, s)[c]` at `SelectByFirstColumn(P, s)`.
+    """
     @ew.add_match(
         FunctionApplication(
             FunctionApplication(GETATTR, (..., Constant[str]('s'))),
@@ -267,6 +271,10 @@ class ConvertAttrSToSelectByColumn(ew.ExpressionWalker):
 
 
 class RecogniseSSugar(ew.PatternWalker):
+    """
+    Recognising datalog terms such as P.s[c]
+    or `getattr(P, s)[c]`.
+    """
     @ew.add_match(Constant)
     def constant(self, expression):
         return False
@@ -300,16 +308,57 @@ class RecogniseSSugar(ew.PatternWalker):
 _RECOGNISE_S_SUGAR = RecogniseSSugar()
 
 
-class TranslateRShiftToSelectByColumn(ew.PatternWalker):
+class TranslateSSugarToSelectByColumn(ew.PatternWalker):
+    """
+    Syntactic sugar to convert datalog terms P.s[c] to
+    SelectByFirstColumn(P, s).
+    """
     _convert_attr_s__to_SelectByColumn = ConvertAttrSToSelectByColumn()
 
     @ew.add_match(Implication, lambda imp: _RECOGNISE_S_SUGAR.walk(imp))
     def replace_s_getattr_by_first_column(self, expression):
         new_expression = (
-            TranslateRShiftToSelectByColumn.
+            TranslateSSugarToSelectByColumn.
             _convert_attr_s__to_SelectByColumn.
             walk(expression)
         )
         if new_expression is not expression:
             new_expression = self.walk(new_expression)
         return new_expression
+
+
+EQ = Constant(op.eq)
+
+
+class TranslateHeadConstantsToEqualities(ew.PatternWalker):
+    """
+    Syntactic sugar to convert datalog rules having constants
+    in the head to having equalities in the body.
+    """
+    @ew.add_match(
+        Implication,
+        lambda imp: any(
+            isinstance(arg, ir.Constant)
+            for arg in imp.consequent.args
+        ) and (imp.antecedent != TRUE)
+    )
+    def head_constants_to_equalities(self, expression):
+        new_equalities = {}
+        new_args = tuple()
+        for arg in expression.consequent.args:
+            if isinstance(arg, ir.Constant):
+                new_param = ir.Symbol.fresh()
+                new_equalities[new_param] = arg
+                arg = new_param
+            new_args += (arg,)
+        new_consequent = expression.consequent.functor(*new_args)
+        new_antecedent = Conjunction(
+            tuple(
+                [expression.antecedent] +
+                [EQ(k, v) for k, v in new_equalities.items()]
+            )
+        )
+
+        new_implication = Implication(new_consequent, new_antecedent)
+
+        return self.walk(new_implication)
