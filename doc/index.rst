@@ -21,7 +21,7 @@ NeuroLang is a probabilistic logic programming system specialised in the analysi
      - .. figure::  /auto_examples/images/thumb/sphx_glr_plot_sulcal_queries_thumb.png
           :scale: 100%
           :class: thumbnail
-          :target: auto_examples/plot_sulcal_queries.py
+          :target: auto_examples/plot_sulcal_queries.html
 
           :ref:`sphx_glr_auto_examples_plot_sulcal_queries.py` .
 
