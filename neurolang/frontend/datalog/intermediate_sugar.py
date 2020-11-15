@@ -317,7 +317,7 @@ class TranslateSSugarToSelectByColumn(ew.PatternWalker):
 
     _convert_attr_s__to_SelectByColumn = ConvertAttrSToSelectByColumn()
 
-    @ew.add_match(Implication, lambda imp: _RECOGNISE_S_SUGAR.walk(imp))
+    @ew.add_match(Implication, _RECOGNISE_S_SUGAR.walk)
     def replace_s_getattr_by_first_column(self, expression):
         new_expression = (
             TranslateSSugarToSelectByColumn
