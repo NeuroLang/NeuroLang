@@ -19,7 +19,7 @@ from typing import (
     Union
 )
 
-from .. import datalog as dl, expressions as ir
+from .. import datalog as dl, expressions as ir, logic as lg
 from ..datalog import constraints_representation as cr
 from ..expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 from ..expression_walker import (
@@ -104,7 +104,6 @@ class Expression(object):
             functor = self.neurolang_symbol
         else:
             functor = self.expression
-
         new_expression = ir.FunctionApplication(functor, new_args)
         return Operation(self.query_builder, new_expression, self, args)
 
@@ -307,14 +306,12 @@ binary_operations = (
 def op_bind(op):
     @wraps(op)
     def fun(self, *args):
-        new_args = tuple(
-            (
-                arg.expression
-                if isinstance(arg, Expression)
-                else ir.Constant(arg)
-                for arg in (self,) + args
-            )
-        )
+        new_args = self._translate_tuple(args)
+        if self.query_builder.logic_programming and isinstance(self, Symbol):
+            self_arg = self.neurolang_symbol
+        else:
+            self_arg = self.expression
+        new_args = (self_arg,) + new_args
         arg_types = [a.type for a in new_args]
         functor = ir.Constant[Callable[arg_types, ir.Unknown]](
             op, auto_infer_type=False
@@ -416,7 +413,7 @@ class Operation(Expression):
         self,
         query_builder: "QueryBuilderBase",
         expression: ir.Expression,
-        operator: ir.FunctionApplication,
+        operator: Expression,
         arguments: Tuple[Expression, ...],
         infix: bool = False,
     ) -> "Operation":
@@ -460,6 +457,18 @@ class Operation(Expression):
         else:
             arg_repr = repr(a)
         return arg_repr
+
+    def __ilshift__(self, other: "Expression") -> None:
+        if (
+            self.query_builder.logic_programming and
+            isinstance(self.operator.expression, ir.Symbol)
+        ):
+            return self.query_builder._declare_implication(
+                self,
+                self.other
+            )
+        else:
+            return super().__ilshift__(self, other)
 
 
 class Symbol(Expression):
@@ -567,6 +576,16 @@ class Symbol(Expression):
             return self.expression == other.expression
         else:
             return self.expression == other
+
+    def __getattr__(self, name: Union["Expression", str]) -> "Operation":
+        if isinstance(name, Expression):
+            name_ = name.expression
+        else:
+            name_ = ir.Constant[str](name)
+        new_expression = ir.FunctionApplication(
+            ir.Constant(getattr), (self.neurolang_symbol, name_,),
+        )
+        return Operation(self.query_builder, new_expression, self, (name,))
 
     def __hash__(self) -> int:
         return hash(self.expression)
@@ -825,3 +844,30 @@ class TranslateExpressionToFrontEndExpression(ExpressionWalker):
         while len(formulas) > 0:
             current_expression = current_expression & self.walk(formulas.pop())
         return current_expression
+
+    @add_match(dl.Negation)
+    def negation(self, expression: ir.Expression) -> Expression:
+        formula = self.walk(expression.formula)
+        return ~formula
+
+    @add_match(lg.ExistentialPredicate)
+    def exists(self, expression: ir.Expression) -> Expression:
+        head = self.walk(expression.head)
+        body = self.walk(expression.body)
+        return Exists(
+            self.query_builder,
+            expression,
+            head,
+            body
+        )
+
+    @add_match(lg.UniversalPredicate)
+    def forall(self, expression: ir.Expression) -> Expression:
+        head = self.walk(expression.head)
+        body = self.walk(expression.body)
+        return All(
+            self.query_builder,
+            expression,
+            head,
+            body
+        )
