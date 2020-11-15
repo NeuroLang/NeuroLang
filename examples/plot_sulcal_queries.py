@@ -13,7 +13,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from nilearn import datasets, plotting
 
-from neurolang.frontend import ExplicitVBR, NeurolangDL
+from neurolang import ExplicitVBR, NeurolangDL
 
 ##################################################
 # Initialise the NeuroLang probabilistic engine.
