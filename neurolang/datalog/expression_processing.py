@@ -38,8 +38,8 @@ from ..logic import (
     Negation,
     Quantifier,
     Union,
-    expression_processing as elp,
 )
+from ..logic import expression_processing as elp
 from ..logic.transformations import CollapseConjunctions
 from ..logic.unification import most_general_unifier
 from .expressions import TranslateToLogic
@@ -148,9 +148,7 @@ def all_body_preds_in_set(implication, predicate_set):
         in the prediacte_set
 
     """
-    preds = (
-        e.functor for e in extract_logic_atoms(implication.antecedent)
-    )
+    preds = (e.functor for e in extract_logic_atoms(implication.antecedent))
     predicate_set = predicate_set | {implication.consequent.functor}
     return all(not isinstance(e, Symbol) or e in predicate_set for e in preds)
 
@@ -476,14 +474,19 @@ def enforce_conjunctive_antecedent(implication):
     )
 
 
-def maybe_deconjunct_single_pred(conjunction):
+def maybe_deconjunct_single_pred(expression):
     """
-    Remove the conjunction from single-conjunct conjunctions. The conjunction
-    remains unchanged if it has multiple conjuncts.
+    Remove the conjunction from single-conjunct conjunctions.
+
+    The conjunction remains unchanged if it has multiple conjuncts or if it
+    already is a single predicate.
+
     """
-    if len(conjunction.formulas) == 1:
-        return conjunction.formulas[0]
-    return conjunction
+    if isinstance(expression, FunctionApplication):
+        return expression
+    if len(expression.formulas) == 1:
+        return expression.formulas[0]
+    return expression
 
 
 def maybe_disjunct(
@@ -676,24 +679,14 @@ class FlattenQueryInNonRecursiveUCQ(PatternWalker):
         if mgu is None:
             return FALSE
         antecedent = ReplaceExpressionWalker(mgu[0]).walk(cq.antecedent)
-        equality_conj = Conjunction(
-            tuple(
-                Constant(operator.eq)(x, y)
-                for x, y in mgu[0].items()
-                if (isinstance(x, Symbol) and isinstance(y, Constant))
-                or (isinstance(x, Constant) and isinstance(y, Symbol))
-            )
-        )
-        antecedent = conjunct_formulas(antecedent, equality_conj)
-        if not self._check_compatibility_symbol_to_constant_equalities(
-            antecedent
-        ):
+        if isinstance(
+            antecedent, Conjunction
+        ) and not self._check_compatibility_symb_to_const_eqs(antecedent):
             return FALSE
-        antecedent = maybe_deconjunct_single_pred(antecedent)
-        return antecedent
+        return maybe_deconjunct_single_pred(antecedent)
 
     @staticmethod
-    def _check_compatibility_symbol_to_constant_equalities(conjunction):
+    def _check_compatibility_symb_to_const_eqs(conjunction):
         """
         Statically analyse variable-to-constant equalities within the
         conjunction to check for compatibility. For example, if the two

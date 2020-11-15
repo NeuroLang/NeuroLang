@@ -27,6 +27,7 @@ y = Symbol("y")
 z = Symbol("z")
 
 a = Constant("a")
+b = Constant("b")
 
 
 class TestDatalogProgram(DatalogProgram, ExpressionWalker):
@@ -209,3 +210,13 @@ def test_flatten_not_unifiable_becomes_false():
     program.walk(code)
     flat = flatten_query(Z(z), program)
     assert flat == FALSE
+
+
+def test_flatten_query_double_vareq():
+    code = Implication(P(x), Conjunction((R(x),)))
+    program = TestDatalogProgram()
+    program.walk(code)
+    query = Conjunction((P(a), P(b)))
+    flat = flatten_query(query, program)
+    assert isinstance(flat, Conjunction)
+    assert set(flat.formulas) == {R(a), R(b)}
