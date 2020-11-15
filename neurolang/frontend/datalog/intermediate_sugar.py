@@ -6,11 +6,14 @@ import operator as op
 from typing import AbstractSet, Callable, DefaultDict
 
 from ... import expression_walker as ew, expressions as ir
-from ...datalog.expression_processing import conjunct_formulas, extract_logic_atoms
+from ...datalog.expression_processing import (
+    conjunct_formulas,
+    extract_logic_atoms,
+)
 from ...exceptions import SymbolNotFoundError
 from ...expression_walker import ReplaceExpressionWalker
 from ...expressions import Constant, FunctionApplication, Symbol
-from ...logic import Conjunction, Implication, TRUE
+from ...logic import TRUE, Conjunction, Implication
 from ...type_system import Unknown, get_args, is_leq_informative
 
 
@@ -52,6 +55,7 @@ class TranslateColumnsToAtoms(ew.PatternWalker):
 
     >>> Implication(A(fresh0, fresh1, fresh2), B(fresh2, x)))
     """
+
     @ew.add_match(
         ir.FunctionApplication,
         lambda exp: any(isinstance(arg, Column) for arg in exp.args),
@@ -255,18 +259,15 @@ class ConvertAttrSToSelectByColumn(ew.ExpressionWalker):
     Convert terms such as P.s[c]
     or `getattr(P, s)[c]` at `SelectByFirstColumn(P, s)`.
     """
+
     @ew.add_match(
         FunctionApplication(
-            FunctionApplication(GETATTR, (..., Constant[str]('s'))),
-            (...,)
+            FunctionApplication(GETATTR, (..., Constant[str]("s"))), (...,)
         )
     )
     def conversion(self, expression):
         return self.walk(
-            SelectByFirstColumn(
-                expression.functor.args[0],
-                expression.args[0]
-            )
+            SelectByFirstColumn(expression.functor.args[0], expression.args[0])
         )
 
 
@@ -275,6 +276,7 @@ class RecogniseSSugar(ew.PatternWalker):
     Recognising datalog terms such as P.s[c]
     or `getattr(P, s)[c]`.
     """
+
     @ew.add_match(Constant)
     def constant(self, expression):
         return False
@@ -285,8 +287,7 @@ class RecogniseSSugar(ew.PatternWalker):
 
     @ew.add_match(
         FunctionApplication(
-            FunctionApplication(GETATTR, (..., Constant[str]('s'))),
-            (...,)
+            FunctionApplication(GETATTR, (..., Constant[str]("s"))), (...,)
         )
     )
     def s_sugar(self, expression):
@@ -313,14 +314,17 @@ class TranslateSSugarToSelectByColumn(ew.PatternWalker):
     Syntactic sugar to convert datalog terms P.s[c] to
     SelectByFirstColumn(P, s).
     """
+
     _convert_attr_s__to_SelectByColumn = ConvertAttrSToSelectByColumn()
 
-    @ew.add_match(Implication, lambda imp: _RECOGNISE_S_SUGAR.walk(imp))
+    @ew.add_match(Implication, _RECOGNISE_S_SUGAR.walk)
     def replace_s_getattr_by_first_column(self, expression):
         new_expression = (
-            TranslateSSugarToSelectByColumn.
-            _convert_attr_s__to_SelectByColumn.
-            walk(expression)
+            TranslateSSugarToSelectByColumn
+            ._convert_attr_s__to_SelectByColumn
+            .walk(
+                expression
+            )
         )
         if new_expression is not expression:
             new_expression = self.walk(new_expression)
@@ -335,12 +339,13 @@ class TranslateHeadConstantsToEqualities(ew.PatternWalker):
     Syntactic sugar to convert datalog rules having constants
     in the head to having equalities in the body.
     """
+
     @ew.add_match(
         Implication,
         lambda imp: any(
-            isinstance(arg, ir.Constant)
-            for arg in imp.consequent.args
-        ) and (imp.antecedent != TRUE)
+            isinstance(arg, ir.Constant) for arg in imp.consequent.args
+        )
+        and (imp.antecedent != TRUE),
     )
     def head_constants_to_equalities(self, expression):
         new_equalities = {}
@@ -354,8 +359,8 @@ class TranslateHeadConstantsToEqualities(ew.PatternWalker):
         new_consequent = expression.consequent.functor(*new_args)
         new_antecedent = Conjunction(
             tuple(
-                [expression.antecedent] +
-                [EQ(k, v) for k, v in new_equalities.items()]
+                [expression.antecedent]
+                + [EQ(k, v) for k, v in new_equalities.items()]
             )
         )
 
