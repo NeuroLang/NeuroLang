@@ -257,7 +257,7 @@ workflows:
     jobs:
       # - py36
       # - py37
-      - docs:
+      - docs
         # requires:
         #  - py37
       - deploy_docs:
