@@ -58,6 +58,16 @@ class QueryBasedProbFactToDetRule(PatternWalker):
                 new_formulas.append(formula)
         return self.walk(Union(tuple(new_formulas)))
 
+    @add_match(Implication, is_query_based_probfact)
+    def query_based_probafact(self, impl):
+        return self.walk(
+            Union(
+                self._query_based_probabilistic_fact_to_det_and_prob_rules(
+                    impl
+                )
+            )
+        )
+
     @staticmethod
     def _query_based_probabilistic_fact_to_det_and_prob_rules(impl):
         prob_symb = Symbol.fresh()
