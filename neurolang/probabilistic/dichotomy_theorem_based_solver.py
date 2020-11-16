@@ -24,6 +24,7 @@ import typing
 from collections import defaultdict
 
 from ..datalog.expression_processing import (
+    EQ,
     enforce_conjunction,
     flatten_query,
     unify_query_vareqs,
@@ -104,6 +105,9 @@ def is_hierarchical_without_self_joins(query):
 def extract_atom_sets_and_detect_self_joins(query):
     has_self_joins = False
     predicates = extract_logic_atoms(query)
+    predicates = set(
+        pred for pred in predicates if not pred.functor == EQ
+    )
     seen_predicate_functor = set()
     atom_set = defaultdict(set)
     for predicate in predicates:
