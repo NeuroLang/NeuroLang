@@ -38,7 +38,6 @@ from .relational_algebra import (
 
 ADD = Constant(operator.add)
 MUL = Constant(operator.mul)
-SUB = Constant(operator.sub)
 
 
 class ProvenanceAlgebraSet(Constant):
@@ -323,11 +322,12 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
         tmp_np_op_args = (tmp_left, tmp_right)
         tmp_non_prov_result = NaturalJoin(*tmp_np_op_args)
 
+        sub = Constant(operator.sub)
         result = ExtendedProjection(
             tmp_non_prov_result,
             (
                 ExtendedProjectionListMember(
-                    fun_exp=SUB(tmp_left_prov_col, tmp_right_prov_col),
+                    fun_exp=sub(tmp_left_prov_col, tmp_right_prov_col),
                     dst_column=res_prov_col,
                 ),
             )
