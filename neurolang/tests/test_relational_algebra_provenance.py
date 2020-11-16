@@ -588,7 +588,7 @@ def test_difference_same_provenance_column():
             columns=("_p_", "x", "y", "w"),
             iterable=[
                 (0.5, "a", "b", "a"),
-                (0.7, "a", "a", "b"),
+                (0.3, "a", "a", "b"),
                 (0.2, "b", "b", "c"),
             ],
         ),
@@ -599,9 +599,9 @@ def test_difference_same_provenance_column():
         NamedRelationalAlgebraFrozenSet(
             columns=("_p_", "x", "y", "z"),
             iterable=[
-                (0.2, "a", "b", "a"),
-                (0.3, "b", "a", "b"),
-                (0.1, "b", "b", "c"),
+                (0.7, "a", "b", "a"),
+                (0.8, "b", "a", "b"),
+                (0.9, "b", "b", "c"),
             ],
         ),
         ColumnStr("_p_"),
@@ -611,8 +611,9 @@ def test_difference_same_provenance_column():
         NamedRelationalAlgebraFrozenSet(
             columns=("_p_", "x", "y", "w"),
             iterable=[
-                (0.3, "a", "b", "a"),
-                (0.1, "b", "b", "c"),
+                (0.15, "a", "b", "a"),
+                (0.3, "a", "a", "b"),
+                (0.02, "b", "b", "c"),
             ],
         ),
         ColumnStr("_p_"),
