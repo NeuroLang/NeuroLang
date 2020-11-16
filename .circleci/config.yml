@@ -255,11 +255,11 @@ workflows:
   version: 2
   test_benchmark_build:
     jobs:
-      # - py36
-      # - py37
-      - docs
-        # requires:
-        #  - py37
+      - py36
+      - py37
+      - docs:
+        requires:
+         - py37
       - deploy_docs:
          requires:
            - docs
