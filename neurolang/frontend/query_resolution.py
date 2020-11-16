@@ -33,6 +33,7 @@ from ..typed_symbol_table import TypedSymbolTable
 from .neurosynth_utils import NeuroSynthHandler, StudyID, TfIDf
 from . import query_resolution_expressions as fe
 from ..datalog import DatalogProgram
+from ..logic import ExistentialPredicate, UniversalPredicate
 
 
 class QueryBuilderBase:
@@ -143,6 +144,78 @@ class QueryBuilderBase:
             does symbol exist in current symbol_table
         """
         return symbol in self.symbol_table
+
+    def exists(
+        self, quantified_variable: fe.Symbol, body: fe.Expression
+    ) -> fe.Exists:
+        """
+        Existential predicate on the body. The predicate
+        will be cosidered satisfied if any instance of
+        `quantified_variable` satifies `body`.
+
+        Parameters
+        ----------
+        quantified_variable : fe.Symbol
+            existentially-quantified variable
+
+        body: fe.Expression
+            first order logic proposition which to be
+            satisfied by the existential quatifier.
+
+        Returns
+        -------
+        fe.Exists
+            representation of the existential predicate.
+        """
+        existential_predicate = (
+            fe.Exists(
+                self,
+                ExistentialPredicate(
+                    quantified_variable.expression,
+                    body.expression
+                ),
+                quantified_variable,
+                body
+            )
+        )
+
+        return existential_predicate
+
+    def all(
+        self, quantified_variable: fe.Symbol, body: fe.Expression
+    ) -> fe.All:
+        """
+        Universal predicate on the body. The predicate
+        will be cosidered satisfied if all instances of
+        `quantified_variable` satify `body`.
+
+        Parameters
+        ----------
+        quantified_variable : fe.Symbol
+            universally-quantified variable
+
+        body: fe.Expression
+            first order logic proposition which to be
+            satisfied by the universal quatifier.
+
+        Returns
+        -------
+        fe.All
+            representation of the universal predicate.
+        """
+        universal_predicate = (
+            fe.All(
+                self,
+                UniversalPredicate(
+                    quantified_variable.expression,
+                    body.expression
+                ),
+                quantified_variable,
+                body
+            )
+        )
+
+        return universal_predicate
 
     @property
     def types(self) -> List[Type]:
