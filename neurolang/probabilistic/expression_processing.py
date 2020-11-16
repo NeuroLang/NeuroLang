@@ -55,6 +55,18 @@ def is_probabilistic_fact(expression):
     )
 
 
+def is_query_based_probfact(expression):
+    return (
+        isinstance(expression, Implication)
+        and isinstance(expression.consequent, ProbabilisticPredicate)
+        and expression.antecedent != TRUE
+        and not (
+            isinstance(expression.antecedent, FunctionApplication)
+            and expression.antecedent.functor.is_fresh
+        )
+    )
+
+
 def group_probabilistic_facts_by_pred_symb(union):
     probfacts = collections.defaultdict(list)
     non_probfacts = list()

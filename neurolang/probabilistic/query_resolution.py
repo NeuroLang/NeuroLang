@@ -5,11 +5,12 @@ from ..datalog.expression_processing import EQ, conjunct_formulas
 from ..datalog.instance import MapInstance
 from ..expression_pattern_matching import add_match
 from ..expression_walker import PatternWalker
-from ..expressions import Constant, FunctionApplication, Symbol
+from ..expressions import Constant, Symbol
 from ..logic import TRUE, Implication, Union
 from .cplogic.program import CPLogicProgram
 from .expression_processing import (
     construct_within_language_succ_result,
+    is_query_based_probfact,
     is_within_language_prob_query,
     within_language_succ_query_to_intensional_rule,
 )
@@ -36,12 +37,24 @@ class QueryBasedProbFactToDetRule(PatternWalker):
     """
 
     @add_match(
-        Implication(ProbabilisticPredicate, ...),
-        lambda implication: implication.antecedent != TRUE
-        and not (
-            isinstance(implication.antecedent, FunctionApplication)
-            and implication.antecedent.functor.is_fresh
+        Union,
+        lambda union: any(
+            is_query_based_probfact(formula) for formula in union.formulas
         ),
+    )
+    def union_with_query_based_pfact(self, union):
+        new_formulas = list()
+        for formula in union.formulas:
+            if is_query_based_probfact(formula):
+                translated = self.walk(formula)
+                new_formulas += list(translated.formulas)
+            else:
+                new_formulas.append(formula)
+        return Union(tuple(new_formulas))
+
+    @add_match(
+        Implication(ProbabilisticPredicate, ...),
+        is_query_based_probfact,
     )
     def query_based_probabilistic_fact(self, impl):
         prob_symb = Symbol.fresh()
@@ -54,9 +67,7 @@ class QueryBasedProbFactToDetRule(PatternWalker):
             prob_symb, impl.consequent.body
         )
         prob_rule = Implication(prob_consequent, det_consequent)
-        self.walk(det_rule)
-        self.walk(prob_rule)
-        return impl
+        return self.walk(Union((det_rule, prob_rule)))
 
 
 def _solve_within_language_prob_query(
