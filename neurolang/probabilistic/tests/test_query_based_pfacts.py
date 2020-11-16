@@ -5,7 +5,7 @@ import pytest
 from ...exceptions import ForbiddenDisjunctionError
 from ...expression_walker import IdentityWalker
 from ...expressions import Constant, FunctionApplication, Symbol
-from ...logic import Implication
+from ...logic import Implication, Union
 from ..cplogic.program import (
     CPLogicProgram,
     TranslateQueryBasedProbabilisticFactMixin,
@@ -41,7 +41,7 @@ def test_query_based_pfact():
         Q(x, p),
     )
     program = QueryBasedProbFactToDetRuleProgramTest()
-    program.walk(pfact)
+    program.walk(Union((pfact,)))
     program_rules = list()
     for union in program.intensional_database().values():
         program_rules += union.formulas
