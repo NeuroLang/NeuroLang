@@ -153,8 +153,8 @@ jobs:
           keys:
             - v1-docs-{{ .Branch }}--
       - run:
-          name: Install Texlive
-          command: 'sudo apt update && sudo apt install texlive texlive-xetex texlive-fonts-extra texlive-latex-extra texlive-plain-extra'
+          name: Install Texlive and dvipng
+          command: 'sudo apt update && sudo apt install texlive texlive-xetex texlive-fonts-extra texlive-latex-extra texlive-plain-extra dvipng'
       - run:
           name: Install extra packages & build documentation
           command: |
