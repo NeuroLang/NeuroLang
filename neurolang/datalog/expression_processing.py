@@ -794,7 +794,7 @@ class RemoveDuplicatedAntecedentPredicates(PatternWalker):
         )
 
 
-class ExtractVariableEqualities(PatternWalker):
+class ExtractVariableEqualitiesMixin(PatternWalker):
     def __init__(self):
         self._equality_sets = list()
 
@@ -868,9 +868,16 @@ class ExtractVariableEqualities(PatternWalker):
         return {symb: chosen_symb for symb in iterator}
 
 
+class ExtractVariableEqualities(
+    ExtractVariableEqualitiesMixin,
+    IdentityWalker,
+):
+    pass
+
+
 def unify_query_vareqs(query, keep_head_var_eqs=False):
     query = enforce_conjunctive_antecedent(query)
-    extractor = UnifyVariableEqualitiesMixin._Extractor()
+    extractor = ExtractVariableEqualities()
     extractor.walk(query.antecedent)
     replacer = ReplaceSymbolWalker(extractor.substitutions)
     conjuncts = set(
@@ -906,9 +913,6 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
     def extract_and_unify_var_eqs_in_implication(self, implication):
         new_impl = unify_query_vareqs(implication, keep_head_var_eqs=False)
         return self.walk(new_impl)
-
-    class _Extractor(ExtractVariableEqualities, IdentityWalker):
-        pass
 
 
 class UnifyVariableEqualities(UnifyVariableEqualitiesMixin, ExpressionWalker):
