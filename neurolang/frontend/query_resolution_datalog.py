@@ -254,12 +254,13 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         >>> s3
         l3: typing.AbstractSet[typing.Tuple[int]] = [(2,)]
         """
-
         if len(args) == 1:
             predicate = args[0]
             head = tuple()
         elif len(args) == 2:
             head, predicate = args
+            if isinstance(head, fe.Symbol):
+                head = (head,)
         else:
             raise ValueError("query takes 1 or 2 arguments")
 
