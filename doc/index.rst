@@ -8,21 +8,22 @@ Welcome to Neurolang's documentation!
 
 NeuroLang is a probabilistic logic programming system specialised in the analysis of neuroimaging data, but not exclusively determined by it. See our example gallery for some use cases on neuroimaging meta-analysis.
 
-.. raw:: html
+.. list-table::
+   :widths: 40 40
 
+   * - .. figure::  /auto_examples/images/thumb/sphx_glr_plot_neurosynth_implementation_thumb.png
+          :scale: 100%
+          :class: thumbnail
+          :target: auto_examples/plot_neurosynth_implementation.html
 
-    <div style="clear: both"></div>
-    <div class="container-fluid hidden-xs hidden-sm">
-      <div class="row">
-        <a href="auto_examples/plot_neurosynth_implementation.html">
-          <div class="col-md-2 thumbnail">
-            <img src="_images/sphx_glr_plot_neurosynth_implementation_thumb.png">
-          </div>
-        </a>
-      </div>
-    </div>
-    <br>
+          :ref:`sphx_glr_auto_examples_plot_neurosynth_implementation.py` .
 
+     - .. figure::  /auto_examples/images/thumb/sphx_glr_plot_sulcal_queries_thumb.png
+          :scale: 100%
+          :class: thumbnail
+          :target: auto_examples/plot_sulcal_queries.html
+
+          :ref:`sphx_glr_auto_examples_plot_sulcal_queries.py` .
 
 
 Contents:
@@ -30,6 +31,7 @@ Contents:
 .. toctree::
    :maxdepth: 1
 
+   install
    tutorial
    auto_examples/index
    api
