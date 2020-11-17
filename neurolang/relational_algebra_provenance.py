@@ -290,7 +290,6 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             new_prov_col.value,
         )
 
-
     @add_match(Difference(ProvenanceAlgebraSet, ProvenanceAlgebraSet))
     def prov_difference(self, diff):
         left = self.walk(diff.relation_left)
@@ -340,7 +339,6 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
                 for col in set(res_columns) - {res_prov_col}
             ),
         )
-
         return ProvenanceAlgebraSet(
             self.walk(result).value, res_prov_col.value
         )
