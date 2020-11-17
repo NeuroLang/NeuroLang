@@ -16,14 +16,6 @@ from ..datalog.expression_processing import (
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..logic import Conjunction, Implication, Union
-from ..relational_algebra import (
-    ExtendedProjection,
-    ExtendedProjectionListMember,
-    str2columnstr_constant,
-)
-from ..relational_algebra_provenance import (
-    RelationalAlgebraProvenanceCountingSolver,
-)
 from .exceptions import DistributionDoesNotSumToOneError
 from .expressions import PROB, ProbabilisticPredicate, ProbabilisticQuery
 
@@ -384,20 +376,3 @@ def is_probabilistic_predicate_symbol(pred_symb, program):
                 if apred.functor not in wlq_symbs
             ]
     return False
-
-
-def project_on_query_head(query, provset):
-    proj_list = list()
-    for term in query.consequent.args:
-        if isinstance(term, Constant):
-            proj_list.append(
-                ExtendedProjectionListMember(
-                    term, str2columnstr_constant(Symbol.fresh().name)
-                )
-            )
-        else:
-            col = str2columnstr_constant(term.name)
-            proj_list.append(ExtendedProjectionListMember(col, col))
-    result = ExtendedProjection(provset, tuple(proj_list))
-    solver = RelationalAlgebraProvenanceCountingSolver()
-    return solver.walk(result)

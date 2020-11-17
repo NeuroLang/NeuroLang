@@ -1,11 +1,14 @@
 import operator
 import typing
 
+import pytest
+
 from ...datalog.aggregation import (
     DatalogWithAggregationMixin,
     TranslateToLogicWithAggregation,
 )
 from ...datalog.basic_representation import DatalogProgram
+from ...exceptions import ForbiddenExpressionError
 from ...expression_walker import ExpressionWalker
 from ...expressions import Constant, Symbol
 from ...logic import Conjunction, Implication, Union
@@ -196,15 +199,6 @@ def test_aggregation():
             )
         ),
     )
-    program = DatalogWithVariableEqualityUnification()
-    program.walk(rule)
-    expected = Union(
-        (
-            Implication(
-                P(x, Constant(sum)(y, a), Q(x, a)),
-                R(x, y, a),
-            )
-        )
-    )
-    result = program.intensional_database()[P]
-    assert logic_exp_commutative_equal(result, expected)
+    program = DatalogWithVariableEqualityUnificationAndAggregation()
+    with pytest.raises(ForbiddenExpressionError):
+        program.walk(rule)

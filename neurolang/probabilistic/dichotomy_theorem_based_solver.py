@@ -25,9 +25,10 @@ from collections import defaultdict
 
 from ..datalog.expression_processing import (
     EQ,
+    UnifyVariableEqualities,
     enforce_conjunction,
     flatten_query,
-    unify_variable_equalities,
+    iter_conjuncts,
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import ExpressionWalker, add_match
@@ -60,10 +61,7 @@ from ..relational_algebra_provenance import (
 from ..utils import log_performance
 from ..utils.orderedset import OrderedSet
 from .exceptions import NotHierarchicalQueryException
-from .expression_processing import (
-    lift_optimization_for_choice_predicates,
-    project_on_query_head,
-)
+from .expression_processing import lift_optimization_for_choice_predicates
 from .probabilistic_ra_utils import (
     DeterministicFactSet,
     ProbabilisticChoiceSet,
@@ -105,9 +103,7 @@ def is_hierarchical_without_self_joins(query):
 def extract_atom_sets_and_detect_self_joins(query):
     has_self_joins = False
     predicates = extract_logic_atoms(query)
-    predicates = set(
-        pred for pred in predicates if not pred.functor == EQ
-    )
+    predicates = set(pred for pred in predicates if not pred.functor == EQ)
     seen_predicate_functor = set()
     atom_set = defaultdict(set)
     for predicate in predicates:
@@ -312,22 +308,19 @@ def solve_succ_query(query, cpl_program):
         symbol_table = generate_probabilistic_symbol_table_for_query(
             cpl_program, flat_query_body
         )
-        unified_query = unify_variable_equalities(flat_query, keep_head_var_eqs=True)
+        unified_query = UnifyVariableEqualities().walk(flat_query)
         shattered_query = shatter_easy_probfacts(unified_query, symbol_table)
         prob_pred_symbs = (
             cpl_program.pfact_pred_symbs | cpl_program.pchoice_pred_symbs
         )
-        # note: this assumes that the shattering process does not change the
-        # order of the antecedent's conjuncts
         shattered_query_probabilistic_body = Conjunction(
             tuple(
-                shattered_conjunct
-                for shattered_conjunct, flat_conjunct in zip(
-                    shattered_query.antecedent.formulas,
-                    enforce_conjunction(unified_query.antecedent).formulas,
+                conjunct
+                for conjunct in iter_conjuncts(shattered_query.antecedent)
+                if isinstance(
+                    conjunct.functor,
+                    (ProbabilisticChoiceSet, ProbabilisticFactSet),
                 )
-                if extract_logic_atoms(flat_conjunct)[0].functor
-                in prob_pred_symbs
             )
         )
         if not is_hierarchical_without_self_joins(
@@ -340,16 +333,13 @@ def solve_succ_query(query, cpl_program):
             raise NotHierarchicalQueryException(
                 "Query not hierarchical, algorithm can't be applied"
             )
-
         ra_query = TranslateToNamedRA().walk(shattered_query.antecedent)
-        # finally project on the initial query's head variables
-        proj_cols = tuple(
-            OrderedSet(
-                str2columnstr_constant(arg.name)
-                for arg in query.consequent.args
-            )
+        # project on query's head variables
+        ra_query = _project_on_query_head(ra_query, shattered_query)
+        # re-introduce head variables potentially removed by unification
+        ra_query = _maybe_reintroduce_head_variables(
+            ra_query, flat_query, unified_query
         )
-        ra_query = Projection(ra_query, proj_cols)
         ra_query = RAQueryOptimiser().walk(ra_query)
 
     with log_performance(LOG, "Run RAP query"):
@@ -357,6 +347,39 @@ def solve_succ_query(query, cpl_program):
         prob_set_result = solver.walk(ra_query)
 
     return prob_set_result
+
+
+def _project_on_query_head(provset, query):
+    proj_cols = tuple(
+        OrderedSet(
+            str2columnstr_constant(arg.name)
+            for arg in query.consequent.args
+            if isinstance(arg, Symbol)
+        )
+    )
+    return Projection(provset, proj_cols)
+
+
+def _maybe_reintroduce_head_variables(ra_query, flat_query, unified_query):
+    proj_list = list()
+    for old, new in zip(
+        flat_query.consequent.args, unified_query.consequent.args
+    ):
+        dst_column = str2columnstr_constant(old.name)
+        fun_exp = dst_column
+        if new != old:
+            if isinstance(new, Symbol):
+                fun_exp = str2columnstr_constant(new.name)
+            elif isinstance(new, Constant):
+                fun_exp = new
+            else:
+                raise ValueError(
+                    f"Unexpected argument {new}. "
+                    "Expected symbol or constant"
+                )
+        member = ExtendedProjectionListMember(fun_exp, dst_column)
+        proj_list.append(member)
+    return ExtendedProjection(ra_query, tuple(proj_list))
 
 
 def solve_marg_query(rule, cpl):

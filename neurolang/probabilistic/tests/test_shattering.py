@@ -42,12 +42,9 @@ def test_no_constant():
     symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
     shattered = shatter_easy_probfacts(query, symbol_table)
     assert isinstance(shattered, Implication)
-    assert len(shattered.antecedent.formulas) == 1
-    assert isinstance(shattered.antecedent.formulas[0], FunctionApplication)
-    assert isinstance(
-        shattered.antecedent.formulas[0].functor, ProbabilisticFactSet
-    )
-    assert shattered.antecedent.formulas[0].args == (x, y)
+    assert isinstance(shattered.antecedent, FunctionApplication)
+    assert isinstance(shattered.antecedent.functor, ProbabilisticFactSet)
+    assert shattered.antecedent.args == (x, y)
 
 
 def test_one_constant_one_var():
@@ -59,13 +56,10 @@ def test_one_constant_one_var():
     symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
     shattered = shatter_easy_probfacts(query, symbol_table)
     assert isinstance(shattered, Implication)
-    assert len(shattered.antecedent.formulas) == 1
-    assert isinstance(shattered.antecedent.formulas[0], FunctionApplication)
-    assert isinstance(
-        shattered.antecedent.formulas[0].functor, ProbabilisticFactSet
-    )
-    assert shattered.antecedent.formulas[0].args == (y,)
-    assert shattered.antecedent.formulas[0].functor.relation in symbol_table
+    assert isinstance(shattered.antecedent, FunctionApplication)
+    assert isinstance(shattered.antecedent.functor, ProbabilisticFactSet)
+    assert shattered.antecedent.args == (y,)
+    assert shattered.antecedent.functor.relation in symbol_table
 
 
 def test_query_shattering_self_join():
@@ -140,8 +134,7 @@ def test_shattering_duplicated_predicate():
     symbol_table = generate_probabilistic_symbol_table_for_query(cpl, query)
     shattered = shatter_easy_probfacts(query, symbol_table)
     assert isinstance(shattered, Implication)
-    assert len(shattered.antecedent.formulas) == 1
-    assert shattered.antecedent.formulas[0].args == (x, y)
+    assert shattered.antecedent.args == (x, y)
 
 
 def test_predicates_with_more_than_two_parameters():

@@ -42,7 +42,7 @@ from ..logic import (
 from ..logic import expression_processing as elp
 from ..logic.transformations import CollapseConjunctions
 from ..logic.unification import most_general_unifier
-from .expressions import TranslateToLogic
+from .expressions import AggregationApplication, TranslateToLogic
 
 EQ = Constant(operator.eq)
 
@@ -745,7 +745,21 @@ def is_rule_with_builtin(rule, known_builtins=None):
 
 
 def remove_conjunction_duplicates(conjunction):
-    return Conjunction(tuple(set(conjunction.formulas)))
+    return maybe_deconjunct_single_pred(
+        Conjunction(tuple(set(conjunction.formulas)))
+    )
+
+
+def iter_conjuncts(expression):
+    if isinstance(expression, Conjunction):
+        for conjunct in expression.formulas:
+            yield conjunct
+    elif isinstance(expression, FunctionApplication):
+        yield expression
+    elif expression == TRUE:
+        yield
+    else:
+        raise ValueError("Expected predicate or conjunction of predicates")
 
 
 def iter_disjunction_or_implication_rules(implication_or_disjunction):
@@ -754,6 +768,16 @@ def iter_disjunction_or_implication_rules(implication_or_disjunction):
     else:
         for formula in implication_or_disjunction.formulas:
             yield formula
+
+
+def is_aggregation_rule(rule):
+    return is_aggregation_predicate(rule.consequent)
+
+
+def is_aggregation_predicate(predicate):
+    return any(
+        isinstance(arg, AggregationApplication) for arg in predicate.args
+    )
 
 
 def is_equality_between_symbol_and_symbol_or_constant(formula):
@@ -875,48 +899,52 @@ class ExtractVariableEqualities(
     pass
 
 
-def unify_variable_equalities(implication, keep_head_var_eqs=False):
-    implication = enforce_conjunctive_antecedent(implication)
-    extractor = ExtractVariableEqualities()
-    extractor.walk(implication.antecedent)
-    replacer = ReplaceSymbolWalker(extractor.substitutions)
-    conjuncts = set(
-        replacer.walk(formula)
-        for formula in implication.antecedent.formulas
-        if not is_equality_between_symbol_and_symbol_or_constant(formula)
-    )
-    if keep_head_var_eqs:
-        head_symbols = set(
-            arg
-            for arg in implication.consequent.args
-            if isinstance(arg, Symbol)
-        )
-        conjuncts |= set(
-            EQ(x, y)
-            for x, y in extractor.substitutions.items()
-            if x in head_symbols
-        )
-        consequent = implication.consequent
-    else:
-        consequent = replacer.walk(implication.consequent)
-    antecedent = conjunct_if_needed(tuple(conjuncts))
-    implication = Implication(consequent, antecedent)
-    return implication
-
-
 class UnifyVariableEqualitiesMixin(PatternWalker):
     @add_match(
-        Implication(FunctionApplication(Symbol, ...), Conjunction),
-        lambda implication: any(
+        Implication(FunctionApplication(Symbol, ...), ...),
+        lambda implication: all(
+            isinstance(arg, (Symbol, Constant))
+            for arg in implication.consequent.args
+        )
+        and any(
             is_equality_between_symbol_and_symbol_or_constant(formula)
-            for formula in implication.antecedent.formulas
+            for formula in iter_conjuncts(implication.antecedent)
         ),
     )
     def extract_and_unify_var_eqs_in_implication(self, implication):
-        new_impl = unify_variable_equalities(
-            implication, keep_head_var_eqs=False
+        extractor = ExtractVariableEqualities()
+        extractor.walk(implication.antecedent)
+        replacer = ReplaceSymbolWalker(extractor.substitutions)
+        antecedent = Conjunction(
+            tuple(
+                formula
+                for formula in iter_conjuncts(implication.antecedent)
+                if not is_equality_between_symbol_and_symbol_or_constant(
+                    formula
+                )
+            )
         )
-        return self.walk(new_impl)
+        antecedent = replacer.walk(antecedent)
+        if len(antecedent.formulas) == 0:
+            antecedent = TRUE
+        else:
+            antecedent = remove_conjunction_duplicates(antecedent)
+        consequent = replacer.walk(implication.consequent)
+        new_implication = Implication(consequent, antecedent)
+        return self.walk(new_implication)
+
+    @add_match(
+        Implication(FunctionApplication(Symbol, ...), ...),
+        lambda implication: is_aggregation_rule(implication)
+        and any(
+            is_equality_between_symbol_and_symbol_or_constant(formula)
+            for formula in iter_conjuncts(implication.antecedent)
+        ),
+    )
+    def unsupported_unification_for_aggregation(self, rule_with_aggregation):
+        raise ForbiddenExpressionError(
+            "Unification of rules with aggregation not supported"
+        )
 
 
 class UnifyVariableEqualities(UnifyVariableEqualitiesMixin, ExpressionWalker):
