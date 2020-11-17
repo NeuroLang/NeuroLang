@@ -1,3 +1,4 @@
+import math
 import operator
 from typing import AbstractSet
 
@@ -22,6 +23,7 @@ from .relational_algebra import (
     ExtendedProjection,
     ExtendedProjectionListMember,
     Difference,
+    LeftNaturalJoin,
     NameColumns,
     NaturalJoin,
     Product,
@@ -38,7 +40,7 @@ from .relational_algebra import (
 
 ADD = Constant(operator.add)
 MUL = Constant(operator.mul)
-
+SUB = Constant(operator.sub)
 
 class ProvenanceAlgebraSet(Constant):
     def __init__(self, relations, provenance_column):
@@ -320,14 +322,16 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             tmp_right_prov_col,
         )
         tmp_np_op_args = (tmp_left, tmp_right)
-        tmp_non_prov_result = NaturalJoin(*tmp_np_op_args)
+        tmp_non_prov_result = LeftNaturalJoin(*tmp_np_op_args)
 
-        sub = Constant(operator.sub)
+        isnan = lambda x: 0 if math.isnan(x) else x
+        isnan = Constant(isnan)
+
         result = ExtendedProjection(
             tmp_non_prov_result,
             (
                 ExtendedProjectionListMember(
-                    fun_exp=sub(tmp_left_prov_col, tmp_right_prov_col),
+                    fun_exp=MUL(tmp_left_prov_col, SUB(Constant(1), isnan(tmp_right_prov_col))),
                     dst_column=res_prov_col,
                 ),
             )

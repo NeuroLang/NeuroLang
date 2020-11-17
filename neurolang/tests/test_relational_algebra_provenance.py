@@ -11,6 +11,7 @@ from ..relational_algebra import (
     ColumnStr,
     ColumnInt,
     Difference,
+    LeftNaturalJoin,
     NaturalJoin,
     Product,
     RenameColumn,
@@ -568,18 +569,19 @@ def test_difference():
 
     r_expected = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
-            columns=("_p1_", "x", "y", "w"),
+            columns=("_p1_", "y", "x", "w"),
             iterable=[
-                (0.3, "a", "b", "a"),
-                (0.1, "b", "b", "c"),
+                (0.4, "b", "a", "a"),
+                (0.7, "a", "a", "b"),
+                (0.18, "b", "b", "c"),
             ],
         ),
         ColumnStr("_p1_"),
     )
 
     op = Difference(r_left, r_right)
-    sol = RelationalAlgebraProvenanceCountingSolver().walk(op)
-    assert sol == r_expected
+    result = RelationalAlgebraProvenanceCountingSolver().walk(op)
+    assert testing.eq_prov_relations(result, r_expected)
 
 
 def test_difference_same_provenance_column():
@@ -609,16 +611,16 @@ def test_difference_same_provenance_column():
 
     r_expected = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
-            columns=("_p_", "x", "y", "w"),
+            columns=("_p_", "w", "x", "y"),
             iterable=[
-                (0.15, "a", "b", "a"),
-                (0.3, "a", "a", "b"),
-                (0.02, "b", "b", "c"),
+                (0.15, "a", "a", "b"),
+                (0.3, "b", "a", "a"),
+                (0.02, "c", "b", "b"),
             ],
         ),
         ColumnStr("_p_"),
     )
 
     op = Difference(r_left, r_right)
-    sol = RelationalAlgebraProvenanceCountingSolver().walk(op)
-    assert sol == r_expected
+    result = RelationalAlgebraProvenanceCountingSolver().walk(op)
+    assert testing.eq_prov_relations(result, r_expected)
