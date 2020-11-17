@@ -641,11 +641,9 @@ def eq_prov_isclose(pas1, pas2):
     )
     c1 = Symbol.fresh().name
     c2 = Symbol.fresh().name
-    x1 = pas1.value.rename_column(pas1.provenance_column, c1)
-    x2 = pas2.value.rename_column(pas2.provenance_column, c2)
-    joined = x1.naturaljoin(x2)
-    probs = list(joined.projection(*(c1, c2)))
-    for p1, p2 in probs:
+    x1 = pas1.value._container[pas1.provenance_column].values
+    x2 = pas2.value._container[pas2.provenance_column].values
+    for p1, p2 in zip(x1, x2):
         if isinstance(p1, float) and isinstance(p2, float):
             if not np.isclose(p1, p2):
                 return False
