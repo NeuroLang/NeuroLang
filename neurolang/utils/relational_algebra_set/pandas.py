@@ -512,7 +512,7 @@ class NamedRelationalAlgebraFrozenSet(
             return self
 
         new_container = self._container.set_index(on).join(
-            other._container.set_index(on), 
+            other._container.set_index(on),
             how='left'
         )
         new_container = new_container.reset_index()

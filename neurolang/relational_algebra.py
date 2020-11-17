@@ -121,8 +121,8 @@ class LeftNaturalJoin(RelationalAlgebraOperation):
 
     def __repr__(self):
         return (
-            f"[{self.relation_left}" 
-            f"\N{LEFT OUTER JOIN}" 
+            f"[{self.relation_left}"
+            f"\N{LEFT OUTER JOIN}"
             f"{self.relation_right}]"
         )
 

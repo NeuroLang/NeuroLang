@@ -42,6 +42,7 @@ ADD = Constant(operator.add)
 MUL = Constant(operator.mul)
 SUB = Constant(operator.sub)
 
+
 class ProvenanceAlgebraSet(Constant):
     def __init__(self, relations, provenance_column):
         self.relations = relations
@@ -331,9 +332,9 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             (
                 ExtendedProjectionListMember(
                     fun_exp=MUL(
-                        tmp_left_prov_col, 
+                        tmp_left_prov_col,
                         SUB(
-                            Constant(1), 
+                            Constant(1),
                             isnan(tmp_right_prov_col)
                         )
                     ),
@@ -345,8 +346,6 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
                 for col in set(res_columns) - {res_prov_col}
             ),
         )
-
-
         return ProvenanceAlgebraSet(
             self.walk(result).value, res_prov_col.value
         )
