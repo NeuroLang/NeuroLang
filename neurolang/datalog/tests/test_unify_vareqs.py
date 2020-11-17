@@ -1,9 +1,18 @@
 import operator
+import typing
 
+from ...datalog.aggregation import (
+    DatalogWithAggregationMixin,
+    TranslateToLogicWithAggregation,
+)
 from ...datalog.basic_representation import DatalogProgram
 from ...expression_walker import ExpressionWalker
 from ...expressions import Constant, Symbol
 from ...logic import Conjunction, Implication, Union
+from ...type_system import Unknown
+from ...utils.testing.logic_commutative_comparison import (
+    logic_exp_commutative_equal,
+)
 from ..expression_processing import (
     CollapseConjunctiveAntecedents,
     RemoveDuplicatedAntecedentPredicates,
@@ -25,7 +34,7 @@ c = Constant("c")
 EQ = Constant(operator.eq)
 
 
-class DatalogWithVariableEqualityPropagation(
+class DatalogWithVariableEqualityUnification(
     TranslateToLogic,
     CollapseConjunctiveAntecedents,
     UnifyVariableEqualitiesMixin,
@@ -36,9 +45,9 @@ class DatalogWithVariableEqualityPropagation(
     pass
 
 
-def test_propagation_to_one_conjunct():
+def test_one_conjunct():
     rule = Implication(R(x), Conjunction((P(x, y), EQ(y, a))))
-    program = DatalogWithVariableEqualityPropagation()
+    program = DatalogWithVariableEqualityUnification()
     program.walk(rule)
     assert R in program.intensional_database()
     expected = Union((Implication(R(x), P(x, a)),))
@@ -46,34 +55,27 @@ def test_propagation_to_one_conjunct():
     assert result == expected
 
 
-def test_propagation_to_two_conjuncts():
+def test_two_conjuncts():
     rule = Implication(R(x, y), Conjunction((P(x, y), EQ(y, a), Q(y, y))))
-    program = DatalogWithVariableEqualityPropagation()
+    program = DatalogWithVariableEqualityUnification()
     program.walk(rule)
     expected = Union((Implication(R(x, a), Conjunction((P(x, a), Q(a, a)))),))
     assert R in program.intensional_database()
     result = program.intensional_database()[R]
-    assert isinstance(result, Union)
-    assert len(result.formulas) == 1
-    assert isinstance(result.formulas[0], Implication)
-    assert isinstance(result.formulas[0].antecedent, Conjunction)
-    assert result.formulas[0].consequent == expected.formulas[0].consequent
-    assert set(result.formulas[0].antecedent.formulas) == set(
-        expected.formulas[0].antecedent.formulas
-    )
+    assert logic_exp_commutative_equal(result, expected)
 
 
 def test_single_equality_antecedent():
     rule = Implication(R(x), Conjunction((EQ(x, a),)))
-    program = DatalogWithVariableEqualityPropagation()
+    program = DatalogWithVariableEqualityUnification()
     program.walk(rule)
     assert R not in program.intensional_database()
     assert R in program.extensional_database()
 
 
-def test_between_vars_equality_propagation():
+def test_between_vars_equalities():
     rule = Implication(R(x, y), Conjunction((P(x, y), EQ(y, x), Q(y, y))))
-    program = DatalogWithVariableEqualityPropagation()
+    program = DatalogWithVariableEqualityUnification()
     program.walk(rule)
     assert R in program.intensional_database()
     expecteds = [
@@ -82,10 +84,7 @@ def test_between_vars_equality_propagation():
     ]
     result = program.intensional_database()[R]
     assert any(
-        result.formulas[0].consequent == expected.formulas[0].consequent
-        and set(result.formulas[0].antecedent.formulas)
-        == set(expected.formulas[0].antecedent.formulas)
-        for expected in expecteds
+        logic_exp_commutative_equal(result, expected) for expected in expecteds
     )
 
 
@@ -93,7 +92,7 @@ def test_multiple_between_vars_equalities():
     rule = Implication(
         R(x, y, z), Conjunction((P(z, x), EQ(y, z), EQ(y, x), Q(y, y)))
     )
-    program = DatalogWithVariableEqualityPropagation()
+    program = DatalogWithVariableEqualityUnification()
     program.walk(rule)
     expecteds = [
         Union((Implication(R(v, v, v), Conjunction((P(v, v), Q(v, v)))),))
@@ -101,15 +100,8 @@ def test_multiple_between_vars_equalities():
     ]
     assert R in program.intensional_database()
     result = program.intensional_database()[R]
-    assert isinstance(result, Union)
-    assert len(result.formulas) == 1
-    assert isinstance(result.formulas[0], Implication)
-    assert isinstance(result.formulas[0].antecedent, Conjunction)
     assert any(
-        result.formulas[0].consequent == expected.formulas[0].consequent
-        and set(result.formulas[0].antecedent.formulas)
-        == set(expected.formulas[0].antecedent.formulas)
-        for expected in expecteds
+        logic_exp_commutative_equal(result, expected) for expected in expecteds
     )
 
 
@@ -118,7 +110,7 @@ def test_mix_between_var_eqs_var_to_const_eq():
         R(x, y, z),
         Conjunction((P(z, x), EQ(y, z), EQ(y, a), Q(y, y), EQ(b, x))),
     )
-    program = DatalogWithVariableEqualityPropagation()
+    program = DatalogWithVariableEqualityUnification()
     program.walk(rule)
     expected = Union(
         (
@@ -130,14 +122,7 @@ def test_mix_between_var_eqs_var_to_const_eq():
     )
     assert R in program.intensional_database()
     result = program.intensional_database()[R]
-    assert isinstance(result, Union)
-    assert len(result.formulas) == 1
-    assert isinstance(result.formulas[0], Implication)
-    assert isinstance(result.formulas[0].antecedent, Conjunction)
-    assert result.formulas[0].consequent == expected.formulas[0].consequent
-    assert set(result.formulas[0].antecedent.formulas) == set(
-        expected.formulas[0].antecedent.formulas
-    )
+    assert logic_exp_commutative_equal(result, expected)
 
 
 def test_collapsable_conjunction():
@@ -152,7 +137,7 @@ def test_collapsable_conjunction():
             )
         ),
     )
-    program = DatalogWithVariableEqualityPropagation()
+    program = DatalogWithVariableEqualityUnification()
     program.walk(rule)
     expected = Union(
         (
@@ -163,14 +148,7 @@ def test_collapsable_conjunction():
         )
     )
     result = program.intensional_database()[R]
-    assert isinstance(result, Union)
-    assert len(result.formulas) == 1
-    assert isinstance(result.formulas[0], Implication)
-    assert isinstance(result.formulas[0].antecedent, Conjunction)
-    assert result.formulas[0].consequent == expected.formulas[0].consequent
-    assert set(result.formulas[0].antecedent.formulas) == set(
-        expected.formulas[0].antecedent.formulas
-    )
+    assert logic_exp_commutative_equal(result, expected)
 
 
 def test_extra_var_eq_const_eq():
@@ -178,17 +156,57 @@ def test_extra_var_eq_const_eq():
         Z(x, y),
         Conjunction((Q(x, y), EQ(z, y), EQ(y, a))),
     )
-    program = DatalogWithVariableEqualityPropagation()
+    program = DatalogWithVariableEqualityUnification()
     program.walk(rule)
     expected = Union((Implication(Z(x, a), Q(x, a)),))
     result = program.intensional_database()[Z]
-    assert result == expected
+    assert logic_exp_commutative_equal(result, expected)
     rule = Implication(
         Z(x, y, z),
         Conjunction((Q(x, y), EQ(z, y), EQ(y, a))),
     )
-    program = DatalogWithVariableEqualityPropagation()
+    program = DatalogWithVariableEqualityUnification()
     program.walk(rule)
     expected = Union((Implication(Z(x, a, a), Q(x, a)),))
     result = program.intensional_database()[Z]
-    assert result == expected
+    assert logic_exp_commutative_equal(result, expected)
+
+
+class DatalogWithVariableEqualityUnificationAndAggregation(
+    TranslateToLogicWithAggregation,
+    UnifyVariableEqualitiesMixin,
+    RemoveDuplicatedAntecedentPredicates,
+    DatalogWithAggregationMixin,
+    DatalogProgram,
+    ExpressionWalker,
+):
+    def function_sum(
+        self,
+        x: typing.AbstractSet,
+        y: typing.AbstractSet,
+    ) -> Unknown:
+        return sum(v + w for v, w in zip(x, y))
+
+
+def test_aggregation():
+    rule = Implication(
+        P(x, Constant(sum)(y, z)),
+        Conjunction(
+            (
+                R(x, y, z),
+                EQ(z, a),
+            )
+        ),
+    )
+    program = DatalogWithVariableEqualityUnification()
+    program.walk(rule)
+    expected = Union(
+        (
+            Implication(
+                P(x, Constant(sum)(y, a), Q(x, a)),
+                R(x, y, a),
+            )
+        )
+    )
+    result = program.intensional_database()[P]
+    assert logic_exp_commutative_equal(result, expected)
