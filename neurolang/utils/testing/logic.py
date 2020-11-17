@@ -1,10 +1,14 @@
-from ..expression_pattern_matching import add_match
-from ..expression_walker import ExpressionWalker
-from ..expressions import Definition, Expression
-from . import NaryLogicOperator
+from ...expression_pattern_matching import add_match
+from ...expression_walker import ExpressionWalker
+from ...expressions import Definition, Expression
+from ...logic import NaryLogicOperator
+
+__all__ = [
+    "logic_exp_commutative_equal",
+]
 
 
-class LogicalComparison(Definition):
+class LogicCommutativeComparison(Definition):
     def __init__(self, first, second):
         self.first = first
         self.second = second
@@ -15,8 +19,10 @@ class LogicalComparison(Definition):
         )
 
 
-class ExpressionComparator(ExpressionWalker):
-    @add_match(LogicalComparison(NaryLogicOperator, NaryLogicOperator))
+class LogicCommutativeComparator(ExpressionWalker):
+    @add_match(
+        LogicCommutativeComparison(NaryLogicOperator, NaryLogicOperator)
+    )
     def nary_logic_operators(self, comp):
         if not isinstance(comp.first, type(comp.second)) or not isinstance(
             comp.second, type(comp.first)
@@ -24,7 +30,7 @@ class ExpressionComparator(ExpressionWalker):
             return False
         return self._compare_set_of_formulas(comp.first, comp.second)
 
-    @add_match(LogicalComparison(Expression, Expression))
+    @add_match(LogicCommutativeComparison(Expression, Expression))
     def expressions(self, comp):
         args1 = comp.first.unapply()
         args2 = comp.second.unapply()
@@ -37,7 +43,7 @@ class ExpressionComparator(ExpressionWalker):
 
     def _args_equal(self, arg1, arg2):
         if isinstance(arg1, Expression) and isinstance(arg2, Expression):
-            if not self.walk(LogicalComparison(arg1, arg2)):
+            if not self.walk(LogicCommutativeComparison(arg1, arg2)):
                 return False
         elif arg1 != arg2:
             return False
@@ -45,12 +51,17 @@ class ExpressionComparator(ExpressionWalker):
 
     def _compare_set_of_formulas(self, first, second):
         return all(
-            any(self.walk(LogicalComparison(f1, f2)) for f2 in second.formulas)
+            any(
+                self.walk(LogicCommutativeComparison(f1, f2))
+                for f2 in second.formulas
+            )
             for f1 in first.formulas
         )
 
 
-def logic_exps_equal(exp1, exp2):
+def logic_exp_commutative_equal(exp1, exp2):
     if not isinstance(exp1, Expression) or not isinstance(exp2, Expression):
         raise ValueError("Can only compare expressions")
-    return ExpressionComparator().walk(LogicalComparison(exp1, exp2))
+    return LogicCommutativeComparator().walk(
+        LogicCommutativeComparison(exp1, exp2)
+    )

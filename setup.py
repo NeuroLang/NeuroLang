@@ -1,4 +1,11 @@
+import os
+import sys
 from setuptools import setup
+
+# Workaround for editable install with pip
+# and versioneer
+sys.path.append(os.path.dirname(__file__))
+
 import versioneer
 
 if __name__ == "__main__":

@@ -445,6 +445,8 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
             ExtendedProjectionListMember(c, c) for c in named_columns
         )
         stack = list(classified_formulas["eq_formulas"])
+        if len(stack) == 0:
+            return output
         seen_counts = collections.defaultdict(int)
         while stack:
             formula = stack.pop()
