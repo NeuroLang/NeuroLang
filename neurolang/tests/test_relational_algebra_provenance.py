@@ -569,9 +569,9 @@ def test_difference():
 
     r_expected = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
-            columns=("_p1_", "y", "x", "w"),
+            columns=("_p1_", "x", "y", "w"),
             iterable=[
-                (0.4, "b", "a", "a"),
+                (0.4, "a", "b", "a"),
                 (0.7, "a", "a", "b"),
                 (0.18, "b", "b", "c"),
             ],
@@ -611,11 +611,11 @@ def test_difference_same_provenance_column():
 
     r_expected = ProvenanceAlgebraSet(
         NamedRelationalAlgebraFrozenSet(
-            columns=("_p_", "w", "x", "y"),
+            columns=("_p_", "x", "y", "w"),
             iterable=[
-                (0.15, "a", "a", "b"),
-                (0.3, "b", "a", "a"),
-                (0.02, "c", "b", "b"),
+                (0.15, "a", "b", "a"),
+                (0.3, "a", "a", "b"),
+                (0.02, "b", "b", "c"),
             ],
         ),
         ColumnStr("_p_"),
