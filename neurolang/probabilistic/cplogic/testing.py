@@ -50,10 +50,11 @@ def get_named_relation_tuples(relation):
 def eq_prov_relations(pas1, pas2):
     assert isinstance(pas1, ProvenanceAlgebraSet)
     assert isinstance(pas2, ProvenanceAlgebraSet)
-    assert (
-        pas1.value.projection(*pas1.non_provenance_columns).to_unnamed()
-        == pas2.value.projection(*pas2.non_provenance_columns).to_unnamed()
-    )
+    assert len(pas1.value.columns) == len(pas2.value.columns)
+    set1 = pas1.value.projection(*pas1.non_provenance_columns)
+    set2 = pas2.value.projection(*pas2.non_provenance_columns)
+    for c in pas1.non_provenance_columns:
+        assert (set1._container[c] == set2._container[c]).all()
     # ensure the prov col names are different so we can join the sets
     c1 = Symbol.fresh().name
     c2 = Symbol.fresh().name
