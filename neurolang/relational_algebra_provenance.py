@@ -324,8 +324,7 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
         tmp_np_op_args = (tmp_left, tmp_right)
         tmp_non_prov_result = LeftNaturalJoin(*tmp_np_op_args)
 
-        isnan = lambda x: 0 if math.isnan(x) else x
-        isnan = Constant(isnan)
+        isnan = Constant(lambda x: 0 if math.isnan(x) else x)
 
         result = ExtendedProjection(
             tmp_non_prov_result,
