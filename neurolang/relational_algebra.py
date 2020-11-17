@@ -119,7 +119,7 @@ class LeftNaturalJoin(RelationalAlgebraOperation):
         self.relation_right = relation_right
 
     def __repr__(self):
-        return f"[{self.relation_left}" f"\N{JOIN}" f"{self.relation_right}]"
+        return f"[{self.relation_left}" f"\N{LEFT OUTER JOIN}" f"{self.relation_right}]"
 
 
 class Product(RelationalAlgebraOperation):
