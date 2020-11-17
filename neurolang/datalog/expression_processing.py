@@ -750,18 +750,6 @@ def remove_conjunction_duplicates(conjunction):
     )
 
 
-def iter_conjuncts(expression):
-    if isinstance(expression, Conjunction):
-        for conjunct in expression.formulas:
-            yield conjunct
-    elif isinstance(expression, FunctionApplication):
-        yield expression
-    elif expression == TRUE:
-        yield
-    else:
-        raise ValueError("Expected predicate or conjunction of predicates")
-
-
 def iter_disjunction_or_implication_rules(implication_or_disjunction):
     if isinstance(implication_or_disjunction, Implication):
         yield implication_or_disjunction
@@ -908,7 +896,7 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
         )
         and any(
             is_equality_between_symbol_and_symbol_or_constant(formula)
-            for formula in iter_conjuncts(implication.antecedent)
+            for formula in extract_logic_predicates(implication.antecedent)
         ),
     )
     def extract_and_unify_var_eqs_in_implication(self, implication):
@@ -918,7 +906,7 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
         antecedent = Conjunction(
             tuple(
                 formula
-                for formula in iter_conjuncts(implication.antecedent)
+                for formula in extract_logic_predicates(implication.antecedent)
                 if not is_equality_between_symbol_and_symbol_or_constant(
                     formula
                 )
@@ -938,7 +926,7 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
         lambda implication: is_aggregation_rule(implication)
         and any(
             is_equality_between_symbol_and_symbol_or_constant(formula)
-            for formula in iter_conjuncts(implication.antecedent)
+            for formula in extract_logic_predicates(implication.antecedent)
         ),
     )
     def unsupported_unification_for_aggregation(self, rule_with_aggregation):

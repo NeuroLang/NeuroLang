@@ -5,7 +5,7 @@ from typing import AbstractSet
 
 from ..datalog.expression_processing import (
     enforce_conjunctive_antecedent,
-    iter_conjuncts,
+    extract_logic_predicates,
 )
 from ..expression_pattern_matching import add_match
 from ..expression_walker import ExpressionWalker, ReplaceExpressionWalker
@@ -177,7 +177,7 @@ def query_to_tagged_set_representation(query, symbol_table):
 def _check_shatter_fully_solved(shattered_query):
     if any(
         isinstance(formula, Shatter)
-        for formula in iter_conjuncts(shattered_query.antecedent)
+        for formula in extract_logic_predicates(shattered_query.antecedent)
     ):
         raise NotEasilyShatterableError("Cannot easily shatter query")
 
