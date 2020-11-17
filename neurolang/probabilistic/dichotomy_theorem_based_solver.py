@@ -27,7 +27,7 @@ from ..datalog.expression_processing import (
     EQ,
     enforce_conjunction,
     flatten_query,
-    unify_query_vareqs,
+    unify_variable_equalities,
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import ExpressionWalker, add_match
@@ -312,7 +312,7 @@ def solve_succ_query(query, cpl_program):
         symbol_table = generate_probabilistic_symbol_table_for_query(
             cpl_program, flat_query_body
         )
-        unified_query = unify_query_vareqs(flat_query, keep_head_var_eqs=True)
+        unified_query = unify_variable_equalities(flat_query, keep_head_var_eqs=True)
         shattered_query = shatter_easy_probfacts(unified_query, symbol_table)
         prob_pred_symbs = (
             cpl_program.pfact_pred_symbs | cpl_program.pchoice_pred_symbs

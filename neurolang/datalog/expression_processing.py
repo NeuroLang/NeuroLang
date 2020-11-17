@@ -875,31 +875,33 @@ class ExtractVariableEqualities(
     pass
 
 
-def unify_query_vareqs(query, keep_head_var_eqs=False):
-    query = enforce_conjunctive_antecedent(query)
+def unify_variable_equalities(implication, keep_head_var_eqs=False):
+    implication = enforce_conjunctive_antecedent(implication)
     extractor = ExtractVariableEqualities()
-    extractor.walk(query.antecedent)
+    extractor.walk(implication.antecedent)
     replacer = ReplaceSymbolWalker(extractor.substitutions)
     conjuncts = set(
         replacer.walk(formula)
-        for formula in query.antecedent.formulas
+        for formula in implication.antecedent.formulas
         if not is_equality_between_symbol_and_symbol_or_constant(formula)
     )
     if keep_head_var_eqs:
         head_symbols = set(
-            arg for arg in query.consequent.args if isinstance(arg, Symbol)
+            arg
+            for arg in implication.consequent.args
+            if isinstance(arg, Symbol)
         )
         conjuncts |= set(
             EQ(x, y)
             for x, y in extractor.substitutions.items()
             if x in head_symbols
         )
-        consequent = query.consequent
+        consequent = implication.consequent
     else:
-        consequent = replacer.walk(query.consequent)
+        consequent = replacer.walk(implication.consequent)
     antecedent = conjunct_if_needed(tuple(conjuncts))
-    query = Implication(consequent, antecedent)
-    return query
+    implication = Implication(consequent, antecedent)
+    return implication
 
 
 class UnifyVariableEqualitiesMixin(PatternWalker):
@@ -911,7 +913,9 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
         ),
     )
     def extract_and_unify_var_eqs_in_implication(self, implication):
-        new_impl = unify_query_vareqs(implication, keep_head_var_eqs=False)
+        new_impl = unify_variable_equalities(
+            implication, keep_head_var_eqs=False
+        )
         return self.walk(new_impl)
 
 

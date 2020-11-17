@@ -2,7 +2,7 @@ import pytest
 
 from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication
-from ..logic_commutative_comparison import logic_exp_commutative_equal
+from ..logic import logic_exp_commutative_equal
 
 P = Symbol("P")
 Q = Symbol("Q")
