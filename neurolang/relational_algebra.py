@@ -113,13 +113,18 @@ class NaturalJoin(RelationalAlgebraOperation):
     def __repr__(self):
         return f"[{self.relation_left}" f"\N{JOIN}" f"{self.relation_right}]"
 
+
 class LeftNaturalJoin(RelationalAlgebraOperation):
     def __init__(self, relation_left, relation_right):
         self.relation_left = relation_left
         self.relation_right = relation_right
 
     def __repr__(self):
-        return f"[{self.relation_left}" f"\N{LEFT OUTER JOIN}" f"{self.relation_right}]"
+        return (
+            f"[{self.relation_left}" 
+            f"\N{LEFT OUTER JOIN}" 
+            f"{self.relation_right}]"
+        )
 
 
 class Product(RelationalAlgebraOperation):

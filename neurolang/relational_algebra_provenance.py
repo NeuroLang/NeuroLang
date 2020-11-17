@@ -330,7 +330,13 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
             tmp_non_prov_result,
             (
                 ExtendedProjectionListMember(
-                    fun_exp=MUL(tmp_left_prov_col, SUB(Constant(1), isnan(tmp_right_prov_col))),
+                    fun_exp=MUL(
+                        tmp_left_prov_col, 
+                        SUB(
+                            Constant(1), 
+                            isnan(tmp_right_prov_col)
+                        )
+                    ),
                     dst_column=res_prov_col,
                 ),
             )
@@ -339,10 +345,12 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
                 for col in set(res_columns) - {res_prov_col}
             ),
         )
+
+
         return ProvenanceAlgebraSet(
             self.walk(result).value, res_prov_col.value
         )
-        
+
     @add_match(NaturalJoinInverse)
     def prov_naturaljoin_inverse(self, naturaljoin):
         return self._apply_provenance_join_operation(
