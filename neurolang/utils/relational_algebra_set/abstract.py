@@ -149,6 +149,10 @@ class NamedRelationalAlgebraFrozenSet(RelationalAlgebraFrozenSet):
         pass
 
     @abstractmethod
+    def left_naturaljoin(self, other):
+        pass
+
+    @abstractmethod
     def cross_product(self, other):
         pass
 

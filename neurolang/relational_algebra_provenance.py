@@ -1,3 +1,4 @@
+import math
 import operator
 from typing import AbstractSet
 
@@ -21,6 +22,8 @@ from .relational_algebra import (
     EquiJoin,
     ExtendedProjection,
     ExtendedProjectionListMember,
+    Difference,
+    LeftNaturalJoin,
     NameColumns,
     NaturalJoin,
     Product,
@@ -37,6 +40,7 @@ from .relational_algebra import (
 
 ADD = Constant(operator.add)
 MUL = Constant(operator.mul)
+SUB = Constant(operator.sub)
 
 
 class ProvenanceAlgebraSet(Constant):
@@ -285,6 +289,64 @@ class RelationalAlgebraProvenanceCountingSolver(ExpressionWalker):
                 )
             ).value,
             new_prov_col.value,
+        )
+
+    @add_match(Difference(ProvenanceAlgebraSet, ProvenanceAlgebraSet))
+    def prov_difference(self, diff):
+        left = self.walk(diff.relation_left)
+        right = self.walk(diff.relation_right)
+
+        res_columns = set(left.value.columns)
+        res_columns.symmetric_difference(set(right.value.columns))
+
+        res_columns = tuple(str2columnstr_constant(col) for col in res_columns)
+        res_prov_col = str2columnstr_constant(left.provenance_column)
+        tmp_left_prov_col = Constant[ColumnStr](
+            ColumnStr(f"{left.provenance_column}1"),
+            verify_type=False,
+            auto_infer_type=False,
+        )
+        tmp_right_prov_col = Constant[ColumnStr](
+            ColumnStr(f"{right.provenance_column}2"),
+            verify_type=False,
+            auto_infer_type=False,
+        )
+        tmp_left = RenameColumn(
+            Constant[AbstractSet](left.value),
+            str2columnstr_constant(left.provenance_column),
+            tmp_left_prov_col,
+        )
+        tmp_right = RenameColumn(
+            Constant[AbstractSet](right.value),
+            str2columnstr_constant(right.provenance_column),
+            tmp_right_prov_col,
+        )
+        tmp_np_op_args = (tmp_left, tmp_right)
+        tmp_non_prov_result = LeftNaturalJoin(*tmp_np_op_args)
+
+        isnan = Constant(lambda x: 0 if math.isnan(x) else x)
+
+        result = ExtendedProjection(
+            tmp_non_prov_result,
+            (
+                ExtendedProjectionListMember(
+                    fun_exp=MUL(
+                        tmp_left_prov_col,
+                        SUB(
+                            Constant(1),
+                            isnan(tmp_right_prov_col)
+                        )
+                    ),
+                    dst_column=res_prov_col,
+                ),
+            )
+            + tuple(
+                ExtendedProjectionListMember(fun_exp=col, dst_column=col)
+                for col in set(res_columns) - {res_prov_col}
+            ),
+        )
+        return ProvenanceAlgebraSet(
+            self.walk(result).value, res_prov_col.value
         )
 
     @add_match(NaturalJoinInverse)
