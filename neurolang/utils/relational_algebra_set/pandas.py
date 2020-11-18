@@ -505,6 +505,26 @@ class NamedRelationalAlgebraFrozenSet(
             columns=new_columns
         )
 
+    def left_naturaljoin(self, other):
+        on = [c for c in self.columns if c in other.columns]
+
+        if len(on) == 0:
+            return self
+
+        new_container = self._container.set_index(on).join(
+            other._container.set_index(on),
+            how='left'
+        )
+        new_container = new_container.reset_index()
+        return self._light_init_same_structure(
+            new_container,
+            might_have_duplicates=(
+                self._might_have_duplicates |
+                other._might_have_duplicates
+            ),
+            columns=self.columns
+        )
+
     def cross_product(self, other):
         res = self._dee_dum_product(other)
         if res is not None:

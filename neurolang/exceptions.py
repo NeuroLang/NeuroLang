@@ -28,6 +28,10 @@ class RelationalAlgebraError(NeuroLangException):
     pass
 
 
+class ProjectionOverMissingColumnsError(RelationalAlgebraError):
+    pass
+
+
 class RelationalAlgebraNotImplementedError(
     RelationalAlgebraError, NotImplementedError
 ):
@@ -67,4 +71,8 @@ class ForbiddenRecursivityError(UnsupportedProgramError):
 
 
 class ForbiddenUnstratifiedAggregation(UnsupportedProgramError):
+    pass
+
+
+class WrongArgumentsInPredicateError(NeuroLangException):
     pass
