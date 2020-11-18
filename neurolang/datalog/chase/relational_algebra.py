@@ -4,6 +4,10 @@ from collections import defaultdict
 from functools import lru_cache
 from typing import AbstractSet, Callable
 
+
+from ...exceptions import (
+    ProjectionOverMissingColumnsError, WrongArgumentsInPredicateError
+)
 from ...expressions import Constant, FunctionApplication, Symbol
 from ...expression_walker import ExpressionWalker, ReplaceSymbolWalker
 from ...logic.unification import apply_substitution_arguments
@@ -155,35 +159,41 @@ class ChaseNamedRelationalAlgebraMixin:
 
     """
     def chase_step(self, instance, rule, restriction_instance=None):
-        if restriction_instance is None:
-            restriction_instance = MapInstance()
+        try:
+            if restriction_instance is None:
+                restriction_instance = MapInstance()
 
-        rule = self.rewrite_constants_in_consequent(rule)
-        rule = self.rewrite_antecedent_equalities(rule)
+            rule = self.rewrite_constants_in_consequent(rule)
+            rule = self.rewrite_antecedent_equalities(rule)
 
-        consequent = rule.consequent
+            consequent = rule.consequent
 
-        if isinstance(rule.antecedent, Conjunction):
-            predicates = rule.antecedent.formulas
-        else:
-            predicates = (rule.antecedent,)
+            if isinstance(rule.antecedent, Conjunction):
+                predicates = rule.antecedent.formulas
+            else:
+                predicates = (rule.antecedent,)
 
-        substitutions = self.obtain_substitutions(
-            predicates, instance, restriction_instance
-        )
-
-        if consequent.functor in instance:
-            substitutions = self.eliminate_already_computed(
-                consequent, instance, substitutions
-            )
-        if consequent.functor in restriction_instance:
-            substitutions = self.eliminate_already_computed(
-                consequent, restriction_instance, substitutions
+            substitutions = self.obtain_substitutions(
+                predicates, instance, restriction_instance
             )
 
-        return self.compute_result_set(
-            rule, substitutions, instance, restriction_instance
-        )
+            if consequent.functor in instance:
+                substitutions = self.eliminate_already_computed(
+                    consequent, instance, substitutions
+                )
+            if consequent.functor in restriction_instance:
+                substitutions = self.eliminate_already_computed(
+                    consequent, restriction_instance, substitutions
+                )
+
+            return self.compute_result_set(
+                rule, substitutions, instance, restriction_instance
+            )
+        except ProjectionOverMissingColumnsError:
+            raise WrongArgumentsInPredicateError(
+                "There is a preducate in the query with the "
+                "wrong number of arguments."
+            )
 
     @lru_cache(1024)
     def rewrite_constants_in_consequent(self, rule):

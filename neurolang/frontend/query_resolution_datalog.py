@@ -31,6 +31,7 @@ from .datalog.standard_syntax import parser as datalog_parser
 from .datalog.natural_syntax import parser as nat_datalog_parser
 from .query_resolution import NeuroSynthMixin, QueryBuilderBase, RegionMixin
 from ..datalog import DatalogProgram
+from ..datalog.wrapped_collections import WrappedRelationalAlgebraFrozenSet
 from . import query_resolution_expressions as fe
 
 __all__ = ["QueryBuilderDatalog"]
@@ -259,7 +260,10 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             head = tuple()
         elif len(args) == 2:
             head, predicate = args
-            if isinstance(head, fe.Symbol):
+            if (
+                isinstance(head, (fe.Symbol, fe.Expression)) and
+                isinstance(head.expression, ir.Symbol)
+            ):
                 head = (head,)
         else:
             raise ValueError("query takes 1 or 2 arguments")
@@ -271,9 +275,9 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             self.add_tuple_set(solution_set.value, name=functor_orig.name)
             return fe.Symbol(self, out_symbol.name)
         elif len(head) == 0:
-            return len(solution_set.value) > 0
+            return len(solution_set) > 0
         else:
-            return RelationalAlgebraFrozenSet(solution_set.value)
+            return solution_set
 
     def _execute_query(
         self,
@@ -354,6 +358,8 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         elif isinstance(head, tuple):
             new_head = self.new_symbol()(*head)
             functor = new_head.expression.functor
+        else:
+            raise ValueError("Wrong head syntax")
         query_expression = self._declare_implication(new_head, predicate)
 
         reachable_rules = reachable_code(query_expression, self.program_ir)
@@ -361,8 +367,16 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
             self.program_ir, rules=reachable_rules
         ).build_chase_solution()
 
-        solution_set = solution.get(functor.name, ir.Constant(set()))
+        solution_set = solution.get(
+            functor.name, ir.Constant(WrappedRelationalAlgebraFrozenSet())
+        )
         self.program_ir.symbol_table = self.symbol_table.enclosing_scope
+
+        if isinstance(head, tuple):
+            solution_set = NamedRelationalAlgebraFrozenSet(
+                    tuple(s.expression.name for s in head),
+                    solution_set.value.unwrap()
+                )
         return solution_set, functor_orig
 
     def solve_all(self) -> Dict[str, NamedRelationalAlgebraFrozenSet]:
