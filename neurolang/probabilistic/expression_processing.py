@@ -10,7 +10,6 @@ from ..datalog.expression_processing import (
     conjunct_formulas,
     enforce_conjunction,
     extract_logic_predicates,
-    iter_disjunction_or_implication_rules,
     reachable_code,
 )
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
@@ -367,9 +366,7 @@ def is_probabilistic_predicate_symbol(pred_symb, program):
             or pred_symb not in program.intensional_database()
         ):
             continue
-        for rule in iter_disjunction_or_implication_rules(
-            program.symbol_table[pred_symb]
-        ):
+        for rule in program.symbol_table[pred_symb].formulas:
             stack += [
                 apred.functor
                 for apred in extract_logic_predicates(rule.antecedent)
