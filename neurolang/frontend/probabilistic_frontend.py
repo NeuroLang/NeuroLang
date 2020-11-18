@@ -263,6 +263,8 @@ class NeurolangPDL(QueryBuilderDatalog):
         solution = self._restrict_to_query_solution(
             head_symbols, predicate, solution
         )
+        if functor_orig is None:
+            solution = solution.value
         return solution, functor_orig
 
     def solve_all(self) -> Dict[str, NamedRelationalAlgebraFrozenSet]:
@@ -395,7 +397,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         query_solution = query_solution.projection(
             *(symb.name for symb in head_symbols)
         )
-        return ir.Constant[AbstractSet](query_solution.to_unnamed())
+        return ir.Constant[AbstractSet](query_solution)
 
     def _rewrite_program_with_ontology(self, deterministic_program):
         orw = OntologyRewriter(
