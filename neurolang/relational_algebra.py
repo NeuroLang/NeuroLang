@@ -529,7 +529,7 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
             projected_relation = relation.value.projection(*cols)
         except KeyError:
             raise ProjectionOverMissingColumnsError(
-                f"Not all columns {projection.attributes} present in "
+                f"Not all columns {projection.attributes} are present in "
                 "the RelationalAlgebra set"
             )
         return self._build_relation_constant(projected_relation)
