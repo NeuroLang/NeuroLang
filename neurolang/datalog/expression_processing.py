@@ -874,19 +874,13 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
                 UnifyVariableEqualities.add_equality_with_symbol(
                     eq_sets, *equality_predicate.args
                 )
-            else:
-                symb = next(
-                    arg
-                    for arg in equality_predicate.args
-                    if isinstance(arg, Symbol)
-                )
-                cst = next(
-                    arg
-                    for arg in equality_predicate.args
-                    if isinstance(arg, Constant)
-                )
+            elif isinstance(equality_predicate.args[0], Symbol):
                 UnifyVariableEqualities.add_equality_with_constant(
-                    eq_sets, symb, cst
+                    eq_sets, *equality_predicate.args
+                )
+            else:
+                UnifyVariableEqualities.add_equality_with_constant(
+                    eq_sets, *reversed(equality_predicate.args)
                 )
         return eq_sets
 
