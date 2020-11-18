@@ -99,6 +99,9 @@ def logic_exp_commutative_equal(exp1, exp2):
     formulas of a commutative logic operator is not the same in the two
     expressions.
 
+    Apart from commutative logic operators, the comparison between the two
+    expressions remains the same as the equality comparison.
+
     Parameters
     ----------
     exp1 : Expression
