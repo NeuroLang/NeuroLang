@@ -27,8 +27,8 @@ from ..datalog.expression_processing import (
     EQ,
     UnifyVariableEqualities,
     enforce_conjunction,
-    flatten_query,
     extract_logic_predicates,
+    flatten_query,
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import ExpressionWalker, add_match
@@ -103,13 +103,7 @@ def is_hierarchical_without_self_joins(query):
 def extract_atom_sets_and_detect_self_joins(query):
     has_self_joins = False
     predicates = extract_logic_atoms(query)
-<<<<<<< HEAD
-    predicates = set(
-        pred for pred in predicates if not isinstance(pred.functor, Constant)
-    )
-=======
     predicates = set(pred for pred in predicates if not pred.functor == EQ)
->>>>>>> frontend-cbma-test
     seen_predicate_functor = set()
     atom_set = defaultdict(set)
     for predicate in predicates:
