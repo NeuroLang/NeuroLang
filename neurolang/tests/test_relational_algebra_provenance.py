@@ -648,5 +648,3 @@ def eq_prov_isclose(pas1, pas2):
         elif p1 != p2:
             return False
     return True
-
-    
