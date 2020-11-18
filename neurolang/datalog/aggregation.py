@@ -17,7 +17,7 @@ from ..expression_walker import (
     FunctionApplicationToPythonLambda,
     PatternWalker,
     ReplaceSymbolsByConstants,
-    add_match
+    add_match,
 )
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
 from ..type_system import get_generic_type
@@ -26,39 +26,19 @@ from . import (
     Implication,
     Union,
     chase,
-    is_conjunctive_expression_with_nested_predicates
+    is_conjunctive_expression_with_nested_predicates,
 )
 from .basic_representation import UnionOfConjunctiveQueries
-from .expression_processing import extract_logic_predicates, stratify
-from .expressions import TranslateToLogic
+from .expression_processing import (
+    extract_logic_predicates,
+    is_aggregation_predicate,
+    is_aggregation_rule,
+    stratify,
+)
+from .expressions import TranslateToLogic, AggregationApplication
 from .instance import MapInstance
 
 FA2L = FunctionApplicationToPythonLambda()
-
-
-class AggregationApplication(FunctionApplication):
-    def __repr__(self):
-        r = u'\u03BB{{<{}>: {}}}'.format(self.functor, self.__type_repr__)
-        if self.args is ...:
-            r += '(...)'
-        elif self.args is not None:
-            r += (
-                '(' +
-                ', '.join(repr(arg) for arg in self.args)
-                + ')'
-                )
-
-        return r
-
-
-def is_aggregation_rule(rule):
-    return is_aggregation_predicate(rule.consequent)
-
-
-def is_aggregation_predicate(predicate):
-    return any(
-        isinstance(arg, AggregationApplication) for arg in predicate.args
-    )
 
 
 class TranslateToLogicWithAggregation(TranslateToLogic):

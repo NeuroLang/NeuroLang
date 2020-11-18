@@ -10,11 +10,11 @@ from ..datalog.expression_processing import (
     conjunct_formulas,
     enforce_conjunction,
     extract_logic_predicates,
-    iter_disjunction_or_implication_rules,
     reachable_code,
 )
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
+<<<<<<< HEAD
 from ..logic import TRUE, Conjunction, Implication, Union
 from ..relational_algebra import (
     ExtendedProjection,
@@ -24,6 +24,9 @@ from ..relational_algebra import (
 from ..relational_algebra_provenance import (
     RelationalAlgebraProvenanceCountingSolver,
 )
+=======
+from ..logic import Conjunction, Implication, Union
+>>>>>>> frontend-cbma-test
 from .exceptions import DistributionDoesNotSumToOneError
 from .expressions import PROB, ProbabilisticPredicate, ProbabilisticQuery
 
@@ -387,29 +390,10 @@ def is_probabilistic_predicate_symbol(pred_symb, program):
             or pred_symb not in program.intensional_database()
         ):
             continue
-        for rule in iter_disjunction_or_implication_rules(
-            program.symbol_table[pred_symb]
-        ):
+        for rule in program.symbol_table[pred_symb].formulas:
             stack += [
                 apred.functor
                 for apred in extract_logic_predicates(rule.antecedent)
                 if apred.functor not in wlq_symbs
             ]
     return False
-
-
-def project_on_query_head(query, provset):
-    proj_list = list()
-    for term in query.consequent.args:
-        if isinstance(term, Constant):
-            proj_list.append(
-                ExtendedProjectionListMember(
-                    term, str2columnstr_constant(Symbol.fresh().name)
-                )
-            )
-        else:
-            col = str2columnstr_constant(term.name)
-            proj_list.append(ExtendedProjectionListMember(col, col))
-    result = ExtendedProjection(provset, tuple(proj_list))
-    solver = RelationalAlgebraProvenanceCountingSolver()
-    return solver.walk(result)

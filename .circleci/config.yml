@@ -152,7 +152,9 @@ jobs:
       - restore_cache:
           keys:
             - v1-docs-{{ .Branch }}--
-
+      - run:
+          name: Install Texlive and dvipng
+          command: 'sudo apt update && sudo apt install texlive texlive-xetex texlive-fonts-extra texlive-latex-extra texlive-plain-extra dvipng'
       - run:
           name: Install extra packages & build documentation
           command: |
@@ -257,7 +259,7 @@ workflows:
       - py37
       - docs:
          requires:
-         - py37
+          - py37
       - deploy_docs:
          requires:
            - docs
