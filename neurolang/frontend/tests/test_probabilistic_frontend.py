@@ -234,6 +234,7 @@ def test_solve_query():
     with nl.scope as e:
         e.Z[e.x, e.PROB[e.x]] = P[e.x] & Q[e.x]
         res = nl.query((e.x, e.p), e.Z[e.x, e.p])
+        res_2 = nl.query(e.p, e.Z(e.x, e.p))
     expected = RelationalAlgebraFrozenSet(
         [
             ("a", 1 / 9),
@@ -241,6 +242,7 @@ def test_solve_query():
         ]
     )
     assert_almost_equal(res, expected)
+    assert_almost_equal(res_2, expected.projection(1))
 
 
 def test_solve_query_prob_col_not_last():
@@ -415,7 +417,7 @@ def test_post_probabilistic_aggregation():
         res = nl.query((e.x, e.s), e.D[e.x, e.s])
 
     assert len(res) == 2
-    assert res == {("a", 0.2 * 0.2 + 0.2 * 0.1), ("b", 0.9 * 0.7)}
+    assert res.to_unnamed() == {("a", 0.2 * 0.2 + 0.2 * 0.1), ("b", 0.9 * 0.7)}
 
 
 def test_empty_result_query():

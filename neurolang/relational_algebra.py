@@ -3,7 +3,7 @@ from typing import AbstractSet, Tuple
 
 from . import expression_walker as ew
 from . import type_system
-from .exceptions import NeuroLangException
+from .exceptions import NeuroLangException, ProjectionOverMissingColumnsError
 from .expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 from .expressions import (
     Constant,
@@ -112,6 +112,19 @@ class NaturalJoin(RelationalAlgebraOperation):
 
     def __repr__(self):
         return f"[{self.relation_left}" f"\N{JOIN}" f"{self.relation_right}]"
+
+
+class LeftNaturalJoin(RelationalAlgebraOperation):
+    def __init__(self, relation_left, relation_right):
+        self.relation_left = relation_left
+        self.relation_right = relation_right
+
+    def __repr__(self):
+        return (
+            f"[{self.relation_left}"
+            f"\N{LEFT OUTER JOIN}"
+            f"{self.relation_right}]"
+        )
 
 
 class Product(RelationalAlgebraOperation):
@@ -523,9 +536,15 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
 
     @ew.add_match(Projection(Constant, ...))
     def ra_projection(self, projection):
-        relation = projection.relation
-        cols = tuple(v.value for v in projection.attributes)
-        projected_relation = relation.value.projection(*cols)
+        try:
+            relation = projection.relation
+            cols = tuple(v.value for v in projection.attributes)
+            projected_relation = relation.value.projection(*cols)
+        except KeyError:
+            raise ProjectionOverMissingColumnsError(
+                f"Not all columns {projection.attributes} are present in "
+                "the RelationalAlgebra set"
+            )
         return self._build_relation_constant(projected_relation)
 
     @ew.add_match(
@@ -559,6 +578,13 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         left = naturaljoin.relation_left.value
         right = naturaljoin.relation_right.value
         res = left.naturaljoin(right)
+        return self._build_relation_constant(res)
+
+    @ew.add_match(LeftNaturalJoin(Constant, Constant))
+    def ra_left_naturaljoin(self, naturaljoin):
+        left = naturaljoin.relation_left.value
+        right = naturaljoin.relation_right.value
+        res = left.left_naturaljoin(right)
         return self._build_relation_constant(res)
 
     @ew.add_match(Difference(Constant, Constant))

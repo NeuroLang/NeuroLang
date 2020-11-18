@@ -27,8 +27,8 @@ from ..datalog.expression_processing import (
     EQ,
     UnifyVariableEqualities,
     enforce_conjunction,
-    extract_logic_predicates,
     flatten_query,
+    extract_logic_predicates,
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import ExpressionWalker, add_match

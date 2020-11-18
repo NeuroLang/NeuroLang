@@ -853,9 +853,10 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
                     term: const for term in eq_set if isinstance(term, Symbol)
                 }
             else:
-                iterator = iter(eq_set)
-                chosen_symb = next(iterator)
-                update = {symb: chosen_symb for symb in iterator}
+                chosen_symb = max(eq_set, key=lambda symb: symb.name)
+                update = {
+                    symb: chosen_symb for symb in eq_set if symb != chosen_symb
+                }
             substitutions.update(update)
         return substitutions
 
@@ -873,19 +874,13 @@ class UnifyVariableEqualitiesMixin(PatternWalker):
                 UnifyVariableEqualities.add_equality_with_symbol(
                     eq_sets, *equality_predicate.args
                 )
-            else:
-                symb = next(
-                    arg
-                    for arg in equality_predicate.args
-                    if isinstance(arg, Symbol)
-                )
-                cst = next(
-                    arg
-                    for arg in equality_predicate.args
-                    if isinstance(arg, Constant)
-                )
+            elif isinstance(equality_predicate.args[0], Symbol):
                 UnifyVariableEqualities.add_equality_with_constant(
-                    eq_sets, symb, cst
+                    eq_sets, *equality_predicate.args
+                )
+            else:
+                UnifyVariableEqualities.add_equality_with_constant(
+                    eq_sets, *reversed(equality_predicate.args)
                 )
         return eq_sets
 

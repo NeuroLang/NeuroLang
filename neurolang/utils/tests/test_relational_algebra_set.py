@@ -553,6 +553,57 @@ def test_named_relational_algebra_ra_naturaljoin(ra_module):
     assert res == ras_d
 
 
+def test_named_relational_algebra_ra_left_naturaljoin(ra_module):
+    import numpy as np
+
+    ras_a = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("z", "y"), [(0, 0), (1, 2), (2, 4), (3, 6), (4, 8)]
+    )
+
+    ras_b = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("z", "y", "v"), [(0, 0, 1), (2, 3, 2), (4, 6, 3), (6, 9, 4), (8, 12, 5)]
+    )
+
+    ras_c = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("y", "v"), [(0, 0), (2, 6), (4, 9), (8, 4)]
+    )
+
+    empty = ra_module.NamedRelationalAlgebraFrozenSet(("z", "y"), [])
+    dee = ra_module.NamedRelationalAlgebraFrozenSet.dee()
+    dum = ra_module.NamedRelationalAlgebraFrozenSet.dum()
+
+    expected_a_b = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("z", "y", "v")
+        , [(0, 0, 1), (1, 2, np.nan), (2, 4, np.nan), (3, 6, np.nan), (4, 8, np.nan)]
+    )
+
+    expected_b_a = ras_b
+
+    expected_a_c = ra_module.NamedRelationalAlgebraFrozenSet(
+        ("y", "z", "v"), [(0, 0, 0), (2, 1, 6), (4, 2, 9), (6, 3, np.nan), (8, 4, 4)]
+    )
+
+    res = ras_a.left_naturaljoin(ras_b)
+    assert res == expected_a_b
+
+    res = ras_b.left_naturaljoin(ras_a)
+    assert res == expected_b_a
+
+    res = ras_a.left_naturaljoin(ras_a)
+    assert res == ras_a
+
+    res = ras_a.left_naturaljoin(ras_c)
+    assert res == expected_a_c
+
+
+    assert len(ras_a.left_naturaljoin(empty)) == 5
+    assert len(empty.left_naturaljoin(ras_a)) == 0
+    assert ras_a.left_naturaljoin(dee) == ras_a
+    assert dee.left_naturaljoin(ras_a) == dee
+    assert ras_a.left_naturaljoin(dum) == ras_a
+    assert dum.left_naturaljoin(ras_a) == dum
+
+
 def test_named_relational_algebra_ra_cross_product(ra_module):
     a = [(i, i * 2) for i in range(5)]
     b = [(i * 2, i * 3) for i in range(5)]

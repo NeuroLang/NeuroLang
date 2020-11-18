@@ -14,15 +14,7 @@ from ..datalog.expression_processing import (
 )
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
-from ..logic import TRUE, Conjunction, Implication, Union
-from ..relational_algebra import (
-    ExtendedProjection,
-    ExtendedProjectionListMember,
-    str2columnstr_constant,
-)
-from ..relational_algebra_provenance import (
-    RelationalAlgebraProvenanceCountingSolver,
-)
+from ..logic import Conjunction, Implication, Union
 from .exceptions import DistributionDoesNotSumToOneError
 from .expressions import PROB, ProbabilisticPredicate, ProbabilisticQuery
 
