@@ -3,7 +3,7 @@ from typing import AbstractSet, Tuple
 
 from . import expression_walker as ew
 from . import type_system
-from .exceptions import NeuroLangException
+from .exceptions import NeuroLangException, ProjectionOverMissingColumnsError
 from .expression_pattern_matching import NeuroLangPatternMatchingNoMatch
 from .expressions import (
     Constant,
@@ -523,9 +523,15 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
 
     @ew.add_match(Projection(Constant, ...))
     def ra_projection(self, projection):
-        relation = projection.relation
-        cols = tuple(v.value for v in projection.attributes)
-        projected_relation = relation.value.projection(*cols)
+        try:
+            relation = projection.relation
+            cols = tuple(v.value for v in projection.attributes)
+            projected_relation = relation.value.projection(*cols)
+        except KeyError:
+            raise ProjectionOverMissingColumnsError(
+                f"Not all columns {projection.attributes} present in "
+                "the RelationalAlgebra set"
+            )
         return self._build_relation_constant(projected_relation)
 
     @ew.add_match(
