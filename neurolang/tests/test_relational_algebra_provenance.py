@@ -639,8 +639,6 @@ def eq_prov_isclose(pas1, pas2):
         pas1.value.projection(*pas1.non_provenance_columns).to_unnamed()
         == pas2.value.projection(*pas2.non_provenance_columns).to_unnamed()
     )
-    c1 = Symbol.fresh().name
-    c2 = Symbol.fresh().name
     x1 = pas1.value._container[pas1.provenance_column].values
     x2 = pas2.value._container[pas2.provenance_column].values
     for p1, p2 in zip(x1, x2):
