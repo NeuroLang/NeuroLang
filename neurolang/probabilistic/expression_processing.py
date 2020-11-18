@@ -14,7 +14,6 @@ from ..datalog.expression_processing import (
 )
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
-<<<<<<< HEAD
 from ..logic import TRUE, Conjunction, Implication, Union
 from ..relational_algebra import (
     ExtendedProjection,
@@ -24,9 +23,6 @@ from ..relational_algebra import (
 from ..relational_algebra_provenance import (
     RelationalAlgebraProvenanceCountingSolver,
 )
-=======
-from ..logic import Conjunction, Implication, Union
->>>>>>> frontend-cbma-test
 from .exceptions import DistributionDoesNotSumToOneError
 from .expressions import PROB, ProbabilisticPredicate, ProbabilisticQuery
 
