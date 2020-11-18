@@ -750,14 +750,6 @@ def remove_conjunction_duplicates(conjunction):
     )
 
 
-def iter_disjunction_or_implication_rules(implication_or_disjunction):
-    if isinstance(implication_or_disjunction, Implication):
-        yield implication_or_disjunction
-    else:
-        for formula in implication_or_disjunction.formulas:
-            yield formula
-
-
 def is_aggregation_rule(rule):
     return is_aggregation_predicate(rule.consequent)
 
