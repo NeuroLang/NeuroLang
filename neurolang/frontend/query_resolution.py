@@ -33,7 +33,7 @@ from ..typed_symbol_table import TypedSymbolTable
 from .neurosynth_utils import NeuroSynthHandler, StudyID, TfIDf
 from . import query_resolution_expressions as fe
 from ..datalog import DatalogProgram
-from ..logic import ExistentialPredicate, UniversalPredicate
+from ..logic import ExistentialPredicate, UniversalPredicate, TRUE
 
 
 class QueryBuilderBase:

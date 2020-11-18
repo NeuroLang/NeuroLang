@@ -14,7 +14,7 @@ from ..datalog.expression_processing import (
 )
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
-from ..logic import Conjunction, Implication, Union
+from ..logic import TRUE, Conjunction, Implication, Union
 from .exceptions import DistributionDoesNotSumToOneError
 from .expressions import PROB, ProbabilisticPredicate, ProbabilisticQuery
 

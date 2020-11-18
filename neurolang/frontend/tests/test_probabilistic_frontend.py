@@ -10,7 +10,10 @@ from ...probabilistic.exceptions import (
     UnsupportedProbabilisticQueryError,
 )
 from ...regions import SphericalVolume
-from ...utils.relational_algebra_set import RelationalAlgebraFrozenSet
+from ...utils.relational_algebra_set import (
+    NamedRelationalAlgebraFrozenSet,
+    RelationalAlgebraFrozenSet,
+)
 from ..probabilistic_frontend import ProbabilisticFrontend
 
 
@@ -723,8 +726,8 @@ def test_query_based_pfact_region_volume():
             e.contained, e.container, e.PROB[e.contained, e.container]
         ] = e.Z[e.contained, e.container]
         res = nl.query((e.p,), e.Query[e.contained, e.container, e.p])
-    expected = RelationalAlgebraFrozenSet([(1 / 2 ** 3,)])
-    assert res == expected
+    expected = NamedRelationalAlgebraFrozenSet(("p",), [(1 / 2 ** 3,)])
+    assert_almost_equal(res, expected)
 
 
 def test_solve_marg_query_disjunction():
