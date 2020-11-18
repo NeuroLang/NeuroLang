@@ -219,8 +219,63 @@ we can formalise it as
         )
   
 
+Probabilistic Semantics in Neurolang
+------------------------------------
+
+One of the main features of NeuroLang are its probabilistic semantics. Specifically, NeuroLang can represent discrete random variables and execute inference tasks.
+For a more detailed description of probabilistic logic languages please see the introduction of De Raedt et al [deraedt2015]_. Let's present an example:
+
+In neuroimaging meta-analysis, a main question is the probability that an article containg a specific term, such as "auditory" reports a voxel in the brain as active.
+To model this consider a set of articles as independent identically distributed samples of *neuroscientific knowledge*. Then we also consider known the probability that
+in a given article, a voxel is reported as active, and also a term is reported as present. Both with a certain probability. Our goal is then to compute, as done by Yarkoni et al. [yarkoni2011]_,
+the probability that a voxel is reported as active, when a word is on the study. We can formalise this problem mathematically as:
+
+.. math::
+
+    \mathbf{s} &\sim \operatorname{Choice}\left(\{S_1, \ldots, S_n\}, \frac 1 n \right) \\
+    \mathbf{t_1}, \mathbf{s} &\sim \operatorname{Bernoulli}\left(\theta_{t_1, \mathbf{s}}\right)\\
+    &\vdots\\
+    \mathbf{t_T}, \mathbf{s} &\sim \operatorname{Bernoulli}\left(\theta_{t_T, \mathbf{s}}\right)\\
+    \mathbf{v_1}, \mathbf{s} &\sim \operatorname{Bernoulli}\left(\theta_{v_1, \mathbf{s}}\right)\\
+    &\vdots\\
+    \mathbf{v_V}, \mathbf{s} &\sim \operatorname{Bernoulli}\left(\theta_{v_V, \mathbf{s}}\right)\\
+
+where :math:`\mathbf{s}` is a chosen study amongs those in the set :math:`S_1,\ldots,S_n`; :math:`\mathbf{t_i},\mathbf{s}` is the probability that the i-th term  is present in study *s*;
+and :math:`\mathbf{v_j}, \mathbf{s}` is the joint probability that the j-th voxel is reported active in study *s*. Our goal then is to compute the probability, that a voxel `j` is active
+if a certain term :math:`t_i` is reported in the study :math:`P(\mathbf{v_j}|\mathbf{t_i})`. In the following NeuroLang snippet we setup the computation of this conditional probability as well as
+of the marginal probability that a term has been mentioned in a study:
+
+.. code:: python
+
+  with neurolang.scope as e:
+      # Express the marginal random variables for term and voxel
+      e.TermAssociation[e.t] = e.SelectedStudy[e.s] & e.TermInStudy[e.t, e.s]
+      e.Voxel[e.v] = e.SelectedStudy[e.s] & e.VoxelReported[e.v, e.s]
+
+      # Compute the marginal probability of a term with respect to the program
+      e.term_marginal_probability[e.t, e.PROB[e.t]] = e.TermAssociation[a.t]
+
+      # compute the probability of a voxel being present conditioned to that of the term
+      # auditory being present.
+      e.probmap[e.v, e.PROB[e.v]] = e.Voxel[e.v] // e.TermAssociation["auditory"] 
+
+      #perform the calculations
+      term_marginal_probability = nl.query((e.t, e.prob), e.term_marginal_probability(e.t, e.prob))
+      voxel_conditional_probability = nl.query((e.v, e.prob), e.probmap(e.v, e.prob))
+
+For a more complete example including the prodiduction of the following image,
+see the example :ref:`sphx_glr_auto_examples_plot_neurosynth_implementation.py`.
+
+.. figure::  /auto_examples/images/thumb/sphx_glr_plot_neurosynth_implementation_thumb.png
+          :scale: 100%
+          :align: center
+
+          Probability that a voxel is active is "auditory" is mentioned in a study. Only the voxels with
+          a probability within the largest 5% are shown.
 
 
 .. [abiteboul1995] Abiteboul, S., Hull, R. & Vianu, V. Foundations of databases. (Addison Wesley, 1995).
+.. [deraedt2015] De Raedt, L. & Kimmig, A. Probabilistic (logic) programming concepts. Mach Learn 100, 5–47 (2015).
 .. [maier2018] Maier, D., Tekle, K. T., Kifer, M. & Warren, D. S. Datalog: concepts, history, and outlook. in Declarative Logic Programming (eds. Kifer, M. & Liu, Y. A.) 3–100 (Association for Computing Machinery and Morgan & Claypool, 2018). doi:10.1145/3191315.3191317.
+.. [yarkoni2011] Yarkoni, T., Poldrack, R. A., Nichols, T. E., Van Essen, D. C. & Wager, T. D. Large-scale automated synthesis of human functional neuroimaging data. Nat Meth 8, 665–670 (2011).
 
