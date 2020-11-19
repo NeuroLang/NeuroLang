@@ -103,10 +103,7 @@ def load_neurosynth_data():
             ns_activations[["x", "y", "z"]].values.astype(float),
         )
     ).astype(int)
-    ns_activations["i"] = ijk_positions[:, 0]
-    ns_activations["j"] = ijk_positions[:, 1]
-    ns_activations["k"] = ijk_positions[:, 2]
-    ns_activations = ns_activations[["i", "j", "k", "id"]]
+    ns_activations = pd.DataFrame(np.c_[ijk_positions, ns_activations.id])
 
     ns_features = pd.read_csv(ns_features_fn, sep="\t")
     ns_terms = pd.melt(
