@@ -10,7 +10,7 @@ from ...probabilistic.exceptions import (
     UnsupportedProbabilisticQueryError
 )
 from ...utils.relational_algebra_set import RelationalAlgebraFrozenSet
-from ..probabilistic_frontend import ProbabilisticFrontend
+from ..probabilistic_frontend import NeurolangPDL
 
 
 def assert_almost_equal(set_a, set_b):
@@ -27,7 +27,7 @@ def assert_almost_equal(set_a, set_b):
 
 
 def test_add_uniform_probabilistic_choice_set():
-    nl = ProbabilisticFrontend()
+    nl = NeurolangPDL()
 
     prob = [(a,) for a in range(10)]
     prob_set = nl.add_uniform_probabilistic_choice_over_set(prob, "prob")
@@ -46,7 +46,7 @@ def test_add_uniform_probabilistic_choice_set():
 
 
 def test_deterministic_query():
-    nl = ProbabilisticFrontend()
+    nl = NeurolangPDL()
     d1 = [(1,), (2,), (3,), (4,), (5,)]
     data1 = nl.add_tuple_set(d1, name="data1")
 
@@ -65,7 +65,7 @@ def test_deterministic_query():
 
 
 def test_probabilistic_query():
-    nl = ProbabilisticFrontend()
+    nl = NeurolangPDL()
     d1 = [(1,), (2,), (3,), (4,), (5,)]
     data1 = nl.add_uniform_probabilistic_choice_over_set(d1, name="data1")
 
@@ -83,7 +83,7 @@ def test_probabilistic_query():
 
 
 def test_marg_query():
-    nl = ProbabilisticFrontend()
+    nl = NeurolangPDL()
     nl.add_probabilistic_choice_from_tuples(
         {(0.2, "a"), (0.3, "b"), (0.5, "c")}, name="P"
     )
@@ -108,7 +108,7 @@ def test_marg_query():
 
 
 def test_mixed_queries():
-    nl = ProbabilisticFrontend()
+    nl = NeurolangPDL()
     d1 = [(1,), (2,), (3,), (4,), (5,)]
     data1 = nl.add_tuple_set(d1, name="data1")
 
@@ -164,7 +164,7 @@ def test_ontology_query():
     </rdf:RDF>
     """
 
-    nl = ProbabilisticFrontend()
+    nl = NeurolangPDL()
     nl.load_ontology(io.StringIO(test_case))
 
     p2 = nl.new_symbol(
@@ -183,7 +183,7 @@ def test_ontology_query():
 
 
 def test_simple_within_language_succ_query():
-    nl = ProbabilisticFrontend()
+    nl = NeurolangPDL()
     P = nl.add_uniform_probabilistic_choice_over_set(
         [("a",), ("b",), ("c",)], name="P"
     )
@@ -201,7 +201,7 @@ def test_simple_within_language_succ_query():
 
 
 def test_within_language_succ_query():
-    nl = ProbabilisticFrontend()
+    nl = NeurolangPDL()
     P = nl.add_uniform_probabilistic_choice_over_set(
         [
             ("a", "b"),
@@ -223,7 +223,7 @@ def test_within_language_succ_query():
 
 
 def test_solve_query():
-    nl = ProbabilisticFrontend()
+    nl = NeurolangPDL()
     P = nl.add_uniform_probabilistic_choice_over_set(
         [("a",), ("b",), ("c",)], name="P"
     )
@@ -245,7 +245,7 @@ def test_solve_query():
 
 
 def test_solve_query_prob_col_not_last():
-    nl = ProbabilisticFrontend()
+    nl = NeurolangPDL()
     P = nl.add_uniform_probabilistic_choice_over_set(
         [("a",), ("b",), ("c",)], name="P"
     )
@@ -265,7 +265,7 @@ def test_solve_query_prob_col_not_last():
 
 
 def test_solve_boolean_query():
-    nl = ProbabilisticFrontend()
+    nl = NeurolangPDL()
     P = nl.add_uniform_probabilistic_choice_over_set(
         [("a",), ("b",), ("c",)], name="P"
     )
@@ -291,7 +291,7 @@ def test_solve_complex_stratified_query():
     C(x, y, p1, p2)     :- A(x, p1), B(x, y, p2)
 
     """
-    nl = ProbabilisticFrontend()
+    nl = NeurolangPDL()
     R = nl.add_probabilistic_facts_from_tuples(
         [(0.3, 1, 2), (0.7, 1, 4), (0.2, 2, 2), (0.6, 2, 4), (0.8, 2, 6)],
         name="R",
@@ -312,7 +312,7 @@ def test_solve_complex_stratified_query():
 
 
 def test_solve_complex_stratified_query_with_deterministic_part():
-    nl = ProbabilisticFrontend()
+    nl = NeurolangPDL()
     A = nl.add_tuple_set([("a",), ("b",), ("c",)], name="A")
     B = nl.add_tuple_set([("a",), ("b",)], name="B")
     P = nl.add_probabilistic_facts_from_tuples(
@@ -335,7 +335,7 @@ def test_solve_complex_stratified_query_with_deterministic_part():
 
 
 def test_neurolange_dl_deterministic_negation():
-    neurolang = ProbabilisticFrontend()
+    neurolang = NeurolangPDL()
     s = neurolang.new_symbol(name="s")
     x = neurolang.new_symbol(name="x")
     y = neurolang.new_symbol(name="y")
@@ -351,7 +351,7 @@ def test_neurolange_dl_deterministic_negation():
 
 @pytest.mark.xfail(reason="RAP negation needs to be implemented")
 def test_neurolange_dl_probabilistic_negation():
-    neurolang = ProbabilisticFrontend()
+    neurolang = NeurolangPDL()
     s = neurolang.new_symbol(name="s")
     x = neurolang.new_symbol(name="x")
     y = neurolang.new_symbol(name="y")
@@ -370,7 +370,7 @@ def test_neurolange_dl_probabilistic_negation():
 
 
 def test_neurolang_dl_aggregation():
-    neurolang = ProbabilisticFrontend()
+    neurolang = NeurolangPDL()
     q = neurolang.new_symbol(name="q")
     p = neurolang.new_symbol(name="p")
     r = neurolang.new_symbol(name="r")
@@ -396,7 +396,7 @@ def test_neurolang_dl_aggregation():
 
 
 def test_post_probabilistic_aggregation():
-    nl = ProbabilisticFrontend()
+    nl = NeurolangPDL()
     A = nl.add_probabilistic_facts_from_tuples(
         [(0.2, "a"), (0.9, "b"), (0.5, "c")],
         name="A",
@@ -420,7 +420,7 @@ def test_post_probabilistic_aggregation():
 
 
 def test_empty_result_query():
-    nl = ProbabilisticFrontend()
+    nl = NeurolangPDL()
     A = nl.add_tuple_set([("f",), ("d",)], name="A")
     B = nl.add_probabilistic_facts_from_tuples(
         [
@@ -441,7 +441,7 @@ def test_empty_result_query():
 
 
 def test_forbidden_query_on_probabilistic_predicate():
-    nl = ProbabilisticFrontend()
+    nl = NeurolangPDL()
     A = nl.add_tuple_set([("f",), ("d",)], name="A")
     B = nl.add_probabilistic_facts_from_tuples(
         [(0.2, "a"), (0.7, "b"), (0.6, "c")], name="B"
@@ -453,7 +453,7 @@ def test_forbidden_query_on_probabilistic_predicate():
 
 
 def test_empty_boolean_query_result():
-    nl = ProbabilisticFrontend()
+    nl = NeurolangPDL()
     A = nl.add_tuple_set([("a",), ("b",), ("c",)], name="A")
     B = nl.add_probabilistic_facts_from_tuples(
         [(0.4, "a"), (0.5, "b")], name="B"
@@ -468,7 +468,7 @@ def test_empty_boolean_query_result():
 
 
 def test_equality():
-    nl = ProbabilisticFrontend()
+    nl = NeurolangPDL()
     r1 = nl.add_tuple_set([(i,) for i in range(5)], name="r1")
 
     with nl.scope as e:
@@ -493,7 +493,7 @@ def test_equality():
 
 
 def test_equality2():
-    nl = ProbabilisticFrontend()
+    nl = NeurolangPDL()
     nl.add_tuple_set(
         [("Hola", "var"), ("Hello", "var2"), ("Bonjour", "var")],
         name="test_var",
@@ -514,7 +514,7 @@ def test_equality2():
 
 
 def test_result_both_deterministic_and_post_probabilistic():
-    nl = ProbabilisticFrontend()
+    nl = NeurolangPDL()
     nl.add_tuple_set(
         [
             ("this", "is", "inglese"),
@@ -566,7 +566,7 @@ def test_result_both_deterministic_and_post_probabilistic():
 
 
 def test_result_query_relation_correct_column_names():
-    nl = ProbabilisticFrontend()
+    nl = NeurolangPDL()
     nl.add_tuple_set(
         [
             ("alice",),
@@ -594,7 +594,7 @@ def test_result_query_relation_correct_column_names():
 
 
 def test_add_constraints_and_rewrite():
-    nl = ProbabilisticFrontend()
+    nl = NeurolangPDL()
 
     nl.add_tuple_set(
         [
@@ -624,7 +624,7 @@ def test_add_constraints_and_rewrite():
 
 
 def test_solve_marg_query():
-    nl = ProbabilisticFrontend()
+    nl = NeurolangPDL()
     nl.add_tuple_set(
         [
             ("alice",),
@@ -671,7 +671,7 @@ def test_solve_marg_query():
 
 
 def test_solve_marg_query_disjunction():
-    nl = ProbabilisticFrontend()
+    nl = NeurolangPDL()
     nl.add_tuple_set(
         [
             ("alice",),
@@ -705,3 +705,26 @@ def test_solve_marg_query_disjunction():
                     e.does_not_smoke[e.p]
                 )
             ) // e.practice[e.p, e.sport]
+
+
+def test_query_without_safe_plan():
+    nl = NeurolangPDL()
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.2, "alice"),
+            (0.8, "bob"),
+        ],
+        name="names",
+    )
+
+    with nl.scope as e:
+        e.q[e.x, e.y, e.PROB[e.x, e.y]] = e.names[e.x] & e.names[e.y]
+
+        res = nl.solve_all()
+
+    assert res['q'].to_unnamed() == {
+        ('alice', 'alice', .2),
+        ('alice', 'bob', .2 * .8),
+        ('bob', 'alice', .2 * .8),
+        ('bob', 'bob', 0.8)
+    }
