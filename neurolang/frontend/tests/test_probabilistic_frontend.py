@@ -4,13 +4,21 @@ from typing import AbstractSet, Tuple
 import numpy as np
 import pytest
 
-from ...exceptions import UnsupportedProgramError, UnsupportedQueryError
+from ...exceptions import (
+    UnsupportedProgramError,
+    UnsupportedQueryError,
+    UnsupportedSolverError
+)
 from ...probabilistic.exceptions import (
     ForbiddenConditionalQueryNonConjunctive,
-    UnsupportedProbabilisticQueryError,
+    UnsupportedProbabilisticQueryError
 )
 from ...utils.relational_algebra_set import RelationalAlgebraFrozenSet
-from ..probabilistic_frontend import NeurolangPDL
+from ..probabilistic_frontend import (
+    NeurolangPDL,
+    lifted_solve_marg_query,
+    lifted_solve_succ_query
+)
 
 
 def assert_almost_equal(set_a, set_b):
@@ -726,6 +734,25 @@ def test_query_without_safe_plan():
         ('bob', 'alice', .2 * .8),
         ('bob', 'bob', 0.8)
     }
+
+
+def test_query_without_safe_fails():
+    nl = NeurolangPDL(
+        probabilistic_solvers=(lifted_solve_succ_query,),
+        probabilistic_marg_solvers=(lifted_solve_marg_query,)
+    )
+    nl.add_probabilistic_facts_from_tuples(
+        [
+            (0.2, "alice"),
+            (0.8, "bob"),
+        ],
+        name="names",
+    )
+
+    with pytest.raises(UnsupportedSolverError):
+        with nl.scope as e:
+            e.q[e.x, e.y, e.PROB[e.x, e.y]] = e.names[e.x] & e.names[e.y]
+            nl.solve_all()
 
 
 def test_cbma_two_term_conjunctive_query():

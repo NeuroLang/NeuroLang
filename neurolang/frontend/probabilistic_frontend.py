@@ -369,7 +369,7 @@ class NeurolangPDL(QueryBuilderDatalog):
                     succ_solver,
                     marg_solver,
                 )
-            except UnsupportedSolverError as e:
+            except UnsupportedSolverError:
                 if i == len(self.probabilistic_solvers) - 1:
                     raise
             else:
