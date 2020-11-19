@@ -1,9 +1,17 @@
 # -*- coding: utf-8 -*-
 """
-TODO
+Region-Based Reverse Inference on the Neurosynth Coordinate-Based \
+Meta-Analysis Database
 ============================================================================
 
-TODO
+Reported peak activation coordinates (foci) within the Neurosynth database are
+used to model the association between neuroanatomical regions and neuroimaging
+studies in a probabilistic NeuroLang program. Associations between terms and
+studies, based on TFIDF features in the database, are also encoded in the
+probabilistic program. Queries are solved to find the most probable term
+associations for a pattern of region activations. This process of finding the
+most probable term associations given a pattern of activations is sometimes
+called "reverse inference".
 
 """
 import pathlib
