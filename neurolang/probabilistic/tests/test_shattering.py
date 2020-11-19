@@ -1,3 +1,4 @@
+from neurolang.probabilistic.exceptions import NotEasilyShatterableError
 import operator
 
 import pytest
@@ -93,31 +94,31 @@ def test_query_shattering_not_easy():
     cpl.add_probabilistic_facts_from_tuples(
         P, [(0.2, "a", "b"), (1.0, "a", "c"), (0.7, "b", "b")]
     )
-    with pytest.raises(UnexpectedExpressionError):
+    with pytest.raises(NotEasilyShatterableError):
         query = Implication(ans(x, y), Conjunction((P(a, x), P(a, y))))
         symbol_table = generate_probabilistic_symbol_table_for_query(
             cpl, query
         )
         shatter_easy_probfacts(query, symbol_table)
-    with pytest.raises(UnexpectedExpressionError):
+    with pytest.raises(NotEasilyShatterableError):
         query = Implication(ans(x, y), Conjunction((P(a, x), P(y, a))))
         symbol_table = generate_probabilistic_symbol_table_for_query(
             cpl, query
         )
         shatter_easy_probfacts(query, symbol_table)
-    with pytest.raises(UnexpectedExpressionError):
+    with pytest.raises(NotEasilyShatterableError):
         query = Implication(ans(x), Conjunction((P(a, x), P(x, a))))
         symbol_table = generate_probabilistic_symbol_table_for_query(
             cpl, query
         )
         shatter_easy_probfacts(query, symbol_table)
-    with pytest.raises(UnexpectedExpressionError):
+    with pytest.raises(NotEasilyShatterableError):
         query = Implication(ans(x, y, z), Conjunction((P(x, y), P(a, z))))
         symbol_table = generate_probabilistic_symbol_table_for_query(
             cpl, query
         )
         shatter_easy_probfacts(query, symbol_table)
-    with pytest.raises(UnexpectedExpressionError):
+    with pytest.raises(NotEasilyShatterableError):
         query = Implication(ans(x, y, z), Conjunction((P(x, y), P(z, z))))
         symbol_table = generate_probabilistic_symbol_table_for_query(
             cpl, query

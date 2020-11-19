@@ -3,7 +3,8 @@ from neurolang.datalog.negation import is_conjunctive_negation
 from ..exceptions import (
     NeuroLangException,
     UnexpectedExpressionError,
-    UnsupportedQueryError
+    UnsupportedQueryError,
+    UnsupportedSolverError
 )
 
 
@@ -23,7 +24,7 @@ class UncomparableDistributionsError(NeuroLangException):
     pass
 
 
-class NotEasilyShatterableError(UnexpectedExpressionError):
+class NotEasilyShatterableError(UnsupportedSolverError):
     pass
 
 

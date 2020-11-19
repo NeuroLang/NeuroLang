@@ -62,6 +62,10 @@ class UnsupportedQueryError(NeuroLangException):
     pass
 
 
+class UnsupportedSolverError(NeuroLangException):
+    pass
+
+
 class ProtectedKeywordError(NeuroLangException):
     pass
 
