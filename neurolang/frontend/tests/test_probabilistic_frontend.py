@@ -683,7 +683,7 @@ def test_solve_marg_query():
 
 
 def test_query_based_pfact():
-    nl = ProbabilisticFrontend()
+    nl = NeurolangPDL()
     nl.add_tuple_set(
         [
             (2, 0.2),
@@ -707,7 +707,7 @@ def test_query_based_pfact():
 
 
 def test_query_based_pfact_region_volume():
-    nl = ProbabilisticFrontend()
+    nl = NeurolangPDL()
 
     @nl.add_symbol
     def volume(s: SphericalVolume) -> float:
