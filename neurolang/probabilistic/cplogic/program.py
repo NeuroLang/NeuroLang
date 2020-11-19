@@ -1,14 +1,12 @@
 import typing
-from operator import floordiv, matmul
 
 from ...datalog import DatalogProgram
 from ...datalog.basic_representation import UnionOfConjunctiveQueries
 from ...exceptions import ForbiddenDisjunctionError, ForbiddenExpressionError
 from ...expression_pattern_matching import add_match
 from ...expression_walker import ExpressionWalker, PatternWalker
-from ...expressions import Constant, FunctionApplication, Symbol
+from ...expressions import Constant, Symbol
 from ...logic import TRUE, Implication, Union
-from ...type_system import get_generic_type
 from ..exceptions import (
     ForbiddenConditionalQueryNoProb,
     MalformedProbabilisticTupleError,
@@ -23,100 +21,7 @@ from ..expression_processing import (
     is_within_language_prob_query,
     union_contains_probabilistic_facts,
 )
-from ..expressions import (
-    PROB,
-    Condition,
-    ProbabilisticPredicate,
-    ProbabilisticQuery,
-)
-
-
-def is_within_language_prob_query_wannabe(expression):
-    return (
-        isinstance(expression, FunctionApplication)
-        and get_generic_type(type(expression)) is FunctionApplication
-        and expression.functor == PROB
-    )
-
-
-class TranslateProbabilisticQueryMixin(PatternWalker):
-    @add_match(
-        Implication(
-            ..., FunctionApplication(Constant[typing.Any](floordiv), ...)
-        )
-    )
-    def conditional_query(self, implication):
-        new_implication = Implication(
-            implication.consequent, Condition(*implication.antecedent.args)
-        )
-        if not (
-            any(
-                isinstance(arg, ProbabilisticQuery)
-                or is_within_language_prob_query_wannabe(arg)
-                for arg in new_implication.consequent.args
-            )
-        ):
-            raise ForbiddenExpressionError(
-                "Missing probabilistic term in consequent's head"
-            )
-        if (
-            sum(
-                isinstance(arg, ProbabilisticQuery)
-                for arg in new_implication.consequent.args
-            )
-            > 1
-        ):
-            raise ForbiddenExpressionError(
-                "Can only contain one probabilistic term in consequent's head"
-            )
-        return self.walk(new_implication)
-
-    @add_match(
-        Implication,
-        lambda implication: isinstance(
-            implication.consequent, FunctionApplication
-        )
-        and any(
-            is_within_language_prob_query_wannabe(arg)
-            for arg in implication.consequent.args
-        ),
-    )
-    def within_language_prob_query(self, implication):
-        csqt_args = tuple()
-        for arg in implication.consequent.args:
-            if is_within_language_prob_query_wannabe(arg):
-                arg = ProbabilisticQuery(*arg.unapply())
-            csqt_args += (arg,)
-        consequent = implication.consequent.functor(*csqt_args)
-        return self.walk(Implication(consequent, implication.antecedent))
-
-
-class TranslateQueryBasedProbabilisticFactMixin(PatternWalker):
-    """
-    Translate an expression of the form
-
-        (P @ y)(x) :- Q(x)
-
-    to its equivalent query-based probabilistic fact
-
-        P(x) : y :- Q(x)
-
-    This is useful when the rule was defined at the frontend level using the
-    sugar syntax `(P @ y)[x] = Q[x]`.
-
-    """
-
-    @add_match(
-        Implication(
-            FunctionApplication(Constant(matmul)(Symbol, ...), ...),
-            ...,
-        )
-    )
-    def query_based_probfact_wannabe(self, impl):
-        pred_symb, probability = impl.consequent.functor.args
-        body = pred_symb(*impl.consequent.args)
-        new_consequent = ProbabilisticPredicate(probability, body)
-        return self.walk(Implication(new_consequent, impl.antecedent))
+from ..expressions import Condition, ProbabilisticPredicate
 
 
 class CPLogicMixin(PatternWalker):

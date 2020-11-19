@@ -22,7 +22,7 @@ from ...expressions import (
     ProbabilisticPredicate,
     ProbabilisticQuery,
 )
-from ..program import CPLogicProgram, TranslateProbabilisticQueryMixin
+from ..program import CPLogicProgram
 
 P = Symbol("P")
 Q = Symbol("Q")
@@ -275,25 +275,3 @@ def test_wlq_marg_conjunctive_conditioning():
     cpl = CPLogicProgram()
     cpl.walk(wlq)
     assert Q in cpl.within_language_prob_queries()
-
-
-class _TestTranslator(TranslateProbabilisticQueryMixin, ExpressionWalker):
-    pass
-
-
-def test_wlq_floordiv_translation():
-    wlq = Implication(
-        Q(x, y, PROB(x, y)), Constant(operator.floordiv)(P(x), R(x, y))
-    )
-    translator = _TestTranslator()
-    result = translator.walk(wlq)
-    assert result == Implication(
-        Q(x, y, ProbabilisticQuery(PROB, (x, y))), Condition(P(x), R(x, y))
-    )
-
-
-def test_wlq_marg_bad_syntax():
-    bad_wlq = Implication(Q(x, y), Constant(operator.floordiv)(P(x), Z(x, y)))
-    translator = _TestTranslator()
-    with pytest.raises(ForbiddenExpressionError):
-        translator.walk(bad_wlq)

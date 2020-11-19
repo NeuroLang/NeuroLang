@@ -3,18 +3,31 @@ Set of syntactic sugar processors at the intermediate level.
 """
 
 import operator as op
+import typing
 from typing import AbstractSet, Callable, DefaultDict
 
-from ... import expression_walker as ew, expressions as ir
+from ... import expression_walker as ew
+from ... import expressions as ir
 from ...datalog.expression_processing import (
     conjunct_formulas,
     extract_logic_atoms,
 )
-from ...exceptions import SymbolNotFoundError
+from ...exceptions import ForbiddenExpressionError, SymbolNotFoundError
 from ...expression_walker import ReplaceExpressionWalker
 from ...expressions import Constant, FunctionApplication, Symbol
 from ...logic import TRUE, Conjunction, Implication
-from ...type_system import Unknown, get_args, is_leq_informative
+from ...probabilistic.expressions import (
+    PROB,
+    Condition,
+    ProbabilisticPredicate,
+    ProbabilisticQuery,
+)
+from ...type_system import (
+    Unknown,
+    get_args,
+    get_generic_type,
+    is_leq_informative,
+)
 
 
 class Column(ir.Definition):
@@ -367,3 +380,90 @@ class TranslateHeadConstantsToEqualities(ew.PatternWalker):
         new_implication = Implication(new_consequent, new_antecedent)
 
         return self.walk(new_implication)
+
+
+class TranslateProbabilisticQueryMixin(ew.PatternWalker):
+    @ew.add_match(
+        Implication(
+            ..., FunctionApplication(Constant[typing.Any](op.floordiv), ...)
+        )
+    )
+    def conditional_query(self, implication):
+        new_implication = Implication(
+            implication.consequent, Condition(*implication.antecedent.args)
+        )
+        if not (
+            any(
+                isinstance(arg, ProbabilisticQuery)
+                or (
+                    get_generic_type(type(arg)) is FunctionApplication
+                    and arg.functor == PROB
+                )
+                for arg in new_implication.consequent.args
+            )
+        ):
+            raise ForbiddenExpressionError(
+                "Missing probabilistic term in consequent's head"
+            )
+        if (
+            sum(
+                isinstance(arg, ProbabilisticQuery)
+                for arg in new_implication.consequent.args
+            )
+            > 1
+        ):
+            raise ForbiddenExpressionError(
+                "Can only contain one probabilistic term in consequent's head"
+            )
+        return self.walk(new_implication)
+
+    @ew.add_match(
+        Implication,
+        lambda implication: isinstance(
+            implication.consequent, FunctionApplication
+        )
+        and any(
+            get_generic_type(type(arg)) is FunctionApplication
+            and arg.functor == PROB
+            for arg in implication.consequent.args
+        ),
+    )
+    def within_language_prob_query(self, implication):
+        csqt_args = tuple()
+        for arg in implication.consequent.args:
+            if (
+                get_generic_type(type(arg)) is FunctionApplication
+                and arg.functor == PROB
+            ):
+                arg = ProbabilisticQuery(*arg.unapply())
+            csqt_args += (arg,)
+        consequent = implication.consequent.functor(*csqt_args)
+        return self.walk(Implication(consequent, implication.antecedent))
+
+
+class TranslateQueryBasedProbabilisticFactMixin(ew.PatternWalker):
+    """
+    Translate an expression of the form
+
+        (P @ y)(x) :- Q(x)
+
+    to its equivalent query-based probabilistic fact
+
+        P(x) : y :- Q(x)
+
+    This is useful when the rule was defined at the frontend level using the
+    sugar syntax `(P @ y)[x] = Q[x]`.
+
+    """
+
+    @ew.add_match(
+        Implication(
+            FunctionApplication(Constant(op.matmul)(Symbol, ...), ...),
+            ...,
+        )
+    )
+    def query_based_probfact_wannabe(self, impl):
+        pred_symb, probability = impl.consequent.functor.args
+        body = pred_symb(*impl.consequent.args)
+        new_consequent = ProbabilisticPredicate(probability, body)
+        return self.walk(Implication(new_consequent, impl.antecedent))
