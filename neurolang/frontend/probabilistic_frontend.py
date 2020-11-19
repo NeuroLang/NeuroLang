@@ -41,16 +41,16 @@ from ..probabilistic.dichotomy_theorem_based_solver import (
     solve_marg_query as lifted_solve_marg_query,
     solve_succ_query as lifted_solve_succ_query
 )
-from ..probabilistic.weighted_model_counting import (
-    solve_marg_query as wmc_solve_marg_query,
-    solve_succ_query as wmc_solve_succ_query
-)
 from ..probabilistic.expression_processing import (
     is_probabilistic_predicate_symbol,
     is_within_language_prob_query
 )
 from ..probabilistic.query_resolution import compute_probabilistic_solution
 from ..probabilistic.stratification import stratify_program
+from ..probabilistic.weighted_model_counting import (
+    solve_marg_query as wmc_solve_marg_query,
+    solve_succ_query as wmc_solve_succ_query
+)
 from ..region_solver import RegionSolver
 from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
@@ -85,8 +85,14 @@ class NeurolangPDL(QueryBuilderDatalog):
     def __init__(
         self,
         chase_class: Type[Chase] = Chase,
-        probabilistic_solvers: Tuple[Callable] = (lifted_solve_succ_query, wmc_solve_succ_query),
-        probabilistic_marg_solvers: Tuple[Callable] = (lifted_solve_marg_query, wmc_solve_marg_query),
+        probabilistic_solvers: Tuple[Callable] = (
+            lifted_solve_succ_query,
+            wmc_solve_succ_query,
+        ),
+        probabilistic_marg_solvers: Tuple[Callable] = (
+            lifted_solve_marg_query,
+            wmc_solve_marg_query,
+        ),
     ) -> "NeurolangPDL":
         """
         Query builder with probabilistic capabilities
@@ -361,7 +367,7 @@ class NeurolangPDL(QueryBuilderDatalog):
                     pchoice_edb,
                     prob_idb,
                     succ_solver,
-                    marg_solver
+                    marg_solver,
                 )
             except UnsupportedSolverError as e:
                 if i == len(self.probabilistic_solvers) - 1:
