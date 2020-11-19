@@ -44,9 +44,19 @@ atlas_labels = {
     label: str(name.decode("utf8"))
     for label, name in atlas_destrieux["labels"]
 }
-nl.add_atlas_set(
-    "AnatomicalRegion", atlas_labels, nibabel.load(atlas_destrieux["maps"])
+atlas_spatial_image = nibabel.load(atlas_destrieux["maps"])
+atlas_spatial_image = nilearn.image.resample_to_img(
+    atlas_spatial_image, mni_t1_4mm
 )
+dfs = list()
+for label, name in atlas_destrieux["labels"]:
+    voxels = np.transpose(
+        (np.asanyarray(atlas_spatial_image.dataobj) == label).nonzero()
+    )
+    df = pd.DataFrame(voxels, columns=["i", "j", "k"])
+    df["region_name"] = str(name.decode("utf-8"))
+    dfs.append(df[["region_name", "i", "j", "k"]])
+nl.add_tuple_set(pd.concat(dfs).values, name="AnatomicalRegion")
 
 ###############################################################################
 # Loading the database
@@ -96,13 +106,6 @@ def load_neurosynth_data():
     ).query("TfIdf > 1e-3")[["term", "pmid"]]
     ns_docs = ns_features[["pmid"]].drop_duplicates()
 
-    # limit size
-    ns_docs = ns_docs.iloc[:100, :]
-    ns_terms = ns_terms.loc[ns_terms.pmid.isin(ns_docs.iloc[:, 0].values)]
-    ns_activations = ns_activations.loc[
-        ns_activations.id.isin(ns_docs.iloc[:, 0].values)
-    ]
-
     if cache_store_path.is_file():
         cache_store_path.unlink()
 
@@ -123,47 +126,32 @@ SelectedStudy = nl.add_uniform_probabilistic_choice_over_set(
 
 
 @nl.add_symbol
-def agg_create_region(
+def agg_count(
     i: typing.Iterable,
     j: typing.Iterable,
     k: typing.Iterable,
-) -> neurolang.regions.ExplicitVBR:
-    voxels = np.c_[i, j, k]
-    return neurolang.regions.ExplicitVBR(
-        voxels, mni_t1_4mm.affine, image_dim=mni_t1_4mm.shape
-    )
-
-
-@nl.add_symbol
-def intersection(
-    first: neurolang.regions.ExplicitVBR,
-    second: neurolang.regions.ExplicitVBR,
-) -> neurolang.regions.ExplicitVBR:
-    return neurolang.regions.region_intersection({first, second})
-
-
-@nl.add_symbol
-def volume(region: neurolang.regions.ExplicitVBR) -> float:
-    if isinstance(region, neurolang.regions.EmptyRegion):
-        return 0.0
-    return float(len(region.voxels))
+) -> int:
+    return len(i)
 
 
 ###############################################################################
 # Probabilistic program and querying
 
 with nl.environment as e:
-    e.StudyRegion[e.s, e.agg_create_region[e.i, e.j, e.k]] = FocusReported[
-        e.i, e.j, e.k, e.s
+    e.RegionVolume[e.r, e.agg_count[e.i, e.j, e.k]] = e.AnatomicalRegion[
+        e.r, e.i, e.j, e.k
     ]
-    (e.RegionReported @ (e.volume[e.intersect] / e.volume[e.r]))[e.l, e.s] = (
-        e.AnatomicalRegion[e.l, e.r]
-        & e.StudyRegion[e.s, e.sr]
-        & (e.intersect == e.intersection[e.r, e.sr])
+    e.StudyRegionIntersectionVolume[e.s, e.r, e.agg_count[e.i, e.j, e.k]] = (
+        e.FocusReported[e.i, e.j, e.k, e.s]
+        & e.AnatomicalRegion[e.r, e.i, e.j, e.k]
+    )
+    (e.RegionReported @ (e.v1 / e.v2))[e.r, e.s] = (
+        e.StudyRegionIntersectionVolume[e.s, e.r, e.v1]
+        & e.RegionVolume[e.r, e.v2]
     )
     e.RegionActivation[e.r] = e.RegionReported[e.r, e.s] & e.SelectedStudy[e.s]
     e.TermAssociation[e.t] = e.SelectedStudy[e.s] & e.TermInStudy[e.t, e.s]
-    e.Query[e.t, e.PROB[e.t]] = e.TermAssociation[e.t] // (
-        e.RegionActivation["L G_pariet_inf-Angular"]
+    e.Query[e.t, e.r, e.PROB[e.t, e.r]] = e.TermAssociation[e.t] // (
+        e.RegionActivation[e.r]
     )
-    result = nl.query((e.t, e.p), e.Query[e.t, e.p])
+    result = nl.query((e.t, e.r, e.p), e.Query[e.t, e.r, e.p])
