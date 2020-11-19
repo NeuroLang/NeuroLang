@@ -109,7 +109,7 @@ class NeurolangPDL(QueryBuilderDatalog):
 
         probabilistic_marg_solvers : Tuple[Callable], optional
             used to compute probabilistic solutions,
-            by default (lifted_solve_succ_query, wmc_solve_marg_query)
+            by default (lifted_solve_marg_query, wmc_solve_marg_query)
 
 
         Returns
