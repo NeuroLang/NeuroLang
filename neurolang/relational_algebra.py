@@ -114,6 +114,19 @@ class NaturalJoin(RelationalAlgebraOperation):
         return f"[{self.relation_left}" f"\N{JOIN}" f"{self.relation_right}]"
 
 
+class LeftNaturalJoin(RelationalAlgebraOperation):
+    def __init__(self, relation_left, relation_right):
+        self.relation_left = relation_left
+        self.relation_right = relation_right
+
+    def __repr__(self):
+        return (
+            f"[{self.relation_left}"
+            f"\N{LEFT OUTER JOIN}"
+            f"{self.relation_right}]"
+        )
+
+
 class Product(RelationalAlgebraOperation):
     def __init__(self, relations):
         self.relations = tuple(relations)
@@ -565,6 +578,13 @@ class RelationalAlgebraSolver(ew.ExpressionWalker):
         left = naturaljoin.relation_left.value
         right = naturaljoin.relation_right.value
         res = left.naturaljoin(right)
+        return self._build_relation_constant(res)
+
+    @ew.add_match(LeftNaturalJoin(Constant, Constant))
+    def ra_left_naturaljoin(self, naturaljoin):
+        left = naturaljoin.relation_left.value
+        right = naturaljoin.relation_right.value
+        res = left.left_naturaljoin(right)
         return self._build_relation_constant(res)
 
     @ew.add_match(Difference(Constant, Constant))

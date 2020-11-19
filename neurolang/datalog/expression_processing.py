@@ -23,7 +23,6 @@ from ..expression_pattern_matching import (
 )
 from ..expression_walker import (
     ExpressionWalker,
-    IdentityWalker,
     PatternWalker,
     ReplaceExpressionWalker,
     ReplaceSymbolWalker,
@@ -42,7 +41,7 @@ from ..logic import (
 from ..logic import expression_processing as elp
 from ..logic.transformations import CollapseConjunctions
 from ..logic.unification import most_general_unifier
-from .expressions import TranslateToLogic
+from .expressions import AggregationApplication, TranslateToLogic
 
 EQ = Constant(operator.eq)
 
@@ -745,23 +744,26 @@ def is_rule_with_builtin(rule, known_builtins=None):
 
 
 def remove_conjunction_duplicates(conjunction):
-    return Conjunction(tuple(set(conjunction.formulas)))
+    return maybe_deconjunct_single_pred(
+        Conjunction(tuple(set(conjunction.formulas)))
+    )
 
 
-def iter_disjunction_or_implication_rules(implication_or_disjunction):
-    if isinstance(implication_or_disjunction, Implication):
-        yield implication_or_disjunction
-    else:
-        for formula in implication_or_disjunction.formulas:
-            yield formula
+def is_aggregation_rule(rule):
+    return is_aggregation_predicate(rule.consequent)
 
 
-def is_equality_between_symbol_and_symbol_or_constant(formula):
+def is_aggregation_predicate(predicate):
+    return any(
+        isinstance(arg, AggregationApplication) for arg in predicate.args
+    )
+
+
+def is_variable_equality(formula):
     return (
         isinstance(formula, FunctionApplication)
         and formula.functor == EQ
-        and len(formula.args) == 2
-        and all(isinstance(arg, (Constant, Symbol)) for arg in formula.args)
+        and any(isinstance(arg, Symbol) for arg in formula.args)
     )
 
 
@@ -794,59 +796,108 @@ class RemoveDuplicatedAntecedentPredicates(PatternWalker):
         )
 
 
-class ExtractVariableEqualities(PatternWalker):
-    def __init__(self):
-        self._equality_sets = list()
+class UnifyVariableEqualitiesMixin(PatternWalker):
+    @add_match(
+        Implication(FunctionApplication(Symbol, ...), ...),
+        lambda implication: all(
+            isinstance(arg, (Symbol, Constant))
+            for arg in implication.consequent.args
+        )
+        and any(
+            is_variable_equality(formula)
+            for formula in extract_logic_predicates(implication.antecedent)
+        ),
+    )
+    def extract_and_unify_var_eqs_in_implication(self, implication):
+        eq_sets = self.extract_variable_equalities(implication.antecedent)
+        substitutions = self.build_substitutions_from_equalities(eq_sets)
+        replacer = ReplaceSymbolWalker(substitutions)
+        antecedent = Conjunction(
+            tuple(
+                formula
+                for formula in extract_logic_predicates(implication.antecedent)
+                if not is_variable_equality(formula)
+            )
+        )
+        antecedent = replacer.walk(antecedent)
+        if len(antecedent.formulas) == 0:
+            antecedent = TRUE
+        else:
+            antecedent = remove_conjunction_duplicates(antecedent)
+        consequent = replacer.walk(implication.consequent)
+        new_implication = Implication(consequent, antecedent)
+        return self.walk(new_implication)
 
-    @property
-    def substitutions(self):
+    @add_match(
+        Implication(FunctionApplication(Symbol, ...), ...),
+        lambda implication: is_aggregation_rule(implication)
+        and any(
+            is_variable_equality(formula)
+            for formula in extract_logic_predicates(implication.antecedent)
+        ),
+    )
+    def unsupported_unification_for_aggregation(self, rule_with_aggregation):
+        raise ForbiddenExpressionError(
+            "Unification of rules with aggregation not supported"
+        )
+
+    @staticmethod
+    def build_substitutions_from_equalities(eq_sets):
         substitutions = dict()
-        for eq_set in self._equality_sets:
+        for eq_set in eq_sets:
             if any(isinstance(term, Constant) for term in eq_set):
-                update = self._get_const_equality_substitutions(eq_set)
+                const = next(
+                    term for term in eq_set if isinstance(term, Constant)
+                )
+                update = {
+                    term: const for term in eq_set if isinstance(term, Symbol)
+                }
             else:
-                update = self._get_between_symbs_equality_substitutions(eq_set)
+                chosen_symb = max(eq_set, key=lambda symb: symb.name)
+                update = {
+                    symb: chosen_symb for symb in eq_set if symb != chosen_symb
+                }
             substitutions.update(update)
         return substitutions
 
-    @add_match(
-        Conjunction,
-        lambda conj: any(
-            is_equality_between_symbol_and_symbol_or_constant(formula)
-            for formula in conj.formulas
-        ),
-    )
-    def conjunction_with_variable_equality(self, conjunction):
-        for formula in conjunction.formulas:
-            self.walk(formula)
+    @staticmethod
+    def extract_variable_equalities(expression):
+        equality_predicates = set(
+            predicate
+            for predicate in extract_logic_predicates(expression)
+            if predicate.functor == EQ
+            and any(isinstance(arg, Symbol) for arg in predicate.args)
+        )
+        eq_sets = list()
+        for equality_predicate in equality_predicates:
+            if all(isinstance(arg, Symbol) for arg in equality_predicate.args):
+                UnifyVariableEqualities.add_equality_with_symbol(
+                    eq_sets, *equality_predicate.args
+                )
+            elif isinstance(equality_predicate.args[0], Symbol):
+                UnifyVariableEqualities.add_equality_with_constant(
+                    eq_sets, *equality_predicate.args
+                )
+            else:
+                UnifyVariableEqualities.add_equality_with_constant(
+                    eq_sets, *reversed(equality_predicate.args)
+                )
+        return eq_sets
 
-    @add_match(FunctionApplication(EQ, (Symbol, Symbol)))
-    def variable_equality_between_variables(self, function_application):
-        first, second = function_application.args
-        self._add_equality_with_symbol(first, second)
-
-    @add_match(FunctionApplication(EQ, (Constant, Symbol)))
-    def variable_equality_with_constant_reversed(self, function_application):
-        functor, (const, symb) = function_application.unapply()
-        self.walk(function_application.apply(functor, (symb, const)))
-
-    @add_match(FunctionApplication(EQ, (Symbol, Constant)))
-    def variable_equality_with_constant(self, function_application):
-        symb, const = function_application.args
-        self._add_equality_with_constant(symb, const)
-
-    def _add_equality_with_constant(self, symb, const):
+    @staticmethod
+    def add_equality_with_constant(eq_sets, symb, const):
         found_eq_set = False
-        for eq_set in self._equality_sets:
+        for eq_set in eq_sets:
             if any(term == symb for term in eq_set):
                 eq_set.add(const)
                 found_eq_set = True
         if not found_eq_set:
-            self._equality_sets.append({symb, const})
+            eq_sets.append({symb, const})
 
-    def _add_equality_with_symbol(self, first, second):
+    @staticmethod
+    def add_equality_with_symbol(eq_sets, first, second):
         found_eq_set = False
-        for eq_set in self._equality_sets:
+        for eq_set in eq_sets:
             if any(term == first for term in eq_set):
                 eq_set.add(second)
                 found_eq_set = True
@@ -854,43 +905,7 @@ class ExtractVariableEqualities(PatternWalker):
                 eq_set.add(first)
                 found_eq_set = True
         if not found_eq_set:
-            self._equality_sets.append({first, second})
-
-    @staticmethod
-    def _get_const_equality_substitutions(eq_set):
-        const = next(term for term in eq_set if isinstance(term, Constant))
-        return {term: const for term in eq_set if isinstance(term, Symbol)}
-
-    @staticmethod
-    def _get_between_symbs_equality_substitutions(eq_set):
-        iterator = iter(eq_set)
-        chosen_symb = next(iterator)
-        return {symb: chosen_symb for symb in iterator}
-
-
-class UnifyVariableEqualitiesMixin(PatternWalker):
-    @add_match(
-        Implication(FunctionApplication(Symbol, ...), Conjunction),
-        lambda implication: any(
-            is_equality_between_symbol_and_symbol_or_constant(formula)
-            for formula in implication.antecedent.formulas
-        ),
-    )
-    def extract_and_unify_var_eqs_in_implication(self, implication):
-        extractor = UnifyVariableEqualitiesMixin._Extractor()
-        extractor.walk(implication.antecedent)
-        replacer = ReplaceSymbolWalker(extractor.substitutions)
-        consequent = replacer.walk(implication.consequent)
-        conjuncts = tuple(
-            replacer.walk(formula)
-            for formula in implication.antecedent.formulas
-            if not is_equality_between_symbol_and_symbol_or_constant(formula)
-        )
-        antecedent = conjunct_if_needed(conjuncts)
-        return self.walk(Implication(consequent, antecedent))
-
-    class _Extractor(ExtractVariableEqualities, IdentityWalker):
-        pass
+            eq_sets.append({first, second})
 
 
 class UnifyVariableEqualities(UnifyVariableEqualitiesMixin, ExpressionWalker):
