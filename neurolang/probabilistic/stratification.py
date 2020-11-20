@@ -100,7 +100,7 @@ def stratify_program(query, program):
             grpd_symbs[idb_type].add(rule.consequent.functor)
             grpd_idbs[idb_type].append(rule)
             count = len(idb)
-    _check_no_negation_in_probabilistic_rules(grpd_idbs["probabilistic"])
+    _check_no_negated_prob_idb_predicate(grpd_idbs["probabilistic"])
     return {
         idb_type: Union(tuple(idb_rules))
         for idb_type, idb_rules in grpd_idbs.items()
@@ -108,13 +108,13 @@ def stratify_program(query, program):
     }
 
 
-def _check_no_negation_in_probabilistic_rules(prob_rules):
+def _check_no_negated_prob_idb_predicate(prob_idb):
     if any(
         any(
-            isinstance(pred, Negation)
+            isinstance(pred, Negation) and pred.formula.functor in prob_idb
             for pred in extract_logic_predicates(rule.antecedent)
         )
-        for rule in prob_rules
+        for rule in prob_idb
     ):
         raise UnsupportedProgramError(
             "Negation not permitted in probabilistic rules"

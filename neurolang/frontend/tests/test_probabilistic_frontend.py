@@ -369,10 +369,11 @@ def test_neurolange_dl_probabilistic_negation():
     q = neurolang.add_tuple_set(dataset_det, name="q")
     r = neurolang.add_probabilistic_facts_from_tuples(dataset, name="r")
 
-    s[x, y, prob(x, y)] = ~r(x, x) & q(x, y)
+    s[x, y, prob(x, y)] = ~r(x, y) & q(x, y)
 
-    with pytest.raises(UnsupportedProgramError):
-        neurolang.solve_all()
+    result = neurolang.solve_all()["s"].to_unnamed()
+    expected = {(i, j, 1 - p) for (p, i, j) in dataset}
+    assert_almost_equal(result, expected)
 
 
 def test_neurolang_dl_aggregation():

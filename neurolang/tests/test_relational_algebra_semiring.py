@@ -2,9 +2,11 @@ import operator
 
 from ..expressions import Constant
 from ..probabilistic.cplogic import testing
+from ..probabilistic.cplogic.testing import eq_prov_relations
 from ..relational_algebra import (
     ColumnInt,
     ColumnStr,
+    Difference,
     NamedRelationalAlgebraFrozenSet,
     NaturalJoin,
     Projection,
@@ -300,3 +302,87 @@ def test_selection_between_columnints():
         ColumnStr("_p_"),
     )
     assert testing.eq_prov_relations(result, expected)
+
+
+def test_difference():
+    r_left = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            columns=("_p1_", "x", "y", "w"),
+            iterable=[
+                (0.5, "a", "b", "a"),
+                (0.7, "a", "a", "b"),
+                (0.2, "b", "b", "c"),
+            ],
+        ),
+        ColumnStr("_p1_"),
+    )
+
+    r_right = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            columns=("_p2_", "x", "y", "z"),
+            iterable=[
+                (0.2, "a", "b", "a"),
+                (0.3, "b", "a", "b"),
+                (0.1, "b", "b", "c"),
+            ],
+        ),
+        ColumnStr("_p2_"),
+    )
+
+    r_expected = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            columns=("_p1_", "x", "y", "w"),
+            iterable=[
+                (0.4, "a", "b", "a"),
+                (0.7, "a", "a", "b"),
+                (0.18, "b", "b", "c"),
+            ],
+        ),
+        ColumnStr("_p1_"),
+    )
+
+    op = Difference(r_left, r_right)
+    result = RelationalAlgebraProvenanceExpressionSemringSolver().walk(op)
+    assert eq_prov_relations(result, r_expected)
+
+
+def test_difference_same_provenance_column():
+    r_left = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            columns=("_p_", "x", "y", "w"),
+            iterable=[
+                (0.5, "a", "b", "a"),
+                (0.3, "a", "a", "b"),
+                (0.2, "b", "b", "c"),
+            ],
+        ),
+        ColumnStr("_p_"),
+    )
+
+    r_right = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            columns=("_p_", "x", "y", "z"),
+            iterable=[
+                (0.7, "a", "b", "a"),
+                (0.8, "b", "a", "b"),
+                (0.9, "b", "b", "c"),
+            ],
+        ),
+        ColumnStr("_p_"),
+    )
+
+    r_expected = ProvenanceAlgebraSet(
+        NamedRelationalAlgebraFrozenSet(
+            columns=("_p_", "x", "y", "w"),
+            iterable=[
+                (0.15, "a", "b", "a"),
+                (0.3, "a", "a", "b"),
+                (0.02, "b", "b", "c"),
+            ],
+        ),
+        ColumnStr("_p_"),
+    )
+
+    op = Difference(r_left, r_right)
+    result = RelationalAlgebraProvenanceExpressionSemringSolver().walk(op)
+    assert eq_prov_relations(result, r_expected)
