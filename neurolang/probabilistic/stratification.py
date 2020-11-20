@@ -2,16 +2,15 @@ import collections
 
 import numpy as np
 
-from neurolang.logic.expression_processing import extract_logic_atoms
-
 from ..datalog.expression_processing import (
     dependency_matrix,
     extract_logic_predicates,
+    get_predicate_functor,
     reachable_code,
 )
 from ..exceptions import ForbiddenRecursivityError, UnsupportedProgramError
 from ..expressions import Symbol
-from ..logic import Implication, Union
+from ..logic import Implication, Negation, Union
 
 
 def _iter_implication_or_union_of_implications(expression):
@@ -101,10 +100,24 @@ def stratify_program(query, program):
             grpd_symbs[idb_type].add(rule.consequent.functor)
             grpd_idbs[idb_type].append(rule)
             count = len(idb)
+    _check_no_negation_in_probabilistic_rules(grpd_idbs["probabilistic"])
     return {
         idb_type: Union(tuple(idb_rules))
         for idb_type, idb_rules in grpd_idbs.items()
     }
+
+
+def _check_no_negation_in_probabilistic_rules(prob_rules):
+    if any(
+        any(
+            isinstance(pred, Negation)
+            for pred in extract_logic_predicates(rule.antecedent)
+        )
+        for rule in prob_rules
+    ):
+        raise UnsupportedProgramError(
+            "Negation not permitted in probabilistic rules"
+        )
 
 
 def _get_list_of_intensional_rules(program):
@@ -129,9 +142,9 @@ def _get_program_deterministic_symbols(program):
 
 def _get_rule_idb_type(rule, grpd_symbs, wlq_symbs):
     dep_symbs = set(
-        pred.functor
-        for pred in extract_logic_atoms(rule.antecedent)
-        if isinstance(pred.functor, Symbol)
+        get_predicate_functor(pred)
+        for pred in extract_logic_predicates(rule.antecedent)
+        if isinstance(get_predicate_functor(pred), Symbol)
     )
     idb_type = None
     # handle the case of a WLQ with deterministic-only dependencies

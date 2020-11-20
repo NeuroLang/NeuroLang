@@ -3,7 +3,9 @@ import typing
 
 import pytest
 
+from ....datalog.basic_representation import DatalogProgram
 from ....datalog.expressions import Fact
+from ....datalog.negation import DatalogProgramNegationMixin
 from ....exceptions import (
     ForbiddenDisjunctionError,
     ForbiddenExpressionError,
@@ -11,7 +13,7 @@ from ....exceptions import (
 )
 from ....expression_walker import ExpressionWalker
 from ....expressions import Constant, Symbol
-from ....logic import Conjunction, Implication, Union
+from ....logic import TRUE, Conjunction, Implication, Negation, Union
 from ...exceptions import (
     DistributionDoesNotSumToOneError,
     MalformedProbabilisticTupleError,
@@ -22,7 +24,11 @@ from ...expressions import (
     ProbabilisticPredicate,
     ProbabilisticQuery,
 )
-from ..program import CPLogicProgram, TranslateProbabilisticQueryMixin
+from ..program import (
+    CPLogicMixin,
+    CPLogicProgram,
+    TranslateProbabilisticQueryMixin,
+)
 
 P = Symbol("P")
 Q = Symbol("Q")
@@ -95,6 +101,33 @@ def test_cplogic_program():
             ]
         )
     }
+
+
+class CPLogicNegationProgram(
+    CPLogicMixin,
+    DatalogProgramNegationMixin,
+    DatalogProgram,
+    ExpressionWalker,
+):
+    pass
+
+
+def test_negated_predicate_in_antecedent():
+    cpl = CPLogicNegationProgram()
+    rule_with_negation = Implication(Q(x), Conjunction((P(x), Negation(R(x)))))
+    code = Union(
+        (
+            rule_with_negation,
+            Implication(
+                ProbabilisticPredicate(Constant[float](0.2), P(a)), TRUE
+            ),
+            Implication(
+                ProbabilisticPredicate(Constant[float](0.7), R(a)), TRUE
+            ),
+        )
+    )
+    cpl.walk(code)
+    assert rule_with_negation in cpl.intensional_database()[Q].formulas
 
 
 def test_multiple_probfact_same_pred_symb():

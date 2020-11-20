@@ -357,7 +357,6 @@ def test_neurolange_dl_deterministic_negation():
     assert res["s"].to_unnamed() == {(i, j) for i, j in dataset if i != j}
 
 
-@pytest.mark.xfail(reason="RAP negation needs to be implemented")
 def test_neurolange_dl_probabilistic_negation():
     neurolang = NeurolangPDL()
     s = neurolang.new_symbol(name="s")
@@ -372,9 +371,8 @@ def test_neurolange_dl_probabilistic_negation():
 
     s[x, y, prob(x, y)] = ~r(x, x) & q(x, y)
 
-    res = neurolang.solve_all()
-
-    assert res["s"].to_unnamed() == {(i, j) for i, j in dataset if i != j}
+    with pytest.raises(UnsupportedProgramError):
+        neurolang.solve_all()
 
 
 def test_neurolang_dl_aggregation():
