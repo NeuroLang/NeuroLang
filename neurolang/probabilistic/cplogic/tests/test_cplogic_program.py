@@ -24,11 +24,7 @@ from ...expressions import (
     ProbabilisticPredicate,
     ProbabilisticQuery,
 )
-from ..program import (
-    CPLogicMixin,
-    CPLogicProgram,
-    TranslateProbabilisticQueryMixin,
-)
+from ..program import CPLogicMixin, CPLogicProgram
 
 P = Symbol("P")
 Q = Symbol("Q")
@@ -287,7 +283,7 @@ def test_wlq_marg_conditioned_conditioning_shared_var():
     )
     cpl = CPLogicProgram()
     cpl.walk(wlq)
-    assert Q in cpl.within_language_succ_queries()
+    assert Q in cpl.within_language_prob_queries()
 
 
 def test_wlq_marg_conditioning_empty_conjunction():
@@ -297,7 +293,7 @@ def test_wlq_marg_conditioning_empty_conjunction():
     )
     cpl = CPLogicProgram()
     cpl.walk(wlq)
-    assert Q in cpl.within_language_succ_queries()
+    assert Q in cpl.within_language_prob_queries()
 
 
 def test_wlq_marg_conjunctive_conditioning():
@@ -307,26 +303,4 @@ def test_wlq_marg_conjunctive_conditioning():
     )
     cpl = CPLogicProgram()
     cpl.walk(wlq)
-    assert Q in cpl.within_language_succ_queries()
-
-
-class _TestTranslator(TranslateProbabilisticQueryMixin, ExpressionWalker):
-    pass
-
-
-def test_wlq_floordiv_translation():
-    wlq = Implication(
-        Q(x, y, PROB(x, y)), Constant(operator.floordiv)(P(x), R(x, y))
-    )
-    translator = _TestTranslator()
-    result = translator.walk(wlq)
-    assert result == Implication(
-        Q(x, y, ProbabilisticQuery(PROB, (x, y))), Condition(P(x), R(x, y))
-    )
-
-
-def test_wlq_marg_bad_syntax():
-    bad_wlq = Implication(Q(x, y), Constant(operator.floordiv)(P(x), Z(x, y)))
-    translator = _TestTranslator()
-    with pytest.raises(ForbiddenExpressionError):
-        translator.walk(bad_wlq)
+    assert Q in cpl.within_language_prob_queries()

@@ -16,7 +16,7 @@ from typing import (
     List,
     Optional,
     Tuple,
-    Type
+    Type,
 )
 from uuid import uuid1
 
@@ -24,7 +24,7 @@ from .. import expressions as ir
 from ..datalog.aggregation import (
     Chase,
     DatalogWithAggregationMixin,
-    TranslateToLogicWithAggregation
+    TranslateToLogicWithAggregation,
 )
 from ..datalog.constraints_representation import DatalogConstraintsProgram
 from ..datalog.negation import DatalogProgramNegationMixin
@@ -33,30 +33,38 @@ from ..datalog.ontologies_rewriter import OntologyRewriter
 from ..exceptions import UnsupportedQueryError, UnsupportedSolverError
 from ..expression_walker import ExpressionBasicEvaluator
 from ..logic import Union
-from ..probabilistic.cplogic.program import (
-    CPLogicMixin,
-    TranslateProbabilisticQueryMixin
-)
+from ..probabilistic.cplogic.program import CPLogicMixin
 from ..probabilistic.dichotomy_theorem_based_solver import (
     solve_marg_query as lifted_solve_marg_query,
-    solve_succ_query as lifted_solve_succ_query
+)
+from ..probabilistic.dichotomy_theorem_based_solver import (
+    solve_succ_query as lifted_solve_succ_query,
 )
 from ..probabilistic.expression_processing import (
     is_probabilistic_predicate_symbol,
-    is_within_language_prob_query
+    is_within_language_prob_query,
 )
-from ..probabilistic.query_resolution import compute_probabilistic_solution
+from ..probabilistic.query_resolution import (
+    QueryBasedProbFactToDetRule,
+    compute_probabilistic_solution,
+)
 from ..probabilistic.stratification import stratify_program
 from ..probabilistic.weighted_model_counting import (
     solve_marg_query as wmc_solve_marg_query,
-    solve_succ_query as wmc_solve_succ_query
+)
+from ..probabilistic.weighted_model_counting import (
+    solve_succ_query as wmc_solve_succ_query,
 )
 from ..region_solver import RegionSolver
 from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
-    RelationalAlgebraStringExpression
+    RelationalAlgebraStringExpression,
 )
 from . import query_resolution_expressions as fe
+from .datalog.intermediate_sugar import (
+    TranslateProbabilisticQueryMixin,
+    TranslateQueryBasedProbabilisticFactMixin,
+)
 from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
 from .query_resolution_datalog import QueryBuilderDatalog
 
@@ -64,6 +72,8 @@ from .query_resolution_datalog import QueryBuilderDatalog
 class RegionFrontendCPLogicSolver(
     TranslateProbabilisticQueryMixin,
     TranslateToLogicWithAggregation,
+    TranslateQueryBasedProbabilisticFactMixin,
+    QueryBasedProbFactToDetRule,
     ProbFol2DatalogMixin,
     RegionSolver,
     CPLogicMixin,

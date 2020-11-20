@@ -9,17 +9,21 @@ from ...exceptions import (
     NegativeFormulaNotNamedRelationException,
     UnsupportedProgramError,
     UnsupportedQueryError,
-    UnsupportedSolverError
+    UnsupportedSolverError,
 )
 from ...probabilistic.exceptions import (
     ForbiddenConditionalQueryNonConjunctive,
-    UnsupportedProbabilisticQueryError
+    UnsupportedProbabilisticQueryError,
 )
-from ...utils.relational_algebra_set import RelationalAlgebraFrozenSet
+from ...regions import SphericalVolume
+from ...utils.relational_algebra_set import (
+    NamedRelationalAlgebraFrozenSet,
+    RelationalAlgebraFrozenSet,
+)
 from ..probabilistic_frontend import (
     NeurolangPDL,
     lifted_solve_marg_query,
-    lifted_solve_succ_query
+    lifted_solve_succ_query,
 )
 
 
@@ -719,6 +723,62 @@ def test_solve_marg_query():
     assert_almost_equal(result, expected)
 
 
+def test_query_based_pfact():
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [
+            (2, 0.2),
+            (7, 0.8),
+            (4, 0.4),
+        ],
+        name="A",
+    )
+    with nl.environment as e:
+        (e.B @ (e.p / 2))[e.x] = e.A[e.x, e.p]
+        e.Query[e.PROB[e.x], e.x] = e.B[e.x]
+        result = nl.query((e.x, e.p), e.Query[e.p, e.x])
+    expected = RelationalAlgebraFrozenSet(
+        [
+            (2, 0.1),
+            (7, 0.4),
+            (4, 0.2),
+        ]
+    )
+    assert_almost_equal(result, expected)
+
+
+def test_query_based_pfact_region_volume():
+    nl = NeurolangPDL()
+
+    @nl.add_symbol
+    def volume(s: SphericalVolume) -> float:
+        return (4 / 3) * np.pi * s.radius ** 3
+
+    assert volume.symbol_name in nl.functions
+
+    nl.add_tuple_set(
+        [
+            ("contained", SphericalVolume((0, 0, 0), 1)),
+            ("container", SphericalVolume((0, 0, 0), 2)),
+        ],
+        name="my_sphere",
+    )
+
+    with nl.environment as e:
+        (e.Z @ (e.volume[e.contained] / e.volume[e.container]))[
+            e.contained, e.container
+        ] = (
+            e.my_sphere["contained", e.contained]
+            & e.my_sphere["container", e.container]
+        )
+        e.Query[
+            e.contained, e.container, e.PROB[e.contained, e.container]
+        ] = e.Z[e.contained, e.container]
+        res = nl.query((e.p,), e.Query[e.contained, e.container, e.p])
+    expected = NamedRelationalAlgebraFrozenSet(("p",), [(1 / 2 ** 3,)])
+    assert_almost_equal(res, expected)
+
+
 def test_solve_marg_query_disjunction():
     nl = NeurolangPDL()
     nl.add_tuple_set(
@@ -769,18 +829,18 @@ def test_query_without_safe_plan():
 
         res = nl.solve_all()
 
-    assert res['q'].to_unnamed() == {
-        ('alice', 'alice', .2),
-        ('alice', 'bob', .2 * .8),
-        ('bob', 'alice', .2 * .8),
-        ('bob', 'bob', 0.8)
+    assert res["q"].to_unnamed() == {
+        ("alice", "alice", 0.2),
+        ("alice", "bob", 0.2 * 0.8),
+        ("bob", "alice", 0.2 * 0.8),
+        ("bob", "bob", 0.8),
     }
 
 
 def test_query_without_safe_fails():
     nl = NeurolangPDL(
         probabilistic_solvers=(lifted_solve_succ_query,),
-        probabilistic_marg_solvers=(lifted_solve_marg_query,)
+        probabilistic_marg_solvers=(lifted_solve_marg_query,),
     )
     nl.add_probabilistic_facts_from_tuples(
         [

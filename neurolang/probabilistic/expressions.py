@@ -24,6 +24,14 @@ class ProbabilisticPredicate(Definition):
         self.body = body
         self._symbols = body._symbols | self.probability._symbols
 
+    @property
+    def functor(self):
+        return self.body.functor
+
+    @property
+    def args(self):
+        return self.body.args
+
     def __repr__(self):
         return "ProbabilisticPredicate{{{} :: {} : {}}}".format(
             self.probability, self.body, self.type
