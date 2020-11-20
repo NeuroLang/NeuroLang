@@ -12,7 +12,8 @@ from ..datalog.expression_processing import (
 )
 from ..exceptions import ForbiddenRecursivityError, UnsupportedProgramError
 from ..expressions import Symbol
-from ..logic import Implication, Union
+from ..logic import TRUE, Implication, Union
+from .expressions import ProbabilisticPredicate
 
 
 def _iter_implication_or_union_of_implications(expression):
@@ -175,6 +176,8 @@ def _check_for_query_based_probfact_dependency_on_prob_relation(
             for atom in extract_logic_atoms(rule.antecedent)
         )
         for rule in prob_idb
+        if isinstance(rule.consequent, ProbabilisticPredicate)
+        and rule.antecedent != True
     ):
         raise UnsupportedProgramError(
             "Query-based probabilistic facts cannot depend on probabilistic "

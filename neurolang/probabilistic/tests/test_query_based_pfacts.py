@@ -1,9 +1,6 @@
-import operator
-
 import pytest
 
 from ...exceptions import ForbiddenDisjunctionError
-from ...expression_walker import IdentityWalker
 from ...expressions import Constant, FunctionApplication, Symbol
 from ...logic import Implication, Union
 from ..cplogic.program import CPLogicProgram
