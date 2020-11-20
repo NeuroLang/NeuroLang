@@ -4,7 +4,7 @@ from ..expression_walker import (
     add_match,
 )
 from ..expressions import Symbol
-from ..logic import Constant, Implication, NaryLogicOperator
+from ..logic import Constant, Implication, NaryLogicOperator, Negation
 from ..logic.expression_processing import ExtractFreeVariablesWalker
 from ..logic.transformations import CollapseConjunctions
 from ..logic.unification import apply_substitution, most_general_unifier
@@ -178,7 +178,9 @@ class OntologyRewriter:
         return []
 
     def _get_term(self, q, sigma_con):
-        q_args = []
+        if isinstance(q, Negation):
+            return []
+
         if isinstance(q, NaryLogicOperator):
             q_args = [
                 formula
@@ -186,6 +188,7 @@ class OntologyRewriter:
                 if formula.functor == sigma_con.functor
             ]
         else:
+            q_args = []
             if q.functor == sigma_con.functor:
                 q_args.append(q)
 

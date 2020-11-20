@@ -252,3 +252,34 @@ def test_infinite_walker():
     expected = CollapseConjunctions().walk(expected)
 
     assert sigma_rep == expected
+
+
+def test_rewrite_negation():
+    project = S_("project")
+    inArea = S_("inArea")
+    hasCollaborator = S_("hasCollaborator")
+    p = S_("p")
+
+    x = S_("x")
+    y = S_("y")
+    z = S_("z")
+    a = S_("a")
+    b = S_("b")
+    db = C_("db")
+
+    sigma = RI_(project(x) & inArea(x, y), hasCollaborator(z, y, x))
+    q = I_(p(b), ~(hasCollaborator(a, db, b)))
+
+    qB = EB_((q,))
+    sigmaB = EB_((sigma,))
+
+    dt = DatalogTranslator()
+    qB = dt.walk(qB)
+    sigmaB = dt.walk(sigmaB)
+
+    orw = OntologyRewriter(qB, sigmaB)
+    rewrite = orw.Xrewrite()
+
+    assert len(rewrite) == 1
+    imp1 = rewrite.pop()
+    assert imp1[0] == qB.formulas[0]
