@@ -9,6 +9,7 @@ folks, in
 particular:
 
 * `Demian Wassermann <https://pages.saclay.inria.fr/demian.wassermann/>`_
+* Antonia Machlouzarides-Shalit
 * Valentin Iovene
 * Gaston Zanitti
 * Matias Schimt
