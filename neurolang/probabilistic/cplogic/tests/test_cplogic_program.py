@@ -3,7 +3,9 @@ import typing
 
 import pytest
 
+from ....datalog.basic_representation import DatalogProgram
 from ....datalog.expressions import Fact
+from ....datalog.negation import DatalogProgramNegationMixin
 from ....exceptions import (
     ForbiddenDisjunctionError,
     ForbiddenExpressionError,
@@ -11,7 +13,7 @@ from ....exceptions import (
 )
 from ....expression_walker import ExpressionWalker
 from ....expressions import Constant, Symbol
-from ....logic import Conjunction, Implication, Union
+from ....logic import TRUE, Conjunction, Implication, Negation, Union
 from ...exceptions import (
     DistributionDoesNotSumToOneError,
     MalformedProbabilisticTupleError,
@@ -22,7 +24,7 @@ from ...expressions import (
     ProbabilisticPredicate,
     ProbabilisticQuery,
 )
-from ..program import CPLogicProgram, TranslateProbabilisticQueryMixin
+from ..program import CPLogicMixin, CPLogicProgram
 
 P = Symbol("P")
 Q = Symbol("Q")
@@ -95,6 +97,33 @@ def test_cplogic_program():
             ]
         )
     }
+
+
+class CPLogicNegationProgram(
+    CPLogicMixin,
+    DatalogProgramNegationMixin,
+    DatalogProgram,
+    ExpressionWalker,
+):
+    pass
+
+
+def test_negated_predicate_in_antecedent():
+    cpl = CPLogicNegationProgram()
+    rule_with_negation = Implication(Q(x), Conjunction((P(x), Negation(R(x)))))
+    code = Union(
+        (
+            rule_with_negation,
+            Implication(
+                ProbabilisticPredicate(Constant[float](0.2), P(a)), TRUE
+            ),
+            Implication(
+                ProbabilisticPredicate(Constant[float](0.7), R(a)), TRUE
+            ),
+        )
+    )
+    cpl.walk(code)
+    assert rule_with_negation in cpl.intensional_database()[Q].formulas
 
 
 def test_multiple_probfact_same_pred_symb():
@@ -254,7 +283,7 @@ def test_wlq_marg_conditioned_conditioning_shared_var():
     )
     cpl = CPLogicProgram()
     cpl.walk(wlq)
-    assert Q in cpl.within_language_succ_queries()
+    assert Q in cpl.within_language_prob_queries()
 
 
 def test_wlq_marg_conditioning_empty_conjunction():
@@ -264,7 +293,7 @@ def test_wlq_marg_conditioning_empty_conjunction():
     )
     cpl = CPLogicProgram()
     cpl.walk(wlq)
-    assert Q in cpl.within_language_succ_queries()
+    assert Q in cpl.within_language_prob_queries()
 
 
 def test_wlq_marg_conjunctive_conditioning():
@@ -274,26 +303,4 @@ def test_wlq_marg_conjunctive_conditioning():
     )
     cpl = CPLogicProgram()
     cpl.walk(wlq)
-    assert Q in cpl.within_language_succ_queries()
-
-
-class _TestTranslator(TranslateProbabilisticQueryMixin, ExpressionWalker):
-    pass
-
-
-def test_wlq_floordiv_translation():
-    wlq = Implication(
-        Q(x, y, PROB(x, y)), Constant(operator.floordiv)(P(x), R(x, y))
-    )
-    translator = _TestTranslator()
-    result = translator.walk(wlq)
-    assert result == Implication(
-        Q(x, y, ProbabilisticQuery(PROB, (x, y))), Condition(P(x), R(x, y))
-    )
-
-
-def test_wlq_marg_bad_syntax():
-    bad_wlq = Implication(Q(x, y), Constant(operator.floordiv)(P(x), Z(x, y)))
-    translator = _TestTranslator()
-    with pytest.raises(ForbiddenExpressionError):
-        translator.walk(bad_wlq)
+    assert Q in cpl.within_language_prob_queries()

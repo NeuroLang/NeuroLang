@@ -1,17 +1,18 @@
 import collections
+import typing
 
 import numpy as np
 
-from neurolang.logic.expression_processing import extract_logic_atoms
-
 from ..datalog.expression_processing import (
     dependency_matrix,
+    extract_logic_atoms,
     extract_logic_predicates,
     reachable_code,
 )
 from ..exceptions import ForbiddenRecursivityError, UnsupportedProgramError
 from ..expressions import Symbol
-from ..logic import Implication, Union
+from ..logic import TRUE, Implication, Negation, Union
+from .expressions import ProbabilisticPredicate
 
 
 def _iter_implication_or_union_of_implications(expression):
@@ -78,7 +79,7 @@ def stratify_program(query, program):
     """
     idb = list(reachable_code_from_query(query, program).formulas)
     idb_symbs, dep_mat = dependency_matrix(program, idb)
-    wlq_symbs = set(program.within_language_succ_queries()).intersection(
+    wlq_symbs = set(program.within_language_prob_queries()).intersection(
         idb_symbs
     )
     _check_for_dependencies_between_wlqs(dep_mat, idb_symbs, wlq_symbs)
@@ -101,10 +102,28 @@ def stratify_program(query, program):
             grpd_symbs[idb_type].add(rule.consequent.functor)
             grpd_idbs[idb_type].append(rule)
             count = len(idb)
+    _check_for_query_based_probfact_dependency_on_prob_relation(
+        grpd_idbs["probabilistic"], grpd_symbs
+    )
+    _check_no_negated_prob_idb_predicate(grpd_idbs["probabilistic"])
     return {
         idb_type: Union(tuple(idb_rules))
         for idb_type, idb_rules in grpd_idbs.items()
+        if idb_rules
     }
+
+
+def _check_no_negated_prob_idb_predicate(prob_idb):
+    if any(
+        any(
+            isinstance(pred, Negation) and pred.formula.functor in prob_idb
+            for pred in extract_logic_predicates(rule.antecedent)
+        )
+        for rule in prob_idb
+    ):
+        raise UnsupportedProgramError(
+            "Negation not permitted in probabilistic rules"
+        )
 
 
 def _get_list_of_intensional_rules(program):
@@ -127,7 +146,18 @@ def _get_program_deterministic_symbols(program):
     return det_symbs
 
 
+def _get_idb_type_already_classified(pred_symb, grpd_symbs):
+    for typ, symbs in grpd_symbs.items():
+        if pred_symb in symbs:
+            return typ
+    return None
+
+
 def _get_rule_idb_type(rule, grpd_symbs, wlq_symbs):
+    pred_symb = rule.consequent.functor
+    idb_type = _get_idb_type_already_classified(pred_symb, grpd_symbs)
+    if idb_type is not None:
+        return idb_type
     dep_symbs = set(
         pred.functor
         for pred in extract_logic_atoms(rule.antecedent)
@@ -135,7 +165,7 @@ def _get_rule_idb_type(rule, grpd_symbs, wlq_symbs):
     )
     idb_type = None
     # handle the case of a WLQ with deterministic-only dependencies
-    if rule.consequent.functor in wlq_symbs:
+    if pred_symb in wlq_symbs:
         idb_type = "probabilistic"
     elif grpd_symbs["deterministic"].issuperset(dep_symbs):
         idb_type = "deterministic"
@@ -148,6 +178,25 @@ def _get_rule_idb_type(rule, grpd_symbs, wlq_symbs):
     elif not grpd_symbs["probabilistic"].isdisjoint(dep_symbs):
         idb_type = "probabilistic"
     return idb_type
+
+
+def _check_for_query_based_probfact_dependency_on_prob_relation(
+    prob_idb: typing.Iterable[Implication],
+    grpd_symbs: typing.Mapping[Symbol, str],
+) -> None:
+    if any(
+        any(
+            atom.functor in grpd_symbs["probabilistic"]
+            for atom in extract_logic_atoms(rule.antecedent)
+        )
+        for rule in prob_idb
+        if isinstance(rule.consequent, ProbabilisticPredicate)
+        and rule.antecedent != TRUE
+    ):
+        raise UnsupportedProgramError(
+            "Query-based probabilistic facts cannot depend on probabilistic "
+            "predicate"
+        )
 
 
 def _check_for_dependencies_between_wlqs(dep_mat, idb_symbs, wlq_symbs):

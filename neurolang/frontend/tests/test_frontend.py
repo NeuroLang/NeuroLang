@@ -1,4 +1,5 @@
 from collections import namedtuple
+from neurolang.exceptions import NeuroLangException, WrongArgumentsInPredicateError
 from operator import contains
 from typing import AbstractSet, Callable, Tuple
 from unittest.mock import patch
@@ -161,7 +162,7 @@ def test_query_regions_from_region_set():
     )
 
     assert len(query_result) == len(regions)
-    assert query_result == {(i1,), (i2,), (i3,)}
+    assert query_result.to_unnamed() == {(i1,), (i2,), (i3,)}
 
 
 def test_query_new_predicate():
@@ -197,6 +198,38 @@ def test_query_new_predicate():
     )
     assert len(query_result) == 1
     assert next(iter(query_result)) == (inferior_posterior,)
+
+
+def test_query_single_symbol():
+    neurolang = frontend.NeurolangDL()
+
+    s = neurolang.add_tuple_set(
+        [(i,) for i in range(5)]
+    )
+
+    with neurolang.scope as e:
+        e.q[e.x] = s(e.x)
+
+        res = neurolang.query(e.x, e.q(e.x))
+
+    assert res.to_unnamed() == {(i,) for i in range(5)}
+
+
+def test_query_wrong_head_arguments():
+    neurolang = frontend.NeurolangDL()
+
+    s = neurolang.add_tuple_set(
+        [(i, i) for i in range(5)]
+    )
+
+    with neurolang.scope as e:
+        e.q[e.x, e.y] = s(e.x, e.y)
+
+        with pytest.raises(WrongArgumentsInPredicateError):
+            neurolang.query((e.x, e.y, e.z), e.q(e.x, e.y, e.z))
+
+        with pytest.raises(NeuroLangException):
+            neurolang.query((e.x, e.y, e.z), e.q(e.x, e.y))
 
 
 @pytest.mark.skip()
@@ -288,7 +321,7 @@ def test_neurolang_dl_query():
 
     dataset = {(i, i * 2) for i in range(10)}
     q = neurolang.add_tuple_set(dataset, name="q")
-    sol = neurolang.query((x, y), q(x, y))
+    sol = neurolang.query((x, y), q(x, y)).to_unnamed()
     assert sol == dataset
 
     sol = neurolang.query(tuple(), q(x, x))
@@ -299,13 +332,13 @@ def test_neurolang_dl_query():
     assert not sol
     assert not neurolang.query(q(100, x))
 
-    sol = neurolang.query((x,), q(x, y) & q(y, z))
+    sol = neurolang.query((x,), q(x, y) & q(y, z)).to_unnamed()
     res = set((x,) for x in range(5))
     assert sol == res
 
     r[x, y] = q(x, y)
     r[x, z] = r[x, y] & q(y, z)
-    sol = neurolang.query((y,), r(1, y))
+    sol = neurolang.query((y,), r(1, y)).to_unnamed()
     assert sol == set((x,) for x in (2, 4, 8, 16))
 
 
@@ -474,7 +507,7 @@ def test_neurolang_dl_aggregation_direct_query():
 
     p[x, sum_(y)] = q[x, y]
 
-    sol = neurolang.query((x, y), p(x, y))
+    sol = neurolang.query((x, y), p(x, y)).to_unnamed()
 
     res_q = {(0, 2 + 4 + 6 + 8), (1, 1 + 3 + 5 + 7 + 9)}
 
@@ -514,7 +547,7 @@ def test_neurolang_dl_aggregation_environment_direct_query():
             e.q[i % 2, i] = True
 
         e.p[e.x, sum_(e.y)] = e.q[e.x, e.y]
-        sol = neurolang.query((e.x, e.y), e.p(e.x, e.y))
+        sol = neurolang.query((e.x, e.y), e.p(e.x, e.y)).to_unnamed()
 
     res_q = {(0, 2 + 4 + 6 + 8), (1, 1 + 3 + 5 + 7 + 9)}
 
@@ -539,7 +572,7 @@ def test_aggregation_number_of_arrivals():
 
         res = neurolang.query((e.x, e.c), e.count_destinations(e.x, e.c))
 
-    assert res == {(0, 3), (1, 2), (2, 1)}
+    assert res.to_unnamed() == {(0, 3), (1, 2), (2, 1)}
 
 
 def test_neurolang_dl_attribute_access():
@@ -623,3 +656,43 @@ def test_translate_expression_to_fronted_expression():
     assert imp_fe.expression == imp_exp
     assert imp_fe.consequent == tr.walk(imp_exp.consequent)
     assert imp_fe.antecedent == tr.walk(imp_exp.antecedent)
+
+
+def test_first_column_sugar_body_s():
+    qr = frontend.NeurolangDL()
+    qr.add_tuple_set({
+        ('one', 1), ('two', 2)
+    }, name='dd')
+
+    with qr.scope as e:
+        e.s[e.x] = (e.x == e.y) & e.dd('one', e.y)
+        e.r[e.x] = (e.x == (e.dd.s['one']))
+        res_all = qr.solve_all()
+
+    assert res_all['r'] == res_all['s']
+
+
+def test_first_column_sugar_head_s():
+    qr = frontend.NeurolangDL()
+    qr.add_tuple_set({
+        (1, 'one'), (2, 'two')
+    }, name='dd')
+
+    with qr.scope as e:
+        e.r.s['one'] = e.dd('one')
+        res_all = qr.solve_all()
+
+    assert set(res_all['r']) == {('one', 1)}
+
+
+def test_head_constant():
+    qr = frontend.NeurolangDL()
+    qr.add_tuple_set({
+        (1,)
+    }, name='dd')
+
+    with qr.scope as e:
+        e.r['one', e.x] = e.dd(e.x)
+        res_all = qr.solve_all()
+
+    assert set(res_all['r']) == {('one', 1)}

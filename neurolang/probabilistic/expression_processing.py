@@ -10,20 +10,11 @@ from ..datalog.expression_processing import (
     conjunct_formulas,
     enforce_conjunction,
     extract_logic_predicates,
-    iter_disjunction_or_implication_rules,
     reachable_code,
 )
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
-from ..logic import Conjunction, Implication, Union
-from ..relational_algebra import (
-    ExtendedProjection,
-    ExtendedProjectionListMember,
-    str2columnstr_constant,
-)
-from ..relational_algebra_provenance import (
-    RelationalAlgebraProvenanceCountingSolver,
-)
+from ..logic import TRUE, Conjunction, Implication, Union
 from .exceptions import DistributionDoesNotSumToOneError
 from .expressions import PROB, ProbabilisticPredicate, ProbabilisticQuery
 
@@ -51,7 +42,19 @@ def is_probabilistic_fact(expression):
         isinstance(expression, Implication)
         and isinstance(expression.consequent, ProbabilisticPredicate)
         and isinstance(expression.consequent.body, FunctionApplication)
-        and expression.antecedent == Constant[bool](True)
+        and expression.antecedent == TRUE
+    )
+
+
+def is_query_based_probfact(expression):
+    return (
+        isinstance(expression, Implication)
+        and isinstance(expression.consequent, ProbabilisticPredicate)
+        and expression.antecedent != TRUE
+        and not (
+            isinstance(expression.antecedent, FunctionApplication)
+            and expression.antecedent.functor.is_fresh
+        )
     )
 
 
@@ -363,7 +366,7 @@ def lift_optimization_for_choice_predicates(query, program):
 
 
 def is_probabilistic_predicate_symbol(pred_symb, program):
-    wlq_symbs = set(program.within_language_succ_queries())
+    wlq_symbs = set(program.within_language_prob_queries())
     prob_symbs = program.pfact_pred_symbs | program.pchoice_pred_symbs
     stack = [pred_symb]
     while stack:
@@ -375,29 +378,10 @@ def is_probabilistic_predicate_symbol(pred_symb, program):
             or pred_symb not in program.intensional_database()
         ):
             continue
-        for rule in iter_disjunction_or_implication_rules(
-            program.symbol_table[pred_symb]
-        ):
+        for rule in program.symbol_table[pred_symb].formulas:
             stack += [
                 apred.functor
                 for apred in extract_logic_predicates(rule.antecedent)
                 if apred.functor not in wlq_symbs
             ]
     return False
-
-
-def project_on_query_head(query, provset):
-    proj_list = list()
-    for term in query.consequent.args:
-        if isinstance(term, Constant):
-            proj_list.append(
-                ExtendedProjectionListMember(
-                    term, str2columnstr_constant(Symbol.fresh().name)
-                )
-            )
-        else:
-            col = str2columnstr_constant(term.name)
-            proj_list.append(ExtendedProjectionListMember(col, col))
-    result = ExtendedProjection(provset, tuple(proj_list))
-    solver = RelationalAlgebraProvenanceCountingSolver()
-    return solver.walk(result)

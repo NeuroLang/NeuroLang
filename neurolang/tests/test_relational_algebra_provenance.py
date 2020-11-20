@@ -10,6 +10,8 @@ from ..probabilistic.cplogic import testing
 from ..relational_algebra import (
     ColumnStr,
     ColumnInt,
+    Difference,
+    LeftNaturalJoin,
     NaturalJoin,
     Product,
     RenameColumn,

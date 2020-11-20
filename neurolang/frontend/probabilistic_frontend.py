@@ -16,7 +16,7 @@ from typing import (
     List,
     Optional,
     Tuple,
-    Type
+    Type,
 )
 from uuid import uuid1
 
@@ -24,35 +24,47 @@ from .. import expressions as ir
 from ..datalog.aggregation import (
     Chase,
     DatalogWithAggregationMixin,
-    TranslateToLogicWithAggregation
+    TranslateToLogicWithAggregation,
 )
 from ..datalog.constraints_representation import DatalogConstraintsProgram
 from ..datalog.negation import DatalogProgramNegationMixin
 from ..datalog.ontologies_parser import OntologyParser
 from ..datalog.ontologies_rewriter import OntologyRewriter
-from ..exceptions import UnsupportedQueryError
+from ..exceptions import UnsupportedQueryError, UnsupportedSolverError
 from ..expression_walker import ExpressionBasicEvaluator
 from ..logic import Union
-from ..probabilistic.cplogic.program import (
-    CPLogicMixin,
-    TranslateProbabilisticQueryMixin
-)
+from ..probabilistic.cplogic.program import CPLogicMixin
 from ..probabilistic.dichotomy_theorem_based_solver import (
     solve_marg_query as lifted_solve_marg_query,
-    solve_succ_query as lifted_solve_succ_query
+)
+from ..probabilistic.dichotomy_theorem_based_solver import (
+    solve_succ_query as lifted_solve_succ_query,
 )
 from ..probabilistic.expression_processing import (
     is_probabilistic_predicate_symbol,
-    is_within_language_prob_query
+    is_within_language_prob_query,
 )
-from ..probabilistic.query_resolution import compute_probabilistic_solution
+from ..probabilistic.query_resolution import (
+    QueryBasedProbFactToDetRule,
+    compute_probabilistic_solution,
+)
 from ..probabilistic.stratification import stratify_program
+from ..probabilistic.weighted_model_counting import (
+    solve_marg_query as wmc_solve_marg_query,
+)
+from ..probabilistic.weighted_model_counting import (
+    solve_succ_query as wmc_solve_succ_query,
+)
 from ..region_solver import RegionSolver
 from ..relational_algebra import (
     NamedRelationalAlgebraFrozenSet,
-    RelationalAlgebraStringExpression
+    RelationalAlgebraStringExpression,
 )
 from . import query_resolution_expressions as fe
+from .datalog.intermediate_sugar import (
+    TranslateProbabilisticQueryMixin,
+    TranslateQueryBasedProbabilisticFactMixin,
+)
 from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
 from .query_resolution_datalog import QueryBuilderDatalog
 
@@ -60,6 +72,8 @@ from .query_resolution_datalog import QueryBuilderDatalog
 class RegionFrontendCPLogicSolver(
     TranslateProbabilisticQueryMixin,
     TranslateToLogicWithAggregation,
+    TranslateQueryBasedProbabilisticFactMixin,
+    QueryBasedProbFactToDetRule,
     ProbFol2DatalogMixin,
     RegionSolver,
     CPLogicMixin,
@@ -81,9 +95,15 @@ class NeurolangPDL(QueryBuilderDatalog):
     def __init__(
         self,
         chase_class: Type[Chase] = Chase,
-        probabilistic_solver: Callable = lifted_solve_succ_query,
-        probabilistic_marg_solver: Callable = lifted_solve_marg_query,
-    ) -> "ProbabilisticFrontend":
+        probabilistic_solvers: Tuple[Callable] = (
+            lifted_solve_succ_query,
+            wmc_solve_succ_query,
+        ),
+        probabilistic_marg_solvers: Tuple[Callable] = (
+            lifted_solve_marg_query,
+            wmc_solve_marg_query,
+        ),
+    ) -> "NeurolangPDL":
         """
         Query builder with probabilistic capabilities
 
@@ -91,20 +111,32 @@ class NeurolangPDL(QueryBuilderDatalog):
         ----------
         chase_class : Type[Chase], optional
             used to compute deterministic solutions, by default Chase
-        probabilistic_solver : Callable, optional
+        probabilistic_solvers : Tuple[Callable], optional
             used to compute probabilistic solutions,
-            by default lifted_solve_succ_query
+            the order of the elements indicates the priority
+            of usage of the solver.
+            by default (lifted_solve_succ_query, wmc_solve_succ_query)
+
+        probabilistic_marg_solvers : Tuple[Callable], optional
+            used to compute probabilistic solutions,
+            by default (lifted_solve_marg_query, wmc_solve_marg_query)
+
 
         Returns
         -------
-        ProbabilisticFrontend
+        NeurolangPDL
             see description
         """
         super().__init__(
             RegionFrontendCPLogicSolver(), chase_class=chase_class
         )
-        self.probabilistic_solver = probabilistic_solver
-        self.probabilistic_marg_solver = lifted_solve_marg_query
+        if len(probabilistic_solvers) != len(probabilistic_marg_solvers):
+            raise ValueError(
+                "probabilistic solve and marg "
+                "solvers should be the same length"
+            )
+        self.probabilistic_solvers = probabilistic_solvers
+        self.probabilistic_marg_solvers = probabilistic_marg_solvers
         self.ontology_loaded = False
 
     def load_ontology(
@@ -147,7 +179,7 @@ class NeurolangPDL(QueryBuilderDatalog):
 
         Example
         -------
-        >>> nl = ProbabilisticFrontend()
+        >>> nl = NeurolangPDL()
         >>> P = nl.add_uniform_probabilistic_choice_over_set(
         ...     [("a",), ("b",), ("c",)], name="P"
         ... )
@@ -203,7 +235,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         Examples
         --------
         Note: example ran with pandas backend
-        >>> nl = ProbabilisticFrontend()
+        >>> nl = NeurolangPDL()
         >>> P = nl.add_uniform_probabilistic_choice_over_set(
         ...     [("a",), ("b",), ("c",)], name="P"
         ... )
@@ -263,6 +295,8 @@ class NeurolangPDL(QueryBuilderDatalog):
         solution = self._restrict_to_query_solution(
             head_symbols, predicate, solution
         )
+        if functor_orig is None:
+            solution = solution.value
         return solution, functor_orig
 
     def solve_all(self) -> Dict[str, NamedRelationalAlgebraFrozenSet]:
@@ -281,7 +315,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         Example
         -------
         Note: example ran with pandas backend
-        >>> nl = ProbabilisticFrontend()
+        >>> nl = NeurolangPDL()
         >>> P = nl.add_uniform_probabilistic_choice_over_set(
         ...     [("a",), ("b",), ("c",)], name="P"
         ... )
@@ -333,14 +367,24 @@ class NeurolangPDL(QueryBuilderDatalog):
     def _solve_probabilistic_stratum(self, solution, prob_idb):
         pfact_edb = self.program_ir.probabilistic_facts()
         pchoice_edb = self.program_ir.probabilistic_choices()
-        prob_solution = compute_probabilistic_solution(
-            solution,
-            pfact_edb,
-            pchoice_edb,
-            prob_idb,
-            self.probabilistic_solver,
-            self.probabilistic_marg_solver,
-        )
+        for i, (succ_solver, marg_solver) in enumerate(
+            zip(self.probabilistic_solvers, self.probabilistic_marg_solvers)
+        ):
+            try:
+                prob_solution = compute_probabilistic_solution(
+                    solution,
+                    pfact_edb,
+                    pchoice_edb,
+                    prob_idb,
+                    succ_solver,
+                    marg_solver,
+                )
+            except UnsupportedSolverError:
+                if i == len(self.probabilistic_solvers) - 1:
+                    raise
+            else:
+                break
+
         wlq_symbs = set(
             rule.consequent.functor
             for rule in prob_idb.formulas
@@ -395,7 +439,7 @@ class NeurolangPDL(QueryBuilderDatalog):
         query_solution = query_solution.projection(
             *(symb.name for symb in head_symbols)
         )
-        return ir.Constant[AbstractSet](query_solution.to_unnamed())
+        return ir.Constant[AbstractSet](query_solution)
 
     def _rewrite_program_with_ontology(self, deterministic_program):
         orw = OntologyRewriter(
@@ -451,7 +495,7 @@ class NeurolangPDL(QueryBuilderDatalog):
 
         Example
         -------
-        >>> nl = ProbabilisticFrontend()
+        >>> nl = NeurolangPDL()
         >>> p = [(0.8, 'a', 'b'), (0.7, 'b', 'c')]
         >>> nl.add_probabilistic_facts_from_tuples(p, name="P")
         P: typing.AbstractSet[typing.Tuple[float, str]] = \
@@ -517,7 +561,7 @@ class NeurolangPDL(QueryBuilderDatalog):
 
         Example
         -------
-        >>> nl = ProbabilisticFrontend()
+        >>> nl = NeurolangPDL()
         >>> p = [(0.8, 'a', 'b'), (0.2, 'b', 'c')]
         >>> nl.add_probabilistic_choice_from_tuples(p, name="P")
         P: typing.AbstractSet[typing.Tuple[float, str, str]] = \
@@ -581,7 +625,7 @@ class NeurolangPDL(QueryBuilderDatalog):
 
         Example
         -------
-        >>> nl = ProbabilisticFrontend()
+        >>> nl = NeurolangPDL()
         >>> p = [('a',), ('b',)]
         >>> nl.add_uniform_probabilistic_choice_over_set(p, name="P")
         P: typing.AbstractSet[typing.Tuple[float, str]] = \
@@ -607,6 +651,3 @@ class NeurolangPDL(QueryBuilderDatalog):
         ra_set = ra_set.extended_projection(projections)
         self.program_ir.add_probabilistic_choice_from_tuples(symbol, ra_set)
         return fe.Symbol(self, name)
-
-
-ProbabilisticFrontend = NeurolangPDL
