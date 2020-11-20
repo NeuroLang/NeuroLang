@@ -710,6 +710,49 @@ class RelationalAlgebraProvenanceExpressionSemringSolver(
 
         return res
 
+    @add_match(Difference(ProvenanceAlgebraSet, ProvenanceAlgebraSet))
+    def difference(self, diff):
+        left = self.walk(diff.relation_left)
+        right = self.walk(diff.relation_right)
+        res_columns = tuple(
+            str2columnstr_constant(col) for col in left.value.columns
+        )
+        res_prov_col = str2columnstr_constant(left.provenance_column)
+        tmp_left_prov_col = str2columnstr_constant(Symbol.fresh().name)
+        tmp_right_prov_col = str2columnstr_constant(Symbol.fresh().name)
+        tmp_left = RenameColumn(
+            Constant[AbstractSet](left.value),
+            str2columnstr_constant(left.provenance_column),
+            tmp_left_prov_col,
+        )
+        tmp_right = RenameColumn(
+            Constant[AbstractSet](right.value),
+            str2columnstr_constant(right.provenance_column),
+            tmp_right_prov_col,
+        )
+        tmp_np_op_args = (tmp_left, tmp_right)
+        tmp_non_prov_result = LeftNaturalJoin(*tmp_np_op_args)
+        isnan = Constant(lambda x: 0 if math.isnan(x) else x)
+        result = ExtendedProjection(
+            tmp_non_prov_result,
+            (
+                ExtendedProjectionListMember(
+                    fun_exp=MUL(
+                        tmp_left_prov_col,
+                        SUB(Constant(1), isnan(tmp_right_prov_col)),
+                    ),
+                    dst_column=res_prov_col,
+                ),
+            )
+            + tuple(
+                ExtendedProjectionListMember(fun_exp=col, dst_column=col)
+                for col in set(res_columns) - {res_prov_col}
+            ),
+        )
+        return ProvenanceAlgebraSet(
+            self.walk(result).value, res_prov_col.value
+        )
+
     # Raise Exception for non-implemented RAP operations
     @add_match(
         RelationalAlgebraOperation,

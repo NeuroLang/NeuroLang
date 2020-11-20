@@ -2,11 +2,16 @@ import collections
 from operator import contains, eq, not_
 from typing import AbstractSet, Callable, Tuple
 
-from ..exceptions import ForbiddenExpressionError, NeuroLangException
+from ..exceptions import (
+    CouldNotTranslateConjunctionException,
+    ForbiddenExpressionError,
+    NegativeFormulaNotNamedRelationException,
+    NegativeFormulaNotSafeRangeException
+)
 from ..expression_walker import (
     ExpressionBasicEvaluator,
     ReplaceExpressionsByValues,
-    add_match,
+    add_match
 )
 from ..expressions import Constant, FunctionApplication, Symbol
 from ..logic import Disjunction
@@ -23,7 +28,7 @@ from ..relational_algebra import (
     RelationalAlgebraOperation,
     Selection,
     Union,
-    get_expression_columns,
+    get_expression_columns
 )
 from ..type_system import is_leq_informative
 from ..utils import NamedRelationalAlgebraFrozenSet
@@ -34,28 +39,6 @@ CONTAINS = Constant(contains)
 EQ_pattern = Constant[Callable](eq)
 Builtin_pattern = Constant[Callable]
 REBV = ReplaceExpressionsByValues({})
-
-
-class TranslateToNamedRAException(NeuroLangException):
-    pass
-
-
-class CouldNotTranslateConjunctionException(TranslateToNamedRAException):
-    def __init__(self, output):
-        super().__init__(f"Could not translate conjunction: {output}")
-        self.output = output
-
-
-class NegativeFormulaNotSafeRangeException(TranslateToNamedRAException):
-    def __init__(self, formula):
-        super().__init__(f"Negative predicate {formula} is not safe range")
-        self.formula = formula
-
-
-class NegativeFormulaNotNamedRelationException(TranslateToNamedRAException):
-    def __init__(self, formula):
-        super().__init__(f"Negative formula {formula} is not a named relation")
-        self.formula = formula
 
 
 class TranslateToNamedRA(ExpressionBasicEvaluator):

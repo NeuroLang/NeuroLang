@@ -5,6 +5,8 @@ import numpy as np
 import pytest
 
 from ...exceptions import (
+    NegativeFormulaNotSafeRangeException,
+    NegativeFormulaNotNamedRelationException,
     UnsupportedProgramError,
     UnsupportedQueryError,
     UnsupportedSolverError
@@ -357,7 +359,6 @@ def test_neurolange_dl_deterministic_negation():
     assert res["s"].to_unnamed() == {(i, j) for i, j in dataset if i != j}
 
 
-@pytest.mark.xfail(reason="RAP negation needs to be implemented")
 def test_neurolange_dl_probabilistic_negation():
     neurolang = NeurolangPDL()
     s = neurolang.new_symbol(name="s")
@@ -370,11 +371,51 @@ def test_neurolange_dl_probabilistic_negation():
     q = neurolang.add_tuple_set(dataset_det, name="q")
     r = neurolang.add_probabilistic_facts_from_tuples(dataset, name="r")
 
-    s[x, y, prob(x, y)] = ~r(x, x) & q(x, y)
+    s[x, y, prob(x, y)] = ~r(x, y) & q(x, y)
 
-    res = neurolang.solve_all()
+    result = neurolang.solve_all()["s"].to_unnamed()
+    expected = {(i, j, 1 - p) for (p, i, j) in dataset}
+    assert_almost_equal(result, expected)
 
-    assert res["s"].to_unnamed() == {(i, j) for i, j in dataset if i != j}
+
+def test_neurolange_dl_probabilistic_negation_not_safe():
+    neurolang = NeurolangPDL()
+    s = neurolang.new_symbol(name="s")
+    x = neurolang.new_symbol(name="x")
+    y = neurolang.new_symbol(name="y")
+    z = neurolang.new_symbol(name="z")
+    prob = neurolang.new_symbol(name="PROB")
+
+    dataset_det = {(i, i * 2) for i in range(10)}
+    dataset = {((1 + i) / 10, i, i * 2) for i in range(10)}
+    q = neurolang.add_tuple_set(dataset_det, name="q")
+    r = neurolang.add_probabilistic_facts_from_tuples(dataset, name="r")
+
+    s[x, y, prob(x, y)] = ~r(x, z) & q(x, y)
+
+    with pytest.raises(NegativeFormulaNotSafeRangeException):
+        neurolang.solve_all()
+
+
+def test_neurolange_dl_probabilistic_negation_rule():
+    neurolang = NeurolangPDL()
+    s = neurolang.new_symbol(name="s")
+    t = neurolang.new_symbol(name="t")
+    x = neurolang.new_symbol(name="x")
+    y = neurolang.new_symbol(name="y")
+    z = neurolang.new_symbol(name="z")
+    prob = neurolang.new_symbol(name="PROB")
+
+    dataset_det = {(i, i * 2) for i in range(10)}
+    dataset = {((1 + i) / 10, i, i * 2) for i in range(10)}
+    q = neurolang.add_tuple_set(dataset_det, name="q")
+    r = neurolang.add_probabilistic_facts_from_tuples(dataset, name="r")
+
+    t[x, y] = r(x, y) & q(y, z)
+    s[x, y, prob(x, y)] = ~t(x, x) & q(x, y)
+
+    with pytest.raises(NegativeFormulaNotNamedRelationException):
+        neurolang.solve_all()
 
 
 def test_neurolang_dl_aggregation():
