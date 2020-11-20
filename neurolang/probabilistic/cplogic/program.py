@@ -24,34 +24,6 @@ from ..expression_processing import (
 from ..expressions import Condition, ProbabilisticPredicate
 
 
-class TranslateQueryBasedProbabilisticFactMixin(PatternWalker):
-    """
-    Translate an expression of the form
-
-        (P @ y)(x) :- Q(x)
-
-    to its equivalent query-based probabilistic fact
-
-        P(x) : y :- Q(x)
-
-    This is useful when the rule was defined at the frontend level using the
-    sugar syntax `(P @ y)[x] = Q[x]`.
-
-    """
-
-    @add_match(
-        Implication(
-            FunctionApplication(Constant(matmul)(Symbol, ...), ...),
-            ...,
-        )
-    )
-    def query_based_probfact_wannabe(self, impl):
-        pred_symb, probability = impl.consequent.functor.args
-        body = pred_symb(*impl.consequent.args)
-        new_consequent = ProbabilisticPredicate(probability, body)
-        return self.walk(Implication(new_consequent, impl.antecedent))
-
-
 class CPLogicMixin(PatternWalker):
     """
     Datalog extended with probabilistic facts semantics from ProbLog.
