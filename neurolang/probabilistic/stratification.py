@@ -1,4 +1,5 @@
 import collections
+import typing
 
 import numpy as np
 
@@ -101,6 +102,9 @@ def stratify_program(query, program):
             grpd_symbs[idb_type].add(rule.consequent.functor)
             grpd_idbs[idb_type].append(rule)
             count = len(idb)
+    _check_for_query_based_probfact_dependency_on_prob_relation(
+        grpd_idbs["probabilistic"], grpd_symbs
+    )
     return {
         idb_type: Union(tuple(idb_rules))
         for idb_type, idb_rules in grpd_idbs.items()
@@ -159,6 +163,23 @@ def _get_rule_idb_type(rule, grpd_symbs, wlq_symbs):
     elif not grpd_symbs["probabilistic"].isdisjoint(dep_symbs):
         idb_type = "probabilistic"
     return idb_type
+
+
+def _check_for_query_based_probfact_dependency_on_prob_relation(
+    prob_idb: typing.Iterable[Implication],
+    grpd_symbs: typing.Mapping[Symbol, str],
+) -> None:
+    if any(
+        any(
+            atom.functor in grpd_symbs["probabilistic"]
+            for atom in extract_logic_atoms(rule.antecedent)
+        )
+        for rule in prob_idb
+    ):
+        raise UnsupportedProgramError(
+            "Query-based probabilistic facts cannot depend on probabilistic "
+            "predicate"
+        )
 
 
 def _check_for_dependencies_between_wlqs(dep_mat, idb_symbs, wlq_symbs):
