@@ -210,29 +210,6 @@ def extract_logic_atoms(expression):
     return elp.extract_logic_atoms(expression)
 
 
-def get_predicate_functor(
-    predicate: typing.Union[FunctionApplication, Negation]
-) -> typing.Union[Symbol, Constant]:
-    """
-    Get the functor of a predicate that is either an atom (positive literal) or
-    the negation of an atom (negative literal).
-
-    Parameters
-    ----------
-    predicate : function application or negation of a function application
-        Positive or negative literal.
-
-    Returns
-    -------
-    Symbol or Constant
-        The predicate's functor.
-
-    """
-    if isinstance(predicate, Negation):
-        return predicate.formula.functor
-    return predicate.functor
-
-
 def stratify(union, datalog_instance):
     """Given an expression block containing `Implication` instances
      and a datalog instance, return the stratification of the formulas

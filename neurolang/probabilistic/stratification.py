@@ -6,7 +6,6 @@ from ..datalog.expression_processing import (
     dependency_matrix,
     extract_logic_atoms,
     extract_logic_predicates,
-    get_predicate_functor,
     reachable_code,
 )
 from ..exceptions import ForbiddenRecursivityError, UnsupportedProgramError
