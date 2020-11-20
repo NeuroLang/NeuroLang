@@ -1,15 +1,9 @@
-import operator
-
 import pytest
 
 from ...exceptions import ForbiddenDisjunctionError
-from ...expression_walker import IdentityWalker
 from ...expressions import Constant, FunctionApplication, Symbol
 from ...logic import Implication, Union
-from ..cplogic.program import (
-    CPLogicProgram,
-    TranslateQueryBasedProbabilisticFactMixin,
-)
+from ..cplogic.program import CPLogicProgram
 from ..expressions import ProbabilisticPredicate
 from ..query_resolution import QueryBasedProbFactToDetRule
 
@@ -75,22 +69,3 @@ def test_prevent_combination_of_query_based_and_set_based():
     cpl.add_probabilistic_facts_from_tuples(P, [(0.2, "a")])
     with pytest.raises(ForbiddenDisjunctionError):
         cpl.walk(pfact)
-
-
-class TestTranslateQueryBasedProbabilisticFact(
-    TranslateQueryBasedProbabilisticFactMixin,
-    IdentityWalker,
-):
-    pass
-
-
-def test_translation_sugar_syntax():
-    pfact = Implication(
-        Constant(operator.matmul)(P, (p / Constant(2)))(x), Q(x, p)
-    )
-    translator = TestTranslateQueryBasedProbabilisticFact()
-    result = translator.walk(pfact)
-    expected = Implication(
-        ProbabilisticPredicate(p / Constant(2), P(x)), Q(x, p)
-    )
-    assert result == expected

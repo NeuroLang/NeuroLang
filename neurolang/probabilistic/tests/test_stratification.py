@@ -251,7 +251,7 @@ def test_stratify_query_based_probfact():
     )
     program = CPLogicWithQueryBasedProbFactProgram()
     program.walk(code)
-    query = Implication(Query(x, p), Conjunction((P(x), Z(y))))
+    query = Implication(Query(x, y), Conjunction((P(x), Z(y))))
     idbs = stratify_program(query, program)
     P_formula = next(
         formula
@@ -273,3 +273,23 @@ def test_stratify_query_based_probfact():
         formula.consequent.functor == Z_formula.antecedent.functor
         for formula in idbs["deterministic"].formulas
     )
+
+
+def test_cannot_stratify_qbased_probfact_with_prob_dependency():
+    code = Union(
+        (
+            Implication(
+                ProbabilisticPredicate(Constant(0.2), P(a)),
+                TRUE,
+            ),
+            Implication(
+                ProbabilisticPredicate(Constant(0.6), Q(x)),
+                P(x),
+            ),
+        )
+    )
+    program = CPLogicWithQueryBasedProbFactProgram()
+    program.walk(code)
+    query = Implication(Query(x), Q(x))
+    with pytest.raises(UnsupportedProgramError):
+        stratify_program(query, program)

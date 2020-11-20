@@ -1,4 +1,5 @@
 import collections
+import typing
 
 import numpy as np
 
@@ -10,7 +11,8 @@ from ..datalog.expression_processing import (
 )
 from ..exceptions import ForbiddenRecursivityError, UnsupportedProgramError
 from ..expressions import Symbol
-from ..logic import Implication, Negation, Union
+from ..logic import TRUE, Implication, Negation, Union
+from .expressions import ProbabilisticPredicate
 
 
 def _iter_implication_or_union_of_implications(expression):
@@ -100,6 +102,9 @@ def stratify_program(query, program):
             grpd_symbs[idb_type].add(rule.consequent.functor)
             grpd_idbs[idb_type].append(rule)
             count = len(idb)
+    _check_for_query_based_probfact_dependency_on_prob_relation(
+        grpd_idbs["probabilistic"], grpd_symbs
+    )
     _check_no_negated_prob_idb_predicate(grpd_idbs["probabilistic"])
     return {
         idb_type: Union(tuple(idb_rules))
@@ -173,6 +178,25 @@ def _get_rule_idb_type(rule, grpd_symbs, wlq_symbs):
     elif not grpd_symbs["probabilistic"].isdisjoint(dep_symbs):
         idb_type = "probabilistic"
     return idb_type
+
+
+def _check_for_query_based_probfact_dependency_on_prob_relation(
+    prob_idb: typing.Iterable[Implication],
+    grpd_symbs: typing.Mapping[Symbol, str],
+) -> None:
+    if any(
+        any(
+            atom.functor in grpd_symbs["probabilistic"]
+            for atom in extract_logic_atoms(rule.antecedent)
+        )
+        for rule in prob_idb
+        if isinstance(rule.consequent, ProbabilisticPredicate)
+        and rule.antecedent != TRUE
+    ):
+        raise UnsupportedProgramError(
+            "Query-based probabilistic facts cannot depend on probabilistic "
+            "predicate"
+        )
 
 
 def _check_for_dependencies_between_wlqs(dep_mat, idb_symbs, wlq_symbs):

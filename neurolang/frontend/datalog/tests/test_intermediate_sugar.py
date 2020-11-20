@@ -1,11 +1,21 @@
+import operator
 from typing import AbstractSet, Tuple
 from unittest.mock import Mock
 
+import pytest
+
 from ....datalog import Fact
 from ....datalog.expression_processing import extract_logic_atoms
-from ....expression_walker import ExpressionWalker
+from ....exceptions import ForbiddenExpressionError
+from ....expression_walker import ExpressionWalker, IdentityWalker
 from ....expressions import Constant, Symbol
 from ....logic import Conjunction, Implication
+from ....probabilistic.expressions import (
+    PROB,
+    Condition,
+    ProbabilisticPredicate,
+    ProbabilisticQuery,
+)
 from .. import intermediate_sugar as sugar
 
 
@@ -158,3 +168,58 @@ def test_select_by_first_implication_builtin_head():
     fs = fresh_symbols[0]
     res = Implication(A(c, fs), Conjunction((C(fs, x), eq(fs, y), B(x))))
     assert tr == res
+
+
+class _TestTranslator(sugar.TranslateProbabilisticQueryMixin, ExpressionWalker):
+    pass
+
+
+def test_wlq_floordiv_translation():
+    P = Symbol("P")
+    Q = Symbol("Q")
+    R = Symbol("R")
+    x = Symbol("x")
+    y = Symbol("y")
+    wlq = Implication(
+        Q(x, y, PROB(x, y)), Constant(operator.floordiv)(P(x), R(x, y))
+    )
+    translator = _TestTranslator()
+    result = translator.walk(wlq)
+    assert result == Implication(
+        Q(x, y, ProbabilisticQuery(PROB, (x, y))), Condition(P(x), R(x, y))
+    )
+
+
+def test_wlq_marg_bad_syntax():
+    P = Symbol("P")
+    Q = Symbol("Q")
+    Z = Symbol("Z")
+    x = Symbol("x")
+    y = Symbol("y")
+    bad_wlq = Implication(Q(x, y), Constant(operator.floordiv)(P(x), Z(x, y)))
+    translator = _TestTranslator()
+    with pytest.raises(ForbiddenExpressionError):
+        translator.walk(bad_wlq)
+
+
+class TestTranslateQueryBasedProbabilisticFact(
+    sugar.TranslateQueryBasedProbabilisticFactMixin,
+    IdentityWalker,
+):
+    pass
+
+
+def test_translation_sugar_syntax():
+    P = Symbol("P")
+    Q = Symbol("Q")
+    x = Symbol("x")
+    p = Symbol("p")
+    pfact = Implication(
+        Constant(operator.matmul)(P, (p / Constant(2)))(x), Q(x, p)
+    )
+    translator = TestTranslateQueryBasedProbabilisticFact()
+    result = translator.walk(pfact)
+    expected = Implication(
+        ProbabilisticPredicate(p / Constant(2), P(x)), Q(x, p)
+    )
+    assert result == expected
