@@ -109,6 +109,7 @@ def stratify_program(query, program):
     return {
         idb_type: Union(tuple(idb_rules))
         for idb_type, idb_rules in grpd_idbs.items()
+        if idb_rules
     }
 
 
