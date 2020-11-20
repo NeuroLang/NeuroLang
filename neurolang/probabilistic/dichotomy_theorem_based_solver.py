@@ -27,20 +27,16 @@ from ..datalog.expression_processing import (
     EQ,
     UnifyVariableEqualities,
     enforce_conjunction,
-    flatten_query,
+    extract_logic_atoms,
     extract_logic_predicates,
+    flatten_query,
 )
 from ..datalog.translate_to_named_ra import TranslateToNamedRA
 from ..expression_walker import ExpressionWalker, add_match
 from ..expressions import Constant, Symbol
 from ..logic import FALSE, Conjunction, Implication
-from ..logic.expression_processing import (
-    extract_logic_atoms,
-    extract_logic_free_variables,
-    extract_logic_predicates,
-)
+from ..logic.expression_processing import extract_logic_free_variables
 from ..relational_algebra import (
-    ColumnInt,
     ColumnStr,
     EliminateTrivialProjections,
     ExtendedProjection,
@@ -310,17 +306,12 @@ def solve_succ_query(query, cpl_program):
         )
         unified_query = UnifyVariableEqualities().walk(flat_query)
         shattered_query = shatter_easy_probfacts(unified_query, symbol_table)
-        prob_pred_symbs = (
-            cpl_program.pfact_pred_symbs | cpl_program.pchoice_pred_symbs
-        )
         shattered_query_probabilistic_body = Conjunction(
             tuple(
-                conjunct
-                for conjunct in extract_logic_predicates(
-                    shattered_query.antecedent
-                )
+                atom
+                for atom in extract_logic_atoms(shattered_query.antecedent)
                 if isinstance(
-                    conjunct.functor,
+                    atom.functor,
                     (ProbabilisticChoiceSet, ProbabilisticFactSet),
                 )
             )

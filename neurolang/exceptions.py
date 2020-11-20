@@ -80,3 +80,25 @@ class ForbiddenUnstratifiedAggregation(UnsupportedProgramError):
 
 class WrongArgumentsInPredicateError(NeuroLangException):
     pass
+
+
+class TranslateToNamedRAException(NeuroLangException):
+    pass
+
+
+class CouldNotTranslateConjunctionException(TranslateToNamedRAException):
+    def __init__(self, output):
+        super().__init__(f"Could not translate conjunction: {output}")
+        self.output = output
+
+
+class NegativeFormulaNotSafeRangeException(TranslateToNamedRAException):
+    def __init__(self, formula):
+        super().__init__(f"Negative predicate {formula} is not safe range")
+        self.formula = formula
+
+
+class NegativeFormulaNotNamedRelationException(TranslateToNamedRAException):
+    def __init__(self, formula):
+        super().__init__(f"Negative formula {formula} is not a named relation")
+        self.formula = formula
