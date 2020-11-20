@@ -4,6 +4,7 @@ import numpy as np
 
 from ..datalog.expression_processing import (
     dependency_matrix,
+    extract_logic_atoms,
     extract_logic_predicates,
     get_predicate_functor,
     reachable_code,
@@ -143,9 +144,9 @@ def _get_program_deterministic_symbols(program):
 
 def _get_rule_idb_type(rule, grpd_symbs, wlq_symbs):
     dep_symbs = set(
-        get_predicate_functor(pred)
-        for pred in extract_logic_predicates(rule.antecedent)
-        if isinstance(get_predicate_functor(pred), Symbol)
+        pred.functor
+        for pred in extract_logic_atoms(rule.antecedent)
+        if isinstance(pred.functor, Symbol)
     )
     idb_type = None
     # handle the case of a WLQ with deterministic-only dependencies
