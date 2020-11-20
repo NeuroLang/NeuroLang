@@ -178,7 +178,7 @@ def _check_for_query_based_probfact_dependency_on_prob_relation(
         )
         for rule in prob_idb
         if isinstance(rule.consequent, ProbabilisticPredicate)
-        and rule.antecedent != True
+        and rule.antecedent != TRUE
     ):
         raise UnsupportedProgramError(
             "Query-based probabilistic facts cannot depend on probabilistic "
