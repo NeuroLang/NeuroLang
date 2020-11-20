@@ -14,7 +14,7 @@ from ..datalog.expression_processing import (
 )
 from ..exceptions import NeuroLangFrontendException, UnexpectedExpressionError
 from ..expressions import Constant, Expression, FunctionApplication, Symbol
-from ..logic import Conjunction, Implication, Union
+from ..logic import TRUE, Conjunction, Implication, Union
 from .exceptions import DistributionDoesNotSumToOneError
 from .expressions import PROB, ProbabilisticPredicate, ProbabilisticQuery
 
@@ -42,7 +42,19 @@ def is_probabilistic_fact(expression):
         isinstance(expression, Implication)
         and isinstance(expression.consequent, ProbabilisticPredicate)
         and isinstance(expression.consequent.body, FunctionApplication)
-        and expression.antecedent == Constant[bool](True)
+        and expression.antecedent == TRUE
+    )
+
+
+def is_query_based_probfact(expression):
+    return (
+        isinstance(expression, Implication)
+        and isinstance(expression.consequent, ProbabilisticPredicate)
+        and expression.antecedent != TRUE
+        and not (
+            isinstance(expression.antecedent, FunctionApplication)
+            and expression.antecedent.functor.is_fresh
+        )
     )
 
 
@@ -354,7 +366,7 @@ def lift_optimization_for_choice_predicates(query, program):
 
 
 def is_probabilistic_predicate_symbol(pred_symb, program):
-    wlq_symbs = set(program.within_language_succ_queries())
+    wlq_symbs = set(program.within_language_prob_queries())
     prob_symbs = program.pfact_pred_symbs | program.pchoice_pred_symbs
     stack = [pred_symb]
     while stack:

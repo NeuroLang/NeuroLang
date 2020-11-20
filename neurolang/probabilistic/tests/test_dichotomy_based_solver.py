@@ -5,14 +5,14 @@ from ...expressions import Constant, Symbol
 from ...logic import Conjunction
 from ..dichotomy_theorem_based_solver import is_hierarchical_without_self_joins
 
-Q = Symbol('Q')
-R = Symbol('R')
-S = Symbol('S')
-T = Symbol('T')
-w = Symbol('w')
-x = Symbol('x')
-y = Symbol('y')
-z = Symbol('z')
+Q = Symbol("Q")
+R = Symbol("R")
+S = Symbol("S")
+T = Symbol("T")
+w = Symbol("w")
+x = Symbol("x")
+y = Symbol("y")
+z = Symbol("z")
 
 
 def test_hierarchical_without_self_joins():
