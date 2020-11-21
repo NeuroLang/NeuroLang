@@ -12,7 +12,7 @@ It then shows how a two-term conjunctive query can be expressed and solved to
 obtain an uncorreted forward inference map for studies associated with both
 terms 'auditory' and 'memory'.
 """
-from typing import Iterable, Union
+from typing import Iterable
 
 import nibabel
 import nilearn.datasets
