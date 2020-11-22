@@ -178,7 +178,10 @@ class OntologyRewriter:
         return []
 
     def _get_term(self, q, sigma_con):
-        if isinstance(q, Negation):
+        if (
+            isinstance(q, Negation)
+            or isinstance(sigma_con, Negation)
+        ):
             return []
 
         if isinstance(q, NaryLogicOperator):
