@@ -188,7 +188,8 @@ class OntologyRewriter:
             q_args = [
                 formula
                 for formula in q.formulas
-                if formula.functor == sigma_con.functor
+                if not isinstance(formula, Negation)
+                and formula.functor == sigma_con.functor
             ]
         else:
             q_args = []
