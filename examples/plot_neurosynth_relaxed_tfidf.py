@@ -64,7 +64,7 @@ def agg_create_region_overlay(
 # Loading the database
 
 ns_database_fn, ns_features_fn = nilearn.datasets.utils._fetch_files(
-    "neurolang/frontend/neurosynth_data",
+    "neurolang",
     [
         (
             "database.txt",
