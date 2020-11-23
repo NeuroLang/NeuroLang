@@ -331,22 +331,26 @@ def op_bind(op):
 
 def rop_bind(op):
     @wraps(op)
-    def fun(self, value):
-        raise NotImplementedError()
-        original_value = value
-        if isinstance(value, Expression):
-            value = value.expression
+    def fun(self, *args):
+        new_args = self._translate_tuple(args)
+        if self.query_builder.logic_programming and isinstance(self, Symbol):
+            self_arg = self.neurolang_symbol
         else:
-            value = ir.Constant(value)
-
-        return Operation(
-            self.query_builder,
-            op(self.expression, value),
-            op,
-            (self, original_value),
-            infix=True,
+            self_arg = self.expression
+        new_args = new_args + (self_arg,)
+        arg_types = [a.type for a in new_args]
+        functor = ir.Constant[Callable[arg_types, ir.Unknown]](
+            op, auto_infer_type=False
         )
-
+        new_expression = functor(*new_args)
+        res = Operation(
+            self.query_builder,
+            new_expression,
+            op,
+            args + (self,),
+            infix=len(args) > 0,
+        )
+        return res
     return fun
 
 
