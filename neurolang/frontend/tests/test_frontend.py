@@ -1,6 +1,6 @@
 from collections import namedtuple
 from neurolang.exceptions import NeuroLangException, WrongArgumentsInPredicateError
-from operator import contains
+from operator import contains, add
 from typing import AbstractSet, Callable, Tuple
 from unittest.mock import patch
 
@@ -573,6 +573,24 @@ def test_aggregation_number_of_arrivals():
         res = neurolang.query((e.x, e.c), e.count_destinations(e.x, e.c))
 
     assert res.to_unnamed() == {(0, 3), (1, 2), (2, 1)}
+
+
+def test_frontend_operators():
+    neurolang = frontend.NeurolangDL()
+
+    a = neurolang.new_symbol(name='a')
+
+    b = a + 1
+
+    assert isinstance(b, qre.Operation)
+    assert b.expression.functor == exp.Constant(add)
+    assert b.expression.args == (a.expression, exp.Constant(1))
+
+    c = 1 + a
+
+    assert isinstance(c, qre.Operation)
+    assert c.expression.functor == exp.Constant(add)
+    assert c.expression.args == (exp.Constant(1), a.expression)
 
 
 def test_neurolang_dl_attribute_access():
