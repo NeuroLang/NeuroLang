@@ -29,8 +29,6 @@ from ...type_system import (
     is_leq_informative,
 )
 
-MATMUL = Constant[typing.Callable[[typing.Any, float], Unknown]](op.matmul)
-
 
 class Column(ir.Definition):
     def __init__(self, set_symbol, column_position):
@@ -460,9 +458,7 @@ class TranslateQueryBasedProbabilisticFactMixin(ew.PatternWalker):
 
     @ew.add_match(
         Implication(
-            FunctionApplication(
-                FunctionApplication(MATMUL, (Symbol, ...)), ...
-            ),
+            FunctionApplication(Constant(op.matmul)(Symbol, ...), ...),
             ...,
         )
     )
