@@ -12,7 +12,7 @@ It then shows how a two-term conjunctive query can be expressed and solved to
 obtain an uncorreted forward inference map for studies associated with both
 terms 'auditory' and 'memory'.
 """
-from typing import Iterable
+from typing import Iterable, Callable
 
 import nibabel
 import nilearn.datasets
@@ -111,7 +111,7 @@ SelectedStudy = nl.add_uniform_probabilistic_choice_over_set(
 ###############################################################################
 # Probabilistic program and querying
 
-nl.add_symbol(np.exp, name="exp")
+nl.add_symbol(np.exp, name="exp", type_=Callable[[float], float])
 
 with nl.environment as e:
     (e.TermInStudy @ (1 / (1 + e.exp(-e.alpha * (e.tfidf - e.tau)) + 1)))[
