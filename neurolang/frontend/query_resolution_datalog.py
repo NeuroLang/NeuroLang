@@ -17,6 +17,8 @@ from typing import (
 )
 from uuid import uuid1
 
+import pandas as pd
+
 from .. import datalog
 from .. import expressions as ir
 from ..datalog import aggregation
@@ -469,6 +471,10 @@ class QueryBuilderDatalog(RegionMixin, NeuroSynthMixin, QueryBuilderBase):
         if isinstance(type_, tuple):
             type_ = Tuple[type_]
         symbol = ir.Symbol[AbstractSet[type_]](name)
+        if isinstance(iterable, pd.DataFrame):
+            iterable = iterable.rename(
+                columns={n: i for i, n in enumerate(iterable.columns)}
+            )
         self.program_ir.add_extensional_predicate_from_tuples(
             symbol, iterable, type_=type_
         )

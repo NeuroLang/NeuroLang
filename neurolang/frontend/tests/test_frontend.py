@@ -1,21 +1,19 @@
 from collections import namedtuple
-from neurolang.exceptions import NeuroLangException, WrongArgumentsInPredicateError
-from operator import contains, add
+from operator import add, contains
 from typing import AbstractSet, Callable, Tuple
 from unittest.mock import patch
 
 import numpy as np
+import pandas as pd
 import pytest
 
-from neurolang import frontend
-from neurolang.frontend import query_resolution
-
-from ... import expressions as exp
+from ... import expressions as exp, frontend
 from ...datalog import DatalogProgram, Fact, Implication
+from ...exceptions import NeuroLangException, WrongArgumentsInPredicateError
 from ...expression_walker import ExpressionBasicEvaluator
 from ...regions import ExplicitVBR, SphericalVolume
 from ...type_system import Unknown
-from .. import query_resolution_expressions as qre
+from .. import query_resolution, query_resolution_expressions as qre
 
 
 def test_symbol_management():
@@ -123,6 +121,15 @@ def test_add_set():
     assert s.type is AbstractSet[Tuple[str, int]]
     assert res.type is AbstractSet[Tuple[str, int]]
     assert res.value == v
+    assert isinstance(repr(res), str)
+
+    v = pd.DataFrame([[0, 's', .1], [1, 'p', .3]], columns=['A', 'B', 'C'])
+    s = neurolang.add_tuple_set(v)
+    res = neurolang[s]
+
+    assert s.type is AbstractSet[Tuple[int, str, float]]
+    assert res.type is AbstractSet[Tuple[int, str, float]]
+    assert res.value == set(v.itertuples(index=False))
     assert isinstance(repr(res), str)
 
 
