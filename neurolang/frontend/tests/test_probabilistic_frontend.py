@@ -5,8 +5,8 @@ import numpy as np
 import pytest
 
 from ...exceptions import (
-    NegativeFormulaNotSafeRangeException,
     NegativeFormulaNotNamedRelationException,
+    NegativeFormulaNotSafeRangeException,
     UnsupportedProgramError,
     UnsupportedQueryError,
     UnsupportedSolverError,
@@ -909,4 +909,23 @@ def test_cbma_two_term_conjunctive_query():
             ),
         ]
     )
+    assert_almost_equal(res, expected)
+
+
+def test_simple_sigmoid():
+    nl = NeurolangPDL()
+    unnormalised = nl.add_tuple_set(
+        [
+            ("a", 1),
+            ("b", 2),
+            ("c", 7),
+        ],
+        name="unnormalised",
+    )
+    exp = nl.add_symbol(np.exp, name="exp")
+    with nl.environment as e:
+        (e.prob @ (1 / (1 + exp(-e.x))))[e.l] = unnormalised[e.l, e.x]
+        e.Query[e.l, e.PROB[e.l]] = e.prob[e.l]
+        res = nl.query((e.l, e.p), e.Query[e.l, e.p])
+    expected = {(l, (1 / (1 + np.exp(-x)))) for l, x in unnormalised.value}
     assert_almost_equal(res, expected)

@@ -100,7 +100,6 @@ ns_docs = ns_features[["pmid"]].drop_duplicates().values
 ns_tfidf = pd.melt(
     ns_features, var_name="term", id_vars="pmid", value_name="TfIdf"
 )
-ns_tfidf = ns_tfidf.loc[ns_tfidf.term.isin(["memory", "auditory"])]
 ns_tfidf = ns_tfidf[["pmid", "term", "TfIdf"]].values
 
 StudyTFIDF = nl.add_tuple_set(ns_tfidf, name="StudyTFIDF")
@@ -112,18 +111,10 @@ SelectedStudy = nl.add_uniform_probabilistic_choice_over_set(
 ###############################################################################
 # Probabilistic program and querying
 
-
-@nl.add_symbol
-def tfidf_to_probability(
-    tfidf: float,
-    alpha: float,
-    tau: float,
-) -> float:
-    return 1 / (1 + np.exp(-alpha * (tfidf - tau)))
-
+nl.add_symbol(np.exp, name="exp")
 
 with nl.environment as e:
-    (e.TermInStudy @ e.tfidf_to_probability[e.tfidf, e.alpha, e.tau])[
+    (e.TermInStudy @ (e.exp(-e.alpha * (e.tfidf - e.tau)) + 1) ** (-1))[
         e.t, e.s
     ] = (e.StudyTFIDF[e.s, e.t, e.tfidf] & (e.alpha == 3000) & (e.tau == 0.01))
     e.TermAssociation[e.t] = e.SelectedStudy[e.s] & e.TermInStudy[e.t, e.s]

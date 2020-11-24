@@ -156,6 +156,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
 
     @add_match(FunctionApplication)
     def translate_fa(self, expression):
+        __import__('pdb').set_trace()
         functor = self.walk(expression.functor)
         named_args = list()
         projections = list()
@@ -175,6 +176,7 @@ class TranslateToNamedRA(ExpressionBasicEvaluator):
                 projections.append(
                     Constant[ColumnInt](counter, verify_type=False)
                 )
+                assert isinstance(arg, Symbol)
                 named_args.append(arg)
             counter += 1
         in_set = self.generate_ra_expression(

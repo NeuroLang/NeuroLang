@@ -1,6 +1,7 @@
 from operator import contains, eq, gt, mul, not_
 from typing import AbstractSet, Tuple
 
+import numpy
 import pytest
 
 from ...exceptions import NeuroLangException
@@ -788,3 +789,30 @@ def test_equality_nested_builtin_application():
         ),
     )
     assert result == expected
+
+
+def test_sigmoid():
+    x = Symbol("x")
+    z = Symbol("z")
+    P = Symbol("P")
+    conjunction = Conjunction(
+        (P(x, z), EQ(z, Constant(1) / (Constant(1) + Constant(numpy.exp)(-x))))
+    )
+    result = TranslateToNamedRA().walk(conjunction)
+    expected = ExtendedProjection(
+        NameColumns(
+            Projection(P, (C_(ColumnInt(0)), C_(ColumnInt(1)))),
+            (C_(ColumnStr("x")), C_(ColumnStr("z"))),
+        ),
+        (
+            ExtendedProjectionListMember(
+                str2columnstr_constant("x"),
+                str2columnstr_constant("x"),
+            ),
+            ExtendedProjectionListMember(
+                Constant(1)
+                / (Constant(1) + Constant(numpy.exp)(-C_(ColumnStr("x")))),
+                str2columnstr_constant("x"),
+            ),
+        ),
+    )
