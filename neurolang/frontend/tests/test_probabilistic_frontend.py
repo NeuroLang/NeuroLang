@@ -1,5 +1,5 @@
 import io
-from typing import AbstractSet, Tuple
+from typing import AbstractSet, Callable, Tuple
 
 import numpy as np
 import pytest
@@ -922,7 +922,7 @@ def test_simple_sigmoid():
         ],
         name="unnormalised",
     )
-    exp = nl.add_symbol(np.exp, name="exp")
+    exp = nl.add_symbol(np.exp, name="exp", type_=Callable[[float], float])
     with nl.environment as e:
         (e.prob @ (1 / (1 + exp(-e.x))))[e.l] = unnormalised[e.l, e.x]
         e.Query[e.l, e.PROB[e.l]] = e.prob[e.l]

@@ -437,9 +437,9 @@ class StringArithmeticWalker(ew.PatternWalker):
         )
 
     @ew.add_match(FunctionApplication(Constant(numpy.exp), (...,)))
-    def nump_exponential(self, fa):
+    def numpy_exponential(self, fa):
         return Constant[RelationalAlgebraStringExpression](
-            "exp({})".format(self.walk(fa.args[0].value)),
+            "exp({})".format(self.walk(self.walk(fa.args[0]).value)),
             auto_infer_type=False,
             verify_type=False,
         )
