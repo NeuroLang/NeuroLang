@@ -3,6 +3,7 @@ import operator as op
 from typing import AbstractSet, Callable, Mapping, Sequence, Tuple
 
 import pytest
+import numpy
 
 from .. import expressions, logic
 from ..expression_walker import (
@@ -316,3 +317,8 @@ def test_fresh_symbol_subclass():
 
     assert isinstance(TestSymbol.fresh(), TestSymbol)
     assert isinstance(TestSymbol[int].fresh(), TestSymbol[int])
+
+
+def test_numpy_ufunc_no_qualname_repr():
+    exp = C_(numpy.exp)
+    repr(exp)
