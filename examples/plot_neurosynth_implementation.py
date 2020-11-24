@@ -145,5 +145,3 @@ plot = plotting.plot_stat_map(
     result_image, threshold=np.percentile(img[img > 0], 95)
 )
 plotting.show()
-
-# %%
