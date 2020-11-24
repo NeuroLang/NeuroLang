@@ -2,6 +2,7 @@ import io
 from typing import AbstractSet, Tuple
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from ...exceptions import (
@@ -57,6 +58,13 @@ def test_add_uniform_probabilistic_choice_set():
 
     assert data.type is AbstractSet[Tuple[float, str]]
     assert res_d.type is AbstractSet[Tuple[float, str]]
+
+    d = pd.DataFrame([("a",), ("b",), ("c",), ("d",)], columns=["ids"])
+    data2 = nl.add_uniform_probabilistic_choice_over_set(d, name="data2")
+    res_d2 = nl[data]
+
+    assert data2.type is AbstractSet[Tuple[float, str]]
+    assert res_d2.type is AbstractSet[Tuple[float, str]]
 
 
 def test_deterministic_query():
