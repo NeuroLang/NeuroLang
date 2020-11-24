@@ -548,7 +548,11 @@ class Constant(Expression):
     def __repr__(self):
         if self.value is ...:
             value_str = '...'
-        elif callable(self.value) and not isinstance(self.value, Expression):
+        elif (
+            callable(self.value)
+            and not isinstance(self.value, Expression)
+            and hasattr(self.value, "__qualname__")
+        ):
             value_str = self.value.__qualname__
         else:
             value_str = repr(self.value)
