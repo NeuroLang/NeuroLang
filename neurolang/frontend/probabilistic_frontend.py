@@ -20,6 +20,8 @@ from typing import (
 )
 from uuid import uuid1
 
+import pandas as pd
+
 from .. import expressions as ir
 from ..datalog.aggregation import (
     Chase,
@@ -580,6 +582,10 @@ class NeurolangPDL(QueryBuilderDatalog):
     def _add_probabilistic_tuples(
         self, iterable, type_, name, solver_add_method
     ):
+        if isinstance(iterable, pd.DataFrame):
+            iterable = iterable.rename(
+                columns={n: i for i, n in enumerate(iterable.columns)}
+            )
         if name is None:
             name = str(uuid1())
         if isinstance(type_, tuple):
@@ -638,8 +644,14 @@ class NeurolangPDL(QueryBuilderDatalog):
             name = str(uuid1())
         if isinstance(type_, tuple):
             type_ = Tuple[type_]
+        if isinstance(iterable, pd.DataFrame):
+            iterable = iterable.rename(
+                columns={n: i for i, n in enumerate(iterable.columns)}
+            )
+            arity = len(iterable.columns)
+        else:
+            arity = len(next(iter(iterable)))
         symbol = ir.Symbol[AbstractSet[type_]](name)
-        arity = len(next(iter(iterable)))
         columns = tuple(ir.Symbol.fresh().name for _ in range(arity))
         ra_set = NamedRelationalAlgebraFrozenSet(columns, iterable)
         prob_col = ir.Symbol.fresh().name

@@ -1,12 +1,13 @@
 from typing import Tuple
 
 import numpy as np
+import pandas as pd
 from pytest import mark
 
 from ..expressions import Constant
 from ..wrapped_collections import (NamedRelationalAlgebraFrozenSet,
                                    RelationalAlgebraFrozenSet,
-                                   WrappedNamedRelationalAlgebraFrozenSet,
+                                   WrappedNamedRelationalAlgebraFrozenSet, WrappedRelationalAlgebraFrozenSet,
                                    WrappedRelationalAlgebraSet)
 
 R1 = WrappedRelationalAlgebraSet([
@@ -130,6 +131,15 @@ def test_create_from_array():
 
     assert len(r1) == 2
     assert {(1, 0), (0, 1)} == r1.unwrap()
+
+
+def test_create_from_dataframe():
+    df = pd.DataFrame([[0, 's', .1], [1, 'p', .3]])
+    r1 = WrappedRelationalAlgebraFrozenSet(df)
+
+    assert len(r1) == 2
+    assert r1.row_type == Tuple[int, str, float]
+    assert set(df.itertuples(index=False)) == r1.unwrap()
 
 
 def test_type_inference():

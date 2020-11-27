@@ -5,7 +5,7 @@ NeuroLang Example based Implementing a NeuroSynth Query
 
 """
 
-
+# %%
 from typing import Iterable
 
 import nibabel as nib
@@ -90,18 +90,17 @@ def agg_create_region_overlay(
 ###############################################################################
 # Loading the database
 
-activations = nl.add_tuple_set(ns_database.values, name="activations")
-terms = nl.add_tuple_set(ns_terms.values, name="terms")
-docs = nl.add_uniform_probabilistic_choice_over_set(
-    ns_docs.values, name="docs"
-)
+activations = nl.add_tuple_set(ns_database, name="activations")
+terms = nl.add_tuple_set(ns_terms, name="terms")
+docs = nl.add_uniform_probabilistic_choice_over_set(ns_docs, name="docs")
 
 
+# %%
 ###############################################################################
 # Probabilistic program and querying
 
 with nl.scope as e:
-    e.vox_activation[e.i, e.j, e.k, e.d] = e.activations[
+    e.vox_activation[e.i, e.j, e.k, e.d] = e.activations(
         e.d,
         ...,
         ...,
@@ -118,16 +117,24 @@ with nl.scope as e:
         e.i,
         e.j,
         e.k,
-    ]
+    ) & e.docs(e.d)
+
+    e.term_present[e.t, e.d] = e.terms(e.d, e.t) & e.docs(e.d)
+
+    e.marg_term[e.t, e.PROB(e.t)] = e.term_present[e.t, e.d]
     e.probmap[e.i, e.j, e.k, e.PROB[e.i, e.j, e.k]] = (
-        e.vox_activation[e.i, e.j, e.k, e.d]
-    ) // e.terms[e.d, "auditory"]
+        e.vox_activation(e.i, e.j, e.k, e.d)
+    ) // e.term_present("auditory", e.d)
+
     e.img[e.agg_create_region_overlay[e.i, e.j, e.k, e.p]] = e.probmap[
         e.i, e.j, e.k, e.p
     ]
+
+    marg_term = nl.query((e.t, e.p), e.marg_term(e.t, e.p))
     img_query = nl.query((e.x,), e.img(e.x))
 
 
+# %%
 ###############################################################################
 # Plotting results
 # --------------------------------------------
