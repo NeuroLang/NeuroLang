@@ -92,9 +92,9 @@ master_doc = "index"
 # --- Sphinx Gallery ---
 sphinx_gallery_conf = {
     # path to your examples scripts
-    "examples_dirs": "../examples",
+    "examples_dirs": ["../examples", "../experiments"],
     # path where to save gallery generated examples
-    "gallery_dirs": "auto_examples",
+    "gallery_dirs": ["auto_examples", "experiments"],
     # To auto-generate example sections in the API
     "doc_module": ("neurolang",),
     # Auto-generated mini-galleries go here
