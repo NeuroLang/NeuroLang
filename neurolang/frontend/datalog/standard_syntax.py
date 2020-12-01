@@ -5,7 +5,7 @@ import tatsu
 from ...datalog import Conjunction, Fact, Implication, Negation, Union
 from ...datalog.constraints_representation import RightImplication
 from ...expressions import Constant, Expression, FunctionApplication, Symbol
-from ...probabilistic.expressions import ProbabilisticPredicate
+from ...probabilistic.expressions import Condition, ProbabilisticPredicate
 
 
 GRAMMAR = u"""
@@ -22,19 +22,24 @@ GRAMMAR = u"""
     probabilistic_expression = (float | int_ext_identifier ) '::' expression ;
     expression = rule | constraint | fact;
     fact = constant_predicate ;
-    rule = head implication body ;
+    rule = head implication (condition | body) ;
     constraint = body right_implication head ;
     head = head_predicate ;
-    body = ( conjunction ).{ predicate } ;
+    body = conjunction ;
+    condition = composite_predicate '//' composite_predicate ;
+    conjunction = ( conjunction_symbol ).{ predicate } ;
+    composite_predicate = '(' @:conjunction ')'
+                        | predicate ;
 
-    conjunction = ',' | '&' | '\N{LOGICAL AND}' ;
+    conjunction_symbol = ',' | '&' | '\N{LOGICAL AND}' ;
     implication = ':-' | '\N{LEFTWARDS ARROW}' ;
     right_implication = '-:' | '\N{RIGHTWARDS ARROW}' ;
     head_predicate = identifier'(' [ arguments ] ')' ;
     predicate = int_ext_identifier'(' [ arguments ] ')'
               | negated_predicate
               | comparison
-              | logical_constant ;
+              | logical_constant
+              | '(' @predicate ')';
 
     constant_predicate = identifier'(' ','.{ literal } ')' ;
 
@@ -158,6 +163,18 @@ class DatalogSemantics:
 
     def body(self, ast):
         return Conjunction(ast)
+
+    def condition(self, ast):
+
+        conditioned = ast[0]
+        if isinstance(conditioned, list):
+            conditioned = Conjunction(tuple(conditioned))
+
+        condition = ast[2]
+        if isinstance(condition, list):
+            condition = Conjunction(tuple(condition))
+
+        return Condition(conditioned, condition)
 
     def head_predicate(self, ast):
         if not isinstance(ast, Expression):
