@@ -436,7 +436,10 @@ class StringArithmeticWalker(ew.PatternWalker):
             verify_type=False,
         )
 
-    @ew.add_match(FunctionApplication(Constant(numpy.exp), (...,)))
+    @ew.add_match(
+        FunctionApplication(Constant, ...),
+        lambda fa: fa.functor.value == numpy.exp,
+    )
     def numpy_exponential(self, fa):
         return Constant[RelationalAlgebraStringExpression](
             "exp({})".format(self.walk(fa.args[0]).value),
@@ -444,7 +447,10 @@ class StringArithmeticWalker(ew.PatternWalker):
             verify_type=False,
         )
 
-    @ew.add_match(FunctionApplication(Constant(operator.neg), (...,)))
+    @ew.add_match(
+        FunctionApplication(Constant, ...),
+        lambda fa: fa.functor.value == operator.neg,
+    )
     def negative_value(self, fa):
         return Constant[RelationalAlgebraStringExpression](
             "-({})".format(self.walk(fa.args[0]).value),
