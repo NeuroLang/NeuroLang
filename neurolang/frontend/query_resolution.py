@@ -366,9 +366,7 @@ class QueryBuilderBase:
         ]
 
     def add_symbol(
-        self, value: Union[fe.Expression, ir.Constant, Any],
-        name: str = None,
-        type_: Type = Unknown,
+        self, value: Union[fe.Expression, ir.Constant, Any], name: str = None
     ) -> fe.Symbol:
         """
         Creates a symbol with given value and adds it to the
@@ -408,12 +406,8 @@ class QueryBuilderBase:
             value = value.expression
         elif isinstance(value, ir.Constant):
             pass
-        elif type_ is Unknown:
-            value = ir.Constant(value)
         else:
-            value = ir.Constant[type_](
-                value, auto_infer_type=False, verify_type=False
-            )
+            value = ir.Constant(value)
 
         symbol = ir.Symbol[value.type](name)
         self.symbol_table[symbol] = value

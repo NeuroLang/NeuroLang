@@ -1,7 +1,7 @@
 from operator import add, eq, mul, pow, sub, truediv
 
 from ....datalog import Conjunction, Fact, Implication, Negation, Union
-from ....probabilistic.expressions import ProbabilisticPredicate
+from ....probabilistic.expressions import Condition, ProbabilisticPredicate
 from ....expressions import Constant, Symbol, FunctionApplication
 from ..standard_syntax import ExternalSymbol, parser
 
@@ -159,7 +159,9 @@ def test_uri():
     from rdflib import RDFS
 
     label = Symbol(name=str(RDFS.label))
-    regional_part = Symbol(name='http://sig.biostr.washington.edu/fma3.0#regional_part_of')
+    regional_part = Symbol(
+        name='http://sig.biostr.washington.edu/fma3.0#regional_part_of'
+    )
     x = Symbol('x')
     y = Symbol('y')
 
@@ -195,3 +197,42 @@ def test_probabilistic_fact():
             Constant(True)
         ),
     ))
+
+
+def test_condition():
+    A = Symbol('A')
+    B = Symbol('B')
+    C = Symbol('C')
+    x = Symbol('x')
+    res = parser('C(x) :- A(x) // B(x)')
+
+    expected = Union((
+        Implication(
+            C(x),
+            Condition(A(x), B(x))
+        ),
+    ))
+
+    assert res == expected
+
+    res = parser('C(x) :- (A(x), B(x)) // B(x)')
+
+    expected = Union((
+        Implication(
+            C(x),
+            Condition(Conjunction((A(x), B(x))), B(x))
+        ),
+    ))
+
+    assert res == expected
+
+    res = parser('C(x) :- A(x) // (A(x), B(x))')
+
+    expected = Union((
+        Implication(
+            C(x),
+            Condition(A(x), Conjunction((A(x), B(x))))
+        ),
+    ))
+
+    assert res == expected
