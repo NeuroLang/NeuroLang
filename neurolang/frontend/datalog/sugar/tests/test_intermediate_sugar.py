@@ -4,19 +4,19 @@ from unittest.mock import Mock
 
 import pytest
 
-from ....datalog import Fact
-from ....datalog.expression_processing import extract_logic_atoms
-from ....exceptions import ForbiddenExpressionError
-from ....expression_walker import ExpressionWalker, IdentityWalker
-from ....expressions import Constant, Symbol
-from ....logic import Conjunction, Implication
-from ....probabilistic.expressions import (
+from .....datalog import Fact
+from .....datalog.expression_processing import extract_logic_atoms
+from .....exceptions import ForbiddenExpressionError
+from .....expression_walker import ExpressionWalker, IdentityWalker
+from .....expressions import Constant, Symbol
+from .....logic import Conjunction, Implication
+from .....probabilistic.expressions import (
     PROB,
     Condition,
     ProbabilisticPredicate,
     ProbabilisticQuery,
 )
-from .. import intermediate_sugar as sugar
+from ... import sugar
 
 
 class SymbolTableMixin:

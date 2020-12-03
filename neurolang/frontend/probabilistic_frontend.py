@@ -63,7 +63,7 @@ from ..relational_algebra import (
     RelationalAlgebraStringExpression,
 )
 from . import query_resolution_expressions as fe
-from .datalog.intermediate_sugar import (
+from .datalog.sugar import (
     TranslateProbabilisticQueryMixin,
     TranslateQueryBasedProbabilisticFactMixin,
 )

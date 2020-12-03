@@ -921,6 +921,7 @@ def test_cbma_two_term_conjunctive_query():
     assert_almost_equal(res, expected)
 
 
+@pytest.mark.xfail
 def test_query_based_spatial_prior():
     nl = NeurolangPDL()
     nl.add_tuple_set(
@@ -941,7 +942,7 @@ def test_query_based_spatial_prior():
     with nl.environment as e:
         (e.VoxelReported @ (1 / e.d))[e.i1, e.j1, e.k1, e.s] = (
             e.FocusReported(e.i2, e.j2, e.k2, e.s)
-            & e.Voxel[e.i1, e.j1, e.k2]
+            & e.Voxel(e.i1, e.j1, e.k2)
             & (e.d == e.EUCLIDEAN(e.i1, e.j1, e.k1, e.i2, e.j2, e.k2))
             & (e.d < "10mm")
         )
