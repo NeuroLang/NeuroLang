@@ -342,6 +342,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             return iter(self._container.itertuples(name=None, index=False))
 
     def __hash__(self):
+        if self._container is None:
+            return hash((tuple(), None))
         self._drop_duplicates_if_needed()
         v = self._container.values
         v.flags.writeable = False
