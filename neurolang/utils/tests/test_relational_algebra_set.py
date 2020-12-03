@@ -949,3 +949,10 @@ def test_unsupported_aggregation_function(ra_module):
     )
     with pytest.raises(ValueError, match="Unsupported aggregate_function"):
         relation.aggregate(["x"], None)
+
+
+def test_hash_none_container(ra_module):
+    # GH584: hash of RA set with None _container
+    relation = ra_module.RelationalAlgebraSet()
+    assert relation._container is None
+    assert hash(relation) == hash((tuple(), None))
