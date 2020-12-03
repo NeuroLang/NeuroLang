@@ -66,6 +66,7 @@ from . import query_resolution_expressions as fe
 from .datalog.sugar import (
     TranslateProbabilisticQueryMixin,
     TranslateQueryBasedProbabilisticFactMixin,
+    TranslateSpatialEuclideanBoundMixin,
 )
 from .datalog.syntax_preprocessing import ProbFol2DatalogMixin
 from .query_resolution_datalog import QueryBuilderDatalog
@@ -74,6 +75,7 @@ from .query_resolution_datalog import QueryBuilderDatalog
 class RegionFrontendCPLogicSolver(
     TranslateProbabilisticQueryMixin,
     TranslateToLogicWithAggregation,
+    TranslateSpatialEuclideanBoundMixin,
     TranslateQueryBasedProbabilisticFactMixin,
     QueryBasedProbFactToDetRule,
     ProbFol2DatalogMixin,

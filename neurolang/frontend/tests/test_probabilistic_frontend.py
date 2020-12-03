@@ -921,7 +921,6 @@ def test_cbma_two_term_conjunctive_query():
     assert_almost_equal(res, expected)
 
 
-@pytest.mark.xfail
 def test_query_based_spatial_prior():
     nl = NeurolangPDL()
     nl.add_tuple_set(
