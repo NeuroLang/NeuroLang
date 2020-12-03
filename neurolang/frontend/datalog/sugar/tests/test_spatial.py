@@ -12,8 +12,8 @@ def test_euclidean_spatial_bound_detection():
     P = Symbol("P")
     i1, j1, k1 = Symbol("i1"), Symbol("j1"), Symbol("k1")
     i2, j2, k2 = Symbol("i2"), Symbol("j2"), Symbol("k2")
-    FirstSafeRange = Symbol("FirstSafeRange")
-    SecondSafeRange = Symbol("SecondSafeRange")
+    FirstRange = Symbol("FirstRange")
+    SecondRange = Symbol("SecondRange")
     EUCLIDEAN = Symbol("EUCLIDEAN")
     d = Symbol("d")
     max_dist = Constant("10mm")
@@ -22,8 +22,8 @@ def test_euclidean_spatial_bound_detection():
         P(i2, j2, k2),
         Conjunction(
             (
-                FirstSafeRange(i1, j1, k1),
-                SecondSafeRange(i2, j2, k2),
+                FirstRange(i1, j1, k1),
+                SecondRange(i2, j2, k2),
                 EQ(d, EUCLIDEAN(i1, j1, k1, i2, j2, k2)),
                 LT(d, max_dist),
             )
