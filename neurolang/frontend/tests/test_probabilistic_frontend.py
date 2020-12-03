@@ -1,4 +1,5 @@
 import io
+import itertools
 from typing import AbstractSet, Tuple
 
 import numpy as np
@@ -6,8 +7,8 @@ import pandas as pd
 import pytest
 
 from ...exceptions import (
-    NegativeFormulaNotSafeRangeException,
     NegativeFormulaNotNamedRelationException,
+    NegativeFormulaNotSafeRangeException,
     UnsupportedProgramError,
     UnsupportedQueryError,
     UnsupportedSolverError,
@@ -918,3 +919,44 @@ def test_cbma_two_term_conjunctive_query():
         ]
     )
     assert_almost_equal(res, expected)
+
+
+def test_query_based_spatial_prior():
+    nl = NeurolangPDL()
+    nl.add_tuple_set(
+        [
+            (5, 5, 5, "s1"),
+            (7, 5, 5, "s1"),
+            (10, 10, 10, "s2"),
+            (10, 10, 11, "s2"),
+        ],
+        name="FocusReported",
+    )
+    nl.add_tuple_set(
+        list(itertools.product(range(15), range(15), range(15))), name="Voxel"
+    )
+    nl.add_uniform_probabilistic_choice_over_set(
+        [("s1",), ("s2",)], name="SelectedStudy"
+    )
+    with nl.environment as e:
+        (e.VoxelReported @ (1 / e.d))[e.i1, e.j1, e.k1, e.s] = (
+            e.FocusReported(e.i2, e.j2, e.k2, e.s)
+            & e.Voxel[e.i1, e.j1, e.k2]
+            & (e.d == e.EUCLIDEAN(e.i1, e.j1, e.k1, e.i2, e.j2, e.k2))
+            & (e.d < "10mm")
+        )
+        e.Activation[e.i, e.j, e.k, e.PROB[e.i, e.j, e.k]] = e.VoxelReported(
+            e.i, e.j, e.k, e.s
+        ) & e.SelectedStudy(e.s)
+        result = nl.query(
+            (e.i, e.j, e.k, e.p), e.Activation(e.i, e.j, e.k, e.p)
+        )
+    expected = RelationalAlgebraFrozenSet(
+        [
+            (5, 5, 5, "s1"),
+            (7, 5, 5, "s1"),
+            (10, 10, 10, "s1"),
+            (10, 10, 11, "s2"),
+        ]
+    )
+    assert_almost_equal(result, expected)
