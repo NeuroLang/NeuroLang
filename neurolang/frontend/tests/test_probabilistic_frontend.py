@@ -941,7 +941,7 @@ def test_query_based_spatial_prior():
     with nl.environment as e:
         (e.VoxelReported @ (1 / e.d))[e.i1, e.j1, e.k1, e.s] = (
             e.FocusReported(e.i2, e.j2, e.k2, e.s)
-            & e.Voxel(e.i1, e.j1, e.k2)
+            & e.Voxel(e.i1, e.j1, e.k1)
             & (e.d == e.EUCLIDEAN(e.i1, e.j1, e.k1, e.i2, e.j2, e.k2))
             & (e.d < "10mm")
         )

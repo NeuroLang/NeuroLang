@@ -2,12 +2,13 @@ import operator
 import typing
 
 import numpy
+import pandas
 import scipy.spatial
 
 from ....datalog.expression_processing import UnifyVariableEqualitiesMixin
 from ....exceptions import UnsupportedProgramError
 from ....expression_pattern_matching import add_match
-from ....expression_walker import PatternWalker
+from ....expression_walker import ExpressionBasicEvaluator, PatternWalker
 from ....expressions import Constant, Expression, FunctionApplication, Symbol
 from ....logic import Conjunction, Implication
 from ....relational_algebra import RelationalAlgebraSet
@@ -15,7 +16,7 @@ from ....relational_algebra import RelationalAlgebraSet
 EUCLIDEAN = Symbol("EUCLIDEAN")
 
 
-class DetectEuclideanSpatialBound(UnifyVariableEqualitiesMixin):
+class DetectEuclideanDistanceBoundMatrix(PatternWalker):
     """
     Detect a Euclidean spatial bound in the antecedent of a rule.
 
@@ -33,8 +34,18 @@ class DetectEuclideanSpatialBound(UnifyVariableEqualitiesMixin):
 
     """
 
-    @add_match(Implication)
+    def __init__(self):
+        self._rule_normaliser = self._RuleNormaliser()
+
+    class _RuleNormaliser(
+        UnifyVariableEqualitiesMixin,
+        ExpressionBasicEvaluator,
+    ):
+        pass
+
+    @add_match(Implication(FunctionApplication, Conjunction))
     def implication(self, implication):
+        implication = self._rule_normaliser.walk(implication)
         formulas = implication.antecedent.formulas
         var_to_euclidean_equality_formula = self.get_var_to_euclidean_equality(
             formulas
@@ -106,28 +117,33 @@ class DetectEuclideanSpatialBound(UnifyVariableEqualitiesMixin):
         return matching_formulas[0]
 
 
-class TranslateSpatialEuclideanBoundMixin(PatternWalker):
+class TranslateEuclideanDistanceBoundMatrixMixin(PatternWalker):
     @add_match(
         Implication(FunctionApplication, Conjunction),
-        DetectEuclideanSpatialBound().walk,
+        DetectEuclideanDistanceBoundMatrix().walk,
     )
     def euclidean_spatial_bound(self, implication):
         formulas = implication.antecedent.formulas
         var_to_euclidean_equality_formula = (
-            DetectEuclideanSpatialBound.get_var_to_euclidean_equality(formulas)
+            DetectEuclideanDistanceBoundMatrix.get_var_to_euclidean_equality(
+                formulas
+            )
         )
         distance_upper_bound_formula = (
-            DetectEuclideanSpatialBound.get_distance_upper_bound(formulas)
+            DetectEuclideanDistanceBoundMatrix.get_distance_upper_bound(
+                formulas
+            )
         )
-        d, (i1, j1, k1, i2, j2, k2) = var_to_euclidean_equality_formula.args
+        d = var_to_euclidean_equality_formula.args[0]
+        i1, j1, k1, i2, j2, k2 = var_to_euclidean_equality_formula.args[1].args
         upper_bound = distance_upper_bound_formula.args[1]
         first_range_pred = (
-            DetectEuclideanSpatialBound.get_range_pred_for_coord(
+            DetectEuclideanDistanceBoundMatrix.get_range_pred_for_coord(
                 formulas, (i1, j1, k1)
             )
         )
         second_range_pred = (
-            DetectEuclideanSpatialBound.get_range_pred_for_coord(
+            DetectEuclideanDistanceBoundMatrix.get_range_pred_for_coord(
                 formulas, (i2, j2, k2)
             )
         )
@@ -145,23 +161,18 @@ class TranslateSpatialEuclideanBoundMixin(PatternWalker):
         )
         new_pred_symb = Symbol.fresh()
         spatial_bound_solution_pred = new_pred_symb(i1, j1, k1, i2, j2, k2, d)
-        self.symbol_table[new_pred_symb] = Constant[typing.AbstractSet](
-            RelationalAlgebraSet(spatial_bound_solution)
+        self.add_extensional_predicate_from_tuples(
+            new_pred_symb, spatial_bound_solution
         )
         removed_formulas = {
             var_to_euclidean_equality_formula,
             distance_upper_bound_formula,
-            first_range_pred,
-            second_range_pred,
+            # first_range_pred,
+            # second_range_pred,
         }
-        new_formulas = (
-            tuple(
-                formula
-                for formula in formulas
-                if formula not in removed_formulas
-            )
-            + spatial_bound_solution_pred
-        )
+        new_formulas = tuple(
+            formula for formula in formulas if formula not in removed_formulas
+        ) + (spatial_bound_solution_pred,)
         new_implication = Implication(
             implication.consequent, Conjunction(new_formulas)
         )
@@ -184,13 +195,15 @@ class TranslateSpatialEuclideanBoundMixin(PatternWalker):
         second_ckd_tree = scipy.spatial.cKDTree(second_coord_array)
         dist_mat = first_ckd_tree.sparse_distance_matrix(
             second_ckd_tree,
+            max_dist,
             output_type="ndarray",
             p=2,
         )
+        dist_mat = pandas.DataFrame(dist_mat)
         solution_array = numpy.c_[
-            first_coord_array[dist_mat[:, 0]],
-            second_coord_array[dist_mat[:, 1]],
-            numpy.atleast_2d(dist_mat[:, 2]),
+            first_coord_array[dist_mat.iloc[:, 0].values],
+            second_coord_array[dist_mat.iloc[:, 1].values],
+            numpy.atleast_2d(dist_mat.iloc[:, 2].values).T,
         ]
         return solution_array
 
@@ -201,7 +214,10 @@ class TranslateSpatialEuclideanBoundMixin(PatternWalker):
     ) -> RelationalAlgebraSet:
         pred_symb = range_pred.functor
         ra_set = self.symbol_table[pred_symb].value
+        args_as_str = list(
+            arg.name for arg in range_pred.args if isinstance(arg, Symbol)
+        )
         proj_cols = (
-            ra_set.columns.index(coord_arg.name) for coord_arg in coord_args
+            args_as_str.index(coord_arg.name) for coord_arg in coord_args
         )
         return ra_set.projection(*proj_cols)

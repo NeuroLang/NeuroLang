@@ -3,7 +3,7 @@ import operator
 from .....datalog.expression_processing import EQ
 from .....expressions import Constant, Symbol
 from .....logic import Conjunction, Implication
-from ..spatial import DetectEuclideanSpatialBound
+from ..spatial import DetectEuclideanDistanceBoundMatrix
 
 
 def test_euclidean_spatial_bound_detection():
@@ -17,7 +17,7 @@ def test_euclidean_spatial_bound_detection():
     EUCLIDEAN = Symbol("EUCLIDEAN")
     d = Symbol("d")
     max_dist = Constant("10mm")
-    detector = DetectEuclideanSpatialBound()
+    detector = DetectEuclideanDistanceBoundMatrix()
     expression = Implication(
         P(i2, j2, k2),
         Conjunction(
