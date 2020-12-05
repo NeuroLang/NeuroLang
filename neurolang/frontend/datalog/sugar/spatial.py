@@ -8,7 +8,7 @@ import scipy.spatial
 from ....datalog.expression_processing import UnifyVariableEqualitiesMixin
 from ....exceptions import UnsupportedProgramError
 from ....expression_pattern_matching import add_match
-from ....expression_walker import ExpressionBasicEvaluator, PatternWalker
+from ....expression_walker import IdentityWalker, PatternWalker
 from ....expressions import Constant, Expression, FunctionApplication, Symbol
 from ....logic import Conjunction, Implication
 from ....relational_algebra import RelationalAlgebraSet
@@ -39,7 +39,7 @@ class DetectEuclideanDistanceBoundMatrix(PatternWalker):
 
     class _RuleNormaliser(
         UnifyVariableEqualitiesMixin,
-        ExpressionBasicEvaluator,
+        IdentityWalker,
     ):
         pass
 
@@ -167,8 +167,6 @@ class TranslateEuclideanDistanceBoundMatrixMixin(PatternWalker):
         removed_formulas = {
             var_to_euclidean_equality_formula,
             distance_upper_bound_formula,
-            # first_range_pred,
-            # second_range_pred,
         }
         new_formulas = tuple(
             formula for formula in formulas if formula not in removed_formulas

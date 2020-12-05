@@ -460,6 +460,7 @@ class TranslateQueryBasedProbabilisticFactMixin(ew.PatternWalker):
         )
     )
     def query_based_probfact_wannabe(self, impl):
+        __import__('pdb').set_trace()
         pred_symb, probability = impl.consequent.functor.args
         body = pred_symb(*impl.consequent.args)
         new_consequent = ProbabilisticPredicate(probability, body)

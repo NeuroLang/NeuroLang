@@ -938,12 +938,19 @@ def test_query_based_spatial_prior():
     nl.add_uniform_probabilistic_choice_over_set(
         [("s1",), ("s2",)], name="SelectedStudy"
     )
+
+    @nl.add_symbol
+    def dist_to_prob(dist: float) -> float:
+        if dist == 0.0:
+            return 1.0
+        return 1 / dist
+
     with nl.environment as e:
-        (e.VoxelReported @ (1 / e.d))[e.i1, e.j1, e.k1, e.s] = (
+        (e.VoxelReported @ e.dist_to_prob(e.d))[e.i1, e.j1, e.k1, e.s] = (
             e.FocusReported(e.i2, e.j2, e.k2, e.s)
             & e.Voxel(e.i1, e.j1, e.k1)
             & (e.d == e.EUCLIDEAN(e.i1, e.j1, e.k1, e.i2, e.j2, e.k2))
-            & (e.d < "10mm")
+            & (e.d < "1mm")
         )
         e.Activation[e.i, e.j, e.k, e.PROB[e.i, e.j, e.k]] = e.VoxelReported(
             e.i, e.j, e.k, e.s

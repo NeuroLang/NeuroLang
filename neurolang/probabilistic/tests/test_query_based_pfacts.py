@@ -1,3 +1,5 @@
+import typing
+
 import pytest
 
 from ...exceptions import ForbiddenDisjunctionError
@@ -69,3 +71,36 @@ def test_prevent_combination_of_query_based_and_set_based():
     cpl.add_probabilistic_facts_from_tuples(P, [(0.2, "a")])
     with pytest.raises(ForbiddenDisjunctionError):
         cpl.walk(pfact)
+
+
+def test_callable_symbol_probability():
+    fun = Symbol[typing.Callable[[float], float]]("fun")
+    cpl = QueryBasedProbFactToDetRuleProgramTest()
+    cpl.symbol_table[fun] = Constant(lambda x: x ** 2)
+    pfact = Implication(
+        ProbabilisticPredicate(fun(x), P(y)),
+        Q(x, y),
+    )
+    cpl.walk(Union((pfact,)))
+    rules = list()
+    for union in cpl.intensional_database().values():
+        rules += union.formulas
+    det_rule = next(
+        formula
+        for formula in rules
+        if (
+            isinstance(formula.consequent, FunctionApplication)
+            # check _f1_
+            and formula.consequent.functor.is_fresh
+            # check _f2_ first arg in consequent
+            and formula.consequent.args[0].is_fresh
+            and formula.consequent.args[1:] == (y,)
+        )
+    )
+    assert any(
+        isinstance(formula.consequent, ProbabilisticPredicate)
+        and formula.consequent.probability == det_rule.consequent.args[0]
+        and formula.antecedent == det_rule.consequent
+        and formula.consequent.body == P(y)
+        for formula in rules
+    )
