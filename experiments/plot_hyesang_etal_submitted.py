@@ -10,6 +10,7 @@ Reverse Inference From Hippocampal-IPS Circuits to Cognition
 
 import re
 import warnings
+from typing import Iterable
 
 import nibabel as nib
 import numpy as np
@@ -18,6 +19,7 @@ import seaborn as sns
 from matplotlib import pyplot as plt
 from nilearn import datasets, image
 from rdflib import RDFS
+from sklearn.model_selection import KFold
 
 from neurolang import frontend as fe
 
@@ -113,49 +115,6 @@ hyesang_etal_files = datasets.utils._fetch_files(
     ]
 )
 
-
-# %%
-###############################################################################
-# Probabilistic Logic Programming in NeuroLang
-# --------------------------------------------
-
-nl = fe.NeurolangPDL()
-
-
-###############################################################################
-# Addig builtin functions
-
-
-@nl.add_symbol
-def word_lower(name: str) -> str:
-    return name.lower()
-
-
-@nl.add_symbol
-def str_match(string: str, pattern: str) -> bool:
-    return re.match(pattern, string) is not None
-
-
-# %%
-###############################################################################
-# Load Data into the NeuroLang engine
-
-# Load the CogAt Ontology
-
-nl.load_ontology(cogAt)
-part_of = nl.new_symbol(name='http://www.obofoundry.org/ro/ro.owl#part_of')
-subclass_of = nl.new_symbol(name=str(RDFS.subClassOf))
-label = nl.new_symbol(name=str(RDFS.label))
-hasTopConcept = nl.new_symbol(name='http://www.w3.org/2004/02/skos/core#hasTopConcept')
-
-
-# Load the NeuroSynth database
-activations = nl.add_tuple_set(ns_database, name='activations')
-terms = nl.add_tuple_set(ns_terms, name='terms')
-docs = nl.add_uniform_probabilistic_choice_over_set(ns_docs, name='docs')
-
-
-# Load our ROIs
 paths = hyesang_etal_files
 region_names = {
     'combined_BN_L_Hipp_roi': 'Left Hippocampus',
@@ -186,13 +145,75 @@ for path in paths:
 
 df_imgs = pd.concat(df_imgs)
 
+
+# %%
+# Probabilistic Logic Programming in NeuroLang
+# --------------------------------------------
+
+nl = fe.NeurolangPDL()
+
+
+##############################################################################
+# Adding builtin functions
+# ~~~~~~~~~~~~~~~~~~~~~~~~
+
+@nl.add_symbol
+def word_lower(name: str) -> str:
+    return name.lower()
+
+
+@nl.add_symbol
+def str_match(string: str, pattern: str) -> bool:
+    return re.match(pattern, string) is not None
+
+
+@nl.add_symbol
+def mean(iterable: Iterable) -> float:
+    return np.mean(iterable)
+
+
+@nl.add_symbol
+def std(iterable: Iterable) -> float:
+    return np.std(iterable)
+
+##############################################################################
+# Load Data into the NeuroLang engine
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+# Load the CogAt Ontology
+
+nl.load_ontology(cogAt)
+part_of = nl.new_symbol(name='http://www.obofoundry.org/ro/ro.owl#part_of')
+subclass_of = nl.new_symbol(name=str(RDFS.subClassOf))
+label = nl.new_symbol(name=str(RDFS.label))
+hasTopConcept = nl.new_symbol(name='http://www.w3.org/2004/02/skos/core#hasTopConcept')
+
+
+# Load the NeuroSynth database
+activations = nl.add_tuple_set(ns_database, name='activations')
+terms = nl.add_tuple_set(ns_terms, name='terms')
+
+doc_indices = ns_docs.index.values
+docs = nl.add_uniform_probabilistic_choice_over_set(ns_docs, name='docs')
+
+# Generate 20 folds to compute confidence intervals for
+# meta-analytic probability estimations
+kfold = KFold(n_splits=20, shuffle=True, random_state=42)
+
+ns_doc_folds = pd.concat(
+    ns_docs.iloc[train].assign(fold=[i] * len(train))
+    for i, (train, _) in enumerate(kfold.split(ns_docs))
+)
+doc_folds = nl.add_tuple_set(ns_doc_folds, name='doc_folds')
+
 vinod_image = nl.add_tuple_set(
     df_imgs[['name', 'i', 'j', 'k']],
     name='vinod_image'
 )
 
-
-# %%
+##############################################################################
+# Code and execute the probabilistic query in NeuroLang
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 with nl.scope as e:
 
@@ -214,36 +235,69 @@ with nl.scope as e:
         ]
     )
 
-    e.term_prob[e.t, e.name1, e.name2, e.PROB[e.t, e.name1, e.name2]] = (
-        (e.filtered_terms[e.t] & e.terms[e.d, e.t] & e.docs[e.d])
-        // (
-            e.docs[e.d] &
+    e.term_prob[
+        e.t, e.name1, e.name2, e.fold,
+        e.PROB[e.t, e.name1, e.name2, e.fold]
+    ] = (
+        (
+            e.docs[e.d] & e.doc_folds[e.d, e.fold] &
+            e.filtered_terms[e.t] & e.terms[e.d, e.t]
+        ) // (
+            e.docs[e.d] & e.doc_folds[e.d, e.fold] &
             e.filtered_regions[e.d, e.name1, e.i1, e.j1, e.k1] &
             e.filtered_regions[e.d, e.name2, e.i2, e.j2, e.k2] &
             (e.name1 != e.name2)
         )
     )
 
-    e.result[e.term, e.name1, e.name2, e.PROB] = (
-        e.term_prob[e.term, e.name1, e.name2, e.PROB] &
+    e.result_mean[e.term, e.name1, e.name2, e.mean(e.PROB)] = (
+        e.term_prob[e.term, e.name1, e.name2, e.fold, e.PROB] &
         e.str_match(e.name1, '.*Hipp.*') &
         e.str_match(e.name2, '.*IPS.*')
     )
 
-    res = nl.solve_all()['result'].as_pandas_dataframe()
+    e.result_std[e.term, e.name1, e.name2, e.std(e.PROB)] = (
+        e.term_prob[e.term, e.name1, e.name2, e.fold, e.PROB] &
+        e.str_match(e.name1, '.*Hipp.*') &
+        e.str_match(e.name2, '.*IPS.*')
+    )
+
+    e.result_summary_stats[
+        e.term, e.name1, e.name2, e.prob_mean, e.prob_std
+    ] = (
+        e.result_mean[e.term, e.name1, e.name2, e.prob_mean] &
+        e.result_std[e.term, e.name1, e.name2, e.prob_std]
+    )
+
+    res = nl.solve_all()
+    result_summary_stats = res['result_summary_stats'].as_pandas_dataframe()
+
+
+##############################################################################
+# Plotting the results
+# --------------------
+
+# %%
+# Plot resulting probability term rank across all conditions
+
+result_order = result_summary_stats['prob_mean'].argsort()
+mean_prob = result_summary_stats.iloc[result_order]['prob_mean']
+std_prob = result_summary_stats.iloc[result_order]['prob_std']
+plt.plot(mean_prob.values)
+plt.fill_between(
+    np.arange(len(mean_prob)),
+    mean_prob.values - 3 * std_prob.values,
+    mean_prob.values + 3 * std_prob.values,
+    alpha=.4
+)
+plt.xlabel('Term Rank')
+plt.ylabel('P(Term | Hippocampal Circuit is Reported)')
+plt.axhline(np.percentile(mean_prob.values, 95), c='r')
 
 
 # %%
-thr = np.percentile(res['PROB'], 95)
-selected_terms = res[res.PROB > thr].term.unique()
-thr_res = res.query('term in @selected_terms')
-res_cum = res.sort_values('PROB')
-res_cum['PROB_cum'] = res_cum['PROB'].cumsum()
-plt.plot(res_cum['PROB_cum'].values / res_cum['PROB_cum'].values.max())
-plt.axhline(.95, c='r')
-
-# %%
-
+# Plot probability estimations for the top 5% most
+# probable of term | hippocampal-IPS circuit combinations
 
 def draw_heatmap(*args, **kwargs):
     data = kwargs.pop('data')
@@ -262,13 +316,106 @@ def draw_heatmap(*args, **kwargs):
     return sns.heatmap(d, **kwargs)
 
 
-vmax = thr_res.PROB.max()
-fg = sns.FacetGrid(thr_res, col='name1', height=4, sharex=True, sharey=True)
+thr = np.percentile(result_summary_stats['prob_mean'], 95)
+sel_terms = (
+    result_summary_stats
+    .query('prob_mean >= @thr')
+    .reset_index()
+    .term
+    .unique()
+)
+results_summary_stats_thr = (
+    result_summary_stats
+    .query('term in @sel_terms')
+    .reset_index()
+    .sort_values(['name1', 'name2', 'term'])
+)
+fg = sns.FacetGrid(
+    results_summary_stats_thr,
+    col='name1',
+    height=4, sharex=True, sharey=True
+)
 fg.map_dataframe(
-    draw_heatmap, 'name2', 'term', 'PROB',
-    threshold=thr, vmin=thr, vmax=vmax, cmap='viridis'
+    draw_heatmap, 'name2', 'term', 'prob_mean',
+    threshold=thr,
+    vmin=thr,
+    vmax=results_summary_stats_thr.prob_mean.max(),
+    cmap='viridis',
+    annot=True
 )
 fg.set_titles("{col_name}")
 for ax in fg.axes.flatten():
     ax.set_xlabel('')
     ax.set_ylabel('')
+
+# %%
+# Plot dispersion of probability estimations for the top 5% most
+# probable of term | hippocampal-IPS circuit combinations
+
+fg = sns.FacetGrid(
+    results_summary_stats_thr,
+    col='name1',
+    height=4, sharex=True, sharey=True
+)
+fg.map_dataframe(
+    draw_heatmap, 'name2', 'term', 'prob_std',
+    vmax=results_summary_stats_thr.prob_std.max(),
+    cmap='plasma', annot=True
+)
+fg.set_titles("{col_name}")
+for ax in fg.axes.flatten():
+    ax.set_xlabel('')
+    ax.set_ylabel('')
+
+
+# %%
+if False:
+    # %%
+    import holoviews as hv
+    from holoviews import dim, opts
+
+    hv.extension('matplotlib')
+    hv.output(fig='png', size=200)
+
+    # %%
+    res['circuit'] = res.apply(lambda x: x['name1'] + ' - ' + x['name2'], axis=1)
+
+    # %%
+    nodes = pd.DataFrame(
+        np.r_[res['term'].unique(), res['circuit'].unique()],
+        columns=['name']
+    )
+    nodes.loc[:res['term'].nunique(), 'group'] = 1
+    nodes.loc[res['term'].nunique():, 'group'] = 2
+    nodes['group'] = nodes.group.astype(int)
+    nodes = nodes.reset_index()
+
+    # %%
+
+    links = (
+        res[['circuit', 'term', 'PROB']].rename(
+            columns={
+                'circuit': 'source',
+                'term': 'target',
+                'PROB': 'value'
+            }
+        )
+    )
+    links.loc[links.value < thr, 'value'] = 0
+    links['source'] = links.merge(nodes, left_on='source', right_on='name', how='left')['index'].values
+    links['target'] = links.merge(nodes, left_on='target', right_on='name', how='left')['index'].values
+    print(links.head())
+
+    # %%
+    (
+        hv.Chord((links, hv.Dataset(nodes, 'index')))
+        #.select(value=(1, None))
+        .opts(
+            opts.Chord(
+                cmap='Category20', 
+                #edge_color=dim('source').astype(str),
+                labels='name',
+                node_color=dim('index').astype(str)
+            )
+        )
+    )
