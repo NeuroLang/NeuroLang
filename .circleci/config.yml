@@ -164,7 +164,9 @@ jobs:
             make api
             make html
           no_output_timeout: 7h
-
+      - run:
+          command: cat /sys/fs/cgroup/memory/memory.max_usage_in_bytes
+          when: always
       - save_cache:
           paths:
             - ./venv
