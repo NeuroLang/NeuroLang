@@ -1,6 +1,8 @@
 import operator
 from typing import AbstractSet, Tuple
 
+import numpy
+
 from . import expression_walker as ew
 from . import type_system
 from .exceptions import NeuroLangException, ProjectionOverMissingColumnsError
@@ -430,6 +432,28 @@ class StringArithmeticWalker(ew.PatternWalker):
                     self.walk(fa.args[1]).value,
                 ),
             ),
+            auto_infer_type=False,
+            verify_type=False,
+        )
+
+    @ew.add_match(
+        FunctionApplication(Constant, ...),
+        lambda fa: fa.functor.value == numpy.exp,
+    )
+    def numpy_exponential(self, fa):
+        return Constant[RelationalAlgebraStringExpression](
+            "exp({})".format(self.walk(fa.args[0]).value),
+            auto_infer_type=False,
+            verify_type=False,
+        )
+
+    @ew.add_match(
+        FunctionApplication(Constant, ...),
+        lambda fa: fa.functor.value == operator.neg,
+    )
+    def negative_value(self, fa):
+        return Constant[RelationalAlgebraStringExpression](
+            "-({})".format(self.walk(fa.args[0]).value),
             auto_infer_type=False,
             verify_type=False,
         )

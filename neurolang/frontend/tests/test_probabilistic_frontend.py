@@ -941,7 +941,7 @@ def test_query_based_spatial_prior():
     )
     exp = nl.add_symbol(np.exp, name="exp", type_=Callable[[float], float])
     with nl.environment as e:
-        (e.VoxelReported @ (exp(-(e.d / 5.0))))[e.i1, e.j1, e.k1, e.s] = (
+        (e.VoxelReported @ exp(-e.d / 5.0))[e.i1, e.j1, e.k1, e.s] = (
             e.FocusReported(e.i2, e.j2, e.k2, e.s)
             & e.Voxel(e.i1, e.j1, e.k1)
             & (e.d == e.EUCLIDEAN(e.i1, e.j1, e.k1, e.i2, e.j2, e.k2))
@@ -962,3 +962,22 @@ def test_query_based_spatial_prior():
         ]
     )
     assert_almost_equal(result, expected)
+
+
+def test_simple_sigmoid():
+    nl = NeurolangPDL()
+    unnormalised = nl.add_tuple_set(
+        [
+            ("a", 1),
+            ("b", 2),
+            ("c", 7),
+        ],
+        name="unnormalised",
+    )
+    exp = nl.add_symbol(np.exp, name="exp", type_=Callable[[float], float])
+    with nl.environment as e:
+        (e.prob @ (1 / (1 + exp(-e.x))))[e.l] = unnormalised[e.l, e.x]
+        e.Query[e.l, e.PROB[e.l]] = e.prob[e.l]
+        res = nl.query((e.l, e.p), e.Query[e.l, e.p])
+    expected = {(l, (1 / (1 + np.exp(-x)))) for l, x in unnormalised.value}
+    assert_almost_equal(res, expected)

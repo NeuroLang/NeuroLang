@@ -71,6 +71,7 @@ class QueryBasedProbFactToDetRule(PatternWalker):
             prob_rule,
         ) = self._query_based_probabilistic_fact_to_det_and_prob_rules(impl)
         prob_rule.__already_walked__ = True
+        __import__('pdb').set_trace()
         return self.walk(Union((det_rule, prob_rule)))
 
     @staticmethod
