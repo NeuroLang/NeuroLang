@@ -5,7 +5,10 @@ import numpy
 import pandas
 import scipy.spatial
 
-from ....datalog.expression_processing import UnifyVariableEqualitiesMixin
+from ....datalog.expression_processing import (
+    UnifyVariableEqualitiesMixin,
+    extract_logic_atoms,
+)
 from ....exceptions import UnsupportedProgramError
 from ....expression_pattern_matching import add_match
 from ....expression_walker import IdentityWalker, PatternWalker
@@ -46,7 +49,7 @@ class DetectEuclideanDistanceBoundMatrix(PatternWalker):
     @add_match(Implication(FunctionApplication, Conjunction))
     def implication(self, implication):
         implication = self._rule_normaliser.walk(implication)
-        formulas = implication.antecedent.formulas
+        formulas = extract_logic_atoms(implication.antecedent)
         var_to_euclidean_equality_formula = self.get_var_to_euclidean_equality(
             formulas
         )

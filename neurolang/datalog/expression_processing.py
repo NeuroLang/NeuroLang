@@ -943,7 +943,7 @@ class EqualitySymbolLeftHandSideNormaliseMixin(PatternWalker):
         Implication(FunctionApplication, Conjunction),
         lambda implication: any(
             is_to_be_sorted_equality(conjunct)
-            for conjunct in implication.antecedent.formulas
+            for conjunct in extract_logic_atoms(implication.antecedent)
         ),
     )
     def sort_antecedent_equalities(self, implication):
