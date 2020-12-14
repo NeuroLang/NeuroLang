@@ -1,6 +1,6 @@
 import io
 import itertools
-from typing import AbstractSet, Tuple
+from typing import AbstractSet, Callable, Tuple
 
 import numpy as np
 import pandas as pd
@@ -927,6 +927,7 @@ def test_query_based_spatial_prior():
         [
             (5, 5, 5, "s1"),
             (7, 5, 5, "s1"),
+            (5, 5, 5, "s2"),
             (10, 10, 10, "s2"),
             (10, 10, 11, "s2"),
         ],
@@ -938,15 +939,9 @@ def test_query_based_spatial_prior():
     nl.add_uniform_probabilistic_choice_over_set(
         [("s1",), ("s2",)], name="SelectedStudy"
     )
-
-    @nl.add_symbol
-    def dist_to_prob(dist: float) -> float:
-        if dist == 0.0:
-            return 1.0
-        return 1 / dist
-
+    exp = nl.add_symbol(np.exp, name="exp", type_=Callable[[float], float])
     with nl.environment as e:
-        (e.VoxelReported @ e.dist_to_prob(e.d))[e.i1, e.j1, e.k1, e.s] = (
+        (e.VoxelReported @ (exp(-(e.d / 5.0))))[e.i1, e.j1, e.k1, e.s] = (
             e.FocusReported(e.i2, e.j2, e.k2, e.s)
             & e.Voxel(e.i1, e.j1, e.k1)
             & (e.d == e.EUCLIDEAN(e.i1, e.j1, e.k1, e.i2, e.j2, e.k2))

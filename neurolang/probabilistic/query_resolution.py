@@ -39,7 +39,9 @@ class QueryBasedProbFactToDetRule(PatternWalker):
     @add_match(
         Union,
         lambda union: any(
-            is_query_based_probfact(formula) for formula in union.formulas
+            is_query_based_probfact(formula)
+            and not hasattr(formula, "__already_walked__")
+            for formula in union.formulas
         ),
     )
     def union_with_query_based_pfact(self, union):
@@ -58,15 +60,18 @@ class QueryBasedProbFactToDetRule(PatternWalker):
                 new_formulas.append(formula)
         return self.walk(Union(tuple(new_formulas)))
 
-    @add_match(Implication, is_query_based_probfact)
+    @add_match(
+        Implication,
+        lambda implication: is_query_based_probfact(implication)
+        and not hasattr(implication, "__already_walked__"),
+    )
     def query_based_probafact(self, impl):
-        return self.walk(
-            Union(
-                self._query_based_probabilistic_fact_to_det_and_prob_rules(
-                    impl
-                )
-            )
-        )
+        (
+            det_rule,
+            prob_rule,
+        ) = self._query_based_probabilistic_fact_to_det_and_prob_rules(impl)
+        prob_rule.__already_walked__ = True
+        return self.walk(Union((det_rule, prob_rule)))
 
     @staticmethod
     def _query_based_probabilistic_fact_to_det_and_prob_rules(impl):

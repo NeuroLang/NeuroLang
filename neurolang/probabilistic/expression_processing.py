@@ -51,10 +51,6 @@ def is_query_based_probfact(expression):
         isinstance(expression, Implication)
         and isinstance(expression.consequent, ProbabilisticPredicate)
         and expression.antecedent != TRUE
-        and not (
-            isinstance(expression.antecedent, FunctionApplication)
-            and expression.antecedent.functor.is_fresh
-        )
     )
 
 
