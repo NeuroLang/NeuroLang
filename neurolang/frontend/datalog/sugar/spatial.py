@@ -171,9 +171,9 @@ class TranslateEuclideanDistanceBoundMatrixMixin(PatternWalker):
             var_to_euclidean_equality_formula,
             distance_upper_bound_formula,
         }
-        new_formulas = tuple(
+        new_formulas = (spatial_bound_solution_pred,) + tuple(
             formula for formula in formulas if formula not in removed_formulas
-        ) + (spatial_bound_solution_pred,)
+        )
         new_implication = Implication(
             implication.consequent, Conjunction(new_formulas)
         )

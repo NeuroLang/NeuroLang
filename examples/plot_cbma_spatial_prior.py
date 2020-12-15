@@ -91,6 +91,7 @@ ns_docs = ns_features[["pmid"]].drop_duplicates()
 ns_terms = pd.melt(
     ns_features, var_name="term", id_vars="pmid", value_name="TfIdf"
 ).query("TfIdf > 1e-3")[["term", "pmid"]]
+ns_terms = ns_terms.loc[ns_terms["term"].isin(terms)]
 
 TermInStudy = nl.add_tuple_set(ns_terms, name="TermInStudy")
 FocusReported = nl.add_tuple_set(ns_database, name="FocusReported")
