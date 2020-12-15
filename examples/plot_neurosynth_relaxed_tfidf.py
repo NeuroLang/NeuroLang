@@ -97,8 +97,7 @@ ns_features = pd.read_csv(ns_features_fn, sep="\t")
 ns_docs = ns_features[["pmid"]].drop_duplicates()
 ns_tfidf = pd.melt(
     ns_features, var_name="term", id_vars="pmid", value_name="TfIdf"
-)
-ns_tfidf = ns_tfidf[["pmid", "term", "TfIdf"]]
+).query("TfIdf > 0")[["pmid", "term", "TfIdf"]]
 
 StudyTFIDF = nl.add_tuple_set(ns_tfidf, name="StudyTFIDF")
 VoxelReported = nl.add_tuple_set(ns_database, name="VoxelReported")
