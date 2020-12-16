@@ -1,4 +1,4 @@
-from operator import contains, eq, gt, mul, not_, neg
+from operator import contains, eq, gt, mul, not_
 from typing import AbstractSet, Tuple, Callable
 
 import numpy
@@ -24,7 +24,6 @@ from ...relational_algebra import (
 from ...utils import NamedRelationalAlgebraFrozenSet
 from ..expressions import Conjunction, Negation
 from ..translate_to_named_ra import TranslateToNamedRA
-from ...type_system import Unknown
 
 C_ = Constant
 S_ = Symbol
