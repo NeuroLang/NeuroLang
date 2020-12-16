@@ -113,7 +113,7 @@ nl.add_symbol(np.exp, name="exp", type_=Callable[[float], float])
 with nl.environment as e:
     (e.TermInStudy @ (1 / (1 + e.exp(-e.alpha * (e.tfidf - e.tau)) + 1)))[
         e.t, e.s
-    ] = (e.StudyTFIDF[e.s, e.t, e.tfidf] & (e.alpha == 3000) & (e.tau == 0.01))
+    ] = (e.StudyTFIDF[e.s, e.t, e.tfidf] & (e.alpha == 300) & (e.tau == 0.1))
     e.TermAssociation[e.t] = e.SelectedStudy[e.s] & e.TermInStudy[e.t, e.s]
     e.Activation[e.i, e.j, e.k] = (
         e.SelectedStudy[e.s] & e.VoxelReported[e.i, e.j, e.k, e.s]
