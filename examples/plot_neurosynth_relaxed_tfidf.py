@@ -111,7 +111,7 @@ SelectedStudy = nl.add_uniform_probabilistic_choice_over_set(
 nl.add_symbol(np.exp, name="exp", type_=Callable[[float], float])
 
 with nl.environment as e:
-    (e.TermInStudy @ (1 / (1 + e.exp(-e.alpha * (e.tfidf - e.tau)) + 1)))[
+    (e.TermInStudy @ (1 / (1 + e.exp(-e.alpha * (e.tfidf - e.tau)))))[
         e.t, e.s
     ] = (e.StudyTFIDF[e.s, e.t, e.tfidf] & (e.alpha == 300) & (e.tau == 0.1))
     e.TermAssociation[e.t] = e.SelectedStudy[e.s] & e.TermInStudy[e.t, e.s]
