@@ -411,9 +411,7 @@ class QueryBuilderBase:
         elif type_ is Unknown:
             value = ir.Constant(value)
         else:
-            value = ir.Constant[type_](
-                value, auto_infer_type=False, verify_type=False
-            )
+            value = ir.Constant[type_](value, auto_infer_type=False)
 
         symbol = ir.Symbol[value.type](name)
         self.symbol_table[symbol] = value

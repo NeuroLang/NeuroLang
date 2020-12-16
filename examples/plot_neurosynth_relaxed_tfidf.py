@@ -33,12 +33,6 @@ from neurolang.frontend import ExplicitVBR, ExplicitVBROverlay, NeurolangPDL
 mni_t1 = nibabel.load(nilearn.datasets.fetch_icbm152_2009()["t1"])
 mni_t1_4mm = nilearn.image.resample_img(mni_t1, np.eye(3) * 4)
 
-###############################################################################
-# Define a function that transforms TFIDF features to probabilities
-
-term_1 = "memory"
-term_2 = "auditory"
-terms = [term_1, term_2]
 
 ###############################################################################
 # Probabilistic Logic Programming in NeuroLang
@@ -58,6 +52,13 @@ def agg_create_region_overlay(
     return ExplicitVBROverlay(
         voxels, mni_t1_4mm.affine, p, image_dim=mni_t1_4mm.shape
     )
+
+
+###############################################################################
+# Register NumPy's exponential function so we can use it to efficiently map \
+# TFIDF features to probabilities
+
+nl.add_symbol(np.exp, name="exp", type_=Callable[[float], float])
 
 
 ###############################################################################
@@ -107,8 +108,16 @@ SelectedStudy = nl.add_uniform_probabilistic_choice_over_set(
 
 ###############################################################################
 # Probabilistic program and querying
+#
+# Compute a forward inference map for studies associated to both terms 'angular
+# gyrus' and 'semantic'. As per [1]_, "semantic processing is the most
+# consistent function that activates the angular gyrus".
+#
+# .. [1] Seghier, Mohamed L. 2013. ‘The Angular Gyrus: Multiple Functions and
+#    Multiple Subdivisions’. The Neuroscientist 19 (1): 43–61.
+#    https://doi.org/10.1177/1073858412440596.
 
-nl.add_symbol(np.exp, name="exp", type_=Callable[[float], float])
+
 
 with nl.environment as e:
     (e.TermInStudy @ (1 / (1 + e.exp(-e.alpha * (e.tfidf - e.tau)))))[
@@ -120,7 +129,7 @@ with nl.environment as e:
     )
     e.probmap[e.i, e.j, e.k, e.PROB[e.i, e.j, e.k]] = (
         e.Activation[e.i, e.j, e.k]
-    ) // (e.TermAssociation["auditory"] & e.TermAssociation["memory"])
+    ) // (e.TermAssociation["semantic"] & e.TermAssociation["angular gyrus"])
     e.img[e.agg_create_region_overlay[e.i, e.j, e.k, e.p]] = e.probmap[
         e.i, e.j, e.k, e.p
     ]
