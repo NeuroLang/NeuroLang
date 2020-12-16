@@ -433,7 +433,6 @@ class StringArithmeticWalker(ew.PatternWalker):
                 ),
             ),
             auto_infer_type=False,
-            verify_type=False,
         )
 
     @ew.add_match(
@@ -442,9 +441,10 @@ class StringArithmeticWalker(ew.PatternWalker):
     )
     def numpy_exponential(self, fa):
         return Constant[RelationalAlgebraStringExpression](
-            "exp({})".format(self.walk(fa.args[0]).value),
+            RelationalAlgebraStringExpression(
+                "exp({})".format(self.walk(fa.args[0]).value)
+            ),
             auto_infer_type=False,
-            verify_type=False,
         )
 
     @ew.add_match(
@@ -453,9 +453,10 @@ class StringArithmeticWalker(ew.PatternWalker):
     )
     def negative_value(self, fa):
         return Constant[RelationalAlgebraStringExpression](
-            "-({})".format(self.walk(fa.args[0]).value),
+            RelationalAlgebraStringExpression(
+                "-({})".format(self.walk(fa.args[0]).value)
+            ),
             auto_infer_type=False,
-            verify_type=False,
         )
 
     @ew.add_match(Constant[ColumnStr])
@@ -463,31 +464,27 @@ class StringArithmeticWalker(ew.PatternWalker):
         return Constant[RelationalAlgebraStringExpression](
             RelationalAlgebraStringExpression(cst_col_str.value),
             auto_infer_type=False,
-            verify_type=False,
         )
 
     @ew.add_match(Constant[int])
     def constant_int(self, cst):
         return Constant[RelationalAlgebraStringExpression](
-            str(cst.value),
+            RelationalAlgebraStringExpression(cst.value),
             auto_infer_type=False,
-            verify_type=False,
         )
 
     @ew.add_match(Constant[float])
     def constant_float(self, cst):
         return Constant[RelationalAlgebraStringExpression](
-            str(cst.value),
+            RelationalAlgebraStringExpression(cst.value),
             auto_infer_type=False,
-            verify_type=False,
         )
 
     @ew.add_match(Constant[str])
     def constant_str(self, cst):
         return Constant[RelationalAlgebraStringExpression](
-            f'"{cst.value}"',
+            RelationalAlgebraStringExpression(cst.value),
             auto_infer_type=False,
-            verify_type=False,
         )
 
 
