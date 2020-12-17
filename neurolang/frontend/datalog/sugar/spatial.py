@@ -182,9 +182,9 @@ class TranslateEuclideanDistanceBoundMatrixMixin(PatternWalker):
     @staticmethod
     def upper_bound_to_max_dist(upper_bound):
         val = upper_bound.value
-        if isinstance(val, str) and val.endswith("mm"):
-            return float(val[:-2])
-        raise ValueError("Unsupported")
+        if isinstance(val, (int, float)):
+            return float(val)
+        raise ValueError("Unsupported distance expression")
 
     @staticmethod
     def solve_spatial_bound(
@@ -201,12 +201,17 @@ class TranslateEuclideanDistanceBoundMatrixMixin(PatternWalker):
             p=2,
         )
         dist_mat = pandas.DataFrame(dist_mat)
-        solution_array = numpy.c_[
-            first_coord_array[dist_mat.iloc[:, 0].values],
-            second_coord_array[dist_mat.iloc[:, 1].values],
-            numpy.atleast_2d(dist_mat.iloc[:, 2].values).T,
-        ]
-        return solution_array
+        solution_df = pandas.DataFrame(
+            numpy.c_[
+                first_coord_array[dist_mat.iloc[:, 0].values],
+                second_coord_array[dist_mat.iloc[:, 1].values],
+            ],
+            dtype=int,
+        )
+        solution_df[len(solution_df.columns)] = numpy.atleast_2d(
+            dist_mat.iloc[:, 2].values
+        ).T
+        return solution_df
 
     def safe_range_pred_to_coord_set(
         self,

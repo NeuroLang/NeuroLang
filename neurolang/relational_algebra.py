@@ -388,7 +388,8 @@ OPERATOR_STRING = {
     operator.gt: ">",
     operator.lt: "<",
     operator.ge: ">=",
-    operator.le: "<="
+    operator.le: "<=",
+    operator.pow: "**",
 }
 
 

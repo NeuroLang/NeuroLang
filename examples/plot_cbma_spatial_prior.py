@@ -120,7 +120,7 @@ with nl.environment as e:
         e.FocusReported(e.i2, e.j2, e.k2, e.s)
         & e.Voxel(e.i1, e.j1, e.k1)
         & (e.d == e.EUCLIDEAN(e.i1, e.j1, e.k1, e.i2, e.j2, e.k2))
-        & (e.d < "1mm")
+        & (e.d < 1)
     )
     e.TermAssociation[e.t] = e.SelectedStudy[e.s] & e.TermInStudy[e.t, e.s]
     e.Activation[e.i, e.j, e.k] = (
