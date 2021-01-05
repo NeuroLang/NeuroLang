@@ -25,7 +25,39 @@ class RelationalAlgebraColumnStr(str, RelationalAlgebraColumn):
 
 
 class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
+    """
+    RelationalAlgebraFrozenSet implementation using in-memory pandas.DataFrame
+    as container
+    """
     def __init__(self, iterable=None):
+        """
+        Create a new RelationalAlgebraFrozenSet.
+        A RelationalAlgebraSet is a set of n elements, each element being a tuple of arity k.
+
+
+        Parameters
+        ----------
+        iterable : Iterable
+            Initial values for the set
+
+        Examples
+        --------
+        Constructing a Set from a list.
+
+        >>> a = [(i % 2, i, i * 2) for i in range(5)]
+        >>> ras = RelationalAlgebraFrozenSet(a)
+        >>> ras
+          0  1  2
+        0  0  0  0
+        1  1  1  2
+        2  0  2  4
+        3  1  3  6
+        4  0  4  8
+
+        Returns
+        -------
+        RelationalAlgebraFrozenSet
+        """
         self._container = None
         self._might_have_duplicates = True
         if iterable is not None:
@@ -142,6 +174,20 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         return type(self)()
 
     def projection(self, *columns):
+        """
+        Projects the set on the given list of columns.
+        
+        Examples
+        --------
+        >>> ras = RelationalAlgebraFrozenSet([(i % 2, i, i * 2) for i in range(5)])
+        >>> ras.projection(1)
+           0
+        0  0
+        1  1
+        2  2
+        3  3
+        4  4
+        """
         if self.is_empty():
             return self._empty_set_same_structure()
         new_container = self._container[list(columns)]
@@ -189,7 +235,6 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             ix &= self._container[col1] == self._container[col2]
 
         new_container = self._container[ix]
-
         output = self._empty_set_same_structure()
         output._container = new_container
         return output
