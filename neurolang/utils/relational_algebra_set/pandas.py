@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from typing import Iterable
+from typing import Iterable, Callable, Dict, Union
 from uuid import uuid1
 
 import pandas as pd
@@ -27,7 +27,7 @@ class RelationalAlgebraColumnStr(str, RelationalAlgebraColumn):
 class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     """
     RelationalAlgebraFrozenSet implementation using in-memory pandas.DataFrame
-    as container
+    as container for the elements.
     """
     def __init__(self, iterable=None):
         """
@@ -180,6 +180,13 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         Examples
         --------
         >>> ras = RelationalAlgebraFrozenSet([(i % 2, i, i * 2) for i in range(5)])
+        >>> ras
+           0  1  2
+        0  0  0  0
+        1  1  1  2
+        2  0  2  4
+        3  1  3  6
+        4  0  4  8
         >>> ras.projection(1)
            0
         0  0
@@ -196,7 +203,26 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         output._container = new_container
         return output
 
-    def selection(self, select_criteria):
+    def selection(
+        self,
+        select_criteria: Union[Callable, RelationalAlgebraStringExpression,
+        Dict[int, Union[int, Callable]]]
+    ):
+        """
+        Select the elements based on the given selet_criteria.
+        The select_criteria may be a callable function, a string expression or a Dict of columns -> value
+
+        Parameters
+        ----------
+        select_criteria : Callable | RelationalAlgebraStringExpression 
+        | Dict [int, int | Callable]
+            selection criteria
+
+        Returns
+        -------
+        RelationalAlgebraFrozenSet
+            A RelationalAlgebraFrozenSet with elements matching the criteria.
+        """
         if self.is_empty():
             return self._empty_set_same_structure()
 
@@ -214,18 +240,41 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         return output
 
     def _selection_dict(self, select_criteria):
+        """
+        Performs element-wise logical AND on the selection vector returned
+        for each item in the select_criteria
+        """
         it = iter(select_criteria.items())
         col, value = next(it)
-        ix = self._container[col] == value
+        ix = self._container[col].apply(value) if callable(value) else self._container[col] == value
         for col, value in it:
-            if callable(value):
-                selector = self._container[col].apply(value)
-            else:
-                selector = self._container[col] == value
-            ix &= selector
+            ix &= self._container[col].apply(value) if callable(value) else self._container[col] == value
         return ix
 
-    def selection_columns(self, select_criteria):
+    def selection_columns(self, select_criteria: Dict[int, int]):
+        """
+        Select the elements where column pairs indicated as key, value
+        items of the select_criteria are equal.
+        The select_criteria must be a Dict of Int -> Int.
+
+        Examples
+        --------
+        Select the elements where col0 == col1 and col1 == col2
+        >>> ras = RelationalAlgebraFrozenSet([(i % 2, i, i * 2) for i in range(5)])
+        >>> ras.selection_columns({0:1, 1: 2})
+           0  1  2
+        0  0  0  0
+
+        Parameters
+        ----------
+        select_criteria : Dict [Int, Int]
+            selection criteria
+
+        Returns
+        -------
+        RelationalAlgebraFrozenSet
+            A RelationalAlgebraFrozenSet with elements matching the criteria.
+        """
         if self.is_empty():
             return self._empty_set_same_structure()
         it = iter(select_criteria.items())
@@ -346,7 +395,7 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
                 res = True
             elif self.arity != other.arity:
                 res = False
-            elif self.arity == 0 and self.arity == 0:
+            elif self.arity == 0 and other.arity == 0:
                 res = self.is_dee() and other.is_dee()
             elif scont is not None and ocont is not None:
                 intersection_dups = scont.merge(
