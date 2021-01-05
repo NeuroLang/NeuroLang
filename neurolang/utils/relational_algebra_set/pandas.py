@@ -67,18 +67,6 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
             len(self._container) == 0
         )
 
-    def is_dum(self):
-        return (
-            self.arity == 0 and
-            self.is_empty()
-        )
-
-    def is_dee(self):
-        return (
-            self.arity == 0 and
-            not self.is_empty()
-        )
-
     def __contains__(self, element):
         element = self._normalise_element(element)
         if (

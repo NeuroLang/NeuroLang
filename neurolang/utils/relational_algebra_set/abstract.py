@@ -87,7 +87,7 @@ class RelationalAlgebraFrozenSet(Set):
         pass
 
     @abstractmethod
-    def as_numpy_array():
+    def as_numpy_array(self):
         pass
 
     def _dee_dum_product(self, other):
