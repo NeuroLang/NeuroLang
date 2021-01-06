@@ -33,8 +33,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     def __init__(self, iterable=None):
         """
         Create a new RelationalAlgebraFrozenSet.
-        A RelationalAlgebraSet is a set of n elements, each element being a tuple of arity k.
-
+        A RelationalAlgebraSet is a set of n elements, each element being
+        a tuple of arity k.
 
         Parameters
         ----------
@@ -174,7 +174,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
 
         Examples
         --------
-        >>> ras = RelationalAlgebraFrozenSet([(i % 2, i, i * 2) for i in range(5)])
+        >>> ras = RelationalAlgebraFrozenSet(
+                [(i % 2, i, i * 2) for i in range(5)])
         >>> ras
            0  1  2
         0  0  0  0
@@ -208,7 +209,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
     ):
         """
         Select the elements based on the given selet_criteria.
-        The select_criteria may be a callable function, a string expression or a Dict of columns -> value
+        The select_criteria may be a callable function, a string expression
+        or a Dict of columns -> value
 
         Parameters
         ----------
@@ -266,7 +268,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         Examples
         --------
         Select the elements where col0 == col1 and col1 == col2
-        >>> ras = RelationalAlgebraFrozenSet([(i % 2, i, i * 2) for i in range(5)])
+        >>> ras = RelationalAlgebraFrozenSet(
+                [(i % 2, i, i * 2) for i in range(5)])
         >>> ras.selection_columns({0:1, 1: 2})
            0  1  2
         0  0  0  0
@@ -639,7 +642,7 @@ class NamedRelationalAlgebraFrozenSet(
             raise ValueError(f"{dst} cannot be in the columns")
         src_idx = self._columns.index(src)
         new_columns = (
-            self._columns[:src_idx] + (dst,) + self._columns[src_idx + 1 :]
+            self._columns[:src_idx] + (dst,) + self._columns[src_idx + 1:]
         )
         new_container = self._container.rename(columns={src: dst})
         return self._light_init_same_structure(
