@@ -214,8 +214,8 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
 
         Parameters
         ----------
-        select_criteria : Callable | RelationalAlgebraStringExpression 
-        | Dict [int, int | Callable]
+        select_criteria : Union[Callable, RelationalAlgebraStringExpression,
+        Dict[int, Union[int, Callable]]]
             selection criteria
 
         Returns
@@ -246,9 +246,17 @@ class RelationalAlgebraFrozenSet(abc.RelationalAlgebraFrozenSet):
         """
         it = iter(select_criteria.items())
         col, value = next(it)
-        ix = self._container[col].apply(value) if callable(value) else self._container[col] == value
+        if callable(value):
+            selector = self._container[col].apply(value)
+        else:
+            selector = self._container[col] == value
+        ix = selector
         for col, value in it:
-            ix &= self._container[col].apply(value) if callable(value) else self._container[col] == value
+            if callable(value):
+                selector = self._container[col].apply(value)
+            else:
+                selector = self._container[col] == value
+            ix &= selector
         return ix
 
     def selection_columns(self, select_criteria: Dict[int, int]):
