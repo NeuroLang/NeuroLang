@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from functools import reduce
 from neurolang.utils.relational_algebra_set import (
     NamedRelationalAlgebraFrozenSet,
     RelationalAlgebraFrozenSet,
@@ -7,83 +8,112 @@ from neurolang.utils.relational_algebra_set import (
 
 
 class TimeNamedRelationalAlgebraFrozenSets:
-    params = [
-        [10 ** 5, 10 ** 6, 10 ** 7],
-    ]
+    params = [[10 ** 4, 10 ** 5, 10 ** 6], [10], [3], [2, 8], [0.75]]
 
     param_names = [
         "rows",
+        "cols",
+        "number of join columns",
+        "number of chained joins",
+        "ratio of dictinct elements",
     ]
 
-    def setup(self, N):
+    def setup(self, N, ncols, njoin_columns, njoins, distinct_r):
         """
-        Generate 2 NamedRelationalAlgebraFrozenSets with N elements &
-        ncols arity. The first ncols//3 columns are identical to perform
-        joins on.
+        Generate njoins NamedRelationalAlgebraFrozenSets each with N elements
+        & ncols arity. The first njoin_columns columns are identical to
+        perform joins on.
+
+        Parameters
+        ----------
+        N : int
+            number of elements per set
+        ncols : int
+            number of columns per set
+        njoin_columns : int
+            number of identical columns for all sets
+        njoins : int
+            number of joins to chain
+        distinct_r: int
+            ratio of distinct elements in the set
         """
-        self.ncols = 10
-        self.same_cols = self.ncols // 3
-        cols1 = [hex(x) for x in range(self.ncols)]
-        cols2 = cols1[-self.same_cols :] + [
-            hex(self.ncols + x) for x in range(self.ncols - self.same_cols)
-        ]
+        same_cols = [hex(x) for x in range(njoin_columns)]
         df1 = pd.DataFrame(
-            np.random.randint(0, N, size=(N, self.ncols)), columns=cols1
+            np.random.randint(0, N * distinct_r, size=(N, njoin_columns)),
+            columns=same_cols,
         )
-        df2 = pd.concat(
-            [
-                df1[cols2[: self.same_cols]],
-                pd.DataFrame(
-                    np.random.randint(
-                        0, N, size=(N, self.ncols - self.same_cols)
-                    ),
-                    columns=cols2[self.same_cols :],
+        self.sets = []
+        for i in range(njoins):
+            cols = [hex(ncols * i + x) for x in range(njoin_columns, ncols)]
+            df = pd.DataFrame(
+                np.random.randint(
+                    0, N * distinct_r, size=(N, ncols - njoin_columns)
                 ),
-            ],
-            axis=1,
-        )
-        self.ns1 = NamedRelationalAlgebraFrozenSet(cols1, df1)
-        self.ns2 = NamedRelationalAlgebraFrozenSet(cols2, df2)
+                columns=cols,
+            )
+            self.sets.append(
+                NamedRelationalAlgebraFrozenSet(
+                    same_cols + cols, pd.concat([df1, df], axis=1)
+                )
+            )
 
-    def time_ra_naturaljoin(self, N):
-        self.ns1.naturaljoin(self.ns2)
+    def time_ra_naturaljoin(self, N, ncols, njoin_columns, njoins, distinct_r):
+        reduce(lambda a, b: a.naturaljoin(b), self.sets)
 
-    def time_ra_left_naturaljoin(self, N):
-        self.ns2.left_naturaljoin(self.ns1)
+    def time_ra_left_naturaljoin(
+        self, N, ncols, njoin_columns, njoins, distinct_r
+    ):
+        reduce(lambda a, b: a.left_naturaljoin(b), self.sets)
 
 
 class TimeRelationalAlgebraFrozenSets:
-    params = [
-        [10 ** 5, 10 ** 6, 10 ** 7],
-    ]
+    params = [[10 ** 4, 10 ** 5, 10 ** 6], [10], [3], [2, 8], [0.75]]
 
     param_names = [
         "rows",
+        "cols",
+        "number of join columns",
+        "number of chained joins",
+        "ratio of dictinct elements",
     ]
 
-    def setup(self, N):
+    def setup(self, N, ncols, njoin_columns, njoins, distinct_r):
         """
-        Generate 2 RelationalAlgebraFrozenSets with N elements &
-        ncols arity. The first ncols//3 columns are identical to perform
-        joins on.
-        """
-        self.ncols = 10
-        self.same_cols = self.ncols // 3
-        df1 = pd.DataFrame(np.random.randint(0, N, size=(N, self.ncols)))
-        df2 = pd.concat(
-            [
-                df1.loc[:, : self.same_cols - 1],
-                pd.DataFrame(
-                    np.random.randint(
-                        0, N, size=(N, self.ncols - self.same_cols)
-                    ),
-                ),
-            ],
-            axis=1,
-            ignore_index=True,
-        )
-        self.ns1 = RelationalAlgebraFrozenSet(df1)
-        self.ns2 = RelationalAlgebraFrozenSet(df2)
+        Generate njoins RelationalAlgebraFrozenSets each with N elements
+        & ncols arity. The first njoin_columns columns are identical to
+        perform joins on.
 
-    def time_ra_equijoin(self, N):
-        self.ns2.equijoin(self.ns2, [(self.same_cols - 1, self.same_cols - 1)])
+        Parameters
+        ----------
+        N : int
+            number of elements per set
+        ncols : int
+            number of columns per set
+        njoin_columns : int
+            number of identical columns for all sets
+        njoins : int
+            number of joins to chain
+        distinct_r: int
+            ratio of distinct elements in the set
+        """
+        df1 = pd.DataFrame(
+            np.random.randint(0, N * distinct_r, size=(N, njoin_columns))
+        )
+        self.sets = []
+        for _ in range(njoins):
+            df = pd.DataFrame(
+                np.random.randint(
+                    0, N * distinct_r, size=(N, ncols - njoin_columns)
+                ),
+            )
+            self.sets.append(
+                RelationalAlgebraFrozenSet(
+                    pd.concat([df1, df], axis=1, ignore_index=True)
+                )
+            )
+
+    def time_ra_equijoin(self, N, ncols, njoin_columns, njoins, distinct_r):
+        reduce(
+            lambda a, b: a.equijoin(b, [(i, i) for i in range(njoin_columns)]),
+            self.sets,
+        )
